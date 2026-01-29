@@ -1,6 +1,7 @@
 import { type ApiEnvelope, handleOptions, readSessionFromRequest, setCors, setNoStore } from '../../server/auth/_shared.js'
 import { getDb } from '../../server/_lib/postgres.js'
 import { normalizeReferralCode, getClientIp, getUserAgent, hashForAttribution } from '../../server/_lib/referrals.js'
+import { checkRateLimit, RATE_LIMITS, rateLimitKey, getClientIp as getRateLimitIp } from '../../server/_lib/rateLimit.js'
 import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../server/_lib/waitlistPoints.js'
 import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
 
@@ -275,6 +276,14 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
+  // Rate limiting: 5 signups per minute per IP
+  const clientIp = getRateLimitIp(req)
+  const rateLimit = checkRateLimit(rateLimitKey('waitlist', clientIp), RATE_LIMITS.waitlistSignup)
+  if (!rateLimit.allowed) {
+    res.setHeader('Retry-After', Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString())
+    return res.status(429).json({ success: false, error: 'Too many requests. Please try again later.' } satisfies ApiEnvelope<never>)
+  }
+
   let body: WaitlistRequestBody = {}
   try {
     body =
@@ -495,10 +504,11 @@ export default async function handler(req: any, res: any) {
 
     // Award CSW linking points if CSW was linked before signup
     if (signupId && cswAddress.length > 0) {
-      // Update the signup record with CSW address if not already set
+      // Update the signup record with CSW address (store in dedicated csw_address column)
       await db.sql`
         UPDATE profiles
-        SET primary_wallet = COALESCE(primary_wallet, ${cswAddress})
+        SET csw_address = COALESCE(csw_address, ${cswAddress}),
+            primary_wallet = COALESCE(primary_wallet, ${cswAddress})
         WHERE id = ${signupId};
       `
       // Award CSW points (idempotent)

@@ -4,6 +4,8 @@ import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } fr
 import { ensureCreatorAccessSchema, getDb, isDbConfigured } from '../../../../server/_lib/postgres.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/supabaseAdmin.js'
 import { getSessionAddress, isAdminAddress } from '../../../../server/_lib/session.js'
+import { logAdminAction } from '../../../../server/_lib/adminAudit.js'
+import { getClientIp } from '../../../../server/_lib/rateLimit.js'
 
 type DenyBody = {
   requestId: number
@@ -60,6 +62,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(404).json({ success: false, error: 'Request not found' } satisfies ApiEnvelope<never>)
       }
 
+      // Audit log
+      const db = isDbConfigured() ? await getDb() : null
+      if (db) {
+        await logAdminAction({
+          db: db as any,
+          adminAddress: admin,
+          action: 'creator_deny',
+          targetType: 'access_request',
+          targetId: requestId,
+          details: { note },
+          ipAddress: getClientIp(req),
+        })
+      }
+
       return res.status(200).json({
         success: true,
         data: { requestId, denied: true } satisfies DenyResponse,
@@ -95,6 +111,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (u.rows.length === 0) {
     return res.status(404).json({ success: false, error: 'Request not found' } satisfies ApiEnvelope<never>)
   }
+
+  // Audit log
+  await logAdminAction({
+    db: db as any,
+    adminAddress: admin,
+    action: 'creator_deny',
+    targetType: 'access_request',
+    targetId: requestId,
+    details: { note },
+    ipAddress: getClientIp(req),
+  })
 
   return res.status(200).json({
     success: true,

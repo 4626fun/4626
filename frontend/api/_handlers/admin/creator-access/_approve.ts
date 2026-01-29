@@ -4,6 +4,8 @@ import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } fr
 import { ensureCreatorAccessSchema, getDb, isDbConfigured } from '../../../../server/_lib/postgres.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/supabaseAdmin.js'
 import { getSessionAddress, isAdminAddress } from '../../../../server/_lib/session.js'
+import { logAdminAction } from '../../../../server/_lib/adminAudit.js'
+import { getClientIp } from '../../../../server/_lib/rateLimit.js'
 
 type ApproveBody = {
   requestId: number
@@ -80,6 +82,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .eq('id', requestId)
       if (u.error) throw new Error(u.error.message)
 
+      // Audit log
+      const db = isDbConfigured() ? await getDb() : null
+      if (db) {
+        await logAdminAction({
+          db: db as any,
+          adminAddress: admin,
+          action: 'creator_approve',
+          targetType: 'access_request',
+          targetId: requestId,
+          details: { wallet: walletLc, note },
+          ipAddress: getClientIp(req),
+        })
+      }
+
       return res.status(200).json({
         success: true,
         data: { requestId, wallet: walletLc, approved: true } satisfies ApproveResponse,
@@ -131,6 +147,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
      WHERE id = $3;`,
     [admin, note, requestId],
   )
+
+  // Audit log
+  await logAdminAction({
+    db: db as any,
+    adminAddress: admin,
+    action: 'creator_approve',
+    targetType: 'access_request',
+    targetId: requestId,
+    details: { wallet, note },
+    ipAddress: getClientIp(req),
+  })
 
   return res.status(200).json({
     success: true,

@@ -2,6 +2,7 @@ import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } fr
 import { getDb } from '../../../server/_lib/postgres.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
+import { checkRateLimit, RATE_LIMITS, rateLimitKey, getClientIp } from '../../../server/_lib/rateLimit.js'
 
 type Body = {
   email?: string
@@ -35,6 +36,14 @@ export default async function handler(req: any, res: any) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  // Rate limiting: 10 CSW link attempts per minute per IP
+  const clientIp = getClientIp(req)
+  const rateLimit = checkRateLimit(rateLimitKey('csw-link', clientIp), RATE_LIMITS.cswLink)
+  if (!rateLimit.allowed) {
+    res.setHeader('Retry-After', Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString())
+    return res.status(429).json({ success: false, error: 'Too many requests. Please try again later.' } satisfies ApiEnvelope<never>)
   }
 
   const body = await readJsonBody<Body>(req)
@@ -72,15 +81,24 @@ export default async function handler(req: any, res: any) {
     return res.status(404).json({ success: false, error: 'Waitlist entry not found' } satisfies ApiEnvelope<never>)
   }
 
-  // Update the signup with the CSW address if not already set
-  if (primaryWallet && isValidEvmAddress(primaryWallet)) {
-    await db.sql`
-      UPDATE profiles
-      SET primary_wallet = COALESCE(primary_wallet, ${primaryWallet}),
-          updated_at = NOW()
-      WHERE id = ${signupId};
-    `
+  // Check if this CSW is already linked to a different profile (prevent hijacking)
+  const existingLink = await db.sql`
+    SELECT id, email FROM profiles
+    WHERE LOWER(csw_address) = ${cswAddress.toLowerCase()} AND id != ${signupId}
+    LIMIT 1;
+  `
+  if (existingLink?.rows?.length > 0) {
+    return res.status(409).json({ success: false, error: 'This wallet is already linked to another account' } satisfies ApiEnvelope<never>)
   }
+
+  // Update the signup with the CSW address (store in dedicated csw_address column)
+  await db.sql`
+    UPDATE profiles
+    SET csw_address = COALESCE(csw_address, ${cswAddress}),
+        primary_wallet = COALESCE(primary_wallet, ${primaryWallet && isValidEvmAddress(primaryWallet) ? primaryWallet : cswAddress}),
+        updated_at = NOW()
+    WHERE id = ${signupId};
+  `
 
   // Award CSW link points (idempotent via ledger unique key)
   await awardWaitlistPoints({

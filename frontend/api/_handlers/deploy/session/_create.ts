@@ -6,7 +6,9 @@ import { privateKeyToAccount } from 'viem/accounts'
 
 import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { ensureDeploySessionsSchema, hashDeployToken, insertDeploySession, randomDeployToken, randomId } from '../../../../server/_lib/deploySessions.js'
-import { isDbConfigured } from '../../../../server/_lib/postgres.js'
+import { isDbConfigured, getDb } from '../../../../server/_lib/postgres.js'
+import { checkRateLimit, RATE_LIMITS, rateLimitKey } from '../../../../server/_lib/rateLimit.js'
+import { getSupabase } from '../../../../server/_lib/supabase.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -30,6 +32,69 @@ type CreateDeploySessionResponse = {
   expiresAt: string
 }
 
+/**
+ * Check if an address is on the creator allowlist.
+ * Checks: direct allowlist, CSW ownership, linked wallets, and approved profiles.
+ */
+async function checkCreatorAllowlist(address: Address, smartWallet: Address): Promise<boolean> {
+  const addr = address.toLowerCase()
+  const csw = smartWallet.toLowerCase()
+
+  // Try Supabase first
+  const supabase = getSupabase()
+  if (supabase) {
+    try {
+      // Check direct allowlist entry
+      const { data: allowlistData } = await supabase
+        .from('allowlist')
+        .select('id')
+        .or(`address.ilike.${addr},csw_address.ilike.${csw}`)
+        .is('revoked_at', null)
+        .limit(1)
+      if (allowlistData && allowlistData.length > 0) return true
+
+      // Check creator_wallets table
+      const { data: walletData } = await supabase
+        .from('creator_wallets')
+        .select('id')
+        .or(`wallet_address.ilike.${addr},wallet_address.ilike.${csw}`)
+        .limit(1)
+      if (walletData && walletData.length > 0) return true
+
+      // Check approved profiles
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('id')
+        .or(`primary_wallet.ilike.${addr},embedded_wallet.ilike.${addr},csw_address.ilike.${csw}`)
+        .eq('app_access_status', 'approved')
+        .limit(1)
+      if (profileData && profileData.length > 0) return true
+
+      return false
+    } catch {
+      // Fall through to Postgres
+    }
+  }
+
+  // Fallback to Postgres
+  const db = await getDb()
+  if (!db?.query) return false
+
+  try {
+    const result = await db.query(`
+      SELECT 1 FROM allowlist WHERE (LOWER(address) = $1 OR LOWER(csw_address) = $2) AND revoked_at IS NULL
+      UNION ALL
+      SELECT 1 FROM creator_wallets WHERE LOWER(wallet_address) = $1 OR LOWER(wallet_address) = $2
+      UNION ALL
+      SELECT 1 FROM profiles WHERE (LOWER(primary_wallet) = $1 OR LOWER(embedded_wallet) = $1 OR LOWER(csw_address) = $2) AND app_access_status = 'approved'
+      LIMIT 1;
+    `, [addr, csw])
+    return result.rows && result.rows.length > 0
+  } catch {
+    return false
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setNoStore(res)
   if (handleOptions(req, res)) return
@@ -48,6 +113,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<null>)
   }
 
+  // Rate limiting: 3 deploy sessions per minute per address
+  const rateLimit = checkRateLimit(rateLimitKey('deploy', session.address.toLowerCase()), RATE_LIMITS.deployCreate)
+  if (!rateLimit.allowed) {
+    res.setHeader('Retry-After', Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString())
+    return res.status(429).json({ success: false, error: 'Too many deploy attempts. Please try again later.' } satisfies ApiEnvelope<null>)
+  }
+
   const body = await readJsonBody<CreateDeploySessionRequest>(req)
   if (!body) return res.status(400).json({ success: false, error: 'Invalid JSON body' } satisfies ApiEnvelope<null>)
 
@@ -59,6 +131,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!isAddress(smartWallet) || !isAddress(creatorToken) || !isAddress(ownerAddress)) {
       return res.status(400).json({ success: false, error: 'Invalid addresses' } satisfies ApiEnvelope<null>)
+    }
+
+    // Validate that sessionAddress matches ownerAddress or is an owner of the smart wallet
+    if (sessionAddress.toLowerCase() !== ownerAddress.toLowerCase()) {
+      // Allow if sessionAddress is the smartWallet (CSW case)
+      if (sessionAddress.toLowerCase() !== smartWallet.toLowerCase()) {
+        return res.status(403).json({ success: false, error: 'Session address must match owner or smart wallet' } satisfies ApiEnvelope<null>)
+      }
+    }
+
+    // Check creator allowlist before creating session
+    const isAllowlisted = await checkCreatorAllowlist(sessionAddress, smartWallet)
+    if (!isAllowlisted) {
+      return res.status(403).json({ success: false, error: 'Creator access required. Please apply for access first.' } satisfies ApiEnvelope<null>)
     }
 
     const phase2Calls = Array.isArray(body.phase2Calls) ? body.phase2Calls : []

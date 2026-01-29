@@ -4,6 +4,8 @@ import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } fr
 import { getDb, isDbConfigured } from '../../../../server/_lib/postgres.js'
 import { getSessionAddress, isAdminAddress } from '../../../../server/_lib/session.js'
 import { ensureWaitlistSchema } from '../../../../server/_lib/waitlistSchema.js'
+import { logAdminAction } from '../../../../server/_lib/adminAudit.js'
+import { getClientIp } from '../../../../server/_lib/rateLimit.js'
 
 type Body = { id?: number; note?: string | null }
 
@@ -46,6 +48,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!q.rows || q.rows.length === 0) {
     return res.status(404).json({ success: false, error: 'Signup not found' } satisfies ApiEnvelope<never>)
   }
+
+  // Audit log
+  await logAdminAction({
+    db: db as any,
+    adminAddress: admin,
+    action: 'waitlist_approve',
+    targetType: 'profile',
+    targetId: id,
+    details: { note },
+    ipAddress: getClientIp(req),
+  })
 
   return res.status(200).json({ success: true, data: { id, status: 'approved' } } satisfies ApiEnvelope<any>)
 }
