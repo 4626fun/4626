@@ -833,9 +833,11 @@ function DeployVaultBatcher({
     return connectedAddress && isAddress(connectedAddress) ? (getAddress(connectedAddress) as Address) : null
   }, [connectedAddress])
 
+  // Prefer using the Privy Smart Wallet client whenever available; its account address
+  // is the smart wallet itself and can sign/submit without relying on eth_sign from EOAs.
   const canUsePrivySmartWallet = useMemo(() => {
-    return !!smartWalletClient && !!smartWalletAddrForAuth && smartWalletAddrForAuth.toLowerCase() === owner.toLowerCase()
-  }, [owner, smartWalletAddrForAuth, smartWalletClient])
+    return !!smartWalletClient && !!smartWalletAddrForAuth
+  }, [smartWalletAddrForAuth, smartWalletClient])
 
   const canUseExternalOwner = useMemo(() => {
     return (
@@ -1705,8 +1707,8 @@ function DeployVaultBatcher({
         const embeddedOwnerExec = canUsePrivyEmbeddedOwner ? embeddedOwnerAddr : null
         const ownerExec = (embeddedOwnerExec ?? externalOwnerExec) as Address | null
         const ownerWalletClient = canUsePrivyEmbeddedOwner ? (embeddedWalletClient as any) : (activeWalletClient as any)
-        // For CSW UserOps, prefer eth_sign when using Privy embedded wallets.
-        const userOpSignMode = canUsePrivyEmbeddedOwner ? 'eth_sign' : 'auto'
+        // For non-Privy smart wallet paths, prefer signMessage (personal_sign) to avoid eth_sign blocking.
+        const userOpSignMode = 'signMessage'
 
         // Enforce custody: the smart wallet sender must already hold the initial deposit.
         const smartWalletBalance = (await publicClient.readContract({
