@@ -321,68 +321,85 @@ export function ExploreCreators() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
-          className="rounded-2xl border border-zinc-800 bg-zinc-900/50"
+          className="rounded-2xl border border-zinc-800 bg-zinc-900/50 overflow-hidden"
         >
-          {/* Single horizontal scroll container (no double scrollbars) */}
-          <div className="overflow-x-auto scrollbar-hide">
-            <div className="min-w-max">
-              <div className="sticky top-24 z-50 border-b border-zinc-800 bg-zinc-950 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
+          {/* Sticky header - outside horizontal scroll to preserve sticky behavior */}
+          <div className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
+            <div 
+              className="overflow-x-auto scrollbar-hide" 
+              id="explore-creators-header"
+              onScroll={(e) => {
+                const body = document.getElementById('explore-creators-body')
+                if (body) body.scrollLeft = e.currentTarget.scrollLeft
+              }}
+            >
+              <div className="min-w-max">
                 <TokenTableHeader timeframe={currentTimeFilter} currentSort={currentSort} onSortChange={handleSortChange} />
               </div>
+            </div>
+          </div>
 
-              <div className="divide-y divide-zinc-800/50">
-                {isLoading ? (
-                  // Loading skeletons
-                  Array.from({ length: 10 }).map((_, i) => <TokenRowSkeleton key={i} />)
-                ) : isError ? (
-                  // Error state
-                  <div className="px-6 py-12 text-center">
-                    <p className="text-zinc-400 mb-4">Failed to load creators</p>
-                    <p className="text-xs text-zinc-600">{(error as Error)?.message || 'Unknown error'}</p>
-                  </div>
-                ) : filteredCoins.length === 0 ? (
-                  // Empty state
-                  <div className="px-6 py-12 text-center">
-                    <p className="text-zinc-400">
-                      {searchQuery ? 'No creators found matching your search' : 'No creators available'}
-                    </p>
-                  </div>
-                ) : (
-                  // Token rows
-                  filteredCoins.map((coin, index) => (
-                    <TokenRow
-                      key={coin.address || index}
-                      rank={index + 1}
-                      coin={coin}
-                      linkPrefix="/explore/creators"
-                      timeframe={currentTimeFilter}
-                      migratedCoins={migratedCoins ?? undefined}
-                    />
-                  ))
-                )}
+          {/* Table body with synced horizontal scroll */}
+          <div 
+            className="overflow-x-auto scrollbar-hide" 
+            id="explore-creators-body"
+            onScroll={(e) => {
+              const header = document.getElementById('explore-creators-header')
+              if (header) header.scrollLeft = e.currentTarget.scrollLeft
+            }}
+          >
+            <div className="min-w-max divide-y divide-zinc-800/50">
+              {isLoading ? (
+                // Loading skeletons
+                Array.from({ length: 10 }).map((_, i) => <TokenRowSkeleton key={i} />)
+              ) : isError ? (
+                // Error state
+                <div className="px-6 py-12 text-center">
+                  <p className="text-zinc-400 mb-4">Failed to load creators</p>
+                  <p className="text-xs text-zinc-600">{(error as Error)?.message || 'Unknown error'}</p>
+                </div>
+              ) : filteredCoins.length === 0 ? (
+                // Empty state
+                <div className="px-6 py-12 text-center">
+                  <p className="text-zinc-400">
+                    {searchQuery ? 'No creators found matching your search' : 'No creators available'}
+                  </p>
+                </div>
+              ) : (
+                // Token rows
+                filteredCoins.map((coin, index) => (
+                  <TokenRow
+                    key={coin.address || index}
+                    rank={index + 1}
+                    coin={coin}
+                    linkPrefix="/explore/creators"
+                    timeframe={currentTimeFilter}
+                    migratedCoins={migratedCoins ?? undefined}
+                  />
+                ))
+              )}
 
-                {/* Loading more indicator */}
-                {isFetchingNextPage && (
-                  <>
-                    <TokenRowSkeleton />
-                    <TokenRowSkeleton />
-                    <TokenRowSkeleton />
-                  </>
-                )}
+              {/* Loading more indicator */}
+              {isFetchingNextPage && (
+                <>
+                  <TokenRowSkeleton />
+                  <TokenRowSkeleton />
+                  <TokenRowSkeleton />
+                </>
+              )}
 
-                {/* Load more button (fallback for scroll) */}
-                {hasNextPage && !isFetchingNextPage && (
-                  <div className="px-6 py-4 border-t border-zinc-800 flex justify-center">
-                    <button
-                      type="button"
-                      onClick={() => fetchNextPage()}
-                      className="px-6 py-2 rounded-full text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-                    >
-                      Load more
-                    </button>
-                  </div>
-                )}
-              </div>
+              {/* Load more button (fallback for scroll) */}
+              {hasNextPage && !isFetchingNextPage && (
+                <div className="px-6 py-4 border-t border-zinc-800 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => fetchNextPage()}
+                    className="px-6 py-2 rounded-full text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                  >
+                    Load more
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </motion.div>

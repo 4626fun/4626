@@ -101,8 +101,8 @@ async function fetchWaitlistDetail(params: { id: number }): Promise<AdminWaitlis
 }
 
 export function AdminWaitlist() {
-  const { isConnected } = useAccount()
-  const { isSignedIn, busy: authBusy, error: authError, signIn } = useSiweAuth()
+  const { isConnected, address } = useAccount()
+  const { isSignedIn, busy: authBusy, error: authError, signIn, authAddress } = useSiweAuth()
   const location = useLocation()
 
   const [query, setQuery] = useState('')
@@ -198,6 +198,7 @@ export function AdminWaitlist() {
             <div className="flex justify-center">
               <ConnectButton variant="default" />
             </div>
+            <div className="text-[10px] text-zinc-700 mt-2">Status: Not connected</div>
           </div>
         </div>
       </div>
@@ -223,6 +224,10 @@ export function AdminWaitlist() {
               {authBusy ? 'Signing in...' : 'Sign in'}
             </button>
             {authError ? <div className="text-[11px] text-red-400/90">{authError}</div> : null}
+            <div className="text-[10px] text-zinc-700 mt-2 space-y-1">
+              <div>Connected: {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'No'}</div>
+              <div>Auth: {authAddress ? `${authAddress.slice(0, 6)}...${authAddress.slice(-4)}` : 'Not signed in'}</div>
+            </div>
           </div>
         </div>
       </div>
