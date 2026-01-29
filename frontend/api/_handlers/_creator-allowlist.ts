@@ -82,7 +82,7 @@ async function dbIsWaitlisted(
     const addr = address.toLowerCase()
     const { rows } = await db.sql`
       SELECT id
-      FROM users
+      FROM profiles
       WHERE (lower(primary_wallet) = ${addr} OR lower(embedded_wallet) = ${addr})
         AND COALESCE(app_access_status, 'pending') = 'approved'
       LIMIT 1;
