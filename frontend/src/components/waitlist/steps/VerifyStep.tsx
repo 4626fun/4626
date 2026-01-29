@@ -296,7 +296,7 @@ export const VerifyStep = memo(function VerifyStep({
       {/* No Creator Coin found */}
       {/* If no Creator Coin found, we auto-continue (minimal flow). */}
 
-      {/* CSW Detected - Simple confirmation */}
+      {/* CSW Detected - Simple confirmation (no points display) */}
       {showDeployOwnerLink && cswAddress ? (
         <motion.div {...scaleIn} className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
           <div className="flex items-center gap-3">
@@ -309,7 +309,6 @@ export const VerifyStep = memo(function VerifyStep({
                 {short(cswAddress)}
               </div>
             </div>
-            <div className="text-[13px] text-emerald-400 font-medium">+250 pts</div>
           </div>
         </motion.div>
       ) : null}

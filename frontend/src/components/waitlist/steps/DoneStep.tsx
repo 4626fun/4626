@@ -1,8 +1,7 @@
 import { memo } from 'react'
 import { motion } from 'framer-motion'
-import { CheckCircle2, ArrowRight, Trophy, Copy } from 'lucide-react'
+import { CheckCircle2, ArrowRight, Copy } from 'lucide-react'
 import { WaitlistDoneCelebrationBackground } from '../WaitlistDoneCelebrationBackground'
-import { SIGNUP_POINTS } from '../waitlistConstants'
 import type { WaitlistState } from '../waitlistTypes'
 
 const baseEase = [0.4, 0, 0.2, 1] as const
@@ -34,16 +33,12 @@ export const DoneStep = memo(function DoneStep({
   displayEmail,
   isBypassAdmin,
   appUrl,
-  waitlistPosition,
   referralCode,
   referralLink,
   primaryCta,
   onCopyReferral,
   copyToast,
 }: DoneStepProps) {
-  const points = waitlistPosition?.points.total ?? SIGNUP_POINTS
-  const rank = waitlistPosition?.rank.total ?? null
-
   return (
     <motion.div {...fadeUp} className="relative overflow-hidden space-y-6">
       {/* Celebration background (progressive enhancement) */}
@@ -52,6 +47,7 @@ export const DoneStep = memo(function DoneStep({
         {/* readability overlay */}
         <div className="absolute inset-0 bg-[#020202]/60" />
       </div>
+
       {/* Success Header */}
       <motion.div {...scaleIn} className="text-center space-y-4">
         <div className="flex justify-center">
@@ -75,52 +71,31 @@ export const DoneStep = memo(function DoneStep({
           {displayEmail && (
             <p className="text-[14px] text-zinc-500 mt-1">{displayEmail}</p>
           )}
+          <p className="text-[13px] text-zinc-600 mt-2">
+            We'll notify you when it's your turn.
+          </p>
         </div>
       </motion.div>
 
-      {/* Points Summary */}
-      <motion.div {...fadeUp} className="rounded-2xl bg-zinc-900/50 border border-zinc-800/50 p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.15em] text-zinc-600 font-medium">
-              Starting Points
-            </div>
-            <div className="text-[32px] font-light text-white tabular-nums">
-              {points.toLocaleString()}
-            </div>
-          </div>
-          {rank && (
-            <div className="text-right">
-              <div className="flex items-center gap-1.5 text-zinc-400">
-                <Trophy className="w-4 h-4" />
-                <span className="text-[14px]">Rank #{rank}</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </motion.div>
-
-      {/* Primary CTA - Go to Profile */}
-      <motion.div {...fadeUp} className="space-y-3">
-        <a
-          href={primaryCta?.href || '/portfolio'}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-[#0052FF] text-white text-[15px] font-medium hover:bg-[#0047E1] transition-all duration-200 active:scale-[0.98]"
-        >
-          {primaryCta?.label || 'Earn More Points'}
-          <ArrowRight className="w-4 h-4" />
-        </a>
-        
-        <p className="text-center text-[13px] text-zinc-500">
-          {primaryCta ? 'If you’re allowed to deploy, continue now.' : 'Connect socials and invite friends to climb the leaderboard'}
-        </p>
-      </motion.div>
+      {/* Primary CTA */}
+      {primaryCta ? (
+        <motion.div {...fadeUp}>
+          <a
+            href={primaryCta.href}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-[#0052FF] text-white text-[15px] font-medium hover:bg-[#0047E1] transition-all duration-200 active:scale-[0.98]"
+          >
+            {primaryCta.label}
+            <ArrowRight className="w-4 h-4" />
+          </a>
+        </motion.div>
+      ) : null}
 
       {/* Quick Referral Link */}
       {referralCode && (
         <motion.div {...fadeUp} className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3">
           <div className="flex items-center gap-2">
             <div className="flex-1 min-w-0">
-              <div className="text-[11px] text-zinc-600 mb-1">Your referral link</div>
+              <div className="text-[11px] text-zinc-600 mb-1">Share with friends</div>
               <div className="font-mono text-[12px] text-zinc-400 truncate">
                 {referralLink}
               </div>
@@ -139,26 +114,17 @@ export const DoneStep = memo(function DoneStep({
         </motion.div>
       )}
 
-      {/* Secondary Links */}
-      <motion.div {...fadeUp} className="flex items-center justify-center gap-4 text-[13px]">
-        <a
-          href="/leaderboard"
-          className="text-zinc-500 hover:text-zinc-300 transition-colors"
-        >
-          View Leaderboard
-        </a>
-        {isBypassAdmin && (
-          <>
-            <span className="text-zinc-700">•</span>
-            <a
-              href={`${appUrl}/deploy`}
-              className="text-[#0052FF] hover:text-[#3373FF] transition-colors"
-            >
-              Deploy (Admin)
-            </a>
-          </>
-        )}
-      </motion.div>
+      {/* Admin Link */}
+      {isBypassAdmin && (
+        <motion.div {...fadeUp} className="flex items-center justify-center text-[13px]">
+          <a
+            href={`${appUrl}/deploy`}
+            className="text-[#0052FF] hover:text-[#3373FF] transition-colors"
+          >
+            Deploy (Admin)
+          </a>
+        </motion.div>
+      )}
     </motion.div>
   )
 })
