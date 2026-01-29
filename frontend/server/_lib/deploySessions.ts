@@ -44,7 +44,7 @@ export async function ensureDeploySessionsSchema(): Promise<void> {
   if (deploySessionsSchemaEnsured) return
   try {
     await db.sql`
-      CREATE TABLE IF NOT EXISTS deploy_sessions (
+      CREATE TABLE IF NOT EXISTS deploys (
         id TEXT PRIMARY KEY,
         token_hash TEXT UNIQUE NOT NULL,
         session_address TEXT NOT NULL,
@@ -63,10 +63,10 @@ export async function ensureDeploySessionsSchema(): Promise<void> {
       );
     `
 
-    await db.sql`CREATE INDEX IF NOT EXISTS deploy_sessions_sender_idx ON deploy_sessions (smart_wallet);`
-    await db.sql`CREATE INDEX IF NOT EXISTS deploy_sessions_session_address_idx ON deploy_sessions (session_address);`
-    await db.sql`CREATE INDEX IF NOT EXISTS deploy_sessions_step_idx ON deploy_sessions (step);`
-    await db.sql`CREATE INDEX IF NOT EXISTS deploy_sessions_expires_idx ON deploy_sessions (expires_at);`
+    await db.sql`CREATE INDEX IF NOT EXISTS deploys_sender_idx ON deploys (smart_wallet);`
+    await db.sql`CREATE INDEX IF NOT EXISTS deploys_session_address_idx ON deploys (session_address);`
+    await db.sql`CREATE INDEX IF NOT EXISTS deploys_step_idx ON deploys (step);`
+    await db.sql`CREATE INDEX IF NOT EXISTS deploys_expires_idx ON deploys (expires_at);`
     deploySessionsSchemaEnsured = true
   } catch (err) {
     deploySessionsSchemaEnsured = false
@@ -145,7 +145,7 @@ export async function insertDeploySession(params: {
   const payloadJson = params.payload ?? {}
 
   await db.sql`
-    INSERT INTO deploy_sessions (
+    INSERT INTO deploys (
       id,
       token_hash,
       session_address,
@@ -179,7 +179,7 @@ export async function getDeploySessionById(id: string): Promise<DeploySessionRec
   const db = await getDb()
   if (!db) return null
   await ensureDeploySessionsSchema()
-  const res = await db.sql`SELECT * FROM deploy_sessions WHERE id = ${id} LIMIT 1;`
+  const res = await db.sql`SELECT * FROM deploys WHERE id = ${id} LIMIT 1;`
   const row = (res.rows?.[0] ?? null) as any
   return row ? mapRow(row) : null
 }
@@ -188,7 +188,7 @@ export async function getDeploySessionByTokenHash(tokenHash: string): Promise<De
   const db = await getDb()
   if (!db) return null
   await ensureDeploySessionsSchema()
-  const res = await db.sql`SELECT * FROM deploy_sessions WHERE token_hash = ${tokenHash} LIMIT 1;`
+  const res = await db.sql`SELECT * FROM deploys WHERE token_hash = ${tokenHash} LIMIT 1;`
   const row = (res.rows?.[0] ?? null) as any
   return row ? mapRow(row) : null
 }
@@ -220,7 +220,7 @@ export async function getActiveDeploySessionForSender(params: {
   const res = includeExpired
     ? includeFailed
       ? await db.sql`
-          SELECT * FROM deploy_sessions
+          SELECT * FROM deploys
           WHERE session_address = ${sessionAddress}
             AND smart_wallet = ${smartWallet}
             AND step != 'completed'
@@ -228,7 +228,7 @@ export async function getActiveDeploySessionForSender(params: {
           LIMIT 1;
         `
       : await db.sql`
-          SELECT * FROM deploy_sessions
+          SELECT * FROM deploys
           WHERE session_address = ${sessionAddress}
             AND smart_wallet = ${smartWallet}
             AND step NOT IN ('completed', 'failed')
@@ -237,7 +237,7 @@ export async function getActiveDeploySessionForSender(params: {
         `
     : includeFailed
       ? await db.sql`
-          SELECT * FROM deploy_sessions
+          SELECT * FROM deploys
           WHERE session_address = ${sessionAddress}
             AND smart_wallet = ${smartWallet}
             AND step != 'completed'
@@ -246,7 +246,7 @@ export async function getActiveDeploySessionForSender(params: {
           LIMIT 1;
         `
       : await db.sql`
-          SELECT * FROM deploy_sessions
+          SELECT * FROM deploys
           WHERE session_address = ${sessionAddress}
             AND smart_wallet = ${smartWallet}
             AND step NOT IN ('completed', 'failed')
@@ -274,7 +274,7 @@ export async function updateDeploySession(params: {
   if (patch && typeof patch === 'object') {
     // Merge JSONB (right-biased).
     await db.sql`
-      UPDATE deploy_sessions
+      UPDATE deploys
       SET
         payload = COALESCE(payload, '{}'::jsonb) || ${patch},
         step = COALESCE(${params.step ?? null}, step),
@@ -288,7 +288,7 @@ export async function updateDeploySession(params: {
   }
 
   await db.sql`
-    UPDATE deploy_sessions
+    UPDATE deploys
     SET
       step = COALESCE(${params.step ?? null}, step),
       last_error = COALESCE(${params.lastError ?? null}, last_error),

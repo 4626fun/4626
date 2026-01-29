@@ -64,7 +64,7 @@ async function checkSupabase(): Promise<{ ok: boolean; latencyMs: number | null;
   try {
     const supabase = getSupabaseAdmin()
     // Minimal query that validates connectivity + schema presence.
-    const q = await supabase.from('creator_allowlist').select('address').limit(1)
+    const q = await supabase.from('allowlist').select('address').limit(1)
     if (q.error) throw new Error(q.error.message)
     return { ok: true, latencyMs: Date.now() - start, error: null }
   } catch (err: unknown) {

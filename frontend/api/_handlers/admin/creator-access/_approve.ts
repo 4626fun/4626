@@ -46,7 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const now = new Date().toISOString()
 
       const r = await supabase
-        .from('creator_access_requests')
+        .from('access_requests')
         .select('wallet_address')
         .eq('id', requestId)
         .limit(1)
@@ -65,11 +65,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (typeof note === 'string') allowPayload.note = note
 
-      const up = await supabase.from('creator_allowlist').upsert(allowPayload, { onConflict: 'address' })
+      const up = await supabase.from('allowlist').upsert(allowPayload, { onConflict: 'address' })
       if (up.error) throw new Error(up.error.message)
 
       const u = await supabase
-        .from('creator_access_requests')
+        .from('access_requests')
         .update({
           status: 'approved',
           reviewed_at: now,
@@ -101,7 +101,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Resolve wallet address from the request row.
-  const r = await db.query(`SELECT wallet_address FROM creator_access_requests WHERE id = $1 LIMIT 1;`, [requestId])
+  const r = await db.query(`SELECT wallet_address FROM access_requests WHERE id = $1 LIMIT 1;`, [requestId])
   const wallet = r.rows?.[0]?.wallet_address ? String(r.rows[0].wallet_address).toLowerCase() : ''
   if (!wallet) {
     return res.status(404).json({ success: false, error: 'Request not found' } satisfies ApiEnvelope<never>)
@@ -109,7 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Upsert allowlist entry.
   await db.query(
-    `INSERT INTO creator_allowlist (address, approved_by, approved_at, revoked_at, note)
+    `INSERT INTO allowlist (address, approved_by, approved_at, revoked_at, note)
      VALUES ($1, $2, NOW(), NULL, $3)
      ON CONFLICT (address)
      DO UPDATE SET
@@ -122,7 +122,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Mark request as approved.
   await db.query(
-    `UPDATE creator_access_requests
+    `UPDATE access_requests
        SET status = 'approved',
            reviewed_at = NOW(),
            reviewed_by = $1,

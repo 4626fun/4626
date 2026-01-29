@@ -24,7 +24,7 @@ async function restoreViaSupabase(params: { address: `0x${string}`; admin: `0x${
   const now = new Date().toISOString()
 
   const existing = await supabase
-    .from('creator_allowlist')
+    .from('allowlist')
     .select('address, note')
     .eq('address', params.address)
     .limit(1)
@@ -39,7 +39,7 @@ async function restoreViaSupabase(params: { address: `0x${string}`; admin: `0x${
   if (typeof params.note === 'string') payload.note = params.note
   else if ((existing.data ?? []).length > 0 && (existing.data as any)[0]?.note) payload.note = (existing.data as any)[0].note
 
-  const upsertRes = await supabase.from('creator_allowlist').upsert(payload, { onConflict: 'address' })
+  const upsertRes = await supabase.from('allowlist').upsert(payload, { onConflict: 'address' })
   if (upsertRes.error) throw new Error(upsertRes.error.message)
 }
 
@@ -89,14 +89,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   await db.query(
-    `INSERT INTO creator_allowlist (address, approved_by, approved_at, revoked_at, note)
+    `INSERT INTO allowlist (address, approved_by, approved_at, revoked_at, note)
      VALUES ($1, $2, NOW(), NULL, $3)
      ON CONFLICT (address)
      DO UPDATE SET
        approved_by = EXCLUDED.approved_by,
        approved_at = NOW(),
        revoked_at = NULL,
-       note = COALESCE(EXCLUDED.note, creator_allowlist.note);`,
+       note = COALESCE(EXCLUDED.note, allowlist.note);`,
     [address, admin, note],
   )
 

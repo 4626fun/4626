@@ -97,7 +97,7 @@ export default async function handler(req: any, res: any) {
               COALESCE(SUM(CASE WHEN l.source = 'referral_qualified' THEN l.amount ELSE 0 END), 0)::int AS invite_points
             FROM wallet_rollup w
             LEFT JOIN eligible_with_key e ON e.wallet_key = w.wallet_key
-            LEFT JOIN waitlist_points_ledger l ON l.signup_id = e.id
+            LEFT JOIN points l ON l.signup_id = e.id
             GROUP BY w.canonical_signup_id, w.wallet_key, w.referral_code
           ),
           ranked AS (
@@ -151,7 +151,7 @@ export default async function handler(req: any, res: any) {
               COALESCE(SUM(CASE WHEN l.source = 'referral_qualified' THEN l.amount ELSE 0 END), 0)::int AS invite_points
             FROM wallet_rollup w
             LEFT JOIN eligible_with_key e ON e.wallet_key = w.wallet_key
-            LEFT JOIN waitlist_points_ledger l ON l.signup_id = e.id
+            LEFT JOIN points l ON l.signup_id = e.id
             GROUP BY w.canonical_signup_id, w.wallet_key, w.referral_code
           ),
           ranked AS (

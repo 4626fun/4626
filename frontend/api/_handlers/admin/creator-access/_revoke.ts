@@ -26,7 +26,7 @@ async function revokeViaSupabase(params: { address: `0x${string}`; note: string 
   if (typeof params.note === 'string') payload.note = params.note
 
   const updateRes = await supabase
-    .from('creator_allowlist')
+    .from('allowlist')
     .update(payload)
     .eq('address', params.address)
     .select('address')
@@ -84,7 +84,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const out = await db.query(
-    `UPDATE creator_allowlist
+    `UPDATE allowlist
        SET revoked_at = NOW(),
            note = $1
      WHERE address = $2

@@ -119,7 +119,7 @@ export default async function handler(req: any, res: any) {
       COALESCE(SUM(CASE WHEN source = 'csw_link' THEN amount ELSE 0 END), 0)::int AS csw,
       COALESCE(SUM(CASE WHEN source LIKE 'social_%' THEN amount ELSE 0 END), 0)::int AS social,
       COALESCE(SUM(CASE WHEN source LIKE 'bonus_%' THEN amount ELSE 0 END), 0)::int AS bonus
-    FROM waitlist_points_ledger
+    FROM points
     WHERE signup_id = ${signupId};
   `
   const p = pointsAgg?.rows?.[0] ?? {}
@@ -176,7 +176,7 @@ export default async function handler(req: any, res: any) {
         COALESCE(SUM(l.amount), 0)::int AS total_points,
         COALESCE(SUM(CASE WHEN l.source = 'referral_qualified' THEN l.amount ELSE 0 END), 0)::int AS invite_points
       FROM eligible e
-      LEFT JOIN waitlist_points_ledger l ON l.signup_id = e.id
+      LEFT JOIN points l ON l.signup_id = e.id
       GROUP BY e.id
     ),
     ranked AS (
@@ -204,7 +204,7 @@ export default async function handler(req: any, res: any) {
         COALESCE(SUM(l.amount), 0)::int AS total_points,
         COALESCE(SUM(CASE WHEN l.source = 'referral_qualified' THEN l.amount ELSE 0 END), 0)::int AS invite_points
       FROM eligible e
-      LEFT JOIN waitlist_points_ledger l ON l.signup_id = e.id
+      LEFT JOIN points l ON l.signup_id = e.id
       GROUP BY e.id
     ),
     ranked AS (

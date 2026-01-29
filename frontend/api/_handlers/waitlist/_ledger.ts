@@ -82,14 +82,14 @@ export default async function handler(req: any, res: any) {
 
   const totalAgg = await db.sql`
     SELECT COALESCE(SUM(amount), 0)::int AS total
-    FROM waitlist_points_ledger
+    FROM points
     WHERE signup_id = ${signupId};
   `
   const totalPoints = safeInt(totalAgg?.rows?.[0]?.total)
 
   const ledger = await db.sql`
     SELECT source, source_id, amount, created_at
-    FROM waitlist_points_ledger
+    FROM points
     WHERE signup_id = ${signupId}
     ORDER BY created_at DESC
     LIMIT 200;

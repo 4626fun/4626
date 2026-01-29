@@ -211,7 +211,7 @@ export async function ensureCreatorAccessSchema(): Promise<void> {
   creatorAccessSchemaEnsured = true
 
   await db.sql`
-    CREATE TABLE IF NOT EXISTS creator_allowlist (
+    CREATE TABLE IF NOT EXISTS allowlist (
       address TEXT PRIMARY KEY,
       csw_address TEXT,
       approved_by TEXT,
@@ -221,19 +221,19 @@ export async function ensureCreatorAccessSchema(): Promise<void> {
     );
   `
 
-  await db.sql`CREATE INDEX IF NOT EXISTS creator_allowlist_revoked_at_idx ON creator_allowlist (revoked_at);`
+  await db.sql`CREATE INDEX IF NOT EXISTS allowlist_revoked_at_idx ON allowlist (revoked_at);`
   
   // Add csw_address column if it doesn't exist (migration for existing tables)
   try {
-    await db.sql`ALTER TABLE creator_allowlist ADD COLUMN IF NOT EXISTS csw_address TEXT;`
+    await db.sql`ALTER TABLE allowlist ADD COLUMN IF NOT EXISTS csw_address TEXT;`
   } catch {
     // Column may already exist
   }
   
-  await db.sql`CREATE INDEX IF NOT EXISTS creator_allowlist_csw_idx ON creator_allowlist (csw_address) WHERE csw_address IS NOT NULL;`
+  await db.sql`CREATE INDEX IF NOT EXISTS allowlist_csw_idx ON allowlist (csw_address) WHERE csw_address IS NOT NULL;`
 
   await db.sql`
-    CREATE TABLE IF NOT EXISTS creator_access_requests (
+    CREATE TABLE IF NOT EXISTS access_requests (
       id BIGSERIAL PRIMARY KEY,
       wallet_address TEXT NOT NULL,
       coin_address TEXT,
@@ -250,21 +250,21 @@ export async function ensureCreatorAccessSchema(): Promise<void> {
   // If it already exists, Postgres will throw; that's fine.
   try {
     await db.sql`
-      ALTER TABLE creator_access_requests
-        ADD CONSTRAINT creator_access_requests_status_check
+      ALTER TABLE access_requests
+        ADD CONSTRAINT access_requests_status_check
         CHECK (status IN ('pending', 'approved', 'denied'));
     `
   } catch {
     // ignore
   }
 
-  await db.sql`CREATE INDEX IF NOT EXISTS creator_access_requests_status_created_idx ON creator_access_requests (status, created_at DESC);`
-  await db.sql`CREATE INDEX IF NOT EXISTS creator_access_requests_wallet_idx ON creator_access_requests (wallet_address);`
+  await db.sql`CREATE INDEX IF NOT EXISTS access_requests_status_created_idx ON access_requests (status, created_at DESC);`
+  await db.sql`CREATE INDEX IF NOT EXISTS access_requests_wallet_idx ON access_requests (wallet_address);`
 
   // Prevent multiple concurrent pending requests per wallet.
   await db.sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS creator_access_requests_wallet_pending_unique
-      ON creator_access_requests (wallet_address)
+    CREATE UNIQUE INDEX IF NOT EXISTS access_requests_wallet_pending_unique
+      ON access_requests (wallet_address)
       WHERE status = 'pending';
   `
 }

@@ -44,7 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const supabase = getSupabaseAdmin()
       const now = new Date().toISOString()
       const u = await supabase
-        .from('creator_access_requests')
+        .from('access_requests')
         .update({
           status: 'denied',
           reviewed_at: now,
@@ -81,7 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const u = await db.query(
-    `UPDATE creator_access_requests
+    `UPDATE access_requests
        SET status = 'denied',
            reviewed_at = NOW(),
            reviewed_by = $1,

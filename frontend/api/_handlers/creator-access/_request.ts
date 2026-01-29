@@ -45,7 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // If already allowlisted, short-circuit.
       const allow = await supabase
-        .from('creator_allowlist')
+        .from('allowlist')
         .select('address')
         .eq('address', sessionAddress)
         .is('revoked_at', null)
@@ -66,7 +66,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Prefer "one pending request per wallet". If table constraint isn't present yet,
       // we still de-dupe by updating the latest pending request.
       const existing = await supabase
-        .from('creator_access_requests')
+        .from('access_requests')
         .select('id')
         .eq('wallet_address', sessionAddress)
         .eq('status', 'pending')
@@ -82,7 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (existingId && Number.isFinite(existingId) && existingId > 0) {
         const u = await supabase
-          .from('creator_access_requests')
+          .from('access_requests')
           .update({ coin_address: coin, updated_at: now })
           .eq('id', existingId)
           .select('id')
@@ -95,7 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const inserted = await supabase
-        .from('creator_access_requests')
+        .from('access_requests')
         .insert({ wallet_address: sessionAddress, coin_address: coin, status: 'pending' })
         .select('id')
         .limit(1)
@@ -129,7 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // If already allowlisted, short-circuit.
-  const allow = await db.query(`SELECT address FROM creator_allowlist WHERE address = $1 AND revoked_at IS NULL LIMIT 1;`, [
+  const allow = await db.query(`SELECT address FROM allowlist WHERE address = $1 AND revoked_at IS NULL LIMIT 1;`, [
     sessionAddress,
   ])
   if (allow.rows.length > 0) {
@@ -145,11 +145,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Create (or update) a pending request.
   const inserted = await db.query(
-    `INSERT INTO creator_access_requests (wallet_address, coin_address, status)
+    `INSERT INTO access_requests (wallet_address, coin_address, status)
      VALUES ($1, $2, 'pending')
      ON CONFLICT (wallet_address) WHERE status = 'pending'
      DO UPDATE SET
-       coin_address = COALESCE(EXCLUDED.coin_address, creator_access_requests.coin_address),
+       coin_address = COALESCE(EXCLUDED.coin_address, access_requests.coin_address),
        updated_at = NOW()
      RETURNING id;`,
     [sessionAddress, coin],

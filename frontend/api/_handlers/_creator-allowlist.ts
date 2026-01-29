@@ -48,7 +48,7 @@ async function dbIsAllowlisted(
   for (const a of addresses) {
     const addr = a.toLowerCase()
     if (!isAddressLike(addr)) continue
-    const { rows } = await db.sql`SELECT address FROM creator_allowlist WHERE address = ${addr} AND revoked_at IS NULL LIMIT 1;`
+    const { rows } = await db.sql`SELECT address FROM allowlist WHERE address = ${addr} AND revoked_at IS NULL LIMIT 1;`
     if (rows.length > 0) return true
   }
   return false
@@ -101,7 +101,7 @@ async function supabaseIsAllowlisted(addresses: string[]): Promise<boolean> {
 
   const supabase = getSupabaseAdmin()
   const res = await supabase
-    .from('creator_allowlist')
+    .from('allowlist')
     .select('address')
     .in('address', addrs)
     .is('revoked_at', null)

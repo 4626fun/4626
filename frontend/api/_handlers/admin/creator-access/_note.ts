@@ -22,7 +22,7 @@ function isAddressLike(value: string): boolean {
 async function updateNoteSupabase(params: { address: `0x${string}`; note: string }) {
   const supabase = getSupabaseAdmin()
   const updateRes = await supabase
-    .from('creator_allowlist')
+    .from('allowlist')
     .update({ note: params.note })
     .eq('address', params.address)
     .select('address')
@@ -80,7 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const r = await db.query(
-    `UPDATE creator_allowlist
+    `UPDATE allowlist
        SET note = $1
      WHERE address = $2
      RETURNING address;`,

@@ -63,7 +63,7 @@ export async function ensureWaitlistPointsSchema(db: Db): Promise<void> {
 
     // Append-only points ledger (idempotent via unique key).
     await db.sql`
-      CREATE TABLE IF NOT EXISTS waitlist_points_ledger (
+      CREATE TABLE IF NOT EXISTS points (
         id BIGSERIAL PRIMARY KEY,
         signup_id BIGINT NOT NULL,
         source TEXT NOT NULL,
@@ -73,11 +73,11 @@ export async function ensureWaitlistPointsSchema(db: Db): Promise<void> {
       );
     `
     await db.sql`
-      CREATE UNIQUE INDEX IF NOT EXISTS waitlist_points_ledger_unique_source
-        ON waitlist_points_ledger (signup_id, source, source_id)
+      CREATE UNIQUE INDEX IF NOT EXISTS points_unique_source
+        ON points (signup_id, source, source_id)
         WHERE source_id IS NOT NULL;
     `
-    await db.sql`CREATE INDEX IF NOT EXISTS waitlist_points_ledger_signup_idx ON waitlist_points_ledger (signup_id, created_at DESC);`
+    await db.sql`CREATE INDEX IF NOT EXISTS points_signup_idx ON points (signup_id, created_at DESC);`
 
     waitlistPointsSchemaEnsured = true
   } catch {
@@ -95,7 +95,7 @@ export async function awardWaitlistPoints(params: {
 }): Promise<void> {
   const { db, signupId, source, sourceId, amount } = params
   await db.sql`
-    INSERT INTO waitlist_points_ledger (signup_id, source, source_id, amount, created_at)
+    INSERT INTO points (signup_id, source, source_id, amount, created_at)
     VALUES (${signupId}, ${source}, ${sourceId}, ${amount}, NOW())
     ON CONFLICT (signup_id, source, source_id) DO NOTHING;
   `

@@ -40,7 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const supabase = getSupabaseAdmin()
       const allowRes = await supabase
-        .from('creator_allowlist')
+        .from('allowlist')
         .select('address')
         .eq('address', sessionAddress)
         .is('revoked_at', null)
@@ -49,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const approved = Array.isArray(allowRes.data) && allowRes.data.length > 0
 
       const reqRes = await supabase
-        .from('creator_access_requests')
+        .from('access_requests')
         .select('id, coin_address, status, created_at, reviewed_at, decision_note')
         .eq('wallet_address', sessionAddress)
         .order('created_at', { ascending: false })
@@ -92,14 +92,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ success: false, error: 'Database driver missing query()' } satisfies ApiEnvelope<never>)
   }
 
-  const allow = await db.query(`SELECT address FROM creator_allowlist WHERE address = $1 AND revoked_at IS NULL LIMIT 1;`, [
+  const allow = await db.query(`SELECT address FROM allowlist WHERE address = $1 AND revoked_at IS NULL LIMIT 1;`, [
     sessionAddress,
   ])
   const approved = allow.rows.length > 0
 
   const r = await db.query(
     `SELECT id, coin_address, status, created_at, reviewed_at, decision_note
-     FROM creator_access_requests
+     FROM access_requests
      WHERE wallet_address = $1
      ORDER BY created_at DESC
      LIMIT 1;`,

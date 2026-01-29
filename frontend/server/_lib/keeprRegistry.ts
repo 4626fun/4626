@@ -171,7 +171,7 @@ export async function upsertKeeprVault(params: { config: KeeprConfigV1; actorWal
   `
 
   await db.sql`
-    INSERT INTO keepr_audit_log (vault_address, actor_wallet, event_type, details)
+    INSERT INTO keepr_logs (vault_address, actor_wallet, event_type, details)
     VALUES (
       ${vaultAddress},
       ${params.actorWallet ? String(params.actorWallet).toLowerCase() : null},
@@ -285,7 +285,7 @@ export async function setKeeprJoinLocked(params: {
   `
 
   await db.sql`
-    INSERT INTO keepr_audit_log (vault_address, actor_wallet, event_type, details)
+    INSERT INTO keepr_logs (vault_address, actor_wallet, event_type, details)
     VALUES (
       ${String(params.vaultAddress).toLowerCase()},
       ${params.actorWallet ? String(params.actorWallet).toLowerCase() : null},

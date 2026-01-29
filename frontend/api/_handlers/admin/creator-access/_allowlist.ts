@@ -47,7 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Filter by address (substring) if provided, but keep tight limit.
       const baseQuery = supabase
-        .from('creator_allowlist')
+        .from('allowlist')
         .select('address, approved_at, approved_by, note')
         .is('revoked_at', null)
         .order('approved_at', { ascending: false })
@@ -93,7 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     q && like
       ? await db.query(
           `SELECT address, approved_at, approved_by, note
-           FROM creator_allowlist
+           FROM allowlist
            WHERE revoked_at IS NULL AND address LIKE $1
            ORDER BY approved_at DESC NULLS LAST
            LIMIT 200;`,
@@ -101,7 +101,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         )
       : await db.query(
           `SELECT address, approved_at, approved_by, note
-           FROM creator_allowlist
+           FROM allowlist
            WHERE revoked_at IS NULL
            ORDER BY approved_at DESC NULLS LAST
            LIMIT 200;`,

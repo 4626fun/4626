@@ -421,9 +421,9 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
   if (isSupabaseAdminConfigured()) {
     const supabase = getSupabaseAdmin()
     try {
-      // Check creator_allowlist first (direct address match)
+      // Check allowlist first (direct address match)
       const allowlistedRes = await supabase
-        .from('creator_allowlist')
+        .from('allowlist')
         .select('address')
         .ilike('address', addr)
         .is('revoked_at', null)
@@ -434,7 +434,7 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
 
       // Check if session is owner of any allowlisted CSW (on-chain check)
       const cswRes = await supabase
-        .from('creator_allowlist')
+        .from('allowlist')
         .select('csw_address')
         .not('csw_address', 'is', null)
         .is('revoked_at', null)
@@ -493,7 +493,7 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
 
     // Check direct address match
     const allowlistedQ = await db.query(
-      `SELECT address FROM creator_allowlist WHERE LOWER(address) = $1 AND revoked_at IS NULL LIMIT 1;`,
+      `SELECT address FROM allowlist WHERE LOWER(address) = $1 AND revoked_at IS NULL LIMIT 1;`,
       [addr],
     )
     if (Array.isArray(allowlistedQ.rows) && allowlistedQ.rows.length > 0) {
@@ -502,7 +502,7 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
 
     // Check CSW ownership (session is owner of an allowlisted CSW)
     const cswQ = await db.query(
-      `SELECT csw_address FROM creator_allowlist WHERE csw_address IS NOT NULL AND revoked_at IS NULL LIMIT 50;`,
+      `SELECT csw_address FROM allowlist WHERE csw_address IS NOT NULL AND revoked_at IS NULL LIMIT 50;`,
       [],
     )
     if (Array.isArray(cswQ.rows)) {

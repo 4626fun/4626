@@ -116,7 +116,7 @@ export async function ensureKeeprSchema(): Promise<void> {
     }
 
     await db.sql`
-      CREATE TABLE IF NOT EXISTS keepr_audit_log (
+      CREATE TABLE IF NOT EXISTS keepr_logs (
         id BIGSERIAL PRIMARY KEY,
         vault_address TEXT NOT NULL,
         actor_wallet TEXT,
@@ -125,7 +125,7 @@ export async function ensureKeeprSchema(): Promise<void> {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `
-    await db.sql`CREATE INDEX IF NOT EXISTS keepr_audit_vault_idx ON keepr_audit_log (vault_address, created_at DESC);`
+    await db.sql`CREATE INDEX IF NOT EXISTS keepr_audit_vault_idx ON keepr_logs (vault_address, created_at DESC);`
 
     // Users who attempted to join but were ineligible can be "watched".
     // Keepr will periodically re-check eligibility and auto-add when eligible.
@@ -240,7 +240,7 @@ export async function ensureKeeprSchema(): Promise<void> {
       DO $$
       BEGIN
         IF to_regclass('public.takopi_audit_log') IS NOT NULL THEN
-          INSERT INTO keepr_audit_log (id, vault_address, actor_wallet, event_type, details, created_at)
+          INSERT INTO keepr_logs (id, vault_address, actor_wallet, event_type, details, created_at)
           SELECT id, vault_address, actor_wallet, event_type, details, created_at
           FROM takopi_audit_log
           ON CONFLICT (id) DO NOTHING;
@@ -255,7 +255,7 @@ export async function ensureKeeprSchema(): Promise<void> {
       // ignore
     }
     try {
-      await db.sql`SELECT setval(pg_get_serial_sequence('keepr_audit_log', 'id'), COALESCE((SELECT MAX(id) FROM keepr_audit_log), 1), true);`
+      await db.sql`SELECT setval(pg_get_serial_sequence('keepr_logs', 'id'), COALESCE((SELECT MAX(id) FROM keepr_logs), 1), true);`
     } catch {
       // ignore
     }

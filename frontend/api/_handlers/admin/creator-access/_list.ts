@@ -39,7 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const supabase = getSupabaseAdmin()
       const q = await supabase
-        .from('creator_access_requests')
+        .from('access_requests')
         .select('id, wallet_address, coin_address, created_at')
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
@@ -54,7 +54,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const allowRes =
         wallets.length > 0
           ? await supabase
-              .from('creator_allowlist')
+              .from('allowlist')
               .select('address')
               .in('address', wallets)
               .is('revoked_at', null)
@@ -102,8 +102,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
        r.coin_address,
        r.created_at,
        CASE WHEN a.address IS NOT NULL THEN true ELSE false END AS allowlisted
-     FROM creator_access_requests r
-     LEFT JOIN creator_allowlist a
+     FROM access_requests r
+     LEFT JOIN allowlist a
        ON a.address = r.wallet_address AND a.revoked_at IS NULL
      WHERE r.status = 'pending'
      ORDER BY r.created_at DESC
