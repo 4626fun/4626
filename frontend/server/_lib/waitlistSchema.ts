@@ -24,6 +24,10 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
         has_creator_coin BOOLEAN NULL,
         farcaster_fid BIGINT NULL,
         contact_preference TEXT NULL,
+        app_access_status TEXT NOT NULL DEFAULT 'pending',
+        app_access_decision_note TEXT NULL,
+        app_access_decided_at TIMESTAMPTZ NULL,
+        app_access_decided_by TEXT NULL,
         verifications JSONB NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -44,6 +48,10 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
       await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS primary_wallet TEXT NULL;`
       await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS solana_wallet TEXT NULL;`
       await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS contact_preference TEXT NULL;`
+      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS app_access_status TEXT NOT NULL DEFAULT 'pending';`
+      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS app_access_decision_note TEXT NULL;`
+      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS app_access_decided_at TIMESTAMPTZ NULL;`
+      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS app_access_decided_by TEXT NULL;`
       await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS verifications JSONB NULL;`
       await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`
       await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`

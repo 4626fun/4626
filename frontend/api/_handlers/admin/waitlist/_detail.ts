@@ -21,6 +21,10 @@ type WaitlistDetail = {
   farcasterFid: number | null
   contactPreference: string | null
   verifications: unknown | null
+  appAccessStatus: string | null
+  appAccessDecisionNote: string | null
+  appAccessDecidedAt: string | null
+  appAccessDecidedBy: string | null
   referralCode: string | null
   referredByCode: string | null
   referredBySignupId: number | null
@@ -134,6 +138,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     farcasterFid: typeof row.farcaster_fid === 'number' ? row.farcaster_fid : row.farcaster_fid ? Number(row.farcaster_fid) : null,
     contactPreference: typeof row.contact_preference === 'string' ? row.contact_preference : null,
     verifications: row.verifications ?? null,
+    appAccessStatus: typeof row.app_access_status === 'string' ? row.app_access_status : null,
+    appAccessDecisionNote: typeof row.app_access_decision_note === 'string' ? row.app_access_decision_note : null,
+    appAccessDecidedAt: toIso(row.app_access_decided_at),
+    appAccessDecidedBy: typeof row.app_access_decided_by === 'string' ? row.app_access_decided_by : null,
     referralCode: typeof row.referral_code === 'string' ? row.referral_code : null,
     referredByCode: typeof row.referred_by_code === 'string' ? row.referred_by_code : null,
     referredBySignupId:

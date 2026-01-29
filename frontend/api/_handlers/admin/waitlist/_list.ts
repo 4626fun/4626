@@ -16,6 +16,8 @@ type WaitlistListItem = {
   embeddedWalletClientType: string | null
   referralCode: string | null
   contactPreference: string | null
+  appAccessStatus: string | null
+  appAccessDecidedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -86,6 +88,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
        embedded_wallet_client_type,
        referral_code,
        contact_preference,
+       app_access_status,
+       app_access_decided_at,
        created_at,
        updated_at
      FROM waitlist_signups
@@ -106,6 +110,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     embeddedWalletClientType: typeof row.embedded_wallet_client_type === 'string' ? row.embedded_wallet_client_type : null,
     referralCode: typeof row.referral_code === 'string' ? row.referral_code : null,
     contactPreference: typeof row.contact_preference === 'string' ? row.contact_preference : null,
+    appAccessStatus: typeof row.app_access_status === 'string' ? row.app_access_status : null,
+    appAccessDecidedAt: toIso(row.app_access_decided_at) || null,
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
   }))

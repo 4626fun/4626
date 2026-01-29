@@ -83,7 +83,8 @@ async function dbIsWaitlisted(
     const { rows } = await db.sql`
       SELECT id
       FROM waitlist_signups
-      WHERE lower(primary_wallet) = ${addr} OR lower(embedded_wallet) = ${addr}
+      WHERE (lower(primary_wallet) = ${addr} OR lower(embedded_wallet) = ${addr})
+        AND COALESCE(app_access_status, 'pending') = 'approved'
       LIMIT 1;
     `
     return rows.length > 0
@@ -130,6 +131,7 @@ async function supabaseIsWaitlisted(address: string | null): Promise<boolean> {
       .from('waitlist_signups')
       .select('id')
       .or(`primary_wallet.eq.${addr},embedded_wallet.eq.${addr}`)
+      .eq('app_access_status', 'approved')
       .limit(1)
     if (res.error) return false
     return Array.isArray(res.data) && res.data.length > 0

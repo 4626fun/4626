@@ -96,6 +96,8 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'admin/creator-access/revoke': () => import('./admin/creator-access/_revoke.js'),
   'admin/waitlist/detail': () => import('./admin/waitlist/_detail.js'),
   'admin/waitlist/list': () => import('./admin/waitlist/_list.js'),
+  'admin/waitlist/approve': () => import('./admin/waitlist/_approve.js'),
+  'admin/waitlist/deny': () => import('./admin/waitlist/_deny.js'),
 }
 
 export async function getApiHandler(subpath: string): Promise<ApiHandler | null> {

@@ -21,6 +21,8 @@ type WaitlistListItem = {
   embeddedWalletClientType: string | null
   referralCode: string | null
   contactPreference: string | null
+  appAccessStatus: string | null
+  appAccessDecidedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -45,6 +47,10 @@ type WaitlistDetail = {
   farcasterFid: number | null
   contactPreference: string | null
   verifications: unknown | null
+  appAccessStatus: string | null
+  appAccessDecisionNote: string | null
+  appAccessDecidedAt: string | null
+  appAccessDecidedBy: string | null
   referralCode: string | null
   referredByCode: string | null
   referredBySignupId: number | null
@@ -101,6 +107,9 @@ export function AdminWaitlist() {
 
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [decisionNote, setDecisionNote] = useState('')
+  const [decisionBusy, setDecisionBusy] = useState(false)
+  const [decisionError, setDecisionError] = useState<string | null>(null)
 
   const listQuery = useQuery({
     queryKey: ['adminWaitlistList', query.trim().toLowerCase()],
@@ -127,11 +136,38 @@ export function AdminWaitlist() {
   const items = listQuery.data?.items ?? []
   const detail = detailQuery.data?.signup ?? null
 
+  useEffect(() => {
+    if (!detail) return
+    setDecisionNote(detail.appAccessDecisionNote ?? '')
+  }, [detail])
+
   const errorMessage = useMemo(() => {
     const e = listQuery.error || detailQuery.error
     if (!(e instanceof Error)) return null
     return e.message
   }, [detailQuery.error, listQuery.error])
+
+  const applyDecision = async (action: 'approve' | 'deny') => {
+    if (!selectedId) return
+    setDecisionBusy(true)
+    setDecisionError(null)
+    try {
+      const res = await apiFetch(`/api/admin/waitlist/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ id: selectedId, note: decisionNote.trim().length > 0 ? decisionNote.trim() : null }),
+      })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<any> | null
+      if (!res.ok || !json || json.success !== true) {
+        throw new Error((json && typeof json.error === 'string' && json.error) || `Update failed (HTTP ${res.status})`)
+      }
+      await Promise.all([listQuery.refetch(), detailQuery.refetch()])
+    } catch (e: any) {
+      setDecisionError(e?.message ? String(e.message) : 'Update failed')
+    } finally {
+      setDecisionBusy(false)
+    }
+  }
 
   const adminTabs = useMemo(
     () => [
@@ -255,6 +291,10 @@ export function AdminWaitlist() {
         </div>
       ) : null}
 
+      {decisionError ? (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs text-red-200">{decisionError}</div>
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="rounded-xl border border-white/10 bg-black/30 overflow-hidden">
           <div className="px-4 py-3 border-b border-white/10 text-xs text-zinc-600 flex items-center justify-between">
@@ -284,6 +324,20 @@ export function AdminWaitlist() {
                       <span>{item.persona ?? 'N/A'}</span>
                       <span>{shortAddr(item.primaryWallet || item.embeddedWallet || item.solanaWallet)}</span>
                     </div>
+                    <div className="mt-1 flex items-center justify-between gap-2 text-[11px]">
+                      <span className="text-zinc-600">access</span>
+                      <span
+                        className={
+                          item.appAccessStatus === 'approved'
+                            ? 'text-emerald-300'
+                            : item.appAccessStatus === 'denied'
+                              ? 'text-rose-300'
+                              : 'text-amber-300'
+                        }
+                      >
+                        {item.appAccessStatus ?? 'pending'}
+                      </span>
+                    </div>
                   </button>
                 )
               })
@@ -297,6 +351,56 @@ export function AdminWaitlist() {
             <div className="text-sm text-zinc-600">{selectedId ? 'Loading...' : 'Select a signup to view details.'}</div>
           ) : (
             <div className="space-y-4">
+              <div className="rounded-lg border border-white/10 bg-black/20 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-600">App access</div>
+                    <div
+                      className={`text-sm font-medium ${
+                        detail.appAccessStatus === 'approved'
+                          ? 'text-emerald-300'
+                          : detail.appAccessStatus === 'denied'
+                            ? 'text-rose-300'
+                            : 'text-amber-300'
+                      }`}
+                    >
+                      {detail.appAccessStatus ?? 'pending'}
+                    </div>
+                    <div className="text-[11px] text-zinc-600">
+                      {detail.appAccessDecidedAt ? `Decided ${formatDate(detail.appAccessDecidedAt)}` : 'Not decided yet'}
+                      {detail.appAccessDecidedBy ? ` · by ${shortAddr(detail.appAccessDecidedBy)}` : ''}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="btn-accent"
+                      disabled={decisionBusy}
+                      onClick={() => void applyDecision('approve')}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      disabled={decisionBusy}
+                      onClick={() => void applyDecision('deny')}
+                    >
+                      Deny
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  value={decisionNote}
+                  onChange={(e) => setDecisionNote(e.target.value)}
+                  placeholder="Decision note (optional)"
+                  className="w-full min-h-[70px] rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
+                />
+                <div className="text-[11px] text-zinc-600">
+                  Approved users can access the app and deploy flows that require allowlist access.
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <div>
                   <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-600">Email</div>

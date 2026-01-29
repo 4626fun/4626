@@ -413,6 +413,7 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
           .from('waitlist_signups')
           .select('id')
           .or(`primary_wallet.eq.${addr},embedded_wallet.eq.${addr}`)
+          .eq('app_access_status', 'approved')
           .limit(1),
       ])
       if (allowlistedRes.error || linkedRes.error || waitlistedRes.error) throw new Error('allowlist_check_failed')
@@ -444,7 +445,11 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
       db.query(`SELECT wallet_address FROM creator_wallets WHERE wallet_address = $1 LIMIT 1;`, [addr]).catch(() => ({ rows: [] })),
       db
         .query(
-          `SELECT id FROM waitlist_signups WHERE lower(primary_wallet) = $1 OR lower(embedded_wallet) = $1 LIMIT 1;`,
+          `SELECT id
+           FROM waitlist_signups
+           WHERE (lower(primary_wallet) = $1 OR lower(embedded_wallet) = $1)
+             AND COALESCE(app_access_status, 'pending') = 'approved'
+           LIMIT 1;`,
           [addr],
         )
         .catch(() => ({ rows: [] })),
