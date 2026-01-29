@@ -50,6 +50,13 @@ const COINBASE_SMART_WALLET_OWNERS_ABI = [
     inputs: [{ name: 'index', type: 'uint256' }],
     outputs: [{ type: 'bytes' }],
   },
+  {
+    type: 'function',
+    name: 'nextOwnerIndex',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
 ] as const
 
 function asOwnerBytes(owner: Address): Hex {
@@ -63,7 +70,7 @@ async function findCoinbaseSmartWalletOwnerIndex(params: {
   ownerAddress: Address
   maxScan?: number
 }): Promise<{ ownerIndex: number | null; ownerCount: number }> {
-  const { publicClient, smartWallet, ownerAddress, maxScan = 64 } = params
+  const { publicClient, smartWallet, ownerAddress, maxScan = 256 } = params
   const countRaw = (await publicClient.readContract({
     address: smartWallet,
     abi: COINBASE_SMART_WALLET_OWNERS_ABI,
@@ -72,8 +79,22 @@ async function findCoinbaseSmartWalletOwnerIndex(params: {
   const count = Number(countRaw)
   if (!Number.isFinite(count) || count <= 0) return { ownerIndex: null, ownerCount: 0 }
 
+  // Use nextOwnerIndex when available to avoid missing owners after removals.
+  let upperBound = count
+  try {
+    const nextRaw = (await publicClient.readContract({
+      address: smartWallet,
+      abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+      functionName: 'nextOwnerIndex',
+    })) as bigint
+    const next = Number(nextRaw)
+    if (Number.isFinite(next) && next > 0) upperBound = next
+  } catch {
+    // ignore; fallback to ownerCount
+  }
+
   const expected = asOwnerBytes(ownerAddress).toLowerCase()
-  const limit = Math.min(count, Math.max(1, maxScan))
+  const limit = Math.min(upperBound, Math.max(1, maxScan))
   for (let i = 0; i < limit; i++) {
     const b = (await publicClient.readContract({
       address: smartWallet,
@@ -179,7 +200,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     smartWallet,
     ownerAddress,
   })
-  const resolvedOwnerIndex = ownerIndex ?? (ownerCount === 1 ? 0 : null)
+  const resolvedOwnerIndex = ownerIndex ?? null
   if (resolvedOwnerIndex === null) {
     throw new Error('Connected wallet is not an onchain owner of this Coinbase Smart Wallet.')
   }

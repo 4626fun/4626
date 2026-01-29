@@ -34,6 +34,7 @@ const COINBASE_SMART_WALLET_ABI = [
 const COINBASE_SMART_WALLET_OWNERS_ABI = [
   { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'ownerAtIndex', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'bytes' }] },
+  { type: 'function', name: 'nextOwnerIndex', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 ] as const
 
 type RequestBody = {
@@ -108,7 +109,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         functionName: 'ownerCount',
       })) as bigint
       const count = Number(countRaw)
-      const maxScan = Math.min(Number.isFinite(count) ? count : 0, 64)
+      let upperBound = Number.isFinite(count) ? count : 0
+      try {
+        const nextRaw = (await client.readContract({
+          address: smartWallet as `0x${string}`,
+          abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+          functionName: 'nextOwnerIndex',
+        })) as bigint
+        const next = Number(nextRaw)
+        if (Number.isFinite(next) && next > 0) upperBound = next
+      } catch {
+        // ignore; fallback to ownerCount
+      }
+      const maxScan = Math.min(upperBound, 128)
       const expected = String(encodeAbiParameters([{ type: 'address' }], [ownerAddress as `0x${string}`])).toLowerCase()
       let isOwner = false
       for (let i = 0; i < maxScan; i++) {
