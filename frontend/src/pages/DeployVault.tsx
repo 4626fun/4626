@@ -1705,6 +1705,8 @@ function DeployVaultBatcher({
         const embeddedOwnerExec = canUsePrivyEmbeddedOwner ? embeddedOwnerAddr : null
         const ownerExec = (embeddedOwnerExec ?? externalOwnerExec) as Address | null
         const ownerWalletClient = canUsePrivyEmbeddedOwner ? (embeddedWalletClient as any) : (activeWalletClient as any)
+        // For CSW UserOps, prefer eth_sign when using Privy embedded wallets.
+        const userOpSignMode = canUsePrivyEmbeddedOwner ? 'eth_sign' : 'auto'
 
         // Enforce custody: the smart wallet sender must already hold the initial deposit.
         const smartWalletBalance = (await publicClient.readContract({
@@ -1843,7 +1845,7 @@ function DeployVaultBatcher({
             ownerAddress: ownerExec as Address,
             calls: toCalls(phase1Calls),
             version: '1',
-              userOpSignMode: 'auto',
+              userOpSignMode,
           })
           setTxId(r1.transactionHash)
           setPhaseTxs((s) => ({ ...s, userOp1: r1.userOpHash, tx1: r1.transactionHash }))
@@ -1868,7 +1870,7 @@ function DeployVaultBatcher({
             ownerAddress: ownerExec as Address,
             calls: toCalls(phase2Calls),
             version: '1',
-            userOpSignMode: 'auto',
+            userOpSignMode,
           })
           setTxId(r2.transactionHash)
           setPhaseTxs((s) => ({ ...s, userOp2: r2.userOpHash, tx2: r2.transactionHash }))
@@ -1894,7 +1896,7 @@ function DeployVaultBatcher({
               ownerAddress: ownerExec as Address,
               calls: toCalls(phase3Calls),
               version: '1',
-              userOpSignMode: 'auto',
+              userOpSignMode,
             })
             setTxId(r3.transactionHash)
             setPhaseTxs((s) => ({ ...s, userOp3: r3.userOpHash, tx3: r3.transactionHash }))
