@@ -4,6 +4,7 @@ import type { ZoraCoin, ZoraProfile } from '@/lib/zora/types'
 
 export type CreatorIdentitySource =
   | 'zoraCoinCreatorAddress'
+  | 'privySmartWallet'
   | 'farcasterCustody'
   | 'zoraProfilePublicWallet'
   | 'connectedWallet'
@@ -43,20 +44,23 @@ function normalizeAddress(value: unknown): Address | null {
 /**
  * Resolve canonical creator identity in a way that prevents fragmentation.
  *
- * Rules (your requested precedence):
- * - If a creator coin exists (Zora Coin metadata present), enforce its creator address as canonical identity.
- * - Otherwise, if we can infer a public wallet from a Zora profile (e.g. via Farcaster username → Zora profile),
- *   use that as canonical identity.
- * - Otherwise, fall back to the connected wallet (but treat this as fragile; caller should confirm before irreversible actions).
+ * Rules (Privy-first approach):
+ * - If Privy smart wallet is available and matches the creator coin's creator address, use it (no blocking).
+ * - If a creator coin exists and Privy smart wallet doesn't match, block (wrong account).
+ * - If no creator coin exists, use Privy smart wallet as the canonical identity for new deployments.
+ * - Fallback to connected wallet only if Privy is unavailable.
  */
 export function resolveCreatorIdentity(params: {
   connectedWallet: Address | null
+  privySmartWallet?: Address | null
   zoraCoin?: ZoraCoin | null
   farcasterZoraProfile?: ZoraProfile | null
   farcasterCustodyAddress?: Address | null
 }): CreatorIdentityResolution {
-  const execution = normalizeAddress(params.connectedWallet)
+  const privyWallet = normalizeAddress(params.privySmartWallet)
+  const connectedWallet = normalizeAddress(params.connectedWallet)
   const zoraCoinCreator = normalizeAddress(params.zoraCoin?.creatorAddress)
+  const zoraCoinPayoutRecipient = normalizeAddress(params.zoraCoin?.payoutRecipientAddress)
 
   const farcasterPublicWallet = normalizeAddress(params.farcasterZoraProfile?.publicWallet?.walletAddress)
   const farcasterCustody = normalizeAddress(params.farcasterCustodyAddress)
@@ -67,12 +71,41 @@ export function resolveCreatorIdentity(params: {
   if (zoraCoinCreator) {
     const canonical = zoraCoinCreator
 
-    let blockingReason: string | null = null
-    if (execution && execution.toLowerCase() !== canonical.toLowerCase()) {
+    // If Privy smart wallet matches the creator address OR the payout recipient, allow it
+    if (privyWallet) {
+      const privyLc = privyWallet.toLowerCase()
+      const isCreator = canonical.toLowerCase() === privyLc
+      const isPayoutRecipient = zoraCoinPayoutRecipient && zoraCoinPayoutRecipient.toLowerCase() === privyLc
+
+      if (isCreator || isPayoutRecipient) {
+        // Privy smart wallet is authorized - no blocking
+        return {
+          canonicalIdentity: { address: canonical, source: 'zoraCoinCreatorAddress' },
+          execution: { address: privyWallet },
+          hasExistingCreatorCoinIdentity: true,
+          blockingReason: null,
+          warnings,
+        }
+      }
+
+      // Privy smart wallet doesn't match - block
       warnings.push('CONNECTED_WALLET_MISMATCH')
-      blockingReason = `This creator coin’s canonical identity is ${canonical}. You’re connected as ${execution}. Switch to the canonical identity wallet to continue.`
-    } else if (!execution) {
-      blockingReason = `Connect the canonical identity wallet (${canonical}) to continue.`
+      return {
+        canonicalIdentity: { address: canonical, source: 'zoraCoinCreatorAddress' },
+        execution: { address: privyWallet },
+        hasExistingCreatorCoinIdentity: true,
+        blockingReason: `This creator coin belongs to ${canonical}. Your Privy wallet (${privyWallet}) doesn't match. Sign in with the account you used on Zora.`,
+        warnings,
+      }
+    }
+
+    // No Privy wallet - fall back to connected wallet check
+    let blockingReason: string | null = null
+    if (connectedWallet && connectedWallet.toLowerCase() !== canonical.toLowerCase()) {
+      warnings.push('CONNECTED_WALLET_MISMATCH')
+      blockingReason = `This creator coin's canonical identity is ${canonical}. You're connected as ${connectedWallet}. Sign in with Privy using the account you used on Zora.`
+    } else if (!connectedWallet) {
+      blockingReason = `Sign in to continue.`
     }
 
     if (farcasterCustody && farcasterCustody.toLowerCase() !== canonical.toLowerCase()) {
@@ -81,57 +114,64 @@ export function resolveCreatorIdentity(params: {
 
     return {
       canonicalIdentity: { address: canonical, source: 'zoraCoinCreatorAddress' },
-      execution: { address: execution },
+      execution: { address: connectedWallet },
       hasExistingCreatorCoinIdentity: true,
       blockingReason,
       warnings,
     }
   }
 
-  // 2) Farcaster custody (high-confidence identity when coin is absent)
+  // 2) No existing coin - Privy smart wallet becomes the canonical identity for new deployments
+  if (privyWallet) {
+    return {
+      canonicalIdentity: { address: privyWallet, source: 'privySmartWallet' },
+      execution: { address: privyWallet },
+      hasExistingCreatorCoinIdentity: false,
+      blockingReason: null,
+      warnings,
+    }
+  }
+
+  // 3) Farcaster custody (fallback when Privy unavailable)
   if (farcasterCustody) {
     const canonical = farcasterCustody
 
     let blockingReason: string | null = null
-    if (execution && execution.toLowerCase() !== canonical.toLowerCase()) {
+    if (connectedWallet && connectedWallet.toLowerCase() !== canonical.toLowerCase()) {
       warnings.push('CONNECTED_WALLET_MISMATCH')
-      blockingReason = `Your Farcaster custody wallet is ${canonical}. You’re connected as ${execution}. Switch to the custody wallet (or use an identity-signed authorization) to continue.`
-    } else if (!execution) {
-      blockingReason = `Connect your Farcaster custody wallet (${canonical}) to continue.`
+      blockingReason = `Your Farcaster custody wallet is ${canonical}. Sign in with Privy using that account.`
+    } else if (!connectedWallet) {
+      blockingReason = `Sign in to continue.`
     }
 
     return {
       canonicalIdentity: { address: canonical, source: 'farcasterCustody' },
-      execution: { address: execution },
+      execution: { address: connectedWallet },
       hasExistingCreatorCoinIdentity: false,
       blockingReason,
       warnings,
     }
   }
 
-  // 3) No coin + no custody: block deploy/launch actions (avoid accidental identity fragmentation)
+  // 4) No coin + no Privy + no custody: require sign-in
   warnings.push('CUSTODY_UNAVAILABLE')
 
   if (farcasterPublicWallet) {
-    const canonical = farcasterPublicWallet
-    if (execution && execution.toLowerCase() !== canonical.toLowerCase()) warnings.push('CONNECTED_WALLET_MISMATCH')
     return {
-      canonicalIdentity: { address: canonical, source: 'zoraProfilePublicWallet' },
-      execution: { address: execution },
+      canonicalIdentity: { address: farcasterPublicWallet, source: 'zoraProfilePublicWallet' },
+      execution: { address: connectedWallet },
       hasExistingCreatorCoinIdentity: false,
-      blockingReason:
-        'Farcaster custody is unavailable (or could not be verified). For safety, we cannot proceed with irreversible onchain actions right now.',
+      blockingReason: 'Sign in with Privy to continue.',
       warnings,
     }
   }
 
-  if (execution) {
+  if (connectedWallet) {
     return {
-      canonicalIdentity: { address: execution, source: 'connectedWallet' },
-      execution: { address: execution },
+      canonicalIdentity: { address: connectedWallet, source: 'connectedWallet' },
+      execution: { address: connectedWallet },
       hasExistingCreatorCoinIdentity: false,
-      blockingReason:
-        'Farcaster custody is unavailable (or could not be verified). For safety, we cannot proceed with irreversible onchain actions right now.',
+      blockingReason: 'Sign in with Privy to continue.',
       warnings,
     }
   }
@@ -140,8 +180,7 @@ export function resolveCreatorIdentity(params: {
     canonicalIdentity: { address: null, source: 'unknown' },
     execution: { address: null },
     hasExistingCreatorCoinIdentity: false,
-    blockingReason: 'Connect a wallet to continue.',
+    blockingReason: 'Sign in to continue.',
     warnings,
   }
 }
-

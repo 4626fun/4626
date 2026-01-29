@@ -23,7 +23,6 @@ import { coinABI } from '@zoralabs/protocol-deployments'
 import { BarChart3, ChevronDown, Layers, Lock, Rocket, ShieldCheck } from 'lucide-react'
 import { useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
-import { ConnectButtonWeb3 } from '@/components/ConnectButtonWeb3'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { DerivedTokenIcon } from '@/components/DerivedTokenIcon'
 import { RequestCreatorAccess } from '@/components/RequestCreatorAccess'
@@ -2152,8 +2151,6 @@ function DeployVaultMain() {
   
   const [creatorToken, setCreatorToken] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [linkOwnerBusy, setLinkOwnerBusy] = useState(false)
-  const [linkOwnerError, setLinkOwnerError] = useState<string | null>(null)
   
   // Connected wallet is the user's Coinbase Smart Wallet
   const connectedWalletAddress = useMemo(() => {
@@ -2324,6 +2321,10 @@ function DeployVaultMain() {
   // Detect "your" creator coin + smart wallet from your Zora profile and prefill inputs once.
   const myProfileQuery = useZoraProfile(address)
   const myProfile = myProfileQuery.data
+  
+  // Also query Privy smart wallet's Zora profile (for Privy-first flow)
+  const privyWalletProfileQuery = useZoraProfile(privySmartWalletAddress ?? undefined)
+  const privyWalletProfile = privyWalletProfileQuery.data
   const miniApp = useMiniAppContext()
   const farcasterAuth = useFarcasterAuth()
   // `sdk.context.*` is untrusted. Prefer verified Farcaster auth (Quick Auth / SIWF) when available.
@@ -2419,6 +2420,12 @@ function DeployVaultMain() {
     return isAddress(v) ? (v as Address) : null
   }, [farcasterProfileQuery.data?.creatorCoin?.address])
 
+  // Detect creator coin from Privy smart wallet's Zora profile (Privy-first flow)
+  const detectedCreatorCoinFromPrivy = useMemo(() => {
+    const v = privyWalletProfile?.creatorCoin?.address ? String(privyWalletProfile.creatorCoin.address) : ''
+    return isAddress(v) ? (v as Address) : null
+  }, [privyWalletProfile?.creatorCoin?.address])
+
   // Privy provides the smart wallet directly - no need to detect from Zora profile
   const publicClient = usePublicClient({ chainId: base.id })
   const entryPointBytecodeQuery = useQuery({
@@ -2461,6 +2468,18 @@ function DeployVaultMain() {
     setCreatorToken(detectedCreatorCoinFromFarcaster)
     autofillRef.current.tokenFor = key
   }, [prefillToken, creatorToken, verifiedFarcasterUsername, detectedCreatorCoinFromFarcaster])
+
+  // Privy-first: auto-fill creator coin from Privy smart wallet's Zora profile
+  useEffect(() => {
+    if (!privyAuthenticated || !privySmartWalletAddress) return
+    if (prefillToken) return
+    if (creatorToken.trim().length > 0) return
+    if (!detectedCreatorCoinFromPrivy) return
+    const key = `privy:${privySmartWalletAddress.toLowerCase()}`
+    if (autofillRef.current.tokenFor === key) return
+    setCreatorToken(detectedCreatorCoinFromPrivy)
+    autofillRef.current.tokenFor = key
+  }, [privyAuthenticated, privySmartWalletAddress, prefillToken, creatorToken, detectedCreatorCoinFromPrivy])
 
   const tokenIsValid = isAddress(creatorToken)
 
@@ -2612,16 +2631,17 @@ function DeployVaultMain() {
   void coinSmartWallet // reserved for future UX
 
   // Canonical identity enforcement (prevents irreversible fragmentation).
-  // For existing creator coins, we enforce `zoraCoin.creatorAddress` as the identity wallet.
-  // The connected wallet (EOA) may differ from canonical identity if it's an owner of a smart wallet.
+  // Privy smart wallet is the primary identity source.
+  // For existing creator coins, we verify Privy wallet matches the coin's creator/payout recipient.
   const identity = useMemo(() => {
     return resolveCreatorIdentity({
       connectedWallet: connectedWalletAddress,
+      privySmartWallet: privySmartWalletAddress,
       zoraCoin: zoraCoin ?? null,
       farcasterZoraProfile: farcasterProfileQuery.data ?? null,
       farcasterCustodyAddress,
     })
-  }, [connectedWalletAddress, farcasterCustodyAddress, farcasterProfileQuery.data, zoraCoin])
+  }, [connectedWalletAddress, privySmartWalletAddress, farcasterCustodyAddress, farcasterProfileQuery.data, zoraCoin])
 
   const canonicalIdentityAddress = identity.canonicalIdentity.address
   const deploySender = (canonicalIdentityAddress as Address | null) ?? null
@@ -2683,51 +2703,6 @@ function DeployVaultMain() {
       })
     },
   })
-
-  const linkBaseAccountOwner = useCallback(async () => {
-    if (!publicClient || !walletClient || !canonicalSmartWalletAddress || !embeddedPrivyEoaAddress || !connectedWalletAddress) return
-    setLinkOwnerBusy(true)
-    setLinkOwnerError(null)
-    try {
-      if (embeddedOwnerQuery.data === true) return
-      const executor = connectedWalletAddress
-      if (!executor || !isAddress(executor)) {
-        throw new Error('Connect a wallet that already owns the creator smart wallet.')
-      }
-      if (executor.toLowerCase() !== canonicalSmartWalletAddress.toLowerCase()) {
-        const isOwner = (await publicClient.readContract({
-          address: canonicalSmartWalletAddress as Address,
-          abi: COINBASE_SMART_WALLET_OWNER_LINK_ABI,
-          functionName: 'isOwnerAddress',
-          args: [executor as Address],
-        })) as boolean
-        if (!isOwner) throw new Error('Connected wallet is not an owner of the creator smart wallet.')
-      }
-
-      const hash = await (walletClient as any).writeContract({
-        account: (walletClient as any).account,
-        chain: base as any,
-        address: canonicalSmartWalletAddress as Address,
-        abi: COINBASE_SMART_WALLET_OWNER_LINK_ABI,
-        functionName: 'addOwnerAddress',
-        args: [embeddedPrivyEoaAddress as Address],
-      })
-      await (publicClient as any).waitForTransactionReceipt({ hash })
-      await embeddedOwnerQuery.refetch()
-    } catch (e: any) {
-      setLinkOwnerError(e?.shortMessage || e?.message || 'Failed to link embedded wallet')
-    } finally {
-      setLinkOwnerBusy(false)
-    }
-  }, [
-    baseAccountOwnerQuery,
-    canonicalSmartWalletAddress,
-    connectedWalletAddress,
-    embeddedOwnerQuery,
-    embeddedPrivyEoaAddress,
-    publicClient,
-    walletClient,
-  ])
 
   // Allow injected EOAs (Rabby/MetaMask/etc) to operate a Coinbase Smart Wallet canonical identity
   // when the EOA is an onchain owner of that smart wallet.
@@ -2800,14 +2775,6 @@ function DeployVaultMain() {
   // If the canonical identity is a smart wallet contract, wagmi should reflect that smart wallet address
   // via the Privy smart-wallet bridge.
   const isAuthorizedDeployer = !identityBlockingReason
-  const embeddedIsOwner = embeddedOwnerQuery.data === true
-  // Show link option when Privy embedded EOA exists but isn't yet an onchain owner.
-  const showBaseAccountLink =
-    !!canonicalSmartWalletAddress &&
-    !!embeddedPrivyEoaAddress &&
-    embeddedPrivyEoaAddress.toLowerCase() !== canonicalSmartWalletAddress.toLowerCase() &&
-    embeddedOwnerQuery.isFetching === false &&
-    embeddedIsOwner === false
 
   const { data: deploySenderTokenBalance } = useReadContract({
     address: tokenIsValid ? (creatorToken as `0x${string}`) : undefined,
@@ -3625,44 +3592,8 @@ function DeployVaultMain() {
                 </div>
               ) : null}
 
-              {showBaseAccountLink ? (
-                <div className="rounded-lg border border-white/10 bg-black/20 p-4 space-y-3">
-                  <div className="text-[10px] uppercase tracking-wide text-zinc-600">Enable embedded signer</div>
-                  <div className="text-xs text-zinc-600">
-                    This links your Privy embedded wallet as an owner of the creator Coinbase Smart Wallet. It’s a one‑time transaction signed by an existing owner.
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-zinc-600">
-                    <span>Authorizing wallet</span>
-                    <span className="font-mono text-zinc-300">
-                      {connectedWalletAddress ? shortAddress(String(connectedWalletAddress)) : 'Connect wallet'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-zinc-600">
-                    <span>Privy embedded</span>
-                    <span className="font-mono text-zinc-300">{embeddedPrivyEoaAddress ? shortAddress(String(embeddedPrivyEoaAddress)) : '—'}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-zinc-600">
-                    <span>Creator smart wallet</span>
-                    <span className="font-mono text-zinc-300">{shortAddress(String(canonicalSmartWalletAddress))}</span>
-                  </div>
-                  {embeddedOwnerQuery.isFetching ? (
-                    <div className="text-[11px] text-zinc-600">Checking owner status…</div>
-                  ) : embeddedIsOwner ? (
-                    <div className="text-[11px] text-emerald-300/80">Embedded wallet is already an owner.</div>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn-accent w-full disabled:opacity-60"
-                      disabled={linkOwnerBusy || baseAccountOwnerQuery.data !== true}
-                      onClick={() => void linkBaseAccountOwner()}
-                    >
-                      {linkOwnerBusy ? 'Linking…' : baseAccountOwnerQuery.data !== true ? 'Connect an owner wallet to link' : 'Link embedded wallet as owner'}
-                    </button>
-                  )}
-                  {linkOwnerError ? <div className="text-[11px] text-red-400/90">{linkOwnerError}</div> : null}
-                </div>
-              ) : null}
 
+              {/* Simplified auth flow: Privy only */}
               {!privyReady ? (
                 <button
                   disabled
@@ -3670,38 +3601,37 @@ function DeployVaultMain() {
                 >
                   Loading…
                 </button>
-              ) : !privyAuthenticated && !hasWallet ? (
+              ) : !privyAuthenticated ? (
                 <div className="space-y-3">
                   <button
                     type="button"
                     className="btn-accent w-full"
-                    onClick={() => void login({ loginMethods: ['email'] })}
+                    onClick={() => void login({ loginMethods: ['wallet', 'email'] })}
                   >
-                    Sign in with email
+                    Sign in to Deploy
                   </button>
                   <div className="text-[11px] text-zinc-600">
-                    Sign in to link your Coinbase Smart Wallet and deploy.
+                    Sign in with the same account you used on Zora to access your Creator Coin wallet.
                   </div>
                 </div>
-              ) : !privyAuthenticated && !executionCanOperateCanonical ? (
+              ) : !privySmartWalletAddress ? (
                 <div className="space-y-3">
                   <button
-                    type="button"
-                    className="btn-accent w-full"
-                    onClick={() => void login({ loginMethods: ['email'] })}
+                    disabled
+                    className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-600 text-sm cursor-not-allowed"
                   >
-                    Sign in with email
+                    No Smart Wallet detected
                   </button>
                   <div className="text-[11px] text-zinc-600">
-                    Sign in or connect a wallet that owns the creator smart wallet.
+                    Your Privy account doesn't have a Coinbase Smart Wallet. Sign in with the same account you used on Zora.
                   </div>
-                </div>
-              ) : !hasWallet ? (
-                <div className="space-y-3">
-                  <ConnectButtonWeb3 />
-                  <div className="text-[11px] text-zinc-600">
-                    Connect your Coinbase Smart Wallet to deploy.
-                  </div>
+                  <button
+                    type="button"
+                    className="btn-secondary w-full"
+                    onClick={() => void login({ loginMethods: ['wallet', 'email'] })}
+                  >
+                    Try different sign-in
+                  </button>
                 </div>
               ) : !tokenIsValid && creatorAllowlistQuery.isLoading ? (
                 <button

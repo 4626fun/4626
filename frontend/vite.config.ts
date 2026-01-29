@@ -134,6 +134,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/zora/profileCoins': () => import('./api/_handlers/zora/_profileCoins'),
         '/api/zora/topCreators': () => import('./api/_handlers/zora/_topCreators'),
         '/api/debank/totalBalanceBatch': () => import('./api/_handlers/debank/_totalBalanceBatch'),
+        '/api/debank/tokenList': () => import('./api/_handlers/debank/_tokenList'),
         '/api/dexscreener/tokenStatsBatch': () => import('./api/_handlers/dexscreener/_tokenStatsBatch'),
         '/api/status/protocolReport': () => import('./api/_handlers/status/_protocolReport'),
         '/api/status/vaultReport': () => import('./api/_handlers/status/_vaultReport'),
@@ -239,6 +240,9 @@ export default defineConfig(({ command }) => {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           web3: ['wagmi', 'viem', '@coinbase/onchainkit'],
+          privy: ['@privy-io/react-auth', '@privy-io/wagmi', '@privy-io/cross-app-connect'],
+          charts: ['d3', 'recharts'],
+          zora: ['@zoralabs/coins-sdk'],
         },
       },
     },

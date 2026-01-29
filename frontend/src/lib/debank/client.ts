@@ -18,6 +18,25 @@ export type DebankTotalBalanceBatch = {
   results: Record<string, DebankTotalBalance | null>
 }
 
+export type DebankToken = {
+  id: string
+  chain?: string
+  name?: string
+  symbol?: string
+  decimals?: number
+  logoUrl?: string
+  amount: number
+  price?: number
+  usdValue: number
+}
+
+export type DebankTokenList = {
+  asOf: number
+  address: string
+  chainId: string
+  tokens: DebankToken[]
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { headers: { Accept: 'application/json' } })
   if (!res.ok) {
@@ -81,3 +100,16 @@ export async function fetchDebankTotalBalanceBatch(params: { addresses: string[]
   return { asOf: asOf || Date.now(), results }
 }
 
+export async function fetchDebankTokenList(params: { address: string; chainId?: string }): Promise<DebankTokenList | null> {
+  const address = String(params.address || '').trim()
+  if (!address) return null
+  const chainId = String(params.chainId || 'base').trim()
+
+  try {
+    const qs = new URLSearchParams({ id: address, chainId })
+    const envelope = await fetchJson<ApiEnvelope<DebankTokenList>>(`/api/debank/tokenList?${qs.toString()}`)
+    return envelope.data ?? null
+  } catch {
+    return null
+  }
+}

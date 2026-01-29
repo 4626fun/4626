@@ -94,7 +94,7 @@ export const DoneStep = memo(function DoneStep({
       {/* Primary CTA - Go to Profile */}
       <motion.div {...fadeUp} className="space-y-3">
         <a
-          href="/profile"
+          href="/portfolio"
           className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-[#0052FF] text-white text-[15px] font-medium hover:bg-[#0047E1] transition-all duration-200 active:scale-[0.98]"
         >
           Earn More Points

@@ -34,6 +34,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'creator-access/status': () => import('./creator-access/_status.js'),
 
   'debank/totalBalanceBatch': () => import('./debank/_totalBalanceBatch.js'),
+  'debank/tokenList': () => import('./debank/_tokenList.js'),
   'dexscreener/tokenStatsBatch': () => import('./dexscreener/_tokenStatsBatch.js'),
 
   'deploy/session/cancel': () => import('./deploy/session/_cancel.js'),
