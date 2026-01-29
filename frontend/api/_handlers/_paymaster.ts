@@ -406,21 +406,41 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
   if (isSupabaseAdminConfigured()) {
     const supabase = getSupabaseAdmin()
     try {
-      const [allowlistedRes, linkedRes, waitlistedRes] = await Promise.all([
-        supabase.from('creator_allowlist').select('address').eq('address', addr).is('revoked_at', null).limit(1),
-        supabase.from('creator_wallets').select('wallet_address').eq('wallet_address', addr).limit(1),
-        supabase
-          .from('waitlist_signups')
-          .select('id')
-          .or(`primary_wallet.eq.${addr},embedded_wallet.eq.${addr}`)
-          .eq('app_access_status', 'approved')
-          .limit(1),
-      ])
-      if (allowlistedRes.error || linkedRes.error || waitlistedRes.error) throw new Error('allowlist_check_failed')
-      const allowlisted = Array.isArray(allowlistedRes.data) && allowlistedRes.data.length > 0
-      const linked = Array.isArray(linkedRes.data) && linkedRes.data.length > 0
-      const waitlisted = Array.isArray(waitlistedRes.data) && waitlistedRes.data.length > 0
-      return { mode: 'enforced', allowed: allowlisted || linked || waitlisted }
+      // Check creator_allowlist first (primary check)
+      const allowlistedRes = await supabase
+        .from('creator_allowlist')
+        .select('address')
+        .ilike('address', addr)
+        .is('revoked_at', null)
+        .limit(1)
+      if (!allowlistedRes.error && Array.isArray(allowlistedRes.data) && allowlistedRes.data.length > 0) {
+        return { mode: 'enforced', allowed: true }
+      }
+
+      // Check creator_wallets (linked wallets)
+      const linkedRes = await supabase
+        .from('creator_wallets')
+        .select('wallet_address')
+        .ilike('wallet_address', addr)
+        .limit(1)
+      if (!linkedRes.error && Array.isArray(linkedRes.data) && linkedRes.data.length > 0) {
+        return { mode: 'enforced', allowed: true }
+      }
+
+      // Check waitlist_signups with approved app_access_status
+      // Use raw query for case-insensitive wallet matching
+      const waitlistedRes = await supabase
+        .from('waitlist_signups')
+        .select('id')
+        .or(`primary_wallet.ilike.${addr},embedded_wallet.ilike.${addr}`)
+        .eq('app_access_status', 'approved')
+        .limit(1)
+      if (!waitlistedRes.error && Array.isArray(waitlistedRes.data) && waitlistedRes.data.length > 0) {
+        return { mode: 'enforced', allowed: true }
+      }
+
+      // If all checks passed without errors but no match, user is not allowed
+      return { mode: 'enforced', allowed: false }
     } catch {
       throw new Error('allowlist_check_failed')
     }
