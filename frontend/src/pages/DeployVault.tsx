@@ -1686,11 +1686,8 @@ function DeployVaultBatcher({
           )
         }
 
-        if (!canUsePrivySmartWallet && !!embeddedWalletClient && !!embeddedOwnerAddr && !embeddedIsOwner) {
-          throw new Error(
-            'Your Privy embedded wallet is not yet an owner of this Coinbase Smart Wallet. Link it once, then retry deploy.',
-          )
-        }
+        // Do NOT hard-block if an embedded wallet exists but isn't an onchain owner.
+        // We may still be able to proceed with an external owner wallet (or another valid signer path).
         
         // For external owners, prefer trying the operation even if the wallet is likely to block `eth_sign`.
         // Our AA signer wrapper will attempt `eth_sign` then fall back to `personal_sign`/`signMessage` where possible.

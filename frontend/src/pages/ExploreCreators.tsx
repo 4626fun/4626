@@ -326,7 +326,7 @@ export function ExploreCreators() {
           {/* Single horizontal scroll container (no double scrollbars) */}
           <div className="overflow-x-auto scrollbar-hide">
             <div className="min-w-max">
-              <div className="sticky top-24 z-20 border-b border-zinc-800 bg-zinc-950 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
+              <div className="sticky top-24 z-50 border-b border-zinc-800 bg-zinc-950 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
                 <TokenTableHeader timeframe={currentTimeFilter} currentSort={currentSort} onSortChange={handleSortChange} />
               </div>
 

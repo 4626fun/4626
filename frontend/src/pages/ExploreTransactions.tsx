@@ -279,8 +279,8 @@ export function ExploreTransactions() {
           transition={{ duration: 0.4, delay: 0.2 }}
           className="rounded-2xl border border-zinc-800 bg-zinc-900/50"
         >
-          {/* Sticky header (align with Explore tables) */}
-          <div className="sticky top-24 z-20 border-b border-zinc-800 bg-zinc-900/70 backdrop-blur">
+          {/* Sticky header */}
+          <div className="sticky top-24 z-50 border-b border-zinc-800 bg-zinc-950 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
             <ActivityTableHeader />
           </div>
 
