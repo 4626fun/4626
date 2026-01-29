@@ -1,9 +1,38 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { getSessionAddress, isAdminAddress } from '../../../server/_lib/session.js'
+import { getSessionAddress, isAdminAddress, isAdminEmail } from '../../../server/_lib/session.js'
+import { getDb } from '../../../server/_lib/db.js'
 
 type AdminResponse = { address: string; isAdmin: boolean } | null
+
+async function lookupEmailByWallet(address: string): Promise<string | null> {
+  try {
+    const db = getDb()
+    // Check waitlist_signups first (most common)
+    const r1 = await db.sql`
+      SELECT email FROM waitlist_signups
+      WHERE LOWER(primary_wallet) = LOWER(${address})
+         OR LOWER(embedded_wallet) = LOWER(${address})
+      LIMIT 1;
+    `
+    const email1 = r1?.rows?.[0]?.email
+    if (typeof email1 === 'string' && email1.length > 0) return email1
+
+    // Check creator_wallets
+    const r2 = await db.sql`
+      SELECT email FROM creator_wallets
+      WHERE LOWER(wallet_address) = LOWER(${address})
+      LIMIT 1;
+    `
+    const email2 = r2?.rows?.[0]?.email
+    if (typeof email2 === 'string' && email2.length > 0) return email2
+
+    return null
+  } catch {
+    return null
+  }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -19,9 +48,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ success: true, data: null } satisfies ApiEnvelope<AdminResponse>)
   }
 
+  // Check if admin by wallet address first
+  if (isAdminAddress(address)) {
+    return res.status(200).json({
+      success: true,
+      data: { address, isAdmin: true } satisfies NonNullable<AdminResponse>,
+    } satisfies ApiEnvelope<AdminResponse>)
+  }
+
+  // Check if admin by email (look up email from database)
+  const email = await lookupEmailByWallet(address)
+  if (email && isAdminEmail(email)) {
+    return res.status(200).json({
+      success: true,
+      data: { address, isAdmin: true } satisfies NonNullable<AdminResponse>,
+    } satisfies ApiEnvelope<AdminResponse>)
+  }
+
   return res.status(200).json({
     success: true,
-    data: { address, isAdmin: isAdminAddress(address) } satisfies NonNullable<AdminResponse>,
+    data: { address, isAdmin: false } satisfies NonNullable<AdminResponse>,
   } satisfies ApiEnvelope<AdminResponse>)
 }
 

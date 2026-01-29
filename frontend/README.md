@@ -121,6 +121,7 @@ npm run build
 | `DATABASE_URL` | Optional | server | Postgres connection string for local dev |
 | `AUTH_SESSION_SECRET` | Recommended | server | SIWE session secret (stable in production) |
 | `CREATOR_ACCESS_ADMIN_ADDRESSES` | Optional | server | Admin wallets allowed to approve/deny creator access |
+| `CREATOR_ACCESS_ADMIN_EMAILS` | Optional | server | Admin emails allowed to approve/deny creator access (looked up by wallet) |
 | `CREATOR_ALLOWLIST` | Optional | server | Legacy fallback allowlist (env-based, only used if DB is not configured) |
 | `PRIVY_APP_ID` | Optional | server | Privy App ID (server-side). Used by `/api/waitlist` when enabled |
 | `PRIVY_APP_SECRET` | Optional | server | Privy App Secret (server-side). Used by `/api/waitlist` when enabled |
@@ -150,7 +151,9 @@ CREATE TABLE IF NOT EXISTS waitlist_signups (
 
 - Approvals are managed at `/admin/creator-access`.
 - Requests are submitted from `/deploy`.
-- Admin access is controlled by `CREATOR_ACCESS_ADMIN_ADDRESSES` (comma/space separated).
+- Admin access is controlled by:
+  - `CREATOR_ACCESS_ADMIN_ADDRESSES` - comma/space separated wallet addresses
+  - `CREATOR_ACCESS_ADMIN_EMAILS` - comma/space separated emails (looked up from `waitlist_signups` or `creator_wallets` by signed-in wallet)
 
 ## License
 

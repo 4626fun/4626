@@ -43,4 +43,41 @@ export function isAdminAddress(address: `0x${string}`): boolean {
   return set.has(addrLc)
 }
 
+function normalizeEmail(v: string): string {
+  return v.trim().toLowerCase()
+}
+
+function isValidEmail(v: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+}
+
+export function isAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false
+  const raw = process.env.CREATOR_ACCESS_ADMIN_EMAILS
+  if (!raw) return false
+
+  const g: any = globalThis as any
+  const cached: { key: string; set: Set<string> } | undefined = g.__creatorvault_admin_emails_cache
+  const cacheKey = raw
+  const set =
+    cached && cached.key === cacheKey
+      ? cached.set
+      : (() => {
+          const parts = raw
+            .split(/[\s,]+/g)
+            .map((s) => normalizeEmail(s))
+            .filter(Boolean)
+          const out = new Set<string>()
+          for (const p of parts) {
+            if (!isValidEmail(p)) continue
+            out.add(p)
+          }
+          g.__creatorvault_admin_emails_cache = { key: cacheKey, set: out }
+          return out
+        })()
+
+  const emailLc = normalizeEmail(email)
+  return set.has(emailLc)
+}
+
 
