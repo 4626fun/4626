@@ -16,9 +16,11 @@ import {
 import { getApiContracts } from '../../server/_lib/contracts.js'
 import { logger } from '../../server/_lib/logger.js'
 import { ensureCreatorAccessSchema, getDb, isDbConfigured } from '../../server/_lib/postgres.js'
+import { ensureCreatorWalletsSchema } from '../../server/_lib/creatorWallets.js'
 import { getActiveDeploySessionForSender, getDeploySessionByTokenHash, hashDeployToken, signDeployToken } from '../../server/_lib/deploySessions.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
 import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../server/auth/_shared.js'
+import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -403,23 +405,55 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
 
   if (isSupabaseAdminConfigured()) {
     const supabase = getSupabaseAdmin()
-    const res = await supabase
-      .from('creator_allowlist')
-      .select('address')
-      .eq('address', addr)
-      .is('revoked_at', null)
-      .limit(1)
-    if (res.error) throw new Error('allowlist_check_failed')
-    return { mode: 'enforced', allowed: Array.isArray(res.data) && res.data.length > 0 }
+    try {
+      const [allowlistedRes, linkedRes, waitlistedRes] = await Promise.all([
+        supabase.from('creator_allowlist').select('address').eq('address', addr).is('revoked_at', null).limit(1),
+        supabase.from('creator_wallets').select('wallet_address').eq('wallet_address', addr).limit(1),
+        supabase
+          .from('waitlist_signups')
+          .select('id')
+          .or(`primary_wallet.eq.${addr},embedded_wallet.eq.${addr}`)
+          .limit(1),
+      ])
+      if (allowlistedRes.error || linkedRes.error || waitlistedRes.error) throw new Error('allowlist_check_failed')
+      const allowlisted = Array.isArray(allowlistedRes.data) && allowlistedRes.data.length > 0
+      const linked = Array.isArray(linkedRes.data) && linkedRes.data.length > 0
+      const waitlisted = Array.isArray(waitlistedRes.data) && waitlistedRes.data.length > 0
+      return { mode: 'enforced', allowed: allowlisted || linked || waitlisted }
+    } catch {
+      throw new Error('allowlist_check_failed')
+    }
   }
 
   if (isDbConfigured()) {
     const db = await getDb()
     if (!db) throw new Error('allowlist_check_failed')
     await ensureCreatorAccessSchema()
-    if (!db.query) throw new Error('allowlist_check_failed')
-    const { rows } = await db.query(`SELECT address FROM creator_allowlist WHERE address = $1 AND revoked_at IS NULL LIMIT 1;`, [addr])
-    return { mode: 'enforced', allowed: rows.length > 0 }
+    if (!db.query || typeof (db as any).sql !== 'function') throw new Error('allowlist_check_failed')
+    // Mirror `/api/creator-allowlist`: allow allowlisted OR linked OR waitlisted creators.
+    // This keeps paymaster/bundler gating consistent with the UI's creator-access decision.
+    try {
+      await ensureCreatorWalletsSchema(db as any)
+      await ensureWaitlistSchema(db as any)
+    } catch {
+      // Don't block everything if optional tables are unavailable; fall back to allowlist-only.
+    }
+
+    const [allowlistedQ, linkedQ, waitlistedQ] = await Promise.all([
+      db.query(`SELECT address FROM creator_allowlist WHERE address = $1 AND revoked_at IS NULL LIMIT 1;`, [addr]),
+      db.query(`SELECT wallet_address FROM creator_wallets WHERE wallet_address = $1 LIMIT 1;`, [addr]).catch(() => ({ rows: [] })),
+      db
+        .query(
+          `SELECT id FROM waitlist_signups WHERE lower(primary_wallet) = $1 OR lower(embedded_wallet) = $1 LIMIT 1;`,
+          [addr],
+        )
+        .catch(() => ({ rows: [] })),
+    ])
+
+    const allowlisted = Array.isArray(allowlistedQ.rows) && allowlistedQ.rows.length > 0
+    const linked = Array.isArray(linkedQ.rows) && linkedQ.rows.length > 0
+    const waitlisted = Array.isArray(waitlistedQ.rows) && waitlistedQ.rows.length > 0
+    return { mode: 'enforced', allowed: allowlisted || linked || waitlisted }
   }
 
   // Fallback (no DB): env allowlist (legacy/simple).

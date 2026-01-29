@@ -86,6 +86,16 @@ const CREATOR_COIN_OWNERS_ABI = [
   { type: 'function', name: 'ownerAt', inputs: [{ type: 'uint256' }], outputs: [{ type: 'address' }], stateMutability: 'view' },
 ] as const
 
+const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+  {
+    type: 'function',
+    name: 'addOwnerAddress',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'owner', type: 'address' }],
+    outputs: [],
+  },
+] as const
+
 async function isCoinbaseSmartWalletOwner(params: {
   smartWallet: Address
   ownerAddress: Address
@@ -1661,11 +1671,10 @@ function DeployVaultBatcher({
           embeddedOwnerAddr.toLowerCase() !== owner.toLowerCase() &&
           embeddedIsOwner
 
-        const canUseExternalOwner =
-          !canUsePrivySmartWallet &&
-          !!activeWalletClient &&
-          !!connectedAddr &&
-          connectedAddr.toLowerCase() !== owner.toLowerCase()
+        // We intentionally do NOT use an external/injected owner wallet for UserOp signing.
+        // Many wallets (notably Rabby) block the raw signature method (`eth_sign`) required for Coinbase Smart Wallet userOps.
+        // Instead, we require the Privy embedded EOA to be added as an onchain owner of the smart wallet once.
+        const canUseExternalOwner = false
 
         const hasMultipleInjectedProviders =
           typeof window !== 'undefined' &&
@@ -1678,12 +1687,12 @@ function DeployVaultBatcher({
               'Multiple wallet extensions detected. Disable one (MetaMask/Coinbase/Rabby) or use email sign-in to continue.',
             )
           }
-          if (!activeWalletClient && connectedAddr) {
-            throw new Error('Wallet connection is not ready. Reconnect your wallet and retry.')
+          if (embeddedOwnerAddr && !embeddedIsOwner) {
+            throw new Error(
+              'Your Privy embedded wallet must be added as an owner of this Coinbase Smart Wallet. Add it once, then retry deploy.',
+            )
           }
-          throw new Error(
-            'Sign in with Privy to use your embedded wallet, or connect an external wallet that owns the creator smart wallet.',
-          )
+          throw new Error('Sign in with Privy using email to create an embedded wallet, then add it as a Smart Wallet owner to continue.')
         }
 
         // Do NOT hard-block if an embedded wallet exists but isn't an onchain owner.
@@ -2100,7 +2109,8 @@ function DeployVaultBatcher({
 }
 
 function DeployVaultMain() {
-  const { address, isConnected } = useAccount()
+  const { address, isConnected, connector } = useAccount()
+  const { data: walletClient } = useWalletClient({ chainId: base.id })
   const { ready: privyReady, authenticated: privyAuthenticated, logout, getAccessToken } = usePrivy() as any
   const { login } = useLogin()
   const { wallets } = useWallets()
@@ -2108,6 +2118,9 @@ function DeployVaultMain() {
   const siwe = useSiweAuth()
   const [linkWalletBusy, setLinkWalletBusy] = useState(false)
   const [linkWalletError, setLinkWalletError] = useState<string | null>(null)
+  const [installOwnerBusy, setInstallOwnerBusy] = useState(false)
+  const [installOwnerTxHash, setInstallOwnerTxHash] = useState<string | null>(null)
+  const [installOwnerError, setInstallOwnerError] = useState<string | null>(null)
   const autoLoginAttemptRef = useRef(false)
   const autoBridgeAttemptRef = useRef(false)
   const [handoffState, setHandoffState] = useState<'idle' | 'signingIn' | 'bridging' | 'ready' | 'error'>('idle')
@@ -2221,6 +2234,16 @@ function DeployVaultMain() {
     )
   }, [wallets])
 
+  const embeddedPrivyEoaAddress = useMemo(() => {
+    try {
+      const w: any = embeddedPrivyWallet as any
+      const raw = typeof w?.address === 'string' ? String(w.address) : ''
+      return raw && isAddress(raw) ? (getAddress(raw) as Address) : null
+    } catch {
+      return null
+    }
+  }, [embeddedPrivyWallet])
+
   const { linkWallet } = useLinkAccount({
     onSuccess: () => {
       setLinkWalletBusy(false)
@@ -2231,6 +2254,15 @@ function DeployVaultMain() {
       setLinkWalletError(typeof err === 'string' ? err : 'Failed to link wallet')
     },
   })
+
+  const handleCopyEmbedded = useCallback(async () => {
+    if (!embeddedPrivyEoaAddress) return
+    try {
+      await navigator.clipboard.writeText(embeddedPrivyEoaAddress)
+    } catch {
+      // ignore
+    }
+  }, [embeddedPrivyEoaAddress])
 
   const [searchParams] = useSearchParams()
   const prefillToken = useMemo(() => searchParams.get('token') ?? '', [searchParams])
@@ -2675,6 +2707,121 @@ function DeployVaultMain() {
     retry: 0,
   })
   void canonicalIdentityBytecodeQuery // reserved for future UX
+
+  const canonicalIdentityIsContract = useMemo(() => {
+    const b = canonicalIdentityBytecodeQuery.data
+    return typeof b === 'string' && b !== '0x'
+  }, [canonicalIdentityBytecodeQuery.data])
+
+  const embeddedEoaIsCanonicalOwnerQuery = useQuery({
+    queryKey: ['coinbaseSmartWalletOwner', 'embedded', canonicalIdentityAddress, embeddedPrivyEoaAddress],
+    enabled: !!canonicalIdentityIsContract && !!canonicalIdentityAddress && !!embeddedPrivyEoaAddress,
+    staleTime: 15_000,
+    retry: 1,
+    queryFn: async () => {
+      const canonical = canonicalIdentityAddress as Address
+      const embedded = embeddedPrivyEoaAddress as Address
+      return await isCoinbaseSmartWalletOwner({ smartWallet: canonical, ownerAddress: embedded })
+    },
+  })
+  const embeddedEoaIsCanonicalOwner = embeddedEoaIsCanonicalOwnerQuery.data === true
+
+  const handleInstallEmbeddedAsOwner = useCallback(async () => {
+    if (installOwnerBusy) return
+    if (!canonicalIdentityIsContract || !canonicalIdentityAddress) {
+      setInstallOwnerError('Missing Coinbase Smart Wallet address.')
+      return
+    }
+    if (!embeddedPrivyEoaAddress) {
+      setInstallOwnerError('No Privy embedded wallet found. Sign in with email to create one, then retry.')
+      return
+    }
+    if (!isConnected || !connectedWalletAddress) {
+      setInstallOwnerError('Connect the wallet that currently owns your Coinbase Smart Wallet, then retry.')
+      return
+    }
+
+    setInstallOwnerBusy(true)
+    setInstallOwnerError(null)
+    setInstallOwnerTxHash(null)
+
+    try {
+      const ok = await isCoinbaseSmartWalletOwner({
+        smartWallet: canonicalIdentityAddress as Address,
+        ownerAddress: connectedWalletAddress as Address,
+      })
+      if (!ok) {
+        throw new Error('Connected wallet is not an onchain owner of this Coinbase Smart Wallet.')
+      }
+
+      const data = encodeFunctionData({
+        abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+        functionName: 'addOwnerAddress',
+        args: [embeddedPrivyEoaAddress],
+      })
+
+      let txHash: string | null = null
+      try {
+        const wc: any = walletClient as any
+        if (wc?.writeContract) {
+          txHash = await wc.writeContract({
+            address: canonicalIdentityAddress as Address,
+            abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+            functionName: 'addOwnerAddress',
+            args: [embeddedPrivyEoaAddress],
+          })
+        }
+      } catch {
+        txHash = null
+      }
+
+      if (!txHash) {
+        const provider =
+          connector && typeof (connector as any).getProvider === 'function' ? await (connector as any).getProvider() : null
+        const request =
+          provider?.request
+            ? provider.request.bind(provider)
+            : typeof window !== 'undefined' && (window as any)?.ethereum?.request
+              ? (window as any).ethereum.request.bind((window as any).ethereum)
+              : null
+        if (!request) throw new Error('No wallet provider available.')
+        txHash = await request({
+          method: 'eth_sendTransaction',
+          params: [
+            {
+              from: connectedWalletAddress as Address,
+              to: canonicalIdentityAddress as Address,
+              data,
+              value: '0x0',
+            },
+          ],
+        })
+      }
+
+      setInstallOwnerTxHash(String(txHash))
+
+      if (publicClient && typeof (publicClient as any).waitForTransactionReceipt === 'function') {
+        await (publicClient as any).waitForTransactionReceipt({ hash: txHash })
+      }
+      await embeddedEoaIsCanonicalOwnerQuery.refetch()
+    } catch (e: any) {
+      const msg = typeof e?.message === 'string' ? e.message : 'Failed to add owner'
+      setInstallOwnerError(msg)
+    } finally {
+      setInstallOwnerBusy(false)
+    }
+  }, [
+    canonicalIdentityAddress,
+    canonicalIdentityIsContract,
+    connectedWalletAddress,
+    connector,
+    embeddedEoaIsCanonicalOwnerQuery,
+    embeddedPrivyEoaAddress,
+    installOwnerBusy,
+    isConnected,
+    publicClient,
+    walletClient,
+  ])
 
   // Allow injected EOAs (Rabby/MetaMask/etc) to operate a Coinbase Smart Wallet canonical identity
   // when the EOA is an onchain owner of that smart wallet.
@@ -3673,6 +3820,56 @@ function DeployVaultMain() {
                   >
                     Try different sign-in
                   </button>
+                </div>
+              ) : tokenIsValid &&
+                zoraCoin &&
+                canonicalIdentityAddress &&
+                canonicalIdentityIsContract &&
+                embeddedPrivyEoaAddress &&
+                embeddedEoaIsCanonicalOwnerQuery.isLoading ? (
+                <button
+                  disabled
+                  className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-600 text-sm cursor-not-allowed"
+                >
+                  Checking Smart Wallet owners…
+                </button>
+              ) : tokenIsValid &&
+                zoraCoin &&
+                canonicalIdentityAddress &&
+                canonicalIdentityIsContract &&
+                embeddedPrivyEoaAddress &&
+                !embeddedEoaIsCanonicalOwner ? (
+                <div className="space-y-3">
+                  <div className="p-4 rounded-lg border border-amber-500/20 bg-amber-500/10">
+                    <div className="text-sm font-medium text-amber-200">One-time setup required</div>
+                    <div className="mt-1 text-xs text-amber-200/80 leading-relaxed">
+                      To avoid wallet compatibility issues (e.g. Rabby blocking required signatures), CreatorVault uses your Privy embedded wallet
+                      to sign Coinbase Smart Wallet user operations. Add it as an owner of your Zora Coinbase Smart Wallet once, then retry deploy.
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-white/10 bg-black/20 px-3 py-2">
+                      <div className="min-w-0">
+                        <div className="text-[10px] uppercase tracking-wider text-zinc-500">CreatorVault embedded wallet</div>
+                        <div className="mt-0.5 font-mono text-xs text-zinc-200 truncate">{embeddedPrivyEoaAddress}</div>
+                      </div>
+                      <button type="button" className="btn-secondary shrink-0" onClick={() => void handleCopyEmbedded()}>
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+
+                  <button type="button" className="btn-accent w-full" disabled={installOwnerBusy} onClick={() => void handleInstallEmbeddedAsOwner()}>
+                    {installOwnerBusy ? 'Confirming…' : 'Add embedded wallet as owner'}
+                  </button>
+                  {installOwnerTxHash ? (
+                    <div className="text-[11px] text-zinc-500">
+                      Submitted: <span className="font-mono text-zinc-400">{shortAddress(installOwnerTxHash)}</span>
+                    </div>
+                  ) : null}
+                  {installOwnerError ? <div className="text-[11px] text-red-400">{installOwnerError}</div> : null}
+
+                  <div className="text-[11px] text-zinc-600">
+                    You must connect the wallet that currently owns your Smart Wallet to approve this owner add.
+                  </div>
                 </div>
               ) : !tokenIsValid && creatorAllowlistQuery.isLoading ? (
                 <button
