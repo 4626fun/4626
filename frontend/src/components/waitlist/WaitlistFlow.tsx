@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { getAppBaseUrl } from '@/lib/host'
-import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
+import { useAccount, usePublicClient } from 'wagmi'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { isPrivyClientEnabled } from '@/lib/flags'
 import { usePrivyClientStatus } from '@/lib/privy/client'
@@ -10,7 +10,6 @@ import { toViemAccount, useBaseAccountSdk, useConnectWallet, useLogin, usePrivy,
 import { base } from 'wagmi/chains'
 import { encodeAbiParameters, getAddress, isAddress } from 'viem'
 import { useMiniAppContext } from '@/hooks'
-import { apiAliasPath } from '@/lib/apiBase'
 import { fetchZoraCoin, fetchZoraProfile } from '@/lib/zora/client'
 import { Logo } from '@/components/brand/Logo'
 import type {
@@ -33,16 +32,8 @@ import { useWaitlistReferral, getStoredReferralCode } from './useWaitlistReferra
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const EVM_RE = /^0x[a-fA-F0-9]{40}$/
 const SOL_RE = /^[1-9A-HJ-NP-Za-km-z]+$/
-const SHARE_MESSAGE = 'Creator vaults on Base — join the waitlist.'
 const BASE_EASE = [0.4, 0, 0.2, 1] as const
 const BASE_MOTION_MS = 0.2
-
-const STEP_WIPE = {
-  initial: { opacity: 0, scaleX: 0.2 },
-  animate: { opacity: 1, scaleX: 1 },
-  exit: { opacity: 0, scaleX: 0.2 },
-  transition: { duration: BASE_MOTION_MS, ease: BASE_EASE },
-} as const
 
 const COINBASE_SMART_WALLET_OWNER_LINK_ABI = [
   {
@@ -436,7 +427,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   const { apiFetch } = useWaitlistApi(appUrl)
   const { address: connectedAddressRaw } = useAccount()
   const publicClient = usePublicClient({ chainId: base.id })
-  const { data: walletClient } = useWalletClient({ chainId: base.id })
   const siwe = useSiweAuth()
   const miniApp = useMiniAppContext()
 
@@ -450,7 +440,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     (emailOptOutNext: boolean) => dispatchFlow({ type: 'set_email_opt_out', emailOptOut: emailOptOutNext }),
     [],
   )
-  const setDoneEmail = useCallback((value: string | null) => dispatchFlow({ type: 'set_done_email', doneEmail: value }), [])
   const setBusy = useCallback((busy: boolean) => dispatchFlow({ type: 'set_busy', busy }), [])
   const setError = useCallback((error: string | null) => dispatchFlow({ type: 'set_error', error }), [])
   const setContactPreference = useCallback(
@@ -464,7 +453,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     [],
   )
   const verifySolana = useCallback((address: string) => dispatchVerification({ type: 'verify_solana', address }), [])
-  const clearWalletVerifications = useCallback(() => dispatchVerification({ type: 'clear_wallet_verifications' }), [])
   const startPrivyVerify = useCallback(() => dispatchVerification({ type: 'privy_start' }), [])
   const finishPrivyVerify = useCallback(() => dispatchVerification({ type: 'privy_done' }), [])
   const setPrivyVerifyError = useCallback(
@@ -504,10 +492,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     inviteToast,
     inviteTemplateIdx,
     referralCode,
-    shareBusy,
-    shareToast,
     actionsDone,
-    miniAppAddSupported,
     waitlistPosition,
   } = waitlist
 
@@ -739,7 +724,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   }, [
     embeddedWalletAddress,
     finishPrivyVerify,
-    formatPrivyConnectError,
     handlePrivyContinue,
     privyAuthed,
     privyLogin,
@@ -770,7 +754,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       setPrivyVerifyError(msg)
       finishPrivyVerify()
     }
-  }, [finishPrivyVerify, formatPrivyConnectError, privyAuthed, privyLogin, privyLogout, privyReady, privyVerifyBusy, setPrivyVerifyError, startPrivyVerify])
+  }, [finishPrivyVerify, privyAuthed, privyLogin, privyLogout, privyReady, privyVerifyBusy, setPrivyVerifyError, startPrivyVerify])
 
   // If wallet sign-in is disabled (Privy dashboard config), auto-fall back to email login once
   // so users aren’t stuck staring at an error.
@@ -804,147 +788,16 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     [connectedAddressRaw],
   )
 
-  // Optional: Link Privy embedded EOA as owner on CSW to enable Privy-based deploy signing.
+  // Best-effort: infer Coinbase Smart Wallet from Zora profile (payout recipient / linked wallets).
+  // This is used for:
+  // - showing “Smart Wallet Detected”
+  // - awarding CSW points at signup when we already know the wallet
   const [zoraProfileSmartWalletAddress, setZoraProfileSmartWalletAddress] = useState<string | null>(null)
-  const [zoraProfileExists, setZoraProfileExists] = useState<boolean | null>(null)
   const cswAddress = useMemo(() => {
     const raw = typeof zoraProfileSmartWalletAddress === 'string' ? zoraProfileSmartWalletAddress : ''
     return isAddress(raw) ? (getAddress(raw) as any) : null
   }, [zoraProfileSmartWalletAddress])
-  const embeddedEoaAddressForLink = embeddedWalletAddress
-  const connectedOwnerAddressForLink = useMemo(() => {
-    const raw = typeof connectedAddressRaw === 'string' ? connectedAddressRaw : ''
-    return isValidEvmAddress(raw) ? raw : null
-  }, [connectedAddressRaw])
-
-  const [deployOwnerLinkBusy, setDeployOwnerLinkBusy] = useState(false)
-  const [deployOwnerLinkError, setDeployOwnerLinkError] = useState<string | null>(null)
-  const [embeddedEoaIsOwner, setEmbeddedEoaIsOwner] = useState<boolean | null>(null)
-  const [connectedOwnerIsOwner, setConnectedOwnerIsOwner] = useState<boolean | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    const run = async () => {
-      if (!publicClient || !cswAddress || !embeddedEoaAddressForLink) {
-        if (!cancelled) setEmbeddedEoaIsOwner(null)
-        return
-      }
-      try {
-        const ok = (await (publicClient as any).readContract({
-          address: cswAddress,
-          abi: COINBASE_SMART_WALLET_OWNER_LINK_ABI,
-          functionName: 'isOwnerAddress',
-          args: [embeddedEoaAddressForLink],
-        })) as boolean
-        if (!cancelled) setEmbeddedEoaIsOwner(Boolean(ok))
-      } catch {
-        if (!cancelled) setEmbeddedEoaIsOwner(null)
-      }
-    }
-    void run()
-    return () => {
-      cancelled = true
-    }
-  }, [cswAddress, embeddedEoaAddressForLink, publicClient])
-
-  useEffect(() => {
-    let cancelled = false
-    const run = async () => {
-      if (!publicClient || !cswAddress || !connectedOwnerAddressForLink) {
-        if (!cancelled) setConnectedOwnerIsOwner(null)
-        return
-      }
-      if (connectedOwnerAddressForLink.toLowerCase() === cswAddress.toLowerCase()) {
-        if (!cancelled) setConnectedOwnerIsOwner(true)
-        return
-      }
-      try {
-        const ok = (await (publicClient as any).readContract({
-          address: cswAddress,
-          abi: COINBASE_SMART_WALLET_OWNER_LINK_ABI,
-          functionName: 'isOwnerAddress',
-          args: [connectedOwnerAddressForLink],
-        })) as boolean
-        if (!cancelled) setConnectedOwnerIsOwner(Boolean(ok))
-      } catch {
-        if (!cancelled) setConnectedOwnerIsOwner(null)
-      }
-    }
-    void run()
-    return () => {
-      cancelled = true
-    }
-  }, [connectedOwnerAddressForLink, cswAddress, publicClient])
-
-  const linkEmbeddedEoaAsOwner = useCallback(async () => {
-    if (deployOwnerLinkBusy) return
-    setDeployOwnerLinkBusy(true)
-    setDeployOwnerLinkError(null)
-    try {
-      if (!publicClient) throw new Error('Network client not ready.')
-      if (!walletClient) throw new Error('Connect an owner wallet to continue.')
-      if (!cswAddress) throw new Error('Creator smart wallet is not configured.')
-      if (!embeddedEoaAddressForLink) throw new Error('Sign in with Privy to create your embedded wallet.')
-      if (!connectedOwnerAddressForLink) throw new Error('Connect a wallet that already owns the creator smart wallet.')
-
-      const hasMultipleInjectedProviders =
-        typeof window !== 'undefined' &&
-        Array.isArray((window as any)?.ethereum?.providers) &&
-        ((window as any).ethereum.providers as any[]).length > 1
-      if (hasMultipleInjectedProviders) {
-        throw new Error('Multiple wallet extensions detected. Disable one (MetaMask/Coinbase/Rabby) and retry.')
-      }
-
-      // Ensure Base chain for the owner wallet.
-      const wc: any = walletClient as any
-      const currentChainId = typeof wc?.chain?.id === 'number' ? wc.chain.id : null
-      if (currentChainId !== base.id) {
-        try {
-          if (typeof wc?.switchChain === 'function') {
-            await wc.switchChain({ id: base.id })
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      if (connectedOwnerAddressForLink.toLowerCase() !== cswAddress.toLowerCase()) {
-        const isOwner = (await (publicClient as any).readContract({
-          address: cswAddress,
-          abi: COINBASE_SMART_WALLET_OWNER_LINK_ABI,
-          functionName: 'isOwnerAddress',
-          args: [connectedOwnerAddressForLink],
-        })) as boolean
-        if (!isOwner) throw new Error('Connected wallet is not an owner of the creator smart wallet.')
-      }
-
-      const hash = await (walletClient as any).writeContract({
-        account: connectedOwnerAddressForLink,
-        chain: base as any,
-        address: cswAddress,
-        abi: COINBASE_SMART_WALLET_OWNER_LINK_ABI,
-        functionName: 'addOwnerAddress',
-        args: [embeddedEoaAddressForLink],
-      })
-
-      await (publicClient as any).waitForTransactionReceipt({ hash })
-
-      // Refresh status
-      setConnectedOwnerIsOwner(true)
-      setEmbeddedEoaIsOwner(true)
-    } catch (e: any) {
-      setDeployOwnerLinkError(e?.shortMessage || e?.message || 'Failed to link deploy signer')
-    } finally {
-      setDeployOwnerLinkBusy(false)
-    }
-  }, [
-    connectedOwnerAddressForLink,
-    cswAddress,
-    deployOwnerLinkBusy,
-    embeddedEoaAddressForLink,
-    publicClient,
-    walletClient,
-  ])
+  const effectiveCswAddress = cswAddress || coinbaseSmartWalletAddress
 
   const adminBypassSet = useMemo(() => {
     // Keep this in sync with `frontend/src/App.tsx` so admins can always escape the waitlist UI.
@@ -987,9 +840,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   }, [apiFetch, isBypassAdmin, step, verifiedWallet])
   const deployHref = useMemo(() => {
     const baseUrl = appUrl.replace(/\/+$/, '')
+    const authHint = contactPreference === 'email' ? 'email' : 'wallet'
     // autologin=1 prompts Privy sign-in on app host; from=waitlist helps tailor UX.
-    return `${baseUrl}/deploy?from=waitlist&autologin=1`
-  }, [appUrl])
+    return `${baseUrl}/deploy?from=waitlist&autologin=1&auth=${encodeURIComponent(authHint)}`
+  }, [appUrl, contactPreference])
   const primaryCta = useMemo(() => {
     if (deployAccessState !== 'ready') return null
     return { label: 'Continue to Deploy', href: deployHref }
@@ -1132,10 +986,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   )
   const {
     referralLink,
-    shareHostLabel,
-    handleShareX,
     handleCopyReferral,
-    handleNextInviteTemplate,
   } = useWaitlistReferral({
     locationSearch: location.search,
     shareBaseUrl: appUrl.replace(/\/+$/, ''),
@@ -1147,118 +998,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     setInviteToast: (toast) => patchWaitlist({ inviteToast: toast }),
     apiFetch,
   })
-  const pointsBreakdownUrl = useMemo(() => {
-    if (!referralCode) return null
-    return `${apiAliasPath('/api/waitlist/ledger')}?ref=${encodeURIComponent(referralCode)}`
-  }, [referralCode])
-  const miniAppHostLabel = useMemo(() => {
-    if (!miniApp.isMiniApp) return null
-    return miniApp.isBaseApp ? 'Base app' : 'Farcaster'
-  }, [miniApp.isBaseApp, miniApp.isMiniApp])
   const displayEmail = doneEmail && !isSyntheticEmail(doneEmail) ? doneEmail : null
-  const showEmailCapture = Boolean(doneEmail && isSyntheticEmail(doneEmail))
-  const [emailCapture, setEmailCapture] = useState('')
-  const [emailCaptureBusy, setEmailCaptureBusy] = useState(false)
-  const [emailCaptureError, setEmailCaptureError] = useState<string | null>(null)
-  const [emailCaptureSuccess, setEmailCaptureSuccess] = useState<string | null>(null)
-
-  const handleFollow = useCallback(() => {
-    markAction('follow')
-    markAction('x')
-  }, [markAction])
-
-  // Effective CSW address - prioritize Zora profile CSW (where assets/activity live)
-  // Fall back to Privy-connected wallet for new users without a Zora profile
-  const effectiveCswAddress = cswAddress || coinbaseSmartWalletAddress
-
-  const handleLinkCsw = useCallback(async () => {
-    if (waitlist.cswLinkBusy || waitlist.cswLinked) return
-    patchWaitlist({ cswLinkBusy: true, cswLinkError: null })
-    
-    try {
-      // If user already has a CSW (from Zora profile or Privy), mark as linked
-      if (effectiveCswAddress) {
-        // Just mark as linked locally - points awarded on signup
-        patchWaitlist({ cswLinked: true, cswLinkBusy: false })
-      } else {
-        // Open Privy wallet connect to link a CSW
-        privyConnectWallet()
-        patchWaitlist({ cswLinkBusy: false })
-      }
-    } catch (e: any) {
-      patchWaitlist({ 
-        cswLinkBusy: false, 
-        cswLinkError: e?.message || 'Failed to link wallet' 
-      })
-    }
-  }, [
-    effectiveCswAddress,
-    privyConnectWallet,
-    patchWaitlist,
-    waitlist.cswLinkBusy,
-    waitlist.cswLinked,
-  ])
-
-  const handleSocialAction = useCallback((action: ActionKey, _url: string) => {
-    markAction(action)
-    
-    // Sync to server for verified actions
-    if (doneEmail) {
-      void (async () => {
-        try {
-          await apiFetch('/api/waitlist/task-claim', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-            body: JSON.stringify({ email: doneEmail, taskKey: action }),
-          })
-          await refreshPosition(doneEmail)
-        } catch {
-          // ignore - best effort
-        }
-      })()
-    }
-  }, [apiFetch, doneEmail, markAction, refreshPosition])
-
-  const handleEmailCaptureSubmit = useCallback(async () => {
-    if (!doneEmail || !isSyntheticEmail(doneEmail)) return
-    const nextEmail = normalizeEmail(emailCapture)
-    if (!isValidEmail(nextEmail)) {
-      setEmailCaptureError('Enter a valid email address.')
-      setEmailCaptureSuccess(null)
-      return
-    }
-    setEmailCaptureBusy(true)
-    setEmailCaptureError(null)
-    setEmailCaptureSuccess(null)
-    try {
-      const res = await apiFetch('/api/waitlist/update-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ currentEmail: doneEmail, newEmail: nextEmail }),
-      })
-      const text = await res.text().catch(() => '')
-      const json = safeJsonParse<any>(text)
-      if (!res.ok || !json || json.success !== true) {
-        const msg =
-          json && typeof json.error === 'string'
-            ? json.error
-            : res.ok
-              ? 'Email update failed.'
-              : `Email update failed (HTTP ${res.status})`
-        throw new Error(msg)
-      }
-      const updatedEmail = String(json?.data?.email || nextEmail)
-      setDoneEmail(updatedEmail)
-      setContactPreference('email')
-      setEmailOptOut(false)
-      setEmailCapture('')
-      setEmailCaptureSuccess('Email saved.')
-    } catch (e: any) {
-      setEmailCaptureError(e?.message ? String(e.message) : 'Email update failed.')
-    } finally {
-      setEmailCaptureBusy(false)
-    }
-  }, [apiFetch, doneEmail, emailCapture, setContactPreference, setDoneEmail, setEmailOptOut])
 
   function primaryWalletForSubmit(): string | null {
     const pw = typeof verifiedWallet === 'string' && isValidEvmAddress(verifiedWallet) ? verifiedWallet : null
@@ -1464,7 +1204,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       patchWaitlist({ creatorCoin: null, creatorCoinBusy: false, creatorCoinDeclaredMissing: false })
       creatorCoinForWalletRef.current = null
       setZoraProfileSmartWalletAddress(null)
-      setZoraProfileExists(null)
       return
     }
     if (creatorCoinForWalletRef.current === w) return
@@ -1528,7 +1267,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
           }
         }
         const profile = await fetchZoraProfile(w)
-        if (!cancelled) setZoraProfileExists(Boolean(profile))
         const coinAddrRaw = profile?.creatorCoin?.address ? String(profile.creatorCoin.address) : ''
         const coinAddr = isValidEvmAddress(coinAddrRaw) ? coinAddrRaw : null
         let smartWallet: string | null = null
@@ -1604,7 +1342,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         if (!cancelled) {
           patchWaitlist({ creatorCoin: null })
           setZoraProfileSmartWalletAddress(null)
-          setZoraProfileExists(null)
         }
       } finally {
         if (!cancelled) patchWaitlist({ creatorCoinBusy: false })
@@ -1614,7 +1351,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     return () => {
       cancelled = true
     }
-  }, [patchWaitlist, verifiedWallet])
+  }, [patchWaitlist, publicClient, verifiedWallet])
 
   useEffect(() => {
     if (step !== 'verify') return
@@ -1654,119 +1391,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
 
   // Simplified flow: no auto-advance - user clicks "Join Waitlist" to submit
 
-  useEffect(() => {
-    if (!miniApp.isMiniApp) {
-      patchWaitlist({ miniAppAddSupported: null })
-      return
-    }
-    let cancelled = false
-    ;(async () => {
-      try {
-        const { sdk } = await import('@farcaster/miniapp-sdk')
-        const ok = typeof sdk?.actions?.addMiniApp === 'function'
-        if (!cancelled) patchWaitlist({ miniAppAddSupported: ok })
-      } catch {
-        if (!cancelled) patchWaitlist({ miniAppAddSupported: false })
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [miniApp.isMiniApp, patchWaitlist])
-
-  async function shareOrCompose() {
-    if (shareBusy) return
-    patchWaitlist({ shareBusy: true, shareToast: null })
-    const shareLink = referralLink
-    try {
-      if (miniApp.isMiniApp) {
-        try {
-          const { sdk } = await import('@farcaster/miniapp-sdk')
-          if (sdk?.actions?.composeCast) {
-            await sdk.actions.composeCast({
-              text: SHARE_MESSAGE,
-              embeds: [shareLink],
-            } as any)
-            markAction('share')
-            patchWaitlist({ shareToast: 'Opened Farcaster composer.' })
-            return
-          }
-        } catch {
-          // fall through
-        }
-      }
-
-      if (typeof navigator !== 'undefined' && typeof (navigator as any).share === 'function') {
-        await (navigator as any).share({
-          title: 'Creator Vaults',
-          text: SHARE_MESSAGE,
-          url: shareLink,
-        })
-        markAction('share')
-        patchWaitlist({ shareToast: 'Shared.' })
-        return
-      }
-
-      try {
-        const warpcastUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(SHARE_MESSAGE)}&embeds[]=${encodeURIComponent(
-          shareLink,
-        )}`
-        if (miniApp.isMiniApp) {
-          try {
-            const { sdk } = await import('@farcaster/miniapp-sdk')
-            if (sdk?.actions?.openUrl) {
-              await sdk.actions.openUrl(warpcastUrl)
-              markAction('share')
-              patchWaitlist({ shareToast: 'Opened Warpcast.' })
-              return
-            }
-          } catch {
-            // fall through
-          }
-        }
-        const opened = window.open(warpcastUrl, '_blank', 'noopener,noreferrer')
-        if (opened) {
-          markAction('share')
-          patchWaitlist({ shareToast: 'Opened Warpcast.' })
-          return
-        }
-      } catch {
-        // fall through
-      }
-
-      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(shareLink)
-        markAction('share')
-        patchWaitlist({ shareToast: 'Link copied.' })
-        return
-      }
-
-      patchWaitlist({ shareToast: `Open: ${shareHostLabel}` })
-    } finally {
-      setTimeout(() => patchWaitlist({ shareToast: null }), 2500)
-      patchWaitlist({ shareBusy: false })
-    }
-  }
-
-  async function addMiniApp() {
-    if (shareBusy) return
-    patchWaitlist({ shareBusy: true, shareToast: null })
-    try {
-      const { sdk } = await import('@farcaster/miniapp-sdk')
-      if (!sdk?.actions?.addMiniApp) {
-        patchWaitlist({ shareToast: 'Add is not supported in this host.' })
-        return
-      }
-      await sdk.actions.addMiniApp()
-      markAction('saveApp')
-      patchWaitlist({ shareToast: 'Added to your Mini Apps.' })
-    } catch {
-      patchWaitlist({ shareToast: 'Add failed.' })
-    } finally {
-      setTimeout(() => patchWaitlist({ shareToast: null }), 2500)
-      patchWaitlist({ shareBusy: false })
-    }
-  }
 
   const containerClass =
     variant === 'page'
@@ -1845,7 +1469,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     showPrivy={showPrivy}
                     showPrivyReady={showPrivyReady}
                     privyReady={privyReady}
-                    privyAuthed={privyAuthed}
                     privyVerifyBusy={privyVerifyBusy}
                     privyVerifyError={privyVerifyError}
                     showDeployOwnerLink={Boolean(showPrivyReady && privyAuthed && (cswAddress || coinbaseSmartWalletAddress))}
@@ -1878,6 +1501,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     waitlistPosition={waitlistPosition}
                     referralCode={referralCode}
                     referralLink={referralLink}
+                    primaryCta={primaryCta}
                     onCopyReferral={handleCopyReferral}
                     copyToast={inviteToast}
                   />

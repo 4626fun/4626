@@ -24,6 +24,7 @@ type DoneStepProps = {
   waitlistPosition: WaitlistState['waitlistPosition']
   referralCode: string | null
   referralLink: string
+  primaryCta?: { label: string; href: string } | null
   onCopyReferral: () => void
   copyToast?: string | null
 }
@@ -35,6 +36,7 @@ export const DoneStep = memo(function DoneStep({
   waitlistPosition,
   referralCode,
   referralLink,
+  primaryCta,
   onCopyReferral,
   copyToast,
 }: DoneStepProps) {
@@ -94,15 +96,15 @@ export const DoneStep = memo(function DoneStep({
       {/* Primary CTA - Go to Profile */}
       <motion.div {...fadeUp} className="space-y-3">
         <a
-          href="/portfolio"
+          href={primaryCta?.href || '/portfolio'}
           className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-[#0052FF] text-white text-[15px] font-medium hover:bg-[#0047E1] transition-all duration-200 active:scale-[0.98]"
         >
-          Earn More Points
+          {primaryCta?.label || 'Earn More Points'}
           <ArrowRight className="w-4 h-4" />
         </a>
         
         <p className="text-center text-[13px] text-zinc-500">
-          Connect socials and invite friends to climb the leaderboard
+          {primaryCta ? 'If you’re allowed to deploy, continue now.' : 'Connect socials and invite friends to climb the leaderboard'}
         </p>
       </motion.div>
 

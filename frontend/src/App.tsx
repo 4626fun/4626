@@ -379,7 +379,7 @@ function App() {
             <Route path="/" element={<WaitlistLanding />} />
             {/* Back-compat */}
             <Route path="/waitlist" element={<Navigate to="/" replace />} />
-            <Route path="/profile" element={<ExternalRedirect to={`${appBase}/portfolio`} />} />
+            <Route path="/portfolio" element={<WaitlistProfile />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
 
             {/* If someone hits an app route on the marketing domain, push them to app.* */}
@@ -437,7 +437,6 @@ function App() {
                   <Route path="/swap" element={<Swap />} />
                   <Route path="/positions" element={<Positions />} />
                   <Route path="/portfolio" element={<Portfolio />} />
-                  <Route path="/profile" element={<Navigate to="/portfolio" replace />} />
                   <Route path="/launch" element={<Navigate to="/deploy" replace />} />
                   <Route path="/deploy" element={<DeployVault />} />
                   <Route path="/coin/:address/manage" element={<CoinManage />} />

@@ -8,7 +8,6 @@ import { ConnectButtonWeb3 } from '@/components/ConnectButtonWeb3'
 
 // Base brand motion: cubic-bezier(0.4, 0, 0.2, 1), 120-240ms for snappy UI
 const baseEase = [0.4, 0, 0.2, 1] as const
-const BASE_SQUARE_BLUE = '/base/1_Base%20Brand%20Assets/The%20Square/Base_square_blue.svg'
 const BASE_SQUARE_WHITE = '/base/1_Base%20Brand%20Assets/The%20Square/Base_square_white.svg'
 const fadeUp = {
   initial: { opacity: 0, y: 12 },
@@ -27,7 +26,6 @@ type VerifyStepProps = {
   showPrivy: boolean
   showPrivyReady: boolean
   privyReady: boolean
-  privyAuthed: boolean
   privyVerifyBusy: boolean
   privyVerifyError: string | null
   // CSW detection (simplified - just show detection, no owner linking at signup)
@@ -51,7 +49,6 @@ export const VerifyStep = memo(function VerifyStep({
   showPrivy,
   showPrivyReady,
   privyReady,
-  privyAuthed,
   privyVerifyBusy,
   privyVerifyError,
   showDeployOwnerLink,
@@ -69,9 +66,6 @@ export const VerifyStep = memo(function VerifyStep({
   const hasCreatorCoin = !!creatorCoin?.address
   const showSubmitButton = verifiedWallet && (hasCreatorCoin || creatorCoinDeclaredMissing)
   const short = (v: string) => `${v.slice(0, 6)}…${v.slice(-4)}`
-  const privyCtaLabel = privyAuthed ? 'Switch sign-in' : 'Connect Wallet'
-  const privyEmbeddedCtaLabel = privyAuthed ? 'Switch sign-in' : 'Sign in with Privy'
-  const creatorGreeting = (creatorCoin?.symbol || '').trim()
   const headerTitle = !verifiedWallet ? 'Connect wallet' : showSubmitButton ? 'Join the waitlist' : 'Checking your wallet'
   const headerSubtitle = !verifiedWallet
     ? 'Use a wallet connected to your creator coin. We’ll look it up automatically.'

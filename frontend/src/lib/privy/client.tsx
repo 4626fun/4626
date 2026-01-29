@@ -69,21 +69,24 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
     return <PrivyClientContext.Provider value={ctx}>{children}</PrivyClientContext.Provider>
   }
 
+  const appearance = {
+    walletList: ['metamask', 'coinbase_wallet', 'phantom', 'detected_wallets', 'wallet_connect'],
+  } as const
+  const loginMethods = ['wallet', 'email'] as const
+
   const baseConfig: PrivyProviderConfig = {
-    appearance: {
-      walletList: ['metamask', 'coinbase_wallet', 'phantom', 'detected_wallets', 'wallet_connect'],
-    },
+    appearance,
     // Enable embedded wallets - this is the signer for the Coinbase Smart Wallet
     embeddedWallets: {
       ethereum: { createOnLogin: 'users-without-wallets' },
     },
-    loginMethods: ['wallet', 'email'],
+    loginMethods,
   } as any
 
   const safeConfig: PrivyProviderConfig = {
-    appearance: baseConfig.appearance,
+    appearance,
     // Intentionally omit `embeddedWallets` so HTTP/insecure dev origins don't crash the app.
-    loginMethods: baseConfig.loginMethods,
+    loginMethods,
   } as any
 
   return (

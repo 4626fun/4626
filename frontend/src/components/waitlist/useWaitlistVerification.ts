@@ -154,7 +154,6 @@ export function useWaitlistVerification({
       cancelled = true
       window.clearTimeout(timer)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     finishPrivyVerify,
     getPrivyWalletMissingMessage,

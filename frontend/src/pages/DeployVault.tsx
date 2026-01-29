@@ -81,23 +81,6 @@ type ServerDeployResponse = {
   }
 }
 
-const COINBASE_SMART_WALLET_OWNER_LINK_ABI = [
-  {
-    type: 'function',
-    name: 'addOwnerAddress',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'owner', type: 'address' }],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'isOwnerAddress',
-    stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-] as const
-
 const CREATOR_COIN_OWNERS_ABI = [
   { type: 'function', name: 'totalOwners', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
   { type: 'function', name: 'ownerAt', inputs: [{ type: 'uint256' }], outputs: [{ type: 'address' }], stateMutability: 'view' },
@@ -773,13 +756,8 @@ function DeployVaultBatcher({
   const { data: walletClient } = useWalletClient({ chainId: base.id })
   const connectorId = String((connector as any)?.id ?? '').toLowerCase()
   const connectorName = String((connector as any)?.name ?? '').toLowerCase()
-  const isRabbyLike = connectorId.includes('rabby') || connectorName.includes('rabby')
-  const isRabbyInjected =
-    typeof window !== 'undefined' &&
-    Boolean((window as any)?.ethereum) &&
-    (Boolean(((window as any).ethereum as any)?.isRabby) ||
-      (Array.isArray(((window as any).ethereum as any)?.providers) &&
-        (((window as any).ethereum as any).providers as any[]).some((p) => Boolean(p?.isRabby))))
+  void connectorId
+  void connectorName
 
   // Gas sponsorship (EIP-4337 paymaster) for ERC-4337 UserOperations.
   // See docs/aa/notes.md for the AA mental model (EntryPoint + bundler + paymaster).
@@ -1534,7 +1512,7 @@ function DeployVaultBatcher({
           try {
             activeWalletClient = await (connector as any).getWalletClient({ chainId: base.id })
           } catch {
-            activeWalletClient = null
+            activeWalletClient = undefined
           }
         }
 
@@ -1854,7 +1832,7 @@ function DeployVaultBatcher({
             const r1 = await sendCoinbaseSmartWalletUserOperation({
             publicClient: publicClient as any,
             walletClient: ownerWalletClient as any,
-            bundlerUrl: cdpRpcUrl,
+            bundlerUrl: cdpRpcUrl!,
             smartWallet: owner,
             ownerAddress: ownerExec as Address,
             calls: toCalls(phase1Calls),
@@ -1879,7 +1857,7 @@ function DeployVaultBatcher({
           const r2 = await sendCoinbaseSmartWalletUserOperation({
             publicClient: publicClient as any,
             walletClient: ownerWalletClient as any,
-            bundlerUrl: cdpRpcUrl,
+            bundlerUrl: cdpRpcUrl!,
             smartWallet: owner,
             ownerAddress: ownerExec as Address,
             calls: toCalls(phase2Calls),
@@ -1905,7 +1883,7 @@ function DeployVaultBatcher({
             const r3 = await sendCoinbaseSmartWalletUserOperation({
               publicClient: publicClient as any,
               walletClient: ownerWalletClient as any,
-              bundlerUrl: cdpRpcUrl,
+              bundlerUrl: cdpRpcUrl!,
               smartWallet: owner,
               ownerAddress: ownerExec as Address,
               calls: toCalls(phase3Calls),
@@ -2126,7 +2104,6 @@ function DeployVaultBatcher({
 
 function DeployVaultMain() {
   const { address, isConnected } = useAccount()
-  const { data: walletClient } = useWalletClient({ chainId: base.id })
   const { ready: privyReady, authenticated: privyAuthenticated, logout, getAccessToken } = usePrivy() as any
   const { login } = useLogin()
   const { wallets } = useWallets()
@@ -2209,20 +2186,15 @@ function DeployVaultMain() {
     )
   }, [wallets])
 
-  const embeddedPrivyEoaAddress = useMemo(() => {
-    try {
-      const raw = typeof (embeddedPrivyWallet as any)?.address === 'string' ? String((embeddedPrivyWallet as any).address) : ''
-      return raw && isAddress(raw) ? (getAddress(raw) as Address) : null
-    } catch {
-      return null
-    }
-  }, [embeddedPrivyWallet])
-
   const [searchParams] = useSearchParams()
   const prefillToken = useMemo(() => searchParams.get('token') ?? '', [searchParams])
   const autoLogin = useMemo(() => {
     const raw = (searchParams.get('autologin') ?? '').trim().toLowerCase()
     return raw === '1' || raw === 'true' || raw === 'yes'
+  }, [searchParams])
+  const authHint = useMemo(() => {
+    const raw = (searchParams.get('auth') ?? '').trim().toLowerCase()
+    return raw === 'email' || raw === 'wallet' ? (raw as 'email' | 'wallet') : null
   }, [searchParams])
   const fromWaitlist = useMemo(() => {
     const raw = (searchParams.get('from') ?? '').trim().toLowerCase()
@@ -2258,7 +2230,8 @@ function DeployVaultMain() {
         try {
           setHandoffError(null)
           setHandoffState('signingIn')
-          await login({ loginMethods: ['wallet', 'email'] })
+          const loginMethods = authHint ? [authHint] : (['wallet', 'email'] as const)
+          await login({ loginMethods: loginMethods as any })
         } catch {
           setHandoffState('error')
           setHandoffError('Sign-in cancelled. Click “Sign in with Privy” to continue.')
@@ -2288,7 +2261,7 @@ function DeployVaultMain() {
         setHandoffError('Could not establish a session. Click “Sign in with Privy” and retry.')
       }
     })()
-  }, [autoLogin, getAccessToken, handoffState, login, privyAuthenticated, privyReady, siwe])
+  }, [authHint, autoLogin, getAccessToken, handoffState, login, privyAuthenticated, privyReady, siwe])
 
   // Mark handoff ready once we have an app session.
   useEffect(() => {
@@ -2655,54 +2628,7 @@ function DeployVaultMain() {
     staleTime: 60_000,
     retry: 0,
   })
-  const canonicalIdentityIsContract = useMemo(() => {
-    const code = canonicalIdentityBytecodeQuery.data
-    return !!code && code !== '0x'
-  }, [canonicalIdentityBytecodeQuery.data])
-  
-  // Use Privy smart wallet as canonical if it matches the coin's creator identity
-  const canonicalSmartWalletAddress = useMemo(() => {
-    // Privy smart wallet is source of truth - if user is authenticated, use it
-    if (privySmartWalletAddress) {
-      // Verify it matches the coin's canonical identity (creator or payout recipient)
-      const privyLc = privySmartWalletAddress.toLowerCase()
-      if (canonicalIdentityAddress && canonicalIdentityAddress.toLowerCase() === privyLc) {
-        return privySmartWalletAddress
-      }
-    }
-    // Fallback: check if canonical identity is a contract (for EOA ownership path)
-    if (!canonicalIdentityIsContract) return null
-    const raw = typeof canonicalIdentityAddress === 'string' ? canonicalIdentityAddress : ''
-    return isAddress(raw) ? (getAddress(raw) as Address) : null
-  }, [privySmartWalletAddress, canonicalIdentityAddress, canonicalIdentityIsContract])
-
-  const baseAccountOwnerQuery = useQuery({
-    queryKey: ['coinbaseSmartWalletOwner', canonicalSmartWalletAddress, connectedWalletAddress],
-    enabled: !!publicClient && !!canonicalSmartWalletAddress && !!connectedWalletAddress,
-    staleTime: 30_000,
-    retry: 0,
-    queryFn: async () => {
-      return (await publicClient!.readContract({
-        address: canonicalSmartWalletAddress as Address,
-        abi: COINBASE_SMART_WALLET_OWNER_LINK_ABI,
-        functionName: 'isOwnerAddress',
-        args: [connectedWalletAddress as Address],
-      })) as boolean
-    },
-  })
-
-  const embeddedOwnerQuery = useQuery({
-    queryKey: ['coinbaseSmartWalletOwner', canonicalSmartWalletAddress, embeddedPrivyEoaAddress],
-    enabled: !!canonicalSmartWalletAddress && !!embeddedPrivyEoaAddress,
-    staleTime: 30_000,
-    retry: 0,
-    queryFn: async () => {
-      return await isCoinbaseSmartWalletOwner({
-        smartWallet: canonicalSmartWalletAddress as Address,
-        ownerAddress: embeddedPrivyEoaAddress as Address,
-      })
-    },
-  })
+  void canonicalIdentityBytecodeQuery // reserved for future UX
 
   // Allow injected EOAs (Rabby/MetaMask/etc) to operate a Coinbase Smart Wallet canonical identity
   // when the EOA is an onchain owner of that smart wallet.
@@ -3230,6 +3156,55 @@ function DeployVaultMain() {
                         </button>
                       </div>
                     ) : null}
+                  </motion.div>
+                ) : null}
+
+                {fromWaitlist && privyReady && privyAuthenticated && !smartWalletClient && !embeddedPrivyWallet ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.18, ease: baseEase }}
+                    className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-[12px] text-amber-200/90"
+                  >
+                    <div className="font-medium text-amber-200">Account mismatch?</div>
+                    <div className="mt-1 text-amber-200/80">
+                      You’re signed into Privy, but we can’t see your Zora global wallet / Coinbase Smart Wallet on this session.
+                      Sign in using the same method you used on Zora (email or wallet).
+                    </div>
+                    <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => {
+                          void (async () => {
+                            try {
+                              if (typeof logout === 'function') await logout()
+                            } catch {
+                              // ignore
+                            }
+                            await login({ loginMethods: ['email'] })
+                          })()
+                        }}
+                      >
+                        Try email sign-in
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => {
+                          void (async () => {
+                            try {
+                              if (typeof logout === 'function') await logout()
+                            } catch {
+                              // ignore
+                            }
+                            await login({ loginMethods: ['wallet'] })
+                          })()
+                        }}
+                      >
+                        Try wallet sign-in
+                      </button>
+                    </div>
                   </motion.div>
                 ) : null}
               </div>

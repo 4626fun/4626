@@ -238,7 +238,7 @@ export function WaitlistProfile() {
 
     // Open link in new tab
     window.open(url, '_blank', 'noopener,noreferrer')
-  }, [appUrl, fetchUserData, userData?.referralCode, userEmail])
+  }, [appUrl, fetchUserData, userData?.email, userData?.referralCode, userEmail])
 
   // Copy referral link
   const handleCopyReferral = useCallback(async () => {
@@ -263,7 +263,7 @@ export function WaitlistProfile() {
             <Logo width={32} height={32} showText={false} />
             <div>
               <div className="text-[13px] text-white font-medium">4626.fun</div>
-              <div className="text-[11px] text-zinc-500">Waitlist Profile</div>
+              <div className="text-[11px] text-zinc-500">Portfolio</div>
             </div>
           </div>
 
@@ -362,7 +362,7 @@ export function WaitlistProfile() {
             <Logo width={28} height={28} showText={false} />
             <div>
               <div className="text-[13px] text-white font-medium">4626.fun</div>
-              <div className="text-[11px] text-zinc-500">Profile</div>
+              <div className="text-[11px] text-zinc-500">Portfolio</div>
             </div>
           </div>
           <Link

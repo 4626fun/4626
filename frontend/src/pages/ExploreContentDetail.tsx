@@ -64,7 +64,7 @@ function PriceChart({ data, positive }: { data: number[]; positive: boolean }) {
     })
 
     return `M${points.join(' L')}`
-  }, [data, chartWidth, chartHeight])
+  }, [data, chartWidth, chartHeight, padding.left, padding.top])
 
   const areaD = useMemo(() => {
     if (!pathD) return ''
@@ -72,7 +72,7 @@ function PriceChart({ data, positive }: { data: number[]; positive: boolean }) {
     const lastX = padding.left + chartWidth
     const bottomY = padding.top + chartHeight
     return `${pathD} L${lastX},${bottomY} L${firstX},${bottomY} Z`
-  }, [pathD, chartWidth, chartHeight])
+  }, [pathD, chartWidth, chartHeight, padding.left, padding.top])
 
   const strokeColor = positive ? '#22c55e' : '#ef4444'
   const gradientId = `chart-gradient-content-${positive ? 'up' : 'down'}`
