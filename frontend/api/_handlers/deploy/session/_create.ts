@@ -8,7 +8,7 @@ import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStor
 import { ensureDeploySessionsSchema, hashDeployToken, insertDeploySession, randomDeployToken, randomId } from '../../../../server/_lib/deploySessions.js'
 import { isDbConfigured, getDb } from '../../../../server/_lib/postgres.js'
 import { checkRateLimit, RATE_LIMITS, rateLimitKey } from '../../../../server/_lib/rateLimit.js'
-import { getSupabase } from '../../../../server/_lib/supabase.js'
+import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/supabaseAdmin.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -41,8 +41,8 @@ async function checkCreatorAllowlist(address: Address, smartWallet: Address): Pr
   const csw = smartWallet.toLowerCase()
 
   // Try Supabase first
-  const supabase = getSupabase()
-  if (supabase) {
+  if (isSupabaseAdminConfigured()) {
+    const supabase = getSupabaseAdmin()
     try {
       // Check direct allowlist entry
       const { data: allowlistData } = await supabase

@@ -8,7 +8,8 @@ type AdminResponse = { address: string; isAdmin: boolean } | null
 
 async function lookupEmailByWallet(address: string): Promise<string | null> {
   try {
-    const db = getDb()
+    const db = await getDb()
+    if (!db) return null
     // Check profiles first (most common)
     const r1 = await db.sql`
       SELECT email FROM profiles

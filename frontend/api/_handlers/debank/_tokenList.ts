@@ -153,7 +153,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const raw = await fetchJson<DebankTokenRaw[]>(url, headers, 10_000)
     const tokens: DebankToken[] = (Array.isArray(raw) ? raw : [])
-      .map((t) => {
+      .map((t): DebankToken | null => {
         const id = typeof t?.id === 'string' ? t.id : ''
         if (!id) return null
         const amount = typeof t?.amount === 'number' && Number.isFinite(t.amount) ? t.amount : NaN
@@ -170,9 +170,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           amount,
           price: typeof t?.price === 'number' && Number.isFinite(t.price) ? t.price : undefined,
           usdValue,
-        } satisfies DebankToken
+        }
       })
-      .filter((v): v is DebankToken => Boolean(v))
+      .filter((v): v is DebankToken => v !== null)
       .sort((a, b) => b.usdValue - a.usdValue)
 
     const data: DebankTokenListResponse = {
