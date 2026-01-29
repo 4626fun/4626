@@ -102,8 +102,11 @@ async function fetchWaitlistDetail(params: { id: number }): Promise<AdminWaitlis
 
 export function AdminWaitlist() {
   const { isConnected, address } = useAccount()
-  const { isSignedIn, busy: authBusy, error: authError, signIn, authAddress } = useSiweAuth()
+  const { isSignedIn, busy: authBusy, error: authError, signIn, signOut, authAddress } = useSiweAuth()
   const location = useLocation()
+  
+  // Detect address mismatch (connected wallet differs from auth session)
+  const hasAddressMismatch = address && authAddress && address.toLowerCase() !== authAddress.toLowerCase()
 
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -214,15 +217,38 @@ export function AdminWaitlist() {
               <ShieldCheck className="w-7 h-7 text-zinc-300" />
             </div>
             <div className="font-display text-xl text-white">Admin</div>
-            <div className="text-xs text-zinc-600">Sign in (no transaction) to verify admin access.</div>
-            <button
-              type="button"
-              onClick={() => void signIn()}
-              disabled={authBusy}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/5 border border-white/10 px-5 py-3 text-sm text-zinc-200 hover:text-white hover:border-white/20 transition-colors disabled:opacity-60"
-            >
-              {authBusy ? 'Signing in...' : 'Sign in'}
-            </button>
+            
+            {hasAddressMismatch ? (
+              <>
+                <div className="text-xs text-amber-400">
+                  Session mismatch: signed in as a different wallet.
+                </div>
+                <div className="text-[11px] text-zinc-500">
+                  Sign out first, then sign in with your connected wallet.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void signOut()}
+                  disabled={authBusy}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-5 py-3 text-sm text-red-200 hover:text-white hover:border-red-500/30 transition-colors disabled:opacity-60"
+                >
+                  {authBusy ? 'Signing out...' : 'Sign out'}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="text-xs text-zinc-600">Sign in (no transaction) to verify admin access.</div>
+                <button
+                  type="button"
+                  onClick={() => void signIn()}
+                  disabled={authBusy}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/5 border border-white/10 px-5 py-3 text-sm text-zinc-200 hover:text-white hover:border-white/20 transition-colors disabled:opacity-60"
+                >
+                  {authBusy ? 'Signing in...' : 'Sign in'}
+                </button>
+              </>
+            )}
+            
             {authError ? <div className="text-[11px] text-red-400/90">{authError}</div> : null}
             <div className="text-[10px] text-zinc-700 mt-2 space-y-1">
               <div>Connected: {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'No'}</div>
