@@ -9,9 +9,9 @@ type AdminResponse = { address: string; isAdmin: boolean } | null
 async function lookupEmailByWallet(address: string): Promise<string | null> {
   try {
     const db = getDb()
-    // Check waitlist_signups first (most common)
+    // Check users first (most common)
     const r1 = await db.sql`
-      SELECT email FROM waitlist_signups
+      SELECT email FROM users
       WHERE LOWER(primary_wallet) = LOWER(${address})
          OR LOWER(embedded_wallet) = LOWER(${address})
       LIMIT 1;

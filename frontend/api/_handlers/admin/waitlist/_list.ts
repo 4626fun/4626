@@ -92,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
        app_access_decided_at,
        created_at,
        updated_at
-     FROM waitlist_signups
+     FROM users
      ${where}
      ORDER BY created_at DESC
      LIMIT 200;`,

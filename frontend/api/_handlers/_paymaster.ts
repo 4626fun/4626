@@ -400,13 +400,28 @@ function parseAllowlist(raw: string | undefined): Set<string> {
   return out
 }
 
+async function checkCswOwnership(sessionAddress: Address, cswAddress: Address): Promise<boolean> {
+  try {
+    const client = await getBaseClient()
+    const isOwner = await client.readContract({
+      address: cswAddress,
+      abi: COINBASE_SMART_WALLET_OWNER_ABI,
+      functionName: 'isOwnerAddress',
+      args: [sessionAddress],
+    })
+    return Boolean(isOwner)
+  } catch {
+    return false
+  }
+}
+
 async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: AllowlistMode; allowed: boolean }> {
   const addr = sessionAddress.toLowerCase()
 
   if (isSupabaseAdminConfigured()) {
     const supabase = getSupabaseAdmin()
     try {
-      // Check creator_allowlist first (primary check)
+      // Check creator_allowlist first (direct address match)
       const allowlistedRes = await supabase
         .from('creator_allowlist')
         .select('address')
@@ -415,6 +430,23 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
         .limit(1)
       if (!allowlistedRes.error && Array.isArray(allowlistedRes.data) && allowlistedRes.data.length > 0) {
         return { mode: 'enforced', allowed: true }
+      }
+
+      // Check if session is owner of any allowlisted CSW (on-chain check)
+      const cswRes = await supabase
+        .from('creator_allowlist')
+        .select('csw_address')
+        .not('csw_address', 'is', null)
+        .is('revoked_at', null)
+        .limit(50)
+      if (!cswRes.error && Array.isArray(cswRes.data) && cswRes.data.length > 0) {
+        for (const row of cswRes.data) {
+          const csw = row.csw_address as string
+          if (csw && isAddress(csw)) {
+            const isOwner = await checkCswOwnership(sessionAddress, getAddress(csw))
+            if (isOwner) return { mode: 'enforced', allowed: true }
+          }
+        }
       }
 
       // Check creator_wallets (linked wallets)
@@ -427,10 +459,9 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
         return { mode: 'enforced', allowed: true }
       }
 
-      // Check waitlist_signups with approved app_access_status
-      // Use raw query for case-insensitive wallet matching
+      // Check users with approved app_access_status
       const waitlistedRes = await supabase
-        .from('waitlist_signups')
+        .from('users')
         .select('id')
         .or(`primary_wallet.ilike.${addr},embedded_wallet.ilike.${addr}`)
         .eq('app_access_status', 'approved')
@@ -460,25 +491,52 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
       // Don't block everything if optional tables are unavailable; fall back to allowlist-only.
     }
 
-    const [allowlistedQ, linkedQ, waitlistedQ] = await Promise.all([
-      db.query(`SELECT address FROM creator_allowlist WHERE address = $1 AND revoked_at IS NULL LIMIT 1;`, [addr]),
-      db.query(`SELECT wallet_address FROM creator_wallets WHERE wallet_address = $1 LIMIT 1;`, [addr]).catch(() => ({ rows: [] })),
-      db
-        .query(
-          `SELECT id
-           FROM waitlist_signups
-           WHERE (lower(primary_wallet) = $1 OR lower(embedded_wallet) = $1)
-             AND COALESCE(app_access_status, 'pending') = 'approved'
-           LIMIT 1;`,
-          [addr],
-        )
-        .catch(() => ({ rows: [] })),
-    ])
+    // Check direct address match
+    const allowlistedQ = await db.query(
+      `SELECT address FROM creator_allowlist WHERE LOWER(address) = $1 AND revoked_at IS NULL LIMIT 1;`,
+      [addr],
+    )
+    if (Array.isArray(allowlistedQ.rows) && allowlistedQ.rows.length > 0) {
+      return { mode: 'enforced', allowed: true }
+    }
 
-    const allowlisted = Array.isArray(allowlistedQ.rows) && allowlistedQ.rows.length > 0
-    const linked = Array.isArray(linkedQ.rows) && linkedQ.rows.length > 0
-    const waitlisted = Array.isArray(waitlistedQ.rows) && waitlistedQ.rows.length > 0
-    return { mode: 'enforced', allowed: allowlisted || linked || waitlisted }
+    // Check CSW ownership (session is owner of an allowlisted CSW)
+    const cswQ = await db.query(
+      `SELECT csw_address FROM creator_allowlist WHERE csw_address IS NOT NULL AND revoked_at IS NULL LIMIT 50;`,
+      [],
+    )
+    if (Array.isArray(cswQ.rows)) {
+      for (const row of cswQ.rows) {
+        const csw = row.csw_address as string
+        if (csw && isAddress(csw)) {
+          const isOwner = await checkCswOwnership(sessionAddress, getAddress(csw))
+          if (isOwner) return { mode: 'enforced', allowed: true }
+        }
+      }
+    }
+
+    // Check linked wallets
+    const linkedQ = await db.query(
+      `SELECT wallet_address FROM creator_wallets WHERE LOWER(wallet_address) = $1 LIMIT 1;`,
+      [addr],
+    ).catch(() => ({ rows: [] }))
+    if (Array.isArray(linkedQ.rows) && linkedQ.rows.length > 0) {
+      return { mode: 'enforced', allowed: true }
+    }
+
+    // Check waitlist signups
+    const waitlistedQ = await db.query(
+      `SELECT id FROM users
+       WHERE (LOWER(primary_wallet) = $1 OR LOWER(embedded_wallet) = $1)
+         AND COALESCE(app_access_status, 'pending') = 'approved'
+       LIMIT 1;`,
+      [addr],
+    ).catch(() => ({ rows: [] }))
+    if (Array.isArray(waitlistedQ.rows) && waitlistedQ.rows.length > 0) {
+      return { mode: 'enforced', allowed: true }
+    }
+
+    return { mode: 'enforced', allowed: false }
   }
 
   // Fallback (no DB): env allowlist (legacy/simple).

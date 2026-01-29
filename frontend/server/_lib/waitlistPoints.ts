@@ -48,7 +48,7 @@ export async function ensureWaitlistPointsSchema(db: Db): Promise<void> {
   try {
     // Profile completion (used to qualify referrals).
     try {
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS profile_completed_at TIMESTAMPTZ NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_completed_at TIMESTAMPTZ NULL;`
     } catch {
       // ignore (older Postgres or restricted perms)
     }

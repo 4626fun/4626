@@ -213,6 +213,7 @@ export async function ensureCreatorAccessSchema(): Promise<void> {
   await db.sql`
     CREATE TABLE IF NOT EXISTS creator_allowlist (
       address TEXT PRIMARY KEY,
+      csw_address TEXT,
       approved_by TEXT,
       approved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       revoked_at TIMESTAMPTZ,
@@ -221,6 +222,15 @@ export async function ensureCreatorAccessSchema(): Promise<void> {
   `
 
   await db.sql`CREATE INDEX IF NOT EXISTS creator_allowlist_revoked_at_idx ON creator_allowlist (revoked_at);`
+  
+  // Add csw_address column if it doesn't exist (migration for existing tables)
+  try {
+    await db.sql`ALTER TABLE creator_allowlist ADD COLUMN IF NOT EXISTS csw_address TEXT;`
+  } catch {
+    // Column may already exist
+  }
+  
+  await db.sql`CREATE INDEX IF NOT EXISTS creator_allowlist_csw_idx ON creator_allowlist (csw_address) WHERE csw_address IS NOT NULL;`
 
   await db.sql`
     CREATE TABLE IF NOT EXISTS creator_access_requests (

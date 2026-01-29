@@ -85,7 +85,7 @@ export default async function handler(req: any, res: any) {
   if (hasValidEmail) {
     me = await db.sql`
       SELECT id, email, referral_code, profile_completed_at
-      FROM waitlist_signups
+      FROM users
       WHERE email = ${email}
       LIMIT 1;
     `
@@ -95,7 +95,7 @@ export default async function handler(req: any, res: any) {
   if ((!me?.rows?.length) && hasValidWallet) {
     me = await db.sql`
       SELECT id, email, referral_code, profile_completed_at
-      FROM waitlist_signups
+      FROM users
       WHERE LOWER(primary_wallet) = ${wallet}
          OR LOWER(embedded_wallet) = ${wallet}
       LIMIT 1;
@@ -159,7 +159,7 @@ export default async function handler(req: any, res: any) {
   // Leaderboard rank (invite and total) among profile-complete users.
   const totalCountQ = await db.sql`
     SELECT COUNT(*)::int AS c
-    FROM waitlist_signups
+    FROM users
     WHERE profile_completed_at IS NOT NULL;
   `
   const totalCount = Math.max(0, safeInt(totalCountQ?.rows?.[0]?.c))
@@ -167,7 +167,7 @@ export default async function handler(req: any, res: any) {
   const inviteRankQ = await db.sql`
     WITH eligible AS (
       SELECT id
-      FROM waitlist_signups
+      FROM users
       WHERE profile_completed_at IS NOT NULL
     ),
     scored AS (
@@ -195,7 +195,7 @@ export default async function handler(req: any, res: any) {
   const totalRankQ = await db.sql`
     WITH eligible AS (
       SELECT id
-      FROM waitlist_signups
+      FROM users
       WHERE profile_completed_at IS NOT NULL
     ),
     scored AS (

@@ -43,7 +43,7 @@ export default async function handler(req: any, res: any) {
 
   // Mark profile completed (idempotent).
   const updated = await db.sql`
-    UPDATE waitlist_signups
+    UPDATE users
     SET profile_completed_at = COALESCE(profile_completed_at, NOW()), updated_at = NOW()
     WHERE email = ${email}
     RETURNING id, profile_completed_at;

@@ -10,7 +10,7 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
   try {
     // Create a minimal, durable waitlist schema. Safe to run repeatedly.
     await db.sql`
-      CREATE TABLE IF NOT EXISTS waitlist_signups (
+      CREATE TABLE IF NOT EXISTS users (
         id BIGSERIAL PRIMARY KEY,
         email TEXT NOT NULL UNIQUE,
         primary_wallet TEXT NULL,
@@ -37,31 +37,33 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
     // Backfill/migrate older tables that were created without newer columns.
     // `IF NOT EXISTS` is supported on modern Postgres versions; if it throws, we ignore.
     try {
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS persona TEXT NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS has_creator_coin BOOLEAN NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS farcaster_fid BIGINT NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS privy_user_id TEXT NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS embedded_wallet TEXT NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS embedded_wallet_chain TEXT NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS embedded_wallet_client_type TEXT NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS base_sub_account TEXT NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS primary_wallet TEXT NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS solana_wallet TEXT NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS contact_preference TEXT NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS app_access_status TEXT NOT NULL DEFAULT 'pending';`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS app_access_decision_note TEXT NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS app_access_decided_at TIMESTAMPTZ NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS app_access_decided_by TEXT NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS verifications JSONB NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS persona TEXT NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS has_creator_coin BOOLEAN NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS farcaster_fid BIGINT NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS privy_user_id TEXT NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS embedded_wallet TEXT NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS embedded_wallet_chain TEXT NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS embedded_wallet_client_type TEXT NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS base_sub_account TEXT NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS primary_wallet TEXT NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS solana_wallet TEXT NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS contact_preference TEXT NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS app_access_status TEXT NOT NULL DEFAULT 'pending';`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS app_access_decision_note TEXT NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS app_access_decided_at TIMESTAMPTZ NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS app_access_decided_by TEXT NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS verifications JSONB NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS csw_address TEXT NULL;`
     } catch {
       // ignore (older Postgres or restricted perms)
     }
 
-    await db.sql`CREATE INDEX IF NOT EXISTS waitlist_signups_created_at_idx ON waitlist_signups (created_at DESC);`
+    await db.sql`CREATE INDEX IF NOT EXISTS users_created_at_idx ON users (created_at DESC);`
+    await db.sql`CREATE INDEX IF NOT EXISTS users_csw_idx ON users (csw_address) WHERE csw_address IS NOT NULL;`
 
-    // Referral schema depends on waitlist_signups existing.
+    // Referral schema depends on users existing.
     await ensureReferralsSchema(db)
 
     // Points + profile completion schema.

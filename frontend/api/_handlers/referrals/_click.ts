@@ -41,7 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Look up referrer by code.
   const ref = await db.sql`
     SELECT id
-    FROM waitlist_signups
+    FROM users
     WHERE referral_code = ${referralCode}
     LIMIT 1;
   `

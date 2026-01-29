@@ -131,7 +131,7 @@ export default async function handler(req: any, res: any) {
   // Find the signup
   const me = await db.sql`
     SELECT id, farcaster_fid
-    FROM waitlist_signups
+    FROM users
     WHERE email = ${email}
     LIMIT 1;
   `
@@ -151,7 +151,7 @@ export default async function handler(req: any, res: any) {
         // Store the FID for future reference
         if (verified) {
           await db.sql`
-            UPDATE waitlist_signups
+            UPDATE users
             SET farcaster_fid = ${fid}, updated_at = NOW()
             WHERE id = ${signupId} AND farcaster_fid IS NULL;
           `

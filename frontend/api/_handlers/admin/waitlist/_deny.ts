@@ -33,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!db.query) return res.status(500).json({ success: false, error: 'Database driver missing query()' } satisfies ApiEnvelope<never>)
 
   const q = await db.query(
-    `UPDATE waitlist_signups
+    `UPDATE users
      SET app_access_status = 'denied',
          app_access_decision_note = $2,
          app_access_decided_at = NOW(),

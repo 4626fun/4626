@@ -132,7 +132,7 @@ npm run build
 The waitlist API stores signups in Postgres. Create the table once:
 
 ```sql
-CREATE TABLE IF NOT EXISTS waitlist_signups (
+CREATE TABLE IF NOT EXISTS users (
   id BIGSERIAL PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
   primary_wallet TEXT NULL,
@@ -153,7 +153,7 @@ CREATE TABLE IF NOT EXISTS waitlist_signups (
 - Requests are submitted from `/deploy`.
 - Admin access is controlled by:
   - `CREATOR_ACCESS_ADMIN_ADDRESSES` - comma/space separated wallet addresses
-  - `CREATOR_ACCESS_ADMIN_EMAILS` - comma/space separated emails (looked up from `waitlist_signups` or `creator_wallets` by signed-in wallet)
+  - `CREATOR_ACCESS_ADMIN_EMAILS` - comma/space separated emails (looked up from `users` or `creator_wallets` by signed-in wallet)
 
 ## License
 

@@ -49,21 +49,21 @@ export async function ensureReferralsSchema(db: Db): Promise<void> {
   try {
     // Waitlist signup referral metadata.
     try {
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS referral_code TEXT NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS referred_by_code TEXT NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS referred_by_signup_id BIGINT NULL;`
-      await db.sql`ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS referral_claimed_at TIMESTAMPTZ NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code TEXT NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_code TEXT NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by_signup_id BIGINT NULL;`
+      await db.sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_claimed_at TIMESTAMPTZ NULL;`
     } catch {
       // ignore (older Postgres or restricted perms)
     }
 
     // Enforce uniqueness of referral codes (ignore NULLs).
     await db.sql`
-      CREATE UNIQUE INDEX IF NOT EXISTS waitlist_signups_referral_code_unique
-        ON waitlist_signups (referral_code)
+      CREATE UNIQUE INDEX IF NOT EXISTS users_referral_code_unique
+        ON users (referral_code)
         WHERE referral_code IS NOT NULL;
     `
-    await db.sql`CREATE INDEX IF NOT EXISTS waitlist_signups_referred_by_signup_id_idx ON waitlist_signups (referred_by_signup_id);`
+    await db.sql`CREATE INDEX IF NOT EXISTS users_referred_by_signup_id_idx ON users (referred_by_signup_id);`
 
     // Click events (best-effort; used for analytics and basic anti-abuse).
     await db.sql`

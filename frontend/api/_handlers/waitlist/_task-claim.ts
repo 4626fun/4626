@@ -93,7 +93,7 @@ export default async function handler(req: any, res: any) {
 
   const me = await db.sql`
     SELECT id
-    FROM waitlist_signups
+    FROM users
     WHERE email = ${email}
     LIMIT 1;
   `

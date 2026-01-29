@@ -61,13 +61,13 @@ export default async function handler(req: any, res: any) {
   const me = referralCode
     ? await db.sql`
         SELECT id, referral_code
-        FROM waitlist_signups
+        FROM users
         WHERE referral_code = ${referralCode}
         LIMIT 1;
       `
     : await db.sql`
         SELECT id, referral_code
-        FROM waitlist_signups
+        FROM users
         WHERE email = ${email}
         LIMIT 1;
       `

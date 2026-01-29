@@ -62,7 +62,7 @@ export default async function handler(req: any, res: any) {
   // Find the signup
   const me = await db.sql`
     SELECT id, primary_wallet
-    FROM waitlist_signups
+    FROM users
     WHERE email = ${email}
     LIMIT 1;
   `
@@ -75,7 +75,7 @@ export default async function handler(req: any, res: any) {
   // Update the signup with the CSW address if not already set
   if (primaryWallet && isValidEvmAddress(primaryWallet)) {
     await db.sql`
-      UPDATE waitlist_signups
+      UPDATE users
       SET primary_wallet = COALESCE(primary_wallet, ${primaryWallet}),
           updated_at = NOW()
       WHERE id = ${signupId};
@@ -94,7 +94,7 @@ export default async function handler(req: any, res: any) {
   // Also award referrer bonus if this user was referred
   const referrerResult = await db.sql`
     SELECT referred_by_signup_id
-    FROM waitlist_signups
+    FROM users
     WHERE id = ${signupId} AND referred_by_signup_id IS NOT NULL
     LIMIT 1;
   `
