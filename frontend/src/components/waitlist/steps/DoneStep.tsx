@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import { motion } from 'framer-motion'
 import { CheckCircle2, ArrowRight, Trophy, Copy } from 'lucide-react'
+import { WaitlistDoneCelebrationBackground } from '../WaitlistDoneCelebrationBackground'
 import { SIGNUP_POINTS } from '../waitlistConstants'
 import type { WaitlistState } from '../waitlistTypes'
 
@@ -44,7 +45,13 @@ export const DoneStep = memo(function DoneStep({
   const rank = waitlistPosition?.rank.total ?? null
 
   return (
-    <motion.div {...fadeUp} className="space-y-6">
+    <motion.div {...fadeUp} className="relative overflow-hidden space-y-6">
+      {/* Celebration background (progressive enhancement) */}
+      <div className="absolute inset-0 -z-10">
+        <WaitlistDoneCelebrationBackground className="absolute inset-0" />
+        {/* readability overlay */}
+        <div className="absolute inset-0 bg-[#020202]/60" />
+      </div>
       {/* Success Header */}
       <motion.div {...scaleIn} className="text-center space-y-4">
         <div className="flex justify-center">

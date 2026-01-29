@@ -256,10 +256,10 @@ export function TokenTableHeader({ timeframe = '1d', currentSort, onSortChange }
   const stickyLeft = getStickyLeftMap(columns)
   const groupSpans = buildGroupSpans(columns)
 
-  const stickyHeaderCellClass = 'sticky z-50 bg-zinc-950/80 backdrop-blur-sm border-r border-zinc-800/60'
+  const stickyHeaderCellClass = 'sticky z-50 bg-zinc-950 border-r border-zinc-800/60'
 
   return (
-    <div className="bg-zinc-900/80 backdrop-blur border-b border-zinc-800">
+    <div className="bg-zinc-950 border-b border-zinc-800">
       {/* Group labels */}
       <div className="grid" style={{ gridTemplateColumns }}>
         {groupSpans.map((g) => (
