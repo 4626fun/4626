@@ -13,7 +13,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
  * - 1y: Last 365 days (daily data)
  */
 
-const THEGRAPH_API_KEY = process.env.THEGRAPH_API_KEY || ''
+// The Graph API key from environment (supports both naming conventions)
+const THEGRAPH_API_KEY = process.env.THEGRAPH_API_KEY || process.env.GRAPH_API_KEY || ''
 
 // Custom 4626 subgraph for Zora coins on Uniswap V4 Base
 // Owner: 0xakita.eth - https://thegraph.com/studio/subgraph/4626
