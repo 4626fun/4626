@@ -31,6 +31,11 @@ const COINBASE_SMART_WALLET_ABI = [
   },
 ] as const
 
+const COINBASE_SMART_WALLET_OWNERS_ABI = [
+  { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'ownerAtIndex', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'bytes' }] },
+] as const
+
 type RequestBody = {
   smartWallet?: string
   ownerAddress?: string
@@ -67,7 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const rpcs = getBaseRpcUrls()
-  const { createPublicClient, http } = await import('viem')
+  const { createPublicClient, encodeAbiParameters, http } = await import('viem')
   const { base } = await import('viem/chains')
 
   let lastError: Error | null = null
@@ -78,18 +83,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         transport: http(rpc, { timeout: 10_000 }),
       })
 
-      const isOwner = await client.readContract({
-        address: smartWallet as `0x${string}`,
-        abi: COINBASE_SMART_WALLET_ABI,
-        functionName: 'isOwnerAddress',
-        args: [ownerAddress as `0x${string}`],
-      })
+      // First try the standard method (fast path).
+      try {
+        const isOwner = await client.readContract({
+          address: smartWallet as `0x${string}`,
+          abi: COINBASE_SMART_WALLET_ABI,
+          functionName: 'isOwnerAddress',
+          args: [ownerAddress as `0x${string}`],
+        })
 
-      const data: ResponseData = {
-        smartWallet,
-        ownerAddress,
-        isOwner: isOwner === true,
+        const data: ResponseData = {
+          smartWallet,
+          ownerAddress,
+          isOwner: isOwner === true,
+        }
+        return res.status(200).json({ success: true, data } satisfies ApiEnvelope<ResponseData>)
+      } catch {
+        // Fall back to iterating owners if isOwnerAddress is not available.
       }
+
+      const countRaw = (await client.readContract({
+        address: smartWallet as `0x${string}`,
+        abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+        functionName: 'ownerCount',
+      })) as bigint
+      const count = Number(countRaw)
+      const maxScan = Math.min(Number.isFinite(count) ? count : 0, 64)
+      const expected = String(encodeAbiParameters([{ type: 'address' }], [ownerAddress as `0x${string}`])).toLowerCase()
+      let isOwner = false
+      for (let i = 0; i < maxScan; i++) {
+        const ownerBytes = (await client.readContract({
+          address: smartWallet as `0x${string}`,
+          abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+          functionName: 'ownerAtIndex',
+          args: [BigInt(i)],
+        })) as string
+        if (String(ownerBytes).toLowerCase() === expected) {
+          isOwner = true
+          break
+        }
+      }
+
+      const data: ResponseData = { smartWallet, ownerAddress, isOwner }
       return res.status(200).json({ success: true, data } satisfies ApiEnvelope<ResponseData>)
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err))
