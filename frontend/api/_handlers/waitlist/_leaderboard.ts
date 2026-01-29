@@ -66,7 +66,7 @@ export default async function handler(req: any, res: any) {
       ? await db.sql`
           WITH eligible AS (
             SELECT id, primary_wallet, embedded_wallet, referral_code
-            FROM users
+            FROM profiles
             WHERE profile_completed_at IS NOT NULL
             ORDER BY id ASC
             LIMIT ${maxUsers}
@@ -120,7 +120,7 @@ export default async function handler(req: any, res: any) {
       : await db.sql`
           WITH eligible AS (
             SELECT id, primary_wallet, embedded_wallet, referral_code
-            FROM users
+            FROM profiles
             WHERE profile_completed_at IS NOT NULL
             ORDER BY id ASC
             LIMIT ${maxUsers}

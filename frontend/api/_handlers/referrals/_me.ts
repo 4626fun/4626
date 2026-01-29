@@ -55,14 +55,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     address.length > 0
       ? await db.sql`
           SELECT id, referral_code
-          FROM users
+          FROM profiles
           WHERE (primary_wallet = ${address} OR embedded_wallet = ${address})
           LIMIT 1;
         `
       : codeParam.trim().length > 0
         ? await db.sql`
             SELECT id, referral_code
-            FROM users
+            FROM profiles
             WHERE referral_code = ${codeParam.trim().toUpperCase()}
             LIMIT 1;
           `
@@ -98,7 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const rankWeekly = await db.sql`
     WITH referrers AS (
       SELECT id
-      FROM users
+      FROM profiles
       WHERE referral_code IS NOT NULL
     ),
     conversions AS (
@@ -138,7 +138,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const rankAll = await db.sql`
     WITH referrers AS (
       SELECT id
-      FROM users
+      FROM profiles
       WHERE referral_code IS NOT NULL
     ),
     conversions AS (

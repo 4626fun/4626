@@ -93,7 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (Number.isFinite(id)) {
     const q = await db.query(
       `SELECT *
-       FROM users
+       FROM profiles
        WHERE id = $1
        LIMIT 1;`,
       [Math.floor(id)],
@@ -102,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } else if (email) {
     const q = await db.query(
       `SELECT *
-       FROM users
+       FROM profiles
        WHERE LOWER(email) = LOWER($1)
        LIMIT 1;`,
       [email],
@@ -111,7 +111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } else if (referral) {
     const q = await db.query(
       `SELECT *
-       FROM users
+       FROM profiles
        WHERE referral_code = $1
        LIMIT 1;`,
       [referral],

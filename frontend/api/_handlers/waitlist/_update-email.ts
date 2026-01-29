@@ -52,7 +52,7 @@ export default async function handler(req: any, res: any) {
 
   const existing = await db.sql`
     SELECT id
-    FROM users
+    FROM profiles
     WHERE email = ${newEmail}
     LIMIT 1;
   `
@@ -61,7 +61,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const updated = await db.sql`
-    UPDATE users
+    UPDATE profiles
     SET email = ${newEmail}, contact_preference = 'email', updated_at = NOW()
     WHERE email = ${currentEmail}
     RETURNING id, email;

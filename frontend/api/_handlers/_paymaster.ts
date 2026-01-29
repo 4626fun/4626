@@ -459,9 +459,9 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
         return { mode: 'enforced', allowed: true }
       }
 
-      // Check users with approved app_access_status
+      // Check profiles with approved app_access_status
       const waitlistedRes = await supabase
-        .from('users')
+        .from('profiles')
         .select('id')
         .or(`primary_wallet.ilike.${addr},embedded_wallet.ilike.${addr}`)
         .eq('app_access_status', 'approved')
@@ -526,7 +526,7 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
 
     // Check waitlist signups
     const waitlistedQ = await db.query(
-      `SELECT id FROM users
+      `SELECT id FROM profiles
        WHERE (LOWER(primary_wallet) = $1 OR LOWER(embedded_wallet) = $1)
          AND COALESCE(app_access_status, 'pending') = 'approved'
        LIMIT 1;`,

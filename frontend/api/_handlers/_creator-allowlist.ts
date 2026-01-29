@@ -128,7 +128,7 @@ async function supabaseIsWaitlisted(address: string | null): Promise<boolean> {
   try {
     const addr = address.toLowerCase()
     const res = await supabase
-      .from('users')
+      .from('profiles')
       .select('id')
       .or(`primary_wallet.eq.${addr},embedded_wallet.eq.${addr}`)
       .eq('app_access_status', 'approved')

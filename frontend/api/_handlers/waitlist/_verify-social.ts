@@ -62,8 +62,8 @@ async function verifyFarcasterFollow(userFid: number): Promise<boolean> {
     const data = await response.json() as any
     
     // Check if the viewer (user) follows the target (us)
-    const users = Array.isArray(data?.users) ? data.users : []
-    const ourUser = users.find((u: any) => u?.fid === OUR_FARCASTER_FID)
+    const profiles = Array.isArray(data?.profiles) ? data.profiles : []
+    const ourUser = profiles.find((u: any) => u?.fid === OUR_FARCASTER_FID)
     
     // viewer_context.following indicates if the viewer follows this user
     return ourUser?.viewer_context?.following === true
@@ -131,7 +131,7 @@ export default async function handler(req: any, res: any) {
   // Find the signup
   const me = await db.sql`
     SELECT id, farcaster_fid
-    FROM users
+    FROM profiles
     WHERE email = ${email}
     LIMIT 1;
   `
@@ -151,7 +151,7 @@ export default async function handler(req: any, res: any) {
         // Store the FID for future reference
         if (verified) {
           await db.sql`
-            UPDATE users
+            UPDATE profiles
             SET farcaster_fid = ${fid}, updated_at = NOW()
             WHERE id = ${signupId} AND farcaster_fid IS NULL;
           `

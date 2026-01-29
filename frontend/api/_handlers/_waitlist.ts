@@ -189,7 +189,7 @@ function extractEmbeddedWalletMeta(user: any): EmbeddedWalletMeta {
 
 async function privyGetUserByEmail(params: { appId: string; appSecret: string; email: string }): Promise<any | null> {
   const { appId, appSecret, email } = params
-  const url = `https://auth.privy.io/api/v1/apps/${encodeURIComponent(appId)}/users/email/${encodeURIComponent(email)}`
+  const url = `https://auth.privy.io/api/v1/apps/${encodeURIComponent(appId)}/profiles/email/${encodeURIComponent(email)}`
   const res = await fetch(url, {
     method: 'GET',
     headers: {
@@ -212,7 +212,7 @@ async function privyCreateUserWithEthereumWallet(params: {
   email: string
 }): Promise<any> {
   const { appId, appSecret, email } = params
-  const url = `https://auth.privy.io/api/v1/apps/${encodeURIComponent(appId)}/users`
+  const url = `https://auth.privy.io/api/v1/apps/${encodeURIComponent(appId)}/profiles`
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -425,7 +425,7 @@ export default async function handler(req: any, res: any) {
   try {
     // Preferred schema (includes persona + has_creator_coin).
     const r = await db.sql`
-      INSERT INTO users (
+      INSERT INTO profiles (
         email,
         primary_wallet,
         solana_wallet,
@@ -460,18 +460,18 @@ export default async function handler(req: any, res: any) {
         NOW()
       )
       ON CONFLICT (email) DO UPDATE
-        SET primary_wallet = COALESCE(EXCLUDED.primary_wallet, users.primary_wallet),
-            solana_wallet = COALESCE(EXCLUDED.solana_wallet, users.solana_wallet),
-            privy_user_id = COALESCE(EXCLUDED.privy_user_id, users.privy_user_id),
-            embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, users.embedded_wallet),
-            embedded_wallet_chain = COALESCE(EXCLUDED.embedded_wallet_chain, users.embedded_wallet_chain),
-            embedded_wallet_client_type = COALESCE(EXCLUDED.embedded_wallet_client_type, users.embedded_wallet_client_type),
-            base_sub_account = COALESCE(EXCLUDED.base_sub_account, users.base_sub_account),
-            persona = COALESCE(EXCLUDED.persona, users.persona),
-            has_creator_coin = COALESCE(EXCLUDED.has_creator_coin, users.has_creator_coin),
-            farcaster_fid = COALESCE(EXCLUDED.farcaster_fid, users.farcaster_fid),
-            contact_preference = COALESCE(EXCLUDED.contact_preference, users.contact_preference),
-            verifications = COALESCE(EXCLUDED.verifications, users.verifications),
+        SET primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),
+            solana_wallet = COALESCE(EXCLUDED.solana_wallet, profiles.solana_wallet),
+            privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
+            embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, profiles.embedded_wallet),
+            embedded_wallet_chain = COALESCE(EXCLUDED.embedded_wallet_chain, profiles.embedded_wallet_chain),
+            embedded_wallet_client_type = COALESCE(EXCLUDED.embedded_wallet_client_type, profiles.embedded_wallet_client_type),
+            base_sub_account = COALESCE(EXCLUDED.base_sub_account, profiles.base_sub_account),
+            persona = COALESCE(EXCLUDED.persona, profiles.persona),
+            has_creator_coin = COALESCE(EXCLUDED.has_creator_coin, profiles.has_creator_coin),
+            farcaster_fid = COALESCE(EXCLUDED.farcaster_fid, profiles.farcaster_fid),
+            contact_preference = COALESCE(EXCLUDED.contact_preference, profiles.contact_preference),
+            verifications = COALESCE(EXCLUDED.verifications, profiles.verifications),
             updated_at = NOW()
       RETURNING id, (xmax = 0) AS created, email, referral_code;
     `
@@ -497,7 +497,7 @@ export default async function handler(req: any, res: any) {
     if (signupId && cswAddress.length > 0) {
       // Update the signup record with CSW address if not already set
       await db.sql`
-        UPDATE users
+        UPDATE profiles
         SET primary_wallet = COALESCE(primary_wallet, ${cswAddress})
         WHERE id = ${signupId};
       `
@@ -520,7 +520,7 @@ export default async function handler(req: any, res: any) {
         `C${Number(signupId).toString(36).toUpperCase()}`
       try {
         const up = await db.sql`
-          UPDATE users
+          UPDATE profiles
           SET referral_code = ${desired}, referral_claimed_at = NOW()
           WHERE id = ${signupId} AND referral_code IS NULL
           RETURNING referral_code;
@@ -548,7 +548,7 @@ export default async function handler(req: any, res: any) {
     if (signupId && referralFromBody) {
       const ref = await db.sql`
         SELECT id
-        FROM users
+        FROM profiles
         WHERE referral_code = ${referralFromBody}
         LIMIT 1;
       `
@@ -556,7 +556,7 @@ export default async function handler(req: any, res: any) {
       if (referrerId && referrerId !== signupId) {
         // Link invitee to referrer (do not overwrite if already set).
         await db.sql`
-          UPDATE users
+          UPDATE profiles
           SET referred_by_code = ${referralFromBody}, referred_by_signup_id = ${referrerId}
           WHERE id = ${signupId} AND referred_by_signup_id IS NULL;
         `
@@ -611,11 +611,11 @@ export default async function handler(req: any, res: any) {
     const lower = String(msg).toLowerCase()
 
     // If the table didn't exist (or was dropped), try to recreate and retry once.
-    if (lower.includes('relation') && lower.includes('users')) {
+    if (lower.includes('relation') && lower.includes('profiles')) {
       try {
         await ensureWaitlistSchema(db as any)
         const rRetry = await db.sql`
-          INSERT INTO users (
+          INSERT INTO profiles (
             email,
             primary_wallet,
             solana_wallet,
@@ -650,18 +650,18 @@ export default async function handler(req: any, res: any) {
             NOW()
           )
           ON CONFLICT (email) DO UPDATE
-            SET primary_wallet = COALESCE(EXCLUDED.primary_wallet, users.primary_wallet),
-                solana_wallet = COALESCE(EXCLUDED.solana_wallet, users.solana_wallet),
-                privy_user_id = COALESCE(EXCLUDED.privy_user_id, users.privy_user_id),
-                embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, users.embedded_wallet),
-                embedded_wallet_chain = COALESCE(EXCLUDED.embedded_wallet_chain, users.embedded_wallet_chain),
-                embedded_wallet_client_type = COALESCE(EXCLUDED.embedded_wallet_client_type, users.embedded_wallet_client_type),
-                base_sub_account = COALESCE(EXCLUDED.base_sub_account, users.base_sub_account),
-                persona = COALESCE(EXCLUDED.persona, users.persona),
-                has_creator_coin = COALESCE(EXCLUDED.has_creator_coin, users.has_creator_coin),
-                farcaster_fid = COALESCE(EXCLUDED.farcaster_fid, users.farcaster_fid),
-                contact_preference = COALESCE(EXCLUDED.contact_preference, users.contact_preference),
-                verifications = COALESCE(EXCLUDED.verifications, users.verifications),
+            SET primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),
+                solana_wallet = COALESCE(EXCLUDED.solana_wallet, profiles.solana_wallet),
+                privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
+                embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, profiles.embedded_wallet),
+                embedded_wallet_chain = COALESCE(EXCLUDED.embedded_wallet_chain, profiles.embedded_wallet_chain),
+                embedded_wallet_client_type = COALESCE(EXCLUDED.embedded_wallet_client_type, profiles.embedded_wallet_client_type),
+                base_sub_account = COALESCE(EXCLUDED.base_sub_account, profiles.base_sub_account),
+                persona = COALESCE(EXCLUDED.persona, profiles.persona),
+                has_creator_coin = COALESCE(EXCLUDED.has_creator_coin, profiles.has_creator_coin),
+                farcaster_fid = COALESCE(EXCLUDED.farcaster_fid, profiles.farcaster_fid),
+                contact_preference = COALESCE(EXCLUDED.contact_preference, profiles.contact_preference),
+                verifications = COALESCE(EXCLUDED.verifications, profiles.verifications),
                 updated_at = NOW()
           RETURNING (xmax = 0) AS created, email;
         `
@@ -690,12 +690,12 @@ export default async function handler(req: any, res: any) {
     ) {
       try {
         const r2 = await db.sql`
-          INSERT INTO users (email, primary_wallet, privy_user_id, embedded_wallet, created_at, updated_at)
+          INSERT INTO profiles (email, primary_wallet, privy_user_id, embedded_wallet, created_at, updated_at)
           VALUES (${email}, ${primaryWallet.length > 0 ? primaryWallet : null}, ${privyUserId}, ${embeddedWallet}, NOW(), NOW())
           ON CONFLICT (email) DO UPDATE
-            SET primary_wallet = COALESCE(EXCLUDED.primary_wallet, users.primary_wallet),
-                privy_user_id = COALESCE(EXCLUDED.privy_user_id, users.privy_user_id),
-                embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, users.embedded_wallet),
+            SET primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),
+                privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
+                embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, profiles.embedded_wallet),
                 updated_at = NOW()
           RETURNING (xmax = 0) AS created, email;
         `
@@ -711,8 +711,8 @@ export default async function handler(req: any, res: any) {
 
     // Helpful hint if the table hasn't been created yet.
     const hint =
-      lower.includes('relation') && lower.includes('users')
-        ? 'Missing table. Create `users` (see docs) and retry.'
+      lower.includes('relation') && lower.includes('profiles')
+        ? 'Missing table. Create `profiles` (see docs) and retry.'
         : null
     return res.status(500).json({ success: false, error: hint ? `${msg}. ${hint}` : msg } satisfies ApiEnvelope<never>)
   }

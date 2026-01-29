@@ -56,7 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? await db.sql`
           WITH referrers AS (
             SELECT id, referral_code, primary_wallet
-            FROM users
+            FROM profiles
             WHERE referral_code IS NOT NULL
           ),
           conversions AS (
@@ -100,7 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : await db.sql`
           WITH referrers AS (
             SELECT id, referral_code, primary_wallet
-            FROM users
+            FROM profiles
             WHERE referral_code IS NOT NULL
           ),
           conversions AS (
@@ -153,7 +153,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (addr) {
     const mine = await db.sql`
       SELECT id
-      FROM users
+      FROM profiles
       WHERE (primary_wallet = ${addr} OR embedded_wallet = ${addr})
       LIMIT 1;
     `
@@ -163,7 +163,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const rWeekly = await db.sql`
         WITH referrers AS (
           SELECT id
-          FROM users
+          FROM profiles
           WHERE referral_code IS NOT NULL
         ),
         scored AS (
@@ -188,7 +188,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const rAll = await db.sql`
         WITH referrers AS (
           SELECT id
-          FROM users
+          FROM profiles
           WHERE referral_code IS NOT NULL
         ),
         scored AS (
