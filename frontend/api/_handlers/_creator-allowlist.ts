@@ -48,7 +48,13 @@ async function dbIsAllowlisted(
   for (const a of addresses) {
     const addr = a.toLowerCase()
     if (!isAddressLike(addr)) continue
-    const { rows } = await db.sql`SELECT address FROM allowlist WHERE address = ${addr} AND revoked_at IS NULL LIMIT 1;`
+    const { rows } = await db.sql`
+      SELECT address
+      FROM allowlist
+      WHERE (lower(address) = ${addr} OR lower(csw_address) = ${addr})
+        AND revoked_at IS NULL
+      LIMIT 1;
+    `
     if (rows.length > 0) return true
   }
   return false
@@ -64,7 +70,7 @@ async function dbHasLinkedWallet(
     const { rows } = await db.sql`
       SELECT wallet_address
       FROM creator_wallets
-      WHERE wallet_address = ${address.toLowerCase()}
+      WHERE lower(wallet_address) = ${address.toLowerCase()}
       LIMIT 1;
     `
     return rows.length > 0
@@ -83,7 +89,9 @@ async function dbIsWaitlisted(
     const { rows } = await db.sql`
       SELECT id
       FROM profiles
-      WHERE (lower(primary_wallet) = ${addr} OR lower(embedded_wallet) = ${addr})
+      WHERE (lower(primary_wallet) = ${addr}
+        OR lower(embedded_wallet) = ${addr}
+        OR lower(csw_address) = ${addr})
         AND COALESCE(app_access_status, 'pending') = 'approved'
       LIMIT 1;
     `
@@ -100,10 +108,11 @@ async function supabaseIsAllowlisted(addresses: string[]): Promise<boolean> {
   if (addrs.length === 0) return false
 
   const supabase = getSupabaseAdmin()
+  const orFilters = addrs.map((a) => `address.ilike.${a},csw_address.ilike.${a}`).join(',')
   const res = await supabase
     .from('allowlist')
     .select('address')
-    .in('address', addrs)
+    .or(orFilters)
     .is('revoked_at', null)
     .limit(1)
   if (res.error) throw new Error(res.error.message)
@@ -114,7 +123,7 @@ async function supabaseHasLinkedWallet(address: string | null): Promise<boolean>
   if (!address || !isAddressLike(address)) return false
   const supabase = getSupabaseAdmin()
   try {
-    const res = await supabase.from('creator_wallets').select('wallet_address').eq('wallet_address', address.toLowerCase()).limit(1)
+    const res = await supabase.from('creator_wallets').select('wallet_address').ilike('wallet_address', address.toLowerCase()).limit(1)
     if (res.error) return false
     return Array.isArray(res.data) && res.data.length > 0
   } catch {
@@ -130,7 +139,7 @@ async function supabaseIsWaitlisted(address: string | null): Promise<boolean> {
     const res = await supabase
       .from('profiles')
       .select('id')
-      .or(`primary_wallet.eq.${addr},embedded_wallet.eq.${addr}`)
+      .or(`primary_wallet.ilike.${addr},embedded_wallet.ilike.${addr},csw_address.ilike.${addr}`)
       .eq('app_access_status', 'approved')
       .limit(1)
     if (res.error) return false
