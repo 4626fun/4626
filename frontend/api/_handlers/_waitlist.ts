@@ -299,13 +299,13 @@ export default async function handler(req: any, res: any) {
 
   let primaryWallet = primaryWalletInput
   if (sessionWallet && isValidEvmAddress(sessionWallet)) {
-    if (primaryWallet && primaryWallet.toLowerCase() !== sessionWallet.toLowerCase()) {
-      return res.status(400).json({
-        success: false,
-        error: 'Signed-in wallet does not match the provided wallet.',
-      } satisfies ApiEnvelope<never>)
+    // If the caller did not provide a wallet, bind the signup to the signed-in wallet.
+    // If they DID provide one and it doesn't match, do not hard-fail:
+    // - This endpoint is used by the marketing waitlist flow which can be used without SIWE.
+    // - Users may also have a stale SIWE token in sessionStorage from a different wallet/app host.
+    if (!primaryWallet) {
+      primaryWallet = sessionWallet
     }
-    primaryWallet = sessionWallet
   }
 
   // If the client sent a synthetic email, normalize it deterministically from the wallet identity.
