@@ -13,11 +13,11 @@ const TABS: Tab[] = [
 ]
 
 const TIME_FILTERS = [
-  { label: '1H', value: '1h' },
-  { label: '1D', value: '1d' },
-  { label: '1W', value: '1w' },
-  { label: '1M', value: '1m' },
-  { label: '1Y', value: '1y' },
+  { label: '1H', value: '1h', available: false },
+  { label: '1D', value: '1d', available: true },
+  { label: '1W', value: '1w', available: false },
+  { label: '1M', value: '1m', available: false },
+  { label: '1Y', value: '1y', available: false },
 ] as const
 
 const SORT_OPTIONS = [
@@ -111,15 +111,20 @@ export function ExploreSubnav({
           <div className="flex items-center gap-1 h-10 bg-zinc-900 border border-zinc-800 rounded-full p-1">
             {TIME_FILTERS.map((filter) => {
               const active = currentTimeFilter === filter.value
+              const disabled = !filter.available
               return (
                 <button
                   key={filter.value}
                   type="button"
-                  onClick={() => handleTimeFilterClick(filter.value)}
+                  onClick={() => !disabled && handleTimeFilterClick(filter.value)}
+                  disabled={disabled}
+                  title={disabled ? 'Coming soon - Uniswap V4 historical data' : undefined}
                   className={`h-8 px-3 rounded-full text-xs font-medium leading-none transition-colors ${
                     active
                       ? 'bg-zinc-700 text-white'
-                      : 'text-zinc-400 hover:text-white'
+                      : disabled
+                        ? 'text-zinc-600 cursor-not-allowed'
+                        : 'text-zinc-400 hover:text-white'
                   }`}
                 >
                   {filter.label}

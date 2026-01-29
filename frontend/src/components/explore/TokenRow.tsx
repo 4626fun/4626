@@ -103,7 +103,27 @@ function formatDeltaPercent(delta: string | undefined): { text: string; positive
   if (!Number.isFinite(num)) return { text: '-', positive: true }
   const positive = num >= 0
   const abs = Math.abs(num)
-  return { text: `${positive ? '+' : '-'}${abs.toFixed(2)}%`, positive }
+  
+  // Format based on magnitude for cleaner display
+  let formatted: string
+  if (abs >= 1000) {
+    // Very large changes: show as whole number
+    formatted = `${Math.round(abs)}%`
+  } else if (abs >= 10) {
+    // Large changes: 1 decimal place
+    formatted = `${abs.toFixed(1)}%`
+  } else if (abs >= 0.01) {
+    // Normal changes: 2 decimal places
+    formatted = `${abs.toFixed(2)}%`
+  } else if (abs > 0) {
+    // Very small changes: show as <0.01%
+    formatted = '<0.01%'
+  } else {
+    formatted = '0%'
+  }
+  
+  const sign = positive ? '+' : '-'
+  return { text: `${sign}${formatted}`, positive }
 }
 
 function buildGroupSpans(columns: ReturnType<typeof getExploreColumns>) {
@@ -134,6 +154,11 @@ export function TokenRow({ rank, coin, linkPrefix = '/explore/creators', timefra
   const name = coin.name || coin.symbol || 'Unknown'
   const symbol = coin.symbol || ''
   const chain = coin.chainId === 8453 ? 'base' : 'base'
+  
+  // Check if name and symbol are effectively the same (for creator coins)
+  const nameNormalized = name.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const symbolNormalized = symbol.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const isSameNameSymbol = nameNormalized === symbolNormalized || !symbol || symbol === name
   const address = coin.address || ''
   const payoutTo = coin.payoutRecipientAddress
   const marketCap = coin.marketCap
@@ -182,17 +207,25 @@ export function TokenRow({ rank, coin, linkPrefix = '/explore/creators', timefra
           className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-r from-transparent to-zinc-950 opacity-80"
           aria-hidden="true"
         />
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0">
           {avatarUrl ? (
-            <img src={avatarUrl} alt={name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+            <img src={avatarUrl} alt={name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
           ) : (
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center flex-shrink-0">
-              <span className="text-[10px] font-medium text-zinc-400">{name.slice(0, 2).toUpperCase()}</span>
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center flex-shrink-0">
+              <span className="text-[11px] font-medium text-zinc-400">{name.slice(0, 2).toUpperCase()}</span>
             </div>
           )}
           <div className="min-w-0">
-            <div className="text-sm font-medium text-white truncate">{name}</div>
-            {symbol && <div className="text-[10px] text-zinc-500 truncate">{symbol}</div>}
+            {isSameNameSymbol ? (
+              // Single display for matching name/symbol (common for creator coins)
+              <div className="text-[15px] font-medium text-white truncate">{symbol || name}</div>
+            ) : (
+              // Separate display when different
+              <>
+                <div className="text-sm font-medium text-white truncate">{name}</div>
+                <div className="text-[10px] text-zinc-500 truncate">{symbol}</div>
+              </>
+            )}
           </div>
         </div>
       </div>
