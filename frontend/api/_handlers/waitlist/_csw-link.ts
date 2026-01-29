@@ -101,11 +101,12 @@ export default async function handler(req: any, res: any) {
   `
 
   // Award CSW link points (idempotent via ledger unique key)
+  // Use csw: prefix to match format in _waitlist.ts
   await awardWaitlistPoints({
     db,
     signupId,
     source: 'csw_link',
-    sourceId: cswAddress.toLowerCase(),
+    sourceId: `csw:${cswAddress.toLowerCase()}`,
     amount: WAITLIST_POINTS.linkCsw,
   })
 

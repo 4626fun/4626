@@ -2,6 +2,7 @@ import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } fr
 import { getDb } from '../../../server/_lib/postgres.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
+import { checkRateLimit, rateLimitKey, getClientIp } from '../../../server/_lib/rateLimit.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -56,7 +57,8 @@ async function verifyFarcasterFollow(userFid: number): Promise<boolean> {
 
     if (!response.ok) {
       console.error('Neynar API error:', response.status)
-      return true // Honor system fallback on error
+      // Don't auto-verify on API error - require successful verification
+      return false
     }
 
     const data = await response.json() as any
@@ -69,7 +71,8 @@ async function verifyFarcasterFollow(userFid: number): Promise<boolean> {
     return ourUser?.viewer_context?.following === true
   } catch (e) {
     console.error('Farcaster verification error:', e)
-    return true // Honor system fallback on error
+    // Don't auto-verify on error - require successful verification
+    return false
   }
 }
 
@@ -106,6 +109,14 @@ export default async function handler(req: any, res: any) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  // Rate limiting: 10 verifications per minute per IP
+  const clientIp = getClientIp(req)
+  const rateLimit = checkRateLimit(rateLimitKey('verify-social', clientIp), { windowMs: 60_000, maxRequests: 10 })
+  if (!rateLimit.allowed) {
+    res.setHeader('Retry-After', Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString())
+    return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 
   const body = await readJsonBody<Body>(req)
@@ -146,18 +157,17 @@ export default async function handler(req: any, res: any) {
   switch (platform) {
     case 'farcaster': {
       const fid = typeof body?.fid === 'number' ? body.fid : null
-      if (fid) {
-        verified = await verifyFarcasterFollow(fid)
-        // Store the FID for future reference
-        if (verified) {
-          await db.sql`
-            UPDATE profiles
-            SET farcaster_fid = ${fid}, updated_at = NOW()
-            WHERE id = ${signupId} AND farcaster_fid IS NULL;
-          `
-        }
-      } else {
-        verified = true // Honor system if no FID provided
+      if (!fid || fid <= 0) {
+        return res.status(400).json({ success: false, error: 'Farcaster FID is required' } satisfies ApiEnvelope<never>)
+      }
+      verified = await verifyFarcasterFollow(fid)
+      // Store the FID for future reference
+      if (verified) {
+        await db.sql`
+          UPDATE profiles
+          SET farcaster_fid = ${fid}, updated_at = NOW()
+          WHERE id = ${signupId} AND farcaster_fid IS NULL;
+        `
       }
       break
     }

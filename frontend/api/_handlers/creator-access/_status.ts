@@ -31,10 +31,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const sessionAddress = getSessionAddress(req)
-  if (!sessionAddress) {
+  const sessionAddressRaw = getSessionAddress(req)
+  if (!sessionAddressRaw) {
     return res.status(200).json({ success: true, data: null } satisfies ApiEnvelope<CreatorAccessStatus>)
   }
+  // Normalize to lowercase for case-insensitive matching
+  const sessionAddress = sessionAddressRaw.toLowerCase()
 
   if (isSupabaseAdminConfigured()) {
     try {
@@ -42,7 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const allowRes = await supabase
         .from('allowlist')
         .select('address')
-        .eq('address', sessionAddress)
+        .ilike('address', sessionAddress)
         .is('revoked_at', null)
         .limit(1)
       if (allowRes.error) throw new Error(allowRes.error.message)
@@ -51,7 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const reqRes = await supabase
         .from('access_requests')
         .select('id, coin_address, status, created_at, reviewed_at, decision_note')
-        .eq('wallet_address', sessionAddress)
+        .ilike('wallet_address', sessionAddress)
         .order('created_at', { ascending: false })
         .limit(1)
       if (reqRes.error) throw new Error(reqRes.error.message)
@@ -92,7 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ success: false, error: 'Database driver missing query()' } satisfies ApiEnvelope<never>)
   }
 
-  const allow = await db.query(`SELECT address FROM allowlist WHERE address = $1 AND revoked_at IS NULL LIMIT 1;`, [
+  const allow = await db.query(`SELECT address FROM allowlist WHERE LOWER(address) = $1 AND revoked_at IS NULL LIMIT 1;`, [
     sessionAddress,
   ])
   const approved = allow.rows.length > 0
@@ -100,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const r = await db.query(
     `SELECT id, coin_address, status, created_at, reviewed_at, decision_note
      FROM access_requests
-     WHERE wallet_address = $1
+     WHERE LOWER(wallet_address) = $1
      ORDER BY created_at DESC
      LIMIT 1;`,
     [sessionAddress],

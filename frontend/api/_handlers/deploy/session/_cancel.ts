@@ -86,6 +86,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const rec = await getDeploySessionById(sessionId)
   if (!rec) return res.status(404).json({ success: false, error: 'Not found' } satisfies ApiEnvelope<null>)
 
+  // Check if already in terminal state
+  if (['cancelled', 'completed'].includes(rec.step)) {
+    return res.status(200).json({ success: true, data: { id: rec.id, step: rec.step } } satisfies ApiEnvelope<any>)
+  }
+
   const sessionAddress = getAddress(session.address)
   if (sessionAddress.toLowerCase() !== rec.sessionAddress.toLowerCase()) {
     return res.status(403).json({ success: false, error: 'Forbidden' } satisfies ApiEnvelope<null>)

@@ -10,6 +10,7 @@ export const WAITLIST_POINTS = {
   // Referral points (awarded to referrer)
   referralSignup: 50,        // When referred user signs up
   referralCswLink: 100,      // When referred user links CSW
+  qualifiedReferral: 150,    // When referred user completes profile
   
   // Social actions - verified
   farcaster: 75,

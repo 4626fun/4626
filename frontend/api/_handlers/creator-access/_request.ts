@@ -34,10 +34,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const sessionAddress = getSessionAddress(req)
-  if (!sessionAddress) {
+  const sessionAddressRaw = getSessionAddress(req)
+  if (!sessionAddressRaw) {
     return res.status(401).json({ success: false, error: 'Sign in required' } satisfies ApiEnvelope<never>)
   }
+  // Normalize to lowercase for case-insensitive matching
+  const sessionAddress = sessionAddressRaw.toLowerCase()
 
   if (isSupabaseAdminConfigured()) {
     try {
@@ -47,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const allow = await supabase
         .from('allowlist')
         .select('address')
-        .eq('address', sessionAddress)
+        .ilike('address', sessionAddress)
         .is('revoked_at', null)
         .limit(1)
       if (allow.error) throw new Error(allow.error.message)
@@ -68,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const existing = await supabase
         .from('access_requests')
         .select('id')
-        .eq('wallet_address', sessionAddress)
+        .ilike('wallet_address', sessionAddress)
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .limit(1)
@@ -129,7 +131,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // If already allowlisted, short-circuit.
-  const allow = await db.query(`SELECT address FROM allowlist WHERE address = $1 AND revoked_at IS NULL LIMIT 1;`, [
+  const allow = await db.query(`SELECT address FROM allowlist WHERE LOWER(address) = $1 AND revoked_at IS NULL LIMIT 1;`, [
     sessionAddress,
   ])
   if (allow.rows.length > 0) {

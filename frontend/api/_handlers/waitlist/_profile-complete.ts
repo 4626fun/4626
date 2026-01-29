@@ -2,6 +2,7 @@ import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } fr
 import { getDb } from '../../../server/_lib/postgres.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
+import { checkRateLimit, rateLimitKey, getClientIp } from '../../../server/_lib/rateLimit.js'
 
 type Body = { email?: string }
 
@@ -26,6 +27,14 @@ export default async function handler(req: any, res: any) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  // Rate limiting: 10 profile completions per minute per IP
+  const clientIp = getClientIp(req)
+  const rateLimit = checkRateLimit(rateLimitKey('profile-complete', clientIp), { windowMs: 60_000, maxRequests: 10 })
+  if (!rateLimit.allowed) {
+    res.setHeader('Retry-After', Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString())
+    return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 
   const body = await readJsonBody<Body>(req)

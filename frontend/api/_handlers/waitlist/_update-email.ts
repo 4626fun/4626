@@ -1,6 +1,7 @@
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { type ApiEnvelope, handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
+import { checkRateLimit, RATE_LIMITS, rateLimitKey, getClientIp } from '../../../server/_lib/rateLimit.js'
 
 type Body = { currentEmail?: string; newEmail?: string }
 
@@ -29,6 +30,21 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
+  // Rate limiting: 5 email updates per minute per IP
+  const clientIp = getClientIp(req)
+  const rateLimit = checkRateLimit(rateLimitKey('update-email', clientIp), { windowMs: 60_000, maxRequests: 5 })
+  if (!rateLimit.allowed) {
+    res.setHeader('Retry-After', Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString())
+    return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
+  }
+
+  // Authentication required - verify caller owns the profile
+  const session = readSessionFromRequest(req)
+  if (!session?.address) {
+    return res.status(401).json({ success: false, error: 'Authentication required' } satisfies ApiEnvelope<never>)
+  }
+  const sessionAddress = session.address.toLowerCase()
+
   const body = await readJsonBody<Body>(req)
   const currentEmail = normalizeEmail(typeof body?.currentEmail === 'string' ? body.currentEmail : '')
   const newEmail = normalizeEmail(typeof body?.newEmail === 'string' ? body.newEmail : '')
@@ -50,24 +66,34 @@ export default async function handler(req: any, res: any) {
   if (!db) return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
   await ensureWaitlistSchema(db as any)
 
-  const existing = await db.sql`
-    SELECT id
-    FROM profiles
-    WHERE email = ${newEmail}
+  // Verify the session address owns this profile (check primary_wallet, embedded_wallet, or csw_address)
+  const ownershipCheck = await db.sql`
+    SELECT id FROM profiles
+    WHERE email = ${currentEmail}
+      AND (LOWER(primary_wallet) = ${sessionAddress} 
+           OR LOWER(embedded_wallet) = ${sessionAddress}
+           OR LOWER(csw_address) = ${sessionAddress})
     LIMIT 1;
   `
-  if (existing?.rows?.[0]) {
-    return res.status(409).json({ success: false, error: 'Email already in use.' } satisfies ApiEnvelope<never>)
+  if (!ownershipCheck?.rows?.[0]) {
+    return res.status(403).json({ success: false, error: 'Not authorized to update this profile' } satisfies ApiEnvelope<never>)
   }
 
+  // Atomic update with NOT EXISTS to prevent TOCTOU race
   const updated = await db.sql`
     UPDATE profiles
     SET email = ${newEmail}, contact_preference = 'email', updated_at = NOW()
     WHERE email = ${currentEmail}
+      AND NOT EXISTS (SELECT 1 FROM profiles WHERE email = ${newEmail})
     RETURNING id, email;
   `
   const row = updated?.rows?.[0] ?? null
   if (!row?.id) {
+    // Could be: profile not found, or email already taken (race condition)
+    const conflict = await db.sql`SELECT id FROM profiles WHERE email = ${newEmail} LIMIT 1;`
+    if (conflict?.rows?.[0]) {
+      return res.status(409).json({ success: false, error: 'Email already in use.' } satisfies ApiEnvelope<never>)
+    }
     return res.status(404).json({ success: false, error: 'Signup not found.' } satisfies ApiEnvelope<never>)
   }
 
