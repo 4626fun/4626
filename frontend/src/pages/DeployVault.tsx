@@ -21,7 +21,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { coinABI } from '@zoralabs/protocol-deployments'
 import { BarChart3, ChevronDown, Layers, Lock, Rocket, ShieldCheck } from 'lucide-react'
-import { useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
+import { useLinkAccount, useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { DerivedTokenIcon } from '@/components/DerivedTokenIcon'
@@ -2109,6 +2109,8 @@ function DeployVaultMain() {
   const { wallets } = useWallets()
   const { client: smartWalletClient } = useSmartWallets()
   const siwe = useSiweAuth()
+  const [linkWalletBusy, setLinkWalletBusy] = useState(false)
+  const [linkWalletError, setLinkWalletError] = useState<string | null>(null)
   const autoLoginAttemptRef = useRef(false)
   const autoBridgeAttemptRef = useRef(false)
   const [handoffState, setHandoffState] = useState<'idle' | 'signingIn' | 'bridging' | 'ready' | 'error'>('idle')
@@ -2125,6 +2127,42 @@ function DeployVaultMain() {
       return null
     }
   }, [smartWalletClient])
+
+  const walletClientTypeOf = useCallback((w: any): string => {
+    return String(
+      w?.wallet_client_type ??
+        w?.walletClientType ??
+        w?.connector_type ??
+        w?.connectorType ??
+        w?.type ??
+        '',
+    )
+      .trim()
+      .toLowerCase()
+  }, [])
+
+  // If the user logged in with email, they may still need to link a wallet in this Privy app.
+  // This is NOT the same as “Zora global wallet”, which only works when apps are configured for shared wallets.
+  const privyLinkedEoaWallet = useMemo(() => {
+    const ws = Array.isArray(wallets) ? (wallets as any[]) : []
+    return (
+      ws.find((w) => {
+        const t = walletClientTypeOf(w)
+        // Exclude Privy embedded wallets; this bucket is for externally-linked EOAs/Base Account/etc.
+        if (t === 'privy' || t.includes('privy') || t.includes('embedded')) return false
+        const raw = typeof (w as any)?.address === 'string' ? String((w as any).address) : ''
+        return raw && isAddress(raw)
+      }) ?? null
+    )
+  }, [walletClientTypeOf, wallets])
+  const privyLinkedEoaAddress = useMemo(() => {
+    try {
+      const raw = typeof (privyLinkedEoaWallet as any)?.address === 'string' ? String((privyLinkedEoaWallet as any).address) : ''
+      return raw && isAddress(raw) ? (getAddress(raw) as Address) : null
+    } catch {
+      return null
+    }
+  }, [privyLinkedEoaWallet])
   
   const [creatorToken, setCreatorToken] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -2134,16 +2172,16 @@ function DeployVaultMain() {
     return address && isAddress(address) ? getAddress(address) as Address : null
   }, [address])
   
-  // Unified wallet state - considers both wagmi connection AND Privy smart wallet
-  // This allows users who authenticated via Privy (waitlist) to proceed without re-connecting wagmi
+  // Unified wallet state - considers wagmi connection, Privy smart wallet, and Privy-linked EOAs.
+  // This allows users who authenticated via Privy (waitlist) to proceed without re-connecting wagmi.
   const hasWallet = useMemo(() => {
-    return isConnected || !!privySmartWalletAddress
-  }, [isConnected, privySmartWalletAddress])
+    return isConnected || !!privySmartWalletAddress || !!privyLinkedEoaAddress
+  }, [isConnected, privyLinkedEoaAddress, privySmartWalletAddress])
   
   // Effective wallet address for display - prefer Privy smart wallet (set during waitlist), fallback to wagmi
   const effectiveWalletAddress = useMemo(() => {
-    return privySmartWalletAddress ?? connectedWalletAddress
-  }, [privySmartWalletAddress, connectedWalletAddress])
+    return privySmartWalletAddress ?? connectedWalletAddress ?? privyLinkedEoaAddress
+  }, [connectedWalletAddress, privyLinkedEoaAddress, privySmartWalletAddress])
   const deploymentVersion = useMemo(() => {
     const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v3'
     const v = String(raw).trim()
@@ -2185,6 +2223,17 @@ function DeployVaultMain() {
       }) ?? null
     )
   }, [wallets])
+
+  const { linkWallet } = useLinkAccount({
+    onSuccess: () => {
+      setLinkWalletBusy(false)
+      setLinkWalletError(null)
+    },
+    onError: (err) => {
+      setLinkWalletBusy(false)
+      setLinkWalletError(typeof err === 'string' ? err : 'Failed to link wallet')
+    },
+  })
 
   const [searchParams] = useSearchParams()
   const prefillToken = useMemo(() => searchParams.get('token') ?? '', [searchParams])
@@ -3589,17 +3638,37 @@ function DeployVaultMain() {
                     Sign in with the same account you used on Zora to access your Creator Coin wallet.
                   </div>
                 </div>
-              ) : !privySmartWalletAddress ? (
+              ) : !privySmartWalletAddress && !privyLinkedEoaAddress && !isConnected ? (
                 <div className="space-y-3">
                   <button
                     disabled
                     className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-600 text-sm cursor-not-allowed"
                   >
-                    No Smart Wallet detected
+                    No wallet linked
                   </button>
                   <div className="text-[11px] text-zinc-600">
-                    Your Privy account doesn't have a Coinbase Smart Wallet. Sign in with the same account you used on Zora.
+                    Email sign-in does not automatically import your Zora wallet into this app. Link a wallet (Coinbase Wallet / Base Account),
+                    then retry deploy.
                   </div>
+                  <button
+                    type="button"
+                    className="btn-accent w-full"
+                    disabled={linkWalletBusy}
+                    onClick={() => {
+                      if (linkWalletBusy) return
+                      setLinkWalletBusy(true)
+                      setLinkWalletError(null)
+                      try {
+                        linkWallet()
+                      } catch (e: any) {
+                        setLinkWalletBusy(false)
+                        setLinkWalletError(e?.message ? String(e.message) : 'Failed to link wallet')
+                      }
+                    }}
+                  >
+                    {linkWalletBusy ? 'Opening…' : 'Link a wallet'}
+                  </button>
+                  {linkWalletError ? <div className="text-[11px] text-red-400">{linkWalletError}</div> : null}
                   <button
                     type="button"
                     className="btn-secondary w-full"

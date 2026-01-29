@@ -108,7 +108,7 @@ export function ExploreSubnav({
           </div>
 
           {/* Time filter pills */}
-          <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-full p-1">
+          <div className="flex items-center gap-1 h-10 bg-zinc-900 border border-zinc-800 rounded-full p-1">
             {TIME_FILTERS.map((filter) => {
               const active = currentTimeFilter === filter.value
               return (
@@ -116,7 +116,7 @@ export function ExploreSubnav({
                   key={filter.value}
                   type="button"
                   onClick={() => handleTimeFilterClick(filter.value)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  className={`h-8 px-3 rounded-full text-xs font-medium leading-none transition-colors ${
                     active
                       ? 'bg-zinc-700 text-white'
                       : 'text-zinc-400 hover:text-white'
