@@ -669,7 +669,7 @@ export function ExploreCreatorDetail() {
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center overflow-hidden">
                       <img 
-                        src="https://green-decisive-crane-434.mypinata.cloud/ipfs/bafkreif45w3dwkgteg2gdqkdz3vhvqegy27zepslc6qgdwjfsc7247rdzy" 
+                        src="https://green-decisive-crane-434.mypinata.cloud/ipfs/bafkreidse2dmc2h5myecpddbm53xwbn62yq4l4af7fnpi362prhk6f2hoi" 
                         alt="Basescan" 
                         className="w-5 h-5" 
                       />
@@ -678,6 +678,27 @@ export function ExploreCreatorDetail() {
                   </div>
                   <ExternalLink className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
                 </a>
+
+                {handle && (
+                  <a
+                    href={`https://warpcast.com/${handle}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center overflow-hidden">
+                        <img 
+                          src="https://green-decisive-crane-434.mypinata.cloud/ipfs/bafkreibay2mwysid4bxw2a3a4a5stjeldrkth3qvtyguxn2d7pxjt4jlwq" 
+                          alt="Farcaster" 
+                          className="w-5 h-5" 
+                        />
+                      </div>
+                      <span className="text-sm text-white">Farcaster</span>
+                    </div>
+                    <ExternalLink className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
+                  </a>
+                )}
               </div>
             </div>
 
