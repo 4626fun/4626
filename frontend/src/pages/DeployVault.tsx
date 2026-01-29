@@ -927,7 +927,7 @@ function DeployVaultBatcher({
       return `Gas sponsorship requires a session. Click “${switchAuthLabel ?? 'Sign in with Privy'}” and retry.`
     }
     if (lower.includes('signature check failed') || lower.includes('invalid userop signature')) {
-      return "UserOp signature failed. Ensure the signer wallet is an onchain owner of the creator smart wallet and can sign the UserOp hash (some wallets block `eth_sign`). If you linked a Privy embedded EOA, switch to a Privy embedded session and retry."
+      return "UserOp signature failed. Ensure the signer wallet is an onchain owner of the creator smart wallet and can sign the UserOp hash (some wallets block `eth_sign`). If you just added a new owner, refresh the page and retry."
     }
     if (lower.includes('failed to fetch')) {
       return 'Paymaster request failed to reach the endpoint (network/CORS). Prefer `VITE_CDP_PAYMASTER_URL=/api/paymaster` and ensure the server env `CDP_PAYMASTER_URL` is set.'
@@ -2716,7 +2716,9 @@ function DeployVaultMain() {
   const embeddedEoaIsCanonicalOwnerQuery = useQuery({
     queryKey: ['coinbaseSmartWalletOwner', 'embedded', canonicalIdentityAddress, embeddedPrivyEoaAddress],
     enabled: !!canonicalIdentityIsContract && !!canonicalIdentityAddress && !!embeddedPrivyEoaAddress,
-    staleTime: 15_000,
+    staleTime: 0, // Always refetch - ownership can change externally (e.g. via Basescan)
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
     retry: 1,
     queryFn: async () => {
       const canonical = canonicalIdentityAddress as Address
@@ -2725,6 +2727,9 @@ function DeployVaultMain() {
     },
   })
   const embeddedEoaIsCanonicalOwner = embeddedEoaIsCanonicalOwnerQuery.data === true
+  const refreshEmbeddedOwnerStatus = useCallback(() => {
+    void embeddedEoaIsCanonicalOwnerQuery.refetch()
+  }, [embeddedEoaIsCanonicalOwnerQuery])
 
   const handleInstallEmbeddedAsOwner = useCallback(async () => {
     if (installOwnerBusy) return
@@ -2829,7 +2834,9 @@ function DeployVaultMain() {
   const executionCanOperateCanonicalQuery = useQuery({
     queryKey: ['coinbaseSmartWalletOwner', canonicalIdentityAddress, connectedWalletAddress],
     enabled: !!canonicalIdentityAddress && !!connectedWalletAddress && !!identity.blockingReason,
-    staleTime: 60_000,
+    staleTime: 0, // Always refetch - ownership can change externally
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
     retry: 1,
     queryFn: async () => {
       const canonical = canonicalIdentityAddress as Address
