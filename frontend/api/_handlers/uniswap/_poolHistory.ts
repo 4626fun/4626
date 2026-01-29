@@ -14,7 +14,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
  */
 
 const THEGRAPH_API_KEY = process.env.THEGRAPH_API_KEY || ''
-const UNISWAP_V4_BASE_SUBGRAPH_ID = process.env.UNISWAP_V4_BASE_SUBGRAPH_ID || ''
+
+// Custom 4626 subgraph for Zora coins on Uniswap V4 Base
+// Owner: 0xakita.eth - https://thegraph.com/studio/subgraph/4626
+const CUSTOM_4626_SUBGRAPH_ID = 'Gqm2b5J85n1bhCyDMpGbtbVn4935EvvdyHdHrx3dibyj'
+
+const UNISWAP_V4_BASE_SUBGRAPH_ID = process.env.UNISWAP_V4_BASE_SUBGRAPH_ID || CUSTOM_4626_SUBGRAPH_ID
 const UNISWAP_V3_BASE_SUBGRAPH_ID = '43Hwfi3dJSoGpyas9VwNoDAv55yjgGrPpNSmbQZArzMG'
 
 function getSubgraphUrl(): string {

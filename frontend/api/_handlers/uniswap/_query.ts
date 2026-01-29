@@ -10,12 +10,14 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 // The Graph API key from environment
 const THEGRAPH_API_KEY = process.env.THEGRAPH_API_KEY || ''
 
-// Uniswap V4 subgraph ID for Base
-// Find at: https://thegraph.com/explorer/subgraphs
-// Search for "uniswap v4 base"
-const UNISWAP_V4_BASE_SUBGRAPH_ID = process.env.UNISWAP_V4_BASE_SUBGRAPH_ID || ''
+// Custom 4626 subgraph for Zora coins on Uniswap V4 Base
+// Owner: 0xakita.eth - https://thegraph.com/studio/subgraph/4626
+const CUSTOM_4626_SUBGRAPH_ID = 'Gqm2b5J85n1bhCyDMpGbtbVn4935EvvdyHdHrx3dibyj'
 
-// Fallback: Use a known V3 subgraph for Base if V4 isn't available yet
+// Override via env var if needed
+const UNISWAP_V4_BASE_SUBGRAPH_ID = process.env.UNISWAP_V4_BASE_SUBGRAPH_ID || CUSTOM_4626_SUBGRAPH_ID
+
+// Fallback: Use official Uniswap V3 subgraph for Base if custom not deployed
 const UNISWAP_V3_BASE_SUBGRAPH_ID = '43Hwfi3dJSoGpyas9VwNoDAv55yjgGrPpNSmbQZArzMG'
 
 function getSubgraphUrl(): string {
