@@ -1707,8 +1707,9 @@ function DeployVaultBatcher({
         const embeddedOwnerExec = canUsePrivyEmbeddedOwner ? embeddedOwnerAddr : null
         const ownerExec = (embeddedOwnerExec ?? externalOwnerExec) as Address | null
         const ownerWalletClient = canUsePrivyEmbeddedOwner ? (embeddedWalletClient as any) : (activeWalletClient as any)
-        // For non-Privy smart wallet paths, prefer signMessage (personal_sign) to avoid eth_sign blocking.
-        const userOpSignMode = 'signMessage'
+        // For embedded Privy owners, prefer auto so we can use eth_sign when supported.
+        // For other paths, keep signMessage to avoid eth_sign blocking by injected wallets.
+        const userOpSignMode: 'auto' | 'signMessage' = canUsePrivyEmbeddedOwner ? 'auto' : 'signMessage'
 
         // Enforce custody: the smart wallet sender must already hold the initial deposit.
         const smartWalletBalance = (await publicClient.readContract({
