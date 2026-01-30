@@ -899,6 +899,12 @@ function DeployVaultBatcher({
         'Use Coinbase Wallet (Base Account) or a Privy embedded signer, then retry.'
       )
     }
+    if (lower.includes('method not supported') && lower.includes('eth_sign')) {
+      return (
+        "Your signer doesn’t support `eth_sign`, which is required to sign Coinbase Smart Wallet UserOp hashes. " +
+        'Use Coinbase Wallet (Base Account) or a Privy embedded signer that supports `eth_sign`, then retry.'
+      )
+    }
     if (
       lower.includes('metamask') &&
       (lower.includes('not found') ||
@@ -1707,9 +1713,9 @@ function DeployVaultBatcher({
         const embeddedOwnerExec = canUsePrivyEmbeddedOwner ? embeddedOwnerAddr : null
         const ownerExec = (embeddedOwnerExec ?? externalOwnerExec) as Address | null
         const ownerWalletClient = canUsePrivyEmbeddedOwner ? (embeddedWalletClient as any) : (activeWalletClient as any)
-        // For embedded Privy owners, require eth_sign (UserOp hash signing).
+        // For embedded Privy owners, prefer auto so we can attempt eth_sign and fall back if unsupported.
         // For other paths, keep signMessage to avoid eth_sign blocking by injected wallets.
-        const userOpSignMode: 'eth_sign' | 'signMessage' = canUsePrivyEmbeddedOwner ? 'eth_sign' : 'signMessage'
+        const userOpSignMode: 'auto' | 'signMessage' = canUsePrivyEmbeddedOwner ? 'auto' : 'signMessage'
 
         // Enforce custody: the smart wallet sender must already hold the initial deposit.
         const smartWalletBalance = (await publicClient.readContract({
