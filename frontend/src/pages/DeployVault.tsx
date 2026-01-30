@@ -44,6 +44,7 @@ import {
 } from '@/lib/tokenSymbols'
 import { computeMarketFloorQuote } from '@/lib/cca/marketFloor'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
+import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 
 const MIN_FIRST_DEPOSIT = 5_000_000n * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
