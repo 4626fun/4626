@@ -1,4 +1,7 @@
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { createPublicClient, http } from 'viem'
+import { base } from 'viem/chains'
+
+import { type ApiEnvelope, handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
@@ -29,6 +32,54 @@ function isValidEvmAddress(v: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(v)
 }
 
+const COINBASE_SMART_WALLET_OWNER_ABI = [
+  {
+    type: 'function',
+    name: 'isOwnerAddress',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+] as const
+
+const DEFAULT_BASE_RPCS = [
+  'https://mainnet.base.org',
+  'https://base.llamarpc.com',
+] as const
+
+function getBaseRpcUrls(): string[] {
+  const raw = (process.env.BASE_RPC_URL ?? '').trim()
+  if (!raw) return [...DEFAULT_BASE_RPCS]
+  const parts = raw.split(',').map((s) => s.trim()).filter(Boolean)
+  const urls = parts.length > 0 ? [...parts, ...DEFAULT_BASE_RPCS] : [...DEFAULT_BASE_RPCS]
+  return Array.from(new Set(urls))
+}
+
+async function isCswOwner(sessionAddress: string, cswAddress: string): Promise<boolean> {
+  if (!isValidEvmAddress(sessionAddress) || !isValidEvmAddress(cswAddress)) return false
+  const rpcs = getBaseRpcUrls()
+  let lastError: unknown = null
+  for (const rpc of rpcs) {
+    try {
+      const client = createPublicClient({
+        chain: base,
+        transport: http(rpc, { timeout: 10_000 }),
+      })
+      const ok = await client.readContract({
+        address: cswAddress as `0x${string}`,
+        abi: COINBASE_SMART_WALLET_OWNER_ABI,
+        functionName: 'isOwnerAddress',
+        args: [sessionAddress as `0x${string}`],
+      })
+      return Boolean(ok)
+    } catch (err) {
+      lastError = err
+    }
+  }
+  if (lastError) throw lastError
+  return false
+}
+
 export default async function handler(req: any, res: any) {
   setCors(req, res)
   setNoStore(res)
@@ -54,6 +105,12 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ success: false, error: 'Invalid email' } satisfies ApiEnvelope<never>)
   }
 
+  const session = readSessionFromRequest(req)
+  if (!session?.address) {
+    return res.status(401).json({ success: false, error: 'Authentication required' } satisfies ApiEnvelope<never>)
+  }
+  const sessionAddress = session.address.toLowerCase()
+
   const cswAddress = typeof body?.cswAddress === 'string' ? body.cswAddress.trim() : ''
   if (!isValidEvmAddress(cswAddress)) {
     return res.status(400).json({ success: false, error: 'Invalid CSW address' } satisfies ApiEnvelope<never>)
@@ -70,15 +127,36 @@ export default async function handler(req: any, res: any) {
 
   // Find the signup
   const me = await db.sql`
-    SELECT id, primary_wallet
+    SELECT id, primary_wallet, embedded_wallet, csw_address
     FROM profiles
     WHERE email = ${email}
     LIMIT 1;
   `
-  const signupId = typeof me?.rows?.[0]?.id === 'number' ? (me.rows[0].id as number) : null
+  const row = me?.rows?.[0] ?? null
+  const signupId = typeof row?.id === 'number' ? (row.id as number) : null
   
   if (!signupId) {
     return res.status(404).json({ success: false, error: 'Waitlist entry not found' } satisfies ApiEnvelope<never>)
+  }
+
+  const ownsProfile =
+    (typeof row?.primary_wallet === 'string' && row.primary_wallet.toLowerCase() === sessionAddress) ||
+    (typeof row?.embedded_wallet === 'string' && row.embedded_wallet.toLowerCase() === sessionAddress) ||
+    (typeof row?.csw_address === 'string' && row.csw_address.toLowerCase() === sessionAddress)
+  if (!ownsProfile) {
+    return res.status(403).json({ success: false, error: 'Not authorized to update this profile' } satisfies ApiEnvelope<never>)
+  }
+
+  try {
+    const ok = await isCswOwner(session.address, cswAddress)
+    if (!ok) {
+      return res.status(403).json({ success: false, error: 'Wallet ownership verification failed' } satisfies ApiEnvelope<never>)
+    }
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: err?.message ? String(err.message) : 'Failed to verify wallet ownership',
+    } satisfies ApiEnvelope<never>)
   }
 
   // Check if this CSW is already linked to a different profile (prevent hijacking)

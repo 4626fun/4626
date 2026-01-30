@@ -1,4 +1,4 @@
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { type ApiEnvelope, handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
@@ -44,6 +44,12 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ success: false, error: 'Invalid email' } satisfies ApiEnvelope<never>)
   }
 
+  const session = readSessionFromRequest(req)
+  if (!session?.address) {
+    return res.status(401).json({ success: false, error: 'Authentication required' } satisfies ApiEnvelope<never>)
+  }
+  const sessionAddress = session.address.toLowerCase()
+
   const db = await getDb()
   if (!db) return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
 
@@ -55,12 +61,26 @@ export default async function handler(req: any, res: any) {
     UPDATE profiles
     SET profile_completed_at = COALESCE(profile_completed_at, NOW()), updated_at = NOW()
     WHERE email = ${email}
+      AND (
+        LOWER(primary_wallet) = ${sessionAddress}
+        OR LOWER(embedded_wallet) = ${sessionAddress}
+        OR LOWER(csw_address) = ${sessionAddress}
+      )
     RETURNING id, profile_completed_at;
   `
   const row = updated?.rows?.[0] ?? null
   const signupId = typeof row?.id === 'number' ? (row.id as number) : null
   const profileCompleted = Boolean(row?.profile_completed_at)
   if (!signupId) {
+    const exists = await db.sql`
+      SELECT id
+      FROM profiles
+      WHERE email = ${email}
+      LIMIT 1;
+    `
+    if (exists?.rows?.[0]?.id) {
+      return res.status(403).json({ success: false, error: 'Not authorized to update this profile' } satisfies ApiEnvelope<never>)
+    }
     // Not on waitlist (yet). Return success with a clear state so the client can ignore.
     const data: ProfileCompleteResponse = { email, profileCompleted: false, qualifiedReferral: false }
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<ProfileCompleteResponse>)

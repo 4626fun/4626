@@ -17,6 +17,7 @@ import { getApiContracts } from '../../server/_lib/contracts.js'
 import { logger } from '../../server/_lib/logger.js'
 import { ensureCreatorAccessSchema, getDb, isDbConfigured } from '../../server/_lib/postgres.js'
 import { ensureCreatorWalletsSchema } from '../../server/_lib/creatorWallets.js'
+import { resolveCoinParties } from '../../server/_lib/coinParties.js'
 import { getActiveDeploySessionForSender, getDeploySessionByTokenHash, hashDeployToken, signDeployToken } from '../../server/_lib/deploySessions.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
 import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../server/auth/_shared.js'
@@ -400,6 +401,29 @@ function parseAllowlist(raw: string | undefined): Set<string> {
   return out
 }
 
+function normalizeAddresses(input: Array<Address | string | null | undefined>): Address[] {
+  const out = new Set<string>()
+  for (const a of input) {
+    if (!a || typeof a !== 'string') continue
+    if (!isAddress(a)) continue
+    out.add(getAddress(a).toLowerCase())
+  }
+  return Array.from(out).map((a) => getAddress(a as Address))
+}
+
+function buildSupabaseOrFilters(fields: string[], addresses: string[]): string {
+  return addresses.flatMap((addr) => fields.map((f) => `${f}.ilike.${addr}`)).join(',')
+}
+
+async function resolveAllowlistAddresses(params: { sessionAddress: Address; creatorToken?: Address | null }): Promise<Address[]> {
+  const base = normalizeAddresses([params.sessionAddress])
+  const token = params.creatorToken && isAddress(params.creatorToken) ? getAddress(params.creatorToken) : null
+  if (!token) return base
+  const parties = await resolveCoinParties(token as `0x${string}`)
+  const combined = normalizeAddresses([params.sessionAddress, parties.creator, parties.payoutRecipient])
+  return combined.length > 0 ? combined : base
+}
+
 async function checkCswOwnership(sessionAddress: Address, cswAddress: Address): Promise<boolean> {
   try {
     const client = await getBaseClient()
@@ -415,17 +439,22 @@ async function checkCswOwnership(sessionAddress: Address, cswAddress: Address): 
   }
 }
 
-async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: AllowlistMode; allowed: boolean }> {
-  const addr = sessionAddress.toLowerCase()
+async function isCreatorAllowlisted(params: {
+  sessionAddress: Address
+  creatorToken?: Address | null
+}): Promise<{ mode: AllowlistMode; allowed: boolean }> {
+  const addr = params.sessionAddress.toLowerCase()
+  const addressesToCheck = await resolveAllowlistAddresses({ sessionAddress: params.sessionAddress, creatorToken: params.creatorToken })
+  const addressFilters = addressesToCheck.map((a) => a.toLowerCase())
 
   if (isSupabaseAdminConfigured()) {
     const supabase = getSupabaseAdmin()
     try {
-      // Check allowlist first (direct address match)
+      // Check allowlist first (direct address or CSW match)
       const allowlistedRes = await supabase
         .from('allowlist')
         .select('address')
-        .ilike('address', addr)
+        .or(buildSupabaseOrFilters(['address', 'csw_address'], addressFilters))
         .is('revoked_at', null)
         .limit(1)
       if (!allowlistedRes.error && Array.isArray(allowlistedRes.data) && allowlistedRes.data.length > 0) {
@@ -453,7 +482,7 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
       const linkedRes = await supabase
         .from('creator_wallets')
         .select('wallet_address')
-        .ilike('wallet_address', addr)
+        .or(buildSupabaseOrFilters(['wallet_address'], addressFilters))
         .limit(1)
       if (!linkedRes.error && Array.isArray(linkedRes.data) && linkedRes.data.length > 0) {
         return { mode: 'enforced', allowed: true }
@@ -463,7 +492,7 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
       const waitlistedRes = await supabase
         .from('profiles')
         .select('id')
-        .or(`primary_wallet.ilike.${addr},embedded_wallet.ilike.${addr}`)
+        .or(buildSupabaseOrFilters(['primary_wallet', 'embedded_wallet', 'csw_address'], addressFilters))
         .eq('app_access_status', 'approved')
         .limit(1)
       if (!waitlistedRes.error && Array.isArray(waitlistedRes.data) && waitlistedRes.data.length > 0) {
@@ -493,8 +522,11 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
 
     // Check direct address match
     const allowlistedQ = await db.query(
-      `SELECT address FROM allowlist WHERE LOWER(address) = $1 AND revoked_at IS NULL LIMIT 1;`,
-      [addr],
+      `SELECT address FROM allowlist
+       WHERE (LOWER(address) = ANY($1) OR LOWER(csw_address) = ANY($1))
+         AND revoked_at IS NULL
+       LIMIT 1;`,
+      [addressFilters],
     )
     if (Array.isArray(allowlistedQ.rows) && allowlistedQ.rows.length > 0) {
       return { mode: 'enforced', allowed: true }
@@ -517,8 +549,8 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
 
     // Check linked wallets
     const linkedQ = await db.query(
-      `SELECT wallet_address FROM creator_wallets WHERE LOWER(wallet_address) = $1 LIMIT 1;`,
-      [addr],
+      `SELECT wallet_address FROM creator_wallets WHERE LOWER(wallet_address) = ANY($1) LIMIT 1;`,
+      [addressFilters],
     ).catch(() => ({ rows: [] }))
     if (Array.isArray(linkedQ.rows) && linkedQ.rows.length > 0) {
       return { mode: 'enforced', allowed: true }
@@ -527,10 +559,10 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
     // Check waitlist signups
     const waitlistedQ = await db.query(
       `SELECT id FROM profiles
-       WHERE (LOWER(primary_wallet) = $1 OR LOWER(embedded_wallet) = $1)
+       WHERE (LOWER(primary_wallet) = ANY($1) OR LOWER(embedded_wallet) = ANY($1) OR LOWER(csw_address) = ANY($1))
          AND COALESCE(app_access_status, 'pending') = 'approved'
        LIMIT 1;`,
-      [addr],
+      [addressFilters],
     ).catch(() => ({ rows: [] }))
     if (Array.isArray(waitlistedQ.rows) && waitlistedQ.rows.length > 0) {
       return { mode: 'enforced', allowed: true }
@@ -546,8 +578,8 @@ async function isCreatorAllowlisted(sessionAddress: Address): Promise<{ mode: Al
   return { mode, allowed }
 }
 
-async function assertCreatorAllowlisted(sessionAddress: Address): Promise<void> {
-  const { mode, allowed } = await isCreatorAllowlisted(sessionAddress)
+async function assertCreatorAllowlisted(params: { sessionAddress: Address; creatorToken?: Address | null }): Promise<void> {
+  const { mode, allowed } = await isCreatorAllowlisted(params)
   if (mode === 'enforced' && !allowed) throw new Error('not_allowlisted')
 }
 
@@ -764,7 +796,12 @@ async function assertSessionOwnsSender(params: { sender: Address; sessionAddress
   if (getAddress(expected as Address) !== params.sender) throw new Error('sender_address_mismatch')
 }
 
-async function validateInnerCalls(params: { sender: Address; sessionAddress: Address; callData: Hex; deploySessionOwner?: Address | null }) {
+async function validateInnerCalls(params: {
+  sender: Address
+  sessionAddress: Address
+  callData: Hex
+  deploySessionOwner?: Address | null
+}): Promise<{ expectedCreatorToken: Address }> {
   const contracts = getApiContracts()
   if (!contracts.creatorVaultBatcher) throw new Error('creator_vault_batcher_not_configured')
   const creatorVaultBatcher = getAddress(contracts.creatorVaultBatcher)
@@ -1108,6 +1145,8 @@ async function validateInnerCalls(params: { sender: Address; sessionAddress: Add
       continue
     }
   }
+
+  return { expectedCreatorToken }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -1219,12 +1258,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       enforceRateLimit(sessionAddress)
       const initCode = isHexString(initCodeRaw) ? (initCodeRaw as Hex) : null
 
-      // Only sponsor approved creators (Supabase/Postgres allowlist).
-      await assertCreatorAllowlisted(sessionAddress)
-
-      // Ensure this session is an onchain owner of the Coinbase Smart Wallet sender.
-      await assertSessionOwnsSender({ sender, sessionAddress, initCode })
-
       // If this is a server-driven deploy session request, also ensure the session owner is installed.
       if (deploySessionOwner) {
         const client = await getBaseClient()
@@ -1237,7 +1270,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!ok) throw new Error('deploy_session_owner_not_installed')
       }
 
+      // Ensure this session is an onchain owner of the Coinbase Smart Wallet sender.
+      await assertSessionOwnsSender({ sender, sessionAddress, initCode })
+
       // Validate inner calls match CreatorVault patterns.
+      let expectedCreatorToken: Address | null = null
       if (allowCleanupOnlyForInactiveDeploySession && deploySessionOwner) {
         // Special-case: allow only `removeOwnerAtIndex` self-call for the recorded deploy session owner.
         const decoded = decodeFunctionData({ abi: COINBASE_SMART_WALLET_ABI, data: callDataRaw })
@@ -1269,8 +1306,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (String(ownerBytes).toLowerCase() !== String(expected).toLowerCase()) throw new Error('deploy_session_owner_mismatch')
         }
       } else {
-        await validateInnerCalls({ sender, sessionAddress, callData: callDataRaw, deploySessionOwner })
+        const validated = await validateInnerCalls({ sender, sessionAddress, callData: callDataRaw, deploySessionOwner })
+        expectedCreatorToken = validated.expectedCreatorToken
       }
+
+      // Only sponsor approved creators (Supabase/Postgres allowlist).
+      await assertCreatorAllowlisted({ sessionAddress, creatorToken: expectedCreatorToken })
     }
   } catch (err: unknown) {
     if (err instanceof Error && err.message === 'rate_limited') {

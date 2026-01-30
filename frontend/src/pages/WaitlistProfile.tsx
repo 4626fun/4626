@@ -14,6 +14,7 @@ import {
 import { usePrivy, useWallets, useLinkAccount } from '@privy-io/react-auth'
 import { getAppBaseUrl } from '@/lib/host'
 import { Logo } from '@/components/brand/Logo'
+import { useWaitlistApi } from '@/components/waitlist/useWaitlistApi'
 import {
   SIGNUP_POINTS,
   LINK_CSW_POINTS,
@@ -63,6 +64,7 @@ function isValidEvmAddress(v: string): boolean {
 
 export function WaitlistProfile() {
   const appUrl = useMemo(() => getAppBaseUrl(), [])
+  const { apiFetch } = useWaitlistApi(appUrl)
   const { ready: privyReady, authenticated: privyAuthed, user: privyUser, login: privyLogin } = usePrivy()
   const { wallets: privyWallets } = useWallets()
   
@@ -224,7 +226,7 @@ export function WaitlistProfile() {
     const identifier = userEmail || (userData?.email)
     if (identifier) {
       try {
-        await fetch(`${appUrl}/api/waitlist/task-claim`, {
+        await apiFetch('/api/waitlist/task-claim', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: identifier, taskKey: action }),

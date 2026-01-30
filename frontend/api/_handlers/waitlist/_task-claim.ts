@@ -1,4 +1,4 @@
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { type ApiEnvelope, handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
@@ -87,20 +87,35 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ success: false, error: 'Invalid task key' } satisfies ApiEnvelope<never>)
   }
 
+  const session = readSessionFromRequest(req)
+  if (!session?.address) {
+    return res.status(401).json({ success: false, error: 'Authentication required' } satisfies ApiEnvelope<never>)
+  }
+  const sessionAddress = session.address.toLowerCase()
+
   const db = await getDb()
   if (!db) return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
   await ensureWaitlistSchema(db as any)
 
   const me = await db.sql`
-    SELECT id
+    SELECT id, primary_wallet, embedded_wallet, csw_address
     FROM profiles
     WHERE email = ${email}
     LIMIT 1;
   `
-  const signupId = typeof me?.rows?.[0]?.id === 'number' ? (me.rows[0].id as number) : null
+  const row = me?.rows?.[0] ?? null
+  const signupId = typeof row?.id === 'number' ? (row.id as number) : null
   if (!signupId) {
     const data: TaskClaimResponse = { email, taskKey, awarded: false }
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<TaskClaimResponse>)
+  }
+
+  const ownsProfile =
+    (typeof row?.primary_wallet === 'string' && row.primary_wallet.toLowerCase() === sessionAddress) ||
+    (typeof row?.embedded_wallet === 'string' && row.embedded_wallet.toLowerCase() === sessionAddress) ||
+    (typeof row?.csw_address === 'string' && row.csw_address.toLowerCase() === sessionAddress)
+  if (!ownsProfile) {
+    return res.status(403).json({ success: false, error: 'Not authorized to update this profile' } satisfies ApiEnvelope<never>)
   }
 
   await awardWaitlistPoints({

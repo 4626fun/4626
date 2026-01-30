@@ -1,4 +1,4 @@
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { type ApiEnvelope, handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
@@ -127,6 +127,12 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ success: false, error: 'Invalid email' } satisfies ApiEnvelope<never>)
   }
 
+  const session = readSessionFromRequest(req)
+  if (!session?.address) {
+    return res.status(401).json({ success: false, error: 'Authentication required' } satisfies ApiEnvelope<never>)
+  }
+  const sessionAddress = session.address.toLowerCase()
+
   const platform = body?.platform as SocialPlatform
   if (!platform || !['farcaster', 'discord', 'telegram'].includes(platform)) {
     return res.status(400).json({ success: false, error: 'Invalid platform' } satisfies ApiEnvelope<never>)
@@ -141,15 +147,24 @@ export default async function handler(req: any, res: any) {
 
   // Find the signup
   const me = await db.sql`
-    SELECT id, farcaster_fid
+    SELECT id, farcaster_fid, primary_wallet, embedded_wallet, csw_address
     FROM profiles
     WHERE email = ${email}
     LIMIT 1;
   `
-  const signupId = typeof me?.rows?.[0]?.id === 'number' ? (me.rows[0].id as number) : null
+  const row = me?.rows?.[0] ?? null
+  const signupId = typeof row?.id === 'number' ? (row.id as number) : null
   
   if (!signupId) {
     return res.status(404).json({ success: false, error: 'Waitlist entry not found' } satisfies ApiEnvelope<never>)
+  }
+
+  const ownsProfile =
+    (typeof row?.primary_wallet === 'string' && row.primary_wallet.toLowerCase() === sessionAddress) ||
+    (typeof row?.embedded_wallet === 'string' && row.embedded_wallet.toLowerCase() === sessionAddress) ||
+    (typeof row?.csw_address === 'string' && row.csw_address.toLowerCase() === sessionAddress)
+  if (!ownsProfile) {
+    return res.status(403).json({ success: false, error: 'Not authorized to update this profile' } satisfies ApiEnvelope<never>)
   }
 
   let verified = false
