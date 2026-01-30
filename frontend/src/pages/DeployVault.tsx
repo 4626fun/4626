@@ -935,7 +935,10 @@ function DeployVaultBatcher({
       return `Gas sponsorship requires a session. Click “${switchAuthLabel ?? 'Sign in with Privy'}” and retry.`
     }
     if (lower.includes('signature check failed') || lower.includes('invalid userop signature')) {
-      return "UserOp signature failed. Ensure the signer wallet is an onchain owner of the creator smart wallet and can sign the UserOp hash (some wallets block `eth_sign`). If you just added a new owner, refresh the page and retry."
+      return (
+        "UserOp signature failed. This usually means the signer isn’t an onchain owner or didn’t sign the raw UserOp hash with `eth_sign`. " +
+        'Use a wallet that supports `eth_sign` (Coinbase Wallet/Base Account) or the Privy smart wallet client, then retry. If you just added a new owner, refresh and retry.'
+      )
     }
     if (lower.includes('failed to fetch')) {
       return 'Paymaster request failed to reach the endpoint (network/CORS). Prefer `VITE_CDP_PAYMASTER_URL=/api/paymaster` and ensure the server env `CDP_PAYMASTER_URL` is set.'
@@ -1713,9 +1716,9 @@ function DeployVaultBatcher({
         const embeddedOwnerExec = canUsePrivyEmbeddedOwner ? embeddedOwnerAddr : null
         const ownerExec = (embeddedOwnerExec ?? externalOwnerExec) as Address | null
         const ownerWalletClient = canUsePrivyEmbeddedOwner ? (embeddedWalletClient as any) : (activeWalletClient as any)
-        // For embedded Privy owners, prefer auto so we can attempt eth_sign and fall back if unsupported.
+        // For embedded Privy owners, require eth_sign (UserOp hash signing).
         // For other paths, keep signMessage to avoid eth_sign blocking by injected wallets.
-        const userOpSignMode: 'auto' | 'signMessage' = canUsePrivyEmbeddedOwner ? 'auto' : 'signMessage'
+        const userOpSignMode: 'eth_sign' | 'signMessage' = canUsePrivyEmbeddedOwner ? 'eth_sign' : 'signMessage'
 
         // Enforce custody: the smart wallet sender must already hold the initial deposit.
         const smartWalletBalance = (await publicClient.readContract({
