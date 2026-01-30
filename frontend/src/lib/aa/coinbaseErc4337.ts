@@ -125,7 +125,7 @@ function createWalletBackedLocalAccount(params: {
       // - Prefer `eth_sign` when available (no EIP-191 prefix).
       // - Many wallets (notably Rabby and some injected providers) block `eth_sign` entirely.
       //   In those cases, `personal_sign` / EIP-191 is NOT a reliable fallback for UserOp hashes; the account will
-      //   typically reject it during simulation. Prefer switching to a Privy embedded signer or another compatible wallet.
+      //   typically reject it during simulation. Sign in with wallet to use the Privy smart wallet client, or use Coinbase Wallet (Base Account).
       const tryEthSign = async () => {
         const sig = await (walletClient as any).request({ method: 'eth_sign', params: [address, hash] })
         return sig as Hex
@@ -161,7 +161,7 @@ function createWalletBackedLocalAccount(params: {
             return await tryPersonalSign()
           } catch {
             throw new Error(
-              "Your signer blocked the raw signature method (`eth_sign`) and couldn’t sign via `personal_sign`. Switch to a Privy embedded signer (recommended) or use a different wallet.",
+              "Your signer blocked the raw signature method (`eth_sign`) and couldn’t sign via `personal_sign`. Sign in with wallet to use the Privy smart wallet client, or use Coinbase Wallet (Base Account).",
             )
           }
         }
