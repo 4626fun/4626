@@ -472,7 +472,7 @@ async function isCreatorAllowlisted(params: {
         for (const row of cswRes.data) {
           const csw = row.csw_address as string
           if (csw && isAddress(csw)) {
-            const isOwner = await checkCswOwnership(sessionAddress, getAddress(csw))
+            const isOwner = await checkCswOwnership(params.sessionAddress, getAddress(csw))
             if (isOwner) return { mode: 'enforced', allowed: true }
           }
         }
@@ -541,7 +541,7 @@ async function isCreatorAllowlisted(params: {
       for (const row of cswQ.rows) {
         const csw = row.csw_address as string
         if (csw && isAddress(csw)) {
-          const isOwner = await checkCswOwnership(sessionAddress, getAddress(csw))
+          const isOwner = await checkCswOwnership(params.sessionAddress, getAddress(csw))
           if (isOwner) return { mode: 'enforced', allowed: true }
         }
       }
