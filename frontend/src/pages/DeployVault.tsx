@@ -1,6 +1,7 @@
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { useAccount, usePublicClient, useReadContract, useWalletClient } from 'wagmi'
+import { useSendCalls } from 'wagmi/experimental'
 import { base } from 'wagmi/chains'
 import type { Address, Hex } from 'viem'
 import {
@@ -756,7 +757,9 @@ function DeployVaultBatcher({
   switchAuthCta?: { label: string; onClick: () => void }
   smartWalletClient: any
 }) {
+  const { address: connectedAddress } = useAccount()
   const publicClient = usePublicClient({ chainId: base.id })
+  const { sendCallsAsync } = useSendCalls()
 
   const smartWalletAddrForAuth = useMemo(() => {
     try {
@@ -771,6 +774,12 @@ function DeployVaultBatcher({
   const canUsePrivySmartWallet = useMemo(() => {
     return !!smartWalletClient && !!smartWalletAddrForAuth
   }, [smartWalletAddrForAuth, smartWalletClient])
+  const accountForCalls = useMemo(() => {
+    return connectedAddress && isAddress(connectedAddress) ? (getAddress(connectedAddress) as Address) : null
+  }, [connectedAddress])
+  const canUseWalletSendCalls = useMemo(() => {
+    return !!accountForCalls && typeof sendCallsAsync === 'function'
+  }, [accountForCalls, sendCallsAsync])
 
   const resolvedTokenDecimals = typeof tokenDecimals === 'number' ? tokenDecimals : 18
   const formatDeposit = (raw?: bigint): string => {
@@ -829,8 +838,12 @@ function DeployVaultBatcher({
         'Sign in with wallet to use the Privy smart wallet client, or use Coinbase Wallet (Base Account), then retry.'
       )
     }
-    if (lower.includes('smart wallet client required') || lower.includes('privy smart wallet client required')) {
-      return 'Privy smart wallet client required. Sign in with wallet to access your Zora smart wallet, then retry.'
+    if (
+      lower.includes('smart wallet client required') ||
+      lower.includes('privy smart wallet client required') ||
+      lower.includes('smart wallet required')
+    ) {
+      return 'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account), then retry.'
     }
     if (
       lower.includes('metamask') &&
@@ -879,7 +892,8 @@ function DeployVaultBatcher({
     return msg
   }
 
-  const hrefForTx = (h?: string | null) => (h ? `https://basescan.org/tx/${h}` : null)
+  const isTxHash = (h?: string | null) => typeof h === 'string' && /^0x[a-fA-F0-9]{64}$/.test(h)
+  const hrefForTx = (h?: string | null) => (isTxHash(h) ? `https://basescan.org/tx/${h}` : null)
   const href1 = hrefForTx(phaseTxs.tx1 ?? null)
   const href2 = hrefForTx(phaseTxs.tx2 ?? null)
   const href3 = hrefForTx(phaseTxs.tx3 ?? null)
@@ -1438,14 +1452,14 @@ function DeployVaultBatcher({
         } as const
 
         // ============================================================
-        // Deploy path: Privy Smart Wallet client only
+        // Deploy path: smart wallet signer (Privy or wallet_sendCalls)
         // ============================================================
         if (!publicClient) throw new Error('Public client not ready.')
 
-        // Hard guard: require Privy smart wallet client for deployment.
-        if (!canUsePrivySmartWallet) {
+        // Hard guard: require a smart wallet signer (Privy or wallet_sendCalls).
+        if (!canUsePrivySmartWallet && !canUseWalletSendCalls) {
           throw new Error(
-            'Privy smart wallet client required. Sign in with wallet to access your Zora smart wallet, then retry.',
+            'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account), then retry.',
           )
         }
 
@@ -1562,37 +1576,52 @@ function DeployVaultBatcher({
           phases: { phase3: phase3Calls.length > 0 },
         })
 
-        // Helper to convert calls format for Privy
+        // Helper to convert calls format
         const toCalls = (calls: Array<{ target: Address; value: bigint; data: Hex }>) =>
           calls.map((c) => ({ to: c.target, value: c.value, data: c.data }))
 
+        const sendPhaseCalls = async (
+          calls: Array<{ target: Address; value: bigint; data: Hex }>,
+          phaseLabel: 'phase1' | 'phase2' | 'phase3',
+        ) => {
+          if (canUsePrivySmartWallet) {
+            const hash = await smartWalletClient.sendTransaction({ calls: toCalls(calls) })
+            setTxId(hash)
+            setPhaseTxs((s) => ({ ...s, [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: hash }))
+            logger.warn(`[DeployVault] ${phaseLabel}_confirmed`, { txHash: hash })
+            return
+          }
+
+          if (!sendCallsAsync || !accountForCalls) {
+            throw new Error(
+              'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account), then retry.',
+            )
+          }
+          const res = await sendCallsAsync({
+            calls: toCalls(calls),
+            account: accountForCalls,
+            chainId: base.id,
+            forceAtomic: true,
+          })
+          const callId = typeof res === 'string' ? res : (res as any)?.id ?? null
+          const txKey = callId ? String(callId) : null
+          setTxId(txKey)
+          setPhaseTxs((s) => ({ ...s, [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: txKey ?? undefined }))
+          logger.warn(`[DeployVault] ${phaseLabel}_submitted`, { id: txKey })
+        }
+
         // Phase 1: Deploy core contracts
         setPhase('phase1')
-        const h1 = await smartWalletClient.sendTransaction({
-          calls: toCalls(phase1Calls),
-        })
-        setTxId(h1)
-        setPhaseTxs((s) => ({ ...s, tx1: h1 }))
-        logger.warn('[DeployVault] phase1_confirmed', { txHash: h1 })
+        await sendPhaseCalls(phase1Calls, 'phase1')
 
         // Phase 2: Launch + configure
         setPhase('phase2')
-        const h2 = await smartWalletClient.sendTransaction({
-          calls: toCalls(phase2Calls),
-        })
-        setTxId(h2)
-        setPhaseTxs((s) => ({ ...s, tx2: h2 }))
-        logger.warn('[DeployVault] phase2_confirmed', { txHash: h2 })
+        await sendPhaseCalls(phase2Calls, 'phase2')
 
         // Phase 3: Strategies (optional)
         if (phase3Calls.length > 0) {
           setPhase('phase3')
-          const h3 = await smartWalletClient.sendTransaction({
-            calls: toCalls(phase3Calls),
-          })
-          setTxId(h3)
-          setPhaseTxs((s) => ({ ...s, tx3: h3 }))
-          logger.warn('[DeployVault] phase3_confirmed', { txHash: h3 })
+          await sendPhaseCalls(phase3Calls, 'phase3')
         }
 
         setPhase('done')
@@ -1609,7 +1638,7 @@ function DeployVaultBatcher({
     }
   }
 
-  const canAutoUpdatePayoutRecipient = !payoutMismatch || canUsePrivySmartWallet
+  const canAutoUpdatePayoutRecipient = !payoutMismatch || canUsePrivySmartWallet || canUseWalletSendCalls
   void canAutoUpdatePayoutRecipient
 
   const expectedError = expectedQuery.isError
@@ -1630,7 +1659,7 @@ function DeployVaultBatcher({
   return (
     <div className="space-y-3">
       <div className="text-[11px] text-zinc-500 leading-relaxed">
-        One click will submit <span className="text-zinc-200">up to 3</span> onchain operations (Phases 1–3) via your Privy smart wallet.
+        One click will submit <span className="text-zinc-200">up to 3</span> onchain operations (Phases 1–3) via your smart wallet.
         Progress is tracked below.
       </div>
       {authIsStale ? (
@@ -1805,6 +1834,7 @@ function DeployVaultMain() {
   const { login } = useLogin()
   const { wallets } = useWallets()
   const { client: smartWalletClient } = useSmartWallets()
+  const { sendCallsAsync } = useSendCalls()
   const siwe = useSiweAuth()
   const [linkWalletBusy, setLinkWalletBusy] = useState(false)
   const [linkWalletError, setLinkWalletError] = useState<string | null>(null)
@@ -2850,6 +2880,8 @@ function DeployVaultMain() {
   const fundingGateOk = walletHasMinDeposit
 
   const privySmartWalletReady = Boolean(privySmartWalletAddress && smartWalletClient)
+  const canUseWalletSendCalls = Boolean(isConnected && connectedWalletAddress && typeof sendCallsAsync === 'function')
+  const smartWalletCapabilityReady = privySmartWalletReady || canUseWalletSendCalls
 
   const canDeploy =
     tokenIsValid &&
@@ -2869,7 +2901,13 @@ function DeployVaultMain() {
     creatorVaultBatcherConfigured &&
     bytecodeInfraOk &&
     !identityBlockingReason &&
-    privySmartWalletReady
+    smartWalletCapabilityReady
+
+  const deployPathLabel = privySmartWalletReady
+    ? 'Privy smart wallet'
+    : canUseWalletSendCalls
+      ? 'Wallet call batching'
+      : 'Privy smart wallet'
 
   const vrfConsumerAddress = (CONTRACTS.vrfConsumer ?? null) as Address | null
   const vrfConsumerConfigured = isAddress(String(vrfConsumerAddress ?? ''))
@@ -2994,8 +3032,8 @@ function DeployVaultMain() {
                       ? `Needs 5,000,000 ${underlyingSymbolUpper || 'TOKENS'} to deploy.`
                       : identityBlockingReason
                         ? identityBlockingReason
-                      : !privySmartWalletReady
-                        ? 'Privy smart wallet required. Sign in with wallet to access your Zora smart wallet.'
+                      : !smartWalletCapabilityReady
+                        ? 'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account).'
                     : bytecodeInfraQuery.isFetching
                       ? 'Checking deployment bytecode store…'
                       : bytecodeInfraQuery.isError
@@ -3054,7 +3092,7 @@ function DeployVaultMain() {
                   </motion.div>
                 ) : null}
 
-                {fromWaitlist && privyReady && privyAuthenticated && !smartWalletClient ? (
+                {fromWaitlist && privyReady && privyAuthenticated && !smartWalletCapabilityReady ? (
                   <motion.div
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -3410,7 +3448,7 @@ function DeployVaultMain() {
 
                     <div className="text-xs text-zinc-600 space-y-3">
                       <div>
-                        Deploy runs from your <span className="text-white">Privy smart wallet</span> on Base. It must hold the first{' '}
+                        Deploy runs from your <span className="text-white">smart wallet</span> on Base. It must hold the first{' '}
                         <span className="text-white font-medium">5,000,000 {underlyingSymbolUpper || 'TOKENS'}</span> deposit.
                       </div>
 
@@ -3453,7 +3491,7 @@ function DeployVaultMain() {
                   <div className="flex items-center justify-between gap-4">
                     <div className="text-[11px] text-zinc-500">Deploy path</div>
                     <div className="text-[11px] text-zinc-300">
-                      Privy smart wallet
+                      {deployPathLabel}
                     </div>
                   </div>
                   <div className="text-[11px] text-zinc-700">
