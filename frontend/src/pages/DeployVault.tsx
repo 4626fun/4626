@@ -1682,10 +1682,21 @@ function DeployVaultBatcher({
           embeddedOwnerAddr.toLowerCase() !== owner.toLowerCase() &&
           embeddedIsOwner
 
-        // We intentionally do NOT use an external/injected owner wallet for UserOp signing.
-        // Many wallets (notably Rabby) block the raw signature method (`eth_sign`) required for Coinbase Smart Wallet userOps.
-        // Instead, we require the Privy embedded EOA to be added as an onchain owner of the smart wallet once.
-        const canUseExternalOwner = false
+        // Allow external owner if the connected wallet is an onchain owner of the smart wallet.
+        // This still requires eth_sign support to produce a valid UserOp signature.
+        let externalIsOwner = false
+        if (
+          !canUsePrivySmartWallet &&
+          !!activeWalletClient &&
+          !!connectedAddr &&
+          connectedAddr.toLowerCase() !== owner.toLowerCase()
+        ) {
+          externalIsOwner = await isCoinbaseSmartWalletOwner({
+            smartWallet: owner as Address,
+            ownerAddress: connectedAddr as Address,
+          })
+        }
+        const canUseExternalOwner = externalIsOwner
 
         const hasMultipleInjectedProviders =
           typeof window !== 'undefined' &&
@@ -1703,6 +1714,9 @@ function DeployVaultBatcher({
               'Your Privy embedded wallet must be added as an owner of this Coinbase Smart Wallet. Add it once, then retry deploy.',
             )
           }
+          if (connectedAddr && !externalIsOwner) {
+            throw new Error('Connected wallet is not an onchain owner of this Coinbase Smart Wallet. Connect the owner wallet and retry.')
+          }
           throw new Error('Sign in with Privy using email to create an embedded wallet, then add it as a Smart Wallet owner to continue.')
         }
 
@@ -1716,9 +1730,10 @@ function DeployVaultBatcher({
         const embeddedOwnerExec = canUsePrivyEmbeddedOwner ? embeddedOwnerAddr : null
         const ownerExec = (embeddedOwnerExec ?? externalOwnerExec) as Address | null
         const ownerWalletClient = canUsePrivyEmbeddedOwner ? (embeddedWalletClient as any) : (activeWalletClient as any)
-        // For embedded Privy owners, require eth_sign (UserOp hash signing).
+        // For embedded/external owners, require eth_sign (UserOp hash signing).
         // For other paths, keep signMessage to avoid eth_sign blocking by injected wallets.
-        const userOpSignMode: 'eth_sign' | 'signMessage' = canUsePrivyEmbeddedOwner ? 'eth_sign' : 'signMessage'
+        const userOpSignMode: 'eth_sign' | 'signMessage' =
+          canUsePrivyEmbeddedOwner || canUseExternalOwner ? 'eth_sign' : 'signMessage'
 
         // Enforce custody: the smart wallet sender must already hold the initial deposit.
         const smartWalletBalance = (await publicClient.readContract({
