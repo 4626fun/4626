@@ -1721,6 +1721,12 @@ function DeployVaultBatcher({
           // 1. Builds a UserOperation with the calls
           // 2. Opens Zora popup for user to sign the UserOp hash (no gas!)
           // 3. Submits to bundler with CDP paymaster (paymaster pays gas)
+          console.log(`[DeployVault] Cross-app ERC-4337 check for ${phaseLabel}:`, {
+            canonicalSmartWallet,
+            zoraEmbeddedWalletAddress,
+            crossAppSignMessage: typeof crossAppSignMessage,
+            publicClient: !!publicClient,
+          })
           logger.info(`[DeployVault] Cross-app ERC-4337 check for ${phaseLabel}:`, {
             canonicalSmartWallet: !!canonicalSmartWallet,
             zoraEmbeddedWalletAddress: !!zoraEmbeddedWalletAddress,
