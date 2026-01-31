@@ -747,6 +747,8 @@ function DeployVaultBatcher({
   embeddedEoaAddress,
   zoraEmbeddedWalletAddress,
   sendCrossAppTransaction,
+  connectorId,
+  wagmiWalletClient,
 }: {
   creatorToken: Address
   owner: Address
@@ -770,9 +772,15 @@ function DeployVaultBatcher({
   embeddedEoaAddress: Address | null
   zoraEmbeddedWalletAddress: Address | null
   sendCrossAppTransaction: ((tx: { to: Address; data: Hex; value: bigint; chainId: number }, appId: string) => Promise<string>) | null
+  // For direct Coinbase Wallet connection (supports eth_sign)
+  connectorId: string | undefined
+  wagmiWalletClient: any
 }) {
   const { address: connectedAddress } = useAccount()
   const publicClient = usePublicClient({ chainId: base.id })
+  
+  // Detect Coinbase Wallet direct connection (not via Privy)
+  const isCoinbaseWalletDirect = connectorId === 'coinbaseWalletSDK' || connectorId === 'com.coinbase.wallet'
 
   const smartWalletAddrForAuth = useMemo(() => {
     try {
@@ -1578,7 +1586,46 @@ function DeployVaultBatcher({
           calls: Array<{ target: Address; value: bigint; data: Hex }>,
           phaseLabel: 'phase1' | 'phase2' | 'phase3',
         ) => {
-          // Use cross-app transaction to send through the canonical (Zora) smart wallet
+          // OPTION 1: Direct Coinbase Wallet connection (best - supports eth_sign for ERC-4337)
+          // When connected via Coinbase Wallet SDK, the connected address IS the smart wallet
+          // and we can use proper ERC-4337 UserOperations with single approval
+          if (isCoinbaseWalletDirect && connectedAddress && wagmiWalletClient && publicClient) {
+            logger.info(`[DeployVault] Using Coinbase Wallet direct for ${phaseLabel}`, {
+              smartWallet: connectedAddress,
+              callCount: calls.length,
+            })
+            
+            // Use the CDP paymaster URL
+            const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+            const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
+            let bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv)
+            if (!bundlerUrl) bundlerUrl = '/api/paymaster'
+            
+            // The connected address is both the smart wallet AND the signer for Coinbase Wallet
+            const result = await sendCoinbaseSmartWalletUserOperation({
+              publicClient: publicClient as any,
+              walletClient: wagmiWalletClient as any,
+              bundlerUrl,
+              smartWallet: connectedAddress as Address,
+              ownerAddress: connectedAddress as Address, // For CB Wallet, the wallet signs for itself
+              calls: toCalls(calls),
+              version: '1',
+            })
+            
+            setTxId(result.transactionHash)
+            setPhaseTxs((s) => ({
+              ...s,
+              [phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : 'userOp3']: result.userOpHash,
+              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: result.transactionHash,
+            }))
+            logger.warn(`[DeployVault] ${phaseLabel}_confirmed via Coinbase Wallet`, {
+              userOpHash: result.userOpHash,
+              txHash: result.transactionHash,
+            })
+            return
+          }
+          
+          // OPTION 2: Cross-app transaction to send through the canonical (Zora) smart wallet
           // This bypasses ERC-4337 signature issues by using Zora's cross-app popup flow
           if (canonicalSmartWallet && zoraEmbeddedWalletAddress && sendCrossAppTransaction) {
             logger.info(`[DeployVault] Using cross-app executeBatch for ${phaseLabel}`, {
@@ -3639,6 +3686,8 @@ function DeployVaultMain() {
               {/* Debug: Wallet state - temporarily always visible for diagnosis */}
               <div className="p-3 rounded-lg border border-zinc-800 bg-zinc-900/50 text-[10px] font-mono space-y-1 mb-3">
                 <div className="text-zinc-500 font-semibold">Debug: Wallet State</div>
+                <div>connector: <span className={connector?.id === 'coinbaseWalletSDK' ? 'text-green-400' : 'text-zinc-300'}>{connector?.id || 'none'}</span></div>
+                <div>connectedAddress: <span className="text-zinc-300">{address || 'null'}</span></div>
                 <div>privySmartWallet: <span className="text-zinc-300">{privySmartWalletAddress || 'null'}</span></div>
                 <div>canonicalIdentity: <span className="text-zinc-300">{canonicalIdentityAddress || 'null'}</span></div>
                 <div>smartWalletMatchesCanonical: <span className={smartWalletMatchesCanonical ? 'text-green-400' : 'text-red-400'}>{String(smartWalletMatchesCanonical)}</span></div>
@@ -3649,6 +3698,9 @@ function DeployVaultMain() {
                 <div>ownerQuery data: <span className="text-zinc-300">{String(embeddedEoaIsCanonicalOwnerQuery.data)}</span></div>
                 <div>embeddedPrivyEoa: <span className="text-zinc-300">{embeddedPrivyEoaAddress || 'null'}</span></div>
                 <div>canDeploy: <span className={canDeploy ? 'text-green-400' : 'text-red-400'}>{String(canDeploy)}</span></div>
+                {connector?.id === 'coinbaseWalletSDK' && (
+                  <div className="text-green-400 font-semibold mt-1">✓ Coinbase Wallet Direct - ERC-4337 ready!</div>
+                )}
               </div>
 
               {/* Simplified auth flow: Privy only */}
@@ -3996,6 +4048,8 @@ function DeployVaultMain() {
                     embeddedEoaAddress={embeddedPrivyEoaAddress}
                     zoraEmbeddedWalletAddress={zoraEmbeddedWalletAddress}
                     sendCrossAppTransaction={sendCrossAppTransaction}
+                    connectorId={connector?.id}
+                    wagmiWalletClient={walletClient}
                   />
                 </>
               ) : (
