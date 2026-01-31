@@ -1664,13 +1664,29 @@ function DeployVaultBatcher({
               args: [calls.map(c => ({ target: c.target, value: c.value, data: c.data }))],
             })
             
-            // Use Privy's embedded wallet sendTransaction which includes gas sponsorship
-            // The embedded wallet is an owner of the smart wallet, so this should work
-            const txHash = await embeddedWallet.sendTransaction({
+            // Get the embedded wallet's provider
+            const provider = await embeddedWallet.getEthereumProvider()
+            if (!provider) {
+              throw new Error('Could not get embedded wallet provider')
+            }
+            
+            // The embedded wallet needs ETH for gas since Privy doesn't auto-sponsor for raw txs
+            // Check if we can send via the provider with sponsored gas
+            // Try using eth_sendTransaction - if embedded wallet has no ETH, this will fail
+            // In that case, user needs to fund the embedded wallet with a tiny amount of ETH
+            logger.info('[DeployVault] Sending executeBatch from embedded wallet', {
+              from: embeddedEoaAddress,
               to: canonicalSmartWallet,
-              data: batchData,
-              value: 0n,
-              chainId: base.id,
+            })
+            
+            const txHash = await provider.request({
+              method: 'eth_sendTransaction',
+              params: [{
+                from: embeddedEoaAddress,
+                to: canonicalSmartWallet,
+                data: batchData,
+                value: '0x0',
+              }],
             })
             
             setTxId(txHash)
@@ -3758,25 +3774,24 @@ function DeployVaultMain() {
                   <div className="text-green-400 font-semibold mt-1">✓ Coinbase Wallet Direct - ERC-4337 ready!</div>
                 )}
                 
-                {/* Link Zora Wallet button - needed for cross-app deploy */}
-                {!zoraEmbeddedWalletAddress && privyAuthenticated && (
+                {/* Fund embedded wallet for gas */}
+                {embeddedPrivyEoaAddress && canonicalIdentityIsContract && (
                   <div className="mt-2 pt-2 border-t border-zinc-700">
-                    <div className="text-amber-400 mb-2">⚠ Link Zora wallet for cross-app deploy</div>
-                    <button
-                      type="button"
-                      className="w-full py-2 px-3 bg-purple-600 hover:bg-purple-500 text-white text-xs rounded"
-                      disabled={linkZoraWalletBusy}
-                      onClick={handleLinkZoraWallet}
-                    >
-                      {linkZoraWalletBusy ? 'Connecting to Zora…' : 'Link Zora Wallet'}
-                    </button>
-                    {linkZoraWalletError && (
-                      <div className="text-red-400 text-[10px] mt-1">{linkZoraWalletError}</div>
-                    )}
+                    <div className="text-amber-400 mb-2">⚠ Embedded wallet needs ETH for gas</div>
+                    <div className="text-[9px] text-zinc-500 mb-2">
+                      Send ~0.001 ETH to enable deploy via executeBatch
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <code className="text-[9px] bg-black/30 px-2 py-1 rounded flex-1 truncate">{embeddedPrivyEoaAddress}</code>
+                      <button
+                        type="button"
+                        className="px-2 py-1 bg-zinc-700 hover:bg-zinc-600 text-white text-[9px] rounded"
+                        onClick={() => void navigator.clipboard.writeText(embeddedPrivyEoaAddress)}
+                      >
+                        Copy
+                      </button>
+                    </div>
                   </div>
-                )}
-                {zoraEmbeddedWalletAddress && (
-                  <div className="text-green-400 font-semibold mt-1">✓ Zora wallet linked - cross-app deploy ready!</div>
                 )}
               </div>
 
