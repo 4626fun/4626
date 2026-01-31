@@ -683,6 +683,7 @@ function DeployVaultBatcher({
   privySmartWalletAddress,
   connectorId,
   wagmiWalletClient,
+  connectedIsCanonicalOwner,
 }: {
   creatorToken: Address
   owner: Address
@@ -709,6 +710,8 @@ function DeployVaultBatcher({
   // For direct Coinbase Wallet connection (supports eth_sign)
   connectorId: string | undefined
   wagmiWalletClient: any
+  // Whether the connected EOA is an owner of the canonical smart wallet
+  connectedIsCanonicalOwner: boolean
 }) {
   const { address: connectedAddress } = useAccount()
   const publicClient = usePublicClient({ chainId: base.id })
@@ -1631,11 +1634,50 @@ function DeployVaultBatcher({
             return
           }
           
+          // PATH 3: Connected EOA is owner of canonical smart wallet
+          // Use ERC-4337 with the EOA signing UserOps for the canonical wallet
+          if (canonicalSmartWallet && connectedIsCanonicalOwner && connectedAddress && wagmiWalletClient && publicClient) {
+            logger.info(`[DeployVault] Using ERC-4337 via connected EOA for ${phaseLabel}`)
+            
+            const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+            const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
+            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv) || '/api/paymaster'
+            
+            logger.info('[DeployVault] Sending ERC-4337 UserOp via connected EOA', {
+              canonicalSmartWallet,
+              connectedEOA: connectedAddress,
+              callCount: calls.length,
+            })
+            
+            const result = await sendCoinbaseSmartWalletUserOperation({
+              publicClient: publicClient as any,
+              walletClient: wagmiWalletClient as any,
+              bundlerUrl,
+              smartWallet: canonicalSmartWallet,
+              ownerAddress: connectedAddress as Address,
+              calls: toCalls(calls),
+              version: '1',
+            })
+            
+            setTxId(result.transactionHash)
+            setPhaseTxs((s) => ({
+              ...s,
+              [phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : 'userOp3']: result.userOpHash,
+              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: result.transactionHash,
+            }))
+            logger.warn(`[DeployVault] ${phaseLabel}_confirmed via ERC-4337 (connected EOA signer)`, {
+              userOpHash: result.userOpHash,
+              txHash: result.transactionHash,
+            })
+            return
+          }
+          
           // No valid ERC-4337 path available
           throw new Error(
             'ERC-4337 deployment requires one of:\n' +
             '1. Connect with Coinbase Wallet (recommended)\n' +
-            '2. Add your Privy smart wallet as an owner of your Zora wallet (one-time setup)',
+            '2. Add your Privy smart wallet as an owner of your Zora wallet (one-time setup)\n' +
+            '3. Connect with an EOA that is an owner of your Zora smart wallet',
           )
         }
 
@@ -1856,10 +1898,14 @@ function DeployVaultBatcher({
       </div>
 
       {/* Show deploy button only if we have a valid ERC-4337 path */}
-      {isCoinbaseWalletDirect || privySmartWalletIsCanonicalOwner ? (
+      {isCoinbaseWalletDirect || privySmartWalletIsCanonicalOwner || connectedIsCanonicalOwner ? (
         <div className="space-y-2">
           <div className="text-[10px] text-green-400/80 flex items-center gap-1">
-            <span>✓</span> Gas-free ERC-4337 {privySmartWalletIsCanonicalOwner ? 'via Privy smart wallet' : 'via Coinbase Wallet'}
+            <span>✓</span> Gas-free ERC-4337 {
+              isCoinbaseWalletDirect ? 'via Coinbase Wallet' :
+              privySmartWalletIsCanonicalOwner ? 'via Privy smart wallet' :
+              'via connected wallet (owner)'
+            }
           </div>
           <button type="button" onClick={() => void submit()} disabled={disabled} className="btn-accent w-full rounded-lg">
             {busy ? 'Deploying…' : '1‑Click Deploy (Gas-Free)'}
@@ -1874,6 +1920,7 @@ function DeployVaultBatcher({
           <div className="text-[11px] text-zinc-400 space-y-1">
             <div>Option 1: Connect with <strong className="text-amber-200">Coinbase Wallet</strong> (instant)</div>
             <div>Option 2: Add your Privy smart wallet as owner (one-time setup below)</div>
+            <div>Option 3: Connect with an EOA that is an owner of your Zora smart wallet</div>
           </div>
         </div>
       )}
@@ -2619,9 +2666,11 @@ function DeployVaultMain() {
   // Allow injected EOAs (Rabby/MetaMask/etc) to operate a Coinbase Smart Wallet canonical identity
   // when the EOA is an onchain owner of that smart wallet.
   // Uses server-side API to avoid client-side RPC rate limits.
+  // Also used for ERC-4337 PATH 3 (EOA signs UserOps for canonical smart wallet).
   const executionCanOperateCanonicalQuery = useQuery({
     queryKey: ['coinbaseSmartWalletOwner', canonicalIdentityAddress, connectedWalletAddress],
-    enabled: !!canonicalIdentityAddress && !!connectedWalletAddress && !!identity.blockingReason,
+    // Run when: identity blocking reason OR canonical is a contract (for ERC-4337 PATH 3)
+    enabled: !!canonicalIdentityAddress && !!connectedWalletAddress && (!!identity.blockingReason || canonicalIdentityIsContract),
     staleTime: 0, // Always refetch - ownership can change externally
     refetchOnWindowFocus: true,
     refetchOnMount: true,
@@ -2640,7 +2689,7 @@ function DeployVaultMain() {
   })
 
   const executionCanOperateCanonical = executionCanOperateCanonicalQuery.data === true
-  const executionCanOperateCanonicalPending = !!identity.blockingReason && executionCanOperateCanonicalQuery.isFetching
+  const executionCanOperateCanonicalPending = (!!identity.blockingReason || canonicalIdentityIsContract) && executionCanOperateCanonicalQuery.isFetching
 
   // Check if connected EOA is an owner of the Creator Coin itself (via ownerAt)
   const creatorCoinOwnersQuery = useQuery({
@@ -3609,6 +3658,7 @@ function DeployVaultMain() {
                     privySmartWalletAddress={privySmartWalletAddress}
                     connectorId={connector?.id}
                     wagmiWalletClient={walletClient}
+                    connectedIsCanonicalOwner={executionCanOperateCanonical}
                   />
                 </>
               ) : (
