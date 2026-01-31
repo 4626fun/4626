@@ -3570,21 +3570,20 @@ function DeployVaultMain() {
               ) : null}
 
 
-              {/* Debug: Wallet state */}
-              {import.meta.env.DEV && (
-                <div className="p-3 rounded-lg border border-zinc-800 bg-zinc-900/50 text-[10px] font-mono space-y-1 mb-3">
-                  <div className="text-zinc-500 font-semibold">Debug: Wallet State</div>
-                  <div>privySmartWallet: <span className="text-zinc-300">{privySmartWalletAddress || 'null'}</span></div>
-                  <div>canonicalIdentity: <span className="text-zinc-300">{canonicalIdentityAddress || 'null'}</span></div>
-                  <div>smartWalletMatchesCanonical: <span className={smartWalletMatchesCanonical ? 'text-green-400' : 'text-red-400'}>{String(smartWalletMatchesCanonical)}</span></div>
-                  <div>embeddedEoaIsCanonicalOwner: <span className={embeddedEoaIsCanonicalOwner ? 'text-green-400' : 'text-red-400'}>{String(embeddedEoaIsCanonicalOwner)}</span></div>
-                  <div>privySmartWalletReady: <span className={privySmartWalletReady ? 'text-green-400' : 'text-red-400'}>{String(privySmartWalletReady)}</span></div>
-                  <div>smartWalletCapabilityReady: <span className={smartWalletCapabilityReady ? 'text-green-400' : 'text-red-400'}>{String(smartWalletCapabilityReady)}</span></div>
-                  <div>ownerQuery status: <span className="text-zinc-300">{embeddedEoaIsCanonicalOwnerQuery.status}</span></div>
-                  <div>ownerQuery data: <span className="text-zinc-300">{String(embeddedEoaIsCanonicalOwnerQuery.data)}</span></div>
-                  <div>embeddedPrivyEoa: <span className="text-zinc-300">{embeddedPrivyEoaAddress || 'null'}</span></div>
-                </div>
-              )}
+              {/* Debug: Wallet state - temporarily always visible for diagnosis */}
+              <div className="p-3 rounded-lg border border-zinc-800 bg-zinc-900/50 text-[10px] font-mono space-y-1 mb-3">
+                <div className="text-zinc-500 font-semibold">Debug: Wallet State</div>
+                <div>privySmartWallet: <span className="text-zinc-300">{privySmartWalletAddress || 'null'}</span></div>
+                <div>canonicalIdentity: <span className="text-zinc-300">{canonicalIdentityAddress || 'null'}</span></div>
+                <div>smartWalletMatchesCanonical: <span className={smartWalletMatchesCanonical ? 'text-green-400' : 'text-red-400'}>{String(smartWalletMatchesCanonical)}</span></div>
+                <div>embeddedEoaIsCanonicalOwner: <span className={embeddedEoaIsCanonicalOwner ? 'text-green-400' : 'text-red-400'}>{String(embeddedEoaIsCanonicalOwner)}</span></div>
+                <div>privySmartWalletReady: <span className={privySmartWalletReady ? 'text-green-400' : 'text-red-400'}>{String(privySmartWalletReady)}</span></div>
+                <div>smartWalletCapabilityReady: <span className={smartWalletCapabilityReady ? 'text-green-400' : 'text-red-400'}>{String(smartWalletCapabilityReady)}</span></div>
+                <div>ownerQuery status: <span className="text-zinc-300">{embeddedEoaIsCanonicalOwnerQuery.status}</span></div>
+                <div>ownerQuery data: <span className="text-zinc-300">{String(embeddedEoaIsCanonicalOwnerQuery.data)}</span></div>
+                <div>embeddedPrivyEoa: <span className="text-zinc-300">{embeddedPrivyEoaAddress || 'null'}</span></div>
+                <div>canDeploy: <span className={canDeploy ? 'text-green-400' : 'text-red-400'}>{String(canDeploy)}</span></div>
+              </div>
 
               {/* Simplified auth flow: Privy only */}
               {!privyReady ? (
