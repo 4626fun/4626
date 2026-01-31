@@ -75,6 +75,9 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
   } as const
   const loginMethods = ['wallet', 'email'] as const
 
+  // Zora's Privy App ID - enables cross-app wallet sharing (Global Wallet)
+  const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
+
   const baseConfig: PrivyProviderConfig = {
     appearance,
     // Enable embedded wallets - this is the signer for the Coinbase Smart Wallet
@@ -82,12 +85,24 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
       ethereum: { createOnLogin: 'users-without-wallets' },
     },
     loginMethods,
+    // Enable cross-app wallets from Zora so users get the same wallet they created on Zora
+    externalWallets: {
+      crossApp: {
+        providerAppIds: [ZORA_PRIVY_APP_ID],
+      },
+    },
   } as any
 
   const safeConfig: PrivyProviderConfig = {
     appearance,
     // Intentionally omit `embeddedWallets` so HTTP/insecure dev origins don't crash the app.
     loginMethods,
+    // Enable cross-app wallets from Zora
+    externalWallets: {
+      crossApp: {
+        providerAppIds: [ZORA_PRIVY_APP_ID],
+      },
+    },
   } as any
 
   return (
