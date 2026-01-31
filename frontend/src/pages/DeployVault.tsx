@@ -1569,58 +1569,64 @@ function DeployVaultBatcher({
           }
           
           // PATH 2: Privy Smart Wallet is owner of canonical smart wallet
-          // Use Privy's smartWalletClient which handles signing via Privy's backend (no eth_sign needed!)
-          // This is the gas-free ERC-4337 path
+          // Use true ERC-4337 through EntryPoint v0.6 with our CDP paymaster
+          // The Privy smart wallet signs the UserOp hash as an owner of the canonical wallet
           if (canonicalSmartWallet && privySmartWalletIsCanonicalOwner && smartWalletClient && privySmartWalletAddress) {
-            logger.info(`[DeployVault] Using Privy smartWalletClient for ${phaseLabel} (gas-free ERC-4337)`)
+            logger.info(`[DeployVault] Using ERC-4337 via Privy smart wallet for ${phaseLabel}`)
             
-            // Encode executeBatch call to the canonical smart wallet
-            // The Privy smart wallet will call the canonical's executeBatch as an owner
-            const executeBatchData = encodeFunctionData({
-              abi: [
-                {
-                  type: 'function',
-                  name: 'executeBatch',
-                  stateMutability: 'payable',
-                  inputs: [
-                    {
-                      name: 'calls',
-                      type: 'tuple[]',
-                      components: [
-                        { name: 'target', type: 'address' },
-                        { name: 'value', type: 'uint256' },
-                        { name: 'data', type: 'bytes' },
-                      ],
-                    },
-                  ],
-                  outputs: [],
-                },
-              ],
-              functionName: 'executeBatch',
-              args: [calls.map(c => ({ target: c.target, value: c.value, data: c.data }))],
-            })
+            const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+            const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
+            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv) || '/api/paymaster'
             
-            logger.info('[DeployVault] Sending transaction via Privy smartWalletClient', {
-              from: privySmartWalletAddress,
-              to: canonicalSmartWallet,
+            // Create a wallet client adapter that uses the Privy smartWalletClient for signing
+            // This allows the Privy smart wallet to sign UserOp hashes for the canonical wallet
+            const privyWalletClientAdapter = {
+              request: async (args: { method: string; params: any[] }) => {
+                // For eth_sign, use Privy's signMessage which handles the signing internally
+                if (args.method === 'eth_sign') {
+                  const [, hash] = args.params
+                  // Privy smart wallet can sign messages - this will sign the UserOp hash
+                  const sig = await smartWalletClient.signMessage({ message: { raw: hash as `0x${string}` } })
+                  return sig
+                }
+                throw new Error(`Unsupported method: ${args.method}`)
+              },
+              signMessage: async (args: { account: Address; message: any }) => {
+                const msg = typeof args.message === 'object' && 'raw' in args.message
+                  ? args.message.raw
+                  : args.message
+                return await smartWalletClient.signMessage({ message: msg })
+              },
+              signTypedData: async (args: any) => {
+                return await smartWalletClient.signTypedData(args)
+              },
+            }
+            
+            logger.info('[DeployVault] Sending ERC-4337 UserOp via Privy smart wallet', {
+              canonicalSmartWallet,
+              privySmartWallet: privySmartWalletAddress,
               callCount: calls.length,
             })
             
-            // Use Privy's smartWalletClient to send the transaction
-            // This is gas-sponsored and uses Privy's backend for signing
-            const txHash = await smartWalletClient.sendTransaction({
-              to: canonicalSmartWallet,
-              data: executeBatchData,
-              value: 0n,
+            const result = await sendCoinbaseSmartWalletUserOperation({
+              publicClient: publicClient as any,
+              walletClient: privyWalletClientAdapter as any,
+              bundlerUrl,
+              smartWallet: canonicalSmartWallet,
+              ownerAddress: privySmartWalletAddress,
+              calls: toCalls(calls),
+              version: '1',
             })
             
-            setTxId(txHash)
+            setTxId(result.transactionHash)
             setPhaseTxs((s) => ({
               ...s,
-              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: txHash,
+              [phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : 'userOp3']: result.userOpHash,
+              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: result.transactionHash,
             }))
-            logger.warn(`[DeployVault] ${phaseLabel}_confirmed via Privy smartWalletClient (gas-free)`, {
-              txHash,
+            logger.warn(`[DeployVault] ${phaseLabel}_confirmed via ERC-4337 (Privy smart wallet signer)`, {
+              userOpHash: result.userOpHash,
+              txHash: result.transactionHash,
             })
             return
           }
