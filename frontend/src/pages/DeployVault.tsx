@@ -1679,15 +1679,40 @@ function DeployVaultBatcher({
               args: [calls.map(c => ({ target: c.target, value: c.value, data: c.data }))],
             })
             
-            // Get the embedded wallet's provider
+            // Get the embedded wallet's provider and switch to Base
             const provider = await embeddedWallet.getEthereumProvider()
             if (!provider) {
               throw new Error('Could not get embedded wallet provider')
             }
             
-            logger.info('[DeployVault] Sending executeBatch from embedded wallet', {
+            // Switch to Base network (chain ID 8453)
+            try {
+              await provider.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: '0x2105' }], // 8453 in hex
+              })
+            } catch (switchError: any) {
+              // If chain doesn't exist, add it
+              if (switchError?.code === 4902) {
+                await provider.request({
+                  method: 'wallet_addEthereumChain',
+                  params: [{
+                    chainId: '0x2105',
+                    chainName: 'Base',
+                    nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                    rpcUrls: ['https://mainnet.base.org'],
+                    blockExplorerUrls: ['https://basescan.org'],
+                  }],
+                })
+              } else {
+                throw switchError
+              }
+            }
+            
+            logger.info('[DeployVault] Sending executeBatch from embedded wallet on Base', {
               from: embeddedEoaAddress,
               to: canonicalSmartWallet,
+              chainId: 8453,
             })
             
             const txHash = await provider.request({
@@ -1697,6 +1722,7 @@ function DeployVaultBatcher({
                 to: canonicalSmartWallet,
                 data: batchData,
                 value: '0x0',
+                chainId: '0x2105', // Base
               }],
             })
             
