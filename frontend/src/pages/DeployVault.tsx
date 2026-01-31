@@ -749,6 +749,7 @@ function DeployVaultBatcher({
   zoraEmbeddedBalance: _zoraEmbeddedBalance,
   sendCrossAppTransaction,
   crossAppSignMessage,
+  embeddedEoaIsCanonicalOwner,
   connectorId,
   wagmiWalletClient,
 }: {
@@ -779,6 +780,8 @@ function DeployVaultBatcher({
   sendCrossAppTransaction: ((tx: { to: Address; data: Hex; value: bigint; chainId: number }, options: { address: string }) => Promise<string>) | null
   // Privy's cross-app signMessage - for ERC-4337 UserOp signing (no gas needed!)
   crossAppSignMessage: CrossAppSignMessage | null
+  // Whether the embedded Privy EOA is an owner of the canonical smart wallet
+  embeddedEoaIsCanonicalOwner: boolean
   // For direct Coinbase Wallet connection (supports eth_sign)
   connectorId: string | undefined
   wagmiWalletClient: any
@@ -786,8 +789,6 @@ function DeployVaultBatcher({
   void _zoraEmbeddedBalance // Used for display in parent component
   void zoraEmbeddedHasGas // Used by handleAddOwnerToZoraWallet in parent
   void sendCrossAppTransaction // Legacy - replaced by crossAppSignMessage + ERC-4337
-  void embeddedWallet // Removed: direct tx from embedded wallet requires gas
-  void embeddedEoaAddress // Removed: direct tx from embedded wallet requires gas
   const { address: connectedAddress } = useAccount()
   const publicClient = usePublicClient({ chainId: base.id })
   
@@ -1702,13 +1703,98 @@ function DeployVaultBatcher({
             }
           }
           
-          // OPTION 3: Fallback - use Privy smart wallet client (will use Privy's derived smart wallet)
+          // OPTION 3: Embedded Privy EOA is an owner of the canonical smart wallet
+          // Use ERC-4337 with the embedded wallet signing for the canonical identity
+          console.log(`[DeployVault] Checking embedded wallet ERC-4337 path for ${phaseLabel}:`, {
+            canonicalSmartWallet,
+            embeddedEoaAddress,
+            embeddedEoaIsCanonicalOwner,
+            hasEmbeddedWallet: !!embeddedWallet,
+          })
+          if (canonicalSmartWallet && embeddedEoaAddress && embeddedEoaIsCanonicalOwner && embeddedWallet && publicClient) {
+            logger.info(`[DeployVault] Using embedded wallet ERC-4337 for ${phaseLabel}`, {
+              canonicalSmartWallet,
+              embeddedEoaAddress,
+              callCount: calls.length,
+            })
+            
+            try {
+              // Get the embedded wallet's provider
+              const provider = await embeddedWallet.getEthereumProvider()
+              if (!provider) {
+                throw new Error('Could not get embedded wallet provider')
+              }
+              
+              // Create a walletClient-like wrapper for the provider
+              const embeddedWalletClient = {
+                request: (args: any) => provider.request(args),
+                signMessage: async ({ account, message }: { account: Address; message: any }) => {
+                  const msg = typeof message === 'string' ? message : message.raw
+                  return provider.request({
+                    method: 'personal_sign',
+                    params: [msg, account],
+                  })
+                },
+                signTypedData: async (args: any) => {
+                  return provider.request({
+                    method: 'eth_signTypedData_v4',
+                    params: [args.account, JSON.stringify(args)],
+                  })
+                },
+              }
+              
+              // Get the bundler/paymaster URL
+              const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+              const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
+              let bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv)
+              if (!bundlerUrl) bundlerUrl = '/api/paymaster'
+              
+              // Send UserOperation via ERC-4337 with embedded wallet signing
+              const result = await sendCoinbaseSmartWalletUserOperation({
+                publicClient: publicClient as any,
+                walletClient: embeddedWalletClient as any,
+                bundlerUrl,
+                smartWallet: canonicalSmartWallet,
+                ownerAddress: embeddedEoaAddress,
+                calls: toCalls(calls),
+                version: '1',
+              })
+              
+              setTxId(result.transactionHash)
+              setPhaseTxs((s) => ({
+                ...s,
+                [phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : 'userOp3']: result.userOpHash,
+                [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: result.transactionHash,
+              }))
+              logger.warn(`[DeployVault] ${phaseLabel}_confirmed via embedded wallet ERC-4337`, {
+                userOpHash: result.userOpHash,
+                txHash: result.transactionHash,
+              })
+              return
+            } catch (err: unknown) {
+              const errMsg = err instanceof Error ? err.message : String(err)
+              logger.error(`[DeployVault] Embedded wallet ERC-4337 failed for ${phaseLabel}:`, errMsg)
+              console.error(`[DeployVault] Embedded wallet ERC-4337 failed:`, err)
+              // If user rejected, don't continue to fallback
+              if (errMsg.toLowerCase().includes('reject') || errMsg.toLowerCase().includes('cancel') || errMsg.toLowerCase().includes('denied')) {
+                throw err
+              }
+              // Otherwise, continue to try fallback
+            }
+          }
+          
+          // OPTION 4: Fallback - use Privy smart wallet client (will use Privy's derived smart wallet)
+          // WARNING: This targets privySmartWallet, NOT canonicalIdentity - may not match!
           if (!canUsePrivySmartWallet || !smartWalletClient) {
             throw new Error(
               'Smart wallet required. Sign in via Privy to access your Zora smart wallet, then retry.',
             )
           }
           logger.warn(`[DeployVault] Fallback to Privy smartWalletClient for ${phaseLabel}`)
+          console.warn(`[DeployVault] WARNING: Using Privy smart wallet fallback - may not match canonical identity!`, {
+            privySmartWallet: await smartWalletClient.account?.address,
+            canonicalSmartWallet,
+          })
           const hash = await smartWalletClient.sendTransaction({ calls: toCalls(calls) })
           setTxId(hash)
           setPhaseTxs((s) => ({ ...s, [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: hash }))
@@ -4146,6 +4232,7 @@ function DeployVaultMain() {
                     zoraEmbeddedBalance={zoraEmbeddedBalanceQuery.data ?? 0n}
                     sendCrossAppTransaction={sendCrossAppTransaction}
                     crossAppSignMessage={crossAppSignMessage ?? null}
+                    embeddedEoaIsCanonicalOwner={embeddedEoaIsCanonicalOwner}
                     connectorId={connector?.id}
                     wagmiWalletClient={walletClient}
                   />
