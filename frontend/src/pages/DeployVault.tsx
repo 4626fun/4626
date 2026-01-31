@@ -45,7 +45,7 @@ import {
 import { computeMarketFloorQuote } from '@/lib/cca/marketFloor'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
-import { sendCoinbaseSmartWalletUserOperation, sendCrossAppUserOperation, type CrossAppSignMessage } from '@/lib/aa/coinbaseErc4337'
+import { sendCoinbaseSmartWalletUserOperation, type CrossAppSignMessage } from '@/lib/aa/coinbaseErc4337'
 
 const MIN_FIRST_DEPOSIT = 5_000_000n * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
@@ -797,10 +797,12 @@ function DeployVaultBatcher({
   void _zoraEmbeddedBalance
   void zoraEmbeddedHasGas
   void sendCrossAppTransaction
-  void embeddedWallet
-  void embeddedEoaAddress
-  void embeddedEoaIsCanonicalOwner
+  void crossAppSignMessage
   void smartWalletClient
+  void zoraEmbeddedWalletAddress
+  void linkZoraWalletBusy
+  void handleLinkZoraWallet
+  void linkZoraWalletError
   const { address: connectedAddress } = useAccount()
   const publicClient = usePublicClient({ chainId: base.id })
   
@@ -1648,36 +1650,68 @@ function DeployVaultBatcher({
             return
           }
           
-          // PATH 2: Cross-app Zora wallet (ERC-4337 with paymaster)
-          // Requires Zora wallet to be linked via cross-app connect
-          if (canonicalSmartWallet && zoraEmbeddedWalletAddress && crossAppSignMessage && publicClient) {
-            logger.info(`[DeployVault] Using cross-app ERC-4337 for ${phaseLabel}`)
+          // PATH 2: Embedded Privy EOA is owner of canonical smart wallet
+          // Send direct executeBatch transaction (requires ETH for gas)
+          if (canonicalSmartWallet && embeddedEoaAddress && embeddedEoaIsCanonicalOwner && embeddedWallet) {
+            logger.info(`[DeployVault] Using embedded wallet executeBatch for ${phaseLabel}`)
             
-            const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-            const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
-            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv) || '/api/paymaster'
+            // Coinbase Smart Wallet's executeBatch ABI
+            const executeBatchAbi = [{
+              type: 'function',
+              name: 'executeBatch',
+              stateMutability: 'payable',
+              inputs: [{
+                name: 'calls',
+                type: 'tuple[]',
+                components: [
+                  { name: 'target', type: 'address' },
+                  { name: 'value', type: 'uint256' },
+                  { name: 'data', type: 'bytes' },
+                ],
+              }],
+              outputs: [],
+            }] as const
             
-            const { transactionHash } = await sendCrossAppUserOperation({
-              publicClient,
-              crossAppSignMessage: crossAppSignMessage as CrossAppSignMessage,
-              bundlerUrl,
-              smartWallet: canonicalSmartWallet,
-              zoraEmbeddedWalletAddress,
-              calls: calls.map(c => ({ to: c.target, value: c.value, data: c.data })),
+            // Encode the batch call
+            const batchData = encodeFunctionData({
+              abi: executeBatchAbi,
+              functionName: 'executeBatch',
+              args: [calls.map(c => ({ target: c.target, value: c.value, data: c.data }))],
             })
             
-            setTxId(transactionHash)
+            // Get the embedded wallet's provider
+            const provider = await embeddedWallet.getEthereumProvider()
+            if (!provider) {
+              throw new Error('Could not get embedded wallet provider')
+            }
+            
+            logger.info('[DeployVault] Sending executeBatch from embedded wallet', {
+              from: embeddedEoaAddress,
+              to: canonicalSmartWallet,
+            })
+            
+            const txHash = await provider.request({
+              method: 'eth_sendTransaction',
+              params: [{
+                from: embeddedEoaAddress,
+                to: canonicalSmartWallet,
+                data: batchData,
+                value: '0x0',
+              }],
+            })
+            
+            setTxId(txHash)
             setPhaseTxs((s) => ({
               ...s,
-              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: transactionHash,
+              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: txHash as Hex,
             }))
-            logger.warn(`[DeployVault] ${phaseLabel}_confirmed via cross-app ERC-4337`)
+            logger.warn(`[DeployVault] ${phaseLabel}_confirmed via embedded wallet batch`, { txHash })
             return
           }
           
           // No valid path available
           throw new Error(
-            'To deploy, either connect with Coinbase Wallet or link your Zora wallet via the "Link Zora Wallet" button above.',
+            'To deploy, either connect with Coinbase Wallet or fund your embedded wallet with ETH for gas.',
           )
         }
 
@@ -1868,29 +1902,18 @@ function DeployVaultBatcher({
         )}
       </div>
 
-      {/* Show Link Zora Wallet button if not using Coinbase Wallet and Zora not linked */}
-      {!isCoinbaseWalletDirect && !zoraEmbeddedWalletAddress ? (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
-          <div className="text-sm font-medium text-amber-200">Link your Zora wallet to deploy</div>
-          <div className="text-[11px] text-amber-200/70">
-            Your Zora smart wallet is your canonical identity. Link it to enable gas-free deployment via ERC-4337.
-          </div>
-          <button
-            type="button"
-            className="btn-primary w-full"
-            disabled={linkZoraWalletBusy}
-            onClick={handleLinkZoraWallet}
-          >
-            {linkZoraWalletBusy ? 'Connecting to Zora…' : 'Link Zora Wallet'}
-          </button>
-          {linkZoraWalletError && (
-            <div className="text-[11px] text-red-400">{linkZoraWalletError}</div>
-          )}
-        </div>
-      ) : (
+      {/* Show deploy button if we have a valid path */}
+      {isCoinbaseWalletDirect || embeddedEoaIsCanonicalOwner ? (
         <button type="button" onClick={() => void submit()} disabled={disabled} className="btn-accent w-full rounded-lg">
-          {busy ? 'Deploying…' : '1‑Click Deploy (ERC‑4337)'}
+          {busy ? 'Deploying…' : '1‑Click Deploy'}
         </button>
+      ) : (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
+          <div className="text-sm font-medium text-amber-200">Setup required</div>
+          <div className="text-[11px] text-amber-200/70">
+            Connect with Coinbase Wallet, or ensure your embedded wallet is an owner of the canonical smart wallet.
+          </div>
+        </div>
       )}
 
       {disabledReason && !busy ? (
