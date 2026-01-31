@@ -2177,6 +2177,27 @@ function DeployVaultMain() {
     return isAddress(addr) ? getAddress(addr) as Address : null
   }, [crossAppAccount])
 
+  // Check if Zora exposes their smart wallet address via cross-app
+  // If available, this is the Coinbase Smart Wallet that holds the user's assets
+  const zoraSmartWalletFromCrossApp = useMemo(() => {
+    const smartWallets = (crossAppAccount as any)?.smartWallets
+    if (!smartWallets?.[0]?.address) return null
+    const addr = smartWallets[0].address
+    return isAddress(addr) ? getAddress(addr) as Address : null
+  }, [crossAppAccount])
+
+  // Debug: log cross-app account structure
+  useEffect(() => {
+    if (crossAppAccount) {
+      logger.info('[DeployVault] Cross-app account structure:', {
+        type: (crossAppAccount as any)?.type,
+        embeddedWallets: (crossAppAccount as any)?.embeddedWallets,
+        smartWallets: (crossAppAccount as any)?.smartWallets,
+        providerApp: (crossAppAccount as any)?.providerApp,
+      })
+    }
+  }, [crossAppAccount])
+
   // Check Zora embedded wallet ETH balance (needed for gas)
   const publicClientForBalance = usePublicClient({ chainId: base.id })
   const zoraEmbeddedBalanceQuery = useQuery({
@@ -4189,6 +4210,33 @@ function DeployVaultMain() {
                 >
                   {deployBlocker || 'Enter token address to continue'}
                 </button>
+              )}
+
+              {/* Debug: Show Zora cross-app wallet info */}
+              {zoraEmbeddedWalletAddress && (
+                <div className="p-3 rounded-lg bg-zinc-900/50 border border-zinc-800 space-y-2 text-[10px]">
+                  <div className="text-zinc-400 font-medium">Zora Cross-App Wallets</div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500">Embedded (EOA):</span>
+                      <code className="text-zinc-300 font-mono">{zoraEmbeddedWalletAddress.slice(0,10)}...{zoraEmbeddedWalletAddress.slice(-8)}</code>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500">Smart Wallet:</span>
+                      <code className="text-zinc-300 font-mono">
+                        {zoraSmartWalletFromCrossApp 
+                          ? `${zoraSmartWalletFromCrossApp.slice(0,10)}...${zoraSmartWalletFromCrossApp.slice(-8)}`
+                          : 'Not exposed'}
+                      </code>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500">EOA Balance:</span>
+                      <span className={zoraEmbeddedHasGas ? 'text-green-400' : 'text-amber-400'}>
+                        {formatUnits(zoraEmbeddedBalanceQuery.data ?? 0n, 18)} ETH
+                      </span>
+                    </div>
+                  </div>
+                </div>
               )}
 
               {/* Warning: Zora wallet linked but needs gas */}
