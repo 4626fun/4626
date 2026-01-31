@@ -1349,7 +1349,7 @@ function DeployVaultBatcher({
           const token1 = token0 === creatorAddr ? usdcAddr : creatorAddr
 
           const pow10 = (d: number) => 10n ** BigInt(d)
-          const CREATOR_PER_USDC = 100n
+          const CREATOR_PER_USDC = 100n9
 
           // Choose integer amounts that encode 100 CREATOR == 1 USDC.
           // Uniswap v3 initialization uses sqrt(price) where price = amount1/amount0 in raw units.
@@ -1629,7 +1629,7 @@ function DeployVaultBatcher({
               'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account), then retry.',
             )
           }
-
+          
           let lastHash: Hex | null = null
           for (const call of calls) {
             const txHash = await walletClient.sendTransaction({
