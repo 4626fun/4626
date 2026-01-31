@@ -786,6 +786,8 @@ function DeployVaultBatcher({
   void _zoraEmbeddedBalance // Used for display in parent component
   void zoraEmbeddedHasGas // Used by handleAddOwnerToZoraWallet in parent
   void sendCrossAppTransaction // Legacy - replaced by crossAppSignMessage + ERC-4337
+  void embeddedWallet // Removed: direct tx from embedded wallet requires gas
+  void embeddedEoaAddress // Removed: direct tx from embedded wallet requires gas
   const { address: connectedAddress } = useAccount()
   const publicClient = usePublicClient({ chainId: base.id })
   
@@ -1643,80 +1645,8 @@ function DeployVaultBatcher({
             return
           }
           
-          // OPTION 2: Use embedded wallet to call executeBatch on the canonical smart wallet
-          // The embedded wallet is an owner of the smart wallet, so it can call execute/executeBatch directly
-          // Privy handles gas sponsorship for embedded wallet transactions
-          logger.info(`[DeployVault] Checking embedded wallet batch path`, {
-            canonicalSmartWallet,
-            hasEmbeddedWallet: !!embeddedWallet,
-            embeddedEoaAddress,
-          })
-          if (canonicalSmartWallet && embeddedWallet && embeddedEoaAddress) {
-            logger.info(`[DeployVault] Using embedded wallet executeBatch for ${phaseLabel}`, {
-              canonicalSmartWallet,
-              embeddedEoaAddress,
-              callCount: calls.length,
-            })
-            
-            // Coinbase Smart Wallet's executeBatch ABI
-            const executeBatchAbi = [{
-              type: 'function',
-              name: 'executeBatch',
-              stateMutability: 'payable',
-              inputs: [{
-                name: 'calls',
-                type: 'tuple[]',
-                components: [
-                  { name: 'target', type: 'address' },
-                  { name: 'value', type: 'uint256' },
-                  { name: 'data', type: 'bytes' },
-                ],
-              }],
-              outputs: [],
-            }] as const
-            
-            // Encode the batch call
-            const batchData = encodeFunctionData({
-              abi: executeBatchAbi,
-              functionName: 'executeBatch',
-              args: [calls.map(c => ({ target: c.target, value: c.value, data: c.data }))],
-            })
-            
-            // Get the embedded wallet's provider
-            const provider = await embeddedWallet.getEthereumProvider()
-            if (!provider) {
-              throw new Error('Could not get embedded wallet provider')
-            }
-            
-            // The embedded wallet needs ETH for gas since Privy doesn't auto-sponsor for raw txs
-            // Check if we can send via the provider with sponsored gas
-            // Try using eth_sendTransaction - if embedded wallet has no ETH, this will fail
-            // In that case, user needs to fund the embedded wallet with a tiny amount of ETH
-            logger.info('[DeployVault] Sending executeBatch from embedded wallet', {
-              from: embeddedEoaAddress,
-              to: canonicalSmartWallet,
-            })
-            
-            const txHash = await provider.request({
-              method: 'eth_sendTransaction',
-              params: [{
-                from: embeddedEoaAddress,
-                to: canonicalSmartWallet,
-                data: batchData,
-                value: '0x0',
-              }],
-            })
-            
-            setTxId(txHash)
-            setPhaseTxs((s) => ({
-              ...s,
-              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: txHash as Hex,
-            }))
-            logger.warn(`[DeployVault] ${phaseLabel}_confirmed via embedded wallet batch`, { txHash })
-            return
-          }
-          
-          // OPTION 3: Cross-app ERC-4337 UserOperation (uses paymaster for gas - no ETH needed in EOA!)
+          // OPTION 2: Cross-app ERC-4337 UserOperation (PREFERRED for Zora wallets)
+          // Uses paymaster for gas - no ETH needed in the Zora EOA!
           // This flow:
           // 1. Builds a UserOperation with the calls
           // 2. Opens Zora popup for user to sign the UserOp hash (no gas!)
@@ -1726,11 +1656,6 @@ function DeployVaultBatcher({
             zoraEmbeddedWalletAddress,
             crossAppSignMessage: typeof crossAppSignMessage,
             publicClient: !!publicClient,
-          })
-          logger.info(`[DeployVault] Cross-app ERC-4337 check for ${phaseLabel}:`, {
-            canonicalSmartWallet: !!canonicalSmartWallet,
-            zoraEmbeddedWalletAddress: !!zoraEmbeddedWalletAddress,
-            crossAppSignMessage: !!crossAppSignMessage,
           })
           if (canonicalSmartWallet && zoraEmbeddedWalletAddress && crossAppSignMessage && publicClient) {
             logger.info(`[DeployVault] Using cross-app ERC-4337 UserOp for ${phaseLabel}`, {
@@ -1768,6 +1693,7 @@ function DeployVaultBatcher({
               // Log but continue to fallback path
               const errMsg = err instanceof Error ? err.message : String(err)
               logger.error(`[DeployVault] Cross-app ERC-4337 failed for ${phaseLabel}:`, errMsg)
+              console.error(`[DeployVault] Cross-app ERC-4337 failed:`, err)
               // If user rejected the signature popup, don't continue to fallback
               if (errMsg.toLowerCase().includes('reject') || errMsg.toLowerCase().includes('cancel') || errMsg.toLowerCase().includes('denied')) {
                 throw err
@@ -1776,7 +1702,7 @@ function DeployVaultBatcher({
             }
           }
           
-          // Fallback: use Privy smart wallet client (will use Privy's derived smart wallet)
+          // OPTION 3: Fallback - use Privy smart wallet client (will use Privy's derived smart wallet)
           if (!canUsePrivySmartWallet || !smartWalletClient) {
             throw new Error(
               'Smart wallet required. Sign in via Privy to access your Zora smart wallet, then retry.',
