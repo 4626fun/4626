@@ -1587,7 +1587,27 @@ function DeployVaultBatcher({
           // PATH 2: Privy embedded EOA is owner of canonical smart wallet
           // Use ERC-4337 with the embedded EOA signing directly (simple ecrecover, no EIP-1271)
           if (canonicalSmartWallet && embeddedEoaIsCanonicalOwner && embeddedPrivyWallet && embeddedPrivyEoaAddress) {
-            logger.info(`[DeployVault] Using ERC-4337 via Privy embedded EOA for ${phaseLabel}`)
+            logger.info(`[DeployVault] Using ERC-4337 via Privy embedded EOA for ${phaseLabel}`, {
+              canonicalSmartWallet,
+              embeddedPrivyEoaAddress,
+              embeddedEoaIsCanonicalOwner,
+            })
+            
+            // Double-check the embedded EOA is actually an owner on-chain
+            const verifyOwner = await isCoinbaseSmartWalletOwner({
+              smartWallet: canonicalSmartWallet,
+              ownerAddress: embeddedPrivyEoaAddress,
+            })
+            if (!verifyOwner) {
+              logger.error('[DeployVault] Embedded EOA is NOT an owner on-chain!', {
+                canonicalSmartWallet,
+                embeddedPrivyEoaAddress,
+              })
+              throw new Error(
+                `Your Privy embedded wallet (${embeddedPrivyEoaAddress}) is not an owner of your Zora wallet. ` +
+                'Click "Enable Gas-Free Deploys" first.'
+              )
+            }
             
             const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
             const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
@@ -1597,6 +1617,17 @@ function DeployVaultBatcher({
             const embeddedProvider = await (embeddedPrivyWallet as any).getEthereumProvider()
             if (!embeddedProvider?.request) {
               throw new Error('Embedded wallet provider not available')
+            }
+            
+            // Verify the provider's account matches our expected address
+            const accounts = await embeddedProvider.request({ method: 'eth_accounts' }) as string[]
+            const providerAddress = accounts[0]?.toLowerCase()
+            if (providerAddress !== embeddedPrivyEoaAddress.toLowerCase()) {
+              logger.error('[DeployVault] Provider address mismatch!', {
+                expected: embeddedPrivyEoaAddress,
+                got: providerAddress,
+              })
+              throw new Error('Embedded wallet address mismatch. Please refresh and try again.')
             }
             
             // Create a wallet client adapter that uses the embedded EOA for signing
