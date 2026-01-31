@@ -1662,19 +1662,30 @@ function DeployVaultBatcher({
             }
             
             // Create a walletClient-like wrapper that uses eth_sign for UserOp signatures
+            // Coinbase Smart Wallet requires raw eth_sign (no EIP-191 prefix) for UserOp hashes
             const embeddedWalletClient = {
               request: (args: any) => provider.request(args),
               signMessage: async ({ account, message }: { account: Address; message: any }) => {
-                // For UserOp signatures, use the raw bytes
+                // For UserOp signatures, use the raw bytes with eth_sign
                 const msg = typeof message === 'string' 
                   ? message 
                   : message.raw 
                     ? message.raw 
                     : message
-                return provider.request({
-                  method: 'personal_sign',
-                  params: [msg, account],
-                })
+                // Try eth_sign first (raw signature, no EIP-191 prefix)
+                try {
+                  return await provider.request({
+                    method: 'eth_sign',
+                    params: [account, msg],
+                  })
+                } catch (e: any) {
+                  // If eth_sign is blocked, fall back to personal_sign
+                  console.warn('[DeployVault] eth_sign failed, trying personal_sign:', e?.message)
+                  return provider.request({
+                    method: 'personal_sign',
+                    params: [msg, account],
+                  })
+                }
               },
               signTypedData: async (args: any) => {
                 return provider.request({
@@ -1705,7 +1716,7 @@ function DeployVaultBatcher({
               ownerAddress: embeddedEoaAddress,
               calls: toCalls(calls),
               version: '1',
-              userOpSignMode: 'signMessage', // Force signMessage mode for Privy embedded wallet
+              userOpSignMode: 'eth_sign', // Use eth_sign for raw UserOp hash signature (required by Coinbase Smart Wallet)
             })
             
             setTxId(result.transactionHash)
