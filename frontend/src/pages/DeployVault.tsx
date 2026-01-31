@@ -752,6 +752,9 @@ function DeployVaultBatcher({
   embeddedEoaIsCanonicalOwner,
   connectorId,
   wagmiWalletClient,
+  linkZoraWalletBusy,
+  handleLinkZoraWallet,
+  linkZoraWalletError,
 }: {
   creatorToken: Address
   owner: Address
@@ -785,6 +788,10 @@ function DeployVaultBatcher({
   // For direct Coinbase Wallet connection (supports eth_sign)
   connectorId: string | undefined
   wagmiWalletClient: any
+  // For linking Zora wallet
+  linkZoraWalletBusy: boolean
+  handleLinkZoraWallet: () => void
+  linkZoraWalletError: string | null
 }) {
   // Void unused props (kept for parent component compatibility)
   void _zoraEmbeddedBalance
@@ -1861,9 +1868,30 @@ function DeployVaultBatcher({
         )}
       </div>
 
-      <button type="button" onClick={() => void submit()} disabled={disabled} className="btn-accent w-full rounded-lg">
-        {busy ? 'Deploying…' : '1‑Click Deploy (ERC‑4337)'}
-      </button>
+      {/* Show Link Zora Wallet button if not using Coinbase Wallet and Zora not linked */}
+      {!isCoinbaseWalletDirect && !zoraEmbeddedWalletAddress ? (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
+          <div className="text-sm font-medium text-amber-200">Link your Zora wallet to deploy</div>
+          <div className="text-[11px] text-amber-200/70">
+            Your Zora smart wallet is your canonical identity. Link it to enable gas-free deployment via ERC-4337.
+          </div>
+          <button
+            type="button"
+            className="btn-primary w-full"
+            disabled={linkZoraWalletBusy}
+            onClick={handleLinkZoraWallet}
+          >
+            {linkZoraWalletBusy ? 'Connecting to Zora…' : 'Link Zora Wallet'}
+          </button>
+          {linkZoraWalletError && (
+            <div className="text-[11px] text-red-400">{linkZoraWalletError}</div>
+          )}
+        </div>
+      ) : (
+        <button type="button" onClick={() => void submit()} disabled={disabled} className="btn-accent w-full rounded-lg">
+          {busy ? 'Deploying…' : '1‑Click Deploy (ERC‑4337)'}
+        </button>
+      )}
 
       {disabledReason && !busy ? (
         <div className="text-[11px] text-amber-300/80">{disabledReason}</div>
@@ -4108,6 +4136,9 @@ function DeployVaultMain() {
                     embeddedEoaIsCanonicalOwner={embeddedEoaIsCanonicalOwner}
                     connectorId={connector?.id}
                     wagmiWalletClient={walletClient}
+                    linkZoraWalletBusy={linkZoraWalletBusy}
+                    handleLinkZoraWallet={handleLinkZoraWallet}
+                    linkZoraWalletError={linkZoraWalletError}
                   />
                 </>
               ) : (
