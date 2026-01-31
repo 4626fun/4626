@@ -1349,9 +1349,9 @@ function DeployVaultBatcher({
           const token1 = token0 === creatorAddr ? usdcAddr : creatorAddr
 
           const pow10 = (d: number) => 10n ** BigInt(d)
-          const CREATOR_PER_USDC = 100n // 100 CREATOR == 1 USDC
+          const CREATOR_PER_USDC = 1n // Fallback to 1 CREATOR == 1 USDC if market price isn't available.
 
-          // Choose integer amounts that encode 100 CREATOR == 1 USDC.
+          // Choose integer amounts that encode 1 CREATOR == 1 USDC.
           // Uniswap v3 initialization uses sqrt(price) where price = amount1/amount0 in raw units.
           const amount0 =
             token0.toLowerCase() === usdcAddr.toLowerCase() ? pow10(usdcDecimals) : CREATOR_PER_USDC * pow10(creatorDecimals)
