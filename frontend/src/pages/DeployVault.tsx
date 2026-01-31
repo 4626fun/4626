@@ -1625,8 +1625,69 @@ function DeployVaultBatcher({
             return
           }
           
-          // OPTION 2: Cross-app transaction to send through the canonical (Zora) smart wallet
-          // This bypasses ERC-4337 signature issues by using Zora's cross-app popup flow
+          // OPTION 2: Use embedded wallet to call executeBatch on the canonical smart wallet
+          // The embedded wallet is an owner of the smart wallet, so it can call execute/executeBatch directly
+          // Privy handles gas sponsorship for embedded wallet transactions
+          if (canonicalSmartWallet && embeddedWallet && embeddedEoaAddress) {
+            logger.info(`[DeployVault] Using embedded wallet executeBatch for ${phaseLabel}`, {
+              canonicalSmartWallet,
+              embeddedEoaAddress,
+              callCount: calls.length,
+            })
+            
+            // Coinbase Smart Wallet's executeBatch ABI
+            const executeBatchAbi = [{
+              type: 'function',
+              name: 'executeBatch',
+              stateMutability: 'payable',
+              inputs: [{
+                name: 'calls',
+                type: 'tuple[]',
+                components: [
+                  { name: 'target', type: 'address' },
+                  { name: 'value', type: 'uint256' },
+                  { name: 'data', type: 'bytes' },
+                ],
+              }],
+              outputs: [],
+            }] as const
+            
+            // Encode the batch call
+            const batchData = encodeFunctionData({
+              abi: executeBatchAbi,
+              functionName: 'executeBatch',
+              args: [calls.map(c => ({ target: c.target, value: c.value, data: c.data }))],
+            })
+            
+            // Get the embedded wallet's provider and send transaction directly
+            // The embedded wallet is an owner of the smart wallet, so this should work
+            const provider = await embeddedWallet.getEthereumProvider()
+            if (!provider) {
+              throw new Error('Could not get embedded wallet provider')
+            }
+            
+            // Send transaction from embedded wallet TO the smart wallet
+            // Privy will handle gas sponsorship
+            const txHash = await provider.request({
+              method: 'eth_sendTransaction',
+              params: [{
+                from: embeddedEoaAddress,
+                to: canonicalSmartWallet,
+                data: batchData,
+                value: '0x0',
+              }],
+            })
+            
+            setTxId(txHash)
+            setPhaseTxs((s) => ({
+              ...s,
+              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: txHash as Hex,
+            }))
+            logger.warn(`[DeployVault] ${phaseLabel}_confirmed via embedded wallet batch`, { txHash })
+            return
+          }
+          
+          // OPTION 3: Cross-app transaction (requires Zora wallet to be linked)
           if (canonicalSmartWallet && zoraEmbeddedWalletAddress && sendCrossAppTransaction) {
             logger.info(`[DeployVault] Using cross-app executeBatch for ${phaseLabel}`, {
               canonicalSmartWallet,
