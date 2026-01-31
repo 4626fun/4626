@@ -1592,8 +1592,18 @@ function DeployVaultBatcher({
               transport: custom(provider),
             })
             
-            // Use the CDP paymaster URL (same-origin proxy)
-            const bundlerUrl = resolveCdpPaymasterUrl()
+            // Use the CDP paymaster URL (same-origin proxy or direct CDP API)
+            const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+            const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
+            let bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv)
+            
+            // Fallback: use same-origin proxy if env vars aren't set (works if server-side CDP_PAYMASTER_URL is configured)
+            if (!bundlerUrl) {
+              bundlerUrl = '/api/paymaster'
+              logger.warn('[DeployVault] Using fallback bundler URL: /api/paymaster', { paymasterEnv, apiKeyEnv })
+            }
+            
+            logger.info('[DeployVault] Using bundler URL', { bundlerUrl })
             
             // Send the UserOperation through the canonical smart wallet (Zora wallet)
             const result = await sendCoinbaseSmartWalletUserOperation({
