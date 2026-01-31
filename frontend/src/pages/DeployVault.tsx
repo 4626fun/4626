@@ -46,7 +46,6 @@ import { computeMarketFloorQuote } from '@/lib/cca/marketFloor'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
-import { createWalletClient, custom } from 'viem'
 
 const MIN_FIRST_DEPOSIT = 5_000_000n * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
@@ -771,7 +770,8 @@ function DeployVaultBatcher({
   embeddedWallet: any
   embeddedEoaAddress: Address | null
   zoraEmbeddedWalletAddress: Address | null
-  sendCrossAppTransaction: ((tx: { to: Address; data: Hex; value: bigint; chainId: number }, appId: string) => Promise<string>) | null
+  // Privy's cross-app sendTransaction - takes tx request and { address } of the cross-app wallet
+  sendCrossAppTransaction: ((tx: { to: Address; data: Hex; value: bigint; chainId: number }, options: { address: string }) => Promise<string>) | null
   // For direct Coinbase Wallet connection (supports eth_sign)
   connectorId: string | undefined
   wagmiWalletClient: any
@@ -795,6 +795,14 @@ function DeployVaultBatcher({
   const canUsePrivySmartWallet = useMemo(() => {
     return !!smartWalletClient && !!smartWalletAddrForAuth
   }, [smartWalletAddrForAuth, smartWalletClient])
+
+  // Check if connected wallet supports EIP-5792 wallet_sendCalls
+  // Coinbase Wallet and Zora Wallet (via cross-app-connect) support this
+  const canUseWalletSendCalls = useMemo(() => {
+    if (!connectorId) return false
+    const supportedConnectors = ['coinbaseWalletSDK', 'zora-global-wallet']
+    return supportedConnectors.includes(connectorId)
+  }, [connectorId])
 
   const resolvedTokenDecimals = typeof tokenDecimals === 'number' ? tokenDecimals : 18
   const formatDeposit = (raw?: bigint): string => {
@@ -1731,6 +1739,10 @@ function DeployVaultBatcher({
             })
             
             // Send via cross-app transaction (opens Zora popup for approval)
+            // The address option specifies which cross-app embedded wallet to use
+            if (!zoraEmbeddedWalletAddress) {
+              throw new Error('Zora embedded wallet address not available')
+            }
             const txHash = await sendCrossAppTransaction(
               {
                 to: canonicalSmartWallet,
@@ -1738,7 +1750,7 @@ function DeployVaultBatcher({
                 value: 0n,
                 chainId: base.id,
               },
-              ZORA_PRIVY_APP_ID,
+              { address: zoraEmbeddedWalletAddress },
             )
             
             setTxId(txHash)
@@ -2162,11 +2174,12 @@ function DeployVaultMain() {
 
   // The Zora smart wallet is derived from the Zora embedded wallet
   // For Coinbase Smart Wallet, we need to check if our local embedded wallet is an owner
-  const zoraSmartWalletAddress = useMemo(() => {
+  const _zoraSmartWalletAddress = useMemo(() => {
     // The user's Zora smart wallet - this should match the creator coin's creator address
     // We'll get this from the zoraCoin data later
     return null as Address | null
   }, [])
+  void _zoraSmartWalletAddress // Reserved for future use
 
   // Add owner to Zora smart wallet using cross-app transaction
   const handleAddOwnerToZoraWallet = useCallback(async (zoraSmartWallet: Address) => {

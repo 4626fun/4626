@@ -195,7 +195,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   const { publicClient, walletClient, bundlerUrl, smartWallet, ownerAddress, calls, version = '1', userOpSignMode = 'auto' } = params
   if (!bundlerUrl) throw new Error('Missing bundler URL')
 
-  const { ownerIndex, ownerCount } = await findCoinbaseSmartWalletOwnerIndex({
+  const { ownerIndex } = await findCoinbaseSmartWalletOwnerIndex({
     publicClient,
     smartWallet,
     ownerAddress,
