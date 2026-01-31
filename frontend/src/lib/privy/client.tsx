@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Component, createContext, useContext, useMemo } from 'react'
 import { getPrivyAppId, isPrivyClientEnabled } from '@/lib/flags'
 import { PrivyProvider } from '@privy-io/react-auth'
+import { SmartWalletsProvider } from '@privy-io/react-auth/smart-wallets'
 
 type PrivyClientStatus = 'disabled' | 'loading' | 'ready'
 
@@ -92,7 +93,9 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
   return (
     <PrivyClientContext.Provider value="ready">
       <PrivyProviderSafetyBoundary appId={appId} baseConfig={baseConfig} safeConfig={safeConfig}>
-        {children}
+        <SmartWalletsProvider>
+          {children}
+        </SmartWalletsProvider>
       </PrivyProviderSafetyBoundary>
     </PrivyClientContext.Provider>
   )
