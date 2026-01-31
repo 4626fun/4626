@@ -2928,7 +2928,16 @@ function DeployVaultMain() {
   const fundingGateOk = walletHasMinDeposit
 
   const privySmartWalletReady = Boolean(privySmartWalletAddress && smartWalletClient)
-  const smartWalletCapabilityReady = privySmartWalletReady
+  
+  // Check if Privy smart wallet matches the canonical identity (Zora smart wallet)
+  // If they don't match, user needs to add the local embedded wallet as an owner
+  const smartWalletMatchesCanonical = useMemo(() => {
+    if (!privySmartWalletAddress || !canonicalIdentityAddress) return false
+    return privySmartWalletAddress.toLowerCase() === canonicalIdentityAddress.toLowerCase()
+  }, [privySmartWalletAddress, canonicalIdentityAddress])
+  
+  // Smart wallet is ready only if it matches canonical OR embedded wallet is an owner
+  const smartWalletCapabilityReady = privySmartWalletReady && (smartWalletMatchesCanonical || embeddedEoaIsCanonicalOwner)
 
   const canDeploy =
     tokenIsValid &&
@@ -3786,6 +3795,74 @@ function DeployVaultMain() {
                 >
                   {`Creator smart wallet needs 5,000,000 ${underlyingSymbolUpper || 'TOKENS'} to deploy & launch`}
                 </button>
+              ) : tokenIsValid && zoraCoin && privySmartWalletReady && !smartWalletMatchesCanonical && !embeddedEoaIsCanonicalOwner ? (
+                <div className="space-y-3">
+                  <div className="p-4 rounded-lg border border-amber-500/20 bg-amber-500/10">
+                    <div className="text-sm font-medium text-amber-200">Wallet setup required</div>
+                    <div className="mt-2 text-xs text-amber-200/80 leading-relaxed">
+                      Your Privy smart wallet (<span className="font-mono">{privySmartWalletAddress ? shortAddress(privySmartWalletAddress) : '—'}</span>) 
+                      doesn't match your Zora smart wallet (<span className="font-mono">{canonicalIdentityAddress ? shortAddress(canonicalIdentityAddress) : '—'}</span>).
+                    </div>
+                    <div className="mt-2 text-xs text-amber-200/80 leading-relaxed">
+                      Add your CreatorVault embedded wallet as an owner of your Zora wallet to enable deployment.
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-white/10 bg-black/20 px-3 py-2">
+                      <div className="min-w-0">
+                        <div className="text-[10px] uppercase tracking-wider text-zinc-500">CreatorVault embedded wallet</div>
+                        <div className="mt-0.5 font-mono text-xs text-zinc-200 truncate">{embeddedPrivyEoaAddress || '—'}</div>
+                      </div>
+                      <button type="button" className="btn-secondary shrink-0" onClick={() => void handleCopyEmbedded()}>
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Option 1: Link Zora and add owner via cross-app */}
+                  {zoraEmbeddedWalletAddress ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn-primary w-full"
+                        disabled={addOwnerBusy}
+                        onClick={() => canonicalIdentityAddress && void handleAddOwnerToZoraWallet(canonicalIdentityAddress as Address)}
+                      >
+                        {addOwnerBusy ? 'Confirm in Zora popup…' : 'Add owner via Zora (Recommended)'}
+                      </button>
+                      {addOwnerTxHash && (
+                        <div className="text-[11px] text-green-400">
+                          Success! Tx: <span className="font-mono">{shortAddress(addOwnerTxHash)}</span>
+                          <button type="button" className="ml-2 text-zinc-400 underline" onClick={() => void refreshEmbeddedOwnerStatus()}>
+                            Refresh status
+                          </button>
+                        </div>
+                      )}
+                      {addOwnerError && <div className="text-[11px] text-red-400">{addOwnerError}</div>}
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" className="btn-primary w-full" disabled={linkZoraWalletBusy} onClick={handleLinkZoraWallet}>
+                        {linkZoraWalletBusy ? 'Connecting…' : 'Link Zora Wallet'}
+                      </button>
+                      {linkZoraWalletError && <div className="text-[11px] text-red-400">{linkZoraWalletError}</div>}
+                      <div className="text-[11px] text-zinc-600">
+                        Link your Zora wallet to add the owner via cross-app transaction.
+                      </div>
+                    </>
+                  )}
+
+                  <div className="text-[11px] text-zinc-700 text-center">— or add manually on Basescan —</div>
+                  <a
+                    href={`https://basescan.org/address/${canonicalIdentityAddress}#writeContract`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-secondary w-full text-center block"
+                  >
+                    Open on Basescan
+                  </a>
+                  <div className="text-[11px] text-zinc-600">
+                    Call <code className="bg-black/30 px-1 rounded">addOwnerAddress</code> with <code className="bg-black/30 px-1 rounded">{embeddedPrivyEoaAddress ? shortAddress(embeddedPrivyEoaAddress) : '—'}</code>
+                  </div>
+                </div>
               ) : canDeploy ? (
                 <>
                   {tokenIsValid && zoraCoin && identity.warnings.includes('CUSTODY_MISMATCH') && farcasterCustodyAddress ? (
