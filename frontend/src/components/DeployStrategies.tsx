@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useAccount, usePublicClient, useReadContract, useWalletClient } from 'wagmi'
-import { useSendCalls } from 'wagmi/experimental'
 import { base } from 'wagmi/chains'
 import { encodeFunctionData, erc20Abi, getContractAddress, isAddress, parseUnits, type Address, type Hex } from 'viem'
+import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { CONTRACTS } from '@/config/contracts'
 import { logger } from '@/lib/logger'
 
@@ -54,7 +54,7 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
   const { address, connector } = useAccount()
   const publicClient = usePublicClient({ chainId: base.id })
   const { data: walletClient } = useWalletClient({ chainId: base.id })
-  const { sendCallsAsync } = useSendCalls()
+  const { client: smartWalletClient } = useSmartWallets()
 
   const { data: tokenDecimalsRaw } = useReadContract({
     address: tokenAddress,
@@ -63,7 +63,9 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
   })
   const tokenDecimals = typeof tokenDecimalsRaw === 'number' ? tokenDecimalsRaw : 18
 
-  const isSmartWallet = connector?.id === 'coinbaseWalletSDK'
+  // Privy smart wallet is the preferred path - single UserOperation with one signature
+  const hasPrivySmartWallet = Boolean(smartWalletClient?.account?.address)
+  const isSmartWallet = hasPrivySmartWallet || connector?.id === 'coinbaseWalletSDK'
 
   const [batcherAddress, setBatcherAddress] = useState<string>(CONTRACTS.strategyDeploymentBatcher ?? '')
   const [quoteToken, setQuoteToken] = useState<string>(CONTRACTS.usdc)
@@ -196,21 +198,24 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
         value: 0n,
       })
 
-      // Preferred: atomic sendCalls (Smart Wallets)
-      try {
-        const res = await sendCallsAsync({
-          calls,
-          account: address as Address,
-          chainId: base.id,
-          forceAtomic: true,
-        })
-        setBundleId(res.id)
-        return
-      } catch (e) {
-        logger.warn('[DeployStrategies] wallet_sendCalls failed; falling back to sequential txs', e)
+      // Preferred: Privy smart wallet - batches all calls into single ERC-4337 UserOperation (one signature)
+      if (smartWalletClient) {
+        try {
+          const privyCalls = calls.map((c) => ({ to: c.to, data: c.data, value: c.value }))
+          const hash = await smartWalletClient.sendTransaction({ calls: privyCalls })
+          setBundleId(String(hash))
+          if (publicClient) {
+            await publicClient.waitForTransactionReceipt({ hash: hash as Hex })
+          }
+          return
+        } catch (e) {
+          logger.warn('[DeployStrategies] Privy smart wallet sendTransaction failed', e)
+          throw e
+        }
       }
 
-      // Fallback: sequential transactions
+      // Fallback: sequential transactions (EOA wallets without smart wallet)
+      if (!walletClient) throw new Error('No wallet client available')
       for (const c of calls) {
         const txHash = await walletClient.sendTransaction({
           account: address as any,
@@ -387,9 +392,16 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
       )}
 
       <div className="text-xs text-gray-500 space-y-1">
-        <p>• If your wallet supports EIP-5792 atomic batching, this can run as a single atomic bundle.</p>
-        <p>• If batching is unavailable, it will fall back to sequential transactions.</p>
-        {isSmartWallet ? <p>• Coinbase Smart Wallet detected.</p> : null}
+        {hasPrivySmartWallet ? (
+          <>
+            <p>• Using Privy Smart Wallet - all operations batched into single transaction (one approval).</p>
+            <p>• ERC-4337 Account Abstraction with gas sponsorship.</p>
+          </>
+        ) : isSmartWallet ? (
+          <p>• Coinbase Smart Wallet detected.</p>
+        ) : (
+          <p>• EOA wallet - operations will run sequentially (multiple approvals).</p>
+        )}
       </div>
     </div>
   )
