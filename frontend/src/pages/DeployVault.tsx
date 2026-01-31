@@ -45,6 +45,8 @@ import {
 import { computeMarketFloorQuote } from '@/lib/cca/marketFloor'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
+import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
+import { createWalletClient, custom } from 'viem'
 
 const MIN_FIRST_DEPOSIT = 5_000_000n * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
@@ -737,6 +739,9 @@ function DeployVaultBatcher({
   onSuccess,
   switchAuthCta,
   smartWalletClient,
+  canonicalSmartWallet,
+  embeddedWallet,
+  embeddedEoaAddress,
 }: {
   creatorToken: Address
   owner: Address
@@ -755,6 +760,9 @@ function DeployVaultBatcher({
   onSuccess: (addresses: ServerDeployResponse['addresses']) => void
   switchAuthCta?: { label: string; onClick: () => void }
   smartWalletClient: any
+  canonicalSmartWallet: Address | null
+  embeddedWallet: any
+  embeddedEoaAddress: Address | null
 }) {
   const { address: connectedAddress } = useAccount()
   const publicClient = usePublicClient({ chainId: base.id })
@@ -1563,12 +1571,61 @@ function DeployVaultBatcher({
           calls: Array<{ target: Address; value: bigint; data: Hex }>,
           phaseLabel: 'phase1' | 'phase2' | 'phase3',
         ) => {
-          // Require Privy smart wallet for ERC-4337 batched transactions (single approval)
+          // Prefer sending through the canonical smart wallet (Zora wallet) using the embedded EOA as signer
+          // This enables ERC-4337 batching through the user's actual Zora smart wallet
+          if (canonicalSmartWallet && embeddedWallet && embeddedEoaAddress && publicClient) {
+            logger.info(`[DeployVault] Using sendCoinbaseSmartWalletUserOperation for ${phaseLabel}`, {
+              canonicalSmartWallet,
+              embeddedEoaAddress,
+            })
+            
+            // Get the embedded wallet's ethereum provider
+            const provider = await embeddedWallet.getEthereumProvider()
+            if (!provider) {
+              throw new Error('Could not get embedded wallet provider')
+            }
+            
+            // Create a wallet client from the embedded wallet's provider
+            const embeddedWalletClient = createWalletClient({
+              account: embeddedEoaAddress,
+              chain: base,
+              transport: custom(provider),
+            })
+            
+            // Use the CDP paymaster URL (same-origin proxy)
+            const bundlerUrl = resolveCdpPaymasterUrl()
+            
+            // Send the UserOperation through the canonical smart wallet (Zora wallet)
+            const result = await sendCoinbaseSmartWalletUserOperation({
+              publicClient: publicClient as any,
+              walletClient: embeddedWalletClient as any,
+              bundlerUrl,
+              smartWallet: canonicalSmartWallet,
+              ownerAddress: embeddedEoaAddress,
+              calls: toCalls(calls),
+              version: '1', // CoinbaseSmartWallet v1
+            })
+            
+            setTxId(result.transactionHash)
+            setPhaseTxs((s) => ({
+              ...s,
+              [phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : 'userOp3']: result.userOpHash,
+              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: result.transactionHash,
+            }))
+            logger.warn(`[DeployVault] ${phaseLabel}_confirmed via canonical wallet`, {
+              userOpHash: result.userOpHash,
+              txHash: result.transactionHash,
+            })
+            return
+          }
+          
+          // Fallback: use Privy smart wallet client (will use Privy's derived smart wallet)
           if (!canUsePrivySmartWallet || !smartWalletClient) {
             throw new Error(
               'Smart wallet required. Sign in via Privy to access your Zora smart wallet, then retry.',
             )
           }
+          logger.warn(`[DeployVault] Fallback to Privy smartWalletClient for ${phaseLabel}`)
           const hash = await smartWalletClient.sendTransaction({ calls: toCalls(calls) })
           setTxId(hash)
           setPhaseTxs((s) => ({ ...s, [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: hash }))
@@ -3925,6 +3982,9 @@ function DeployVaultMain() {
                     onSuccess={() => {}}
                     switchAuthCta={switchAuthCta}
                     smartWalletClient={smartWalletClient}
+                    canonicalSmartWallet={canonicalIdentityIsContract ? (canonicalIdentityAddress as Address) : null}
+                    embeddedWallet={embeddedPrivyWallet}
+                    embeddedEoaAddress={embeddedPrivyEoaAddress}
                   />
                 </>
               ) : (
