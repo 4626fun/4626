@@ -1628,6 +1628,11 @@ function DeployVaultBatcher({
           // OPTION 2: Use embedded wallet to call executeBatch on the canonical smart wallet
           // The embedded wallet is an owner of the smart wallet, so it can call execute/executeBatch directly
           // Privy handles gas sponsorship for embedded wallet transactions
+          logger.info(`[DeployVault] Checking embedded wallet batch path`, {
+            canonicalSmartWallet,
+            hasEmbeddedWallet: !!embeddedWallet,
+            embeddedEoaAddress,
+          })
           if (canonicalSmartWallet && embeddedWallet && embeddedEoaAddress) {
             logger.info(`[DeployVault] Using embedded wallet executeBatch for ${phaseLabel}`, {
               canonicalSmartWallet,
@@ -3751,6 +3756,7 @@ function DeployVaultMain() {
                 <div>connectedAddress: <span className="text-zinc-300">{address || 'null'}</span></div>
                 <div>privySmartWallet: <span className="text-zinc-300">{privySmartWalletAddress || 'null'}</span></div>
                 <div>canonicalIdentity: <span className="text-zinc-300">{canonicalIdentityAddress || 'null'}</span></div>
+                <div>canonicalIsContract: <span className={canonicalIdentityIsContract ? 'text-green-400' : 'text-red-400'}>{String(canonicalIdentityIsContract)}</span></div>
                 <div>zoraEmbeddedWallet: <span className={zoraEmbeddedWalletAddress ? 'text-green-400' : 'text-red-400'}>{zoraEmbeddedWalletAddress || 'NOT LINKED'}</span></div>
                 <div>smartWalletMatchesCanonical: <span className={smartWalletMatchesCanonical ? 'text-green-400' : 'text-red-400'}>{String(smartWalletMatchesCanonical)}</span></div>
                 <div>embeddedEoaIsCanonicalOwner: <span className={embeddedEoaIsCanonicalOwner ? 'text-green-400' : 'text-red-400'}>{String(embeddedEoaIsCanonicalOwner)}</span></div>
