@@ -745,6 +745,8 @@ function DeployVaultBatcher({
   embeddedWallet,
   embeddedEoaAddress,
   zoraEmbeddedWalletAddress,
+  zoraEmbeddedHasGas,
+  zoraEmbeddedBalance: _zoraEmbeddedBalance,
   sendCrossAppTransaction,
   connectorId,
   wagmiWalletClient,
@@ -770,12 +772,15 @@ function DeployVaultBatcher({
   embeddedWallet: any
   embeddedEoaAddress: Address | null
   zoraEmbeddedWalletAddress: Address | null
+  zoraEmbeddedHasGas: boolean
+  zoraEmbeddedBalance: bigint
   // Privy's cross-app sendTransaction - takes tx request and { address } of the cross-app wallet
   sendCrossAppTransaction: ((tx: { to: Address; data: Hex; value: bigint; chainId: number }, options: { address: string }) => Promise<string>) | null
   // For direct Coinbase Wallet connection (supports eth_sign)
   connectorId: string | undefined
   wagmiWalletClient: any
 }) {
+  void _zoraEmbeddedBalance // Used for display in parent component
   const { address: connectedAddress } = useAccount()
   const publicClient = usePublicClient({ chainId: base.id })
   
@@ -1706,8 +1711,8 @@ function DeployVaultBatcher({
             return
           }
           
-          // OPTION 3: Cross-app transaction (requires Zora wallet to be linked)
-          if (canonicalSmartWallet && zoraEmbeddedWalletAddress && sendCrossAppTransaction) {
+          // OPTION 3: Cross-app transaction (requires Zora wallet to be linked AND funded with ETH for gas)
+          if (canonicalSmartWallet && zoraEmbeddedWalletAddress && sendCrossAppTransaction && zoraEmbeddedHasGas) {
             logger.info(`[DeployVault] Using cross-app executeBatch for ${phaseLabel}`, {
               canonicalSmartWallet,
               zoraEmbeddedWalletAddress,
@@ -2171,6 +2176,24 @@ function DeployVaultMain() {
     const addr = crossAppAccount.embeddedWallets[0].address
     return isAddress(addr) ? getAddress(addr) as Address : null
   }, [crossAppAccount])
+
+  // Check Zora embedded wallet ETH balance (needed for gas)
+  const publicClientForBalance = usePublicClient({ chainId: base.id })
+  const zoraEmbeddedBalanceQuery = useQuery({
+    queryKey: ['zoraEmbeddedBalance', zoraEmbeddedWalletAddress],
+    queryFn: async () => {
+      if (!zoraEmbeddedWalletAddress || !publicClientForBalance) return 0n
+      return publicClientForBalance.getBalance({ address: zoraEmbeddedWalletAddress })
+    },
+    enabled: !!zoraEmbeddedWalletAddress && !!publicClientForBalance,
+    refetchInterval: 30000, // Refresh every 30s
+  })
+  
+  const zoraEmbeddedHasGas = useMemo(() => {
+    // Need at least ~0.0001 ETH for gas (very conservative)
+    const minGas = 100_000_000_000_000n // 0.0001 ETH
+    return (zoraEmbeddedBalanceQuery.data ?? 0n) >= minGas
+  }, [zoraEmbeddedBalanceQuery.data])
 
   // The Zora smart wallet is derived from the Zora embedded wallet
   // For Coinbase Smart Wallet, we need to check if our local embedded wallet is an owner
@@ -4152,6 +4175,8 @@ function DeployVaultMain() {
                     embeddedWallet={embeddedPrivyWallet}
                     embeddedEoaAddress={embeddedPrivyEoaAddress}
                     zoraEmbeddedWalletAddress={zoraEmbeddedWalletAddress}
+                    zoraEmbeddedHasGas={zoraEmbeddedHasGas}
+                    zoraEmbeddedBalance={zoraEmbeddedBalanceQuery.data ?? 0n}
                     sendCrossAppTransaction={sendCrossAppTransaction}
                     connectorId={connector?.id}
                     wagmiWalletClient={walletClient}
@@ -4164,6 +4189,29 @@ function DeployVaultMain() {
                 >
                   {deployBlocker || 'Enter token address to continue'}
                 </button>
+              )}
+
+              {/* Warning: Zora wallet linked but needs gas */}
+              {zoraEmbeddedWalletAddress && !zoraEmbeddedHasGas && (
+                <div className="p-3 rounded-lg bg-amber-900/20 border border-amber-700/30 space-y-2">
+                  <div className="text-xs text-amber-300/90 font-medium">⚠ Zora wallet needs ETH for gas</div>
+                  <div className="text-[11px] text-zinc-400">
+                    Your Zora embedded wallet has no ETH for transaction fees. Send ~0.001 ETH to enable cross-app deploys.
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <code className="text-[9px] bg-black/30 px-2 py-1 rounded flex-1 truncate font-mono">{zoraEmbeddedWalletAddress}</code>
+                    <button
+                      type="button"
+                      className="text-[9px] px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded"
+                      onClick={() => navigator.clipboard.writeText(zoraEmbeddedWalletAddress)}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <div className="text-[10px] text-zinc-500">
+                    Balance: {formatUnits(zoraEmbeddedBalanceQuery.data ?? 0n, 18)} ETH
+                  </div>
+                </div>
               )}
 
               {!canDeploy && deployBlocker ? (

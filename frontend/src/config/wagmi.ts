@@ -1,16 +1,18 @@
 import { http, createConfig } from 'wagmi'
 import { base } from 'wagmi/chains'
 import { coinbaseWallet, walletConnect, injected } from 'wagmi/connectors'
-import { zoraWalletConnector } from './zoraWalletConnector'
 
 /**
  * Minimal Wagmi Config
  * 
- * Four connection paths:
- * 1. Zora Wallet (cross-app global wallet - recommended for Creator Coin holders)
- * 2. Coinbase Wallet (includes Smart Wallet)
- * 3. WalletConnect (MetaMask, Rainbow, etc.)
- * 4. Injected (browser extension fallback)
+ * Three connection paths:
+ * 1. Coinbase Wallet (includes Smart Wallet)
+ * 2. WalletConnect (MetaMask, Rainbow, etc.)
+ * 3. Injected (browser extension fallback)
+ * 
+ * Note: Zora wallet integration uses Privy SDK's useCrossAppAccounts
+ * hook directly, not a wagmi connector, because cross-app transactions
+ * must go through Privy's popup flow on Zora's domain.
  */
 
 const WALLETCONNECT_PROJECT_ID =
@@ -24,8 +26,6 @@ const BASE_RPC_URL =
 export const wagmiConfig = createConfig({
   chains: [base],
   connectors: [
-    // Zora Wallet - connects to user's Zora smart wallet via Privy cross-app
-    zoraWalletConnector({ smartWalletMode: true }),
     coinbaseWallet({
       appName: 'Creator Vaults',
       preference: 'smartWalletOnly',
