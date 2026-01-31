@@ -494,9 +494,13 @@ export async function sendCrossAppUserOperation(params: {
   // 1. Build the UserOp
   // 2. Call owner.sign() which opens the Zora popup
   // 3. Submit to bundler with paymaster (EntryPoint v0.6)
+  //
+  // Cross-app signing uses an EOA (Zora embedded wallet) so verification gas is lower,
+  // but we use a safe buffer for EIP-1271 in case the account structure changes.
   const userOpHash = await sendUserOperation(bundlerClient, {
     account,
     calls,
+    verificationGasLimit: 200_000n,
     paymaster: {
       getPaymasterData: paymasterClient.getPaymasterData,
       getPaymasterStubData: paymasterClient.getPaymasterStubData,
@@ -584,13 +588,35 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // ENFORCE: Verify bundler supports EntryPoint v0.6 before sending
   await verifyBundlerSupportsV06(bundlerUrl)
 
+  // Check if the owner might be a smart wallet (for EIP-1271 verification gas estimation)
+  // Smart wallet signature verification requires significantly more gas than EOA
+  let ownerIsContract = false
+  try {
+    const ownerBytecode = await publicClient.readContract({
+      address: ownerAddress,
+      abi: [{ type: 'function', name: 'ownerCount', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+      functionName: 'ownerCount',
+    }).catch(() => null)
+    // If we can call ownerCount, it's likely a Coinbase Smart Wallet
+    ownerIsContract = ownerBytecode !== null
+  } catch {
+    // Ignore - assume EOA if we can't determine
+  }
+
   // Send the UserOperation via EntryPoint v0.6 with CDP paymaster
   // toCoinbaseSmartAccount uses entryPoint06Address by default
+  // 
+  // Gas limits:
+  // - verificationGasLimit: Higher for smart wallet signers (EIP-1271 requires ~300-500k)
+  // - callGasLimit: Auto-estimated, but we don't override since batcher calls vary
+  const verificationGasLimit = ownerIsContract ? 500_000n : 150_000n
+  
   let userOpHash: Hex
   try {
     userOpHash = await sendUserOperation(bundlerClient, {
       account,
       calls,
+      verificationGasLimit,
       paymaster: {
         getPaymasterData: paymasterClient.getPaymasterData,
         getPaymasterStubData: paymasterClient.getPaymasterStubData,
@@ -631,6 +657,15 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     }
     if (lc.includes('aa10') || lc.includes('sender already constructed')) {
       throw new Error('Smart wallet already exists at this address.')
+    }
+    if (lc.includes('aa40') || lc.includes('verificationgaslimit')) {
+      throw new Error(
+        'Signature verification used more gas than estimated. ' +
+        'This can happen with smart wallet signers (EIP-1271). Please try again.'
+      )
+    }
+    if (lc.includes('aa41') || lc.includes('over paymasterverificationgaslimit')) {
+      throw new Error('Paymaster verification gas limit exceeded. Please try again.')
     }
     if (lc.includes('resource not available') || lc.includes('request denied')) {
       throw new Error(`Paymaster denied request: ${errMsg}`)
