@@ -1593,18 +1593,40 @@ function DeployVaultBatcher({
             
             // Create a wallet client adapter that uses the Privy smartWalletClient for signing
             // This allows the Privy smart wallet to sign UserOp hashes for the canonical wallet
+            //
+            // IMPORTANT: Coinbase Smart Wallet's isValidSignature uses EIP-712 (not EIP-191)
+            // for signature verification. We must sign with signTypedData using the correct
+            // domain and ReplaySafeHash type, NOT signMessage which uses EIP-191.
             const privyWalletClientAdapter = {
               request: async (args: { method: string; params: any[] }) => {
-                // For eth_sign, use Privy's signMessage which handles the signing internally
+                // For eth_sign, we need to produce an EIP-712 signature that the Privy SW will accept
+                // when its isValidSignature is called during canonical wallet verification
                 if (args.method === 'eth_sign') {
                   const [, hash] = args.params
-                  // Privy smart wallet can sign messages - this will sign the UserOp hash
-                  const sig = await smartWalletClient.signMessage({ message: { raw: hash as `0x${string}` } })
+                  
+                  // Sign using EIP-712 with Coinbase SW's ReplaySafeHash domain
+                  // This is what isValidSignature expects for verification
+                  const sig = await smartWalletClient.signTypedData({
+                    domain: {
+                      name: 'Coinbase Smart Wallet',
+                      version: '1',
+                      chainId: base.id,
+                      verifyingContract: privySmartWalletAddress as Address,
+                    },
+                    types: {
+                      ReplaySafeHash: [{ name: 'hash', type: 'bytes32' }],
+                    },
+                    primaryType: 'ReplaySafeHash',
+                    message: {
+                      hash: hash as `0x${string}`,
+                    },
+                  })
                   return sig
                 }
                 throw new Error(`Unsupported method: ${args.method}`)
               },
               signMessage: async (args: { account: Address; message: any }) => {
+                // Fallback to signMessage for non-UserOp signing
                 const msg = typeof args.message === 'object' && 'raw' in args.message
                   ? args.message.raw
                   : args.message
