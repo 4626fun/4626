@@ -1340,30 +1340,7 @@ function DeployVaultBatcher({
         const usdcForV3 = getAddress(((CONTRACTS as any).usdc ?? BASE_USDC) as Address)
         const chainlinkEthUsdForPricing = getAddress(((CONTRACTS as any).chainlinkEthUsd ?? BASE_CHAINLINK_ETH_USD) as Address)
 
-        const fallbackV3InitialSqrtPriceX96 = (() => {
-          const creatorDecimals = typeof tokenDecimals === 'number' ? tokenDecimals : 18
-          const usdcDecimals = 6
-          const usdcAddr = usdcForV3
-          const creatorAddr = getAddress(creatorToken as Address)
-          const token0 = creatorAddr.toLowerCase() < usdcAddr.toLowerCase() ? creatorAddr : usdcAddr
-          const token1 = token0 === creatorAddr ? usdcAddr : creatorAddr
-
-          const pow10 = (d: number) => 10n ** BigInt(d)
-          const CREATOR_PER_USDC = 100n9
-
-          // Choose integer amounts that encode 100 CREATOR == 1 USDC.
-          // Uniswap v3 initialization uses sqrt(price) where price = amount1/amount0 in raw units.
-          const amount0 =
-            token0.toLowerCase() === usdcAddr.toLowerCase() ? pow10(usdcDecimals) : CREATOR_PER_USDC * pow10(creatorDecimals)
-          const amount1 =
-            token1.toLowerCase() === usdcAddr.toLowerCase() ? pow10(usdcDecimals) : CREATOR_PER_USDC * pow10(creatorDecimals)
-
-          const numerator = amount1 << 192n
-          const ratioX192 = numerator / amount0
-          const sqrtPriceX96 = sqrtBigInt(ratioX192)
-          // Clamp to uint160 range (contract expects uint160).
-          return sqrtPriceX96 > (2n ** 160n - 1n) ? (2n ** 160n - 1n) : sqrtPriceX96
-        })()
+        const fallbackV3InitialSqrtPriceX96 = null
 
         const CHAINLINK_AGGREGATOR_ABI = [
           { type: 'function', name: 'decimals', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] },
@@ -1447,6 +1424,10 @@ function DeployVaultBatcher({
             return null
           }
         })()
+
+        if (!marketV3InitialSqrtPriceX96) {
+          throw new Error('Market-derived V3 price unavailable. Retry once pricing is available.')
+        }
 
         const phase3Params = {
           creatorToken,
@@ -1629,7 +1610,7 @@ function DeployVaultBatcher({
               'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account), then retry.',
             )
           }
-          
+
           let lastHash: Hex | null = null
           for (const call of calls) {
             const txHash = await walletClient.sendTransaction({
