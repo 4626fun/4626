@@ -21,7 +21,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { coinABI } from '@zoralabs/protocol-deployments'
 import { BarChart3, ChevronDown, Layers, Lock, Rocket, ShieldCheck } from 'lucide-react'
-import { useLinkAccount, useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
+import { useLinkAccount, useLogin, usePrivy, useWallets, useCrossAppAccounts } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { DerivedTokenIcon } from '@/components/DerivedTokenIcon'
@@ -1799,7 +1799,10 @@ function DeployVaultMain() {
   const { login } = useLogin()
   const { wallets } = useWallets()
   const { client: smartWalletClient } = useSmartWallets()
+  const { linkCrossAppAccount } = useCrossAppAccounts()
   const siwe = useSiweAuth()
+  const [linkZoraWalletBusy, setLinkZoraWalletBusy] = useState(false)
+  const [linkZoraWalletError, setLinkZoraWalletError] = useState<string | null>(null)
   const [linkWalletBusy, setLinkWalletBusy] = useState(false)
   const [linkWalletError, setLinkWalletError] = useState<string | null>(null)
   const [installOwnerBusy, setInstallOwnerBusy] = useState(false)
@@ -1938,6 +1941,23 @@ function DeployVaultMain() {
       setLinkWalletError(typeof err === 'string' ? err : 'Failed to link wallet')
     },
   })
+
+  // Zora's Privy App ID for cross-app wallet linking
+  const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
+
+  const handleLinkZoraWallet = useCallback(async () => {
+    if (!privyAuthenticated) return
+    setLinkZoraWalletBusy(true)
+    setLinkZoraWalletError(null)
+    try {
+      await linkCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+      // On success, user will be redirected back and the Zora wallet will be linked
+    } catch (err: any) {
+      setLinkZoraWalletError(err?.message || 'Failed to link Zora wallet')
+    } finally {
+      setLinkZoraWalletBusy(false)
+    }
+  }, [privyAuthenticated, linkCrossAppAccount])
 
   const handleCopyEmbedded = useCallback(async () => {
     if (!embeddedPrivyEoaAddress) return
@@ -3492,12 +3512,23 @@ function DeployVaultMain() {
                     No wallet linked
                   </button>
                   <div className="text-[11px] text-zinc-600">
-                    Email sign-in does not automatically import your Zora wallet into this app. Link a wallet (Coinbase Wallet / Base Account),
-                    then retry deploy.
+                    Email sign-in does not automatically import your Zora wallet into this app.
                   </div>
                   <button
                     type="button"
-                    className="btn-accent w-full"
+                    className="btn-primary w-full"
+                    disabled={linkZoraWalletBusy}
+                    onClick={handleLinkZoraWallet}
+                  >
+                    {linkZoraWalletBusy ? 'Connecting to Zora…' : 'Link Zora Wallet'}
+                  </button>
+                  {linkZoraWalletError && (
+                    <div className="text-[11px] text-red-400">{linkZoraWalletError}</div>
+                  )}
+                  <div className="text-[11px] text-zinc-700 text-center">or</div>
+                  <button
+                    type="button"
+                    className="btn-secondary w-full"
                     disabled={linkWalletBusy}
                     onClick={() => {
                       if (linkWalletBusy) return
@@ -3511,7 +3542,7 @@ function DeployVaultMain() {
                       }
                     }}
                   >
-                    {linkWalletBusy ? 'Opening…' : 'Link a wallet'}
+                    {linkWalletBusy ? 'Opening…' : 'Link a different wallet'}
                   </button>
                   {linkWalletError ? <div className="text-[11px] text-red-400">{linkWalletError}</div> : null}
                   <button
