@@ -64,7 +64,7 @@ function asOwnerBytes(owner: Address): Hex {
   return encodeAbiParameters([{ type: 'address' }], [owner]) as Hex
 }
 
-async function findCoinbaseSmartWalletOwnerIndex(params: {
+export async function findCoinbaseSmartWalletOwnerIndex(params: {
   publicClient: PublicClientLike
   smartWallet: Address
   ownerAddress: Address
@@ -180,6 +180,154 @@ function createWalletBackedLocalAccount(params: {
       return (await wc.signTransaction({ ...tx, ...options, account: address })) as Hex
     },
   })
+}
+
+/**
+ * Cross-app signing function type from Privy's useCrossAppAccounts
+ */
+export type CrossAppSignMessage = (
+  message: string,
+  options: { address: string }
+) => Promise<string>
+
+/**
+ * Create a local account that uses Privy cross-app signing.
+ * This allows signing UserOperations via Zora's popup flow without needing gas.
+ */
+function createCrossAppSigningAccount(params: {
+  crossAppSignMessage: CrossAppSignMessage
+  ownerAddress: Address
+}) {
+  const { crossAppSignMessage, ownerAddress } = params
+
+  return toAccount({
+    address: ownerAddress,
+    // Sign the UserOp hash via cross-app popup (no gas required!)
+    sign: async ({ hash }) => {
+      // Cross-app signMessage uses personal_sign which adds EIP-191 prefix.
+      // Coinbase Smart Wallet supports this via SignatureCheckerLib.
+      // We pass the raw hash as a hex string - Privy will handle the signing.
+      const signature = await crossAppSignMessage(hash, { address: ownerAddress })
+      return signature as Hex
+    },
+    signMessage: async ({ message }) => {
+      const msgStr = typeof message === 'string' 
+        ? message 
+        : typeof message === 'object' && 'raw' in message
+          ? (message.raw as Hex)
+          : String(message)
+      return (await crossAppSignMessage(msgStr, { address: ownerAddress })) as Hex
+    },
+    signTypedData: async () => {
+      throw new Error('signTypedData not supported for cross-app accounts')
+    },
+    signTransaction: async () => {
+      throw new Error('signTransaction not supported for cross-app accounts')
+    },
+  })
+}
+
+/**
+ * Send a UserOperation via ERC-4337 using cross-app signing.
+ * 
+ * This flow:
+ * 1. Builds the UserOperation for the smart wallet
+ * 2. Computes the UserOp hash
+ * 3. Opens a popup to Zora for the user to sign (no gas needed!)
+ * 4. Submits to bundler with paymaster (paymaster pays gas)
+ * 5. Waits for on-chain confirmation
+ * 
+ * @param params.crossAppSignMessage - signMessage from useCrossAppAccounts
+ * @param params.zoraEmbeddedWalletAddress - The Zora EOA that will sign
+ * @param params.smartWallet - The Coinbase Smart Wallet address
+ */
+export async function sendCrossAppUserOperation(params: {
+  publicClient: PublicClientLike
+  crossAppSignMessage: CrossAppSignMessage
+  bundlerUrl: string
+  smartWallet: Address
+  zoraEmbeddedWalletAddress: Address
+  calls: Array<{ to: Address; value?: bigint; data?: Hex }>
+  version?: '1' | '1.1'
+}): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
+  const { 
+    publicClient, 
+    crossAppSignMessage, 
+    bundlerUrl, 
+    smartWallet, 
+    zoraEmbeddedWalletAddress, 
+    calls, 
+    version = '1' 
+  } = params
+  
+  if (!bundlerUrl) throw new Error('Missing bundler URL')
+
+  // Verify the Zora EOA is an owner of the smart wallet
+  const { ownerIndex } = await findCoinbaseSmartWalletOwnerIndex({
+    publicClient,
+    smartWallet,
+    ownerAddress: zoraEmbeddedWalletAddress,
+  })
+  
+  if (ownerIndex === null) {
+    throw new Error(
+      `Zora embedded wallet (${zoraEmbeddedWalletAddress}) is not an owner of the smart wallet (${smartWallet}). ` +
+      'The user may need to add this wallet as an owner first.'
+    )
+  }
+
+  // Create an account that uses cross-app signing
+  const owner = createCrossAppSigningAccount({
+    crossAppSignMessage,
+    ownerAddress: zoraEmbeddedWalletAddress,
+  })
+
+  // Create the Coinbase Smart Account
+  const account = await toCoinbaseSmartAccount({
+    client: publicClient as any,
+    address: smartWallet,
+    owners: [owner],
+    ownerIndex,
+    version,
+  })
+
+  // Set up bundler + paymaster (uses CDP for gas sponsorship)
+  const sessionToken = typeof window !== 'undefined' ? getStoredSessionToken() : null
+  const transport = http(bundlerUrl, {
+    fetchOptions: {
+      credentials: 'include',
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
+    },
+  })
+  const paymasterClient = createPaymasterClient({ transport })
+  const bundlerClient = createBundlerClient({
+    client: publicClient as any,
+    transport,
+  })
+
+  // Send the UserOperation - this will:
+  // 1. Build the UserOp
+  // 2. Call owner.sign() which opens the Zora popup
+  // 3. Submit to bundler with paymaster
+  const userOpHash = await sendUserOperation(bundlerClient, {
+    account,
+    calls,
+    paymaster: {
+      getPaymasterData: paymasterClient.getPaymasterData,
+      getPaymasterStubData: paymasterClient.getPaymasterStubData,
+    },
+  })
+
+  // Wait for on-chain confirmation
+  const receipt = await waitForUserOperationReceipt(bundlerClient, { 
+    hash: userOpHash, 
+    timeout: 120_000 
+  })
+  
+  return { 
+    userOpHash, 
+    transactionHash: receipt.receipt.transactionHash as Hex 
+  }
 }
 
 export async function sendCoinbaseSmartWalletUserOperation(params: {

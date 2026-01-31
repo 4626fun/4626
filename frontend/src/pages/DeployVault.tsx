@@ -45,7 +45,7 @@ import {
 import { computeMarketFloorQuote } from '@/lib/cca/marketFloor'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
-import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
+import { sendCoinbaseSmartWalletUserOperation, sendCrossAppUserOperation, type CrossAppSignMessage } from '@/lib/aa/coinbaseErc4337'
 
 const MIN_FIRST_DEPOSIT = 5_000_000n * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
@@ -748,6 +748,7 @@ function DeployVaultBatcher({
   zoraEmbeddedHasGas,
   zoraEmbeddedBalance: _zoraEmbeddedBalance,
   sendCrossAppTransaction,
+  crossAppSignMessage,
   connectorId,
   wagmiWalletClient,
 }: {
@@ -776,11 +777,15 @@ function DeployVaultBatcher({
   zoraEmbeddedBalance: bigint
   // Privy's cross-app sendTransaction - takes tx request and { address } of the cross-app wallet
   sendCrossAppTransaction: ((tx: { to: Address; data: Hex; value: bigint; chainId: number }, options: { address: string }) => Promise<string>) | null
+  // Privy's cross-app signMessage - for ERC-4337 UserOp signing (no gas needed!)
+  crossAppSignMessage: CrossAppSignMessage | null
   // For direct Coinbase Wallet connection (supports eth_sign)
   connectorId: string | undefined
   wagmiWalletClient: any
 }) {
   void _zoraEmbeddedBalance // Used for display in parent component
+  void zoraEmbeddedHasGas // Used by handleAddOwnerToZoraWallet in parent
+  void sendCrossAppTransaction // Legacy - replaced by crossAppSignMessage + ERC-4337
   const { address: connectedAddress } = useAccount()
   const publicClient = usePublicClient({ chainId: base.id })
   
@@ -1711,67 +1716,58 @@ function DeployVaultBatcher({
             return
           }
           
-          // OPTION 3: Cross-app transaction (requires Zora wallet to be linked AND funded with ETH for gas)
-          // NOTE: Privy's sendTransaction estimates gas LOCALLY before opening popup, so EOA needs ETH
-          logger.info(`[DeployVault] Cross-app check for ${phaseLabel}:`, {
+          // OPTION 3: Cross-app ERC-4337 UserOperation (uses paymaster for gas - no ETH needed in EOA!)
+          // This flow:
+          // 1. Builds a UserOperation with the calls
+          // 2. Opens Zora popup for user to sign the UserOp hash (no gas!)
+          // 3. Submits to bundler with CDP paymaster (paymaster pays gas)
+          logger.info(`[DeployVault] Cross-app ERC-4337 check for ${phaseLabel}:`, {
             canonicalSmartWallet: !!canonicalSmartWallet,
             zoraEmbeddedWalletAddress: !!zoraEmbeddedWalletAddress,
-            sendCrossAppTransaction: !!sendCrossAppTransaction,
-            zoraEmbeddedHasGas,
+            crossAppSignMessage: !!crossAppSignMessage,
           })
-          if (canonicalSmartWallet && zoraEmbeddedWalletAddress && sendCrossAppTransaction && zoraEmbeddedHasGas) {
-            logger.info(`[DeployVault] Using cross-app executeBatch for ${phaseLabel}`, {
+          if (canonicalSmartWallet && zoraEmbeddedWalletAddress && crossAppSignMessage && publicClient) {
+            logger.info(`[DeployVault] Using cross-app ERC-4337 UserOp for ${phaseLabel}`, {
               canonicalSmartWallet,
               zoraEmbeddedWalletAddress,
               callCount: calls.length,
             })
             
-            // Coinbase Smart Wallet's executeBatch ABI
-            const executeBatchAbi = [{
-              type: 'function',
-              name: 'executeBatch',
-              stateMutability: 'payable',
-              inputs: [{
-                name: 'calls',
-                type: 'tuple[]',
-                components: [
-                  { name: 'target', type: 'address' },
-                  { name: 'value', type: 'uint256' },
-                  { name: 'data', type: 'bytes' },
-                ],
-              }],
-              outputs: [],
-            }] as const
-            
-            // Encode the batch call
-            const batchData = encodeFunctionData({
-              abi: executeBatchAbi,
-              functionName: 'executeBatch',
-              args: [calls.map(c => ({ target: c.target, value: c.value, data: c.data }))],
-            })
-            
-            // Send via cross-app transaction (opens Zora popup for approval)
-            // The address option specifies which cross-app embedded wallet to use
-            if (!zoraEmbeddedWalletAddress) {
-              throw new Error('Zora embedded wallet address not available')
+            try {
+              // Get the bundler/paymaster URL (CDP handles gas sponsorship)
+              const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+              const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
+              let bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv)
+              if (!bundlerUrl) bundlerUrl = '/api/paymaster'
+              
+              // Send UserOperation via ERC-4337 with cross-app signing
+              // The user will see a popup on Zora's domain to sign the UserOp hash
+              const { transactionHash } = await sendCrossAppUserOperation({
+                publicClient,
+                crossAppSignMessage: crossAppSignMessage as CrossAppSignMessage,
+                bundlerUrl,
+                smartWallet: canonicalSmartWallet,
+                zoraEmbeddedWalletAddress,
+                calls: calls.map(c => ({ to: c.target, value: c.value, data: c.data })),
+              })
+              
+              setTxId(transactionHash)
+              setPhaseTxs((s) => ({
+                ...s,
+                [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: transactionHash,
+              }))
+              logger.warn(`[DeployVault] ${phaseLabel}_confirmed via cross-app ERC-4337`, { transactionHash })
+              return
+            } catch (err: unknown) {
+              // Log but continue to fallback path
+              const errMsg = err instanceof Error ? err.message : String(err)
+              logger.error(`[DeployVault] Cross-app ERC-4337 failed for ${phaseLabel}:`, errMsg)
+              // If user rejected the signature popup, don't continue to fallback
+              if (errMsg.toLowerCase().includes('reject') || errMsg.toLowerCase().includes('cancel') || errMsg.toLowerCase().includes('denied')) {
+                throw err
+              }
+              // Otherwise, continue to try other paths
             }
-            const txHash = await sendCrossAppTransaction(
-              {
-                to: canonicalSmartWallet,
-                data: batchData,
-                value: 0n,
-                chainId: base.id,
-              },
-              { address: zoraEmbeddedWalletAddress },
-            )
-            
-            setTxId(txHash)
-            setPhaseTxs((s) => ({
-              ...s,
-              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: txHash as Hex,
-            }))
-            logger.warn(`[DeployVault] ${phaseLabel}_confirmed via cross-app batch`, { txHash })
-            return
           }
           
           // Fallback: use Privy smart wallet client (will use Privy's derived smart wallet)
@@ -2011,7 +2007,7 @@ function DeployVaultMain() {
   const { login } = useLogin()
   const { wallets } = useWallets()
   const { client: smartWalletClient } = useSmartWallets()
-  const { linkCrossAppAccount, sendTransaction: sendCrossAppTransaction } = useCrossAppAccounts()
+  const { linkCrossAppAccount, sendTransaction: sendCrossAppTransaction, signMessage: crossAppSignMessage } = useCrossAppAccounts()
   const { user } = usePrivy() as any
   const siwe = useSiweAuth()
   const [linkZoraWalletBusy, setLinkZoraWalletBusy] = useState(false)
@@ -4217,6 +4213,7 @@ function DeployVaultMain() {
                     zoraEmbeddedHasGas={zoraEmbeddedHasGas}
                     zoraEmbeddedBalance={zoraEmbeddedBalanceQuery.data ?? 0n}
                     sendCrossAppTransaction={sendCrossAppTransaction}
+                    crossAppSignMessage={crossAppSignMessage ?? null}
                     connectorId={connector?.id}
                     wagmiWalletClient={walletClient}
                   />
