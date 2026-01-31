@@ -759,6 +759,7 @@ function DeployVaultBatcher({
 }) {
   const { address: connectedAddress } = useAccount()
   const publicClient = usePublicClient({ chainId: base.id })
+  const { data: walletClient } = useWalletClient({ chainId: base.id })
   const { sendCallsAsync } = useSendCalls()
 
   const smartWalletAddrForAuth = useMemo(() => {
@@ -780,6 +781,9 @@ function DeployVaultBatcher({
   const canUseWalletSendCalls = useMemo(() => {
     return !!accountForCalls && typeof sendCallsAsync === 'function'
   }, [accountForCalls, sendCallsAsync])
+  const canUseWalletSequential = useMemo(() => {
+    return !!accountForCalls && !!walletClient
+  }, [accountForCalls, walletClient])
 
   const resolvedTokenDecimals = typeof tokenDecimals === 'number' ? tokenDecimals : 18
   const formatDeposit = (raw?: bigint): string => {
@@ -844,6 +848,12 @@ function DeployVaultBatcher({
       lower.includes('smart wallet required')
     ) {
       return 'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account), then retry.'
+    }
+    if (lower.includes('wallet_sendcalls') && lower.includes('unsupported method')) {
+      return 'Your wallet does not support call batching (wallet_sendCalls). Use Coinbase Wallet (Base Account) or Privy smart wallet, then retry.'
+    }
+    if (lower.includes('chain: undefined') && lower.includes('wallet_sendcalls')) {
+      return 'Call batching failed to resolve the Base chain. Reconnect your wallet or use Coinbase Wallet (Base Account), then retry.'
     }
     if (
       lower.includes('metamask') &&
@@ -1339,7 +1349,7 @@ function DeployVaultBatcher({
           const token1 = token0 === creatorAddr ? usdcAddr : creatorAddr
 
           const pow10 = (d: number) => 10n ** BigInt(d)
-          const CREATOR_PER_USDC = 100n
+          const CREATOR_PER_USDC = 100n9
 
           // Choose integer amounts that encode 100 CREATOR == 1 USDC.
           // Uniswap v3 initialization uses sqrt(price) where price = amount1/amount0 in raw units.
@@ -1457,7 +1467,7 @@ function DeployVaultBatcher({
         if (!publicClient) throw new Error('Public client not ready.')
 
         // Hard guard: require a smart wallet signer (Privy or wallet_sendCalls).
-        if (!canUsePrivySmartWallet && !canUseWalletSendCalls) {
+        if (!canUsePrivySmartWallet && !canUseWalletSendCalls && !canUseWalletSequential) {
           throw new Error(
             'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account), then retry.',
           )
@@ -1592,22 +1602,52 @@ function DeployVaultBatcher({
             return
           }
 
-          if (!sendCallsAsync || !accountForCalls) {
+          if (sendCallsAsync && accountForCalls) {
+            try {
+              const res = await sendCallsAsync({
+                calls: toCalls(calls),
+                account: accountForCalls,
+                chainId: base.id,
+                forceAtomic: true,
+              })
+              const callId = typeof res === 'string' ? res : (res as any)?.id ?? null
+              const txKey = callId ? String(callId) : null
+              setTxId(txKey)
+              setPhaseTxs((s) => ({
+                ...s,
+                [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: txKey ?? undefined,
+              }))
+              logger.warn(`[DeployVault] ${phaseLabel}_submitted`, { id: txKey })
+              return
+            } catch (err) {
+              logger.warn(`[DeployVault] ${phaseLabel}_sendCalls_failed`, err)
+            }
+          }
+
+          if (!walletClient || !accountForCalls || !publicClient) {
             throw new Error(
               'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account), then retry.',
             )
           }
-          const res = await sendCallsAsync({
-            calls: toCalls(calls),
-            account: accountForCalls,
-            chainId: base.id,
-            forceAtomic: true,
-          })
-          const callId = typeof res === 'string' ? res : (res as any)?.id ?? null
-          const txKey = callId ? String(callId) : null
-          setTxId(txKey)
-          setPhaseTxs((s) => ({ ...s, [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: txKey ?? undefined }))
-          logger.warn(`[DeployVault] ${phaseLabel}_submitted`, { id: txKey })
+          
+          let lastHash: Hex | null = null
+          for (const call of calls) {
+            const txHash = await walletClient.sendTransaction({
+              account: accountForCalls as any,
+              chain: base as any,
+              to: call.target,
+              data: call.data,
+              value: call.value,
+            })
+            lastHash = txHash as Hex
+            setTxId(lastHash)
+            setPhaseTxs((s) => ({
+              ...s,
+              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: lastHash ?? undefined,
+            }))
+            await publicClient.waitForTransactionReceipt({ hash: txHash as Hex })
+          }
+          logger.warn(`[DeployVault] ${phaseLabel}_submitted`, { txHash: lastHash })
         }
 
         // Phase 1: Deploy core contracts
@@ -1638,7 +1678,8 @@ function DeployVaultBatcher({
     }
   }
 
-  const canAutoUpdatePayoutRecipient = !payoutMismatch || canUsePrivySmartWallet || canUseWalletSendCalls
+  const canAutoUpdatePayoutRecipient =
+    !payoutMismatch || canUsePrivySmartWallet || canUseWalletSendCalls || canUseWalletSequential
   void canAutoUpdatePayoutRecipient
 
   const expectedError = expectedQuery.isError
@@ -2881,7 +2922,8 @@ function DeployVaultMain() {
 
   const privySmartWalletReady = Boolean(privySmartWalletAddress && smartWalletClient)
   const canUseWalletSendCalls = Boolean(isConnected && connectedWalletAddress && typeof sendCallsAsync === 'function')
-  const smartWalletCapabilityReady = privySmartWalletReady || canUseWalletSendCalls
+  const canUseWalletSequential = Boolean(isConnected && connectedWalletAddress && walletClient)
+  const smartWalletCapabilityReady = privySmartWalletReady || canUseWalletSendCalls || canUseWalletSequential
 
   const canDeploy =
     tokenIsValid &&
@@ -2907,7 +2949,9 @@ function DeployVaultMain() {
     ? 'Privy smart wallet'
     : canUseWalletSendCalls
       ? 'Wallet call batching'
-      : 'Privy smart wallet'
+      : canUseWalletSequential
+        ? 'Wallet transactions'
+        : 'Privy smart wallet'
 
   const vrfConsumerAddress = (CONTRACTS.vrfConsumer ?? null) as Address | null
   const vrfConsumerConfigured = isAddress(String(vrfConsumerAddress ?? ''))
