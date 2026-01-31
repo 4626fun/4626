@@ -1,13 +1,82 @@
 import type { Address, Hex } from 'viem'
-import { encodeAbiParameters, http } from 'viem'
+import { encodeAbiParameters, getAddress, http } from 'viem'
 import { toAccount } from 'viem/accounts'
 import {
   createBundlerClient,
   createPaymasterClient,
+  entryPoint06Address,
   sendUserOperation,
   toCoinbaseSmartAccount,
   waitForUserOperationReceipt,
 } from 'viem/account-abstraction'
+
+// ============================================================================
+// ENTRYPOINT v0.6 ENFORCEMENT
+// ============================================================================
+// This module ONLY supports ERC-4337 EntryPoint v0.6. This is enforced at:
+// 1. Build time: We import entryPoint06Address from viem/account-abstraction
+// 2. Runtime: We verify the bundler supports v0.6 before sending UserOps
+// 3. Server: The /api/paymaster endpoint rejects non-v0.6 requests
+// ============================================================================
+
+const ENTRYPOINT_V06 = getAddress(entryPoint06Address)
+const ENTRYPOINT_V06_EXPECTED = getAddress('0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789')
+
+// Sanity check at module load time
+if (ENTRYPOINT_V06 !== ENTRYPOINT_V06_EXPECTED) {
+  throw new Error(
+    `EntryPoint v0.6 address mismatch! Expected ${ENTRYPOINT_V06_EXPECTED}, got ${ENTRYPOINT_V06}. ` +
+    'This could indicate a viem version mismatch or incorrect import.'
+  )
+}
+
+/**
+ * Verify the bundler supports EntryPoint v0.6.
+ * Throws if the bundler doesn't support v0.6.
+ */
+async function verifyBundlerSupportsV06(bundlerUrl: string): Promise<void> {
+  try {
+    const response = await fetch(bundlerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'eth_supportedEntryPoints',
+        params: [],
+      }),
+    })
+    
+    if (!response.ok) {
+      // Don't fail on network errors - let the actual UserOp fail with a better message
+      console.warn('[ERC-4337] Could not verify bundler EntryPoint support:', response.status)
+      return
+    }
+    
+    const data = await response.json()
+    const supportedEntryPoints: string[] = data?.result ?? []
+    
+    const supportsV06 = supportedEntryPoints.some(
+      (ep: string) => getAddress(ep) === ENTRYPOINT_V06
+    )
+    
+    if (!supportsV06) {
+      throw new Error(
+        `Bundler does not support EntryPoint v0.6 (${ENTRYPOINT_V06}). ` +
+        `Supported: ${supportedEntryPoints.join(', ') || 'none'}. ` +
+        'This deployment requires EntryPoint v0.6 for gas sponsorship.'
+      )
+    }
+  } catch (e: unknown) {
+    // If it's our own error, rethrow
+    if (e instanceof Error && e.message.includes('EntryPoint v0.6')) {
+      throw e
+    }
+    // Network errors - warn but don't block (let the UserOp fail with better context)
+    console.warn('[ERC-4337] Could not verify bundler EntryPoint support:', e)
+  }
+}
 
 // NOTE: Avoid tight coupling to a specific `viem` client instance/type.
 // wagmi and other libs can surface structurally-compatible clients that TypeScript may treat as distinct.
@@ -62,6 +131,26 @@ const COINBASE_SMART_WALLET_OWNERS_ABI = [
 function asOwnerBytes(owner: Address): Hex {
   // Coinbase Smart Wallet stores EOA owners as 32-byte left-padded address bytes.
   return encodeAbiParameters([{ type: 'address' }], [owner]) as Hex
+}
+
+/**
+ * The canonical EntryPoint v0.6 address used by this module.
+ * This is the ONLY EntryPoint version supported.
+ */
+export const ERC4337_ENTRYPOINT_V06 = ENTRYPOINT_V06
+
+/**
+ * Assert that a given address matches EntryPoint v0.6.
+ * Use this to verify configuration matches expectations.
+ */
+export function assertEntryPointV06(address: Address): void {
+  const normalized = getAddress(address)
+  if (normalized !== ENTRYPOINT_V06) {
+    throw new Error(
+      `Expected EntryPoint v0.6 (${ENTRYPOINT_V06}), got ${normalized}. ` +
+      'This module only supports ERC-4337 EntryPoint v0.6.'
+    )
+  }
 }
 
 export async function findCoinbaseSmartWalletOwnerIndex(params: {
@@ -398,10 +487,13 @@ export async function sendCrossAppUserOperation(params: {
     transport,
   })
 
+  // ENFORCE: Verify bundler supports EntryPoint v0.6 before sending
+  await verifyBundlerSupportsV06(bundlerUrl)
+
   // Send the UserOperation - this will:
   // 1. Build the UserOp
   // 2. Call owner.sign() which opens the Zora popup
-  // 3. Submit to bundler with paymaster
+  // 3. Submit to bundler with paymaster (EntryPoint v0.6)
   const userOpHash = await sendUserOperation(bundlerClient, {
     account,
     calls,
@@ -489,7 +581,11 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     transport,
   })
 
+  // ENFORCE: Verify bundler supports EntryPoint v0.6 before sending
+  await verifyBundlerSupportsV06(bundlerUrl)
+
   // Send the UserOperation via EntryPoint v0.6 with CDP paymaster
+  // toCoinbaseSmartAccount uses entryPoint06Address by default
   let userOpHash: Hex
   try {
     userOpHash = await sendUserOperation(bundlerClient, {

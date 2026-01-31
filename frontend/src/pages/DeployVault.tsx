@@ -44,7 +44,11 @@ import {
 import { computeMarketFloorQuote } from '@/lib/cca/marketFloor'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
-import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
+import { 
+  sendCoinbaseSmartWalletUserOperation, 
+  ERC4337_ENTRYPOINT_V06,
+  assertEntryPointV06,
+} from '@/lib/aa/coinbaseErc4337'
 
 const MIN_FIRST_DEPOSIT = 5_000_000n * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
@@ -316,7 +320,13 @@ async function fetchAdminAuth(): Promise<AdminAuthResponse> {
   return (json.data ?? null) as AdminAuthResponse
 }
 
-const COINBASE_ENTRYPOINT_V06 = addr('5FF137D4b0FDCD49DcA30c7CF57E578a026d2789')
+// Use the canonical EntryPoint v0.6 from the ERC-4337 module
+// This ensures the UI and the UserOp sender use the same address
+const COINBASE_ENTRYPOINT_V06 = ERC4337_ENTRYPOINT_V06
+
+// BUILD-TIME ASSERTION: Verify EntryPoint v0.6 matches expected address
+// This will throw at module load if there's a mismatch
+assertEntryPointV06(addr('5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'))
 
 const COIN_PAYOUT_RECIPIENT_ABI = [
   {
