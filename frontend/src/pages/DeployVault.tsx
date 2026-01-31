@@ -1631,23 +1631,55 @@ function DeployVaultBatcher({
             }
             
             // Create a wallet client adapter that uses the embedded EOA for signing
-            // This produces simple ecrecover signatures (no EIP-1271 complexity)
+            // Note: viem's toCoinbaseSmartAccount handles the ReplaySafeHash EIP-712 transformation
+            // Our sign function just needs to sign the hash it receives
             const embeddedWalletClientAdapter = {
               request: async (args: { method: string; params: any[] }) => {
+                logger.info('[DeployVault] Embedded wallet request', { method: args.method })
+                
+                if (args.method === 'eth_sign') {
+                  const [addr, hash] = args.params
+                  logger.info('[DeployVault] eth_sign requested', { addr, hash })
+                  
+                  // Try eth_sign first (raw signature)
+                  try {
+                    const sig = await embeddedProvider.request({
+                      method: 'eth_sign',
+                      params: [addr, hash],
+                    })
+                    logger.info('[DeployVault] eth_sign succeeded')
+                    return sig
+                  } catch (e: any) {
+                    logger.warn('[DeployVault] eth_sign failed, trying personal_sign', { error: e?.message })
+                    // Fallback to personal_sign
+                    const sig = await embeddedProvider.request({
+                      method: 'personal_sign',
+                      params: [hash, addr],
+                    })
+                    logger.info('[DeployVault] personal_sign succeeded')
+                    return sig
+                  }
+                }
+                
                 return await embeddedProvider.request(args)
               },
               signMessage: async (args: { account: Address; message: any }) => {
                 const msg = typeof args.message === 'object' && 'raw' in args.message
                   ? args.message.raw
                   : args.message
-                // Use personal_sign via the embedded provider
-                const msgHex = typeof msg === 'string' && msg.startsWith('0x') ? msg : `0x${Buffer.from(msg).toString('hex')}`
-                return await embeddedProvider.request({
+                const msgHex = typeof msg === 'string' && msg.startsWith('0x') ? msg : `0x${Buffer.from(String(msg)).toString('hex')}`
+                
+                logger.info('[DeployVault] signMessage called', { account: args.account, msgHex })
+                
+                const sig = await embeddedProvider.request({
                   method: 'personal_sign',
-                  params: [msgHex, embeddedPrivyEoaAddress],
+                  params: [msgHex, args.account],
                 })
+                logger.info('[DeployVault] signMessage succeeded')
+                return sig
               },
               signTypedData: async (args: any) => {
+                logger.info('[DeployVault] signTypedData called', { args })
                 return await embeddedProvider.request({
                   method: 'eth_signTypedData_v4',
                   params: [embeddedPrivyEoaAddress, JSON.stringify(args)],
