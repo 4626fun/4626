@@ -3690,16 +3690,36 @@ function DeployVaultMain() {
                 <div>connectedAddress: <span className="text-zinc-300">{address || 'null'}</span></div>
                 <div>privySmartWallet: <span className="text-zinc-300">{privySmartWalletAddress || 'null'}</span></div>
                 <div>canonicalIdentity: <span className="text-zinc-300">{canonicalIdentityAddress || 'null'}</span></div>
+                <div>zoraEmbeddedWallet: <span className={zoraEmbeddedWalletAddress ? 'text-green-400' : 'text-red-400'}>{zoraEmbeddedWalletAddress || 'NOT LINKED'}</span></div>
                 <div>smartWalletMatchesCanonical: <span className={smartWalletMatchesCanonical ? 'text-green-400' : 'text-red-400'}>{String(smartWalletMatchesCanonical)}</span></div>
                 <div>embeddedEoaIsCanonicalOwner: <span className={embeddedEoaIsCanonicalOwner ? 'text-green-400' : 'text-red-400'}>{String(embeddedEoaIsCanonicalOwner)}</span></div>
                 <div>privySmartWalletReady: <span className={privySmartWalletReady ? 'text-green-400' : 'text-red-400'}>{String(privySmartWalletReady)}</span></div>
                 <div>smartWalletCapabilityReady: <span className={smartWalletCapabilityReady ? 'text-green-400' : 'text-red-400'}>{String(smartWalletCapabilityReady)}</span></div>
-                <div>ownerQuery status: <span className="text-zinc-300">{embeddedEoaIsCanonicalOwnerQuery.status}</span></div>
-                <div>ownerQuery data: <span className="text-zinc-300">{String(embeddedEoaIsCanonicalOwnerQuery.data)}</span></div>
                 <div>embeddedPrivyEoa: <span className="text-zinc-300">{embeddedPrivyEoaAddress || 'null'}</span></div>
                 <div>canDeploy: <span className={canDeploy ? 'text-green-400' : 'text-red-400'}>{String(canDeploy)}</span></div>
                 {connector?.id === 'coinbaseWalletSDK' && (
                   <div className="text-green-400 font-semibold mt-1">✓ Coinbase Wallet Direct - ERC-4337 ready!</div>
+                )}
+                
+                {/* Link Zora Wallet button - needed for cross-app deploy */}
+                {!zoraEmbeddedWalletAddress && privyAuthenticated && (
+                  <div className="mt-2 pt-2 border-t border-zinc-700">
+                    <div className="text-amber-400 mb-2">⚠ Link Zora wallet for cross-app deploy</div>
+                    <button
+                      type="button"
+                      className="w-full py-2 px-3 bg-purple-600 hover:bg-purple-500 text-white text-xs rounded"
+                      disabled={linkZoraWalletBusy}
+                      onClick={handleLinkZoraWallet}
+                    >
+                      {linkZoraWalletBusy ? 'Connecting to Zora…' : 'Link Zora Wallet'}
+                    </button>
+                    {linkZoraWalletError && (
+                      <div className="text-red-400 text-[10px] mt-1">{linkZoraWalletError}</div>
+                    )}
+                  </div>
+                )}
+                {zoraEmbeddedWalletAddress && (
+                  <div className="text-green-400 font-semibold mt-1">✓ Zora wallet linked - cross-app deploy ready!</div>
                 )}
               </div>
 
