@@ -1651,87 +1651,73 @@ function DeployVaultBatcher({
           }
           
           // PATH 2: Embedded Privy EOA is owner of canonical smart wallet
-          // Send direct executeBatch transaction (requires ETH for gas)
-          if (canonicalSmartWallet && embeddedEoaAddress && embeddedEoaIsCanonicalOwner && embeddedWallet) {
-            logger.info(`[DeployVault] Using embedded wallet executeBatch for ${phaseLabel}`)
+          // Use ERC-4337 with paymaster - no ETH needed in embedded wallet!
+          if (canonicalSmartWallet && embeddedEoaAddress && embeddedEoaIsCanonicalOwner && embeddedWallet && publicClient) {
+            logger.info(`[DeployVault] Using embedded wallet ERC-4337 for ${phaseLabel}`)
             
-            // Coinbase Smart Wallet's executeBatch ABI
-            const executeBatchAbi = [{
-              type: 'function',
-              name: 'executeBatch',
-              stateMutability: 'payable',
-              inputs: [{
-                name: 'calls',
-                type: 'tuple[]',
-                components: [
-                  { name: 'target', type: 'address' },
-                  { name: 'value', type: 'uint256' },
-                  { name: 'data', type: 'bytes' },
-                ],
-              }],
-              outputs: [],
-            }] as const
-            
-            // Encode the batch call
-            const batchData = encodeFunctionData({
-              abi: executeBatchAbi,
-              functionName: 'executeBatch',
-              args: [calls.map(c => ({ target: c.target, value: c.value, data: c.data }))],
-            })
-            
-            // Get the embedded wallet's provider and switch to Base
+            // Get the embedded wallet's provider
             const provider = await embeddedWallet.getEthereumProvider()
             if (!provider) {
               throw new Error('Could not get embedded wallet provider')
             }
             
-            // Switch to Base network (chain ID 8453)
-            try {
-              await provider.request({
-                method: 'wallet_switchEthereumChain',
-                params: [{ chainId: '0x2105' }], // 8453 in hex
-              })
-            } catch (switchError: any) {
-              // If chain doesn't exist, add it
-              if (switchError?.code === 4902) {
-                await provider.request({
-                  method: 'wallet_addEthereumChain',
-                  params: [{
-                    chainId: '0x2105',
-                    chainName: 'Base',
-                    nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-                    rpcUrls: ['https://mainnet.base.org'],
-                    blockExplorerUrls: ['https://basescan.org'],
-                  }],
+            // Create a walletClient-like wrapper that uses eth_sign for UserOp signatures
+            const embeddedWalletClient = {
+              request: (args: any) => provider.request(args),
+              signMessage: async ({ account, message }: { account: Address; message: any }) => {
+                // For UserOp signatures, use the raw bytes
+                const msg = typeof message === 'string' 
+                  ? message 
+                  : message.raw 
+                    ? message.raw 
+                    : message
+                return provider.request({
+                  method: 'personal_sign',
+                  params: [msg, account],
                 })
-              } else {
-                throw switchError
-              }
+              },
+              signTypedData: async (args: any) => {
+                return provider.request({
+                  method: 'eth_signTypedData_v4',
+                  params: [args.account, JSON.stringify(args)],
+                })
+              },
             }
             
-            logger.info('[DeployVault] Sending executeBatch from embedded wallet on Base', {
-              from: embeddedEoaAddress,
-              to: canonicalSmartWallet,
-              chainId: 8453,
+            // Get the bundler/paymaster URL
+            const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+            const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
+            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv) || '/api/paymaster'
+            
+            logger.info('[DeployVault] Sending ERC-4337 UserOp via embedded wallet', {
+              smartWallet: canonicalSmartWallet,
+              ownerAddress: embeddedEoaAddress,
+              bundlerUrl,
+              callCount: calls.length,
             })
             
-            const txHash = await provider.request({
-              method: 'eth_sendTransaction',
-              params: [{
-                from: embeddedEoaAddress,
-                to: canonicalSmartWallet,
-                data: batchData,
-                value: '0x0',
-                chainId: '0x2105', // Base
-              }],
+            // Send UserOperation via ERC-4337 with paymaster (gas sponsored!)
+            const result = await sendCoinbaseSmartWalletUserOperation({
+              publicClient: publicClient as any,
+              walletClient: embeddedWalletClient as any,
+              bundlerUrl,
+              smartWallet: canonicalSmartWallet,
+              ownerAddress: embeddedEoaAddress,
+              calls: toCalls(calls),
+              version: '1',
+              userOpSignMode: 'signMessage', // Force signMessage mode for Privy embedded wallet
             })
             
-            setTxId(txHash)
+            setTxId(result.transactionHash)
             setPhaseTxs((s) => ({
               ...s,
-              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: txHash as Hex,
+              [phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : 'userOp3']: result.userOpHash,
+              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: result.transactionHash,
             }))
-            logger.warn(`[DeployVault] ${phaseLabel}_confirmed via embedded wallet batch`, { txHash })
+            logger.warn(`[DeployVault] ${phaseLabel}_confirmed via embedded wallet ERC-4337`, {
+              userOpHash: result.userOpHash,
+              txHash: result.transactionHash,
+            })
             return
           }
           
