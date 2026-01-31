@@ -20,11 +20,10 @@ import {
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { coinABI } from '@zoralabs/protocol-deployments'
-import { BarChart3, ChevronDown, Layers, Lock, Rocket, ShieldCheck } from 'lucide-react'
-import { useLinkAccount, useLogin, usePrivy, useWallets, useCrossAppAccounts } from '@privy-io/react-auth'
+import { ChevronDown } from 'lucide-react'
+import { useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { usePrivyClientStatus } from '@/lib/privy/client'
-import { DerivedTokenIcon } from '@/components/DerivedTokenIcon'
 import { RequestCreatorAccess } from '@/components/RequestCreatorAccess'
 import { CONTRACTS } from '@/config/contracts'
 import { useCreatorAllowlist, useFarcasterAuth, useMiniAppContext } from '@/hooks'
@@ -56,9 +55,6 @@ const BASE_USDC = addr('833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')
 const BASE_CHAINLINK_ETH_USD = addr('71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70')
 const PAYOUT_ROUTER_SALT_TAG = 'CreatorVault:PayoutRouter' as const
 const BURN_STREAM_SALT_TAG = 'CreatorVault:VaultShareBurnStream' as const
-
-// Zora's Privy App ID for cross-app wallet integration
-const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
 
 // Uniswap CCA uses Q96 fixed-point prices + a compact step schedule.
 const DEFAULT_REQUIRED_RAISE_WEI = 100_000_000_000_000_000n // 0.1 ETH
@@ -152,21 +148,6 @@ function formatEthPerTokenForUi(weiPerToken: bigint): string {
   const compact = formatWithMaxDecimals(DEFAULT_MAX_DECIMALS)
   if (compact === '0' && weiPerToken > 0n) return formatWithMaxDecimals(FULL_MAX_DECIMALS)
   return compact
-}
-
-function identitySourceLabel(source: string): string {
-  switch (source) {
-    case 'zoraCoinCreatorAddress':
-      return 'Zora coin creator'
-    case 'farcasterCustody':
-      return 'Farcaster custody'
-    case 'zoraProfilePublicWallet':
-      return 'Zora profile public wallet'
-    case 'connectedWallet':
-      return 'Connected wallet'
-    default:
-      return source || 'unknown'
-  }
 }
 
 function encodeUniswapCcaLinearSteps(durationBlocks: bigint): Hex {
@@ -655,50 +636,6 @@ const CREATE2_DEPLOYER_STORE_ABI = [
     outputs: [{ type: 'address' }],
   },
 ] as const
-
-function ExplainerRow({
-  icon,
-  label,
-  title,
-  contractName,
-  note,
-  metaLine,
-}: {
-  icon: ReactNode
-  label: string
-  title: ReactNode
-  contractName: string
-  note: string
-  metaLine?: ReactNode
-}) {
-  return (
-    <div className="px-4 py-4 grid grid-cols-[56px_minmax(0,1fr)_auto] gap-x-4 items-start hover:bg-white/[0.02] transition-colors">
-      <div className="w-14 shrink-0 pt-0.5 flex justify-center">{icon}</div>
-
-      <div className="min-w-0">
-        <div className="text-[15px] leading-5 text-zinc-100 font-medium truncate min-w-0">{title}</div>
-
-        <div className="text-[11px] text-zinc-500 mt-1 leading-5">
-          <span className="inline-flex align-middle items-center rounded-md border border-white/5 bg-black/20 px-2 py-0.5 font-mono text-[10px] leading-4 text-zinc-300">
-            {contractName}
-          </span>
-          {metaLine ? (
-            <>
-              <span className="text-zinc-800">{' · '}</span>
-              <span className="align-middle">{metaLine}</span>
-            </>
-          ) : null}
-        </div>
-
-        <div className="text-[11px] text-zinc-600 leading-relaxed mt-2">{note}</div>
-      </div>
-
-      <div className="shrink-0 pt-[3px] text-[10px] leading-4 uppercase tracking-[0.34em] text-zinc-500/90 font-medium whitespace-nowrap text-right">
-        {label}
-      </div>
-    </div>
-  )
-}
 
 function AddressRow({ label, address }: { label: string; address: Address | null | undefined }) {
   const a = address ? String(address) : ''
@@ -1756,9 +1693,6 @@ function DeployVaultBatcher({
     }
   }
 
-  const canAutoUpdatePayoutRecipient = !payoutMismatch || canUsePrivySmartWallet || canUseWalletSendCalls
-  void canAutoUpdatePayoutRecipient
-
   const expectedError = expectedQuery.isError
     ? ((expectedQuery.error as any)?.message || 'Failed to compute deployment addresses.')
     : null
@@ -1990,19 +1924,7 @@ function DeployVaultMain() {
   const { login } = useLogin()
   const { wallets } = useWallets()
   const { client: smartWalletClient } = useSmartWallets()
-  const { linkCrossAppAccount, sendTransaction: sendCrossAppTransaction } = useCrossAppAccounts()
-  const { user } = usePrivy() as any
   const siwe = useSiweAuth()
-  const [linkZoraWalletBusy, setLinkZoraWalletBusy] = useState(false)
-  const [linkZoraWalletError, setLinkZoraWalletError] = useState<string | null>(null)
-  const [addOwnerBusy, setAddOwnerBusy] = useState(false)
-  const [addOwnerError, setAddOwnerError] = useState<string | null>(null)
-  const [addOwnerTxHash, setAddOwnerTxHash] = useState<string | null>(null)
-  const [linkWalletBusy, setLinkWalletBusy] = useState(false)
-  const [linkWalletError, setLinkWalletError] = useState<string | null>(null)
-  const [installOwnerBusy, setInstallOwnerBusy] = useState(false)
-  const [installOwnerTxHash, setInstallOwnerTxHash] = useState<string | null>(null)
-  const [installOwnerError, setInstallOwnerError] = useState<string | null>(null)
   // State for adding Privy smart wallet as owner (enables gas-free ERC-4337)
   const [addPrivySwOwnerBusy, setAddPrivySwOwnerBusy] = useState(false)
   const [addPrivySwOwnerTxHash, setAddPrivySwOwnerTxHash] = useState<string | null>(null)
@@ -2061,7 +1983,6 @@ function DeployVaultMain() {
   }, [privyLinkedEoaWallet])
   
   const [creatorToken, setCreatorToken] = useState('')
-  const [showAdvanced, setShowAdvanced] = useState(false)
   
   // Connected wallet is the user's Coinbase Smart Wallet
   const connectedWalletAddress = useMemo(() => {
@@ -2129,153 +2050,6 @@ function DeployVaultMain() {
       return null
     }
   }, [embeddedPrivyWallet])
-
-  const { linkWallet } = useLinkAccount({
-    onSuccess: () => {
-      setLinkWalletBusy(false)
-      setLinkWalletError(null)
-    },
-    onError: (err) => {
-      setLinkWalletBusy(false)
-      setLinkWalletError(typeof err === 'string' ? err : 'Failed to link wallet')
-    },
-  })
-
-  const handleLinkZoraWallet = useCallback(async () => {
-    if (!privyAuthenticated) return
-    setLinkZoraWalletBusy(true)
-    setLinkZoraWalletError(null)
-    try {
-      await linkCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
-      // On success, user will be redirected back and the Zora wallet will be linked
-    } catch (err: any) {
-      setLinkZoraWalletError(err?.message || 'Failed to link Zora wallet')
-    } finally {
-      setLinkZoraWalletBusy(false)
-    }
-  }, [privyAuthenticated, linkCrossAppAccount])
-
-  // Get the cross-app (Zora) wallet from user's linked accounts
-  const crossAppAccount = useMemo(() => {
-    if (!user?.linkedAccounts) return null
-    return user.linkedAccounts.find((acc: any) => acc.type === 'cross_app') ?? null
-  }, [user])
-
-  const zoraEmbeddedWalletAddress = useMemo(() => {
-    if (!crossAppAccount?.embeddedWallets?.[0]?.address) return null
-    const addr = crossAppAccount.embeddedWallets[0].address
-    return isAddress(addr) ? getAddress(addr) as Address : null
-  }, [crossAppAccount])
-
-  // Check if Zora exposes their smart wallet address via cross-app
-  // If available, this is the Coinbase Smart Wallet that holds the user's assets
-  // Note: Currently unused since Zora cross-app is read-only
-  const _zoraSmartWalletFromCrossApp = useMemo(() => {
-    const smartWallets = (crossAppAccount as any)?.smartWallets
-    if (!smartWallets?.[0]?.address) return null
-    const addr = smartWallets[0].address
-    return isAddress(addr) ? getAddress(addr) as Address : null
-  }, [crossAppAccount])
-  void _zoraSmartWalletFromCrossApp
-
-  // Debug: log cross-app account structure
-  useEffect(() => {
-    if (crossAppAccount) {
-      logger.info('[DeployVault] Cross-app account structure:', {
-        type: (crossAppAccount as any)?.type,
-        embeddedWallets: (crossAppAccount as any)?.embeddedWallets,
-        smartWallets: (crossAppAccount as any)?.smartWallets,
-        providerApp: (crossAppAccount as any)?.providerApp,
-      })
-    }
-  }, [crossAppAccount])
-
-  // Check Zora embedded wallet ETH balance (needed for gas)
-  const publicClientForBalance = usePublicClient({ chainId: base.id })
-  const zoraEmbeddedBalanceQuery = useQuery({
-    queryKey: ['zoraEmbeddedBalance', zoraEmbeddedWalletAddress],
-    queryFn: async () => {
-      if (!zoraEmbeddedWalletAddress || !publicClientForBalance) return 0n
-      return publicClientForBalance.getBalance({ address: zoraEmbeddedWalletAddress })
-    },
-    enabled: !!zoraEmbeddedWalletAddress && !!publicClientForBalance,
-    refetchInterval: 30000, // Refresh every 30s
-  })
-  
-  const zoraEmbeddedHasGas = useMemo(() => {
-    // Need at least ~0.0001 ETH for gas (very conservative)
-    const minGas = 100_000_000_000_000n // 0.0001 ETH
-    return (zoraEmbeddedBalanceQuery.data ?? 0n) >= minGas
-  }, [zoraEmbeddedBalanceQuery.data])
-
-  // The Zora smart wallet is derived from the Zora embedded wallet
-  // For Coinbase Smart Wallet, we need to check if our local embedded wallet is an owner
-  const _zoraSmartWalletAddress = useMemo(() => {
-    // The user's Zora smart wallet - this should match the creator coin's creator address
-    // We'll get this from the zoraCoin data later
-    return null as Address | null
-  }, [])
-  void _zoraSmartWalletAddress // Reserved for future use
-
-  // Add owner to Zora smart wallet using cross-app transaction
-  const handleAddOwnerToZoraWallet = useCallback(async (zoraSmartWallet: Address) => {
-    if (!zoraEmbeddedWalletAddress || !embeddedPrivyEoaAddress) {
-      setAddOwnerError('Missing wallet addresses')
-      return
-    }
-    
-    // Check if Zora embedded wallet has gas
-    if (!zoraEmbeddedHasGas) {
-      setAddOwnerError('Zora embedded wallet needs ETH for gas. Fund it first.')
-      return
-    }
-    
-    if (!sendCrossAppTransaction) {
-      setAddOwnerError('Cross-app transaction not available')
-      return
-    }
-    
-    setAddOwnerBusy(true)
-    setAddOwnerError(null)
-    setAddOwnerTxHash(null)
-    
-    try {
-      // Encode addOwnerAddress(address) call
-      const addOwnerData = encodeFunctionData({
-        abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
-        functionName: 'addOwnerAddress',
-        args: [embeddedPrivyEoaAddress],
-      })
-      
-      // Send transaction from cross-app wallet (Zora embedded wallet)
-      const txHash = await sendCrossAppTransaction(
-        {
-          to: zoraSmartWallet,
-          data: addOwnerData,
-          value: 0n,
-          chainId: base.id,
-        },
-        { address: zoraEmbeddedWalletAddress }
-      )
-      
-      setAddOwnerTxHash(txHash)
-      logger.info('[DeployVault] Added owner to Zora smart wallet', { txHash, zoraSmartWallet, newOwner: embeddedPrivyEoaAddress })
-    } catch (err: any) {
-      logger.error('[DeployVault] Failed to add owner', err)
-      setAddOwnerError(err?.message || 'Failed to add owner to Zora wallet')
-    } finally {
-      setAddOwnerBusy(false)
-    }
-  }, [zoraEmbeddedWalletAddress, embeddedPrivyEoaAddress, sendCrossAppTransaction, zoraEmbeddedHasGas])
-
-  const handleCopyEmbedded = useCallback(async () => {
-    if (!embeddedPrivyEoaAddress) return
-    try {
-      await navigator.clipboard.writeText(embeddedPrivyEoaAddress)
-    } catch {
-      // ignore
-    }
-  }, [embeddedPrivyEoaAddress])
 
   const [searchParams] = useSearchParams()
   const prefillToken = useMemo(() => searchParams.get('token') ?? '', [searchParams])
@@ -2444,7 +2218,7 @@ function DeployVaultMain() {
 
   const adminAuthQuery = useQuery({
     queryKey: ['adminAuth'],
-    enabled: hasWallet && showAdvanced,
+    enabled: hasWallet,
     queryFn: fetchAdminAuth,
     staleTime: 30_000,
     retry: 0,
@@ -2619,20 +2393,6 @@ function DeployVaultMain() {
     return toShareName(underlyingSymbolUpper, baseName)
   }, [underlyingSymbolUpper, baseName])
 
-  function formatToken18(raw?: bigint): string {
-    if (raw === undefined) return '—'
-    const decimals = typeof tokenDecimals === 'number' ? tokenDecimals : 18
-    const s = formatUnits(raw, decimals)
-    const n = Number(s)
-    if (Number.isFinite(n)) return n.toLocaleString(undefined, { maximumFractionDigits: 2 })
-    return s
-  }
-
-  const creatorAddress = zoraCoin?.creatorAddress ? String(zoraCoin.creatorAddress) : null
-  const isOriginalCreator =
-    !!address && !!creatorAddress && address.toLowerCase() === creatorAddress.toLowerCase()
-  void isOriginalCreator // reserved for future UX
-
   // Onchain read of payoutRecipient (immediate after tx, no indexer delay).
   const { data: onchainPayoutRecipient } = useReadContract({
     address: tokenIsValid ? (creatorToken as `0x${string}`) : undefined,
@@ -2648,51 +2408,6 @@ function DeployVaultMain() {
     const r = zoraCoin?.payoutRecipientAddress ? String(zoraCoin.payoutRecipientAddress) : ''
     return isAddress(r) ? (r as Address) : null
   }, [onchainPayoutRecipient, zoraCoin?.payoutRecipientAddress])
-
-  // Prefer onchain truth over indexer graphs:
-  // If the coin's payoutRecipient is a deployed contract, treat it as the canonical smart wallet.
-  // This matches how many creators deploy their Zora coin (Smart Wallet payout recipient).
-  const payoutRecipientBytecodeQuery = useQuery({
-    queryKey: ['bytecode', 'payoutRecipient', creatorToken, payoutRecipient],
-    enabled: !!publicClient && !!payoutRecipient,
-    queryFn: async () => {
-      return await publicClient!.getBytecode({ address: payoutRecipient as Address })
-    },
-    staleTime: 60_000,
-    retry: 0,
-  })
-
-  const payoutRecipientContract = useMemo(() => {
-    if (!payoutRecipient) return null
-    const code = payoutRecipientBytecodeQuery.data
-    if (!code || code === '0x') return null
-    return payoutRecipient
-  }, [payoutRecipient, payoutRecipientBytecodeQuery.data])
-
-  const { data: payoutRecipientTokenBalance } = useReadContract({
-    address: tokenIsValid ? (creatorToken as `0x${string}`) : undefined,
-    abi: erc20Abi,
-    functionName: 'balanceOf',
-    args: [((payoutRecipient ?? ZERO_ADDRESS) as Address) as `0x${string}`],
-    query: { enabled: tokenIsValid && !!payoutRecipient },
-  })
-
-  void payoutRecipientTokenBalance // reserved for future UX
-
-  const isPayoutRecipient =
-    !!address && !!payoutRecipient && address.toLowerCase() === payoutRecipient.toLowerCase()
-  void isPayoutRecipient // reserved for future UX
-
-  // Privy provides the user's smart wallet directly via Zora global wallet integration.
-  // Use this as the source of truth instead of detecting from Zora profile.
-  const coinSmartWallet = useMemo(() => {
-    // Privy smart wallet is the source of truth
-    if (privySmartWalletAddress) return privySmartWalletAddress
-    // Fallback: the coin's payout recipient if it's a contract
-    if (payoutRecipientContract) return payoutRecipientContract
-    return null
-  }, [privySmartWalletAddress, payoutRecipientContract])
-  void coinSmartWallet // reserved for future UX
 
   // Canonical identity enforcement (prevents irreversible fragmentation).
   // Privy smart wallet is the primary identity source.
@@ -2719,7 +2434,6 @@ function DeployVaultMain() {
     staleTime: 60_000,
     retry: 0,
   })
-  void canonicalIdentityBytecodeQuery // reserved for future UX
 
   const canonicalIdentityIsContract = useMemo(() => {
     const b = canonicalIdentityBytecodeQuery.data
@@ -2740,9 +2454,6 @@ function DeployVaultMain() {
     },
   })
   const embeddedEoaIsCanonicalOwner = embeddedEoaIsCanonicalOwnerQuery.data === true
-  const refreshEmbeddedOwnerStatus = useCallback(() => {
-    void embeddedEoaIsCanonicalOwnerQuery.refetch()
-  }, [embeddedEoaIsCanonicalOwnerQuery])
 
   // Check if Privy smart wallet is an owner of the canonical smart wallet
   // This enables gas-sponsored ERC-4337 transactions via Privy's backend signing
@@ -2898,102 +2609,6 @@ function DeployVaultMain() {
     walletClient,
   ])
 
-  const handleInstallEmbeddedAsOwner = useCallback(async () => {
-    if (installOwnerBusy) return
-    if (!canonicalIdentityIsContract || !canonicalIdentityAddress) {
-      setInstallOwnerError('Missing Coinbase Smart Wallet address.')
-      return
-    }
-    if (!embeddedPrivyEoaAddress) {
-      setInstallOwnerError('No Privy embedded wallet found. Sign in with email to create one, then retry.')
-      return
-    }
-    if (!isConnected || !connectedWalletAddress) {
-      setInstallOwnerError('Connect the wallet that currently owns your Coinbase Smart Wallet, then retry.')
-      return
-    }
-
-    setInstallOwnerBusy(true)
-    setInstallOwnerError(null)
-    setInstallOwnerTxHash(null)
-
-    try {
-      const ok = await isCoinbaseSmartWalletOwner({
-        smartWallet: canonicalIdentityAddress as Address,
-        ownerAddress: connectedWalletAddress as Address,
-      })
-      if (!ok) {
-        throw new Error('Connected wallet is not an onchain owner of this Coinbase Smart Wallet.')
-      }
-
-      const data = encodeFunctionData({
-        abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
-        functionName: 'addOwnerAddress',
-        args: [embeddedPrivyEoaAddress],
-      })
-
-      let txHash: string | null = null
-      try {
-        const wc: any = walletClient as any
-        if (wc?.writeContract) {
-          txHash = await wc.writeContract({
-            address: canonicalIdentityAddress as Address,
-            abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
-            functionName: 'addOwnerAddress',
-            args: [embeddedPrivyEoaAddress],
-          })
-        }
-      } catch {
-        txHash = null
-      }
-
-      if (!txHash) {
-        const provider =
-          connector && typeof (connector as any).getProvider === 'function' ? await (connector as any).getProvider() : null
-        const request =
-          provider?.request
-            ? provider.request.bind(provider)
-            : typeof window !== 'undefined' && (window as any)?.ethereum?.request
-              ? (window as any).ethereum.request.bind((window as any).ethereum)
-              : null
-        if (!request) throw new Error('No wallet provider available.')
-        txHash = await request({
-          method: 'eth_sendTransaction',
-          params: [
-            {
-              from: connectedWalletAddress as Address,
-              to: canonicalIdentityAddress as Address,
-              data,
-              value: '0x0',
-            },
-          ],
-        })
-      }
-
-      setInstallOwnerTxHash(String(txHash))
-
-      if (publicClient && typeof (publicClient as any).waitForTransactionReceipt === 'function') {
-        await (publicClient as any).waitForTransactionReceipt({ hash: txHash })
-      }
-      await embeddedEoaIsCanonicalOwnerQuery.refetch()
-    } catch (e: any) {
-      const msg = typeof e?.message === 'string' ? e.message : 'Failed to add owner'
-      setInstallOwnerError(msg)
-    } finally {
-      setInstallOwnerBusy(false)
-    }
-  }, [
-    canonicalIdentityAddress,
-    canonicalIdentityIsContract,
-    connectedWalletAddress,
-    connector,
-    embeddedEoaIsCanonicalOwnerQuery,
-    embeddedPrivyEoaAddress,
-    installOwnerBusy,
-    isConnected,
-    publicClient,
-    walletClient,
-  ])
 
   // Allow injected EOAs (Rabby/MetaMask/etc) to operate a Coinbase Smart Wallet canonical identity
   // when the EOA is an onchain owner of that smart wallet.
@@ -3338,21 +2953,6 @@ function DeployVaultMain() {
   // Smart wallet is ready only if it matches canonical OR embedded wallet is an owner
   const smartWalletCapabilityReady = privySmartWalletReady && (smartWalletMatchesCanonical || embeddedEoaIsCanonicalOwner)
 
-  // Debug: Log wallet matching state
-  useEffect(() => {
-    console.log('[DeployVault] Wallet state debug:', {
-      privySmartWalletAddress,
-      canonicalIdentityAddress,
-      smartWalletMatchesCanonical,
-      embeddedEoaIsCanonicalOwner,
-      embeddedPrivyEoaAddress,
-      privySmartWalletReady,
-      smartWalletCapabilityReady,
-      embeddedEoaIsCanonicalOwnerQueryStatus: embeddedEoaIsCanonicalOwnerQuery.status,
-      embeddedEoaIsCanonicalOwnerQueryData: embeddedEoaIsCanonicalOwnerQuery.data,
-    })
-  }, [privySmartWalletAddress, canonicalIdentityAddress, smartWalletMatchesCanonical, embeddedEoaIsCanonicalOwner, embeddedPrivyEoaAddress, privySmartWalletReady, smartWalletCapabilityReady, embeddedEoaIsCanonicalOwnerQuery.status, embeddedEoaIsCanonicalOwnerQuery.data])
-
   const canDeploy =
     tokenIsValid &&
     !!zoraCoin &&
@@ -3372,10 +2972,6 @@ function DeployVaultMain() {
     bytecodeInfraOk &&
     !identityBlockingReason &&
     smartWalletCapabilityReady
-
-  const deployPathLabel = privySmartWalletReady
-    ? 'Privy smart wallet (ERC-4337)'
-    : 'Sign in via Privy required'
 
   const vrfConsumerAddress = (CONTRACTS.vrfConsumer ?? null) as Address | null
   const vrfConsumerConfigured = isAddress(String(vrfConsumerAddress ?? ''))
@@ -3761,15 +3357,6 @@ function DeployVaultMain() {
                   <div className="label">Launch</div>
                   <div className="text-xs text-zinc-600">Minimal launch details for your Creator Coin.</div>
                 </div>
-                {hasWallet ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowAdvanced((v) => !v)}
-                    className="text-[10px] text-zinc-600 hover:text-zinc-300 transition-colors"
-                  >
-                    {showAdvanced ? 'Hide details' : 'Details'}
-                  </button>
-                ) : null}
               </div>
 
               {/* Creator Coin */}
@@ -3814,64 +3401,32 @@ function DeployVaultMain() {
                       <div className="text-xs text-zinc-600">Sign in to continue.</div>
                     </>
                   )
-                ) : !showAdvanced ? (
-                  tokenIsValid ? (
-                    <>
-                      <input
-                        value={creatorToken}
-                        disabled
-                        className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-500 placeholder:text-zinc-700 outline-none font-mono opacity-70 cursor-not-allowed"
-                      />
-                      <div className="text-xs text-zinc-600">
-                        {detectedCreatorCoin &&
-                        creatorToken.toLowerCase() === detectedCreatorCoin.toLowerCase()
-                          ? 'Prefilled for this wallet.'
-                          : prefillToken
-                            ? 'Set from a link.'
-                            : 'Set manually.'}
-                      </div>
-                    </>
-                  ) : detectedCreatorCoin ? (
-                    <>
-                      <input
-                        value={detectedCreatorCoin}
-                        disabled
-                        className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-500 placeholder:text-zinc-700 outline-none font-mono opacity-70 cursor-not-allowed"
-                      />
-                      <div className="text-xs text-zinc-600">Prefilled for this wallet.</div>
-                    </>
-                  ) : myProfileQuery.isLoading || myProfileQuery.isFetching ? (
-                    <>
-                      <input
-                        value=""
-                        disabled
-                        placeholder="Detecting your creator coin…"
-                        className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-500 placeholder:text-zinc-700 outline-none font-mono opacity-70 cursor-not-allowed"
-                      />
-                      <div className="text-xs text-zinc-600">If you don’t have a Creator Coin yet, you won’t be able to deploy a vault.</div>
-                    </>
-                  ) : (
-                    <>
-                      <input
-                        value=""
-                        disabled
-                        placeholder="No creator coin detected for this wallet"
-                        className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-500 placeholder:text-zinc-700 outline-none font-mono opacity-70 cursor-not-allowed"
-                      />
-                      <div className="text-xs text-zinc-600">Open Details if you need to paste a coin address.</div>
-                    </>
-                  )
                 ) : (
                   <>
-                    <div className="text-xs text-zinc-600">
-                      Paste a Creator Coin address if you want to deploy a different coin.
-                    </div>
                     <input
                       value={creatorToken}
                       onChange={(e) => setCreatorToken(e.target.value)}
                       placeholder="0x..."
                       className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none focus:border-cyan-500/50 transition-colors font-mono"
                     />
+                    <div className="text-xs text-zinc-600">
+                      {tokenIsValid ? (
+                        <>
+                          {detectedCreatorCoin && creatorToken.toLowerCase() === detectedCreatorCoin.toLowerCase()
+                            ? 'Prefilled for this wallet.'
+                            : prefillToken
+                              ? 'Set from a link.'
+                              : 'Set manually.'}{' '}
+                          Edit to deploy a different coin.
+                        </>
+                      ) : myProfileQuery.isLoading || myProfileQuery.isFetching ? (
+                        'Detecting your creator coin…'
+                      ) : detectedCreatorCoin ? (
+                        'Detected a creator coin for this wallet. You can use it or paste another address.'
+                      ) : (
+                        'Paste a Creator Coin address to deploy.'
+                      )}
+                    </div>
                     {hasWallet && detectedCreatorCoin ? (
                       <button
                         type="button"
@@ -3885,287 +3440,30 @@ function DeployVaultMain() {
                 )}
               </div>
 
-              {/* Details */}
-              {hasWallet && showAdvanced ? (
-                <div className="pt-3 border-t border-zinc-900/50 space-y-4">
-                  <div className="space-y-2">
-                    <div className="label">Deployment</div>
-                    <div className="text-[10px] text-zinc-700">
-                      Deterministic version: <span className="font-mono text-zinc-400">{deploymentVersion}</span>
-                    </div>
-                    <div className="text-xs text-zinc-600">
-                      This is a global “slate” knob. Change <span className="font-mono">VITE_DEPLOYMENT_VERSION</span> to start a fresh deterministic
-                      namespace for everyone.
-                    </div>
-                  </div>
-
-                  <div className="text-xs text-zinc-600">
-                    Allowlist:{' '}
-                    <span className="text-zinc-300">
-                      {allowlistMode === 'disabled' ? 'disabled' : isAllowlistedCreator ? 'allowed' : 'blocked'}
-                    </span>
-                  </div>
-                </div>
-              ) : null}
-
-              {/* Smart Wallet Requirement */}
-              {hasWallet && showAdvanced ? (
-                <div className="pt-3 border-t border-zinc-900/50 space-y-4">
-                  <div>
-                    <div className="label mb-2">Your Smart Wallet</div>
-
-                    <div className="text-xs text-zinc-600 space-y-3">
-                      <div>
-                        Deploy runs from your <span className="text-white">smart wallet</span> on Base. It must hold the first{' '}
-                        <span className="text-white font-medium">5,000,000 {underlyingSymbolUpper || 'TOKENS'}</span> deposit.
-                      </div>
-
-                      {tokenIsValid ? (
-                        <div className="flex items-center justify-between text-sm p-3 bg-black/40 border border-zinc-800 rounded-lg">
-                          <span className="text-zinc-500">Creator smart wallet balance:</span>
-                          <span className={walletHasMinDeposit ? 'text-emerald-400 font-medium' : 'text-amber-300/90 font-medium'}>
-                            {formatToken18(typeof deploySenderTokenBalance === 'bigint' ? deploySenderTokenBalance : undefined)}{' '}
-                            {underlyingSymbolUpper || 'TOKENS'}
-                          </span>
-                        </div>
-                      ) : null}
-
-                      <div className="text-[11px] text-zinc-700">
-                        After deployment: the Vault is owned by your canonical identity wallet; protocol-owned components handle shared ops (hooks, auction wiring, fee routing).
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
             {/* Deploy */}
             <div className="card rounded-xl p-8 space-y-4">
               <div className="label">Deploy</div>
-
-              {showAdvanced && hasWallet && tokenIsValid && zoraCoin && canonicalIdentityAddress && effectiveWalletAddress ? (
-                <div className="rounded-lg border border-white/5 bg-black/20 p-4 space-y-2">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="text-[11px] text-zinc-500">Canonical identity</div>
-                    <div className="text-[11px] font-mono text-zinc-200">{shortAddress(String(canonicalIdentityAddress))}</div>
-                  </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="text-[11px] text-zinc-500">Identity source</div>
-                    <div className="text-[11px] text-zinc-400">{identitySourceLabel(String(identity.canonicalIdentity.source))}</div>
-                  </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="text-[11px] text-zinc-500">Execution wallet</div>
-                    <div className="text-[11px] font-mono text-zinc-200">{shortAddress(String(connectedWalletAddress))}</div>
-                  </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="text-[11px] text-zinc-500">Deploy path</div>
-                    <div className="text-[11px] text-zinc-300">
-                      {deployPathLabel}
-                    </div>
-                  </div>
-                  <div className="text-[11px] text-zinc-700">
-                    Vault ownership will be set to the canonical identity. Your connected wallet only executes the transaction.
-                  </div>
-                </div>
-              ) : null}
-
-
-              {/* Debug: Wallet state - temporarily always visible for diagnosis */}
-              <div className="p-3 rounded-lg border border-zinc-800 bg-zinc-900/50 text-[10px] font-mono space-y-1 mb-3">
-                <div className="text-zinc-500 font-semibold">Debug: Wallet State</div>
-                <div>connector: <span className={connector?.id === 'coinbaseWalletSDK' ? 'text-green-400' : 'text-zinc-300'}>{connector?.id || 'none'}</span></div>
-                <div>connectedAddress: <span className="text-zinc-300">{address || 'null'}</span></div>
-                <div>privySmartWallet: <span className="text-zinc-300">{privySmartWalletAddress || 'null'}</span></div>
-                <div>canonicalIdentity: <span className="text-zinc-300">{canonicalIdentityAddress || 'null'}</span></div>
-                <div>canonicalIsContract: <span className={canonicalIdentityIsContract ? 'text-green-400' : 'text-red-400'}>{String(canonicalIdentityIsContract)}</span></div>
-                <div>zoraEmbeddedWallet: <span className={zoraEmbeddedWalletAddress ? 'text-green-400' : 'text-red-400'}>{zoraEmbeddedWalletAddress || 'NOT LINKED'}</span></div>
-                <div>smartWalletMatchesCanonical: <span className={smartWalletMatchesCanonical ? 'text-green-400' : 'text-red-400'}>{String(smartWalletMatchesCanonical)}</span></div>
-                <div>embeddedEoaIsCanonicalOwner: <span className={embeddedEoaIsCanonicalOwner ? 'text-green-400' : 'text-red-400'}>{String(embeddedEoaIsCanonicalOwner)}</span></div>
-                <div>privySmartWalletReady: <span className={privySmartWalletReady ? 'text-green-400' : 'text-red-400'}>{String(privySmartWalletReady)}</span></div>
-                <div>smartWalletCapabilityReady: <span className={smartWalletCapabilityReady ? 'text-green-400' : 'text-red-400'}>{String(smartWalletCapabilityReady)}</span></div>
-                <div>embeddedPrivyEoa: <span className="text-zinc-300">{embeddedPrivyEoaAddress || 'null'}</span></div>
-                <div>canDeploy: <span className={canDeploy ? 'text-green-400' : 'text-red-400'}>{String(canDeploy)}</span></div>
-                {/* ERC-4337 deployment status */}
-                <div className="mt-2 pt-2 border-t border-zinc-700">
-                  <div className="text-[10px] text-zinc-400 mb-1">Deploy Path (ERC-4337 only):</div>
-                  {connector?.id === 'coinbaseWalletSDK' || connector?.id === 'com.coinbase.wallet' ? (
-                    <div className="text-green-400">✓ Coinbase Wallet connected - ready to deploy</div>
-                  ) : privySmartWalletIsCanonicalOwner ? (
-                    <div className="text-green-400">✓ Privy smart wallet is owner - ready to deploy</div>
-                  ) : (
-                    <div className="text-amber-400">Connect Coinbase Wallet or complete one-time setup</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Simplified auth flow: Privy only */}
+              {/* Auth flow */}
               {!privyReady ? (
-                <button
-                  disabled
-                  className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-600 text-sm cursor-not-allowed"
-                >
-                  Loading…
-                </button>
+                <div className="text-sm text-zinc-500 text-center py-4">Loading…</div>
               ) : !privyAuthenticated ? (
-                <div className="space-y-3">
-                  <button
-                    type="button"
-                    className="btn-accent w-full"
-                    onClick={() => void login({ loginMethods: ['wallet', 'email'] })}
-                  >
-                    Sign in to Deploy
-                  </button>
-                  <div className="text-[11px] text-zinc-600">
-                    Sign in with the same account you used on Zora to access your Creator Coin wallet.
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  className="btn-accent w-full"
+                  onClick={() => void login({ loginMethods: ['wallet', 'email'] })}
+                >
+                  Sign in to Deploy
+                </button>
               ) : !privySmartWalletAddress && !privyLinkedEoaAddress && !isConnected ? (
-                <div className="space-y-3">
-                  <button
-                    disabled
-                    className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-600 text-sm cursor-not-allowed"
-                  >
-                    No wallet linked
-                  </button>
-                  <div className="text-[11px] text-zinc-600">
-                    Email sign-in does not automatically import your Zora wallet into this app.
-                  </div>
+                <div className="space-y-2">
+                  <div className="text-sm text-amber-300/80">Connect your wallet to continue</div>
                   <button
                     type="button"
                     className="btn-primary w-full"
-                    disabled={linkZoraWalletBusy}
-                    onClick={handleLinkZoraWallet}
+                    onClick={() => void login({ loginMethods: ['wallet'] })}
                   >
-                    {linkZoraWalletBusy ? 'Connecting to Zora…' : 'Link Zora Wallet'}
+                    Connect Wallet
                   </button>
-                  {linkZoraWalletError && (
-                    <div className="text-[11px] text-red-400">{linkZoraWalletError}</div>
-                  )}
-                  <div className="text-[11px] text-zinc-700 text-center">or</div>
-                  <button
-                    type="button"
-                    className="btn-secondary w-full"
-                    disabled={linkWalletBusy}
-                    onClick={() => {
-                      if (linkWalletBusy) return
-                      setLinkWalletBusy(true)
-                      setLinkWalletError(null)
-                      try {
-                        linkWallet()
-                      } catch (e: any) {
-                        setLinkWalletBusy(false)
-                        setLinkWalletError(e?.message ? String(e.message) : 'Failed to link wallet')
-                      }
-                    }}
-                  >
-                    {linkWalletBusy ? 'Opening…' : 'Link a different wallet'}
-                  </button>
-                  {linkWalletError ? <div className="text-[11px] text-red-400">{linkWalletError}</div> : null}
-                  <button
-                    type="button"
-                    className="btn-secondary w-full"
-                    onClick={() => void login({ loginMethods: ['wallet', 'email'] })}
-                  >
-                    Try different sign-in
-                  </button>
-                </div>
-              ) : tokenIsValid &&
-                zoraCoin &&
-                canonicalIdentityAddress &&
-                canonicalIdentityIsContract &&
-                embeddedPrivyEoaAddress &&
-                embeddedEoaIsCanonicalOwnerQuery.isLoading ? (
-                <button
-                  disabled
-                  className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-600 text-sm cursor-not-allowed"
-                >
-                  Checking Smart Wallet owners…
-                </button>
-              ) : tokenIsValid &&
-                zoraCoin &&
-                canonicalIdentityAddress &&
-                canonicalIdentityIsContract &&
-                embeddedPrivyEoaAddress &&
-                !embeddedEoaIsCanonicalOwner ? (
-                <div className="space-y-3">
-                  <div className="p-4 rounded-lg border border-amber-500/20 bg-amber-500/10">
-                    <div className="text-sm font-medium text-amber-200">One-time setup required</div>
-                    <div className="mt-1 text-xs text-amber-200/80 leading-relaxed">
-                      To enable ERC-4337 batched transactions, add your CreatorVault embedded wallet as an owner of your Zora Smart Wallet.
-                      This is a one-time setup.
-                    </div>
-                    <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-white/10 bg-black/20 px-3 py-2">
-                      <div className="min-w-0">
-                        <div className="text-[10px] uppercase tracking-wider text-zinc-500">CreatorVault embedded wallet</div>
-                        <div className="mt-0.5 font-mono text-xs text-zinc-200 truncate">{embeddedPrivyEoaAddress}</div>
-                      </div>
-                      <button type="button" className="btn-secondary shrink-0" onClick={() => void handleCopyEmbedded()}>
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Option 1: Use cross-app wallet (Zora) to add owner - preferred */}
-                  {zoraEmbeddedWalletAddress ? (
-                    <>
-                      <button
-                        type="button"
-                        className="btn-primary w-full"
-                        disabled={addOwnerBusy}
-                        onClick={() => void handleAddOwnerToZoraWallet(canonicalIdentityAddress as Address)}
-                      >
-                        {addOwnerBusy ? 'Confirm in Zora popup…' : 'Add owner via Zora (Recommended)'}
-                      </button>
-                      {addOwnerTxHash ? (
-                        <div className="text-[11px] text-green-400">
-                          Success! Tx: <span className="font-mono">{shortAddress(addOwnerTxHash)}</span>
-                          <button
-                            type="button"
-                            className="ml-2 text-zinc-400 underline"
-                            onClick={() => void refreshEmbeddedOwnerStatus()}
-                          >
-                            Refresh status
-                          </button>
-                        </div>
-                      ) : null}
-                      {addOwnerError ? <div className="text-[11px] text-red-400">{addOwnerError}</div> : null}
-                      <div className="text-[11px] text-zinc-600">
-                        This will open a popup to Zora for you to approve the transaction.
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        className="btn-primary w-full"
-                        disabled={linkZoraWalletBusy}
-                        onClick={handleLinkZoraWallet}
-                      >
-                        {linkZoraWalletBusy ? 'Connecting…' : 'Link Zora Wallet first'}
-                      </button>
-                      {linkZoraWalletError && (
-                        <div className="text-[11px] text-red-400">{linkZoraWalletError}</div>
-                      )}
-                      <div className="text-[11px] text-zinc-600">
-                        Link your Zora wallet to add the owner via cross-app transaction.
-                      </div>
-                    </>
-                  )}
-
-                  <div className="text-[11px] text-zinc-700 text-center">— or —</div>
-
-                  {/* Option 2: Connect wallet manually */}
-                  <button type="button" className="btn-secondary w-full" disabled={installOwnerBusy} onClick={() => void handleInstallEmbeddedAsOwner()}>
-                    {installOwnerBusy ? 'Confirming…' : 'Add owner via connected wallet'}
-                  </button>
-                  {installOwnerTxHash ? (
-                    <div className="text-[11px] text-zinc-500">
-                      Submitted: <span className="font-mono text-zinc-400">{shortAddress(installOwnerTxHash)}</span>
-                    </div>
-                  ) : null}
-                  {installOwnerError ? <div className="text-[11px] text-red-400">{installOwnerError}</div> : null}
-                  <div className="text-[11px] text-zinc-600">
-                    Connect the wallet that currently owns your Smart Wallet to approve.
-                  </div>
                 </div>
               ) : !tokenIsValid && creatorAllowlistQuery.isLoading ? (
                 <button
@@ -4237,74 +3535,6 @@ function DeployVaultMain() {
                 >
                   {`Creator smart wallet needs 5,000,000 ${underlyingSymbolUpper || 'TOKENS'} to deploy & launch`}
                 </button>
-              ) : tokenIsValid && zoraCoin && privySmartWalletReady && !smartWalletMatchesCanonical && !embeddedEoaIsCanonicalOwner ? (
-                <div className="space-y-3">
-                  <div className="p-4 rounded-lg border border-amber-500/20 bg-amber-500/10">
-                    <div className="text-sm font-medium text-amber-200">Wallet setup required</div>
-                    <div className="mt-2 text-xs text-amber-200/80 leading-relaxed">
-                      Your Privy smart wallet (<span className="font-mono">{privySmartWalletAddress ? shortAddress(privySmartWalletAddress) : '—'}</span>) 
-                      doesn't match your Zora smart wallet (<span className="font-mono">{canonicalIdentityAddress ? shortAddress(canonicalIdentityAddress) : '—'}</span>).
-                    </div>
-                    <div className="mt-2 text-xs text-amber-200/80 leading-relaxed">
-                      Add your CreatorVault embedded wallet as an owner of your Zora wallet to enable deployment.
-                    </div>
-                    <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-white/10 bg-black/20 px-3 py-2">
-                      <div className="min-w-0">
-                        <div className="text-[10px] uppercase tracking-wider text-zinc-500">CreatorVault embedded wallet</div>
-                        <div className="mt-0.5 font-mono text-xs text-zinc-200 truncate">{embeddedPrivyEoaAddress || '—'}</div>
-                      </div>
-                      <button type="button" className="btn-secondary shrink-0" onClick={() => void handleCopyEmbedded()}>
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Option 1: Link Zora and add owner via cross-app */}
-                  {zoraEmbeddedWalletAddress ? (
-                    <>
-                      <button
-                        type="button"
-                        className="btn-primary w-full"
-                        disabled={addOwnerBusy}
-                        onClick={() => canonicalIdentityAddress && void handleAddOwnerToZoraWallet(canonicalIdentityAddress as Address)}
-                      >
-                        {addOwnerBusy ? 'Confirm in Zora popup…' : 'Add owner via Zora (Recommended)'}
-                      </button>
-                      {addOwnerTxHash && (
-                        <div className="text-[11px] text-green-400">
-                          Success! Tx: <span className="font-mono">{shortAddress(addOwnerTxHash)}</span>
-                          <button type="button" className="ml-2 text-zinc-400 underline" onClick={() => void refreshEmbeddedOwnerStatus()}>
-                            Refresh status
-                          </button>
-                        </div>
-                      )}
-                      {addOwnerError && <div className="text-[11px] text-red-400">{addOwnerError}</div>}
-                    </>
-                  ) : (
-                    <>
-                      <button type="button" className="btn-primary w-full" disabled={linkZoraWalletBusy} onClick={handleLinkZoraWallet}>
-                        {linkZoraWalletBusy ? 'Connecting…' : 'Link Zora Wallet'}
-                      </button>
-                      {linkZoraWalletError && <div className="text-[11px] text-red-400">{linkZoraWalletError}</div>}
-                      <div className="text-[11px] text-zinc-600">
-                        Link your Zora wallet to add the owner via cross-app transaction.
-                      </div>
-                    </>
-                  )}
-
-                  <div className="text-[11px] text-zinc-700 text-center">— or add manually on Basescan —</div>
-                  <a
-                    href={`https://basescan.org/address/${canonicalIdentityAddress}#writeContract`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-secondary w-full text-center block"
-                  >
-                    Open on Basescan
-                  </a>
-                  <div className="text-[11px] text-zinc-600">
-                    Call <code className="bg-black/30 px-1 rounded">addOwnerAddress</code> with <code className="bg-black/30 px-1 rounded">{embeddedPrivyEoaAddress ? shortAddress(embeddedPrivyEoaAddress) : '—'}</code>
-                  </div>
-                </div>
               ) : canDeploy ? (
                 <>
                   {tokenIsValid && zoraCoin && identity.warnings.includes('CUSTODY_MISMATCH') && farcasterCustodyAddress ? (
@@ -4319,76 +3549,36 @@ function DeployVaultMain() {
                     </div>
                   ) : null}
 
-                  {/* Show gas-free setup option when Privy smart wallet is not yet an owner */}
-                  {privySmartWalletAddress && !privySmartWalletIsCanonicalOwner && (
+                  {/* Gas-free setup or status */}
+                  {privySmartWalletAddress && !privySmartWalletIsCanonicalOwner ? (
                     <div className="p-4 rounded-lg border border-blue-500/20 bg-blue-500/10 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-medium text-blue-200">🚀 Enable Gas-Free Deploys</div>
-                        <div className="text-[10px] text-blue-300/60">One-time setup</div>
+                      <div className="text-sm font-medium text-blue-200">One-time setup</div>
+                      <div className="text-[11px] text-blue-200/70">
+                        Enable gas-free deployments. This is completely free.
                       </div>
-                      
-                      <div className="text-[11px] text-blue-200/70 leading-relaxed">
-                        Add your Privy smart wallet as an owner to enable gas-free ERC-4337 deployments.
-                        This uses a gas-sponsored UserOperation — <strong className="text-green-300">no fees required</strong>.
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] text-green-400">
-                        <span>✓</span>
-                        <span>Gas sponsored by paymaster (works with any wallet)</span>
-                      </div>
-
-                      <div className="flex items-center gap-2 text-[10px] text-zinc-500 bg-black/20 rounded px-2 py-1">
-                        <span>Adding:</span>
-                        <span className="font-mono text-zinc-400">{shortAddress(privySmartWalletAddress)}</span>
-                        <span className="text-zinc-600">as owner</span>
-                      </div>
-                      
                       <button
                         type="button"
                         className="btn-primary w-full"
                         disabled={addPrivySwOwnerBusy}
                         onClick={() => void handleAddPrivySmartWalletAsOwner()}
                       >
-                        {addPrivySwOwnerBusy ? 'Confirming in wallet…' : 'Setup Gas-Free (No Cost)'}
+                        {addPrivySwOwnerBusy ? 'Confirming…' : 'Enable Gas-Free Deploys'}
                       </button>
-                      
                       {addPrivySwOwnerTxHash && (
-                        <div className="text-[11px] text-green-400 flex items-center gap-2">
-                          <span>✓ Success!</span>
-                          <a 
-                            href={`https://basescan.org/tx/${addPrivySwOwnerTxHash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-mono hover:underline"
-                          >
-                            {shortAddress(addPrivySwOwnerTxHash)}
-                          </a>
-                          <button
-                            type="button"
-                            className="text-zinc-400 underline"
-                            onClick={() => void refreshPrivySmartWalletOwnerStatus()}
-                          >
-                            Refresh
-                          </button>
+                        <div className="text-[11px] text-green-400">
+                          ✓ Success! <button type="button" className="underline" onClick={() => void refreshPrivySmartWalletOwnerStatus()}>Refresh</button>
                         </div>
                       )}
                       {addPrivySwOwnerError && (
-                        <div className="text-[11px] text-red-400 whitespace-pre-wrap">{addPrivySwOwnerError}</div>
+                        <div className="text-[11px] text-red-400">{addPrivySwOwnerError}</div>
                       )}
                     </div>
-                  )}
-
-                  {/* Show success message when gas-free is enabled */}
-                  {privySmartWalletIsCanonicalOwner && (
-                    <div className="p-3 rounded-lg border border-green-500/20 bg-green-500/10">
-                      <div className="flex items-center gap-2 text-sm text-green-300">
-                        <span>✓</span>
-                        <span>Gas-free deployment enabled</span>
-                      </div>
-                      <div className="mt-1 text-[10px] text-green-300/60">
-                        Transactions will be sponsored via ERC-4337 paymaster
-                      </div>
+                  ) : privySmartWalletIsCanonicalOwner ? (
+                    <div className="flex items-center gap-2 text-[11px] text-green-400 mb-2">
+                      <span>✓</span>
+                      <span>Gas-free deployment ready</span>
                     </div>
-                  )}
+                  ) : null}
 
                   <DeployVaultBatcher
                     creatorToken={creatorToken as Address}
@@ -4441,185 +3631,6 @@ function DeployVaultMain() {
               </div>
             </div>
 
-            {/* Contracts (details) */}
-            {showAdvanced ? (
-              <details className="card rounded-xl p-8">
-                <summary className="flex items-center justify-between gap-4 cursor-pointer list-none">
-                  <div className="label">Contracts</div>
-                  <div className="text-[10px] text-zinc-600">View</div>
-                </summary>
-
-              <div className="mt-6 rounded-2xl border border-white/5 bg-[#080808]/60 backdrop-blur-2xl overflow-hidden divide-y divide-white/5">
-                <div className="px-4 py-2 text-[10px] uppercase tracking-wide text-zinc-500 bg-white/[0.02]">
-                  Core stack
-                </div>
-
-                <ExplainerRow
-                  icon={
-                    <div className="w-14 h-14 rounded-full bg-black/30 border border-white/5 shadow-[inset_0_0_24px_rgba(0,0,0,0.9)] flex items-center justify-center text-zinc-500">
-                      <Lock className="w-5 h-5" />
-                    </div>
-                  }
-                  label="Vault token"
-                  title={`${derivedVaultName || '—'} (${derivedVaultSymbol || '—'})`}
-                  contractName="CreatorOVault"
-                  note="Core vault that holds creator coin deposits and mints shares."
-                  metaLine={
-                    <>
-                      <span className="font-mono text-zinc-400">ERC-4626</span>
-                      {' · '}
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
-                        <img
-                          src="/protocols/layerzero.svg"
-                          alt=""
-                          aria-hidden="true"
-                          loading="lazy"
-                          className="w-3.5 h-3.5 opacity-90"
-                        />
-                        LayerZero
-                      </span>
-                      {' · '}
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
-                        <img
-                          src="/protocols/yearn.svg"
-                          alt=""
-                          aria-hidden="true"
-                          loading="lazy"
-                          className="w-3.5 h-3.5 opacity-90"
-                        />
-                        Yearn v3
-                      </span>
-                    </>
-                  }
-                />
-
-                <ExplainerRow
-                  icon={
-                    tokenIsValid ? (
-                      <DerivedTokenIcon
-                        tokenAddress={creatorToken as `0x${string}`}
-                        symbol={underlyingSymbolUpper || 'TOKEN'}
-                        variant="share"
-                        size="lg"
-                      />
-                    ) : null
-                  }
-                  label="Share token"
-                  title={`${derivedShareName || '—'} (${derivedShareSymbol || '—'})`}
-                  contractName="CreatorShareOFT"
-                  note="Wrapped vault shares token (■TOKEN) used for routing fees."
-                  metaLine={
-                    <>
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
-                        <img
-                          src="/protocols/layerzero.svg"
-                          alt=""
-                          aria-hidden="true"
-                          loading="lazy"
-                          className="w-3.5 h-3.5 opacity-90"
-                        />
-                        LayerZero OFT
-                      </span>
-                    </>
-                  }
-                />
-
-                <ExplainerRow
-                  icon={
-                    <div className="w-8 h-8 flex items-center justify-center text-zinc-600">
-                      <Layers className="w-4 h-4" />
-                    </div>
-                  }
-                  label="Wrapper"
-                  title="Vault Wrapper"
-                  contractName="CreatorOVaultWrapper"
-                  note="Wraps/unlocks vault shares into ■TOKEN."
-                />
-
-                <ExplainerRow
-                  icon={
-                    <div className="w-8 h-8 flex items-center justify-center text-zinc-600">
-                      <BarChart3 className="w-4 h-4" />
-                    </div>
-                  }
-                  label="Gauge controller"
-                  title="Fees & incentives"
-                  contractName="CreatorGaugeController"
-                  note="Routes fees (burn / lottery / voters) and manages gauges."
-                />
-
-                <ExplainerRow
-                  icon={
-                    <div className="w-8 h-8 flex items-center justify-center text-zinc-600">
-                      <Rocket className="w-4 h-4" />
-                    </div>
-                  }
-                  label="Launch strategy"
-                  title={
-                    <a
-                      href="https://cca.uniswap.org"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-block max-w-full hover:text-white transition-colors underline underline-offset-4 decoration-white/15 hover:decoration-white/30"
-                      title="Open cca.uniswap.org"
-                    >
-                      Uniswap Continuous Clearing Auction
-                    </a>
-                  }
-                  contractName="CCALaunchStrategy"
-                  note="Runs Uniswap’s Continuous Clearing Auction (CCA) for fair price discovery."
-                  metaLine={
-                    <>
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
-                        <img
-                          src="/protocols/uniswap.png"
-                          alt=""
-                          aria-hidden="true"
-                          loading="lazy"
-                          className="w-3.5 h-3.5 opacity-90"
-                        />
-                        Uniswap
-                      </span>
-                    </>
-                  }
-                />
-
-                <ExplainerRow
-                  icon={
-                    <div className="w-8 h-8 flex items-center justify-center text-zinc-600">
-                      <ShieldCheck className="w-4 h-4" />
-                    </div>
-                  }
-                  label="Oracle"
-                  title="Price oracle"
-                  contractName="CreatorOracle"
-                  note="Price oracle used by the auction and strategies."
-                  metaLine={
-                    <>
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
-                        <img
-                          src="/protocols/chainlink.svg"
-                          alt=""
-                          aria-hidden="true"
-                          loading="lazy"
-                          className="w-3.5 h-3.5 opacity-90"
-                        />
-                        Chainlink
-                      </span>
-                    </>
-                  }
-                />
-
-                <div className="px-4 py-2 text-[10px] uppercase tracking-wide text-zinc-500 bg-white/[0.02]">
-                  Yield strategies (post-auction)
-                </div>
-                <div className="px-4 py-3 text-[12px] text-zinc-500">
-                  Yield strategies are deployed after launch (post-auction) to keep the initial deployment deterministic and compatible with wallet
-                  simulation.
-                </div>
-              </div>
-              </details>
-            ) : null}
           </div>
         </div>
       </div>
