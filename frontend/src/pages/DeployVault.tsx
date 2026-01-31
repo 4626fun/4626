@@ -1664,23 +1664,13 @@ function DeployVaultBatcher({
               args: [calls.map(c => ({ target: c.target, value: c.value, data: c.data }))],
             })
             
-            // Get the embedded wallet's provider and send transaction directly
+            // Use Privy's embedded wallet sendTransaction which includes gas sponsorship
             // The embedded wallet is an owner of the smart wallet, so this should work
-            const provider = await embeddedWallet.getEthereumProvider()
-            if (!provider) {
-              throw new Error('Could not get embedded wallet provider')
-            }
-            
-            // Send transaction from embedded wallet TO the smart wallet
-            // Privy will handle gas sponsorship
-            const txHash = await provider.request({
-              method: 'eth_sendTransaction',
-              params: [{
-                from: embeddedEoaAddress,
-                to: canonicalSmartWallet,
-                data: batchData,
-                value: '0x0',
-              }],
+            const txHash = await embeddedWallet.sendTransaction({
+              to: canonicalSmartWallet,
+              data: batchData,
+              value: 0n,
+              chainId: base.id,
             })
             
             setTxId(txHash)
