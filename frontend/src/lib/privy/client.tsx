@@ -3,6 +3,7 @@ import { Component, createContext, useContext, useMemo } from 'react'
 import { getPrivyAppId, isPrivyClientEnabled } from '@/lib/flags'
 import { PrivyProvider } from '@privy-io/react-auth'
 import { SmartWalletsProvider } from '@privy-io/react-auth/smart-wallets'
+import { base } from 'viem/chains'
 
 type PrivyClientStatus = 'disabled' | 'loading' | 'ready'
 
@@ -90,10 +91,23 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
     loginMethods,
   } as any
 
+  // Use same-origin proxy for paymaster/bundler to keep CDP key server-side
+  // The proxy at /api/paymaster handles authentication and forwards to CDP
+  const paymasterUrl = (import.meta.env.VITE_CDP_PAYMASTER_URL as string) || '/api/paymaster'
+
   return (
     <PrivyClientContext.Provider value="ready">
       <PrivyProviderSafetyBoundary appId={appId} baseConfig={baseConfig} safeConfig={safeConfig}>
-        <SmartWalletsProvider>
+        <SmartWalletsProvider
+          config={{
+            chains: [base],
+            transactionReceipt: { confirmations: 1 },
+            bundlerUrl: ({ chain }) => paymasterUrl,
+            paymasterUrl: ({ chain }) => ({
+              url: paymasterUrl,
+            }),
+          }}
+        >
           {children}
         </SmartWalletsProvider>
       </PrivyProviderSafetyBoundary>
