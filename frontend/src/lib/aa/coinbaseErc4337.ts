@@ -604,6 +604,19 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     if (lc.includes('insufficient funds') || lc.includes('insufficient balance')) {
       throw new Error('Paymaster rejected: insufficient sponsorship funds. Contact support.')
     }
+    if (lc.includes('max sponsorship cost') || lc.includes('sponsorship cost per user op exceeded')) {
+      // Extract the cost and limit from the error if possible
+      const costMatch = errMsg.match(/(\d+\.?\d*)\s*USD.*limit:\s*(\d+\.?\d*)\s*USD/i)
+      if (costMatch) {
+        throw new Error(
+          `Gas sponsorship limit exceeded: this operation costs $${costMatch[1]} but the limit is $${costMatch[2]}. ` +
+          'Increase your per-UserOp limit in the CDP Dashboard (portal.cdp.coinbase.com).'
+        )
+      }
+      throw new Error(
+        'Gas sponsorship limit exceeded. Increase your per-UserOp limit in the CDP Dashboard (portal.cdp.coinbase.com).'
+      )
+    }
     if (lc.includes('invalid signature') || lc.includes('signature check failed')) {
       throw new Error(
         'UserOp signature verification failed. This usually means the signer is not a valid owner. ' +
@@ -618,6 +631,9 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     }
     if (lc.includes('aa10') || lc.includes('sender already constructed')) {
       throw new Error('Smart wallet already exists at this address.')
+    }
+    if (lc.includes('resource not available') || lc.includes('request denied')) {
+      throw new Error(`Paymaster denied request: ${errMsg}`)
     }
     
     throw new Error(`UserOperation failed: ${errMsg}`)
