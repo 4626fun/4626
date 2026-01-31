@@ -742,9 +742,6 @@ function DeployVaultBatcher({
   switchAuthCta,
   smartWalletClient,
   canonicalSmartWallet,
-  embeddedWallet,
-  embeddedEoaAddress,
-  embeddedEoaIsCanonicalOwner,
   privySmartWalletIsCanonicalOwner,
   privySmartWalletAddress,
   connectorId,
@@ -768,10 +765,6 @@ function DeployVaultBatcher({
   switchAuthCta?: { label: string; onClick: () => void }
   smartWalletClient: any
   canonicalSmartWallet: Address | null
-  embeddedWallet: any
-  embeddedEoaAddress: Address | null
-  // Whether the embedded Privy EOA is an owner of the canonical smart wallet
-  embeddedEoaIsCanonicalOwner: boolean
   // Whether the Privy smart wallet is an owner of the canonical smart wallet (enables gas-free ERC-4337)
   privySmartWalletIsCanonicalOwner: boolean
   // The Privy smart wallet address
@@ -1695,107 +1688,11 @@ function DeployVaultBatcher({
             return
           }
           
-          // PATH 3: Embedded Privy EOA is owner of canonical smart wallet
-          // Fallback: Use direct executeBatch (requires ETH in embedded wallet)
-          if (canonicalSmartWallet && embeddedEoaAddress && embeddedEoaIsCanonicalOwner && embeddedWallet && publicClient) {
-            logger.info(`[DeployVault] Using embedded wallet direct executeBatch for ${phaseLabel} (requires ETH)`)
-            
-            // Get the embedded wallet's provider
-            const provider = await embeddedWallet.getEthereumProvider()
-            if (!provider) {
-              throw new Error('Could not get embedded wallet provider')
-            }
-            
-            // Ensure we're on Base network
-            const chainIdHex = await provider.request({ method: 'eth_chainId' })
-            const currentChainId = parseInt(chainIdHex, 16)
-            if (currentChainId !== 8453) {
-              try {
-                await provider.request({
-                  method: 'wallet_switchEthereumChain',
-                  params: [{ chainId: '0x2105' }],
-                })
-              } catch (switchError: any) {
-                if (switchError?.code === 4902) {
-                  await provider.request({
-                    method: 'wallet_addEthereumChain',
-                    params: [{
-                      chainId: '0x2105',
-                      chainName: 'Base',
-                      nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
-                      rpcUrls: ['https://mainnet.base.org'],
-                      blockExplorerUrls: ['https://basescan.org'],
-                    }],
-                  })
-                } else {
-                  throw switchError
-                }
-              }
-            }
-            
-            // Encode executeBatch call
-            const executeBatchData = encodeFunctionData({
-              abi: [
-                {
-                  type: 'function',
-                  name: 'executeBatch',
-                  stateMutability: 'payable',
-                  inputs: [
-                    {
-                      name: 'calls',
-                      type: 'tuple[]',
-                      components: [
-                        { name: 'target', type: 'address' },
-                        { name: 'value', type: 'uint256' },
-                        { name: 'data', type: 'bytes' },
-                      ],
-                    },
-                  ],
-                  outputs: [],
-                },
-              ],
-              functionName: 'executeBatch',
-              args: [calls.map(c => ({ target: c.target, value: c.value, data: c.data }))],
-            })
-            
-            logger.info('[DeployVault] Sending direct executeBatch via embedded wallet', {
-              from: embeddedEoaAddress,
-              to: canonicalSmartWallet,
-              callCount: calls.length,
-            })
-            
-            // Send transaction from embedded EOA
-            const txHash = await provider.request({
-              method: 'eth_sendTransaction',
-              params: [{
-                from: embeddedEoaAddress,
-                to: canonicalSmartWallet,
-                data: executeBatchData,
-                value: '0x0',
-              }],
-            })
-            
-            setTxId(txHash)
-            setPhaseTxs((s) => ({
-              ...s,
-              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: txHash,
-            }))
-            
-            // Wait for confirmation
-            if (publicClient && typeof (publicClient as any).waitForTransactionReceipt === 'function') {
-              await (publicClient as any).waitForTransactionReceipt({ hash: txHash })
-            }
-            
-            logger.warn(`[DeployVault] ${phaseLabel}_confirmed via embedded wallet direct`, {
-              txHash,
-            })
-            return
-          }
-          
-          // No valid path available
+          // No valid ERC-4337 path available
           throw new Error(
-            'To deploy gas-free, add your Privy smart wallet as an owner of your Zora wallet. ' +
-            'Alternatively, connect with Coinbase Wallet or fund your embedded wallet with ETH.',
+            'ERC-4337 deployment requires one of:\n' +
+            '1. Connect with Coinbase Wallet (recommended)\n' +
+            '2. Add your Privy smart wallet as an owner of your Zora wallet (one-time setup)',
           )
         }
 
@@ -2018,44 +1915,25 @@ function DeployVaultBatcher({
         )}
       </div>
 
-      {/* Show deploy button if we have a valid path */}
-      {isCoinbaseWalletDirect || privySmartWalletIsCanonicalOwner || embeddedEoaIsCanonicalOwner ? (
+      {/* Show deploy button only if we have a valid ERC-4337 path */}
+      {isCoinbaseWalletDirect || privySmartWalletIsCanonicalOwner ? (
         <div className="space-y-2">
-          {privySmartWalletIsCanonicalOwner && (
-            <div className="text-[10px] text-green-400/80 flex items-center gap-1">
-              <span>✓</span> Gas-free deployment enabled via Privy smart wallet
-            </div>
-          )}
+          <div className="text-[10px] text-green-400/80 flex items-center gap-1">
+            <span>✓</span> Gas-free ERC-4337 {privySmartWalletIsCanonicalOwner ? 'via Privy smart wallet' : 'via Coinbase Wallet'}
+          </div>
           <button type="button" onClick={() => void submit()} disabled={disabled} className="btn-accent w-full rounded-lg">
-            {busy ? 'Deploying…' : privySmartWalletIsCanonicalOwner ? '1‑Click Deploy (Gas-Free)' : '1‑Click Deploy'}
-          </button>
-        </div>
-      ) : embeddedEoaIsCanonicalOwner && privySmartWalletAddress && !privySmartWalletIsCanonicalOwner ? (
-        /* Embedded EOA is owner but Privy smart wallet is not - offer to add it */
-        <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4 space-y-3">
-          <div className="text-sm font-medium text-blue-200">Enable Gas-Free Deploys</div>
-          <div className="text-[11px] text-blue-200/70 leading-relaxed">
-            Add your Privy smart wallet (<span className="font-mono">{shortAddress(privySmartWalletAddress)}</span>) as an owner 
-            of your Zora wallet. This is a one-time setup that enables gas-free deployments.
-          </div>
-          <div className="text-[10px] text-zinc-500">
-            Requires ~$0.50 in ETH in your embedded wallet ({embeddedEoaAddress ? shortAddress(embeddedEoaAddress) : '—'})
-          </div>
-          {/* TODO: Add button to trigger handleAddPrivySmartWalletAsOwner - needs to be passed as prop */}
-          <button 
-            type="button" 
-            disabled={disabled}
-            onClick={() => void submit()}
-            className="btn-primary w-full rounded-lg"
-          >
-            Deploy (with gas)
+            {busy ? 'Deploying…' : '1‑Click Deploy (Gas-Free)'}
           </button>
         </div>
       ) : (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
-          <div className="text-sm font-medium text-amber-200">Setup required</div>
-          <div className="text-[11px] text-amber-200/70">
-            Connect with Coinbase Wallet, or ensure your embedded wallet is an owner of the canonical smart wallet.
+          <div className="text-sm font-medium text-amber-200">ERC-4337 Setup Required</div>
+          <div className="text-[11px] text-amber-200/70 leading-relaxed">
+            All deployments use gas-sponsored ERC-4337 UserOperations.
+          </div>
+          <div className="text-[11px] text-zinc-400 space-y-1">
+            <div>Option 1: Connect with <strong className="text-amber-200">Coinbase Wallet</strong> (instant)</div>
+            <div>Option 2: Add your Privy smart wallet as owner (one-time setup below)</div>
           </div>
         </div>
       )}
@@ -2911,114 +2789,60 @@ function DeployVaultMain() {
         args: [privySmartWalletAddress],
       })
 
-      // PATH A: Use connected Coinbase Wallet with ERC-4337 (gas-sponsored, best UX)
+      // Use Coinbase Wallet with ERC-4337 (gas-sponsored)
       const isCoinbaseWallet = connector?.id === 'coinbaseWalletSDK' || connector?.id === 'com.coinbase.wallet'
-      if (isCoinbaseWallet && connectedWalletAddress && walletClient && publicClient) {
-        // Check if connected wallet is an owner
-        const isOwner = await isCoinbaseSmartWalletOwner({
-          smartWallet: canonicalIdentityAddress as Address,
-          ownerAddress: connectedWalletAddress as Address,
-        })
-        
-        if (isOwner) {
-          logger.info('[DeployVault] Using Coinbase Wallet ERC-4337 to add Privy SW as owner (gas-free)')
-          
-          const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-          const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
-          const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv) || '/api/paymaster'
-          
-          const result = await sendCoinbaseSmartWalletUserOperation({
-            publicClient: publicClient as any,
-            walletClient: walletClient as any,
-            bundlerUrl,
-            smartWallet: canonicalIdentityAddress as Address,
-            ownerAddress: connectedWalletAddress as Address,
-            calls: [{
-              to: canonicalIdentityAddress as Address,
-              value: 0n,
-              data: addOwnerData,
-            }],
-            version: '1',
-          })
-          
-          setAddPrivySwOwnerTxHash(result.transactionHash)
-          logger.info('[DeployVault] Privy smart wallet added as owner via Coinbase Wallet ERC-4337', {
-            userOpHash: result.userOpHash,
-            txHash: result.transactionHash,
-          })
-          
-          await privySmartWalletIsCanonicalOwnerQuery.refetch()
-          return
-        }
+      if (!isCoinbaseWallet) {
+        throw new Error(
+          'Connect with Coinbase Wallet to enable gas-free deploys.\n\n' +
+          'Your Coinbase Wallet is already an owner of your Zora smart wallet, ' +
+          'so this one-time setup is completely gas-free.'
+        )
       }
-
-      // PATH B: Use embedded EOA (requires ETH for gas)
-      if (embeddedPrivyEoaAddress && embeddedPrivyWallet && embeddedEoaIsCanonicalOwner) {
-        logger.info('[DeployVault] Using embedded EOA to add Privy SW as owner (requires gas)')
-        
-        const provider = await embeddedPrivyWallet.getEthereumProvider()
-        if (!provider) {
-          throw new Error('Could not get embedded wallet provider')
-        }
-
-        // Ensure we're on Base network
-        const chainIdHex = await provider.request({ method: 'eth_chainId' })
-        const currentChainId = parseInt(chainIdHex, 16)
-        if (currentChainId !== 8453) {
-          try {
-            await provider.request({
-              method: 'wallet_switchEthereumChain',
-              params: [{ chainId: '0x2105' }],
-            })
-          } catch (switchError: any) {
-            if (switchError?.code === 4902) {
-              await provider.request({
-                method: 'wallet_addEthereumChain',
-                params: [{
-                  chainId: '0x2105',
-                  chainName: 'Base',
-                  nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
-                  rpcUrls: ['https://mainnet.base.org'],
-                  blockExplorerUrls: ['https://basescan.org'],
-                }],
-              })
-            } else {
-              throw switchError
-            }
-          }
-        }
-
-        const txHash = await provider.request({
-          method: 'eth_sendTransaction',
-          params: [{
-            from: embeddedPrivyEoaAddress,
-            to: canonicalIdentityAddress,
-            data: addOwnerData,
-            value: '0x0',
-          }],
-        })
-
-        setAddPrivySwOwnerTxHash(String(txHash))
-        logger.info('[DeployVault] Adding Privy smart wallet as owner via embedded EOA', {
-          txHash,
-          canonical: canonicalIdentityAddress,
-          privySmartWallet: privySmartWalletAddress,
-        })
-
-        if (publicClient && typeof (publicClient as any).waitForTransactionReceipt === 'function') {
-          await (publicClient as any).waitForTransactionReceipt({ hash: txHash })
-        }
-
-        await privySmartWalletIsCanonicalOwnerQuery.refetch()
-        return
+      
+      if (!connectedWalletAddress || !walletClient || !publicClient) {
+        throw new Error('Wallet not connected. Please connect your Coinbase Wallet.')
       }
-
-      // No valid path available
-      throw new Error(
-        'To enable gas-free deploys, either:\n' +
-        '1. Connect with Coinbase Wallet (recommended - no gas needed), or\n' +
-        '2. Ensure your embedded wallet is an owner and has ETH for gas'
-      )
+      
+      // Verify connected wallet is an owner
+      const isOwner = await isCoinbaseSmartWalletOwner({
+        smartWallet: canonicalIdentityAddress as Address,
+        ownerAddress: connectedWalletAddress as Address,
+      })
+      
+      if (!isOwner) {
+        throw new Error(
+          'Your connected Coinbase Wallet is not an owner of your Zora smart wallet.\n\n' +
+          'Make sure you are connected with the same Coinbase Wallet that controls your Zora identity.'
+        )
+      }
+      
+      logger.info('[DeployVault] Using Coinbase Wallet ERC-4337 to add Privy SW as owner (gas-free)')
+      
+      const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+      const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
+      const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv) || '/api/paymaster'
+      
+      const result = await sendCoinbaseSmartWalletUserOperation({
+        publicClient: publicClient as any,
+        walletClient: walletClient as any,
+        bundlerUrl,
+        smartWallet: canonicalIdentityAddress as Address,
+        ownerAddress: connectedWalletAddress as Address,
+        calls: [{
+          to: canonicalIdentityAddress as Address,
+          value: 0n,
+          data: addOwnerData,
+        }],
+        version: '1',
+      })
+      
+      setAddPrivySwOwnerTxHash(result.transactionHash)
+      logger.info('[DeployVault] Privy smart wallet added as owner via Coinbase Wallet ERC-4337', {
+        userOpHash: result.userOpHash,
+        txHash: result.transactionHash,
+      })
+      
+      await privySmartWalletIsCanonicalOwnerQuery.refetch()
     } catch (e: any) {
       const msg = typeof e?.message === 'string' ? e.message : 'Failed to add Privy smart wallet as owner'
       setAddPrivySwOwnerError(msg)
@@ -3032,9 +2856,6 @@ function DeployVaultMain() {
     canonicalIdentityIsContract,
     connectedWalletAddress,
     connector?.id,
-    embeddedEoaIsCanonicalOwner,
-    embeddedPrivyEoaAddress,
-    embeddedPrivyWallet,
     privySmartWalletAddress,
     privySmartWalletIsCanonicalOwnerQuery,
     publicClient,
@@ -4127,29 +3948,17 @@ function DeployVaultMain() {
                 <div>smartWalletCapabilityReady: <span className={smartWalletCapabilityReady ? 'text-green-400' : 'text-red-400'}>{String(smartWalletCapabilityReady)}</span></div>
                 <div>embeddedPrivyEoa: <span className="text-zinc-300">{embeddedPrivyEoaAddress || 'null'}</span></div>
                 <div>canDeploy: <span className={canDeploy ? 'text-green-400' : 'text-red-400'}>{String(canDeploy)}</span></div>
-                {connector?.id === 'coinbaseWalletSDK' && (
-                  <div className="text-green-400 font-semibold mt-1">✓ Coinbase Wallet Direct - ERC-4337 ready!</div>
-                )}
-                
-                {/* Fund embedded wallet for gas */}
-                {embeddedPrivyEoaAddress && canonicalIdentityIsContract && (
-                  <div className="mt-2 pt-2 border-t border-zinc-700">
-                    <div className="text-amber-400 mb-2">⚠ Embedded wallet needs ETH for gas</div>
-                    <div className="text-[9px] text-zinc-500 mb-2">
-                      Send ~0.001 ETH to enable deploy via executeBatch
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <code className="text-[9px] bg-black/30 px-2 py-1 rounded flex-1 truncate">{embeddedPrivyEoaAddress}</code>
-                      <button
-                        type="button"
-                        className="px-2 py-1 bg-zinc-700 hover:bg-zinc-600 text-white text-[9px] rounded"
-                        onClick={() => void navigator.clipboard.writeText(embeddedPrivyEoaAddress)}
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                )}
+                {/* ERC-4337 deployment status */}
+                <div className="mt-2 pt-2 border-t border-zinc-700">
+                  <div className="text-[10px] text-zinc-400 mb-1">Deploy Path (ERC-4337 only):</div>
+                  {connector?.id === 'coinbaseWalletSDK' || connector?.id === 'com.coinbase.wallet' ? (
+                    <div className="text-green-400">✓ Coinbase Wallet connected - ready to deploy</div>
+                  ) : privySmartWalletIsCanonicalOwner ? (
+                    <div className="text-green-400">✓ Privy smart wallet is owner - ready to deploy</div>
+                  ) : (
+                    <div className="text-amber-400">Connect Coinbase Wallet or complete one-time setup</div>
+                  )}
+                </div>
               </div>
 
               {/* Simplified auth flow: Privy only */}
@@ -4479,37 +4288,28 @@ function DeployVaultMain() {
                     <div className="p-4 rounded-lg border border-blue-500/20 bg-blue-500/10 space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="text-sm font-medium text-blue-200">🚀 Enable Gas-Free Deploys</div>
-                        <div className="text-[10px] text-blue-300/60">One-time setup</div>
+                        <div className="text-[10px] text-blue-300/60">One-time setup (ERC-4337)</div>
                       </div>
                       
-                      {/* Show different messaging based on whether Coinbase Wallet is connected */}
+                      {/* Coinbase Wallet connected - can setup gas-free */}
                       {(connector?.id === 'coinbaseWalletSDK' || connector?.id === 'com.coinbase.wallet') ? (
                         <>
                           <div className="text-[11px] text-blue-200/70 leading-relaxed">
                             <strong className="text-blue-200">You're connected with Coinbase Wallet!</strong> Click below to enable gas-free deployments. 
-                            This transaction is sponsored — no gas fees.
+                            This uses ERC-4337 with gas sponsorship — no fees.
                           </div>
                           <div className="flex items-center gap-2 text-[10px] text-green-400">
                             <span>✓</span>
                             <span>Gas sponsored by paymaster</span>
                           </div>
                         </>
-                      ) : embeddedEoaIsCanonicalOwner ? (
-                        <>
-                          <div className="text-[11px] text-blue-200/70 leading-relaxed">
-                            Add your Privy smart wallet as an owner to enable gas-free deployments.
-                          </div>
-                          <div className="text-[10px] text-amber-300/70">
-                            ⚠ Requires ~$0.50 in ETH (or connect Coinbase Wallet for free setup)
-                          </div>
-                        </>
                       ) : (
                         <>
                           <div className="text-[11px] text-blue-200/70 leading-relaxed">
-                            Connect with <strong className="text-blue-200">Coinbase Wallet</strong> to enable gas-free deployments with no setup cost.
+                            Connect with <strong className="text-blue-200">Coinbase Wallet</strong> to enable gas-free deployments.
                           </div>
                           <div className="text-[10px] text-zinc-500">
-                            Your Coinbase Wallet is already an owner of your Zora smart wallet.
+                            Your Coinbase Wallet is already an owner of your Zora smart wallet. The setup uses ERC-4337 and is completely gas-free.
                           </div>
                         </>
                       )}
@@ -4523,12 +4323,12 @@ function DeployVaultMain() {
                       <button
                         type="button"
                         className="btn-primary w-full"
-                        disabled={addPrivySwOwnerBusy || (!embeddedEoaIsCanonicalOwner && connector?.id !== 'coinbaseWalletSDK' && connector?.id !== 'com.coinbase.wallet')}
+                        disabled={addPrivySwOwnerBusy || (connector?.id !== 'coinbaseWalletSDK' && connector?.id !== 'com.coinbase.wallet')}
                         onClick={() => void handleAddPrivySmartWalletAsOwner()}
                       >
                         {addPrivySwOwnerBusy ? 'Confirming in wallet…' : 
                          (connector?.id === 'coinbaseWalletSDK' || connector?.id === 'com.coinbase.wallet') ? 'Setup Gas-Free (No Cost)' : 
-                         'Setup Gas-Free Deploys'}
+                         'Connect Coinbase Wallet First'}
                       </button>
                       
                       {addPrivySwOwnerTxHash && (
@@ -4589,9 +4389,6 @@ function DeployVaultMain() {
                     switchAuthCta={switchAuthCta}
                     smartWalletClient={smartWalletClient}
                     canonicalSmartWallet={canonicalIdentityIsContract ? (canonicalIdentityAddress as Address) : null}
-                    embeddedWallet={embeddedPrivyWallet}
-                    embeddedEoaAddress={embeddedPrivyEoaAddress}
-                    embeddedEoaIsCanonicalOwner={embeddedEoaIsCanonicalOwner}
                     privySmartWalletIsCanonicalOwner={privySmartWalletIsCanonicalOwner}
                     privySmartWalletAddress={privySmartWalletAddress}
                     connectorId={connector?.id}
