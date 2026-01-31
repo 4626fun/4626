@@ -109,6 +109,63 @@ export async function findCoinbaseSmartWalletOwnerIndex(params: {
 
 type UserOpSignMode = 'eth_sign' | 'signMessage' | 'auto'
 
+// Patterns that indicate eth_sign is blocked/unsupported
+const ETH_SIGN_BLOCKED_PATTERNS = [
+  'eth_sign',
+  'method not found',
+  'method not supported',
+  'unsupported method',
+  'not supported',
+  'method does not exist',
+  'unknown method',
+  'invalid method',
+  'dangerous',
+  'disabled',
+  'blocked',
+  'prohibited',
+  'security',
+] as const
+
+// Error codes that indicate method not supported
+const METHOD_NOT_SUPPORTED_CODES = [-32601, -32600, -32602, 4200] as const
+
+// Patterns that indicate user rejection (should not retry or fallback)
+const USER_REJECTION_PATTERNS = [
+  'user rejected',
+  'user denied',
+  'user cancelled',
+  'rejected by user',
+  'denied by user',
+  'cancelled by user',
+  'request rejected',
+  'transaction rejected',
+  'action_rejected',
+  'user refused',
+] as const
+
+function isUserRejection(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error ?? '')
+  const lc = msg.toLowerCase()
+  const code = (error as any)?.code
+  
+  // Common user rejection error codes
+  if (code === 4001 || code === 'ACTION_REJECTED') return true
+  
+  return USER_REJECTION_PATTERNS.some(p => lc.includes(p))
+}
+
+function isEthSignBlocked(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error ?? '')
+  const lc = msg.toLowerCase()
+  const code = (error as any)?.code
+  
+  // Check error codes first
+  if (typeof code === 'number' && METHOD_NOT_SUPPORTED_CODES.includes(code as any)) return true
+  
+  // Check message patterns
+  return ETH_SIGN_BLOCKED_PATTERNS.some(p => lc.includes(p))
+}
+
 function createWalletBackedLocalAccount(params: {
   walletClient: WalletClientLike
   address: Address
@@ -121,62 +178,98 @@ function createWalletBackedLocalAccount(params: {
     // Required for Coinbase Smart Wallet userOp signatures (sign raw digest).
     sign: async ({ hash }) => {
       // Coinbase Smart Wallet UserOps are signed over the 32-byte UserOp hash.
-      //
-      // - Prefer `eth_sign` when available (no EIP-191 prefix).
-      // - Many wallets (notably Rabby and some injected providers) block `eth_sign` entirely.
-      //   In those cases, `personal_sign` / EIP-191 is NOT a reliable fallback for UserOp hashes; the account will
-      //   typically reject it during simulation. Sign in with wallet to use the Privy smart wallet client, or use Coinbase Wallet (Base Account).
-      const tryEthSign = async () => {
-        const sig = await (walletClient as any).request({ method: 'eth_sign', params: [address, hash] })
-        return sig as Hex
+      // The signature must be over the raw hash (no EIP-191 prefix for eth_sign,
+      // but Coinbase SW also supports EIP-191 via SignatureCheckerLib).
+      
+      const tryEthSign = async (): Promise<Hex> => {
+        try {
+          const sig = await (walletClient as any).request({ 
+            method: 'eth_sign', 
+            params: [address, hash] 
+          })
+          if (!sig || typeof sig !== 'string' || !sig.startsWith('0x')) {
+            throw new Error('Invalid signature returned from eth_sign')
+          }
+          return sig as Hex
+        } catch (e) {
+          // Rethrow with context
+          if (isUserRejection(e)) {
+            throw new Error('User rejected the signature request.')
+          }
+          throw e
+        }
       }
-      const tryPersonalSign = async () => {
-        return (await walletClient.signMessage({
-          account: address,
-          // `raw` signs the 32-byte payload (still EIP-191 prefixed at the JSON-RPC layer).
-          message: { raw: hash },
-        })) as Hex
+      
+      const tryPersonalSign = async (): Promise<Hex> => {
+        try {
+          const sig = await walletClient.signMessage({
+            account: address,
+            // `raw` signs the 32-byte payload (EIP-191 prefixed at JSON-RPC layer).
+            // Coinbase Smart Wallet accepts this via SignatureCheckerLib.
+            message: { raw: hash },
+          })
+          if (!sig || typeof sig !== 'string' || !sig.startsWith('0x')) {
+            throw new Error('Invalid signature returned from signMessage')
+          }
+          return sig as Hex
+        } catch (e) {
+          if (isUserRejection(e)) {
+            throw new Error('User rejected the signature request.')
+          }
+          throw e
+        }
       }
 
+      // Force specific mode if requested
       if (userOpSignMode === 'eth_sign') return await tryEthSign()
       if (userOpSignMode === 'signMessage') return await tryPersonalSign()
 
+      // Auto mode: try eth_sign first, fall back to signMessage
+      // This order is preferred because eth_sign produces a raw signature,
+      // but most wallets block it for security reasons.
       try {
         return await tryEthSign()
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e ?? '')
-        const lc = msg.toLowerCase()
-        const code = (e as any)?.code
-        const looksBlocked =
-          lc.includes('eth_sign') ||
-          code === -32601 ||
-          lc.includes('-32601') ||
-          (lc.includes('method not found') && lc.includes('sign')) ||
-          lc.includes('unsupported method') ||
-          lc.includes('not supported')
-        if (looksBlocked) {
-          // Many wallets block `eth_sign`, but *can* still produce a valid signature for smart accounts via
-          // `personal_sign` / `signMessage` (EIP-191). Try it as a fallback in auto mode.
+      } catch (ethSignError: unknown) {
+        // If user rejected, don't try fallback
+        if (isUserRejection(ethSignError)) {
+          throw ethSignError
+        }
+        
+        // If eth_sign is blocked/unsupported, try signMessage fallback
+        if (isEthSignBlocked(ethSignError)) {
           try {
             return await tryPersonalSign()
-          } catch {
+          } catch (personalSignError: unknown) {
+            // If user rejected the fallback, report that
+            if (isUserRejection(personalSignError)) {
+              throw personalSignError
+            }
+            // Both methods failed
             throw new Error(
-              "Your signer blocked the raw signature method (`eth_sign`) and couldn’t sign via `personal_sign`. Sign in with wallet to use the Privy smart wallet client, or use Coinbase Wallet (Base Account).",
+              'Could not sign the UserOperation. Your wallet blocked eth_sign and signMessage also failed. ' +
+              'Try using Coinbase Wallet or adding your Privy smart wallet as an owner.'
             )
           }
         }
-        throw e
+        
+        // Unknown error, rethrow with context
+        const errMsg = ethSignError instanceof Error ? ethSignError.message : String(ethSignError)
+        throw new Error(`Failed to sign UserOperation: ${errMsg}`)
       }
     },
     signMessage: async ({ message }) => {
-      return (await walletClient.signMessage({ account: address, message })) as Hex
+      const sig = await walletClient.signMessage({ account: address, message })
+      return sig as Hex
     },
     signTypedData: async (typedData: any) => {
-      return (await walletClient.signTypedData({ account: address, ...(typedData as any) })) as Hex
+      const sig = await walletClient.signTypedData({ account: address, ...(typedData as any) })
+      return sig as Hex
     },
     signTransaction: async (tx, options) => {
       const wc: any = walletClient as any
-      if (typeof wc.signTransaction !== 'function') throw new Error('Wallet does not support signTransaction')
+      if (typeof wc.signTransaction !== 'function') {
+        throw new Error('Wallet does not support signTransaction')
+      }
       return (await wc.signTransaction({ ...tx, ...options, account: address })) as Hex
     },
   })
@@ -341,24 +434,42 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   userOpSignMode?: UserOpSignMode
 }): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
   const { publicClient, walletClient, bundlerUrl, smartWallet, ownerAddress, calls, version = '1', userOpSignMode = 'auto' } = params
+  
+  // Input validation
   if (!bundlerUrl) throw new Error('Missing bundler URL')
+  if (!smartWallet) throw new Error('Missing smart wallet address')
+  if (!ownerAddress) throw new Error('Missing owner address')
+  if (!publicClient) throw new Error('Missing public client')
+  if (!walletClient) throw new Error('Missing wallet client')
+  if (!calls || calls.length === 0) throw new Error('No calls provided')
 
+  // Find owner index
   const { ownerIndex } = await findCoinbaseSmartWalletOwnerIndex({
     publicClient,
     smartWallet,
     ownerAddress,
   })
-  const resolvedOwnerIndex = ownerIndex ?? null
-  if (resolvedOwnerIndex === null) {
-    throw new Error('Connected wallet is not an onchain owner of this Coinbase Smart Wallet.')
+  
+  if (ownerIndex === null) {
+    throw new Error(
+      `Connected wallet (${ownerAddress}) is not an onchain owner of the smart wallet (${smartWallet}). ` +
+      'Add this wallet as an owner first, or connect with a wallet that is already an owner.'
+    )
   }
 
-  const owner = createWalletBackedLocalAccount({ walletClient, address: ownerAddress, userOpSignMode })
+  // Create the owner account for signing
+  const owner = createWalletBackedLocalAccount({ 
+    walletClient, 
+    address: ownerAddress, 
+    userOpSignMode 
+  })
+  
+  // Create the Coinbase Smart Account
   const account = await toCoinbaseSmartAccount({
     client: publicClient as any,
     address: smartWallet,
     owners: [owner],
-    ownerIndex: resolvedOwnerIndex,
+    ownerIndex,
     version,
   })
 
@@ -378,15 +489,52 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     transport,
   })
 
-  const userOpHash = await sendUserOperation(bundlerClient, {
-    account,
-    calls,
-    paymaster: {
-      getPaymasterData: paymasterClient.getPaymasterData,
-      getPaymasterStubData: paymasterClient.getPaymasterStubData,
-    },
-  })
+  // Send the UserOperation via EntryPoint v0.6 with CDP paymaster
+  let userOpHash: Hex
+  try {
+    userOpHash = await sendUserOperation(bundlerClient, {
+      account,
+      calls,
+      paymaster: {
+        getPaymasterData: paymasterClient.getPaymasterData,
+        getPaymasterStubData: paymasterClient.getPaymasterStubData,
+      },
+    })
+  } catch (e: unknown) {
+    const errMsg = e instanceof Error ? e.message : String(e)
+    const lc = errMsg.toLowerCase()
+    
+    // Provide helpful error messages for common failures
+    if (lc.includes('insufficient funds') || lc.includes('insufficient balance')) {
+      throw new Error('Paymaster rejected: insufficient sponsorship funds. Contact support.')
+    }
+    if (lc.includes('invalid signature') || lc.includes('signature check failed')) {
+      throw new Error(
+        'UserOp signature verification failed. This usually means the signer is not a valid owner. ' +
+        'Try reconnecting your wallet or adding it as an owner of the smart wallet.'
+      )
+    }
+    if (lc.includes('aa21') || lc.includes('didn\'t pay prefund')) {
+      throw new Error('Paymaster did not sponsor this operation. Check paymaster configuration.')
+    }
+    if (lc.includes('aa25') || lc.includes('invalid account nonce')) {
+      throw new Error('Account nonce mismatch. A pending transaction may exist. Wait and retry.')
+    }
+    if (lc.includes('aa10') || lc.includes('sender already constructed')) {
+      throw new Error('Smart wallet already exists at this address.')
+    }
+    
+    throw new Error(`UserOperation failed: ${errMsg}`)
+  }
 
-  const receipt = await waitForUserOperationReceipt(bundlerClient, { hash: userOpHash, timeout: 120_000 })
-  return { userOpHash, transactionHash: receipt.receipt.transactionHash as Hex }
+  // Wait for on-chain confirmation with extended timeout
+  const receipt = await waitForUserOperationReceipt(bundlerClient, { 
+    hash: userOpHash, 
+    timeout: 180_000 // 3 minutes for complex operations
+  })
+  
+  return { 
+    userOpHash, 
+    transactionHash: receipt.receipt.transactionHash as Hex 
+  }
 }
