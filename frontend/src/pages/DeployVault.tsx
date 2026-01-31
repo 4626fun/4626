@@ -1876,7 +1876,6 @@ function DeployVaultMain() {
   const { wallets } = useWallets()
   const { client: smartWalletClient } = useSmartWallets()
   const { sendCallsAsync } = useSendCalls()
-  const { data: walletClient } = useWalletClient({ chainId: base.id })
   const siwe = useSiweAuth()
   const [linkWalletBusy, setLinkWalletBusy] = useState(false)
   const [linkWalletError, setLinkWalletError] = useState<string | null>(null)
