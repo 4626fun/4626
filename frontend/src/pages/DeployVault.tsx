@@ -853,6 +853,17 @@ function DeployVaultBatcher({
     const msg = String(raw || 'Deployment failed')
     const lower = msg.toLowerCase()
 
+    // Check if a transaction was actually submitted despite the error (common with bundler estimation errors)
+    const submittedMatch = msg.match(/Submitted:\s*(0x[a-fA-F0-9]{64})/)
+    if (submittedMatch && lower.includes('execution reverted')) {
+      const txHash = submittedMatch[1]
+      return (
+        `⚠️ The bundler reported an estimation error, but your transaction was submitted!\n\n` +
+        `Transaction: ${txHash}\n\n` +
+        `Check Basescan to verify if it succeeded. If it did, refresh the page to continue.`
+      )
+    }
+
     if (lower.includes('blocked the raw signature method') && lower.includes('eth_sign')) {
       return (
         "Your current wallet can’t sign the UserOp hash required for smart wallet execution (`eth_sign`). " +
@@ -1808,6 +1819,38 @@ function DeployVaultBatcher({
         return
       }
     } catch (e: any) {
+      const rawMsg = e instanceof Error ? e.message : String(e ?? '')
+      
+      // Check if a transaction was actually submitted despite the error
+      const submittedMatch = rawMsg.match(/Submitted:\s*(0x[a-fA-F0-9]{64})/)
+      if (submittedMatch && publicClient) {
+        const txHash = submittedMatch[1] as Hex
+        logger.warn('[DeployVault] Transaction submitted despite error', { txHash, rawMsg })
+        
+        // Try to wait for the transaction receipt
+        try {
+          const receipt = await (publicClient as any).waitForTransactionReceipt({ 
+            hash: txHash,
+            timeout: 60_000 
+          })
+          if (receipt.status === 'success') {
+            // Transaction succeeded! Update state
+            setTxId(txHash)
+            setPhaseTxs((s) => ({
+              ...s,
+              [phase === 'phase1' ? 'tx1' : phase === 'phase2' ? 'tx2' : 'tx3']: txHash,
+            }))
+            // Show success message - user should refresh to see vault
+            setPhase('done')
+            logger.warn('[DeployVault] deploy_success (recovered from estimation error)', { txHash })
+            if (expected) onSuccess(expected)
+            return
+          }
+        } catch (receiptError) {
+          logger.warn('[DeployVault] Failed to get receipt for submitted tx', { txHash, error: receiptError })
+        }
+      }
+      
       let pretty = formatDeployError(e)
       logger.warn('[DeployVault] deploy_failed', { error: pretty })
       setError(pretty)
@@ -2025,7 +2068,26 @@ function DeployVaultBatcher({
 
       {error ? (
         <div className="space-y-2">
-          <div className="text-[11px] text-red-400/90">{error}</div>
+          <div className="text-[11px] text-red-400/90 whitespace-pre-wrap">
+            {/* If error contains a transaction hash, make it clickable */}
+            {error.includes('0x') && error.match(/0x[a-fA-F0-9]{64}/) ? (
+              <>
+                {error.split(/(0x[a-fA-F0-9]{64})/).map((part, i) => 
+                  /^0x[a-fA-F0-9]{64}$/.test(part) ? (
+                    <a 
+                      key={i}
+                      href={`https://basescan.org/tx/${part}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:underline font-mono"
+                    >
+                      {part.slice(0, 10)}...{part.slice(-8)}
+                    </a>
+                  ) : part
+                )}
+              </>
+            ) : error}
+          </div>
           {/* Only show auth-switch CTA for auth/session issues (not for signing-method incompatibility). */}
           {switchAuthCta && /no_session|not authenticated|gas sponsorship requires a session|base account|email|privy|smart wallet/i.test(error) ? (
             <button type="button" className="btn-primary w-full" onClick={switchAuthCta.onClick}>
