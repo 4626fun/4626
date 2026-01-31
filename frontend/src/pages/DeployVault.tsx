@@ -1799,10 +1799,14 @@ function DeployVaultMain() {
   const { login } = useLogin()
   const { wallets } = useWallets()
   const { client: smartWalletClient } = useSmartWallets()
-  const { linkCrossAppAccount } = useCrossAppAccounts()
+  const { linkCrossAppAccount, sendTransaction: sendCrossAppTransaction } = useCrossAppAccounts()
+  const { user } = usePrivy() as any
   const siwe = useSiweAuth()
   const [linkZoraWalletBusy, setLinkZoraWalletBusy] = useState(false)
   const [linkZoraWalletError, setLinkZoraWalletError] = useState<string | null>(null)
+  const [addOwnerBusy, setAddOwnerBusy] = useState(false)
+  const [addOwnerError, setAddOwnerError] = useState<string | null>(null)
+  const [addOwnerTxHash, setAddOwnerTxHash] = useState<string | null>(null)
   const [linkWalletBusy, setLinkWalletBusy] = useState(false)
   const [linkWalletError, setLinkWalletError] = useState<string | null>(null)
   const [installOwnerBusy, setInstallOwnerBusy] = useState(false)
@@ -1958,6 +1962,66 @@ function DeployVaultMain() {
       setLinkZoraWalletBusy(false)
     }
   }, [privyAuthenticated, linkCrossAppAccount])
+
+  // Get the cross-app (Zora) wallet from user's linked accounts
+  const crossAppAccount = useMemo(() => {
+    if (!user?.linkedAccounts) return null
+    return user.linkedAccounts.find((acc: any) => acc.type === 'cross_app') ?? null
+  }, [user])
+
+  const zoraEmbeddedWalletAddress = useMemo(() => {
+    if (!crossAppAccount?.embeddedWallets?.[0]?.address) return null
+    const addr = crossAppAccount.embeddedWallets[0].address
+    return isAddress(addr) ? getAddress(addr) as Address : null
+  }, [crossAppAccount])
+
+  // The Zora smart wallet is derived from the Zora embedded wallet
+  // For Coinbase Smart Wallet, we need to check if our local embedded wallet is an owner
+  const zoraSmartWalletAddress = useMemo(() => {
+    // The user's Zora smart wallet - this should match the creator coin's creator address
+    // We'll get this from the zoraCoin data later
+    return null as Address | null
+  }, [])
+
+  // Add owner to Zora smart wallet using cross-app transaction
+  const handleAddOwnerToZoraWallet = useCallback(async (zoraSmartWallet: Address) => {
+    if (!zoraEmbeddedWalletAddress || !embeddedPrivyEoaAddress) {
+      setAddOwnerError('Missing wallet addresses')
+      return
+    }
+    
+    setAddOwnerBusy(true)
+    setAddOwnerError(null)
+    setAddOwnerTxHash(null)
+    
+    try {
+      // Encode addOwnerAddress(address) call
+      const addOwnerData = encodeFunctionData({
+        abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+        functionName: 'addOwnerAddress',
+        args: [embeddedPrivyEoaAddress],
+      })
+      
+      // Send transaction from cross-app wallet (Zora embedded wallet)
+      const txHash = await sendCrossAppTransaction(
+        {
+          to: zoraSmartWallet,
+          data: addOwnerData,
+          value: 0n,
+          chainId: base.id,
+        },
+        { address: zoraEmbeddedWalletAddress }
+      )
+      
+      setAddOwnerTxHash(txHash)
+      logger.info('[DeployVault] Added owner to Zora smart wallet', { txHash, zoraSmartWallet, newOwner: embeddedPrivyEoaAddress })
+    } catch (err: any) {
+      logger.error('[DeployVault] Failed to add owner', err)
+      setAddOwnerError(err?.message || 'Failed to add owner to Zora wallet')
+    } finally {
+      setAddOwnerBusy(false)
+    }
+  }, [zoraEmbeddedWalletAddress, embeddedPrivyEoaAddress, sendCrossAppTransaction])
 
   const handleCopyEmbedded = useCallback(async () => {
     if (!embeddedPrivyEoaAddress) return
@@ -3575,8 +3639,8 @@ function DeployVaultMain() {
                   <div className="p-4 rounded-lg border border-amber-500/20 bg-amber-500/10">
                     <div className="text-sm font-medium text-amber-200">One-time setup required</div>
                     <div className="mt-1 text-xs text-amber-200/80 leading-relaxed">
-                      To avoid wallet compatibility issues (e.g. Rabby blocking required signatures), CreatorVault uses your Privy embedded wallet
-                      to sign Coinbase Smart Wallet user operations. Add it as an owner of your Zora Coinbase Smart Wallet once, then retry deploy.
+                      To enable ERC-4337 batched transactions, add your CreatorVault embedded wallet as an owner of your Zora Smart Wallet.
+                      This is a one-time setup.
                     </div>
                     <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-white/10 bg-black/20 px-3 py-2">
                       <div className="min-w-0">
@@ -3589,8 +3653,58 @@ function DeployVaultMain() {
                     </div>
                   </div>
 
-                  <button type="button" className="btn-accent w-full" disabled={installOwnerBusy} onClick={() => void handleInstallEmbeddedAsOwner()}>
-                    {installOwnerBusy ? 'Confirming…' : 'Add embedded wallet as owner'}
+                  {/* Option 1: Use cross-app wallet (Zora) to add owner - preferred */}
+                  {zoraEmbeddedWalletAddress ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn-primary w-full"
+                        disabled={addOwnerBusy}
+                        onClick={() => void handleAddOwnerToZoraWallet(canonicalIdentityAddress as Address)}
+                      >
+                        {addOwnerBusy ? 'Confirm in Zora popup…' : 'Add owner via Zora (Recommended)'}
+                      </button>
+                      {addOwnerTxHash ? (
+                        <div className="text-[11px] text-green-400">
+                          Success! Tx: <span className="font-mono">{shortAddress(addOwnerTxHash)}</span>
+                          <button
+                            type="button"
+                            className="ml-2 text-zinc-400 underline"
+                            onClick={() => void refreshEmbeddedOwnerStatus()}
+                          >
+                            Refresh status
+                          </button>
+                        </div>
+                      ) : null}
+                      {addOwnerError ? <div className="text-[11px] text-red-400">{addOwnerError}</div> : null}
+                      <div className="text-[11px] text-zinc-600">
+                        This will open a popup to Zora for you to approve the transaction.
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="btn-primary w-full"
+                        disabled={linkZoraWalletBusy}
+                        onClick={handleLinkZoraWallet}
+                      >
+                        {linkZoraWalletBusy ? 'Connecting…' : 'Link Zora Wallet first'}
+                      </button>
+                      {linkZoraWalletError && (
+                        <div className="text-[11px] text-red-400">{linkZoraWalletError}</div>
+                      )}
+                      <div className="text-[11px] text-zinc-600">
+                        Link your Zora wallet to add the owner via cross-app transaction.
+                      </div>
+                    </>
+                  )}
+
+                  <div className="text-[11px] text-zinc-700 text-center">— or —</div>
+
+                  {/* Option 2: Connect wallet manually */}
+                  <button type="button" className="btn-secondary w-full" disabled={installOwnerBusy} onClick={() => void handleInstallEmbeddedAsOwner()}>
+                    {installOwnerBusy ? 'Confirming…' : 'Add owner via connected wallet'}
                   </button>
                   {installOwnerTxHash ? (
                     <div className="text-[11px] text-zinc-500">
@@ -3598,9 +3712,8 @@ function DeployVaultMain() {
                     </div>
                   ) : null}
                   {installOwnerError ? <div className="text-[11px] text-red-400">{installOwnerError}</div> : null}
-
                   <div className="text-[11px] text-zinc-600">
-                    You must connect the wallet that currently owns your Smart Wallet to approve this owner add.
+                    Connect the wallet that currently owns your Smart Wallet to approve.
                   </div>
                 </div>
               ) : !tokenIsValid && creatorAllowlistQuery.isLoading ? (
