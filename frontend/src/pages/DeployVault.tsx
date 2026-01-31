@@ -1712,6 +1712,13 @@ function DeployVaultBatcher({
           }
           
           // OPTION 3: Cross-app transaction (requires Zora wallet to be linked AND funded with ETH for gas)
+          // NOTE: Privy's sendTransaction estimates gas LOCALLY before opening popup, so EOA needs ETH
+          logger.info(`[DeployVault] Cross-app check for ${phaseLabel}:`, {
+            canonicalSmartWallet: !!canonicalSmartWallet,
+            zoraEmbeddedWalletAddress: !!zoraEmbeddedWalletAddress,
+            sendCrossAppTransaction: !!sendCrossAppTransaction,
+            zoraEmbeddedHasGas,
+          })
           if (canonicalSmartWallet && zoraEmbeddedWalletAddress && sendCrossAppTransaction && zoraEmbeddedHasGas) {
             logger.info(`[DeployVault] Using cross-app executeBatch for ${phaseLabel}`, {
               canonicalSmartWallet,
@@ -2232,6 +2239,17 @@ function DeployVaultMain() {
       return
     }
     
+    // Check if Zora embedded wallet has gas
+    if (!zoraEmbeddedHasGas) {
+      setAddOwnerError('Zora embedded wallet needs ETH for gas. Fund it first.')
+      return
+    }
+    
+    if (!sendCrossAppTransaction) {
+      setAddOwnerError('Cross-app transaction not available')
+      return
+    }
+    
     setAddOwnerBusy(true)
     setAddOwnerError(null)
     setAddOwnerTxHash(null)
@@ -2263,7 +2281,7 @@ function DeployVaultMain() {
     } finally {
       setAddOwnerBusy(false)
     }
-  }, [zoraEmbeddedWalletAddress, embeddedPrivyEoaAddress, sendCrossAppTransaction])
+  }, [zoraEmbeddedWalletAddress, embeddedPrivyEoaAddress, sendCrossAppTransaction, zoraEmbeddedHasGas])
 
   const handleCopyEmbedded = useCallback(async () => {
     if (!embeddedPrivyEoaAddress) return
