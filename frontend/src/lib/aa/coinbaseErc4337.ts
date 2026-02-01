@@ -841,9 +841,12 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // toCoinbaseSmartAccount uses entryPoint06Address by default
   // 
   // Gas limits:
-  // - verificationGasLimit: Higher for smart wallet signers (EIP-1271 requires ~300-500k)
+  // - verificationGasLimit: Higher for smart wallet signers (EIP-1271 can exceed 500k)
   // - callGasLimit: Auto-estimated, but we don't override since batcher calls vary
-  const verificationGasLimit = ownerIsContract ? 500_000n : 150_000n
+  const verificationGasLimit = ownerIsContract ? 1_000_000n : 150_000n
+  if (AA_DEBUG) {
+    logger.debug('[ERC-4337] verificationGasLimit', { ownerIsContract, verificationGasLimit: String(verificationGasLimit) })
+  }
   
   let userOpHash: Hex
   try {
