@@ -1772,6 +1772,7 @@ function DeployVaultBatcher({
                 const hasAccountSignMessage = typeof account?.signMessage === 'function'
                 const hasClientSignMessage = typeof client?.signMessage === 'function'
                 const hasSignMessage = hasAccountSignMessage || hasClientSignMessage
+                const hasRequest = typeof client?.request === 'function'
 
                 if (AA_DEBUG) {
                   logger.debug('[DeployVault] Privy smart wallet signer capabilities', {
@@ -1806,6 +1807,8 @@ function DeployVaultBatcher({
                 )
               },
               signTypedData: async (args: any) => {
+                const client: any = smartWalletClient as any
+                const account: any = client?.account
                 if (typeof account?.signTypedData === 'function' || typeof client?.signTypedData === 'function') {
                   const rawResult = await withTimeout(
                     typeof account?.signTypedData === 'function'
