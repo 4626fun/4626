@@ -1631,16 +1631,52 @@ function DeployVaultBatcher({
             }
             
             // Create a wallet client adapter that uses the embedded EOA for signing
-            // Just pass through to the embedded provider - let it handle signing
+            // Coinbase Smart Wallet verifies signatures over EIP-712 ReplaySafeHash(userOpHash)
+            // viem passes the raw userOpHash to sign(), so we must transform it to EIP-712
             const embeddedWalletClientAdapter = {
               request: async (args: { method: string; params: any[] }) => {
-                logger.info('[DeployVault] Embedded provider request', { method: args.method, params: args.params })
+                logger.info('[DeployVault] Embedded provider request', { method: args.method })
                 
-                // Pass through all requests to the embedded provider
-                // The embedded provider should handle eth_sign or fall back internally
+                // Intercept eth_sign: transform to EIP-712 ReplaySafeHash for Coinbase Smart Wallet
+                if (args.method === 'eth_sign') {
+                  const [signerAddr, rawHash] = args.params
+                  
+                  logger.info('[DeployVault] eth_sign intercepted, converting to EIP-712 ReplaySafeHash', {
+                    signer: signerAddr,
+                    rawHash,
+                    smartWallet: canonicalSmartWallet,
+                  })
+                  
+                  // Coinbase Smart Wallet expects signature over: EIP712Hash(ReplaySafeHash{hash})
+                  // where domain is the smart wallet contract itself
+                  const typedData = {
+                    types: {
+                      ReplaySafeHash: [{ name: 'hash', type: 'bytes32' }],
+                    },
+                    domain: {
+                      name: 'Coinbase Smart Wallet',
+                      version: '1',
+                      chainId: base.id,
+                      verifyingContract: canonicalSmartWallet,
+                    },
+                    primaryType: 'ReplaySafeHash' as const,
+                    message: {
+                      hash: rawHash,
+                    },
+                  }
+                  
+                  const sig = await embeddedProvider.request({
+                    method: 'eth_signTypedData_v4',
+                    params: [signerAddr, JSON.stringify(typedData)],
+                  })
+                  logger.info('[DeployVault] EIP-712 signature obtained', { sig })
+                  return sig
+                }
+                
+                // Pass through other requests
                 try {
                   const result = await embeddedProvider.request(args)
-                  logger.info('[DeployVault] Embedded provider response', { method: args.method, result })
+                  logger.info('[DeployVault] Embedded provider response', { method: args.method })
                   return result
                 } catch (e: any) {
                   logger.error('[DeployVault] Embedded provider error', { method: args.method, error: e?.message })
@@ -1653,11 +1689,28 @@ function DeployVaultBatcher({
                   : args.message
                 const msgHex = typeof msg === 'string' && msg.startsWith('0x') ? msg : `0x${Buffer.from(String(msg)).toString('hex')}`
                 
-                logger.info('[DeployVault] signMessage via personal_sign', { account: args.account })
+                logger.info('[DeployVault] signMessage converting to EIP-712', { account: args.account })
+                
+                // Use EIP-712 ReplaySafeHash for Coinbase Smart Wallet
+                const typedData = {
+                  types: {
+                    ReplaySafeHash: [{ name: 'hash', type: 'bytes32' }],
+                  },
+                  domain: {
+                    name: 'Coinbase Smart Wallet',
+                    version: '1',
+                    chainId: base.id,
+                    verifyingContract: canonicalSmartWallet,
+                  },
+                  primaryType: 'ReplaySafeHash' as const,
+                  message: {
+                    hash: msgHex,
+                  },
+                }
                 
                 const sig = await embeddedProvider.request({
-                  method: 'personal_sign',
-                  params: [msgHex, args.account],
+                  method: 'eth_signTypedData_v4',
+                  params: [args.account, JSON.stringify(typedData)],
                 })
                 return sig
               },
