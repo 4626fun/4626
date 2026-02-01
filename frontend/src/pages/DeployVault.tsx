@@ -1733,6 +1733,28 @@ function DeployVaultBatcher({
         ) => {
           const logPhaseLabel = opts?.segment ? `${phaseLabel}.${opts.segment}` : phaseLabel
 
+          if (!opts?.noSplit && phaseLabel === 'phase2' && calls.length > 1) {
+            const approveSelector = '0x095ea7b3'
+            const creatorTokenAddr = getAddress(creatorToken).toLowerCase()
+            const approveCalls = calls.filter((c) => {
+              if (!c?.data || typeof c.data !== 'string') return false
+              if (!c.data.startsWith(approveSelector)) return false
+              return getAddress(c.target).toLowerCase() === creatorTokenAddr
+            })
+            const otherCalls = calls.filter((c) => !approveCalls.includes(c))
+            if (approveCalls.length > 0 && otherCalls.length > 0) {
+              logger.info('[DeployVault] Splitting phase2 approvals', {
+                approvalCount: approveCalls.length,
+                remainingCount: otherCalls.length,
+              })
+              const approveSegment = opts?.segment ? `${opts.segment}.approve` : 'approve'
+              const remainingSegment = opts?.segment ? `${opts.segment}.afterApprove` : 'afterApprove'
+              await sendPhaseCalls(approveCalls, phaseLabel, { noSplit: true, segment: approveSegment })
+              await sendPhaseCalls(otherCalls, phaseLabel, { noSplit: false, segment: remainingSegment })
+              return
+            }
+          }
+
           if (!opts?.noSplit && phaseLabel === 'phase2' && calls.length > 2) {
             const batcherIdx = calls.findIndex(
               (c) => getAddress(c.target).toLowerCase() === getAddress(batcherAddress).toLowerCase()
