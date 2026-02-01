@@ -72,7 +72,8 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
   }
 
   const appearance = {
-    walletList: ['metamask', 'coinbase_wallet', 'phantom', 'detected_wallets', 'wallet_connect'],
+    // Solana connectors are not configured; avoid Phantom to prevent Solana warnings.
+    walletList: ['metamask', 'coinbase_wallet', 'detected_wallets', 'wallet_connect'],
   } as const
   const loginMethods = ['wallet', 'email'] as const
 
