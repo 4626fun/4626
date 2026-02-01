@@ -841,16 +841,21 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // toCoinbaseSmartAccount uses entryPoint06Address by default
   // 
   // Gas limits:
-  // - verificationGasLimit: Higher for smart wallet signers (EIP-1271 can exceed 1M)
+  // - verificationGasLimit: Higher for smart wallet signers (EIP-1271 can exceed 2M)
   // - callGasLimit: Auto-estimated, but we don't override since batcher calls vary
-  const verificationGasLimit = ownerIsContract ? 2_000_000n : 150_000n
+  const baseVerificationGasLimit = ownerIsContract ? 2_000_000n : 150_000n
+  const retryVerificationGasLimit = ownerIsContract ? 4_000_000n : baseVerificationGasLimit
   if (AA_DEBUG) {
-    logger.debug('[ERC-4337] verificationGasLimit', { ownerIsContract, verificationGasLimit: String(verificationGasLimit) })
+    logger.debug('[ERC-4337] verificationGasLimit', {
+      ownerIsContract,
+      verificationGasLimit: String(baseVerificationGasLimit),
+    })
   }
-  
+
   let userOpHash: Hex
-  try {
-    userOpHash = await sendUserOperation(bundlerClient, {
+  let lastError: unknown = null
+  const sendWithVerificationGasLimit = (verificationGasLimit: bigint) =>
+    sendUserOperation(bundlerClient, {
       account,
       calls,
       verificationGasLimit,
@@ -859,10 +864,36 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         getPaymasterStubData: paymasterClient.getPaymasterStubData,
       },
     })
+
+  try {
+    userOpHash = await sendWithVerificationGasLimit(baseVerificationGasLimit)
   } catch (e: unknown) {
-    const errMsg = e instanceof Error ? e.message : String(e)
+    lastError = e
+  }
+
+  if (lastError && ownerIsContract && retryVerificationGasLimit > baseVerificationGasLimit) {
+    const errMsg = lastError instanceof Error ? lastError.message : String(lastError)
     const lc = errMsg.toLowerCase()
-    
+    if (lc.includes('aa40') || lc.includes('verificationgaslimit')) {
+      if (AA_DEBUG) {
+        logger.debug('[ERC-4337] retrying with higher verificationGasLimit', {
+          base: String(baseVerificationGasLimit),
+          retry: String(retryVerificationGasLimit),
+        })
+      }
+      try {
+        userOpHash = await sendWithVerificationGasLimit(retryVerificationGasLimit)
+        lastError = null
+      } catch (e: unknown) {
+        lastError = e
+      }
+    }
+  }
+
+  if (lastError) {
+    const errMsg = lastError instanceof Error ? lastError.message : String(lastError)
+    const lc = errMsg.toLowerCase()
+
     // Provide helpful error messages for common failures
     if (lc.includes('insufficient funds') || lc.includes('insufficient balance')) {
       throw new Error('Paymaster rejected: insufficient sponsorship funds. Contact support.')
