@@ -147,6 +147,22 @@ function debugSignatureReady(context: string, signature: Hex, details?: Record<s
   })
 }
 
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`))
+    }, ms)
+  })
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+const SIGN_TIMEOUT_MS = 30_000
+
 function isUserOpHashLike(value: unknown): boolean {
   return isHexString(value) && value.length === 66
 }
@@ -407,10 +423,14 @@ function createWalletBackedLocalAccount(params: {
       
       const tryEthSign = async (): Promise<Hex> => {
         try {
-          const rawSig = await (walletClient as any).request({ 
-            method: 'eth_sign', 
-            params: [address, hash] 
-          })
+          const rawSig = await withTimeout(
+            (walletClient as any).request({
+              method: 'eth_sign',
+              params: [address, hash],
+            }),
+            SIGN_TIMEOUT_MS,
+            'eth_sign',
+          )
           const sig = ensureSignatureHex(rawSig, 'eth_sign')
           debugSignatureReady('eth_sign', sig, { address })
           return sig
@@ -427,17 +447,25 @@ function createWalletBackedLocalAccount(params: {
         try {
           let rawSig: unknown
           if (typeof walletClient.signMessage === 'function') {
-            rawSig = await walletClient.signMessage({
-              account: address,
-              // `raw` signs the 32-byte payload (EIP-191 prefixed at JSON-RPC layer).
-              // Coinbase Smart Wallet accepts this via SignatureCheckerLib.
-              message: { raw: hash },
-            })
+            rawSig = await withTimeout(
+              walletClient.signMessage({
+                account: address,
+                // `raw` signs the 32-byte payload (EIP-191 prefixed at JSON-RPC layer).
+                // Coinbase Smart Wallet accepts this via SignatureCheckerLib.
+                message: { raw: hash },
+              }),
+              SIGN_TIMEOUT_MS,
+              'signMessage',
+            )
           } else if (typeof walletClient.request === 'function') {
-            rawSig = await walletClient.request({
-              method: 'personal_sign',
-              params: [hash, address],
-            })
+            rawSig = await withTimeout(
+              walletClient.request({
+                method: 'personal_sign',
+                params: [hash, address],
+              }),
+              SIGN_TIMEOUT_MS,
+              'personal_sign',
+            )
           } else {
             throw new Error('Wallet does not support signMessage or personal_sign')
           }
@@ -499,7 +527,11 @@ function createWalletBackedLocalAccount(params: {
       }
       let rawSig: unknown
       if (typeof walletClient.signMessage === 'function') {
-        rawSig = await walletClient.signMessage({ account: address, message })
+        rawSig = await withTimeout(
+          walletClient.signMessage({ account: address, message }),
+          SIGN_TIMEOUT_MS,
+          'signMessage',
+        )
       } else if (typeof walletClient.request === 'function') {
         const msg =
           typeof message === 'object' && message !== null && 'raw' in message
@@ -507,10 +539,14 @@ function createWalletBackedLocalAccount(params: {
             : typeof message === 'string'
               ? message
               : `0x${Buffer.from(String(message)).toString('hex')}`
-        rawSig = await walletClient.request({
-          method: 'personal_sign',
-          params: [msg, address],
-        })
+        rawSig = await withTimeout(
+          walletClient.request({
+            method: 'personal_sign',
+            params: [msg, address],
+          }),
+          SIGN_TIMEOUT_MS,
+          'personal_sign',
+        )
       } else {
         throw new Error('Wallet does not support signMessage or personal_sign')
       }
@@ -519,12 +555,20 @@ function createWalletBackedLocalAccount(params: {
     signTypedData: async (typedData: any) => {
       let rawSig: unknown
       if (typeof walletClient.signTypedData === 'function') {
-        rawSig = await walletClient.signTypedData({ account: address, ...(typedData as any) })
+        rawSig = await withTimeout(
+          walletClient.signTypedData({ account: address, ...(typedData as any) }),
+          SIGN_TIMEOUT_MS,
+          'signTypedData',
+        )
       } else if (typeof walletClient.request === 'function') {
-        rawSig = await walletClient.request({
-          method: 'eth_signTypedData_v4',
-          params: [address, JSON.stringify(typedData)],
-        })
+        rawSig = await withTimeout(
+          walletClient.request({
+            method: 'eth_signTypedData_v4',
+            params: [address, JSON.stringify(typedData)],
+          }),
+          SIGN_TIMEOUT_MS,
+          'eth_signTypedData_v4',
+        )
       } else {
         throw new Error('Wallet does not support signTypedData')
       }
