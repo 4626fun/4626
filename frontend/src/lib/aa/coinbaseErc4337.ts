@@ -266,9 +266,12 @@ function createWalletBackedLocalAccount(params: {
     address,
     // Required for Coinbase Smart Wallet userOp signatures (sign raw digest).
     sign: async ({ hash }) => {
-      // Coinbase Smart Wallet UserOps are signed over the 32-byte UserOp hash.
-      // The signature must be over the raw hash (no EIP-191 prefix for eth_sign,
-      // but Coinbase SW also supports EIP-191 via SignatureCheckerLib).
+      // Log what viem is passing to us
+      console.log('[createWalletBackedLocalAccount] sign called', {
+        hash,
+        hashLength: hash?.length,
+        address,
+      })
       
       const tryEthSign = async (): Promise<Hex> => {
         try {
@@ -347,6 +350,12 @@ function createWalletBackedLocalAccount(params: {
       }
     },
     signMessage: async ({ message }) => {
+      console.log('[createWalletBackedLocalAccount] signMessage called', {
+        message,
+        messageType: typeof message,
+        isRaw: typeof message === 'object' && 'raw' in message,
+        address,
+      })
       const sig = await walletClient.signMessage({ account: address, message })
       return sig as Hex
     },
