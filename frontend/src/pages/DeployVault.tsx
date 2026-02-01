@@ -70,6 +70,94 @@ const DEFAULT_CCA_DURATION_BLOCKS = 302_400n // ~7 days on Base at ~2s blocks (m
 const DEFAULT_MIN_COIN_AGE_DAYS = 30
 const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
 
+function isDebugEnabled(): boolean {
+  if (import.meta.env.VITE_DEBUG_LOGS === 'true') return true
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem('cv:debug') === 'true'
+  } catch {
+    return false
+  }
+}
+
+const AA_DEBUG = isDebugEnabled()
+
+const HEX_STRING_RE = /^0x[0-9a-fA-F]+$/
+
+function isHexString(value: unknown): value is Hex {
+  return typeof value === 'string' && HEX_STRING_RE.test(value)
+}
+
+function getHexByteLength(hex: string): number | null {
+  if (!hex.startsWith('0x')) return null
+  const body = hex.slice(2)
+  if (body.length % 2 !== 0) return null
+  return body.length / 2
+}
+
+function signatureMeta(signature: Hex) {
+  const byteLength = getHexByteLength(signature)
+  return {
+    signatureLength: signature.length,
+    byteLength,
+    is64Bytes: byteLength === 64,
+    is65Bytes: byteLength === 65,
+  }
+}
+
+function isUserOpHashLike(value: unknown): boolean {
+  return isHexString(value) && value.length === 66
+}
+
+type SignatureExtraction = { signature: Hex | null; source: string | null }
+
+function extractSignatureHex(value: unknown, depth = 0): SignatureExtraction {
+  if (isHexString(value)) {
+    return { signature: value as Hex, source: depth === 0 ? 'string' : `nested.${depth}` }
+  }
+  if (!value || typeof value !== 'object' || depth > 2) {
+    return { signature: null, source: null }
+  }
+  const record = value as Record<string, unknown>
+  const direct = record.signature ?? record.sig
+  if (isHexString(direct)) {
+    return { signature: direct as Hex, source: 'object.signature' }
+  }
+  const candidates: Array<[string, unknown]> = [
+    ['data', record.data],
+    ['result', record.result],
+    ['response', record.response],
+    ['signature', record.signature],
+    ['sig', record.sig],
+  ]
+  for (const [key, candidate] of candidates) {
+    if (isHexString(candidate)) {
+      return { signature: candidate as Hex, source: `object.${key}` }
+    }
+    if (candidate && typeof candidate === 'object') {
+      const nested = extractSignatureHex(candidate, depth + 1)
+      if (nested.signature) {
+        return { signature: nested.signature, source: `object.${key}.${nested.source ?? 'nested'}` }
+      }
+    }
+  }
+  return { signature: null, source: null }
+}
+
+function ensureSignatureHex(value: unknown, context: string): Hex {
+  const { signature, source } = extractSignatureHex(value)
+  if (!signature) {
+    throw new Error(`Invalid signature returned from ${context}`)
+  }
+  if (AA_DEBUG) {
+    logger.debug(`[DeployVault] ${context} signature`, {
+      source: source ?? 'unknown',
+      ...signatureMeta(signature),
+    })
+  }
+  return signature
+}
+
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type AdminAuthResponse = { address: string; isAdmin: boolean } | null
 type ServerDeployResponse = {
@@ -1557,7 +1645,7 @@ function DeployVaultBatcher({
         ) => {
           // PATH 1: Direct Coinbase Wallet connection
           // When connected via Coinbase Wallet SDK, we can use ERC-4337 directly
-          if (isCoinbaseWalletDirect && connectedAddress && wagmiWalletClient && publicClient) {
+          if (isCoinbaseWalletDirect && connectedAddress && wagmiWalletClient && publicClient && canonicalSmartWallet) {
             logger.info(`[DeployVault] Using Coinbase Wallet direct for ${phaseLabel}`)
             
             const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
@@ -1568,7 +1656,7 @@ function DeployVaultBatcher({
               publicClient: publicClient as any,
               walletClient: wagmiWalletClient as any,
               bundlerUrl,
-              smartWallet: connectedAddress as Address,
+              smartWallet: canonicalSmartWallet,
               ownerAddress: connectedAddress as Address,
               calls: toCalls(calls),
               version: '1',
@@ -1642,11 +1730,13 @@ function DeployVaultBatcher({
                 if (args.method === 'eth_sign') {
                   const [signerAddr, hashToSign] = args.params
                   
-                  logger.info('[DeployVault] eth_sign called', {
-                    signer: signerAddr,
-                    hashToSign,
-                    hashLength: hashToSign?.length,
-                  })
+                  if (AA_DEBUG) {
+                    logger.debug('[DeployVault] eth_sign called', {
+                      signer: signerAddr,
+                      hashLength: typeof hashToSign === 'string' ? hashToSign.length : null,
+                      hashLooksValid: isUserOpHashLike(hashToSign),
+                    })
+                  }
                   
                   // Try raw eth_sign first - produces signature over raw hash
                   // SignatureCheckerLib accepts: ecrecover(hash, sig)
@@ -1655,12 +1745,7 @@ function DeployVaultBatcher({
                       method: 'eth_sign',
                       params: [signerAddr, hashToSign],
                     })
-                    // Privy may return { signature, encoding } or raw string
-                    const sig = typeof rawResult === 'object' && rawResult?.signature 
-                      ? rawResult.signature 
-                      : rawResult
-                    logger.info('[DeployVault] eth_sign succeeded (raw)', { sig })
-                    return sig
+                    return ensureSignatureHex(rawResult, 'eth_sign')
                   } catch (ethSignError: any) {
                     logger.warn('[DeployVault] eth_sign failed, trying personal_sign', { error: ethSignError?.message })
                   }
@@ -1671,12 +1756,7 @@ function DeployVaultBatcher({
                     method: 'personal_sign',
                     params: [hashToSign, signerAddr],
                   })
-                  // Privy may return { signature, encoding } or raw string
-                  const sig = typeof rawResult === 'object' && rawResult?.signature 
-                    ? rawResult.signature 
-                    : rawResult
-                  logger.info('[DeployVault] personal_sign signature obtained', { sig })
-                  return sig
+                  return ensureSignatureHex(rawResult, 'personal_sign')
                 }
                 
                 // Pass through other requests
@@ -1695,30 +1775,26 @@ function DeployVaultBatcher({
                   : args.message
                 const msgHex = typeof msg === 'string' && msg.startsWith('0x') ? msg : `0x${Buffer.from(String(msg)).toString('hex')}`
                 
-                logger.info('[DeployVault] signMessage', { account: args.account, msgLength: msgHex?.length })
+                if (AA_DEBUG) {
+                  logger.debug('[DeployVault] signMessage', { account: args.account, msgLength: msgHex?.length })
+                }
                 
                 // personal_sign (EIP-191) - SignatureCheckerLib accepts this
                 const rawResult = await embeddedProvider.request({
                   method: 'personal_sign',
                   params: [msgHex, args.account],
                 })
-                // Privy may return { signature, encoding } or raw string
-                const sig = typeof rawResult === 'object' && rawResult?.signature 
-                  ? rawResult.signature 
-                  : rawResult
-                return sig
+                return ensureSignatureHex(rawResult, 'personal_sign')
               },
               signTypedData: async (args: any) => {
-                logger.info('[DeployVault] signTypedData', { primaryType: args.primaryType })
+                if (AA_DEBUG) {
+                  logger.debug('[DeployVault] signTypedData', { primaryType: args.primaryType })
+                }
                 const rawResult = await embeddedProvider.request({
                   method: 'eth_signTypedData_v4',
                   params: [embeddedPrivyEoaAddress, JSON.stringify(args)],
                 })
-                // Privy may return { signature, encoding } or raw string
-                const sig = typeof rawResult === 'object' && rawResult?.signature 
-                  ? rawResult.signature 
-                  : rawResult
-                return sig
+                return ensureSignatureHex(rawResult, 'eth_signTypedData_v4')
               },
             }
             

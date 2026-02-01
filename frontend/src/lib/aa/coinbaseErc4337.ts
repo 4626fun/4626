@@ -9,6 +9,7 @@ import {
   toCoinbaseSmartAccount,
   waitForUserOperationReceipt,
 } from 'viem/account-abstraction'
+import { logger } from '@/lib/logger'
 
 // ============================================================================
 // ENTRYPOINT v0.6 ENFORCEMENT
@@ -93,6 +94,127 @@ export type WalletClientLike = {
 } & Record<string, any>
 
 const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
+
+function isDebugEnabled(): boolean {
+  if (import.meta.env.VITE_DEBUG_LOGS === 'true') return true
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem('cv:debug') === 'true'
+  } catch {
+    return false
+  }
+}
+
+const AA_DEBUG = isDebugEnabled()
+
+const HEX_STRING_RE = /^0x[0-9a-fA-F]+$/
+
+function isHexString(value: unknown): value is Hex {
+  return typeof value === 'string' && HEX_STRING_RE.test(value)
+}
+
+function getHexByteLength(hex: string): number | null {
+  if (!hex.startsWith('0x')) return null
+  const body = hex.slice(2)
+  if (body.length % 2 !== 0) return null
+  return body.length / 2
+}
+
+function signatureMeta(signature: Hex) {
+  const byteLength = getHexByteLength(signature)
+  return {
+    signatureLength: signature.length,
+    byteLength,
+    is64Bytes: byteLength === 64,
+    is65Bytes: byteLength === 65,
+  }
+}
+
+function debugSignature(context: string, signature: Hex, source?: string | null) {
+  if (!AA_DEBUG) return
+  logger.debug(`[ERC-4337] ${context} signature`, {
+    source: source ?? 'unknown',
+    ...signatureMeta(signature),
+  })
+}
+
+function isUserOpHashLike(value: unknown): boolean {
+  return isHexString(value) && value.length === 66
+}
+
+type SignatureExtraction = { signature: Hex | null; source: string | null }
+
+function extractSignatureHex(value: unknown, depth = 0): SignatureExtraction {
+  if (isHexString(value)) {
+    return { signature: value as Hex, source: depth === 0 ? 'string' : `nested.${depth}` }
+  }
+  if (!value || typeof value !== 'object' || depth > 2) {
+    return { signature: null, source: null }
+  }
+  const record = value as Record<string, unknown>
+  const direct = record.signature ?? record.sig
+  if (isHexString(direct)) {
+    return { signature: direct as Hex, source: 'object.signature' }
+  }
+  const candidates: Array<[string, unknown]> = [
+    ['data', record.data],
+    ['result', record.result],
+    ['response', record.response],
+    ['signature', record.signature],
+    ['sig', record.sig],
+  ]
+  for (const [key, candidate] of candidates) {
+    if (isHexString(candidate)) {
+      return { signature: candidate as Hex, source: `object.${key}` }
+    }
+    if (candidate && typeof candidate === 'object') {
+      const nested = extractSignatureHex(candidate, depth + 1)
+      if (nested.signature) {
+        return { signature: nested.signature, source: `object.${key}.${nested.source ?? 'nested'}` }
+      }
+    }
+  }
+  return { signature: null, source: null }
+}
+
+function ensureSignatureHex(value: unknown, context: string): Hex {
+  const { signature, source } = extractSignatureHex(value)
+  if (!signature) {
+    throw new Error(`Invalid signature returned from ${context}`)
+  }
+  debugSignature(context, signature, source)
+  return signature
+}
+
+export function runSignatureExtractionHarness() {
+  const sig65 = `0x${'11'.repeat(65)}`
+  const sig64 = `0x${'22'.repeat(64)}`
+  const cases = [
+    { name: 'raw string', input: sig65 },
+    { name: 'object signature', input: { signature: sig65, encoding: 'hex' } },
+    { name: 'nested data signature', input: { data: { signature: sig65 } } },
+    { name: 'nested result signature (64-byte)', input: { result: { signature: sig64 } } },
+  ]
+  return cases.map((t) => {
+    const { signature, source } = extractSignatureHex(t.input)
+    const meta = signature ? signatureMeta(signature) : null
+    return {
+      name: t.name,
+      ok: Boolean(signature),
+      source,
+      signatureLength: meta?.signatureLength ?? null,
+      byteLength: meta?.byteLength ?? null,
+    }
+  })
+}
+
+if (AA_DEBUG && typeof window !== 'undefined') {
+  const w = window as any
+  if (typeof w.__cvSignatureHarness !== 'function') {
+    w.__cvSignatureHarness = runSignatureExtractionHarness
+    logger.debug('[ERC-4337] Signature harness attached to window.__cvSignatureHarness')
+  }
+}
 
 function getStoredSessionToken(): string | null {
   try {
@@ -266,23 +388,21 @@ function createWalletBackedLocalAccount(params: {
     address,
     // Required for Coinbase Smart Wallet userOp signatures (sign raw digest).
     sign: async ({ hash }) => {
-      // Log what viem is passing to us
-      console.log('[createWalletBackedLocalAccount] sign called', {
-        hash,
-        hashLength: hash?.length,
-        address,
-      })
+      if (AA_DEBUG) {
+        logger.debug('[ERC-4337] sign called', {
+          address,
+          hashLength: typeof hash === 'string' ? hash.length : null,
+          hashLooksValid: isUserOpHashLike(hash),
+        })
+      }
       
       const tryEthSign = async (): Promise<Hex> => {
         try {
-          const sig = await (walletClient as any).request({ 
+          const rawSig = await (walletClient as any).request({ 
             method: 'eth_sign', 
             params: [address, hash] 
           })
-          if (!sig || typeof sig !== 'string' || !sig.startsWith('0x')) {
-            throw new Error('Invalid signature returned from eth_sign')
-          }
-          return sig as Hex
+          return ensureSignatureHex(rawSig, 'eth_sign')
         } catch (e) {
           // Rethrow with context
           if (isUserRejection(e)) {
@@ -294,16 +414,13 @@ function createWalletBackedLocalAccount(params: {
       
       const tryPersonalSign = async (): Promise<Hex> => {
         try {
-          const sig = await walletClient.signMessage({
+          const rawSig = await walletClient.signMessage({
             account: address,
             // `raw` signs the 32-byte payload (EIP-191 prefixed at JSON-RPC layer).
             // Coinbase Smart Wallet accepts this via SignatureCheckerLib.
             message: { raw: hash },
           })
-          if (!sig || typeof sig !== 'string' || !sig.startsWith('0x')) {
-            throw new Error('Invalid signature returned from signMessage')
-          }
-          return sig as Hex
+          return ensureSignatureHex(rawSig, 'signMessage')
         } catch (e) {
           if (isUserRejection(e)) {
             throw new Error('User rejected the signature request.')
@@ -350,18 +467,19 @@ function createWalletBackedLocalAccount(params: {
       }
     },
     signMessage: async ({ message }) => {
-      console.log('[createWalletBackedLocalAccount] signMessage called', {
-        message,
-        messageType: typeof message,
-        isRaw: typeof message === 'object' && 'raw' in message,
-        address,
-      })
-      const sig = await walletClient.signMessage({ account: address, message })
-      return sig as Hex
+      if (AA_DEBUG) {
+        logger.debug('[ERC-4337] signMessage called', {
+          address,
+          messageType: typeof message,
+          isRaw: typeof message === 'object' && message !== null && 'raw' in message,
+        })
+      }
+      const rawSig = await walletClient.signMessage({ account: address, message })
+      return ensureSignatureHex(rawSig, 'signMessage')
     },
     signTypedData: async (typedData: any) => {
-      const sig = await walletClient.signTypedData({ account: address, ...(typedData as any) })
-      return sig as Hex
+      const rawSig = await walletClient.signTypedData({ account: address, ...(typedData as any) })
+      return ensureSignatureHex(rawSig, 'signTypedData')
     },
     signTransaction: async (tx, options) => {
       const wc: any = walletClient as any
@@ -399,7 +517,7 @@ function createCrossAppSigningAccount(params: {
       // Coinbase Smart Wallet supports this via SignatureCheckerLib.
       // We pass the raw hash as a hex string - Privy will handle the signing.
       const signature = await crossAppSignMessage(hash, { address: ownerAddress })
-      return signature as Hex
+      return ensureSignatureHex(signature, 'crossAppSignMessage')
     },
     signMessage: async ({ message }) => {
       const msgStr = typeof message === 'string' 
@@ -407,7 +525,8 @@ function createCrossAppSigningAccount(params: {
         : typeof message === 'object' && 'raw' in message
           ? (message.raw as Hex)
           : String(message)
-      return (await crossAppSignMessage(msgStr, { address: ownerAddress })) as Hex
+      const signature = await crossAppSignMessage(msgStr, { address: ownerAddress })
+      return ensureSignatureHex(signature, 'crossAppSignMessage')
     },
     signTypedData: async () => {
       throw new Error('signTypedData not supported for cross-app accounts')
@@ -549,17 +668,19 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   if (!calls || calls.length === 0) throw new Error('No calls provided')
 
   // Find owner index
-  const { ownerIndex } = await findCoinbaseSmartWalletOwnerIndex({
+  const { ownerIndex, ownerCount } = await findCoinbaseSmartWalletOwnerIndex({
     publicClient,
     smartWallet,
     ownerAddress,
   })
-  
-  console.log('[sendCoinbaseSmartWalletUserOperation] Owner index lookup', {
-    smartWallet,
-    ownerAddress,
-    ownerIndex,
-  })
+  if (AA_DEBUG) {
+    logger.debug('[ERC-4337] Owner index lookup', {
+      smartWallet,
+      ownerAddress,
+      ownerIndex,
+      ownerCount,
+    })
+  }
   
   if (ownerIndex === null) {
     throw new Error(
