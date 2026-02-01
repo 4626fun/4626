@@ -106,6 +106,31 @@ function signatureMeta(signature: Hex) {
   }
 }
 
+const NON_EOA_SIGNATURE_CODE = 'CV_NON_EOA_SIGNATURE'
+
+function isNonEoaSignatureError(error: unknown): boolean {
+  const code = (error as any)?.code
+  if (code === NON_EOA_SIGNATURE_CODE) return true
+  const msg = error instanceof Error ? error.message : String(error ?? '')
+  return msg.includes(NON_EOA_SIGNATURE_CODE)
+}
+
+function ensureEoaSignature(signature: Hex, context: string): Hex {
+  const meta = signatureMeta(signature)
+  if (meta.byteLength !== 65) {
+    if (AA_DEBUG) {
+      logger.warn('[DeployVault] Non-EOA signature detected', {
+        context,
+        ...meta,
+      })
+    }
+    const err = new Error(`${NON_EOA_SIGNATURE_CODE}:${context}`)
+    ;(err as any).code = NON_EOA_SIGNATURE_CODE
+    throw err
+  }
+  return signature
+}
+
 function isEthSignUnsupported(error: unknown): boolean {
   const code = (error as any)?.code
   if (code === -32601) return true // Method not found
@@ -117,19 +142,6 @@ function isEthSignUnsupported(error: unknown): boolean {
     lc.includes('method not found') ||
     lc.includes('does not support')
   )
-}
-
-const PRIVY_SMART_WALLET_UNSUPPORTED_PATTERNS = [
-  'privy smart wallet does not support',
-  'privy smart wallet signer not supported',
-  'signer not supported in this environment',
-  'does not support raw signing',
-] as const
-
-function isPrivySmartWalletSigningUnsupported(error: unknown): boolean {
-  const msg = error instanceof Error ? error.message : String(error ?? '')
-  const lc = msg.toLowerCase()
-  return PRIVY_SMART_WALLET_UNSUPPORTED_PATTERNS.some((pattern) => lc.includes(pattern))
 }
 
 function isUserOpHashLike(value: unknown): boolean {
@@ -1731,11 +1743,52 @@ function DeployVaultBatcher({
         const sendPhaseCalls = async (
           calls: Array<{ target: Address; value: bigint; data: Hex }>,
           phaseLabel: 'phase1' | 'phase2' | 'phase3',
+          opts?: { noSplit?: boolean; segment?: string },
         ) => {
+          const logPhaseLabel = opts?.segment ? `${phaseLabel}.${opts.segment}` : phaseLabel
+
+          if (!opts?.noSplit && phaseLabel === 'phase2' && calls.length > 2) {
+            const batcherIdx = calls.findIndex(
+              (c) => getAddress(c.target).toLowerCase() === getAddress(batcherAddress).toLowerCase()
+            )
+            if (batcherIdx > -1 && batcherIdx < calls.length - 1) {
+              const phase2Primary = calls.slice(0, batcherIdx + 1)
+              const phase2Secondary = calls.slice(batcherIdx + 1)
+              logger.info('[DeployVault] Splitting phase2 into multiple UserOps', {
+                primaryCount: phase2Primary.length,
+                secondaryCount: phase2Secondary.length,
+              })
+              await sendPhaseCalls(phase2Primary, phaseLabel, { noSplit: true, segment: 'part1' })
+              await sendPhaseCalls(phase2Secondary, phaseLabel, { noSplit: false, segment: 'part2' })
+              return
+            }
+          }
+
+          if (!opts?.noSplit && phaseLabel === 'phase2' && calls.length > 1) {
+            const create2Addr = getAddress(expectedCreate2Deployer).toLowerCase()
+            const create2Calls = calls.filter(
+              (c) => getAddress(c.target).toLowerCase() === create2Addr
+            )
+            const otherCalls = calls.filter(
+              (c) => getAddress(c.target).toLowerCase() !== create2Addr
+            )
+            if (create2Calls.length > 0 && otherCalls.length > 0) {
+              logger.info('[DeployVault] Splitting phase2 deploys/config', {
+                deployCount: create2Calls.length,
+                configCount: otherCalls.length,
+              })
+              const deploySegment = opts?.segment ? `${opts.segment}.deploys` : 'deploys'
+              const configSegment = opts?.segment ? `${opts.segment}.config` : 'config'
+              await sendPhaseCalls(create2Calls, phaseLabel, { noSplit: true, segment: deploySegment })
+              await sendPhaseCalls(otherCalls, phaseLabel, { noSplit: true, segment: configSegment })
+              return
+            }
+          }
+
           // PATH 1: Direct Coinbase Wallet connection
           // When connected via Coinbase Wallet SDK, we can use ERC-4337 directly
           if (isCoinbaseWalletDirect && connectedAddress && wagmiWalletClient && publicClient && canonicalSmartWallet) {
-            logger.info(`[DeployVault] Using Coinbase Wallet direct for ${phaseLabel}`)
+            logger.info(`[DeployVault] Using Coinbase Wallet direct for ${logPhaseLabel}`)
             
             const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
             const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
@@ -1759,7 +1812,7 @@ function DeployVaultBatcher({
               [phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : 'userOp3']: result.userOpHash,
               [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: result.transactionHash,
             }))
-            logger.warn(`[DeployVault] ${phaseLabel}_confirmed via Coinbase Wallet`)
+            logger.warn(`[DeployVault] ${logPhaseLabel}_confirmed via Coinbase Wallet`)
             return
           }
           
@@ -1773,7 +1826,7 @@ function DeployVaultBatcher({
             publicClient &&
             !preferEmbeddedEoaRef.current
           ) {
-            logger.info(`[DeployVault] Using ERC-4337 via Privy smart wallet owner for ${phaseLabel}`, {
+            logger.info(`[DeployVault] Using ERC-4337 via Privy smart wallet owner for ${logPhaseLabel}`, {
               canonicalSmartWallet,
               privySmartWalletAddress,
             })
@@ -1808,7 +1861,7 @@ function DeployVaultBatcher({
                     throw new Error('Privy smart wallet does not support raw signing')
                   }
                   const sig = ensureSignatureHex(rawResult, 'privySmartWallet.eth_sign')
-                  debugSignatureReady('privySmartWallet.eth_sign', sig, { signer: privySmartWalletAddress })
+                  ensureEoaSignature(sig, 'privySmartWallet.eth_sign')
                   return sig
                 }
                 if (typeof client?.request === 'function') {
@@ -1846,6 +1899,7 @@ function DeployVaultBatcher({
                     context,
                   )
                   const sig = ensureSignatureHex(rawResult, context)
+                  ensureEoaSignature(sig, context)
                   debugSignatureReady(context, sig, { signer: privySmartWalletAddress })
                   return sig
                 }
@@ -1871,6 +1925,7 @@ function DeployVaultBatcher({
                     context,
                   )
                   const sig = ensureSignatureHex(rawResult, context)
+                  ensureEoaSignature(sig, context)
                   debugSignatureReady(context, sig, { signer: privySmartWalletAddress })
                   return sig
                 }
@@ -1900,19 +1955,17 @@ function DeployVaultBatcher({
                 [phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : 'userOp3']: result.userOpHash,
                 [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: result.transactionHash,
               }))
-              logger.warn(`[DeployVault] ${phaseLabel}_confirmed via ERC-4337 (privy smart wallet owner)`, {
+              logger.warn(`[DeployVault] ${logPhaseLabel}_confirmed via ERC-4337 (privy smart wallet owner)`, {
                 userOpHash: result.userOpHash,
                 txHash: result.transactionHash,
               })
               return
             } catch (e) {
-              if (isPrivySmartWalletSigningUnsupported(e)) {
-                const msg = e instanceof Error ? e.message : String(e ?? '')
+              if (isNonEoaSignatureError(e)) {
                 preferEmbeddedEoaRef.current = true
-                logger.warn('[DeployVault] Privy smart wallet signing unsupported; falling back to embedded EOA', {
-                  phaseLabel,
+            logger.warn('[DeployVault] Privy smart wallet signature is not 65 bytes; falling back to embedded EOA', {
+              phaseLabel: logPhaseLabel,
                   privySmartWalletAddress,
-                  error: msg,
                 })
               } else {
                 throw e
@@ -1923,7 +1976,7 @@ function DeployVaultBatcher({
           // PATH 2: Privy embedded EOA is owner of canonical smart wallet
           // Use ERC-4337 with the embedded EOA signing directly (simple ecrecover, no EIP-1271)
           if (canonicalSmartWallet && embeddedEoaIsCanonicalOwner && embeddedPrivyWallet && embeddedPrivyEoaAddress) {
-            logger.info(`[DeployVault] Using ERC-4337 via Privy embedded EOA for ${phaseLabel}`, {
+            logger.info(`[DeployVault] Using ERC-4337 via Privy embedded EOA for ${logPhaseLabel}`, {
               canonicalSmartWallet,
               embeddedPrivyEoaAddress,
               embeddedEoaIsCanonicalOwner,
@@ -2110,7 +2163,7 @@ function DeployVaultBatcher({
               [phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : 'userOp3']: result.userOpHash,
               [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: result.transactionHash,
             }))
-            logger.warn(`[DeployVault] ${phaseLabel}_confirmed via ERC-4337 (embedded EOA signer)`, {
+            logger.warn(`[DeployVault] ${logPhaseLabel}_confirmed via ERC-4337 (embedded EOA signer)`, {
               userOpHash: result.userOpHash,
               txHash: result.transactionHash,
             })
@@ -2121,7 +2174,7 @@ function DeployVaultBatcher({
           // PATH 3: Connected EOA is owner of canonical smart wallet
           // Use ERC-4337 with the EOA signing UserOps for the canonical wallet
           if (canonicalSmartWallet && connectedIsCanonicalOwner && connectedAddress && wagmiWalletClient && publicClient) {
-            logger.info(`[DeployVault] Using ERC-4337 via connected EOA for ${phaseLabel}`)
+            logger.info(`[DeployVault] Using ERC-4337 via connected EOA for ${logPhaseLabel}`)
             
             const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
             const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
@@ -2151,7 +2204,7 @@ function DeployVaultBatcher({
               [phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : 'userOp3']: result.userOpHash,
               [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: result.transactionHash,
             }))
-            logger.warn(`[DeployVault] ${phaseLabel}_confirmed via ERC-4337 (connected EOA signer)`, {
+            logger.warn(`[DeployVault] ${logPhaseLabel}_confirmed via ERC-4337 (connected EOA signer)`, {
               userOpHash: result.userOpHash,
               txHash: result.transactionHash,
             })
