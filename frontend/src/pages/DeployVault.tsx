@@ -2506,6 +2506,54 @@ function DeployVaultMain() {
     }
   }, [embeddedPrivyWallet])
 
+  useEffect(() => {
+    if (!privyAuthenticated || !embeddedPrivyWallet) return
+    let mounted = true
+    const run = async () => {
+      try {
+        const provider = await (embeddedPrivyWallet as any).getEthereumProvider?.()
+        if (!provider?.request || !mounted) return
+        const current = await provider.request({ method: 'eth_chainId' }).catch(() => null)
+        if (typeof current === 'string' && current.toLowerCase() !== BASE_CHAIN_ID_HEX) {
+          await provider.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: BASE_CHAIN_ID_HEX }],
+          })
+        }
+      } catch {
+        // ignore - user may reject or provider may not support switching
+      }
+    }
+    void run()
+    return () => {
+      mounted = false
+    }
+  }, [embeddedPrivyWallet, privyAuthenticated])
+
+  useEffect(() => {
+    if (!privyAuthenticated || !smartWalletClient) return
+    let mounted = true
+    const run = async () => {
+      try {
+        const client: any = smartWalletClient as any
+        if (typeof client.request !== 'function' || !mounted) return
+        const current = await client.request({ method: 'eth_chainId' }).catch(() => null)
+        if (typeof current === 'string' && current.toLowerCase() !== BASE_CHAIN_ID_HEX) {
+          await client.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: BASE_CHAIN_ID_HEX }],
+          })
+        }
+      } catch {
+        // ignore
+      }
+    }
+    void run()
+    return () => {
+      mounted = false
+    }
+  }, [privyAuthenticated, smartWalletClient])
+
   const [searchParams] = useSearchParams()
   const prefillToken = useMemo(() => searchParams.get('token') ?? '', [searchParams])
   const autoLogin = useMemo(() => {
