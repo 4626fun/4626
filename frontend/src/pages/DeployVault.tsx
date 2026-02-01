@@ -106,6 +106,31 @@ function signatureMeta(signature: Hex) {
   }
 }
 
+const NON_EOA_SIGNATURE_CODE = 'CV_NON_EOA_SIGNATURE'
+
+function isNonEoaSignatureError(error: unknown): boolean {
+  const code = (error as any)?.code
+  if (code === NON_EOA_SIGNATURE_CODE) return true
+  const msg = error instanceof Error ? error.message : String(error ?? '')
+  return msg.includes(NON_EOA_SIGNATURE_CODE)
+}
+
+function ensureEoaSignature(signature: Hex, context: string): Hex {
+  const meta = signatureMeta(signature)
+  if (meta.byteLength !== 65) {
+    if (AA_DEBUG) {
+      logger.warn('[DeployVault] Non-EOA signature detected', {
+        context,
+        ...meta,
+      })
+    }
+    const err = new Error(`${NON_EOA_SIGNATURE_CODE}:${context}`)
+    ;(err as any).code = NON_EOA_SIGNATURE_CODE
+    throw err
+  }
+  return signature
+}
+
 function isUserOpHashLike(value: unknown): boolean {
   return isHexString(value) && value.length === 66
 }
@@ -1769,16 +1794,19 @@ function DeployVaultBatcher({
                       hasClientSignMessage: typeof client?.signMessage === 'function',
                     })
                   }
+                  let rawResult: unknown
                   if (typeof account?.sign === 'function') {
-                    return await account.sign({ hash: hashToSign })
+                    rawResult = await account.sign({ hash: hashToSign })
+                  } else if (typeof account?.signMessage === 'function') {
+                    rawResult = await account.signMessage({ message: { raw: hashToSign } })
+                  } else if (typeof client?.signMessage === 'function') {
+                    rawResult = await client.signMessage({ account: privySmartWalletAddress, message: { raw: hashToSign } })
+                  } else {
+                    throw new Error('Privy smart wallet does not support raw signing')
                   }
-                  if (typeof account?.signMessage === 'function') {
-                    return await account.signMessage({ message: { raw: hashToSign } })
-                  }
-                  if (typeof client?.signMessage === 'function') {
-                    return await client.signMessage({ account: privySmartWalletAddress, message: { raw: hashToSign } })
-                  }
-                  throw new Error('Privy smart wallet does not support raw signing')
+                  const sig = ensureSignatureHex(rawResult, 'privySmartWallet.eth_sign')
+                  ensureEoaSignature(sig, 'privySmartWallet.eth_sign')
+                  return sig
                 }
                 if (typeof client?.request === 'function') {
                   return await client.request(args)
@@ -1806,22 +1834,17 @@ function DeployVaultBatcher({
                 }
 
                 if (hasSignMessage) {
+                  const context = hasAccountSignMessage ? 'privySmartWallet.account.signMessage' : 'privySmartWallet.signMessage'
                   const rawResult = await withTimeout(
                     hasAccountSignMessage
                       ? account.signMessage({ message: msg })
                       : client.signMessage({ account: privySmartWalletAddress, message: msg }),
                     20_000,
-                    hasAccountSignMessage ? 'privySmartWallet.account.signMessage' : 'privySmartWallet.signMessage',
+                    context,
                   )
-                  const sig = ensureSignatureHex(
-                    rawResult,
-                    hasAccountSignMessage ? 'privySmartWallet.account.signMessage' : 'privySmartWallet.signMessage',
-                  )
-                  debugSignatureReady(
-                    hasAccountSignMessage ? 'privySmartWallet.account.signMessage' : 'privySmartWallet.signMessage',
-                    sig,
-                    { signer: privySmartWalletAddress },
-                  )
+                  const sig = ensureSignatureHex(rawResult, context)
+                  ensureEoaSignature(sig, context)
+                  debugSignatureReady(context, sig, { signer: privySmartWalletAddress })
                   return sig
                 }
 
@@ -1834,28 +1857,20 @@ function DeployVaultBatcher({
                 const client: any = smartWalletClient as any
                 const account: any = client?.account
                 if (typeof account?.signTypedData === 'function' || typeof client?.signTypedData === 'function') {
+                  const context =
+                    typeof account?.signTypedData === 'function'
+                      ? 'privySmartWallet.account.signTypedData'
+                      : 'privySmartWallet.signTypedData'
                   const rawResult = await withTimeout(
                     typeof account?.signTypedData === 'function'
                       ? account.signTypedData(args as any)
                       : client.signTypedData({ account: privySmartWalletAddress, ...(args as any) }),
                     20_000,
-                    typeof account?.signTypedData === 'function'
-                      ? 'privySmartWallet.account.signTypedData'
-                      : 'privySmartWallet.signTypedData',
+                    context,
                   )
-                  const sig = ensureSignatureHex(
-                    rawResult,
-                    typeof account?.signTypedData === 'function'
-                      ? 'privySmartWallet.account.signTypedData'
-                      : 'privySmartWallet.signTypedData',
-                  )
-                  debugSignatureReady(
-                    typeof account?.signTypedData === 'function'
-                      ? 'privySmartWallet.account.signTypedData'
-                      : 'privySmartWallet.signTypedData',
-                    sig,
-                    { signer: privySmartWalletAddress },
-                  )
+                  const sig = ensureSignatureHex(rawResult, context)
+                  ensureEoaSignature(sig, context)
+                  debugSignatureReady(context, sig, { signer: privySmartWalletAddress })
                   return sig
                 }
                 throw new Error(
@@ -1865,29 +1880,40 @@ function DeployVaultBatcher({
               },
             }
 
-            const result = await sendCoinbaseSmartWalletUserOperation({
-              publicClient: publicClient as any,
-              walletClient: smartWalletClientAdapter as any,
-              bundlerUrl,
-              smartWallet: canonicalSmartWallet,
-              ownerAddress: privySmartWalletAddress,
-              calls: toCalls(calls),
-              version: '1',
-              userOpSignMode: 'eth_sign',
-              ownerIsContract: true,
-            })
+            try {
+              const result = await sendCoinbaseSmartWalletUserOperation({
+                publicClient: publicClient as any,
+                walletClient: smartWalletClientAdapter as any,
+                bundlerUrl,
+                smartWallet: canonicalSmartWallet,
+                ownerAddress: privySmartWalletAddress,
+                calls: toCalls(calls),
+                version: '1',
+                userOpSignMode: 'eth_sign',
+                ownerIsContract: true,
+              })
 
-            setTxId(result.transactionHash)
-            setPhaseTxs((s) => ({
-              ...s,
-              [phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : 'userOp3']: result.userOpHash,
-              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: result.transactionHash,
-            }))
-            logger.warn(`[DeployVault] ${phaseLabel}_confirmed via ERC-4337 (privy smart wallet owner)`, {
-              userOpHash: result.userOpHash,
-              txHash: result.transactionHash,
-            })
-            return
+              setTxId(result.transactionHash)
+              setPhaseTxs((s) => ({
+                ...s,
+                [phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : 'userOp3']: result.userOpHash,
+                [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: result.transactionHash,
+              }))
+              logger.warn(`[DeployVault] ${phaseLabel}_confirmed via ERC-4337 (privy smart wallet owner)`, {
+                userOpHash: result.userOpHash,
+                txHash: result.transactionHash,
+              })
+              return
+            } catch (e) {
+              if (isNonEoaSignatureError(e)) {
+                logger.warn('[DeployVault] Privy smart wallet signature is not 65 bytes; falling back to embedded EOA', {
+                  phaseLabel,
+                  privySmartWalletAddress,
+                })
+              } else {
+                throw e
+              }
+            }
           }
 
           // PATH 2: Privy embedded EOA is owner of canonical smart wallet
