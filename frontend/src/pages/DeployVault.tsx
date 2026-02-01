@@ -1726,59 +1726,50 @@ function DeployVaultBatcher({
                 const msgHex =
                   typeof msg === 'string' && msg.startsWith('0x') ? msg : `0x${Buffer.from(String(msg)).toString('hex')}`
 
-                if (hasSignMessage) {
-                  try {
-                    const rawResult = await withTimeout(
-                      (smartWalletClient as any).signMessage({
-                        account: privySmartWalletAddress,
-                        message: msg,
-                      }),
-                      20_000,
-                      'privySmartWallet.signMessage',
-                    )
-                    const sig = ensureSignatureHex(rawResult, 'privySmartWallet.signMessage')
-                    debugSignatureReady('privySmartWallet.signMessage', sig, { signer: privySmartWalletAddress })
-                    return sig
-                  } catch (e: any) {
-                    logger.warn('[DeployVault] privy smart wallet signMessage failed', {
-                      error: e?.message ?? String(e),
-                    })
-                    if (!hasRequest) {
-                      throw new Error('Privy smart wallet signMessage failed and request() is unavailable')
-                    }
-                  }
+                if (AA_DEBUG) {
+                  logger.debug('[DeployVault] Privy smart wallet signer capabilities', {
+                    hasSignMessage,
+                    hasRequest,
+                  })
                 }
 
                 if (hasRequest) {
+                  try {
+                    const rawResult = await withTimeout(
+                      (smartWalletClient as any).request({
+                        method: 'personal_sign',
+                        params: [msgHex, privySmartWalletAddress],
+                      }),
+                      20_000,
+                      'privySmartWallet.personal_sign',
+                    )
+                    const sig = ensureSignatureHex(rawResult, 'privySmartWallet.personal_sign')
+                    debugSignatureReady('privySmartWallet.personal_sign', sig, { signer: privySmartWalletAddress })
+                    return sig
+                  } catch (e: any) {
+                    logger.warn('[DeployVault] privy smart wallet personal_sign failed', {
+                      error: e?.message ?? String(e),
+                    })
+                  }
+                }
+
+                if (hasSignMessage) {
                   const rawResult = await withTimeout(
-                    (smartWalletClient as any).request({
-                      method: 'personal_sign',
-                      params: [msgHex, privySmartWalletAddress],
+                    (smartWalletClient as any).signMessage({
+                      account: privySmartWalletAddress,
+                      message: msg,
                     }),
                     20_000,
-                    'privySmartWallet.personal_sign',
+                    'privySmartWallet.signMessage',
                   )
-                  const sig = ensureSignatureHex(rawResult, 'privySmartWallet.personal_sign')
-                  debugSignatureReady('privySmartWallet.personal_sign', sig, { signer: privySmartWalletAddress })
+                  const sig = ensureSignatureHex(rawResult, 'privySmartWallet.signMessage')
+                  debugSignatureReady('privySmartWallet.signMessage', sig, { signer: privySmartWalletAddress })
                   return sig
                 }
 
                 throw new Error('Privy smart wallet client cannot sign messages')
               },
               signTypedData: async (args: any) => {
-                if (typeof (smartWalletClient as any)?.signTypedData === 'function') {
-                  const rawResult = await withTimeout(
-                    (smartWalletClient as any).signTypedData({
-                      account: privySmartWalletAddress,
-                      ...(args as any),
-                    }),
-                    20_000,
-                    'privySmartWallet.signTypedData',
-                  )
-                  const sig = ensureSignatureHex(rawResult, 'privySmartWallet.signTypedData')
-                  debugSignatureReady('privySmartWallet.signTypedData', sig, { signer: privySmartWalletAddress })
-                  return sig
-                }
                 if (typeof (smartWalletClient as any)?.request === 'function') {
                   const rawResult = await withTimeout(
                     (smartWalletClient as any).request({
@@ -1790,6 +1781,19 @@ function DeployVaultBatcher({
                   )
                   const sig = ensureSignatureHex(rawResult, 'privySmartWallet.eth_signTypedData_v4')
                   debugSignatureReady('privySmartWallet.eth_signTypedData_v4', sig, { signer: privySmartWalletAddress })
+                  return sig
+                }
+                if (typeof (smartWalletClient as any)?.signTypedData === 'function') {
+                  const rawResult = await withTimeout(
+                    (smartWalletClient as any).signTypedData({
+                      account: privySmartWalletAddress,
+                      ...(args as any),
+                    }),
+                    20_000,
+                    'privySmartWallet.signTypedData',
+                  )
+                  const sig = ensureSignatureHex(rawResult, 'privySmartWallet.signTypedData')
+                  debugSignatureReady('privySmartWallet.signTypedData', sig, { signer: privySmartWalletAddress })
                   return sig
                 }
                 throw new Error('Privy smart wallet client cannot sign typed data')
