@@ -167,6 +167,20 @@ function debugSignatureReady(context: string, signature: Hex, details?: Record<s
   })
 }
 
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`))
+    }, ms)
+  })
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type AdminAuthResponse = { address: string; isAdmin: boolean } | null
 type ServerDeployResponse = {
@@ -1750,10 +1764,14 @@ function DeployVaultBatcher({
                   // Try raw eth_sign first - produces signature over raw hash
                   // SignatureCheckerLib accepts: ecrecover(hash, sig)
                   try {
-                    const rawResult = await embeddedProvider.request({
-                      method: 'eth_sign',
-                      params: [signerAddr, hashToSign],
-                    })
+                    const rawResult = await withTimeout(
+                      embeddedProvider.request({
+                        method: 'eth_sign',
+                        params: [signerAddr, hashToSign],
+                      }),
+                      30_000,
+                      'eth_sign',
+                    )
                     const sig = ensureSignatureHex(rawResult, 'eth_sign')
                     debugSignatureReady('eth_sign', sig, { signer: signerAddr })
                     return sig
@@ -1789,10 +1807,14 @@ function DeployVaultBatcher({
                 }
                 
                 // personal_sign (EIP-191) - SignatureCheckerLib accepts this
-                const rawResult = await embeddedProvider.request({
-                  method: 'personal_sign',
-                  params: [msgHex, args.account],
-                })
+                const rawResult = await withTimeout(
+                  embeddedProvider.request({
+                    method: 'personal_sign',
+                    params: [msgHex, args.account],
+                  }),
+                  30_000,
+                  'personal_sign',
+                )
                 const sig = ensureSignatureHex(rawResult, 'personal_sign')
                 debugSignatureReady('personal_sign', sig, { signer: args.account })
                 return sig
@@ -1801,10 +1823,14 @@ function DeployVaultBatcher({
                 if (AA_DEBUG) {
                   logger.debug('[DeployVault] signTypedData', { primaryType: args.primaryType })
                 }
-                const rawResult = await embeddedProvider.request({
-                  method: 'eth_signTypedData_v4',
-                  params: [embeddedPrivyEoaAddress, JSON.stringify(args)],
-                })
+                const rawResult = await withTimeout(
+                  embeddedProvider.request({
+                    method: 'eth_signTypedData_v4',
+                    params: [embeddedPrivyEoaAddress, JSON.stringify(args)],
+                  }),
+                  30_000,
+                  'eth_signTypedData_v4',
+                )
                 const sig = ensureSignatureHex(rawResult, 'eth_signTypedData_v4')
                 debugSignatureReady('eth_signTypedData_v4', sig, { signer: embeddedPrivyEoaAddress })
                 return sig
