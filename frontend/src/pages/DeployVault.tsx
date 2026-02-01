@@ -2557,9 +2557,9 @@ function DeployVaultMain() {
     return privySmartWalletAddress ?? connectedWalletAddress ?? privyLinkedEoaAddress
   }, [connectedWalletAddress, privyLinkedEoaAddress, privySmartWalletAddress])
   const deploymentVersion = useMemo(() => {
-    const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.8'
+    const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.1.1'
     const v = String(raw).trim()
-    return v.length > 0 ? v : 'v1.8'
+    return v.length > 0 ? v : 'v1.1.1'
   }, [])
 
   const switchAuthCta = useMemo(() => {
