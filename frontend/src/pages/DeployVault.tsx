@@ -158,6 +158,15 @@ function ensureSignatureHex(value: unknown, context: string): Hex {
   return signature
 }
 
+function debugSignatureReady(context: string, signature: Hex, details?: Record<string, unknown>) {
+  if (!AA_DEBUG) return
+  logger.debug('[DeployVault] UserOp signature ready', {
+    context,
+    ...signatureMeta(signature),
+    ...(details ?? {}),
+  })
+}
+
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type AdminAuthResponse = { address: string; isAdmin: boolean } | null
 type ServerDeployResponse = {
@@ -1745,7 +1754,9 @@ function DeployVaultBatcher({
                       method: 'eth_sign',
                       params: [signerAddr, hashToSign],
                     })
-                    return ensureSignatureHex(rawResult, 'eth_sign')
+                    const sig = ensureSignatureHex(rawResult, 'eth_sign')
+                    debugSignatureReady('eth_sign', sig, { signer: signerAddr })
+                    return sig
                   } catch (ethSignError: any) {
                     logger.warn('[DeployVault] eth_sign failed, trying personal_sign', { error: ethSignError?.message })
                   }
@@ -1756,7 +1767,9 @@ function DeployVaultBatcher({
                     method: 'personal_sign',
                     params: [hashToSign, signerAddr],
                   })
-                  return ensureSignatureHex(rawResult, 'personal_sign')
+                  const sig = ensureSignatureHex(rawResult, 'personal_sign')
+                  debugSignatureReady('personal_sign', sig, { signer: signerAddr })
+                  return sig
                 }
                 
                 // Pass through other requests
@@ -1784,7 +1797,9 @@ function DeployVaultBatcher({
                   method: 'personal_sign',
                   params: [msgHex, args.account],
                 })
-                return ensureSignatureHex(rawResult, 'personal_sign')
+                const sig = ensureSignatureHex(rawResult, 'personal_sign')
+                debugSignatureReady('personal_sign', sig, { signer: args.account })
+                return sig
               },
               signTypedData: async (args: any) => {
                 if (AA_DEBUG) {
@@ -1794,7 +1809,9 @@ function DeployVaultBatcher({
                   method: 'eth_signTypedData_v4',
                   params: [embeddedPrivyEoaAddress, JSON.stringify(args)],
                 })
-                return ensureSignatureHex(rawResult, 'eth_signTypedData_v4')
+                const sig = ensureSignatureHex(rawResult, 'eth_signTypedData_v4')
+                debugSignatureReady('eth_signTypedData_v4', sig, { signer: embeddedPrivyEoaAddress })
+                return sig
               },
             }
             
@@ -3175,6 +3192,30 @@ function DeployVaultMain() {
 
   const fundingGateOk = walletHasMinDeposit
 
+  const debugControlsVisible = useMemo(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      const params = new URLSearchParams(window.location.search)
+      return params.get('debug') === '1' || window.localStorage.getItem('cv:debug') === 'true'
+    } catch {
+      return false
+    }
+  }, [])
+
+  const toggleDebugLogs = useCallback(() => {
+    if (typeof window === 'undefined') return
+    try {
+      if (isDebugEnabled()) {
+        window.localStorage.removeItem('cv:debug')
+      } else {
+        window.localStorage.setItem('cv:debug', 'true')
+      }
+    } catch {
+      // ignore
+    }
+    window.location.reload()
+  }, [])
+
   const privySmartWalletReady = Boolean(privySmartWalletAddress && smartWalletClient)
   
   // Check if Privy smart wallet matches the canonical identity (Zora smart wallet)
@@ -3859,6 +3900,15 @@ function DeployVaultMain() {
                       {switchAuthCta.label}
                     </button>
                   ) : null}
+                </div>
+              ) : null}
+
+              {debugControlsVisible ? (
+                <div className="flex items-center justify-between text-[10px] text-zinc-600">
+                  <span>Debug logs: {AA_DEBUG ? 'on' : 'off'}</span>
+                  <button type="button" className="underline" onClick={toggleDebugLogs}>
+                    {AA_DEBUG ? 'Disable' : 'Enable'}
+                  </button>
                 </div>
               ) : null}
 

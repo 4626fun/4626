@@ -138,6 +138,15 @@ function debugSignature(context: string, signature: Hex, source?: string | null)
   })
 }
 
+function debugSignatureReady(context: string, signature: Hex, details?: Record<string, unknown>) {
+  if (!AA_DEBUG) return
+  logger.debug('[ERC-4337] UserOp signature ready', {
+    context,
+    ...signatureMeta(signature),
+    ...(details ?? {}),
+  })
+}
+
 function isUserOpHashLike(value: unknown): boolean {
   return isHexString(value) && value.length === 66
 }
@@ -402,7 +411,9 @@ function createWalletBackedLocalAccount(params: {
             method: 'eth_sign', 
             params: [address, hash] 
           })
-          return ensureSignatureHex(rawSig, 'eth_sign')
+          const sig = ensureSignatureHex(rawSig, 'eth_sign')
+          debugSignatureReady('eth_sign', sig, { address })
+          return sig
         } catch (e) {
           // Rethrow with context
           if (isUserRejection(e)) {
@@ -420,7 +431,9 @@ function createWalletBackedLocalAccount(params: {
             // Coinbase Smart Wallet accepts this via SignatureCheckerLib.
             message: { raw: hash },
           })
-          return ensureSignatureHex(rawSig, 'signMessage')
+          const sig = ensureSignatureHex(rawSig, 'signMessage')
+          debugSignatureReady('signMessage', sig, { address })
+          return sig
         } catch (e) {
           if (isUserRejection(e)) {
             throw new Error('User rejected the signature request.')
@@ -517,7 +530,9 @@ function createCrossAppSigningAccount(params: {
       // Coinbase Smart Wallet supports this via SignatureCheckerLib.
       // We pass the raw hash as a hex string - Privy will handle the signing.
       const signature = await crossAppSignMessage(hash, { address: ownerAddress })
-      return ensureSignatureHex(signature, 'crossAppSignMessage')
+      const sig = ensureSignatureHex(signature, 'crossAppSignMessage')
+      debugSignatureReady('crossAppSignMessage', sig, { address: ownerAddress })
+      return sig
     },
     signMessage: async ({ message }) => {
       const msgStr = typeof message === 'string' 
