@@ -3,6 +3,7 @@ import { Component, createContext, useContext, useMemo } from 'react'
 import { getPrivyAppId, isPrivyClientEnabled } from '@/lib/flags'
 import { PrivyProvider } from '@privy-io/react-auth'
 import { SmartWalletsProvider } from '@privy-io/react-auth/smart-wallets'
+import { base } from 'viem/chains'
 
 type PrivyClientStatus = 'disabled' | 'loading' | 'ready'
 
@@ -85,6 +86,8 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
       ethereum: { createOnLogin: 'users-without-wallets' },
     },
     loginMethods,
+    defaultChain: base,
+    supportedChains: [base],
     // Enable cross-app wallets from Zora so users get the same wallet they created on Zora
     externalWallets: {
       crossApp: {
@@ -97,6 +100,8 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
     appearance,
     // Intentionally omit `embeddedWallets` so HTTP/insecure dev origins don't crash the app.
     loginMethods,
+    defaultChain: base,
+    supportedChains: [base],
     // Enable cross-app wallets from Zora
     externalWallets: {
       crossApp: {
