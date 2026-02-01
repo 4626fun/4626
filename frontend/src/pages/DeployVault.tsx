@@ -1637,7 +1637,8 @@ function DeployVaultBatcher({
               request: async (args: { method: string; params: any[] }) => {
                 logger.info('[DeployVault] Embedded provider request', { method: args.method })
                 
-                // eth_sign: sign the raw hash that viem passes (already wrapped by viem)
+                // eth_sign: sign the hash that viem passes
+                // viem already wrapped with ReplaySafeHash, so this is the EIP-712 digest
                 if (args.method === 'eth_sign') {
                   const [signerAddr, hashToSign] = args.params
                   
@@ -1647,8 +1648,21 @@ function DeployVaultBatcher({
                     hashLength: hashToSign?.length,
                   })
                   
-                  // Use personal_sign which adds EIP-191 prefix
-                  // Coinbase Smart Wallet's SignatureCheckerLib accepts this
+                  // Try raw eth_sign first - produces signature over raw hash
+                  // SignatureCheckerLib accepts: ecrecover(hash, sig)
+                  try {
+                    const sig = await embeddedProvider.request({
+                      method: 'eth_sign',
+                      params: [signerAddr, hashToSign],
+                    })
+                    logger.info('[DeployVault] eth_sign succeeded (raw)')
+                    return sig
+                  } catch (ethSignError: any) {
+                    logger.warn('[DeployVault] eth_sign failed, trying personal_sign', { error: ethSignError?.message })
+                  }
+                  
+                  // Fallback: personal_sign adds EIP-191 prefix
+                  // SignatureCheckerLib accepts: ecrecover(toEthSignedMessageHash(hash), sig)
                   const sig = await embeddedProvider.request({
                     method: 'personal_sign',
                     params: [hashToSign, signerAddr],
@@ -1673,9 +1687,9 @@ function DeployVaultBatcher({
                   : args.message
                 const msgHex = typeof msg === 'string' && msg.startsWith('0x') ? msg : `0x${Buffer.from(String(msg)).toString('hex')}`
                 
-                logger.info('[DeployVault] signMessage via personal_sign', { account: args.account, msgLength: msgHex?.length })
+                logger.info('[DeployVault] signMessage', { account: args.account, msgLength: msgHex?.length })
                 
-                // Use personal_sign (EIP-191) - SignatureCheckerLib accepts this
+                // personal_sign (EIP-191) - SignatureCheckerLib accepts this
                 const sig = await embeddedProvider.request({
                   method: 'personal_sign',
                   params: [msgHex, args.account],
