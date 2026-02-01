@@ -1734,23 +1734,17 @@ function DeployVaultBatcher({
                 }
 
                 if (hasRequest) {
-                  try {
-                    const rawResult = await withTimeout(
-                      (smartWalletClient as any).request({
-                        method: 'personal_sign',
-                        params: [msgHex, privySmartWalletAddress],
-                      }),
-                      20_000,
-                      'privySmartWallet.personal_sign',
-                    )
-                    const sig = ensureSignatureHex(rawResult, 'privySmartWallet.personal_sign')
-                    debugSignatureReady('privySmartWallet.personal_sign', sig, { signer: privySmartWalletAddress })
-                    return sig
-                  } catch (e: any) {
-                    logger.warn('[DeployVault] privy smart wallet personal_sign failed', {
-                      error: e?.message ?? String(e),
-                    })
-                  }
+                  const rawResult = await withTimeout(
+                    (smartWalletClient as any).request({
+                      method: 'personal_sign',
+                      params: [msgHex, privySmartWalletAddress],
+                    }),
+                    20_000,
+                    'privySmartWallet.personal_sign',
+                  )
+                  const sig = ensureSignatureHex(rawResult, 'privySmartWallet.personal_sign')
+                  debugSignatureReady('privySmartWallet.personal_sign', sig, { signer: privySmartWalletAddress })
+                  return sig
                 }
 
                 if (hasSignMessage) {
