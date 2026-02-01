@@ -1,5 +1,7 @@
 # Dependencies
 node_modules/
+docs/
+docs-site/
 docs-site/node_modules/
 npm-debug.log*
 yarn-debug.log*
@@ -38,6 +40,8 @@ target/deploy/*-keypair.json
 !.cursor/rules/**
 !.cursor/skills/
 !.cursor/skills/**
+.cursor/rules/ERC-4337-Wallet-Invariants.mdc
+frontend/v4-subgraph/
 *.swp
 *.swo
 *~

@@ -930,8 +930,8 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // - paymaster validation can also push EOA flows above 150k in larger batches
   // - callGasLimit: Auto-estimated, but we don't override since batcher calls vary
   const verificationGasLimits = ownerIsContract
-    ? [2_000_000n, 4_000_000n, 8_000_000n]
-    : [150_000n, 4_000_000n]
+    ? [1_000_000n, 2_500_000n, 5_000_000n]
+    : [1_000_000n, 2_500_000n, 5_000_000n]
   const uniqueVerificationGasLimits = Array.from(new Set(verificationGasLimits))
   if (AA_DEBUG) {
     logger.debug('[ERC-4337] verificationGasLimit', {
