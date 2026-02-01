@@ -1,6 +1,6 @@
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
-import { useAccount, usePublicClient, useReadContract, useWalletClient } from 'wagmi'
+import { useAccount, useChainId, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
 import { base } from 'wagmi/chains'
 import type { Address, Hex } from 'viem'
 import {
@@ -69,6 +69,7 @@ const DEFAULT_CCA_DURATION_BLOCKS = 302_400n // ~7 days on Base at ~2s blocks (m
 // Rationale: reduce launch-manipulation surface area on brand new coins with thin/no trading history.
 const DEFAULT_MIN_COIN_AGE_DAYS = 30
 const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
+const BASE_CHAIN_ID_HEX = `0x${base.id.toString(16)}`
 
 function isDebugEnabled(): boolean {
   if (import.meta.env.VITE_DEBUG_LOGS === 'true') return true
@@ -844,10 +845,39 @@ function DeployVaultBatcher({
   connectedIsCanonicalOwner: boolean
 }) {
   const { address: connectedAddress } = useAccount()
+  const chainId = useChainId()
+  const { switchChainAsync } = useSwitchChain()
   const publicClient = usePublicClient({ chainId: base.id })
   
   // Detect Coinbase Wallet direct connection (not via Privy)
   const isCoinbaseWalletDirect = connectorId === 'coinbaseWalletSDK' || connectorId === 'com.coinbase.wallet'
+
+  const ensureBaseChain = useCallback(async (label: string) => {
+    if (chainId === base.id) return
+    if (typeof switchChainAsync !== 'function') {
+      throw new Error(`Please switch ${label} to Base network to continue.`)
+    }
+    try {
+      await switchChainAsync({ chainId: base.id })
+    } catch {
+      throw new Error(`Please switch ${label} to Base network to continue.`)
+    }
+  }, [chainId, switchChainAsync])
+
+  const ensureProviderOnBase = useCallback(async (provider: any, label: string) => {
+    if (!provider?.request) return
+    const current = await provider.request({ method: 'eth_chainId' }).catch(() => null)
+    if (typeof current === 'string' && current.toLowerCase() !== BASE_CHAIN_ID_HEX) {
+      try {
+        await provider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: BASE_CHAIN_ID_HEX }],
+        })
+      } catch {
+        throw new Error(`Please switch ${label} to Base network to continue.`)
+      }
+    }
+  }, [])
 
   const smartWalletAddrForAuth = useMemo(() => {
     try {
@@ -951,6 +981,9 @@ function DeployVaultBatcher({
     }
     if (lower.includes('chain: undefined') && lower.includes('wallet_sendcalls')) {
       return 'Call batching failed to resolve the Base chain. Reconnect your wallet or use Coinbase Wallet (Base Account), then retry.'
+    }
+    if (lower.includes('switch') && lower.includes('base')) {
+      return 'Please switch your wallet to Base and retry.'
     }
     if (
       lower.includes('metamask') &&
@@ -1680,6 +1713,8 @@ function DeployVaultBatcher({
             const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
             const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
             const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv) || '/api/paymaster'
+
+            await ensureBaseChain('Coinbase Wallet')
             
             const result = await sendCoinbaseSmartWalletUserOperation({
               publicClient: publicClient as any,
@@ -1718,6 +1753,8 @@ function DeployVaultBatcher({
             const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
             const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
             const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv) || '/api/paymaster'
+
+            await ensureProviderOnBase(smartWalletClient, 'Privy smart wallet')
 
             const smartWalletClientAdapter = {
               request: async (args: { method: string; params: any[] }) => {
@@ -1839,6 +1876,8 @@ function DeployVaultBatcher({
             if (!embeddedProvider?.request) {
               throw new Error('Embedded wallet provider not available')
             }
+
+            await ensureProviderOnBase(embeddedProvider, 'Privy embedded wallet')
             
             // Verify the provider's account matches our expected address
             const accounts = await embeddedProvider.request({ method: 'eth_accounts' }) as string[]
@@ -1985,6 +2024,8 @@ function DeployVaultBatcher({
             const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
             const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
             const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv) || '/api/paymaster'
+
+            await ensureBaseChain('your wallet')
             
             logger.info('[DeployVault] Sending ERC-4337 UserOp via connected EOA', {
               canonicalSmartWallet,
@@ -2315,6 +2356,8 @@ function DeployVaultBatcher({
 
 function DeployVaultMain() {
   const { address, isConnected, connector } = useAccount()
+  const chainId = useChainId()
+  const { switchChainAsync } = useSwitchChain()
   const { data: walletClient } = useWalletClient({ chainId: base.id })
   const { ready: privyReady, authenticated: privyAuthenticated, logout, getAccessToken } = usePrivy() as any
   const { login } = useLogin()
@@ -2383,6 +2426,18 @@ function DeployVaultMain() {
   }, [privyLinkedEoaWallet])
   
   const [creatorToken, setCreatorToken] = useState('')
+
+  const ensureBaseChain = useCallback(async (label: string) => {
+    if (chainId === base.id) return
+    if (typeof switchChainAsync !== 'function') {
+      throw new Error(`Please switch ${label} to Base network to continue.`)
+    }
+    try {
+      await switchChainAsync({ chainId: base.id })
+    } catch {
+      throw new Error(`Please switch ${label} to Base network to continue.`)
+    }
+  }, [chainId, switchChainAsync])
   
   // Connected wallet is the user's Coinbase Smart Wallet
   const connectedWalletAddress = useMemo(() => {
@@ -2902,6 +2957,8 @@ function DeployVaultMain() {
       if (!connectedWalletAddress || !walletClient || !publicClient) {
         throw new Error('Wallet not connected. Please connect a wallet that is an owner of your Zora smart wallet.')
       }
+
+    await ensureBaseChain('your wallet')
       
       // Verify connected wallet is an owner
       const isOwner = await isCoinbaseSmartWalletOwner({
@@ -3046,6 +3103,8 @@ function DeployVaultMain() {
       if (!connectedWalletAddress || !walletClient || !publicClient) {
         throw new Error('Wallet not connected. Please connect a wallet that is an owner of your Zora smart wallet.')
       }
+
+      await ensureBaseChain('your wallet')
 
       const isOwner = await isCoinbaseSmartWalletOwner({
         smartWallet: canonicalIdentityAddress as Address,

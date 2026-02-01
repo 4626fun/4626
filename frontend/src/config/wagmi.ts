@@ -23,6 +23,11 @@ const BASE_RPC_URL =
   (import.meta.env.VITE_BASE_READ_RPC_URL as string | undefined)?.trim() ||
   ''
 
+const WALLETCONNECT_APP_URL =
+  (import.meta.env.VITE_APP_URL as string | undefined)?.trim() ||
+  (typeof window !== 'undefined' ? window.location.origin : 'https://4626.fun')
+const WALLETCONNECT_ICON_URL = `${WALLETCONNECT_APP_URL.replace(/\/$/, '')}/pwa-512.png`
+
 export const wagmiConfig = createConfig({
   chains: [base],
   connectors: [
@@ -35,8 +40,8 @@ export const wagmiConfig = createConfig({
       metadata: {
         name: 'Creator Vaults',
         description: 'Creator coin vaults on Base',
-        url: 'https://4626.fun',
-        icons: ['https://4626.fun/pwa-512.png'],
+        url: WALLETCONNECT_APP_URL,
+        icons: [WALLETCONNECT_ICON_URL],
       },
       showQrModal: true,
     }),
