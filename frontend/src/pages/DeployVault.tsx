@@ -1758,18 +1758,14 @@ function DeployVaultBatcher({
                     debugSignatureReady('eth_sign', sig, { signer: signerAddr })
                     return sig
                   } catch (ethSignError: any) {
-                    logger.warn('[DeployVault] eth_sign failed, trying personal_sign', { error: ethSignError?.message })
+                    const msg = ethSignError?.message ? String(ethSignError.message) : 'eth_sign failed'
+                    logger.warn('[DeployVault] eth_sign failed for embedded EOA', { error: msg })
+                    throw new Error(
+                      'Embedded wallet does not support eth_sign. ' +
+                        'UserOp signing for Coinbase Smart Wallet requires eth_sign. ' +
+                        'Use Coinbase Wallet (Base Account) or connect an owner EOA.'
+                    )
                   }
-                  
-                  // Fallback: personal_sign adds EIP-191 prefix
-                  // SignatureCheckerLib accepts: ecrecover(toEthSignedMessageHash(hash), sig)
-                  const rawResult = await embeddedProvider.request({
-                    method: 'personal_sign',
-                    params: [hashToSign, signerAddr],
-                  })
-                  const sig = ensureSignatureHex(rawResult, 'personal_sign')
-                  debugSignatureReady('personal_sign', sig, { signer: signerAddr })
-                  return sig
                 }
                 
                 // Pass through other requests
@@ -1829,6 +1825,7 @@ function DeployVaultBatcher({
               ownerAddress: embeddedPrivyEoaAddress,
               calls: toCalls(calls),
               version: '1',
+              userOpSignMode: 'eth_sign',
             })
             
             setTxId(result.transactionHash)
