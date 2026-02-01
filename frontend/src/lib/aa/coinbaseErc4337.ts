@@ -88,8 +88,8 @@ export type PublicClientLike = {
 
 export type WalletClientLike = {
   request: (args: any) => Promise<any>
-  signMessage: (args: any) => Promise<any>
-  signTypedData: (args: any) => Promise<any>
+  signMessage?: (args: any) => Promise<any>
+  signTypedData?: (args: any) => Promise<any>
   signTransaction?: (args: any) => Promise<any>
 } & Record<string, any>
 
@@ -425,12 +425,22 @@ function createWalletBackedLocalAccount(params: {
       
       const tryPersonalSign = async (): Promise<Hex> => {
         try {
-          const rawSig = await walletClient.signMessage({
-            account: address,
-            // `raw` signs the 32-byte payload (EIP-191 prefixed at JSON-RPC layer).
-            // Coinbase Smart Wallet accepts this via SignatureCheckerLib.
-            message: { raw: hash },
-          })
+          let rawSig: unknown
+          if (typeof walletClient.signMessage === 'function') {
+            rawSig = await walletClient.signMessage({
+              account: address,
+              // `raw` signs the 32-byte payload (EIP-191 prefixed at JSON-RPC layer).
+              // Coinbase Smart Wallet accepts this via SignatureCheckerLib.
+              message: { raw: hash },
+            })
+          } else if (typeof walletClient.request === 'function') {
+            rawSig = await walletClient.request({
+              method: 'personal_sign',
+              params: [hash, address],
+            })
+          } else {
+            throw new Error('Wallet does not support signMessage or personal_sign')
+          }
           const sig = ensureSignatureHex(rawSig, 'signMessage')
           debugSignatureReady('signMessage', sig, { address })
           return sig
@@ -487,11 +497,37 @@ function createWalletBackedLocalAccount(params: {
           isRaw: typeof message === 'object' && message !== null && 'raw' in message,
         })
       }
-      const rawSig = await walletClient.signMessage({ account: address, message })
+      let rawSig: unknown
+      if (typeof walletClient.signMessage === 'function') {
+        rawSig = await walletClient.signMessage({ account: address, message })
+      } else if (typeof walletClient.request === 'function') {
+        const msg =
+          typeof message === 'object' && message !== null && 'raw' in message
+            ? (message.raw as Hex)
+            : typeof message === 'string'
+              ? message
+              : `0x${Buffer.from(String(message)).toString('hex')}`
+        rawSig = await walletClient.request({
+          method: 'personal_sign',
+          params: [msg, address],
+        })
+      } else {
+        throw new Error('Wallet does not support signMessage or personal_sign')
+      }
       return ensureSignatureHex(rawSig, 'signMessage')
     },
     signTypedData: async (typedData: any) => {
-      const rawSig = await walletClient.signTypedData({ account: address, ...(typedData as any) })
+      let rawSig: unknown
+      if (typeof walletClient.signTypedData === 'function') {
+        rawSig = await walletClient.signTypedData({ account: address, ...(typedData as any) })
+      } else if (typeof walletClient.request === 'function') {
+        rawSig = await walletClient.request({
+          method: 'eth_signTypedData_v4',
+          params: [address, JSON.stringify(typedData)],
+        })
+      } else {
+        throw new Error('Wallet does not support signTypedData')
+      }
       return ensureSignatureHex(rawSig, 'signTypedData')
     },
     signTransaction: async (tx, options) => {
