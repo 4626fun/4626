@@ -1767,8 +1767,11 @@ function DeployVaultBatcher({
                 const msg = typeof args.message === 'object' && args.message !== null && 'raw' in args.message
                   ? args.message.raw
                   : args.message
-                const hasSignMessage = typeof (smartWalletClient as any)?.signMessage === 'function'
-                const hasRequest = typeof (smartWalletClient as any)?.request === 'function'
+                const client: any = smartWalletClient as any
+                const account: any = client?.account
+                const hasAccountSignMessage = typeof account?.signMessage === 'function'
+                const hasClientSignMessage = typeof client?.signMessage === 'function'
+                const hasSignMessage = hasAccountSignMessage || hasClientSignMessage
 
                 if (AA_DEBUG) {
                   logger.debug('[DeployVault] Privy smart wallet signer capabilities', {
@@ -1779,15 +1782,21 @@ function DeployVaultBatcher({
 
                 if (hasSignMessage) {
                   const rawResult = await withTimeout(
-                    (smartWalletClient as any).signMessage({
-                      account: privySmartWalletAddress,
-                      message: msg,
-                    }),
+                    hasAccountSignMessage
+                      ? account.signMessage({ message: msg })
+                      : client.signMessage({ account: privySmartWalletAddress, message: msg }),
                     20_000,
-                    'privySmartWallet.signMessage',
+                    hasAccountSignMessage ? 'privySmartWallet.account.signMessage' : 'privySmartWallet.signMessage',
                   )
-                  const sig = ensureSignatureHex(rawResult, 'privySmartWallet.signMessage')
-                  debugSignatureReady('privySmartWallet.signMessage', sig, { signer: privySmartWalletAddress })
+                  const sig = ensureSignatureHex(
+                    rawResult,
+                    hasAccountSignMessage ? 'privySmartWallet.account.signMessage' : 'privySmartWallet.signMessage',
+                  )
+                  debugSignatureReady(
+                    hasAccountSignMessage ? 'privySmartWallet.account.signMessage' : 'privySmartWallet.signMessage',
+                    sig,
+                    { signer: privySmartWalletAddress },
+                  )
                   return sig
                 }
 
@@ -1797,17 +1806,29 @@ function DeployVaultBatcher({
                 )
               },
               signTypedData: async (args: any) => {
-                if (typeof (smartWalletClient as any)?.signTypedData === 'function') {
+                if (typeof account?.signTypedData === 'function' || typeof client?.signTypedData === 'function') {
                   const rawResult = await withTimeout(
-                    (smartWalletClient as any).signTypedData({
-                      account: privySmartWalletAddress,
-                      ...(args as any),
-                    }),
+                    typeof account?.signTypedData === 'function'
+                      ? account.signTypedData(args as any)
+                      : client.signTypedData({ account: privySmartWalletAddress, ...(args as any) }),
                     20_000,
-                    'privySmartWallet.signTypedData',
+                    typeof account?.signTypedData === 'function'
+                      ? 'privySmartWallet.account.signTypedData'
+                      : 'privySmartWallet.signTypedData',
                   )
-                  const sig = ensureSignatureHex(rawResult, 'privySmartWallet.signTypedData')
-                  debugSignatureReady('privySmartWallet.signTypedData', sig, { signer: privySmartWalletAddress })
+                  const sig = ensureSignatureHex(
+                    rawResult,
+                    typeof account?.signTypedData === 'function'
+                      ? 'privySmartWallet.account.signTypedData'
+                      : 'privySmartWallet.signTypedData',
+                  )
+                  debugSignatureReady(
+                    typeof account?.signTypedData === 'function'
+                      ? 'privySmartWallet.account.signTypedData'
+                      : 'privySmartWallet.signTypedData',
+                    sig,
+                    { signer: privySmartWalletAddress },
+                  )
                   return sig
                 }
                 throw new Error(
@@ -3610,7 +3631,8 @@ function DeployVaultMain() {
 
   const privySmartWalletReady = Boolean(privySmartWalletAddress && smartWalletClient)
   const privySmartWalletCanSign = useMemo(() => {
-    return typeof (smartWalletClient as any)?.signMessage === 'function'
+    const client: any = smartWalletClient as any
+    return typeof client?.signMessage === 'function' || typeof client?.account?.signMessage === 'function'
   }, [smartWalletClient])
   
   // Check if Privy smart wallet matches the canonical identity (Zora smart wallet)
