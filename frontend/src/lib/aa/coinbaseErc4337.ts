@@ -929,12 +929,14 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // - verificationGasLimit: Higher for smart wallet signers (EIP-1271 can exceed 2M)
   // - paymaster validation can also push EOA flows above 150k in larger batches
   // - callGasLimit: Auto-estimated, but we don't override since batcher calls vary
-  const baseVerificationGasLimit = ownerIsContract ? 2_000_000n : 150_000n
-  const retryVerificationGasLimit = ownerIsContract ? 4_000_000n : 4_000_000n
+  const verificationGasLimits = ownerIsContract
+    ? [2_000_000n, 4_000_000n, 8_000_000n]
+    : [150_000n, 4_000_000n]
+  const uniqueVerificationGasLimits = Array.from(new Set(verificationGasLimits))
   if (AA_DEBUG) {
     logger.debug('[ERC-4337] verificationGasLimit', {
       ownerIsContract,
-      verificationGasLimit: String(baseVerificationGasLimit),
+      verificationGasLimit: String(uniqueVerificationGasLimits[0] ?? 0n),
     })
   }
 
@@ -959,27 +961,27 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     })
   }
 
-  try {
-    userOpHash = await sendWithVerificationGasLimit(baseVerificationGasLimit)
-  } catch (e: unknown) {
-    lastError = e
+  const shouldRetryVerificationGas = (error: unknown): boolean => {
+    const errMsg = error instanceof Error ? error.message : String(error ?? '')
+    const lc = errMsg.toLowerCase()
+    return lc.includes('aa40') || lc.includes('verificationgaslimit')
   }
 
-  if (lastError && retryVerificationGasLimit > baseVerificationGasLimit) {
-    const errMsg = lastError instanceof Error ? lastError.message : String(lastError)
-    const lc = errMsg.toLowerCase()
-    if (lc.includes('aa40') || lc.includes('verificationgaslimit')) {
+  for (let i = 0; i < uniqueVerificationGasLimits.length; i++) {
+    const limit = uniqueVerificationGasLimits[i]
+    try {
+      userOpHash = await sendWithVerificationGasLimit(limit)
+      lastError = null
+      break
+    } catch (e: unknown) {
+      lastError = e
+      const hasNext = i + 1 < uniqueVerificationGasLimits.length
+      if (!hasNext || !shouldRetryVerificationGas(e)) break
       if (AA_DEBUG) {
         logger.debug('[ERC-4337] retrying with higher verificationGasLimit', {
-          base: String(baseVerificationGasLimit),
-          retry: String(retryVerificationGasLimit),
+          base: String(limit),
+          retry: String(uniqueVerificationGasLimits[i + 1]),
         })
-      }
-      try {
-        userOpHash = await sendWithVerificationGasLimit(retryVerificationGasLimit)
-        lastError = null
-      } catch (e: unknown) {
-        lastError = e
       }
     }
   }

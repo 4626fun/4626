@@ -106,31 +106,6 @@ function signatureMeta(signature: Hex) {
   }
 }
 
-const NON_EOA_SIGNATURE_CODE = 'CV_NON_EOA_SIGNATURE'
-
-function isNonEoaSignatureError(error: unknown): boolean {
-  const code = (error as any)?.code
-  if (code === NON_EOA_SIGNATURE_CODE) return true
-  const msg = error instanceof Error ? error.message : String(error ?? '')
-  return msg.includes(NON_EOA_SIGNATURE_CODE)
-}
-
-function ensureEoaSignature(signature: Hex, context: string): Hex {
-  const meta = signatureMeta(signature)
-  if (meta.byteLength !== 65) {
-    if (AA_DEBUG) {
-      logger.warn('[DeployVault] Non-EOA signature detected', {
-        context,
-        ...meta,
-      })
-    }
-    const err = new Error(`${NON_EOA_SIGNATURE_CODE}:${context}`)
-    ;(err as any).code = NON_EOA_SIGNATURE_CODE
-    throw err
-  }
-  return signature
-}
-
 function isEthSignUnsupported(error: unknown): boolean {
   const code = (error as any)?.code
   if (code === -32601) return true // Method not found
@@ -142,6 +117,19 @@ function isEthSignUnsupported(error: unknown): boolean {
     lc.includes('method not found') ||
     lc.includes('does not support')
   )
+}
+
+const PRIVY_SMART_WALLET_UNSUPPORTED_PATTERNS = [
+  'privy smart wallet does not support',
+  'privy smart wallet signer not supported',
+  'signer not supported in this environment',
+  'does not support raw signing',
+] as const
+
+function isPrivySmartWalletSigningUnsupported(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error ?? '')
+  const lc = msg.toLowerCase()
+  return PRIVY_SMART_WALLET_UNSUPPORTED_PATTERNS.some((pattern) => lc.includes(pattern))
 }
 
 function isUserOpHashLike(value: unknown): boolean {
@@ -1820,7 +1808,7 @@ function DeployVaultBatcher({
                     throw new Error('Privy smart wallet does not support raw signing')
                   }
                   const sig = ensureSignatureHex(rawResult, 'privySmartWallet.eth_sign')
-                  ensureEoaSignature(sig, 'privySmartWallet.eth_sign')
+                  debugSignatureReady('privySmartWallet.eth_sign', sig, { signer: privySmartWalletAddress })
                   return sig
                 }
                 if (typeof client?.request === 'function') {
@@ -1858,7 +1846,6 @@ function DeployVaultBatcher({
                     context,
                   )
                   const sig = ensureSignatureHex(rawResult, context)
-                  ensureEoaSignature(sig, context)
                   debugSignatureReady(context, sig, { signer: privySmartWalletAddress })
                   return sig
                 }
@@ -1884,7 +1871,6 @@ function DeployVaultBatcher({
                     context,
                   )
                   const sig = ensureSignatureHex(rawResult, context)
-                  ensureEoaSignature(sig, context)
                   debugSignatureReady(context, sig, { signer: privySmartWalletAddress })
                   return sig
                 }
@@ -1920,11 +1906,13 @@ function DeployVaultBatcher({
               })
               return
             } catch (e) {
-              if (isNonEoaSignatureError(e)) {
+              if (isPrivySmartWalletSigningUnsupported(e)) {
+                const msg = e instanceof Error ? e.message : String(e ?? '')
                 preferEmbeddedEoaRef.current = true
-                logger.warn('[DeployVault] Privy smart wallet signature is not 65 bytes; falling back to embedded EOA', {
+                logger.warn('[DeployVault] Privy smart wallet signing unsupported; falling back to embedded EOA', {
                   phaseLabel,
                   privySmartWalletAddress,
+                  error: msg,
                 })
               } else {
                 throw e
