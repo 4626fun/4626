@@ -183,9 +183,13 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
         name: 'codeIds',
         type: 'tuple',
         components: [
+          { name: 'vault', type: 'bytes32' },
+          { name: 'wrapper', type: 'bytes32' },
+          { name: 'shareOFT', type: 'bytes32' },
           { name: 'gauge', type: 'bytes32' },
           { name: 'cca', type: 'bytes32' },
           { name: 'oracle', type: 'bytes32' },
+          { name: 'oftBootstrap', type: 'bytes32' },
         ],
       },
     ],
@@ -220,9 +224,13 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
         name: 'codeIds',
         type: 'tuple',
         components: [
+          { name: 'vault', type: 'bytes32' },
+          { name: 'wrapper', type: 'bytes32' },
+          { name: 'shareOFT', type: 'bytes32' },
           { name: 'gauge', type: 'bytes32' },
           { name: 'cca', type: 'bytes32' },
           { name: 'oracle', type: 'bytes32' },
+          { name: 'oftBootstrap', type: 'bytes32' },
         ],
       },
       {

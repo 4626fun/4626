@@ -140,6 +140,10 @@ async function logUserOpEstimate(params: {
     logger.debug('[ERC-4337] estimateUserOperationGas unavailable', { reason: 'prepareUserOperation not supported' })
     return
   }
+  const originalAccount = client.account
+  if (!originalAccount) {
+    client.account = account
+  }
   try {
     const prepared = await client.prepareUserOperation({
       account,
@@ -166,6 +170,12 @@ async function logUserOpEstimate(params: {
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e ?? '')
     logger.debug('[ERC-4337] estimateUserOperationGas failed', { error: msg })
+  } finally {
+    if (!originalAccount) {
+      delete client.account
+    } else {
+      client.account = originalAccount
+    }
   }
 }
 
