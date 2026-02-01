@@ -279,6 +279,27 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
     ],
     outputs: [],
   },
+  {
+    type: 'function',
+    name: 'launchDeferredAuction',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'auctionSteps', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [{ name: 'auction', type: 'address' }],
+  },
 ] as const
 
 // Coinbase Smart Wallet factories (see viem's `toCoinbaseSmartAccount` implementation).
@@ -301,6 +322,7 @@ const SELECTOR_BATCHER_DEPLOY_PHASE1 = '0x3c51ca4e'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH = '0x669fb9e2'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT = '0xd76fbd95'
 const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0x6e3f91b0'
+const SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION = '0x37421852'
 
 const SELECTOR_ACTIVATION_BATCH_ACTIVATE = '0xc5c1e920'
 const SELECTOR_ACTIVATION_BATCH_ACTIVATE_WITH_PERMIT2_FOR = '0xdc5de72c'
@@ -315,6 +337,7 @@ const ALLOWED_BATCHER_SELECTORS = new Set<string>([
   SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH,
   SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT,
   SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES,
+  SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION,
 ])
 
 const ALLOWED_ACTIVATION_SELECTORS = new Set<string>([
@@ -843,7 +866,7 @@ async function validateInnerCalls(params: {
   }
 
   // Pass 1: detect the "primary" token from the deploy/activate call.
-  let mode: 'deploy_phase1' | 'deploy_phase2' | 'deploy_phase3' | 'deploy' | 'activate' | 'approve_only' | null = null
+  let mode: 'deploy_phase1' | 'deploy_phase2' | 'deploy_phase3' | 'launch_auction' | 'deploy' | 'activate' | 'approve_only' | null = null
   let expectedCreatorToken: Address | null = null
   let expectedVault: Address | null = null
 
@@ -859,7 +882,8 @@ async function validateInnerCalls(params: {
         selector === SELECTOR_BATCHER_DEPLOY_PHASE1 ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT ||
-        selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES
+        selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES ||
+        selector === SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION
       ) {
         let decodedBatcher: any
         try {
@@ -884,6 +908,8 @@ async function validateInnerCalls(params: {
           mode = 'deploy_phase3'
           expectedVault = p && isAddress(p.vault) ? getAddress(p.vault) : null
           if (!expectedVault) throw new Error('batcher_vault_decode_failed')
+        } else if (selector === SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION) {
+          mode = 'launch_auction'
         }
       } else {
         // Legacy one-call deploy functions have owner/creatorToken as the first two static args.

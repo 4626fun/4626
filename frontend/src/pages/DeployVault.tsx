@@ -749,6 +749,27 @@ const CREATOR_VAULT_BATCHER_ABI = [
       },
     ],
   },
+  {
+    type: 'function',
+    name: 'launchDeferredAuction',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'auctionSteps', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [{ name: 'auction', type: 'address' }],
+  },
 ] as const
 
 // UniversalBytecodeStore (v1 + v2 compatible) helpers.
@@ -938,14 +959,16 @@ function DeployVaultBatcher({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [txId, setTxId] = useState<string | null>(null)
-  const [phase, setPhase] = useState<'idle' | 'phase1' | 'phase2' | 'phase3' | 'done'>('idle')
+  const [phase, setPhase] = useState<'idle' | 'phase1' | 'phase2' | 'phase3' | 'phase4' | 'done'>('idle')
   const [phaseTxs, setPhaseTxs] = useState<{
     userOp1?: Hex
     userOp2?: Hex
     userOp3?: Hex
+    userOp4?: Hex
     tx1?: Hex
     tx2?: Hex
     tx3?: Hex
+    tx4?: Hex
   }>({})
   const switchAuthLabel = typeof switchAuthCta?.label === 'string' && switchAuthCta.label.trim().length > 0 ? switchAuthCta.label.trim() : null
 
@@ -1062,6 +1085,7 @@ function DeployVaultBatcher({
   const href1 = hrefForTx(phaseTxs.tx1 ?? null)
   const href2 = hrefForTx(phaseTxs.tx2 ?? null)
   const href3 = hrefForTx(phaseTxs.tx3 ?? null)
+  const href4 = hrefForTx(phaseTxs.tx4 ?? null)
 
   const batcherAddress = (CONTRACTS.creatorVaultBatcher ?? null) as Address | null
 
@@ -1693,6 +1717,29 @@ function DeployVaultBatcher({
           },
         ]
 
+        const phase4Calls: Array<{ target: Address; value: bigint; data: Hex }> = []
+        if (DEFAULT_AUCTION_PERCENT > 0) {
+          phase4Calls.push({
+            target: batcherAddress,
+            value: 0n,
+            data: encodeFunctionData({
+              abi: CREATOR_VAULT_BATCHER_ABI,
+              functionName: 'launchDeferredAuction',
+              args: [
+                {
+                  creatorToken,
+                  owner,
+                  shareOFT: phase2Params.shareOFT,
+                  version: deploymentVersion,
+                  floorPriceQ96: floorPriceQ96Aligned,
+                  requiredRaise: DEFAULT_REQUIRED_RAISE_WEI,
+                  auctionSteps,
+                },
+              ],
+            }),
+          })
+        }
+
         // Safety: constrain target addresses to known deploy surfaces (no arbitrary calldata UI).
         const assertSafe = (calls: Array<{ target: Address; value: bigint; data: Hex }>) => {
           const allow = new Set<string>([
@@ -1713,13 +1760,14 @@ function DeployVaultBatcher({
         assertSafe(phase1Calls)
         assertSafe(phase2Calls)
         assertSafe(phase3Calls)
+        assertSafe(phase4Calls)
 
         logger.warn('[DeployVault] deploy_start', {
           creatorToken,
           owner,
           deploymentVersion,
           batcher: batcherAddress,
-          phases: { phase3: phase3Calls.length > 0 },
+          phases: { phase3: phase3Calls.length > 0, phase4: phase4Calls.length > 0 },
         })
 
         // Helper to convert calls format
@@ -1728,7 +1776,7 @@ function DeployVaultBatcher({
 
         const sendPhaseCalls = async (
           calls: Array<{ target: Address; value: bigint; data: Hex }>,
-          phaseLabel: 'phase1' | 'phase2' | 'phase3',
+          phaseLabel: 'phase1' | 'phase2' | 'phase3' | 'phase4',
           opts?: { noSplit?: boolean; segment?: string },
         ) => {
           const logPhaseLabel = opts?.segment ? `${phaseLabel}.${opts.segment}` : phaseLabel
@@ -1817,8 +1865,24 @@ function DeployVaultBatcher({
             setTxId(result.transactionHash)
             setPhaseTxs((s) => ({
               ...s,
-              [phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : 'userOp3']: result.userOpHash,
-              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: result.transactionHash,
+              [
+                phaseLabel === 'phase1'
+                  ? 'userOp1'
+                  : phaseLabel === 'phase2'
+                    ? 'userOp2'
+                    : phaseLabel === 'phase3'
+                      ? 'userOp3'
+                      : 'userOp4'
+              ]: result.userOpHash,
+              [
+                phaseLabel === 'phase1'
+                  ? 'tx1'
+                  : phaseLabel === 'phase2'
+                    ? 'tx2'
+                    : phaseLabel === 'phase3'
+                      ? 'tx3'
+                      : 'tx4'
+              ]: result.transactionHash,
             }))
             logger.warn(`[DeployVault] ${logPhaseLabel}_confirmed via Coinbase Wallet`)
             return
@@ -1960,8 +2024,24 @@ function DeployVaultBatcher({
               setTxId(result.transactionHash)
               setPhaseTxs((s) => ({
                 ...s,
-                [phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : 'userOp3']: result.userOpHash,
-                [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: result.transactionHash,
+                [
+                  phaseLabel === 'phase1'
+                    ? 'userOp1'
+                    : phaseLabel === 'phase2'
+                      ? 'userOp2'
+                      : phaseLabel === 'phase3'
+                        ? 'userOp3'
+                        : 'userOp4'
+                ]: result.userOpHash,
+                [
+                  phaseLabel === 'phase1'
+                    ? 'tx1'
+                    : phaseLabel === 'phase2'
+                      ? 'tx2'
+                      : phaseLabel === 'phase3'
+                        ? 'tx3'
+                        : 'tx4'
+                ]: result.transactionHash,
               }))
               logger.warn(`[DeployVault] ${logPhaseLabel}_confirmed via ERC-4337 (privy smart wallet owner)`, {
                 userOpHash: result.userOpHash,
@@ -2177,8 +2257,24 @@ function DeployVaultBatcher({
             setTxId(result.transactionHash)
             setPhaseTxs((s) => ({
               ...s,
-              [phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : 'userOp3']: result.userOpHash,
-              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: result.transactionHash,
+              [
+                phaseLabel === 'phase1'
+                  ? 'userOp1'
+                  : phaseLabel === 'phase2'
+                    ? 'userOp2'
+                    : phaseLabel === 'phase3'
+                      ? 'userOp3'
+                      : 'userOp4'
+              ]: result.userOpHash,
+              [
+                phaseLabel === 'phase1'
+                  ? 'tx1'
+                  : phaseLabel === 'phase2'
+                    ? 'tx2'
+                    : phaseLabel === 'phase3'
+                      ? 'tx3'
+                      : 'tx4'
+              ]: result.transactionHash,
             }))
             logger.warn(`[DeployVault] ${logPhaseLabel}_confirmed via ERC-4337 (embedded EOA signer)`, {
               userOpHash: result.userOpHash,
@@ -2218,8 +2314,24 @@ function DeployVaultBatcher({
             setTxId(result.transactionHash)
             setPhaseTxs((s) => ({
               ...s,
-              [phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : 'userOp3']: result.userOpHash,
-              [phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : 'tx3']: result.transactionHash,
+              [
+                phaseLabel === 'phase1'
+                  ? 'userOp1'
+                  : phaseLabel === 'phase2'
+                    ? 'userOp2'
+                    : phaseLabel === 'phase3'
+                      ? 'userOp3'
+                      : 'userOp4'
+              ]: result.userOpHash,
+              [
+                phaseLabel === 'phase1'
+                  ? 'tx1'
+                  : phaseLabel === 'phase2'
+                    ? 'tx2'
+                    : phaseLabel === 'phase3'
+                      ? 'tx3'
+                      : 'tx4'
+              ]: result.transactionHash,
             }))
             logger.warn(`[DeployVault] ${logPhaseLabel}_confirmed via ERC-4337 (connected EOA signer)`, {
               userOpHash: result.userOpHash,
@@ -2250,6 +2362,10 @@ function DeployVaultBatcher({
           setPhase('phase3')
           await sendPhaseCalls(phase3Calls, 'phase3')
         }
+        if (phase4Calls.length > 0) {
+          setPhase('phase4')
+          await sendPhaseCalls(phase4Calls, 'phase4')
+        }
 
         setPhase('done')
         logger.warn('[DeployVault] deploy_success', { creatorToken, owner, deploymentVersion })
@@ -2276,7 +2392,15 @@ function DeployVaultBatcher({
             setTxId(txHash)
             setPhaseTxs((s) => ({
               ...s,
-              [phase === 'phase1' ? 'tx1' : phase === 'phase2' ? 'tx2' : 'tx3']: txHash,
+              [
+                phase === 'phase1'
+                  ? 'tx1'
+                  : phase === 'phase2'
+                    ? 'tx2'
+                    : phase === 'phase3'
+                      ? 'tx3'
+                      : 'tx4'
+              ]: txHash,
             }))
             // Show success message - user should refresh to see vault
             setPhase('done')
@@ -2315,7 +2439,7 @@ function DeployVaultBatcher({
   return (
     <div className="space-y-3">
       <div className="text-[11px] text-zinc-500 leading-relaxed">
-        One click will submit <span className="text-zinc-200">up to 3</span> onchain operations (Phases 1–3) via your smart wallet.
+        One click will submit <span className="text-zinc-200">up to 4</span> onchain operations (Phases 1–4) via your smart wallet.
         Progress is tracked below.
       </div>
       {authIsStale ? (
@@ -2341,7 +2465,7 @@ function DeployVaultBatcher({
           </div>
           <div className="flex items-center justify-between gap-4">
             <div className={phase === 'phase2' ? 'text-zinc-100' : phase === 'idle' ? 'text-zinc-500' : 'text-zinc-300'}>
-              Phase 2: launch + configure
+              Phase 2: configure + reserve auction
             </div>
             {href2 ? (
               <a className="font-mono text-zinc-300 hover:text-white" href={href2} target="_blank" rel="noreferrer">
@@ -2349,7 +2473,11 @@ function DeployVaultBatcher({
               </a>
             ) : (
               <div className="text-zinc-700">
-                {phase === 'phase2' ? 'pending…' : phase === 'idle' || phase === 'phase1' ? '—' : phase === 'done' ? 'done' : '…'}
+                {phase === 'phase2'
+                  ? 'pending…'
+                  : phase === 'idle' || phase === 'phase1'
+                    ? '—'
+                    : 'done'}
               </div>
             )}
           </div>
@@ -2366,6 +2494,24 @@ function DeployVaultBatcher({
                 {phase === 'phase3'
                   ? 'pending…'
                   : phase === 'idle' || phase === 'phase1' || phase === 'phase2'
+                    ? '—'
+                    : 'done'}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div className={phase === 'phase4' ? 'text-zinc-100' : phase === 'idle' ? 'text-zinc-500' : 'text-zinc-300'}>
+              Phase 4: launch auction
+            </div>
+            {href4 ? (
+              <a className="font-mono text-zinc-300 hover:text-white" href={href4} target="_blank" rel="noreferrer">
+                tx
+              </a>
+            ) : (
+              <div className="text-zinc-700">
+                {phase === 'phase4'
+                  ? 'pending…'
+                  : phase === 'idle' || phase === 'phase1' || phase === 'phase2' || phase === 'phase3'
                     ? '—'
                     : phase === 'done'
                       ? 'done'
@@ -2388,7 +2534,7 @@ function DeployVaultBatcher({
         <summary className="cursor-pointer select-none list-none px-4 py-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Deployment plan</div>
-            <div className="text-[12px] text-zinc-200 truncate">Phases 1–3 · deterministic addresses</div>
+            <div className="text-[12px] text-zinc-200 truncate">Phases 1–4 · deterministic addresses</div>
           </div>
           <ChevronDown className="w-4 h-4 text-zinc-500 transition-transform group-open:rotate-180" />
         </summary>

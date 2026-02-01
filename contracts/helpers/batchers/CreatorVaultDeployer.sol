@@ -160,6 +160,22 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         address auction;
     }
 
+    struct PendingAuction {
+        address shareOFT;
+        address ccaStrategy;
+        uint256 amount;
+    }
+
+    struct DeferredAuctionParams {
+        address creatorToken;
+        address owner;
+        address shareOFT;
+        string version;
+        uint256 floorPriceQ96;
+        uint128 requiredRaise;
+        bytes auctionSteps;
+    }
+
     struct StrategyCodeIds {
         bytes32 charmAlphaVaultDeploy;
         bytes32 creatorCharmStrategy;
@@ -196,6 +212,10 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     error InvalidWeight();
     error V3PoolMissing();
     error MissingInitialSqrtPriceX96();
+    error AuctionAlreadyPending();
+    error NoPendingAuction();
+    error AuctionShareOFTMismatch();
+    error AuctionAmountMismatch();
 
     ICreatorRegistry public immutable registry;
     IUniversalBytecodeStore public immutable bytecodeStore;
@@ -213,6 +233,9 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     address public immutable uniswapRouter;
     address public immutable ajnaFactory;
 
+    /// @notice Pending auction allocations keyed by creator/owner/version salt.
+    mapping(bytes32 => PendingAuction) public pendingAuctions;
+
     event Phase1Deployed(
         address indexed creatorToken,
         address indexed owner,
@@ -228,6 +251,23 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         address gaugeController,
         address ccaStrategy,
         address oracle,
+        address auction
+    );
+
+    event AuctionDeferred(
+        address indexed creatorToken,
+        address indexed owner,
+        address indexed shareOFT,
+        address ccaStrategy,
+        uint256 amount
+    );
+
+    event AuctionLaunchedDeferred(
+        address indexed creatorToken,
+        address indexed owner,
+        address indexed shareOFT,
+        address ccaStrategy,
+        uint256 amount,
         address auction
     );
 
@@ -374,6 +414,42 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         out = _deployPhase2AndLaunch(params, codeIds);
     }
 
+    // ================================
+    // PHASE 4: Deferred auction launch
+    // ================================
+
+    function launchDeferredAuction(
+        DeferredAuctionParams calldata params
+    ) external nonReentrant returns (address auction) {
+        _requireOwner(params.owner);
+        if (params.creatorToken == address(0) || params.owner == address(0) || params.shareOFT == address(0)) revert ZeroAddress();
+
+        bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
+        PendingAuction memory pending = pendingAuctions[baseSalt];
+        if (pending.amount == 0) revert NoPendingAuction();
+        if (pending.shareOFT != params.shareOFT) revert AuctionShareOFTMismatch();
+        if (IERC20(params.shareOFT).balanceOf(address(this)) < pending.amount) revert AuctionAmountMismatch();
+
+        IERC20(params.shareOFT).forceApprove(pending.ccaStrategy, pending.amount);
+        auction = ICCALaunchStrategy(pending.ccaStrategy).launchAuction(
+            pending.amount,
+            params.floorPriceQ96,
+            params.requiredRaise,
+            params.auctionSteps
+        );
+
+        delete pendingAuctions[baseSalt];
+
+        emit AuctionLaunchedDeferred(
+            params.creatorToken,
+            params.owner,
+            params.shareOFT,
+            pending.ccaStrategy,
+            pending.amount,
+            auction
+        );
+    }
+
     function _deployPhase2AndLaunch(
         Phase2Params calldata params,
         CodeIds calldata codeIds
@@ -429,7 +505,7 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         ICCALaunchStrategy(out.ccaStrategy).setOracleConfig(out.oracle, poolManager, taxHook, out.gaugeController);
         ICCALaunchStrategy(out.ccaStrategy).setDefaultTickSpacing(_defaultTickSpacingQ96(params.floorPriceQ96));
 
-        // Deposit + wrap + optional auction
+        // Deposit + wrap + deferred auction (launch in later phase)
         IERC20(params.creatorToken).forceApprove(params.vault, params.depositAmount);
         uint256 shares = ICreatorOVault(params.vault).deposit(params.depositAmount, address(this));
 
@@ -438,13 +514,14 @@ contract CreatorVaultDeployer is ReentrancyGuard {
 
         uint256 auctionAmount = (wsTokens * params.auctionPercent) / 100;
         if (auctionAmount > 0) {
-            IERC20(params.shareOFT).forceApprove(out.ccaStrategy, auctionAmount);
-            out.auction = ICCALaunchStrategy(out.ccaStrategy).launchAuction(
-                auctionAmount,
-                params.floorPriceQ96,
-                params.requiredRaise,
-                params.auctionSteps
-            );
+            PendingAuction storage pending = pendingAuctions[baseSalt];
+            if (pending.amount != 0) revert AuctionAlreadyPending();
+            pendingAuctions[baseSalt] = PendingAuction({
+                shareOFT: params.shareOFT,
+                ccaStrategy: out.ccaStrategy,
+                amount: auctionAmount
+            });
+            emit AuctionDeferred(params.creatorToken, params.owner, params.shareOFT, out.ccaStrategy, auctionAmount);
         }
 
         uint256 remaining = wsTokens - auctionAmount;
