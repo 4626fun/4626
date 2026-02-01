@@ -843,7 +843,7 @@ async function validateInnerCalls(params: {
   }
 
   // Pass 1: detect the "primary" token from the deploy/activate call.
-  let mode: 'deploy_phase1' | 'deploy_phase2' | 'deploy_phase3' | 'deploy' | 'activate' | null = null
+  let mode: 'deploy_phase1' | 'deploy_phase2' | 'deploy_phase3' | 'deploy' | 'activate' | 'approve_only' | null = null
   let expectedCreatorToken: Address | null = null
   let expectedVault: Address | null = null
 
@@ -911,13 +911,31 @@ async function validateInnerCalls(params: {
   }
 
   if (!mode || !expectedCreatorToken) {
-    const sample = innerCalls
-      .slice(0, 3)
-      .map((c) => `${c.target}:${getSelector(c.data)}`)
-      .join(',')
-    throw new Error(
-      `missing_primary_call(expectedBatcher=${creatorVaultBatcher},expectedActivation=${vaultActivationBatcher},seen=${sample})`,
-    )
+    const approveOnlyToken = (() => {
+      if (innerCalls.length === 0) return null
+      const firstTarget = innerCalls[0].target
+      const allowedSpenders = new Set<Address>([creatorVaultBatcher, vaultActivationBatcher, permit2])
+      const ok = innerCalls.every((c) => {
+        if (c.target !== firstTarget) return false
+        if (getSelector(c.data) !== SELECTOR_ERC20_APPROVE) return false
+        const spender = decodeAddressArgFromCalldata(c.data, 0)
+        return !!spender && allowedSpenders.has(spender)
+      })
+      return ok ? getAddress(firstTarget) : null
+    })()
+
+    if (approveOnlyToken) {
+      mode = 'approve_only'
+      expectedCreatorToken = approveOnlyToken
+    } else {
+      const sample = innerCalls
+        .slice(0, 3)
+        .map((c) => `${c.target}:${getSelector(c.data)}`)
+        .join(',')
+      throw new Error(
+        `missing_primary_call(expectedBatcher=${creatorVaultBatcher},expectedActivation=${vaultActivationBatcher},seen=${sample})`,
+      )
+    }
   }
 
   const bytecodeStoreRaw = contracts.universalBytecodeStore
