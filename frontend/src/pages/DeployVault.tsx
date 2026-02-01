@@ -1631,111 +1631,38 @@ function DeployVaultBatcher({
             }
             
             // Create a wallet client adapter that uses the embedded EOA for signing
-            // viem's toCoinbaseSmartAccount passes the raw UserOp hash to sign()
-            // We need to sign the EIP-712 ReplaySafeHash (computed from that hash)
+            // Just pass through to the embedded provider - let it handle signing
             const embeddedWalletClientAdapter = {
               request: async (args: { method: string; params: any[] }) => {
-                logger.info('[DeployVault] Embedded wallet request', { method: args.method })
+                logger.info('[DeployVault] Embedded provider request', { method: args.method, params: args.params })
                 
-                if (args.method === 'eth_sign') {
-                  const [addr, hash] = args.params
-                  
-                  // Log ALL the details for debugging
-                  logger.info('[DeployVault] eth_sign details', {
-                    signerAddress: addr,
-                    hashToSign: hash,
-                    canonicalWallet: canonicalSmartWallet,
-                    chainId: base.id,
-                  })
-                  
-                  // Try eth_sign first (raw signature over the hash viem passes)
-                  // viem might already be computing the correct hash
-                  try {
-                    logger.info('[DeployVault] Trying raw eth_sign first')
-                    const sig = await embeddedProvider.request({
-                      method: 'eth_sign',
-                      params: [addr, hash],
-                    })
-                    logger.info('[DeployVault] eth_sign succeeded (raw)', { signature: sig })
-                    return sig
-                  } catch (ethSignError: any) {
-                    logger.warn('[DeployVault] eth_sign failed', { error: ethSignError?.message })
-                  }
-                  
-                  // Fallback: Coinbase Smart Wallet validates signatures against EIP-712 ReplaySafeHash
-                  // The on-chain contract computes: eip712Hash(ReplaySafeHash(userOpHash))
-                  // We must sign the same thing
-                  const typedData = {
-                    types: {
-                      ReplaySafeHash: [{ name: 'hash', type: 'bytes32' }],
-                    },
-                    domain: {
-                      name: 'Coinbase Smart Wallet',
-                      version: '1',
-                      chainId: base.id,
-                      verifyingContract: canonicalSmartWallet,
-                    },
-                    primaryType: 'ReplaySafeHash' as const,
-                    message: {
-                      hash: hash,
-                    },
-                  }
-                  
-                  logger.info('[DeployVault] Falling back to EIP-712 typed data', {
-                    domain: typedData.domain,
-                    message: typedData.message,
-                  })
-                  
-                  const sig = await embeddedProvider.request({
-                    method: 'eth_signTypedData_v4',
-                    params: [addr, JSON.stringify(typedData)],
-                  })
-                  logger.info('[DeployVault] EIP-712 signature succeeded', { signature: sig })
-                  return sig
+                // Pass through all requests to the embedded provider
+                // The embedded provider should handle eth_sign or fall back internally
+                try {
+                  const result = await embeddedProvider.request(args)
+                  logger.info('[DeployVault] Embedded provider response', { method: args.method, result })
+                  return result
+                } catch (e: any) {
+                  logger.error('[DeployVault] Embedded provider error', { method: args.method, error: e?.message })
+                  throw e
                 }
-                
-                return await embeddedProvider.request(args)
               },
               signMessage: async (args: { account: Address; message: any }) => {
                 const msg = typeof args.message === 'object' && 'raw' in args.message
                   ? args.message.raw
                   : args.message
-                const hash = typeof msg === 'string' && msg.startsWith('0x') ? msg : `0x${Buffer.from(String(msg)).toString('hex')}`
+                const msgHex = typeof msg === 'string' && msg.startsWith('0x') ? msg : `0x${Buffer.from(String(msg)).toString('hex')}`
                 
-                logger.info('[DeployVault] signMessage called, using EIP-712', { account: args.account, hash })
-                
-                // Use EIP-712 ReplaySafeHash for Coinbase Smart Wallet
-                const typedData = {
-                  types: {
-                    EIP712Domain: [
-                      { name: 'name', type: 'string' },
-                      { name: 'version', type: 'string' },
-                      { name: 'chainId', type: 'uint256' },
-                      { name: 'verifyingContract', type: 'address' },
-                    ],
-                    ReplaySafeHash: [{ name: 'hash', type: 'bytes32' }],
-                  },
-                  domain: {
-                    name: 'Coinbase Smart Wallet',
-                    version: '1',
-                    chainId: base.id,
-                    verifyingContract: canonicalSmartWallet,
-                  },
-                  primaryType: 'ReplaySafeHash',
-                  message: {
-                    hash: hash,
-                  },
-                }
+                logger.info('[DeployVault] signMessage via personal_sign', { account: args.account })
                 
                 const sig = await embeddedProvider.request({
-                  method: 'eth_signTypedData_v4',
-                  params: [args.account, JSON.stringify(typedData)],
+                  method: 'personal_sign',
+                  params: [msgHex, args.account],
                 })
-                logger.info('[DeployVault] signMessage EIP-712 succeeded')
                 return sig
               },
               signTypedData: async (args: any) => {
-                logger.info('[DeployVault] signTypedData called', { args })
+                logger.info('[DeployVault] signTypedData', { primaryType: args.primaryType })
                 return await embeddedProvider.request({
                   method: 'eth_signTypedData_v4',
                   params: [embeddedPrivyEoaAddress, JSON.stringify(args)],
