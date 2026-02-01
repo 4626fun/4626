@@ -1,7 +1,18 @@
 type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 const LOG_LEVELS: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 }
-const MIN_LEVEL: LogLevel = import.meta.env.PROD ? 'warn' : 'debug'
+
+function isDebugEnabled(): boolean {
+  if (import.meta.env.VITE_DEBUG_LOGS === 'true') return true
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem('cv:debug') === 'true'
+  } catch {
+    return false
+  }
+}
+
+const MIN_LEVEL: LogLevel = isDebugEnabled() ? 'debug' : import.meta.env.PROD ? 'warn' : 'debug'
 
 export const logger = {
   debug: (msg: string, data?: unknown) => log('debug', msg, data),
