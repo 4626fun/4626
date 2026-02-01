@@ -555,6 +555,12 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     ownerAddress,
   })
   
+  console.log('[sendCoinbaseSmartWalletUserOperation] Owner index lookup', {
+    smartWallet,
+    ownerAddress,
+    ownerIndex,
+  })
+  
   if (ownerIndex === null) {
     throw new Error(
       `Connected wallet (${ownerAddress}) is not an onchain owner of the smart wallet (${smartWallet}). ` +
