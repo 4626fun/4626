@@ -1758,8 +1758,30 @@ function DeployVaultBatcher({
 
             const smartWalletClientAdapter = {
               request: async (args: { method: string; params: any[] }) => {
-                if (typeof (smartWalletClient as any)?.request === 'function') {
-                  return await (smartWalletClient as any).request(args)
+                const client: any = smartWalletClient as any
+                const account: any = client?.account
+                if (args.method === 'eth_sign') {
+                  const [, hashToSign] = args.params ?? []
+                  if (AA_DEBUG) {
+                    logger.debug('[DeployVault] Privy smart wallet eth_sign', {
+                      hasAccountSign: typeof account?.sign === 'function',
+                      hasAccountSignMessage: typeof account?.signMessage === 'function',
+                      hasClientSignMessage: typeof client?.signMessage === 'function',
+                    })
+                  }
+                  if (typeof account?.sign === 'function') {
+                    return await account.sign({ hash: hashToSign })
+                  }
+                  if (typeof account?.signMessage === 'function') {
+                    return await account.signMessage({ message: { raw: hashToSign } })
+                  }
+                  if (typeof client?.signMessage === 'function') {
+                    return await client.signMessage({ account: privySmartWalletAddress, message: { raw: hashToSign } })
+                  }
+                  throw new Error('Privy smart wallet does not support raw signing')
+                }
+                if (typeof client?.request === 'function') {
+                  return await client.request(args)
                 }
                 throw new Error('Privy smart wallet client does not support request()')
               },
@@ -1769,6 +1791,7 @@ function DeployVaultBatcher({
                   : args.message
                 const client: any = smartWalletClient as any
                 const account: any = client?.account
+                const hasAccountSign = typeof account?.sign === 'function'
                 const hasAccountSignMessage = typeof account?.signMessage === 'function'
                 const hasClientSignMessage = typeof client?.signMessage === 'function'
                 const hasSignMessage = hasAccountSignMessage || hasClientSignMessage
@@ -1776,6 +1799,7 @@ function DeployVaultBatcher({
 
                 if (AA_DEBUG) {
                   logger.debug('[DeployVault] Privy smart wallet signer capabilities', {
+                    hasAccountSign,
                     hasSignMessage,
                     hasRequest,
                   })
@@ -1849,7 +1873,7 @@ function DeployVaultBatcher({
               ownerAddress: privySmartWalletAddress,
               calls: toCalls(calls),
               version: '1',
-              userOpSignMode: 'signMessage',
+              userOpSignMode: 'eth_sign',
               ownerIsContract: true,
             })
 
@@ -3635,7 +3659,11 @@ function DeployVaultMain() {
   const privySmartWalletReady = Boolean(privySmartWalletAddress && smartWalletClient)
   const privySmartWalletCanSign = useMemo(() => {
     const client: any = smartWalletClient as any
-    return typeof client?.signMessage === 'function' || typeof client?.account?.signMessage === 'function'
+    return (
+      typeof client?.account?.sign === 'function' ||
+      typeof client?.account?.signMessage === 'function' ||
+      typeof client?.signMessage === 'function'
+    )
   }, [smartWalletClient])
   
   // Check if Privy smart wallet matches the canonical identity (Zora smart wallet)
