@@ -109,6 +109,66 @@ const AA_DEBUG = isDebugEnabled()
 
 const HEX_STRING_RE = /^0x[0-9a-fA-F]+$/
 
+function formatGasValue(value: unknown): string | null {
+  if (typeof value === 'bigint') return value.toString()
+  if (typeof value === 'number') return Math.trunc(value).toString()
+  if (typeof value === 'string') return value
+  return null
+}
+
+function formatGasEstimate(estimate: any) {
+  return {
+    preVerificationGas: formatGasValue(estimate?.preVerificationGas),
+    verificationGasLimit: formatGasValue(estimate?.verificationGasLimit),
+    callGasLimit: formatGasValue(estimate?.callGasLimit),
+    paymasterVerificationGasLimit: formatGasValue(estimate?.paymasterVerificationGasLimit),
+    paymasterPostOpGasLimit: formatGasValue(estimate?.paymasterPostOpGasLimit),
+  }
+}
+
+async function logUserOpEstimate(params: {
+  bundlerClient: any
+  account: any
+  calls: Array<{ to: Address; value?: bigint; data?: Hex }>
+  verificationGasLimit: bigint
+  paymasterClient: { getPaymasterData: any; getPaymasterStubData: any }
+}) {
+  if (!AA_DEBUG) return
+  const { bundlerClient, account, calls, verificationGasLimit, paymasterClient } = params
+  const client: any = bundlerClient as any
+  if (typeof client?.prepareUserOperation !== 'function') {
+    logger.debug('[ERC-4337] estimateUserOperationGas unavailable', { reason: 'prepareUserOperation not supported' })
+    return
+  }
+  try {
+    const prepared = await client.prepareUserOperation({
+      account,
+      calls,
+      verificationGasLimit,
+      paymaster: {
+        getPaymasterData: paymasterClient.getPaymasterData,
+        getPaymasterStubData: paymasterClient.getPaymasterStubData,
+      },
+    })
+    const userOperation = prepared?.userOperation ?? prepared
+    let estimate: any = null
+    if (typeof client?.estimateUserOperationGas === 'function') {
+      estimate = await client.estimateUserOperationGas({ userOperation, entryPoint: ENTRYPOINT_V06 })
+    } else if (typeof client?.request === 'function') {
+      estimate = await client.request({
+        method: 'eth_estimateUserOperationGas',
+        params: [userOperation, ENTRYPOINT_V06],
+      })
+    }
+    if (estimate) {
+      logger.debug('[ERC-4337] estimateUserOperationGas', formatGasEstimate(estimate))
+    }
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e ?? '')
+    logger.debug('[ERC-4337] estimateUserOperationGas failed', { error: msg })
+  }
+}
+
 function isHexString(value: unknown): value is Hex {
   return typeof value === 'string' && HEX_STRING_RE.test(value)
 }
@@ -720,6 +780,14 @@ export async function sendCrossAppUserOperation(params: {
   //
   // Cross-app signing uses an EOA (Zora embedded wallet) so verification gas is lower,
   // but we use a safe buffer for EIP-1271 in case the account structure changes.
+  await logUserOpEstimate({
+    bundlerClient,
+    account,
+    calls,
+    verificationGasLimit: 200_000n,
+    paymasterClient,
+  })
+
   const userOpHash = await sendUserOperation(bundlerClient, {
     account,
     calls,
@@ -735,6 +803,13 @@ export async function sendCrossAppUserOperation(params: {
     hash: userOpHash, 
     timeout: 120_000 
   })
+  if (AA_DEBUG) {
+    logger.debug('[ERC-4337] UserOp receipt', {
+      actualGasUsed: formatGasValue((receipt as any)?.actualGasUsed),
+      actualGasCost: formatGasValue((receipt as any)?.actualGasCost),
+      txHash: (receipt as any)?.receipt?.transactionHash,
+    })
+  }
   
   return { 
     userOpHash, 
@@ -842,9 +917,10 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // 
   // Gas limits:
   // - verificationGasLimit: Higher for smart wallet signers (EIP-1271 can exceed 2M)
+  // - paymaster validation can also push EOA flows above 150k in larger batches
   // - callGasLimit: Auto-estimated, but we don't override since batcher calls vary
   const baseVerificationGasLimit = ownerIsContract ? 2_000_000n : 150_000n
-  const retryVerificationGasLimit = ownerIsContract ? 4_000_000n : baseVerificationGasLimit
+  const retryVerificationGasLimit = ownerIsContract ? 4_000_000n : 4_000_000n
   if (AA_DEBUG) {
     logger.debug('[ERC-4337] verificationGasLimit', {
       ownerIsContract,
@@ -852,10 +928,17 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     })
   }
 
-  let userOpHash: Hex
+  let userOpHash: Hex | null = null
   let lastError: unknown = null
-  const sendWithVerificationGasLimit = (verificationGasLimit: bigint) =>
-    sendUserOperation(bundlerClient, {
+  const sendWithVerificationGasLimit = async (verificationGasLimit: bigint) => {
+    await logUserOpEstimate({
+      bundlerClient,
+      account,
+      calls,
+      verificationGasLimit,
+      paymasterClient,
+    })
+    return await sendUserOperation(bundlerClient, {
       account,
       calls,
       verificationGasLimit,
@@ -864,6 +947,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         getPaymasterStubData: paymasterClient.getPaymasterStubData,
       },
     })
+  }
 
   try {
     userOpHash = await sendWithVerificationGasLimit(baseVerificationGasLimit)
@@ -871,7 +955,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     lastError = e
   }
 
-  if (lastError && ownerIsContract && retryVerificationGasLimit > baseVerificationGasLimit) {
+  if (lastError && retryVerificationGasLimit > baseVerificationGasLimit) {
     const errMsg = lastError instanceof Error ? lastError.message : String(lastError)
     const lc = errMsg.toLowerCase()
     if (lc.includes('aa40') || lc.includes('verificationgaslimit')) {
@@ -943,10 +1027,21 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }
 
   // Wait for on-chain confirmation with extended timeout
+  if (!userOpHash) {
+    throw new Error('UserOperation did not return a hash.')
+  }
+
   const receipt = await waitForUserOperationReceipt(bundlerClient, { 
     hash: userOpHash, 
     timeout: 180_000 // 3 minutes for complex operations
   })
+  if (AA_DEBUG) {
+    logger.debug('[ERC-4337] UserOp receipt', {
+      actualGasUsed: formatGasValue((receipt as any)?.actualGasUsed),
+      actualGasCost: formatGasValue((receipt as any)?.actualGasCost),
+      txHash: (receipt as any)?.receipt?.transactionHash,
+    })
+  }
   
   return { 
     userOpHash, 
