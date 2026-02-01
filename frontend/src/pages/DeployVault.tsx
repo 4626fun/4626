@@ -1631,26 +1631,42 @@ function DeployVaultBatcher({
             }
             
             // Create a wallet client adapter that uses the embedded EOA for signing
-            // Coinbase Smart Wallet needs EIP-712 ReplaySafeHash signature
-            // Since personal_sign won't work (adds wrong prefix), we use signTypedData
+            // viem's toCoinbaseSmartAccount passes the raw UserOp hash to sign()
+            // We need to sign the EIP-712 ReplaySafeHash (computed from that hash)
             const embeddedWalletClientAdapter = {
               request: async (args: { method: string; params: any[] }) => {
                 logger.info('[DeployVault] Embedded wallet request', { method: args.method })
                 
                 if (args.method === 'eth_sign') {
                   const [addr, hash] = args.params
-                  logger.info('[DeployVault] eth_sign requested, using EIP-712 ReplaySafeHash', { addr, hash })
                   
-                  // Coinbase Smart Wallet validates signatures against EIP-712 ReplaySafeHash
-                  // We need to sign using signTypedData with the correct domain
+                  // Log ALL the details for debugging
+                  logger.info('[DeployVault] eth_sign details', {
+                    signerAddress: addr,
+                    hashToSign: hash,
+                    canonicalWallet: canonicalSmartWallet,
+                    chainId: base.id,
+                  })
+                  
+                  // Try eth_sign first (raw signature over the hash viem passes)
+                  // viem might already be computing the correct hash
+                  try {
+                    logger.info('[DeployVault] Trying raw eth_sign first')
+                    const sig = await embeddedProvider.request({
+                      method: 'eth_sign',
+                      params: [addr, hash],
+                    })
+                    logger.info('[DeployVault] eth_sign succeeded (raw)', { signature: sig })
+                    return sig
+                  } catch (ethSignError: any) {
+                    logger.warn('[DeployVault] eth_sign failed', { error: ethSignError?.message })
+                  }
+                  
+                  // Fallback: Coinbase Smart Wallet validates signatures against EIP-712 ReplaySafeHash
+                  // The on-chain contract computes: eip712Hash(ReplaySafeHash(userOpHash))
+                  // We must sign the same thing
                   const typedData = {
                     types: {
-                      EIP712Domain: [
-                        { name: 'name', type: 'string' },
-                        { name: 'version', type: 'string' },
-                        { name: 'chainId', type: 'uint256' },
-                        { name: 'verifyingContract', type: 'address' },
-                      ],
                       ReplaySafeHash: [{ name: 'hash', type: 'bytes32' }],
                     },
                     domain: {
@@ -1659,17 +1675,22 @@ function DeployVaultBatcher({
                       chainId: base.id,
                       verifyingContract: canonicalSmartWallet,
                     },
-                    primaryType: 'ReplaySafeHash',
+                    primaryType: 'ReplaySafeHash' as const,
                     message: {
                       hash: hash,
                     },
                   }
                   
+                  logger.info('[DeployVault] Falling back to EIP-712 typed data', {
+                    domain: typedData.domain,
+                    message: typedData.message,
+                  })
+                  
                   const sig = await embeddedProvider.request({
                     method: 'eth_signTypedData_v4',
                     params: [addr, JSON.stringify(typedData)],
                   })
-                  logger.info('[DeployVault] EIP-712 signature succeeded')
+                  logger.info('[DeployVault] EIP-712 signature succeeded', { signature: sig })
                   return sig
                 }
                 

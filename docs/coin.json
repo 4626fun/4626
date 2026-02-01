@@ -1,0 +1,83 @@
+{
+  "success": true,
+  "data": {
+      "__typename": "GraphQLZora20CreatorToken",
+      "id": "R3JhcGhRTFpvcmEyMENyZWF0b3JUb2tlbjpCQVNFLU1BSU5ORVQuMHg1YjY3NDE5NjgxMjQ1MWI3Y2VjMDI0ZmU5ZDIyZDJjMGIxNzJmYTc1",
+      "platformBlocked": false,
+      "name": "akita",
+      "description": "",
+      "address": "0x5b674196812451b7cec024fe9d22d2c0b172fa75",
+      "coinType": "CREATOR",
+      "symbol": "akita",
+      "totalSupply": "1000000000",
+      "totalVolume": "7932.380983654308",
+      "volume24h": "0.53",
+      "createdAt": "2025-07-27T01:44:13",
+      "creatorAddress": "0xab6d5c10b03300326cd7fab7267ae192842967b5",
+      "poolCurrencyToken": {
+          "address": "0x1111111111166b7fe7bd91427724b487980afc69",
+          "name": "ZORA",
+          "decimals": 18
+      },
+      "tokenPrice": {
+          "priceInUsdc": "0.0000040459896044651729812865685432055725404",
+          "currencyAddress": "0x5b674196812451b7cec024fe9d22d2c0b172fa75",
+          "priceInPoolToken": "0.00013970887751700000723419081705145572414039634168148040771484375"
+      },
+      "marketCap": "3346.03",
+      "marketCapDelta24h": "-272.88",
+      "chainId": 8453,
+      "tokenUri": "ipfs://bafkreifakt2kay2glucmulvc6jhoshyiy46nmwnwsksvqopohbljfjiwym",
+      "platformReferrerAddress": "0x0000000000000000000000000000000000000000",
+      "payoutRecipientAddress": "0xab6d5c10b03300326cd7fab7267ae192842967b5",
+      "creatorProfile": {
+          "__typename": "GraphQLAccountProfile",
+          "id": "R3JhcGhRTEFjY291bnRQcm9maWxlOjY2MGE3M2NjN2RmMWIzNTNkNTYzZDk2Yw==",
+          "handle": "akita",
+          "platformBlocked": false,
+          "avatar": {
+              "previewImage": {
+                  "blurhash": null,
+                  "medium": "https://scontent-iad4-1.choicecdn.com/-/rs:fit:1200:1200/f:best/aHR0cHM6Ly9tYWdpYy5kZWNlbnRyYWxpemVkLWNvbnRlbnQuY29tL2lwZnMvYmFmeWJlaWZub25mc2RoM2kzZnJtZHdudW10eHJnZWV1ZnNkd3prdzVndmF3Z3N6dzR1cXNjbmV1aGk=",
+                  "small": "https://scontent-iad4-1.choicecdn.com/-/rs:fit:600:600/f:best/aHR0cHM6Ly9tYWdpYy5kZWNlbnRyYWxpemVkLWNvbnRlbnQuY29tL2lwZnMvYmFmeWJlaWZub25mc2RoM2kzZnJtZHdudW10eHJnZWV1ZnNkd3prdzVndmF3Z3N6dzR1cXNjbmV1aGk="
+              }
+          },
+          "socialAccounts": {
+              "instagram": null,
+              "tiktok": null,
+              "twitter": {
+                  "username": "stkmaAkita",
+                  "displayName": "AKITA V█ (3,3)",
+                  "followerCount": 1738,
+                  "id": null
+              },
+              "farcaster": {
+                  "username": "wenakita",
+                  "displayName": "Akita",
+                  "followerCount": 78,
+                  "id": "418793"
+              }
+          },
+          "creatorCoin": {
+              "address": "0x5b674196812451b7cec024fe9d22d2c0b172fa75"
+          }
+      },
+      "mediaContent": {
+          "mimeType": null,
+          "originalUri": "ipfs://bafybeifnonfsdh3i3frmdwnumtxrgeeufsdwzkw5gvawgszw4uqscneuhi",
+          "previewImage": {
+              "small": "https://scontent-iad4-1.choicecdn.com/-/rs:fit:600:600/f:best/aHR0cHM6Ly9tYWdpYy5kZWNlbnRyYWxpemVkLWNvbnRlbnQuY29tL2lwZnMvYmFmeWJlaWZub25mc2RoM2kzZnJtZHdudW10eHJnZWV1ZnNkd3prdzVndmF3Z3N6dzR1cXNjbmV1aGk=",
+              "medium": "https://scontent-iad4-1.choicecdn.com/-/rs:fit:1200:1200/f:best/aHR0cHM6Ly9tYWdpYy5kZWNlbnRyYWxpemVkLWNvbnRlbnQuY29tL2lwZnMvYmFmeWJlaWZub25mc2RoM2kzZnJtZHdudW10eHJnZWV1ZnNkd3prdzVndmF3Z3N6dzR1cXNjbmV1aGk=",
+              "blurhash": null
+          }
+      },
+      "uniqueHolders": 35,
+      "uniswapV4PoolKey": {
+          "token0Address": "0x1111111111166b7fe7bd91427724b487980afc69",
+          "token1Address": "0x5b674196812451b7cec024fe9d22d2c0b172fa75",
+          "fee": 30000,
+          "tickSpacing": 200,
+          "hookAddress": "0xd61a675f8a0c67a73dc3b54fb7318b4d91409040"
+      }
+  }
+}

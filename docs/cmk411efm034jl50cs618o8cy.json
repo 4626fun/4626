@@ -1,0 +1,101 @@
+{
+  "id": "cmk411efm034jl50cs618o8cy",
+  "name": "4626.fun",
+  "logo_url": null,
+  "icon_url": "https://imagedelivery.net/oHBRUd2clqykxgDWmeAyLg/24c5cdd6-5f2f-4e56-ff41-0d32ae3a6300/icon",
+  "terms_and_conditions_url": null,
+  "privacy_policy_url": null,
+  "require_users_accept_terms": null,
+  "theme": "System",
+  "accent_color": "#696FFD",
+  "show_wallet_login_first": false,
+  "allowed_domains": [
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "https://4626.fun",
+      "https://app.4626.fun",
+      "https://farcaster.xyz",
+      "https://privy.4626.fun",
+      "https://www.farcaster.xyz",
+      "https://www.privy.4626.fun"
+  ],
+  "allowed_native_app_ids": [],
+  "allowed_native_app_url_schemes": [],
+  "wallet_auth": true,
+  "email_auth": true,
+  "sms_auth": false,
+  "guest_auth": false,
+  "solana_wallet_auth": true,
+  "telegram_auth": false,
+  "disable_plus_emails": true,
+  "google_oauth": false,
+  "twitter_oauth": false,
+  "discord_oauth": false,
+  "github_oauth": false,
+  "tiktok_oauth": false,
+  "line_oauth": false,
+  "twitch_oauth": false,
+  "linkedin_oauth": false,
+  "apple_oauth": false,
+  "spotify_oauth": false,
+  "instagram_oauth": false,
+  "farcaster_auth": false,
+  "passkey_auth": false,
+  "passkeys_for_signup_enabled": false,
+  "custom_jwt_auth": false,
+  "allowlist_enabled": false,
+  "allowlist_config": {
+      "error_title": null,
+      "error_detail": null,
+      "cta_text": null,
+      "cta_link": null
+  },
+  "custom_oauth_providers": [],
+  "wallet_connect_cloud_project_id": "bc3dfd319b4a0ecaa25cdee7e36bd0c4",
+  "custom_api_url": null,
+  "embedded_wallet_config": {
+      "create_on_login": "users-without-wallets",
+      "ethereum": {
+          "create_on_login": "users-without-wallets"
+      },
+      "solana": {
+          "create_on_login": "users-without-wallets"
+      },
+      "user_owned_recovery_options": [
+          "user-passcode"
+      ],
+      "require_user_password_on_create": false,
+      "require_user_owned_recovery_on_create": false,
+      "mode": "user-controlled-server-wallets-only"
+  },
+  "enforce_wallet_uis": false,
+  "legacy_wallet_ui_config": false,
+  "fiat_on_ramp_enabled": false,
+  "captcha_enabled": false,
+  "enabled_captcha_provider": null,
+  "twitter_oauth_on_mobile_enabled": true,
+  "mfa_methods": [],
+  "verification_key": "-----BEGIN PUBLIC KEY-----MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEqQHUK6G3NJTNBCRuitR35cewYAJLJ95mI1q/Opg3Ssd7cQexyLkjhdwwNI942VkVB5lLfKrguyYcd+fV+lQ9VQ==-----END PUBLIC KEY-----",
+  "max_linked_wallets_per_user": 20,
+  "farcaster_link_wallets_enabled": true,
+  "whatsapp_enabled": false,
+  "smart_wallet_config": {
+      "enabled": true,
+      "smart_wallet_type": "coinbase_smart_wallet",
+      "smart_wallet_version": "1.1",
+      "configured_networks": [
+          {
+              "chain_id": "eip155:8453",
+              "paymaster_url": "https://api.developer.coinbase.com/rpc/v1/base/FU03TBCP7rh2TjOaHlZwR2ZFeUCe3FxD",
+              "bundler_url": "https://api.developer.coinbase.com/rpc/v1/base/FU03TBCP7rh2TjOaHlZwR2ZFeUCe3FxD",
+              "paymaster_context": null
+          },
+          {
+              "chain_id": "eip155:84532",
+              "paymaster_url": "https://api.developer.coinbase.com/rpc/v1/base-sepolia/69qEA4mm5eg8FCwNAq3dm3UJxrdMAZSO",
+              "bundler_url": "https://api.developer.coinbase.com/rpc/v1/base-sepolia/69qEA4mm5eg8FCwNAq3dm3UJxrdMAZSO",
+              "paymaster_context": null
+          }
+      ]
+  }
+}
