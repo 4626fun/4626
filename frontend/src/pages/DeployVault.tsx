@@ -1651,11 +1651,15 @@ function DeployVaultBatcher({
                   // Try raw eth_sign first - produces signature over raw hash
                   // SignatureCheckerLib accepts: ecrecover(hash, sig)
                   try {
-                    const sig = await embeddedProvider.request({
+                    const rawResult = await embeddedProvider.request({
                       method: 'eth_sign',
                       params: [signerAddr, hashToSign],
                     })
-                    logger.info('[DeployVault] eth_sign succeeded (raw)')
+                    // Privy may return { signature, encoding } or raw string
+                    const sig = typeof rawResult === 'object' && rawResult?.signature 
+                      ? rawResult.signature 
+                      : rawResult
+                    logger.info('[DeployVault] eth_sign succeeded (raw)', { sig })
                     return sig
                   } catch (ethSignError: any) {
                     logger.warn('[DeployVault] eth_sign failed, trying personal_sign', { error: ethSignError?.message })
@@ -1663,11 +1667,15 @@ function DeployVaultBatcher({
                   
                   // Fallback: personal_sign adds EIP-191 prefix
                   // SignatureCheckerLib accepts: ecrecover(toEthSignedMessageHash(hash), sig)
-                  const sig = await embeddedProvider.request({
+                  const rawResult = await embeddedProvider.request({
                     method: 'personal_sign',
                     params: [hashToSign, signerAddr],
                   })
-                  logger.info('[DeployVault] personal_sign signature obtained')
+                  // Privy may return { signature, encoding } or raw string
+                  const sig = typeof rawResult === 'object' && rawResult?.signature 
+                    ? rawResult.signature 
+                    : rawResult
+                  logger.info('[DeployVault] personal_sign signature obtained', { sig })
                   return sig
                 }
                 
@@ -1690,18 +1698,27 @@ function DeployVaultBatcher({
                 logger.info('[DeployVault] signMessage', { account: args.account, msgLength: msgHex?.length })
                 
                 // personal_sign (EIP-191) - SignatureCheckerLib accepts this
-                const sig = await embeddedProvider.request({
+                const rawResult = await embeddedProvider.request({
                   method: 'personal_sign',
                   params: [msgHex, args.account],
                 })
+                // Privy may return { signature, encoding } or raw string
+                const sig = typeof rawResult === 'object' && rawResult?.signature 
+                  ? rawResult.signature 
+                  : rawResult
                 return sig
               },
               signTypedData: async (args: any) => {
                 logger.info('[DeployVault] signTypedData', { primaryType: args.primaryType })
-                return await embeddedProvider.request({
+                const rawResult = await embeddedProvider.request({
                   method: 'eth_signTypedData_v4',
                   params: [embeddedPrivyEoaAddress, JSON.stringify(args)],
                 })
+                // Privy may return { signature, encoding } or raw string
+                const sig = typeof rawResult === 'object' && rawResult?.signature 
+                  ? rawResult.signature 
+                  : rawResult
+                return sig
               },
             }
             
