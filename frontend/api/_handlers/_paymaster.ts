@@ -935,7 +935,14 @@ async function validateInnerCalls(params: {
     if (!vaultCode || vaultCode === '0x') throw new Error('vault_not_deployed')
     const vaultCodeHash = keccak256(vaultCode)
     if (vaultCodeHash.toLowerCase() !== CREATOR_OVAULT_RUNTIME_CODE_HASH.toLowerCase()) {
-      throw new Error('vault_code_hash_mismatch')
+      logger.warn('[Paymaster] vault_code_hash_mismatch', {
+        expected: CREATOR_OVAULT_RUNTIME_CODE_HASH,
+        actual: vaultCodeHash,
+        vault: expectedVault,
+        creatorToken: expectedCreatorToken,
+        sender: params.sender,
+      })
+      throw new Error(`vault_code_hash_mismatch(actual=${vaultCodeHash})`)
     }
 
     const burnSalt = expectedBurnStreamSalt({ creatorToken: expectedCreatorToken, sender: params.sender })
