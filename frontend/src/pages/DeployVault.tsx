@@ -886,6 +886,7 @@ function DeployVaultBatcher({
   const chainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
   const publicClient = usePublicClient({ chainId: base.id })
+  const preferEmbeddedEoaRef = useRef(false)
   
   // Detect Coinbase Wallet direct connection (not via Privy)
   const isCoinbaseWalletDirect = connectorId === 'coinbaseWalletSDK' || connectorId === 'com.coinbase.wallet'
@@ -1781,7 +1782,8 @@ function DeployVaultBatcher({
             privySmartWalletCanSign &&
             smartWalletClient &&
             privySmartWalletAddress &&
-            publicClient
+            publicClient &&
+            !preferEmbeddedEoaRef.current
           ) {
             logger.info(`[DeployVault] Using ERC-4337 via Privy smart wallet owner for ${phaseLabel}`, {
               canonicalSmartWallet,
@@ -1919,6 +1921,7 @@ function DeployVaultBatcher({
               return
             } catch (e) {
               if (isNonEoaSignatureError(e)) {
+                preferEmbeddedEoaRef.current = true
                 logger.warn('[DeployVault] Privy smart wallet signature is not 65 bytes; falling back to embedded EOA', {
                   phaseLabel,
                   privySmartWalletAddress,
@@ -2123,6 +2126,7 @@ function DeployVaultBatcher({
               userOpHash: result.userOpHash,
               txHash: result.transactionHash,
             })
+            preferEmbeddedEoaRef.current = true
             return
           }
           
@@ -2565,9 +2569,9 @@ function DeployVaultMain() {
     return privySmartWalletAddress ?? connectedWalletAddress ?? privyLinkedEoaAddress
   }, [connectedWalletAddress, privyLinkedEoaAddress, privySmartWalletAddress])
   const deploymentVersion = useMemo(() => {
-    const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.3'
+    const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.6'
     const v = String(raw).trim()
-    return v.length > 0 ? v : 'v1.3'
+    return v.length > 0 ? v : 'v1.6'
   }, [])
 
   const switchAuthCta = useMemo(() => {
