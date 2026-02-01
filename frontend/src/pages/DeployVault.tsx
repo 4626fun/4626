@@ -106,29 +106,15 @@ function signatureMeta(signature: Hex) {
   }
 }
 
-const NON_EOA_SIGNATURE_CODE = 'CV_NON_EOA_SIGNATURE'
-
-function isNonEoaSignatureError(error: unknown): boolean {
-  const code = (error as any)?.code
-  if (code === NON_EOA_SIGNATURE_CODE) return true
-  const msg = error instanceof Error ? error.message : String(error ?? '')
-  return msg.includes(NON_EOA_SIGNATURE_CODE)
-}
-
-function ensureEoaSignature(signature: Hex, context: string): Hex {
+function logNonEoaSignature(signature: Hex, context: string) {
   const meta = signatureMeta(signature)
-  if (meta.byteLength !== 65) {
-    if (AA_DEBUG) {
-      logger.warn('[DeployVault] Non-EOA signature detected', {
-        context,
-        ...meta,
-      })
-    }
-    const err = new Error(`${NON_EOA_SIGNATURE_CODE}:${context}`)
-    ;(err as any).code = NON_EOA_SIGNATURE_CODE
-    throw err
+  if (meta.byteLength !== 65 && AA_DEBUG) {
+    logger.warn('[DeployVault] Non-EOA signature detected', {
+      context,
+      ...meta,
+    })
   }
-  return signature
+  return meta
 }
 
 function isEthSignUnsupported(error: unknown): boolean {
@@ -1861,7 +1847,7 @@ function DeployVaultBatcher({
                     throw new Error('Privy smart wallet does not support raw signing')
                   }
                   const sig = ensureSignatureHex(rawResult, 'privySmartWallet.eth_sign')
-                  ensureEoaSignature(sig, 'privySmartWallet.eth_sign')
+                  logNonEoaSignature(sig, 'privySmartWallet.eth_sign')
                   return sig
                 }
                 if (typeof client?.request === 'function') {
@@ -1899,7 +1885,7 @@ function DeployVaultBatcher({
                     context,
                   )
                   const sig = ensureSignatureHex(rawResult, context)
-                  ensureEoaSignature(sig, context)
+                  logNonEoaSignature(sig, context)
                   debugSignatureReady(context, sig, { signer: privySmartWalletAddress })
                   return sig
                 }
@@ -1925,7 +1911,7 @@ function DeployVaultBatcher({
                     context,
                   )
                   const sig = ensureSignatureHex(rawResult, context)
-                  ensureEoaSignature(sig, context)
+                  logNonEoaSignature(sig, context)
                   debugSignatureReady(context, sig, { signer: privySmartWalletAddress })
                   return sig
                 }
@@ -1961,11 +1947,20 @@ function DeployVaultBatcher({
               })
               return
             } catch (e) {
-              if (isNonEoaSignatureError(e)) {
+              const msg = e instanceof Error ? e.message : String(e ?? '')
+              const lc = msg.toLowerCase()
+              const shouldFallback =
+                lc.includes('invalid signature') ||
+                lc.includes('signature check failed') ||
+                lc.includes('signature verification used more gas') ||
+                lc.includes('verificationgaslimit') ||
+                lc.includes('aa40')
+              if (shouldFallback) {
                 preferEmbeddedEoaRef.current = true
-            logger.warn('[DeployVault] Privy smart wallet signature is not 65 bytes; falling back to embedded EOA', {
-              phaseLabel: logPhaseLabel,
+                logger.warn('[DeployVault] Privy smart wallet signer failed; falling back to embedded EOA', {
+                  phaseLabel: logPhaseLabel,
                   privySmartWalletAddress,
+                  error: msg,
                 })
               } else {
                 throw e
@@ -2610,9 +2605,9 @@ function DeployVaultMain() {
     return privySmartWalletAddress ?? connectedWalletAddress ?? privyLinkedEoaAddress
   }, [connectedWalletAddress, privyLinkedEoaAddress, privySmartWalletAddress])
   const deploymentVersion = useMemo(() => {
-    const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.1.2'
+    const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.1.4'
     const v = String(raw).trim()
-    return v.length > 0 ? v : 'v1.1.2'
+    return v.length > 0 ? v : 'v1.1.4'
   }, [])
 
   const switchAuthCta = useMemo(() => {
