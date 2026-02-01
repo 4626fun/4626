@@ -7,6 +7,26 @@ import { Web3Providers } from './web3/Web3Providers'
 import { PrivyClientProvider } from '@/lib/privy/client'
 import './index.css'
 
+if (typeof window !== 'undefined') {
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const debugEnabled = params.get('debug') === '1' || window.localStorage.getItem('cv:debug') === 'true'
+    if (debugEnabled && !(window as any).__cvPrivyAnalyticsFetchPatched) {
+      const originalFetch = window.fetch.bind(window)
+      window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+        if (url.includes('https://auth.privy.io/api/v1/analytics_events')) {
+          return Promise.resolve(new Response(null, { status: 204 }))
+        }
+        return originalFetch(input, init)
+      }
+      ;(window as any).__cvPrivyAnalyticsFetchPatched = true
+    }
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * Minimal provider stack:
  * 
