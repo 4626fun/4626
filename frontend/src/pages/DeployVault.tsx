@@ -802,6 +802,7 @@ function DeployVaultBatcher({
   canonicalSmartWallet,
   privySmartWalletAddress,
   privySmartWalletIsCanonicalOwner,
+  privySmartWalletCanSign,
   embeddedEoaIsCanonicalOwner,
   embeddedPrivyWallet,
   embeddedPrivyEoaAddress,
@@ -829,6 +830,7 @@ function DeployVaultBatcher({
   canonicalSmartWallet: Address | null
   privySmartWalletAddress: Address | null
   privySmartWalletIsCanonicalOwner: boolean
+  privySmartWalletCanSign: boolean
   // Whether the Privy embedded EOA is an owner of the canonical smart wallet (enables gas-free ERC-4337)
   embeddedEoaIsCanonicalOwner: boolean
   // The Privy embedded wallet object (for signing)
@@ -1700,7 +1702,14 @@ function DeployVaultBatcher({
           }
           
           // PATH 1.5: Privy app smart wallet is an owner (EIP-1271 signer)
-          if (canonicalSmartWallet && privySmartWalletIsCanonicalOwner && smartWalletClient && privySmartWalletAddress && publicClient) {
+          if (
+            canonicalSmartWallet &&
+            privySmartWalletIsCanonicalOwner &&
+            privySmartWalletCanSign &&
+            smartWalletClient &&
+            privySmartWalletAddress &&
+            publicClient
+          ) {
             logger.info(`[DeployVault] Using ERC-4337 via Privy smart wallet owner for ${phaseLabel}`, {
               canonicalSmartWallet,
               privySmartWalletAddress,
@@ -1723,28 +1732,12 @@ function DeployVaultBatcher({
                   : args.message
                 const hasSignMessage = typeof (smartWalletClient as any)?.signMessage === 'function'
                 const hasRequest = typeof (smartWalletClient as any)?.request === 'function'
-                const msgHex =
-                  typeof msg === 'string' && msg.startsWith('0x') ? msg : `0x${Buffer.from(String(msg)).toString('hex')}`
 
                 if (AA_DEBUG) {
                   logger.debug('[DeployVault] Privy smart wallet signer capabilities', {
                     hasSignMessage,
                     hasRequest,
                   })
-                }
-
-                if (hasRequest) {
-                  const rawResult = await withTimeout(
-                    (smartWalletClient as any).request({
-                      method: 'personal_sign',
-                      params: [msgHex, privySmartWalletAddress],
-                    }),
-                    20_000,
-                    'privySmartWallet.personal_sign',
-                  )
-                  const sig = ensureSignatureHex(rawResult, 'privySmartWallet.personal_sign')
-                  debugSignatureReady('privySmartWallet.personal_sign', sig, { signer: privySmartWalletAddress })
-                  return sig
                 }
 
                 if (hasSignMessage) {
@@ -1761,22 +1754,12 @@ function DeployVaultBatcher({
                   return sig
                 }
 
-                throw new Error('Privy smart wallet client cannot sign messages')
+                throw new Error(
+                  'Privy smart wallet signer not supported in this environment. ' +
+                    'Use Coinbase Wallet (Base Account) or connect an owner EOA.'
+                )
               },
               signTypedData: async (args: any) => {
-                if (typeof (smartWalletClient as any)?.request === 'function') {
-                  const rawResult = await withTimeout(
-                    (smartWalletClient as any).request({
-                      method: 'eth_signTypedData_v4',
-                      params: [privySmartWalletAddress, JSON.stringify(args)],
-                    }),
-                    20_000,
-                    'privySmartWallet.eth_signTypedData_v4',
-                  )
-                  const sig = ensureSignatureHex(rawResult, 'privySmartWallet.eth_signTypedData_v4')
-                  debugSignatureReady('privySmartWallet.eth_signTypedData_v4', sig, { signer: privySmartWalletAddress })
-                  return sig
-                }
                 if (typeof (smartWalletClient as any)?.signTypedData === 'function') {
                   const rawResult = await withTimeout(
                     (smartWalletClient as any).signTypedData({
@@ -1790,7 +1773,10 @@ function DeployVaultBatcher({
                   debugSignatureReady('privySmartWallet.signTypedData', sig, { signer: privySmartWalletAddress })
                   return sig
                 }
-                throw new Error('Privy smart wallet client cannot sign typed data')
+                throw new Error(
+                  'Privy smart wallet signer not supported in this environment. ' +
+                    'Use Coinbase Wallet (Base Account) or connect an owner EOA.'
+                )
               },
             }
 
@@ -3516,6 +3502,9 @@ function DeployVaultMain() {
   }, [])
 
   const privySmartWalletReady = Boolean(privySmartWalletAddress && smartWalletClient)
+  const privySmartWalletCanSign = useMemo(() => {
+    return typeof (smartWalletClient as any)?.signMessage === 'function'
+  }, [smartWalletClient])
   
   // Check if Privy smart wallet matches the canonical identity (Zora smart wallet)
   // If they don't match, user can add the app smart wallet as an owner (EIP-1271)
@@ -3526,7 +3515,10 @@ function DeployVaultMain() {
   
   // Smart wallet is ready only if it matches canonical OR an authorized owner signer is available
   const smartWalletCapabilityReady =
-    privySmartWalletReady && (smartWalletMatchesCanonical || embeddedEoaIsCanonicalOwner || privySmartWalletIsCanonicalOwner)
+    privySmartWalletReady &&
+    (smartWalletMatchesCanonical ||
+      embeddedEoaIsCanonicalOwner ||
+      (privySmartWalletIsCanonicalOwner && privySmartWalletCanSign))
 
   const canDeploy =
     tokenIsValid &&
@@ -4132,10 +4124,15 @@ function DeployVaultMain() {
                         Adds your app smart wallet as an owner of the canonical Zora smart wallet (EIP-1271).
                         The canonical wallet remains the sender. Higher verification gas, but no eth_sign required.
                       </div>
+                      {!privySmartWalletCanSign ? (
+                        <div className="text-[11px] text-amber-200/80">
+                          Smart wallet signing is not supported in this environment. Use Coinbase Wallet or an owner EOA.
+                        </div>
+                      ) : null}
                       <button
                         type="button"
                         className="btn-primary w-full"
-                        disabled={addPrivySmartWalletOwnerBusy}
+                        disabled={addPrivySmartWalletOwnerBusy || !privySmartWalletCanSign}
                         onClick={() => void handleAddPrivyAppSmartWalletOwner()}
                       >
                         {addPrivySmartWalletOwnerBusy ? 'Confirming…' : 'Enable Smart Wallet Signer'}
@@ -4215,6 +4212,7 @@ function DeployVaultMain() {
                     canonicalSmartWallet={canonicalIdentityIsContract ? (canonicalIdentityAddress as Address) : null}
                     privySmartWalletAddress={privySmartWalletAddress}
                     privySmartWalletIsCanonicalOwner={privySmartWalletIsCanonicalOwner}
+                    privySmartWalletCanSign={privySmartWalletCanSign}
                     embeddedEoaIsCanonicalOwner={embeddedEoaIsCanonicalOwner}
                     embeddedPrivyWallet={embeddedPrivyWallet}
                     embeddedPrivyEoaAddress={embeddedPrivyEoaAddress}
