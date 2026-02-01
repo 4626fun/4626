@@ -671,8 +671,9 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   calls: Array<{ to: Address; value?: bigint; data?: Hex }>
   version?: '1' | '1.1'
   userOpSignMode?: UserOpSignMode
+  ownerIsContract?: boolean
 }): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
-  const { publicClient, walletClient, bundlerUrl, smartWallet, ownerAddress, calls, version = '1', userOpSignMode = 'auto' } = params
+  const { publicClient, walletClient, bundlerUrl, smartWallet, ownerAddress, calls, version = '1', userOpSignMode = 'auto', ownerIsContract: ownerIsContractOverride } = params
   
   // Input validation
   if (!bundlerUrl) throw new Error('Missing bundler URL')
@@ -741,17 +742,19 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
 
   // Check if the owner might be a smart wallet (for EIP-1271 verification gas estimation)
   // Smart wallet signature verification requires significantly more gas than EOA
-  let ownerIsContract = false
-  try {
-    const ownerBytecode = await publicClient.readContract({
-      address: ownerAddress,
-      abi: [{ type: 'function', name: 'ownerCount', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
-      functionName: 'ownerCount',
-    }).catch(() => null)
-    // If we can call ownerCount, it's likely a Coinbase Smart Wallet
-    ownerIsContract = ownerBytecode !== null
-  } catch {
-    // Ignore - assume EOA if we can't determine
+  let ownerIsContract = typeof ownerIsContractOverride === 'boolean' ? ownerIsContractOverride : false
+  if (typeof ownerIsContractOverride !== 'boolean') {
+    try {
+      const ownerBytecode = await publicClient.readContract({
+        address: ownerAddress,
+        abi: [{ type: 'function', name: 'ownerCount', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+        functionName: 'ownerCount',
+      }).catch(() => null)
+      // If we can call ownerCount, it's likely a Coinbase Smart Wallet
+      ownerIsContract = ownerBytecode !== null
+    } catch {
+      // Ignore - assume EOA if we can't determine
+    }
   }
 
   // Send the UserOperation via EntryPoint v0.6 with CDP paymaster
