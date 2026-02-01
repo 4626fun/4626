@@ -4,6 +4,11 @@
   "installCommand": "pnpm install --frozen-lockfile",
   "framework": "vite",
   "outputDirectory": "dist",
+  "functions": {
+    "api/farcaster-manifest.ts": {
+      "includeFiles": "public/.well-known/farcaster.json"
+    }
+  },
   "routes": [
     {
       "src": "/(.*)",
