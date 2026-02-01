@@ -131,6 +131,19 @@ function ensureEoaSignature(signature: Hex, context: string): Hex {
   return signature
 }
 
+function isEthSignUnsupported(error: unknown): boolean {
+  const code = (error as any)?.code
+  if (code === -32601) return true // Method not found
+  const msg = error instanceof Error ? error.message : String(error ?? '')
+  const lc = msg.toLowerCase()
+  return (
+    lc.includes('not supported') ||
+    lc.includes('unsupported') ||
+    lc.includes('method not found') ||
+    lc.includes('does not support')
+  )
+}
+
 function isUserOpHashLike(value: unknown): boolean {
   return isHexString(value) && value.length === 66
 }
@@ -2001,11 +2014,34 @@ function DeployVaultBatcher({
                   } catch (ethSignError: any) {
                     const msg = ethSignError?.message ? String(ethSignError.message) : 'eth_sign failed'
                     logger.warn('[DeployVault] eth_sign failed for embedded EOA', { error: msg })
-                    throw new Error(
-                      'Embedded wallet does not support eth_sign. ' +
-                        'UserOp signing for Coinbase Smart Wallet requires eth_sign. ' +
-                        'Use Coinbase Wallet (Base Account) or connect an owner EOA.'
-                    )
+                  if (isEthSignUnsupported(ethSignError)) {
+                    if (AA_DEBUG) {
+                      logger.debug('[DeployVault] Trying secp256k1_sign fallback for embedded EOA')
+                    }
+                    try {
+                      const rawResult = await withTimeout(
+                        embeddedProvider.request({
+                          method: 'secp256k1_sign',
+                          params: [hashToSign],
+                        }),
+                        30_000,
+                        'secp256k1_sign',
+                      )
+                      const sig = ensureSignatureHex(rawResult, 'secp256k1_sign')
+                      debugSignatureReady('secp256k1_sign', sig, { signer: signerAddr })
+                      return sig
+                    } catch (fallbackError: any) {
+                      const fallbackMsg = fallbackError?.message
+                        ? String(fallbackError.message)
+                        : 'secp256k1_sign failed'
+                      logger.warn('[DeployVault] secp256k1_sign failed for embedded EOA', { error: fallbackMsg })
+                    }
+                  }
+                  throw new Error(
+                    'Embedded wallet does not support eth_sign or secp256k1_sign. ' +
+                      'UserOp signing for Coinbase Smart Wallet requires raw signing. ' +
+                      'Use Coinbase Wallet (Base Account) or connect an owner EOA.'
+                  )
                   }
                 }
                 
