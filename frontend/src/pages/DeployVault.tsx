@@ -1468,6 +1468,14 @@ function DeployVaultBatcher({
       if (!chainlinkEthUsd) throw new Error('Chainlink feed not available')
 
       const tempOwner = batcherAddress as Address
+      const batcherBytecode =
+        (await publicClient!
+          .getBytecode({ address: batcherAddress as Address })
+          .catch(() => null)) ?? null
+      const supportsPhase1WithSalt = (() => {
+        if (!batcherBytecode || batcherBytecode === '0x') return false
+        return batcherBytecode.toLowerCase().includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
+      })()
 
       const baseSalt = deriveBaseSalt({ creatorToken, owner, chainId: base.id, version: deploymentVersion })
       const vaultSalt = saltFor(baseSalt, 'vault')
@@ -1499,7 +1507,13 @@ function DeployVaultBatcher({
       const shareOftInitCode = concatHex([DEPLOY_BYTECODE.CreatorShareOFT as Hex, shareOftArgs])
       const derivedShareOftSalt = deriveShareOftSalt({ owner, shareSymbol, version: deploymentVersion })
       let shareOftSaltOverrideUsed = shareOftSaltOverride
-      if (!shareOftSaltOverrideUsed && shareOftVanitySuffix) {
+      if (shareOftSaltOverrideUsed && !supportsPhase1WithSalt) {
+        logger.warn('[DeployVault] Batcher lacks vanity salt support; ignoring ShareOFT override', {
+          batcher: batcherAddress,
+        })
+        shareOftSaltOverrideUsed = null
+      }
+      if (!shareOftSaltOverrideUsed && shareOftVanitySuffix && supportsPhase1WithSalt) {
         const initCodeHash = keccak256(shareOftInitCode)
         const vanityKey = [
           create2Deployer.toLowerCase(),
@@ -1768,9 +1782,9 @@ function DeployVaultBatcher({
 
       if (isTwoStepBatcher) {
         if (!supportsPhase1WithSalt) {
-          throw new Error(
-            'CreatorVaultBatcher does not support vanity ShareOFT salts. Deploy the updated batcher and update VITE_CREATOR_VAULT_BATCHER.',
-          )
+          logger.warn('[DeployVault] Batcher lacks vanity salt support; continuing without override', {
+            batcher: batcherAddress,
+          })
         }
         const phase1Any = phase1ExistsQuery.data?.anyDeployed ?? false
         const phase1All = phase1ExistsQuery.data?.allDeployed ?? false
