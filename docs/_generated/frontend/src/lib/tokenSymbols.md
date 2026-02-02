@@ -12,7 +12,7 @@
 
 > `const` **SHARE\_SYMBOL\_PREFIX**: `"■"` = `'■'`
 
-Defined in: [lib/tokenSymbols.ts:5](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/tokenSymbols.ts#L5)
+Defined in: [lib/tokenSymbols.ts:5](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/tokenSymbols.ts#L5)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [lib/tokenSymbols.ts:5](https://github.com/wenakita/4626/blob/fd1990
 
 > `const` **VAULT\_SYMBOL\_PREFIX**: `"▢"` = `'▢'`
 
-Defined in: [lib/tokenSymbols.ts:6](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/tokenSymbols.ts#L6)
+Defined in: [lib/tokenSymbols.ts:6](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/tokenSymbols.ts#L6)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [lib/tokenSymbols.ts:6](https://github.com/wenakita/4626/blob/fd1990
 
 > **isUnicodeShareSymbol**(`symbol`): `boolean`
 
-Defined in: [lib/tokenSymbols.ts:55](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/tokenSymbols.ts#L55)
+Defined in: [lib/tokenSymbols.ts:55](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/tokenSymbols.ts#L55)
 
 #### Parameters
 
@@ -46,7 +46,7 @@ Defined in: [lib/tokenSymbols.ts:55](https://github.com/wenakita/4626/blob/fd199
 
 > **isUnicodeVaultSymbol**(`symbol`): `boolean`
 
-Defined in: [lib/tokenSymbols.ts:59](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/tokenSymbols.ts#L59)
+Defined in: [lib/tokenSymbols.ts:59](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/tokenSymbols.ts#L59)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [lib/tokenSymbols.ts:59](https://github.com/wenakita/4626/blob/fd199
 
 > **normalizeUnderlyingSymbol**(`raw`): `string`
 
-Defined in: [lib/tokenSymbols.ts:17](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/tokenSymbols.ts#L17)
+Defined in: [lib/tokenSymbols.ts:17](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/tokenSymbols.ts#L17)
 
 Strip known prefixes (Unicode badges or legacy ws/s) to recover the underlying ticker.
 
@@ -84,7 +84,7 @@ Strip known prefixes (Unicode badges or legacy ws/s) to recover the underlying t
 
 > **toShareName**(`rawUnderlying`, `creatorName?`): `string`
 
-Defined in: [lib/tokenSymbols.ts:43](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/tokenSymbols.ts#L43)
+Defined in: [lib/tokenSymbols.ts:43](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/tokenSymbols.ts#L43)
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: [lib/tokenSymbols.ts:43](https://github.com/wenakita/4626/blob/fd199
 
 > **toShareSymbol**(`rawUnderlying`): `string`
 
-Defined in: [lib/tokenSymbols.ts:33](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/tokenSymbols.ts#L33)
+Defined in: [lib/tokenSymbols.ts:33](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/tokenSymbols.ts#L33)
 
 #### Parameters
 
@@ -124,7 +124,7 @@ Defined in: [lib/tokenSymbols.ts:33](https://github.com/wenakita/4626/blob/fd199
 
 > **toVaultName**(`rawUnderlying`, `creatorName?`): `string`
 
-Defined in: [lib/tokenSymbols.ts:49](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/tokenSymbols.ts#L49)
+Defined in: [lib/tokenSymbols.ts:49](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/tokenSymbols.ts#L49)
 
 #### Parameters
 
@@ -146,7 +146,7 @@ Defined in: [lib/tokenSymbols.ts:49](https://github.com/wenakita/4626/blob/fd199
 
 > **toVaultSymbol**(`rawUnderlying`): `string`
 
-Defined in: [lib/tokenSymbols.ts:38](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/tokenSymbols.ts#L38)
+Defined in: [lib/tokenSymbols.ts:38](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/tokenSymbols.ts#L38)
 
 #### Parameters
 
@@ -164,7 +164,7 @@ Defined in: [lib/tokenSymbols.ts:38](https://github.com/wenakita/4626/blob/fd199
 
 > **underlyingSymbolUpper**(`raw`): `string`
 
-Defined in: [lib/tokenSymbols.ts:28](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/tokenSymbols.ts#L28)
+Defined in: [lib/tokenSymbols.ts:28](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/tokenSymbols.ts#L28)
 
 #### Parameters
 

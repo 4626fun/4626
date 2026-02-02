@@ -68,17 +68,24 @@ vault.addStrategy(ajnaStrategy, 2139);    // 21.39%
 
 ### Deployment flow
 
+```mermaid
+flowchart LR
+    subgraph Vault
+        Idle[Idle Balance]
+    end
+    
+    subgraph Strategies
+        S1[Charm 69%]
+        S2[Ajna 21.39%]
+        S3[Reserve 9.61%]
+    end
+    
+    Idle -->|deploy| S1
+    Idle -->|deploy| S2
+    Idle -.->|keep| S3
 ```
-Keeper calls deployToStrategies()
-        │
-        ▼
-Calculate deployable = coinBalance - minimumTotalIdle
-        │
-        ▼
-For each active strategy:
-├─► amount = deployable × weight / totalWeight
-└─► strategy.deposit(amount)
-```
+
+Keeper calls `deployToStrategies()` to move idle capital into strategies based on weights.
 
 ---
 

@@ -11,24 +11,45 @@ Contract hierarchy and relationships in the 4626 protocol.
 
 ## Contract hierarchy
 
+```mermaid
+flowchart TD
+    subgraph Registry["Global Registry"]
+        R[CreatorRegistry]
+    end
+    
+    subgraph Core["Core Contracts"]
+        Vault[CreatorOVault<br/>▢TOKEN]
+        Wrapper[Wrapper]
+        ShareOFT[CreatorShareOFT<br/>■TOKEN]
+    end
+    
+    subgraph Strategies["Yield Strategies"]
+        CCA[CCA Launch]
+        Charm[Charm V3]
+        Ajna[Ajna]
+    end
+    
+    subgraph Governance["Governance"]
+        Gauge[GaugeController]
+        Voting[VaultGaugeVoting]
+        VE[ve4626]
+        Rewards[VoterRewards]
+    end
+    
+    R --> Vault
+    R --> ShareOFT
+    Vault --> Wrapper
+    Wrapper --> ShareOFT
+    Vault --> CCA
+    Vault --> Charm
+    Vault --> Ajna
+    ShareOFT --> Gauge
+    Gauge --> Voting
+    Voting --> VE
+    Gauge --> Rewards
 ```
-                         ┌─────────────────────┐
-                         │   CreatorRegistry   │
-                         │  (global registry)  │
-                         └─────────────────────┘
-                                   │
-       ┌───────────────────────────┼───────────────────────────┐
-       │                           │                           │
-       ▼                           ▼                           ▼
-┌─────────────────┐      ┌─────────────────┐        ┌─────────────────┐
-│  CreatorOVault  │      │ CreatorShareOFT │        │  Governance     │
-│   (ERC-4626)    │      │  (LayerZero)    │        │  Contracts      │
-└─────────────────┘      └─────────────────┘        └─────────────────┘
-       │                         │                         │
-       ├─► Strategies            ├─► GaugeController       ├─► VaultGaugeVoting
-       ├─► Wrapper               └─► LotteryManager        ├─► ve4626
-       └─► Accounting                                      └─► VoterRewards
-```
+
+**Legend:** ▢ = vault shares, ■ = wrapped OFT shares
 
 ---
 
@@ -57,23 +78,27 @@ Contract hierarchy and relationships in the 4626 protocol.
 
 ## Access control
 
-```
-Owner (creator multisig)
-├─► Full vault control
-├─► Strategy management
-└─► Emergency shutdown
-
-Management (operator)
-├─► Strategy parameters
-└─► Keeper management
-
-Keeper (automation)
-├─► Deploy to strategies
-└─► Report profit/loss
-
-Emergency Admin
-├─► Pause operations
-└─► Emergency withdrawal
+```mermaid
+flowchart TD
+    subgraph Roles
+        Owner[Owner<br/>creator multisig]
+        Mgmt[Management<br/>operator]
+        Keeper[Keeper<br/>automation]
+        Emergency[Emergency Admin]
+    end
+    
+    Owner --> |full control| Vault[Vault]
+    Owner --> |strategy mgmt| Strategies
+    Owner --> |shutdown| Emergency
+    
+    Mgmt --> |parameters| Strategies
+    Mgmt --> |assign| Keeper
+    
+    Keeper --> |deploy| Strategies
+    Keeper --> |report| Vault
+    
+    Emergency --> |pause| Vault
+    Emergency --> |withdraw| Strategies
 ```
 
 ---

@@ -27,17 +27,24 @@ For Uniswap V4 pools, a tax hook collects 6.9% in WETH, which is converted to �
 
 ## Distribution
 
-```
-■TOKEN fees (6.9% of buys)
-          │
-          ▼
-    GaugeController
-          │
-    ┌─────┼─────┐
-    │     │     │
-    ▼     ▼     ▼
-  69%  21.39%  9.61%
-Lottery  Burn  Voters
+```mermaid
+flowchart TD
+    Fees[■TOKEN Fees<br/>6.9% of buys]
+    Fees --> Gauge[GaugeController]
+    
+    Gauge -->|69%| Lottery[Lottery<br/>Jackpot]
+    Gauge -->|21.39%| Burn[Burn ▢TOKEN<br/>PPS increase]
+    Gauge -->|9.61%| Voters[Voter Rewards<br/>ve4626 holders]
+    
+    classDef fees fill:#fff3e0
+    classDef lottery fill:#e3f2fd
+    classDef burn fill:#ffebee
+    classDef voters fill:#e8f5e9
+    
+    class Fees fees
+    class Lottery lottery
+    class Burn burn
+    class Voters voters
 ```
 
 | Recipient | Percentage | Effect |

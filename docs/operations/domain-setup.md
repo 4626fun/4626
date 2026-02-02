@@ -6,23 +6,23 @@ title: Domain Setup
 
 ## Current Domain
 
-**Production domain:** `erc4626.fun`
+**Production domain:** `4626.fun`
 
-- Frontend: https://erc4626.fun
-- Documentation: https://docs.erc4626.fun
+- Frontend: https://4626.fun
+- Documentation: https://docs.4626.fun
 
 ## Farcaster Mini App Requirements (must pass)
 
 ### Canonical domain
 
-- Use **apex** `erc4626.fun` as canonical.
-- Avoid `erc4626.fun` → `www.erc4626.fun` redirects (Farcaster tooling expects the manifest on the exact signed domain).
+- Use **apex** `4626.fun` as canonical.
+- Avoid `4626.fun` → `www.4626.fun` redirects (Farcaster tooling expects the manifest on the exact signed domain).
 
 ### Manifest serving
 
 Ensure the manifest is reachable at the exact domain you signed:
 
-- `https://erc4626.fun/.well-known/farcaster.json`
+- `https://4626.fun/.well-known/farcaster.json`
   - HTTP **200**
   - `Content-Type: application/json`
   - **No redirects**
@@ -30,7 +30,7 @@ Ensure the manifest is reachable at the exact domain you signed:
 Quick check:
 
 ```bash
-curl -s -D - https://erc4626.fun/.well-known/farcaster.json -o /dev/null | sed -n '1,20p'
+curl -s -D - https://4626.fun/.well-known/farcaster.json -o /dev/null | sed -n '1,20p'
 ```
 
 ### Embed meta tag

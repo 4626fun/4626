@@ -21,6 +21,24 @@ The protocol uses ve(3,3) governance where token holders lock assets for voting 
 
 ## How it works
 
+```mermaid
+sequenceDiagram
+    participant User
+    participant ve4626
+    participant GaugeVoting
+    participant Rewards
+    
+    User->>ve4626: lock(■TOKEN, 2 years)
+    ve4626-->>User: veNFT position
+    
+    User->>GaugeVoting: vote(vaults, weights)
+    
+    Note over GaugeVoting: Epoch ends (7 days)
+    
+    User->>Rewards: claim(epoch)
+    Rewards-->>User: ■TOKEN rewards
+```
+
 1. **Lock** ■TOKEN or ▢TOKEN in ve4626 (7 days to 4 years)
 2. **Vote** for vaults each epoch (weekly)
 3. **Earn** rewards from fees and bribes

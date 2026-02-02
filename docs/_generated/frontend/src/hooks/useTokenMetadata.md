@@ -12,7 +12,7 @@
 
 > **useTokenImage**(`tokenAddress`): `object`
 
-Defined in: [hooks/useTokenMetadata.ts:156](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/hooks/useTokenMetadata.ts#L156)
+Defined in: [hooks/useTokenMetadata.ts:156](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/hooks/useTokenMetadata.ts#L156)
 
 #### Parameters
 
@@ -42,7 +42,7 @@ Defined in: [hooks/useTokenMetadata.ts:156](https://github.com/wenakita/4626/blo
 
 > **useTokenMetadata**(`tokenAddress`): `object`
 
-Defined in: [hooks/useTokenMetadata.ts:64](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/hooks/useTokenMetadata.ts#L64)
+Defined in: [hooks/useTokenMetadata.ts:64](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/hooks/useTokenMetadata.ts#L64)
 
 #### Parameters
 

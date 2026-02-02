@@ -28,40 +28,44 @@ CCA is an official Uniswap mechanism deployed on Base, Mainnet, and other chains
 
 ### Auction lifecycle
 
-```
-Day 0-7: Auction period
-├─► Users submit bids (ETH for ■TOKEN)
-├─► Each bid specifies max price
-├─► Clearing price updates continuously
-└─► Early bids get better prices
-
-Day 7: Graduation
-├─► Final clearing price determined
-├─► All bids above clearing price filled
-├─► Graduates to Uniswap V4 pool
-└─► Tax hook configured on pool
-```
-
-### Clearing price
-
-The clearing price is where supply meets demand:
-
-```
-              Price
-                │
-        Max ────┤     ┌─────────────────
-                │     │
-                │     │
-    Clearing ───┼─────┤ ← All bids above here get filled
-                │     │
-                │     │
-                │     │
-        Min ────┼─────┴─────────────────
-                │
-                └────────────────────── Cumulative bids
+```mermaid
+stateDiagram-v2
+    [*] --> Bidding: Day 0
+    Bidding --> Bidding: submit bids
+    Bidding --> Clearing: Day 7
+    Clearing --> Graduated: price set
+    Graduated --> Trading: V4 pool live
+    Trading --> [*]
+    
+    note right of Bidding
+        Users bid ETH for ■TOKEN
+        Clearing price updates
+    end note
+    
+    note right of Graduated
+        Pool created
+        Tax hook configured
+    end note
 ```
 
-All filled bidders pay the same clearing price, regardless of their max bid.
+### Clearing mechanism
+
+All bidders above the clearing price receive tokens at the same price.
+
+```mermaid
+flowchart LR
+    subgraph Bids
+        B1[Bid at 0.01 ETH]
+        B2[Bid at 0.008 ETH]
+        B3[Bid at 0.005 ETH]
+    end
+    
+    CP[Clearing Price<br/>0.007 ETH]
+    
+    B1 -->|filled| Tokens[■TOKEN]
+    B2 -->|filled| Tokens
+    B3 -->|unfilled| Refund[ETH refund]
+```
 
 ---
 
@@ -69,20 +73,14 @@ All filled bidders pay the same clearing price, regardless of their max bid.
 
 The CCA strategy auctions **■TOKEN** (wrapped vault shares), not TOKEN directly:
 
-```
-Creator deposits TOKEN into vault
-        │
-        ▼
-Receives ▢TOKEN (vault shares)
-        │
-        ▼
-Wraps to ■TOKEN via Wrapper
-        │
-        ▼
-■TOKEN deposited to CCA strategy
-        │
-        ▼
-CCA auctions ■TOKEN for ETH
+```mermaid
+flowchart LR
+    TOKEN[TOKEN] -->|deposit| Vault[Vault]
+    Vault -->|mint| VT[▢TOKEN]
+    VT -->|wrap| Wrapper
+    Wrapper -->|mint| WT[■TOKEN]
+    WT -->|deposit| CCA[CCA Strategy]
+    CCA -->|auction| ETH[ETH from bidders]
 ```
 
 ### Why auction wrapped shares
@@ -136,22 +134,14 @@ auction.exitBid(bidId);
 
 When the auction ends, it "graduates" to a Uniswap V4 pool:
 
-```
-Auction ends
-    │
-    ▼
-┌─────────────────────────────┐
-│      Graduation process     │
-│                             │
-│  1. Final price determined  │
-│  2. V4 pool created         │
-│  3. Liquidity added         │
-│  4. Tax hook configured     │
-│  5. Oracle updated          │
-└─────────────────────────────┘
-    │
-    ▼
-Trading begins on V4 pool
+```mermaid
+flowchart TD
+    A[Auction Ends] --> B[Final Price Set]
+    B --> C[Create V4 Pool]
+    C --> D[Add Liquidity]
+    D --> E[Configure Tax Hook<br/>6.9%]
+    E --> F[Update Oracle]
+    F --> G[Trading Live]
 ```
 
 ### Tax hook configuration

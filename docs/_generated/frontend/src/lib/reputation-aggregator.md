@@ -10,7 +10,7 @@
 
 ### OnchainReputation
 
-Defined in: [lib/reputation-aggregator.ts:13](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/reputation-aggregator.ts#L13)
+Defined in: [lib/reputation-aggregator.ts:13](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/reputation-aggregator.ts#L13)
 
 #### Properties
 
@@ -18,13 +18,13 @@ Defined in: [lib/reputation-aggregator.ts:13](https://github.com/wenakita/4626/b
 
 > **address**: `string`
 
-Defined in: [lib/reputation-aggregator.ts:15](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/reputation-aggregator.ts#L15)
+Defined in: [lib/reputation-aggregator.ts:15](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/reputation-aggregator.ts#L15)
 
 ##### aggregated
 
 > **aggregated**: `object`
 
-Defined in: [lib/reputation-aggregator.ts:43](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/reputation-aggregator.ts#L43)
+Defined in: [lib/reputation-aggregator.ts:43](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/reputation-aggregator.ts#L43)
 
 ###### badges
 
@@ -50,13 +50,13 @@ Defined in: [lib/reputation-aggregator.ts:43](https://github.com/wenakita/4626/b
 
 > **basename**: [`BasenameInfo`](basename-api.md#basenameinfo)
 
-Defined in: [lib/reputation-aggregator.ts:16](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/reputation-aggregator.ts#L16)
+Defined in: [lib/reputation-aggregator.ts:16](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/reputation-aggregator.ts#L16)
 
 ##### debank
 
 > **debank**: `object`
 
-Defined in: [lib/reputation-aggregator.ts:17](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/reputation-aggregator.ts#L17)
+Defined in: [lib/reputation-aggregator.ts:17](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/reputation-aggregator.ts#L17)
 
 ###### asOf?
 
@@ -70,13 +70,13 @@ Defined in: [lib/reputation-aggregator.ts:17](https://github.com/wenakita/4626/b
 
 > **guild**: [`BaseGuildStats`](guild-api.md#baseguildstats)
 
-Defined in: [lib/reputation-aggregator.ts:30](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/reputation-aggregator.ts#L30)
+Defined in: [lib/reputation-aggregator.ts:30](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/reputation-aggregator.ts#L30)
 
 ##### profiles
 
 > **profiles**: `object`
 
-Defined in: [lib/reputation-aggregator.ts:33](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/reputation-aggregator.ts#L33)
+Defined in: [lib/reputation-aggregator.ts:33](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/reputation-aggregator.ts#L33)
 
 ###### farcaster?
 
@@ -106,7 +106,7 @@ Defined in: [lib/reputation-aggregator.ts:33](https://github.com/wenakita/4626/b
 
 > **talent**: `object`
 
-Defined in: [lib/reputation-aggregator.ts:23](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/reputation-aggregator.ts#L23)
+Defined in: [lib/reputation-aggregator.ts:23](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/reputation-aggregator.ts#L23)
 
 ###### builderRank?
 
@@ -130,7 +130,7 @@ Defined in: [lib/reputation-aggregator.ts:23](https://github.com/wenakita/4626/b
 
 > **formatReputation**(`reputation`): `object`
 
-Defined in: [lib/reputation-aggregator.ts:336](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/reputation-aggregator.ts#L336)
+Defined in: [lib/reputation-aggregator.ts:336](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/reputation-aggregator.ts#L336)
 
 Format reputation for display
 
@@ -170,7 +170,7 @@ Format reputation for display
 
 > **getOnchainReputation**(`address`): `Promise`\<[`OnchainReputation`](#onchainreputation)\>
 
-Defined in: [lib/reputation-aggregator.ts:245](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/reputation-aggregator.ts#L245)
+Defined in: [lib/reputation-aggregator.ts:245](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/reputation-aggregator.ts#L245)
 
 Fetch comprehensive on-chain reputation for an address
 

@@ -12,7 +12,7 @@
 
 > **CreatorIdentityResolution** = `object`
 
-Defined in: [lib/identity/creatorIdentity.ts:18](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/identity/creatorIdentity.ts#L18)
+Defined in: [lib/identity/creatorIdentity.ts:18](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/identity/creatorIdentity.ts#L18)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [lib/identity/creatorIdentity.ts:18](https://github.com/wenakita/462
 
 > **blockingReason**: `string` \| `null`
 
-Defined in: [lib/identity/creatorIdentity.ts:31](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/identity/creatorIdentity.ts#L31)
+Defined in: [lib/identity/creatorIdentity.ts:31](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/identity/creatorIdentity.ts#L31)
 
 Block irreversible actions when true; caller should present UI guidance.
 
@@ -28,7 +28,7 @@ Block irreversible actions when true; caller should present UI guidance.
 
 > **canonicalIdentity**: `object`
 
-Defined in: [lib/identity/creatorIdentity.ts:20](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/identity/creatorIdentity.ts#L20)
+Defined in: [lib/identity/creatorIdentity.ts:20](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/identity/creatorIdentity.ts#L20)
 
 Canonical creator identity wallet (the identity that must not fragment).
 
@@ -44,7 +44,7 @@ Canonical creator identity wallet (the identity that must not fragment).
 
 > **execution**: `object`
 
-Defined in: [lib/identity/creatorIdentity.ts:25](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/identity/creatorIdentity.ts#L25)
+Defined in: [lib/identity/creatorIdentity.ts:25](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/identity/creatorIdentity.ts#L25)
 
 Currently connected wallet/account (execution context for the current session).
 
@@ -56,7 +56,7 @@ Currently connected wallet/account (execution context for the current session).
 
 > **hasExistingCreatorCoinIdentity**: `boolean`
 
-Defined in: [lib/identity/creatorIdentity.ts:29](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/identity/creatorIdentity.ts#L29)
+Defined in: [lib/identity/creatorIdentity.ts:29](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/identity/creatorIdentity.ts#L29)
 
 Whether we have an existing creator coin identity we should enforce.
 
@@ -64,7 +64,7 @@ Whether we have an existing creator coin identity we should enforce.
 
 > **warnings**: [`CreatorIdentityWarningCode`](#creatoridentitywarningcode)[]
 
-Defined in: [lib/identity/creatorIdentity.ts:33](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/identity/creatorIdentity.ts#L33)
+Defined in: [lib/identity/creatorIdentity.ts:33](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/identity/creatorIdentity.ts#L33)
 
 Non-blocking warnings to show in UI.
 
@@ -74,7 +74,7 @@ Non-blocking warnings to show in UI.
 
 > **CreatorIdentitySource** = `"zoraCoinCreatorAddress"` \| `"privySmartWallet"` \| `"farcasterCustody"` \| `"zoraProfilePublicWallet"` \| `"connectedWallet"` \| `"unknown"`
 
-Defined in: [lib/identity/creatorIdentity.ts:5](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/identity/creatorIdentity.ts#L5)
+Defined in: [lib/identity/creatorIdentity.ts:5](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/identity/creatorIdentity.ts#L5)
 
 ***
 
@@ -82,7 +82,7 @@ Defined in: [lib/identity/creatorIdentity.ts:5](https://github.com/wenakita/4626
 
 > **CreatorIdentityWarningCode** = `"CUSTODY_MISMATCH"` \| `"CONNECTED_WALLET_MISMATCH"` \| `"CUSTODY_UNAVAILABLE"`
 
-Defined in: [lib/identity/creatorIdentity.ts:13](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/identity/creatorIdentity.ts#L13)
+Defined in: [lib/identity/creatorIdentity.ts:13](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/identity/creatorIdentity.ts#L13)
 
 ## Functions
 
@@ -90,7 +90,7 @@ Defined in: [lib/identity/creatorIdentity.ts:13](https://github.com/wenakita/462
 
 > **resolveCreatorIdentity**(`params`): [`CreatorIdentityResolution`](#creatoridentityresolution)
 
-Defined in: [lib/identity/creatorIdentity.ts:53](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/identity/creatorIdentity.ts#L53)
+Defined in: [lib/identity/creatorIdentity.ts:53](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/identity/creatorIdentity.ts#L53)
 
 Resolve canonical creator identity in a way that prevents fragmentation.
 

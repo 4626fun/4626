@@ -12,7 +12,7 @@
 
 > **HostMode** = `"app"` \| `"marketing"`
 
-Defined in: [lib/host.ts:1](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/host.ts#L1)
+Defined in: [lib/host.ts:1](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/host.ts#L1)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [lib/host.ts:1](https://github.com/wenakita/4626/blob/fd199051169d23
 
 > **getAppBaseUrl**(): `string`
 
-Defined in: [lib/host.ts:18](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/host.ts#L18)
+Defined in: [lib/host.ts:18](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/host.ts#L18)
 
 #### Returns
 
@@ -32,7 +32,7 @@ Defined in: [lib/host.ts:18](https://github.com/wenakita/4626/blob/fd199051169d2
 
 > **getHostMode**(): [`HostMode`](#hostmode)
 
-Defined in: [lib/host.ts:3](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/host.ts#L3)
+Defined in: [lib/host.ts:3](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/host.ts#L3)
 
 #### Returns
 

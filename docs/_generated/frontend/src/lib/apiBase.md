@@ -12,7 +12,7 @@
 
 > **ApiFetchInit** = `RequestInit` & `object`
 
-Defined in: [lib/apiBase.ts:7](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/apiBase.ts#L7)
+Defined in: [lib/apiBase.ts:7](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/apiBase.ts#L7)
 
 #### Type Declaration
 
@@ -26,7 +26,7 @@ Defined in: [lib/apiBase.ts:7](https://github.com/wenakita/4626/blob/fd199051169
 
 > **apiAliasPath**(`path`): `string`
 
-Defined in: [lib/apiBase.ts:14](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/apiBase.ts#L14)
+Defined in: [lib/apiBase.ts:14](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/apiBase.ts#L14)
 
 #### Parameters
 
@@ -44,7 +44,7 @@ Defined in: [lib/apiBase.ts:14](https://github.com/wenakita/4626/blob/fd19905116
 
 > **apiFetch**(`path`, `init`, `bases?`): `Promise`\<`Response`\>
 
-Defined in: [lib/apiBase.ts:38](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/apiBase.ts#L38)
+Defined in: [lib/apiBase.ts:38](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/apiBase.ts#L38)
 
 Fetch an API route with a best-effort alias fallback:
 - try `/__api/*` first (to avoid extension blocks on `/api/*`)

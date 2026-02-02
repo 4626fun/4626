@@ -10,7 +10,7 @@
 
 ### ZoraCreator
 
-Defined in: [lib/zora-api.ts:8](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/zora-api.ts#L8)
+Defined in: [lib/zora-api.ts:8](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/zora-api.ts#L8)
 
 #### Properties
 
@@ -18,43 +18,43 @@ Defined in: [lib/zora-api.ts:8](https://github.com/wenakita/4626/blob/fd19905116
 
 > **address**: `string`
 
-Defined in: [lib/zora-api.ts:9](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/zora-api.ts#L9)
+Defined in: [lib/zora-api.ts:9](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/zora-api.ts#L9)
 
 ##### avatar?
 
 > `optional` **avatar**: `string`
 
-Defined in: [lib/zora-api.ts:12](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/zora-api.ts#L12)
+Defined in: [lib/zora-api.ts:12](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/zora-api.ts#L12)
 
 ##### description?
 
 > `optional` **description**: `string`
 
-Defined in: [lib/zora-api.ts:11](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/zora-api.ts#L11)
+Defined in: [lib/zora-api.ts:11](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/zora-api.ts#L11)
 
 ##### instagram?
 
 > `optional` **instagram**: `string`
 
-Defined in: [lib/zora-api.ts:15](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/zora-api.ts#L15)
+Defined in: [lib/zora-api.ts:15](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/zora-api.ts#L15)
 
 ##### name?
 
 > `optional` **name**: `string`
 
-Defined in: [lib/zora-api.ts:10](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/zora-api.ts#L10)
+Defined in: [lib/zora-api.ts:10](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/zora-api.ts#L10)
 
 ##### twitter?
 
 > `optional` **twitter**: `string`
 
-Defined in: [lib/zora-api.ts:14](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/zora-api.ts#L14)
+Defined in: [lib/zora-api.ts:14](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/zora-api.ts#L14)
 
 ##### website?
 
 > `optional` **website**: `string`
 
-Defined in: [lib/zora-api.ts:13](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/zora-api.ts#L13)
+Defined in: [lib/zora-api.ts:13](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/zora-api.ts#L13)
 
 ## Functions
 
@@ -62,7 +62,7 @@ Defined in: [lib/zora-api.ts:13](https://github.com/wenakita/4626/blob/fd1990511
 
 > **getZoraCreatorProfile**(`address`): `Promise`\<[`ZoraCreator`](#zoracreator) \| `null`\>
 
-Defined in: [lib/zora-api.ts:23](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/zora-api.ts#L23)
+Defined in: [lib/zora-api.ts:23](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/zora-api.ts#L23)
 
 Fetch creator profile from Zora
 Note: This uses Zora's GraphQL API - you may need to adjust based on their current schema
@@ -83,7 +83,7 @@ Note: This uses Zora's GraphQL API - you may need to adjust based on their curre
 
 > **mergeCreatorData**(`props`, `talent`, `zora`): `object`
 
-Defined in: [lib/zora-api.ts:75](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/zora-api.ts#L75)
+Defined in: [lib/zora-api.ts:75](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/zora-api.ts#L75)
 
 Merge creator data from multiple sources (Zora, Talent, props)
 Priority: Props > Talent > Zora

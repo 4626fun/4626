@@ -67,32 +67,39 @@ Result: **1 TOKEN deposited ≈ 1 ■TOKEN received** (clean UX)
 
 ## Token flow
 
+```mermaid
+flowchart LR
+    subgraph Input
+        TOKEN[TOKEN<br/>Creator Coin]
+    end
+    
+    subgraph Vault["Vault Layer"]
+        V[CreatorOVault]
+        VT[▢TOKEN<br/>Vault Shares]
+    end
+    
+    subgraph Wrapper["Wrapper Layer"]
+        W[Wrapper]
+        WT[■TOKEN<br/>ShareOFT]
+    end
+    
+    subgraph Usage["Token Usage"]
+        CCA[CCA Auction<br/>fair launch]
+        DEX[DEX Trading<br/>6.9% fee]
+        Bridge[Cross-chain<br/>LayerZero]
+    end
+    
+    TOKEN -->|deposit| V
+    V -->|mint| VT
+    VT -->|wrap| W
+    W -->|mint| WT
+    
+    WT --> CCA
+    WT --> DEX
+    WT --> Bridge
 ```
-                           DEPOSIT
-                              │
-                              ▼
-┌─────────────┐       ┌─────────────────┐       ┌─────────────┐
-│    TOKEN    │──────►│  CreatorOVault  │──────►│   ▢TOKEN    │
-│(Creator Coin)│       │   (ERC-4626)    │       │(Vault Shares)│
-└─────────────┘       └─────────────────┘       └─────────────┘
-                                                       │
-                                                       ▼ WRAP
-                                              ┌─────────────────┐
-                                              │     Wrapper     │
-                                              └─────────────────┘
-                                                       │
-                                                       ▼
-                                              ┌─────────────────┐
-                                              │     ■TOKEN      │
-                                              │  (ShareOFT)     │
-                                              └─────────────────┘
-                                                       │
-                              ┌─────────────────────────┼─────────────────────────┐
-                              │                         │                         │
-                              ▼                         ▼                         ▼
-                         CCA Auction              DEX Trading              Cross-chain
-                        (fair launch)            (with 6.9% fee)           (LayerZero)
-```
+
+**Legend:** TOKEN = underlying, ▢ = vault shares, ■ = wrapped OFT
 
 ---
 
