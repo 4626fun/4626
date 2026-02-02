@@ -26,21 +26,33 @@ This section provides a high-level introduction to the 4626 protocol.
 ## Core architecture
 
 ```
-+------------------+     +-----------------+
-|  Zora Creator    | --> |  CreatorOVault  |
-|  Coin (TOKEN)    |     |  (▢TOKEN)       |
-+------------------+     +-----------------+
-                               |
-         +---------------------+---------------------+
-         |                     |                     |
-         v                     v                     v
-+----------------+   +------------------+   +----------------+
-| CCA Strategy   |   | Charm Strategy   |   | Ajna Strategy  |
-| Auctions ■TOKEN|   | LPs with TOKEN   |   | Lends TOKEN    |
-+----------------+   +------------------+   +----------------+
+Creator Coin (TOKEN)
+        |
+        v
++------------------+
+|  CreatorOVault   |---> Issues ▢TOKEN (vault shares)
++------------------+            |
+        |                       v
+        |               +--------------+
+        |               |   Wrapper    |---> ■TOKEN (OFT)
+        |               +--------------+           |
+        |                                          v
+        |                              +-------------------+
+        |                              | CCA Strategy      |
+        |                              | Auctions ■TOKEN   |
+        |                              | for ETH           |
+        |                              +-------------------+
+        v
++------------------+   +------------------+
+| Charm Strategy   |   | Ajna Strategy    |
+| Deploys TOKEN    |   | Lends TOKEN      |
+| to V3 LP         |   | to Ajna pools    |
++------------------+   +------------------+
 ```
 
-**Key distinction:** The CCA strategy auctions wrapped share tokens (■TOKEN) during launch, while Charm and Ajna strategies deploy the underlying creator coin (TOKEN) for yield.
+**Key distinction:**
+- CCA auctions **■TOKEN** (wrapped shares) for ETH to bootstrap liquidity
+- Yield strategies deploy **TOKEN** (creator coin) for yield generation
 
 ---
 

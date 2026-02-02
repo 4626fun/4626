@@ -32,24 +32,37 @@ CreatorVault uses a multi-strategy approach to maximize yield while maintaining 
 Creator Coin (TOKEN) deposits
         |
         v
-+--------------------+
-|   CreatorOVault    |  <-- ERC-4626 vault
-| Issues ▢TOKEN shares|
-+--------------------+
++------------------------+
+|     CreatorOVault      |  ERC-4626 vault
++------------------------+
         |
-        +---> Idle buffer (9.61% TOKEN)
+        +---> Idle buffer (9.61% TOKEN for withdrawals)
         |
-        +---> Strategy allocation
-              |
-              +---> CCALaunchStrategy -----> Auctions ■TOKEN (wrapped shares)
-              |                              for price discovery
-              |
-              +---> CreatorCharmStrategy --> Deploys TOKEN to V3 LP
-              +---> AjnaStrategy ----------> Lends TOKEN to Ajna pools
-              +---> V4 Strategies ---------> Deploys TOKEN to V4 pools
+        +---> ▢TOKEN shares issued to depositor
+        |           |
+        |           v
+        |     +------------------+
+        |     |  Wrapper         |
+        |     +------------------+
+        |           |
+        |           v
+        |     ■TOKEN (OFT)
+        |           |
+        |           v
+        |     +------------------+
+        |     | CCA Strategy     |  Auctions ■TOKEN for ETH
+        |     +------------------+  (launch/price discovery)
+        |
+        +---> Yield strategies (deploy TOKEN directly)
+                    |
+                    +---> CreatorCharmStrategy (V3 LP)
+                    +---> AjnaStrategy (Lending)
+                    +---> V4 Strategies (V4 LP)
 ```
 
-**Important:** The CCA strategy is unique - it auctions wrapped share tokens (■TOKEN) to bootstrap liquidity and establish price. Other strategies deploy the underlying creator coin (TOKEN) directly for yield generation.
+**Key distinction:**
+- **CCA Strategy** auctions ■TOKEN (wrapped shares) for ETH during launch
+- **Yield Strategies** deploy TOKEN (creator coin) directly for yield
 
 ---
 

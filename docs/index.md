@@ -51,13 +51,27 @@ Welcome to the CreatorVault protocol documentation.
 Creator Coin (TOKEN)
         |
         v
-CreatorOVault (issues ▢TOKEN shares)
++-------------------+
+|   CreatorOVault   |
++-------------------+
         |
-        +---> CCA Strategy -----> Auctions ■TOKEN for launch
-        +---> Yield Strategies -> Deploy TOKEN for yield
+        +--> Issues ▢TOKEN (vault shares)
+        |           |
+        |           v
+        |    +------------------+
+        |    | Wrap via Wrapper |
+        |    +------------------+
+        |           |
+        |           v
+        |    ■TOKEN (OFT) -----> Cross-chain transfers
+        |           |
+        |           v
+        |    CCA Strategy -----> Auctions ■TOKEN for ETH
         |
-        v
-CreatorShareOFT (■TOKEN) -> Cross-chain transfers
+        +--> Yield Strategies -> Deploy TOKEN for yield
+                    |
+                    +---> Charm (V3 LP)
+                    +---> Ajna (Lending)
 ```
 
 ---

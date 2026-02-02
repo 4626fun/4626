@@ -46,29 +46,36 @@ Vaults use two types of strategies:
 ## Architecture overview
 
 ```
-Creator Coin (TOKEN)
-       |
-       v
-+--------------------+
-|   CreatorOVault    |  <-- ERC-4626 vault
-| Issues ▢TOKEN shares|
-+--------------------+
-       |
-       +-----> CreatorShareOFT (■TOKEN) -- Cross-chain via LayerZero
-       |
-       v
-+--------------------+
-|     Strategies     |
-+--------------------+
-       |
-       +---> CCA Strategy -----> Auctions ■TOKEN (wrapped shares)
-       |
-       +---> Charm Strategy ---> Deploys TOKEN (V3 LP)
-       |
-       +---> Ajna Strategy ----> Lends TOKEN
+                    Creator Coin (TOKEN)
+                           |
+                           v
+                  +-------------------+
+                  |   CreatorOVault   |  ERC-4626 vault
+                  +-------------------+
+                           |
+        +------------------+------------------+
+        |                                     |
+        v                                     v
+  Issues ▢TOKEN                      Deploys TOKEN to
+  (vault shares)                     yield strategies
+        |                                     |
+        v                                     +---> Charm (V3 LP)
+  +------------------+                        +---> Ajna (Lending)
+  | CreatorOVault    |                        +---> V4 Strategies
+  | Wrapper          |
+  +------------------+
+        |
+        v
+  ■TOKEN (CreatorShareOFT)
+        |
+        +---> Cross-chain transfers (LayerZero OFT)
+        |
+        +---> CCA Strategy auctions ■TOKEN for ETH
 ```
 
-**Key insight:** CCA auctions wrapped shares (■TOKEN) for price discovery, while yield strategies deploy the underlying creator coin (TOKEN).
+**Key insight:** 
+- **■TOKEN** (wrapped shares) is auctioned via CCA for price discovery
+- **TOKEN** (creator coin) is deployed to yield strategies for returns
 
 ---
 
