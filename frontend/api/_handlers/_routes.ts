@@ -83,8 +83,11 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'uniswap/query': () => import('./uniswap/_query.js'),
   'uniswap/poolHistory': () => import('./uniswap/_poolHistory.js'),
 
+  // Token metadata (ERC-7572) - supports both query param and path-based addresses
   'token/metadata': () => import('./token/_metadata.js'),
   'token/image': () => import('./token/_image.js'),
+  // Versioned API paths (v1/token/{address}/metadata and v1/token/{address}/image)
+  // These are handled dynamically in getApiHandler below
 
   'zora/coin': () => import('./zora/_coin.js'),
   'zora/explore': () => import('./zora/_explore.js'),
@@ -106,9 +109,39 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'admin/waitlist/deny': () => import('./admin/waitlist/_deny.js'),
 }
 
+// Match v1/token/{address}/metadata or v1/token/{address}/image patterns
+const V1_TOKEN_PATTERN = /^v1\/token\/([a-fA-F0-9x]+)\/(metadata|image)$/
+
 export async function getApiHandler(subpath: string): Promise<ApiHandler | null> {
+  // First, check for exact match in static routes
   const loader = apiRouteLoaders[subpath]
-  if (!loader) return null
-  const mod = await loader()
-  return typeof mod?.default === 'function' ? (mod.default as ApiHandler) : null
+  if (loader) {
+    const mod = await loader()
+    return typeof mod?.default === 'function' ? (mod.default as ApiHandler) : null
+  }
+
+  // Handle dynamic v1 token routes: v1/token/{address}/metadata or v1/token/{address}/image
+  const v1Match = subpath.match(V1_TOKEN_PATTERN)
+  if (v1Match) {
+    const [, address, action] = v1Match
+    const routeKey = `token/${action}` as keyof typeof apiRouteLoaders
+    const dynamicLoader = apiRouteLoaders[routeKey]
+    if (dynamicLoader) {
+      const mod = await dynamicLoader()
+      const baseHandler = mod?.default
+      if (typeof baseHandler === 'function') {
+        // Wrap the handler to inject the address from the path into query params
+        const wrappedHandler: ApiHandler = (req, res) => {
+          // Inject address from path into query if not already present
+          if (!req.query.address) {
+            req.query.address = address
+          }
+          return baseHandler(req, res)
+        }
+        return wrappedHandler
+      }
+    }
+  }
+
+  return null
 }

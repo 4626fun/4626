@@ -127,6 +127,8 @@ function localApiRoutesPlugin(): Plugin {
         '/api/onchain/coinMarketRewardsByCoin': () => import('./api/_handlers/onchain/_coinMarketRewardsByCoin'),
         '/api/onchain/coinMarketRewardsCurrency': () => import('./api/_handlers/onchain/_coinMarketRewardsCurrency'),
         '/api/onchain/coinTradeRewardsBatch': () => import('./api/_handlers/onchain/_coinTradeRewardsBatch'),
+        '/api/token/metadata': () => import('./api/_handlers/token/_metadata'),
+        '/api/token/image': () => import('./api/_handlers/token/_image'),
         '/api/zora/coin': () => import('./api/_handlers/zora/_coin'),
         '/api/zora/explore': () => import('./api/_handlers/zora/_explore'),
         '/api/zora/metrics': () => import('./api/_handlers/zora/_metrics'),
