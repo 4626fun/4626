@@ -492,9 +492,12 @@ function readDeploySessionHeaders(req: VercelRequest): { token: string; signatur
 const PAYOUT_ROUTER_CODE_ID = `0x${'ec3a19f83778a374ef791c3df99ec79478b68b0319515a6a7898b3c5d614a107'}` as const
 const VAULT_SHARE_BURN_STREAM_CODE_ID = `0x${'9b5e26f68c206df4fb41253da53c3c1d377334db21d566adbf41ac43fc711a21'}` as const
 
-// CreatorOVault runtime bytecode hash (EIP-170 safe; used for validating phase2 vault address)
-const CREATOR_OVAULT_RUNTIME_CODE_HASH =
-  `0x${'c78233e39d6cd4a86de4d70868329f503db425770d59d2341f874d41364c5f2f'}` as const
+// CreatorOVault runtime bytecode hashes (EIP-170 safe; used for validating phase2 vault address)
+// Include legacy + current deployments to avoid blocking upgraded bytecode.
+const CREATOR_OVAULT_RUNTIME_CODE_HASHES = [
+  `0x${'c78233e39d6cd4a86de4d70868329f503db425770d59d2341f874d41364c5f2f'}`,
+  `0x${'3655a668987b66cba4dd8f0ba37c3c3395ab9e32b80cb41ff7d00c4550201bc4'}`,
+] as const
 
 const BASE_WETH = getAddress(`0x${'4200000000000000000000000000000000000006'}`)
 const BASE_SWAP_ROUTER = getAddress(`0x${'2626664c2603336E57B271c5C0b26F421741e481'}`)
@@ -1092,9 +1095,10 @@ async function validateInnerCalls(params: {
     const vaultCode = (await client.getBytecode({ address: expectedVault })) as Hex | undefined
     if (!vaultCode || vaultCode === '0x') throw new Error('vault_not_deployed')
     const vaultCodeHash = keccak256(vaultCode)
-    if (vaultCodeHash.toLowerCase() !== CREATOR_OVAULT_RUNTIME_CODE_HASH.toLowerCase()) {
+    const allowedVaultHashes = CREATOR_OVAULT_RUNTIME_CODE_HASHES.map((h) => h.toLowerCase())
+    if (!allowedVaultHashes.includes(vaultCodeHash.toLowerCase())) {
       logger.warn('[Paymaster] vault_code_hash_mismatch', {
-        expected: CREATOR_OVAULT_RUNTIME_CODE_HASH,
+        expected: CREATOR_OVAULT_RUNTIME_CODE_HASHES,
         actual: vaultCodeHash,
         vault: expectedVault,
         creatorToken: expectedCreatorToken,
