@@ -3,7 +3,7 @@ import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
-  title: 'CreatorVault Docs',
+  title: '4626.fun Docs',
   tagline: 'Documentation for the 4626 protocol',
   favicon: 'brand/favicon.svg',
 
@@ -48,9 +48,9 @@ const config: Config = {
   themeConfig: {
     image: 'brand/social-card.svg',
     navbar: {
-      title: 'CreatorVault',
+      title: '4626.fun',
       logo: {
-        alt: 'CreatorVault Logo',
+        alt: '4626.fun Logo',
         src: 'brand/logo.svg',
       },
       items: [
@@ -106,7 +106,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `© ${new Date().getFullYear()} CreatorVault · Built on Base`,
+      copyright: `© ${new Date().getFullYear()} 4626.fun · Built on Base`,
     },
     prism: {
       theme: prismThemes.github,
