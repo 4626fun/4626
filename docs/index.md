@@ -8,27 +8,58 @@ slug: /
 
 Welcome to the CreatorVault protocol documentation.
 
-Use the sidebar to explore:
+---
 
-- **Overview** — System architecture, strategies, and account abstraction
-- **Contracts** — Smart contract details, keepers, and lottery mechanics
-- **Frontend** — UI components and Vibeship integration
-- **Integrations** — Farcaster, Solana, and external systems
-- **Operations** — Deployment, automation, and infrastructure
-- **Governance** — VE33 and protocol governance
-- **Guides** — Tutorials and troubleshooting
-- **Reference** — Technical specifications and debugging
+## Quick start
 
-## Quick links
+| Goal | Documentation |
+|------|---------------|
+| Understand the protocol | [Introduction](/overview/introduction) |
+| Deploy a vault | [Pre-launch checklist](/operations/deployment/pre-launch) |
+| Integrate with 4626 | [Contract overview](/contracts) |
+| Use governance | [ve(3,3) system](/governance) |
 
-| Topic | Description |
-|-------|-------------|
-| [Account abstraction activation](/overview/account-abstraction/activation) | 1-click vault activation with ERC-4337 |
-| [Strategy architecture](/overview/architecture/strategy-architecture) | How vault strategies work |
-| [Deployment guide](/operations/deployment/pre-launch) | Pre-launch verification checklist |
+---
 
-## Documentation Model
+## Documentation sections
 
-This documentation is curated from `4626/docs/`. Source code lives in `contracts/` and `frontend/`, but docs describe behavior — they don't mirror code 1:1.
+| Section | Description |
+|---------|-------------|
+| [Overview](/overview) | Architecture, strategies, and core concepts |
+| [Contracts](/contracts) | Smart contract documentation |
+| [Operations](/operations) | Deployment and automation |
+| [Governance](/governance) | ve(3,3) voting and bribes |
+| [Integrations](/integrations) | Cross-chain and external systems |
+| [Guides](/guides) | Tutorials and troubleshooting |
+| [API Reference](/api) | Auto-generated contract and frontend docs |
 
-> **Contributing:** Edit files in `4626/docs/`, not `apps/docs-site/docs/`.
+---
+
+## Key concepts
+
+### Token notation
+
+| Symbol | Description | Contract |
+|--------|-------------|----------|
+| TOKEN | Creator coin | Zora Creator Coin |
+| ▢TOKEN | Vault shares | CreatorOVault |
+| ■TOKEN | Wrapped shares (OFT) | CreatorShareOFT |
+
+### Architecture
+
+```
+Creator Coin -> CreatorOVault -> Strategies -> Yield
+                    |
+                    v
+              CreatorShareOFT (■TOKEN) -> Cross-chain
+```
+
+---
+
+## Contributing
+
+Edit files in `4626/docs/`, not `apps/docs-site/docs/`.
+
+The docs site syncs from source documentation and auto-generates API references from:
+- Contract NatSpec comments (`forge doc`)
+- Frontend TypeScript types (`typedoc`)
