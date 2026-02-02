@@ -109,6 +109,18 @@ const AA_DEBUG = isDebugEnabled()
 
 const HEX_STRING_RE = /^0x[0-9a-fA-F]+$/
 
+function resolveDirectPaymasterUrl(): string | null {
+  const rawPaymaster = (import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined)?.trim() || ''
+  const apiKey = (import.meta.env.VITE_CDP_API_KEY as string | undefined)?.trim() || ''
+  const isProxy =
+    rawPaymaster === '/api/paymaster' ||
+    rawPaymaster.endsWith('/api/paymaster') ||
+    rawPaymaster.includes('/api/paymaster?')
+  if (rawPaymaster && !isProxy) return rawPaymaster
+  if (apiKey) return `https://api.developer.coinbase.com/rpc/v1/base/${apiKey}`
+  return null
+}
+
 function formatGasValue(value: unknown): string | null {
   if (typeof value === 'bigint') return value.toString()
   if (typeof value === 'number') return Math.trunc(value).toString()
@@ -860,20 +872,35 @@ export async function sendCrossAppUserOperation(params: {
 
   // Set up bundler + paymaster (uses CDP for gas sponsorship)
   const sessionToken = typeof window !== 'undefined' ? getStoredSessionToken() : null
-  const transport = http(bundlerUrl, {
+  let transport = http(bundlerUrl, {
     fetchOptions: {
       credentials: 'include',
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
     },
   })
-  const paymasterClient = createPaymasterClient({ transport })
-  const bundlerClient = createBundlerClient({
+  let paymasterClient = createPaymasterClient({ transport })
+  let bundlerClient = createBundlerClient({
     client: publicClient as any,
     transport,
   })
+  let activeBundlerUrl = bundlerUrl
+  const buildClients = (url: string, includeSession: boolean) => {
+    transport = http(url, {
+      fetchOptions: {
+        credentials: includeSession ? 'include' : undefined,
+        headers: includeSession && sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
+      },
+    })
+    paymasterClient = createPaymasterClient({ transport })
+    bundlerClient = createBundlerClient({
+      client: publicClient as any,
+      transport,
+    })
+    activeBundlerUrl = url
+  }
 
   // ENFORCE: Verify bundler supports EntryPoint v0.6 before sending
-  await verifyBundlerSupportsV06(bundlerUrl)
+  await verifyBundlerSupportsV06(activeBundlerUrl)
 
   // Send the UserOperation - this will:
   // 1. Build the UserOp
@@ -1280,6 +1307,24 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }
 
   await attemptSend(true)
+
+  const directPaymasterUrl = resolveDirectPaymasterUrl()
+  if (
+    lastError &&
+    isPaymasterUnavailableError(lastError) &&
+    directPaymasterUrl &&
+    directPaymasterUrl !== activeBundlerUrl
+  ) {
+    logger.warn('[ERC-4337] Paymaster proxy unavailable; retrying direct CDP endpoint', {
+      proxy: activeBundlerUrl,
+      direct: directPaymasterUrl,
+    })
+    buildClients(directPaymasterUrl, false)
+    await verifyBundlerSupportsV06(activeBundlerUrl)
+    lastError = null
+    userOpHash = null
+    await attemptSend(true)
+  }
 
   const shouldFallbackWithoutPaymaster = (error: unknown): boolean => {
     const hasPrefundBalance = typeof smartWalletBalance === 'bigint' && smartWalletBalance > 0n
