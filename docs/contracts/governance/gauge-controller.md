@@ -7,6 +7,12 @@ sidebar_position: 1
 
 Fee collection and distribution hub for creator vaults.
 
+> **Summary**
+> - Central fee routing for all protocol revenue
+> - Receives fees from ShareOFT trades and V4 tax hooks
+> - Distributes to lottery (69%), burn (21.39%), and voters (9.61%)
+> - Accumulates until threshold before distributing
+
 ---
 
 ## Source

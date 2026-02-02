@@ -7,6 +7,12 @@ sidebar_position: 1
 
 Shared lottery service for all creator coins with cross-chain prize distribution.
 
+> **Summary**
+> - Shared service deployed once per chain, serves all creator vaults
+> - Processes lottery entries from ShareOFT buy transactions
+> - Winners receive prizes from all active vaults (diversified portfolio)
+> - Uses Chainlink VRF for verifiable randomness
+
 ---
 
 ## Source
@@ -98,6 +104,8 @@ flowchart TD
     Winner -->|payout| Prize[Multi-token Prize]
 ```
 
+*Every qualifying trade automatically enters the lottery. VRF ensures fair randomness.*
+
 ### Cross-chain winner flow
 
 ```mermaid
@@ -116,6 +124,8 @@ flowchart LR
     L2 -->|pay local jackpots| Winner
     L3 -->|pay local jackpots| Winner
 ```
+
+*Winners are announced on all chains. Each chain pays from its local jackpot reserves.*
 
 ---
 

@@ -7,6 +7,12 @@ sidebar_position: 1
 
 ERC-4626 compliant tokenized vault for creator coins with multi-strategy yield generation.
 
+> **Summary**
+> - Holds custody of the underlying creatorCoin
+> - Issues ▢[creatorCoin] shares representing proportional ownership
+> - Coordinates capital deployment to yield strategies
+> - Strategies only receive creatorCoin, never vault shares
+
 ---
 
 ## Source
@@ -91,6 +97,8 @@ flowchart LR
     Vault -->|update| Balance[coinBalance]
 ```
 
+*Users deposit the underlying creatorCoin and receive ▢shares as a receipt.*
+
 ### Strategy deployment flow
 
 ```mermaid
@@ -101,7 +109,7 @@ flowchart LR
     C -->|supply| S2[Strategy 2]
 ```
 
-The vault allocates creatorCoin to strategies. Strategies only receive creatorCoin, never vault shares.
+*Strategies only receive creatorCoin. Vault shares never leave the accounting layer.*
 
 ### Withdrawal flow
 
@@ -113,6 +121,8 @@ flowchart TD
     Decision -->|yes| Queue[Queue withdrawal]
     Queue -->|wait| Claim[Claim after delay]
 ```
+
+*Large withdrawals are queued to prevent bank-run scenarios.*
 
 ---
 

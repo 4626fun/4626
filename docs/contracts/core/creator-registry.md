@@ -7,6 +7,12 @@ sidebar_position: 0
 
 Global registry for CreatorVault deployments and ecosystem configuration.
 
+> **Summary**
+> - Single source of truth for all creator vault addresses
+> - Provides reverse lookups (vault → token, ShareOFT → token)
+> - Manages LayerZero and cross-chain configuration
+> - Only authorized factories can register new creator coins
+
 ---
 
 ## Source

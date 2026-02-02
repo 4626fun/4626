@@ -7,6 +7,12 @@ sidebar_position: 3
 
 LayerZero OFT (Omnichain Fungible Token) for cross-chain share transfers with integrated buy fee and lottery.
 
+> **Summary**
+> - The user-facing tradeable token (■[creatorCoin])
+> - Wraps vault shares for DEX listing and bridging
+> - Collects 6.9% fee on DEX purchases
+> - Triggers lottery entries on qualifying trades
+
 ---
 
 ## Source

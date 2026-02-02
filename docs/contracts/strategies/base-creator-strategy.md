@@ -7,6 +7,12 @@ sidebar_position: 0
 
 Abstract base contract for all CreatorOVault yield strategies.
 
+> **Summary**
+> - Defines the common interface for all yield strategies
+> - Strategies only receive creatorCoin, never vault shares
+> - Concrete strategies implement protocol-specific logic
+> - Single-token pattern: one strategy manages one token
+
 ---
 
 ## Source
