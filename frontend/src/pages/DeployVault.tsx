@@ -1311,7 +1311,7 @@ function DeployVaultBatcher({
       lower.includes('missing paymaster url') ||
       lower.includes('missing paymaster')
     ) {
-      return 'Bundler / paymaster is not configured. Set `VITE_CDP_API_KEY` (recommended) or `VITE_CDP_PAYMASTER_URL=/api/paymaster` (and configure `CDP_PAYMASTER_URL` server-side) and retry.'
+      return 'Bundler / paymaster is not configured. Set `VITE_CDP_PAYMASTER_URL=/api/paymaster` and configure `CDP_PAYMASTER_URL` server-side, then retry.'
     }
     if (lower.includes('no_session') || lower.includes('not authenticated') || lower.includes('request denied - no_session')) {
       return `Gas sponsorship requires a session. Click “${switchAuthLabel ?? 'Sign in with wallet'}” and retry.`
@@ -2430,8 +2430,7 @@ function DeployVaultBatcher({
             logger.info(`[DeployVault] Using Coinbase Wallet direct for ${logPhaseLabel}`)
             
             const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-            const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
-            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv) || '/api/paymaster'
+            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
 
             await ensureBaseChain('Coinbase Wallet')
             
@@ -2487,8 +2486,7 @@ function DeployVaultBatcher({
             })
 
             const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-            const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
-            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv) || '/api/paymaster'
+            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
 
             await ensureProviderOnBase(smartWalletClient, 'Privy smart wallet')
 
@@ -2685,8 +2683,7 @@ function DeployVaultBatcher({
             }
             
             const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-            const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
-            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv) || '/api/paymaster'
+            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
             
             // Get the embedded wallet's Ethereum provider for signing
             const embeddedProvider = await (embeddedPrivyWallet as any).getEthereumProvider()
@@ -2879,8 +2876,7 @@ function DeployVaultBatcher({
             logger.info(`[DeployVault] Using ERC-4337 via connected EOA for ${logPhaseLabel}`)
             
             const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-            const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
-            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv) || '/api/paymaster'
+            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
 
             await ensureBaseChain('your wallet')
             
@@ -3506,10 +3502,9 @@ function DeployVaultMain() {
     return raw === 'waitlist'
   }, [searchParams])
   const baseEase = useMemo(() => [0.4, 0, 0.2, 1] as const, [])
-  const cdpApiKey = import.meta.env.VITE_CDP_API_KEY as string | undefined
   const cdpPaymasterUrl = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
   const paymasterStatus = useMemo(() => {
-    const paymasterUrl = resolveCdpPaymasterUrl(cdpPaymasterUrl ?? null, cdpApiKey)
+    const paymasterUrl = resolveCdpPaymasterUrl(cdpPaymasterUrl ?? null)
     if (!paymasterUrl || typeof paymasterUrl !== 'string') {
       return { ok: false, hint: 'missing' }
     }
@@ -3519,7 +3514,7 @@ function DeployVaultMain() {
     } catch {
       return { ok: true, hint: 'configured' }
     }
-  }, [cdpApiKey, cdpPaymasterUrl])
+  }, [cdpPaymasterUrl])
 
   // Smooth waitlist → deploy:
   // If we arrived with `autologin=1`, prompt Privy login on the app host and bridge into a CreatorVault session.
@@ -3961,8 +3956,7 @@ function DeployVaultMain() {
       // Try ERC-4337 first for ALL wallets (gas-free via paymaster)
       // Any owner can sign UserOps for a Coinbase Smart Wallet
       const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-      const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
-      const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv) || '/api/paymaster'
+      const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
       
       try {
         logger.info('[DeployVault] Trying ERC-4337 to add Privy SW as owner (gas-free)', {
@@ -4104,8 +4098,7 @@ function DeployVaultMain() {
       }
 
       const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-      const apiKeyEnv = import.meta.env.VITE_CDP_API_KEY as string | undefined
-      const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv, apiKeyEnv) || '/api/paymaster'
+      const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
 
       try {
         logger.info('[DeployVault] Trying ERC-4337 to add app smart wallet as owner (gas-free)', {

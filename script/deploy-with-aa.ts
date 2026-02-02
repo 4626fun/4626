@@ -37,11 +37,11 @@ const CONFIG = {
     rpcUrl: process.env.BASE_RPC_URL || 'https://mainnet.base.org',
     
     // Coinbase Paymaster & Bundler (same endpoint for both!)
-    // This is your Coinbase Developer Platform endpoint
-    bundlerUrl: process.env.BUNDLER_URL || 'https://api.developer.coinbase.com/rpc/v1/base/FU03TBCP7rh2TjOaHlZwR2ZFeUCe3FxD',
+    // Set BUNDLER_URL / PAYMASTER_URL to your CDP endpoint.
+    bundlerUrl: process.env.BUNDLER_URL || '',
     
     // Coinbase Paymaster (same as bundler for CDP)
-    paymasterUrl: process.env.PAYMASTER_URL || 'https://api.developer.coinbase.com/rpc/v1/base/FU03TBCP7rh2TjOaHlZwR2ZFeUCe3FxD',
+    paymasterUrl: process.env.PAYMASTER_URL || '',
     
     // Contract Addresses (deployed on Base)
     contracts: {
@@ -56,6 +56,13 @@ const CONFIG = {
     // Private key for signing (owner of smart account)
     privateKey: process.env.PRIVATE_KEY as Hex,
 };
+
+if (!CONFIG.bundlerUrl) {
+    throw new Error('Missing BUNDLER_URL. Set it to your CDP endpoint.');
+}
+if (!CONFIG.paymasterUrl) {
+    throw new Error('Missing PAYMASTER_URL. Set it to your CDP endpoint.');
+}
 
 // =================================
 // ABIS (simplified)

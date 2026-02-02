@@ -1,9 +1,6 @@
-export function resolveCdpPaymasterUrl(
-  paymaster: string | null | undefined,
-  apiKey: string | undefined,
-): string | null {
+export function resolveCdpPaymasterUrl(paymaster: string | null | undefined): string | null {
   const origin = typeof window !== 'undefined' ? window.location?.origin : null
-  const forceProxy = Boolean(origin && import.meta.env.PROD && (paymaster || apiKey))
+  const forceProxy = Boolean(origin && import.meta.env.PROD && paymaster)
   if (forceProxy && origin) {
     return `${origin}/api/paymaster`
   }
@@ -35,6 +32,5 @@ export function resolveCdpPaymasterUrl(
   }
 
   if (paymaster && typeof paymaster === 'string') return normalizePaymasterUrl(paymaster)
-  if (apiKey) return `https://api.developer.coinbase.com/rpc/v1/base/${apiKey}`
   return null
 }
