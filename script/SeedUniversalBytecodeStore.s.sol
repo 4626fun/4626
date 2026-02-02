@@ -20,15 +20,24 @@ contract SeedUniversalBytecodeStore is Script {
     address constant DEFAULT_BYTECODE_STORE = 0x2b5c97c488B96063153D530e06c34dD5272F3904;
     uint256 constant MAX_SSTORE2_BYTES = 24_575; // EIP-170 runtime limit (24,576) minus STOP prefix.
 
+    function _shouldProcess(uint256 index, uint256 offset, uint256 limit) internal pure returns (bool) {
+        if (limit == 0) return true;
+        return index >= offset && index < offset + limit;
+    }
+
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address storeAddr = vm.envOr("UNIVERSAL_BYTECODE_STORE", DEFAULT_BYTECODE_STORE);
+        uint256 seedOffset = vm.envOr("SEED_OFFSET", uint256(0));
+        uint256 seedLimit = vm.envOr("SEED_LIMIT", uint256(0));
         address broadcaster = vm.addr(pk);
 
         console2.log("Broadcaster:", broadcaster);
         console2.log("Broadcaster balance (ETH):", broadcaster.balance);
 
         console2.log("UniversalBytecodeStore:", storeAddr);
+        console2.log("Seed offset:", seedOffset);
+        console2.log("Seed limit:", seedLimit);
         UniversalBytecodeStore store = UniversalBytecodeStore(storeAddr);
 
         bool supportsChunking = _supportsChunking(storeAddr);
@@ -43,48 +52,73 @@ contract SeedUniversalBytecodeStore is Script {
         }
 
         vm.startBroadcast(pk);
-        _storeIfMissing(
-            store,
-            vm.getCode("out/OFTBootstrapRegistry.sol/OFTBootstrapRegistry.json"),
-            "OFTBootstrapRegistry",
-            supportsChunking
-        );
-        _storeIfMissing(store, vm.getCode("out/CreatorShareOFT.sol/CreatorShareOFT.json"), "CreatorShareOFT", supportsChunking);
-        _storeIfMissing(store, vm.getCode("out/CreatorOVault.sol/CreatorOVault.json"), "CreatorOVault", supportsChunking);
-        _storeIfMissing(
-            store,
-            vm.getCode("out/CreatorOVaultWrapper.sol/CreatorOVaultWrapper.json"),
-            "CreatorOVaultWrapper",
-            supportsChunking
-        );
-        _storeIfMissing(
-            store,
-            vm.getCode("out/CreatorGaugeController.sol/CreatorGaugeController.json"),
-            "CreatorGaugeController",
-            supportsChunking
-        );
-        _storeIfMissing(store, vm.getCode("out/CCALaunchStrategy.sol/CCALaunchStrategy.json"), "CCALaunchStrategy", supportsChunking);
-        _storeIfMissing(store, vm.getCode("out/CreatorOracle.sol/CreatorOracle.json"), "CreatorOracle", supportsChunking);
-        _storeIfMissing(store, vm.getCode("out/PayoutRouter.sol/PayoutRouter.json"), "PayoutRouter", supportsChunking);
-        _storeIfMissing(
-            store,
-            vm.getCode("out/VaultShareBurnStream.sol/VaultShareBurnStream.json"),
-            "VaultShareBurnStream",
-            supportsChunking
-        );
-        _storeIfMissing(
-            store,
-            vm.getCode("out/CharmAlphaVaultDeploy.sol/CharmAlphaVaultDeploy.json"),
-            "CharmAlphaVaultDeploy",
-            supportsChunking
-        );
-        _storeIfMissing(
-            store,
-            vm.getCode("out/CreatorCharmStrategy.sol/CreatorCharmStrategy.json"),
-            "CreatorCharmStrategy",
-            supportsChunking
-        );
-        _storeIfMissing(store, vm.getCode("out/AjnaStrategy.sol/AjnaStrategy.json"), "AjnaStrategy", supportsChunking);
+        uint256 i = 0;
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(
+                store,
+                vm.getCode("out/OFTBootstrapRegistry.sol/OFTBootstrapRegistry.json"),
+                "OFTBootstrapRegistry",
+                supportsChunking
+            );
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/CreatorShareOFT.sol/CreatorShareOFT.json"), "CreatorShareOFT", supportsChunking);
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/CreatorOVault.sol/CreatorOVault.json"), "CreatorOVault", supportsChunking);
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(
+                store,
+                vm.getCode("out/CreatorOVaultWrapper.sol/CreatorOVaultWrapper.json"),
+                "CreatorOVaultWrapper",
+                supportsChunking
+            );
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(
+                store,
+                vm.getCode("out/CreatorGaugeController.sol/CreatorGaugeController.json"),
+                "CreatorGaugeController",
+                supportsChunking
+            );
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/CCALaunchStrategy.sol/CCALaunchStrategy.json"), "CCALaunchStrategy", supportsChunking);
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/CreatorOracle.sol/CreatorOracle.json"), "CreatorOracle", supportsChunking);
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/PayoutRouter.sol/PayoutRouter.json"), "PayoutRouter", supportsChunking);
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(
+                store,
+                vm.getCode("out/VaultShareBurnStream.sol/VaultShareBurnStream.json"),
+                "VaultShareBurnStream",
+                supportsChunking
+            );
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(
+                store,
+                vm.getCode("out/CharmAlphaVaultDeploy.sol/CharmAlphaVaultDeploy.json"),
+                "CharmAlphaVaultDeploy",
+                supportsChunking
+            );
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(
+                store,
+                vm.getCode("out/CreatorCharmStrategy.sol/CreatorCharmStrategy.json"),
+                "CreatorCharmStrategy",
+                supportsChunking
+            );
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/AjnaStrategy.sol/AjnaStrategy.json"), "AjnaStrategy", supportsChunking);
+        }
         vm.stopBroadcast();
     }
 

@@ -240,10 +240,10 @@ AJNA_QUOTE_TOKEN="$ZORA"
 
 ## 📚 Related Documentation
 
-- [Ajna Strategy Deployment](./AJNA_DEPLOYMENT.md)
-- [Ajna Bucket Calculator](./AJNA_BUCKET_CALCULATOR.md)
-- [Creator Ajna Guide](./CREATOR_AJNA_GUIDE.md)
-- [Account Abstraction Activation](./AA_ACTIVATION.md)
+- [Ajna Strategy Deployment](../strategies/ajna/AJNA_DEPLOYMENT.md)
+- [Ajna Bucket Calculator](../strategies/ajna/AJNA_BUCKET_CALCULATOR.md)
+- [Creator Ajna Guide](../strategies/ajna/CREATOR_AJNA_GUIDE.md)
+- [Account Abstraction Activation](../account-abstraction/AA_ACTIVATION.md)
 
 ---
 

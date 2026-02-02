@@ -19,6 +19,7 @@
     "@coinbase/wallet-sdk": "4.3.7",
     "@farcaster/auth-client": "^0.7.0",
     "@farcaster/auth-kit": "^0.8.1",
+    "@farcaster/miniapp-node": "^0.1.12",
     "@farcaster/miniapp-sdk": "^0.2.1",
     "@farcaster/miniapp-wagmi-connector": "^1.1.0",
     "@farcaster/quick-auth": "^0.0.8",
