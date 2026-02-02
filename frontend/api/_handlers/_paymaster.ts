@@ -489,8 +489,11 @@ function readDeploySessionHeaders(req: VercelRequest): { token: string; signatur
 }
 
 // Payout routing (Base mainnet)
-const PAYOUT_ROUTER_CODE_ID = `0x${'ec3a19f83778a374ef791c3df99ec79478b68b0319515a6a7898b3c5d614a107'}` as const
-const VAULT_SHARE_BURN_STREAM_CODE_ID = `0x${'9b5e26f68c206df4fb41253da53c3c1d377334db21d566adbf41ac43fc711a21'}` as const
+// IMPORTANT: These MUST match `keccak256(<creationBytecode>)` for the versions deployed/used by the frontend.
+// If `script/generate_frontend_deploy_bytecode.sh` changes (i.e. bytecode updates), these must be updated too,
+// otherwise the paymaster will query a missing `codeId` and revert with CODE_NOT_FOUND.
+const PAYOUT_ROUTER_CODE_ID = `0x${'2fa908e7520c07b5e5b42bfb66644a9fb44a11038e043422a6917d8c696b6aba'}` as const
+const VAULT_SHARE_BURN_STREAM_CODE_ID = `0x${'36db7e3689800ab8433c75b2cb17deec8296fbea2515f32b4364d2d4de9e9d8b'}` as const
 
 const BYTECODE_STORE_ABI = [
   {

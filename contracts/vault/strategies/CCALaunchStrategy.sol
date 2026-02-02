@@ -588,8 +588,9 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         // mps = MPS (100% = 10,000,000 mps over entire duration)
         uint24 mpsPerBlock = uint24(MPS / duration);
         
-        // Pack: first 24 bits = mps, next 40 bits = blockDelta
-        bytes8 packed = bytes8(uint64(mpsPerBlock) | (uint64(duration) << 24));
+        // Pack: HIGH 24 bits = mps, LOW 40 bits = blockDelta
+        // StepLib.parse() expects: mps = uint24(bytes3(data)), blockDelta = uint40(uint64(data))
+        bytes8 packed = bytes8((uint64(mpsPerBlock) << 40) | uint64(duration));
         
         return abi.encodePacked(packed);
     }
@@ -607,17 +608,20 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         // Use uint256 for intermediate calculations to avoid overflow
         uint256 mpsValue = uint256(MPS);
         
+        // Pack format: HIGH 24 bits = mps, LOW 40 bits = blockDelta
+        // StepLib.parse() expects: mps = uint24(bytes3(data)), blockDelta = uint40(uint64(data))
+        
         // Phase 1: 20% over 50% of time = slow
         uint24 mps1 = uint24((mpsValue * 2000) / 10000 / phase1Duration); // 20% / phase1
-        bytes8 packed1 = bytes8(uint64(mps1) | (uint64(phase1Duration) << 24));
+        bytes8 packed1 = bytes8((uint64(mps1) << 40) | uint64(phase1Duration));
         
         // Phase 2: 30% over 25% of time = medium
         uint24 mps2 = uint24((mpsValue * 3000) / 10000 / phase2Duration);
-        bytes8 packed2 = bytes8(uint64(mps2) | (uint64(phase2Duration) << 24));
+        bytes8 packed2 = bytes8((uint64(mps2) << 40) | uint64(phase2Duration));
         
         // Phase 3: 50% over 25% of time = fast
         uint24 mps3 = uint24((mpsValue * 5000) / 10000 / phase3Duration);
-        bytes8 packed3 = bytes8(uint64(mps3) | (uint64(phase3Duration) << 24));
+        bytes8 packed3 = bytes8((uint64(mps3) << 40) | uint64(phase3Duration));
         
         return abi.encodePacked(packed1, packed2, packed3);
     }
@@ -650,9 +654,11 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         uint256 issued2 = uint256(mps2) * uint256(phase2Blocks);
         uint24 mps3 = uint24(MPS - uint24(issued1 + issued2)); // remainder (includes rounding slack)
 
-        bytes8 packed1 = bytes8(uint64(mps1) | (uint64(phase1Blocks) << 24));
-        bytes8 packed2 = bytes8(uint64(mps2) | (uint64(phase2Blocks) << 24));
-        bytes8 packed3 = bytes8(uint64(mps3) | (uint64(lastBlock) << 24));
+        // Pack format: HIGH 24 bits = mps, LOW 40 bits = blockDelta
+        // StepLib.parse() expects: mps = uint24(bytes3(data)), blockDelta = uint40(uint64(data))
+        bytes8 packed1 = bytes8((uint64(mps1) << 40) | uint64(phase1Blocks));
+        bytes8 packed2 = bytes8((uint64(mps2) << 40) | uint64(phase2Blocks));
+        bytes8 packed3 = bytes8((uint64(mps3) << 40) | uint64(lastBlock));
 
         return abi.encodePacked(packed1, packed2, packed3);
     }

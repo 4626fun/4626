@@ -104,6 +104,10 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     /// @notice Tax config delegate (can call setTaxConfig on hooks on behalf of this token)
     address public taxConfigDelegate;
     
+    /// @notice ERC-7572 contract-level metadata URI
+    /// @dev Returns a URL to JSON metadata including token image, description, etc.
+    string private _contractURI;
+    
     // ================================
     // EVENTS
     // ================================
@@ -121,6 +125,9 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     event MinterUpdated(address indexed minter, bool status);
     event TaxConfigDelegateSet(address indexed delegate);
     event TaxHookConfigured(address indexed hook, address recipient, uint256 taxRate);
+    
+    /// @notice ERC-7572: Emitted when contract URI is updated
+    event ContractURIUpdated();
     
     // ================================
     // ERRORS
@@ -526,6 +533,60 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      */
     function description() external pure returns (string memory) {
         return "CreatorVault Share Token - Represents proportional ownership of assets in a Creator Coin Omnichain Vault. Enables cross-chain transfers via LayerZero.";
+    }
+    
+    // ================================
+    // ERC-7572 CONTRACT METADATA
+    // ================================
+    
+    /**
+     * @notice ERC-7572 contract-level metadata URI
+     * @dev Returns a URL pointing to JSON metadata with token info including:
+     *      - name, symbol, decimals
+     *      - description
+     *      - image (framed creator coin logo)
+     *      - external_link
+     *      - properties (vault, underlying asset, supported chains, etc.)
+     * 
+     * @return URI string pointing to JSON metadata
+     *         Default: https://api.4626.fun/v1/token/{address}/metadata
+     */
+    function contractURI() external view returns (string memory) {
+        // If custom URI is set, use it
+        if (bytes(_contractURI).length > 0) {
+            return _contractURI;
+        }
+        // Default to dynamic API endpoint
+        return string(abi.encodePacked(
+            "https://api.4626.fun/v1/token/",
+            _toHexString(address(this)),
+            "/metadata"
+        ));
+    }
+    
+    /**
+     * @notice Set custom contract metadata URI
+     * @param uri New metadata URI (empty string to use default)
+     */
+    function setContractURI(string calldata uri) external onlyOwner {
+        _contractURI = uri;
+        emit ContractURIUpdated();
+    }
+    
+    /**
+     * @dev Convert address to lowercase hex string
+     */
+    function _toHexString(address addr) internal pure returns (string memory) {
+        bytes memory alphabet = "0123456789abcdef";
+        bytes memory str = new bytes(42);
+        str[0] = "0";
+        str[1] = "x";
+        uint160 value = uint160(addr);
+        for (uint256 i = 41; i > 1; i--) {
+            str[i] = alphabet[value & 0xf];
+            value >>= 4;
+        }
+        return string(str);
     }
     
     // ================================

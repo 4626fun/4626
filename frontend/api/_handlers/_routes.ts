@@ -83,6 +83,9 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'uniswap/query': () => import('./uniswap/_query.js'),
   'uniswap/poolHistory': () => import('./uniswap/_poolHistory.js'),
 
+  'token/metadata': () => import('./token/_metadata.js'),
+  'token/image': () => import('./token/_image.js'),
+
   'zora/coin': () => import('./zora/_coin.js'),
   'zora/explore': () => import('./zora/_explore.js'),
   'zora/metrics': () => import('./zora/_metrics.js'),
