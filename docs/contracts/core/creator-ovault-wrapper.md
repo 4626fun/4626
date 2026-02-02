@@ -7,207 +7,113 @@ sidebar_position: 2
 
 Converts between vault shares (▢TOKEN) and wrapped OFT shares (■TOKEN) with normalization.
 
-**Source:** `contracts/vault/CreatorOVaultWrapper.sol`
+---
+
+## Source
+
+| Contract | Path |
+|----------|------|
+| CreatorOVaultWrapper | [`contracts/vault/CreatorOVaultWrapper.sol`](https://github.com/wenakita/4626/blob/main/contracts/vault/CreatorOVaultWrapper.sol) |
 
 ---
 
-## Overview
+## Purpose
 
-The wrapper provides bidirectional conversion between ▢TOKEN and ■TOKEN, normalizing the vault's 1000x decimals offset so users see intuitive amounts.
+The wrapper normalizes the vault's 1000x decimals offset so users see intuitive token amounts. Without the wrapper, a user depositing 100 TOKEN would receive 100,000 ▢TOKEN. The wrapper converts this to 100 ■TOKEN.
 
----
-
-## Normalization
-
-The vault uses a `10^3` decimals offset for security. The wrapper normalizes this:
-
-| Direction | Conversion |
-|-----------|------------|
-| Wrap | ▢TOKEN / 1000 = ■TOKEN |
-| Unwrap | ■TOKEN × 1000 = ▢TOKEN |
-
-**Example:**
-- Deposit 100 AKITA → 100,000 ▢AKITA → Wrap → 100 ■AKITA
-- Unwrap 100 ■AKITA → 100,000 ▢AKITA → Withdraw → 100 AKITA
-
-**Result:** 1 TOKEN ≈ 1 ■TOKEN (clean UX)
+This normalization layer exists because:
+- The vault requires a decimals offset for security (inflation attack prevention)
+- Users expect 1:1 deposit-to-token ratios
+- The wrapped token (■TOKEN) is the user-facing tradeable asset
 
 ---
 
-## Functions
+## System role
+
+```mermaid
+flowchart LR
+    subgraph Vault["Vault Layer"]
+        V[CreatorOVault]
+        VT[▢TOKEN<br/>1000x scale]
+    end
+    
+    subgraph Wrapper["Wrapper Layer"]
+        W[Wrapper]
+        WT[■TOKEN<br/>1x scale]
+    end
+    
+    V -->|mint| VT
+    VT -->|wrap| W
+    W -->|mint| WT
+    WT -->|unwrap| W
+    W -->|burn| VT
+```
+
+The wrapper sits between the vault and the OFT, handling bidirectional conversion:
+
+| Direction | Conversion | Example |
+|-----------|------------|---------|
+| Wrap | ▢TOKEN / 1000 = ■TOKEN | 5000 ▢AKITA → 5 ■AKITA |
+| Unwrap | ■TOKEN × 1000 = ▢TOKEN | 5 ■AKITA → 5000 ▢AKITA |
+
+---
+
+## Key behaviors
 
 ### One-step operations
 
-For users who want TOKEN ↔ ■TOKEN directly:
+The wrapper provides convenience functions for users who want to go directly from TOKEN to ■TOKEN:
 
-```solidity
-// TOKEN → ■TOKEN (deposit + wrap)
-function deposit(uint256 assets, address receiver) 
-    external returns (uint256 oftAmount);
+- **deposit**: TOKEN → vault deposit → wrap → ■TOKEN
+- **withdraw**: ■TOKEN → unwrap → vault withdraw → TOKEN
 
-// ■TOKEN → TOKEN (unwrap + withdraw)
-function withdraw(uint256 oftAmount, address receiver) 
-    external returns (uint256 assets);
-```
+These combine multiple operations into single transactions.
 
 ### Core conversion
 
-For integrations working with vault shares:
+For integrations working directly with vault shares:
 
-```solidity
-// ▢TOKEN → ■TOKEN
-function wrap(uint256 vaultShares, address receiver) 
-    external returns (uint256 oftAmount);
+- **wrap**: Transfer ▢TOKEN in, mint ■TOKEN out
+- **unwrap**: Burn ■TOKEN in, transfer ▢TOKEN out
 
-// ■TOKEN → ▢TOKEN
-function unwrap(uint256 oftAmount) 
-    external returns (uint256 vaultShares);
-```
+### Accounting
 
-### View functions
+The wrapper maintains its own accounting:
+- `totalLocked`: Total ▢TOKEN held (backing the minted ■TOKEN)
+- `totalMinted`: Total ■TOKEN in circulation
 
-```solidity
-// Preview wrap output
-function previewWrap(uint256 vaultShares) 
-    public pure returns (uint256 oftAmount);
-
-// Preview unwrap output
-function previewUnwrap(uint256 oftAmount) 
-    public pure returns (uint256 vaultShares);
-
-// Preview deposit output
-function previewDeposit(uint256 assets) 
-    public view returns (uint256 oftAmount);
-
-// Preview withdraw output
-function previewWithdraw(uint256 oftAmount) 
-    public view returns (uint256 assets);
-```
+These values must remain in sync for the wrapper to function correctly.
 
 ---
 
-## State
+## Invariants
 
-```solidity
-// Immutables
-IERC20 public immutable creatorCoin;    // TOKEN
-IERC4626 public immutable vault;         // ▢TOKEN
-
-// Mutable
-IMintableBurnableOFT public shareOFT;    // ■TOKEN
-
-// Accounting
-uint256 public totalLocked;              // ▢TOKEN held
-uint256 public totalMinted;              // ■TOKEN minted
-
-// Configuration
-uint256 public constant NORMALIZATION_FACTOR = 1000;
-```
+| Invariant | Description |
+|-----------|-------------|
+| Conversion ratio | Always exactly 1000:1 (▢TOKEN:■TOKEN) |
+| Backing | totalMinted × 1000 = totalLocked |
+| No slippage | Conversions are deterministic, no price impact |
 
 ---
 
-## Flow diagrams
+## Integration points
 
-### Wrap flow
-
-```
-User has ▢TOKEN
-      │
-      ▼
-┌─────────────────┐
-│     Wrapper     │
-│                 │
-│  1. Transfer    │
-│     ▢TOKEN in   │
-│                 │
-│  2. Calculate   │
-│     ■TOKEN      │
-│     = ▢TOKEN    │
-│       / 1000    │
-│                 │
-│  3. Mint        │
-│     ■TOKEN out  │
-└─────────────────┘
-      │
-      ▼
-User receives ■TOKEN
-```
-
-### Unwrap flow
-
-```
-User has ■TOKEN
-      │
-      ▼
-┌─────────────────┐
-│     Wrapper     │
-│                 │
-│  1. Burn        │
-│     ■TOKEN in   │
-│                 │
-│  2. Calculate   │
-│     ▢TOKEN      │
-│     = ■TOKEN    │
-│       × 1000    │
-│                 │
-│  3. Transfer    │
-│     ▢TOKEN out  │
-└─────────────────┘
-      │
-      ▼
-User receives ▢TOKEN
-```
+| Integrates with | Purpose |
+|-----------------|---------|
+| [CreatorOVault](./creator-ovault) | Source of ▢TOKEN |
+| [CreatorShareOFT](./creator-share-oft) | Target ■TOKEN |
+| Frontend | User-facing deposit/withdraw |
 
 ---
 
-## Integration
+## Implementation details
 
-### Wrapping vault shares
+For function signatures and events, see the [source code](https://github.com/wenakita/4626/blob/main/contracts/vault/CreatorOVaultWrapper.sol).
 
-```solidity
-// User has ▢AKITA from vault deposit
-
-// Approve wrapper
-vault.approve(address(wrapper), vaultShares);
-
-// Wrap to ■AKITA
-uint256 oftAmount = wrapper.wrap(vaultShares, receiver);
-```
-
-### One-step deposit
-
-```solidity
-// User has AKITA, wants ■AKITA
-
-// Approve wrapper for TOKEN
-creatorCoin.approve(address(wrapper), assets);
-
-// Deposit and wrap in one call
-uint256 oftAmount = wrapper.deposit(assets, receiver);
-```
-
-### One-step withdrawal
-
-```solidity
-// User has ■AKITA, wants AKITA
-
-// Approve wrapper for ■TOKEN
-shareOFT.approve(address(wrapper), oftAmount);
-
-// Unwrap and withdraw in one call
-uint256 assets = wrapper.withdraw(oftAmount, receiver);
-```
-
----
-
-## Events
-
-```solidity
-event Wrapped(address indexed from, uint256 vaultShares, uint256 oftAmount);
-event Unwrapped(address indexed from, uint256 oftAmount, uint256 vaultShares);
-event Deposited(address indexed from, uint256 assets, uint256 oftAmount);
-event Withdrawn(address indexed from, uint256 oftAmount, uint256 assets);
-```
+Key implementation notes:
+- The `NORMALIZATION_FACTOR` is hardcoded to 1000
+- The wrapper must be authorized as a minter on the ShareOFT
+- Vault approval is required before wrapping
 
 ---
 

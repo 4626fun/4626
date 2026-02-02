@@ -7,248 +7,123 @@ sidebar_position: 1
 
 Fee collection and distribution hub for creator vaults.
 
-**Source:** `contracts/governance/CreatorGaugeController.sol`
+---
+
+## Source
+
+| Contract | Path |
+|----------|------|
+| CreatorGaugeController | [`contracts/governance/CreatorGaugeController.sol`](https://github.com/wenakita/4626/blob/main/contracts/governance/CreatorGaugeController.sol) |
 
 ---
 
-## Overview
+## Purpose
 
-CreatorGaugeController receives trading fees from ShareOFT and distributes them to lottery, burn, and voter allocations. It serves as the central fee routing contract.
+CreatorGaugeController is the central fee routing contract. It receives trading fees from ShareOFT and WETH from V4 tax hooks, accumulates them until a threshold is reached, then distributes to lottery, burn, and voter allocations.
 
----
-
-## Fee flow
-
-```
-■TOKEN fees (6.9% of buys)
-        │
-        ▼
-┌─────────────────────┐
-│  GaugeController    │
-│   receiveFees()     │
-└─────────────────────┘
-        │
-        │ When threshold reached:
-        ▼
-┌─────────────────────┐
-│    distribute()     │
-└─────────────────────┘
-        │
-        ├─► 69% → LotteryManager.addToJackpot()
-        │
-        ├─► 21.39% → Unwrap → Vault.burnSharesForPriceIncrease()
-        │
-        └─► 9.61% → VoterRewardsDistributor.notifyRewards()
-```
+The controller ensures predictable, transparent fee distribution with configurable splits.
 
 ---
 
-## Functions
+## System role
 
-### Fee reception
-
-```solidity
-// Called by ShareOFT when fees collected
-function receiveFees(uint256 amount) external;
-
-// Receive WETH from V4 tax hook
-function receiveWETHFees() external payable;
-```
-
-### Distribution
-
-```solidity
-// Manual distribution trigger
-function distribute() external;
-
-// Force distribution (management)
-function forceDistribute() external;
-
-// Distribute WETH fees
-function distributeWETH() external;
-```
-
-### Configuration
-
-```solidity
-// Set fee split (management)
-function setFeeSplit(
-    uint256 _burnShareBps,
-    uint256 _lotteryShareBps,
-    uint256 _creatorShareBps,
-    uint256 _protocolShareBps
-) external;
-
-// Set distribution parameters
-function setDistributionThreshold(uint256 threshold) external;
-function setDistributionInterval(uint256 interval) external;
-
-// Set recipients
-function setLotteryManager(address manager) external;
-function setCreatorTreasury(address treasury) external;
-function setProtocolTreasury(address treasury) external;
-function setVoterRewardsDistributor(address distributor) external;
-```
-
-### View functions
-
-```solidity
-// Current pending fees
-function pendingFees() external view returns (uint256);
-function pendingWETH() external view returns (uint256);
-
-// Jackpot reserve
-function jackpotReserve() external view returns (uint256);
-
-// Lifetime stats
-function totalFeesReceived() external view returns (uint256);
-function totalSharesBurned() external view returns (uint256);
-function totalLotteryFunded() external view returns (uint256);
-```
-
----
-
-## State
-
-### Fee allocation
-
-```solidity
-uint256 public burnShareBps = 2139;      // 21.39%
-uint256 public lotteryShareBps = 6900;   // 69%
-uint256 public creatorShareBps = 0;      // 0%
-uint256 public protocolShareBps = 961;   // 9.61%
-```
-
-### Distribution parameters
-
-```solidity
-uint256 public distributionThreshold = 100e18;  // 100 ■TOKEN
-uint256 public distributionInterval = 1 hours;
-uint256 public lastDistribution;
-```
-
-### Recipients
-
-```solidity
-ICreatorLotteryManager public lotteryManager;
-IVoterRewardsDistributor public voterRewardsDistributor;
-address public creatorTreasury;
-address public protocolTreasury;
-```
-
-### Accounting
-
-```solidity
-uint256 public pendingFees;
-uint256 public pendingWETH;
-uint256 public jackpotReserve;
-
-uint256 public totalFeesReceived;
-uint256 public totalSharesBurned;
-uint256 public totalLotteryFunded;
-uint256 public totalCreatorEarned;
-uint256 public totalProtocolEarned;
-```
-
----
-
-## Distribution logic
-
-### Threshold check
-
-```solidity
-function _shouldDistribute() internal view returns (bool) {
-    return pendingFees >= distributionThreshold &&
-           block.timestamp >= lastDistribution + distributionInterval;
-}
-```
-
-### Split calculation
-
-```solidity
-function distribute() external {
-    uint256 fees = pendingFees;
-    pendingFees = 0;
+```mermaid
+flowchart TD
+    subgraph Sources
+        OFT[ShareOFT<br/>6.9% buy fees]
+        V4[V4 Tax Hook<br/>WETH fees]
+    end
     
-    uint256 burnAmount = (fees * burnShareBps) / MAX_BPS;
-    uint256 lotteryAmount = (fees * lotteryShareBps) / MAX_BPS;
-    uint256 voterAmount = (fees * protocolShareBps) / MAX_BPS;
+    subgraph Controller["GaugeController"]
+        Pending[Pending Fees]
+        Threshold{Threshold<br/>reached?}
+    end
     
-    // Burn shares to increase PPS
-    _burnForPriceIncrease(burnAmount);
+    subgraph Distribution
+        L[Lottery<br/>69%]
+        B[Burn<br/>21.39%]
+        V[Voters<br/>9.61%]
+    end
     
-    // Add to lottery jackpot
-    _addToLottery(lotteryAmount);
-    
-    // Notify voter rewards
-    _distributeToVoters(voterAmount);
-}
+    OFT -->|■TOKEN| Pending
+    V4 -->|WETH| Pending
+    Pending --> Threshold
+    Threshold -->|yes| L
+    Threshold -->|yes| B
+    Threshold -->|yes| V
 ```
 
 ---
 
-## WETH handling
+## Key behaviors
 
-For V4 tax hook fees paid in ETH:
+### Fee accumulation
 
-```solidity
-function distributeWETH() external {
-    uint256 wethAmount = pendingWETH;
-    pendingWETH = 0;
-    
-    // Swap WETH → TOKEN
-    uint256 tokenAmount = _swapWETHForToken(wethAmount);
-    
-    // Deposit to vault
-    uint256 shares = vault.deposit(tokenAmount, address(this));
-    
-    // Distribute as vault shares
-    _distributeShares(shares);
-}
-```
+Fees accumulate in the controller until two conditions are met:
+1. Pending fees exceed the distribution threshold
+2. Sufficient time has passed since last distribution
 
----
+This batching reduces gas costs and ensures meaningful distribution amounts.
 
-## Events
+### Distribution split
 
-```solidity
-event FeesReceived(uint256 amount);
-event WETHFeesReceived(uint256 amount);
-event FeesDistributed(
-    uint256 burned,
-    uint256 lottery,
-    uint256 voters,
-    uint256 creator
-);
-event JackpotFunded(uint256 amount);
-event SharesBurned(uint256 amount, uint256 newPPS);
-```
+| Recipient | Allocation | Effect |
+|-----------|------------|--------|
+| Lottery | 69% | Funds jackpot for random prizes |
+| Burn | 21.39% | Burns ▢TOKEN, increases price per share |
+| Voters | 9.61% | Rewards for ve4626 voters |
+
+### WETH handling
+
+V4 tax hooks pay fees in WETH. The controller:
+1. Swaps WETH to TOKEN via configured DEX
+2. Deposits TOKEN to vault for ▢TOKEN
+3. Distributes ▢TOKEN using the same split
 
 ---
 
-## Integration
+## Invariants
 
-### For ShareOFT
+| Invariant | Description |
+|-----------|-------------|
+| Split totals 100% | All allocation BPS must sum to 10000 |
+| Threshold gating | Distribution only when threshold met |
+| Accounting accuracy | Lifetime stats match actual distributions |
 
-```solidity
-// In ShareOFT._processBuy()
-_approve(address(this), gaugeController, feeAmount);
-gaugeController.receiveFees(feeAmount);
-```
+---
 
-### For keepers
+## Configuration
 
-```solidity
-// Check if distribution needed
-if (gaugeController.pendingFees() >= threshold) {
-    gaugeController.distribute();
-}
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| Distribution threshold | 100 ■TOKEN | Minimum to trigger distribution |
+| Distribution interval | 1 hour | Cooldown between distributions |
+| Burn share | 21.39% | Share burned for PPS increase |
+| Lottery share | 69% | Share to lottery jackpot |
+| Voter share | 9.61% | Share to voter rewards |
 
-// Distribute WETH if accumulated
-if (gaugeController.pendingWETH() > 0) {
-    gaugeController.distributeWETH();
-}
-```
+---
+
+## Integration points
+
+| Integrates with | Purpose |
+|-----------------|---------|
+| [ShareOFT](../core/creator-share-oft) | Receives ■TOKEN fees |
+| V4 Tax Hook | Receives WETH fees |
+| [LotteryManager](/concepts/lottery) | Funds jackpot |
+| [VoterRewards](/contracts/governance/vault-gauge-voting) | Distributes voter rewards |
+| [Vault](../core/creator-ovault) | Burns shares for PPS |
+
+---
+
+## Implementation details
+
+For function signatures and events, see the [source code](https://github.com/wenakita/4626/blob/main/contracts/governance/CreatorGaugeController.sol).
+
+Key implementation notes:
+- Burn operation unwraps ■TOKEN to ▢TOKEN before burning
+- WETH swap uses configured router (typically Uniswap)
+- `forceDistribute()` allows management to bypass threshold
 
 ---
 

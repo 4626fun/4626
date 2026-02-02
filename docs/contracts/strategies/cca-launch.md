@@ -7,253 +7,145 @@ sidebar_position: 1
 
 Fair launch strategy using Uniswap's Continuous Clearing Auction mechanism.
 
-**Source:** `contracts/vault/strategies/CCALaunchStrategy.sol`
+---
+
+## Source
+
+| Contract | Path |
+|----------|------|
+| CCALaunchStrategy | [`contracts/vault/strategies/CCALaunchStrategy.sol`](https://github.com/wenakita/4626/blob/main/contracts/vault/strategies/CCALaunchStrategy.sol) |
 
 ---
 
-## Overview
+## Purpose
 
-CCALaunchStrategy enables fair token launches by auctioning ■TOKEN (wrapped shares) via Uniswap's CCA. All bidders receive the same clearing price, eliminating sniping and MEV advantages.
+CCALaunchStrategy enables fair token launches by auctioning ■TOKEN via Uniswap's CCA. The mechanism eliminates common launch problems:
 
----
+| Problem | CCA solution |
+|---------|--------------|
+| Sniping | All bidders get same clearing price |
+| MEV/sandwich | No timing advantage to exploit |
+| Information asymmetry | Price discovery is gradual |
+| Whale dominance | Early bids naturally get better prices |
 
-## Key features
-
-- **Fair price discovery** - Clearing price auction, no timing games
-- **MEV resistant** - No sandwich attacks possible
-- **Early participant rewards** - Earlier bids get better prices naturally
-- **V4 graduation** - Automatically creates V4 pool after auction
-
----
-
-## Auction mechanism
-
-### How CCA works
-
-1. Creator deposits ■TOKEN to strategy
-2. Strategy creates auction via CCA Factory
-3. Users submit bids with max price
-4. Clearing price updates continuously
-5. After duration, auction graduates
-6. Filled bidders claim tokens at clearing price
-7. V4 pool created with liquidity
-
-### Clearing price
-
-```
-              Price
-                │
-        Max ────┤     ┌─────────────────
-                │     │
-    Clearing ───┼─────┤ ← All above get filled
-                │     │
-        Min ────┼─────┴─────────────────
-                │
-                └────────────────────── Cumulative bids
-```
-
-All filled bids pay the clearing price, not their max bid.
+This is a launch-only strategy: it runs once to bootstrap liquidity, then the vault transitions to yield strategies.
 
 ---
 
-## Functions
+## System role
 
-### Auction management
-
-```solidity
-// Create new auction
-function createAuction(
-    uint256 amount,      // ■TOKEN to auction
-    uint256 minPrice,    // Floor price
-    uint256 maxPrice,    // Ceiling price
-    uint256 duration,    // Auction length
-    bytes calldata configData
-) external returns (address auction);
-
-// Trigger checkpoint (update clearing price)
-function checkpoint() external;
-
-// Complete auction after graduation
-function completeAuction() external;
-```
-
-### Post-auction
-
-```solidity
-// Sweep raised currency to recipient
-function sweepCurrency() external;
-
-// Sweep unsold tokens
-function sweepUnsoldTokens() external;
-```
-
-### Configuration
-
-```solidity
-// Set recipients
-function setFundsRecipient(address recipient) external;
-function setTokensRecipient(address recipient) external;
-
-// Set V4 pool parameters
-function setPoolFeeTier(uint24 feeTier) external;
-function setPoolTickSpacing(int24 tickSpacing) external;
-
-// Set tax hook config
-function setTaxHook(address hook) external;
-function setTaxRateBps(uint256 rate) external;
-function setFeeRecipient(address recipient) external;
-```
-
-### View functions
-
-```solidity
-// Current auction address
-function currentAuction() external view returns (address);
-
-// Historical auctions
-function pastAuctions(uint256 index) external view returns (address);
-
-// Auction state
-function isGraduated() external view returns (bool);
-function clearingPrice() external view returns (uint256);
-function currencyRaised() external view returns (uint256);
+```mermaid
+flowchart LR
+    subgraph Setup
+        Creator[Creator]
+        Vault[Vault]
+    end
+    
+    subgraph Strategy["CCA Strategy"]
+        CCA[CCA Auction]
+    end
+    
+    subgraph Outcome
+        Pool[V4 Pool]
+        Liquidity[LP Position]
+    end
+    
+    Creator -->|deposit TOKEN| Vault
+    Vault -->|■TOKEN| CCA
+    CCA -->|graduate| Pool
+    CCA -->|ETH raised| Liquidity
 ```
 
 ---
 
-## State
+## Key behaviors
 
-```solidity
-// Core
-IERC20 public immutable auctionToken;    // ■TOKEN
-address public currency;                  // ETH (address(0))
+### Auction lifecycle
 
-// Factory
-address public ccaFactory;
-address public constant UNISWAP_CCA_FACTORY_V110 = 
-    0xcca1101C61cF5cb44C968947985300DF945C3565;
+1. **Setup**: Creator deposits TOKEN, receives ▢TOKEN, wraps to ■TOKEN, transfers to strategy
+2. **Auction creation**: Strategy creates CCA auction via Uniswap factory
+3. **Bidding period**: Users bid ETH for ■TOKEN with max prices
+4. **Clearing**: All bids above clearing price get filled at clearing price
+5. **Graduation**: Auction ends, V4 pool created with raised liquidity
+6. **Post-launch**: Tax hook configured, trading begins
 
-// Current auction
-address public currentAuction;
-address[] public pastAuctions;
+### Clearing price mechanism
 
-// Recipients
-address public fundsRecipient;
-address public tokensRecipient;
+The clearing price is where cumulative demand meets supply. All filled bidders pay this price, regardless of their max bid.
 
-// V4 configuration
-IPoolManager public poolManager;
-address public taxHook;
-address public feeRecipient;
-uint256 public taxRateBps = 690;      // 6.9%
-uint24 public poolFeeTier = 3000;     // 0.3%
-int24 public poolTickSpacing = 60;
+```mermaid
+flowchart LR
+    subgraph Bids["Bid Queue"]
+        B1[0.01 ETH max]
+        B2[0.008 ETH max]
+        B3[0.005 ETH max]
+    end
+    
+    CP[Clearing: 0.007 ETH]
+    
+    B1 -->|filled| Tokens[■TOKEN]
+    B2 -->|filled| Tokens
+    B3 -->|refund| ETH[ETH back]
 ```
+
+### V4 graduation
+
+After the auction ends, the strategy:
+1. Creates a Uniswap V4 pool
+2. Adds raised ETH + unsold ■TOKEN as liquidity
+3. Configures the 6.9% tax hook
+4. Updates the oracle with initial price
 
 ---
 
-## Lifecycle
+## Invariants
 
-### 1. Setup
-
-```solidity
-// Deploy strategy
-CCALaunchStrategy strategy = new CCALaunchStrategy(
-    shareOFT,           // ■TOKEN
-    owner
-);
-
-// Configure
-strategy.setFundsRecipient(treasury);
-strategy.setTokensRecipient(vault);
-strategy.setFeeRecipient(gaugeController);
-```
-
-### 2. Create auction
-
-```solidity
-// Transfer ■TOKEN to strategy
-shareOFT.transfer(address(strategy), auctionAmount);
-
-// Create auction
-address auction = strategy.createAuction(
-    auctionAmount,
-    0.0001 ether,      // Min price per token
-    0.01 ether,        // Max price per token
-    7 days,            // Duration
-    ""                 // Config data
-);
-```
-
-### 3. During auction
-
-```solidity
-// Users submit bids
-IContinuousClearingAuction(auction).submitBid{value: bidAmount}(
-    maxPrice,
-    tokenAmount,
-    bidder,
-    0,       // prevTickPrice
-    ""       // hookData
-);
-
-// Keeper triggers checkpoints
-strategy.checkpoint();
-```
-
-### 4. After graduation
-
-```solidity
-// Check graduation
-require(strategy.isGraduated(), "Not graduated");
-
-// Complete auction (configures V4 pool)
-strategy.completeAuction();
-
-// Sweep funds
-strategy.sweepCurrency();
-strategy.sweepUnsoldTokens();
-```
+| Invariant | Description |
+|-----------|-------------|
+| Single clearing price | All filled bids pay same price |
+| No partial fills | Bids either fill completely or refund |
+| Tax hook required | V4 pool must have tax configured |
+| Factory validation | Only uses official Uniswap CCA factory |
 
 ---
 
-## V4 graduation
+## Configuration
 
-When auction ends, a V4 pool is created:
-
-```
-Auction graduates
-        │
-        ▼
-┌─────────────────────────────┐
-│   V4 Pool Creation          │
-│                             │
-│   1. Create pool key        │
-│   2. Initialize pool        │
-│   3. Add liquidity          │
-│   4. Configure tax hook     │
-└─────────────────────────────┘
-        │
-        ▼
-Trading begins on V4
-(with 6.9% tax to GaugeController)
-```
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| Pool fee tier | 0.3% | V4 pool swap fee |
+| Tax rate | 6.9% | Buy fee on V4 pool |
+| Duration | 7 days | Auction length |
+| Min price | Configurable | Floor price per token |
+| Max price | Configurable | Ceiling price per token |
 
 ---
 
-## Events
+## Integration points
 
-```solidity
-event AuctionCreated(address indexed auction, uint256 amount);
-event AuctionCompleted(address indexed auction, uint256 raised);
-event CurrencySwept(address indexed auction, uint256 amount);
-event TokensSwept(address indexed auction, uint256 amount);
-```
+| Integrates with | Purpose |
+|-----------------|---------|
+| Uniswap CCA Factory | Creates auctions |
+| Uniswap V4 | Post-graduation trading |
+| Tax Hook | Fee collection |
+| [GaugeController](/contracts/governance/gauge-controller) | Fee recipient |
+
+---
+
+## Implementation details
+
+For function signatures and events, see the [source code](https://github.com/wenakita/4626/blob/main/contracts/vault/strategies/CCALaunchStrategy.sol).
+
+Key implementation notes:
+- Uses official Uniswap CCA factory at `0xcca1101...`
+- Strategy holds ■TOKEN during auction
+- Keeper triggers checkpoints to update clearing price
+- Post-graduation sweep functions recover funds
 
 ---
 
 ## Related
 
-- [Auction Concept](/concepts/auction) - How CCA works
+- [Auction Concepts](/concepts/auction) - How CCA works
 - [Token Model](/overview/token-model) - Why ■TOKEN is auctioned
 - [Fee Flow](/overview/fee-flow) - Post-launch fee distribution

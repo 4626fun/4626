@@ -7,227 +7,131 @@ sidebar_position: 1
 
 ERC-4626 compliant tokenized vault for creator coins with multi-strategy yield generation.
 
-**Source:** `contracts/vault/CreatorOVault.sol`
+---
+
+## Source
+
+| Contract | Path |
+|----------|------|
+| CreatorOVault | [`contracts/vault/CreatorOVault.sol`](https://github.com/wenakita/4626/blob/main/contracts/vault/CreatorOVault.sol) |
 
 ---
 
-## Overview
+## Purpose
 
-CreatorOVault accepts deposits of a creator coin (TOKEN) and issues vault shares (▢TOKEN). The vault deploys idle capital to yield strategies and distributes returns proportionally to shareholders.
+CreatorOVault serves as the core accounting layer for each creator's tokenized vault. It accepts deposits of the underlying creator coin (TOKEN), issues proportional vault shares (▢TOKEN), and coordinates capital deployment to yield strategies.
 
----
-
-## Key features
-
-- **ERC-4626 compliant** - Standard tokenized vault interface
-- **Multi-strategy** - Supports up to 5 concurrent strategies
-- **Profit unlocking** - Gradual profit release prevents manipulation
-- **Flash loan protection** - Delay between deposit and withdrawal
-- **Large withdrawal queue** - MEV protection for big exits
-- **Ownership rescue** - Protocol-assisted recovery mechanism
+The vault is the single source of truth for:
+- Total assets under management
+- Share-to-asset conversion rates
+- Strategy allocations and debt tracking
+- Profit and loss accounting
 
 ---
 
-## State
+## System role
 
-### Assets
-
-```solidity
-IERC20 public immutable CREATOR_COIN;  // Underlying asset
-uint256 public coinBalance;             // Idle balance in vault
+```mermaid
+flowchart LR
+    subgraph Users
+        U[Depositors]
+    end
+    
+    subgraph Core
+        V[CreatorOVault<br/>▢TOKEN]
+        W[Wrapper]
+    end
+    
+    subgraph Strategies
+        S1[CCA Launch]
+        S2[Charm V3]
+        S3[Ajna]
+    end
+    
+    U -->|deposit TOKEN| V
+    V -->|▢TOKEN| U
+    V -->|deploy| S1
+    V -->|deploy| S2
+    V -->|deploy| S3
+    V --> W
 ```
 
-### Strategies
-
-```solidity
-mapping(address => bool) public activeStrategies;
-mapping(address => uint256) public strategyWeights;  // Basis points
-mapping(address => uint256) public strategyDebt;     // Deployed amount
-uint256 public totalDebt;
-uint256 public totalStrategyWeight;
-```
-
-### Access control
-
-```solidity
-address public management;
-address public keeper;
-address public emergencyAdmin;
-address public gaugeController;
-```
-
-### Security
-
-```solidity
-uint256 public withdrawDelayBlocks = 1;
-uint256 public largeWithdrawalThreshold = 100_000e18;
-uint256 public largeWithdrawalDelayBlocks = 10;
-uint256 public constant MINIMUM_FIRST_DEPOSIT = 5_000_000e18;
-```
+The vault sits between users and strategies, providing a unified interface for deposits and withdrawals while abstracting the complexity of multi-strategy yield generation.
 
 ---
 
-## Functions
+## Key behaviors
 
-### User functions
+### Deposit and withdrawal
 
-```solidity
-// Deposit TOKEN, receive ▢TOKEN
-function deposit(uint256 assets, address receiver) 
-    external returns (uint256 shares);
+Users deposit TOKEN and receive ▢TOKEN (vault shares). The share price starts at approximately 1:1000 (due to the decimals offset) and increases as the vault generates yield.
 
-// Mint exact ▢TOKEN, pull TOKEN
-function mint(uint256 shares, address receiver) 
-    external returns (uint256 assets);
-
-// Redeem ▢TOKEN for TOKEN
-function redeem(uint256 shares, address receiver, address owner) 
-    external returns (uint256 assets);
-
-// Withdraw exact TOKEN, burn ▢TOKEN
-function withdraw(uint256 assets, address receiver, address owner) 
-    external returns (uint256 shares);
-```
-
-### Large withdrawal queue
-
-```solidity
-// Queue large withdrawal
-function queueWithdrawal(uint256 shares, address receiver) external;
-
-// Claim after delay
-function claimQueuedWithdrawal() external returns (uint256 assets);
-
-// Cancel and get shares back
-function cancelQueuedWithdrawal() external returns (uint256 shares);
-```
+Withdrawals can be instant or queued depending on size. Large withdrawals above the threshold must be queued to prevent MEV exploitation.
 
 ### Strategy management
 
-```solidity
-// Add strategy with weight (management)
-function addStrategy(address strategy, uint256 weight) external;
+The vault supports up to 5 concurrent strategies, each with a weight in basis points. When keepers call `deployToStrategies()`, idle capital is distributed proportionally.
 
-// Remove strategy (management)
-function removeStrategy(address strategy) external;
+Strategies report profits and losses via the `report()` function. Profits are subject to gradual unlocking to prevent manipulation.
 
-// Update weight (management)
-function updateStrategyWeight(address strategy, uint256 newWeight) external;
+### Price per share
 
-// Deploy idle funds (keeper)
-function deployToStrategies() external;
-
-// Report profit/loss (keeper)
-function report() external returns (uint256 profit, uint256 loss);
-```
-
-### View functions
-
-```solidity
-// Total assets under management
-function totalAssets() public view returns (uint256);
-
-// Price per share (1e18 scale)
-function pricePerShare() public view returns (uint256);
-
-// Preview functions
-function previewDeposit(uint256 assets) public view returns (uint256);
-function previewMint(uint256 shares) public view returns (uint256);
-function previewWithdraw(uint256 assets) public view returns (uint256);
-function previewRedeem(uint256 shares) public view returns (uint256);
-```
+The vault tracks `pricePerShare()` which represents the value of one vault share in terms of the underlying asset. This value:
+- Starts at 1e18 (normalized)
+- Increases as strategies generate yield
+- Can be boosted by share burns from fee distribution
 
 ---
 
-## Events
+## Invariants
 
-```solidity
-event Deposit(address sender, address receiver, uint256 assets, uint256 shares);
-event Withdraw(address sender, address receiver, address owner, uint256 assets, uint256 shares);
-event Reported(uint256 profit, uint256 loss, uint256 performanceFees, uint256 totalAssets);
-event StrategyAdded(address indexed strategy, uint256 weight);
-event StrategyRemoved(address indexed strategy);
-event StrategyDeployed(address indexed strategy, uint256 amount);
-event SharesBurnedForPrice(address indexed from, uint256 shares, uint256 newPricePerShare);
-```
+The vault enforces these invariants:
 
----
-
-## Errors
-
-```solidity
-error ZeroAddress();
-error ZeroAmount();
-error ZeroShares();
-error FirstDepositTooSmall(uint256 provided, uint256 minimum);
-error WithdrawTooSoon(uint256 currentBlock, uint256 requiredBlock);
-error LargeWithdrawalMustBeQueued(uint256 amount, uint256 threshold);
-error InflationAttackDetected(uint256 assets, uint256 shares);
-error PriceChangeExceedsLimit(uint256 priceBefore, uint256 priceAfter, uint256 maxChangeBps);
-```
+| Invariant | Enforcement |
+|-----------|-------------|
+| No inflation attacks | `_decimalsOffset() = 3` creates 1000 virtual shares |
+| Minimum first deposit | 5,000,000 TOKEN minimum prevents dust attacks |
+| Flash loan protection | 1 block delay between deposit and withdrawal |
+| Price stability | Max 10% price change per transaction |
+| Large withdrawal protection | Queuing required above threshold |
 
 ---
 
-## Security
+## Access control
 
-### Inflation attack prevention
-
-The vault uses a `10^3` decimals offset creating virtual shares:
-
-```solidity
-function _decimalsOffset() internal pure override returns (uint8) {
-    return 3; // 10^3 = 1000 virtual shares
-}
-```
-
-Combined with `MINIMUM_FIRST_DEPOSIT`, this makes inflation attacks economically infeasible.
-
-### Price manipulation protection
-
-Maximum 10% price change per transaction:
-
-```solidity
-uint256 public constant MAX_PRICE_CHANGE_BPS = 1000;
-```
-
-### Flash loan protection
-
-Minimum 1 block between deposit and withdrawal:
-
-```solidity
-uint256 public withdrawDelayBlocks = 1;
-```
+| Role | Permissions |
+|------|-------------|
+| Owner | Full control, strategy management, emergency shutdown |
+| Management | Strategy parameters, keeper assignment |
+| Keeper | Deploy to strategies, report profits |
+| Emergency Admin | Pause operations, emergency withdrawal |
 
 ---
 
-## Integration
+## Integration points
 
-### Depositing
+| Integrates with | Purpose |
+|-----------------|---------|
+| [CreatorOVaultWrapper](./creator-ovault-wrapper) | Converts ▢TOKEN to ■TOKEN |
+| [Strategies](/contracts/strategies) | Capital deployment |
+| [GaugeController](/contracts/governance/gauge-controller) | Share burns from fees |
 
-```solidity
-// Approve vault
-creatorCoin.approve(address(vault), amount);
+---
 
-// Deposit
-uint256 shares = vault.deposit(amount, receiver);
-```
+## Implementation details
 
-### Withdrawing
+For function signatures, events, and error definitions, see the [source code](https://github.com/wenakita/4626/blob/main/contracts/vault/CreatorOVault.sol).
 
-```solidity
-// Small withdrawal (instant)
-uint256 assets = vault.redeem(shares, receiver, owner);
-
-// Large withdrawal (queued)
-vault.queueWithdrawal(shares, receiver);
-// Wait largeWithdrawalDelayBlocks
-vault.claimQueuedWithdrawal();
-```
+Key implementation notes:
+- Inherits from OpenZeppelin's ERC4626Upgradeable
+- Uses a 10^3 decimals offset for security
+- Implements custom profit unlocking to smooth returns
+- Supports ownership rescue for stuck positions
 
 ---
 
 ## Related
 
 - [Token Model](/overview/token-model) - ▢TOKEN explained
-- [Vault Concept](/concepts/vault) - Deep dive
-- [Strategies](/contracts/strategies) - Capital deployment
+- [Vault Concepts](/concepts/vault) - Deep dive on vault mechanics
+- [Architecture](/overview/architecture) - System design
