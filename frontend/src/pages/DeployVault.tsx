@@ -2153,6 +2153,11 @@ function DeployVaultBatcher({
           opts?: { noSplit?: boolean; segment?: string },
         ) => {
           const logPhaseLabel = opts?.segment ? `${phaseLabel}.${opts.segment}` : phaseLabel
+          const batcherAddressLc = getAddress(batcherAddress).toLowerCase()
+          const batcherCallCount = calls.reduce((acc, c) => {
+            return getAddress(c.target).toLowerCase() === batcherAddressLc ? acc + 1 : acc
+          }, 0)
+          const hasBatcherCall = batcherCallCount > 0
 
           if (!opts?.noSplit && phaseLabel === 'phase2' && calls.length > 1) {
             const approveSelector = '0x095ea7b3'
@@ -2176,9 +2181,9 @@ function DeployVaultBatcher({
             }
           }
 
-          if (!opts?.noSplit && phaseLabel === 'phase2' && calls.length > 2) {
+          if (!opts?.noSplit && phaseLabel === 'phase2' && calls.length > 2 && batcherCallCount > 1) {
             const batcherIdx = calls.findIndex(
-              (c) => getAddress(c.target).toLowerCase() === getAddress(batcherAddress).toLowerCase()
+              (c) => getAddress(c.target).toLowerCase() === batcherAddressLc
             )
             if (batcherIdx > -1 && batcherIdx < calls.length - 1) {
               const phase2Primary = calls.slice(0, batcherIdx + 1)
@@ -2193,7 +2198,7 @@ function DeployVaultBatcher({
             }
           }
 
-          if (!opts?.noSplit && phaseLabel === 'phase2' && calls.length > 1) {
+          if (!opts?.noSplit && phaseLabel === 'phase2' && calls.length > 1 && !hasBatcherCall) {
             const create2Addr = getAddress(expectedCreate2Deployer).toLowerCase()
             const create2Calls = calls.filter(
               (c) => getAddress(c.target).toLowerCase() === create2Addr
