@@ -1,7 +1,6 @@
 # Dependencies
 node_modules/
 docs/
-docs-site/
 docs-site/node_modules/
 npm-debug.log*
 yarn-debug.log*
@@ -162,3 +161,14 @@ reference.sol
 /lib/v3-periphery/
 /lib/solidity-lib/
 tools/
+
+# Ignore old standalone docs-site folder at repo root (if it exists)
+./docs-site/
+
+# Docusaurus build artifacts
+apps/docs-site/build/
+apps/docs-site/.docusaurus/
+apps/docs-site/.cache/
+
+# Dependencies
+**/node_modules/
