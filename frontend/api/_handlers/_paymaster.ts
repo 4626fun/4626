@@ -492,12 +492,23 @@ function readDeploySessionHeaders(req: VercelRequest): { token: string; signatur
 const PAYOUT_ROUTER_CODE_ID = `0x${'ec3a19f83778a374ef791c3df99ec79478b68b0319515a6a7898b3c5d614a107'}` as const
 const VAULT_SHARE_BURN_STREAM_CODE_ID = `0x${'9b5e26f68c206df4fb41253da53c3c1d377334db21d566adbf41ac43fc711a21'}` as const
 
-// CreatorOVault runtime bytecode hashes (EIP-170 safe; used for validating phase2 vault address)
-// Include legacy + current deployments to avoid blocking upgraded bytecode.
-const CREATOR_OVAULT_RUNTIME_CODE_HASHES = [
-  `0x${'c78233e39d6cd4a86de4d70868329f503db425770d59d2341f874d41364c5f2f'}`,
-  `0x${'3655a668987b66cba4dd8f0ba37c3c3395ab9e32b80cb41ff7d00c4550201bc4'}`,
-  `0x${'bc45b78b9b849b41e58c3e043322b436001565c871b928b4f95fceea971d45b5'}`,
+const BYTECODE_STORE_ABI = [
+  {
+    type: 'function',
+    name: 'get',
+    stateMutability: 'view',
+    inputs: [{ name: 'codeId', type: 'bytes32' }],
+    outputs: [{ name: 'creationCode', type: 'bytes' }],
+  },
+] as const
+
+const ERC20_METADATA_ABI = [
+  { type: 'function', name: 'name', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
+  { type: 'function', name: 'symbol', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
+] as const
+
+const ERC4626_ASSET_ABI = [
+  { type: 'function', name: 'asset', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
 
 const BASE_WETH = getAddress(`0x${'4200000000000000000000000000000000000006'}`)
@@ -979,6 +990,8 @@ async function validateInnerCalls(params: {
   let mode: 'deploy_phase1' | 'deploy_phase2' | 'deploy_phase3' | 'launch_auction' | 'deploy' | 'activate' | 'approve_only' | null = null
   let expectedCreatorToken: Address | null = null
   let expectedVault: Address | null = null
+  let expectedCodeIds: { vault: Hex } | null = null
+  let expectedVersion: string | null = null
 
   for (const c of innerCalls) {
     const selector = getSelector(c.data)
@@ -1006,6 +1019,7 @@ async function validateInnerCalls(params: {
         }
 
         const p = decodedBatcher?.args?.[0]
+        const codeIds = decodedBatcher?.args?.[1]
         creatorToken = p && isAddress(p.creatorToken) ? getAddress(p.creatorToken) : null
         owner = p && isAddress(p.owner) ? getAddress(p.owner) : null
         if (!creatorToken || !owner) throw new Error('batcher_decode_failed')
@@ -1022,6 +1036,11 @@ async function validateInnerCalls(params: {
           mode = 'deploy_phase2'
           expectedVault = p && isAddress(p.vault) ? getAddress(p.vault) : null
           if (!expectedVault) throw new Error('batcher_vault_decode_failed')
+          expectedCodeIds =
+            codeIds && typeof codeIds === 'object' && isHexString(codeIds.vault)
+              ? { vault: codeIds.vault as Hex }
+              : null
+          expectedVersion = typeof p?.version === 'string' ? p.version : null
         } else if (selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES) {
           mode = 'deploy_phase3'
           expectedVault = p && isAddress(p.vault) ? getAddress(p.vault) : null
@@ -1086,26 +1105,64 @@ async function validateInnerCalls(params: {
   if (!bytecodeStoreRaw) throw new Error('bytecode_store_not_configured')
   const bytecodeStore = getAddress(bytecodeStoreRaw)
 
-  // In Phase 2, validate the vault address is the expected CreatorOVault runtime code.
-  // This prevents sponsoring calls that route through the batcher into arbitrary contracts.
+  // In Phase 2, validate the vault address via CREATE2 inputs (salt + codeId + constructor args).
+  // This avoids hardcoding runtime hashes and still prevents arbitrary contracts.
   let expectedBurnStream: Address | null = null
   let expectedPayoutRouter: Address | null = null
   if (mode === 'deploy_phase2') {
     if (!expectedVault) throw new Error('missing_vault')
+    if (!expectedCodeIds?.vault || !expectedVersion) throw new Error('missing_code_ids')
     const client = await getBaseClient()
     const vaultCode = (await client.getBytecode({ address: expectedVault })) as Hex | undefined
     if (!vaultCode || vaultCode === '0x') throw new Error('vault_not_deployed')
-    const vaultCodeHash = keccak256(vaultCode)
-    const allowedVaultHashes = CREATOR_OVAULT_RUNTIME_CODE_HASHES.map((h) => h.toLowerCase())
-    if (!allowedVaultHashes.includes(vaultCodeHash.toLowerCase())) {
-      logger.warn('[Paymaster] vault_code_hash_mismatch', {
-        expected: CREATOR_OVAULT_RUNTIME_CODE_HASHES,
-        actual: vaultCodeHash,
-        vault: expectedVault,
+    const asset = (await client.readContract({
+      address: expectedVault,
+      abi: ERC4626_ASSET_ABI,
+      functionName: 'asset',
+    }).catch(() => null)) as Address | null
+    if (asset && getAddress(asset) !== getAddress(expectedCreatorToken as Address)) {
+      throw new Error('vault_asset_mismatch')
+    }
+    const [vaultName, vaultSymbol] = (await Promise.all([
+      client.readContract({ address: expectedVault, abi: ERC20_METADATA_ABI, functionName: 'name' }),
+      client.readContract({ address: expectedVault, abi: ERC20_METADATA_ABI, functionName: 'symbol' }),
+    ])) as [string, string]
+    const creationCode = (await client.readContract({
+      address: bytecodeStore,
+      abi: BYTECODE_STORE_ABI,
+      functionName: 'get',
+      args: [expectedCodeIds.vault],
+    })) as Hex
+    const constructorArgs = encodeAbiParameters(
+      [
+        { type: 'address', name: 'creatorToken' },
+        { type: 'address', name: 'owner' },
+        { type: 'string', name: 'name' },
+        { type: 'string', name: 'symbol' },
+      ],
+      [getAddress(expectedCreatorToken as Address), getAddress(creatorVaultBatcher), vaultName, vaultSymbol],
+    )
+    const initCodeHash = keccak256(concatHex([creationCode, constructorArgs]))
+    const baseSalt = keccak256(
+      encodePacked(
+        ['address', 'address', 'uint256', 'string', 'string'],
+        [getAddress(expectedCreatorToken as Address), params.sender, BigInt(BASE_CHAIN_ID), 'CreatorVault:deploy:', expectedVersion],
+      ),
+    )
+    const vaultSalt = keccak256(encodePacked(['bytes32', 'string'], [baseSalt, 'vault']))
+    const expectedVaultFromCreate2 = getCreate2Address({
+      from: create2DeployerFromStore,
+      salt: vaultSalt,
+      bytecodeHash: initCodeHash,
+    })
+    if (expectedVaultFromCreate2.toLowerCase() !== expectedVault.toLowerCase()) {
+      logger.warn('[Paymaster] vault_address_mismatch', {
+        expected: expectedVaultFromCreate2,
+        actual: expectedVault,
         creatorToken: expectedCreatorToken,
         sender: params.sender,
       })
-      throw new Error(`vault_code_hash_mismatch(actual=${vaultCodeHash})`)
+      throw new Error(`vault_address_mismatch(expected=${expectedVaultFromCreate2})`)
     }
 
     const burnSalt = expectedBurnStreamSalt({ creatorToken: expectedCreatorToken, sender: params.sender })
