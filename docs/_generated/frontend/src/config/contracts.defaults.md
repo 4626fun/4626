@@ -12,7 +12,7 @@
 
 > **ContractAddress** = `` `0x${string}` ``
 
-Defined in: [config/contracts.defaults.ts:11](https://github.com/wenakita/4626/blob/d2887a577bbbcd8195e2d76fc50368643edd1f1a/frontend/src/config/contracts.defaults.ts#L11)
+Defined in: [config/contracts.defaults.ts:11](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/config/contracts.defaults.ts#L11)
 
 Shared, environment-agnostic default addresses.
 
@@ -28,7 +28,7 @@ IMPORTANT:
 
 > `const` **AKITA\_DEFAULTS**: `object`
 
-Defined in: [config/contracts.defaults.ts:70](https://github.com/wenakita/4626/blob/d2887a577bbbcd8195e2d76fc50368643edd1f1a/frontend/src/config/contracts.defaults.ts#L70)
+Defined in: [config/contracts.defaults.ts:70](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/config/contracts.defaults.ts#L70)
 
 #### Type Declaration
 
@@ -66,7 +66,7 @@ Defined in: [config/contracts.defaults.ts:70](https://github.com/wenakita/4626/b
 
 > `const` **BASE\_DEFAULTS**: `object`
 
-Defined in: [config/contracts.defaults.ts:16](https://github.com/wenakita/4626/blob/d2887a577bbbcd8195e2d76fc50368643edd1f1a/frontend/src/config/contracts.defaults.ts#L16)
+Defined in: [config/contracts.defaults.ts:16](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/config/contracts.defaults.ts#L16)
 
 #### Type Declaration
 
@@ -184,7 +184,7 @@ Defined in: [config/contracts.defaults.ts:16](https://github.com/wenakita/4626/b
 
 > `const` **ERC4626\_DEFAULTS**: `object`
 
-Defined in: [config/contracts.defaults.ts:82](https://github.com/wenakita/4626/blob/d2887a577bbbcd8195e2d76fc50368643edd1f1a/frontend/src/config/contracts.defaults.ts#L82)
+Defined in: [config/contracts.defaults.ts:82](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/config/contracts.defaults.ts#L82)
 
 #### Type Declaration
 

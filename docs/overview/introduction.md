@@ -3,79 +3,41 @@ title: Introduction
 sidebar_position: 1
 ---
 
-# Introduction to 4626
+# Introduction
 
-4626 is a protocol for creating tokenized creator vaults on Base. It enables creators to launch ERC-4626 compliant vaults backed by their Zora Creator Coins, with integrated yield strategies, governance, and cross-chain functionality.
-
-**Who this is for:** Developers, integrators, and operators working with the 4626 protocol.
+4626 creates tokenized vaults for Zora Creator Coins. Each vault is ERC-4626 compliant, generates yield through automated strategies, and supports cross-chain transfers via LayerZero.
 
 ---
 
 ## Core concepts
 
-### Creator Vault
+### Vaults
 
-A Creator Vault (`CreatorOVault`) is an ERC-4626 tokenized vault that:
-- Accepts creator coin deposits
-- Issues vault shares (▢TOKEN)
-- Deploys capital to yield strategies
-- Distributes returns to shareholders
+A vault accepts deposits of a creator coin and issues shares representing proportional ownership. The vault deploys assets to yield strategies and distributes returns to shareholders.
 
-### Token notation
+### Tokens
 
-| Token type | Symbol | Contract |
-|------------|--------|----------|
-| Creator coin | TOKEN | Zora Creator Coin |
-| Vault shares | ▢TOKEN | CreatorOVault |
-| Wrapped shares (OFT) | ■TOKEN | CreatorShareOFT |
+| Symbol | Purpose |
+|--------|---------|
+| TOKEN | Creator coin (underlying asset) |
+| ▢TOKEN | Vault shares (receipt for deposits) |
+| ■TOKEN | Wrapped shares (cross-chain OFT) |
+
+See [Token model](/overview/token-model) for details.
 
 ### Strategies
 
-Vaults use two types of strategies:
+**Launch:** CCA auctions ■TOKEN for ETH using Uniswap's Continuous Clearing Auction.
 
-**Launch strategy (auctions ■TOKEN wrapped shares):**
-- **CCA Launch Strategy** - Continuous Clearing Auction to bootstrap liquidity
+**Yield:** Charm, Ajna, and V4 strategies deploy TOKEN for yield.
 
-**Yield strategies (deploy TOKEN for yield):**
-- **Charm Strategy** - Uniswap V3 concentrated liquidity via Charm Alpha Vaults
-- **Ajna Strategy** - Lending via Ajna Protocol
-- **Uniswap V4 Strategies** - Full range, concentrated, and limit order strategies
+### Fees
 
----
+6.9% buy fee on DEX purchases, split between lottery (69%), burn (21.39%), and voters (9.61%). See [Fee flow](/overview/fee-flow).
 
-## Architecture overview
+### Governance
 
-```
-                    Creator Coin (TOKEN)
-                           |
-                           v
-                  +-------------------+
-                  |   CreatorOVault   |  ERC-4626 vault
-                  +-------------------+
-                           |
-        +------------------+------------------+
-        |                                     |
-        v                                     v
-  Issues ▢TOKEN                      Deploys TOKEN to
-  (vault shares)                     yield strategies
-        |                                     |
-        v                                     +---> Charm (V3 LP)
-  +------------------+                        +---> Ajna (Lending)
-  | CreatorOVault    |                        +---> V4 Strategies
-  | Wrapper          |
-  +------------------+
-        |
-        v
-  ■TOKEN (CreatorShareOFT)
-        |
-        +---> Cross-chain transfers (LayerZero OFT)
-        |
-        +---> CCA Strategy auctions ■TOKEN for ETH
-```
-
-**Key insight:** 
-- **■TOKEN** (wrapped shares) is auctioned via CCA for price discovery
-- **TOKEN** (creator coin) is deployed to yield strategies for returns
+ve4626 holders vote to direct lottery probability. See [Governance](/governance).
 
 ---
 
@@ -83,40 +45,17 @@ Vaults use two types of strategies:
 
 | Contract | Purpose |
 |----------|---------|
-| `CreatorOVault` | Main ERC-4626 vault |
-| `CreatorOVaultWrapper` | Wraps vault shares for OFT |
-| `CreatorShareOFT` | LayerZero OFT for cross-chain |
-| `CreatorGaugeController` | Fee distribution and gauge voting |
-| `VaultGaugeVoting` | ve(3,3) style voting |
-| `CreatorLotteryManager` | Jackpot lottery system |
-| `CreatorRegistry` | Global registry of vaults and tokens |
+| CreatorOVault | Vault accepting deposits |
+| CreatorOVaultWrapper | Converts ▢TOKEN ↔ ■TOKEN |
+| CreatorShareOFT | Cross-chain OFT with fee/lottery |
+| CreatorGaugeController | Fee distribution |
+| VaultGaugeVoting | Probability voting |
 
 ---
 
 ## Getting started
 
-1. **Deploy a vault** - Use `CreatorOVaultFactory` or `CreatorVaultDeployer`
-2. **Add strategies** - Configure yield strategies via admin UI
-3. **Activate** - Use `VaultActivationBatcher` for 1-click activation
-4. **Manage** - Monitor via frontend, adjust strategies as needed
-
----
-
-## Documentation structure
-
-| Section | Contents |
-|---------|----------|
-| [Overview](/overview) | Architecture, strategies, naming conventions |
-| [Contracts](/contracts) | Smart contract details |
-| [Operations](/operations) | Deployment and automation |
-| [Governance](/governance) | ve(3,3) voting and bribes |
-| [Guides](/guides) | Tutorials and troubleshooting |
-| [API Reference](/api) | Auto-generated contract and frontend docs |
-
----
-
-## References
-
-- [Strategy architecture](/overview/architecture/strategy-architecture)
-- [Fee architecture](/overview/architecture/fee-architecture)
-- [Account abstraction](/overview/account-abstraction/activation)
+1. [Architecture](/overview/architecture) - System design
+2. [Token model](/overview/token-model) - Three-token system
+3. [Deploy vault](/guides/deploy-vault) - Step-by-step guide
+4. [Launch token](/guides/launch-token) - CCA auction setup

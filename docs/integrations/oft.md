@@ -128,4 +128,4 @@ CreatorShareOFT integrates with CreatorRegistry for:
 ## References
 
 - [LayerZero OFT documentation](https://layerzero.gitbook.io/docs/evm-guides/layerzero-omnichain-contracts/oft)
-- [Fee architecture](/overview/architecture/fee-architecture)
+- [Fee flow](/overview/fee-flow)

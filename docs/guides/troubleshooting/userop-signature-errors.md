@@ -1,8 +1,8 @@
 ---
-title: Userop Signature Errors
+title: UserOp signature errors
 ---
 
-# UserOperation Signature Validation Failures
+# UserOp signature errors
 
 When a bundler returns errors like:
 

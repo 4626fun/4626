@@ -1,8 +1,8 @@
 ---
-title: Erc4337 Debugging
+title: ERC-4337 debugging
 ---
 
-# ERC-4337 Signature Verification Debugging - Summary
+# ERC-4337 debugging
 
 ## Problem
 UserOp signature verification was failing with error:

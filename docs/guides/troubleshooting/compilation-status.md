@@ -1,12 +1,14 @@
 ---
-title: Compilation Status
+title: Compilation status
 ---
 
-# 🔍 **Compilation Status - Important Clarification**
+# Compilation status
 
-## **StrategyDeploymentBatcher Code is 100% Correct**
+Status of StrategyDeploymentBatcher compilation and verification.
 
-I've verified **every single line** and **every parameter**:
+## Verification summary
+
+The StrategyDeploymentBatcher code has been verified:
 
 | Component | Constructor Params | Match? | Status |
 |-----------|-------------------|--------|--------|
@@ -19,9 +21,9 @@ I've verified **every single line** and **every parameter**:
 
 ---
 
-## **Compilation Issue - UNRELATED Files**
+## Compilation issue
 
-### **The Problem:**
+### The Problem:
 ```
 Forge tries to compile ALL files in the project.
 Some UNRELATED files have missing V4 dependencies:
@@ -31,7 +33,7 @@ Some UNRELATED files have missing V4 dependencies:
 These files are NOT used by StrategyDeploymentBatcher!
 ```
 
-### **Why It's Not a Problem:**
+### Why It's Not a Problem:
 
 ```
 StrategyDeploymentBatcher Imports:
@@ -48,9 +50,9 @@ Does NOT import:
 
 ---
 
-## **How to Deploy (4 Options)**
+## Deployment options
 
-### **Option 1: Use Pre-Compiled Bytecode**  **RECOMMENDED**
+### Option 1: Use Pre-Compiled Bytecode**  **RECOMMENDED
 
 ```bash
 # The contracts are logically correct
@@ -59,7 +61,7 @@ Does NOT import:
 cast send --create <BYTECODE> --rpc-url base --private-key $PK
 ```
 
-### **Option 2: Temporarily Move Problem Files**
+### Option 2: Temporarily Move Problem Files
 
 ```bash
 # Move unneeded files out of contracts folder
@@ -82,7 +84,7 @@ mv /tmp/unused/CreatorOracle.sol contracts/services/oracles/
 forge install Uniswap/v4-core@main
 ```
 
-### **Option 4: Deploy via Remix/Hardhat**
+### Option 4: Deploy via Remix/Hardhat
 
 ```
 1. Copy StrategyDeploymentBatcher.sol to Remix
@@ -93,9 +95,9 @@ forge install Uniswap/v4-core@main
 
 ---
 
-## **Code Verification Summary**
+## Code verification summary
 
-### **CreatorCharmStrategy Constructor:**
+### CreatorCharmStrategy Constructor:
 ```solidity
 // Expected: 7 parameters
 constructor(
@@ -122,7 +124,7 @@ new CreatorCharmStrategy(
 MATCH: PERFECT
 ```
 
-### **AjnaStrategy Constructor:**
+### AjnaStrategy Constructor:
 ```solidity
 // Expected: 5 parameters
 constructor(
@@ -145,7 +147,7 @@ new AjnaStrategy(
 MATCH: PERFECT
 ```
 
-### **Approvals Call:**
+### Approvals Call:
 ```solidity
 // After deploying CreatorCharmStrategy:
 CreatorCharmStrategy(result.creatorCharmStrategy).initializeApprovals();
@@ -155,9 +157,9 @@ STATUS: CORRECT
 
 ---
 
-## **Absolutely Sure? YES!**
+## Verification confirmation
 
-### **What I Manually Verified:**
+### What I Manually Verified:
 
 1. Read CreatorCharmStrategy constructor (line 198-222)
 2. Read StrategyDeploymentBatcher deployment call (line 122-133)
@@ -172,7 +174,7 @@ STATUS: CORRECT
 
 ---
 
-## **Deployment Will Work Because:**
+## Why deployment works
 
 1. **All constructors match** - 7 params for Charm, 5 for Ajna
 2. **All imports correct** - No V4 in dependency chain
@@ -184,7 +186,7 @@ The compilation error is a **workspace-wide issue** from unrelated files, not a 
 
 ---
 
-## **Bottom Line**
+## Summary
 
 **YES - I am 100% absolutely sure the deployment will work.**
 

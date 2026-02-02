@@ -12,7 +12,7 @@
 
 > **useAdminStatus**(): `object`
 
-Defined in: [hooks/useAdminStatus.ts:21](https://github.com/wenakita/4626/blob/d2887a577bbbcd8195e2d76fc50368643edd1f1a/frontend/src/hooks/useAdminStatus.ts#L21)
+Defined in: [hooks/useAdminStatus.ts:21](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/hooks/useAdminStatus.ts#L21)
 
 #### Returns
 

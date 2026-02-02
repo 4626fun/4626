@@ -1,16 +1,16 @@
 ---
-title: Owner Setup
+title: Owner setup
 ---
 
-# **MULTISIG OWNER SETUP**
+# Owner setup
 
-## **UPDATED FOR MULTISIG OWNERSHIP**
+How to configure multisig ownership for deployed strategies.
 
-The `StrategyDeploymentBatcher` now accepts a custom `owner` parameter, allowing you to use your multisig wallet as the owner of all deployed strategies!
+The `StrategyDeploymentBatcher` accepts a custom `owner` parameter, allowing multisig wallets to own all deployed strategies.
 
 ---
 
-## **YOUR MULTISIG:**
+## Your multisig
 
 ```
 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3
@@ -18,9 +18,9 @@ The `StrategyDeploymentBatcher` now accepts a custom `owner` parameter, allowing
 
 ---
 
-## **WHAT CHANGED:**
+## What changed
 
-### **Before:**
+### Before:
 ```solidity
 function batchDeployStrategies(
     address underlyingToken,
@@ -33,7 +33,7 @@ function batchDeployStrategies(
 ```
 **Owner was:** `msg.sender` (the caller)
 
-### **After:**
+### After:
 ```solidity
 function batchDeployStrategies(
     address underlyingToken,
@@ -49,9 +49,9 @@ function batchDeployStrategies(
 
 ---
 
-## **HOW TO DEPLOY:**
+## How to deploy
 
-### **Transaction 1: Deploy All Strategies**
+### Transaction 1: Deploy All Strategies
 ```solidity
 DeploymentResult memory result = batcher.batchDeployStrategies(
     creatorToken,                                           // CREATOR token
@@ -72,7 +72,7 @@ DeploymentResult memory result = batcher.batchDeployStrategies(
 
 ---
 
-### **Transaction 2: Accept Governance (FROM MULTISIG)**
+### Transaction 2: Accept Governance (FROM MULTISIG)
 
 **Important:** This transaction MUST be sent from your multisig wallet!
 
@@ -86,7 +86,7 @@ CharmAlphaVault(result.charmVault).acceptGovernance();
 
 ---
 
-## **OWNERSHIP SUMMARY:**
+## Ownership summary
 
 | Contract | Owner | Type |
 |----------|-------|------|
@@ -97,7 +97,7 @@ CharmAlphaVault(result.charmVault).acceptGovernance();
 
 ---
 
-## 🛡️ **WHY MULTISIG IS BETTER:**
+## Why multisig is better
 
 | Aspect | EOA | Multisig |
 |--------|-----|----------|
@@ -111,7 +111,7 @@ CharmAlphaVault(result.charmVault).acceptGovernance();
 
 ---
 
-## **COMPLETE DEPLOYMENT FLOW:**
+## Complete deployment flow
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -146,9 +146,9 @@ CharmAlphaVault(result.charmVault).acceptGovernance();
 
 ---
 
-## **IMPORTANT NOTES:**
+## Important notes
 
-### **1. Accept Governance MUST Come From Multisig**
+### 1. Accept Governance MUST Come From Multisig
 ```solidity
 // WRONG - Called from different address
 EOA.call(charmVault.acceptGovernance())  // Will REVERT
@@ -159,12 +159,12 @@ Multisig(0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3).call(
 )
 ```
 
-### **2. You Don't Need to Deploy From Multisig**
+### 2. You Don't Need to Deploy From Multisig
 - Anyone can call `batchDeployStrategies()` (costs gas)
 - The `owner` parameter determines ownership
 - Multisig only needs to accept governance (cheap transaction)
 
-### **3. Ownership is Immediate for Most Contracts**
+### 3. Ownership is Immediate for Most Contracts
 - **CreatorCharmStrategy:** Owned immediately 
 - **AjnaStrategy:** Owned immediately 
 - **CharmAlphaStrategy:** Not deployed (embedded) 
@@ -172,7 +172,7 @@ Multisig(0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3).call(
 
 ---
 
-## **CHECKLIST:**
+## Checklist
 
 - [ ] 1. Call `batchDeployStrategies()` with multisig address as `owner` parameter
 - [ ] 2. Note the returned `result.charmVault` address
@@ -184,7 +184,7 @@ Multisig(0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3).call(
 
 ---
 
-## **EXAMPLE DEPLOYMENT SCRIPT:**
+## Example deployment script
 
 ```javascript
 // Step 1: Deploy (can be from any address)
@@ -217,7 +217,7 @@ console.log("Multisig now owns CharmAlphaVault!");
 
 ---
 
-## **SECURITY BEST PRACTICES:**
+## Security best practices
 
 1. **Use multisig for ownership** (you're doing this!)
 2. **Require multiple signers** (2-of-3 or 3-of-5 recommended)

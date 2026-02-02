@@ -1,76 +1,67 @@
 ---
 title: Governance
-sidebar_position: 6
+sidebar_position: 5
 ---
 
 # Governance
 
-This section documents the ve(3,3) governance model for the 4626 protocol.
-
-**Who this is for:** Token holders, DAO participants, and governance researchers.
+The protocol uses ve(3,3) governance where token holders lock assets for voting power and direct lottery probability to vaults.
 
 ---
 
-## Overview
+## Why participate
 
-4626 implements a ve(3,3) governance model where:
-- Holders lock tokens to receive ve4626 (vote-escrowed 4626)
-- ve4626 holders vote weekly on vault gauge allocations
-- Voters receive a share of protocol fees proportional to their votes
-- External parties can deposit bribes to incentivize votes
+| Benefit | Mechanism |
+|---------|-----------|
+| Voting power | Direct lottery probability to preferred vaults |
+| Fee share | Earn 9.61% of trading fees pro-rata |
+| Bribes | Protocols pay for your votes |
 
 ---
 
-## Key concepts
+## How it works
 
-### ve4626 (Vote-Escrowed 4626)
+1. **Lock** ■TOKEN or ▢TOKEN in ve4626 (7 days to 4 years)
+2. **Vote** for vaults each epoch (weekly)
+3. **Earn** rewards from fees and bribes
+4. **Claim** after epoch ends
 
-Lock 4626 tokens to receive ve4626, which provides:
-- Voting power in gauge elections
-- Share of voter rewards
-- Governance participation rights
+Voting power decays linearly over the lock period.
 
-### Weekly epochs
+---
 
-Voting operates on weekly epochs:
-- Vote once per epoch on vault allocations
-- Claims only available after epoch ends
-- Votes determine fee distribution for that epoch
+## Epochs
 
-### Gauges
+Voting operates in 7-day epochs starting Thursday 00:00 UTC.
 
-Each whitelisted vault has a gauge that:
-- Receives votes from ve4626 holders
-- Determines share of voter rewards
-- Can influence lottery probability boost
+- Vote during the epoch
+- Votes determine probability for that epoch
+- Claim rewards after epoch ends
+
+---
+
+## Probability direction
+
+Vaults with more votes give their buyers higher lottery win rates.
+
+```
+Vault votes / Total votes = Probability boost
+```
 
 ---
 
 ## Contracts
 
-| Contract | Purpose |
-|----------|---------|
-| `ve4626` | Vote-escrowed token contract |
-| `VaultGaugeVoting` | Weekly epoch voting |
-| `VoterRewardsDistributor` | Fee distribution to voters |
-| `CreatorGaugeController` | Fee routing and gauge management |
-| `BribeDepot` | External bribe deposits |
-| `BribesFactory` | Deploy bribe depots |
+| Contract | Purpose | Documentation |
+|----------|---------|---------------|
+| ve4626 | Lock tokens, get voting power | [API](/contracts/governance/ve4626) |
+| VaultGaugeVoting | Cast and track votes | [API](/contracts/governance/vault-gauge-voting) |
+| VoterRewardsDistributor | Claim fee rewards | [API](/api/contracts) |
+| BribeDepot | External vote incentives | [API](/api/contracts) |
 
 ---
 
-## Documentation
+## Related
 
-- [ve(3,3) Implementation](./ve33-progress.md) - Technical details of the voting system
-
----
-
-## Day-1 configuration
-
-The governance system can be launched in "simple mode":
-- Leave `voterRewardsDistributor` unset on GaugeController
-- Fees accumulate to protocol treasury
-- No voting UI exposed
-- Enable later when ready
-
-See [ve(3,3) Implementation](./ve33-progress.md) for details.
+- [Fee Flow](/overview/fee-flow) - How fees are distributed
+- [Lottery](/concepts/lottery) - Probability mechanics

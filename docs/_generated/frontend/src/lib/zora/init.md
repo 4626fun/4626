@@ -12,7 +12,7 @@
 
 > **initZoraCoinsSdk**(): `Promise`\<`void`\>
 
-Defined in: [lib/zora/init.ts:10](https://github.com/wenakita/4626/blob/d2887a577bbbcd8195e2d76fc50368643edd1f1a/frontend/src/lib/zora/init.ts#L10)
+Defined in: [lib/zora/init.ts:10](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/lib/zora/init.ts#L10)
 
 Initializes the Zora Coins SDK with a public (browser) API key.
 

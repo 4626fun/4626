@@ -1,13 +1,21 @@
 ---
 title: Guides
-sidebar_position: 7
+sidebar_position: 4
 ---
 
 # Guides
 
-Step-by-step guides and troubleshooting documentation.
+Step-by-step tutorials for common tasks in the 4626 protocol.
 
-**Who this is for:** Users who need help with specific tasks or issues.
+---
+
+## Tutorials
+
+| Guide | Description |
+|-------|-------------|
+| [Deploy a vault](./deploy-vault) | Create a new creator vault |
+| [Activate a vault](./activate-vault) | Configure and activate vault |
+| [Launch a token](./launch-token) | Fair launch via CCA |
 
 ---
 
@@ -15,39 +23,33 @@ Step-by-step guides and troubleshooting documentation.
 
 | Guide | Description |
 |-------|-------------|
-| [Delayed completion](./troubleshooting/delayed-completion) | Auction completion issues |
-| [UserOp signature errors](./troubleshooting/userop-signature-errors) | ERC-4337 signature debugging |
-| [Compilation status](./troubleshooting/compilation-status) | Contract compilation issues |
+| [Troubleshooting](./troubleshooting/) | Solutions to frequent problems |
+| [ERC-4337 debugging](/reference/erc4337-debugging) | Account abstraction issues |
 
 ---
 
-## Common tasks
+## Quick reference
 
-### Deploying a vault
+### Deploy checklist
 
-1. Review [pre-launch checklist](/operations/deployment/pre-launch)
-2. Deploy contracts via [automation guide](/operations/automation/full-automation)
-3. Verify deployment via [approvals checklist](/operations/deployment/approvals-checklist)
+1. Have creator coin address ready
+2. Decide on vault name and symbol
+3. Choose initial strategies
+4. Set fee recipients
+5. Deploy via factory or batcher
 
-### Activating a vault
+### Activation checklist
 
-1. Ensure approvals are set
-2. Use `VaultActivationBatcher` for 1-click activation
-3. See [account abstraction](/overview/account-abstraction/activation)
+1. Vault deployed
+2. Wrapper configured
+3. ShareOFT deployed
+4. GaugeController set
+5. Strategies added
 
-### Adding strategies
+### Launch checklist
 
-1. Deploy strategy contracts
-2. Add to vault with `addStrategy()`
-3. Set idle buffer with `setMinimumTotalIdle()`
-4. See [strategy architecture](/overview/architecture/strategy-architecture)
-
----
-
-## Getting help
-
-If documentation doesn't resolve your issue:
-
-1. Check [ERC-4337 debugging](/reference/erc4337-debugging) for AA issues
-2. Review contract source code in `contracts/`
-3. Check test files in `test/` for usage examples
+1. ■TOKEN supply ready
+2. CCA strategy configured
+3. Auction parameters set
+4. Recipients configured
+5. Create auction

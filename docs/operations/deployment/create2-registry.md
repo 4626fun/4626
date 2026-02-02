@@ -22,6 +22,6 @@ SALT_START=0 SALT_ITERS=1000000 forge script script/FindRegistryCreate2Salt.s.so
 
 Copy the salt into `REGISTRY_SALT` in `script/DeployBaseMainnet.s.sol` before deploying.
 
-## AA deployment (optional)
+## AA deployment
 Account abstraction is optional for protocol deployments. Deterministic CREATE2 does not require AA.
 Use AA/bundlers only if you want a single-click or paymaster-managed deploy flow.

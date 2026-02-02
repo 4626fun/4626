@@ -12,7 +12,7 @@
 
 > `const` **AKITA**: `object`
 
-Defined in: [config/contracts.ts:95](https://github.com/wenakita/4626/blob/d2887a577bbbcd8195e2d76fc50368643edd1f1a/frontend/src/config/contracts.ts#L95)
+Defined in: [config/contracts.ts:95](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/config/contracts.ts#L95)
 
 #### Type Declaration
 
@@ -66,7 +66,7 @@ Defined in: [config/contracts.ts:95](https://github.com/wenakita/4626/blob/d2887
 
 > `const` **CONTRACTS**: `object`
 
-Defined in: [config/contracts.ts:23](https://github.com/wenakita/4626/blob/d2887a577bbbcd8195e2d76fc50368643edd1f1a/frontend/src/config/contracts.ts#L23)
+Defined in: [config/contracts.ts:23](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/config/contracts.ts#L23)
 
 #### Type Declaration
 
@@ -216,7 +216,7 @@ Defined in: [config/contracts.ts:23](https://github.com/wenakita/4626/blob/d2887
 
 > `const` **ERC4626**: `object`
 
-Defined in: [config/contracts.ts:112](https://github.com/wenakita/4626/blob/d2887a577bbbcd8195e2d76fc50368643edd1f1a/frontend/src/config/contracts.ts#L112)
+Defined in: [config/contracts.ts:112](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/config/contracts.ts#L112)
 
 #### Type Declaration
 

@@ -1,80 +1,124 @@
 ---
-title: Smart Contracts
-sidebar_position: 2
+title: Contracts
+sidebar_position: 3
 ---
 
-# Smart Contracts
+# Smart contracts
 
 This section documents the public-facing smart contracts in the 4626 protocol.
 
-**Who this is for:** Protocol engineers, auditors, and integrators.
-
 ---
 
-## Contract overview
+## Contract taxonomy
 
 ### Core
 
-| Contract | Description |
-|----------|-------------|
-| `CreatorOVault` | ERC-4626 compliant vault for creator coins |
-| `CreatorOVaultWrapper` | Wraps vault shares for OFT functionality |
-| `CreatorRegistry` | Global registry mapping tokens, vaults, and OFTs |
+The foundational contracts that implement the vault system:
+
+| Contract | Purpose |
+|----------|---------|
+| [CreatorOVault](./core/creator-ovault) | ERC-4626 vault for creator coins |
+| [CreatorOVaultWrapper](./core/creator-ovault-wrapper) | Converts ▢TOKEN ↔ ■TOKEN |
+| [CreatorShareOFT](./core/creator-share-oft) | LayerZero OFT for cross-chain |
+| CreatorRegistry | Global registry of vaults and tokens |
 
 ### Strategies
 
-| Contract | Description |
-|----------|-------------|
-| `CCALaunchStrategy` | Continuous Clearing Auction for token launches |
-| `CreatorCharmStrategy` | Uniswap V3 via Charm Alpha Vaults |
-| `AjnaStrategy` | Lending via Ajna Protocol |
-| `FullRangeStrategy` | Uniswap V4 full range liquidity |
-| `ConcentratedStrategy` | Uniswap V4 concentrated positions |
-| `LimitOrderStrategy` | Uniswap V4 limit orders |
+Capital deployment strategies:
+
+| Contract | Asset | Purpose |
+|----------|-------|---------|
+| [CCALaunchStrategy](./strategies/cca-launch) | ■TOKEN | Fair launch via CCA |
+| CreatorCharmStrategy | TOKEN | V3 LP via Charm |
+| AjnaStrategy | TOKEN | Lending pools |
+| V4 Strategies | TOKEN | V4 liquidity |
 
 ### Governance
 
-| Contract | Description |
-|----------|-------------|
-| `ve4626` | Vote-escrowed 4626 token |
-| `VaultGaugeVoting` | Weekly epoch voting for vault gauges |
-| `VoterRewardsDistributor` | Distributes fees to voters |
-| `CreatorGaugeController` | Fee routing and gauge management |
-| `BribeDepot` | External bribes for votes |
+ve(3,3) governance system:
+
+| Contract | Purpose |
+|----------|---------|
+| [CreatorGaugeController](./governance/gauge-controller) | Fee distribution |
+| [VaultGaugeVoting](./governance/vault-gauge-voting) | Epoch voting |
+| [ve4626](./governance/ve4626) | Vote-escrowed tokens |
+| VoterRewardsDistributor | Voter rewards |
+| BribeDepot | External bribes |
 
 ### Services
 
-| Contract | Description |
-|----------|-------------|
-| `CreatorShareOFT` | LayerZero OFT for cross-chain transfers |
-| `CreatorLotteryManager` | Jackpot lottery mechanics |
-| `CreatorOracle` | Price oracle for creator coins |
-| `SolanaBridgeAdapter` | Solana cross-chain bridge |
+Supporting infrastructure:
+
+| Contract | Purpose |
+|----------|---------|
+| CreatorLotteryManager | Jackpot system |
+| CreatorOracle | Price feeds |
+| SolanaBridgeAdapter | Solana bridge |
 
 ### Helpers
 
-| Contract | Description |
-|----------|-------------|
-| `VaultActivationBatcher` | 1-click vault activation |
-| `StrategyDeploymentBatcher` | Batch strategy deployment |
-| `CreatorVaultDeployer` | Full vault deployment helper |
-| `Create2Deployer` | Deterministic deployment |
+Deployment and automation:
+
+| Contract | Purpose |
+|----------|---------|
+| VaultActivationBatcher | 1-click activation |
+| CreatorVaultDeployer | Full deployment |
+| Create2Deployer | Deterministic addresses |
 
 ---
 
-## Deployment addresses
+## Architecture
 
-See the frontend config at `frontend/src/config/contracts.ts` for current mainnet addresses.
+```
+                    ┌─────────────────────┐
+                    │   CreatorRegistry   │
+                    │   (global state)    │
+                    └─────────────────────┘
+                              │
+         ┌────────────────────┼────────────────────┐
+         │                    │                    │
+         ▼                    ▼                    ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│  CreatorOVault  │  │ CreatorShareOFT │  │   Governance    │
+│   (ERC-4626)    │  │  (LayerZero)    │  │   Contracts     │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+         │                    │                    │
+         ▼                    ▼                    │
+┌─────────────────┐  ┌─────────────────┐          │
+│   Strategies    │  │ GaugeController │◄─────────┘
+└─────────────────┘  └─────────────────┘
+                              │
+                              ▼
+                    ┌─────────────────┐
+                    │ LotteryManager  │
+                    └─────────────────┘
+```
 
 ---
 
-## Subsections
+## Sections
 
-- [Keepers](/contracts/keepers) - Automated keeper agents
-- [Lottery](/contracts/lottery) - Jackpot lottery mechanics
+| Section | Contents |
+|---------|----------|
+| [Core](./core) | Vault, Wrapper, ShareOFT |
+| [Strategies](./strategies) | CCA, Charm, Ajna, V4 |
+| [Governance](./governance) | GaugeController, Voting, ve4626 |
+
+For lottery mechanics, see [Concepts: Lottery](/concepts/lottery).
 
 ---
 
-## Auto-generated API
+## Deployment
 
-For complete function signatures and NatSpec documentation, see the [Contract API Reference](/api/contracts).
+For deployment guides, see:
+- [Deploy Vault Guide](/guides/deploy-vault)
+- [Launch Token Guide](/guides/launch-token)
+- [Operations](/operations)
+
+---
+
+## API reference
+
+For complete function signatures and NatSpec documentation, see:
+- [Contract API](/api/contracts) - Auto-generated from NatSpec
+- [Frontend API](/api/frontend) - TypeScript interfaces

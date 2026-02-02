@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "generate:contracts": "cd ../.. && (command -v forge >/dev/null && forge doc || echo 'Skipping forge doc (not installed)')",
-    "generate:frontend": "cd ../../frontend && (npx typedoc || echo 'Skipping typedoc')",
+    "generate:frontend": "cd ../../frontend && ([ -d node_modules/typedoc ] && pnpm exec typedoc || echo 'Skipping typedoc (dependencies not installed)')",
     "generate:all": "pnpm generate:contracts; pnpm generate:frontend; true",
     "sync-docs": "node scripts/sync-docs.mjs",
     "sync-docs:strict": "node scripts/sync-docs.mjs --strict",

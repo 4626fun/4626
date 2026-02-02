@@ -4,13 +4,13 @@ title: Guide
 
 # **FINAL DEPLOYMENT GUIDE WITH MULTISIG**
 
-## **EVERYTHING IS READY!**
+## Everything is ready
 
 Your multisig `0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3` will own all deployed strategies.
 
 ---
 
-## **DEPLOYMENT COMMAND:**
+## Deployment command
 
 ```solidity
 // Call this function (can be from any address - doesn't have to be the multisig):
@@ -27,7 +27,7 @@ DeploymentResult memory result = StrategyDeploymentBatcher(batcherAddress).batch
 
 ---
 
-## **WHAT GETS DEPLOYED:**
+## What gets deployed
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -63,7 +63,7 @@ DeploymentResult memory result = StrategyDeploymentBatcher(batcherAddress).batch
 
 ---
 
-## **IMPORTANT: ACCEPT GOVERNANCE**
+## Important: Accept governance
 
 After deployment, you MUST call this FROM YOUR MULTISIG:
 
@@ -79,7 +79,7 @@ CharmAlphaVault(result.charmVault).acceptGovernance();
 
 ---
 
-## **OWNERSHIP TABLE:**
+## Ownership table
 
 | Contract | Owner After Deployment | Owner After Accepting |
 |----------|------------------------|----------------------|
@@ -92,7 +92,7 @@ CharmAlphaVault(result.charmVault).acceptGovernance();
 
 ---
 
-## **STEP-BY-STEP CHECKLIST:**
+## Step-by-step checklist
 
 - [ ] 1. Deploy `StrategyDeploymentBatcher` contract
 - [ ] 2. Get your CREATOR token address
@@ -109,7 +109,7 @@ CharmAlphaVault(result.charmVault).acceptGovernance();
 
 ---
 
-## **EXAMPLE WITH ETHERS.JS:**
+## Example with ethers.js
 
 ```javascript
 // Step 1: Deploy all strategies
@@ -191,7 +191,7 @@ function calculateSqrtPrice(
 
 ---
 
-## 🛡️ **SECURITY NOTES:**
+## Security notes
 
 1. **Multisig is MUCH safer than EOA**
    - Multiple signers required
@@ -215,7 +215,7 @@ function calculateSqrtPrice(
 
 ---
 
-## **FINAL VERIFICATION:**
+## Final verification
 
 After deployment, verify:
 

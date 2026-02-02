@@ -12,7 +12,7 @@
 
 > **useBatchMigrationCheck**(`coinAddresses`): `Map`\<`string`, `boolean`\>
 
-Defined in: [hooks/useMigratedCoins.ts:87](https://github.com/wenakita/4626/blob/d2887a577bbbcd8195e2d76fc50368643edd1f1a/frontend/src/hooks/useMigratedCoins.ts#L87)
+Defined in: [hooks/useMigratedCoins.ts:87](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/hooks/useMigratedCoins.ts#L87)
 
 Batch check for multiple coins
 More efficient than individual checks
@@ -33,7 +33,7 @@ More efficient than individual checks
 
 > **useIsCoinMigrated**(`coinAddress`): `boolean` \| `undefined`
 
-Defined in: [hooks/useMigratedCoins.ts:48](https://github.com/wenakita/4626/blob/d2887a577bbbcd8195e2d76fc50368643edd1f1a/frontend/src/hooks/useMigratedCoins.ts#L48)
+Defined in: [hooks/useMigratedCoins.ts:48](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/hooks/useMigratedCoins.ts#L48)
 
 Hook to check if a specific coin has migrated
 
@@ -53,7 +53,7 @@ Hook to check if a specific coin has migrated
 
 > **useMigratedCoins**(): `object`
 
-Defined in: [hooks/useMigratedCoins.ts:15](https://github.com/wenakita/4626/blob/d2887a577bbbcd8195e2d76fc50368643edd1f1a/frontend/src/hooks/useMigratedCoins.ts#L15)
+Defined in: [hooks/useMigratedCoins.ts:15](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/hooks/useMigratedCoins.ts#L15)
 
 Hook to get the set of migrated coins
 Triggers a fetch if not cached

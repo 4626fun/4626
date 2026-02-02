@@ -39,7 +39,7 @@ The root HTML must contain a valid Mini App embed tag (not legacy-only):
 
 - `meta name="fc:miniapp"` JSON must use `"version":"1"` (not `"next"`).
 
-## DNS Configuration
+## DNS configuration
 
 The domain is configured via Vercel with automatic SSL/TLS provisioning.
 

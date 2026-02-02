@@ -1,65 +1,57 @@
 ---
 title: Integrations
-sidebar_position: 4
+sidebar_position: 5
 ---
 
 # Integrations
 
-This section documents external systems and cross-chain integrations.
-
-**Who this is for:** Developers integrating 4626 with external protocols, chains, or platforms.
+Cross-chain and external system integrations for 4626.
 
 ---
 
 ## Cross-chain
 
-### LayerZero OFT
-
-CreatorShareOFT (■TOKEN) implements LayerZero's OFT standard for cross-chain vault share transfers.
-
-| Feature | Description |
-|---------|-------------|
-| Standard | LayerZero OFT V2 |
-| Token | ■TOKEN (wrapped vault shares) |
-| Contract | `CreatorShareOFT.sol` |
-
-### Solana bridge
-
-Experimental integration with Solana via bridge adapters.
-
-- [Solana integration](./solana-integration.md) - Bridge architecture and implementation
+| Integration | Description |
+|-------------|-------------|
+| [LayerZero OFT](./oft) | Cross-chain share transfers |
+| [Solana bridge](./solana-integration) | Solana ecosystem bridge |
 
 ---
 
-## Social integrations
+## LayerZero OFT
 
-### Farcaster
+■TOKEN uses LayerZero's OFT standard for cross-chain transfers:
 
-4626 integrates with Farcaster for:
-- Mini App distribution
-- Social identity verification
-- Creator discovery
+```
+Base ■AKITA ──► LayerZero ──► Arbitrum ■AKITA
+     (burn)                        (mint)
+```
 
-### Zora
+### Supported chains
 
-Creator coins are sourced from Zora's Creator Coin system.
+| Chain | EID | Status |
+|-------|-----|--------|
+| Base | 30184 | Production |
+| Arbitrum | 30110 | Planned |
+| Optimism | 30111 | Planned |
+
+### Usage
+
+```solidity
+// Send ■TOKEN cross-chain
+shareOFT.send(
+    dstEid,           // Destination chain
+    recipient,        // Receiver
+    amount,           // Token amount
+    options,          // LZ options
+    fee,              // Messaging fee
+    refundAddress     // Refund address
+);
+```
 
 ---
 
-## Oracles and data
+## Related
 
-### Creator Oracle
-
-`CreatorOracle.sol` provides price feeds for creator coins.
-
-### DEX integrations
-
-- Uniswap V3 via Charm Alpha Vaults
-- Uniswap V4 via native strategies
-- DEXScreener API for market data
-
----
-
-## Documentation
-
-- [Solana integration](./solana-integration.md) - Cross-chain bridge details
+- [Token model](/overview/token-model) - ■TOKEN explained
+- [CreatorShareOFT](/contracts/core/creator-share-oft) - Contract details

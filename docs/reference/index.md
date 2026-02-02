@@ -1,13 +1,11 @@
 ---
 title: Reference
-sidebar_position: 8
+sidebar_position: 7
 ---
 
 # Reference
 
-Technical reference documentation and debugging guides.
-
-**Who this is for:** Developers debugging issues or looking up technical details.
+Technical reference material for the 4626 protocol.
 
 ---
 
@@ -15,27 +13,47 @@ Technical reference documentation and debugging guides.
 
 | Document | Description |
 |----------|-------------|
-| [Deployment checklist](./deployment-checklist) | Pre-deployment verification |
-| [ERC-4337 debugging](./erc4337-debugging) | Account abstraction troubleshooting |
-| [Strategy deployment](./strategy-deploy) | Strategy deployment reference |
+| [Addresses](./addresses) | Contract addresses by chain |
+| [Glossary](./glossary) | Key terms and definitions |
+| [ERC-4337 Debugging](./erc4337-debugging) | Account abstraction troubleshooting |
 
 ---
 
-## API documentation
+## Quick reference
 
-For auto-generated API documentation from source code:
+### Token symbols
 
-- [Contract API](/api/contracts) - Solidity NatSpec documentation
-- [Frontend API](/api/frontend) - TypeScript type documentation
+| Symbol | Meaning |
+|--------|---------|
+| TOKEN | Creator Coin (underlying asset) |
+| ▢TOKEN | Vault shares (ERC-4626) |
+| ■TOKEN | Wrapped shares (LayerZero OFT) |
+
+### Fee allocation
+
+| Recipient | Percentage |
+|-----------|------------|
+| Lottery | 69% |
+| Burn | 21.39% |
+| Voters | 9.61% |
+
+### Key constants
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| Buy fee | 6.9% (690 bps) | DEX purchase fee |
+| Performance fee | 10% (1000 bps) | Vault profit fee |
+| Min first deposit | 5M tokens | Security threshold |
+| Decimals offset | 10^3 | Inflation protection |
+| Max lock | 4 years | ve4626 maximum |
+| Epoch duration | 7 days | Voting cycle |
 
 ---
 
-## External references
+## External resources
 
-| Resource | URL |
-|----------|-----|
-| Uniswap V4 | https://docs.uniswap.org/contracts/v4 |
-| LayerZero | https://layerzero.gitbook.io/docs |
-| Ajna | https://docs.ajna.finance |
-| Charm Finance | https://docs.charm.fi |
-| ERC-4337 | https://eips.ethereum.org/EIPS/eip-4337 |
+- [LayerZero docs](https://docs.layerzero.network/) - OFT standard
+- [Uniswap docs](https://docs.uniswap.org/) - V4 and CCA
+- [ERC-4626 spec](https://eips.ethereum.org/EIPS/eip-4626) - Vault standard
+- [Charm docs](https://docs.charm.fi/) - Alpha Vaults
+- [Ajna docs](https://docs.ajna.finance/) - Lending protocol

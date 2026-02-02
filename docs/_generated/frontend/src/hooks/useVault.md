@@ -12,7 +12,7 @@
 
 > **useVault**(`vaultAddress`): `object`
 
-Defined in: [hooks/useVault.ts:18](https://github.com/wenakita/4626/blob/d2887a577bbbcd8195e2d76fc50368643edd1f1a/frontend/src/hooks/useVault.ts#L18)
+Defined in: [hooks/useVault.ts:18](https://github.com/wenakita/4626/blob/fd199051169d23a9cf1f9ac62fff0899dc5c1eb1/frontend/src/hooks/useVault.ts#L18)
 
 #### Parameters
 

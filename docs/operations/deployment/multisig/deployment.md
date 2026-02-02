@@ -4,13 +4,13 @@ title: Deployment
 
 # **DEPLOYMENT WITH MULTISIG OWNER**
 
-## **QUICK START**
+## Quick start
 
 Your multisig will now own all deployed strategies!
 
 ---
 
-## **YOUR MULTISIG ADDRESS:**
+## Your multisig address
 
 ```
 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3
@@ -18,7 +18,7 @@ Your multisig will now own all deployed strategies!
 
 ---
 
-## **DEPLOYMENT COMMAND:**
+## Deployment command
 
 ```solidity
 // Step 1: Deploy all strategies
@@ -37,7 +37,7 @@ DeploymentResult memory result = batcher.batchDeployStrategies(
 
 ---
 
-## **WHAT YOU GET:**
+## What you get
 
 | Contract | Owner | Status |
 |----------|-------|--------|
@@ -47,7 +47,7 @@ DeploymentResult memory result = batcher.batchDeployStrategies(
 
 ---
 
-## **WHY THIS IS BETTER:**
+## Why this is better
 
 **Multiple signers required** for any governance action  
 **No single point of failure** if one key is compromised  

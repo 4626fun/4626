@@ -1,18 +1,18 @@
 ---
-title: Cca Verification
+title: CCA verification
 ---
 
-# 🔍 **CCA Deployment Deep Verification (Base / Uniswap v1.1.0)**
+# CCA verification
 
-## **CCA Flow is CORRECT (current code)**
+## CCA flow verification
 
 This document is a sanity-check of the on-chain flow from vault activation → CCA auction creation, and the key deployment/config requirements for Base.
 
 ---
 
-## **The Complete CCA Launch Flow**
+## Complete CCA launch flow
 
-### **Step-by-Step Breakdown:**
+### Step-by-Step Breakdown:
 
 ```
 User → VaultActivationBatcher.batchActivate()
@@ -41,7 +41,7 @@ User → VaultActivationBatcher.batchActivate()
 
 ---
 
-## **Authorization model (no longer onlyOwner)**
+## Authorization model
 
 `CCALaunchStrategy.launchAuctionSimple()` is gated by `onlyApprovedOrOwner`:
 - The **owner** can launch auctions directly.
@@ -66,17 +66,17 @@ Our `CCALaunchStrategy` now stores the factory in **state** (`ccaFactory`) and d
 
 ## 🚨 **What can still break deployment**
 
-### **Current Setup:**
+### Current Setup:
 ```solidity
 // VaultActivationBatcher (line 117)
 auction = ICCAStrategy(ccaStrategy).launchAuctionSimple(auctionAmount, requiredRaise);
 ```
 
-### **If you forget `setApprovedLauncher`**
+### If you forget `setApprovedLauncher`
 
 `VaultActivationBatcher.batchActivate()` will revert when it tries to call `launchAuctionSimple()`.
 
-### **If defaults are misconfigured**
+### If defaults are misconfigured
 
 Uniswap CCA expects **Q96** pricing for `floorPrice` and `tickSpacing`. Our strategy defaults now use Q96, and the default issuance schedule includes a **large final block** issuance to reduce end-price manipulability (per Uniswap guidance).
 
@@ -126,7 +126,7 @@ function launchAuctionSimple(
 
 ---
 
-### **Option 3: Two-Step Process (No Code Changes)**
+### Option 3: Two-Step Process (No Code Changes)
 
 ```solidity
 // Step 1: User deposits/wraps manually
@@ -151,16 +151,16 @@ ccaStrategy.launchAuctionSimple(auctionAmount, requiredRaise);
 
 ---
 
-## **Recommended Solution**
+## Recommended solution
 
-### **Update CCALaunchStrategy to Use Approved Launchers**
+### Update CCALaunchStrategy to Use Approved Launchers
 
 This gives you the best of both worlds:
 - Security (only approved addresses can launch)
 - Flexibility (approve VaultActivationBatcher)
 - Single transaction UX
 
-### **Implementation:**
+### Implementation:
 
 ```solidity
 // Add to CCALaunchStrategy.sol
@@ -204,7 +204,7 @@ ccaStrategy.setApprovedLauncher(address(vaultActivationBatcher), true);
 
 ---
 
-## **After Fix: Complete Flow Will Work**
+## After fix
 
 ```
 1. Deploy CCALaunchStrategy (with approved launchers)
@@ -228,7 +228,7 @@ SUCCESS!
 
 ---
 
-## **Verification Summary**
+## Verification summary
 
 | Component | Status | Issue |
 |-----------|--------|-------|
@@ -239,7 +239,7 @@ SUCCESS!
 
 ---
 
-## **Action Required**
+## Action required
 
 **To deploy CCA with AA batcher:**
 
@@ -254,7 +254,7 @@ Use **Option 3** (two-step process) with current contracts, but worse UX.
 
 ---
 
-## **Bottom Line**
+## Summary
 
 **The code logic is correct, BUT:**
 - Current CCALaunchStrategy won't work with VaultActivationBatcher

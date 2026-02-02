@@ -1,18 +1,20 @@
 ---
-title: Delayed Completion
+title: Delayed completion
 ---
 
-# ⏱️ What Happens If Auction Completion Is Delayed?
+# Delayed completion
 
-## 🔍 Scenario Analysis
+What happens if auction completion is delayed after the auction period ends.
+
+## Scenario analysis
 
 ### If nobody calls `sweepCurrency()` (and the token owner doesn’t configure the tax hook) after Day 7...
 
 ---
 
-## **GOOD NEWS: No Funds Are Lost!**
+## Funds are safe
 
-### **User Safety:**
+### User Safety:
 
 1. **Auction Participants Can Still Claim:**
    - After 7 days, auction automatically ends (by block number)
@@ -38,9 +40,9 @@ title: Delayed Completion
 
 ---
 
-## **WHAT DOESN'T WORK:**
+## What does not work
 
-### **Without Completion:**
+### Without Completion:
 
 1. **No Trading Pool:**
    - ■AKITA/ETH V4 pool doesn't exist
@@ -66,9 +68,9 @@ title: Delayed Completion
 
 ---
 
-## **CAN IT BE COMPLETED LATER?**
+## Can it be completed later
 
-### **YES — with the correct permissions:**
+### YES — with the correct permissions:
 
 ```solidity
 // In CCALaunchStrategy.sol
@@ -92,9 +94,9 @@ function sweepCurrency() external nonReentrant {
 
 ---
 
-## **RECOMMENDED SOLUTIONS:**
+## Recommended solutions
 
-### **Option 1: Set Multiple Reminders (Easiest)**
+### Option 1: Set Multiple Reminders (Easiest)
 
 ```bash
 Day 6: "Auction ends tomorrow - prepare to complete"
@@ -109,7 +111,7 @@ Day 8: "Emergency: Complete auction ASAP"
 
 ---
 
-### **Option 2: Make Completion Permissionless (Best)**
+### Option 2: Make Completion Permissionless (Best)
 
 **Change the contract to allow anyone to complete after 7 days:**
 
@@ -150,7 +152,7 @@ function sweepCurrency() external nonReentrant {
 
 ---
 
-### **Option 3: Build Automated Keeper (Most Reliable)**
+### Option 3: Build Automated Keeper (Most Reliable)
 
 **Simple keeper bot that monitors and completes:**
 
@@ -211,7 +213,7 @@ setInterval(checkAndComplete, 60 * 60 * 1000)
 
 ---
 
-## **RISK ASSESSMENT:**
+## Risk assessment
 
 | Scenario | Risk Level | Impact | Mitigation |
 |----------|------------|--------|------------|
@@ -222,9 +224,9 @@ setInterval(checkAndComplete, 60 * 60 * 1000)
 
 ---
 
-## **WHAT YOU SHOULD DO:**
+## What you should do
 
-### **Before Launch:**
+### Before Launch:
 
 1. **Build the keeper bot** (2 hours of work)
    - Set it up on Render.com
@@ -241,7 +243,7 @@ setInterval(checkAndComplete, 60 * 60 * 1000)
    - Email alerts for day 6, 7, 8
    - Multiple people notified
 
-### **After Launch:**
+### After Launch:
 
 1. **Monitor daily**
    - Check auction progress
@@ -255,7 +257,7 @@ setInterval(checkAndComplete, 60 * 60 * 1000)
 
 ---
 
-## **FINANCIAL IMPACT OF DELAY:**
+## Financial impact of delay
 
 **Example: $10k raised in auction**
 
@@ -272,21 +274,21 @@ setInterval(checkAndComplete, 60 * 60 * 1000)
 
 ---
 
-## **BOTTOM LINE:**
+## Summary
 
-### **Users Are Safe:**
+### Users Are Safe:
 - Can claim ■AKITA from auction
 - Can unwrap to vault shares
 - Can withdraw underlying AKITA
 - No funds lost or locked
 
-### **But Ecosystem Is Dead Until Completion:**
+### But Ecosystem Is Dead Until Completion:
 - No trading pool
 - No fees generated
 - No public market
 - Community disappointed
 
-### **STRONGLY RECOMMEND:**
+### STRONGLY RECOMMEND:
 1. **Build a keeper bot** (best solution)
 2. **Set multiple reminders** (backup)
 3. **Make it permissionless** (safety net)
@@ -294,7 +296,7 @@ setInterval(checkAndComplete, 60 * 60 * 1000)
 
 ---
 
-## **FINAL ANSWER:**
+## Conclusion
 
 **Can you launch safely?** YES.
 
