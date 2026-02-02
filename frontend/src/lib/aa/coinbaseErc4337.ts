@@ -280,6 +280,18 @@ function isPaymasterUnavailableError(error: unknown): boolean {
   )
 }
 
+function formatMetaMessages(error: unknown): string | null {
+  const meta = (error as any)?.metaMessages
+  if (!Array.isArray(meta) || meta.length === 0) return null
+  const messages = meta
+    .map((m) => (typeof m === 'string' ? m : JSON.stringify(m)))
+    .map((m) => String(m).replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+  if (messages.length === 0) return null
+  const limited = messages.slice(0, 3)
+  return limited.join(' | ') + (messages.length > limited.length ? ' | ...' : '')
+}
+
 function debugSignature(context: string, signature: Hex, source?: string | null) {
   if (!AA_DEBUG) return
   logger.debug(`[ERC-4337] ${context} signature`, {
@@ -1295,6 +1307,8 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   if (lastError) {
     const errMsg = lastError instanceof Error ? lastError.message : String(lastError)
     const lc = errMsg.toLowerCase()
+    const metaDetail = formatMetaMessages(lastError)
+    const metaSuffix = metaDetail ? ` (CDP: ${metaDetail})` : ''
 
     // Provide helpful error messages for common failures
     if (lc.includes('insufficient funds') || lc.includes('insufficient balance')) {
@@ -1325,7 +1339,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
           'Smart wallet could not pay gas (no prefund). Add ETH to the smart wallet or re-enable gas sponsorship.'
         )
       }
-      throw new Error('Paymaster did not sponsor this operation. Check paymaster configuration.')
+      throw new Error(`Paymaster did not sponsor this operation. Check paymaster configuration.${metaSuffix}`)
     }
     if (lc.includes('aa25') || lc.includes('invalid account nonce')) {
       throw new Error('Account nonce mismatch. A pending transaction may exist. Wait and retry.')
@@ -1341,7 +1355,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         )
       }
       throw new Error(
-        'Paymaster unavailable. Check CDP paymaster configuration, sponsorship limits, and allowlist, then retry.'
+        `Paymaster unavailable. Check CDP paymaster configuration, sponsorship limits, and allowlist, then retry.${metaSuffix}`
       )
     }
     if (lc.includes('aa40') || lc.includes('verificationgaslimit')) {
