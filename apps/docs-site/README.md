@@ -26,12 +26,33 @@ This site publishes curated documentation from `4626/docs/`.
 
 | Action | Description |
 |--------|-------------|
-| ✅ Reads from | `4626/docs/` only |
+| ✅ Reads from | `4626/docs/` (manual) + `4626/docs/_generated/` (API) |
 | ✅ Publishes | Markdown files to `docs-site/docs/` |
 | ✅ Normalizes | Adds frontmatter (title, sidebar_position) |
+| ✅ Fixes links | Transforms broken links in generated API docs |
 | ✅ Validates | Internal links (in strict mode) |
-| ❌ Never reads | `4626/contracts/` or `4626/frontend/` |
-| ❌ Never generates | Documentation from source code |
+
+### API Docs Pipeline
+
+Auto-generated API documentation flows through this pipeline:
+
+```
+1. forge doc          → docs/_generated/contracts/  (Solidity NatSpec)
+2. typedoc            → docs/_generated/frontend/   (TypeScript TSDoc)
+3. sync-docs.mjs      → docs-site/docs/api/         (copy + fix links)
+4. postprocess-api-docs.ts                          (index pages + validation)
+5. docusaurus build
+```
+
+The postprocess script:
+- Creates `index.md` for directories without one
+- Validates all internal links
+- Fails in `--strict` mode if links are unresolved
+
+Scripts:
+- `pnpm api:postprocess` - Run postprocessing
+- `pnpm api:postprocess:strict` - Fail on unresolved links
+- `pnpm build:strict` - Full strict build pipeline
 
 ## Development
 
@@ -81,15 +102,16 @@ pnpm serve
 
 ```
 apps/docs-site/
-├── docusaurus.config.ts   # Docusaurus configuration
-├── sidebars.ts            # Sidebar configuration
-├── docs/                  # GENERATED - do not edit
+├── docusaurus.config.ts        # Docusaurus configuration
+├── sidebars.ts                 # Sidebar configuration
+├── docs/                       # GENERATED - do not edit
 ├── scripts/
-│   └── sync-docs.ts       # Sync script
+│   ├── sync-docs.mjs           # Sync curated + API docs
+│   └── postprocess-api-docs.ts # Create indexes, validate links
 ├── src/
 │   └── css/
-│       └── custom.css     # Custom styles
-├── static/                # Static assets
+│       └── custom.css          # Custom styles
+├── static/                     # Static assets
 └── package.json
 ```
 
