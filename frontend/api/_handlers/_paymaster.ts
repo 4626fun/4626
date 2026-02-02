@@ -511,6 +511,18 @@ const ERC4626_ASSET_ABI = [
   { type: 'function', name: 'asset', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
 
+const WRAPPER_VIEW_ABI = [
+  { type: 'function', name: 'creatorCoin', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'vault', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'shareOFT', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+] as const
+
+const SHARE_OFT_VIEW_ABI = [
+  { type: 'function', name: 'vault', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+] as const
+
 const CREATOR_VAULT_BATCHER_PHASE1_EVENT = [
   {
     type: 'event',
@@ -1007,6 +1019,8 @@ async function validateInnerCalls(params: {
   let mode: 'deploy_phase1' | 'deploy_phase2' | 'deploy_phase3' | 'launch_auction' | 'deploy' | 'activate' | 'approve_only' | null = null
   let expectedCreatorToken: Address | null = null
   let expectedVault: Address | null = null
+  let expectedWrapper: Address | null = null
+  let expectedShareOFT: Address | null = null
   let expectedCodeIds: { vault: Hex } | null = null
   let expectedVersion: string | null = null
 
@@ -1052,6 +1066,8 @@ async function validateInnerCalls(params: {
         ) {
           mode = 'deploy_phase2'
           expectedVault = p && isAddress(p.vault) ? getAddress(p.vault) : null
+          expectedWrapper = p && isAddress(p.wrapper) ? getAddress(p.wrapper) : null
+          expectedShareOFT = p && isAddress(p.shareOFT) ? getAddress(p.shareOFT) : null
           if (!expectedVault) throw new Error('batcher_vault_decode_failed')
           expectedCodeIds =
             codeIds && typeof codeIds === 'object' && isHexString(codeIds.vault)
@@ -1147,11 +1163,14 @@ async function validateInnerCalls(params: {
     const canValidateViaCreate2 =
       !!expectedCodeIds?.vault && expectedCodeIds.vault !== ZERO_BYTES32 && typeof expectedVersion === 'string'
     if (canValidateViaCreate2) {
+      const vaultCodeId = expectedCodeIds?.vault
+      const version = expectedVersion as string
+      if (!vaultCodeId) throw new Error('missing_code_ids')
       const creationCode = (await client.readContract({
         address: bytecodeStore,
         abi: BYTECODE_STORE_ABI,
         functionName: 'get',
-        args: [expectedCodeIds.vault],
+        args: [vaultCodeId],
       })) as Hex
       const constructorArgs = encodeAbiParameters(
         [
@@ -1166,7 +1185,7 @@ async function validateInnerCalls(params: {
       const baseSalt = keccak256(
         encodePacked(
           ['address', 'address', 'uint256', 'string', 'string'],
-          [getAddress(expectedCreatorToken as Address), params.sender, BigInt(BASE_CHAIN_ID), 'CreatorVault:deploy:', expectedVersion],
+          [getAddress(expectedCreatorToken as Address), params.sender, BigInt(BASE_CHAIN_ID), 'CreatorVault:deploy:', version],
         ),
       )
       const vaultSalt = keccak256(encodePacked(['bytes32', 'string'], [baseSalt, 'vault']))
@@ -1187,6 +1206,37 @@ async function validateInnerCalls(params: {
     }
 
     if (!vaultValidated) {
+      if (expectedWrapper && expectedShareOFT) {
+        const [wrapperCreator, wrapperVault, wrapperShareOFT, wrapperOwner, shareOftVault, shareOftOwner] =
+          (await Promise.all([
+            client.readContract({ address: expectedWrapper, abi: WRAPPER_VIEW_ABI, functionName: 'creatorCoin' }),
+            client.readContract({ address: expectedWrapper, abi: WRAPPER_VIEW_ABI, functionName: 'vault' }),
+            client.readContract({ address: expectedWrapper, abi: WRAPPER_VIEW_ABI, functionName: 'shareOFT' }),
+            client.readContract({ address: expectedWrapper, abi: WRAPPER_VIEW_ABI, functionName: 'owner' }),
+            client.readContract({ address: expectedShareOFT, abi: SHARE_OFT_VIEW_ABI, functionName: 'vault' }),
+            client.readContract({ address: expectedShareOFT, abi: SHARE_OFT_VIEW_ABI, functionName: 'owner' }),
+          ]).catch(() => [])) as [Address, Address, Address, Address, Address, Address]
+        const wrapperOk =
+          wrapperCreator &&
+          wrapperVault &&
+          wrapperShareOFT &&
+          wrapperOwner &&
+          getAddress(wrapperCreator) === getAddress(expectedCreatorToken as Address) &&
+          getAddress(wrapperVault) === getAddress(expectedVault) &&
+          getAddress(wrapperShareOFT) === getAddress(expectedShareOFT) &&
+          getAddress(wrapperOwner) === getAddress(creatorVaultBatcher)
+        const shareOftOk =
+          shareOftVault &&
+          shareOftOwner &&
+          getAddress(shareOftVault) === getAddress(expectedVault) &&
+          getAddress(shareOftOwner) === getAddress(creatorVaultBatcher)
+        if (wrapperOk && shareOftOk) {
+          vaultValidated = true
+        }
+      }
+    }
+
+    if (!vaultValidated) {
       const phase1Logs = await client
         .getLogs({
           address: creatorVaultBatcher,
@@ -1196,7 +1246,7 @@ async function validateInnerCalls(params: {
           toBlock: 'latest',
         })
         .catch(() => [])
-      const matchedPhase1 = phase1Logs.some((log) => {
+      const matchedPhase1 = phase1Logs.some((log: any) => {
         const vault = log.args?.vault
         return vault && getAddress(vault) === expectedVault
       })

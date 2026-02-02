@@ -1347,6 +1347,27 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     if (lc.includes('aa10') || lc.includes('sender already constructed')) {
       throw new Error('Smart wallet already exists at this address.')
     }
+    if (lc.includes('request denied -')) {
+      const reason = errMsg.replace(/^.*request denied -\s*/i, '').trim()
+      if (reason.includes('not authenticated')) {
+        throw new Error(`Session expired or missing. Reconnect your wallet and try again.${metaSuffix}`)
+      }
+      if (reason.includes('creator not approved')) {
+        throw new Error(
+          `Creator not approved for gas sponsorship. Request access or join the allowlist, then retry.${metaSuffix}`,
+        )
+      }
+      if (reason.includes('allowlist unavailable')) {
+        throw new Error(`Paymaster allowlist is unavailable. Please retry shortly.${metaSuffix}`)
+      }
+      if (reason.includes('unsupported chainid')) {
+        throw new Error(`Paymaster rejected this chain. Switch to Base mainnet and retry.${metaSuffix}`)
+      }
+      if (reason.includes('unsupported entrypoint')) {
+        throw new Error(`Paymaster rejected the EntryPoint version. Please retry.${metaSuffix}`)
+      }
+      throw new Error(`Paymaster rejected this request: ${reason}.${metaSuffix}`)
+    }
     if (isPaymasterUnavailableError(lastError)) {
       if (typeof smartWalletBalance === 'bigint' && smartWalletBalance <= 0n) {
         throw new Error(

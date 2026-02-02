@@ -94,7 +94,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     // ================================
 
     /// @notice Uniswap v1.1.0 CCA factory (canonical on Base/Mainnet/Unichain/Sepolia)
-    /// @dev See Uniswap docs deployments table.
+    /// @dev See https://github.com/Uniswap/continuous-clearing-auction#deployments
     address public constant UNISWAP_CCA_FACTORY_V110 = 0xcca1101C61cF5cb44C968947985300DF945C3565;
     
     /// @notice Milli-basis points constant
