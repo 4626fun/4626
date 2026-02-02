@@ -33,30 +33,28 @@ The vault is the single source of truth for:
 
 ```mermaid
 flowchart LR
-    subgraph Users
-        U[Depositors]
+    U[Users]
+    V[CreatorOVault<br/>▢ creatorCoin]
+    C[creatorCoin]
+
+    subgraph Strategies["Yield Strategies"]
+        A[Ajna]
+        CH[Charm V3]
+        O[Other]
     end
-    
-    subgraph Core
-        V[CreatorOVault<br/>▢TOKEN]
-        W[Wrapper]
-    end
-    
-    subgraph Strategies
-        S1[CCA Launch]
-        S2[Charm V3]
-        S3[Ajna]
-    end
-    
-    U -->|deposit TOKEN| V
-    V -->|▢TOKEN| U
-    V -->|deploy| S1
-    V -->|deploy| S2
-    V -->|deploy| S3
-    V --> W
+
+    U -->|deposit creatorCoin| V
+    V -->|mint/burn ▢shares| U
+
+    V -->|allocate| C
+    C -->|supply| A
+    C -->|supply| CH
+    C -->|supply| O
 ```
 
-The vault sits between users and strategies, providing a unified interface for deposits and withdrawals while abstracting the complexity of multi-strategy yield generation.
+The vault acts as an accounting and coordination layer between users and yield strategies. Users deposit the underlying creatorCoin into the vault, which mints ERC-4626 shares (▢[creatorCoin]) to represent proportional ownership.
+
+Yield strategies operate exclusively on the underlying creatorCoin. Vault shares are never deposited into strategies and exist solely for accounting and redemption.
 
 ---
 

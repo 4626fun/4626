@@ -15,14 +15,9 @@ This is the canonical diagram for understanding how assets move through the syst
 
 ```mermaid
 flowchart LR
-    subgraph Asset["Asset Layer"]
-        C[creatorCoin<br/>underlying ERC20]
-    end
-
-    subgraph Accounting["Accounting & Representation"]
-        V[CreatorOVault<br/>▢ shares]
-        W[CreatorShareOFT<br/>■ shares]
-    end
+    U[Users]
+    V[CreatorOVault<br/>▢ creatorCoin]
+    C[creatorCoin]
 
     subgraph Strategies["Yield Strategies"]
         A[Ajna]
@@ -30,32 +25,22 @@ flowchart LR
         O[Other]
     end
 
-    subgraph Governance["Governance"]
-        GC[GaugeController]
-        VG[VaultGaugeVoting]
-        VE[ve4626]
-    end
+    U -->|deposit creatorCoin| V
+    V -->|mint/burn ▢shares| U
 
-    C -->|deposit| V
-    V -->|allocates| C
-    C -->|supplies| A
-    C -->|supplies| CH
-    C -->|supplies| O
-
-    V -->|wrap| W
-
-    W -->|fees| GC
-    GC --> VG
-    VG --> VE
+    V -->|allocate creatorCoin| C
+    C -->|supply creatorCoin| A
+    C -->|supply creatorCoin| CH
+    C -->|supply creatorCoin| O
 ```
 
 ### Legend
 
 | Symbol | Meaning |
 |--------|---------|
-| **creatorCoin** | Underlying ERC-20 asset used by strategies |
-| **▢[creatorCoin]** | ERC-4626 vault shares (accounting only) |
-| **■[creatorCoin]** | Wrapped OFT representation (bridging, UX) |
+| **creatorCoin** | Underlying ERC-20 asset (the only thing strategies receive) |
+| **▢[creatorCoin]** | ERC-4626 vault shares (accounting only, never enters strategies) |
+| **■[creatorCoin]** | Wrapped OFT representation (bridging and UX, never enters strategies) |
 
 > **Invariant:** Yield strategies operate exclusively on the underlying creatorCoin.
 > Vault shares (▢[creatorCoin]) and wrapped OFT shares (■[creatorCoin]) are accounting and representation layers only and are never deposited into strategies.

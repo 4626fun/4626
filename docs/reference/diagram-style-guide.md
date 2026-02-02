@@ -246,15 +246,26 @@ Avoid these:
 
 ---
 
-## Critical invariant
+## Asset flow rule
 
-> **If a diagram shows a strategy receiving anything other than creatorCoin, it is wrong.**
-
-Strategies operate exclusively on the underlying creatorCoin. They never receive:
-- ▢[creatorCoin] (vault shares)
-- ■[creatorCoin] (wrapped OFT shares)
+> **If a diagram shows ▢[creatorCoin] or ■[creatorCoin] entering a strategy, the diagram is incorrect.**
+> **Strategies only ever receive the underlying creatorCoin.**
 
 The canonical asset flow diagram lives in [Architecture](/overview/architecture). All other pages should link to it, not redraw variants.
+
+---
+
+## Diagram categories
+
+Diagrams must belong to exactly one category. Never mix these:
+
+| Category | Shows | Does NOT show |
+|----------|-------|---------------|
+| **Asset flow** | creatorCoin movement | ▢/■ tokens, governance |
+| **Accounting & representation** | ▢/■ token relationships | creatorCoin, strategies |
+| **Governance & deployment** | Roles, permissions, lifecycle | Asset flows |
+
+Most confusion comes from mixing categories. If you need to show multiple concerns, use separate diagrams.
 
 ---
 
