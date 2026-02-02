@@ -109,31 +109,32 @@ stateDiagram-v2
 
 ### E) Strategy relationships (flowchart LR)
 
+Shows how the underlying creatorCoin flows to strategies. Note: strategies never receive vault shares.
+
 ```mermaid
 flowchart LR
+    subgraph Asset
+        C[creatorCoin]
+    end
+    
     subgraph Vault
         V[CreatorOVault]
     end
     
     subgraph Strategies
-        Base[BaseCreatorStrategy]
-        CCA[CCALaunchStrategy]
         Charm[CharmStrategy]
         Ajna[AjnaStrategy]
     end
     
     subgraph External
-        Uniswap[Uniswap V4]
         AjnaPool[Ajna Pools]
         CharmVault[Charm Vaults]
     end
     
-    V --> Base
-    Base --> CCA
-    Base --> Charm
-    Base --> Ajna
+    V -->|allocates| C
+    C -->|supplies| Charm
+    C -->|supplies| Ajna
     
-    CCA --> Uniswap
     Charm --> CharmVault
     Ajna --> AjnaPool
 ```
@@ -245,6 +246,18 @@ Avoid these:
 
 ---
 
+## Critical invariant
+
+> **If a diagram shows a strategy receiving anything other than creatorCoin, it is wrong.**
+
+Strategies operate exclusively on the underlying creatorCoin. They never receive:
+- ▢[creatorCoin] (vault shares)
+- ■[creatorCoin] (wrapped OFT shares)
+
+The canonical asset flow diagram lives in [Architecture](/overview/architecture). All other pages should link to it, not redraw variants.
+
+---
+
 ## Templates
 
 Copy-paste ready templates for common diagrams.
@@ -270,9 +283,11 @@ flowchart TD
 ### Minimal architecture
 
 ```mermaid
-flowchart TD
-    Registry --> Vault
-    Registry --> ShareOFT
-    Vault --> Strategies
-    ShareOFT --> Governance
+flowchart LR
+    C[creatorCoin] -->|deposit| V[Vault]
+    V -->|allocates| C
+    C -->|supplies| S[Strategies]
+    V -->|wrap| OFT[ShareOFT]
 ```
+
+Note: The vault allocates creatorCoin to strategies, not vault shares.

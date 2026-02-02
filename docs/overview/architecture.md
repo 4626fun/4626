@@ -9,47 +9,77 @@ Contract hierarchy and relationships in the 4626 protocol.
 
 ---
 
-## Contract hierarchy
+## Asset and strategy flow
+
+This is the canonical diagram for understanding how assets move through the system.
 
 ```mermaid
-flowchart TD
-    subgraph Registry["Global Registry"]
-        R[CreatorRegistry]
+flowchart LR
+    subgraph Asset["Asset Layer"]
+        C[creatorCoin<br/>underlying ERC20]
     end
-    
-    subgraph Core["Core Contracts"]
-        Vault[CreatorOVault<br/>▢TOKEN]
-        Wrapper[Wrapper]
-        ShareOFT[CreatorShareOFT<br/>■TOKEN]
+
+    subgraph Accounting["Accounting & Representation"]
+        V[CreatorOVault<br/>▢ shares]
+        W[CreatorShareOFT<br/>■ shares]
     end
-    
+
     subgraph Strategies["Yield Strategies"]
-        CCA[CCA Launch]
-        Charm[Charm V3]
-        Ajna[Ajna]
+        A[Ajna]
+        CH[Charm V3]
+        O[Other]
     end
-    
+
     subgraph Governance["Governance"]
-        Gauge[GaugeController]
-        Voting[VaultGaugeVoting]
+        GC[GaugeController]
+        VG[VaultGaugeVoting]
         VE[ve4626]
-        Rewards[VoterRewards]
     end
-    
-    R --> Vault
-    R --> ShareOFT
-    Vault --> Wrapper
-    Wrapper --> ShareOFT
-    Vault --> CCA
-    Vault --> Charm
-    Vault --> Ajna
-    ShareOFT --> Gauge
-    Gauge --> Voting
-    Voting --> VE
-    Gauge --> Rewards
+
+    C -->|deposit| V
+    V -->|allocates| C
+    C -->|supplies| A
+    C -->|supplies| CH
+    C -->|supplies| O
+
+    V -->|wrap| W
+
+    W -->|fees| GC
+    GC --> VG
+    VG --> VE
 ```
 
-**Legend:** ▢ = vault shares, ■ = wrapped OFT shares
+### Legend
+
+| Symbol | Meaning |
+|--------|---------|
+| **creatorCoin** | Underlying ERC-20 asset used by strategies |
+| **▢[creatorCoin]** | ERC-4626 vault shares (accounting only) |
+| **■[creatorCoin]** | Wrapped OFT representation (bridging, UX) |
+
+> **Invariant:** Yield strategies operate exclusively on the underlying creatorCoin.
+> Vault shares (▢[creatorCoin]) and wrapped OFT shares (■[creatorCoin]) are accounting and representation layers only and are never deposited into strategies.
+
+---
+
+## Layer separation
+
+The protocol has three orthogonal layers:
+
+### Asset layer
+
+The underlying creatorCoin (ERC-20) is the only asset that moves between contracts. When users deposit, the vault receives creatorCoin. When strategies deploy capital, they receive creatorCoin. All yield is generated on creatorCoin.
+
+### Accounting layer
+
+- **CreatorOVault** issues ▢[creatorCoin] as receipt tokens for deposits
+- **CreatorShareOFT** wraps ▢[creatorCoin] into ■[creatorCoin] for trading and bridging
+
+These tokens track ownership but never leave the accounting layer. Strategies are unaware of their existence.
+
+### Yield execution layer
+
+Strategies (Ajna, Charm, etc.) receive creatorCoin from the vault, deploy it to external protocols, and return creatorCoin (plus yield) when harvested.
 
 ---
 

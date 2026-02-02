@@ -7,96 +7,74 @@ sidebar_position: 2
 
 Strategies deploy vault capital to generate yield or facilitate token launches.
 
+> **Invariant:** Yield strategies operate exclusively on the underlying creatorCoin.
+> Vault shares (▢[creatorCoin]) and wrapped OFT shares (■[creatorCoin]) are never deposited into yield strategies.
+
+See [Architecture](/overview/architecture) for the canonical asset flow diagram.
+
 ---
 
 ## Strategy types
 
 ### Launch strategies
 
-Deploy ■TOKEN (wrapped shares) for price discovery:
+The CCA strategy is a special case that auctions ■TOKEN for price discovery:
 
-| Strategy | Purpose |
-|----------|---------|
-| [CCA Launch](./cca-launch) | Continuous Clearing Auction |
+| Strategy | Asset | Purpose |
+|----------|-------|---------|
+| [CCA Launch](./cca-launch) | ■TOKEN | Continuous Clearing Auction |
 
 ### Yield strategies
 
-Deploy TOKEN (creator coin) for returns:
+All yield strategies operate on the underlying creatorCoin:
 
-| Strategy | Purpose |
-|----------|---------|
-| Charm | Uniswap V3 LP via Charm Alpha |
-| Ajna | Lending to Ajna pools |
-| V4 Full Range | Uniswap V4 full range LP |
-| V4 Concentrated | Uniswap V4 targeted ranges |
-| V4 Limit Order | Uniswap V4 limit orders |
+| Strategy | Asset | Purpose |
+|----------|-------|---------|
+| Charm | creatorCoin | Uniswap V3 LP via Charm Alpha |
+| Ajna | creatorCoin | Lending to Ajna pools |
+| V4 Full Range | creatorCoin | Uniswap V4 full range LP |
+| V4 Concentrated | creatorCoin | Uniswap V4 targeted ranges |
+| V4 Limit Order | creatorCoin | Uniswap V4 limit orders |
 
 ---
 
 ## Strategy interface
 
-All strategies implement `IStrategy`:
+All strategies implement `IStrategy`. See [source code](https://github.com/wenakita/4626/blob/main/contracts/interfaces/IStrategy.sol) for the full interface.
 
-```solidity
-interface IStrategy {
-    // State
-    function isActive() external view returns (bool);
-    function asset() external view returns (address);
-    function getTotalAssets() external view returns (uint256);
-    
-    // Operations
-    function deposit(uint256 amount) external returns (uint256);
-    function withdraw(uint256 amount) external returns (uint256);
-    function emergencyWithdraw() external returns (uint256);
-    function harvest() external returns (uint256);
-    function rebalance() external;
-}
-```
+Key functions:
+- `asset()` - Returns the underlying asset (always creatorCoin for yield strategies)
+- `deposit(amount)` - Receives creatorCoin from vault
+- `withdraw(amount)` - Returns creatorCoin to vault
+- `harvest()` - Reports yield back to vault
 
 ---
 
 ## Allocation
 
-Strategies receive capital based on weights:
-
-```solidity
-// Add strategies with weights (basis points)
-vault.addStrategy(charmStrategy, 6900);   // 69%
-vault.addStrategy(ajnaStrategy, 2139);    // 21.39%
-// Remaining 9.61% stays idle
-```
-
-### Deployment flow
+The vault allocates creatorCoin to strategies based on weights (basis points):
 
 ```mermaid
 flowchart LR
     subgraph Vault
-        Idle[Idle Balance]
+        C[creatorCoin<br/>idle balance]
     end
     
     subgraph Strategies
-        S1[Charm 69%]
-        S2[Ajna 21.39%]
-        S3[Reserve 9.61%]
+        S1[Charm<br/>69%]
+        S2[Ajna<br/>21.39%]
     end
     
-    Idle -->|deploy| S1
-    Idle -->|deploy| S2
-    Idle -.->|keep| S3
+    subgraph Reserve
+        R[Reserve<br/>9.61%]
+    end
+    
+    C -->|creatorCoin| S1
+    C -->|creatorCoin| S2
+    C -.->|kept idle| R
 ```
 
-Keeper calls `deployToStrategies()` to move idle capital into strategies based on weights.
-
----
-
-## Key distinction
-
-| Type | Asset | Purpose |
-|------|-------|---------|
-| CCA Launch | ■TOKEN | Price discovery, liquidity bootstrap |
-| Yield | TOKEN | Generate returns on underlying |
-
-The CCA strategy auctions wrapped shares to bootstrap liquidity. Yield strategies deploy the underlying creator coin to earn yield.
+Keeper calls `deployToStrategies()` to move idle creatorCoin into strategies based on weights.
 
 ---
 
