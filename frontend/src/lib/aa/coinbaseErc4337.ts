@@ -872,35 +872,20 @@ export async function sendCrossAppUserOperation(params: {
 
   // Set up bundler + paymaster (uses CDP for gas sponsorship)
   const sessionToken = typeof window !== 'undefined' ? getStoredSessionToken() : null
-  let transport = http(bundlerUrl, {
+  const transport = http(bundlerUrl, {
     fetchOptions: {
       credentials: 'include',
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
     },
   })
-  let paymasterClient = createPaymasterClient({ transport })
-  let bundlerClient = createBundlerClient({
+  const paymasterClient = createPaymasterClient({ transport })
+  const bundlerClient = createBundlerClient({
     client: publicClient as any,
     transport,
   })
-  let activeBundlerUrl = bundlerUrl
-  const buildClients = (url: string, includeSession: boolean) => {
-    transport = http(url, {
-      fetchOptions: {
-        credentials: includeSession ? 'include' : undefined,
-        headers: includeSession && sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
-      },
-    })
-    paymasterClient = createPaymasterClient({ transport })
-    bundlerClient = createBundlerClient({
-      client: publicClient as any,
-      transport,
-    })
-    activeBundlerUrl = url
-  }
 
   // ENFORCE: Verify bundler supports EntryPoint v0.6 before sending
-  await verifyBundlerSupportsV06(activeBundlerUrl)
+  await verifyBundlerSupportsV06(bundlerUrl)
 
   // Send the UserOperation - this will:
   // 1. Build the UserOp
@@ -1185,20 +1170,35 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // If `bundlerUrl` is our same-origin proxy (`/api/paymaster`), we MUST include cookies
   // so the backend can validate the SIWE session (`cv_auth_session`).
   const sessionToken = typeof window !== 'undefined' ? getStoredSessionToken() : null
-  const transport = http(bundlerUrl, {
+  let transport = http(bundlerUrl, {
     fetchOptions: {
       credentials: 'include',
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
     },
   })
-  const paymasterClient = createPaymasterClient({ transport })
-  const bundlerClient = createBundlerClient({
+  let paymasterClient = createPaymasterClient({ transport })
+  let bundlerClient = createBundlerClient({
     client: publicClient as any,
     transport,
   })
+  let activeBundlerUrl = bundlerUrl
+  const buildClients = (url: string, includeSession: boolean) => {
+    transport = http(url, {
+      fetchOptions: {
+        credentials: includeSession ? 'include' : undefined,
+        headers: includeSession && sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
+      },
+    })
+    paymasterClient = createPaymasterClient({ transport })
+    bundlerClient = createBundlerClient({
+      client: publicClient as any,
+      transport,
+    })
+    activeBundlerUrl = url
+  }
 
   // ENFORCE: Verify bundler supports EntryPoint v0.6 before sending
-  await verifyBundlerSupportsV06(bundlerUrl)
+  await verifyBundlerSupportsV06(activeBundlerUrl)
 
   // Check if the owner might be a smart wallet (for EIP-1271 verification gas estimation)
   // Smart wallet signature verification requires significantly more gas than EOA
