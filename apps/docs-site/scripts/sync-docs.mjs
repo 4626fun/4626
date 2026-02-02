@@ -14,8 +14,13 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import fg from 'fast-glob';
 import matter from 'gray-matter';
+
+// ESM __dirname equivalent
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Configuration
 const SOURCE_DIR = path.resolve(__dirname, '../../../docs');
@@ -37,15 +42,7 @@ const EXCLUDE_PATTERNS = [
 
 const STRICT_MODE = process.argv.includes('--strict');
 
-interface SyncStats {
-  copied: number;
-  skipped: number;
-  errors: string[];
-  warnings: string[];
-  brokenLinks: string[];
-}
-
-const stats: SyncStats = {
+const stats = {
   copied: 0,
   skipped: 0,
   errors: [],
@@ -56,7 +53,7 @@ const stats: SyncStats = {
 /**
  * Convert filename to title case
  */
-function filenameToTitle(filename: string): string {
+function filenameToTitle(filename) {
   return filename
     .replace(/\.mdx?$/, '')
     .replace(/[-_]/g, ' ')
@@ -66,7 +63,7 @@ function filenameToTitle(filename: string): string {
 /**
  * Extract title from first H1 in content
  */
-function extractH1Title(content: string): string | null {
+function extractH1Title(content) {
   const match = content.match(/^#\s+(.+)$/m);
   return match ? match[1].trim() : null;
 }
@@ -74,11 +71,7 @@ function extractH1Title(content: string): string | null {
 /**
  * Normalize frontmatter for a markdown file
  */
-function normalizeFrontmatter(
-  content: string,
-  relativePath: string,
-  sidebarPosition: number
-): string {
+function normalizeFrontmatter(content, relativePath, sidebarPosition) {
   const parsed = matter(content);
   const filename = path.basename(relativePath);
   
@@ -99,12 +92,8 @@ function normalizeFrontmatter(
 /**
  * Validate internal links in markdown content
  */
-function validateLinks(
-  content: string,
-  filePath: string,
-  allFiles: Set<string>
-): string[] {
-  const broken: string[] = [];
+function validateLinks(content, filePath, allFiles) {
+  const broken = [];
   const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
   let match;
   
@@ -149,7 +138,7 @@ function validateLinks(
 /**
  * Clean destination directory
  */
-async function cleanDestination(): Promise<void> {
+async function cleanDestination() {
   try {
     await fs.rm(DEST_DIR, { recursive: true, force: true });
   } catch {
@@ -161,7 +150,7 @@ async function cleanDestination(): Promise<void> {
 /**
  * Get all markdown files from source
  */
-async function getSourceFiles(): Promise<string[]> {
+async function getSourceFiles() {
   const files = await fg(['**/*.md', '**/*.mdx'], {
     cwd: SOURCE_DIR,
     ignore: EXCLUDE_PATTERNS,
@@ -173,11 +162,7 @@ async function getSourceFiles(): Promise<string[]> {
 /**
  * Copy and process a single file
  */
-async function processFile(
-  relativePath: string,
-  sidebarPosition: number,
-  allFiles: Set<string>
-): Promise<void> {
+async function processFile(relativePath, sidebarPosition, allFiles) {
   const sourcePath = path.join(SOURCE_DIR, relativePath);
   const destPath = path.join(DEST_DIR, relativePath);
   
@@ -201,8 +186,7 @@ async function processFile(
     await fs.writeFile(destPath, processed);
     
     // Log with normalization info
-    const parsed = matter(processed);
-    const addedFields: string[] = [];
+    const addedFields = [];
     if (!matter(content).data.title) addedFields.push('+title');
     if (matter(content).data.sidebar_position === undefined) addedFields.push('+pos');
     
@@ -220,7 +204,7 @@ async function processFile(
 /**
  * Main sync function
  */
-async function sync(): Promise<void> {
+async function sync() {
   console.log('\n📚 Syncing docs from 4626/docs/ to apps/docs-site/docs/\n');
   
   // Clean destination
@@ -233,19 +217,19 @@ async function sync(): Promise<void> {
   const allFilesSet = new Set(files);
   
   // Group files by directory for sidebar ordering
-  const filesByDir = new Map<string, string[]>();
+  const filesByDir = new Map();
   for (const file of files) {
     const dir = path.dirname(file);
     if (!filesByDir.has(dir)) {
       filesByDir.set(dir, []);
     }
-    filesByDir.get(dir)!.push(file);
+    filesByDir.get(dir).push(file);
   }
   
   // Process files
   for (const file of files) {
     const dir = path.dirname(file);
-    const filesInDir = filesByDir.get(dir)!;
+    const filesInDir = filesByDir.get(dir);
     const position = filesInDir.indexOf(file) + 1;
     await processFile(file, position, allFilesSet);
   }
