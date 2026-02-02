@@ -741,12 +741,18 @@ function buildCdpEndpointFromKey(apiKey: string | undefined | null): string | nu
   return `https://api.developer.coinbase.com/rpc/v1/base/${key}`
 }
 
-function getCdpEndpointCandidates(): string[] {
+function getCdpEndpointCandidates(req: VercelRequest): string[] {
   const primary = getCdpEndpoint()
+  const headerKey = (() => {
+    const raw = req.headers?.['x-cdp-api-key']
+    return typeof raw === 'string' ? raw : ''
+  })()
+  const fromHeader = buildCdpEndpointFromKey(headerKey)
   const fallback = buildCdpEndpointFromKey(process.env.VITE_CDP_API_KEY)
   const out: string[] = []
   if (primary) out.push(primary)
-  if (fallback && fallback !== primary) out.push(fallback)
+  if (fromHeader && fromHeader !== primary) out.push(fromHeader)
+  if (fallback && !out.includes(fallback)) out.push(fallback)
   return out
 }
 
@@ -1347,7 +1353,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(jsonRpcError(null, -32600, 'Method not allowed'))
   }
 
-  const cdpEndpoints = getCdpEndpointCandidates()
+  const cdpEndpoints = getCdpEndpointCandidates(req)
   if (cdpEndpoints.length === 0) {
     return res.status(200).json(jsonRpcError(null, -32000, 'CDP paymaster endpoint is not configured'))
   }

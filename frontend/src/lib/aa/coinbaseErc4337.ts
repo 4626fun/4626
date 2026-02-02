@@ -872,10 +872,15 @@ export async function sendCrossAppUserOperation(params: {
 
   // Set up bundler + paymaster (uses CDP for gas sponsorship)
   const sessionToken = typeof window !== 'undefined' ? getStoredSessionToken() : null
+  const cdpApiKey = (import.meta.env.VITE_CDP_API_KEY as string | undefined)?.trim() || ''
+  const sendApiKeyHeader = !!cdpApiKey && bundlerUrl.includes('/api/paymaster')
   const transport = http(bundlerUrl, {
     fetchOptions: {
       credentials: 'include',
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
+      headers: {
+        ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+        ...(sendApiKeyHeader ? { 'x-cdp-api-key': cdpApiKey } : {}),
+      },
     },
   })
   const paymasterClient = createPaymasterClient({ transport })
@@ -1170,10 +1175,15 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // If `bundlerUrl` is our same-origin proxy (`/api/paymaster`), we MUST include cookies
   // so the backend can validate the SIWE session (`cv_auth_session`).
   const sessionToken = typeof window !== 'undefined' ? getStoredSessionToken() : null
+  const cdpApiKey = (import.meta.env.VITE_CDP_API_KEY as string | undefined)?.trim() || ''
+  const sendApiKeyHeader = !!cdpApiKey && bundlerUrl.includes('/api/paymaster')
   let transport = http(bundlerUrl, {
     fetchOptions: {
       credentials: 'include',
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
+      headers: {
+        ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+        ...(sendApiKeyHeader ? { 'x-cdp-api-key': cdpApiKey } : {}),
+      },
     },
   })
   let paymasterClient = createPaymasterClient({ transport })
@@ -1186,7 +1196,10 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     transport = http(url, {
       fetchOptions: {
         credentials: includeSession ? 'include' : undefined,
-        headers: includeSession && sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
+        headers: {
+          ...(includeSession && sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+          ...(sendApiKeyHeader ? { 'x-cdp-api-key': cdpApiKey } : {}),
+        },
       },
     })
     paymasterClient = createPaymasterClient({ transport })
@@ -1308,8 +1321,10 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
 
   await attemptSend(true)
 
+  const allowDirectCdp = import.meta.env.VITE_ALLOW_DIRECT_CDP === 'true'
   const directPaymasterUrl = resolveDirectPaymasterUrl()
   if (
+    allowDirectCdp &&
     lastError &&
     isPaymasterUnavailableError(lastError) &&
     directPaymasterUrl &&
