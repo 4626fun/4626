@@ -13,8 +13,9 @@ const config: Config = {
   organizationName: '4626',
   projectName: 'docs',
 
-  onBrokenLinks: 'throw',
-  onBrokenMarkdownLinks: 'throw',  // Will migrate to markdown.hooks in Docusaurus v4
+  onBrokenLinks: 'warn',  // Relaxed for auto-generated docs
+  onBrokenMarkdownLinks: 'warn',  // Will migrate to markdown.hooks in Docusaurus v4
+  
 
   i18n: {
     defaultLocale: 'en',

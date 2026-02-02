@@ -156,6 +156,41 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
   },
   {
     type: 'function',
+    name: 'deployPhase1WithSalt',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vaultName', type: 'string' },
+          { name: 'vaultSymbol', type: 'string' },
+          { name: 'shareName', type: 'string' },
+          { name: 'shareSymbol', type: 'string' },
+          { name: 'version', type: 'string' },
+        ],
+      },
+      {
+        name: 'codeIds',
+        type: 'tuple',
+        components: [
+          { name: 'vault', type: 'bytes32' },
+          { name: 'wrapper', type: 'bytes32' },
+          { name: 'shareOFT', type: 'bytes32' },
+          { name: 'gauge', type: 'bytes32' },
+          { name: 'cca', type: 'bytes32' },
+          { name: 'oracle', type: 'bytes32' },
+          { name: 'oftBootstrap', type: 'bytes32' },
+        ],
+      },
+      { name: 'shareOftSaltOverride', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
     name: 'deployPhase2AndLaunch',
     stateMutability: 'nonpayable',
     inputs: [
@@ -190,6 +225,71 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
           { name: 'cca', type: 'bytes32' },
           { name: 'oracle', type: 'bytes32' },
           { name: 'oftBootstrap', type: 'bytes32' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'deployPhase2Core',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'creatorTreasury', type: 'address' },
+          { name: 'payoutRecipient', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'shareSymbol', type: 'string' },
+          { name: 'version', type: 'string' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+        ],
+      },
+      {
+        name: 'codeIds',
+        type: 'tuple',
+        components: [
+          { name: 'vault', type: 'bytes32' },
+          { name: 'wrapper', type: 'bytes32' },
+          { name: 'shareOFT', type: 'bytes32' },
+          { name: 'gauge', type: 'bytes32' },
+          { name: 'cca', type: 'bytes32' },
+          { name: 'oracle', type: 'bytes32' },
+          { name: 'oftBootstrap', type: 'bytes32' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'finalizePhase2',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'auctionPercent', type: 'uint8' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
         ],
       },
     ],
@@ -319,8 +419,11 @@ const SELECTOR_CSW_REMOVE_OWNER_AT_INDEX = '0x89625b57' // removeOwnerAtIndex(ui
 
 // Two-step batcher selectors (Base)
 const SELECTOR_BATCHER_DEPLOY_PHASE1 = '0x3c51ca4e'
+const SELECTOR_BATCHER_DEPLOY_PHASE1_WITH_SALT = '0x297cb1e6'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH = '0x669fb9e2'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT = '0xd76fbd95'
+const SELECTOR_BATCHER_DEPLOY_PHASE2_CORE = '0xf9344d88'
+const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0x036a3142'
 const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0x6e3f91b0'
 const SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION = '0x37421852'
 
@@ -334,8 +437,11 @@ const SELECTOR_VAULT_SET_WHITELIST = '0x53d6fd59' // setWhitelist(address,bool)
 
 const ALLOWED_BATCHER_SELECTORS = new Set<string>([
   SELECTOR_BATCHER_DEPLOY_PHASE1,
+  SELECTOR_BATCHER_DEPLOY_PHASE1_WITH_SALT,
   SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH,
   SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT,
+  SELECTOR_BATCHER_DEPLOY_PHASE2_CORE,
+  SELECTOR_BATCHER_FINALIZE_PHASE2,
   SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES,
   SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION,
 ])
@@ -880,8 +986,11 @@ async function validateInnerCalls(params: {
       // Phase-based functions encode params as a tuple (with strings/bytes), so decode via ABI.
       if (
         selector === SELECTOR_BATCHER_DEPLOY_PHASE1 ||
+        selector === SELECTOR_BATCHER_DEPLOY_PHASE1_WITH_SALT ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT ||
+        selector === SELECTOR_BATCHER_DEPLOY_PHASE2_CORE ||
+        selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES ||
         selector === SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION
       ) {
@@ -898,9 +1007,14 @@ async function validateInnerCalls(params: {
         if (!creatorToken || !owner) throw new Error('batcher_decode_failed')
         if (owner !== params.sender) throw new Error('batcher_owner_mismatch')
 
-        if (selector === SELECTOR_BATCHER_DEPLOY_PHASE1) {
+        if (selector === SELECTOR_BATCHER_DEPLOY_PHASE1 || selector === SELECTOR_BATCHER_DEPLOY_PHASE1_WITH_SALT) {
           mode = 'deploy_phase1'
-        } else if (selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH || selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT) {
+        } else if (
+          selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH ||
+          selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT ||
+          selector === SELECTOR_BATCHER_DEPLOY_PHASE2_CORE ||
+          selector === SELECTOR_BATCHER_FINALIZE_PHASE2
+        ) {
           mode = 'deploy_phase2'
           expectedVault = p && isAddress(p.vault) ? getAddress(p.vault) : null
           if (!expectedVault) throw new Error('batcher_vault_decode_failed')

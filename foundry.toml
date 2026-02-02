@@ -45,3 +45,8 @@ optimizer_runs = 200
 
 [rpc_endpoints]
 base = "${BASE_RPC_URL}"
+
+[doc]
+out = "docs/_generated/contracts"
+repository = "https://github.com/creatorvault/4626"
+ignore = ["test/**", "script/**"]

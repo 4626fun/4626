@@ -131,7 +131,7 @@ async function logUserOpEstimate(params: {
   account: any
   calls: Array<{ to: Address; value?: bigint; data?: Hex }>
   verificationGasLimit: bigint
-  paymasterClient: { getPaymasterData: any; getPaymasterStubData: any }
+  paymasterClient?: { getPaymasterData: any; getPaymasterStubData: any }
 }) {
   if (!AA_DEBUG) return
   const { bundlerClient, account, calls, verificationGasLimit, paymasterClient } = params
@@ -145,14 +145,18 @@ async function logUserOpEstimate(params: {
     client.account = account
   }
   try {
+    const paymaster =
+      paymasterClient && paymasterClient.getPaymasterData && paymasterClient.getPaymasterStubData
+        ? {
+            getPaymasterData: paymasterClient.getPaymasterData,
+            getPaymasterStubData: paymasterClient.getPaymasterStubData,
+          }
+        : undefined
     const prepared = await client.prepareUserOperation({
       account,
       calls,
       verificationGasLimit,
-      paymaster: {
-        getPaymasterData: paymasterClient.getPaymasterData,
-        getPaymasterStubData: paymasterClient.getPaymasterStubData,
-      },
+      ...(paymaster ? { paymaster } : {}),
     })
     const userOperation = prepared?.userOperation ?? prepared
     let estimate: any = null
@@ -198,6 +202,17 @@ function signatureMeta(signature: Hex) {
     is64Bytes: byteLength === 64,
     is65Bytes: byteLength === 65,
   }
+}
+
+function isPaymasterStakeError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error ?? '')
+  const lc = msg.toLowerCase()
+  return (
+    lc.includes('banned opcode') ||
+    lc.includes('stake/unstake delay') ||
+    lc.includes('entity stake') ||
+    lc.includes('unstake delay too low')
+  )
 }
 
 function debugSignature(context: string, signature: Hex, source?: string | null) {
@@ -798,15 +813,32 @@ export async function sendCrossAppUserOperation(params: {
     paymasterClient,
   })
 
-  const userOpHash = await sendUserOperation(bundlerClient, {
-    account,
-    calls,
-    verificationGasLimit: 200_000n,
-    paymaster: {
-      getPaymasterData: paymasterClient.getPaymasterData,
-      getPaymasterStubData: paymasterClient.getPaymasterStubData,
-    },
-  })
+  let userOpHash: Hex
+  try {
+    userOpHash = await sendUserOperation(bundlerClient, {
+      account,
+      calls,
+      verificationGasLimit: 200_000n,
+      paymaster: {
+        getPaymasterData: paymasterClient.getPaymasterData,
+        getPaymasterStubData: paymasterClient.getPaymasterStubData,
+      },
+    })
+  } catch (e: unknown) {
+    if (!isPaymasterStakeError(e)) throw e
+    logger.warn('[ERC-4337] Paymaster stake too low; retrying without sponsorship')
+    await logUserOpEstimate({
+      bundlerClient,
+      account,
+      calls,
+      verificationGasLimit: 200_000n,
+    })
+    userOpHash = await sendUserOperation(bundlerClient, {
+      account,
+      calls,
+      verificationGasLimit: 200_000n,
+    })
+  }
 
   // Wait for on-chain confirmation
   const receipt = await waitForUserOperationReceipt(bundlerClient, { 
@@ -942,22 +974,27 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
 
   let userOpHash: Hex | null = null
   let lastError: unknown = null
-  const sendWithVerificationGasLimit = async (verificationGasLimit: bigint) => {
+  let attemptedWithoutPaymaster = false
+  const sendWithVerificationGasLimit = async (verificationGasLimit: bigint, usePaymaster: boolean) => {
     await logUserOpEstimate({
       bundlerClient,
       account,
       calls,
       verificationGasLimit,
-      paymasterClient,
+      paymasterClient: usePaymaster ? paymasterClient : undefined,
     })
     return await sendUserOperation(bundlerClient, {
       account,
       calls,
       verificationGasLimit,
-      paymaster: {
-        getPaymasterData: paymasterClient.getPaymasterData,
-        getPaymasterStubData: paymasterClient.getPaymasterStubData,
-      },
+      ...(usePaymaster
+        ? {
+            paymaster: {
+              getPaymasterData: paymasterClient.getPaymasterData,
+              getPaymasterStubData: paymasterClient.getPaymasterStubData,
+            },
+          }
+        : {}),
     })
   }
 
@@ -967,23 +1004,33 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     return lc.includes('aa40') || lc.includes('verificationgaslimit')
   }
 
-  for (let i = 0; i < uniqueVerificationGasLimits.length; i++) {
-    const limit = uniqueVerificationGasLimits[i]
-    try {
-      userOpHash = await sendWithVerificationGasLimit(limit)
-      lastError = null
-      break
-    } catch (e: unknown) {
-      lastError = e
-      const hasNext = i + 1 < uniqueVerificationGasLimits.length
-      if (!hasNext || !shouldRetryVerificationGas(e)) break
-      if (AA_DEBUG) {
-        logger.debug('[ERC-4337] retrying with higher verificationGasLimit', {
-          base: String(limit),
-          retry: String(uniqueVerificationGasLimits[i + 1]),
-        })
+  const attemptSend = async (usePaymaster: boolean) => {
+    for (let i = 0; i < uniqueVerificationGasLimits.length; i++) {
+      const limit = uniqueVerificationGasLimits[i]
+      try {
+        userOpHash = await sendWithVerificationGasLimit(limit, usePaymaster)
+        lastError = null
+        return
+      } catch (e: unknown) {
+        lastError = e
+        const hasNext = i + 1 < uniqueVerificationGasLimits.length
+        if (!hasNext || !shouldRetryVerificationGas(e)) break
+        if (AA_DEBUG) {
+          logger.debug('[ERC-4337] retrying with higher verificationGasLimit', {
+            base: String(limit),
+            retry: String(uniqueVerificationGasLimits[i + 1]),
+          })
+        }
       }
     }
+  }
+
+  await attemptSend(true)
+
+  if (lastError && isPaymasterStakeError(lastError)) {
+    attemptedWithoutPaymaster = true
+    logger.warn('[ERC-4337] Paymaster stake too low; retrying without sponsorship')
+    await attemptSend(false)
   }
 
   if (lastError) {
@@ -1014,6 +1061,11 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       )
     }
     if (lc.includes('aa21') || lc.includes('didn\'t pay prefund')) {
+      if (attemptedWithoutPaymaster) {
+        throw new Error(
+          'Smart wallet could not pay gas (no prefund). Add ETH to the smart wallet or re-enable gas sponsorship.'
+        )
+      }
       throw new Error('Paymaster did not sponsor this operation. Check paymaster configuration.')
     }
     if (lc.includes('aa25') || lc.includes('invalid account nonce')) {
@@ -1033,6 +1085,12 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     }
     if (lc.includes('resource not available') || lc.includes('request denied')) {
       throw new Error(`Paymaster denied request: ${errMsg}`)
+    }
+    if (lc.includes('banned opcode') || lc.includes('stake/unstake delay') || lc.includes('unstake delay too low')) {
+      throw new Error(
+        'Bundler rejected sponsored UserOp: paymaster stake/unstake delay too low. ' +
+          'Retry with a funded smart wallet or contact support to fix paymaster stake.'
+      )
     }
     
     throw new Error(`UserOperation failed: ${errMsg}`)

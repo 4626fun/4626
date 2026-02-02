@@ -1,6 +1,6 @@
-# 🎨 **STANDARD VAULT NAMING PATTERN**
+# Standard Vault Naming Pattern
 
-## ✅ **THE PATTERN:**
+## Pattern
 
 All CreatorVault Charm vaults use this consistent naming:
 
@@ -11,7 +11,7 @@ Symbol: "CV-[token]-USDC"
 
 ---
 
-## 📋 **EXAMPLES:**
+## Examples
 
 ```solidity
 // AKITA token vault:
@@ -33,7 +33,7 @@ Symbol: "CV-shib-USDC"
 
 ---
 
-## 🚀 **DEPLOYMENT:**
+## Deployment
 
 ```solidity
 // Deploy with standard naming
@@ -52,25 +52,38 @@ batchDeployStrategies(
 
 ---
 
-## ✅ **NAMING RULES:**
+## Naming Rules
 
-1. **Always use lowercase** for token symbols (e.g., "akita" not "AKITA")
-2. **Always use format:** `CreatorVault: [token]/USDC`
-3. **Always use symbol:** `CV-[token]-USDC`
-4. **Quote token is always:** `USDC` (uppercase)
-5. **No variations** - consistency across all vaults
-
----
-
-## 🎯 **BENEFITS:**
-
-- ✅ **Consistent branding** across all vaults
-- ✅ **Easy to identify** CreatorVault products
-- ✅ **Clear token pairing** shown in name
-- ✅ **Professional appearance** on block explorers
-- ✅ **No confusion** between different vaults
+1. Always use lowercase for token symbols (e.g., "akita" not "AKITA")
+2. Always use format: `CreatorVault: [token]/USDC`
+3. Always use symbol: `CV-[token]-USDC`
+4. Quote token is always: `USDC` (uppercase)
+5. No variations (consistency across all vaults)
 
 ---
 
-**This is the ONLY naming pattern used for all CreatorVault Charm vaults.** 🎉
+## Token Symbol Convention
 
+CreatorVault uses two special glyphs for vault-related tokens:
+
+| Token Type | Symbol Format | Contract | Example |
+|------------|---------------|----------|---------|
+| Vault Token (ERC-4626 shares) | `▢{COIN}` | CreatorOVault.sol | ▢AKITA |
+| Share Token (LayerZero OFT) | `■{COIN}` | CreatorShareOFT.sol | ■AKITA |
+
+- **▢{COIN}**: Vault shares that stay on-chain and earn yield via strategies
+- **■{COIN}**: Wrapped vault shares that are cross-chain capable and tradeable on DEXes
+
+---
+
+## Benefits
+
+- Consistent branding across all vaults
+- Easy to identify CreatorVault products
+- Clear token pairing shown in name
+- Professional appearance on block explorers
+- No confusion between different vaults
+
+---
+
+This is the standard naming pattern for all CreatorVault Charm vaults.

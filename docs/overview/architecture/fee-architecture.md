@@ -1,285 +1,194 @@
-# CreatorVault Fee Architecture
+---
+title: Fee architecture
+sidebar_position: 1
+---
+
+# Fee architecture
+
+This document describes how CreatorVault captures and distributes fees across the token lifecycle, from fair launch auctions through ongoing trading. It covers the tax hook integration, fee distribution mechanics, and the rationale behind design choices.
+
+**Who this is for:** Protocol engineers, auditors, integrators, and creators planning token launches.
+
+---
 
 ## Overview
 
-CreatorVault uses a **dual-phase token launch system** with **two fee capture mechanisms**:
+CreatorVault uses a dual-phase token launch system:
 
-### Phase 1: Fair Launch via CCA (Continuous Clearing Auction)
-- Official Uniswap mechanism - no custom hook approval needed!
-- Fair price discovery over 1-4 weeks
-- No sniping, no timing games, early bidders rewarded
-- Automatically graduates to V4 pool
+1. **Fair launch (CCA):** Continuous Clearing Auction for price discovery over 1-4 weeks
+2. **Ongoing trading:** 6.9% fee capture via Uniswap V4 Tax Hook or ShareOFT detection
 
-### Phase 2: Ongoing Trading
-- **Uniswap V4**: Uses existing Tax Hook for 6.9% fees!
-- **Other DEXes**: ShareOFT-based fee detection (fallback)
+**Key terms:**
 
-## ⚡ V4 Tax Hook Integration (NEW!)
+- **CCA (Continuous Clearing Auction):** Official Uniswap mechanism for fair token launches
+- **Tax Hook:** Pre-deployed Uniswap V4 hook that extracts configurable swap fees
+- **ShareOFT:** LayerZero OFT wrapper that detects buys and captures fees on any DEX
+- **GaugeController:** Contract that receives fees and distributes them to lottery, burn, and voters
 
-We leverage an **existing, approved Tax Hook** on Base for the ■AKITA/ETH pool:
+---
 
-**Tax Hook Address**: [`0xca975B9dAF772C71161f3648437c3616E5Be0088`](https://basescan.org/address/0xca975B9dAF772C71161f3648437c3616E5Be0088)
+## Phase 1: Fair launch via CCA
 
-### Why Use Existing Hook?
-
-| Feature | Custom Hook | Existing Tax Hook ✅ |
-|---------|-------------|---------------------|
-| Approval | ❌ Needs allowlist | ✅ Already deployed |
-| Risk | ❌ Unaudited | ✅ Battle-tested |
-| Cost | ❌ Deploy & verify | ✅ Just configure |
-| Fees | Custom | ✅ 6.9% configurable |
-
-### Tax Hook Fee Flow
+CCA is an official Uniswap mechanism that eliminates sniping and timing games. No custom hook approval is required.
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│              ■AKITA/ETH V4 POOL (with Tax Hook)                │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  User swaps ETH → ■AKITA                                       │
-│                    │                                                │
-│                    ▼                                                │
-│           Tax Hook extracts 6.9%                                   │
-│                    │                                                │
-│                    ▼ (WETH)                                        │
-│          CreatorGaugeController                                    │
-│                    │                                                │
-│   ┌────────────────┼────────────────┐                              │
-│   │                │                │                              │
-│   ▼                ▼                ▼                              │
-│  69%            21.39%           9.61%                             │
-│LOTTERY          BURN        VOTERS/PROTOCOL                         │
-│   │               │               │                                │
-│   ▼               ▼               ▼                                │
-│ Reserve        PPS ↑        Rewards / Treasury                      │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### WETH Fee Processing
-
-The Tax Hook sends **WETH** (not ■AKITA). The GaugeController automatically:
-
-1. **Receives WETH** from Tax Hook
-2. **Swaps WETH → akita** (Creator Coin) via Uniswap
-3. **Deposits akita → vault** → receives vault shares
-4. **Distributes vault shares (defaults)**: 69% lottery, 21.39% burn, 9.61% voters/protocol
-
-```solidity
-// Tax Hook configuration
-TaxHookConfigurator.configureCreatorPool(
-    shareOFT,          // ■AKITA (ShareOFT token)
-    gaugeController,      // Fee recipient (receives WETH)
-    690,                  // 6.9% fee in basis points
-    10                    // Tick spacing
-);
-```
-
-## CCA Launch Flow
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    PHASE 1: FAIR LAUNCH (CCA)                   │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  1. Creator deposits akita → gets ■AKITA                   │
-│                                                                 │
-│  2. Creator sends ■AKITA to CCALaunchStrategy              │
-│                                                                 │
-│  3. CCA Auction runs:                                          │
-│     ┌───────────────────────────────────────────────────────┐  │
-│     │  WEEK 1: 20% supply released (slow)                   │  │
-│     │  WEEK 2: 30% supply released (medium)                 │  │
-│     │  WEEK 3-4: 50% supply released (fast)                 │  │
-│     │                                                       │  │
-│     │  ✓ Bids spread over time (no concentration)          │  │
-│     │  ✓ Early bidders get lower average price             │  │
-│     │  ✓ Clearing price discovered fairly                  │  │
-│     │  ✓ No sniping possible                               │  │
-│     └───────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  4. Auction graduates (requires minimum ETH raised)            │
-│                                                                 │
-│  5. V4 pool initialized at fair clearing price                 │
-│                                                                 │
-│  6. Raised ETH → Vault/Creator treasury                        │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
++---------------------------------------------------------------+
+|                    FAIR LAUNCH (CCA)                          |
++---------------------------------------------------------------+
+|                                                               |
+|  1. Creator deposits creator coin -> receives ■TOKEN          |
+|                                                               |
+|  2. Creator sends ■TOKEN to CCALaunchStrategy                 |
+|                                                               |
+|  3. CCA Auction runs:                                         |
+|     +-------------------------------------------------------+ |
+|     |  WEEK 1: 20% supply released (slow)                   | |
+|     |  WEEK 2: 30% supply released (medium)                 | |
+|     |  WEEK 3-4: 50% supply released (fast)                 | |
+|     |                                                       | |
+|     |  - Bids spread over time (no concentration)           | |
+|     |  - Early bidders get lower average price              | |
+|     |  - Clearing price discovered fairly                   | |
+|     |  - No sniping possible                                | |
+|     +-------------------------------------------------------+ |
+|                                                               |
+|  4. Auction graduates (requires minimum ETH raised)           |
+|                                                               |
+|  5. V4 pool initialized at fair clearing price                |
+|                                                               |
+|  6. Raised ETH sent to Vault/Creator treasury                 |
+|                                                               |
++---------------------------------------------------------------+
 
 CCA Factory (v1.1.0): 0xcca1101C61cF5cb44C968947985300DF945C3565
 Networks: Base, Mainnet, Unichain, Sepolia
 ```
 
-## Fee Structure
+---
 
-### Phase 2: Ongoing Trading (Post-CCA)
+## Phase 2: Ongoing trading
 
-After CCA graduation, trading continues with **TWO fee capture mechanisms**:
+After CCA graduation, trading continues with two fee capture mechanisms.
 
-#### Method 1: V4 Tax Hook (PRIMARY - ■AKITA/ETH Pool)
+### V4 Tax Hook (primary)
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│       ■AKITA/ETH V4 POOL (with Tax Hook 0xca975B9d...)         │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  POOL SWAP FEE: ~0% (set low, fees via hook instead)               │
-│                                                                     │
-│  TAX HOOK FEE: 6.9% (configured via setTaxConfig)                  │
-│  └── 100% → GaugeController (as WETH)                              │
-│              └── Swap WETH → akita → deposit → vault shares        │
-│                  └── Split: 69% lottery, 21.39% burn, 9.61% voters/protocol │
-│                                                                     │
-├─────────────────────────────────────────────────────────────────────┤
-│  TOTAL BUY COST: 6.9% (tax hook fee)                               │
-│  TOTAL SELL COST: 6.9% (tax hook fee - configurable)               │
-└─────────────────────────────────────────────────────────────────────┘
-```
+CreatorVault uses an existing, approved Tax Hook on Base. This avoids the need for custom hook development and allowlist approval.
 
-#### Method 2: ShareOFT Detection (FALLBACK - Other DEXes)
+**Tax Hook Address:** [`0xca975B9dAF772C71161f3648437c3616E5Be0088`](https://basescan.org/address/0xca975B9dAF772C71161f3648437c3616E5Be0088)
+
+| Feature | Custom Hook | Existing Tax Hook |
+|---------|-------------|-------------------|
+| Approval | Needs allowlist | Already deployed |
+| Risk | Unaudited | Battle-tested |
+| Cost | Deploy and verify | Configure only |
+| Fees | Custom | 6.9% configurable |
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    OTHER DEX POOLS (V2/V3/etc)                     │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  POOL SWAP FEE: Standard (0.3% - 1% depending on pool)             │
-│  └── 100% → Liquidity Providers                                    │
-│                                                                     │
-│  BUY FEE: 6.9% (detected by ShareOFT on transfer)                  │
-│  └── 100% → GaugeController (as ■AKITA)                        │
-│              └── Unwrap → vault shares                             │
-│                  └── Split: 69% lottery, 21.39% burn, 9.61% voters/protocol │
-│                                                                     │
-├─────────────────────────────────────────────────────────────────────┤
-│  TOTAL BUY COST: ~7.2% (0.3% swap + 6.9% fee)                      │
-│  TOTAL SELL COST: ~0.3% (pool fee only)                            │
-└─────────────────────────────────────────────────────────────────────┘
++---------------------------------------------------------------------+
+|              ■TOKEN/ETH V4 POOL (with Tax Hook)                     |
++---------------------------------------------------------------------+
+|                                                                     |
+|  User swaps ETH -> ■TOKEN                                           |
+|                    |                                                |
+|                    v                                                |
+|           Tax Hook extracts 6.9%                                    |
+|                    |                                                |
+|                    v (WETH)                                         |
+|          CreatorGaugeController                                     |
+|                    |                                                |
+|   +----------------+----------------+                               |
+|   |                |                |                               |
+|   v                v                v                               |
+|  69%            21.39%           9.61%                              |
+| LOTTERY          BURN        VOTERS/PROTOCOL                        |
++---------------------------------------------------------------------+
 ```
 
-### Fee Distribution (Both Methods)
+The Tax Hook sends WETH to the GaugeController, which:
+
+1. Receives WETH from Tax Hook
+2. Swaps WETH to creator coin via Uniswap
+3. Deposits creator coin to vault, receives vault shares
+4. Distributes vault shares: 69% lottery, 21.39% burn, 9.61% voters/protocol
+
+### ShareOFT detection (fallback)
+
+For trades on other DEXes (V2, V3, aggregators), the ShareOFT contract detects buy transfers and captures the 6.9% fee directly.
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    GaugeController Distribution                     │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  Incoming: WETH (from Tax Hook) OR ■AKITA (from ShareOFT)       │
-│                                                                     │
-│  Processing:                                                        │
-│  ├── WETH path: WETH → swap → akita → deposit → vault shares      │
-│  └── OFT path: ■AKITA → unwrap → vault shares                   │
-│                                                                     │
-│  Distribution (vault shares):                                       │
-│  ├── 69% → Lottery Reserve (jackpot)                               │
-│  ├── 21.39% → Burn (PPS ↑)                                         │
-│  └── 9.61% → Voter Rewards / Protocol                              │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
++---------------------------------------------------------------------+
+|                    OTHER DEX POOLS (V2/V3/etc)                      |
++---------------------------------------------------------------------+
+|                                                                     |
+|  POOL SWAP FEE: Standard (0.3% - 1% depending on pool)              |
+|  +-- 100% -> Liquidity Providers                                    |
+|                                                                     |
+|  BUY FEE: 6.9% (detected by ShareOFT on transfer)                   |
+|  +-- 100% -> GaugeController (as ■TOKEN)                            |
+|              +-- Unwrap -> vault shares                             |
+|                  +-- Split: 69% lottery, 21.39% burn, 9.61% voters  |
+|                                                                     |
++---------------------------------------------------------------------+
+|  TOTAL BUY COST: ~7.2% (0.3% swap + 6.9% fee)                       |
+|  TOTAL SELL COST: ~0.3% (pool fee only)                             |
++---------------------------------------------------------------------+
 ```
 
-### We Use EXISTING Infrastructure!
+---
 
-Instead of building custom hooks (which need allowlist approval), we use:
+## Fee distribution
 
-| Need | Our Solution | Address |
-|------|--------------|---------|
-| **Fair Launch** | Uniswap CCA Factory (v1.1.0) | `0xcca1101C61cF5cb44C968947985300DF945C3565` |
-| **6.9% Swap Fee** | Existing Tax Hook | `0xca975B9dAF772C71161f3648437c3616E5Be0088` |
-| **Fallback Fees** | ShareOFT detection | N/A (built into ShareOFT) |
+All captured fees flow through the GaugeController with the following split:
 
-### Benefits of This Approach:
-1. ✅ **No approval process needed** - all contracts already deployed
-2. ✅ **Battle-tested** - production code with real volume
-3. ✅ **No audit required** - using official/existing mechanisms
-4. ✅ **Faster to market** - just configure, don't deploy
-5. ✅ **Trusted by users** - not custom third-party code
-
-## Token Naming Convention
-
-| Token Type | Name Format | Symbol Format | Example |
-|------------|-------------|---------------|---------|
-| **Creator Coin** | (original) | (original) | akita |
-| **Vault Token (ERC-4626)** | `{COIN} Vault Token` | `▢{COIN}` | Akita Vault Token / ▢AKITA |
-| **Share Token (LayerZero OFT)** | `{COIN} Share Token` | `■{COIN}` | Akita Share Token / ■AKITA |
-
-### Token Flow
-```
-akita (Creator Coin)
-    │
-    ▼ deposit
-▢AKITA (Vault Token) ← Stays on-chain, earns yield via strategies
-    │
-    ▼ wrap
-■AKITA (Share Token) ← Cross-chain via LayerZero, trades on DEXes
-```
-
-### Why This Convention?
-- **v** = vault share (standard DeFi: vETH, vUSD, vCRV)
-- **ws** = wrapped share (vault share wrapped for cross-chain)
-
-## Token Pairings
-
-| Token | Paired With | DEX | Fee Tier | Notes |
-|-------|-------------|-----|----------|-------|
-| akita (Creator Coin) | ZORA | Uniswap V4 | 3% | Original creator coin pool |
-| ■AKITA (ShareOFT) | ETH | CCA → V4 | 6.9% (Tax Hook) | Launched via CCA, trades on V4 |
-| ■AKITA (ShareOFT) | USDC | Uniswap V3 | 1% | Stablecoin pair, fallback |
-
-## Complete Launch & Trading Flow
+| Recipient | Share | Purpose |
+|-----------|-------|---------|
+| Lottery reserve | 69% | Jackpot pool for swap-to-win lottery |
+| Burn | 21.39% | Increases price-per-share (PPS) for holders |
+| Voters/Protocol | 9.61% | Governance rewards and protocol treasury |
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        CREATOR LAUNCHES                            │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  1. Factory deploys all contracts:                                 │
-│     - CreatorOVault (▢AKITA)                                        │
-│     - CreatorOVaultWrapper (user-facing: deposit/withdraw)         │
-│     - CreatorShareOFT (■AKITA)                                 │
-│     - CreatorGaugeController                                       │
-│     - CCALaunchStrategy  ← Fair launch mechanism                   │
-│                                                                     │
-│  2. Creator deposits akita via Wrapper → gets ■AKITA           │
-│                                                                     │
-│  3. Creator transfers ■AKITA to CCALaunchStrategy              │
-│                                                                     │
-│  4. Launch CCA auction (1-4 weeks):                                │
-│     strategy.launchAuction(amount, floorPrice, minRaise, steps)    │
-│                                                                     │
-│  5. Users bid in auction - fair price discovery                    │
-│                                                                     │
-│  6. Auction graduates → V4 pool auto-initialized                   │
-│                                                                     │
-│  7. Ongoing trading with ShareOFT fee detection                    │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
++---------------------------------------------------------------------+
+|                    GaugeController Distribution                     |
++---------------------------------------------------------------------+
+|                                                                     |
+|  Incoming: WETH (from Tax Hook) OR ■TOKEN (from ShareOFT)           |
+|                                                                     |
+|  Processing:                                                        |
+|  +-- WETH path: WETH -> swap -> creator coin -> deposit -> shares   |
+|  +-- OFT path: ■TOKEN -> unwrap -> vault shares                     |
+|                                                                     |
+|  Distribution (vault shares):                                       |
+|  +-- 69%    -> Lottery Reserve (jackpot)                            |
+|  +-- 21.39% -> Burn (PPS increases)                                 |
+|  +-- 9.61%  -> Voter Rewards / Protocol                             |
+|                                                                     |
++---------------------------------------------------------------------+
 ```
 
-## Fee Flow Diagram (Post-Launch)
+---
+
+## Token naming convention
+
+CreatorVault uses two derived tokens for each creator coin:
+
+| Token type | Symbol format | Contract | Description |
+|------------|---------------|----------|-------------|
+| Vault token | ▢{COIN} | CreatorOVault.sol | ERC-4626 shares, stays on-chain, earns yield |
+| Share token | ■{COIN} | CreatorShareOFT.sol | Wrapped shares, cross-chain via LayerZero, tradeable |
+
+**Token flow:**
 
 ```
-                                 USER BUYS ■AKITA
-                                         │
-                           Any DEX (V4, V3, V2, Aggregator)
-                                         │
-                              CreatorShareOFT detects BUY
-                                         │
-                                   6.9% buy fee
-                                         │
-                            CreatorGaugeController
-                                         │
-          ┌──────────────────────────────┼──────────────────────────────┐
-          │                              │                              │
-         69%                          21.39%                         9.61%
-       LOTTERY                         BURN                    VOTERS/PROTOCOL
-          │                              │                              │
-          ▼                              ▼                              ▼
-   Jackpot Reserve                   PPS ↑                    Rewards / Treasury
-   (Swap-to-Win!)
-          ▼
-   Next Winner Gets!
+Creator Coin (e.g., AKITA)
+    |
+    v deposit
+▢AKITA (Vault Token) <- Stays on-chain, earns yield via strategies
+    |
+    v wrap
+■AKITA (Share Token) <- Cross-chain via LayerZero, trades on DEXes
 ```
+
+---
 
 ## Using CCA Launch Strategy
 
@@ -287,7 +196,7 @@ akita (Creator Coin)
 // 1. Get the deployed strategy
 CCALaunchStrategy strategy = CCALaunchStrategy(info.ccaStrategy);
 
-// 2. Approve ■AKITA transfer
+// 2. Approve ■TOKEN transfer
 shareOFT.approve(address(strategy), amount);
 
 // 3. Launch simple auction (linear distribution)
@@ -305,68 +214,74 @@ bytes memory steps = abi.encodePacked(
 strategy.launchAuction(amount, floorPrice, minRaise, steps);
 
 // 5. After graduation, sweep funds
-strategy.sweepCurrency();  // ETH to vault
+strategy.sweepCurrency();      // ETH to vault
 strategy.sweepUnsoldTokens();  // Remaining tokens to creator
 ```
 
-## Security Considerations
+---
 
-1. **Official Mechanism**: CCA is official Uniswap - no custom code risk
-2. **Fair Launch**: No sniping, timing games, or MEV attacks during auction
-3. **Fee Caps**: Buy fee capped at 6.9% with minimum burn share (20%)
-4. **Slippage Protection**: Users should set appropriate slippage for buy fee
-5. **CCA Graduation**: Requires minimum ETH raised before pool initialization
+## Security considerations
 
-## Contract Addresses
+1. **Official mechanism:** CCA is official Uniswap infrastructure (no custom code risk)
+2. **Fair launch:** No sniping, timing games, or MEV attacks during auction
+3. **Fee caps:** Buy fee capped at 6.9% with minimum burn share (20%)
+4. **Slippage protection:** Users should set appropriate slippage for buy fee
+5. **Graduation requirement:** Minimum ETH must be raised before pool initialization
 
-### External (Already Deployed)
+---
+
+## Contract addresses
+
+### External infrastructure
 
 | Contract | Address | Network |
 |----------|---------|---------|
-| **V4 Tax Hook** | `0xca975B9dAF772C71161f3648437c3616E5Be0088` | Base |
-| **CCA Factory** | `0xcca1101C61cF5cb44C968947985300DF945C3565` | Base/Mainnet/Unichain |
+| V4 Tax Hook | `0xca975B9dAF772C71161f3648437c3616E5Be0088` | Base |
+| CCA Factory | `0xcca1101C61cF5cb44C968947985300DF945C3565` | Base/Mainnet/Unichain |
 | V4 Pool Manager | `0x498581fF718922c3f8e6A244956aF099B2652b2b` | Base |
 | WETH | `0x4200000000000000000000000000000000000006` | Base |
 | Uniswap V3 Router | `0x2626664c2603336E57B271c5C0b26F421741e481` | Base |
 
-### Creator Tokens
+### Creator tokens (AKITA example)
 
 | Contract | Address | Network |
 |----------|---------|---------|
-| akita (Creator Coin) | `0x5b674196812451b7cec024fe9d22d2c0b172fa75` | Base |
-| ■AKITA (ShareOFT) | TBD (via Factory) | Base |
-| CreatorOVault (▢AKITA) | TBD (via Factory) | Base |
-| CreatorOVaultWrapper | TBD (via Factory) | Base |
-| CCALaunchStrategy | TBD (via Factory) | Base |
-| CreatorGaugeController | TBD (via Factory) | Base |
-| TaxHookConfigurator | TBD (to deploy) | Base |
+| AKITA (Creator Coin) | `0x5b674196812451b7cec024fe9d22d2c0b172fa75` | Base |
+| ■AKITA (ShareOFT) | Deployed via Factory | Base |
+| ▢AKITA (CreatorOVault) | Deployed via Factory | Base |
 
-## Why This Design?
+---
 
-### For Users (Depositors/Holders)
-- **Fair entry**: CCA ensures fair price discovery
-- **Passive yield**: Every buy increases your PPS
-- **No action needed**: Just hold ■AKITA
-- **Compounding**: Gains compound as more people trade
+## Design rationale
 
-### For Early Participants (CCA Bidders)
-- **Better prices**: Early bidders naturally get lower average prices
-- **No sniping risk**: Can't be front-run or outbid last-second
-- **Time to decide**: Spread bids over weeks, not seconds
+### For depositors and holders
 
-### For Traders (Post-Launch)
-- **Low sell fees**: Only ~0.3% on sells
-- **Lottery chance**: Every buy = lottery entry
-- **Standard pools**: Trade on any DEX
+- **Fair entry:** CCA ensures fair price discovery
+- **Passive yield:** Every buy increases PPS through burn
+- **Compounding:** Gains compound as trading volume increases
 
-### For Creators
-- **Revenue**: Creator fee share is configurable (default 0%)
-- **Fair launch**: No accusations of insider trading
-- **Funds upfront**: CCA raises ETH before trading starts
-- **Community trust**: Official mechanism builds credibility
+### For CCA bidders
 
-### For LPs
-- **Fair initial price**: CCA discovers fair value
-- **No IL from manipulation**: Price established fairly
-- **Standard pools**: No custom hook complexity
+- **Better prices:** Early bidders naturally get lower average prices
+- **No sniping risk:** Cannot be front-run or outbid last-second
+- **Time to decide:** Spread bids over weeks, not seconds
 
+### For traders
+
+- **Asymmetric fees:** 6.9% on buys, ~0.3% on sells
+- **Lottery entry:** Every buy equals a lottery entry
+- **Standard pools:** Trade on any DEX
+
+### For creators
+
+- **Revenue:** Creator fee share is configurable (default 0%)
+- **Fair launch:** No accusations of insider trading
+- **Funds upfront:** CCA raises ETH before trading starts
+
+---
+
+## References
+
+- [Strategy architecture](./strategy-architecture.md)
+- [Account abstraction activation](../account-abstraction/activation.md)
+- [CCA deployment verification](../../operations/deployment/cca-verification.md)

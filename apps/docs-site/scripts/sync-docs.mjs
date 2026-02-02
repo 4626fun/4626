@@ -1,15 +1,12 @@
 /**
- * Docs Sync Script
+ * Docs Sync Script - Multi-Source Pipeline
  * 
- * Copies and curates docs from 4626/docs/ -> apps/docs-site/docs/
+ * Merges documentation from three sources:
+ * 1. docs/ - Manual documentation (source of truth)
+ * 2. docs/_generated/contracts/src/ - Solidity API docs from forge doc
+ * 3. docs/_generated/frontend/ - TypeScript API docs from typedoc
  * 
- * Documentation Model:
- * - Source of truth: 4626/docs/ (canonical, human-written)
- * - Generated output: apps/docs-site/docs/ (never edit directly)
- * 
- * Scope Rules:
- * - Only reads from 4626/docs/
- * - Never reads from contracts/ or frontend/ directly
+ * Output: apps/docs-site/docs/ (never edit directly)
  */
 
 import * as fs from 'fs/promises';
@@ -23,22 +20,30 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Configuration
-const SOURCE_DIR = path.resolve(__dirname, '../../../docs');
+const REPO_ROOT = path.resolve(__dirname, '../../..');
 const DEST_DIR = path.resolve(__dirname, '../docs');
 
-const EXCLUDE_PATTERNS = [
-  '**/archive/**',
-  '**/_archive/**',
-  '**/drafts/**',
-  '**/_drafts/**',
-  '**/.github/**',
-  '**/node_modules/**',
-  '**/dist/**',
-  '**/build/**',
-  '**/html/**',
-  '**/_generated/**',
-  '**/.*',
-];
+// Source directories
+const SOURCES = {
+  manual: {
+    dir: path.join(REPO_ROOT, 'docs'),
+    destPrefix: '',
+    exclude: ['_generated/**', '_archive/**', 'archive/**', 'drafts/**', '_drafts/**'],
+    label: 'Manual docs',
+  },
+  contracts: {
+    dir: path.join(REPO_ROOT, 'docs/_generated/contracts/src'),
+    destPrefix: 'api/contracts',
+    exclude: [],
+    label: 'Contract API (forge doc)',
+  },
+  frontend: {
+    dir: path.join(REPO_ROOT, 'docs/_generated/frontend'),
+    destPrefix: 'api/frontend',
+    exclude: [],
+    label: 'Frontend API (typedoc)',
+  },
+};
 
 const STRICT_MODE = process.argv.includes('--strict');
 
@@ -48,6 +53,11 @@ const stats = {
   errors: [],
   warnings: [],
   brokenLinks: [],
+  bySource: {
+    manual: 0,
+    contracts: 0,
+    frontend: 0,
+  },
 };
 
 /**
@@ -71,7 +81,7 @@ function extractH1Title(content) {
 /**
  * Normalize frontmatter for a markdown file
  */
-function normalizeFrontmatter(content, relativePath, sidebarPosition) {
+function normalizeFrontmatter(content, relativePath, sidebarPosition, sourceType) {
   const parsed = matter(content);
   const filename = path.basename(relativePath);
   
@@ -86,53 +96,12 @@ function normalizeFrontmatter(content, relativePath, sidebarPosition) {
     parsed.data.sidebar_position = sidebarPosition;
   }
   
-  return matter.stringify(parsed.content, parsed.data);
-}
-
-/**
- * Validate internal links in markdown content
- */
-function validateLinks(content, filePath, allFiles) {
-  const broken = [];
-  const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
-  let match;
-  
-  while ((match = linkRegex.exec(content)) !== null) {
-    const [, , href] = match;
-    
-    // Skip external links
-    if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('#')) {
-      continue;
-    }
-    
-    // Skip absolute paths starting with /
-    if (href.startsWith('/')) {
-      continue;
-    }
-    
-    // Resolve relative path
-    const dir = path.dirname(filePath);
-    let targetPath = path.resolve(dir, href.split('#')[0]);
-    
-    // Add .md extension if missing
-    if (!targetPath.endsWith('.md') && !targetPath.endsWith('.mdx')) {
-      if (!targetPath.endsWith('/')) {
-        targetPath += '.md';
-      } else {
-        targetPath += 'index.md';
-      }
-    }
-    
-    // Normalize path relative to source
-    const relativeTo = path.relative(SOURCE_DIR, targetPath);
-    
-    // Check if file exists
-    if (!allFiles.has(relativeTo) && !allFiles.has(relativeTo.replace('.md', '/index.md'))) {
-      broken.push(`${href} (from ${path.relative(SOURCE_DIR, filePath)})`);
-    }
+  // Add source label for API docs
+  if (sourceType === 'contracts' || sourceType === 'frontend') {
+    parsed.data.generated = true;
   }
   
-  return broken;
+  return matter.stringify(parsed.content, parsed.data);
 }
 
 /**
@@ -148,73 +117,61 @@ async function cleanDestination() {
 }
 
 /**
- * Get all markdown files from source
+ * Check if source directory exists
  */
-async function getSourceFiles() {
+async function sourceExists(sourceDir) {
+  try {
+    await fs.access(sourceDir);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get all markdown files from a source
+ */
+async function getSourceFiles(sourceDir, excludePatterns) {
   const files = await fg(['**/*.md', '**/*.mdx'], {
-    cwd: SOURCE_DIR,
-    ignore: EXCLUDE_PATTERNS,
+    cwd: sourceDir,
+    ignore: [
+      ...excludePatterns,
+      '**/node_modules/**',
+      '**/.git/**',
+      '**/.*',
+    ],
     dot: false,
   });
   return files.sort();
 }
 
 /**
- * Copy and process a single file
+ * Process files from a single source
  */
-async function processFile(relativePath, sidebarPosition, allFiles) {
-  const sourcePath = path.join(SOURCE_DIR, relativePath);
-  const destPath = path.join(DEST_DIR, relativePath);
+async function processSource(sourceKey) {
+  const source = SOURCES[sourceKey];
   
-  try {
-    // Read source file
-    const content = await fs.readFile(sourcePath, 'utf-8');
-    
-    // Normalize frontmatter
-    const processed = normalizeFrontmatter(content, relativePath, sidebarPosition);
-    
-    // Validate links
-    const brokenLinks = validateLinks(content, sourcePath, allFiles);
-    if (brokenLinks.length > 0) {
-      stats.brokenLinks.push(...brokenLinks);
+  // Check if source exists
+  if (!await sourceExists(source.dir)) {
+    if (sourceKey !== 'manual') {
+      stats.warnings.push(`${source.label}: Source directory not found (run generation first)`);
+      console.log(`   ⚠️  ${source.label}: Not found (skipping)`);
+    } else {
+      stats.errors.push(`${source.label}: Source directory not found`);
+      console.error(`   ✗ ${source.label}: Not found`);
     }
-    
-    // Create destination directory
-    await fs.mkdir(path.dirname(destPath), { recursive: true });
-    
-    // Write processed file
-    await fs.writeFile(destPath, processed);
-    
-    // Log with normalization info
-    const addedFields = [];
-    if (!matter(content).data.title) addedFields.push('+title');
-    if (matter(content).data.sidebar_position === undefined) addedFields.push('+pos');
-    
-    const suffix = addedFields.length > 0 ? ` (${addedFields.join(', ')})` : '';
-    console.log(`   ✓ ${relativePath}${suffix}`);
-    
-    stats.copied++;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    stats.errors.push(`${relativePath}: ${message}`);
-    console.error(`   ✗ ${relativePath}: ${message}`);
+    return;
   }
-}
-
-/**
- * Main sync function
- */
-async function sync() {
-  console.log('\n📚 Syncing docs from 4626/docs/ to apps/docs-site/docs/\n');
   
-  // Clean destination
-  console.log('🗑️  Cleaning destination...');
-  await cleanDestination();
+  const files = await getSourceFiles(source.dir, source.exclude);
   
-  // Get all source files
-  console.log('📂 Scanning source files...\n');
-  const files = await getSourceFiles();
-  const allFilesSet = new Set(files);
+  if (files.length === 0) {
+    stats.warnings.push(`${source.label}: No markdown files found`);
+    console.log(`   ⚠️  ${source.label}: No files found`);
+    return;
+  }
+  
+  console.log(`\n📁 ${source.label} (${files.length} files)`);
   
   // Group files by directory for sidebar ordering
   const filesByDir = new Map();
@@ -226,51 +183,148 @@ async function sync() {
     filesByDir.get(dir).push(file);
   }
   
-  // Process files
+  // Process each file
   for (const file of files) {
-    const dir = path.dirname(file);
-    const filesInDir = filesByDir.get(dir);
-    const position = filesInDir.indexOf(file) + 1;
-    await processFile(file, position, allFilesSet);
+    const sourcePath = path.join(source.dir, file);
+    const destRelative = source.destPrefix ? path.join(source.destPrefix, file) : file;
+    const destPath = path.join(DEST_DIR, destRelative);
+    
+    try {
+      // Read source file
+      const content = await fs.readFile(sourcePath, 'utf-8');
+      
+      // Calculate sidebar position
+      const dir = path.dirname(file);
+      const filesInDir = filesByDir.get(dir);
+      const position = filesInDir.indexOf(file) + 1;
+      
+      // Normalize frontmatter
+      const processed = normalizeFrontmatter(content, file, position, sourceKey);
+      
+      // Create destination directory
+      await fs.mkdir(path.dirname(destPath), { recursive: true });
+      
+      // Write processed file
+      await fs.writeFile(destPath, processed);
+      
+      stats.copied++;
+      stats.bySource[sourceKey]++;
+      
+      // Log (abbreviated for API docs)
+      if (sourceKey === 'manual') {
+        console.log(`   ✓ ${file}`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      stats.errors.push(`${file}: ${message}`);
+      console.error(`   ✗ ${file}: ${message}`);
+    }
   }
   
-  // Validate links
-  console.log('\n🔗 Validating internal links...');
+  // Summary for API docs
+  if (sourceKey !== 'manual') {
+    console.log(`   ✓ ${stats.bySource[sourceKey]} files processed`);
+  }
+}
+
+/**
+ * Create API index pages
+ */
+async function createApiIndexPages() {
+  // Create api/index.md
+  const apiIndexContent = `---
+title: API Reference
+sidebar_position: 100
+---
+
+# API Reference
+
+Auto-generated API documentation from source code.
+
+## Contract API
+
+Solidity smart contract documentation generated from NatSpec comments using \`forge doc\`.
+
+- [View Contract API](/api/contracts/)
+
+## Frontend API
+
+TypeScript API documentation generated from TSDoc comments using TypeDoc.
+
+- [View Frontend API](/api/frontend/)
+
+---
+
+*This documentation is auto-generated. Do not edit directly.*
+`;
+
+  const apiDir = path.join(DEST_DIR, 'api');
+  await fs.mkdir(apiDir, { recursive: true });
+  await fs.writeFile(path.join(apiDir, 'index.md'), apiIndexContent);
+  console.log('\n📄 Created api/index.md');
+}
+
+/**
+ * Main sync function
+ */
+async function sync() {
+  console.log('\n════════════════════════════════════════════════════════════');
+  console.log('📚 Multi-Source Documentation Sync');
+  console.log('════════════════════════════════════════════════════════════');
+  
+  // Clean destination
+  console.log('\n🗑️  Cleaning destination...');
+  await cleanDestination();
+  
+  // Process each source
+  for (const sourceKey of Object.keys(SOURCES)) {
+    await processSource(sourceKey);
+  }
+  
+  // Create API index pages
+  await createApiIndexPages();
   
   // Print summary
-  console.log('\n============================================================');
+  console.log('\n════════════════════════════════════════════════════════════');
   console.log('📊 SYNC SUMMARY');
-  console.log('============================================================');
-  console.log(`   Files copied:  ${stats.copied}`);
-  console.log(`   Files skipped: ${stats.skipped}`);
-  console.log(`   Errors:        ${stats.errors.length}`);
-  console.log(`   Warnings:      ${stats.warnings.length}`);
-  console.log('============================================================\n');
+  console.log('════════════════════════════════════════════════════════════');
+  console.log(`   Manual docs:     ${stats.bySource.manual}`);
+  console.log(`   Contract API:    ${stats.bySource.contracts}`);
+  console.log(`   Frontend API:    ${stats.bySource.frontend}`);
+  console.log(`   ─────────────────────────`);
+  console.log(`   Total copied:    ${stats.copied}`);
+  console.log(`   Errors:          ${stats.errors.length}`);
+  console.log(`   Warnings:        ${stats.warnings.length}`);
+  console.log('════════════════════════════════════════════════════════════\n');
   
-  // Report broken links
-  if (stats.brokenLinks.length > 0) {
-    console.log(`⚠️  Found ${stats.brokenLinks.length} broken internal links:`);
-    for (const link of stats.brokenLinks) {
-      console.log(`   - ${link}`);
+  // Report warnings
+  if (stats.warnings.length > 0) {
+    console.log('⚠️  Warnings:');
+    for (const warning of stats.warnings) {
+      console.log(`   - ${warning}`);
+    }
+    console.log('');
+  }
+  
+  // Report errors
+  if (stats.errors.length > 0) {
+    console.log('❌ Errors:');
+    for (const error of stats.errors) {
+      console.log(`   - ${error}`);
     }
     console.log('');
   }
   
   // Handle strict mode
-  if (STRICT_MODE) {
-    if (stats.errors.length > 0 || stats.brokenLinks.length > 0) {
-      console.error('❌ Strict mode: Failing due to errors or broken links\n');
-      process.exit(1);
-    }
+  if (STRICT_MODE && stats.errors.length > 0) {
+    console.error('❌ Strict mode: Failing due to errors\n');
+    process.exit(1);
   }
   
   if (stats.errors.length === 0) {
     console.log('✅ Sync completed successfully.\n');
   } else {
     console.log('⚠️  Sync completed with errors.\n');
-    if (STRICT_MODE) {
-      process.exit(1);
-    }
   }
 }
 

@@ -93,8 +93,8 @@ docs-export/
 
 # Development and testing directories (excluded from repo)
 scripts/
-!docs-site/scripts/
-!docs-site/scripts/**
+!apps/docs-site/scripts/
+!apps/docs-site/scripts/**
 !frontend/scripts/
 !frontend/scripts/**
 # script/ - Keep deployment scripts

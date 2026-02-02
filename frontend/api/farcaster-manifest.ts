@@ -18,9 +18,9 @@ type Manifest = {
 
 const fallbackManifest: Manifest = {
   accountAssociation: {
-    header: 'eyJmaWQiOjIxODIzMjUsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHg2NTRkZkMxNEY0QjczN2M4NjM5OWY1MTcyMGJjNTlCNTdCM2VEQjc5In0',
-    payload: 'eyJkb21haW4iOiJlcmM0NjI2LmZ1biJ9',
-    signature: 'lhS8ZW/t66E5BaOI+nq0tsoZp9Vf2cD1HUcb8SEI5w47VSSBG6P+yq33wTXDGD1j6HNgRYv8OR7xc9ZGdCvemRs=',
+    header: 'eyJmaWQiOjIyNzQ3MzgsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHg2MkJGM0Q5NzNlMEIyNTA4Y0U2NUI2NDcyNzRiMDFFZDQzNzU5MjNhIn0',
+    payload: 'eyJkb21haW4iOiI0NjI2LmZ1biJ9',
+    signature: 'a0dYBtBbC+TI4CYnngVRPwZ7TZpI+8Mply+Px4FkyJs/pe9H30Vva1MXTLeGEz7k+wXSDeAEkZ0Msa25dK9NIhs=',
   },
   miniapp: {
     version: '1',

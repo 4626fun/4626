@@ -1,53 +1,68 @@
-# 1-Click Vault Activation with Account Abstraction
+---
+title: Vault activation
+sidebar_position: 1
+---
 
-## Overview
+# Vault activation with account abstraction
 
-CreatorVault uses **EIP-5792 batching** (when available) plus onchain batchers to make activation feel like **one click**.
+This document describes how CreatorVault reduces vault activation from 6 separate transactions to a single click using EIP-5792 batching and onchain batcher contracts. It covers both smart wallet and EOA flows, as well as operator-safe activation patterns.
 
-This doc also covers **operator-safe activation** (execution wallets acting for a canonical identity) using **Permit2** + vault operator perms.
+**Who this is for:** Frontend developers, protocol integrators, and anyone implementing vault activation flows.
+
+**Key terms:**
+
+- **EIP-5792:** Standard for batching multiple calls into a single wallet interaction
+- **VaultActivationBatcher:** Onchain contract that performs deposit, wrap, and auction launch atomically
+- **Permit2:** Uniswap's signature-based approval system for gasless token transfers
 
 ---
 
 ## How It Works
 
-### Traditional Flow (6 separate transactions ❌)
+### Traditional Flow (6 separate transactions)
+
 ```
-User → Approve AKITA → Wait...
-User → Deposit AKITA → Wait...
-User → Approve shares → Wait...
-User → Wrap shares → Wait...
-User → Approve ■TOKEN → Wait...
-User → Launch auction → Wait...
+User -> Approve AKITA -> Wait...
+User -> Deposit AKITA -> Wait...
+User -> Approve shares -> Wait...
+User -> Wrap shares -> Wait...
+User -> Approve ■TOKEN -> Wait...
+User -> Launch auction -> Wait...
 ```
 
-### AA Flow (1 transaction ✅)
+### AA Flow (1 transaction)
+
 ```
-User → Launch Auction (1-Click) → Done!
-  ↓
+User -> Launch Auction (1-Click) -> Done!
+  |
+  v
 Smart Wallet batches:
   1. approve(AKITA, VaultActivationBatcher, amount)
   2. VaultActivationBatcher.batchActivate(AKITA, vault, wrapper, cca, amount, 50, requiredRaise)
 
-Where `batchActivate` performs (inside the contract, with correct ERC-4626 share accounting):
-  - deposit(amount) → receives vault **shares**
-  - wrap(shares) → ■AKITA
+Where batchActivate performs (inside the contract, with correct ERC-4626 share accounting):
+  - deposit(amount) -> receives vault shares (▢TOKEN)
+  - wrap(shares) -> ■TOKEN
   - approve + launchAuctionSimple()
-  - transfers remaining ■AKITA back to the user
+  - transfers remaining ■TOKEN back to the user
 ```
 
 ---
 
-## Operator-safe activation (identity vs execution wallet)
+## Operator-Safe Activation (Identity vs Execution Wallet)
 
-If `msg.sender` is an **operator** (execution wallet), activation must still be bound to a single **identity**:
+If `msg.sender` is an operator (execution wallet), activation must still be bound to a single identity:
 
 - The batcher requires `identity == Ownable(vault).owner()`
 - The operator must be authorized by the vault owner: `CreatorOVault.isAuthorizedOperator(operator, OP_ACTIVATE)`
-- Any remaining ■shares are returned to **identity** (never to `msg.sender`)
+- Any remaining ■TOKEN is returned to identity (never to `msg.sender`)
 
 Permit2 funding models:
+
 - **Identity-funded**: identity signs Permit2; operator submits tx (`batchActivateWithPermit2For`)
 - **Operator-funded**: operator provides tokens (`batchActivateWithPermit2FromOperator`)
+
+---
 
 ## Implementation
 
@@ -57,7 +72,7 @@ Permit2 funding models:
 const calls = [
   // 1) Approve tokens to the on-chain batcher
   { to: creatorToken, data: encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [VAULT_ACTIVATION_BATCHER, depositAmount] }) },
-  // 2) Activate (deposit → wrap → auction) inside the batcher
+  // 2) Activate (deposit -> wrap -> auction) inside the batcher
   { to: VAULT_ACTIVATION_BATCHER, data: encodeFunctionData({ abi: VaultActivationBatcherABI, functionName: 'batchActivate', args: [creatorToken, vault, wrapper, ccaStrategy, depositAmount, 50, requiredRaise] }) },
 ]
 
@@ -67,7 +82,7 @@ await sendCallsAsync({ calls, forceAtomic: true })
 
 ### Smart Contract Fallback (`VaultActivationBatcher.sol`)
 
-For users **without** smart wallets (MetaMask, Rainbow, etc.), we provide a helper contract:
+For users without smart wallets (MetaMask, Rainbow, etc.), we provide a helper contract:
 
 ```solidity
 contract VaultActivationBatcher {
@@ -94,6 +109,7 @@ contract VaultActivationBatcher {
 ```
 
 **Usage:**
+
 ```typescript
 // 1. User approves batcher to spend AKITA
 approve(AKITA, batcher, amount)
@@ -106,46 +122,52 @@ batchActivate(AKITA, vault, wrapper, cca, amount, 50, minRaise)
 
 ## User Experience
 
-### With Coinbase Smart Wallet ⚡
+### With Coinbase Smart Wallet
+
 ```
 1. Click "Launch Auction (1-Click)"
 2. Confirm ONCE in wallet
-3. Done! ✅
+3. Done
 ```
 
 **Benefits:**
-- ✅ Single confirmation
-- ✅ Potentially gasless (sponsored)
-- ✅ Instant execution
-- ✅ No intermediate failures
 
-### With EOA (MetaMask, etc.) 🐢
+- Single confirmation
+- Potentially gasless (sponsored)
+- Instant execution
+- No intermediate failures
+
+### With EOA (MetaMask, etc.)
+
 ```
 1. Click "Launch Auction (1-Click)"
 2. App switches to VaultActivationBatcher
 3. Approve batcher (if needed)
 4. Call batchActivate
-5. Done! ✅
+5. Done
 ```
 
 **Benefits:**
-- ✅ Still 2 transactions (vs 6)
-- ✅ Atomic execution (all or nothing)
-- ✅ No intermediate token approvals
+
+- Still 2 transactions (vs 6)
+- Atomic execution (all or nothing)
+- No intermediate token approvals
 
 ---
 
 ## Why This Matters
 
-### For Users:
+### For Users
+
 - **Speed**: 1 click vs 6 confirmations
 - **Simplicity**: No complex multi-step flow
 - **Safety**: Atomic execution (no partial failures)
 - **Cost**: Potentially gasless with smart wallets
 
-### For Creators:
+### For Creators
+
 - **Lower friction**: More likely to activate vaults
-- **Better UX**: Feels like Web2, powered by Web3
+- **Better UX**: Web2 simplicity, Web3 infrastructure
 - **Professional**: Enterprise-grade dApp experience
 
 ---
@@ -153,11 +175,13 @@ batchActivate(AKITA, vault, wrapper, cca, amount, 50, minRaise)
 ## Technical Details
 
 ### Smart Wallet Detection
+
 ```typescript
 const isSmartWallet = connector?.id === 'coinbaseWalletSDK'
 ```
 
 ### Call Encoding
+
 ```typescript
 encodeFunctionData({
   abi: erc20Abi,
@@ -167,6 +191,7 @@ encodeFunctionData({
 ```
 
 ### Batch Execution
+
 ```typescript
 sendTransaction({
   to: address, // Smart wallet address
@@ -177,6 +202,7 @@ sendTransaction({
 ```
 
 ### Fallback Pattern
+
 ```solidity
 // If smart wallet batch fails, use helper contract
 batcher.batchActivate(...)
@@ -187,63 +213,70 @@ batcher.batchActivate(...)
 ## Deployment
 
 ### Frontend
-- ✅ Already deployed on Vercel
-- ✅ Smart wallet detection automatic
-- ✅ Uses `wallet_sendCalls` when supported; falls back to sequential transactions when not
+
+- Already deployed on Vercel
+- Smart wallet detection automatic
+- Uses `wallet_sendCalls` when supported; falls back to sequential transactions when not
 
 ### Contracts
-- ✅ `VaultActivationBatcher.sol` deployed on Base (configure via `VITE_VAULT_ACTIVATION_BATCHER`)
-- ✅ Frontend reads `CONTRACTS.vaultActivationBatcher`
+
+- `VaultActivationBatcher.sol` deployed on Base (configure via `VITE_VAULT_ACTIVATION_BATCHER`)
+- Frontend reads `CONTRACTS.vaultActivationBatcher`
 
 ---
 
 ## Next Steps
 
-### To enable the AA + fallback flow on a new deployment:
+To enable the AA + fallback flow on a new deployment:
 
-1. **Deploy `VaultActivationBatcher` (if needed)** and set `VITE_VAULT_ACTIVATION_BATCHER`
-2. **Approve the batcher as a launcher** on `CCALaunchStrategy` (required because `launchAuctionSimple` is gated by `onlyApprovedOrOwner`)
-3. **(If whitelist is enabled)** whitelist the batcher on the vault
+1. Deploy `VaultActivationBatcher` (if needed) and set `VITE_VAULT_ACTIVATION_BATCHER`
+2. Approve the batcher as a launcher on `CCALaunchStrategy` (required because `launchAuctionSimple` is gated by `onlyApprovedOrOwner`)
+3. If whitelist is enabled, whitelist the batcher on the vault
 
 ---
 
 ## Testing
 
 ### Smart Wallet Flow
+
 1. Connect with Coinbase Smart Wallet
 2. Go to `/activate-akita`
 3. Click "Launch Auction (1-Click)"
 4. Should batch `approve + batchActivate` into one atomic bundle when supported
 
-### EOA Flow (Current)
+### EOA Flow
+
 1. Connect with MetaMask
 2. Go to `/activate-akita`
 3. Click "Launch Auction (1-Click)"
 4. Expect 2 transactions: `approve`, then `batchActivate`
-6. Pending: Fallback to VaultActivationBatcher for EOA support
+5. Pending: Fallback to VaultActivationBatcher for EOA support
 
 ---
 
 ## Security Considerations
 
 ### Smart Wallet Batching
-- ✅ Atomic execution (all or nothing)
-- ✅ User controls all approvals
-- ✅ No intermediate token custody
-- ✅ Revert-safe (gas refunded on failure)
+
+- Atomic execution (all or nothing)
+- User controls all approvals
+- No intermediate token custody
+- Revert-safe (gas refunded on failure)
 
 ### VaultActivationBatcher
-- ✅ No token custody (pull pattern)
-- ✅ User must approve first
-- ✅ ReentrancyGuard on batchActivate
-- ✅ Returns excess tokens immediately
-- ⚠️ User trusts batcher contract code
+
+- No token custody (pull pattern)
+- User must approve first
+- ReentrancyGuard on batchActivate
+- Returns excess tokens immediately
+- User trusts batcher contract code
 
 ---
 
 ## Gas Comparison
 
 ### Traditional (6 txs)
+
 ```
 Approve:  ~45k gas
 Deposit:  ~80k gas
@@ -256,12 +289,14 @@ TOTAL:    ~475k gas (~$15 at 20 gwei)
 ```
 
 ### AA Batched (1 tx)
+
 ```
 Batch:    ~450k gas (~$14 at 20 gwei)
-+ Potentially sponsored (FREE!)
++ Potentially sponsored (FREE)
 ```
 
 ### Batcher (2 txs)
+
 ```
 Approve:  ~45k gas
 Batch:    ~400k gas
@@ -269,7 +304,7 @@ Batch:    ~400k gas
 TOTAL:    ~445k gas (~$14 at 20 gwei)
 ```
 
-**Savings: 6% gas + 83% fewer clicks!**
+**Savings: 6% gas + 83% fewer clicks**
 
 ---
 
@@ -284,8 +319,6 @@ TOTAL:    ~445k gas (~$14 at 20 gwei)
 
 ## Summary
 
-✅ **Smart Wallet Users**: 1-click, potentially gasless, instant
-⏳ **EOA Users**: 2 clicks via VaultActivationBatcher (after deployment)
-🚀 **Result**: Professional dApp experience with minimal friction
-
-
+- **Smart Wallet Users**: 1-click, potentially gasless, instant
+- **EOA Users**: 2 clicks via VaultActivationBatcher (after deployment)
+- **Result**: Professional dApp experience with minimal friction

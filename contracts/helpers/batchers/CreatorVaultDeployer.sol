@@ -93,9 +93,10 @@ interface ICreatorOVaultStrategyManager {
  * @author 0xakita.eth
  * @notice Multi-transaction CreatorVault deployment orchestrator (Phases 1–3).
  * @dev We can no longer deploy the full stack in one transaction on Base due to code-deposit gas limits.
- *      This contract splits deployment into two calls:
+ *      This contract splits deployment into multiple calls:
  *      - Phase 1: deploy vault + wrapper + shareOFT + minimal wiring (no token pulls / no auction)
- *      - Phase 2: deploy gauge + strategy + oracle + full wiring + deposit + optional auction + ownership transfers
+ *      - Phase 2a: deploy gauge + CCA + oracle + wiring (no token pulls)
+ *      - Phase 2b: deposit + vesting + ownership transfers (plus optional deferred auction)
  */
 contract CreatorVaultDeployer is ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -131,6 +132,36 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         address wrapper;
         address shareOFT;
         string shareSymbol;
+        string version;
+        uint256 depositAmount;
+        uint8 auctionPercent;
+        uint128 requiredRaise;
+        uint256 floorPriceQ96;
+        bytes auctionSteps;
+    }
+
+    struct Phase2CoreParams {
+        address creatorToken;
+        address owner;
+        address creatorTreasury;
+        address payoutRecipient;
+        address vault;
+        address wrapper;
+        address shareOFT;
+        string shareSymbol;
+        string version;
+        uint256 floorPriceQ96;
+    }
+
+    struct Phase2FinalizeParams {
+        address creatorToken;
+        address owner;
+        address vault;
+        address wrapper;
+        address shareOFT;
+        address gaugeController;
+        address ccaStrategy;
+        address oracle;
         string version;
         uint256 depositAmount;
         uint8 auctionPercent;
@@ -216,6 +247,7 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     error NoPendingAuction();
     error AuctionShareOFTMismatch();
     error AuctionAmountMismatch();
+    error Phase2Missing();
 
     ICreatorRegistry public immutable registry;
     IUniversalBytecodeStore public immutable bytecodeStore;
@@ -252,6 +284,14 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         address ccaStrategy,
         address oracle,
         address auction
+    );
+
+    event Phase2CoreDeployed(
+        address indexed creatorToken,
+        address indexed owner,
+        address gaugeController,
+        address ccaStrategy,
+        address oracle
     );
 
     event AuctionDeferred(
@@ -339,6 +379,22 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         Phase1Params calldata params,
         CodeIds calldata codeIds
     ) external nonReentrant returns (Phase1Result memory out) {
+        return _deployPhase1Internal(params, codeIds, bytes32(0));
+    }
+
+    function deployPhase1WithSalt(
+        Phase1Params calldata params,
+        CodeIds calldata codeIds,
+        bytes32 shareOftSaltOverride
+    ) external nonReentrant returns (Phase1Result memory out) {
+        return _deployPhase1Internal(params, codeIds, shareOftSaltOverride);
+    }
+
+    function _deployPhase1Internal(
+        Phase1Params calldata params,
+        CodeIds calldata codeIds,
+        bytes32 shareOftSaltOverride
+    ) internal returns (Phase1Result memory out) {
         _requireOwner(params.owner);
         if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
         _requirePhase1CodeIds(codeIds);
@@ -354,7 +410,9 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
         bytes32 vaultSalt = _saltFor(baseSalt, "vault");
         bytes32 wrapperSalt = _saltFor(baseSalt, "wrapper");
-        bytes32 shareOftSalt = _deriveShareOftSalt(params.owner, shareSymbolLower, params.version);
+        bytes32 shareOftSalt = shareOftSaltOverride == bytes32(0)
+            ? _deriveShareOftSalt(params.owner, shareSymbolLower, params.version)
+            : shareOftSaltOverride;
 
         // OFT bootstrap registry is chain-global + constructor-less ⇒ initCodeHash == codeId.
         bytes32 oftBootstrapSalt = keccak256("CreatorVault:OFTBootstrapRegistry:v1");
@@ -401,7 +459,39 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     ) external nonReentrant returns (Phase2Result memory out) {
         _requireOwner(params.owner);
         _pullCreatorTokens(params.creatorToken, params.owner, params.depositAmount);
-        out = _deployPhase2AndLaunch(params, codeIds);
+        Phase2Result memory coreOut = _deployPhase2Core(
+            Phase2CoreParams({
+                creatorToken: params.creatorToken,
+                owner: params.owner,
+                creatorTreasury: params.creatorTreasury,
+                payoutRecipient: params.payoutRecipient,
+                vault: params.vault,
+                wrapper: params.wrapper,
+                shareOFT: params.shareOFT,
+                shareSymbol: params.shareSymbol,
+                version: params.version,
+                floorPriceQ96: params.floorPriceQ96
+            }),
+            codeIds
+        );
+        out = _finalizePhase2Internal(
+            Phase2FinalizeParams({
+                creatorToken: params.creatorToken,
+                owner: params.owner,
+                vault: params.vault,
+                wrapper: params.wrapper,
+                shareOFT: params.shareOFT,
+                gaugeController: coreOut.gaugeController,
+                ccaStrategy: coreOut.ccaStrategy,
+                oracle: coreOut.oracle,
+                version: params.version,
+                depositAmount: params.depositAmount,
+                auctionPercent: params.auctionPercent,
+                requiredRaise: params.requiredRaise,
+                floorPriceQ96: params.floorPriceQ96,
+                auctionSteps: params.auctionSteps
+            })
+        );
     }
 
     function deployPhase2AndLaunchWithPermit(
@@ -411,7 +501,55 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     ) external nonReentrant returns (Phase2Result memory out) {
         _requireOwner(params.owner);
         _permitAndPull(params.creatorToken, params.owner, params.depositAmount, permit);
-        out = _deployPhase2AndLaunch(params, codeIds);
+        Phase2Result memory coreOut = _deployPhase2Core(
+            Phase2CoreParams({
+                creatorToken: params.creatorToken,
+                owner: params.owner,
+                creatorTreasury: params.creatorTreasury,
+                payoutRecipient: params.payoutRecipient,
+                vault: params.vault,
+                wrapper: params.wrapper,
+                shareOFT: params.shareOFT,
+                shareSymbol: params.shareSymbol,
+                version: params.version,
+                floorPriceQ96: params.floorPriceQ96
+            }),
+            codeIds
+        );
+        out = _finalizePhase2Internal(
+            Phase2FinalizeParams({
+                creatorToken: params.creatorToken,
+                owner: params.owner,
+                vault: params.vault,
+                wrapper: params.wrapper,
+                shareOFT: params.shareOFT,
+                gaugeController: coreOut.gaugeController,
+                ccaStrategy: coreOut.ccaStrategy,
+                oracle: coreOut.oracle,
+                version: params.version,
+                depositAmount: params.depositAmount,
+                auctionPercent: params.auctionPercent,
+                requiredRaise: params.requiredRaise,
+                floorPriceQ96: params.floorPriceQ96,
+                auctionSteps: params.auctionSteps
+            })
+        );
+    }
+
+    function deployPhase2Core(
+        Phase2CoreParams calldata params,
+        CodeIds calldata codeIds
+    ) external nonReentrant returns (Phase2Result memory out) {
+        _requireOwner(params.owner);
+        out = _deployPhase2Core(params, codeIds);
+    }
+
+    function finalizePhase2(
+        Phase2FinalizeParams calldata params
+    ) external nonReentrant returns (Phase2Result memory out) {
+        _requireOwner(params.owner);
+        _pullCreatorTokens(params.creatorToken, params.owner, params.depositAmount);
+        out = _finalizePhase2Internal(params);
     }
 
     // ================================
@@ -450,13 +588,12 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         );
     }
 
-    function _deployPhase2AndLaunch(
-        Phase2Params calldata params,
+    function _deployPhase2Core(
+        Phase2CoreParams memory params,
         CodeIds calldata codeIds
     ) internal returns (Phase2Result memory out) {
         if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
         if (params.vault == address(0) || params.wrapper == address(0) || params.shareOFT == address(0)) revert ZeroAddress();
-        if (params.auctionPercent > 100) revert InvalidPercent();
         _requirePhase2CodeIds(codeIds);
 
         // Require phase-1 contracts to exist.
@@ -505,6 +642,29 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         ICCALaunchStrategy(out.ccaStrategy).setOracleConfig(out.oracle, poolManager, taxHook, out.gaugeController);
         ICCALaunchStrategy(out.ccaStrategy).setDefaultTickSpacing(_defaultTickSpacingQ96(params.floorPriceQ96));
 
+        emit Phase2CoreDeployed(params.creatorToken, params.owner, out.gaugeController, out.ccaStrategy, out.oracle);
+    }
+
+    function _finalizePhase2Internal(
+        Phase2FinalizeParams memory params
+    ) internal returns (Phase2Result memory out) {
+        if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
+        if (params.vault == address(0) || params.wrapper == address(0) || params.shareOFT == address(0)) revert ZeroAddress();
+        if (params.gaugeController == address(0) || params.ccaStrategy == address(0) || params.oracle == address(0)) revert ZeroAddress();
+        if (params.auctionPercent > 100) revert InvalidPercent();
+
+        // Require phase-1 + phase-2 contracts to exist.
+        if (params.vault.code.length == 0 || params.wrapper.code.length == 0 || params.shareOFT.code.length == 0) revert Phase1Missing();
+        if (params.gaugeController.code.length == 0 || params.ccaStrategy.code.length == 0 || params.oracle.code.length == 0) {
+            revert Phase2Missing();
+        }
+
+        bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
+
+        out.gaugeController = params.gaugeController;
+        out.ccaStrategy = params.ccaStrategy;
+        out.oracle = params.oracle;
+
         // Deposit + wrap + deferred auction (launch in later phase)
         IERC20(params.creatorToken).forceApprove(params.vault, params.depositAmount);
         uint256 shares = ICreatorOVault(params.vault).deposit(params.depositAmount, address(this));
@@ -518,10 +678,10 @@ contract CreatorVaultDeployer is ReentrancyGuard {
             if (pending.amount != 0) revert AuctionAlreadyPending();
             pendingAuctions[baseSalt] = PendingAuction({
                 shareOFT: params.shareOFT,
-                ccaStrategy: out.ccaStrategy,
+                ccaStrategy: params.ccaStrategy,
                 amount: auctionAmount
             });
-            emit AuctionDeferred(params.creatorToken, params.owner, params.shareOFT, out.ccaStrategy, auctionAmount);
+            emit AuctionDeferred(params.creatorToken, params.owner, params.shareOFT, params.ccaStrategy, auctionAmount);
         }
 
         uint256 remaining = wsTokens - auctionAmount;
@@ -550,16 +710,16 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         ICreatorOVault(params.vault).transferOwnership(params.owner);
         ICreatorOVaultWrapper(params.wrapper).transferOwnership(protocolTreasury);
         ICreatorShareOFT(params.shareOFT).transferOwnership(protocolTreasury);
-        ICreatorGaugeController(out.gaugeController).transferOwnership(protocolTreasury);
-        ICCALaunchStrategy(out.ccaStrategy).transferOwnership(protocolTreasury);
-        IOwnableTransfer(out.oracle).transferOwnership(protocolTreasury);
+        ICreatorGaugeController(params.gaugeController).transferOwnership(protocolTreasury);
+        ICCALaunchStrategy(params.ccaStrategy).transferOwnership(protocolTreasury);
+        IOwnableTransfer(params.oracle).transferOwnership(protocolTreasury);
 
         emit Phase2DeployedAndLaunched(
             params.creatorToken,
             params.owner,
-            out.gaugeController,
-            out.ccaStrategy,
-            out.oracle,
+            params.gaugeController,
+            params.ccaStrategy,
+            params.oracle,
             out.auction
         );
     }
@@ -709,7 +869,7 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         }
     }
 
-    function _deriveBaseSalt(address creatorToken, address owner, string calldata version) internal view returns (bytes32) {
+    function _deriveBaseSalt(address creatorToken, address owner, string memory version) internal view returns (bytes32) {
         return keccak256(abi.encodePacked(creatorToken, owner, block.chainid, "CreatorVault:deploy:", version));
     }
 
@@ -717,7 +877,7 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         return keccak256(abi.encodePacked(baseSalt, label));
     }
 
-    function _deriveShareOftSalt(address owner, string memory shareSymbolLower, string calldata version) internal pure returns (bytes32) {
+    function _deriveShareOftSalt(address owner, string memory shareSymbolLower, string memory version) internal pure returns (bytes32) {
         bytes32 base = keccak256(abi.encodePacked(owner, shareSymbolLower));
         return keccak256(abi.encodePacked(base, "CreatorShareOFT:", version));
     }

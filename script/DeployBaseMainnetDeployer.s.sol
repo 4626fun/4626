@@ -40,7 +40,7 @@ contract DeployBaseMainnetDeployer is Script {
     bytes32 constant DEPLOYER_SALT_V2 = keccak256("CreatorVault:UniversalCreate2DeployerFromStore:v2");
 
     // Deployer salt (constructor args are chain-specific ⇒ address is chain-specific).
-    bytes32 constant DEPLOYER_SALT = keccak256("CreatorVault:CreatorVaultDeployer:v3");
+    bytes32 constant DEPLOYER_SALT = keccak256("CreatorVault:CreatorVaultDeployer:v4");
 
     // Defaults (Base mainnet) — can be overridden via env.
     address constant DEFAULT_REGISTRY = 0x02c8031c39E10832A831b954Df7a2c1bf9Df052D;
