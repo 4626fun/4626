@@ -269,6 +269,27 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
   }
 }
 
+async function waitForContractsDeployed(params: {
+  publicClient: { getBytecode: (args: { address: Address }) => Promise<string | null> }
+  addresses: Address[]
+  label: string
+  timeoutMs?: number
+  intervalMs?: number
+}): Promise<void> {
+  const timeoutMs = params.timeoutMs ?? 90_000
+  const intervalMs = params.intervalMs ?? 1_500
+  const started = Date.now()
+  while (true) {
+    const codes = await Promise.all(params.addresses.map((a) => params.publicClient.getBytecode({ address: a })))
+    const allDeployed = codes.every((c) => !!c && c !== '0x')
+    if (allDeployed) return
+    if (Date.now() - started > timeoutMs) {
+      throw new Error(`${params.label} contracts not deployed after ${Math.round(timeoutMs / 1000)}s`)
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+}
+
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type AdminAuthResponse = { address: string; isAdmin: boolean } | null
 type ServerDeployResponse = {
@@ -2921,6 +2942,12 @@ function DeployVaultBatcher({
         if (phase1Calls.length > 0) {
           setPhase('phase1')
           await sendPhaseCalls(phase1Calls, 'phase1')
+          // Ensure Phase 1 is mined before Phase 2 preflight.
+          await waitForContractsDeployed({
+            publicClient: publicClient as any,
+            addresses: [expected.vault, expected.wrapper, expected.shareOFT],
+            label: 'Phase 1',
+          })
         }
 
         // Phase 2: Launch + configure
@@ -2929,6 +2956,11 @@ function DeployVaultBatcher({
           await sendPhaseCalls(phase2ApproveCalls, 'phase2', { noSplit: true, segment: 'approve' })
         }
         await sendPhaseCalls([phase2CoreCall], 'phase2', { noSplit: true, segment: 'core' })
+        await waitForContractsDeployed({
+          publicClient: publicClient as any,
+          addresses: [expected.gaugeController, expected.ccaStrategy, expected.oracle],
+          label: 'Phase 2 core',
+        })
         await sendPhaseCalls([phase2FinalizeCall], 'phase2', { noSplit: true, segment: 'finalize' })
         const phase2PostCalls = phase2Calls.filter(
           (c) => c !== phase2CoreCall && c !== phase2FinalizeCall && !phase2ApproveCalls.includes(c),
