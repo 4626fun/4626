@@ -36,9 +36,11 @@ This section provides a high-level introduction to the 4626 protocol.
          v                     v                     v
 +----------------+   +------------------+   +----------------+
 | CCA Strategy   |   | Charm Strategy   |   | Ajna Strategy  |
-| (Launch)       |   | (V3 LP)          |   | (Lending)      |
+| Auctions ■TOKEN|   | LPs with TOKEN   |   | Lends TOKEN    |
 +----------------+   +------------------+   +----------------+
 ```
+
+**Key distinction:** The CCA strategy auctions wrapped share tokens (■TOKEN) during launch, while Charm and Ajna strategies deploy the underlying creator coin (TOKEN) for yield.
 
 ---
 

@@ -29,10 +29,14 @@ A Creator Vault (`CreatorOVault`) is an ERC-4626 tokenized vault that:
 | Vault shares | ▢TOKEN | CreatorOVault |
 | Wrapped shares (OFT) | ■TOKEN | CreatorShareOFT |
 
-### Yield strategies
+### Strategies
 
-Vaults deploy capital to multiple strategies:
-- **CCA Launch Strategy** - Continuous Clearing Auction for token launches
+Vaults use two types of strategies:
+
+**Launch strategy (auctions ■TOKEN wrapped shares):**
+- **CCA Launch Strategy** - Continuous Clearing Auction to bootstrap liquidity
+
+**Yield strategies (deploy TOKEN for yield):**
 - **Charm Strategy** - Uniswap V3 concentrated liquidity via Charm Alpha Vaults
 - **Ajna Strategy** - Lending via Ajna Protocol
 - **Uniswap V4 Strategies** - Full range, concentrated, and limit order strategies
@@ -42,25 +46,29 @@ Vaults deploy capital to multiple strategies:
 ## Architecture overview
 
 ```
-Creator Coin (Zora)
+Creator Coin (TOKEN)
        |
        v
-+------------------+
-|  CreatorOVault   |  <-- ERC-4626 vault
-|  (▢TOKEN shares) |
-+------------------+
++--------------------+
+|   CreatorOVault    |  <-- ERC-4626 vault
+| Issues ▢TOKEN shares|
++--------------------+
        |
        +-----> CreatorShareOFT (■TOKEN) -- Cross-chain via LayerZero
        |
        v
-+------------------+
-|    Strategies    |
-+------------------+
-  |     |     |
-  v     v     v
-Charm  Ajna  CCA
-(V3)  (Lend) (Launch)
++--------------------+
+|     Strategies     |
++--------------------+
+       |
+       +---> CCA Strategy -----> Auctions ■TOKEN (wrapped shares)
+       |
+       +---> Charm Strategy ---> Deploys TOKEN (V3 LP)
+       |
+       +---> Ajna Strategy ----> Lends TOKEN
 ```
+
+**Key insight:** CCA auctions wrapped shares (■TOKEN) for price discovery, while yield strategies deploy the underlying creator coin (TOKEN).
 
 ---
 

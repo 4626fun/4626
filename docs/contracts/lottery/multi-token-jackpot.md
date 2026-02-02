@@ -2,7 +2,7 @@
 title: Multi Token Jackpot
 ---
 
-# 🎁 Multi-Token Jackpot System
+# Multi-Token Jackpot System
 
 ## Overview
 

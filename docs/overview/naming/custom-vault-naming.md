@@ -2,7 +2,7 @@
 title: Custom Vault Naming
 ---
 
-# 🎨 **CUSTOM VAULT NAMING IMPLEMENTED!**
+# **CUSTOM VAULT NAMING IMPLEMENTED!**
 
 ## **WHAT CHANGED:**
 
@@ -68,7 +68,7 @@ batchDeployStrategies(
 
 ---
 
-## 🎨 **NAMING PATTERN:**
+## **NAMING PATTERN:**
 
 All vaults use this consistent format:
 
@@ -195,7 +195,7 @@ require(bytes(vaultSymbol).length > 0, "Invalid vault symbol");
 
 ---
 
-## 🎨 **NAME BEST PRACTICES:**
+## **NAME BEST PRACTICES:**
 
 ### **DO:**
 - Include creator/brand name

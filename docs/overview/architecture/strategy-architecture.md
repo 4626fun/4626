@@ -29,22 +29,27 @@ CreatorVault uses a multi-strategy approach to maximize yield while maintaining 
 ## Architecture
 
 ```
-Creator Token deposits
+Creator Coin (TOKEN) deposits
         |
         v
-+------------------+
-|  CreatorOVault   |  <-- ERC-4626 vault
-+------------------+
++--------------------+
+|   CreatorOVault    |  <-- ERC-4626 vault
+| Issues ▢TOKEN shares|
++--------------------+
         |
-        +---> Idle buffer (9.61% default)
+        +---> Idle buffer (9.61% TOKEN)
         |
-        +---> Strategy allocation (weighted)
+        +---> Strategy allocation
               |
-              +---> CCALaunchStrategy (launch phase)
-              +---> CreatorCharmStrategy (V3 LP)
-              +---> AjnaStrategy (lending)
-              +---> V4 Strategies (coming)
+              +---> CCALaunchStrategy -----> Auctions ■TOKEN (wrapped shares)
+              |                              for price discovery
+              |
+              +---> CreatorCharmStrategy --> Deploys TOKEN to V3 LP
+              +---> AjnaStrategy ----------> Lends TOKEN to Ajna pools
+              +---> V4 Strategies ---------> Deploys TOKEN to V4 pools
 ```
+
+**Important:** The CCA strategy is unique - it auctions wrapped share tokens (■TOKEN) to bootstrap liquidity and establish price. Other strategies deploy the underlying creator coin (TOKEN) directly for yield generation.
 
 ---
 
@@ -74,18 +79,28 @@ vault.setMinimumTotalIdle(4_805_000e18);  // 9.61% of 50M
 
 ### CCA Launch Strategy
 
-Used during token launch phase:
+The CCA strategy operates differently from yield strategies - it auctions **wrapped share tokens (■TOKEN)**, not the underlying creator coin.
 
-1. Accepts creator token deposits
-2. Runs continuous clearing auction for 7 days
-3. Graduates to LP position after auction
-4. Configures tax hook on V4 pool
+**How it works:**
+
+1. Creator deposits TOKEN into vault, receives ▢TOKEN shares
+2. ▢TOKEN shares are wrapped into ■TOKEN (OFT)
+3. CCA strategy auctions ■TOKEN via continuous clearing auction
+4. Buyers pay ETH for ■TOKEN
+5. After 7 days, auction graduates to V4 LP position
+6. Tax hook is configured on the resulting pool
+
+**Why auction wrapped shares:**
+- ■TOKEN is cross-chain compatible (LayerZero OFT)
+- Represents a claim on diversified vault yield
+- Price discovery for the vault itself, not just the coin
+- Raised ETH bootstraps LP liquidity
 
 ### LBP Strategy (alternative)
 
 Liquidity Bootstrapping Pool approach:
 
-1. Initial weighted pool (80/20)
+1. Initial weighted pool (80/20) with ■TOKEN
 2. Weight shifts over time
 3. Migrates to V4 after launch
 
@@ -93,33 +108,39 @@ Liquidity Bootstrapping Pool approach:
 
 ## Yield strategies
 
+Unlike the CCA launch strategy, yield strategies deploy the **underlying creator coin (TOKEN)** to generate returns.
+
 ### Charm Strategy (Uniswap V3)
 
-Automated LP management via Charm Alpha Vaults:
+Deploys TOKEN to automated LP positions via Charm Alpha Vaults:
 
 | Parameter | Typical value |
 |-----------|---------------|
+| Asset deployed | TOKEN (creator coin) |
+| Pair | TOKEN/USDC or TOKEN/WETH |
 | Fee tier | 0.3% or 1% |
 | Rebalance threshold | 3000 ticks |
-| TWAP duration | 1800 seconds |
 
 ### Ajna Strategy
 
-Permissionless lending:
+Lends TOKEN to permissionless lending pools:
 
 | Parameter | Typical value |
 |-----------|---------------|
+| Asset deployed | TOKEN (creator coin) |
 | Quote token | WETH or USDC |
 | Bucket placement | Derived from oracle price |
 | Expected APY | 5-15% |
 
 ### V4 Strategies (planned)
 
+Deploys TOKEN to Uniswap V4 pools:
+
 | Strategy | Description |
 |----------|-------------|
-| Full Range | Classic LP across all prices |
-| Concentrated | Targeted price ranges |
-| Limit Order | Single-sided limit positions |
+| Full Range | TOKEN LP across all prices |
+| Concentrated | TOKEN in targeted price ranges |
+| Limit Order | Single-sided TOKEN positions |
 
 ---
 

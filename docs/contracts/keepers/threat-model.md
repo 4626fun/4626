@@ -160,16 +160,16 @@ Assume adversaries may be:
 ---
 
 ### T8 — Group permission takeover (XMTP permissions)
-**Attack:** Malicious admin/member tries to change group roles or remove Takopi.
+**Attack:** Malicious admin/member tries to change group roles or remove Keepr.
 
 **Impact:** Loss of enforcement.
 
 **Mitigations (MVP):**
-- Ensure Takopi is assigned **admin** and OWNER is **super admin**.
+- Ensure Keepr is assigned **admin** and OWNER is **super admin**.
 - Minimize who is granted admin permissions at group level.
 - If XMTP supports it, restrict who can add/remove admins.
 
-**Safe default:** If Takopi loses admin power → stop claiming enforcement guarantees; alert OWNER.
+**Safe default:** If Keepr loses admin power → stop claiming enforcement guarantees; alert OWNER.
 
 ---
 
@@ -202,14 +202,14 @@ Assume adversaries may be:
 ---
 
 ### T11 — Social engineering against users
-**Attack:** Scammer impersonates Takopi or admins, tricks users into sending funds/keys.
+**Attack:** Scammer impersonates Keepr or admins, tricks users into sending funds/keys.
 
 **Impact:** User loss.
 
 **Mitigations (MVP):**
-- Takopi must never ask for secrets.
+- Keepr must never ask for secrets.
 - Standardize warning messages:
-  - “Takopi will never ask for seed phrases or private keys.”
+  - “Keepr will never ask for seed phrases or private keys.”
 - Use a consistent, verifiable agent identity in chat (name + pinned message).
 
 **Safe default:** If asked for sensitive info → refuse and display security warning.
@@ -295,4 +295,4 @@ MVP is acceptable when:
 - Non-admins cannot execute privileged commands.
 - Config changes require OWNER authorization and are integrity-checked.
 - Failures default to denying joins and avoiding noisy removals.
-- Takopi never requests secrets and warns against impersonation.
+- Keepr never requests secrets and warns against impersonation.

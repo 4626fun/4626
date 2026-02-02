@@ -78,7 +78,7 @@ Type: number
 
 Expected: 8453 (Base)
 
-Takopi must refuse to operate if chainId is unsupported or mismatched.
+Keepr must refuse to operate if chainId is unsupported or mismatched.
 
 Vault Bindings
 vault (required)
@@ -104,7 +104,7 @@ Type: 0x address
 
 Vault share token address (if the vault issues shares)
 
-If omitted, Takopi must not enforce share-based gating.
+If omitted, Keepr must not enforce share-based gating.
 
 XMTP Bindings
 xmtp (required)
@@ -116,7 +116,7 @@ XMTP group identifier for this vault community
 xmtp.agentInboxId (optional but recommended)
 Type: string
 
-Inbox ID for Takopi instance
+Inbox ID for Keepr instance
 
 Gating Rules
 gating (required)
@@ -169,7 +169,7 @@ Type: 0x address
 
 Must match vault.canonicalOwnerAddress
 
-If mismatch: Takopi must refuse to execute privileged commands.
+If mismatch: Keepr must refuse to execute privileged commands.
 
 roles.admins (optional)
 Type: array of 0x addresses
@@ -231,10 +231,10 @@ exportable server datastore keyed by vault
 
 future onchain registry (optional)
 
-Takopi must never require secrets to boot.
+Keepr must never require secrets to boot.
 
 Validation Rules (MVP)
-Takopi must refuse operation if:
+Keepr must refuse operation if:
 
 required fields are missing
 
@@ -265,11 +265,11 @@ Copy code
 # `ARCHITECTURE.md`
 
 ```md
-# Takopi Architecture (MVP)
+# Keepr Architecture (MVP)
 
-This document describes how Takopi fits into the system and the minimal runtime flows required for v1.
+This document describes how Keepr fits into the system and the minimal runtime flows required for v1.
 
-Takopi is a vault-bound operator agent inside **Base Chat (XMTP)**.
+Keepr is a vault-bound operator agent inside **Base Chat (XMTP)**.
 
 ---
 
@@ -293,16 +293,16 @@ Takopi is a vault-bound operator agent inside **Base Chat (XMTP)**.
 
 ---
 
-## Takopi (Agent Runtime)
+## Keepr (Agent Runtime)
 
-Takopi is instantiated per vault and bound via config:
+Keepr is instantiated per vault and bound via config:
 
 - vault addresses and chainId
 - canonical owner identity
 - gating thresholds
 - XMTP group ID
 
-Takopi responsibilities:
+Keepr responsibilities:
 
 - enforce token-gated membership
 - run deterministic admin commands
@@ -321,11 +321,11 @@ create XMTP group chat
       ↓
 store (vault → groupId) mapping
       ↓
-spawn Takopi instance with config
+spawn Keepr instance with config
       ↓
-Takopi enforces gating + runs commands
+Keepr enforces gating + runs commands
 Core MVP Flows
-Flow A — Deploy → Group Creation → Takopi Boot
+Flow A — Deploy → Group Creation → Keepr Boot
 Trigger: user successfully deploys a vault
 
 App deploys vault (owner must be canonical identity)
@@ -342,22 +342,22 @@ canonicalOwnerAddress
 
 creatorCoinAddress
 
-App boots Takopi using the config schema (see CONFIG.md)
+App boots Keepr using the config schema (see CONFIG.md)
 
-Takopi posts a pinned “config summary” message (optional)
+Keepr posts a pinned “config summary” message (optional)
 
 Invariant: The vault owner must be the canonical identity wallet.
 
 Flow B — Join Request (Token Gating)
 Trigger: user asks to join group OR uses /keepr check
 
-Takopi maps XMTP inbox → wallet address (provided by integration layer)
+Keepr maps XMTP inbox → wallet address (provided by integration layer)
 
-Takopi reads onchain balance at a known block:
+Keepr reads onchain balance at a known block:
 
 shareBalance(wallet)
 
-Takopi compares against threshold
+Keepr compares against threshold
 
 If eligible:
 
@@ -374,7 +374,7 @@ Default: fail closed if mapping or chain read fails.
 Flow C — Periodic / On-Demand Recheck
 Trigger: /keepr sync or scheduled job
 
-Takopi enumerates group members
+Keepr enumerates group members
 
 For each member, check eligibility at current block
 
@@ -385,7 +385,7 @@ Emit a summary report in group chat
 Apply rate limits and batching
 
 Deterministic Command Handling
-Takopi only reacts to explicit commands:
+Keepr only reacts to explicit commands:
 
 Prefix: /keepr
 
@@ -393,7 +393,7 @@ Grammar: fixed set in COMMANDS.md
 
 Unknown or malformed commands → minimal help response
 
-Takopi must never infer admin intent from free text.
+Keepr must never infer admin intent from free text.
 
 Permissions Model (MVP)
 OWNER: canonicalOwnerAddress
@@ -473,7 +473,7 @@ batch membership operations
 prefer DMs for denials/removals
 
 Action Output Contract
-When Takopi requires the system to take an action, it emits:
+When Keepr requires the system to take an action, it emits:
 
 a short explanation
 
@@ -497,7 +497,7 @@ Copy code
 The integration layer is responsible for executing these actions.
 
 Summary
-Takopi is a vault-bound operator that:
+Keepr is a vault-bound operator that:
 
 enforces explicit membership rules
 
@@ -507,4 +507,4 @@ avoids custody, signing, and identity mutation
 
 stays transparent and walkaway-safe
 
-Takopi should feel boring, predictable, and correct.
+Keepr should feel boring, predictable, and correct.

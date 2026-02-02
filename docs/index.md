@@ -48,10 +48,16 @@ Welcome to the CreatorVault protocol documentation.
 ### Architecture
 
 ```
-Creator Coin -> CreatorOVault -> Strategies -> Yield
-                    |
-                    v
-              CreatorShareOFT (■TOKEN) -> Cross-chain
+Creator Coin (TOKEN)
+        |
+        v
+CreatorOVault (issues ▢TOKEN shares)
+        |
+        +---> CCA Strategy -----> Auctions ■TOKEN for launch
+        +---> Yield Strategies -> Deploy TOKEN for yield
+        |
+        v
+CreatorShareOFT (■TOKEN) -> Cross-chain transfers
 ```
 
 ---
