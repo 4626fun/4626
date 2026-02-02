@@ -1038,6 +1038,8 @@ function DeployVaultBatcher({
   floorPriceQ96Aligned,
   marketFloorTwapDurationSec,
   marketFloorDiscountBps,
+  getAccessToken,
+  signInWithPrivyToken,
   onSuccess,
   switchAuthCta,
   smartWalletClient,
@@ -1067,6 +1069,8 @@ function DeployVaultBatcher({
   floorPriceQ96Aligned: bigint | null
   marketFloorTwapDurationSec: number | null
   marketFloorDiscountBps: number | null
+  getAccessToken?: (() => Promise<string | null>) | null
+  signInWithPrivyToken?: ((token: string) => Promise<string | null>) | null
   onSuccess: (addresses: ServerDeployResponse['addresses']) => void
   switchAuthCta?: { label: string; onClick: () => void }
   smartWalletClient: any
@@ -1169,15 +1173,15 @@ function DeployVaultBatcher({
   }>({})
   const shareOftVanityCacheRef = useRef<{ key: string; salt: Hex } | null>(null)
   const ensurePaymasterSession = useCallback(async () => {
-    if (!getAccessToken) return
+    if (!getAccessToken || typeof signInWithPrivyToken !== 'function') return
     try {
       const token = await getAccessToken()
-      if (!token || typeof siwe?.signInWithPrivyToken !== 'function') return
-      await siwe.signInWithPrivyToken(token)
+      if (!token) return
+      await signInWithPrivyToken(token)
     } catch {
       // If we can't bridge, we still let the paymaster decide.
     }
-  }, [getAccessToken, siwe])
+  }, [getAccessToken, signInWithPrivyToken])
   const switchAuthLabel = typeof switchAuthCta?.label === 'string' && switchAuthCta.label.trim().length > 0 ? switchAuthCta.label.trim() : null
 
   const lastAuthAtMs = useMemo(() => {
@@ -5006,6 +5010,8 @@ function DeployVaultMain() {
                     vaultSymbol={derivedVaultSymbol}
                     vaultName={derivedVaultName}
                     deploymentVersion={deploymentVersion}
+                    getAccessToken={getAccessToken}
+                    signInWithPrivyToken={siwe?.signInWithPrivyToken}
                     shareOftSaltOverride={shareOftSaltOverride}
                     currentPayoutRecipient={payoutRecipient}
                     floorPriceQ96Aligned={marketFloorQuery.data?.floorPriceQ96Aligned ?? null}
