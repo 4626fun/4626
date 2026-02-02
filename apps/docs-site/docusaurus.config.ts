@@ -5,7 +5,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 const config: Config = {
   title: 'CreatorVault Docs',
   tagline: 'Documentation for the 4626 protocol',
-  favicon: 'img/favicon.ico',
+  favicon: 'brand/favicon.svg',
 
   url: 'https://docs.4626.fun',
   baseUrl: '/',
@@ -46,9 +46,13 @@ const config: Config = {
   ],
 
   themeConfig: {
-    image: 'img/social-card.png',
+    image: 'brand/social-card.svg',
     navbar: {
       title: 'CreatorVault',
+      logo: {
+        alt: 'CreatorVault Logo',
+        src: 'brand/logo.svg',
+      },
       items: [
         {
           type: 'docSidebar',

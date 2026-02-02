@@ -22,6 +22,9 @@ const __dirname = path.dirname(__filename);
 // Configuration
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const DEST_DIR = path.resolve(__dirname, '../docs');
+const STATIC_DIR = path.resolve(__dirname, '../static');
+const BRAND_SOURCE = path.join(REPO_ROOT, 'frontend/public/brand');
+const BRAND_DEST = path.join(STATIC_DIR, 'brand');
 
 // Source directories
 const SOURCES = {
@@ -281,6 +284,61 @@ async function processSource(sourceKey) {
 }
 
 /**
+ * Sync brand assets from frontend/public/brand to static/brand
+ */
+async function syncBrandAssets() {
+  console.log('\n🎨 Syncing brand assets...');
+  
+  // Check if source exists
+  if (!await sourceExists(BRAND_SOURCE)) {
+    stats.warnings.push('Brand assets: Source directory not found');
+    console.log('   ⚠️  Brand source not found (skipping)');
+    return;
+  }
+  
+  // Clean and recreate destination
+  try {
+    await fs.rm(BRAND_DEST, { recursive: true, force: true });
+  } catch {
+    // Directory may not exist
+  }
+  await fs.mkdir(BRAND_DEST, { recursive: true });
+  
+  // Get all files in brand directory
+  const files = await fg(['**/*'], {
+    cwd: BRAND_SOURCE,
+    dot: false,
+  });
+  
+  if (files.length === 0) {
+    stats.warnings.push('Brand assets: No files found');
+    console.log('   ⚠️  No brand files found');
+    return;
+  }
+  
+  // Copy each file
+  let copied = 0;
+  for (const file of files) {
+    const sourcePath = path.join(BRAND_SOURCE, file);
+    const destPath = path.join(BRAND_DEST, file);
+    
+    try {
+      await fs.mkdir(path.dirname(destPath), { recursive: true });
+      await fs.copyFile(sourcePath, destPath);
+      copied++;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      stats.warnings.push(`Brand asset ${file}: ${message}`);
+    }
+  }
+  
+  console.log(`   ✓ ${copied} brand assets copied`);
+  for (const file of files) {
+    console.log(`     - ${file}`);
+  }
+}
+
+/**
  * Create API index pages
  */
 async function createApiIndexPages() {
@@ -336,6 +394,9 @@ async function sync() {
   
   // Create API index pages
   await createApiIndexPages();
+  
+  // Sync brand assets
+  await syncBrandAssets();
   
   // Print summary
   console.log('\n════════════════════════════════════════════════════════════');

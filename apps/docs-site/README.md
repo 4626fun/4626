@@ -31,6 +31,7 @@ This site publishes curated documentation from `4626/docs/`.
 | ✅ Normalizes | Adds frontmatter (title, sidebar_position) |
 | ✅ Fixes links | Transforms broken links in generated API docs |
 | ✅ Validates | Internal links (in strict mode) |
+| ✅ Brand assets | Syncs `frontend/public/brand/` → `static/brand/` |
 
 ### API Docs Pipeline
 
@@ -98,6 +99,21 @@ pnpm build
 pnpm serve
 ```
 
+## Brand Assets
+
+Brand assets are managed in `frontend/public/brand/` and automatically synced to `static/brand/` during build.
+
+| Asset | Source | Used for |
+|-------|--------|----------|
+| `logo.svg` | `frontend/public/brand/logo.svg` | Navbar logo |
+| `favicon.svg` | `frontend/public/brand/favicon.svg` | Browser tab icon |
+| `social-card.svg` | `frontend/public/brand/social-card.svg` | Open Graph / Twitter cards |
+
+To update brand assets:
+1. Edit files in `frontend/public/brand/`
+2. Run `pnpm sync-docs` to copy to docs site
+3. Commit changes to `frontend/public/brand/`
+
 ## Project Structure
 
 ```
@@ -111,7 +127,8 @@ apps/docs-site/
 ├── src/
 │   └── css/
 │       └── custom.css          # Custom styles
-├── static/                     # Static assets
+├── static/
+│   └── brand/                  # SYNCED - do not edit directly
 └── package.json
 ```
 

@@ -7,6 +7,9 @@
 # Generated docs (synced from /docs - do not edit directly)
 /docs
 
+# Generated brand assets (synced from frontend/public/brand)
+/static/brand
+
 # Generated files
 .docusaurus
 .cache-loader
