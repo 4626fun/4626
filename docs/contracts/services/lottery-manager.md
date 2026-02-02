@@ -5,12 +5,12 @@ sidebar_position: 1
 
 # CreatorLotteryManager
 
-Shared lottery service for all creator coins with cross-chain prize distribution.
+Shared lottery service for all creator coins.
+Deployed once per chain, processes entries from all ShareOFT trades.
 
 > **Summary**
-> - Shared service deployed once per chain, serves all creator vaults
 > - Processes lottery entries from ShareOFT buy transactions
-> - Winners receive prizes from all active vaults (diversified portfolio)
+> - Winners receive prizes from all active vaults
 > - Uses Chainlink VRF for verifiable randomness
 
 ---
@@ -25,73 +25,40 @@ Shared lottery service for all creator coins with cross-chain prize distribution
 
 ## Purpose
 
-CreatorLotteryManager is a shared service deployed once per chain that serves all creator coins. When users buy any ■[creatorCoin] on a DEX, they automatically enter the lottery. Winners receive a diversified prize from all active creator vaults.
+CreatorLotteryManager serves all creator coins from a single deployment.
+When users buy ■[creatorCoin] on a DEX, they automatically enter the lottery.
 
-This shared architecture means every creator benefits from the combined trading activity of the entire ecosystem.
+The contract is responsible for:
+- Processing entries from ShareOFT buy transactions
+- Calculating win probability based on trade size and boosts
+- Requesting verifiable randomness via Chainlink VRF
+- Distributing prizes from all active vault jackpots
+- Broadcasting winners cross-chain via LayerZero
 
----
-
-## Responsibilities
-
-**What it does:**
-- Process lottery entries from ShareOFT buy transactions
-- Calculate win probability based on trade size and ve4626 boosts
-- Request verifiable randomness via Chainlink VRF
-- Distribute prizes from all active creator vault jackpots
-- Broadcast winners cross-chain via LayerZero
-
-**What it does NOT do:**
-- Collect fees (GaugeController does this)
-- Manage jackpot reserves (GaugeController does this)
-- Track voting power (ve4626 does this)
-- Store user positions
+The contract is not responsible for:
+- Collecting fees (GaugeController handles this)
+- Managing jackpot reserves (GaugeController handles this)
+- Tracking voting power (ve4626 handles this)
 
 ---
 
-## Key invariants and guarantees
+## Invariants
 
-1. **Fair randomness**: All winners determined by Chainlink VRF
-2. **Multi-token prizes**: Winners receive from all active vaults
-3. **Probability bounds**: Base probability capped at configurable maximum
-4. **Boost fairness**: ve4626 boosts apply equally to all participants
-5. **Cross-chain consistency**: Same winner announced on all chains
-6. **Hub authority**: Base chain is authoritative for winner selection
-
----
-
-## External interface (conceptual)
-
-### Lottery entry
-
-When ShareOFT detects a buy, it notifies the lottery manager with:
-- Buyer address
-- Trade amount (in USD via oracle)
-- Source token (which ■[creatorCoin])
-
-The lottery calculates probability and may trigger VRF.
-
-### Probability calculation
-
-Base probability scales with trade size:
-- $1 trade: Base probability
-- $1000+ trade: Maximum probability
-
-Additional boosts from:
-- ve4626 lock duration and amount
-- Vault gauge votes (probability direction)
-
-### Prize distribution
-
-Winners receive shares from all active vaults:
-- 69% of each vault's jackpot reserve
-- Distributed as vault shares (redeemable for creatorCoin)
-- Cross-chain winner notification via LayerZero
+1. All winners determined by Chainlink VRF
+2. Winners receive from all active vaults
+3. Base probability capped at configurable maximum
+4. ve4626 boosts apply equally to all participants
+5. Same winner announced on all chains
+6. Base chain is authoritative for winner selection
 
 ---
 
-## Core flows
+## Core Flows
 
-### Entry and selection flow
+### Entry and Selection
+
+The following diagram shows how trades become lottery entries and how winners are selected.
+VRF ensures fair, verifiable randomness.
 
 ```mermaid
 flowchart TD
@@ -104,9 +71,9 @@ flowchart TD
     Winner -->|payout| Prize[Multi-token Prize]
 ```
 
-*Every qualifying trade automatically enters the lottery. VRF ensures fair randomness.*
+*This diagram shows entry and selection only. Jackpot funding is handled by GaugeController.*
 
-### Cross-chain winner flow
+### Cross-Chain Winner Announcement
 
 ```mermaid
 flowchart LR
@@ -125,11 +92,21 @@ flowchart LR
     L3 -->|pay local jackpots| Winner
 ```
 
-*Winners are announced on all chains. Each chain pays from its local jackpot reserves.*
+*Each chain pays from its local jackpot reserves.*
+
+### Probability Calculation
+
+Base probability scales with trade size:
+- $1 trade: Base probability
+- $1000+ trade: Maximum probability
+
+Additional boosts from:
+- ve4626 lock duration and amount
+- Vault gauge votes (probability direction)
 
 ---
 
-## Access control
+## Access Control
 
 | Function | Access |
 |----------|--------|
@@ -141,9 +118,9 @@ flowchart LR
 
 ---
 
-## Failure modes and edge cases
+## Failure Modes
 
-### Common reverts
+### Common Reverts
 
 | Error | Cause |
 |-------|-------|
@@ -152,33 +129,34 @@ flowchart LR
 | `VRFPending` | Previous VRF request not fulfilled |
 | `Paused` | Lottery is paused |
 
-### Economic considerations
-
-- **Jackpot depletion**: Large wins reduce jackpot for subsequent winners
-- **Low activity**: Few trades means fewer lottery entries
-- **Cross-chain delays**: LayerZero messages have propagation time
-
-### VRF considerations
+### VRF Considerations
 
 - VRF requests cost LINK tokens
-- Callback gas must be sufficient for prize distribution
-- Failed VRF callbacks may require manual intervention
+- Callback gas must be sufficient for distribution
+- Failed callbacks may require manual intervention
+
+### Economic Risks
+
+- Large wins reduce jackpot for subsequent winners
+- Few trades means fewer lottery entries
+- Cross-chain messages have propagation delays
 
 ---
 
-## Integration notes
+## Integration Notes
 
 ### For ShareOFT
 
-ShareOFT automatically notifies lottery on buy detection. No additional integration needed.
+ShareOFT automatically notifies lottery on buy detection.
+No additional integration needed.
 
-### For frontends
+### For Frontends
 
 - Query `getJackpotReserve(vault)` via GaugeController
-- Query `calculateProbability(user, amount)` for estimated odds
+- Query `calculateProbability(user, amount)` for odds
 - Listen for `WinnerSelected` events
 
-### Non-guarantees
+### Non-Guarantees
 
 - Win probability is probabilistic, not guaranteed
 - Prize amounts depend on jackpot state at win time
@@ -186,9 +164,18 @@ ShareOFT automatically notifies lottery on buy detection. No additional integrat
 
 ---
 
-## Related contracts
+## Related Contracts
 
-- [CreatorShareOFT](/contracts/core/creator-share-oft) - Entry source
-- [CreatorGaugeController](/contracts/governance/gauge-controller) - Jackpot funding
-- [CreatorOracle](/contracts/services/creator-oracle) - USD price conversion
-- [ve4626](/contracts/governance/ve4626) - Probability boosts
+- [CreatorShareOFT](/contracts/core/creator-share-oft) — Entry source
+- [CreatorGaugeController](/contracts/governance/gauge-controller) — Jackpot funding
+- [CreatorOracle](/contracts/services/creator-oracle) — USD price conversion
+- [ve4626](/contracts/governance/ve4626) — Probability boosts
+
+---
+
+### Implementation Reference
+
+This document describes design intent.
+For exact behavior and edge cases, refer to the Solidity implementation.
+
+[View on GitHub](https://github.com/wenakita/4626/blob/main/contracts/services/lottery/CreatorLotteryManager.sol)

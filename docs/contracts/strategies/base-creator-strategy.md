@@ -5,13 +5,13 @@ sidebar_position: 0
 
 # BaseCreatorStrategy
 
-Abstract base contract for all CreatorOVault yield strategies.
+Abstract base contract for all yield strategies.
+Defines the common interface for vault-strategy interaction.
 
 > **Summary**
-> - Defines the common interface for all yield strategies
 > - Strategies only receive creatorCoin, never vault shares
-> - Concrete strategies implement protocol-specific logic
 > - Single-token pattern: one strategy manages one token
+> - Concrete strategies implement protocol-specific logic
 
 ---
 
@@ -25,80 +25,49 @@ Abstract base contract for all CreatorOVault yield strategies.
 
 ## Purpose
 
-BaseCreatorStrategy provides the common interface and safety patterns for all yield strategies. Concrete strategies (Ajna, Charm, etc.) inherit from this base and implement the protocol-specific logic.
+BaseCreatorStrategy provides the unified interface and safety patterns for all yield strategies.
+Concrete strategies (Ajna, Charm, etc.) inherit from this base.
 
-This abstraction allows the vault to interact with any strategy through a unified interface while each strategy handles its own yield generation mechanics.
+The base strategy is responsible for:
+- Defining the `IStrategy` interface implementation
+- Managing strategy lifecycle (active, inactive, emergency)
+- Tracking accounting (deposited, withdrawn, harvested)
+- Enforcing vault-only access for sensitive operations
 
----
-
-## Responsibilities
-
-**What it does:**
-- Define the `IStrategy` interface implementation
-- Manage strategy lifecycle (active, inactive, emergency)
-- Track accounting (deposited, withdrawn, harvested)
-- Enforce vault-only access for sensitive operations
-- Provide common safety patterns (reentrancy, emergency mode)
-
-**What it does NOT do:**
-- Generate yield (concrete strategies do this)
-- Interact with external protocols directly (concrete strategies do this)
-- Make allocation decisions (vault does this)
-- Handle multiple tokens (single-token pattern)
+The base strategy is not responsible for:
+- Generating yield (concrete strategies handle this)
+- Interacting with external protocols (concrete strategies handle this)
+- Making allocation decisions (vault handles this)
 
 ---
 
-## Key invariants and guarantees
+## Invariants
 
-1. **Single token pattern**: Each strategy manages exactly one token (creatorCoin)
-2. **Vault-only deposits**: Only the registered vault can deposit/withdraw
-3. **Asset type**: Strategies only receive creatorCoin, never ▢ or ■ tokens
-4. **Emergency mode**: Once enabled, blocks new deposits until disabled
-5. **Accounting accuracy**: `totalDeposited - totalWithdrawn + totalHarvested` reflects lifecycle
-6. **Non-zero vault**: Vault address must be set before activation
-
----
-
-## External interface (conceptual)
-
-### Required overrides
-
-Concrete strategies must implement:
-
-- `_deployFunds(amount)` - Deploy creatorCoin to yield source
-- `_freeFunds(amount)` - Withdraw from yield source
-- `_totalDeployed()` - Get current value in yield source
-- `_harvest()` - Collect and reinvest yields
-
-### Vault operations
-
-The vault calls these functions to manage capital:
-
-- `deposit(amount)` - Receive creatorCoin from vault
-- `withdraw(amount)` - Return creatorCoin to vault
-- `harvest()` - Trigger yield collection
-- `emergencyWithdraw()` - Exit all positions immediately
-
-### View functions
-
-- `isActive()` - Whether strategy accepts deposits
-- `asset()` - The token this strategy manages (creatorCoin)
-- `getTotalAssets()` - Total value managed by strategy
+1. Each strategy manages exactly one token (creatorCoin)
+2. Only the registered vault can deposit/withdraw
+3. Strategies only receive creatorCoin, never ▢ or ■ tokens
+4. Emergency mode blocks new deposits until disabled
+5. Vault address must be set before activation
 
 ---
 
-## Core flows
+## Core Flows
 
-### Deposit flow
+### Deposit
+
+The following diagram shows how creatorCoin flows from vault through the strategy to external protocols.
+Vault shares never enter this flow.
 
 ```mermaid
 flowchart LR
-    Vault[CreatorOVault] -->|deposit creatorCoin| Base[BaseCreatorStrategy]
+    Vault[CreatorOVault] -->|creatorCoin| Base[BaseCreatorStrategy]
     Base -->|_deployFunds| Concrete[ConcreteStrategy]
     Concrete -->|supply| External[(External Protocol)]
 ```
 
-### Harvest flow
+*This diagram shows deposit only. Withdrawal reverses this flow.*
+
+### Harvest
 
 ```mermaid
 flowchart LR
@@ -109,9 +78,11 @@ flowchart LR
     Strategy -->|report| Vault
 ```
 
+*Harvested yield is reported back to the vault for accounting.*
+
 ---
 
-## Access control
+## Access Control
 
 | Function | Access |
 |----------|--------|
@@ -125,9 +96,9 @@ flowchart LR
 
 ---
 
-## Failure modes and edge cases
+## Failure Modes
 
-### Common reverts
+### Common Reverts
 
 | Error | Cause |
 |-------|-------|
@@ -137,39 +108,44 @@ flowchart LR
 | `ZeroAmount` | Attempted zero deposit/withdraw |
 | `ZeroAddress` | Attempted to set zero vault address |
 
-### External protocol risks
+### External Protocol Risks
 
-- **Liquidity**: External protocol may not have sufficient liquidity
-- **Smart contract risk**: External protocol vulnerabilities
-- **Oracle risk**: Price manipulation in external protocols
-- **Slippage**: Large operations may incur slippage
+- External protocol may lack sufficient liquidity
+- Smart contract vulnerabilities in external protocols
+- Price manipulation in external protocols
+- Slippage on large operations
 
 ---
 
-## Integration notes
+## Integration Notes
 
-### For strategy developers
+### For Strategy Developers
 
 To create a new strategy:
-
 1. Inherit from `BaseCreatorStrategy`
 2. Implement `_deployFunds(uint256 amount)`
 3. Implement `_freeFunds(uint256 amount)`
 4. Implement `_totalDeployed() returns (uint256)`
 5. Implement `_harvest() returns (uint256)`
-6. Add protocol-specific initialization
 
-### Non-guarantees
+### Non-Guarantees
 
 - Strategies cannot guarantee positive returns
-- External protocol changes may affect strategy behavior
+- External protocol changes may affect behavior
 - Harvest timing affects yield capture
 
 ---
 
-## Related contracts
+## Related Contracts
 
-- [CreatorOVault](/contracts/core/creator-ovault) - Parent vault
-- [CCALaunchStrategy](/contracts/strategies/cca-launch) - Launch strategy
-- [AjnaStrategy](/contracts/strategies/ajna-strategy) - Ajna implementation
-- [CreatorCharmStrategy](/contracts/strategies/charm-strategy) - Charm implementation
+- [CreatorOVault](/contracts/core/creator-ovault) — Parent vault
+- [CCALaunchStrategy](/contracts/strategies/cca-launch) — Launch strategy
+
+---
+
+### Implementation Reference
+
+This document describes design intent.
+For exact behavior and edge cases, refer to the Solidity implementation.
+
+[View on GitHub](https://github.com/wenakita/4626/blob/main/contracts/vault/strategies/BaseCreatorStrategy.sol)

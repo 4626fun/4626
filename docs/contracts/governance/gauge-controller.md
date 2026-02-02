@@ -5,10 +5,10 @@ sidebar_position: 1
 
 # CreatorGaugeController
 
-Fee collection and distribution hub for creator vaults.
+The central fee routing contract for creator vaults.
+Receives trading fees, accumulates until threshold, then distributes to lottery, burn, and voters.
 
 > **Summary**
-> - Central fee routing for all protocol revenue
 > - Receives fees from ShareOFT trades and V4 tax hooks
 > - Distributes to lottery (69%), burn (21.39%), and voters (9.61%)
 > - Accumulates until threshold before distributing
@@ -25,13 +25,37 @@ Fee collection and distribution hub for creator vaults.
 
 ## Purpose
 
-CreatorGaugeController is the central fee routing contract. It receives trading fees from ShareOFT and WETH from V4 tax hooks, accumulates them until a threshold is reached, then distributes to lottery, burn, and voter allocations.
+CreatorGaugeController ensures predictable, transparent fee distribution.
+All protocol revenue flows through this contract.
 
-The controller ensures predictable, transparent fee distribution with configurable splits.
+The controller is responsible for:
+- Receiving ■TOKEN fees from ShareOFT trades
+- Receiving WETH fees from V4 tax hooks
+- Converting WETH to ■TOKEN via configured DEX
+- Distributing accumulated fees when threshold is reached
+
+The controller is not responsible for:
+- Collecting fees (ShareOFT handles this)
+- Lottery winner selection (LotteryManager handles this)
+- Vote tracking (VaultGaugeVoting handles this)
 
 ---
 
-## System role
+## Invariants
+
+1. Allocation percentages sum to exactly 100%
+2. Distribution only triggers when threshold is met
+3. Lifetime distribution stats match actual transfers
+4. WETH conversion uses configured slippage protection
+
+---
+
+## Core Flows
+
+### Fee Collection and Distribution
+
+The following diagram shows how fees flow from sources through distribution.
+Fees accumulate until the threshold is reached.
 
 ```mermaid
 flowchart TD
@@ -59,19 +83,9 @@ flowchart TD
     Threshold -->|yes| V
 ```
 
----
+*This diagram shows fee routing only. Lottery and voter mechanics are handled by separate contracts.*
 
-## Key behaviors
-
-### Fee accumulation
-
-Fees accumulate in the controller until two conditions are met:
-1. Pending fees exceed the distribution threshold
-2. Sufficient time has passed since last distribution
-
-This batching reduces gas costs and ensures meaningful distribution amounts.
-
-### Distribution split
+### Distribution Split
 
 | Recipient | Allocation | Effect |
 |-----------|------------|--------|
@@ -79,62 +93,82 @@ This batching reduces gas costs and ensures meaningful distribution amounts.
 | Burn | 21.39% | Burns ▢TOKEN, increases price per share |
 | Voters | 9.61% | Rewards for ve4626 voters |
 
-### WETH handling
+### WETH Handling
 
 V4 tax hooks pay fees in WETH. The controller:
-1. Swaps WETH to TOKEN via configured DEX
-2. Deposits TOKEN to vault for ▢TOKEN
-3. Distributes ▢TOKEN using the same split
+1. Swaps WETH to creatorCoin via configured DEX
+2. Deposits creatorCoin to vault for ▢TOKEN
+3. Wraps to ■TOKEN
+4. Distributes using the same split
 
 ---
 
-## Invariants
+## Access Control
 
-| Invariant | Description |
-|-----------|-------------|
-| Split totals 100% | All allocation BPS must sum to 10000 |
-| Threshold gating | Distribution only when threshold met |
-| Accounting accuracy | Lifetime stats match actual distributions |
+| Role | Permissions |
+|------|-------------|
+| Owner | Set allocation percentages, thresholds |
+| Management | Force distribution, update DEX router |
+| Anyone | Trigger distribution (when threshold met) |
 
 ---
 
-## Configuration
+## Failure Modes
+
+### Common Reverts
+
+| Error | Cause |
+|-------|-------|
+| `ThresholdNotMet` | Distribution attempted below threshold |
+| `CooldownActive` | Distribution attempted too soon |
+| `InvalidAllocation` | Percentages don't sum to 100% |
+
+### Operational Pitfalls
+
+- WETH swap may fail if DEX liquidity is insufficient
+- Large fee accumulations may cause slippage on conversion
+- Manual `forceDistribute()` should be used sparingly
+
+---
+
+## Integration Notes
+
+### Configuration
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| Distribution threshold | 100 ■TOKEN | Minimum to trigger distribution |
+| Distribution threshold | 100 ■TOKEN | Minimum to trigger |
 | Distribution interval | 1 hour | Cooldown between distributions |
-| Burn share | 21.39% | Share burned for PPS increase |
-| Lottery share | 69% | Share to lottery jackpot |
-| Voter share | 9.61% | Share to voter rewards |
+| Burn share | 21.39% | Burned for PPS increase |
+| Lottery share | 69% | Lottery jackpot funding |
+| Voter share | 9.61% | Voter reward pool |
+
+### For Keepers
+
+- Monitor pending fees via `pendingFees()`
+- Trigger distribution via `distribute()` when threshold met
+- Use `forceDistribute()` only with management approval
+
+### Non-Guarantees
+
+- Distribution timing depends on threshold and cooldown
+- WETH conversion rate is market-dependent
+- Jackpot funding does not guarantee lottery payouts
 
 ---
 
-## Integration points
+## Related Contracts
 
-| Integrates with | Purpose |
-|-----------------|---------|
-| [ShareOFT](../core/creator-share-oft) | Receives ■TOKEN fees |
-| V4 Tax Hook | Receives WETH fees |
-| [LotteryManager](/concepts/lottery) | Funds jackpot |
-| [VoterRewards](/contracts/governance/vault-gauge-voting) | Distributes voter rewards |
-| [Vault](../core/creator-ovault) | Burns shares for PPS |
+- [CreatorShareOFT](/contracts/core/creator-share-oft) — Fee source
+- [CreatorLotteryManager](/contracts/services/lottery-manager) — Jackpot recipient
+- [VoterRewardsDistributor](/contracts/governance/voter-rewards-distributor) — Voter rewards
+- [CreatorOVault](/contracts/core/creator-ovault) — Share burning
 
 ---
 
-## Implementation details
+### Implementation Reference
 
-For function signatures and events, see the [source code](https://github.com/wenakita/4626/blob/main/contracts/governance/CreatorGaugeController.sol).
+This document describes design intent.
+For exact behavior and edge cases, refer to the Solidity implementation.
 
-Key implementation notes:
-- Burn operation unwraps ■TOKEN to ▢TOKEN before burning
-- WETH swap uses configured router (typically Uniswap)
-- `forceDistribute()` allows management to bypass threshold
-
----
-
-## Related
-
-- [Fee Flow](/overview/fee-flow) - Distribution explained
-- [Lottery](/concepts/lottery) - Jackpot mechanics
-- [VaultGaugeVoting](./vault-gauge-voting) - Voter rewards
+[View on GitHub](https://github.com/wenakita/4626/blob/main/contracts/governance/CreatorGaugeController.sol)

@@ -5,13 +5,13 @@ sidebar_position: 1
 
 # CreatorOVault
 
-ERC-4626 compliant tokenized vault for creator coins with multi-strategy yield generation.
+The canonical custody and accounting layer for creatorCoins.
+Implements ERC-4626 semantics while delegating yield generation to external strategies.
 
 > **Summary**
 > - Holds custody of the underlying creatorCoin
-> - Issues ▢[creatorCoin] shares representing proportional ownership
-> - Coordinates capital deployment to yield strategies
-> - Strategies only receive creatorCoin, never vault shares
+> - Mints and burns ERC-4626 vault shares (▢[creatorCoin])
+> - Allocates underlying assets to yield strategies
 
 ---
 
@@ -25,70 +25,42 @@ ERC-4626 compliant tokenized vault for creator coins with multi-strategy yield g
 
 ## Purpose
 
-CreatorOVault is the core accounting and coordination contract for each creator's tokenized vault. It accepts deposits of the underlying creatorCoin, issues proportional vault shares (▢[creatorCoin]), and coordinates capital deployment to yield strategies.
+CreatorOVault provides a single accounting surface for deposits and withdrawals while abstracting strategy selection and yield execution.
 
-The vault is the single source of truth for total assets, share pricing, and strategy allocations.
+It does not execute yield logic itself.
 
----
+The vault is responsible for:
+- Custody of creatorCoin deposits
+- ERC-4626 compliant share accounting
+- Strategy allocation and deallocation
+- Profit/loss processing from strategy reports
 
-## Responsibilities
-
-**What it does:**
-- Accept creatorCoin deposits and mint ▢[creatorCoin] shares
-- Burn shares and return creatorCoin on withdrawal
-- Track total assets across idle balance and strategy deployments
-- Coordinate strategy allocation based on weights
-- Process profit/loss reports from strategies
-- Enforce security invariants (deposit minimums, withdrawal delays)
-
-**What it does NOT do:**
-- Generate yield directly (strategies do this)
-- Handle cross-chain transfers (ShareOFT does this)
-- Collect or distribute fees (GaugeController does this)
-- Store user positions (standard ERC-20 balance tracking)
+The vault is not responsible for:
+- Yield generation (strategies handle this)
+- Cross-chain transfers (ShareOFT handles this)
+- Fee collection (GaugeController handles this)
 
 ---
 
-## Key invariants and guarantees
+## Invariants
 
-1. **Share-to-asset ratio**: `totalAssets() / totalSupply()` always reflects accurate redemption value
-2. **No inflation attacks**: `_decimalsOffset() = 3` creates 1000 virtual shares
-3. **Minimum first deposit**: First deposit must be at least 5,000,000 tokens
-4. **Flash loan protection**: 1 block minimum between deposit and withdrawal
-5. **Price stability**: Maximum 10% price change per transaction
-6. **Large withdrawal queue**: Withdrawals above threshold require queuing
-7. **Strategy accounting**: `totalDebt == sum(strategyDebt[s] for s in strategies)`
-8. **Asset conservation**: `totalAssets() == coinBalance + totalDebt`
-
----
-
-## External interface (conceptual)
-
-### User operations
-
-**Deposits**: Users deposit creatorCoin and receive ▢[creatorCoin] shares. The share amount is calculated based on current `pricePerShare()`.
-
-**Withdrawals**: Users can redeem shares for creatorCoin. Small withdrawals are instant; large withdrawals must be queued.
-
-**Queue management**: Large withdrawals are queued for a delay period, then claimed. Users can cancel queued withdrawals.
-
-### Strategy operations (keeper)
-
-**Deployment**: Keeper calls `deployToStrategies()` to move idle creatorCoin into strategies based on weights.
-
-**Reporting**: Keeper calls `report()` to process profit/loss from strategies. Profits are subject to gradual unlocking.
-
-### Admin operations (management)
-
-**Strategy management**: Add, remove, or update strategy weights.
-
-**Parameter tuning**: Adjust withdrawal thresholds, delay blocks, minimum deposits.
+1. `totalAssets() / totalSupply()` always reflects accurate redemption value
+2. `_decimalsOffset() = 3` creates 1000 virtual shares to prevent inflation attacks
+3. First deposit must be at least 5,000,000 tokens
+4. Minimum 1 block between deposit and withdrawal (flash loan protection)
+5. Maximum 10% price change per transaction
+6. Large withdrawals require queuing
+7. `totalDebt == sum(strategyDebt[s] for s in strategies)`
+8. `totalAssets() == coinBalance + totalDebt`
 
 ---
 
-## Core flows
+## Core Flows
 
-### Deposit flow
+### Deposit
+
+The following diagram shows asset movement during deposit.
+Only the underlying creatorCoin moves; vault shares are minted as accounting receipts.
 
 ```mermaid
 flowchart LR
@@ -97,21 +69,24 @@ flowchart LR
     Vault -->|update| Balance[coinBalance]
 ```
 
-*Users deposit the underlying creatorCoin and receive ▢shares as a receipt.*
+*This diagram shows deposit flow only. Strategy deployment is a separate operation.*
 
-### Strategy deployment flow
+### Strategy Deployment
+
+The following diagram shows how idle assets are deployed to yield strategies.
+Strategies only receive creatorCoin, never vault shares.
 
 ```mermaid
 flowchart LR
     Keeper[Keeper] -->|deployToStrategies| Vault[CreatorOVault]
-    Vault -->|allocate creatorCoin| C[creatorCoin]
+    Vault -->|allocate| C[creatorCoin]
     C -->|supply| S1[Strategy 1]
     C -->|supply| S2[Strategy 2]
 ```
 
-*Strategies only receive creatorCoin. Vault shares never leave the accounting layer.*
+*This diagram intentionally excludes governance and fee flows.*
 
-### Withdrawal flow
+### Withdrawal
 
 ```mermaid
 flowchart TD
@@ -126,7 +101,7 @@ flowchart TD
 
 ---
 
-## Access control
+## Access Control
 
 | Role | Permissions |
 |------|-------------|
@@ -138,9 +113,9 @@ flowchart TD
 
 ---
 
-## Failure modes and edge cases
+## Failure Modes
 
-### Common reverts
+### Common Reverts
 
 | Error | Cause |
 |-------|-------|
@@ -150,36 +125,30 @@ flowchart TD
 | `InflationAttackDetected` | Share calculation anomaly |
 | `PriceChangeExceedsLimit` | Price moved more than 10% |
 
-### Economic risks
+### Economic Risks
 
-- **Strategy losses**: If a strategy loses funds, all shareholders bear the loss proportionally
-- **Illiquidity**: If strategies cannot return funds, withdrawals may be delayed
-- **Price manipulation**: Large deposits/withdrawals can temporarily affect share price
-
-### Operational pitfalls
-
-- **Deployment timing**: Deploying to strategies during high volatility
-- **Report ordering**: Incorrect profit/loss ordering can affect share pricing
-- **Emergency mode**: Once activated, requires manual intervention to exit
+- Strategy losses affect all shareholders proportionally
+- Illiquidity in strategies may delay withdrawals
+- Large deposits/withdrawals can temporarily affect share price
 
 ---
 
-## Integration notes
+## Integration Notes
 
-### For depositors
+### For Depositors
 
 1. Approve the vault for creatorCoin spending
 2. Call `deposit(assets, receiver)` or `mint(shares, receiver)`
-3. Receive ▢[creatorCoin] shares to your address
+3. Receive ▢[creatorCoin] shares
 4. Optionally wrap to ■[creatorCoin] via the wrapper
 
-### For integrators
+### For Integrators
 
 - Use `previewDeposit()` and `previewRedeem()` for accurate quotes
 - Check `maxDeposit()` and `maxWithdraw()` for limits
 - Monitor `pricePerShare()` for yield tracking
 
-### Non-guarantees
+### Non-Guarantees
 
 - Share price can decrease if strategies incur losses
 - Withdrawal timing depends on strategy liquidity
@@ -187,9 +156,18 @@ flowchart TD
 
 ---
 
-## Related contracts
+## Related Contracts
 
-- [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) - Wraps ▢ to ■ tokens
-- [BaseCreatorStrategy](/contracts/strategies/base-creator-strategy) - Strategy interface
-- [CreatorRegistry](/contracts/core/creator-registry) - Vault registration
-- [CreatorGaugeController](/contracts/governance/gauge-controller) - Share burns
+- [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) — Wraps ▢ to ■ tokens
+- [BaseCreatorStrategy](/contracts/strategies/base-creator-strategy) — Strategy interface
+- [CreatorRegistry](/contracts/core/creator-registry) — Vault registration
+- [CreatorGaugeController](/contracts/governance/gauge-controller) — Fee distribution
+
+---
+
+### Implementation Reference
+
+This document describes design intent.
+For exact behavior and edge cases, refer to the Solidity implementation.
+
+[View on GitHub](https://github.com/wenakita/4626/blob/main/contracts/vault/CreatorOVault.sol)

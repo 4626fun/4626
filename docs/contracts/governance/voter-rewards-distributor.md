@@ -5,7 +5,13 @@ sidebar_position: 4
 
 # VoterRewardsDistributor
 
-Distributes the voter fee slice to ve4626 holders based on their epoch votes.
+Distributes the voter fee slice (9.61%) to ve4626 holders based on epoch votes.
+Pro-rata rewards for active governance participation.
+
+> **Summary**
+> - Receives 9.61% of fees from GaugeController
+> - Tracks rewards per (epoch, vault) pair
+> - Users claim pro-rata share after epoch ends
 
 ---
 
@@ -19,63 +25,39 @@ Distributes the voter fee slice to ve4626 holders based on their epoch votes.
 
 ## Purpose
 
-VoterRewardsDistributor implements ve(3,3) reward mechanics. When GaugeController distributes fees, 9.61% goes to this contract. Voters who directed their ve4626 voting power to vaults during an epoch can claim their pro-rata share of rewards after the epoch ends.
+VoterRewardsDistributor implements ve(3,3) reward mechanics.
+Voters who directed ve4626 power to vaults receive their share of fees.
 
-This creates an incentive for ve4626 holders to actively participate in governance rather than passively holding.
+The contract is responsible for:
+- Receiving vault share tokens from GaugeController
+- Tracking rewards per (epoch, vault) pair
+- Calculating pro-rata claims based on vote weight
+- Sweeping unclaimed rewards from zero-vote epochs
 
----
-
-## Responsibilities
-
-**What it does:**
-- Receive vault share tokens from GaugeController (9.61% of fees)
-- Track rewards per (epoch, vault) pair
-- Calculate user claims based on their vote weight relative to total vault weight
-- Distribute rewards when users claim
-- Sweep unclaimed rewards from zero-vote epochs to treasury
-
-**What it does NOT do:**
-- Collect fees (GaugeController does this)
-- Manage voting power (ve4626 does this)
-- Track votes (VaultGaugeVoting does this)
-- Convert between token types
+The contract is not responsible for:
+- Collecting fees (GaugeController handles this)
+- Managing voting power (ve4626 handles this)
+- Tracking votes (VaultGaugeVoting handles this)
 
 ---
 
-## Key invariants and guarantees
+## Invariants
 
-1. **One claim per epoch**: Users can only claim once per (epoch, vault) pair
-2. **Pro-rata distribution**: Claim amount = `epochRewards × userVoteWeight / totalVaultWeight`
-3. **Epoch finality**: Rewards can only be claimed after the epoch ends
-4. **Reward token consistency**: Each vault always pays in the same token type
-5. **Sweep grace period**: Zero-vote epochs can only be swept after grace period (4 epochs)
-6. **No double counting**: User vote weight is snapshotted at epoch end
-
----
-
-## External interface (conceptual)
-
-### Reward notification (GaugeController)
-
-When GaugeController distributes fees, it calls `notifyRewards(epoch, vault, token, amount)` to record the reward allocation for that epoch.
-
-### User claims
-
-Users call `claim(epoch, vault)` to receive their share of rewards. The contract:
-1. Checks the epoch has ended
-2. Looks up user's vote weight for that vault in that epoch
-3. Calculates pro-rata share
-4. Transfers vault shares to user
-
-### Treasury sweep
-
-Owner can sweep rewards from epochs where no one voted for a vault. This prevents funds from being permanently locked.
+1. Users can only claim once per (epoch, vault) pair
+2. Claim amount = `epochRewards × userVoteWeight / totalVaultWeight`
+3. Rewards can only be claimed after epoch ends
+4. Each vault pays in the same token type
+5. Zero-vote epochs swept after 4-epoch grace period
+6. Vote weight snapshotted at epoch end
 
 ---
 
-## Core flows
+## Core Flows
 
-### Reward distribution flow
+### Reward Notification
+
+The following diagram shows how GaugeController notifies this contract of rewards.
+Rewards are stored by (epoch, vault) pair.
 
 ```mermaid
 flowchart LR
@@ -83,7 +65,9 @@ flowchart LR
     VRD -->|store| Rewards[(epochVaultRewards)]
 ```
 
-### Claim flow
+*This diagram shows notification only. Claims happen after epoch ends.*
+
+### Claim Process
 
 ```mermaid
 flowchart TD
@@ -94,64 +78,75 @@ flowchart TD
     VRD -->|transfer| User
 ```
 
+*Pro-rata calculation uses historical vote snapshots.*
+
 ---
 
-## Access control
+## Access Control
 
 | Function | Access |
 |----------|--------|
-| `notifyRewards` | GaugeController (implicit via transfer) |
+| `notifyRewards` | GaugeController |
 | `claim` | Any user with votes |
 | `sweepZeroVoteEpoch` | Owner only |
 | `setProtocolTreasury` | Owner only |
 
 ---
 
-## Failure modes and edge cases
+## Failure Modes
 
-### Common reverts
+### Common Reverts
 
 | Error | Cause |
 |-------|-------|
-| `EpochNotEnded` | Attempting to claim during active epoch |
+| `EpochNotEnded` | Claiming during active epoch |
 | `AlreadyClaimed` | User already claimed this (epoch, vault) |
 | `ZeroVoteWeight` | User had no votes for this vault |
 | `SweepNotAllowedYet` | Grace period not elapsed |
-| `NotZeroVoteEpoch` | Attempting to sweep epoch with votes |
+| `NotZeroVoteEpoch` | Sweeping epoch with votes |
 
-### Economic considerations
+### Economic Considerations
 
-- **Vote timing**: Votes cast late in an epoch still count for full rewards
-- **Vault selection**: Voting for unpopular vaults may yield higher per-vote rewards
-- **Unclaimed rewards**: Rewards remain claimable indefinitely (no expiry)
+- Late votes still count for full rewards
+- Voting for unpopular vaults may yield higher per-vote rewards
+- Rewards remain claimable indefinitely (no expiry)
 
 ---
 
-## Integration notes
+## Integration Notes
 
-### For voters
+### For Voters
 
 1. Lock tokens in ve4626
 2. Vote for vaults via VaultGaugeVoting
 3. Wait for epoch to end
-4. Call `claim(epoch, vault)` for each vault you voted for
+4. Call `claim(epoch, vault)` for each vault voted for
 
-### For frontends
+### For Frontends
 
-- Query `epochVaultRewards(epoch, vault)` to show total rewards
+- Query `epochVaultRewards(epoch, vault)` for total rewards
 - Use VaultGaugeVoting to get user's vote weight
 - Calculate estimated claim amount client-side
 
-### Non-guarantees
+### Non-Guarantees
 
-- Reward amounts depend on fee volume during the epoch
+- Reward amounts depend on fee volume during epoch
 - Low-activity epochs may have minimal rewards
 - Zero-vote epochs may be swept after grace period
 
 ---
 
-## Related contracts
+## Related Contracts
 
-- [VaultGaugeVoting](/contracts/governance/vault-gauge-voting) - Vote weight source
-- [CreatorGaugeController](/contracts/governance/gauge-controller) - Reward source
-- [ve4626](/contracts/governance/ve4626) - Voting power source
+- [VaultGaugeVoting](/contracts/governance/vault-gauge-voting) — Vote weight source
+- [CreatorGaugeController](/contracts/governance/gauge-controller) — Reward source
+- [ve4626](/contracts/governance/ve4626) — Voting power source
+
+---
+
+### Implementation Reference
+
+This document describes design intent.
+For exact behavior and edge cases, refer to the Solidity implementation.
+
+[View on GitHub](https://github.com/wenakita/4626/blob/main/contracts/governance/VoterRewardsDistributor.sol)

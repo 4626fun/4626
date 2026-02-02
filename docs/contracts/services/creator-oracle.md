@@ -5,7 +5,13 @@ sidebar_position: 2
 
 # CreatorOracle
 
-Cross-chain price oracle for creator coins with manipulation resistance.
+Cross-chain price oracle for creator coins.
+Reads TWAP on Base, broadcasts to all chains via LayerZero.
+
+> **Summary**
+> - Hub authority: Base chain is the price source
+> - TWAP smoothing: 30-minute window resists manipulation
+> - Cross-chain: All chains receive consistent pricing
 
 ---
 
@@ -19,66 +25,41 @@ Cross-chain price oracle for creator coins with manipulation resistance.
 
 ## Purpose
 
-CreatorOracle provides reliable USD pricing for creator coins across all chains. The oracle reads from Uniswap V4 TWAP on Base (the hub chain), combines with Chainlink ETH/USD, and broadcasts the resulting price to all remote chains via LayerZero.
+CreatorOracle provides reliable USD pricing without requiring liquidity on every chain.
+The oracle reads from Uniswap V4 TWAP on Base, combines with Chainlink ETH/USD, and broadcasts to remote chains.
 
-This architecture ensures consistent pricing everywhere without requiring liquidity on every chain.
+The oracle is responsible for:
+- Reading TWAP from Uniswap V4 pool (■[creatorCoin]/ETH)
+- Fetching ETH/USD from Chainlink price feed
+- Calculating and storing ■[creatorCoin]/USD price
+- Broadcasting updates to remote chains via LayerZero
+- Applying tick capping to resist manipulation
 
----
-
-## Responsibilities
-
-**What it does:**
-- Read TWAP from Uniswap V4 pool (■[creatorCoin]/ETH)
-- Fetch ETH/USD from Chainlink price feed
-- Calculate and store ■[creatorCoin]/USD price
-- Broadcast price updates to remote chains via LayerZero
-- Apply tick capping to resist manipulation
-
-**What it does NOT do:**
-- Provide real-time spot prices (uses TWAP)
-- Create or manage liquidity pools
-- Execute trades or swaps
-- Store historical price series
+The oracle is not responsible for:
+- Providing real-time spot prices (uses TWAP)
+- Creating or managing liquidity pools
+- Executing trades or swaps
+- Storing historical price series
 
 ---
 
-## Key invariants and guarantees
+## Invariants
 
-1. **Hub authority**: Base chain is the authoritative price source
-2. **TWAP smoothing**: 30-minute default TWAP window
-3. **Tick capping**: Maximum tick movement per observation
-4. **Staleness check**: Prices older than 2 hours are considered stale
-5. **Chainlink dependency**: ETH/USD comes from trusted Chainlink feed
-6. **Cross-chain consistency**: All chains receive the same price
-
----
-
-## External interface (conceptual)
-
-### Price reading
-
-Contracts query the oracle for current price:
-- `getCreatorPriceUSD()` - Returns price in 1e18 format
-- `getCreatorPriceETH()` - Returns price in ETH terms
-- `isPriceStale()` - Check if price needs refresh
-
-### Price updates (Hub only)
-
-On Base, the oracle:
-1. Reads V4 pool tick via TWAP
-2. Fetches ETH/USD from Chainlink
-3. Calculates USD price
-4. Broadcasts to remote chains
-
-### Cross-chain reception
-
-Remote chains receive price updates via LayerZero and store them for local use.
+1. Base chain is the authoritative price source
+2. 30-minute default TWAP window
+3. Maximum tick movement per observation (tick capping)
+4. Prices older than 2 hours are stale
+5. ETH/USD comes from trusted Chainlink feed
+6. All chains receive the same price
 
 ---
 
-## Core flows
+## Core Flows
 
-### Price calculation flow (Base)
+### Price Calculation (Base)
+
+The following diagram shows how the oracle calculates USD price from on-chain sources.
+TWAP and Chainlink combine for manipulation resistance.
 
 ```mermaid
 flowchart LR
@@ -88,7 +69,9 @@ flowchart LR
     Oracle -->|broadcast| LZ[LayerZero]
 ```
 
-### Cross-chain propagation
+*This diagram shows Base chain flow only. Remote chains receive via LayerZero.*
+
+### Cross-Chain Propagation
 
 ```mermaid
 flowchart TD
@@ -107,9 +90,11 @@ flowchart TD
     O1 -->|LayerZero| O3
 ```
 
+*Remote chains store and serve the broadcast price.*
+
 ---
 
-## Access control
+## Access Control
 
 | Function | Access |
 |----------|--------|
@@ -121,9 +106,9 @@ flowchart TD
 
 ---
 
-## Failure modes and edge cases
+## Failure Modes
 
-### Common reverts
+### Common Reverts
 
 | Error | Cause |
 |-------|-------|
@@ -132,38 +117,36 @@ flowchart TD
 | `PoolNotInitialized` | V4 pool has no liquidity |
 | `NotHubChain` | Broadcast attempted on remote chain |
 
-### Manipulation resistance
+### Manipulation Resistance
 
-**Tick capping**: Limits maximum price movement per observation, preventing flash loan attacks.
+- **Tick capping**: Limits maximum price movement per observation
+- **TWAP**: 30-minute window smooths short-term manipulation
+- **Auto-tuning**: Tick cap adjusts based on observation frequency
 
-**TWAP**: 30-minute window smooths out short-term manipulation.
-
-**Auto-tuning**: Tick cap adjusts based on observation frequency.
-
-### Economic considerations
+### Economic Considerations
 
 - Low liquidity pools may have wider TWAP variance
-- Chainlink feed staleness affects all prices
+- Chainlink staleness affects all prices
 - Cross-chain message costs paid by broadcaster
 
 ---
 
-## Integration notes
+## Integration Notes
 
-### For contracts
+### For Contracts
 
-```
-uint256 priceUSD = oracle.getCreatorPriceUSD();
-require(!oracle.isPriceStale(), "Price stale");
-```
+Query price and check staleness:
+- `getCreatorPriceUSD()` — Returns price in 1e18 format
+- `getCreatorPriceETH()` — Returns price in ETH terms
+- `isPriceStale()` — Check if refresh needed
 
-### For keepers
+### For Keepers
 
 - Monitor price staleness on Base
 - Call `broadcastPrice()` when needed
 - Ensure sufficient ETH for LayerZero fees
 
-### Non-guarantees
+### Non-Guarantees
 
 - TWAP lags spot price by design
 - Remote chain prices may be slightly delayed
@@ -171,8 +154,17 @@ require(!oracle.isPriceStale(), "Price stale");
 
 ---
 
-## Related contracts
+## Related Contracts
 
-- [CreatorLotteryManager](/contracts/services/lottery-manager) - Price consumer
-- [CreatorGaugeController](/contracts/governance/gauge-controller) - Swap slippage
-- [CreatorRegistry](/contracts/core/creator-registry) - Oracle registration
+- [CreatorLotteryManager](/contracts/services/lottery-manager) — Price consumer
+- [CreatorGaugeController](/contracts/governance/gauge-controller) — Swap slippage
+- [CreatorRegistry](/contracts/core/creator-registry) — Oracle registration
+
+---
+
+### Implementation Reference
+
+This document describes design intent.
+For exact behavior and edge cases, refer to the Solidity implementation.
+
+[View on GitHub](https://github.com/wenakita/4626/blob/main/contracts/services/oracles/CreatorOracle.sol)

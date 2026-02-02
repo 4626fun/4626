@@ -5,7 +5,13 @@ sidebar_position: 2
 
 # VaultGaugeVoting
 
-Epoch-based gauge voting where ve4626 holders direct lottery probability to creator vaults.
+Epoch-based gauge voting.
+ve4626 holders direct lottery probability to creator vaults through weighted votes.
+
+> **Summary**
+> - 7-day epochs starting Thursday 00:00 UTC
+> - Votes snapshot at epoch end, apply to next epoch
+> - Vaults with more votes give buyers higher lottery win rates
 
 ---
 
@@ -19,68 +25,40 @@ Epoch-based gauge voting where ve4626 holders direct lottery probability to crea
 
 ## Purpose
 
-VaultGaugeVoting implements ve(3,3) style gauge voting. Instead of directing emissions to pools (like Curve), ve4626 holders direct lottery probability to creator vaults. Vaults with more votes give their buyers higher lottery win rates.
+VaultGaugeVoting implements ve(3,3) style gauge voting.
+Instead of directing emissions, ve4626 holders direct lottery probability to creator vaults.
 
-This creates an incentive market where protocols can bribe ve4626 holders to vote for their vault.
+The contract is responsible for:
+- Accepting votes from ve4626 holders
+- Snapshotting vote weights at epoch boundaries
+- Calculating vault probability boosts
+- Managing epoch timing (7-day cycles)
 
----
-
-## Responsibilities
-
-**What it does:**
-- Accept votes from ve4626 holders (weighted across multiple vaults)
-- Snapshot vote weights at epoch boundaries
-- Calculate vault probability boosts based on vote share
-- Track historical vote data for reward distribution
-- Manage epoch timing (7-day cycles starting Thursday 00:00 UTC)
-
-**What it does NOT do:**
-- Calculate voting power (ve4626 does this)
-- Distribute rewards (VoterRewardsDistributor does this)
-- Run the lottery (LotteryManager does this)
-- Manage bribes (BribeDepot does this)
+The contract is not responsible for:
+- Calculating voting power (ve4626 handles this)
+- Distributing rewards (VoterRewardsDistributor handles this)
+- Running the lottery (LotteryManager handles this)
+- Managing bribes (BribeDepot handles this)
 
 ---
 
-## Key invariants and guarantees
+## Invariants
 
-1. **Weight normalization**: User vote weights must sum to 10,000 basis points (100%)
-2. **Power source**: Voting power comes exclusively from ve4626 balance
-3. **Epoch boundaries**: Votes snapshot at epoch end, apply to next epoch
-4. **Single vote set**: Each user has one active vote allocation per epoch
-5. **Whitelist requirement**: Only whitelisted vaults can receive votes
-6. **No retroactive changes**: Past epoch snapshots are immutable
+1. User vote weights must sum to 10,000 basis points (100%)
+2. Voting power comes exclusively from ve4626 balance
+3. Votes snapshot at epoch end, apply to next epoch
+4. Each user has one active vote allocation per epoch
+5. Only whitelisted vaults can receive votes
+6. Past epoch snapshots are immutable
 
 ---
 
-## External interface (conceptual)
+## Core Flows
 
 ### Voting
 
-Users allocate their voting power across vaults using basis points (0-10000):
-- `vote(vaults[], weights[])` - Set vote allocation
-- `resetVotes()` - Clear current votes
-
-Votes apply to the current epoch and affect probability in the next epoch.
-
-### Query functions
-
-- `getVaultWeight(vault, epoch)` - Total votes for a vault in an epoch
-- `getTotalWeight(epoch)` - Sum of all votes in an epoch
-- `getUserVotes(user, epoch)` - User's vote allocation
-- `getVaultProbabilityBoostPPM(vault)` - Current probability boost (PPM)
-
-### Epoch management
-
-- `currentEpoch()` - Current epoch number
-- `epochStartTime(epoch)` - Timestamp when epoch started
-- `checkpoint()` - Finalize epoch transition (automatic)
-
----
-
-## Core flows
-
-### Voting flow
+The following diagram shows how votes are recorded and snapshotted.
+Voting power is queried from ve4626 at vote time.
 
 ```mermaid
 flowchart LR
@@ -89,7 +67,9 @@ flowchart LR
     VGV -->|store| Snapshot[(Epoch Snapshot)]
 ```
 
-### Probability effect flow
+*This diagram shows vote recording only. Probability effects apply next epoch.*
+
+### Epoch Timing
 
 ```mermaid
 flowchart LR
@@ -105,9 +85,11 @@ flowchart LR
     Prob -->|affects| Lottery[Lottery Wins]
 ```
 
+*Votes cast in epoch N affect lottery probability in epoch N+1.*
+
 ---
 
-## Access control
+## Access Control
 
 | Function | Access |
 |----------|--------|
@@ -119,9 +101,9 @@ flowchart LR
 
 ---
 
-## Failure modes and edge cases
+## Failure Modes
 
-### Common reverts
+### Common Reverts
 
 | Error | Cause |
 |-------|-------|
@@ -130,46 +112,48 @@ flowchart LR
 | `VaultNotWhitelisted` | Voting for non-whitelisted vault |
 | `ArrayLengthMismatch` | Vaults and weights arrays differ |
 
-### Economic considerations
+### Economic Risks
 
-- **Vote concentration**: Whales can dominate probability direction
-- **Bribe efficiency**: Small voters may find bribes more profitable than probability
-- **Epoch timing**: Late votes count the same as early votes
-
-### Operational notes
-
-- Votes cast in final hours of epoch still count
-- Checkpoint is called automatically on first interaction after epoch end
-- Historical data remains queryable indefinitely
+- Whales can dominate probability direction
+- Small voters may find bribes more profitable
+- Late votes count the same as early votes
 
 ---
 
-## Integration notes
+## Integration Notes
 
-### For voters
+### For Voters
 
 1. Lock tokens in ve4626 to get voting power
-2. Research vaults and potential bribes
-3. Call `vote(vaults[], weights[])` with your allocation
-4. Votes apply next epoch, rewards claimable after epoch ends
+2. Call `vote(vaults[], weights[])` with allocation
+3. Votes apply next epoch
+4. Claim rewards after epoch ends
 
-### For frontends
+### For Frontends
 
 - Query `currentEpoch()` and calculate time remaining
 - Show `getVaultWeight / getTotalWeight` as percentage
-- Display user's current allocation via `getUserVotes()`
+- Display user allocation via `getUserVotes()`
 
-### Non-guarantees
+### Non-Guarantees
 
 - Probability boost does not guarantee lottery wins
-- Vote power changes during epoch are not reflected until next epoch
-- Bribes are handled separately from this contract
+- Vote power changes during epoch apply next epoch
+- Bribes are handled by separate contract
 
 ---
 
-## Related contracts
+## Related Contracts
 
-- [ve4626](/contracts/governance/ve4626) - Voting power source
-- [VoterRewardsDistributor](/contracts/governance/voter-rewards-distributor) - Epoch rewards
-- [CreatorLotteryManager](/contracts/services/lottery-manager) - Probability consumer
-- [BribeDepot](https://github.com/wenakita/4626/blob/main/contracts/governance/bribes/BribeDepot.sol) - Vote incentives
+- [ve4626](/contracts/governance/ve4626) — Voting power source
+- [VoterRewardsDistributor](/contracts/governance/voter-rewards-distributor) — Epoch rewards
+- [CreatorLotteryManager](/contracts/services/lottery-manager) — Probability consumer
+
+---
+
+### Implementation Reference
+
+This document describes design intent.
+For exact behavior and edge cases, refer to the Solidity implementation.
+
+[View on GitHub](https://github.com/wenakita/4626/blob/main/contracts/governance/VaultGaugeVoting.sol)

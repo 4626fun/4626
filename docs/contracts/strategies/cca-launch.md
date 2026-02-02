@@ -5,7 +5,13 @@ sidebar_position: 1
 
 # CCA Launch Strategy
 
-Fair launch strategy using Uniswap's Continuous Clearing Auction mechanism.
+Fair launch strategy using Uniswap's Continuous Clearing Auction.
+Eliminates sniping, MEV, and information asymmetry.
+
+> **Summary**
+> - Single clearing price for all bidders
+> - Graduates to V4 pool with raised liquidity
+> - Launch-only: runs once, then vault uses yield strategies
 
 ---
 
@@ -19,20 +25,43 @@ Fair launch strategy using Uniswap's Continuous Clearing Auction mechanism.
 
 ## Purpose
 
-CCALaunchStrategy enables fair token launches by auctioning ■TOKEN via Uniswap's CCA. The mechanism eliminates common launch problems:
+CCALaunchStrategy enables fair token launches by auctioning ■[creatorCoin] via Uniswap's CCA.
 
-| Problem | CCA solution |
+| Problem | CCA Solution |
 |---------|--------------|
 | Sniping | All bidders get same clearing price |
 | MEV/sandwich | No timing advantage to exploit |
 | Information asymmetry | Price discovery is gradual |
 | Whale dominance | Early bids naturally get better prices |
 
-This is a launch-only strategy: it runs once to bootstrap liquidity, then the vault transitions to yield strategies.
+The strategy is responsible for:
+- Creating the CCA auction via Uniswap factory
+- Managing the auction lifecycle
+- Graduating to V4 pool after auction ends
+- Configuring the 6.9% tax hook
+
+The strategy is not responsible for:
+- Ongoing yield generation (yield strategies handle this)
+- Fee distribution (GaugeController handles this)
+- Trading after graduation (V4 pool handles this)
 
 ---
 
-## System role
+## Invariants
+
+1. All filled bids pay the same clearing price
+2. Bids either fill completely or refund (no partial fills)
+3. V4 pool must have tax hook configured
+4. Only official Uniswap CCA factory is used
+
+---
+
+## Core Flows
+
+### Auction Lifecycle
+
+The following diagram shows the complete launch flow.
+creatorCoin enters the strategy, ■[creatorCoin] is auctioned, V4 pool graduates.
 
 ```mermaid
 flowchart LR
@@ -50,28 +79,15 @@ flowchart LR
         Liquidity[LP Position]
     end
     
-    Creator -->|deposit TOKEN| Vault
+    Creator -->|creatorCoin| Vault
     Vault -->|■TOKEN| CCA
     CCA -->|graduate| Pool
     CCA -->|ETH raised| Liquidity
 ```
 
----
+*This diagram shows launch flow only. Post-launch trading uses V4 directly.*
 
-## Key behaviors
-
-### Auction lifecycle
-
-1. **Setup**: Creator deposits TOKEN, receives ▢TOKEN, wraps to ■TOKEN, transfers to strategy
-2. **Auction creation**: Strategy creates CCA auction via Uniswap factory
-3. **Bidding period**: Users bid ETH for ■TOKEN with max prices
-4. **Clearing**: All bids above clearing price get filled at clearing price
-5. **Graduation**: Auction ends, V4 pool created with raised liquidity
-6. **Post-launch**: Tax hook configured, trading begins
-
-### Clearing price mechanism
-
-The clearing price is where cumulative demand meets supply. All filled bidders pay this price, regardless of their max bid.
+### Clearing Price Mechanism
 
 ```mermaid
 flowchart LR
@@ -88,28 +104,51 @@ flowchart LR
     B3 -->|refund| ETH[ETH back]
 ```
 
-### V4 graduation
+*Bids above clearing price fill. Bids below refund.*
 
-After the auction ends, the strategy:
-1. Creates a Uniswap V4 pool
-2. Adds raised ETH + unsold ■TOKEN as liquidity
-3. Configures the 6.9% tax hook
-4. Updates the oracle with initial price
+### Auction Steps
 
----
-
-## Invariants
-
-| Invariant | Description |
-|-----------|-------------|
-| Single clearing price | All filled bids pay same price |
-| No partial fills | Bids either fill completely or refund |
-| Tax hook required | V4 pool must have tax configured |
-| Factory validation | Only uses official Uniswap CCA factory |
+1. **Setup**: Creator deposits creatorCoin, wraps to ■[creatorCoin]
+2. **Auction**: Strategy creates CCA via Uniswap factory
+3. **Bidding**: Users bid ETH with max prices
+4. **Clearing**: All bids above clearing price fill at clearing price
+5. **Graduation**: V4 pool created with raised liquidity
+6. **Post-launch**: Tax hook configured, trading begins
 
 ---
 
-## Configuration
+## Access Control
+
+| Function | Access |
+|----------|--------|
+| `createAuction` | Owner |
+| `checkpoint` | Public |
+| `graduate` | Public (after auction ends) |
+| `sweepFunds` | Owner |
+
+---
+
+## Failure Modes
+
+### Common Reverts
+
+| Error | Cause |
+|-------|-------|
+| `AuctionNotEnded` | Graduation attempted before end |
+| `AlreadyGraduated` | Second graduation attempt |
+| `InsufficientBids` | Not enough ETH raised |
+
+### Economic Risks
+
+- Low demand may result in unfavorable clearing price
+- High demand may leave many bids unfilled
+- Tax hook misconfiguration affects post-launch trading
+
+---
+
+## Integration Notes
+
+### Configuration
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
@@ -119,33 +158,32 @@ After the auction ends, the strategy:
 | Min price | Configurable | Floor price per token |
 | Max price | Configurable | Ceiling price per token |
 
----
+### For Launchers
 
-## Integration points
+- Deposit sufficient creatorCoin before auction start
+- Configure min/max prices based on valuation
+- Monitor clearing price during auction
+- Verify tax hook after graduation
 
-| Integrates with | Purpose |
-|-----------------|---------|
-| Uniswap CCA Factory | Creates auctions |
-| Uniswap V4 | Post-graduation trading |
-| Tax Hook | Fee collection |
-| [GaugeController](/contracts/governance/gauge-controller) | Fee recipient |
+### Non-Guarantees
 
----
-
-## Implementation details
-
-For function signatures and events, see the [source code](https://github.com/wenakita/4626/blob/main/contracts/vault/strategies/CCALaunchStrategy.sol).
-
-Key implementation notes:
-- Uses official Uniswap CCA factory at `0xcca1101...`
-- Strategy holds ■TOKEN during auction
-- Keeper triggers checkpoints to update clearing price
-- Post-graduation sweep functions recover funds
+- Clearing price depends on market demand
+- Unsold tokens return to strategy/vault
+- Post-graduation price may differ from clearing price
 
 ---
 
-## Related
+## Related Contracts
 
-- [Auction Concepts](/concepts/auction) - How CCA works
-- [Token Model](/overview/token-model) - Why ■TOKEN is auctioned
-- [Fee Flow](/overview/fee-flow) - Post-launch fee distribution
+- [BaseCreatorStrategy](/contracts/strategies/base-creator-strategy) — Base class
+- [Auction Concepts](/concepts/auction) — How CCA works
+- [CreatorGaugeController](/contracts/governance/gauge-controller) — Fee recipient
+
+---
+
+### Implementation Reference
+
+This document describes design intent.
+For exact behavior and edge cases, refer to the Solidity implementation.
+
+[View on GitHub](https://github.com/wenakita/4626/blob/main/contracts/vault/strategies/CCALaunchStrategy.sol)
