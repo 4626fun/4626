@@ -1271,8 +1271,8 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
 
   const shouldFallbackWithoutPaymaster = (error: unknown): boolean => {
     const hasPrefundBalance = typeof smartWalletBalance === 'bigint' && smartWalletBalance > 0n
-    if (isPaymasterUnavailableError(error) && hasPrefundBalance) return true
     if (!allowPaymasterFallback) return false
+    if (isPaymasterUnavailableError(error) && hasPrefundBalance) return true
     if (isPaymasterStakeError(error) || isPaymasterUnavailableError(error)) return true
     if (!ownerIsContract && shouldRetryVerificationGas(error)) return true
     return false
