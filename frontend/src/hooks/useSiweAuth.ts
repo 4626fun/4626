@@ -235,30 +235,42 @@ export function useSiweAuth() {
     })()
   }, [address, autoPrivyAttemptKeyRef, busy, getPrivyAccessToken, isConnected, isSignedIn, privyAuthenticated, privyReady, signInWithPrivyToken])
 
-  const signIn = useCallback(async (): Promise<string | null> => {
+  type SignInMethod = 'auto' | 'siwe' | 'privy'
+
+  const signIn = useCallback(async (opts?: { method?: SignInMethod }): Promise<string | null> => {
     if (!address) return null
+    const method: SignInMethod = opts?.method ?? 'auto'
     setBusy(true)
     setError(null)
     try {
-      // Prefer Privy-backed session bridging when available (avoids wallet message signing prompts).
-      // If Privy is enabled but the user isn't authenticated yet, trigger Privy auth first.
-      if (privyReady && !privyAuthenticated && typeof login === 'function') {
-        try {
-          await login({ loginMethods: ['wallet', 'email'] })
-        } catch {
-          // If Privy auth fails/cancels, fall back to SIWE below (or just fail if wallets disallow it).
-        }
-      }
+      const allowPrivy = method === 'auto' || method === 'privy'
 
-      if (privyReady && getPrivyAccessToken) {
-        try {
-          const privyToken = await getPrivyAccessToken()
-          if (privyToken) {
-            const addr = await signInWithPrivyToken(privyToken)
-            if (addr) return addr
+      if (allowPrivy) {
+        // Prefer Privy-backed session bridging when available (avoids wallet message signing prompts).
+        // If Privy is enabled but the user isn't authenticated yet, trigger Privy auth first.
+        if (privyReady && !privyAuthenticated && typeof login === 'function') {
+          try {
+            await login({ loginMethods: ['wallet', 'email'] })
+          } catch {
+            // If Privy auth fails/cancels, fall back to SIWE below (only for method=auto).
           }
-        } catch {
-          // fall through to SIWE
+        }
+
+        if (privyReady && getPrivyAccessToken) {
+          try {
+            const privyToken = await getPrivyAccessToken()
+            if (privyToken) {
+              const addr = await signInWithPrivyToken(privyToken)
+              if (addr) return addr
+            }
+          } catch {
+            // fall through (only for method=auto)
+          }
+        }
+
+        // If caller explicitly requested Privy, do not attempt SIWE.
+        if (method === 'privy') {
+          return null
         }
       }
 

@@ -240,11 +240,11 @@ export function AdminWaitlist() {
                 <div className="text-xs text-zinc-600">Sign in (no transaction) to verify admin access.</div>
                 <button
                   type="button"
-                  onClick={() => void signIn()}
+                  onClick={() => void signIn({ method: 'siwe' })}
                   disabled={authBusy}
                   className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/5 border border-white/10 px-5 py-3 text-sm text-zinc-200 hover:text-white hover:border-white/20 transition-colors disabled:opacity-60"
                 >
-                  {authBusy ? 'Signing in...' : 'Sign in'}
+                  {authBusy ? 'Signing in...' : 'Sign in with wallet (EOA)'}
                 </button>
               </>
             )}
