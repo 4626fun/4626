@@ -1,0 +1,39 @@
+# StrategyType
+[Git Source](https://github.com/creatorvault/4626/blob/d2887a577bbbcd8195e2d76fc50368643edd1f1a/contracts/vault/strategies/univ4/ConcentratedStrategy.sol)
+
+**Title:**
+ConcentratedStrategy
+
+**Author:**
+0xakita.eth (CreatorVault)
+
+Concentrated liquidity around current price for maximum capital efficiency
+
+STRATEGY (inspired by Charm Finance Alpha Vaults):
+- Provides liquidity in a tight range around current price
+- Higher capital efficiency = more fees per dollar of liquidity
+- Requires active management to stay in range
+- Auto-rebalances when price moves out of range
+
+REBALANCE GUARDS (from Charm):
+1. Time-based: Must wait `period` seconds between rebalances
+2. Price movement: Must move at least `minTickMove` ticks
+3. TWAP deviation: Current price must be within `maxTwapDeviation` of TWAP
+4. Boundary check: Price can't be too close to MIN/MAX tick
+
+TWAP PROTECTION:
+Prevents flash loan attacks by comparing spot price to time-weighted average
+
+INTEGRATION:
+- Plugs into CreatorLPManager
+- Most capital efficient but highest maintenance
+
+
+```solidity
+enum StrategyType {
+FullRange,
+LimitOrder,
+Concentrated
+}
+```
+

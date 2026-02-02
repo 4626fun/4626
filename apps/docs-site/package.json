@@ -3,9 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "generate:contracts": "cd ../.. && forge doc",
-    "generate:frontend": "cd ../../frontend && npx typedoc || true",
-    "generate:all": "pnpm generate:contracts && pnpm generate:frontend",
+    "generate:contracts": "cd ../.. && (command -v forge >/dev/null && forge doc || echo 'Skipping forge doc (not installed)')",
+    "generate:frontend": "cd ../../frontend && (npx typedoc || echo 'Skipping typedoc')",
+    "generate:all": "pnpm generate:contracts; pnpm generate:frontend; true",
     "sync-docs": "node scripts/sync-docs.mjs",
     "sync-docs:strict": "node scripts/sync-docs.mjs --strict",
     "docusaurus": "docusaurus",

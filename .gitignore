@@ -1,6 +1,10 @@
 # Dependencies
 node_modules/
-docs/
+
+# Docs - ignore drafts but keep source and generated
+docs/_drafts/
+docs/_archive/
+!docs/_generated/
 docs-site/node_modules/
 npm-debug.log*
 yarn-debug.log*
