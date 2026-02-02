@@ -1,3 +1,7 @@
+---
+title: Vibeship Scan Triage
+---
+
 # Vibeship Security Scan — Triage & Fix Tracker (2026-01-17)
 
 This file is a **curated, repo-specific triage** for the raw Vibeship scan output in `docs/scan2.txt`.

@@ -1,12 +1,16 @@
+---
+title: Cca Verification
+---
+
 # 🔍 **CCA Deployment Deep Verification (Base / Uniswap v1.1.0)**
 
-## ✅ **CCA Flow is CORRECT (current code)**
+## **CCA Flow is CORRECT (current code)**
 
 This document is a sanity-check of the on-chain flow from vault activation → CCA auction creation, and the key deployment/config requirements for Base.
 
 ---
 
-## 📊 **The Complete CCA Launch Flow**
+## **The Complete CCA Launch Flow**
 
 ### **Step-by-Step Breakdown:**
 
@@ -37,13 +41,13 @@ User → VaultActivationBatcher.batchActivate()
 
 ---
 
-## ✅ **Authorization model (no longer onlyOwner)**
+## **Authorization model (no longer onlyOwner)**
 
 `CCALaunchStrategy.launchAuctionSimple()` is gated by `onlyApprovedOrOwner`:
 - The **owner** can launch auctions directly.
 - The **VaultActivationBatcher** can launch auctions after it is approved via `setApprovedLauncher(batcher, true)`.
 
-### ✅ Required deployment step
+### Required deployment step
 
 From your protocol owner / multisig:
 
@@ -78,7 +82,7 @@ Uniswap CCA expects **Q96** pricing for `floorPrice` and `tickSpacing`. Our stra
 
 ---
 
-## ✅ Summary
+## Summary
 
 The happy path is:
 1. User calls `VaultActivationBatcher.batchActivate(...)`
@@ -112,13 +116,13 @@ function launchAuctionSimple(
 ```
 
 **Pros:**
-- ✅ Controlled access
-- ✅ Owner can approve VaultActivationBatcher
-- ✅ Multiple batchers can be approved
+- Controlled access
+- Owner can approve VaultActivationBatcher
+- Multiple batchers can be approved
 
 **Cons:**
-- ⚠️ Requires deployment update
-- ⚠️ Extra step to approve batcher
+- Requires deployment update
+- Extra step to approve batcher
 
 ---
 
@@ -137,24 +141,24 @@ ccaStrategy.launchAuctionSimple(auctionAmount, requiredRaise);
 ```
 
 **Pros:**
-- ✅ No code changes needed
-- ✅ Works with current contract
+- No code changes needed
+- Works with current contract
 
 **Cons:**
-- ❌ Not a single transaction
-- ❌ User must do multiple steps
-- ❌ Not as smooth UX
+- Not a single transaction
+- User must do multiple steps
+- Not as smooth UX
 
 ---
 
-## 🎯 **Recommended Solution**
+## **Recommended Solution**
 
 ### **Update CCALaunchStrategy to Use Approved Launchers**
 
 This gives you the best of both worlds:
-- ✅ Security (only approved addresses can launch)
-- ✅ Flexibility (approve VaultActivationBatcher)
-- ✅ Single transaction UX
+- Security (only approved addresses can launch)
+- Flexibility (approve VaultActivationBatcher)
+- Single transaction UX
 
 ### **Implementation:**
 
@@ -200,7 +204,7 @@ ccaStrategy.setApprovedLauncher(address(vaultActivationBatcher), true);
 
 ---
 
-## ✅ **After Fix: Complete Flow Will Work**
+## **After Fix: Complete Flow Will Work**
 
 ```
 1. Deploy CCALaunchStrategy (with approved launchers)
@@ -208,41 +212,41 @@ ccaStrategy.setApprovedLauncher(address(vaultActivationBatcher), true);
 3. Call ccaStrategy.setApprovedLauncher(batcherAddress, true)
 4. User calls batcher.batchActivate()
     ↓
-5. Batcher pulls tokens ✅
-6. Batcher deposits to vault ✅
-7. Batcher wraps to ■TOKEN ✅
-8. Batcher approves CCA strategy ✅
-9. Batcher calls launchAuctionSimple() ✅
-10. CCA checks: msg.sender (batcher) is approved ✅
-11. CCA pulls ■TOKEN from batcher ✅
-12. CCA creates auction ✅
-13. Returns auction address ✅
-14. Batcher returns remaining tokens to user ✅
+5. Batcher pulls tokens 
+6. Batcher deposits to vault 
+7. Batcher wraps to ■TOKEN 
+8. Batcher approves CCA strategy 
+9. Batcher calls launchAuctionSimple() 
+10. CCA checks: msg.sender (batcher) is approved 
+11. CCA pulls ■TOKEN from batcher 
+12. CCA creates auction 
+13. Returns auction address 
+14. Batcher returns remaining tokens to user 
 
-SUCCESS! 🎉
+SUCCESS! 
 ```
 
 ---
 
-## 📋 **Verification Summary**
+## **Verification Summary**
 
 | Component | Status | Issue |
 |-----------|--------|-------|
-| **VaultActivationBatcher** | ✅ Correct | None |
-| **Token Flow** | ✅ Correct | None |
-| **Approval Flow** | ✅ Correct | None |
-| **CCALaunchStrategy** | ⚠️ **Needs Fix** | **onlyOwner blocks batcher** |
+| **VaultActivationBatcher** | Correct | None |
+| **Token Flow** | Correct | None |
+| **Approval Flow** | Correct | None |
+| **CCALaunchStrategy** | **Needs Fix** | **onlyOwner blocks batcher** |
 
 ---
 
-## 🎯 **Action Required**
+## **Action Required**
 
 **To deploy CCA with AA batcher:**
 
-1. ✅ **Update CCALaunchStrategy** to use approved launchers
-2. ✅ **Deploy both contracts**
-3. ✅ **Approve VaultActivationBatcher** in CCALaunchStrategy
-4. ✅ **Test via AA**
+1. **Update CCALaunchStrategy** to use approved launchers
+2. **Deploy both contracts**
+3. **Approve VaultActivationBatcher** in CCALaunchStrategy
+4. **Test via AA**
 
 **OR**
 
@@ -250,12 +254,12 @@ Use **Option 3** (two-step process) with current contracts, but worse UX.
 
 ---
 
-## 💡 **Bottom Line**
+## **Bottom Line**
 
 **The code logic is correct, BUT:**
-- ❌ Current CCALaunchStrategy won't work with VaultActivationBatcher
-- ✅ Easy fix: Add approved launchers mapping
-- ✅ After fix: Everything will deploy correctly via AA
+- Current CCALaunchStrategy won't work with VaultActivationBatcher
+- Easy fix: Add approved launchers mapping
+- After fix: Everything will deploy correctly via AA
 
-**Current status: CCA needs 1 contract update before AA deployment works.** 🔧
+**Current status: CCA needs 1 contract update before AA deployment works.** 
 

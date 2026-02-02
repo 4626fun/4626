@@ -1,3 +1,7 @@
+---
+title: Domain Setup
+---
+
 # Domain Setup
 
 ## Current Domain

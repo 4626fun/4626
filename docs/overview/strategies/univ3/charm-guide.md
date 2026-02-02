@@ -1,3 +1,7 @@
+---
+title: Charm Guide
+---
+
 # CreatorCharmStrategy - Production Ready
 
 CreatorCharmStrategy is the Uniswap V3 + Charm Alpha adapter used by CreatorVault. It supports single-sided CREATOR deposits and maintains a 99/1 ratio against a configurable quote token (USDC by default in the frontend).

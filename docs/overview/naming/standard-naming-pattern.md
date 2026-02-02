@@ -1,3 +1,7 @@
+---
+title: Standard Naming Pattern
+---
+
 # Standard Vault Naming Pattern
 
 ## Pattern

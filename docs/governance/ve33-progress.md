@@ -1,3 +1,7 @@
+---
+title: Ve33 Progress
+---
+
 # ve(3,3) Voting + Bribes + Voter-Fee Rewards (Progress)
 
 This doc tracks the current state of the **ve(3,3)** module for CreatorVault and how to launch it later without overwhelming day‑1 users.

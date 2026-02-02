@@ -1,3 +1,7 @@
+---
+title: Erc4626 Vault Review
+---
+
 # Ajna “ERC‑4626 Ajna Vault” Review (and how it maps to CreatorVault)
 
 Ajna published an ERC‑4626 wrapper vault design here:
@@ -69,9 +73,9 @@ Because **CreatorOVault is already ERC‑4626**, we don’t need Ajna’s 4626 w
 Two viable options:
 
 ### Option A (incremental): improve `AjnaStrategy`
-- ✅ Implemented: strategy-level “buffer ratio” (keep X% idle inside the strategy) via `idleBufferBps`
-- ✅ Implemented: Ajna read/withdraw calls are **best-effort** (no reverts; returns what can be pulled)
-- ✅ Implemented: `rebalance()` now tries to restore the idle buffer target (best-effort)
+- Implemented: strategy-level “buffer ratio” (keep X% idle inside the strategy) via `idleBufferBps`
+- Implemented: Ajna read/withdraw calls are **best-effort** (no reverts; returns what can be pulled)
+- Implemented: `rebalance()` now tries to restore the idle buffer target (best-effort)
 - Still manual/admin: bucket moves (`moveToBucket`) and bucket selection (`setBucketIndex`)
 
 Practical notes:
@@ -80,7 +84,7 @@ Practical notes:
 
 ### Option B (modular): introduce an ERC‑4626 strategy adapter
 - Keep `CreatorOVault` unchanged
-- ✅ Implemented: a generic `IStrategy` wrapper around a 4626 vault (Ajna‑style or others)
+- Implemented: a generic `IStrategy` wrapper around a 4626 vault (Ajna‑style or others)
   - Contract: `contracts/vault/strategies/ERC4626StrategyAdapter.sol`
 - Future: if Ajna publishes an OSS 4626 vault, we can integrate it without changing `CreatorOVault`
 

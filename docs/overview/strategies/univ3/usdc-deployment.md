@@ -1,8 +1,12 @@
-# 🎯 CreatorCharmStrategy - CREATOR/USDC (99/1 Ratio)
+---
+title: Usdc Deployment
+---
 
-## ✅ **Why USDC > WETH**
+# CreatorCharmStrategy - CREATOR/USDC (99/1 Ratio)
 
-| Feature | CREATOR/WETH | **CREATOR/USDC** ✅ |
+## **Why USDC > WETH**
+
+| Feature | CREATOR/WETH | **CREATOR/USDC** |
 |---------|--------------|---------------------|
 | **Volatility** | High (ETH price swings) | Stable ($1.00) |
 | **Impermanent Loss** | Higher | **Lower** |
@@ -15,7 +19,7 @@
 
 ---
 
-## 📊 **How It Works - 99% CREATOR / 1% USDC**
+## **How It Works - 99% CREATOR / 1% USDC**
 
 ### **Initial Deposit (Empty Charm Vault):**
 ```
@@ -60,7 +64,7 @@ Result: User receives only CREATOR (as expected by IStrategy)
 
 ---
 
-## 🚀 **Deployment Parameters**
+## **Deployment Parameters**
 
 ### **Base Network Addresses:**
 ```solidity
@@ -92,7 +96,7 @@ CreatorCharmStrategy(
 
 ---
 
-## 💡 **Strategy Configuration**
+## **Strategy Configuration**
 
 ### **Default Settings (Safe for Launch):**
 ```solidity
@@ -129,7 +133,7 @@ strategy.setParameters(
 
 ---
 
-## 🔧 **Integration with StrategyDeploymentBatcher**
+## **Integration with StrategyDeploymentBatcher**
 
 ### **Update Batcher Constructor:**
 ```solidity
@@ -191,7 +195,7 @@ creatorPerUsdc = (charmCreator * 1e6) / charmUsdc
 
 ---
 
-## ✅ **Pre-Launch Checklist**
+## **Pre-Launch Checklist**
 
 ### **Contract Deployments:**
 - [ ] CreatorToken deployed
@@ -216,7 +220,7 @@ creatorPerUsdc = (charmCreator * 1e6) / charmUsdc
 
 ---
 
-## 🎯 **Testing Strategy**
+## **Testing Strategy**
 
 ### **Test 1: Initial Deposit (99/1 Ratio)**
 ```solidity
@@ -226,7 +230,7 @@ vault.deposit(1_000_000e18, creator);
 Expected result:
 - 990,000 CREATOR in Charm
 - ~$100 USDC in Charm (from 10k CREATOR swap)
-- Ratio: 99/1 ✅
+- Ratio: 99/1 
 ```
 
 ### **Test 2: Subsequent Deposit (Maintain Ratio)**
@@ -237,7 +241,7 @@ vault.deposit(500_000e18, creator);
 Expected result:
 - 495,000 CREATOR added (after 1% swap)
 - ~$50 USDC added
-- Ratio: Still 99/1 ✅
+- Ratio: Still 99/1 
 ```
 
 ### **Test 3: Withdrawal (Return Only CREATOR)**
@@ -248,7 +252,7 @@ vault.withdraw(10% of shares);
 Expected result:
 - Receive 99,000 CREATOR + $10 USDC
 - Swap $10 USDC → 1,000 CREATOR
-- User gets 100,000 CREATOR total ✅
+- User gets 100,000 CREATOR total 
 ```
 
 ### **Test 4: Price Slippage Protection**
@@ -259,7 +263,7 @@ vault.deposit(100_000e18, creator);
 Expected result:
 - If slippage > 3%, swap reverts
 - Deposit to Charm skipped
-- Tokens returned to vault ✅
+- Tokens returned to vault 
 ```
 
 ---
@@ -293,9 +297,9 @@ Expected result:
 
 ---
 
-## 📊 **Advantages vs WETH**
+## **Advantages vs WETH**
 
-| Feature | CREATOR/WETH | **CREATOR/USDC** ✅ |
+| Feature | CREATOR/WETH | **CREATOR/USDC** |
 |---------|--------------|---------------------|
 | Impermanent Loss | High | **Low** |
 | Price Volatility | High | **Stable** |
@@ -304,22 +308,22 @@ Expected result:
 | IL Example (2x CREATOR pump) | ~5.7% loss | **~2.9% loss** |
 | Fee Earnings | Higher (more volume) | Good (stable) |
 
-**USDC wins for risk-adjusted returns!** 🎯
+**USDC wins for risk-adjusted returns!** 
 
 ---
 
-## 🚀 **Ready to Deploy!**
+## **Ready to Deploy!**
 
 This contract is **production-ready** with CREATOR/USDC pairing:
 
-1. ✅ **Battle-tested** base from USD1/WLFI
-2. ✅ **Lower IL risk** than CREATOR/WETH
-3. ✅ **Dollar-denominated** for easy valuation
-4. ✅ **99/1 ratio** optimized
-5. ✅ **Single-sided deposits** supported
-6. ✅ **Full IStrategy interface** implemented
+1. **Battle-tested** base from USD1/WLFI
+2. **Lower IL risk** than CREATOR/WETH
+3. **Dollar-denominated** for easy valuation
+4. **99/1 ratio** optimized
+5. **Single-sided deposits** supported
+6. **Full IStrategy interface** implemented
 
-**Next Step:** Deploy with `StrategyDeploymentBatcher` in one AA transaction! 🚀
+**Next Step:** Deploy with `StrategyDeploymentBatcher` in one AA transaction! 
 
 ### **Example AA Calldata:**
 ```solidity

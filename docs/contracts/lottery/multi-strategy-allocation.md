@@ -1,3 +1,7 @@
+---
+title: Multi Strategy Allocation
+---
+
 # Multi-Strategy Vault Allocation
 
 ## Summary

@@ -1,3 +1,7 @@
+---
+title: Threat Model
+---
+
 # Keepr Threat Model (MVP)
 
 This document enumerates key threats, mitigations, and safe defaults for **Keepr**, a vault-bound operator agent embedded in **Base Chat (XMTP)**.

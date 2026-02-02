@@ -1,3 +1,7 @@
+---
+title: Strategy Deploy
+---
+
 # Strategy Deployment Checklist (Base → Multichain)
 
 ## Prereqs

@@ -1,3 +1,7 @@
+---
+title: Verification
+---
+
 # AKITA Vault Launch Verification (Base)
 
 ## Phase 0: Pre-launch (Required)

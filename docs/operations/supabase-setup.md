@@ -1,3 +1,7 @@
+---
+title: Supabase Setup
+---
+
 # Supabase Setup (Creator Access Gate)
 
 This project can use Supabase as the primary backend datastore for:

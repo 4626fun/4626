@@ -1,3 +1,7 @@
+---
+title: Solana Integration
+---
+
 # Solana Integration Guide
 
 CreatorVault supports Solana users from Day 1 via the Base-Solana Bridge.

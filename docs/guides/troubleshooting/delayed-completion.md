@@ -1,3 +1,7 @@
+---
+title: Delayed Completion
+---
+
 # ⏱️ What Happens If Auction Completion Is Delayed?
 
 ## 🔍 Scenario Analysis
@@ -6,63 +10,63 @@
 
 ---
 
-## ✅ **GOOD NEWS: No Funds Are Lost!**
+## **GOOD NEWS: No Funds Are Lost!**
 
 ### **User Safety:**
 
 1. **Auction Participants Can Still Claim:**
-   - ✅ After 7 days, auction automatically ends (by block number)
-   - ✅ Users can claim their ■AKITA tokens from the auction contract
-   - ✅ The `claim()` function on CCA contract works independently
-   - ✅ No completion needed for users to get their tokens
+   - After 7 days, auction automatically ends (by block number)
+   - Users can claim their ■AKITA tokens from the auction contract
+   - The `claim()` function on CCA contract works independently
+   - No completion needed for users to get their tokens
 
 2. **Creator's 25M ■AKITA:**
-   - ✅ Already in creator's wallet from launch
-   - ✅ Not affected by auction completion
-   - ✅ Can be held, transferred, or used
+   - Already in creator's wallet from launch
+   - Not affected by auction completion
+   - Can be held, transferred, or used
 
 3. **ETH Raised:**
    - ⏳ Sits safely in the auction contract
-   - ✅ Cannot be stolen or lost
-   - ✅ Can be swept anytime later via `sweepCurrency()`
+   - Cannot be stolen or lost
+   - Can be swept anytime later via `sweepCurrency()`
 
 4. **■AKITA Tokens:**
-   - ✅ Valid and transferable
-   - ✅ Can be unwrapped back to vault shares
-   - ✅ Can withdraw underlying AKITA from vault
-   - ✅ Fully functional even without V4 pool
+   - Valid and transferable
+   - Can be unwrapped back to vault shares
+   - Can withdraw underlying AKITA from vault
+   - Fully functional even without V4 pool
 
 ---
 
-## ⚠️ **WHAT DOESN'T WORK:**
+## **WHAT DOESN'T WORK:**
 
 ### **Without Completion:**
 
 1. **No Trading Pool:**
-   - ❌ ■AKITA/ETH V4 pool doesn't exist
-   - ❌ No public market for ■AKITA
-   - ❌ Users can't buy/sell ■AKITA on Uniswap
-   - ⚠️ Only OTC trades possible
+   - ■AKITA/ETH V4 pool doesn't exist
+   - No public market for ■AKITA
+   - Users can't buy/sell ■AKITA on Uniswap
+   - Only OTC trades possible
 
 2. **No Fee Generation:**
-   - ❌ 6.9% hook not enabled
-   - ❌ No fees collected for jackpot
-   - ❌ No burns happening
-   - ❌ No treasury funding
+   - 6.9% hook not enabled
+   - No fees collected for jackpot
+   - No burns happening
+   - No treasury funding
 
 3. **No Price Discovery (Post-Auction):**
-   - ❌ No public market price
-   - ❌ Oracles can't reference pool
-   - ❌ Hard to value ■AKITA
+   - No public market price
+   - Oracles can't reference pool
+   - Hard to value ■AKITA
 
 4. **Incomplete Launch:**
-   - ⚠️ Auction succeeded but ecosystem not live
-   - ⚠️ Community expectation not met
-   - ⚠️ May confuse users
+   - Auction succeeded but ecosystem not live
+   - Community expectation not met
+   - May confuse users
 
 ---
 
-## 🔧 **CAN IT BE COMPLETED LATER?**
+## **CAN IT BE COMPLETED LATER?**
 
 ### **YES — with the correct permissions:**
 
@@ -75,20 +79,20 @@ function sweepCurrency() external nonReentrant {
 ```
 
 **Key Points:**
-- ✅ No deadline to sweep: `sweepCurrency()` is permissionless
-- ⚠️ Hook config is not permissionless: `setTaxConfig(...)` requires the ■AKITA token owner (or a configured delegate)
-- ✅ ETH will still be there in the auction until swept
-- ✅ Pool can be created anytime
+- No deadline to sweep: `sweepCurrency()` is permissionless
+- Hook config is not permissionless: `setTaxConfig(...)` requires the ■AKITA token owner (or a configured delegate)
+- ETH will still be there in the auction until swept
+- Pool can be created anytime
 
 **However:**
-- ⚠️ The longer you wait, the worse it looks
-- ⚠️ Community may lose confidence
-- ⚠️ Trading volume delayed = missed fees
-- ⚠️ May need to re-announce pool launch
+- The longer you wait, the worse it looks
+- Community may lose confidence
+- Trading volume delayed = missed fees
+- May need to re-announce pool launch
 
 ---
 
-## 💡 **RECOMMENDED SOLUTIONS:**
+## **RECOMMENDED SOLUTIONS:**
 
 ### **Option 1: Set Multiple Reminders (Easiest)**
 
@@ -120,7 +124,7 @@ function sweepCurrency() external nonReentrant {
     (, uint256 endBlock,,) = auction.auctionParameters();
     if (block.number < endBlock) revert AuctionStillActive();
     
-    // ✅ Anyone can call after auction ends!
+    // Anyone can call after auction ends!
     
     uint256 raised = auction.fundsRaised();
     auction.sweepFunds();
@@ -139,10 +143,10 @@ function sweepCurrency() external nonReentrant {
 ```
 
 **Benefits:**
-- ✅ Anyone can complete (decentralized)
-- ✅ Small incentive encourages quick completion
-- ✅ No single point of failure
-- ✅ Community can help
+- Anyone can complete (decentralized)
+- Small incentive encourages quick completion
+- No single point of failure
+- Community can help
 
 ---
 
@@ -175,7 +179,7 @@ async function checkAndComplete() {
       // Step 1: Sweep currency
       const tx1 = await ccaStrategy.sweepCurrency()
       await tx1.wait()
-      console.log('✅ Currency swept')
+      console.log('Currency swept')
       
       // Step 2: Configure hook (if you're token owner)
       const [hookTarget, hookData] = await ccaStrategy.getTaxHookCalldata()
@@ -184,9 +188,9 @@ async function checkAndComplete() {
         data: hookData
       })
       await tx2.wait()
-      console.log('✅ Hook configured')
+      console.log('Hook configured')
       
-      console.log('🎉 Auction completed successfully!')
+      console.log(' Auction completed successfully!')
     } else {
       console.log('Auction still active or already graduated')
     }
@@ -207,7 +211,7 @@ setInterval(checkAndComplete, 60 * 60 * 1000)
 
 ---
 
-## 📊 **RISK ASSESSMENT:**
+## **RISK ASSESSMENT:**
 
 | Scenario | Risk Level | Impact | Mitigation |
 |----------|------------|--------|------------|
@@ -218,7 +222,7 @@ setInterval(checkAndComplete, 60 * 60 * 1000)
 
 ---
 
-## 🎯 **WHAT YOU SHOULD DO:**
+## **WHAT YOU SHOULD DO:**
 
 ### **Before Launch:**
 
@@ -251,7 +255,7 @@ setInterval(checkAndComplete, 60 * 60 * 1000)
 
 ---
 
-## 💰 **FINANCIAL IMPACT OF DELAY:**
+## **FINANCIAL IMPACT OF DELAY:**
 
 **Example: $10k raised in auction**
 
@@ -268,19 +272,19 @@ setInterval(checkAndComplete, 60 * 60 * 1000)
 
 ---
 
-## ✅ **BOTTOM LINE:**
+## **BOTTOM LINE:**
 
 ### **Users Are Safe:**
-- ✅ Can claim ■AKITA from auction
-- ✅ Can unwrap to vault shares
-- ✅ Can withdraw underlying AKITA
-- ✅ No funds lost or locked
+- Can claim ■AKITA from auction
+- Can unwrap to vault shares
+- Can withdraw underlying AKITA
+- No funds lost or locked
 
 ### **But Ecosystem Is Dead Until Completion:**
-- ❌ No trading pool
-- ❌ No fees generated
-- ❌ No public market
-- ❌ Community disappointed
+- No trading pool
+- No fees generated
+- No public market
+- Community disappointed
 
 ### **STRONGLY RECOMMEND:**
 1. **Build a keeper bot** (best solution)
@@ -290,7 +294,7 @@ setInterval(checkAndComplete, 60 * 60 * 1000)
 
 ---
 
-## 🚀 **FINAL ANSWER:**
+## **FINAL ANSWER:**
 
 **Can you launch safely?** YES.
 

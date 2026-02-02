@@ -1,3 +1,7 @@
+---
+title: Introduction
+---
+
 # CreatorVault Documentation
 
 This repo keeps the root clean (only `README.md`) and historically stored project documentation under `docs/`.

@@ -1,3 +1,7 @@
+---
+title: Multi Token Jackpot
+---
+
 # 🎁 Multi-Token Jackpot System
 
 ## Overview
@@ -8,7 +12,7 @@ When you win the CreatorVault lottery, you receive a diversified portfolio of sh
 
 ---
 
-## 🎰 How It Works
+##  How It Works
 
 ### 1. **One Lottery, All Creators**
 
@@ -40,7 +44,7 @@ Winner receives:
 
 ---
 
-## 💰 Example Payout
+## Example Payout
 
 ### Scenario: 3 Active Creators
 
@@ -72,7 +76,7 @@ Winner receives:
 
 ---
 
-## 🔧 Technical Implementation
+## Technical Implementation
 
 ### Core Function
 
@@ -139,7 +143,7 @@ event MultiTokenJackpotWon(
 
 ---
 
-## 🔄 Cross-Chain Behavior
+## Cross-Chain Behavior
 
 ### Same Pattern on Every Chain
 
@@ -164,7 +168,7 @@ Arbitrum Chain:
 
 ---
 
-## 📊 Prize Pool Growth
+## Prize Pool Growth
 
 ### Network Effect
 
@@ -178,11 +182,11 @@ As more creators join, the jackpot grows exponentially:
 | 50 | $1,000 | $50,000 |
 | 100 | $1,000 | **$100,000** |
 
-**More creators = Bigger prizes = More excitement! 🚀**
+**More creators = Bigger prizes = More excitement! **
 
 ---
 
-## 🎯 Use Cases
+## Use Cases
 
 ### 1. **New Creator Discovery**
 
@@ -204,7 +208,7 @@ As more creators join, the jackpot grows exponentially:
 
 ---
 
-## 🔐 Security & Fairness
+## Security & Fairness
 
 ### Fail-Safe Design
 
@@ -257,7 +261,7 @@ Winner receives: ~$34,500 in tokens! 🤑
 
 ---
 
-## 🚀 Launch Impact
+## Launch Impact
 
 ### For AKITA Launch
 
@@ -291,19 +295,19 @@ Month 3: 5 creators active
 
 ---
 
-## ✅ Status
+## Status
 
 ```bash
-✅ Implemented in CreatorLotteryManager.sol
-✅ Uses registry.getAllCreatorCoins()
-✅ Pays from every active vault
-✅ Emits MultiTokenJackpotWon event
-✅ Cross-chain compatible
-✅ Fail-safe error handling
-✅ Compiles successfully
+Implemented in CreatorLotteryManager.sol
+Uses registry.getAllCreatorCoins()
+Pays from every active vault
+Emits MultiTokenJackpotWon event
+Cross-chain compatible
+Fail-safe error handling
+Compiles successfully
 ```
 
-**Status:** READY FOR AKITA LAUNCH! 🚀
+**Status:** READY FOR AKITA LAUNCH! 
 
 ---
 

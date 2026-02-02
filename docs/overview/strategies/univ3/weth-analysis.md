@@ -1,3 +1,7 @@
+---
+title: Weth Analysis
+---
+
 # 🔍 **CREATOR/WETH vs CREATOR/USDC Analysis**
 
 ## The Core Problem Doesn't Change
@@ -7,8 +11,8 @@
 User deposits CREATOR → Vault → Strategy → Charm Vault
 
 Problem: Charm needs BOTH tokens for LP
-- CREATOR ✅ (we have this)
-- USDC ❌ (we don't have this)
+- CREATOR (we have this)
+- USDC (we don't have this)
 ```
 
 ### **With WETH Instead:**
@@ -16,31 +20,31 @@ Problem: Charm needs BOTH tokens for LP
 User deposits CREATOR → Vault → Strategy → Charm Vault
 
 Problem: Charm STILL needs BOTH tokens
-- CREATOR ✅ (we have this)  
-- WETH ❌ (we still don't have this!)
+- CREATOR (we have this)  
+- WETH (we still don't have this!)
 ```
 
-**The pair doesn't matter - we need BOTH tokens regardless!** ⚠️
+**The pair doesn't matter - we need BOTH tokens regardless!** 
 
 ---
 
-## 💡 **But WETH Might Be Slightly Better:**
+## **But WETH Might Be Slightly Better:**
 
 ### **WETH Advantages:**
-1. ✅ **More liquid** - Higher trading volume
-2. ✅ **Native to ETH** - No stablecoin risk
-3. ✅ **Higher LP fees** - ETH pairs trade more
-4. ✅ **Better for DeFi** - Most protocols use WETH
-5. ✅ **Easier to get** - Just wrap ETH
+1. **More liquid** - Higher trading volume
+2. **Native to ETH** - No stablecoin risk
+3. **Higher LP fees** - ETH pairs trade more
+4. **Better for DeFi** - Most protocols use WETH
+5. **Easier to get** - Just wrap ETH
 
 ### **USDC Advantages:**
-1. ✅ **Stable value** - No price volatility
-2. ✅ **Lower IL risk** - CREATOR/USDC has less impermanent loss
-3. ✅ **Dollar-denominated** - Easier for users to understand
+1. **Stable value** - No price volatility
+2. **Lower IL risk** - CREATOR/USDC has less impermanent loss
+3. **Dollar-denominated** - Easier for users to understand
 
 ---
 
-## 🎯 **The REAL Question: How to Get the Second Token?**
+## **The REAL Question: How to Get the Second Token?**
 
 We have 3 options regardless of WETH or USDC:
 
@@ -63,8 +67,8 @@ function deposit(uint256 creatorAmount) external returns (uint256) {
 }
 ```
 
-**With WETH:** ✅ Better - higher liquidity, easier swaps  
-**With USDC:** ⚠️ Okay - but less liquid for swaps
+**With WETH:** Better - higher liquidity, easier swaps  
+**With USDC:** Okay - but less liquid for swaps
 
 ### **Option B: Treasury Provides Match**
 ```solidity
@@ -80,8 +84,8 @@ function deposit(uint256 creatorAmount) external returns (uint256) {
 }
 ```
 
-**With WETH:** ✅ Treasury can easily get WETH  
-**With USDC:** ✅ Treasury can easily get USDC  
+**With WETH:** Treasury can easily get WETH  
+**With USDC:** Treasury can easily get USDC  
 *(Both work equally here)*
 
 ### **Option C: Use Flash Liquidity**
@@ -95,8 +99,8 @@ function deposit(uint256 creatorAmount) external returns (uint256) {
 }
 ```
 
-**With WETH:** ✅ Many WETH flash loan providers  
-**With USDC:** ✅ Many USDC flash loan providers too  
+**With WETH:** Many WETH flash loan providers  
+**With USDC:** Many USDC flash loan providers too  
 *(Both work)*
 
 ---
@@ -106,10 +110,10 @@ function deposit(uint256 creatorAmount) external returns (uint256) {
 ### **Recommendation: Use CREATOR/WETH**
 
 **Why:**
-1. ✅ **Higher volume** = more LP fees earned
-2. ✅ **Better liquidity** = easier swaps
-3. ✅ **More integrations** = more strategies later
-4. ✅ **Native token** = no stablecoin risk
+1. **Higher volume** = more LP fees earned
+2. **Better liquidity** = easier swaps
+3. **More integrations** = more strategies later
+4. **Native token** = no stablecoin risk
 
 **The swap solution becomes:**
 ```solidity
@@ -124,21 +128,21 @@ This is easier with WETH because:
 
 ---
 
-## 📊 **Comparison Table:**
+## **Comparison Table:**
 
 | Factor | CREATOR/USDC | CREATOR/WETH |
 |--------|--------------|--------------|
-| Swap Liquidity | ⚠️ Lower | ✅ Higher |
-| LP Fee Revenue | ⚠️ Lower | ✅ Higher |
-| IL Risk | ✅ Lower | ⚠️ Higher |
-| DeFi Integration | ⚠️ Okay | ✅ Better |
-| User Understanding | ✅ Easier | ⚠️ Harder |
-| Flash Loan Options | ✅ Good | ✅ Good |
+| Swap Liquidity | Lower | Higher |
+| LP Fee Revenue | Lower | Higher |
+| IL Risk | Lower | Higher |
+| DeFi Integration | Okay | Better |
+| User Understanding | Easier | Harder |
+| Flash Loan Options | Good | Good |
 | **OVERALL** | **6/10** | **8/10** |
 
 ---
 
-## 💡 **Practical Implementation:**
+## **Practical Implementation:**
 
 ### **With CREATOR/WETH:**
 ```solidity
@@ -183,7 +187,7 @@ contract CreatorCharmStrategy is IStrategy {
 
 ---
 
-## 🎯 **Final Answer:**
+## **Final Answer:**
 
 **YES - CREATOR/WETH is better than CREATOR/USDC!**
 
@@ -194,4 +198,4 @@ contract CreatorCharmStrategy is IStrategy {
 
 **WETH is easier to swap to** and has better liquidity, so it's the right choice.
 
-**Next step:** Use CreatorCharmStrategy with swap integration ✅
+**Next step:** Use CreatorCharmStrategy with swap integration 

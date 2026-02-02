@@ -1,3 +1,7 @@
+---
+title: Create2 Registry
+---
+
 # CREATE2 Registry Deployment
 
 This repo deploys `CreatorRegistry` via CREATE2 for deterministic addresses across chains.

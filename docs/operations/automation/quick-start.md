@@ -1,6 +1,17 @@
-# ⚡ **AUTOMATED DEPLOYMENT - QUICK START**
+---
+title: Quick start
+sidebar_position: 2
+---
 
-## 🚀 **ONE TRANSACTION - FULLY AUTOMATED!**
+# Automated deployment quick start
+
+Single-transaction deployment for Creator Vault strategies.
+
+**Who this is for:** Developers deploying vaults quickly.
+
+---
+
+## Single transaction deployment
 
 ```solidity
 DeploymentResult memory result = StrategyDeploymentBatcher(BATCHER_ADDRESS).batchDeployStrategies(
@@ -10,56 +21,53 @@ DeploymentResult memory result = StrategyDeploymentBatcher(BATCHER_ADDRESS).batc
     AJNA_FACTORY_OR_ZERO,                              // Ajna factory (or address(0))
     3000,                                              // 0.3% fee tier
     SQRT_PRICE_X96,                                    // Initial price (99/1 ratio)
-    CREATOR_ADDRESS                                    // ⭐ Creator becomes owner
+    CREATOR_ADDRESS                                    // Creator becomes owner
 );
 ```
 
-## ✅ **DONE!**
-
-- ✅ V3 pool created
-- ✅ CharmAlphaVault deployed
-- ✅ Strategy set
-- ✅ Rebalance called
-- ✅ Creator owns everything
-- ✅ **NO MANUAL STEPS NEEDED!**
-
 ---
 
-## 🎯 **WHO SHOULD BE THE OWNER?**
-
-### **Option 1: Creator Address (Recommended for Creator Platforms)**
-```solidity
-owner: creatorAddress  // The person launching their token vault
-```
-**Use when:** Building a platform where creators own their own vaults
-
-### **Option 2: Multisig Address (Recommended for Protocol)**
-```solidity
-owner: 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3  // Your multisig
-```
-**Use when:** You want centralized control for all creator vaults
-
-### **Option 3: Platform Contract (Advanced)**
-```solidity
-owner: platformManagerAddress  // Smart contract that manages creators
-```
-**Use when:** Building complex platform logic
-
----
-
-## 📊 **WHAT GETS DEPLOYED:**
+## What gets deployed
 
 | Contract | Owner | Notes |
 |----------|-------|-------|
-| CharmAlphaVaultDeploy | ⭐ `owner` param | Immediate ownership |
-| CreatorCharmStrategy | ⭐ `owner` param | Immediate ownership |
-| AjnaStrategy | ⭐ `owner` param | Immediate ownership |
+| CharmAlphaVaultDeploy | `owner` param | Immediate ownership |
+| CreatorCharmStrategy | `owner` param | Immediate ownership |
+| AjnaStrategy | `owner` param | Immediate ownership |
 
-**All ownership is IMMEDIATE - no manual acceptance!** ✅
+All ownership is immediate with no manual acceptance required.
 
 ---
 
-## 🔢 **CALCULATING SQRT_PRICE_X96:**
+## Owner options
+
+### Option 1: Creator address (recommended for creator platforms)
+
+```solidity
+owner: creatorAddress  // The person launching their token vault
+```
+
+Use when building a platform where creators own their own vaults.
+
+### Option 2: Multisig address (recommended for protocol)
+
+```solidity
+owner: 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3  // Your multisig
+```
+
+Use when you want centralized control for all creator vaults.
+
+### Option 3: Platform contract (advanced)
+
+```solidity
+owner: platformManagerAddress  // Smart contract that manages creators
+```
+
+Use when building complex platform logic.
+
+---
+
+## Calculating SQRT_PRICE_X96
 
 For 99/1 CREATOR/USDC ratio:
 
@@ -74,14 +82,11 @@ const decimalAdjustment = 10n ** 6n;
 const adjustedSqrtPriceX96 = sqrtPriceX96 * decimalAdjustment;
 
 console.log(adjustedSqrtPriceX96.toString());
-// Use this value ☝️
 ```
 
 ---
 
-## 🎉 **THAT'S IT!**
+## References
 
-One transaction. Fully automated. Creator owns everything.
-
-See `FULL_AUTOMATION_IMPLEMENTED.md` for complete details.
-
+- [Full automation details](./full-automation.md)
+- [Completion options](./completion-options.md)

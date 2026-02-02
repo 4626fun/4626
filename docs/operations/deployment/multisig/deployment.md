@@ -1,12 +1,16 @@
-# 🚀 **DEPLOYMENT WITH MULTISIG OWNER**
+---
+title: Deployment
+---
 
-## ✅ **QUICK START**
+# **DEPLOYMENT WITH MULTISIG OWNER**
+
+## **QUICK START**
 
 Your multisig will now own all deployed strategies!
 
 ---
 
-## 🎯 **YOUR MULTISIG ADDRESS:**
+## **YOUR MULTISIG ADDRESS:**
 
 ```
 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3
@@ -14,7 +18,7 @@ Your multisig will now own all deployed strategies!
 
 ---
 
-## 📋 **DEPLOYMENT COMMAND:**
+## **DEPLOYMENT COMMAND:**
 
 ```solidity
 // Step 1: Deploy all strategies
@@ -25,7 +29,7 @@ DeploymentResult memory result = batcher.batchDeployStrategies(
     ajnaFactory,                                       // Ajna factory (or address(0))
     3000,                                              // 0.3% fee tier
     sqrtPriceX96,                                      // Initial price (99/1 ratio)
-    0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3        // ⭐ YOUR MULTISIG
+    0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3        //  YOUR MULTISIG
 );
 
 // No follow-up acceptance required for the automated path.
@@ -33,26 +37,26 @@ DeploymentResult memory result = batcher.batchDeployStrategies(
 
 ---
 
-## 📊 **WHAT YOU GET:**
+## **WHAT YOU GET:**
 
 | Contract | Owner | Status |
 |----------|-------|--------|
-| **CharmAlphaVaultDeploy** | Your Multisig | ✅ Immediate |
-| **CreatorCharmStrategy** | Your Multisig | ✅ Immediate |
-| **AjnaStrategy** | Your Multisig | ✅ Immediate |
+| **CharmAlphaVaultDeploy** | Your Multisig | Immediate |
+| **CreatorCharmStrategy** | Your Multisig | Immediate |
+| **AjnaStrategy** | Your Multisig | Immediate |
 
 ---
 
-## 🔐 **WHY THIS IS BETTER:**
+## **WHY THIS IS BETTER:**
 
-✅ **Multiple signers required** for any governance action  
-✅ **No single point of failure** if one key is compromised  
-✅ **Transparent audit trail** of all governance decisions  
-✅ **Industry best practice** (used by all major DeFi protocols)
+**Multiple signers required** for any governance action  
+**No single point of failure** if one key is compromised  
+**Transparent audit trail** of all governance decisions  
+**Industry best practice** (used by all major DeFi protocols)
 
 ---
 
-## 🎉 **RESULT:**
+##  **RESULT:**
 
 Your multisig `0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3` will control:
 - Protocol fees

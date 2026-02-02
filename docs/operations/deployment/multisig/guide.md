@@ -1,12 +1,16 @@
-# 🎯 **FINAL DEPLOYMENT GUIDE WITH MULTISIG**
+---
+title: Guide
+---
 
-## ✅ **EVERYTHING IS READY!**
+# **FINAL DEPLOYMENT GUIDE WITH MULTISIG**
+
+## **EVERYTHING IS READY!**
 
 Your multisig `0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3` will own all deployed strategies.
 
 ---
 
-## 🚀 **DEPLOYMENT COMMAND:**
+## **DEPLOYMENT COMMAND:**
 
 ```solidity
 // Call this function (can be from any address - doesn't have to be the multisig):
@@ -17,13 +21,13 @@ DeploymentResult memory result = StrategyDeploymentBatcher(batcherAddress).batch
     AJNA_FACTORY,                                      // Ajna factory (or address(0) if not using)
     3000,                                              // 0.3% fee tier for V3 pool
     SQRT_PRICE_X96,                                    // Initial price (use calculateSqrtPrice for 99/1)
-    0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3        // ⭐ YOUR MULTISIG
+    0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3        //  YOUR MULTISIG
 );
 ```
 
 ---
 
-## 📊 **WHAT GETS DEPLOYED:**
+## **WHAT GETS DEPLOYED:**
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -40,26 +44,26 @@ DeploymentResult memory result = StrategyDeploymentBatcher(batcherAddress).batch
               ↓
 ┌─────────────────────────────────────────────────┐
 │  3. CHARM ALPHA STRATEGY                       │
-│     Owner: Your Multisig ✅                    │
+│     Owner: Your Multisig                    │
 │     Rebalancer for Charm vault                │
 └─────────────────────────────────────────────────┘
               ↓
 ┌─────────────────────────────────────────────────┐
 │  4. CREATOR CHARM STRATEGY V2                  │
-│     Owner: Your Multisig ✅                    │
+│     Owner: Your Multisig                    │
 │     Single-sided deposit handler              │
 └─────────────────────────────────────────────────┘
               ↓
 ┌─────────────────────────────────────────────────┐
 │  5. AJNA STRATEGY (if factory provided)        │
-│     Owner: Your Multisig ✅                    │
+│     Owner: Your Multisig                    │
 │     Lending pool strategy                     │
 └─────────────────────────────────────────────────┘
 ```
 
 ---
 
-## ⚠️ **IMPORTANT: ACCEPT GOVERNANCE**
+## **IMPORTANT: ACCEPT GOVERNANCE**
 
 After deployment, you MUST call this FROM YOUR MULTISIG:
 
@@ -75,20 +79,20 @@ CharmAlphaVault(result.charmVault).acceptGovernance();
 
 ---
 
-## 🔐 **OWNERSHIP TABLE:**
+## **OWNERSHIP TABLE:**
 
 | Contract | Owner After Deployment | Owner After Accepting |
 |----------|------------------------|----------------------|
-| CharmAlphaVault | ⚠️ Pending (multisig) | ✅ Multisig |
-| CharmAlphaStrategy | ❌ Not deployed | Rebalance is embedded in CharmAlphaVaultDeploy |
-| CreatorCharmStrategy | ✅ Multisig | ✅ Multisig |
-| AjnaStrategy | ✅ Multisig | ✅ Multisig |
+| CharmAlphaVault | Pending (multisig) | Multisig |
+| CharmAlphaStrategy | Not deployed | Rebalance is embedded in CharmAlphaVaultDeploy |
+| CreatorCharmStrategy | Multisig | Multisig |
+| AjnaStrategy | Multisig | Multisig |
 
 **Only CharmAlphaVault requires the extra acceptance step.**
 
 ---
 
-## 📋 **STEP-BY-STEP CHECKLIST:**
+## **STEP-BY-STEP CHECKLIST:**
 
 - [ ] 1. Deploy `StrategyDeploymentBatcher` contract
 - [ ] 2. Get your CREATOR token address
@@ -101,11 +105,11 @@ CharmAlphaVault(result.charmVault).acceptGovernance();
 - [ ] 9. Verify ownership by calling `.governance()` on CharmAlphaVault
 - [ ] 10. Call `vault.addStrategy()` for each deployed strategy
 - [ ] 11. Test deposit flow
-- [ ] 12. Launch! 🚀
+- [ ] 12. Launch! 
 
 ---
 
-## 💡 **EXAMPLE WITH ETHERS.JS:**
+## **EXAMPLE WITH ETHERS.JS:**
 
 ```javascript
 // Step 1: Deploy all strategies
@@ -122,7 +126,7 @@ const tx = await batcher.batchDeployStrategies(
 );
 
 const receipt = await tx.wait();
-console.log("✅ Strategies deployed!");
+console.log("Strategies deployed!");
 
 // Parse event to get addresses
 const event = receipt.events.find(e => e.event === "StrategiesDeployed");
@@ -143,11 +147,11 @@ console.log("AjnaStrategy:", ajnaStrategy);
 const charmVaultContract = new ethers.Contract(
     charmVault,
     charmVaultABI,
-    multisigSigner  // ⚠️ MUST be multisig signer
+    multisigSigner  // MUST be multisig signer
 );
 
 await charmVaultContract.acceptGovernance();
-console.log("✅ Multisig now owns CharmAlphaVault!");
+console.log("Multisig now owns CharmAlphaVault!");
 
 // Step 3: Verify ownership
 const currentGovernance = await charmVaultContract.governance();
@@ -189,57 +193,57 @@ function calculateSqrtPrice(
 
 ## 🛡️ **SECURITY NOTES:**
 
-1. ✅ **Multisig is MUCH safer than EOA**
+1. **Multisig is MUCH safer than EOA**
    - Multiple signers required
    - No single point of failure
    - Transparent audit trail
 
-2. ✅ **Verify all addresses before accepting governance**
+2. **Verify all addresses before accepting governance**
    - Check contract source code on BaseScan
    - Verify deployment parameters
    - Test on testnet first
 
-3. ✅ **Test the accept flow**
+3. **Test the accept flow**
    - Make sure your multisig can call `acceptGovernance()`
    - Check that you have enough signers online
    - Practice on Base Sepolia testnet first
 
-4. ✅ **Keep deployment addresses safe**
+4. **Keep deployment addresses safe**
    - Document all deployed addresses
    - Store in your multisig's address book
    - Share with all multisig signers
 
 ---
 
-## 🎯 **FINAL VERIFICATION:**
+## **FINAL VERIFICATION:**
 
 After deployment, verify:
 
 ```solidity
 // 1. Check CharmAlphaVault governance (should be your multisig)
 CharmAlphaVault(charmVault).governance()
-// Should return: 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3 ✅
+// Should return: 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3 
 
 // 2. CharmAlphaStrategy is not deployed in the automated path (embedded).
 // charmStrategy is expected to be address(0) in the StrategiesDeployed result.
-// Should return: 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3 ✅
+// Should return: 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3 
 
 // 3. Check CreatorCharmStrategy owner (should be your multisig)
 CreatorCharmStrategy(creatorCharmStrategy).owner()
-// Should return: 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3 ✅
+// Should return: 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3 
 
 // 4. Check AjnaStrategy owner (should be your multisig)
 AjnaStrategy(ajnaStrategy).owner()
-// Should return: 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3 ✅
+// Should return: 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3 
 ```
 
 ---
 
-## 🎉 **YOU'RE READY TO DEPLOY!**
+##  **YOU'RE READY TO DEPLOY!**
 
 **Everything is configured for your multisig ownership.**
 
 **Deployment is safe and secure!** 🛡️
 
-**Good luck with your launch!** 🚀
+**Good luck with your launch!** 
 

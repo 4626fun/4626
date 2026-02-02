@@ -1,3 +1,7 @@
+---
+title: Guide
+---
+
 # Creator Ajna Strategy Deployment Guide
 
 ## Overview

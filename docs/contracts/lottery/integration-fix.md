@@ -1,3 +1,7 @@
+---
+title: Integration Fix
+---
+
 # Lottery Integration Fix
 
 ## 🐛 **Issue Found**
@@ -7,20 +11,20 @@ The `ShareOFT` contract was calling the `CreatorLotteryManager` with an **incorr
 ### **Before (BROKEN):**
 
 ```solidity
-// ❌ Wrong interface
+// Wrong interface
 interface ICreatorLotteryManager {
     function processSwapLottery(address recipient, address token, uint256 amount) 
         external returns (uint256);
 }
 
-// ❌ Wrong call
+// Wrong call
 ICreatorLotteryManager(mgr).processSwapLottery(recipient, address(this), amount)
 ```
 
 ### **After (FIXED):**
 
 ```solidity
-// ✅ Correct interface
+// Correct interface
 interface ICreatorLotteryManager {
     function processSwapLottery(
         address creatorCoin,  // The underlying creator token (AKITA)
@@ -30,7 +34,7 @@ interface ICreatorLotteryManager {
     ) external payable returns (uint256);
 }
 
-// ✅ Correct call with creator coin lookup
+// Correct call with creator coin lookup
 address creatorCoin = vault != address(0) ? ICreatorOVault(vault).asset() : address(0);
 ICreatorLotteryManager(mgr).processSwapLottery(
     creatorCoin,      // e.g., AKITA token address
@@ -42,7 +46,7 @@ ICreatorLotteryManager(mgr).processSwapLottery(
 
 ---
 
-## 🔧 **What Was Fixed**
+## **What Was Fixed**
 
 ### **1. Updated Interface** (`CreatorShareOFT.sol`)
 - Changed `ICreatorLotteryManager` interface to match the actual contract
@@ -60,7 +64,7 @@ ICreatorLotteryManager(mgr).processSwapLottery(
 
 ---
 
-## ✅ **How It Works Now**
+## **How It Works Now**
 
 ### **Buy Flow with Lottery:**
 
@@ -128,7 +132,7 @@ cast call $LOTTERY_MANAGER "entries(uint256)" <entryId>
 
 ---
 
-## 📝 **Key Changes Summary**
+## **Key Changes Summary**
 
 ### **File: `contracts/services/messaging/CreatorShareOFT.sol`**
 
@@ -142,23 +146,23 @@ cast call $LOTTERY_MANAGER "entries(uint256)" <entryId>
 
 ---
 
-## 🎯 **Why This Matters**
+## **Why This Matters**
 
 ### **Before Fix:**
-- ❌ Lottery calls would **fail silently**
-- ❌ No lottery entries created for buyers
-- ❌ Jackpot never awarded
-- ❌ Social-fi engagement broken
+- Lottery calls would **fail silently**
+- No lottery entries created for buyers
+- Jackpot never awarded
+- Social-fi engagement broken
 
 ### **After Fix:**
-- ✅ Lottery calls **succeed**
-- ✅ Buyers get lottery entries
-- ✅ Jackpot awards work correctly
-- ✅ Social-fi engagement enabled
+- Lottery calls **succeed**
+- Buyers get lottery entries
+- Jackpot awards work correctly
+- Social-fi engagement enabled
 
 ---
 
-## 🚀 **Deployment Steps**
+## **Deployment Steps**
 
 1. **Recompile contracts:**
    ```bash
@@ -187,7 +191,7 @@ cast call $LOTTERY_MANAGER "entries(uint256)" <entryId>
 
 ---
 
-## 📊 **Expected Events After Fix**
+## **Expected Events After Fix**
 
 When a user buys ■AKITA, you should see these events in order:
 
@@ -212,7 +216,7 @@ If `LotteryTriggered` is missing, the lottery call failed!
 
 ---
 
-## ⚠️ **Important Notes**
+## **Important Notes**
 
 1. **Backward Compatibility:**
    - This is a **breaking change** if contracts are already deployed
@@ -229,7 +233,7 @@ If `LotteryTriggered` is missing, the lottery call failed!
 
 ---
 
-## ✅ **Verification Commands**
+## **Verification Commands**
 
 After deployment, verify the fix:
 
@@ -247,7 +251,7 @@ cast call $LOTTERY_MANAGER "entryCounter()"
 
 ---
 
-**Status:** ✅ **FIXED**  
+**Status:** **FIXED**  
 **Priority:** 🔴 **CRITICAL** - Required for lottery functionality  
 **Tested:** ⏳ Pending integration tests
 

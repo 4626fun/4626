@@ -1,131 +1,94 @@
-# ✅ **REQUIRED APPROVALS CHECKLIST**
+---
+title: Approvals checklist
+sidebar_position: 2
+---
 
-## 🎯 **QUICK ANSWER:**
+# Required approvals checklist
 
-### **What You (Protocol Owner) Must Do:**
+This document lists all approvals required for vault deployment.
+
+**Who this is for:** Protocol operators setting up deployment infrastructure.
+
+---
+
+## Critical approval
+
+After deploying CCALaunchStrategy, the protocol owner must approve the batcher:
 
 ```solidity
-// CRITICAL - Do this after deploying CCALaunchStrategy:
 CCALaunchStrategy(ccaAddress).setApprovedLauncher(
     VAULT_ACTIVATION_BATCHER_ADDRESS,
     true
 );
 ```
 
-**That's it! Only 1 critical approval needed.**
+This is the only critical approval needed from the protocol.
 
 ---
 
-## 📋 **FULL CHECKLIST:**
+## Full checklist
 
-### **1. Deploy Contracts:**
+### 1. Deploy contracts
+
 ```bash
-# Deploy these once:
 forge create StrategyDeploymentBatcher
 forge create VaultActivationBatcher
 forge create CCALaunchStrategy
 ```
 
-### **2. CRITICAL APPROVAL:**
+### 2. Protocol approval (critical)
+
+From your multisig:
+
 ```solidity
-// From your multisig (0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3):
 ccaStrategy.setApprovedLauncher(vaultActivationBatcherAddress, true);
 ```
 
-### **3. Users Approve Their Tokens:**
+### 3. User approvals
+
+Each user approves their tokens before deploying:
+
 ```solidity
-// Each user does this before deploying:
 creatorToken.approve(strategyDeploymentBatcherAddress, MAX_UINT);
 ```
 
 ---
 
-## 🔐 **COINBASE SMART WALLET (Optional):**
+## Coinbase Smart Wallet (optional)
 
 If using Coinbase Smart Wallet features:
 
-### **Session Keys (Optional):**
+### Session keys
+
 - Allow batch transactions without signing each time
 - Set expiry (e.g., 24 hours)
 
-### **Paymaster (Optional):**
-- Enable gasless transactions for users
-- Set spending limits per contract
+### Spend limits
 
-### **Contract Whitelist (Optional):**
-- Add StrategyDeploymentBatcher
-- Add VaultActivationBatcher
-
-**None of these are REQUIRED, just nice-to-have for better UX.**
+- Allow batchers to spend your tokens within limits
+- Prevents over-spending
 
 ---
 
-## ⚠️ **WHAT HAPPENS IF YOU FORGET:**
+## Approval matrix
 
-### **If you forget `setApprovedLauncher()`:**
-```
-User calls batchActivate()
-  ↓
-VaultActivationBatcher calls cca.launchAuctionSimple()
-  ↓
-Modifier checks: onlyApprovedOrOwner
-  ↓
-Batcher is not approved ❌
-  ↓
-TRANSACTION REVERTS ❌
-```
-
-### **If user forgets token approval:**
-```
-User calls batchDeployStrategies()
-  ↓
-Batcher tries transferFrom(user, batcher, amount)
-  ↓
-User hasn't approved tokens ❌
-  ↓
-TRANSACTION REVERTS ❌
-```
+| Contract | Approver | Approved spender | Purpose |
+|----------|----------|------------------|---------|
+| CCALaunchStrategy | Protocol multisig | VaultActivationBatcher | Launch auctions |
+| Creator token | User | StrategyDeploymentBatcher | Deploy strategies |
+| Creator token | User | VaultActivationBatcher | Activate vault |
 
 ---
 
-## ✅ **FINAL CHECKLIST:**
+## Security notes
 
-**Before Launch:**
-- [ ] Deploy StrategyDeploymentBatcher
-- [ ] Deploy VaultActivationBatcher
-- [ ] Deploy CCALaunchStrategy
-- [ ] **Call setApprovedLauncher()** ⚠️ **CRITICAL!**
-
-**Per User:**
-- [ ] User approves CREATOR token to batcher
-- [ ] User calls batchDeployStrategies()
-
-**That's all that's REQUIRED!** ✅
-
-Everything else (session keys, paymaster, whitelisting) is optional UX improvements.
+- Approvals should use explicit amounts when possible
+- Revoke unnecessary approvals after use
+- Session keys should have short expiry times
 
 ---
 
-## 🚀 **DEPLOYMENT SCRIPT:**
+## References
 
-```javascript
-// 1. Deploy (one time)
-const batcher = await deploy("StrategyDeploymentBatcher");
-const activationBatcher = await deploy("VaultActivationBatcher");
-const cca = await deploy("CCALaunchStrategy");
-
-// 2. CRITICAL APPROVAL (one time)
-await cca.setApprovedLauncher(activationBatcher.address, true);
-console.log("✅ Batcher approved!");
-
-// 3. User approves (per user)
-await creatorToken.connect(user).approve(batcher.address, MAX);
-console.log("✅ User approved!");
-
-// 4. User deploys (per user)
-await batcher.connect(user).batchDeployStrategies(...);
-console.log("✅ Deployed!");
-```
-
-**Done!** 🎉
-
+- [Pre-launch verification](./pre-launch.md)
+- [CCA verification](./cca-verification.md)

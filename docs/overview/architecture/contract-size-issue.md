@@ -1,4 +1,8 @@
-# ⚠️ **CONTRACT SIZE ISSUE - ONCHAIN “MEGA FACTORY” TOO LARGE**
+---
+title: Contract Size Issue
+---
+
+# **CONTRACT SIZE ISSUE - ONCHAIN “MEGA FACTORY” TOO LARGE**
 
 ## 🚨 **PROBLEM (Historical)**
 
@@ -8,7 +12,7 @@ The old `CreatorVaultFactory` approach (a single onchain contract that deploys +
 
 ---
 
-## 💡 **Solution we use now**
+## **Solution we use now**
 
 ### **External deployment + registry**
 - Deploy contracts via **Foundry scripts** or **Account Abstraction** (CREATE2 deployers), avoiding the onchain size limit entirely.
@@ -16,6 +20,6 @@ The old `CreatorVaultFactory` approach (a single onchain contract that deploys +
 
 ---
 
-## ✅ Status
+## Status
 This is already implemented in the repo’s current deployment flow.
 

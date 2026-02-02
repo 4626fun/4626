@@ -1,3 +1,7 @@
+---
+title: Bucket Calculator
+---
+
 # Ajna Bucket Index Calculator (Correct Mapping)
 
 ## Understanding Ajna Buckets
@@ -268,11 +272,11 @@ Fee:   500 (0.05%)→ tickSpacing: 10
 
 The `scripts/deploy/ajna/DEPLOY_AKITA_AJNA.sh` script automatically:
 
-1. ✅ Finds AKITA/ZORA pool
-2. ✅ Reads current tick
-3. ✅ Calculates suggested bucket
-4. ✅ Prompts for confirmation
-5. ✅ Sets bucket after deployment
+1. Finds AKITA/ZORA pool
+2. Reads current tick
+3. Calculates suggested bucket
+4. Prompts for confirmation
+5. Sets bucket after deployment
 
 ### Manual Override
 
@@ -428,11 +432,11 @@ if [ $BUCKET -gt 7388 ]; then BUCKET=7388; fi
 
 ## Summary
 
-✅ **Use current market price** to calculate optimal bucket
-✅ **Start conservative** (use Uniswap TWAP tick → derive index near market, then add a small safety buffer)
-✅ **Monitor utilization** and adjust if needed
-✅ **Rebalance** when market moves significantly
-✅ **Higher bucket** = higher yield potential, higher risk
+**Use current market price** to calculate optimal bucket
+**Start conservative** (use Uniswap TWAP tick → derive index near market, then add a small safety buffer)
+**Monitor utilization** and adjust if needed
+**Rebalance** when market moves significantly
+**Higher bucket** = higher yield potential, higher risk
 
-For AKITA, the deployment script automatically handles this! 🚀
+For AKITA, the deployment script automatically handles this! 
 

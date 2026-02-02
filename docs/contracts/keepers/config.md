@@ -1,3 +1,7 @@
+---
+title: Config
+---
+
 # Keepr Configuration Schema (MVP)
 
 This document defines the **MVP configuration schema** for Keepr, the vault-bound operator agent.

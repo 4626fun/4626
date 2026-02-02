@@ -1,11 +1,15 @@
-# ⚠️ **GOVERNANCE ACCEPTANCE: DO YOU NEED TO DO THIS FOR EVERY VAULT?**
+---
+title: Governance Acceptance
+---
+
+# **GOVERNANCE ACCEPTANCE: DO YOU NEED TO DO THIS FOR EVERY VAULT?**
 
 ## ❓ **YOUR QUESTION:**
 > "do i need to accept ownership every vault? or is this automated"
 
 ---
 
-## ✅ **SHORT ANSWER:**
+## **SHORT ANSWER:**
 
 **YES** - You need to accept governance for **each new CharmAlphaVault** that gets deployed.
 
@@ -15,9 +19,9 @@
 
 ---
 
-## 📊 **WHEN DOES THIS HAPPEN?**
+## **WHEN DOES THIS HAPPEN?**
 
-### **Scenario 1: CREATOR Deploys Vault (You Accept) ✅**
+### **Scenario 1: CREATOR Deploys Vault (You Accept) **
 ```
 Creator A launches their vault
   ↓
@@ -25,10 +29,10 @@ batchDeployStrategies() creates:
   - CharmAlphaVault A (pendingGovernance = your multisig)
   - Strategies A
   ↓
-✅ You need to accept governance for CharmAlphaVault A
+You need to accept governance for CharmAlphaVault A
 ```
 
-### **Scenario 2: Another CREATOR Deploys Vault (You Accept) ✅**
+### **Scenario 2: Another CREATOR Deploys Vault (You Accept) **
 ```
 Creator B launches their vault
   ↓
@@ -36,21 +40,21 @@ batchDeployStrategies() creates:
   - CharmAlphaVault B (pendingGovernance = your multisig)
   - Strategies B
   ↓
-✅ You need to accept governance for CharmAlphaVault B
+You need to accept governance for CharmAlphaVault B
 ```
 
-### **Scenario 3: User Deposits (No Action Needed) ✅**
+### **Scenario 3: User Deposits (No Action Needed) **
 ```
 User deposits to Creator A's vault
   ↓
 Funds go through existing CharmAlphaVault A
   ↓
-❌ NO acceptance needed - vault already set up
+NO acceptance needed - vault already set up
 ```
 
 ---
 
-## 💡 **WHY IS THIS NEEDED?**
+## **WHY IS THIS NEEDED?**
 
 CharmAlphaVault uses **two-step governance transfer** for safety:
 
@@ -74,7 +78,7 @@ function acceptGovernance() external {
 
 ---
 
-## 🔄 **HOW OFTEN WILL THIS HAPPEN?**
+## **HOW OFTEN WILL THIS HAPPEN?**
 
 **It depends on your use case:**
 
@@ -86,42 +90,42 @@ function acceptGovernance() external {
 - Just once! (1 creator = 1 acceptance)
 
 ### **User deposits:**
-- Never require acceptance ✅
+- Never require acceptance 
 
 ---
 
-## 🎯 **WHAT HAPPENS IF YOU DON'T ACCEPT?**
+## **WHAT HAPPENS IF YOU DON'T ACCEPT?**
 
-### **What STILL WORKS:** ✅
-- ✅ Users can deposit
-- ✅ Users can withdraw
-- ✅ Strategy rebalances automatically
-- ✅ Fees are collected
-- ✅ Everything functions normally
+### **What STILL WORKS:** 
+- Users can deposit
+- Users can withdraw
+- Strategy rebalances automatically
+- Fees are collected
+- Everything functions normally
 
-### **What DOESN'T WORK:** ❌
-- ❌ You can't change protocol fee
-- ❌ You can't change supply cap
-- ❌ You can't update the strategy
-- ❌ You can't call emergency functions
-- ❌ You can't transfer governance to someone else
+### **What DOESN'T WORK:** 
+- You can't change protocol fee
+- You can't change supply cap
+- You can't update the strategy
+- You can't call emergency functions
+- You can't transfer governance to someone else
 
 **Summary:** The vault works fine, but you can't modify governance parameters.
 
 ---
 
-## 🤖 **CAN WE AUTOMATE THIS?**
+## **CAN WE AUTOMATE THIS?**
 
-### **Option 1: Manual Acceptance (Current) ⚠️**
+### **Option 1: Manual Acceptance (Current) **
 
 **Pros:**
-- ✅ Safest approach
-- ✅ Follows industry best practices
-- ✅ Clear audit trail
+- Safest approach
+- Follows industry best practices
+- Clear audit trail
 
 **Cons:**
-- ❌ Requires manual transaction for each vault
-- ❌ Multisig signers need to be online
+- Requires manual transaction for each vault
+- Multisig signers need to be online
 
 ---
 
@@ -130,13 +134,13 @@ function acceptGovernance() external {
 Just don't accept governance!
 
 **Pros:**
-- ✅ No extra transactions needed
-- ✅ Vault works perfectly
-- ✅ Can accept later when you need to change something
+- No extra transactions needed
+- Vault works perfectly
+- Can accept later when you need to change something
 
 **Cons:**
-- ❌ Can't modify governance parameters
-- ❌ Looks "incomplete" if you check ownership
+- Can't modify governance parameters
+- Looks "incomplete" if you check ownership
 
 ---
 
@@ -166,16 +170,16 @@ await multisig.execTransaction(calls);
 ```
 
 **Pros:**
-- ✅ Accept many at once
-- ✅ Only one multisig signing session
-- ✅ Still safe and standard
+- Accept many at once
+- Only one multisig signing session
+- Still safe and standard
 
 **Cons:**
-- ⚠️ Still requires manual action
+- Still requires manual action
 
 ---
 
-### **Option 4: Auto-Accept in Deployment (Requires Code Change) 🔧**
+### **Option 4: Auto-Accept in Deployment (Requires Code Change) **
 
 I can modify the batcher to automatically accept governance in the same transaction!
 
@@ -187,14 +191,14 @@ I can modify the batcher to automatically accept governance in the same transact
 ```
 
 **Pros:**
-- ✅ Fully automated
-- ✅ No manual acceptance needed
-- ✅ One transaction does everything
+- Fully automated
+- No manual acceptance needed
+- One transaction does everything
 
 **Cons:**
-- ⚠️ Requires modifying CharmAlphaVault code (diverges from original Charm)
-- ⚠️ Requires multisig to support callbacks (most do)
-- ⚠️ More complex, more testing needed
+- Requires modifying CharmAlphaVault code (diverges from original Charm)
+- Requires multisig to support callbacks (most do)
+- More complex, more testing needed
 
 **Want me to implement this?** I can do it if you want full automation!
 
@@ -216,13 +220,13 @@ I can modify the batcher to automatically accept governance in the same transact
 
 ---
 
-## 🎯 **MY RECOMMENDATION:**
+## **MY RECOMMENDATION:**
 
 **Start with Option 1 (Manual):**
-1. ✅ It's the safest
-2. ✅ It's the standard
-3. ✅ You'll know exactly what you're accepting
-4. ✅ You can always switch to automation later
+1. It's the safest
+2. It's the standard
+3. You'll know exactly what you're accepting
+4. You can always switch to automation later
 
 **Then consider Option 3 (Batch) if you get many vaults:**
 - Accept 5-10 vaults at once in a single multisig transaction
@@ -235,18 +239,18 @@ I can modify the batcher to automatically accept governance in the same transact
 
 ---
 
-## 📋 **COMPARISON TABLE:**
+## **COMPARISON TABLE:**
 
 | Option | Effort per Vault | Safety | Complexity | Recommended For |
 |--------|------------------|--------|------------|-----------------|
-| **Manual** | 1 tx each | ⭐⭐⭐⭐⭐ | Low | 1-5 vaults |
-| **Skip** | 0 tx | ⭐⭐⭐⭐ | Low | Low-touch ops |
-| **Batch** | 1 tx per batch | ⭐⭐⭐⭐⭐ | Medium | 5-20 vaults |
-| **Auto** | 0 tx | ⭐⭐⭐ | High | 20+ vaults |
+| **Manual** | 1 tx each |  | Low | 1-5 vaults |
+| **Skip** | 0 tx |  | Low | Low-touch ops |
+| **Batch** | 1 tx per batch |  | Medium | 5-20 vaults |
+| **Auto** | 0 tx |  | High | 20+ vaults |
 
 ---
 
-## 🚀 **WHAT I RECOMMEND FOR YOU:**
+## **WHAT I RECOMMEND FOR YOU:**
 
 Based on your setup:
 1. **Start with manual acceptance** (Option 1)
@@ -254,33 +258,33 @@ Based on your setup:
 3. **If you get 20+ vaults, I'll implement auto-accept** (Option 4)
 
 **For now, manual is FINE!** It's:
-- ✅ Safe
-- ✅ Simple
-- ✅ Standard
-- ✅ One tx per new creator vault (not per deposit)
+- Safe
+- Simple
+- Standard
+- One tx per new creator vault (not per deposit)
 
 ---
 
 ## ❓ **WANT ME TO IMPLEMENT AUTO-ACCEPT?**
 
 If you want Option 4 (full automation), I can implement it! It would:
-- ✅ Eliminate manual acceptance
-- ✅ Work with most multisigs (Safe, Gnosis, etc.)
-- ✅ Keep everything in one transaction
+- Eliminate manual acceptance
+- Work with most multisigs (Safe, Gnosis, etc.)
+- Keep everything in one transaction
 
-**Just say the word and I'll code it up!** 🔧
+**Just say the word and I'll code it up!** 
 
 Otherwise, **manual acceptance is totally fine for most use cases.**
 
 ---
 
-## 📊 **SUMMARY:**
+## **SUMMARY:**
 
 **Question:** "do i need to accept ownership every vault?"
 
 **Answer:** 
-- ✅ YES - Once per new CREATOR vault deployed
-- ❌ NO - Not for each user deposit (only on vault creation)
+- YES - Once per new CREATOR vault deployed
+- NO - Not for each user deposit (only on vault creation)
 - 🤷 OPTIONAL - Vault works fine without accepting, you just can't change governance settings
 
 **Frequency:**
@@ -288,5 +292,5 @@ Otherwise, **manual acceptance is totally fine for most use cases.**
 - If 10 creators launch: Accept 10 times (or batch them)
 - If 100 users deposit: No acceptance needed
 
-**Bottom line:** It's per CREATOR vault launch, not per user interaction. For most cases, this is totally manageable! ✅
+**Bottom line:** It's per CREATOR vault launch, not per user interaction. For most cases, this is totally manageable! 
 

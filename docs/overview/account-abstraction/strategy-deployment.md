@@ -1,12 +1,16 @@
-# 🚀 **Account Abstraction Strategy Deployment Guide**
+---
+title: Strategy Deployment
+---
 
-## ✅ **What We've Built**
+# **Account Abstraction Strategy Deployment Guide**
+
+## **What We've Built**
 
 A **complete AA-compatible deployment system** for Charm + Ajna strategies!
 
 ---
 
-## 🎯 **The Problem**
+## **The Problem**
 
 Traditional deployment requires **multiple transactions**:
 1. Deploy Charm Vault → wait
@@ -20,7 +24,7 @@ Traditional deployment requires **multiple transactions**:
 
 ---
 
-## 💡 **The Solution**
+## **The Solution**
 
 With **Account Abstraction**, we batch everything into **ONE transaction**:
 
@@ -64,7 +68,7 @@ function batchDeployStrategies(
 
 ---
 
-## 🔄 **Deployment Flow**
+## **Deployment Flow**
 
 ### **Option A: With Account Abstraction (Recommended)**
 
@@ -119,10 +123,10 @@ cd /home/akitav2/projects/CreatorVault
 forge script script/TestAADeployment.s.sol -vvv
 
 # This will:
-# ✅ Deploy batcher
-# ✅ Simulate batch deployment
-# ✅ Verify all contracts
-# ✅ Generate batch calls for AA
+# Deploy batcher
+# Simulate batch deployment
+# Verify all contracts
+# Generate batch calls for AA
 ```
 
 ### **Testnet Testing:**
@@ -139,7 +143,7 @@ cast call $CHARM_VAULT "totalSupply()" --rpc-url base-sepolia
 
 ---
 
-## 📊 **What Gets Deployed**
+## **What Gets Deployed**
 
 ### **1. V3 Pool**
 - Token Pair: AKITA/USDC
@@ -173,7 +177,7 @@ cast call $CHARM_VAULT "totalSupply()" --rpc-url base-sepolia
 
 ---
 
-## 💰 **Allocation**
+## **Allocation**
 
 After deployment, your vault will have:
 
@@ -186,7 +190,7 @@ Total Assets: 100%
 
 ---
 
-## 🔐 **Security Considerations**
+## **Security Considerations**
 
 ### **Deployment Security:**
 1. **Deterministic Addresses** - Use CREATE2 if needed
@@ -232,7 +236,7 @@ Same contracts, but 5 transactions
 
 ---
 
-## 🎯 **Integration with Existing Vault**
+## **Integration with Existing Vault**
 
 ### **Step 1: Deploy Strategies**
 ```solidity
@@ -261,7 +265,7 @@ assert(ajnaWeightBps == 2139);
 ## 🐛 **Troubleshooting**
 
 ### **"Pool already exists"**
-✅ Good! Batcher will use existing pool
+Good! Batcher will use existing pool
 
 ### **"Invalid sqrt price"**
 Check price calculation:
@@ -334,7 +338,7 @@ async function deployWithAA() {
 
 ---
 
-## ✅ **Success Checklist**
+## **Success Checklist**
 
 - [ ] Batcher deployed
 - [ ] V3 pool created/found
@@ -350,13 +354,13 @@ async function deployWithAA() {
 
 ---
 
-## 🎉 **You're Ready!**
+##  **You're Ready!**
 
 The AA deployment system is **production-ready**:
 
-✅ **Single transaction** deployment  
-✅ **Gas efficient** batching  
-✅ **Tested** and verified  
-✅ **Compatible** with all AA wallets  
+**Single transaction** deployment  
+**Gas efficient** batching  
+**Tested** and verified  
+**Compatible** with all AA wallets  
 
-**Deploy with confidence! 🚀**
+**Deploy with confidence! **

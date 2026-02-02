@@ -1,24 +1,39 @@
-# Lottery Integration - omniDRAGON Pattern
+---
+title: omniDRAGON pattern
+sidebar_position: 1
+---
 
-## ✅ Changes Implemented
+# Lottery integration - omniDRAGON pattern
 
-### 1. **CreatorShareOFT.sol** - Simplified Lottery Trigger
+This document describes the lottery trigger pattern based on omniDRAGON.
 
-**Changed from 4 parameters to 3 parameters** (matching omniDRAGON):
+**Who this is for:** Protocol engineers implementing lottery mechanics.
+
+---
+
+## Overview
+
+The lottery trigger was simplified from 4 parameters to 3 parameters, matching the omniDRAGON pattern.
 
 ```solidity
-// OLD (4 params)
+// Old (4 params)
 processSwapLottery(creatorCoin, trader, tokenIn, amountIn)
 
-// NEW (3 params - like omniDRAGON)
+// New (3 params)
 processSwapLottery(buyer, tokenIn, amountIn)
 ```
 
-**Key Changes:**
-- ✅ Uses `tx.origin` to get actual buyer (not router)
-- ✅ Removed `creatorCoin` parameter - lottery manager derives it
-- ✅ Simplified interface
-- ✅ Same security warnings as omniDRAGON
+---
+
+## Changes implemented
+
+### 1. CreatorShareOFT.sol - Simplified lottery trigger
+
+Key changes:
+- Uses `tx.origin` to get actual buyer (not router)
+- Removed `creatorCoin` parameter - lottery manager derives it
+- Simplified interface
+- Same security model as omniDRAGON
 
 ```solidity
 /**
@@ -41,7 +56,6 @@ function _triggerLottery(address, uint256 amount) internal {
     address mgr = registry.getLotteryManager(uint16(block.chainid));
     if (mgr == address(0)) return;
     
-    // External call wrapped in try-catch to prevent lottery issues from blocking transfers
     try ICreatorLotteryManager(mgr).processSwapLottery(buyer, address(this), amount) returns (uint256 id) {
         if (id > 0) emit LotteryTriggered(buyer, amount, id);
     } catch {
@@ -50,9 +64,10 @@ function _triggerLottery(address, uint256 amount) internal {
 }
 ```
 
-### 2. **CreatorLotteryManager.sol** - Updated to Match
+### 2. CreatorLotteryManager.sol
 
-**Function Signature:**
+Function signature:
+
 ```solidity
 function processSwapLottery(
     address buyer,      // From tx.origin (actual user)
@@ -61,20 +76,21 @@ function processSwapLottery(
 ) external payable returns (uint256 entryId)
 ```
 
-**Internal Logic:**
+Internal logic:
+
 ```solidity
 // Derive creator coin from ■TOKEN (reverse lookup)
 address creatorCoin = registry.getTokenForShareOFT(tokenIn);
 if (creatorCoin == address(0)) {
     return 0;  // Silently skip unregistered
 }
-
 // Rest of lottery logic unchanged
 ```
 
-### 3. **CreatorRegistry.sol** - Already Had the Function!
+### 3. CreatorRegistry.sol
 
-**Existing function used:**
+Uses existing function:
+
 ```solidity
 /// @notice Get token address from ShareOFT
 function getTokenForShareOFT(address _shareOFT) external view returns (address) {
@@ -82,9 +98,10 @@ function getTokenForShareOFT(address _shareOFT) external view returns (address) 
 }
 ```
 
-### 4. **Interface Updates**
+### 4. Interface updates
 
 **ICreatorLotteryManager:**
+
 ```solidity
 interface ICreatorLotteryManager {
     function processSwapLottery(
@@ -96,9 +113,9 @@ interface ICreatorLotteryManager {
 ```
 
 **ICreatorRegistryLottery:**
+
 ```solidity
 interface ICreatorRegistryLottery {
-    // ... existing functions ...
     function getTokenForShareOFT(address _shareOFT) external view returns (address);
     function getLotteryManager(uint16 _chainId) external view returns (address);
 }
@@ -106,16 +123,18 @@ interface ICreatorRegistryLottery {
 
 ---
 
-## 📊 Comparison: Before vs After
+## Comparison
 
-### Before (Complex - 4 Params)
+### Before (4 parameters)
+
 ```solidity
 // ShareOFT had to know creatorCoin
 address creatorCoin = ICreatorOVault(vault).asset();
 processSwapLottery(creatorCoin, recipient, address(this), amount);
 ```
 
-### After (Simple - 3 Params, Like omniDRAGON)
+### After (3 parameters)
+
 ```solidity
 // Lottery manager derives creatorCoin
 address buyer = tx.origin;
@@ -124,63 +143,49 @@ processSwapLottery(buyer, address(this), amount);
 
 ---
 
-## 🎯 Why This Pattern Is Better
+## Benefits
 
-1. **✅ Simpler** - One less parameter to pass
-2. **✅ Correct Buyer** - Uses `tx.origin` to get real user (not router)
-3. **✅ Cleaner Separation** - ShareOFT doesn't need vault reference
-4. **✅ Consistent** - Matches omniDRAGON exactly
-5. **✅ Safer** - Lottery manager controls coin resolution
+1. **Simpler** - One less parameter to pass
+2. **Correct buyer** - Uses `tx.origin` to get real user (not router)
+3. **Cleaner separation** - ShareOFT doesn't need vault reference
+4. **Consistent** - Matches omniDRAGON pattern exactly
+5. **Safer** - Lottery manager controls coin resolution
 
 ---
 
-## 🔄 Flow Diagram
+## Flow diagram
 
 ```
 User buys ■AKITA on Uniswap
-  ↓
+  |
+  v
 Router calls ShareOFT.transfer()
   msg.sender = Router (0xabc...)
   tx.origin  = User (0xdef...)
-  ↓
+  |
+  v
 ShareOFT._processBuy() [6.9% fee]
-  ↓
+  |
+  v
 ShareOFT._triggerLottery()
-  buyer = tx.origin  ✅ (actual user)
-  tokenIn = address(this)  (■AKITA)
+  buyer = tx.origin (actual user)
+  tokenIn = address(this) (■AKITA)
   amount = tokens bought
-  ↓
+  |
+  v
 LotteryManager.processSwapLottery(buyer, tokenIn, amount)
-  ↓
+  |
+  v
 creatorCoin = registry.getTokenForShareOFT(tokenIn)
-  → returns AKITA ✅
-  ↓
+  returns AKITA
+  |
+  v
 Create lottery entry for AKITA ecosystem
-  ↓
-User gets chance to win AKITA jackpot! 🎰
 ```
 
 ---
 
-## ✅ Compilation Status
+## References
 
-```bash
-✅ All contracts compile successfully
-✅ No errors
-⚠️  Only minor linting warnings (non-blocking)
-```
-
----
-
-## 🚀 Ready for Production!
-
-The lottery integration now follows the exact same pattern as omniDRAGON:
-- ✅ Uses `tx.origin` for actual buyer
-- ✅ 3-parameter function signature
-- ✅ Lottery manager derives creator coin
-- ✅ Same security model
-- ✅ Cleaner, simpler code
-
-**Status:** READY TO DEPLOY 🎉
-
-
+- [Multi-token jackpot](./multi-token-jackpot.md)
+- [Integration fix](./integration-fix.md)

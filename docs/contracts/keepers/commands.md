@@ -1,3 +1,7 @@
+---
+title: Commands
+---
+
 # Keepr Command Interface (MVP)
 
 Keepr only responds to **explicit commands**.  

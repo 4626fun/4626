@@ -1,6 +1,10 @@
+---
+title: Deployment
+---
+
 # Ajna Strategy Deployment Guide
 
-## ✅ **COMPLETE: Full Ajna Integration Implemented**
+## **COMPLETE: Full Ajna Integration Implemented**
 
 The AjnaStrategy is production-ready and uses **real Ajna protocol calls**.
 
@@ -8,23 +12,23 @@ The AjnaStrategy is production-ready and uses **real Ajna protocol calls**.
 
 ## What's Implemented
 
-### ✅ Ajna Interface (`IAjnaPool.sol`)
+### Ajna Interface (`IAjnaPool.sol`)
 ```solidity
-✅ addQuoteToken() - Deposit tokens to lending bucket
-✅ removeQuoteToken() - Withdraw tokens from bucket
-✅ moveQuoteToken() - Rebalance between buckets
-✅ lenderInfo() - Query LP position
-✅ bucketInfo() - Query bucket statistics
-✅ IAjnaPoolFactory - Pool deployment + lookup interface
+addQuoteToken() - Deposit tokens to lending bucket
+removeQuoteToken() - Withdraw tokens from bucket
+moveQuoteToken() - Rebalance between buckets
+lenderInfo() - Query LP position
+bucketInfo() - Query bucket statistics
+IAjnaPoolFactory - Pool deployment + lookup interface
 ```
 
-### ✅ Strategy Functions
+### Strategy Functions
 ```solidity
-✅ deposit() / withdraw() - Vault-driven asset flow
-✅ moveToBucket() - Rebalance to different price point
-✅ setBucketIndex() - Change lending price point
-✅ setIdleBufferBps() - Keep part of assets idle for withdrawals
-✅ initializeApprovals() - Required before deposits
+deposit() / withdraw() - Vault-driven asset flow
+moveToBucket() - Rebalance to different price point
+setBucketIndex() - Change lending price point
+setIdleBufferBps() - Keep part of assets idle for withdrawals
+initializeApprovals() - Required before deposits
 ```
 
 ---
