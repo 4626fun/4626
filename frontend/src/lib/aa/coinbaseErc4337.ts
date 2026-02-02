@@ -126,6 +126,50 @@ function formatGasEstimate(estimate: any) {
   }
 }
 
+// Known error selectors for decoding revert reasons
+const KNOWN_ERROR_SELECTORS: Record<string, string> = {
+  '0x08c379a0': 'Error(string)',
+  '0x4e487b71': 'Panic(uint256)',
+  // Coinbase Smart Wallet errors
+  '0x82b42900': 'Unauthorized()',
+  // CreatorVaultDeployer errors
+  '0x30cd7471': 'NotOwner()',
+  '0xd92e233d': 'ZeroAddress()',
+  '0xb92e9c7a': 'InvalidPercent()',
+  '0x1375159e': 'InvalidCodeId()',
+  '0x02058db0': 'Phase1Missing()',
+  '0x585b9263': 'InvalidWeight()',
+  '0xe10fdfee': 'V3PoolMissing()',
+  '0x24c0a9e0': 'MissingInitialSqrtPriceX96()',
+  '0x18b789e6': 'AuctionAlreadyPending()',
+  '0x0fd83a8b': 'NoPendingAuction()',
+  '0x56a694d2': 'AuctionShareOFTMismatch()',
+  '0x8284e8bf': 'AuctionAmountMismatch()',
+  '0xf79c143b': 'Phase2Missing()',
+}
+
+function extractRevertInfo(e: unknown): { error: string; revertData?: Hex; errorName?: string } {
+  const errAny = e as any
+  const msg = e instanceof Error ? e.message : String(e ?? '')
+  const result: { error: string; revertData?: Hex; errorName?: string } = { error: msg }
+  
+  // Extract revert data from various error structures
+  const revertData = errAny?.cause?.cause?.data ?? errAny?.cause?.data ?? errAny?.data
+  if (revertData && typeof revertData === 'string' && revertData.startsWith('0x')) {
+    result.revertData = revertData as Hex
+    const selector = revertData.slice(0, 10).toLowerCase()
+    if (KNOWN_ERROR_SELECTORS[selector]) {
+      result.errorName = KNOWN_ERROR_SELECTORS[selector]
+    }
+  }
+  
+  // Extract error reason from viem's parsed errors
+  if (errAny?.cause?.reason) result.error = errAny.cause.reason
+  if (errAny?.shortMessage) result.error = errAny.shortMessage
+  
+  return result
+}
+
 async function logUserOpEstimate(params: {
   bundlerClient: any
   account: any
@@ -172,8 +216,16 @@ async function logUserOpEstimate(params: {
       logger.debug('[ERC-4337] estimateUserOperationGas', formatGasEstimate(estimate))
     }
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e ?? '')
-    logger.debug('[ERC-4337] estimateUserOperationGas failed', { error: msg })
+    const revertInfo = extractRevertInfo(e)
+    const errDetails: Record<string, unknown> = { 
+      error: revertInfo.error,
+      revertData: revertInfo.revertData,
+      errorName: revertInfo.errorName,
+    }
+    // Also include metaMessages if available (viem often includes helpful context)
+    const errAny = e as any
+    if (errAny?.metaMessages) errDetails.metaMessages = errAny.metaMessages
+    logger.debug('[ERC-4337] estimateUserOperationGas failed', errDetails)
   } finally {
     if (!originalAccount) {
       delete client.account
@@ -872,6 +924,140 @@ export async function sendCrossAppUserOperation(params: {
   }
 }
 
+/**
+ * Pre-flight simulation: test if the calls would succeed when executed from the smart wallet.
+ * This helps diagnose whether a UserOp failure is due to:
+ * 1. ERC-4337 / signature issues (simulation passes but UserOp fails)
+ * 2. Underlying call issues (simulation fails, meaning the contract call itself would revert)
+ * 
+ * Returns both the smart wallet execute simulation result AND a direct target call simulation.
+ * The direct simulation helps identify if the target contract would revert even with correct msg.sender.
+ */
+export async function simulateSmartWalletCalls(params: {
+  publicClient: PublicClientLike
+  smartWallet: Address
+  calls: Array<{ to: Address; value?: bigint; data?: Hex }>
+}): Promise<{ 
+  success: boolean
+  error?: string
+  revertData?: Hex
+  errorName?: string
+  directCallResult?: { success: boolean; error?: string; revertData?: Hex; errorName?: string }
+}> {
+  const { publicClient, smartWallet, calls } = params
+  const client = publicClient as any
+  
+  if (typeof client?.simulateContract !== 'function' && typeof client?.call !== 'function') {
+    return { success: true } // Can't simulate, assume OK
+  }
+  
+  // First, try to simulate the direct target call (as if smart wallet is msg.sender)
+  // This bypasses the smart wallet's authorization checks and tests just the target contract
+  let directCallResult: { success: boolean; error?: string; revertData?: Hex; errorName?: string } | undefined
+  if (calls.length === 1 && calls[0].data && typeof client?.call === 'function') {
+    const call = calls[0]
+    try {
+      await client.call({
+        to: call.to,
+        data: call.data,
+        value: call.value ?? 0n,
+        account: smartWallet, // Simulate as if smart wallet is the caller
+      })
+      directCallResult = { success: true }
+    } catch (e: unknown) {
+      directCallResult = { success: false, ...extractRevertInfo(e) }
+    }
+  }
+  
+  // Now try the full execute() simulation
+  // This might fail with "Unauthorized" because we're calling execute() without going through EntryPoint
+  const EXECUTE_ABI = [
+    {
+      type: 'function',
+      name: 'execute',
+      stateMutability: 'payable',
+      inputs: [
+        { name: 'target', type: 'address' },
+        { name: 'value', type: 'uint256' },
+        { name: 'data', type: 'bytes' },
+      ],
+      outputs: [],
+    },
+    {
+      type: 'function',
+      name: 'executeBatch',
+      stateMutability: 'payable',
+      inputs: [
+        {
+          name: 'calls',
+          type: 'tuple[]',
+          components: [
+            { name: 'target', type: 'address' },
+            { name: 'value', type: 'uint256' },
+            { name: 'data', type: 'bytes' },
+          ],
+        },
+      ],
+      outputs: [],
+    },
+  ] as const
+  
+  try {
+    if (typeof client?.simulateContract !== 'function') {
+      // If we can't simulate the full execute, return the direct call result
+      if (directCallResult) {
+        const { success, error, revertData, errorName } = directCallResult
+        return { success, error, revertData, errorName, directCallResult }
+      }
+      return { success: true }
+    }
+    
+    if (calls.length === 1) {
+      const call = calls[0]
+      await client.simulateContract({
+        address: smartWallet,
+        abi: EXECUTE_ABI,
+        functionName: 'execute',
+        args: [call.to, call.value ?? 0n, call.data ?? '0x'],
+        account: smartWallet, // Note: This may fail with Unauthorized since smartWallet isn't an owner of itself
+      })
+    } else {
+      const batchCalls = calls.map((c) => ({
+        target: c.to,
+        value: c.value ?? 0n,
+        data: c.data ?? '0x' as Hex,
+      }))
+      await client.simulateContract({
+        address: smartWallet,
+        abi: EXECUTE_ABI,
+        functionName: 'executeBatch',
+        args: [batchCalls],
+        account: smartWallet,
+      })
+    }
+    
+    return { success: true, directCallResult }
+  } catch (e: unknown) {
+    const revertInfo = extractRevertInfo(e)
+    
+    // If the execute() simulation failed with Unauthorized but direct call succeeded,
+    // that's expected - the direct call result is more relevant
+    if (revertInfo.errorName === 'Unauthorized()' && directCallResult?.success) {
+      return { 
+        success: true, 
+        directCallResult,
+        // Note: execute() failed but that's expected for simulation
+      }
+    }
+    
+    return { 
+      success: false, 
+      ...revertInfo,
+      directCallResult,
+    }
+  }
+}
+
 export async function sendCoinbaseSmartWalletUserOperation(params: {
   publicClient: PublicClientLike
   walletClient: WalletClientLike
@@ -882,8 +1068,9 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   version?: '1' | '1.1'
   userOpSignMode?: UserOpSignMode
   ownerIsContract?: boolean
+  skipPreflightSimulation?: boolean
 }): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
-  const { publicClient, walletClient, bundlerUrl, smartWallet, ownerAddress, calls, version = '1', userOpSignMode = 'auto', ownerIsContract: ownerIsContractOverride } = params
+  const { publicClient, walletClient, bundlerUrl, smartWallet, ownerAddress, calls, version = '1', userOpSignMode = 'auto', ownerIsContract: ownerIsContractOverride, skipPreflightSimulation } = params
   
   // Input validation
   if (!bundlerUrl) throw new Error('Missing bundler URL')
@@ -892,6 +1079,30 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   if (!publicClient) throw new Error('Missing public client')
   if (!walletClient) throw new Error('Missing wallet client')
   if (!calls || calls.length === 0) throw new Error('No calls provided')
+
+  // Pre-flight simulation: check if the underlying call would succeed
+  // This helps diagnose contract-level reverts vs ERC-4337 issues
+  if (!skipPreflightSimulation && AA_DEBUG) {
+    const simResult = await simulateSmartWalletCalls({ publicClient, smartWallet, calls })
+    if (!simResult.success) {
+      logger.warn('[ERC-4337] Pre-flight simulation FAILED - underlying call would revert', {
+        smartWallet,
+        callCount: calls.length,
+        error: simResult.error,
+        revertData: simResult.revertData,
+        errorName: simResult.errorName,
+        firstCallTo: calls[0]?.to,
+        firstCallData: calls[0]?.data?.slice(0, 10), // Just selector
+      })
+      // Don't throw here - let the actual UserOp attempt fail with full context
+      // This is just diagnostic logging
+    } else {
+      logger.debug('[ERC-4337] Pre-flight simulation passed', {
+        smartWallet,
+        callCount: calls.length,
+      })
+    }
+  }
 
   // Find owner index
   const { ownerIndex, ownerCount } = await findCoinbaseSmartWalletOwnerIndex({
@@ -976,7 +1187,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // - callGasLimit: Auto-estimated, but we don't override since batcher calls vary
   const verificationGasLimits = ownerIsContract
     ? [1_000_000n, 2_500_000n, 5_000_000n]
-    : [200_000n, 400_000n, 800_000n, 1_500_000n]
+    : [200_000n, 400_000n, 800_000n, 1_500_000n, 2_500_000n, 5_000_000n]
   const uniqueVerificationGasLimits = Array.from(new Set(verificationGasLimits))
   if (AA_DEBUG) {
     logger.debug('[ERC-4337] verificationGasLimit', {
@@ -989,6 +1200,23 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   let lastError: unknown = null
   let attemptedWithoutPaymaster = false
   const allowPaymasterFallback = import.meta.env.VITE_ALLOW_PAYMASTER_FALLBACK === 'true'
+  let smartWalletBalance: bigint | null = null
+  try {
+    if (typeof (publicClient as any)?.getBalance === 'function') {
+      smartWalletBalance = await (publicClient as any).getBalance({ address: smartWallet })
+      if (AA_DEBUG) {
+        logger.debug('[ERC-4337] smart wallet balance', {
+          smartWallet,
+          balance: formatGasValue(smartWalletBalance),
+        })
+      }
+    }
+  } catch (e: unknown) {
+    if (AA_DEBUG) {
+      const msg = e instanceof Error ? e.message : String(e ?? '')
+      logger.debug('[ERC-4337] Failed to read smart wallet balance', { smartWallet, error: msg })
+    }
+  }
   const sendWithVerificationGasLimit = async (verificationGasLimit: bigint, usePaymaster: boolean) => {
     await logUserOpEstimate({
       bundlerClient,
@@ -1042,6 +1270,8 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   await attemptSend(true)
 
   const shouldFallbackWithoutPaymaster = (error: unknown): boolean => {
+    const hasPrefundBalance = typeof smartWalletBalance === 'bigint' && smartWalletBalance > 0n
+    if (isPaymasterUnavailableError(error) && hasPrefundBalance) return true
     if (!allowPaymasterFallback) return false
     if (isPaymasterStakeError(error) || isPaymasterUnavailableError(error)) return true
     if (!ownerIsContract && shouldRetryVerificationGas(error)) return true
@@ -1050,7 +1280,15 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
 
   if (lastError && shouldFallbackWithoutPaymaster(lastError)) {
     attemptedWithoutPaymaster = true
-    logger.warn('[ERC-4337] Retrying without sponsorship')
+    const hasPrefundBalance = typeof smartWalletBalance === 'bigint' && smartWalletBalance > 0n
+    if (isPaymasterUnavailableError(lastError) && !allowPaymasterFallback && hasPrefundBalance) {
+      logger.warn('[ERC-4337] Paymaster unavailable; retrying with smart wallet balance', {
+        smartWallet,
+        balance: formatGasValue(smartWalletBalance),
+      })
+    } else {
+      logger.warn('[ERC-4337] Retrying without sponsorship')
+    }
     await attemptSend(false)
   }
 
@@ -1095,6 +1333,17 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     if (lc.includes('aa10') || lc.includes('sender already constructed')) {
       throw new Error('Smart wallet already exists at this address.')
     }
+    if (isPaymasterUnavailableError(lastError)) {
+      if (typeof smartWalletBalance === 'bigint' && smartWalletBalance <= 0n) {
+        throw new Error(
+          'Paymaster unavailable and smart wallet has no ETH for fallback. ' +
+            'Add ETH to the smart wallet or fix the paymaster configuration.'
+        )
+      }
+      throw new Error(
+        'Paymaster unavailable. Check CDP paymaster configuration, sponsorship limits, and allowlist, then retry.'
+      )
+    }
     if (lc.includes('aa40') || lc.includes('verificationgaslimit')) {
       throw new Error(
         'Signature verification used more gas than estimated. ' +
@@ -1103,11 +1352,6 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     }
     if (lc.includes('aa41') || lc.includes('over paymasterverificationgaslimit')) {
       throw new Error('Paymaster verification gas limit exceeded. Please try again.')
-    }
-    if (isPaymasterUnavailableError(lastError)) {
-      throw new Error(
-        'Paymaster unavailable. Check CDP paymaster configuration, sponsorship limits, and allowlist, then retry.'
-      )
     }
     if (lc.includes('banned opcode') || lc.includes('stake/unstake delay') || lc.includes('unstake delay too low')) {
       throw new Error(

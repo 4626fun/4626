@@ -47,6 +47,7 @@ import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { 
   sendCoinbaseSmartWalletUserOperation, 
+  simulateSmartWalletCalls,
   ERC4337_ENTRYPOINT_V06,
   assertEntryPointV06,
 } from '@/lib/aa/coinbaseErc4337'
@@ -75,6 +76,7 @@ const DEFAULT_MIN_COIN_AGE_DAYS = 30
 const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
 const BASE_CHAIN_ID_HEX = `0x${base.id.toString(16)}`
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}`
+const MAX_UINT256 = (1n << 256n) - 1n
 
 function isDebugEnabled(): boolean {
   if (import.meta.env.VITE_DEBUG_LOGS === 'true') return true
@@ -124,17 +126,30 @@ async function findCreate2SaltForSuffix(params: {
   suffix: string
   maxTries: number
   yieldEvery?: number
+  startAt?: bigint
+  isAddressDeployed?: (addr: Address) => Promise<boolean>
 }): Promise<Hex | null> {
   const suffix = normalizeHexSuffix(params.suffix)
   if (!suffix) return null
   const bytecodeHash = keccak256(params.initCode)
   const maxTries = Math.max(1, Math.floor(params.maxTries))
   const yieldEvery = Math.max(256, Math.floor(params.yieldEvery ?? 4096))
+  const startAt = typeof params.startAt === 'bigint' ? params.startAt : 0n
 
   for (let i = 0; i < maxTries; i += 1) {
-    const salt = toHex(BigInt(i), { size: 32 }) as Hex
+    const salt = toHex((startAt + BigInt(i)) & MAX_UINT256, { size: 32 }) as Hex
     const addr = getCreate2Address({ from: params.create2Deployer, salt, bytecodeHash })
     if (addr.slice(-suffix.length).toLowerCase() === suffix) {
+      if (params.isAddressDeployed) {
+        try {
+          const deployed = await params.isAddressDeployed(addr)
+          if (deployed) {
+            continue
+          }
+        } catch {
+          // If we can't check, still allow this salt.
+        }
+      }
       return salt
     }
     if (i > 0 && i % yieldEvery === 0) {
@@ -1111,10 +1126,14 @@ function DeployVaultBatcher({
     }
   }, [chainId, switchChainAsync])
 
-  const ensureProviderOnBase = useCallback(async (provider: any, label: string) => {
+  const ensureProviderOnBase = useCallback(
+    async (provider: any, label: string, opts?: { allowSwitch?: boolean }) => {
     if (!provider?.request) return
     const current = await provider.request({ method: 'eth_chainId' }).catch(() => null)
     if (typeof current === 'string' && current.toLowerCase() !== BASE_CHAIN_ID_HEX) {
+      if (opts?.allowSwitch === false) {
+        throw new Error(`Please switch ${label} to Base network to continue.`)
+      }
       try {
         await provider.request({
           method: 'wallet_switchEthereumChain',
@@ -1124,7 +1143,9 @@ function DeployVaultBatcher({
         throw new Error(`Please switch ${label} to Base network to continue.`)
       }
     }
-  }, [])
+    },
+    [],
+  )
 
   const smartWalletAddrForAuth = useMemo(() => {
     try {
@@ -1492,15 +1513,15 @@ function DeployVaultBatcher({
         initCode: DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex,
       })
 
-      // IMPORTANT: The onchain `CreatorVaultBatcher` normalizes `shareSymbol` to lowercase
-      // when constructing the ShareOFT + Oracle init code (for deterministic addresses).
-      // We must mirror that here, otherwise `expected.*` (especially `expectedGauge`) will be wrong
-      // and we’ll set the coin payoutRecipient to an address that will never be deployed.
-      const shareSymbolDeploy = shareSymbol.toLowerCase()
+      // IMPORTANT: The onchain `CreatorVaultBatcher` uses *lowercase* symbols for salts + oracle wiring,
+      // but uses *uppercase* symbols for ShareOFT metadata. We must mirror both to keep expected
+      // addresses deterministic (especially for ShareOFT + gauge + oracle predictions).
+      const shareSymbolLower = shareSymbol.toLowerCase()
+      const shareSymbolUpper = shareSymbol.toUpperCase()
 
       const shareOftArgs = encodeAbiParameters(parseAbiParameters('string,string,address,address'), [
         shareName,
-        shareSymbolDeploy,
+        shareSymbolUpper,
         oftBootstrapRegistry,
         tempOwner,
       ])
@@ -1515,11 +1536,23 @@ function DeployVaultBatcher({
       }
       if (!shareOftSaltOverrideUsed && shareOftVanitySuffix && supportsPhase1WithSalt) {
         const initCodeHash = keccak256(shareOftInitCode)
+        const vanitySeed = keccak256(
+          encodePacked(['string', 'address', 'address', 'string'], [
+            'CreatorShareOFT:vanity',
+            creatorToken,
+            owner,
+            deploymentVersion,
+          ]),
+        )
+        const vanityStart = BigInt(vanitySeed)
         const vanityKey = [
           create2Deployer.toLowerCase(),
           initCodeHash.toLowerCase(),
           shareOftVanitySuffix,
           String(shareOftVanityMaxTries),
+          deploymentVersion,
+          creatorToken.toLowerCase(),
+          owner.toLowerCase(),
         ].join(':')
         const cached = shareOftVanityCacheRef.current
         if (cached?.key === vanityKey) {
@@ -1530,6 +1563,11 @@ function DeployVaultBatcher({
             initCode: shareOftInitCode,
             suffix: shareOftVanitySuffix,
             maxTries: shareOftVanityMaxTries,
+            startAt: vanityStart,
+            isAddressDeployed: async (addr) => {
+              const bc = await publicClient!.getBytecode({ address: addr })
+              return !!bc && bc !== '0x'
+            },
           })
           if (!found) {
             throw new Error(
@@ -1597,7 +1635,7 @@ function DeployVaultBatcher({
       const oracleArgs = encodeAbiParameters(parseAbiParameters('address,address,string,address'), [
         registryAddress,
         chainlinkEthUsd,
-        shareSymbolDeploy,
+        shareSymbolLower,
         tempOwner,
       ])
       const oracleInitCode = concatHex([DEPLOY_BYTECODE.CreatorOracle as Hex, oracleArgs])
@@ -1786,8 +1824,21 @@ function DeployVaultBatcher({
             batcher: batcherAddress,
           })
         }
-        const phase1Any = phase1ExistsQuery.data?.anyDeployed ?? false
-        const phase1All = phase1ExistsQuery.data?.allDeployed ?? false
+        const phase1State = await (async () => {
+          try {
+            const addrs = [expected!.vault, expected!.wrapper, expected!.shareOFT] as const
+            const codes = await Promise.all(addrs.map((a) => publicClient!.getBytecode({ address: a })))
+            const deployed = codes.map((c) => !!c && c !== '0x')
+            return { anyDeployed: deployed.some(Boolean), allDeployed: deployed.every(Boolean) } as const
+          } catch {
+            return {
+              anyDeployed: phase1ExistsQuery.data?.anyDeployed ?? false,
+              allDeployed: phase1ExistsQuery.data?.allDeployed ?? false,
+            } as const
+          }
+        })()
+        const phase1Any = phase1State.anyDeployed
+        const phase1All = phase1State.allDeployed
         if (phase1Any && !phase1All) {
           throw new Error(
             `Phase 1 is partially deployed for this creator + deployment version (${deploymentVersion}). ` +
@@ -2140,8 +2191,47 @@ function DeployVaultBatcher({
           owner,
           deploymentVersion,
           batcher: batcherAddress,
-          phases: { phase3: phase3Calls.length > 0, phase4: phase4Calls.length > 0 },
+          phases: { phase1: phase1Calls.length, phase2: phase2Calls.length, phase3: phase3Calls.length, phase4: phase4Calls.length },
         })
+
+        // Debug helper: expose phase1 call data on window for console testing
+        if (typeof window !== 'undefined' && phase1Calls.length > 0) {
+          const debugInfo = {
+            phase1Call: phase1Calls[0],
+            owner,
+            batcherAddress,
+            creatorToken,
+            deploymentVersion,
+            testDirectCall: async () => {
+              if (!publicClient) throw new Error('No publicClient')
+              const call = phase1Calls[0]
+              console.log('[DEBUG] Testing direct eth_call to batcher...', {
+                to: call.target,
+                data: call.data.slice(0, 10),
+                from: owner,
+              })
+              try {
+                const result = await (publicClient as any).call({
+                  to: call.target,
+                  data: call.data,
+                  account: owner,
+                })
+                console.log('[DEBUG] Direct call SUCCESS', result)
+                return { success: true, result }
+              } catch (e: any) {
+                console.error('[DEBUG] Direct call FAILED', {
+                  error: e?.message,
+                  shortMessage: e?.shortMessage,
+                  cause: e?.cause,
+                  data: e?.cause?.data ?? e?.data,
+                })
+                return { success: false, error: e }
+              }
+            },
+          }
+          ;(window as any).__cvDeployDebug = debugInfo
+          console.log('[DeployVault] Debug helper available: window.__cvDeployDebug.testDirectCall()')
+        }
 
         // Helper to convert calls format
         const toCalls = (calls: Array<{ target: Address; value: bigint; data: Hex }>) =>
@@ -2153,6 +2243,15 @@ function DeployVaultBatcher({
           opts?: { noSplit?: boolean; segment?: string },
         ) => {
           const logPhaseLabel = opts?.segment ? `${phaseLabel}.${opts.segment}` : phaseLabel
+          const shouldPreferEmbeddedEoaSigner =
+            embeddedEoaIsCanonicalOwner && embeddedPrivyWallet && embeddedPrivyEoaAddress
+          if (shouldPreferEmbeddedEoaSigner && !preferEmbeddedEoaRef.current) {
+            preferEmbeddedEoaRef.current = true
+            logger.info('[DeployVault] Preferring embedded EOA signer to avoid smart-wallet paymaster failures', {
+              canonicalSmartWallet,
+              embeddedPrivyEoaAddress,
+            })
+          }
           const batcherAddressLc = getAddress(batcherAddress).toLowerCase()
           const batcherCallCount = calls.reduce((acc, c) => {
             return getAddress(c.target).toLowerCase() === batcherAddressLc ? acc + 1 : acc
@@ -2217,6 +2316,91 @@ function DeployVaultBatcher({
               await sendPhaseCalls(otherCalls, phaseLabel, { noSplit: true, segment: configSegment })
               return
             }
+          }
+
+          // Pre-flight simulation: check if the underlying call would succeed
+          // This helps diagnose contract-level reverts vs ERC-4337 issues
+          if (canonicalSmartWallet && publicClient) {
+            logger.info(`[DeployVault] ${logPhaseLabel} running pre-flight simulation`, {
+              smartWallet: canonicalSmartWallet,
+              callCount: calls.length,
+              firstCallTo: calls[0]?.target,
+              firstCallSelector: calls[0]?.data?.slice(0, 10),
+            })
+            try {
+              const simResult = await simulateSmartWalletCalls({
+                publicClient: publicClient as any,
+                smartWallet: canonicalSmartWallet,
+                calls: toCalls(calls),
+              })
+              if (!simResult.success) {
+                logger.error(`[DeployVault] ${logPhaseLabel} pre-flight simulation FAILED`, {
+                  smartWallet: canonicalSmartWallet,
+                  callCount: calls.length,
+                  error: simResult.error,
+                  revertData: simResult.revertData,
+                  errorName: simResult.errorName,
+                  directCallResult: simResult.directCallResult,
+                  firstCallTo: calls[0]?.target,
+                  firstCallSelector: calls[0]?.data?.slice(0, 10),
+                })
+                // Provide a more helpful error message based on the detected error
+                if (simResult.errorName) {
+                  const errorMessages: Record<string, string> = {
+                    'NotOwner()': 'The batcher requires msg.sender == owner, but the smart wallet may not be recognized as the caller. Check owner address and ERC-4337 setup.',
+                    'ZeroAddress()': 'One of the required addresses is zero. Check creator token, owner, or other parameters.',
+                    'InvalidCodeId()': 'Bytecode not registered in the bytecode store. Run the bytecode registration script first.',
+                    'Phase1Missing()': 'Phase 1 contracts must be deployed before Phase 2. Deploy Phase 1 first.',
+                    'Phase2Missing()': 'Phase 2 contracts must be deployed before finalization.',
+                    'InvalidPercent()': 'Auction percent must be 0-100.',
+                    'InvalidWeight()': 'Strategy weights must be valid (0-10000 bps).',
+                    'V3PoolMissing()': 'Uniswap V3 pool creation failed.',
+                    'MissingInitialSqrtPriceX96()': 'V3 pool needs initial price to be set.',
+                    'AuctionAlreadyPending()': 'A deferred auction already exists for this deployment.',
+                    'NoPendingAuction()': 'No deferred auction found to launch.',
+                  }
+                  const helpText = errorMessages[simResult.errorName] ?? `Contract reverted with: ${simResult.errorName}`
+                  throw new Error(`${logPhaseLabel} would revert: ${helpText}`)
+                }
+                // If we have directCallResult with an error, show that too
+                if (simResult.directCallResult && !simResult.directCallResult.success) {
+                  logger.error(`[DeployVault] ${logPhaseLabel} direct call simulation also failed`, {
+                    error: simResult.directCallResult.error,
+                    revertData: simResult.directCallResult.revertData,
+                    errorName: simResult.directCallResult.errorName,
+                  })
+                  if (simResult.directCallResult.errorName) {
+                    const errorMessages: Record<string, string> = {
+                      'NotOwner()': 'The batcher requires msg.sender == owner. The smart wallet address must match the owner parameter.',
+                      'ZeroAddress()': 'One of the required addresses is zero.',
+                      'InvalidCodeId()': 'Bytecode not registered. Run bytecode registration first.',
+                      'Phase1Missing()': 'Phase 1 contracts must be deployed first.',
+                      'Phase2Missing()': 'Phase 2 contracts must be deployed first.',
+                    }
+                    const helpText = errorMessages[simResult.directCallResult.errorName] ?? `Contract reverted with: ${simResult.directCallResult.errorName}`
+                    throw new Error(`${logPhaseLabel} would revert: ${helpText}`)
+                  }
+                }
+                // Don't throw for unknown errors - let the UserOp attempt proceed to get more context
+              } else {
+                logger.info(`[DeployVault] ${logPhaseLabel} pre-flight simulation PASSED`, {
+                  directCallResult: simResult.directCallResult?.success ? 'passed' : 'failed',
+                })
+              }
+            } catch (simError) {
+              // If the simulation itself throws (not the contract reverting), log but continue
+              if (simError instanceof Error && simError.message.includes('would revert')) {
+                throw simError // Re-throw our formatted error
+              }
+              logger.warn(`[DeployVault] ${logPhaseLabel} pre-flight simulation error`, {
+                error: simError instanceof Error ? simError.message : String(simError),
+              })
+            }
+          } else {
+            logger.warn(`[DeployVault] ${logPhaseLabel} skipping pre-flight simulation`, {
+              hasCanonicalSmartWallet: !!canonicalSmartWallet,
+              hasPublicClient: !!publicClient,
+            })
           }
 
           // PATH 1: Direct Coinbase Wallet connection
@@ -2434,7 +2618,13 @@ function DeployVaultBatcher({
                 lc.includes('signature check failed') ||
                 lc.includes('signature verification used more gas') ||
                 lc.includes('verificationgaslimit') ||
-                lc.includes('aa40')
+                lc.includes('aa40') ||
+                lc.includes('banned opcode') ||
+                lc.includes('stake/unstake delay') ||
+                lc.includes('unstake delay too low') ||
+                lc.includes('total gas used by the user operation') ||
+                (lc.includes('total gas used') && lc.includes('allowed limit')) ||
+                lc.includes('invalid fields')
               if (shouldFallback) {
                 preferEmbeddedEoaRef.current = true
                 logger.warn('[DeployVault] Privy smart wallet signer failed; falling back to embedded EOA', {
@@ -2483,7 +2673,7 @@ function DeployVaultBatcher({
               throw new Error('Embedded wallet provider not available')
             }
 
-            await ensureProviderOnBase(embeddedProvider, 'Privy embedded wallet')
+            await ensureProviderOnBase(embeddedProvider, 'Privy embedded wallet', { allowSwitch: false })
             
             // Verify the provider's account matches our expected address
             const accounts = await embeddedProvider.request({ method: 'eth_accounts' }) as string[]
