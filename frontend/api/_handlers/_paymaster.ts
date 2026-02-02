@@ -511,6 +511,23 @@ const ERC4626_ASSET_ABI = [
   { type: 'function', name: 'asset', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
 
+const CREATOR_VAULT_BATCHER_PHASE1_EVENT = [
+  {
+    type: 'event',
+    name: 'Phase1Deployed',
+    inputs: [
+      { indexed: true, name: 'creatorToken', type: 'address' },
+      { indexed: true, name: 'owner', type: 'address' },
+      { indexed: false, name: 'oftBootstrapRegistry', type: 'address' },
+      { indexed: false, name: 'vault', type: 'address' },
+      { indexed: false, name: 'wrapper', type: 'address' },
+      { indexed: false, name: 'shareOFT', type: 'address' },
+    ],
+  },
+] as const
+
+const ZERO_BYTES32 = `0x${'0'.repeat(64)}` as const
+
 const BASE_WETH = getAddress(`0x${'4200000000000000000000000000000000000006'}`)
 const BASE_SWAP_ROUTER = getAddress(`0x${'2626664c2603336E57B271c5C0b26F421741e481'}`)
 const PAYOUT_ROUTER_SALT_TAG = 'CreatorVault:PayoutRouter' as const
@@ -1106,12 +1123,11 @@ async function validateInnerCalls(params: {
   const bytecodeStore = getAddress(bytecodeStoreRaw)
 
   // In Phase 2, validate the vault address via CREATE2 inputs (salt + codeId + constructor args).
-  // This avoids hardcoding runtime hashes and still prevents arbitrary contracts.
+  // If codeIds are missing, fall back to the Phase1Deployed event for this creator/owner.
   let expectedBurnStream: Address | null = null
   let expectedPayoutRouter: Address | null = null
   if (mode === 'deploy_phase2') {
     if (!expectedVault) throw new Error('missing_vault')
-    if (!expectedCodeIds?.vault || !expectedVersion) throw new Error('missing_code_ids')
     const client = await getBaseClient()
     const vaultCode = (await client.getBytecode({ address: expectedVault })) as Hex | undefined
     if (!vaultCode || vaultCode === '0x') throw new Error('vault_not_deployed')
@@ -1127,42 +1143,66 @@ async function validateInnerCalls(params: {
       client.readContract({ address: expectedVault, abi: ERC20_METADATA_ABI, functionName: 'name' }),
       client.readContract({ address: expectedVault, abi: ERC20_METADATA_ABI, functionName: 'symbol' }),
     ])) as [string, string]
-    const creationCode = (await client.readContract({
-      address: bytecodeStore,
-      abi: BYTECODE_STORE_ABI,
-      functionName: 'get',
-      args: [expectedCodeIds.vault],
-    })) as Hex
-    const constructorArgs = encodeAbiParameters(
-      [
-        { type: 'address', name: 'creatorToken' },
-        { type: 'address', name: 'owner' },
-        { type: 'string', name: 'name' },
-        { type: 'string', name: 'symbol' },
-      ],
-      [getAddress(expectedCreatorToken as Address), getAddress(creatorVaultBatcher), vaultName, vaultSymbol],
-    )
-    const initCodeHash = keccak256(concatHex([creationCode, constructorArgs]))
-    const baseSalt = keccak256(
-      encodePacked(
-        ['address', 'address', 'uint256', 'string', 'string'],
-        [getAddress(expectedCreatorToken as Address), params.sender, BigInt(BASE_CHAIN_ID), 'CreatorVault:deploy:', expectedVersion],
-      ),
-    )
-    const vaultSalt = keccak256(encodePacked(['bytes32', 'string'], [baseSalt, 'vault']))
-    const expectedVaultFromCreate2 = getCreate2Address({
-      from: create2DeployerFromStore,
-      salt: vaultSalt,
-      bytecodeHash: initCodeHash,
-    })
-    if (expectedVaultFromCreate2.toLowerCase() !== expectedVault.toLowerCase()) {
-      logger.warn('[Paymaster] vault_address_mismatch', {
-        expected: expectedVaultFromCreate2,
-        actual: expectedVault,
-        creatorToken: expectedCreatorToken,
-        sender: params.sender,
+    let vaultValidated = false
+    const canValidateViaCreate2 =
+      !!expectedCodeIds?.vault && expectedCodeIds.vault !== ZERO_BYTES32 && typeof expectedVersion === 'string'
+    if (canValidateViaCreate2) {
+      const creationCode = (await client.readContract({
+        address: bytecodeStore,
+        abi: BYTECODE_STORE_ABI,
+        functionName: 'get',
+        args: [expectedCodeIds.vault],
+      })) as Hex
+      const constructorArgs = encodeAbiParameters(
+        [
+          { type: 'address', name: 'creatorToken' },
+          { type: 'address', name: 'owner' },
+          { type: 'string', name: 'name' },
+          { type: 'string', name: 'symbol' },
+        ],
+        [getAddress(expectedCreatorToken as Address), getAddress(creatorVaultBatcher), vaultName, vaultSymbol],
+      )
+      const initCodeHash = keccak256(concatHex([creationCode, constructorArgs]))
+      const baseSalt = keccak256(
+        encodePacked(
+          ['address', 'address', 'uint256', 'string', 'string'],
+          [getAddress(expectedCreatorToken as Address), params.sender, BigInt(BASE_CHAIN_ID), 'CreatorVault:deploy:', expectedVersion],
+        ),
+      )
+      const vaultSalt = keccak256(encodePacked(['bytes32', 'string'], [baseSalt, 'vault']))
+      const expectedVaultFromCreate2 = getCreate2Address({
+        from: create2DeployerFromStore,
+        salt: vaultSalt,
+        bytecodeHash: initCodeHash,
       })
-      throw new Error(`vault_address_mismatch(expected=${expectedVaultFromCreate2})`)
+      vaultValidated = expectedVaultFromCreate2.toLowerCase() === expectedVault.toLowerCase()
+      if (!vaultValidated) {
+        logger.warn('[Paymaster] vault_address_mismatch', {
+          expected: expectedVaultFromCreate2,
+          actual: expectedVault,
+          creatorToken: expectedCreatorToken,
+          sender: params.sender,
+        })
+      }
+    }
+
+    if (!vaultValidated) {
+      const phase1Logs = await client
+        .getLogs({
+          address: creatorVaultBatcher,
+          event: CREATOR_VAULT_BATCHER_PHASE1_EVENT[0],
+          args: { creatorToken: expectedCreatorToken as Address, owner: params.sender },
+          fromBlock: 0n,
+          toBlock: 'latest',
+        })
+        .catch(() => [])
+      const matchedPhase1 = phase1Logs.some((log) => {
+        const vault = log.args?.vault
+        return vault && getAddress(vault) === expectedVault
+      })
+      if (!matchedPhase1) {
+        throw new Error('vault_address_mismatch(phase1_event_miss)')
+      }
     }
 
     const burnSalt = expectedBurnStreamSalt({ creatorToken: expectedCreatorToken, sender: params.sender })
