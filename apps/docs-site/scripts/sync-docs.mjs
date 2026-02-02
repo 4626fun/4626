@@ -79,6 +79,56 @@ function extractH1Title(content) {
 }
 
 /**
+ * Fix broken links in generated API docs
+ * 
+ * forge doc generates links like:
+ *   /contracts/interfaces/IStrategy.sol/interface.IStrategy.md
+ * 
+ * But in Docusaurus, these pages are at:
+ *   /api/contracts/contracts/interfaces/IStrategy.sol/interface.IStrategy
+ * 
+ * This function transforms links to work correctly.
+ */
+function fixGeneratedLinks(content, sourceType) {
+  if (sourceType !== 'contracts') {
+    return content;
+  }
+  
+  let fixed = content;
+  
+  // Fix absolute links to /contracts/... -> relative links
+  // These are broken because the actual path is /api/contracts/contracts/...
+  // Convert to relative paths that work within the api/contracts section
+  
+  // Pattern: [text](/contracts/path/to/file.md) -> [text](../../../path/to/file)
+  // We convert to relative because the depth varies
+  fixed = fixed.replace(
+    /\]\(\/contracts\/([^)]+)\.md\)/g,
+    (match, linkPath) => {
+      // Remove .md extension for Docusaurus
+      return `](/api/contracts/contracts/${linkPath})`;
+    }
+  );
+  
+  // Fix directory links like /contracts/interfaces -> /api/contracts/contracts/interfaces
+  fixed = fixed.replace(
+    /\]\(\/contracts\/([^)]+)\)/g,
+    (match, linkPath) => {
+      // Skip if already fixed (has /api/ prefix) or is an anchor
+      if (linkPath.startsWith('api/') || linkPath.startsWith('#')) {
+        return match;
+      }
+      return `](/api/contracts/contracts/${linkPath})`;
+    }
+  );
+  
+  // Fix LICENSE links (common in forge doc output)
+  fixed = fixed.replace(/\]\(LICENSE\)/g, '](https://github.com/wenakita/4626/blob/main/LICENSE)');
+  
+  return fixed;
+}
+
+/**
  * Normalize frontmatter for a markdown file
  */
 function normalizeFrontmatter(content, relativePath, sidebarPosition, sourceType) {
@@ -101,7 +151,10 @@ function normalizeFrontmatter(content, relativePath, sidebarPosition, sourceType
     parsed.data.generated = true;
   }
   
-  return matter.stringify(parsed.content, parsed.data);
+  // Fix broken links in generated docs
+  const fixedContent = fixGeneratedLinks(parsed.content, sourceType);
+  
+  return matter.stringify(fixedContent, parsed.data);
 }
 
 /**
