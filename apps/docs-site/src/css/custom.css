@@ -8,6 +8,7 @@
  * - Card: #0A0A0A (Deep Charcoal)
  */
 
+/* Light mode defaults */
 :root {
   /* Primary - Electric Blue */
   --ifm-color-primary: #0052FF;
@@ -23,27 +24,39 @@
   --docusaurus-highlighted-code-line-bg: rgba(0, 82, 255, 0.1);
 
   /* Links */
-  --ifm-link-color: #3B82F6;
-  --ifm-link-hover-color: #0052FF;
+  --ifm-link-color: #0052FF;
+  --ifm-link-hover-color: #004AD9;
 
-  /* Navbar */
-  --ifm-navbar-background-color: #0A0A0A;
-  --ifm-navbar-link-color: #EDEDED;
+  /* Light mode backgrounds */
+  --ifm-background-color: #ffffff;
+  --ifm-background-surface-color: #f8f9fa;
+  
+  /* Light mode text */
+  --ifm-font-color-base: #1c1e21;
+  --ifm-font-color-secondary: #525860;
+
+  /* Navbar - light */
+  --ifm-navbar-background-color: #ffffff;
+  --ifm-navbar-link-color: #1c1e21;
   --ifm-navbar-link-hover-color: #0052FF;
 
-  /* Footer */
-  --ifm-footer-background-color: #020202;
-  --ifm-footer-color: #666666;
-  --ifm-footer-link-color: #EDEDED;
+  /* Footer - light */
+  --ifm-footer-background-color: #f8f9fa;
+  --ifm-footer-color: #525860;
+  --ifm-footer-link-color: #1c1e21;
   --ifm-footer-link-hover-color: #0052FF;
 
-  /* Sidebar */
-  --ifm-menu-color: #EDEDED;
+  /* Sidebar - light */
+  --ifm-menu-color: #1c1e21;
   --ifm-menu-color-active: #0052FF;
   --ifm-menu-color-background-active: rgba(0, 82, 255, 0.1);
+
+  /* Borders - light */
+  --ifm-toc-border-color: #e3e3e3;
+  --ifm-hr-border-color: #e3e3e3;
 }
 
-/* Dark mode - primary palette */
+/* Dark mode */
 [data-theme='dark'] {
   --ifm-color-primary: #3B82F6;
   --ifm-color-primary-dark: #2563EB;
@@ -61,7 +74,27 @@
 
   /* Text colors */
   --ifm-font-color-base: #EDEDED;
-  --ifm-font-color-secondary: #666666;
+  --ifm-font-color-secondary: #999999;
+
+  /* Links */
+  --ifm-link-color: #3B82F6;
+  --ifm-link-hover-color: #60A5FA;
+
+  /* Navbar */
+  --ifm-navbar-background-color: #0A0A0A;
+  --ifm-navbar-link-color: #EDEDED;
+  --ifm-navbar-link-hover-color: #3B82F6;
+
+  /* Footer */
+  --ifm-footer-background-color: #020202;
+  --ifm-footer-color: #999999;
+  --ifm-footer-link-color: #EDEDED;
+  --ifm-footer-link-hover-color: #3B82F6;
+
+  /* Sidebar */
+  --ifm-menu-color: #EDEDED;
+  --ifm-menu-color-active: #3B82F6;
+  --ifm-menu-color-background-active: rgba(59, 130, 246, 0.1);
 
   /* Borders */
   --ifm-toc-border-color: #1F1F1F;
@@ -73,21 +106,21 @@
 
 /* Navbar styling */
 .navbar {
-  border-bottom: 1px solid #1F1F1F;
+  border-bottom: 1px solid var(--ifm-toc-border-color);
 }
 
 .navbar__title {
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 
 /* Footer styling */
 .footer {
-  border-top: 1px solid #1F1F1F;
+  border-top: 1px solid var(--ifm-toc-border-color);
 }
 
 .footer__title {
-  color: #EDEDED;
+  color: var(--ifm-font-color-base);
 }
 
 /* Sidebar styling */
@@ -127,9 +160,19 @@ th, td {
   background-color: #0A0A0A;
 }
 
+th {
+  background-color: var(--ifm-background-surface-color);
+}
+
 /* Mermaid diagram backgrounds */
 [data-theme='dark'] .docusaurus-mermaid-container {
   background-color: #0A0A0A;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.docusaurus-mermaid-container {
+  background-color: var(--ifm-background-surface-color);
   border-radius: 8px;
   padding: 1rem;
 }
