@@ -67,6 +67,7 @@ const DEFAULT_AUCTION_PERCENT = 50
 const DEFAULT_CCA_DURATION_BLOCKS = 302_400n // ~7 days on Base at ~2s blocks (must match CCALaunchStrategy defaultDuration)
 const DEFAULT_SHARE_OFT_VANITY_SUFFIX = '4626'
 const DEFAULT_SHARE_OFT_VANITY_MAX_TRIES = 1_000_000
+const BATCHER_PHASE1_WITH_SALT_SELECTOR = '297cb1e6'
 
 // Minimum age for a Creator Coin before allowing vault deployment.
 // Rationale: reduce launch-manipulation surface area on brand new coins with thin/no trading history.
@@ -1166,6 +1167,17 @@ function DeployVaultBatcher({
     tx3?: Hex
     tx4?: Hex
   }>({})
+  const shareOftVanityCacheRef = useRef<{ key: string; salt: Hex } | null>(null)
+  const ensurePaymasterSession = useCallback(async () => {
+    if (!getAccessToken) return
+    try {
+      const token = await getAccessToken()
+      if (!token || typeof siwe?.signInWithPrivyToken !== 'function') return
+      await siwe.signInWithPrivyToken(token)
+    } catch {
+      // If we can't bridge, we still let the paymaster decide.
+    }
+  }, [getAccessToken, siwe])
   const switchAuthLabel = typeof switchAuthCta?.label === 'string' && switchAuthCta.label.trim().length > 0 ? switchAuthCta.label.trim() : null
 
   const lastAuthAtMs = useMemo(() => {
@@ -1484,19 +1496,32 @@ function DeployVaultBatcher({
       const derivedShareOftSalt = deriveShareOftSalt({ owner, shareSymbol, version: deploymentVersion })
       let shareOftSaltOverrideUsed = shareOftSaltOverride
       if (!shareOftSaltOverrideUsed && shareOftVanitySuffix) {
-        const found = await findCreate2SaltForSuffix({
-          create2Deployer,
-          initCode: shareOftInitCode,
-          suffix: shareOftVanitySuffix,
-          maxTries: shareOftVanityMaxTries,
-        })
-        if (!found) {
-          throw new Error(
-            `Unable to find ShareOFT vanity suffix "${shareOftVanitySuffix}" in ${shareOftVanityMaxTries.toLocaleString()} tries. ` +
-              'Increase VITE_SHARE_OFT_VANITY_MAX_TRIES and retry.',
-          )
+        const initCodeHash = keccak256(shareOftInitCode)
+        const vanityKey = [
+          create2Deployer.toLowerCase(),
+          initCodeHash.toLowerCase(),
+          shareOftVanitySuffix,
+          String(shareOftVanityMaxTries),
+        ].join(':')
+        const cached = shareOftVanityCacheRef.current
+        if (cached?.key === vanityKey) {
+          shareOftSaltOverrideUsed = cached.salt
+        } else {
+          const found = await findCreate2SaltForSuffix({
+            create2Deployer,
+            initCode: shareOftInitCode,
+            suffix: shareOftVanitySuffix,
+            maxTries: shareOftVanityMaxTries,
+          })
+          if (!found) {
+            throw new Error(
+              `Unable to find ShareOFT vanity suffix "${shareOftVanitySuffix}" in ${shareOftVanityMaxTries.toLocaleString()} tries. ` +
+                'Increase VITE_SHARE_OFT_VANITY_MAX_TRIES and retry.',
+            )
+          }
+          shareOftSaltOverrideUsed = found
+          shareOftVanityCacheRef.current = { key: vanityKey, salt: found }
         }
-        shareOftSaltOverrideUsed = found
       }
       const shareOftSalt = shareOftSaltOverrideUsed ?? derivedShareOftSalt
       const shareOftAddress = predictCreate2Address({ create2Deployer, salt: shareOftSalt, initCode: shareOftInitCode })
@@ -1580,6 +1605,7 @@ function DeployVaultBatcher({
 
   const expected = expectedQuery.data?.expected ?? null
   const expectedCreate2Deployer = expectedQuery.data?.create2Deployer ?? null
+  const expectedShareOftSaltOverride = expectedQuery.data?.shareOftSaltOverride ?? null
   const expectedGauge = expected?.gaugeController ?? null
   const expectedBurnStream = expected?.burnStream ?? null
   const expectedPayoutRouter = expected?.payoutRouter ?? null
@@ -1638,6 +1664,7 @@ function DeployVaultBatcher({
     setPhaseTxs({})
 
     try {
+      await ensurePaymasterSession()
       if (!batcherAddress) throw new Error('CreatorVaultBatcher is not configured. Set VITE_CREATOR_VAULT_BATCHER.')
       if (!publicClient) throw new Error('Network client not ready')
       if (!expected || !expectedGauge || !expectedBurnStream || !expectedPayoutRouter || !expectedCreate2Deployer)
@@ -1721,16 +1748,26 @@ function DeployVaultBatcher({
       // Base mainnet can no longer fit the full stack deploy (vault + wrapper + shareOFT + gauge + CCA + oracle + deposit + launch)
       // in a single transaction due to code-deposit gas limits. If the configured batcher supports the two-step ABI,
       // prefer it and bypass the legacy one-tx deploy flow below.
-      const isTwoStepBatcher = await (async () => {
-        const bc = await publicClient.getBytecode({ address: batcherAddress })
-        if (!bc || bc === '0x') return false
+      const batcherBytecode = await publicClient.getBytecode({ address: batcherAddress })
+      const isTwoStepBatcher = (() => {
+        if (!batcherBytecode || batcherBytecode === '0x') return false
         const phase1Topic = keccak256(
           toBytes('Phase1Deployed(address,address,address,address,address,address)'),
         ).slice(2).toLowerCase()
-        return bc.toLowerCase().includes(phase1Topic)
+        return batcherBytecode.toLowerCase().includes(phase1Topic)
+      })()
+      const supportsPhase1WithSalt = (() => {
+        if (!expectedShareOftSaltOverride) return true
+        if (!batcherBytecode || batcherBytecode === '0x') return false
+        return batcherBytecode.toLowerCase().includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
       })()
 
       if (isTwoStepBatcher) {
+        if (!supportsPhase1WithSalt) {
+          throw new Error(
+            'CreatorVaultBatcher does not support vanity ShareOFT salts. Deploy the updated batcher and update VITE_CREATOR_VAULT_BATCHER.',
+          )
+        }
         const phase1Any = phase1ExistsQuery.data?.anyDeployed ?? false
         const phase1All = phase1ExistsQuery.data?.allDeployed ?? false
         if (phase1Any && !phase1All) {
@@ -1749,11 +1786,11 @@ function DeployVaultBatcher({
           shareSymbol,
           version: deploymentVersion,
         } as const
-        const phase1CallData = shareOftSaltOverride
+        const phase1CallData = expectedShareOftSaltOverride
           ? encodeFunctionData({
               abi: CREATOR_VAULT_BATCHER_ABI,
               functionName: 'deployPhase1WithSalt',
-              args: [phase1Params, codeIds, shareOftSaltOverride],
+              args: [phase1Params, codeIds, expectedShareOftSaltOverride],
             })
           : encodeFunctionData({
               abi: CREATOR_VAULT_BATCHER_ABI,
@@ -3103,9 +3140,9 @@ function DeployVaultMain() {
     return privySmartWalletAddress ?? connectedWalletAddress ?? privyLinkedEoaAddress
   }, [connectedWalletAddress, privyLinkedEoaAddress, privySmartWalletAddress])
   const deploymentVersion = useMemo(() => {
-    const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.1.4'
+    const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.1.10'
     const v = String(raw).trim()
-    return v.length > 0 ? v : 'v1.1.4'
+    return v.length > 0 ? v : 'v1.1.10'
   }, [])
   const shareOftSaltOverride = useMemo(() => {
     const env = normalizeBytes32(import.meta.env.VITE_SHARE_OFT_SALT_OVERRIDE as string | undefined)

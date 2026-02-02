@@ -215,6 +215,19 @@ function isPaymasterStakeError(error: unknown): boolean {
   )
 }
 
+function isPaymasterUnavailableError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error ?? '')
+  const lc = msg.toLowerCase()
+  return (
+    lc.includes('resource not available') ||
+    lc.includes('requested resource not available') ||
+    lc.includes('request denied') ||
+    lc.includes('not authenticated') ||
+    lc.includes('cdp paymaster endpoint is not configured') ||
+    lc.includes('method not allowed')
+  )
+}
+
 function debugSignature(context: string, signature: Hex, source?: string | null) {
   if (!AA_DEBUG) return
   logger.debug(`[ERC-4337] ${context} signature`, {
@@ -963,7 +976,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // - callGasLimit: Auto-estimated, but we don't override since batcher calls vary
   const verificationGasLimits = ownerIsContract
     ? [1_000_000n, 2_500_000n, 5_000_000n]
-    : [1_000_000n, 2_500_000n, 5_000_000n]
+    : [200_000n, 400_000n, 800_000n, 1_500_000n]
   const uniqueVerificationGasLimits = Array.from(new Set(verificationGasLimits))
   if (AA_DEBUG) {
     logger.debug('[ERC-4337] verificationGasLimit', {
@@ -975,6 +988,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   let userOpHash: Hex | null = null
   let lastError: unknown = null
   let attemptedWithoutPaymaster = false
+  const allowPaymasterFallback = import.meta.env.VITE_ALLOW_PAYMASTER_FALLBACK === 'true'
   const sendWithVerificationGasLimit = async (verificationGasLimit: bigint, usePaymaster: boolean) => {
     await logUserOpEstimate({
       bundlerClient,
@@ -1027,9 +1041,16 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
 
   await attemptSend(true)
 
-  if (lastError && isPaymasterStakeError(lastError)) {
+  const shouldFallbackWithoutPaymaster = (error: unknown): boolean => {
+    if (!allowPaymasterFallback) return false
+    if (isPaymasterStakeError(error) || isPaymasterUnavailableError(error)) return true
+    if (!ownerIsContract && shouldRetryVerificationGas(error)) return true
+    return false
+  }
+
+  if (lastError && shouldFallbackWithoutPaymaster(lastError)) {
     attemptedWithoutPaymaster = true
-    logger.warn('[ERC-4337] Paymaster stake too low; retrying without sponsorship')
+    logger.warn('[ERC-4337] Retrying without sponsorship')
     await attemptSend(false)
   }
 
@@ -1083,8 +1104,10 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     if (lc.includes('aa41') || lc.includes('over paymasterverificationgaslimit')) {
       throw new Error('Paymaster verification gas limit exceeded. Please try again.')
     }
-    if (lc.includes('resource not available') || lc.includes('request denied')) {
-      throw new Error(`Paymaster denied request: ${errMsg}`)
+    if (isPaymasterUnavailableError(lastError)) {
+      throw new Error(
+        'Paymaster unavailable. Check CDP paymaster configuration, sponsorship limits, and allowlist, then retry.'
+      )
     }
     if (lc.includes('banned opcode') || lc.includes('stake/unstake delay') || lc.includes('unstake delay too low')) {
       throw new Error(

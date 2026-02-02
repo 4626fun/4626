@@ -67,6 +67,38 @@ function setCachedMigratedCoins(addresses: string[]) {
   }
 }
 
+function getInitialLogRangeDelta(): bigint {
+  const raw = import.meta.env.VITE_BASE_LOG_RANGE_DELTA as string | undefined
+  if (!raw) return 50000n
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n < 0) return 50000n
+  return BigInt(Math.floor(n))
+}
+
+function extractSuggestedRangeDelta(error: unknown): bigint | null {
+  const msg = String((error as any)?.message ?? error ?? '')
+  const rangeMatch = msg.match(/\[(0x[0-9a-fA-F]+),\s*(0x[0-9a-fA-F]+)\]/)
+  if (rangeMatch) {
+    try {
+      const from = BigInt(rangeMatch[1])
+      const to = BigInt(rangeMatch[2])
+      if (to >= from) return to - from
+    } catch {
+      // ignore
+    }
+  }
+  const limitMatch = msg.toLowerCase().match(/up to a (\d+) block range/)
+  if (limitMatch) {
+    try {
+      const n = BigInt(limitMatch[1])
+      if (n > 0n) return n - 1n
+    } catch {
+      // ignore
+    }
+  }
+  return null
+}
+
 /**
  * Fetch all migrated coin addresses from LiquidityMigrated events
  */
@@ -89,13 +121,14 @@ export async function fetchMigratedCoins(): Promise<Set<string>> {
     const latestBlock = await client.getBlockNumber()
     
     // Query logs in chunks to avoid RPC limits
-    const chunkSize = 50000n // Smaller chunks for better compatibility
+    let chunkDelta = getInitialLogRangeDelta()
+    let warnedRangeLimit = false
     const migratedAddresses = new Set<string>()
     
     let fromBlock = V4_LAUNCH_BLOCK
     
     while (fromBlock < latestBlock) {
-      const toBlock = fromBlock + chunkSize > latestBlock ? latestBlock : fromBlock + chunkSize
+      const toBlock = fromBlock + chunkDelta > latestBlock ? latestBlock : fromBlock + chunkDelta
       
       try {
         // Use raw RPC request for topic-based filtering
@@ -113,8 +146,26 @@ export async function fetchMigratedCoins(): Promise<Set<string>> {
           migratedAddresses.add(log.address.toLowerCase())
         }
       } catch (e) {
-        // If chunk is too large, try smaller chunks or skip
+        const suggestedDelta = extractSuggestedRangeDelta(e)
+        if (suggestedDelta !== null && suggestedDelta < chunkDelta) {
+          chunkDelta = suggestedDelta
+          if (!warnedRangeLimit) {
+            warnedRangeLimit = true
+            console.warn(
+              `[migrations] RPC log range limit detected. Reducing block delta to ${chunkDelta} and retrying.`,
+            )
+          }
+          continue
+        }
+        if (chunkDelta > 0n) {
+          const reduced = chunkDelta / 10n
+          chunkDelta = reduced < 1n ? 0n : reduced
+          continue
+        }
+        // If we can't reduce further, skip this block to avoid stalling.
         console.warn(`[migrations] Failed to fetch logs for blocks ${fromBlock}-${toBlock}:`, e)
+        fromBlock = toBlock + 1n
+        continue
       }
       
       fromBlock = toBlock + 1n
