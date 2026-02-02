@@ -735,27 +735,6 @@ function getCdpEndpoint(): string | null {
   return v.length > 0 ? v : null
 }
 
-function buildCdpEndpointFromKey(apiKey: string | undefined | null): string | null {
-  const key = (apiKey ?? '').trim()
-  if (!key) return null
-  return `https://api.developer.coinbase.com/rpc/v1/base/${key}`
-}
-
-function getCdpEndpointCandidates(req: VercelRequest): string[] {
-  const primary = getCdpEndpoint()
-  const headerKey = (() => {
-    const raw = req.headers?.['x-cdp-api-key']
-    return typeof raw === 'string' ? raw : ''
-  })()
-  const fromHeader = buildCdpEndpointFromKey(headerKey)
-  const fallback = buildCdpEndpointFromKey(process.env.VITE_CDP_API_KEY)
-  const out: string[] = []
-  if (primary) out.push(primary)
-  if (fromHeader && fromHeader !== primary) out.push(fromHeader)
-  if (fallback && !out.includes(fallback)) out.push(fallback)
-  return out
-}
-
 function isRequestArray(body: unknown): body is JsonRpcRequest[] {
   return Array.isArray(body)
 }
@@ -1353,8 +1332,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(jsonRpcError(null, -32600, 'Method not allowed'))
   }
 
-  const cdpEndpoints = getCdpEndpointCandidates(req)
-  if (cdpEndpoints.length === 0) {
+  const cdpEndpoint = getCdpEndpoint()
+  if (!cdpEndpoint) {
     return res.status(200).json(jsonRpcError(null, -32000, 'CDP paymaster endpoint is not configured'))
   }
 
@@ -1523,37 +1502,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(jsonRpcError(null, -32002, `request denied - ${msg}`))
   }
 
-  // Forward to CDP if validation passed (with fallback).
+  // Forward to CDP if validation passed.
   try {
-    for (let i = 0; i < cdpEndpoints.length; i += 1) {
-      const endpoint = cdpEndpoints[i]
-      const upstream = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const text = await upstream.text()
+    const upstream = await fetch(cdpEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const text = await upstream.text()
 
-      // CDP returns JSON-RPC responses. Some clients (viem) treat non-2xx HTTP as transport failures
-      // and mask the JSON-RPC error. Prefer returning HTTP 200 with the JSON-RPC payload when possible.
-      res.setHeader('Content-Type', 'application/json')
-      try {
-        const parsed = JSON.parse(text)
-        if (parsed && typeof parsed === 'object') {
-          const msg = String((parsed as any)?.error?.message ?? '').toLowerCase()
-          const isResourceUnavailable = msg.includes('resource not available')
-          if (isResourceUnavailable && i < cdpEndpoints.length - 1) {
-            logger.warn('[paymaster-proxy] primary CDP endpoint unavailable; retrying fallback', { endpoint })
-            continue
-          }
-          return res.status(200).send(JSON.stringify(parsed))
-        }
-      } catch {
-        // Non-JSON response; fall back to upstream status.
+    // CDP returns JSON-RPC responses. Some clients (viem) treat non-2xx HTTP as transport failures
+    // and mask the JSON-RPC error. Prefer returning HTTP 200 with the JSON-RPC payload when possible.
+    res.setHeader('Content-Type', 'application/json')
+    try {
+      const parsed = JSON.parse(text)
+      if (parsed && typeof parsed === 'object') {
+        return res.status(200).send(JSON.stringify(parsed))
       }
-      res.status(upstream.status)
-      return res.send(text)
+    } catch {
+      // Non-JSON response; fall back to upstream status.
     }
+    res.status(upstream.status)
+    return res.send(text)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Upstream request failed'
     logger.error('[paymaster-proxy] upstream error', { msg })
