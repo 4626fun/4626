@@ -83,8 +83,30 @@ const config: Config = {
             },
           ],
         },
+        {
+          title: 'Network',
+          items: [
+            {
+              label: 'Built on Base',
+              href: 'https://base.org',
+            },
+            {
+              label: 'Base Block Explorer',
+              href: 'https://basescan.org',
+            },
+          ],
+        },
+        {
+          title: 'Community',
+          items: [
+            {
+              label: 'GitHub',
+              href: 'https://github.com/wenakita/4626',
+            },
+          ],
+        },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} CreatorVault. Built with Docusaurus.`,
+      copyright: `© ${new Date().getFullYear()} CreatorVault · Built on Base`,
     },
     prism: {
       theme: prismThemes.github,

@@ -7,6 +7,11 @@ sidebar_position: 3
 
 Contract hierarchy and relationships in the 4626 protocol.
 
+<div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '1rem', opacity: 0.8}}>
+  <img src="/brands/base/base-logomark.svg" width="20" height="20" alt="Base" />
+  <span>Deployed on Base (Chain ID: 8453)</span>
+</div>
+
 ---
 
 ## Asset and strategy flow

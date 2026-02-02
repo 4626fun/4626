@@ -101,6 +101,8 @@ pnpm serve
 
 ## Brand Assets
 
+### CreatorVault brand
+
 Brand assets are managed in `frontend/public/brand/` and automatically synced to `static/brand/` during build.
 
 | Asset | Source | Used for |
@@ -113,6 +115,21 @@ To update brand assets:
 1. Edit files in `frontend/public/brand/`
 2. Run `pnpm sync-docs` to copy to docs site
 3. Commit changes to `frontend/public/brand/`
+
+### External brand assets
+
+External brand assets (e.g., Base, LayerZero) are stored in `static/brands/` and committed directly.
+
+| Asset | Location | Usage |
+|-------|----------|-------|
+| Base logomark | `static/brands/base/base-logomark.svg` | Integration sections, network context |
+| Base wordmark | `static/brands/base/base-wordmark.svg` | Not currently used |
+
+**Usage guidelines:**
+- Use for contextual attribution only (e.g., "Deployed on Base")
+- Keep usage small and subtle — no hero banners
+- Do not alter colors or stretch/distort
+- Do not imply endorsement
 
 ## Project Structure
 
