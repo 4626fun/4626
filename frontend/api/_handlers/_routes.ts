@@ -28,6 +28,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'v1/gauge/vaults': () => import('./v1/gauge/_vaults.js'),
   'v1/gauge/user': () => import('./v1/gauge/_user.js'),
   'v1/ve4626/user': () => import('./v1/ve4626/_user.js'),
+  'v1/charm/strategy': () => import('./v1/charm/_strategy.js'),
   'v1/build/auction/submitBid': () => import('./v1/build/auction/_submitBid.js'),
   'v1/build/gauge/vote': () => import('./v1/build/gauge/_vote.js'),
   'v1/build/gauge/resetVotes': () => import('./v1/build/gauge/_resetVotes.js'),
@@ -42,6 +43,20 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'v1/build/ajna/setBucketIndex': () => import('./v1/build/ajna/_setBucketIndex.js'),
   'v1/build/ajna/moveToBucket': () => import('./v1/build/ajna/_moveToBucket.js'),
   'v1/build/ajna/setIdleBufferBps': () => import('./v1/build/ajna/_setIdleBufferBps.js'),
+  'v1/build/charm/setCharmVault': () => import('./v1/build/charm/_setCharmVault.js'),
+  'v1/build/charm/setSwapPool': () => import('./v1/build/charm/_setSwapPool.js'),
+  'v1/build/charm/setZRouter': () => import('./v1/build/charm/_setZRouter.js'),
+  'v1/build/charm/setUseZRouter': () => import('./v1/build/charm/_setUseZRouter.js'),
+  'v1/build/charm/setUniFactory': () => import('./v1/build/charm/_setUniFactory.js'),
+  'v1/build/charm/setAutoFeeTier': () => import('./v1/build/charm/_setAutoFeeTier.js'),
+  'v1/build/charm/setParameters': () => import('./v1/build/charm/_setParameters.js'),
+  'v1/build/charm/setActive': () => import('./v1/build/charm/_setActive.js'),
+  'v1/build/charm/initializeApprovals': () => import('./v1/build/charm/_initializeApprovals.js'),
+  'v1/build/charm/rebalance': () => import('./v1/build/charm/_rebalance.js'),
+  'v1/build/charm/ownerEmergencyWithdraw': () => import('./v1/build/charm/_ownerEmergencyWithdraw.js'),
+  'v1/build/charm/ownerEmergencyWithdrawFromCharm': () => import('./v1/build/charm/_ownerEmergencyWithdrawFromCharm.js'),
+  'v1/build/charm/vault/rebalance': () => import('./v1/build/charm/vault/_rebalance.js'),
+  'v1/build/charm/vault/setStrategy': () => import('./v1/build/charm/vault/_setStrategy.js'),
 
   'keepr/join': () => import('./keepr/_join.js'),
   'keepr/joinStatus': () => import('./keepr/_joinStatus.js'),
@@ -146,6 +161,7 @@ const V1_AUCTION_PATTERN = /^v1\/auction\/([a-fA-F0-9x]+)\/(status|recentBids)$/
 const V1_LOTTERY_CREATOR_PATTERN = /^v1\/lottery\/creator\/([a-fA-F0-9x]+)$/
 const V1_GAUGE_USER_PATTERN = /^v1\/gauge\/user\/([a-fA-F0-9x]+)$/
 const V1_VE4626_USER_PATTERN = /^v1\/ve4626\/user\/([a-fA-F0-9x]+)$/
+const V1_CHARM_STRATEGY_PATTERN = /^v1\/charm\/strategy\/([a-fA-F0-9x]+)$/
 
 export async function getApiHandler(subpath: string): Promise<ApiHandler | null> {
   // First, check for exact match in static routes
@@ -272,6 +288,25 @@ export async function getApiHandler(subpath: string): Promise<ApiHandler | null>
         const wrappedHandler: ApiHandler = (req, res) => {
           if (!req.query.address) req.query.address = address
           if (!req.query.user) req.query.user = address
+          return baseHandler(req, res)
+        }
+        return wrappedHandler
+      }
+    }
+  }
+
+  // Handle dynamic v1 charm strategy route: v1/charm/strategy/{address}
+  const v1CharmMatch = subpath.match(V1_CHARM_STRATEGY_PATTERN)
+  if (v1CharmMatch) {
+    const [, address] = v1CharmMatch
+    const dynamicLoader = apiRouteLoaders['v1/charm/strategy']
+    if (dynamicLoader) {
+      const mod = await dynamicLoader()
+      const baseHandler = mod?.default
+      if (typeof baseHandler === 'function') {
+        const wrappedHandler: ApiHandler = (req, res) => {
+          if (!req.query.address) req.query.address = address
+          if (!req.query.strategy) req.query.strategy = address
           return baseHandler(req, res)
         }
         return wrappedHandler

@@ -47,6 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '/v1/gauge/vaults': { get: { summary: 'Gauge whitelisted vaults + weights', responses: { '200': { description: 'OK' } } } },
       '/v1/gauge/user/{address}': { get: { summary: 'Gauge user votes', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
       '/v1/ve4626/user/{address}': { get: { summary: 've4626 lock + power', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
+      '/v1/charm/strategy/{address}': { get: { summary: 'Charm strategy config + status', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
 
       // Build-only endpoints (return unsigned tx calldata)
       '/v1/build/auction/submitBid': { post: { summary: 'Build CCA submitBid calldata', responses: { '200': { description: 'OK' } } } },
@@ -64,6 +65,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '/v1/build/ajna/setBucketIndex': { post: { summary: 'Build AjnaStrategy setBucketIndex calldata (owner)', responses: { '200': { description: 'OK' } } } },
       '/v1/build/ajna/moveToBucket': { post: { summary: 'Build AjnaStrategy moveToBucket calldata (owner)', responses: { '200': { description: 'OK' } } } },
       '/v1/build/ajna/setIdleBufferBps': { post: { summary: 'Build AjnaStrategy setIdleBufferBps calldata (owner)', responses: { '200': { description: 'OK' } } } },
+
+      '/v1/build/charm/setCharmVault': { post: { summary: 'Build CreatorCharmStrategy setCharmVault calldata (owner)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/charm/setSwapPool': { post: { summary: 'Build CreatorCharmStrategy setSwapPool calldata (owner)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/charm/setZRouter': { post: { summary: 'Build CreatorCharmStrategy setZRouter calldata (owner)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/charm/setUseZRouter': { post: { summary: 'Build CreatorCharmStrategy setUseZRouter calldata (owner)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/charm/setUniFactory': { post: { summary: 'Build CreatorCharmStrategy setUniFactory calldata (owner)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/charm/setAutoFeeTier': { post: { summary: 'Build CreatorCharmStrategy setAutoFeeTier calldata (owner)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/charm/setParameters': { post: { summary: 'Build CreatorCharmStrategy setParameters calldata (owner)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/charm/setActive': { post: { summary: 'Build CreatorCharmStrategy setActive calldata (owner)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/charm/initializeApprovals': { post: { summary: 'Build CreatorCharmStrategy initializeApprovals calldata (owner)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/charm/rebalance': { post: { summary: 'Build CreatorCharmStrategy rebalance calldata (owner or vault)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/charm/ownerEmergencyWithdraw': { post: { summary: 'Build CreatorCharmStrategy ownerEmergencyWithdraw calldata (owner)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/charm/ownerEmergencyWithdrawFromCharm': { post: { summary: 'Build CreatorCharmStrategy ownerEmergencyWithdrawFromCharm calldata (owner)', responses: { '200': { description: 'OK' } } } },
+
+      // Charm/AlphaVault-style vault controls (explicit tick ranges)
+      '/v1/build/charm/vault/rebalance': { post: { summary: 'Build Charm/AlphaVault rebalance calldata (strategy-only)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/charm/vault/setStrategy': { post: { summary: 'Build Charm/AlphaVault setStrategy calldata (governance)', responses: { '200': { description: 'OK' } } } },
     },
   }
 
