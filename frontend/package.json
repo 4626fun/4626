@@ -32,6 +32,7 @@
     "@tanstack/react-query": "^5.90.17",
     "@types/d3": "^7.4.3",
     "@types/pg": "^8.16.0",
+    "@vercel/blob": "^0.27.1",
     "@vercel/postgres": "^0.10.0",
     "@vitejs/plugin-react": "^4.7.0",
     "@wagmi/core": "^2.22.1",
@@ -55,7 +56,8 @@
     "tailwindcss": "^3.4.19",
     "viem": "^2.44.2",
     "vite": "^6.4.1",
-    "wagmi": "^2.19.5"
+    "wagmi": "^2.19.5",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@types/node": "^22.19.6",
@@ -69,7 +71,6 @@
     "eslint-plugin-react-refresh": "^0.4.26",
     "playwright": "^1.57.0",
     "pngjs": "^7.0.0",
-    "sharp": "^0.34.5",
     "tsx": "^4.21.0",
     "typedoc": "^0.28.16",
     "typedoc-plugin-markdown": "^4.9.0",

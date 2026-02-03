@@ -122,9 +122,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const apiBaseUrl = `${protocol}://${apiHost}`
     const appBaseUrl = `${protocol}://${appHost}`
 
-    // Generate framed image URL
+    // Generate framed image URL (PNG by default for wallet compatibility)
     const imageUrl = creatorCoin
-      ? `${apiBaseUrl}/v1/token/${address}/image?chain=${chainId}`
+      ? `${apiBaseUrl}/v1/token/${address}/image?chain=${chainId}&format=png`
       : `${appBaseUrl}/logo.svg` // Fallback to default logo
 
     // Build ERC-7572 compliant metadata
