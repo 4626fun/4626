@@ -1,14 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { randomBytes } from 'node:crypto'
 
 import { getAddress, isAddress, type Address, type Hex } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
 
 import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { ensureDeploySessionsSchema, hashDeployToken, insertDeploySession, randomDeployToken, randomId } from '../../../../server/_lib/deploySessions.js'
 import { isDbConfigured, getDb } from '../../../../server/_lib/postgres.js'
 import { checkRateLimit, RATE_LIMITS, rateLimitKey } from '../../../../server/_lib/rateLimit.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/supabaseAdmin.js'
+import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAgentWallets.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -153,14 +152,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ success: false, error: 'Missing phase2Calls' } satisfies ApiEnvelope<null>)
     }
 
-    // Generate ephemeral session owner (EOA) used as a temporary Coinbase Smart Wallet owner.
-    const pk = (`0x${randomBytes(32).toString('hex')}`) as Hex
-    const acct = privateKeyToAccount(pk)
-    const sessionOwner = getAddress(acct.address)
-
     const deployToken = randomDeployToken()
     const tokenHash = hashDeployToken(deployToken)
     const id = randomId()
+
+    // Use a per-creator Privy-managed agent wallet (Keepr can reuse it for ops).
+    // We still install it as a temporary CSW owner only during deploy/ops windows.
+    const agentWallet = await getOrCreateCreatorAgentWallet({ creatorToken: creatorToken.toLowerCase() as `0x${string}` })
+    const sessionOwner = getAddress(agentWallet.address)
 
     const now = Date.now()
     const expiresAt = new Date(now + 10 * 60 * 1000) // 10 minutes
@@ -173,12 +172,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       smartWallet,
       sessionOwner,
       deployToken,
-      sessionOwnerPrivateKey: pk,
       payload: {
         creatorToken,
         ownerAddress,
         smartWallet,
         sessionOwner,
+        agentWalletId: agentWallet.walletId,
+        agentWalletAddress: agentWallet.address,
         version: String(body.version ?? ''),
         phase2Calls,
         phase3Calls,

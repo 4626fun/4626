@@ -24,7 +24,7 @@ export type DeploySessionRecord = {
   smartWallet: `0x${string}`
   sessionOwner: `0x${string}`
   deployToken: string
-  sessionOwnerKeyEnc: string
+  sessionOwnerKeyEnc: string | null
   payload: any
   step: DeploySessionStep
   expiresAt: string
@@ -67,6 +67,15 @@ export async function ensureDeploySessionsSchema(): Promise<void> {
     await db.sql`CREATE INDEX IF NOT EXISTS deploys_session_address_idx ON deploys (session_address);`
     await db.sql`CREATE INDEX IF NOT EXISTS deploys_step_idx ON deploys (step);`
     await db.sql`CREATE INDEX IF NOT EXISTS deploys_expires_idx ON deploys (expires_at);`
+
+    // Schema evolution (non-breaking):
+    // - New Privy agent-wallet sessions do not store raw private keys.
+    // - Older deploy sessions may still have `session_owner_key_enc` set.
+    try {
+      await db.sql`ALTER TABLE deploys ALTER COLUMN session_owner_key_enc DROP NOT NULL;`
+    } catch {
+      // ignore (already altered or insufficient permissions)
+    }
     deploySessionsSchemaEnsured = true
   } catch (err) {
     deploySessionsSchemaEnsured = false
@@ -133,7 +142,7 @@ export async function insertDeploySession(params: {
   smartWallet: string
   sessionOwner: string
   deployToken: string
-  sessionOwnerPrivateKey: string
+  sessionOwnerPrivateKey?: string | null
   payload: any
   expiresAt: Date
 }): Promise<DeploySessionRecord> {
@@ -141,7 +150,10 @@ export async function insertDeploySession(params: {
   if (!db) throw new Error('db_not_configured')
   await ensureDeploySessionsSchema()
 
-  const sessionOwnerKeyEnc = encryptWithSecret(params.sessionOwnerPrivateKey)
+  const sessionOwnerKeyEnc =
+    typeof params.sessionOwnerPrivateKey === 'string' && params.sessionOwnerPrivateKey.trim().length > 0
+      ? encryptWithSecret(params.sessionOwnerPrivateKey)
+      : null
   const payloadJson = params.payload ?? {}
 
   await db.sql`
@@ -307,7 +319,7 @@ function mapRow(r: any): DeploySessionRecord {
     smartWallet: String(r.smart_wallet).toLowerCase() as `0x${string}`,
     sessionOwner: String(r.session_owner).toLowerCase() as `0x${string}`,
     deployToken: String(r.deploy_token),
-    sessionOwnerKeyEnc: String(r.session_owner_key_enc),
+    sessionOwnerKeyEnc: r.session_owner_key_enc ? String(r.session_owner_key_enc) : null,
     payload: r.payload,
     step: String(r.step) as DeploySessionStep,
     expiresAt: new Date(r.expires_at).toISOString(),
