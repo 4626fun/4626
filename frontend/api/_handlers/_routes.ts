@@ -15,6 +15,34 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'analytics': () => import('./_analytics.js'),
   'agent/invokeSkill': () => import('./agent/_invokeSkill.js'),
 
+  // Public, agent-friendly v1 API
+  'v1/spec.json': () => import('./v1/_spec.js'),
+  'v1/vault/report': () => import('./v1/vault/_report.js'),
+  'v1/vault/strategies': () => import('./v1/vault/_strategies.js'),
+  'v1/auction/status': () => import('./v1/auction/_status.js'),
+  'v1/auction/recentBids': () => import('./v1/auction/_recentBids.js'),
+  'v1/lottery/global': () => import('./v1/lottery/_global.js'),
+  'v1/lottery/creator': () => import('./v1/lottery/_creator.js'),
+  'v1/lottery/recentWinners': () => import('./v1/lottery/_recentWinners.js'),
+  'v1/gauge/epoch': () => import('./v1/gauge/_epoch.js'),
+  'v1/gauge/vaults': () => import('./v1/gauge/_vaults.js'),
+  'v1/gauge/user': () => import('./v1/gauge/_user.js'),
+  'v1/ve4626/user': () => import('./v1/ve4626/_user.js'),
+  'v1/build/auction/submitBid': () => import('./v1/build/auction/_submitBid.js'),
+  'v1/build/gauge/vote': () => import('./v1/build/gauge/_vote.js'),
+  'v1/build/gauge/resetVotes': () => import('./v1/build/gauge/_resetVotes.js'),
+  'v1/build/ve4626/lock': () => import('./v1/build/ve4626/_lock.js'),
+  'v1/build/ve4626/extend': () => import('./v1/build/ve4626/_extend.js'),
+  'v1/build/ve4626/increase': () => import('./v1/build/ve4626/_increase.js'),
+  'v1/build/ve4626/unlock': () => import('./v1/build/ve4626/_unlock.js'),
+  'v1/build/ajna/borrow': () => import('./v1/build/ajna/_borrow.js'),
+  'v1/build/ajna/repay': () => import('./v1/build/ajna/_repay.js'),
+  'v1/build/ajna/addCollateral': () => import('./v1/build/ajna/_addCollateral.js'),
+  'v1/build/ajna/removeCollateral': () => import('./v1/build/ajna/_removeCollateral.js'),
+  'v1/build/ajna/setBucketIndex': () => import('./v1/build/ajna/_setBucketIndex.js'),
+  'v1/build/ajna/moveToBucket': () => import('./v1/build/ajna/_moveToBucket.js'),
+  'v1/build/ajna/setIdleBufferBps': () => import('./v1/build/ajna/_setIdleBufferBps.js'),
+
   'keepr/join': () => import('./keepr/_join.js'),
   'keepr/joinStatus': () => import('./keepr/_joinStatus.js'),
   'keepr/nonce': () => import('./keepr/_nonce.js'),
@@ -112,6 +140,13 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
 // Match v1/token/{address}/metadata or v1/token/{address}/image patterns
 const V1_TOKEN_PATTERN = /^v1\/token\/([a-fA-F0-9x]+)\/(metadata|image)$/
 
+// Match v1 REST patterns that embed an address in the path.
+const V1_VAULT_PATTERN = /^v1\/vault\/([a-fA-F0-9x]+)\/(report|strategies)$/
+const V1_AUCTION_PATTERN = /^v1\/auction\/([a-fA-F0-9x]+)\/(status|recentBids)$/
+const V1_LOTTERY_CREATOR_PATTERN = /^v1\/lottery\/creator\/([a-fA-F0-9x]+)$/
+const V1_GAUGE_USER_PATTERN = /^v1\/gauge\/user\/([a-fA-F0-9x]+)$/
+const V1_VE4626_USER_PATTERN = /^v1\/ve4626\/user\/([a-fA-F0-9x]+)$/
+
 export async function getApiHandler(subpath: string): Promise<ApiHandler | null> {
   // First, check for exact match in static routes
   const loader = apiRouteLoaders[subpath]
@@ -136,6 +171,107 @@ export async function getApiHandler(subpath: string): Promise<ApiHandler | null>
           if (!req.query.address) {
             req.query.address = address
           }
+          return baseHandler(req, res)
+        }
+        return wrappedHandler
+      }
+    }
+  }
+
+  // Handle dynamic v1 vault routes: v1/vault/{address}/report|strategies
+  const v1VaultMatch = subpath.match(V1_VAULT_PATTERN)
+  if (v1VaultMatch) {
+    const [, address, action] = v1VaultMatch
+    const routeKey = `v1/vault/${action}` as keyof typeof apiRouteLoaders
+    const dynamicLoader = apiRouteLoaders[routeKey]
+    if (dynamicLoader) {
+      const mod = await dynamicLoader()
+      const baseHandler = mod?.default
+      if (typeof baseHandler === 'function') {
+        const wrappedHandler: ApiHandler = (req, res) => {
+          if (!req.query.address) req.query.address = address
+          if (!req.query.vault) req.query.vault = address
+          return baseHandler(req, res)
+        }
+        return wrappedHandler
+      }
+    }
+  }
+
+  // Handle dynamic v1 auction routes: v1/auction/{address}/status|recentBids
+  const v1AuctionMatch = subpath.match(V1_AUCTION_PATTERN)
+  if (v1AuctionMatch) {
+    const [, address, action] = v1AuctionMatch
+    const routeKey = `v1/auction/${action}` as keyof typeof apiRouteLoaders
+    const dynamicLoader = apiRouteLoaders[routeKey]
+    if (dynamicLoader) {
+      const mod = await dynamicLoader()
+      const baseHandler = mod?.default
+      if (typeof baseHandler === 'function') {
+        const wrappedHandler: ApiHandler = (req, res) => {
+          if (!req.query.address) req.query.address = address
+          if (action === 'status') {
+            if (!req.query.ccaStrategy) req.query.ccaStrategy = address
+          } else {
+            if (!req.query.auction) req.query.auction = address
+          }
+          return baseHandler(req, res)
+        }
+        return wrappedHandler
+      }
+    }
+  }
+
+  // Handle dynamic v1 lottery creator route: v1/lottery/creator/{creatorCoin}
+  const v1LotteryCreatorMatch = subpath.match(V1_LOTTERY_CREATOR_PATTERN)
+  if (v1LotteryCreatorMatch) {
+    const [, address] = v1LotteryCreatorMatch
+    const dynamicLoader = apiRouteLoaders['v1/lottery/creator']
+    if (dynamicLoader) {
+      const mod = await dynamicLoader()
+      const baseHandler = mod?.default
+      if (typeof baseHandler === 'function') {
+        const wrappedHandler: ApiHandler = (req, res) => {
+          if (!req.query.address) req.query.address = address
+          if (!req.query.creatorCoin) req.query.creatorCoin = address
+          return baseHandler(req, res)
+        }
+        return wrappedHandler
+      }
+    }
+  }
+
+  // Handle dynamic v1 gauge user route: v1/gauge/user/{address}
+  const v1GaugeUserMatch = subpath.match(V1_GAUGE_USER_PATTERN)
+  if (v1GaugeUserMatch) {
+    const [, address] = v1GaugeUserMatch
+    const dynamicLoader = apiRouteLoaders['v1/gauge/user']
+    if (dynamicLoader) {
+      const mod = await dynamicLoader()
+      const baseHandler = mod?.default
+      if (typeof baseHandler === 'function') {
+        const wrappedHandler: ApiHandler = (req, res) => {
+          if (!req.query.address) req.query.address = address
+          if (!req.query.user) req.query.user = address
+          return baseHandler(req, res)
+        }
+        return wrappedHandler
+      }
+    }
+  }
+
+  // Handle dynamic v1 ve4626 user route: v1/ve4626/user/{address}
+  const v1VeUserMatch = subpath.match(V1_VE4626_USER_PATTERN)
+  if (v1VeUserMatch) {
+    const [, address] = v1VeUserMatch
+    const dynamicLoader = apiRouteLoaders['v1/ve4626/user']
+    if (dynamicLoader) {
+      const mod = await dynamicLoader()
+      const baseHandler = mod?.default
+      if (typeof baseHandler === 'function') {
+        const wrappedHandler: ApiHandler = (req, res) => {
+          if (!req.query.address) req.query.address = address
+          if (!req.query.user) req.query.user = address
           return baseHandler(req, res)
         }
         return wrappedHandler

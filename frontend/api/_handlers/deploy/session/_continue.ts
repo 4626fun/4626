@@ -3,12 +3,15 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getAddress, type Address, type Hex } from 'viem'
 import { createPublicClient, encodeAbiParameters, encodeFunctionData, http } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
+import { toAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
-import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount, waitForUserOperationReceipt } from 'viem/account-abstraction'
+import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
 import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { logger } from '../../../../server/_lib/logger.js'
 import { decryptWithSecret, getDeploySessionById, signDeployToken, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
+import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
+import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -58,14 +61,6 @@ async function findOwnerIndex(params: {
   return null
 }
 
-function getOrigin(req: VercelRequest): string {
-  const proto = (req.headers['x-forwarded-proto'] ?? 'https') as string
-  const host = (req.headers['x-forwarded-host'] ?? req.headers.host ?? '') as string
-  const safeProto = String(proto).toLowerCase().includes('http') ? String(proto).toLowerCase() : 'https'
-  if (!host) throw new Error('missing_host')
-  return `${safeProto}://${host}`
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setNoStore(res)
   if (handleOptions(req, res)) return
@@ -103,11 +98,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Server signs userops using the temporary owner key.
-    const pk = decryptWithSecret(rec.sessionOwnerKeyEnc) as Hex
-    const ownerAccount = privateKeyToAccount(pk)
-    const smartWallet = getAddress(rec.smartWallet)
+    // Server signs userops using the temporary owner.
+    // New sessions use a Privy-managed agent wallet; legacy sessions use an encrypted raw private key.
+    const payload: any = rec.payload ?? {}
+    const agentWalletId = typeof payload?.agentWalletId === 'string' ? payload.agentWalletId.trim() : ''
     const sessionOwner = getAddress(rec.sessionOwner)
+    const ownerAccount = agentWalletId
+      ? toAccount({
+          address: sessionOwner,
+          sign: async ({ hash }: { hash: Hex }) => {
+            return (await secp256k1SignHash({ walletId: agentWalletId, hash })) as Hex
+          },
+          signMessage: async ({ message }: { message: { raw: Hex } | string }) => {
+            const msg =
+              typeof message === 'object' && message !== null && 'raw' in message
+                ? (message.raw as Hex)
+                : typeof message === 'string'
+                  ? message
+                  : `0x${Buffer.from(String(message)).toString('hex')}`
+            const out = await walletRpc<any>({
+              walletId: agentWalletId,
+              method: 'personal_sign',
+              rpcParams: { message: msg, encoding: 'hex' },
+            })
+            const sig = String(out?.data?.signature ?? '').trim()
+            if (!/^0x[0-9a-fA-F]+$/.test(sig)) throw new Error('privy_personal_sign_invalid_signature')
+            return sig as Hex
+          },
+        })
+      : (() => {
+          if (!rec.sessionOwnerKeyEnc) throw new Error('session_owner_key_missing')
+          const pk = decryptWithSecret(rec.sessionOwnerKeyEnc) as Hex
+          return privateKeyToAccount(pk)
+        })()
+    const smartWallet = getAddress(rec.smartWallet)
     const ownerIndex = await findOwnerIndex({
       publicClient: createPublicClient({ chain: base, transport: http((process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()) }),
       smartWallet,
@@ -121,7 +145,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       transport: http((process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim(), { timeout: 12_000 }),
     })
 
-    const origin = getOrigin(req)
+    const origin = getCanonicalOrigin(req)
     const bundlerUrl = `${origin}/api/paymaster`
 
     const deployToken = rec.deployToken
@@ -146,7 +170,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       version: '1',
     })
 
-    const payload: any = rec.payload ?? {}
     const phase2Calls = Array.isArray(payload.phase2Calls) ? (payload.phase2Calls as any[]) : []
     const phase3Calls = Array.isArray(payload.phase3Calls) ? (payload.phase3Calls as any[]) : []
 
@@ -167,39 +190,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return { to: smartWallet, value: 0n, data } as const
     })()
 
-    let lastTx: Hex | null = null
-    let lastUserOpHash: Hex | null = null
-
     if (shouldRunPhase2) {
-      await updateDeploySession({ id: rec.id, step: 'phase2_sent' })
       const calls = [...phase2Calls.map((c) => ({ to: getAddress(c.to), value: BigInt(c.value ?? 0), data: c.data as Hex }))] as any[]
       if (!shouldRunPhase3) calls.push(removeOwnerCall)
-
-      lastUserOpHash = await sendUserOperation(bundlerClient, {
+      await updateDeploySession({ id: rec.id, step: 'phase2_sent' })
+      const lastUserOpHash = await sendUserOperation(bundlerClient, {
         account,
         calls,
         paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
       })
-      const receipt = await waitForUserOperationReceipt(bundlerClient, { hash: lastUserOpHash, timeout: 180_000 })
-      lastTx = receipt.receipt.transactionHash as Hex
-      await updateDeploySession({ id: rec.id, step: 'phase2_confirmed', lastUserOpHash, lastTxHash: lastTx })
+      await updateDeploySession({ id: rec.id, step: 'phase2_sent', lastUserOpHash, lastTxHash: null })
+      return res.status(200).json({
+        success: true,
+        data: { id: rec.id, step: 'phase2_sent', lastUserOpHash },
+      } satisfies ApiEnvelope<any>)
     }
 
     if (shouldRunPhase3) {
-      await updateDeploySession({ id: rec.id, step: 'phase3_sent' })
       const calls = [
         ...phase3Calls.map((c) => ({ to: getAddress(c.to), value: BigInt(c.value ?? 0), data: c.data as Hex })),
         removeOwnerCall,
       ] as any[]
 
-      lastUserOpHash = await sendUserOperation(bundlerClient, {
+      await updateDeploySession({ id: rec.id, step: 'phase3_sent' })
+      const lastUserOpHash = await sendUserOperation(bundlerClient, {
         account,
         calls,
         paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
       })
-      const receipt = await waitForUserOperationReceipt(bundlerClient, { hash: lastUserOpHash, timeout: 180_000 })
-      lastTx = receipt.receipt.transactionHash as Hex
-      await updateDeploySession({ id: rec.id, step: 'phase3_confirmed', lastUserOpHash, lastTxHash: lastTx })
+      await updateDeploySession({ id: rec.id, step: 'phase3_sent', lastUserOpHash, lastTxHash: null })
+      return res.status(200).json({
+        success: true,
+        data: { id: rec.id, step: 'phase3_sent', lastUserOpHash },
+      } satisfies ApiEnvelope<any>)
     }
 
     await updateDeploySession({ id: rec.id, step: 'completed' })
@@ -209,8 +232,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       data: {
         id: rec.id,
         step: 'completed',
-        lastTxHash: lastTx,
-        lastUserOpHash,
       },
     } satisfies ApiEnvelope<any>)
   } catch (err: any) {

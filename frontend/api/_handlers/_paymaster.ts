@@ -851,7 +851,8 @@ function abiEncodeAddresses(addrs: Address[]): Hex {
   let out = '0x'
   for (const a of addrs) {
     const hex = a.toLowerCase().replace(/^0x/, '')
-    out += '0'.repeat(24 * 2) + hex
+    // Address is 20 bytes; ABI-encoding pads to 32 bytes with 12 leading zero bytes.
+    out += '0'.repeat(12 * 2) + hex
   }
   return out as Hex
 }
@@ -1579,6 +1580,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         storeEnv: Address | null
         storeFromDeployer: Address | null
         storeUsed: Address
+        expectedVault?: Address | null
+        expectedBurnStream?: Address | null
+        expectedPayoutRouter?: Address | null
+        payoutRouterBurnStreamArg?: Address | null
+        vaultBurnStreamArg?: Address | null
       }
     | null = null
 

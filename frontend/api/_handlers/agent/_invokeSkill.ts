@@ -6,10 +6,13 @@ import path from 'node:path'
 import {
   handleOptions,
   readJsonBody,
+  readSessionFromRequest,
   setCors,
   setNoStore,
   type ApiEnvelope,
 } from '../../../server/auth/_shared.js'
+import { isAdminAddress } from '../../../server/_lib/session.js'
+import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import {
   getRepoRootPath,
   resolveSkill,
@@ -44,6 +47,14 @@ type SkillInvokeResponse = {
 
 const EXECUTION_TIMEOUT_MS = 30_000
 const OUTPUT_LIMIT_BYTES = 64_000
+const SKILL_EXECUTION_ENV_KEY = 'SKILL_EXECUTION_ENABLED'
+
+function isExecutionEnabled(): boolean {
+  // Default-safe: disabled on Vercel unless explicitly enabled.
+  const isVercel = Boolean((process.env.VERCEL ?? '').trim())
+  const enabled = String(process.env[SKILL_EXECUTION_ENV_KEY] ?? '').trim() === '1'
+  return isVercel ? enabled : enabled
+}
 
 function parseAllowlist(raw: string | undefined): string[] {
   if (!raw) return []
@@ -138,6 +149,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Use POST to invoke skills.' } satisfies ApiEnvelope<never>)
   }
 
+  // Admin-only: this endpoint can leak repo contents and (optionally) execute scripts.
+  const session = readSessionFromRequest(req)
+  const actor = session?.address ? String(session.address).toLowerCase() : ''
+  if (!actor) {
+    return res.status(401).json({ success: false, error: 'Sign in required.' } satisfies ApiEnvelope<never>)
+  }
+  if (!isAdminAddress(actor as `0x${string}`)) {
+    return res.status(403).json({ success: false, error: 'Admin authorization required.' } satisfies ApiEnvelope<never>)
+  }
+
+  // Rate limit: per-admin + IP (best-effort).
+  const ip = getClientIp(req as any)
+  const rl = checkRateLimit(rateLimitKey('skills', actor, ip), RATE_LIMITS.adminAction)
+  if (!rl.allowed) {
+    return res.status(429).json({ success: false, error: 'Rate limited.' } satisfies ApiEnvelope<never>)
+  }
+
   const body = (await readJsonBody<SkillInvokeRequest>(req)) ?? {}
   const reference = typeof body.reference === 'string' ? body.reference : ''
   if (!reference.trim()) {
@@ -158,6 +186,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (body.execute) {
+      if (!isExecutionEnabled()) {
+        logger.warn('[skills] blocked execution: disabled by env', { reference, envKey: SKILL_EXECUTION_ENV_KEY })
+        return res
+          .status(403)
+          .json({ success: false, error: `Script execution is disabled (set ${SKILL_EXECUTION_ENV_KEY}=1 to enable).` } satisfies ApiEnvelope<never>)
+      }
       if (!body.confirmed) {
         logger.warn('[skills] blocked execution: confirmation missing', { reference })
         return res.status(412).json({ success: false, error: 'Script execution requires confirmed=true.' } satisfies ApiEnvelope<never>)

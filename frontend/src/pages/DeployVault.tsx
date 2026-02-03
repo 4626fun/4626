@@ -1213,6 +1213,55 @@ function DeployVaultBatcher({
     tx3?: Hex
     tx4?: Hex
   }>({})
+  const expectedRef = useRef<ServerDeployResponse['addresses'] | null>(null)
+  const useServerContinue = useMemo(() => {
+    const v = String((import.meta as any)?.env?.VITE_DEPLOY_USE_SERVER_CONTINUE ?? '').trim().toLowerCase()
+    return v === '1' || v === 'true' || v === 'yes'
+  }, [])
+  const deploySessionStorageKey = useMemo(() => {
+    const ct = String(creatorToken ?? '').toLowerCase()
+    const ow = String(owner ?? '').toLowerCase()
+    return `cv:deploy:session:${ct}:${ow}`
+  }, [creatorToken, owner])
+  const persistDeploySession = useCallback(
+    (sessionId: string) => {
+      if (typeof window === 'undefined') return
+      try {
+        localStorage.setItem(
+          deploySessionStorageKey,
+          JSON.stringify({
+            sessionId,
+            creatorToken: String(creatorToken).toLowerCase(),
+            owner: String(owner).toLowerCase(),
+            createdAt: new Date().toISOString(),
+          }),
+        )
+      } catch {
+        // ignore storage errors
+      }
+    },
+    [creatorToken, deploySessionStorageKey, owner],
+  )
+  const clearDeploySession = useCallback(() => {
+    if (typeof window === 'undefined') return
+    try {
+      localStorage.removeItem(deploySessionStorageKey)
+    } catch {
+      // ignore
+    }
+  }, [deploySessionStorageKey])
+  const loadDeploySession = useCallback((): string | null => {
+    if (typeof window === 'undefined') return null
+    try {
+      const raw = localStorage.getItem(deploySessionStorageKey)
+      if (!raw) return null
+      const parsed = JSON.parse(raw)
+      const sessionId = typeof parsed?.sessionId === 'string' ? parsed.sessionId.trim() : ''
+      return sessionId.length > 0 ? sessionId : null
+    } catch {
+      return null
+    }
+  }, [deploySessionStorageKey])
   const shareOftVanityCacheRef = useRef<{ key: string; salt: Hex } | null>(null)
   const ensurePaymasterSession = useCallback(async () => {
     if (!getAccessToken || typeof signInWithPrivyToken !== 'function') return
@@ -1243,7 +1292,7 @@ function DeployVaultBatcher({
     return Date.now() - lastAuthAtMs > 2 * 60 * 60 * 1000
   }, [lastAuthAtMs])
 
-  const formatDeployError = (e: unknown): string => {
+  const formatDeployError = useCallback((e: unknown): string => {
     const raw = e instanceof Error ? e.message : String(e ?? '')
     const msg = String(raw || 'Deployment failed')
     const lower = msg.toLowerCase()
@@ -1338,7 +1387,91 @@ function DeployVaultBatcher({
       return 'Deployment is not configured: missing `VITE_CREATOR_VAULT_BATCHER` / `CONTRACTS.creatorVaultBatcher`.'
     }
     return msg
-  }
+  }, [switchAuthLabel])
+
+  const pollServerDeploySession = useCallback(async (sessionId: string) => {
+    let delayMs = 2000
+    let backoff = false
+    const started = Date.now()
+    while (true) {
+      const sres = await fetch('/api/deploy/session/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      })
+      const sjson = (await sres.json().catch(() => null)) as ApiEnvelope<any> | null
+      if (!sres.ok || !sjson?.success) throw new Error(sjson?.error || 'Failed to fetch deploy status')
+      const step = String(sjson.data?.step ?? '')
+      if (step === 'completed') {
+        const lastTxHash = (sjson.data?.lastTxHash ?? null) as Hex | null
+        if (lastTxHash) setTxId(lastTxHash)
+        setPhase('done')
+        clearDeploySession()
+        if (expectedRef.current) {
+          logger.warn('[DeployVault] deploy_success (server-continued)', { creatorToken, owner, deploymentVersion, sessionId })
+          onSuccess(expectedRef.current)
+        }
+        return
+      }
+      if (step === 'failed' || step === 'cancelled') {
+        clearDeploySession()
+        throw new Error(String(sjson.data?.lastError ?? 'Server deploy failed'))
+      }
+      if (Date.now() - started > 10 * 60 * 1000) {
+        throw new Error('Server deploy did not complete in time. Check status and retry continue.')
+      }
+      if (step === 'phase2_sent' || step === 'phase3_sent' || step === 'cleanup_sent') {
+        backoff = true
+      }
+      if (backoff) delayMs = Math.min(delayMs * 2, 8000)
+      await new Promise((r) => setTimeout(r, delayMs))
+    }
+  }, [clearDeploySession, creatorToken, deploymentVersion, onSuccess, owner])
+
+  useEffect(() => {
+    if (!useServerContinue) return
+    if (busy) return
+    const sessionId = loadDeploySession()
+    if (!sessionId) return
+
+    let cancelled = false
+    ;(async () => {
+      setBusy(true)
+      setError(null)
+      setPhase('phase2')
+      try {
+        await ensurePaymasterSession()
+        const statusRes = await fetch('/api/deploy/session/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        })
+        const statusJson = (await statusRes.json().catch(() => null)) as ApiEnvelope<any> | null
+        if (!statusRes.ok || !statusJson?.success) throw new Error(statusJson?.error || 'Failed to fetch deploy status')
+        const step = String(statusJson.data?.step ?? '')
+        if (step === 'created') {
+          const continueRes = await fetch('/api/deploy/session/continue', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId }),
+          })
+          const continueJson = (await continueRes.json().catch(() => null)) as ApiEnvelope<any> | null
+          if (!continueRes.ok || !continueJson?.success) {
+            throw new Error(continueJson?.error || 'Failed to continue deploy')
+          }
+        }
+        await pollServerDeploySession(sessionId)
+      } catch (e) {
+        if (!cancelled) setError(formatDeployError(e))
+      } finally {
+        if (!cancelled) setBusy(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [busy, ensurePaymasterSession, formatDeployError, loadDeploySession, pollServerDeploySession, useServerContinue])
 
   const isTxHash = (h?: string | null) => typeof h === 'string' && /^0x[a-fA-F0-9]{64}$/.test(h)
   const hrefForTx = (h?: string | null) => (isTxHash(h) ? `https://basescan.org/tx/${h}` : null)
@@ -1752,6 +1885,10 @@ function DeployVaultBatcher({
   const expectedGauge = expected?.gaugeController ?? null
   const expectedBurnStream = expected?.burnStream ?? null
   const expectedPayoutRouter = expected?.payoutRouter ?? null
+
+  useEffect(() => {
+    expectedRef.current = expected
+  }, [expected])
 
   const phase1ExistsQuery = useQuery({
     queryKey: [
@@ -3275,12 +3412,7 @@ function DeployVaultBatcher({
         if (phase2ApproveCalls.length > 0) {
           await sendPhaseCalls(phase2ApproveCalls, 'phase2', { noSplit: true, segment: 'approve' })
         }
-        await sendPhaseCalls([phase2CoreCall], 'phase2', { noSplit: true, segment: 'core' })
-        await waitForContractsDeployed({
-          publicClient: publicClient as any,
-          addresses: [expected.gaugeController, expected.ccaStrategy, expected.oracle],
-          label: 'Phase 2 core',
-        })
+
         const phase2PostCalls = phase2Calls.filter(
           (c) => c !== phase2CoreCall && c !== phase2FinalizeCall && !phase2ApproveCalls.includes(c),
         )
@@ -3304,6 +3436,92 @@ function DeployVaultBatcher({
 
           return [...create2Calls, phase2FinalizeCall, ...vaultAdminCalls, ...rest]
         })()
+
+        if (useServerContinue) {
+          let sessionId: string | null = null
+          const cancelSession = async () => {
+            if (!sessionId) return
+            try {
+              await fetch('/api/deploy/session/cancel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId }),
+              })
+            } catch {
+              // ignore cleanup failures
+            }
+          }
+
+          try {
+            // Create a deploy session BEFORE we install the temporary owner.
+            // The paymaster uses the recorded deploy session to allow self-calls to owner mgmt.
+            const createRes = await fetch('/api/deploy/session/create', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                smartWallet: owner,
+                creatorToken,
+                ownerAddress: owner,
+                // Server runs finalize+post (must include batcher call for paymaster primary-call requirement)
+                phase2Calls: phase2FinalizeAndPostCalls.map((c) => ({ to: c.target, value: String(c.value ?? 0n), data: c.data })),
+                // Server also runs strategies + deferred auction (optional)
+                phase3Calls: [...phase3Calls, ...phase4Calls].map((c) => ({ to: c.target, value: String(c.value ?? 0n), data: c.data })),
+                version: deploymentVersion,
+              }),
+            })
+            const createJson = (await createRes.json().catch(() => null)) as ApiEnvelope<any> | null
+            if (!createRes.ok || !createJson?.success) {
+              throw new Error(createJson?.error || 'Failed to create deploy session')
+            }
+            sessionId = String(createJson.data?.sessionId ?? '').trim()
+            const sessionOwner = String(createJson.data?.sessionOwner ?? '').trim()
+            if (!sessionId || !isAddress(sessionOwner)) throw new Error('Invalid deploy session response')
+            persistDeploySession(sessionId)
+
+            // Install the temporary owner (agent wallet) during the Phase2 core UserOp.
+            const addOwnerData = encodeFunctionData({
+              abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+              functionName: 'addOwnerAddress',
+              args: [getAddress(sessionOwner as Address)],
+            })
+            await sendPhaseCalls(
+              [
+                { target: owner, value: 0n, data: addOwnerData },
+                phase2CoreCall,
+              ],
+              'phase2',
+              { noSplit: true, segment: 'core' },
+            )
+            await waitForContractsDeployed({
+              publicClient: publicClient as any,
+              addresses: [expected.gaugeController, expected.ccaStrategy, expected.oracle],
+              label: 'Phase 2 core',
+            })
+
+            // Ask the server to continue (finalize_post + phase3/4 + cleanup).
+            const continueRes = await fetch('/api/deploy/session/continue', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sessionId }),
+            })
+            const continueJson = (await continueRes.json().catch(() => null)) as ApiEnvelope<any> | null
+            if (!continueRes.ok || !continueJson?.success) {
+              throw new Error(continueJson?.error || 'Failed to continue deploy')
+            }
+
+            await pollServerDeploySession(sessionId)
+          } catch (err) {
+            await cancelSession()
+            throw err
+          }
+        }
+
+        await sendPhaseCalls([phase2CoreCall], 'phase2', { noSplit: true, segment: 'core' })
+        await waitForContractsDeployed({
+          publicClient: publicClient as any,
+          addresses: [expected.gaugeController, expected.ccaStrategy, expected.oracle],
+          label: 'Phase 2 core',
+        })
         await sendPhaseCalls(phase2FinalizeAndPostCalls, 'phase2', {
           noSplit: true,
           segment: phase2PostCalls.length > 0 ? 'finalize_post' : 'finalize',

@@ -1,0 +1,73 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node'
+
+import { handleOptions } from '../../server/auth/_shared.js'
+import { guardAgentApiRequest } from '../../server/_lib/agentApiGuard.js'
+
+type OpenApiSpec = Record<string, any>
+
+function setPublicCors(res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+}
+
+function setCache(res: VercelResponse, seconds: number = 300) {
+  res.setHeader('Cache-Control', `public, s-maxage=${seconds}, stale-while-revalidate=${seconds * 2}`)
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  setPublicCors(res)
+  if (handleOptions(req, res)) return
+
+  if (req.method !== 'GET') {
+    return res.status(405).json({ success: false, error: 'Method not allowed' })
+  }
+
+  const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/spec.json', kind: 'read' })
+  if (!g.ok) return
+
+  const spec: OpenApiSpec = {
+    openapi: '3.0.3',
+    info: {
+      title: 'CreatorVault Agent API',
+      version: '1.0.0',
+      description: 'Public, agent-friendly API for querying CreatorVault and building onchain transactions (build-only).',
+    },
+    servers: [{ url: 'https://creatorvault.fun/api' }, { url: 'https://4626.fun/api' }],
+    paths: {
+      '/v1/spec.json': { get: { summary: 'OpenAPI spec', responses: { '200': { description: 'OK' } } } },
+      '/v1/vault/{address}/report': { get: { summary: 'Vault report', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
+      '/v1/vault/{address}/strategies': { get: { summary: 'Vault strategies', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
+      '/v1/auction/{address}/status': { get: { summary: 'CCA strategy auction status', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
+      '/v1/auction/{address}/recentBids': { get: { summary: 'Recent bids for an auction contract', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
+      '/v1/lottery/global': { get: { summary: 'Global lottery stats', responses: { '200': { description: 'OK' } } } },
+      '/v1/lottery/creator/{creatorCoin}': { get: { summary: 'Creator lottery stats', parameters: [{ name: 'creatorCoin', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
+      '/v1/lottery/recentWinners': { get: { summary: 'Recent lottery winners (logs)', responses: { '200': { description: 'OK' } } } },
+      '/v1/gauge/epoch': { get: { summary: 'Gauge epoch info', responses: { '200': { description: 'OK' } } } },
+      '/v1/gauge/vaults': { get: { summary: 'Gauge whitelisted vaults + weights', responses: { '200': { description: 'OK' } } } },
+      '/v1/gauge/user/{address}': { get: { summary: 'Gauge user votes', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
+      '/v1/ve4626/user/{address}': { get: { summary: 've4626 lock + power', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
+
+      // Build-only endpoints (return unsigned tx calldata)
+      '/v1/build/auction/submitBid': { post: { summary: 'Build CCA submitBid calldata', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/gauge/vote': { post: { summary: 'Build gauge vote calldata', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/gauge/resetVotes': { post: { summary: 'Build gauge resetVotes calldata', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/ve4626/lock': { post: { summary: 'Build ve4626 lock calldata', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/ve4626/extend': { post: { summary: 'Build ve4626 extendLock calldata', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/ve4626/increase': { post: { summary: 'Build ve4626 increaseLock calldata', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/ve4626/unlock': { post: { summary: 'Build ve4626 unlock calldata', responses: { '200': { description: 'OK' } } } },
+
+      '/v1/build/ajna/borrow': { post: { summary: 'Build Ajna ERC20Pool drawDebt calldata', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/ajna/repay': { post: { summary: 'Build Ajna ERC20Pool repayDebt calldata', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/ajna/addCollateral': { post: { summary: 'Build Ajna pledge collateral calldata', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/ajna/removeCollateral': { post: { summary: 'Build Ajna pull collateral calldata', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/ajna/setBucketIndex': { post: { summary: 'Build AjnaStrategy setBucketIndex calldata (owner)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/ajna/moveToBucket': { post: { summary: 'Build AjnaStrategy moveToBucket calldata (owner)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/ajna/setIdleBufferBps': { post: { summary: 'Build AjnaStrategy setIdleBufferBps calldata (owner)', responses: { '200': { description: 'OK' } } } },
+    },
+  }
+
+  setCache(res, 600)
+  return res.status(200).json(spec)
+}
+
