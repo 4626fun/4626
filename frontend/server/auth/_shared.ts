@@ -149,7 +149,9 @@ function getAllowedOrigins(): Set<string> {
 export function setCors(req: VercelRequest, res: VercelResponse) {
   // Allow Authorization so embedded contexts can pass a session token when cookies are blocked.
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CV-Paymaster-Debug')
+  // Allow clients to read debug breadcrumbs when explicitly enabled.
+  res.setHeader('Access-Control-Expose-Headers', 'X-CV-Paymaster-Debug')
 
   const originHeader = typeof req.headers?.origin === 'string' ? req.headers.origin : ''
   const origin = originHeader ? (() => {

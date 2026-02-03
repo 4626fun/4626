@@ -860,10 +860,14 @@ export async function sendCrossAppUserOperation(params: {
 
   // Set up bundler + paymaster (uses CDP for gas sponsorship)
   const sessionToken = typeof window !== 'undefined' ? getStoredSessionToken() : null
+  const transportHeaders = {
+    ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+    ...(AA_DEBUG ? { 'X-CV-Paymaster-Debug': '1' } : {}),
+  } as Record<string, string>
   const transport = http(bundlerUrl, {
     fetchOptions: {
       credentials: 'include',
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
+      headers: Object.keys(transportHeaders).length > 0 ? transportHeaders : undefined,
     },
   })
   const paymasterClient = createPaymasterClient({ transport })
@@ -1158,10 +1162,14 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // If `bundlerUrl` is our same-origin proxy (`/api/paymaster`), we MUST include cookies
   // so the backend can validate the SIWE session (`cv_auth_session`).
   const sessionToken = typeof window !== 'undefined' ? getStoredSessionToken() : null
+  const transportHeaders = {
+    ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+    ...(AA_DEBUG ? { 'X-CV-Paymaster-Debug': '1' } : {}),
+  } as Record<string, string>
   const transport = http(bundlerUrl, {
     fetchOptions: {
       credentials: 'include',
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
+      headers: Object.keys(transportHeaders).length > 0 ? transportHeaders : undefined,
     },
   })
   const paymasterClient = createPaymasterClient({ transport })

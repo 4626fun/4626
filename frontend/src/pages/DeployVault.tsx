@@ -3287,8 +3287,23 @@ function DeployVaultBatcher({
         // IMPORTANT: Keep a batcher call in the same sponsored UserOp.
         // The paymaster requires a "primary" call to `creatorVaultBatcher` / `vaultActivationBatcher`,
         // so we bundle finalize + post into one executeBatch to avoid `missing_primary_call`.
-        const phase2FinalizeAndPostCalls =
-          phase2PostCalls.length > 0 ? [phase2FinalizeCall, ...phase2PostCalls] : [phase2FinalizeCall]
+        const phase2FinalizeAndPostCalls = (() => {
+          if (phase2PostCalls.length === 0) return [phase2FinalizeCall]
+
+          // Ordering matters for simulation:
+          // - Deploy burnStream + payoutRouter first (CREATE2 from store)
+          // - Then run `finalizePhase2`
+          // - Then apply vault admin wiring + any remaining post calls
+          const create2Calls = phase2PostCalls.filter(
+            (c) => String(c.target).toLowerCase() === String(expectedCreate2Deployer).toLowerCase(),
+          )
+          const vaultAdminCalls = phase2PostCalls.filter(
+            (c) => String(c.target).toLowerCase() === String(expected.vault).toLowerCase(),
+          )
+          const rest = phase2PostCalls.filter((c) => !create2Calls.includes(c) && !vaultAdminCalls.includes(c))
+
+          return [...create2Calls, phase2FinalizeCall, ...vaultAdminCalls, ...rest]
+        })()
         await sendPhaseCalls(phase2FinalizeAndPostCalls, 'phase2', {
           noSplit: true,
           segment: phase2PostCalls.length > 0 ? 'finalize_post' : 'finalize',

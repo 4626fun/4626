@@ -985,6 +985,17 @@ async function validateInnerCalls(params: {
   sessionAddress: Address
   callData: Hex
   deploySessionOwner?: Address | null
+  debug?: (info: {
+    deployer: Address
+    storeEnv: Address | null
+    storeFromDeployer: Address | null
+    storeUsed: Address
+    expectedVault?: Address | null
+    expectedBurnStream?: Address | null
+    expectedPayoutRouter?: Address | null
+    payoutRouterBurnStreamArg?: Address | null
+    vaultBurnStreamArg?: Address | null
+  }) => void
 }): Promise<{ expectedCreatorToken: Address }> {
   const contracts = getApiContracts()
   if (!contracts.creatorVaultBatcher) throw new Error('creator_vault_batcher_not_configured')
@@ -1140,7 +1151,9 @@ async function validateInnerCalls(params: {
   // Prefer deriving the bytecode store from the deployer itself (`deployer.store()`),
   // so paymaster validation cannot drift from onchain infra due to env misconfiguration.
   const bytecodeStoreRaw = contracts.universalBytecodeStore
-  let bytecodeStore: Address | null = null
+  const envStore: Address | null = bytecodeStoreRaw && isAddress(bytecodeStoreRaw) ? getAddress(bytecodeStoreRaw) : null
+  let bytecodeStore: Address | null = envStore
+  let deployerStore: Address | null = null
   if (bytecodeStoreRaw && isAddress(bytecodeStoreRaw)) {
     bytecodeStore = getAddress(bytecodeStoreRaw)
   }
@@ -1161,15 +1174,23 @@ async function validateInnerCalls(params: {
       functionName: 'store',
     })) as Address
     if (store && isAddress(store)) {
-      bytecodeStore = getAddress(store)
+      deployerStore = getAddress(store)
+      bytecodeStore = deployerStore
     }
   } catch {
     // ignore; fall back to env/default
   }
   if (!bytecodeStore) throw new Error('bytecode_store_not_configured')
-  if (bytecodeStoreRaw && isAddress(bytecodeStoreRaw) && getAddress(bytecodeStoreRaw) !== bytecodeStore) {
+  params.debug?.({
+    deployer: create2DeployerFromStore,
+    storeEnv: envStore,
+    storeFromDeployer: deployerStore,
+    storeUsed: bytecodeStore,
+    expectedVault,
+  })
+  if (envStore && envStore !== bytecodeStore) {
     logger.warn('[Paymaster] bytecode_store_mismatch', {
-      envBytecodeStore: getAddress(bytecodeStoreRaw),
+      envBytecodeStore: envStore,
       deployerStore: bytecodeStore,
       deployer: create2DeployerFromStore,
     })
@@ -1316,6 +1337,16 @@ async function validateInnerCalls(params: {
         BASE_WETH,
       ]),
     })
+
+    params.debug?.({
+      deployer: create2DeployerFromStore,
+      storeEnv: envStore,
+      storeFromDeployer: deployerStore,
+      storeUsed: bytecodeStore,
+      expectedVault,
+      expectedBurnStream,
+      expectedPayoutRouter,
+    })
   }
 
   // Pass 2: validate each inner call fits the expected patterns.
@@ -1460,7 +1491,19 @@ async function validateInnerCalls(params: {
 
         if (!creatorCoinArg || creatorCoinArg !== expectedCreatorToken) throw new Error('payout_router_creator_mismatch')
         if (!vaultArg || vaultArg !== expectedVault) throw new Error('payout_router_vault_mismatch')
-        if (!burnStreamArg || burnStreamArg !== expectedBurnStream) throw new Error('payout_router_burn_stream_mismatch')
+        if (!burnStreamArg || burnStreamArg !== expectedBurnStream) {
+          params.debug?.({
+            deployer: create2DeployerFromStore,
+            storeEnv: envStore,
+            storeFromDeployer: deployerStore,
+            storeUsed: bytecodeStore,
+            expectedVault,
+            expectedBurnStream,
+            expectedPayoutRouter,
+            payoutRouterBurnStreamArg: burnStreamArg,
+          })
+          throw new Error('payout_router_burn_stream_mismatch')
+        }
         if (!ownerArg || ownerArg !== params.sender) throw new Error('payout_router_owner_mismatch')
         if (!swapRouterArg || swapRouterArg !== BASE_SWAP_ROUTER) throw new Error('payout_router_swap_router_mismatch')
         if (!wethArg || wethArg !== BASE_WETH) throw new Error('payout_router_weth_mismatch')
@@ -1478,7 +1521,19 @@ async function validateInnerCalls(params: {
       }
       if (selector === SELECTOR_VAULT_SET_BURN_STREAM) {
         const burnStreamArg = decodeAddressArgFromCalldata(c.data, 0)
-        if (!burnStreamArg || burnStreamArg !== expectedBurnStream) throw new Error('vault_burn_stream_mismatch')
+        if (!burnStreamArg || burnStreamArg !== expectedBurnStream) {
+          params.debug?.({
+            deployer: create2DeployerFromStore,
+            storeEnv: envStore,
+            storeFromDeployer: deployerStore,
+            storeUsed: bytecodeStore,
+            expectedVault,
+            expectedBurnStream,
+            expectedPayoutRouter,
+            vaultBurnStreamArg: burnStreamArg,
+          })
+          throw new Error('vault_burn_stream_mismatch')
+        }
       } else {
         const accountArg = decodeAddressArgFromCalldata(c.data, 0)
         const statusArg = decodeBoolArgFromCalldata(c.data, 1)
@@ -1515,6 +1570,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
   if (handleOptions(req, res)) return
+
+  const debugRequested = String(req.headers?.['x-cv-paymaster-debug'] ?? '').trim() === '1'
+  const debugEnabled = debugRequested || String(process.env.PAYMASTER_DEBUG ?? '').trim() === '1'
+  let debugStoreInfo:
+    | {
+        deployer: Address
+        storeEnv: Address | null
+        storeFromDeployer: Address | null
+        storeUsed: Address
+      }
+    | null = null
+
+  function formatDebugStoreInfo(info: NonNullable<typeof debugStoreInfo>): string {
+    const parts = [
+      `deployer=${info.deployer}`,
+      `storeUsed=${info.storeUsed}`,
+      `storeEnv=${info.storeEnv ?? 'null'}`,
+      `storeFromDeployer=${info.storeFromDeployer ?? 'null'}`,
+      `expectedVault=${info.expectedVault ?? 'null'}`,
+      `expectedBurnStream=${info.expectedBurnStream ?? 'null'}`,
+      `expectedPayoutRouter=${info.expectedPayoutRouter ?? 'null'}`,
+      `payoutRouterBurnStreamArg=${info.payoutRouterBurnStreamArg ?? 'null'}`,
+      `vaultBurnStreamArg=${info.vaultBurnStreamArg ?? 'null'}`,
+    ]
+    return parts.join(',')
+  }
 
   if (req.method !== 'POST') {
     // Keep JSON-RPC clients happy (avoid transport-level failure masking).
@@ -1668,7 +1749,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (String(ownerBytes).toLowerCase() !== String(expected).toLowerCase()) throw new Error('deploy_session_owner_mismatch')
         }
       } else {
-        const validated = await validateInnerCalls({ sender, sessionAddress, callData: callDataRaw, deploySessionOwner })
+        const validated = await validateInnerCalls({
+          sender,
+          sessionAddress,
+          callData: callDataRaw,
+          deploySessionOwner,
+          debug: debugEnabled
+            ? (info) => {
+                debugStoreInfo = info
+              }
+            : undefined,
+        })
         expectedCreatorToken = validated.expectedCreatorToken
       }
 
@@ -1687,7 +1778,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(jsonRpcError(null, -32002, 'request denied - allowlist unavailable'))
     }
     const msg = err instanceof Error ? err.message : 'request denied'
-    logger.warn('[paymaster-proxy] validation denied', { msg })
+    if (debugEnabled) {
+      logger.warn('[paymaster-proxy] validation denied (debug)', { msg, debugStoreInfo })
+    } else {
+      logger.warn('[paymaster-proxy] validation denied', { msg })
+    }
+    if (debugRequested && debugStoreInfo) {
+      res.setHeader('X-CV-Paymaster-Debug', formatDebugStoreInfo(debugStoreInfo))
+      return res
+        .status(200)
+        .json(jsonRpcError(null, -32002, `request denied - ${msg} (debug ${formatDebugStoreInfo(debugStoreInfo)})`))
+    }
     return res.status(200).json(jsonRpcError(null, -32002, `request denied - ${msg}`))
   }
 
