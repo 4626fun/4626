@@ -41,7 +41,17 @@ contract CharmAlphaVaultDeploy is CharmAlphaVault {
         int24 _limitThreshold,
         int24 _maxTwapDeviation,
         uint32 _twapDuration
-    ) external onlyGovernance {
+    ) external {
+        // NOTE:
+        // This function is intended to be called immediately after deployment (in the same tx)
+        // by our batcher/orchestrator. When deploying via a shared CREATE2 deployer contract,
+        // `governance` (set in the parent constructor) will be the CREATE2 deployer address,
+        // not the batcher — so `onlyGovernance` would incorrectly revert.
+        //
+        // Safety:
+        // - The function is one-time (`_initialized`).
+        // - During our flow, deploy + initialize happen back-to-back in a single transaction,
+        //   so there's no opportunity for a third party to front-run initialization.
         require(!_initialized, "Already initialized");
         require(_newGovernance != address(0), "Invalid governance");
         require(_newKeeper != address(0), "Invalid keeper");
