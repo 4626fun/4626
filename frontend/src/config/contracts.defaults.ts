@@ -28,8 +28,8 @@ export const BASE_DEFAULTS = {
   create2Factory: addr('4e59b44847b379578588920cA78FbF26c0B4956C'),
   create2Deployer: addr('aBf645362104F34D9C3FE48440bE7c99aaDE58E7'),
   // Phase-2 v2 bytecode store (chunked) + deterministic CREATE2 deployer-from-store
-  universalBytecodeStore: addr('2b5c97c488B96063153D530e06c34dD5272F3904'),
-  universalCreate2DeployerFromStore: addr('1e8D381BA03772E1F657B182569e8BFfC111bdd3'),
+  universalBytecodeStore: addr('673B7Fb967A94d889db91258678bf7ca865C8762'),
+  universalCreate2DeployerFromStore: addr('9004dDAD2F7F63eA467014a7e4C62289868d3df1'),
 
   // AA helpers
   vaultActivationBatcher: addr('4b67e3a4284090e5191c27B8F24248eC82DF055D'),
