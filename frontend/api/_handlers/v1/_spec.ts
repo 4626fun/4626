@@ -29,11 +29,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const spec: OpenApiSpec = {
     openapi: '3.0.3',
     info: {
-      title: 'CreatorVault Agent API',
+      title: '4626.fun Agent API',
       version: '1.0.0',
-      description: 'Public, agent-friendly API for querying CreatorVault and building onchain transactions (build-only).',
+      description: 'Public, agent-friendly API for querying 4626.fun and building onchain transactions (build-only).',
     },
-    servers: [{ url: 'https://creatorvault.fun/api' }, { url: 'https://4626.fun/api' }],
+    servers: [{ url: 'https://4626.fun/api' }],
     paths: {
       '/v1/spec.json': { get: { summary: 'OpenAPI spec', responses: { '200': { description: 'OK' } } } },
       '/v1/vault/{address}/report': { get: { summary: 'Vault report', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
@@ -48,6 +48,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '/v1/gauge/user/{address}': { get: { summary: 'Gauge user votes', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
       '/v1/ve4626/user/{address}': { get: { summary: 've4626 lock + power', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
       '/v1/charm/strategy/{address}': { get: { summary: 'Charm strategy config + status', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
+      '/v1/agents/creators': { get: { summary: 'List creator XMTP agents', responses: { '200': { description: 'OK' } } } },
+      '/v1/agents/creators/enable': { post: { summary: 'Enable/provision creator XMTP agent (auth required)', responses: { '200': { description: 'OK' } } } },
 
       // Build-only endpoints (return unsigned tx calldata)
       '/v1/build/auction/submitBid': { post: { summary: 'Build CCA submitBid calldata', responses: { '200': { description: 'OK' } } } },

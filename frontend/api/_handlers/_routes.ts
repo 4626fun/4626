@@ -13,6 +13,7 @@ type ApiHandlerModule = { default?: ApiHandler }
 // but avoid eager importing every handler at module-load time (which can crash the entire function).
 export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'analytics': () => import('./_analytics.js'),
+  'agents': () => import('./_agents.js'),
   'agent/invokeSkill': () => import('./agent/_invokeSkill.js'),
 
   // Public, agent-friendly v1 API
@@ -29,6 +30,8 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'v1/gauge/user': () => import('./v1/gauge/_user.js'),
   'v1/ve4626/user': () => import('./v1/ve4626/_user.js'),
   'v1/charm/strategy': () => import('./v1/charm/_strategy.js'),
+  'v1/agents/creators': () => import('./v1/agents/creators/_list.js'),
+  'v1/agents/creators/enable': () => import('./v1/agents/creators/_enable.js'),
   'v1/build/auction/submitBid': () => import('./v1/build/auction/_submitBid.js'),
   'v1/build/gauge/vote': () => import('./v1/build/gauge/_vote.js'),
   'v1/build/gauge/resetVotes': () => import('./v1/build/gauge/_resetVotes.js'),
