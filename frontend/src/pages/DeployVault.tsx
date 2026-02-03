@@ -1639,19 +1639,85 @@ function DeployVaultBatcher({
       const burnStreamSalt = deriveVaultShareBurnStreamSalt({ creatorToken, owner })
       const burnStreamArgs = encodeAbiParameters(parseAbiParameters('address'), [vaultAddress])
       const burnStreamInitCode = concatHex([DEPLOY_BYTECODE.VaultShareBurnStream as Hex, burnStreamArgs])
-      const burnStreamAddress = predictCreate2Address({ create2Deployer, salt: burnStreamSalt, initCode: burnStreamInitCode })
 
       const payoutRouterSalt = derivePayoutRouterSalt({ creatorToken, owner })
-      const payoutRouterArgs = encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address'), [
-        creatorToken,
-        vaultAddress,
-        burnStreamAddress,
-        owner,
-        getAddress(BASE_SWAP_ROUTER as Address),
-        weth,
-      ])
-      const payoutRouterInitCode = concatHex([DEPLOY_BYTECODE.PayoutRouter as Hex, payoutRouterArgs])
-      const payoutRouterAddress = predictCreate2Address({ create2Deployer, salt: payoutRouterSalt, initCode: payoutRouterInitCode })
+
+      // IMPORTANT: burnStream + payoutRouter are deployed via UniversalCreate2DeployerFromStore in Phase 2.
+      // The paymaster computes expected addresses using `bytecodeStore.get(codeId)` + CREATE2.
+      // To avoid mismatches, compute these expected addresses the same way (fall back to local bytecode if needed).
+      let burnStreamAddress = predictCreate2Address({ create2Deployer, salt: burnStreamSalt, initCode: burnStreamInitCode })
+      let payoutRouterAddress = (() => {
+        const args = encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address'), [
+          creatorToken,
+          vaultAddress,
+          burnStreamAddress,
+          owner,
+          getAddress(BASE_SWAP_ROUTER as Address),
+          weth,
+        ])
+        const init = concatHex([DEPLOY_BYTECODE.PayoutRouter as Hex, args])
+        return predictCreate2Address({ create2Deployer, salt: payoutRouterSalt, initCode: init })
+      })()
+
+      try {
+        const BYTECODE_STORE_GET_ABI = [
+          {
+            type: 'function',
+            name: 'get',
+            stateMutability: 'view',
+            inputs: [{ name: 'codeId', type: 'bytes32' }],
+            outputs: [{ name: 'creationCode', type: 'bytes' }],
+          },
+        ] as const
+
+        let bytecodeStore: Address | null = null
+        try {
+          bytecodeStore = (await publicClient!.readContract({
+            address: batcherAddress as Address,
+            abi: CREATOR_VAULT_BATCHER_ABI,
+            functionName: 'bytecodeStore',
+          })) as Address
+        } catch {
+          bytecodeStore = null
+        }
+        if (!bytecodeStore || !isAddress(String(bytecodeStore))) {
+          const fallback = (CONTRACTS.universalBytecodeStore ?? null) as Address | null
+          bytecodeStore = fallback && isAddress(String(fallback)) ? fallback : null
+        }
+
+        if (bytecodeStore) {
+          const [burnCreation, routerCreation] = (await Promise.all([
+            publicClient!.readContract({
+              address: bytecodeStore,
+              abi: BYTECODE_STORE_GET_ABI,
+              functionName: 'get',
+              args: [vaultShareBurnStreamCodeId],
+            }),
+            publicClient!.readContract({
+              address: bytecodeStore,
+              abi: BYTECODE_STORE_GET_ABI,
+              functionName: 'get',
+              args: [payoutRouterCodeId],
+            }),
+          ])) as [Hex, Hex]
+
+          const burnInitHash = keccak256(concatHex([burnCreation as Hex, burnStreamArgs]))
+          burnStreamAddress = getCreate2Address({ from: create2Deployer, salt: burnStreamSalt, bytecodeHash: burnInitHash })
+
+          const routerArgsFixed = encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address'), [
+            creatorToken,
+            vaultAddress,
+            burnStreamAddress,
+            owner,
+            getAddress(BASE_SWAP_ROUTER as Address),
+            weth,
+          ])
+          const routerInitHash = keccak256(concatHex([routerCreation as Hex, routerArgsFixed]))
+          payoutRouterAddress = getCreate2Address({ from: create2Deployer, salt: payoutRouterSalt, bytecodeHash: routerInitHash })
+        }
+      } catch {
+        // Best-effort: fall back to local bytecode predictions
+      }
 
       const oracleArgs = encodeAbiParameters(parseAbiParameters('address,address,string,address'), [
         registryAddress,
