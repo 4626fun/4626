@@ -2,6 +2,7 @@ import type { Address } from 'viem'
 
 import { checkSharesEligibility } from '../_lib/keeprGating.js'
 import { getKeeprVaultByGroupId, setKeeprJoinLocked } from '../_lib/keeprRegistry.js'
+import { handleFarcasterCommand } from '../farcaster/commands.js'
 
 export type KeeprRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 
@@ -52,10 +53,32 @@ export async function handleKeeprCommand(params: {
   senderWallet: Address
   text: string
 }): Promise<KeeprCommandResult> {
+  const raw = (params.text ?? '').trim()
+  
+  // Handle Farcaster commands (/fc or fc)
+  const looksLikeFc = raw.toLowerCase().startsWith('/fc') || raw.toLowerCase().startsWith('fc ')
+  if (looksLikeFc) {
+    // Determine role for Farcaster commands
+    const v = await getKeeprVaultByGroupId(params.groupId)
+    let role: KeeprRole = 'MEMBER'
+    if (v) {
+      const owner = v.canonicalOwnerAddress
+      const admins = Array.isArray(v.config?.roles?.admins) ? v.config.roles.admins : []
+      const adminsLc = admins.filter(isAddressLike).map((a) => a.toLowerCase() as Address)
+      role = roleForWallet({ wallet: params.senderWallet, owner, admins: adminsLc })
+    }
+    return handleFarcasterCommand({
+      groupId: params.groupId,
+      senderWallet: params.senderWallet,
+      text: raw,
+      role,
+    })
+  }
+
   const v = await getKeeprVaultByGroupId(params.groupId)
   if (!v) {
     // Allow basic commands to explain next steps even if not configured.
-    const raw0 = (params.text ?? '').trim().toLowerCase()
+    const raw0 = raw.toLowerCase()
     const looksLikeKeepr = raw0.startsWith('/keepr') || raw0.startsWith('keepr')
     const parts0 = raw0.split(/\s+/g).filter(Boolean)
     const cmd0 = looksLikeKeepr ? (parts0[1] ?? 'help') : ''
@@ -93,6 +116,13 @@ export async function handleKeeprCommand(params: {
         '- keepr lock (OWNER)',
         '- keepr unlock (OWNER)',
         '- keepr sync (ADMIN/OWNER)',
+        '',
+        'Farcaster commands (type /fc help for more):',
+        '',
+        '- /fc profile <address|fid>',
+        '- /fc cast <message> (ADMIN/OWNER)',
+        '- /fc gallery',
+        '- /fc stats',
       ].join('\n'),
     }
   }

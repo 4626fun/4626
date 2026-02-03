@@ -137,6 +137,10 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   // Versioned API paths (v1/token/{address}/metadata and v1/token/{address}/image)
   // These are handled dynamically in getApiHandler below
 
+  // Farcaster Frames
+  'frames/vault': () => import('./frames/_vault.js'),
+  'frames/gallery': () => import('./frames/_gallery.js'),
+
   'zora/coin': () => import('./zora/_coin.js'),
   'zora/explore': () => import('./zora/_explore.js'),
   'zora/metrics': () => import('./zora/_metrics.js'),
