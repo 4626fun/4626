@@ -2944,9 +2944,13 @@ function DeployVaultBatcher({
             }
           }
           
-          // PATH 3: Connected EOA is owner of canonical smart wallet
-          // Use ERC-4337 with the EOA signing UserOps for the canonical wallet
-          if (canonicalSmartWallet && connectedIsCanonicalOwner && connectedAddress && wagmiWalletClient && publicClient) {
+          const tryConnectedEoaSigner = async (): Promise<boolean> => {
+            // PATH 3: Connected EOA is owner of canonical smart wallet
+            // Use ERC-4337 with the EOA signing UserOps for the canonical wallet
+            if (!canonicalSmartWallet || !connectedIsCanonicalOwner || !connectedAddress || !wagmiWalletClient || !publicClient) {
+              return false
+            }
+
             logger.info(`[DeployVault] Using ERC-4337 via connected EOA for ${logPhaseLabel}`)
 
             const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
@@ -4518,7 +4522,6 @@ function DeployVaultMain() {
     ensureBaseChain,
     privySmartWalletAddress,
     privySmartWalletIsCanonicalOwnerQuery,
-    ensureBaseChain,
     publicClient,
     walletClient,
   ])

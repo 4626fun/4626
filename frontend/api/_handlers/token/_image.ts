@@ -169,7 +169,9 @@ async function resolveStableCreatorCoinImageHref(params: {
 
   const coin = params.creatorCoin.toLowerCase()
   const urlHash = sha256Hex(url)
-  const sourcePath = `coin-images/v${SOURCE_CACHE_V}/base/${params.chainId}/${coin}/${urlHash}.png`
+  // IMPORTANT: source bytes are normalized to PNG at `size` before being cached.
+  // Include `size` in the cache key to avoid reusing a small cached PNG for larger requests (blurry upscales).
+  const sourcePath = `coin-images/v${SOURCE_CACHE_V}/base/${params.chainId}/${coin}/${urlHash}/size-${params.size}.png`
 
   // If we already have it, use the Blob URL (durable, cacheable).
   const existing = await blobHeadOrNull(sourcePath)
@@ -193,7 +195,9 @@ async function getOrCreatePng(params: {
   const creatorCoinLc = params.creatorCoin ? params.creatorCoin.toLowerCase() : null
   const urlHash = url ? sha256Hex(url) : 'no-upstream'
   const sourcePath =
-    creatorCoinLc && url ? `coin-images/v${SOURCE_CACHE_V}/base/${params.chainId}/${creatorCoinLc}/${urlHash}.png` : null
+    creatorCoinLc && url
+      ? `coin-images/v${SOURCE_CACHE_V}/base/${params.chainId}/${creatorCoinLc}/${urlHash}/size-${params.size}.png`
+      : null
 
   // If we have a content-addressed cached PNG already, serve it.
   const tokenKey = `token-images/v1/base/${params.chainId}/${shareOftLc}/size-${params.size}/frame-${FRAME_STYLE_V}/${sha256Hex(
