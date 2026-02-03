@@ -56,7 +56,7 @@ export function VaultNavBar() {
   const items = isAdmin ? [...baseItems, ADMIN_ITEM] : baseItems
 
   return (
-    <header className="sticky top-0 left-0 right-0 z-50 transition-all duration-500">
+    <header className="hidden md:block sticky top-0 left-0 right-0 z-50 transition-all duration-500">
       <div className="absolute inset-0 bg-vault-bg/70 backdrop-blur-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)]" />
 
       <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-brand-primary/25 to-transparent opacity-60" />
