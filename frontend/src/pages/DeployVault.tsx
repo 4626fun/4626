@@ -2957,13 +2957,18 @@ function DeployVaultBatcher({
           addresses: [expected.gaugeController, expected.ccaStrategy, expected.oracle],
           label: 'Phase 2 core',
         })
-        await sendPhaseCalls([phase2FinalizeCall], 'phase2', { noSplit: true, segment: 'finalize' })
         const phase2PostCalls = phase2Calls.filter(
           (c) => c !== phase2CoreCall && c !== phase2FinalizeCall && !phase2ApproveCalls.includes(c),
         )
-        if (phase2PostCalls.length > 0) {
-          await sendPhaseCalls(phase2PostCalls, 'phase2', { noSplit: true, segment: 'post' })
-        }
+        // IMPORTANT: Keep a batcher call in the same sponsored UserOp.
+        // The paymaster requires a "primary" call to `creatorVaultBatcher` / `vaultActivationBatcher`,
+        // so we bundle finalize + post into one executeBatch to avoid `missing_primary_call`.
+        const phase2FinalizeAndPostCalls =
+          phase2PostCalls.length > 0 ? [phase2FinalizeCall, ...phase2PostCalls] : [phase2FinalizeCall]
+        await sendPhaseCalls(phase2FinalizeAndPostCalls, 'phase2', {
+          noSplit: true,
+          segment: phase2PostCalls.length > 0 ? 'finalize_post' : 'finalize',
+        })
 
         // Phase 3: Strategies (optional)
         if (phase3Calls.length > 0) {
