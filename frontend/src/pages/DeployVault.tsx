@@ -2470,194 +2470,7 @@ function DeployVaultBatcher({
             return
           }
           
-          // PATH 1.5: Privy app smart wallet is an owner (EIP-1271 signer)
-          if (
-            canonicalSmartWallet &&
-            privySmartWalletIsCanonicalOwner &&
-            privySmartWalletCanSign &&
-            smartWalletClient &&
-            privySmartWalletAddress &&
-            publicClient &&
-            !preferEmbeddedEoaRef.current
-          ) {
-            logger.info(`[DeployVault] Using ERC-4337 via Privy smart wallet owner for ${logPhaseLabel}`, {
-              canonicalSmartWallet,
-              privySmartWalletAddress,
-            })
-
-            const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-
-            await ensureProviderOnBase(smartWalletClient, 'Privy smart wallet')
-
-            const smartWalletClientAdapter = {
-              request: async (args: { method: string; params: any[] }) => {
-                const client: any = smartWalletClient as any
-                const account: any = client?.account
-                if (args.method === 'eth_sign') {
-                  const [, hashToSign] = args.params ?? []
-                  if (AA_DEBUG) {
-                    logger.debug('[DeployVault] Privy smart wallet eth_sign', {
-                      hasAccountSign: typeof account?.sign === 'function',
-                      hasAccountSignMessage: typeof account?.signMessage === 'function',
-                      hasClientSignMessage: typeof client?.signMessage === 'function',
-                    })
-                  }
-                  let rawResult: unknown
-                  if (typeof account?.sign === 'function') {
-                    rawResult = await account.sign({ hash: hashToSign })
-                  } else if (typeof account?.signMessage === 'function') {
-                    rawResult = await account.signMessage({ message: { raw: hashToSign } })
-                  } else if (typeof client?.signMessage === 'function') {
-                    rawResult = await client.signMessage({ account: privySmartWalletAddress, message: { raw: hashToSign } })
-                  } else {
-                    throw new Error('Privy smart wallet does not support raw signing')
-                  }
-                  const sig = ensureSignatureHex(rawResult, 'privySmartWallet.eth_sign')
-                  logNonEoaSignature(sig, 'privySmartWallet.eth_sign')
-                  return sig
-                }
-                if (typeof client?.request === 'function') {
-                  return await client.request(args)
-                }
-                throw new Error('Privy smart wallet client does not support request()')
-              },
-              signMessage: async (args: { account: Address; message: any }) => {
-                const msg = typeof args.message === 'object' && args.message !== null && 'raw' in args.message
-                  ? args.message.raw
-                  : args.message
-                const client: any = smartWalletClient as any
-                const account: any = client?.account
-                const hasAccountSign = typeof account?.sign === 'function'
-                const hasAccountSignMessage = typeof account?.signMessage === 'function'
-                const hasClientSignMessage = typeof client?.signMessage === 'function'
-                const hasSignMessage = hasAccountSignMessage || hasClientSignMessage
-                const hasRequest = typeof client?.request === 'function'
-
-                if (AA_DEBUG) {
-                  logger.debug('[DeployVault] Privy smart wallet signer capabilities', {
-                    hasAccountSign,
-                    hasSignMessage,
-                    hasRequest,
-                  })
-                }
-
-                if (hasSignMessage) {
-                  const context = hasAccountSignMessage ? 'privySmartWallet.account.signMessage' : 'privySmartWallet.signMessage'
-                  const rawResult = await withTimeout(
-                    hasAccountSignMessage
-                      ? account.signMessage({ message: msg })
-                      : client.signMessage({ account: privySmartWalletAddress, message: msg }),
-                    20_000,
-                    context,
-                  )
-                  const sig = ensureSignatureHex(rawResult, context)
-                  logNonEoaSignature(sig, context)
-                  debugSignatureReady(context, sig, { signer: privySmartWalletAddress })
-                  return sig
-                }
-
-                throw new Error(
-                  'Privy smart wallet signer not supported in this environment. ' +
-                    'Use Coinbase Wallet (Base Account) or connect an owner EOA.'
-                )
-              },
-              signTypedData: async (args: any) => {
-                const client: any = smartWalletClient as any
-                const account: any = client?.account
-                if (typeof account?.signTypedData === 'function' || typeof client?.signTypedData === 'function') {
-                  const context =
-                    typeof account?.signTypedData === 'function'
-                      ? 'privySmartWallet.account.signTypedData'
-                      : 'privySmartWallet.signTypedData'
-                  const rawResult = await withTimeout(
-                    typeof account?.signTypedData === 'function'
-                      ? account.signTypedData(args as any)
-                      : client.signTypedData({ account: privySmartWalletAddress, ...(args as any) }),
-                    20_000,
-                    context,
-                  )
-                  const sig = ensureSignatureHex(rawResult, context)
-                  logNonEoaSignature(sig, context)
-                  debugSignatureReady(context, sig, { signer: privySmartWalletAddress })
-                  return sig
-                }
-                throw new Error(
-                  'Privy smart wallet signer not supported in this environment. ' +
-                    'Use Coinbase Wallet (Base Account) or connect an owner EOA.'
-                )
-              },
-            }
-
-            try {
-              const result = await sendCoinbaseSmartWalletUserOperation({
-                publicClient: publicClient as any,
-                walletClient: smartWalletClientAdapter as any,
-                bundlerUrl,
-                smartWallet: canonicalSmartWallet,
-                ownerAddress: privySmartWalletAddress,
-                calls: toCalls(calls),
-                version: '1',
-                userOpSignMode: 'eth_sign',
-                ownerIsContract: true,
-              })
-
-              setTxId(result.transactionHash)
-              setPhaseTxs((s) => ({
-                ...s,
-                [
-                  phaseLabel === 'phase1'
-                    ? 'userOp1'
-                    : phaseLabel === 'phase2'
-                      ? 'userOp2'
-                      : phaseLabel === 'phase3'
-                        ? 'userOp3'
-                        : 'userOp4'
-                ]: result.userOpHash,
-                [
-                  phaseLabel === 'phase1'
-                    ? 'tx1'
-                    : phaseLabel === 'phase2'
-                      ? 'tx2'
-                      : phaseLabel === 'phase3'
-                        ? 'tx3'
-                        : 'tx4'
-                ]: result.transactionHash,
-              }))
-              logger.warn(`[DeployVault] ${logPhaseLabel}_confirmed via ERC-4337 (privy smart wallet owner)`, {
-                userOpHash: result.userOpHash,
-                txHash: result.transactionHash,
-              })
-              return
-            } catch (e) {
-              const msg = e instanceof Error ? e.message : String(e ?? '')
-              const lc = msg.toLowerCase()
-              const shouldFallback =
-                lc.includes('invalid signature') ||
-                lc.includes('signature check failed') ||
-                lc.includes('signature verification used more gas') ||
-                lc.includes('verificationgaslimit') ||
-                lc.includes('aa40') ||
-                lc.includes('banned opcode') ||
-                lc.includes('stake/unstake delay') ||
-                lc.includes('unstake delay too low') ||
-                lc.includes('total gas used by the user operation') ||
-                (lc.includes('total gas used') && lc.includes('allowed limit')) ||
-                lc.includes('invalid fields')
-              if (shouldFallback) {
-                preferEmbeddedEoaRef.current = true
-                logger.warn('[DeployVault] Privy smart wallet signer failed; falling back to embedded EOA', {
-                  phaseLabel: logPhaseLabel,
-                  privySmartWalletAddress,
-                  error: msg,
-                })
-              } else {
-                throw e
-              }
-            }
-          }
-
-          // PATH 2: Privy embedded EOA is owner of canonical smart wallet
+          // PATH 1.5: Privy embedded EOA is owner of canonical smart wallet
           // Use ERC-4337 with the embedded EOA signing directly (simple ecrecover, no EIP-1271)
           if (canonicalSmartWallet && embeddedEoaIsCanonicalOwner && embeddedPrivyWallet && embeddedPrivyEoaAddress) {
             logger.info(`[DeployVault] Using ERC-4337 via Privy embedded EOA for ${logPhaseLabel}`, {
@@ -2868,6 +2681,198 @@ function DeployVaultBatcher({
             })
             preferEmbeddedEoaRef.current = true
             return
+          }
+
+          // PATH 2: Privy app smart wallet is an owner (EIP-1271 signer)
+          // Original deploy pattern: avoid this path when the embedded EOA owner flow is available.
+          if (
+            canonicalSmartWallet &&
+            !embeddedEoaIsCanonicalOwner &&
+            privySmartWalletIsCanonicalOwner &&
+            privySmartWalletCanSign &&
+            smartWalletClient &&
+            privySmartWalletAddress &&
+            publicClient &&
+            !preferEmbeddedEoaRef.current
+          ) {
+            logger.info(`[DeployVault] Using ERC-4337 via Privy smart wallet owner for ${logPhaseLabel}`, {
+              canonicalSmartWallet,
+              privySmartWalletAddress,
+            })
+
+            const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+
+            await ensureProviderOnBase(smartWalletClient, 'Privy smart wallet')
+
+            const smartWalletClientAdapter = {
+              request: async (args: { method: string; params: any[] }) => {
+                const client: any = smartWalletClient as any
+                const account: any = client?.account
+                if (args.method === 'eth_sign') {
+                  const [, hashToSign] = args.params ?? []
+                  if (AA_DEBUG) {
+                    logger.debug('[DeployVault] Privy smart wallet eth_sign', {
+                      hasAccountSign: typeof account?.sign === 'function',
+                      hasAccountSignMessage: typeof account?.signMessage === 'function',
+                      hasClientSignMessage: typeof client?.signMessage === 'function',
+                    })
+                  }
+                  let rawResult: unknown
+                  if (typeof account?.sign === 'function') {
+                    rawResult = await account.sign({ hash: hashToSign })
+                  } else if (typeof account?.signMessage === 'function') {
+                    rawResult = await account.signMessage({ message: { raw: hashToSign } })
+                  } else if (typeof client?.signMessage === 'function') {
+                    rawResult = await client.signMessage({ account: privySmartWalletAddress, message: { raw: hashToSign } })
+                  } else {
+                    throw new Error('Privy smart wallet does not support raw signing')
+                  }
+                  const sig = ensureSignatureHex(rawResult, 'privySmartWallet.eth_sign')
+                  logNonEoaSignature(sig, 'privySmartWallet.eth_sign')
+                  return sig
+                }
+                if (typeof client?.request === 'function') {
+                  return await client.request(args)
+                }
+                throw new Error('Privy smart wallet client does not support request()')
+              },
+              signMessage: async (args: { account: Address; message: any }) => {
+                const msg =
+                  typeof args.message === 'object' && args.message !== null && 'raw' in args.message
+                    ? args.message.raw
+                    : args.message
+                const client: any = smartWalletClient as any
+                const account: any = client?.account
+                const hasAccountSign = typeof account?.sign === 'function'
+                const hasAccountSignMessage = typeof account?.signMessage === 'function'
+                const hasClientSignMessage = typeof client?.signMessage === 'function'
+                const hasSignMessage = hasAccountSignMessage || hasClientSignMessage
+                const hasRequest = typeof client?.request === 'function'
+
+                if (AA_DEBUG) {
+                  logger.debug('[DeployVault] Privy smart wallet signer capabilities', {
+                    hasAccountSign,
+                    hasSignMessage,
+                    hasRequest,
+                  })
+                }
+
+                if (hasSignMessage) {
+                  const context = hasAccountSignMessage
+                    ? 'privySmartWallet.account.signMessage'
+                    : 'privySmartWallet.signMessage'
+                  const rawResult = await withTimeout(
+                    hasAccountSignMessage
+                      ? account.signMessage({ message: msg })
+                      : client.signMessage({ account: privySmartWalletAddress, message: msg }),
+                    20_000,
+                    context,
+                  )
+                  const sig = ensureSignatureHex(rawResult, context)
+                  logNonEoaSignature(sig, context)
+                  debugSignatureReady(context, sig, { signer: privySmartWalletAddress })
+                  return sig
+                }
+
+                throw new Error(
+                  'Privy smart wallet signer not supported in this environment. ' +
+                    'Use Coinbase Wallet (Base Account) or connect an owner EOA.',
+                )
+              },
+              signTypedData: async (args: any) => {
+                const client: any = smartWalletClient as any
+                const account: any = client?.account
+                if (typeof account?.signTypedData === 'function' || typeof client?.signTypedData === 'function') {
+                  const context =
+                    typeof account?.signTypedData === 'function'
+                      ? 'privySmartWallet.account.signTypedData'
+                      : 'privySmartWallet.signTypedData'
+                  const rawResult = await withTimeout(
+                    typeof account?.signTypedData === 'function'
+                      ? account.signTypedData(args as any)
+                      : client.signTypedData({ account: privySmartWalletAddress, ...(args as any) }),
+                    20_000,
+                    context,
+                  )
+                  const sig = ensureSignatureHex(rawResult, context)
+                  logNonEoaSignature(sig, context)
+                  debugSignatureReady(context, sig, { signer: privySmartWalletAddress })
+                  return sig
+                }
+                throw new Error(
+                  'Privy smart wallet signer not supported in this environment. ' +
+                    'Use Coinbase Wallet (Base Account) or connect an owner EOA.',
+                )
+              },
+            }
+
+            try {
+              const result = await sendCoinbaseSmartWalletUserOperation({
+                publicClient: publicClient as any,
+                walletClient: smartWalletClientAdapter as any,
+                bundlerUrl,
+                smartWallet: canonicalSmartWallet,
+                ownerAddress: privySmartWalletAddress,
+                calls: toCalls(calls),
+                version: '1',
+                userOpSignMode: 'eth_sign',
+                ownerIsContract: true,
+              })
+
+              setTxId(result.transactionHash)
+              setPhaseTxs((s) => ({
+                ...s,
+                [
+                  phaseLabel === 'phase1'
+                    ? 'userOp1'
+                    : phaseLabel === 'phase2'
+                      ? 'userOp2'
+                      : phaseLabel === 'phase3'
+                        ? 'userOp3'
+                        : 'userOp4'
+                ]: result.userOpHash,
+                [
+                  phaseLabel === 'phase1'
+                    ? 'tx1'
+                    : phaseLabel === 'phase2'
+                      ? 'tx2'
+                      : phaseLabel === 'phase3'
+                        ? 'tx3'
+                        : 'tx4'
+                ]: result.transactionHash,
+              }))
+              logger.warn(`[DeployVault] ${logPhaseLabel}_confirmed via ERC-4337 (privy smart wallet owner)`, {
+                userOpHash: result.userOpHash,
+                txHash: result.transactionHash,
+              })
+              return
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : String(e ?? '')
+              const lc = msg.toLowerCase()
+              const shouldFallback =
+                lc.includes('invalid signature') ||
+                lc.includes('signature check failed') ||
+                lc.includes('signature verification used more gas') ||
+                lc.includes('verificationgaslimit') ||
+                lc.includes('aa40') ||
+                lc.includes('banned opcode') ||
+                lc.includes('stake/unstake delay') ||
+                lc.includes('unstake delay too low') ||
+                lc.includes('total gas used by the user operation') ||
+                (lc.includes('total gas used') && lc.includes('allowed limit')) ||
+                lc.includes('invalid fields')
+              if (shouldFallback) {
+                preferEmbeddedEoaRef.current = true
+                logger.warn('[DeployVault] Privy smart wallet signer failed; continuing without it', {
+                  phaseLabel: logPhaseLabel,
+                  privySmartWalletAddress,
+                  error: msg,
+                })
+              } else {
+                throw e
+              }
+            }
           }
           
           // PATH 3: Connected EOA is owner of canonical smart wallet
@@ -4046,6 +4051,7 @@ function DeployVaultMain() {
     connector?.id,
     embeddedPrivyEoaAddress,
     embeddedEoaIsCanonicalOwnerQuery,
+    ensureBaseChain,
     publicClient,
     walletClient,
   ])
@@ -4181,6 +4187,7 @@ function DeployVaultMain() {
     connector?.id,
     privySmartWalletAddress,
     privySmartWalletIsCanonicalOwnerQuery,
+    ensureBaseChain,
     publicClient,
     walletClient,
   ])

@@ -240,7 +240,7 @@ export function WaitlistProfile() {
 
     // Open link in new tab
     window.open(url, '_blank', 'noopener,noreferrer')
-  }, [appUrl, fetchUserData, userData?.email, userData?.referralCode, userEmail])
+  }, [apiFetch, fetchUserData, userData?.email, userData?.referralCode, userEmail])
 
   // Copy referral link
   const handleCopyReferral = useCallback(async () => {
