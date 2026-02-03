@@ -1137,9 +1137,43 @@ async function validateInnerCalls(params: {
     }
   }
 
+  // Prefer deriving the bytecode store from the deployer itself (`deployer.store()`),
+  // so paymaster validation cannot drift from onchain infra due to env misconfiguration.
   const bytecodeStoreRaw = contracts.universalBytecodeStore
-  if (!bytecodeStoreRaw) throw new Error('bytecode_store_not_configured')
-  const bytecodeStore = getAddress(bytecodeStoreRaw)
+  let bytecodeStore: Address | null = null
+  if (bytecodeStoreRaw && isAddress(bytecodeStoreRaw)) {
+    bytecodeStore = getAddress(bytecodeStoreRaw)
+  }
+  try {
+    const CREATE2_DEPLOYER_STORE_ABI = [
+      {
+        type: 'function',
+        name: 'store',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ type: 'address' }],
+      },
+    ] as const
+    const client = await getBaseClient()
+    const store = (await client.readContract({
+      address: create2DeployerFromStore,
+      abi: CREATE2_DEPLOYER_STORE_ABI,
+      functionName: 'store',
+    })) as Address
+    if (store && isAddress(store)) {
+      bytecodeStore = getAddress(store)
+    }
+  } catch {
+    // ignore; fall back to env/default
+  }
+  if (!bytecodeStore) throw new Error('bytecode_store_not_configured')
+  if (bytecodeStoreRaw && isAddress(bytecodeStoreRaw) && getAddress(bytecodeStoreRaw) !== bytecodeStore) {
+    logger.warn('[Paymaster] bytecode_store_mismatch', {
+      envBytecodeStore: getAddress(bytecodeStoreRaw),
+      deployerStore: bytecodeStore,
+      deployer: create2DeployerFromStore,
+    })
+  }
 
   // In Phase 2, validate the vault address via CREATE2 inputs (salt + codeId + constructor args).
   // If codeIds are missing, fall back to the Phase1Deployed event for this creator/owner.
