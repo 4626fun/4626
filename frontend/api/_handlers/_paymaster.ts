@@ -1580,6 +1580,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         storeEnv: Address | null
         storeFromDeployer: Address | null
         storeUsed: Address
+        expectedVault?: Address | null
+        expectedBurnStream?: Address | null
+        expectedPayoutRouter?: Address | null
+        payoutRouterBurnStreamArg?: Address | null
+        vaultBurnStreamArg?: Address | null
       }
     | null = null
 

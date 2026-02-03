@@ -98,10 +98,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const ownerAccount = agentWalletId
       ? toAccount({
           address: sessionOwner,
-          sign: async ({ hash }) => {
+          sign: async ({ hash }: { hash: Hex }) => {
             return (await secp256k1SignHash({ walletId: agentWalletId, hash })) as Hex
           },
-          signMessage: async ({ message }) => {
+          signMessage: async ({ message }: { message: { raw: Hex } | string }) => {
             const msg =
               typeof message === 'object' && message !== null && 'raw' in message
                 ? (message.raw as Hex)
