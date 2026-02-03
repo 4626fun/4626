@@ -5,11 +5,12 @@ import { createPublicClient, encodeAbiParameters, encodeFunctionData, http } fro
 import { privateKeyToAccount } from 'viem/accounts'
 import { toAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
-import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount, waitForUserOperationReceipt } from 'viem/account-abstraction'
+import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
 import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { logger } from '../../../../server/_lib/logger.js'
 import { decryptWithSecret, getDeploySessionById, signDeployToken, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
+import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -57,14 +58,6 @@ async function findOwnerIndex(params: {
     if (String(b).toLowerCase() === expected) return i
   }
   return null
-}
-
-function getOrigin(req: VercelRequest): string {
-  const proto = (req.headers['x-forwarded-proto'] ?? 'https') as string
-  const host = (req.headers['x-forwarded-host'] ?? req.headers.host ?? '') as string
-  const safeProto = String(proto).toLowerCase().includes('http') ? String(proto).toLowerCase() : 'https'
-  if (!host) throw new Error('missing_host')
-  return `${safeProto}://${host}`
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -148,7 +141,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ success: true, data: { id: rec.id, step: 'cancelled' } } satisfies ApiEnvelope<any>)
     }
 
-    const origin = getOrigin(req)
+    const origin = getCanonicalOrigin(req)
     const bundlerUrl = `${origin}/api/paymaster`
 
     const deployToken = rec.deployToken
@@ -186,11 +179,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       calls: [{ to: smartWallet, value: 0n, data }],
       paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
     })
-    const receipt = await waitForUserOperationReceipt(bundlerClient, { hash, timeout: 180_000 })
-    const txHash = receipt.receipt.transactionHash as Hex
-    await updateDeploySession({ id: rec.id, step: 'cancelled', lastUserOpHash: hash, lastTxHash: txHash, lastError: null })
+    await updateDeploySession({ id: rec.id, step: 'cleanup_sent', lastUserOpHash: hash, lastTxHash: null, lastError: null })
 
-    return res.status(200).json({ success: true, data: { id: rec.id, step: 'cancelled', lastTxHash: txHash } } satisfies ApiEnvelope<any>)
+    return res.status(200).json({
+      success: true,
+      data: { id: rec.id, step: 'cleanup_sent', lastUserOpHash: hash },
+    } satisfies ApiEnvelope<any>)
   } catch (err: any) {
     const msg = err?.message ? String(err.message) : 'cancel_failed'
     logger.error('deploy session cancel failed', msg)

@@ -5,11 +5,12 @@ import { createPublicClient, encodeAbiParameters, encodeFunctionData, http } fro
 import { privateKeyToAccount } from 'viem/accounts'
 import { toAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
-import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount, waitForUserOperationReceipt } from 'viem/account-abstraction'
+import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
 import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { logger } from '../../../../server/_lib/logger.js'
 import { decryptWithSecret, getDeploySessionById, signDeployToken, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
+import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -58,14 +59,6 @@ async function findOwnerIndex(params: {
     if (String(b).toLowerCase() === expected) return i
   }
   return null
-}
-
-function getOrigin(req: VercelRequest): string {
-  const proto = (req.headers['x-forwarded-proto'] ?? 'https') as string
-  const host = (req.headers['x-forwarded-host'] ?? req.headers.host ?? '') as string
-  const safeProto = String(proto).toLowerCase().includes('http') ? String(proto).toLowerCase() : 'https'
-  if (!host) throw new Error('missing_host')
-  return `${safeProto}://${host}`
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -152,7 +145,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       transport: http((process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim(), { timeout: 12_000 }),
     })
 
-    const origin = getOrigin(req)
+    const origin = getCanonicalOrigin(req)
     const bundlerUrl = `${origin}/api/paymaster`
 
     const deployToken = rec.deployToken
@@ -197,39 +190,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return { to: smartWallet, value: 0n, data } as const
     })()
 
-    let lastTx: Hex | null = null
-    let lastUserOpHash: Hex | null = null
-
     if (shouldRunPhase2) {
-      await updateDeploySession({ id: rec.id, step: 'phase2_sent' })
       const calls = [...phase2Calls.map((c) => ({ to: getAddress(c.to), value: BigInt(c.value ?? 0), data: c.data as Hex }))] as any[]
       if (!shouldRunPhase3) calls.push(removeOwnerCall)
-
-      lastUserOpHash = await sendUserOperation(bundlerClient, {
+      await updateDeploySession({ id: rec.id, step: 'phase2_sent' })
+      const lastUserOpHash = await sendUserOperation(bundlerClient, {
         account,
         calls,
         paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
       })
-      const receipt = await waitForUserOperationReceipt(bundlerClient, { hash: lastUserOpHash, timeout: 180_000 })
-      lastTx = receipt.receipt.transactionHash as Hex
-      await updateDeploySession({ id: rec.id, step: 'phase2_confirmed', lastUserOpHash, lastTxHash: lastTx })
+      await updateDeploySession({ id: rec.id, step: 'phase2_sent', lastUserOpHash, lastTxHash: null })
+      return res.status(200).json({
+        success: true,
+        data: { id: rec.id, step: 'phase2_sent', lastUserOpHash },
+      } satisfies ApiEnvelope<any>)
     }
 
     if (shouldRunPhase3) {
-      await updateDeploySession({ id: rec.id, step: 'phase3_sent' })
       const calls = [
         ...phase3Calls.map((c) => ({ to: getAddress(c.to), value: BigInt(c.value ?? 0), data: c.data as Hex })),
         removeOwnerCall,
       ] as any[]
 
-      lastUserOpHash = await sendUserOperation(bundlerClient, {
+      await updateDeploySession({ id: rec.id, step: 'phase3_sent' })
+      const lastUserOpHash = await sendUserOperation(bundlerClient, {
         account,
         calls,
         paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
       })
-      const receipt = await waitForUserOperationReceipt(bundlerClient, { hash: lastUserOpHash, timeout: 180_000 })
-      lastTx = receipt.receipt.transactionHash as Hex
-      await updateDeploySession({ id: rec.id, step: 'phase3_confirmed', lastUserOpHash, lastTxHash: lastTx })
+      await updateDeploySession({ id: rec.id, step: 'phase3_sent', lastUserOpHash, lastTxHash: null })
+      return res.status(200).json({
+        success: true,
+        data: { id: rec.id, step: 'phase3_sent', lastUserOpHash },
+      } satisfies ApiEnvelope<any>)
     }
 
     await updateDeploySession({ id: rec.id, step: 'completed' })
@@ -239,8 +232,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       data: {
         id: rec.id,
         step: 'completed',
-        lastTxHash: lastTx,
-        lastUserOpHash,
       },
     } satisfies ApiEnvelope<any>)
   } catch (err: any) {

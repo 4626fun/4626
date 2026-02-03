@@ -74,6 +74,14 @@ function getPrivyPolicyId(): string | null {
   return optionalEnv('PRIVY_WALLET_POLICY_ID')
 }
 
+function requirePrivyPolicyId(): string | null {
+  const id = getPrivyPolicyId()
+  const nodeEnv = (process.env.NODE_ENV ?? '').trim().toLowerCase()
+  const isProd = nodeEnv === 'production' || Boolean((process.env.VERCEL ?? '').trim())
+  if (isProd && !id) throw new Error('PRIVY_WALLET_POLICY_ID missing')
+  return id
+}
+
 function makePrivyAuthorizationSignature(params: {
   method: 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   url: string
@@ -138,7 +146,7 @@ async function privyFetchJson<T>(params: {
 
 export async function createAgentWallet(params?: { idempotencyKey?: string }): Promise<{ walletId: string; address: `0x${string}` }> {
   const ownerId = getPrivyOwnerId()
-  const policyId = getPrivyPolicyId()
+  const policyId = requirePrivyPolicyId()
 
   const body: any = {
     chain_type: 'ethereum',
