@@ -990,6 +990,11 @@ async function validateInnerCalls(params: {
     storeEnv: Address | null
     storeFromDeployer: Address | null
     storeUsed: Address
+    expectedVault?: Address | null
+    expectedBurnStream?: Address | null
+    expectedPayoutRouter?: Address | null
+    payoutRouterBurnStreamArg?: Address | null
+    vaultBurnStreamArg?: Address | null
   }) => void
 }): Promise<{ expectedCreatorToken: Address }> {
   const contracts = getApiContracts()
@@ -1181,6 +1186,7 @@ async function validateInnerCalls(params: {
     storeEnv: envStore,
     storeFromDeployer: deployerStore,
     storeUsed: bytecodeStore,
+    expectedVault,
   })
   if (envStore && envStore !== bytecodeStore) {
     logger.warn('[Paymaster] bytecode_store_mismatch', {
@@ -1331,6 +1337,16 @@ async function validateInnerCalls(params: {
         BASE_WETH,
       ]),
     })
+
+    params.debug?.({
+      deployer: create2DeployerFromStore,
+      storeEnv: envStore,
+      storeFromDeployer: deployerStore,
+      storeUsed: bytecodeStore,
+      expectedVault,
+      expectedBurnStream,
+      expectedPayoutRouter,
+    })
   }
 
   // Pass 2: validate each inner call fits the expected patterns.
@@ -1475,7 +1491,19 @@ async function validateInnerCalls(params: {
 
         if (!creatorCoinArg || creatorCoinArg !== expectedCreatorToken) throw new Error('payout_router_creator_mismatch')
         if (!vaultArg || vaultArg !== expectedVault) throw new Error('payout_router_vault_mismatch')
-        if (!burnStreamArg || burnStreamArg !== expectedBurnStream) throw new Error('payout_router_burn_stream_mismatch')
+        if (!burnStreamArg || burnStreamArg !== expectedBurnStream) {
+          params.debug?.({
+            deployer: create2DeployerFromStore,
+            storeEnv: envStore,
+            storeFromDeployer: deployerStore,
+            storeUsed: bytecodeStore,
+            expectedVault,
+            expectedBurnStream,
+            expectedPayoutRouter,
+            payoutRouterBurnStreamArg: burnStreamArg,
+          })
+          throw new Error('payout_router_burn_stream_mismatch')
+        }
         if (!ownerArg || ownerArg !== params.sender) throw new Error('payout_router_owner_mismatch')
         if (!swapRouterArg || swapRouterArg !== BASE_SWAP_ROUTER) throw new Error('payout_router_swap_router_mismatch')
         if (!wethArg || wethArg !== BASE_WETH) throw new Error('payout_router_weth_mismatch')
@@ -1493,7 +1521,19 @@ async function validateInnerCalls(params: {
       }
       if (selector === SELECTOR_VAULT_SET_BURN_STREAM) {
         const burnStreamArg = decodeAddressArgFromCalldata(c.data, 0)
-        if (!burnStreamArg || burnStreamArg !== expectedBurnStream) throw new Error('vault_burn_stream_mismatch')
+        if (!burnStreamArg || burnStreamArg !== expectedBurnStream) {
+          params.debug?.({
+            deployer: create2DeployerFromStore,
+            storeEnv: envStore,
+            storeFromDeployer: deployerStore,
+            storeUsed: bytecodeStore,
+            expectedVault,
+            expectedBurnStream,
+            expectedPayoutRouter,
+            vaultBurnStreamArg: burnStreamArg,
+          })
+          throw new Error('vault_burn_stream_mismatch')
+        }
       } else {
         const accountArg = decodeAddressArgFromCalldata(c.data, 0)
         const statusArg = decodeBoolArgFromCalldata(c.data, 1)
@@ -1548,6 +1588,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `storeUsed=${info.storeUsed}`,
       `storeEnv=${info.storeEnv ?? 'null'}`,
       `storeFromDeployer=${info.storeFromDeployer ?? 'null'}`,
+      `expectedVault=${info.expectedVault ?? 'null'}`,
+      `expectedBurnStream=${info.expectedBurnStream ?? 'null'}`,
+      `expectedPayoutRouter=${info.expectedPayoutRouter ?? 'null'}`,
+      `payoutRouterBurnStreamArg=${info.payoutRouterBurnStreamArg ?? 'null'}`,
+      `vaultBurnStreamArg=${info.vaultBurnStreamArg ?? 'null'}`,
     ]
     return parts.join(',')
   }
