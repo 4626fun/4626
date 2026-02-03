@@ -1,4 +1,4 @@
-import { http, createConfig } from 'wagmi'
+import { http, createConfig, fallback } from 'wagmi'
 import { base } from 'wagmi/chains'
 import { coinbaseWallet, walletConnect, injected } from 'wagmi/connectors'
 
@@ -22,6 +22,28 @@ const BASE_RPC_URL =
   (import.meta.env.VITE_BASE_RPC as string | undefined)?.trim() ||
   (import.meta.env.VITE_BASE_READ_RPC_URL as string | undefined)?.trim() ||
   ''
+
+function uniqueNonEmptyStrings(values: Array<string | undefined | null>): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const v of values) {
+    const s = typeof v === 'string' ? v.trim() : ''
+    if (!s) continue
+    if (seen.has(s)) continue
+    seen.add(s)
+    out.push(s)
+  }
+  return out
+}
+
+// Browser RPC reality: some providers (or API keys) block browser `fetch` via CORS / allowlists.
+// Use a fallback list so reads don't hard-fail when a single endpoint is unreachable.
+const BASE_READ_RPC_URLS = uniqueNonEmptyStrings([
+  BASE_RPC_URL,
+  // Base public RPCs (best-effort fallbacks)
+  'https://mainnet.base.org',
+  'https://base-mainnet.public.blastapi.io',
+])
 
 const WALLETCONNECT_APP_URL =
   (import.meta.env.VITE_APP_URL as string | undefined)?.trim() ||
@@ -50,7 +72,7 @@ export const wagmiConfig = createConfig({
     }),
   ],
   transports: {
-    [base.id]: BASE_RPC_URL ? http(BASE_RPC_URL) : http(),
+    [base.id]: BASE_READ_RPC_URLS.length > 0 ? fallback(BASE_READ_RPC_URLS.map((url) => http(url))) : http(),
   },
 })
 
