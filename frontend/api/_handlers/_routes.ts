@@ -155,6 +155,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'admin/creator-access/note': () => import('./admin/creator-access/_note.js'),
   'admin/creator-access/restore': () => import('./admin/creator-access/_restore.js'),
   'admin/creator-access/revoke': () => import('./admin/creator-access/_revoke.js'),
+  'admin/miniapp/sendNotification': () => import('./admin/miniapp/_sendNotification.js'),
   'admin/waitlist/detail': () => import('./admin/waitlist/_detail.js'),
   'admin/waitlist/list': () => import('./admin/waitlist/_list.js'),
   'admin/waitlist/approve': () => import('./admin/waitlist/_approve.js'),

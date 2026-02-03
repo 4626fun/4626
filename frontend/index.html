@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <!-- Favicons -->
@@ -15,6 +15,31 @@
     <meta name="description" content="Deposit creator coins into vaults. Earn from trading fees. Everyone earns together." />
     <meta name="base:app_id" content="695a49dc4d3a403912ed8ca5" />
     <meta name="fc:miniapp" content='{"version":"1","imageUrl":"https://4626.fun/miniapp-hero.png","button":{"title":"Open","action":{"type":"launch_miniapp","name":"Creator Vaults","url":"https://4626.fun"}}}' />
+    <script>
+      ;(() => {
+        // Theme bootstrap (pre-hydration) to avoid flash.
+        // Values: "light" | "dark" | "system"
+        const KEY = 'cv:theme'
+        const saved = (() => {
+          try {
+            return String(window.localStorage.getItem(KEY) || '').trim()
+          } catch {
+            return ''
+          }
+        })()
+        const wantsSystem = !saved || saved === 'system'
+        const systemDark = (() => {
+          try {
+            return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+          } catch {
+            return true
+          }
+        })()
+        const isDark = saved === 'dark' || (wantsSystem && systemDark)
+        document.documentElement.classList.toggle('dark', isDark)
+        document.documentElement.style.colorScheme = isDark ? 'dark' : 'light'
+      })()
+    </script>
     <script>
       ;(() => {
         // Stale-chunk recovery:
@@ -93,20 +118,26 @@
     <link rel="manifest" href="/manifest.json?v=2" />
     
     <style>
+      :root {
+        --vault-bg: 248 250 252;
+        --vault-card: 255 255 255;
+        --vault-border: 226 232 240;
+        --vault-text: 11 18 32;
+        --vault-subtext: 71 85 105;
+      }
+      html.dark {
+        --vault-bg: 2 2 2;
+        --vault-card: 10 10 10;
+        --vault-border: 31 31 31;
+        --vault-text: 237 237 237;
+        --vault-subtext: 102 102 102;
+      }
       html, body {
-        background-color: #020202; /* Vault background */
+        background-color: rgb(var(--vault-bg)); /* Vault background */
+        color: rgb(var(--vault-text));
         margin: 0;
         padding: 0;
         height: 100%;
-      }
-      @media (prefers-color-scheme: light) {
-        html, body {
-          background-color: #020202;
-        }
-      }
-      /* Override if class is present */
-      html.dark body {
-        background-color: #020202;
       }
     </style>
   </head>

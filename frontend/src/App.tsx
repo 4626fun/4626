@@ -1,4 +1,4 @@
-import { lazy, useMemo } from 'react'
+import { lazy, useEffect, useMemo } from 'react'
 import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAccount, useConnect } from 'wagmi'
@@ -367,6 +367,28 @@ function App() {
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
   const appBase = getAppBaseUrl()
+
+  // Prefetch the most common routes after first paint to reduce perceived load time.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    let cancelled = false
+    const run = () => {
+      if (cancelled) return
+      void import('./pages/ExploreCreators')
+      void import('./pages/ExploreContent')
+      void import('./pages/DeployVault')
+      void import('./pages/Swap')
+    }
+    // Prefer idle time, fall back to a short delay.
+    const ric = (window as any).requestIdleCallback as ((cb: () => void) => number) | undefined
+    const cancelRic = (window as any).cancelIdleCallback as ((id: number) => void) | undefined
+    const id = ric ? ric(run) : window.setTimeout(run, 1200)
+    return () => {
+      cancelled = true
+      if (ric && cancelRic) cancelRic(id as any)
+      else window.clearTimeout(id as any)
+    }
+  }, [])
 
   return (
     <>

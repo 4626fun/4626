@@ -139,7 +139,7 @@ export function resolveCreatorIdentity(params: {
     let blockingReason: string | null = null
     if (connectedWallet && connectedWallet.toLowerCase() !== canonical.toLowerCase()) {
       warnings.push('CONNECTED_WALLET_MISMATCH')
-      blockingReason = `Your Farcaster custody wallet is ${canonical}. Sign in with Privy using that account.`
+      blockingReason = `Your custody wallet is ${canonical}. Sign in with that account to continue.`
     } else if (!connectedWallet) {
       blockingReason = `Sign in to continue.`
     }

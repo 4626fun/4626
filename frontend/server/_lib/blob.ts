@@ -45,7 +45,8 @@ export async function blobPutBytes(params: {
   cacheControlMaxAgeSeconds?: number
 }): Promise<{ url: string }> {
   const token = requireBlobToken()
-  const r: any = await put(params.pathname, params.bytes, {
+  const body = Buffer.from(params.bytes)
+  const r: any = await put(params.pathname, body, {
     access: 'public',
     contentType: params.contentType,
     token,

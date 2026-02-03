@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { Web3Providers } from './web3/Web3Providers'
 import { PrivyClientProvider } from '@/lib/privy/client'
+import { ThemeProvider } from '@/lib/theme'
 import './index.css'
 
 if (typeof window !== 'undefined') {
@@ -37,12 +38,14 @@ if (typeof window !== 'undefined') {
  */
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <PrivyClientProvider>
-      <BrowserRouter>
-        <Web3Providers>
-          <App />
-        </Web3Providers>
-      </BrowserRouter>
-    </PrivyClientProvider>
+    <ThemeProvider>
+      <PrivyClientProvider>
+        <BrowserRouter>
+          <Web3Providers>
+            <App />
+          </Web3Providers>
+        </BrowserRouter>
+      </PrivyClientProvider>
+    </ThemeProvider>
   </React.StrictMode>,
 )

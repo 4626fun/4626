@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { getAddress, type Address, type Hex } from 'viem'
+import { getAddress, type Address, type Hex, type SignableMessage } from 'viem'
 import { createPublicClient, encodeAbiParameters, encodeFunctionData, http } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { toAccount } from 'viem/accounts'
@@ -109,13 +109,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           sign: async ({ hash }: { hash: Hex }) => {
             return (await secp256k1SignHash({ walletId: agentWalletId, hash })) as Hex
           },
-          signMessage: async ({ message }: { message: { raw: Hex } | string }) => {
+        signTransaction: async () => {
+          throw new Error('privy_sign_transaction_unsupported')
+        },
+          signMessage: async ({ message }: { message: SignableMessage }) => {
             const msg =
-              typeof message === 'object' && message !== null && 'raw' in message
-                ? (message.raw as Hex)
-                : typeof message === 'string'
-                  ? message
-                  : `0x${Buffer.from(String(message)).toString('hex')}`
+              typeof message === 'string'
+                ? message
+                : typeof message.raw === 'string'
+                  ? message.raw
+                  : `0x${Buffer.from(message.raw).toString('hex')}`
             const out = await walletRpc<any>({
               walletId: agentWalletId,
               method: 'personal_sign',
@@ -125,6 +128,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (!/^0x[0-9a-fA-F]+$/.test(sig)) throw new Error('privy_personal_sign_invalid_signature')
             return sig as Hex
           },
+        signTypedData: async () => {
+          throw new Error('privy_sign_typed_data_unsupported')
+        },
         })
       : (() => {
           if (!rec.sessionOwnerKeyEnc) throw new Error('session_owner_key_missing')
@@ -165,7 +171,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const account = await toCoinbaseSmartAccount({
       client: publicClient as any,
       address: smartWallet,
-      owners: [ownerAccount],
+      owners: [ownerAccount as any],
       ownerIndex,
       version: '1',
     })

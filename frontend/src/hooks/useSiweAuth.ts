@@ -250,7 +250,8 @@ export function useSiweAuth() {
         // If Privy is enabled but the user isn't authenticated yet, trigger Privy auth first.
         if (privyReady && !privyAuthenticated && typeof login === 'function') {
           try {
-            await login({ loginMethods: ['wallet', 'email'] })
+            // Featured guidelines: avoid email/phone verification inside the app.
+            await login({ loginMethods: ['wallet'] })
           } catch {
             // If Privy auth fails/cancels, fall back to SIWE below (only for method=auto).
           }

@@ -33,12 +33,13 @@ export default {
           900: '#001F7A',
           950: '#172554',
         },
+        // Theme-aware tokens (set via CSS variables in index.css)
         vault: {
-          bg: '#020202', // True Black
-          card: '#0A0A0A', // Deep Charcoal
-          border: '#1F1F1F', // Fallback border
-          text: '#EDEDED',
-          subtext: '#666666',
+          bg: 'rgb(var(--vault-bg) / <alpha-value>)',
+          card: 'rgb(var(--vault-card) / <alpha-value>)',
+          border: 'rgb(var(--vault-border) / <alpha-value>)',
+          text: 'rgb(var(--vault-text) / <alpha-value>)',
+          subtext: 'rgb(var(--vault-subtext) / <alpha-value>)',
         },
         // Surface colors - cool slate
         surface: {

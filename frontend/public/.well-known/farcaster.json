@@ -4,13 +4,42 @@
     "payload": "eyJkb21haW4iOiI0NjI2LmZ1biJ9",
     "signature": "a0dYBtBbC+TI4CYnngVRPwZ7TZpI+8Mply+Px4FkyJs/pe9H30Vva1MXTLeGEz7k+wXSDeAEkZ0Msa25dK9NIhs="
   },
+  "frame": {
+    "version": "1",
+    "name": "Creator Vaults",
+    "subtitle": "Creator coin vaults on Base",
+    "description": "Deposit creator coins into vaults, track markets, and manage creator vault launches on Base.",
+    "screenshotUrls": [
+      "https://4626.fun/screenshot-1.png",
+      "https://4626.fun/screenshot-2.png",
+      "https://4626.fun/screenshot-3.png"
+    ],
+    "iconUrl": "https://4626.fun/miniapp-icon.png",
+    "splashImageUrl": "https://4626.fun/miniapp-splash.png",
+    "splashBackgroundColor": "#000000",
+    "homeUrl": "https://4626.fun",
+    "webhookUrl": "https://4626.fun/api/webhook",
+    "canonicalDomain": "4626.fun",
+    "requiredChains": ["eip155:8453"],
+    "requiredCapabilities": ["actions.ready", "actions.signIn", "wallet.getEthereumProvider"],
+    "primaryCategory": "finance",
+    "tags": ["creator-coins", "vaults", "base", "zora"],
+    "heroImageUrl": "https://4626.fun/miniapp-hero.png",
+    "tagline": "Vaults for creator coins.",
+    "ogTitle": "Creator Vaults",
+    "ogDescription": "Deposit creator coins into vaults. Earn from trading fees. Everyone earns together.",
+    "ogImageUrl": "https://4626.fun/miniapp-hero.png",
+    "noindex": false
+  },
   "miniapp": {
     "version": "1",
     "name": "Creator Vaults",
     "subtitle": "Creator coin vaults on Base",
     "description": "Deposit creator coins into vaults, track markets, and manage creator vault launches on Base.",
     "screenshotUrls": [
-      "https://4626.fun/screenshot-portrait.png"
+      "https://4626.fun/screenshot-1.png",
+      "https://4626.fun/screenshot-2.png",
+      "https://4626.fun/screenshot-3.png"
     ],
     "iconUrl": "https://4626.fun/miniapp-icon.png",
     "splashImageUrl": "https://4626.fun/miniapp-splash.png",

@@ -93,10 +93,22 @@ async function main() {
       sources: ['miniapp-hero.png', 'miniapp-hero.svg'],
     },
     {
-      outName: 'screenshot-portrait.png',
-      width: 1080,
-      height: 1920,
-      sources: ['screenshot-portrait.png', 'screenshot-portrait.svg'],
+      outName: 'screenshot-1.png',
+      width: 1284,
+      height: 2778,
+      sources: ['screenshot-1.png', 'screenshot-portrait.png', 'screenshot-portrait.svg'],
+    },
+    {
+      outName: 'screenshot-2.png',
+      width: 1284,
+      height: 2778,
+      sources: ['screenshot-2.png', 'screenshot-portrait.png', 'screenshot-portrait.svg'],
+    },
+    {
+      outName: 'screenshot-3.png',
+      width: 1284,
+      height: 2778,
+      sources: ['screenshot-3.png', 'screenshot-portrait.png', 'screenshot-portrait.svg'],
     },
 
     // Favicons / PWA
@@ -132,6 +144,8 @@ async function main() {
     'miniapp-splash.svg',
     'miniapp-hero.svg',
     'screenshot-portrait.svg',
+    // These are generated PNG derivatives used by the manifest.
+    // Keep the source-only screenshots out of dist if present.
     // Legacy / unused token art that can bloat dist.
     'wsAKITA.svg',
   ]

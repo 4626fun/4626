@@ -505,7 +505,7 @@ export function WaitlistProfile() {
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 overflow-hidden divide-y divide-zinc-800/50">
             {/* High Value Socials */}
             <SocialRow
-              label="Follow on Farcaster"
+              label="Follow on Feed"
               handle="@4626"
               points={SOCIAL_POINTS.farcaster}
               done={actionsDone.farcaster}

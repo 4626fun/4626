@@ -15,7 +15,7 @@
  * Env:
  *   MINIAPP_SCREENSHOT_BASE_URL=http://localhost:5173
  *   MINIAPP_HERO_PATH=/dashboard
- *   MINIAPP_PORTRAIT_PATH=/dashboard
+ *   MINIAPP_SCREENSHOT_PATHS=/dashboard,/explore,/deploy
  */
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -42,7 +42,12 @@ const OUT_DIR = path.resolve(__dirname, '../public')
 
 const baseUrl = (process.env.MINIAPP_SCREENSHOT_BASE_URL || 'http://localhost:5173').replace(/\/$/, '')
 const heroPath = process.env.MINIAPP_HERO_PATH || '/dashboard'
-const portraitPath = process.env.MINIAPP_PORTRAIT_PATH || '/dashboard'
+const screenshotPathsRaw = process.env.MINIAPP_SCREENSHOT_PATHS || '/dashboard,/explore,/deploy'
+const screenshotPaths = screenshotPathsRaw
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+  .slice(0, 3)
 
 function urlFor(p) {
   if (p.startsWith('http://') || p.startsWith('https://')) return p
@@ -98,20 +103,24 @@ async function captureHero() {
 async function capturePortrait() {
   const browser = await chromium.launch()
   const context = await browser.newContext({
-    viewport: { width: 540, height: 960 },
-    deviceScaleFactor: 2, // => 1080x1920 output
+    // Featured checklist asks for portrait screenshots at 1284x2778.
+    // Use a 642x1389 viewport at 2x scale to match exactly.
+    viewport: { width: 642, height: 1389 },
+    deviceScaleFactor: 2, // => 1284x2778 output
     isMobile: true,
     hasTouch: true,
     reducedMotion: 'reduce',
   })
   const page = await context.newPage()
 
-  await gotoApp(page, urlFor(portraitPath))
-
-  await page.screenshot({
-    path: path.join(OUT_DIR, 'screenshot-portrait.png'),
-    type: 'png',
-  })
+  for (let i = 0; i < screenshotPaths.length; i++) {
+    const p = screenshotPaths[i]
+    await gotoApp(page, urlFor(p))
+    await page.screenshot({
+      path: path.join(OUT_DIR, `screenshot-${i + 1}.png`),
+      type: 'png',
+    })
+  }
 
   await browser.close()
 }
@@ -122,7 +131,7 @@ async function main() {
   // eslint-disable-next-line no-console
   console.log(' - hero:', heroPath)
   // eslint-disable-next-line no-console
-  console.log(' - portrait:', portraitPath)
+  console.log(' - screenshots:', screenshotPaths.join(', ') || '(none)')
 
   await captureHero()
   // eslint-disable-next-line no-console
@@ -130,7 +139,7 @@ async function main() {
 
   await capturePortrait()
   // eslint-disable-next-line no-console
-  console.log('wrote screenshot-portrait.png')
+  console.log('wrote screenshot-1.png .. screenshot-3.png')
 }
 
 main().catch((err) => {

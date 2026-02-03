@@ -75,7 +75,8 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
     // Solana connectors are not configured; avoid Phantom to prevent Solana warnings.
     walletList: ['metamask', 'coinbase_wallet', 'detected_wallets', 'wallet_connect'],
   } as const
-  const loginMethods = ['wallet', 'email'] as const
+  // Featured guidelines: keep auth in-app and avoid email/phone verification flows.
+  const loginMethods = ['wallet'] as const
 
   // Zora's Privy App ID - enables cross-app wallet sharing (Global Wallet)
   const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'

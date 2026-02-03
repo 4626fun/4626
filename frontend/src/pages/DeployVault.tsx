@@ -5555,14 +5555,14 @@ function DeployVaultMain() {
                 {miniApp.isMiniApp && farcasterAuth.status !== 'verified' && farcasterAuth.canSiwf !== false ? (
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-[11px] text-zinc-600">
-                      Verify Farcaster to enable Mini App autofill.
+                      Verify your profile to enable Mini App autofill.
                     </div>
                     <button
                       type="button"
                       onClick={() => void farcasterAuth.signIn()}
                       disabled={farcasterAuth.status === 'loading'}
                       className="text-[10px] text-zinc-600 hover:text-zinc-200 transition-colors disabled:opacity-60"
-                      title="Requests a Sign in With Farcaster credential (no transaction)"
+                      title="Requests an in-app sign-in credential (no transaction)"
                     >
                       {farcasterAuth.status === 'loading' ? 'Verifying…' : 'Verify'}
                     </button>
@@ -5685,7 +5685,7 @@ function DeployVaultMain() {
                   <div className="text-amber-300/70 text-xs leading-relaxed">{identityBlockingReason}</div>
                   {farcasterVerifiedEthAddresses.length > 0 ? (
                     <div className="text-[11px] text-amber-300/70">
-                      Verified wallets (Farcaster, suggestion-only):{' '}
+                      Verified wallets (suggestion-only):{' '}
                       <span className="font-mono text-amber-200">
                         {farcasterVerifiedEthAddresses.map((a) => shortAddress(a)).join(', ')}
                       </span>
@@ -5728,7 +5728,7 @@ function DeployVaultMain() {
                 <>
                   {tokenIsValid && zoraCoin && identity.warnings.includes('CUSTODY_MISMATCH') && farcasterCustodyAddress ? (
                     <div className="text-[11px] text-amber-300/80">
-                      Farcaster custody wallet{' '}
+                      Custody wallet{' '}
                       <span className="font-mono text-amber-200">{shortAddress(farcasterCustodyAddress)}</span> does not match the coin’s
                       canonical identity{' '}
                       <span className="font-mono text-amber-200">

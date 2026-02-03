@@ -96,15 +96,6 @@ function XIcon({ className }: { className?: string }) {
   )
 }
 
-// Farcaster - Simple Icons: https://simpleicons.org/icons/farcaster.svg
-function FarcasterIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M18.24.24H5.76A5.76 5.76 0 0 0 0 6v12a5.76 5.76 0 0 0 5.76 5.76h12.48A5.76 5.76 0 0 0 24 18V6A5.76 5.76 0 0 0 18.24.24zm1.28 17.52h-1.84V12.6l-5.68 6.2-5.68-6.2v5.16H4.48V6.24h1.84l5.68 6.2 5.68-6.2h1.84v11.52z" />
-    </svg>
-  )
-}
-
 // Instagram - Simple Icons: https://simpleicons.org/icons/instagram.svg
 function InstagramIcon({ className }: { className?: string }) {
   return (
@@ -219,7 +210,7 @@ function ContentCoinRow({ coin, rank }: { coin: ZoraCoin; rank: number }) {
 function SocialLinks({ profile }: { profile: ZoraProfile | null }) {
   if (!profile?.socialAccounts) return null
 
-  const { twitter, farcaster, instagram, tiktok } = profile.socialAccounts
+  const { twitter, instagram, tiktok } = profile.socialAccounts
 
   const links = [
     twitter?.username && {
@@ -228,13 +219,6 @@ function SocialLinks({ profile }: { profile: ZoraProfile | null }) {
       icon: <XIcon className="w-4 h-4" />,
       handle: `@${twitter.username}`,
       followers: twitter.followerCount,
-    },
-    farcaster?.username && {
-      name: 'Farcaster',
-      url: `https://warpcast.com/${farcaster.username}`,
-      icon: <FarcasterIcon className="w-4 h-4" />,
-      handle: `@${farcaster.username}`,
-      followers: farcaster.followerCount,
     },
     instagram?.username && {
       name: 'Instagram',
@@ -679,26 +663,7 @@ export function ExploreCreatorDetail() {
                   <ExternalLink className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
                 </a>
 
-                {handle && (
-                  <a
-                    href={`https://warpcast.com/${handle}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center overflow-hidden">
-                        <img 
-                          src="https://green-decisive-crane-434.mypinata.cloud/ipfs/bafkreibay2mwysid4bxw2a3a4a5stjeldrkth3qvtyguxn2d7pxjt4jlwq" 
-                          alt="Farcaster" 
-                          className="w-5 h-5" 
-                        />
-                      </div>
-                      <span className="text-sm text-white">Farcaster</span>
-                    </div>
-                    <ExternalLink className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
-                  </a>
-                )}
+                {/* Intentionally avoid client-specific deep links (featured guidelines). */}
               </div>
             </div>
 
