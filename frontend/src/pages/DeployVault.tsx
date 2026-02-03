@@ -3439,15 +3439,21 @@ function DeployVaultMain() {
     )
   }, [wallets])
 
+  // Privy embedded wallet objects are not consistent about what `wallet.address` means
+  // (it can be the Privy app smart wallet, not the embedded EOA).
+  // The ONLY reliable source of the embedded EOA is the embedded provider’s `eth_accounts`.
+  const [embeddedPrivyEoaFromProvider, setEmbeddedPrivyEoaFromProvider] = useState<Address | null>(null)
+
   const embeddedPrivyEoaAddress = useMemo(() => {
     try {
+      if (embeddedPrivyEoaFromProvider) return embeddedPrivyEoaFromProvider
       const w: any = embeddedPrivyWallet as any
       const raw = typeof w?.address === 'string' ? String(w.address) : ''
       return raw && isAddress(raw) ? (getAddress(raw) as Address) : null
     } catch {
       return null
     }
-  }, [embeddedPrivyWallet])
+  }, [embeddedPrivyEoaFromProvider, embeddedPrivyWallet])
 
   useEffect(() => {
     if (!privyAuthenticated || !embeddedPrivyWallet) return
@@ -3456,6 +3462,15 @@ function DeployVaultMain() {
       try {
         const provider = await (embeddedPrivyWallet as any).getEthereumProvider?.()
         if (!provider?.request || !mounted) return
+        // Capture the embedded EOA from the provider (preferred).
+        try {
+          const accounts = (await provider.request({ method: 'eth_accounts' })) as unknown
+          const first = Array.isArray(accounts) ? String(accounts[0] ?? '') : ''
+          const normalized = first && isAddress(first) ? (getAddress(first) as Address) : null
+          if (mounted) setEmbeddedPrivyEoaFromProvider(normalized)
+        } catch {
+          // ignore
+        }
         const current = await provider.request({ method: 'eth_chainId' }).catch(() => null)
         if (typeof current === 'string' && current.toLowerCase() !== BASE_CHAIN_ID_HEX) {
           await provider.request({
