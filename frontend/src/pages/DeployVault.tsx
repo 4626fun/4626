@@ -4246,6 +4246,7 @@ function DeployVaultMain() {
   })
 
   const executionCanOperateCanonical = executionCanOperateCanonicalQuery.data === true
+  const connectedIsCanonicalOwner = executionCanOperateCanonical
   const executionCanOperateCanonicalPending = (!!identity.blockingReason || canonicalIdentityIsContract) && executionCanOperateCanonicalQuery.isFetching
 
   // Check if connected EOA is an owner of the Creator Coin itself (via ownerAt)
