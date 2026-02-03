@@ -851,7 +851,8 @@ function abiEncodeAddresses(addrs: Address[]): Hex {
   let out = '0x'
   for (const a of addrs) {
     const hex = a.toLowerCase().replace(/^0x/, '')
-    out += '0'.repeat(24 * 2) + hex
+    // Address is 20 bytes; ABI-encoding pads to 32 bytes with 12 leading zero bytes.
+    out += '0'.repeat(12 * 2) + hex
   }
   return out as Hex
 }
