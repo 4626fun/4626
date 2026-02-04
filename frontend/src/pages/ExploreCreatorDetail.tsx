@@ -330,6 +330,23 @@ export function ExploreCreatorDetail() {
     return contentCoins.slice(start, start + CONTENT_COINS_PAGE_SIZE)
   }, [contentCoins, contentPage])
 
+  const contentPageItems = useMemo(() => {
+    if (totalContentPages <= 7) {
+      return Array.from({ length: totalContentPages }, (_, i) => i + 1)
+    }
+
+    const items: Array<number | 'ellipsis'> = [1]
+    const start = Math.max(2, contentPage - 1)
+    const end = Math.min(totalContentPages - 1, contentPage + 1)
+
+    if (start > 2) items.push('ellipsis')
+    for (let i = start; i <= end; i++) items.push(i)
+    if (end < totalContentPages - 1) items.push('ellipsis')
+    items.push(totalContentPages)
+
+    return items
+  }, [contentPage, totalContentPages])
+
   useEffect(() => {
     if (contentCoinsPage > totalContentPages) {
       setContentCoinsPage(totalContentPages)
@@ -522,7 +539,7 @@ export function ExploreCreatorDetail() {
                       </p>
                     </div>
                     {contentCoins.length > CONTENT_COINS_PAGE_SIZE && (
-                      <div className="flex items-center gap-2 text-xs text-zinc-500">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
                         <button
                           type="button"
                           onClick={() => setContentCoinsPage((p) => Math.max(1, p - 1))}
@@ -531,9 +548,29 @@ export function ExploreCreatorDetail() {
                         >
                           Prev
                         </button>
-                        <span className="tabular-nums text-zinc-500">
-                          Page {contentPage} of {totalContentPages}
-                        </span>
+                        <div className="flex items-center gap-1">
+                          {contentPageItems.map((item, idx) =>
+                            item === 'ellipsis' ? (
+                              <span key={`ellipsis-${idx}`} className="px-1 text-zinc-600">
+                                …
+                              </span>
+                            ) : (
+                              <button
+                                key={`page-${item}`}
+                                type="button"
+                                onClick={() => setContentCoinsPage(item)}
+                                className={`min-w-[28px] px-2 py-1 rounded-md border text-[11px] ${
+                                  item === contentPage
+                                    ? 'border-zinc-700 bg-zinc-800 text-white'
+                                    : 'border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                                }`}
+                                aria-current={item === contentPage ? 'page' : undefined}
+                              >
+                                {item}
+                              </button>
+                            )
+                          )}
+                        </div>
                         <button
                           type="button"
                           onClick={() => setContentCoinsPage((p) => Math.min(totalContentPages, p + 1))}
