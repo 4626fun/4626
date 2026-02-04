@@ -7,6 +7,9 @@
   "functions": {
     "api/farcaster-manifest.ts": {
       "includeFiles": "public/.well-known/farcaster.json"
+    },
+    "api/agent-registration.ts": {
+      "includeFiles": "public/.well-known/agent-registration.json"
     }
   },
   "routes": [
@@ -28,6 +31,11 @@
       "src": "/.well-known/farcaster.json",
       "headers": { "cache-control": "no-store" },
       "dest": "/api/farcaster-manifest"
+    },
+    {
+      "src": "/.well-known/agent-registration.json",
+      "headers": { "cache-control": "no-store" },
+      "dest": "/api/agent-registration"
     },
     {
       "src": "/manifest.json",

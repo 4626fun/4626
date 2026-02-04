@@ -22,6 +22,61 @@ function handleOptions(req: VercelRequest, res: VercelResponse): boolean {
   return false
 }
 
+function normalizeOrigin(req: VercelRequest): string {
+  const explicit = (process.env.CANONICAL_ORIGIN ?? '').trim()
+  if (explicit) return explicit
+
+  const vercelUrl = (process.env.VERCEL_URL ?? '').trim()
+  if (vercelUrl) return `https://${vercelUrl.replace(/\/+$/, '')}`
+
+  const proto = String(req.headers['x-forwarded-proto'] ?? 'https').toLowerCase()
+  const host = String(req.headers['x-forwarded-host'] ?? req.headers.host ?? '').trim()
+  if (host) {
+    const safeProto = proto.startsWith('https') ? 'https' : 'http'
+    return `${safeProto}://${host}`
+  }
+
+  return 'https://4626.fun'
+}
+
+function isAddressLike(value: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(value)
+}
+
+function parseSupportedTrust(raw: string | undefined): string[] {
+  if (!raw) return []
+  return raw
+    .split(/[\s,]+/g)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+function getErc8004Meta(req: VercelRequest): {
+  agentRegistry: string
+  agentId: number
+  chainId: number
+  registrationUrl: string
+  supportedTrust: string[]
+} | null {
+  const registry = (process.env.ERC8004_AGENT_REGISTRY ?? '').trim()
+  const chainIdRaw = (process.env.ERC8004_AGENT_CHAIN_ID ?? '').trim()
+  const agentIdRaw = (process.env.ERC8004_AGENT_ID ?? '').trim()
+  if (!registry || !chainIdRaw || !agentIdRaw) return null
+  if (!isAddressLike(registry)) return null
+
+  const chainId = Number(chainIdRaw)
+  const agentId = Number(agentIdRaw)
+  if (!Number.isFinite(chainId) || chainId <= 0) return null
+  if (!Number.isFinite(agentId) || agentId < 0 || Math.floor(agentId) !== agentId) return null
+
+  const origin = normalizeOrigin(req)
+  const agentRegistry = `eip155:${chainId}:${registry.toLowerCase()}`
+  const registrationUrl = `${origin}/.well-known/agent-registration.json`
+  const supportedTrust = parseSupportedTrust(process.env.ERC8004_AGENT_SUPPORTED_TRUST)
+
+  return { agentRegistry, agentId, chainId, registrationUrl, supportedTrust }
+}
+
 /**
  * GET /api/agents
  *
@@ -40,7 +95,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!g.ok) return
 
   const addr = (process.env.XMTP_AGENT_ADDRESS ?? '').trim()
-  const isAddressLike = (v: string) => /^0x[a-fA-F0-9]{40}$/.test(v)
   const agentAddress = isAddressLike(addr) ? (addr.toLowerCase() as `0x${string}`) : null
 
   const agents = agentAddress
@@ -56,11 +110,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ]
     : []
 
+  const erc8004 = getErc8004Meta(req)
+  const byo = {
+    registrationUrlTemplate: 'https://{your-domain}/.well-known/agent-registration.json',
+    agentUriHint: 'Use your registration URL as agentURI when registering your agent.',
+    requiredFields: ['type', 'name', 'description', 'image', 'services', 'x402Support', 'active', 'registrations'],
+    specUrl: 'https://eips.ethereum.org/EIPS/eip-8004',
+  }
+
   setCache(res, 60)
-  return res.status(200).json({
+  const payload: Record<string, unknown> = {
     success: true,
     count: agents.length,
     agents,
-  })
+    byo,
+  }
+  if (erc8004) payload.erc8004 = erc8004
+  return res.status(200).json(payload)
 }
 
