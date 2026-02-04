@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { Copy, ExternalLink, ShieldCheck } from 'lucide-react'
 import { useAccount, useChainId, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
 import { base } from 'wagmi/chains'
-import { erc20Abi, formatUnits, getAddress, isAddress, parseUnits, type Address } from 'viem'
+import { encodeFunctionData, erc20Abi, formatUnits, getAddress, isAddress, parseUnits, type Address } from 'viem'
 import { useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 
 import { useMiniAppContext } from '@/hooks'
 import { ConnectButton } from '@/components/ConnectButton'
+import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
+import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 
 type SignManifestResult = { header: string; payload: string; signature: string }
 
@@ -186,6 +188,8 @@ function LegacyWithdrawals() {
 
   const isBase = chainId === base.id
   const isCanonical = connectedAddress?.toLowerCase() === CANONICAL_SMART_WALLET.toLowerCase()
+  const canSubmitViaOwner = connectedIsCanonicalOwner && !isCanonical
+  const canUseSmartWallet = (isCanonical || connectedIsCanonicalOwner) && !!walletClient && !!publicClient
   const detectedCsw = useMemo(() => {
     if (isCanonical) return { address: canonicalCswAddress, source: 'connected' as const }
     if (connectedIsCanonicalOwner) return { address: canonicalCswAddress, source: 'owner' as const }
@@ -235,17 +239,46 @@ function LegacyWithdrawals() {
     if (!walletClient || !publicClient) return
     updateTx(key, { status: 'pending', error: undefined, hash: undefined })
     try {
-      const hash = await (walletClient as any).writeContract({
-        account: (walletClient as any).account,
-        chain: base as any,
-        address: config.address,
-        abi: config.abi,
-        functionName: config.functionName,
-        args: config.args ?? [],
-      })
-      updateTx(key, { status: 'pending', hash })
-      await (publicClient as any).waitForTransactionReceipt({ hash })
-      updateTx(key, { status: 'success' })
+      if (!isBase) {
+        throw new Error('Please switch to Base network to continue.')
+      }
+      if (isCanonical) {
+        const hash = await (walletClient as any).writeContract({
+          account: (walletClient as any).account,
+          chain: base as any,
+          address: config.address,
+          abi: config.abi,
+          functionName: config.functionName,
+          args: config.args ?? [],
+        })
+        updateTx(key, { status: 'pending', hash })
+        await (publicClient as any).waitForTransactionReceipt({ hash })
+        updateTx(key, { status: 'success' })
+        return
+      }
+      if (connectedIsCanonicalOwner && connectedAddress) {
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const data = encodeFunctionData({
+          abi: config.abi as any,
+          functionName: config.functionName as any,
+          args: config.args ?? [],
+        })
+        const result = await sendCoinbaseSmartWalletUserOperation({
+          publicClient: publicClient as any,
+          walletClient: walletClient as any,
+          bundlerUrl,
+          smartWallet: canonicalCswAddress as Address,
+          ownerAddress: connectedAddress as Address,
+          calls: [{ to: config.address, data }],
+          version: '1',
+        })
+        updateTx(key, { status: 'pending', hash: result.transactionHash })
+        await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
+        updateTx(key, { status: 'success' })
+        return
+      }
+      throw new Error('Connect the canonical smart wallet or an owner wallet to continue.')
     } catch (e: any) {
       updateTx(key, { status: 'error', error: e?.shortMessage || e?.message || 'Transaction failed' })
     }
@@ -305,12 +338,17 @@ function LegacyWithdrawals() {
                     Detected smart wallet does not match the canonical CSW. Switch to the canonical CSW to proceed.
                   </div>
                 ) : null}
-                {connectedIsCanonicalOwner && !isCanonical ? (
-                  <div className="text-amber-300/80">
-                    Owner detected for the canonical smart wallet. Switch to the smart wallet to submit withdrawals.
+                {canSubmitViaOwner ? (
+                  <div className="text-emerald-300/90">
+                    Owner detected. Transactions will be submitted via the canonical smart wallet.
                   </div>
                 ) : null}
-                {!isCanonical ? (
+                {connectedIsCanonicalOwner && !isCanonical ? (
+                  <div className="text-xs text-zinc-500">
+                    Optional: switch to the canonical CSW for direct signing.
+                  </div>
+                ) : null}
+                {!isCanonical && !connectedIsCanonicalOwner ? (
                   <div className="text-amber-300/80">
                     Connected wallet is not the canonical smart wallet. Unwrap/queue actions are disabled.
                   </div>
@@ -367,9 +405,9 @@ function LegacyWithdrawals() {
 
                 const balance = balanceQuery.data as bigint | undefined
                 const releasable = releasableQuery.data as bigint | undefined
-                const canUnwrap = isConnected && isBase && isCanonical && !!parsedAmount
-                const canQueue = isConnected && isBase && isCanonical && !!parsedAmount && receiverValid
-                const canClaim = isConnected && isBase && isCanonical
+                const canUnwrap = isConnected && isBase && canUseSmartWallet && !!parsedAmount
+                const canQueue = isConnected && isBase && canUseSmartWallet && !!parsedAmount && receiverValid
+                const canClaim = isConnected && isBase && canUseSmartWallet
 
                 return (
                   <div key={legacy.id} className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-4">

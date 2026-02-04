@@ -1291,7 +1291,8 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
 
   const shouldFallbackWithoutPaymaster = (error: unknown): boolean => {
     const hasPrefundBalance = typeof smartWalletBalance === 'bigint' && smartWalletBalance > 0n
-    if (!allowPaymasterFallback) return false
+    // If the paymaster rejects (policy/availability), allow a non-sponsored fallback.
+    // This is required for non-deploy flows (e.g. legacy withdrawals) that the paymaster denies.
     if (isPaymasterUnavailableError(error) && hasPrefundBalance) return true
     if (isPaymasterStakeError(error) || isPaymasterUnavailableError(error)) return true
     if (!ownerIsContract && shouldRetryVerificationGas(error)) return true
