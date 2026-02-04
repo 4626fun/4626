@@ -44,7 +44,7 @@ import {
 } from '@/lib/tokenSymbols'
 import { computeMarketFloorQuote } from '@/lib/cca/marketFloor'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
-import { resolveCdpBundlerUrl, resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
+import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { 
   sendCoinbaseSmartWalletUserOperation, 
   simulateSmartWalletCalls,
@@ -1371,12 +1371,6 @@ function DeployVaultBatcher({
         'Sign in with wallet to use the Privy smart wallet client, or use Coinbase Wallet (Base Account), then retry. If you just added a new owner, refresh and retry.'
       )
     }
-    if (lower.includes('requested resource not available') || lower.includes('resource not available')) {
-      return (
-        'Bundler endpoint does not support ERC-4337 methods. ' +
-        'Set `VITE_CDP_BUNDLER_URL` to a bundler endpoint (or use a combined CDP paymaster+bundler URL) and retry.'
-      )
-    }
     if (lower.includes('failed to fetch')) {
       return 'Paymaster request failed to reach the endpoint (network/CORS). Prefer `VITE_CDP_PAYMASTER_URL=/api/paymaster` and ensure the server env `CDP_PAYMASTER_URL` is set.'
     }
@@ -2642,9 +2636,7 @@ function DeployVaultBatcher({
             logger.info(`[DeployVault] Using Coinbase Wallet direct for ${logPhaseLabel}`)
             
             const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-            const bundlerEnv = import.meta.env.VITE_CDP_BUNDLER_URL as string | undefined
-            const paymasterUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-            const bundlerUrl = resolveCdpBundlerUrl(bundlerEnv, paymasterEnv) || paymasterUrl
+            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
 
             await ensureBaseChain('Coinbase Wallet')
             
@@ -2652,7 +2644,6 @@ function DeployVaultBatcher({
               publicClient: publicClient as any,
               walletClient: wagmiWalletClient as any,
               bundlerUrl,
-              paymasterUrl,
               smartWallet: canonicalSmartWallet,
               ownerAddress: connectedAddress as Address,
               calls: toCalls(calls),
@@ -2711,9 +2702,7 @@ function DeployVaultBatcher({
             }
             
             const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-            const bundlerEnv = import.meta.env.VITE_CDP_BUNDLER_URL as string | undefined
-            const paymasterUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-            const bundlerUrl = resolveCdpBundlerUrl(bundlerEnv, paymasterEnv) || paymasterUrl
+            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
             
             // Get the embedded wallet's Ethereum provider for signing
             const embeddedProvider = await (embeddedPrivyWallet as any).getEthereumProvider()
@@ -2863,7 +2852,6 @@ function DeployVaultBatcher({
               publicClient: publicClient as any,
               walletClient: embeddedWalletClientAdapter as any,
               bundlerUrl,
-              paymasterUrl,
               smartWallet: canonicalSmartWallet,
               ownerAddress: embeddedPrivyEoaAddress,
               calls: toCalls(calls),
@@ -2919,9 +2907,7 @@ function DeployVaultBatcher({
             })
 
             const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-            const bundlerEnv = import.meta.env.VITE_CDP_BUNDLER_URL as string | undefined
-            const paymasterUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-            const bundlerUrl = resolveCdpBundlerUrl(bundlerEnv, paymasterEnv) || paymasterUrl
+            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
 
             await ensureProviderOnBase(smartWalletClient, 'Privy smart wallet')
 
@@ -3032,7 +3018,6 @@ function DeployVaultBatcher({
                 publicClient: publicClient as any,
                 walletClient: smartWalletClientAdapter as any,
                 bundlerUrl,
-                paymasterUrl,
                 smartWallet: canonicalSmartWallet,
                 ownerAddress: privySmartWalletAddress,
                 calls: toCalls(calls),
@@ -3106,9 +3091,7 @@ function DeployVaultBatcher({
             logger.info(`[DeployVault] Using ERC-4337 via connected EOA for ${logPhaseLabel}`)
 
             const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-            const bundlerEnv = import.meta.env.VITE_CDP_BUNDLER_URL as string | undefined
-            const paymasterUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-            const bundlerUrl = resolveCdpBundlerUrl(bundlerEnv, paymasterEnv) || paymasterUrl
+            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
 
             await ensureBaseChain('your wallet')
 
@@ -3122,7 +3105,6 @@ function DeployVaultBatcher({
               publicClient: publicClient as any,
               walletClient: wagmiWalletClient as any,
               bundlerUrl,
-              paymasterUrl,
               smartWallet: canonicalSmartWallet,
               ownerAddress: connectedAddress as Address,
               calls: toCalls(calls),
@@ -3188,9 +3170,7 @@ function DeployVaultBatcher({
               }
 
               const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-              const bundlerEnv = import.meta.env.VITE_CDP_BUNDLER_URL as string | undefined
-              const paymasterUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-              const bundlerUrl = resolveCdpBundlerUrl(bundlerEnv, paymasterEnv) || paymasterUrl
+              const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
 
               // Get the embedded wallet's Ethereum provider for signing
               const embeddedProvider = await (embeddedPrivyWallet as any).getEthereumProvider()
@@ -3338,7 +3318,6 @@ function DeployVaultBatcher({
                 publicClient: publicClient as any,
                 walletClient: embeddedWalletClientAdapter as any,
                 bundlerUrl,
-                paymasterUrl,
                 smartWallet: canonicalSmartWallet,
                 ownerAddress: embeddedPrivyEoaAddress,
                 calls: toCalls(calls),
@@ -4554,9 +4533,7 @@ function DeployVaultMain() {
       // Try ERC-4337 first for ALL wallets (gas-free via paymaster)
       // Any owner can sign UserOps for a Coinbase Smart Wallet
       const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-      const bundlerEnv = import.meta.env.VITE_CDP_BUNDLER_URL as string | undefined
-      const paymasterUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-      const bundlerUrl = resolveCdpBundlerUrl(bundlerEnv, paymasterEnv) || paymasterUrl
+      const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
       
       try {
         logger.info('[DeployVault] Trying ERC-4337 to add Privy SW as owner (gas-free)', {
@@ -4568,7 +4545,6 @@ function DeployVaultMain() {
           publicClient: publicClient as any,
           walletClient: walletClient as any,
           bundlerUrl,
-          paymasterUrl,
           smartWallet: canonicalIdentityAddress as Address,
           ownerAddress: connectedWalletAddress as Address,
           calls: [{
@@ -4700,9 +4676,7 @@ function DeployVaultMain() {
       }
 
       const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-      const bundlerEnv = import.meta.env.VITE_CDP_BUNDLER_URL as string | undefined
-      const paymasterUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-      const bundlerUrl = resolveCdpBundlerUrl(bundlerEnv, paymasterEnv) || paymasterUrl
+      const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
 
       try {
         logger.info('[DeployVault] Trying ERC-4337 to add app smart wallet as owner (gas-free)', {
@@ -4715,7 +4689,6 @@ function DeployVaultMain() {
           publicClient: publicClient as any,
           walletClient: walletClient as any,
           bundlerUrl,
-          paymasterUrl,
           smartWallet: canonicalIdentityAddress as Address,
           ownerAddress: connectedWalletAddress as Address,
           calls: [{
