@@ -14,6 +14,11 @@
     "api/**/*.ts",
     "api/_handlers/**/*.ts",
     "server/_lib/**/*.ts",
-    "server/auth/**/*.ts"
+    "server/auth/**/*.ts",
+    "server/debank/**/*.ts",
+    "server/dexscreener/**/*.ts",
+    "server/farcaster/**/*.ts",
+    "server/zora/**/*.ts",
+    "src/config/contracts.defaults.ts"
   ]
 }

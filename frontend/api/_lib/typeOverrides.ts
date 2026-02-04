@@ -10,7 +10,3 @@ declare module 'viem/accounts' {
 declare module 'viem/account-abstraction' {
   export function toCoinbaseSmartAccount(params: any): Promise<any>
 }
-
-declare module '@vercel/blob' {
-  export function put(pathname: string, body: Uint8Array, options?: any): Promise<any>
-}
