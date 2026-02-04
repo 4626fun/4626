@@ -125,6 +125,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'waitlist/task-claim': () => import('./waitlist/_task-claim.js'),
   'waitlist/update-email': () => import('./waitlist/_update-email.js'),
   'waitlist/verify-social': () => import('./waitlist/_verify-social.js'),
+  'rpc': () => import('./rpc/_proxy.js'),
   'webhook': () => import('./_webhook.js'),
 
   'uniswap/query': () => import('./uniswap/_query.js'),

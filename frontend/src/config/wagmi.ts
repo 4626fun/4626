@@ -31,6 +31,7 @@ function isCorsRestrictedRpc(url: string): boolean {
 }
 
 const BASE_RPC_URL = IS_BROWSER && isCorsRestrictedRpc(BASE_RPC_URL_RAW) ? '' : BASE_RPC_URL_RAW
+const BASE_RPC_PROXY = IS_BROWSER ? '/api/rpc' : ''
 
 function uniqueNonEmptyStrings(values: Array<string | undefined | null>): string[] {
   const out: string[] = []
@@ -49,6 +50,7 @@ function uniqueNonEmptyStrings(values: Array<string | undefined | null>): string
 // Use a fallback list so reads don't hard-fail when a single endpoint is unreachable.
 const BASE_READ_RPC_URLS = uniqueNonEmptyStrings(
   [
+    BASE_RPC_PROXY,
     BASE_RPC_URL,
     // Base public RPCs (best-effort fallbacks)
     'https://base-mainnet.public.blastapi.io',

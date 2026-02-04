@@ -16,7 +16,7 @@ if (typeof window !== 'undefined') {
     if ((debugEnabled || needsAlchemyRewrite) && !(window as any).__cvFetchPatched) {
       const originalFetch = window.fetch.bind(window)
       const alchemyBaseRpc = /(^|\/\/)base-mainnet\.g\.alchemy\.com/i
-      const safeBaseRpc = 'https://mainnet.base.org'
+      const safeBaseRpc = '/api/rpc'
       window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
         if (debugEnabled && url.includes('https://auth.privy.io/api/v1/analytics_events')) {

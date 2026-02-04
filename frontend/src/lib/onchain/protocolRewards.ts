@@ -26,8 +26,12 @@ const protocolRewardsAbi = [
 ] as const
 
 function getBaseRpcUrl(): string {
-  // Avoid CORS-restricted RPCs in the browser. Prefer community endpoints as best-effort fallback.
-  if (BASE_RPC_RAW && !(IS_BROWSER && isCorsRestrictedRpc(BASE_RPC_RAW))) return BASE_RPC_RAW
+  // Avoid CORS-restricted RPCs in the browser. Prefer the same-origin proxy when needed.
+  if (IS_BROWSER) {
+    if (BASE_RPC_RAW && !isCorsRestrictedRpc(BASE_RPC_RAW)) return BASE_RPC_RAW
+    return '/api/rpc'
+  }
+  if (BASE_RPC_RAW) return BASE_RPC_RAW
   return 'https://base-mainnet.public.blastapi.io'
 }
 

@@ -37,7 +37,11 @@ function isCorsRestrictedRpc(url: string): boolean {
 }
 
 function getBaseRpcUrl(): string {
-  if (BASE_RPC_RAW && !(IS_BROWSER && isCorsRestrictedRpc(BASE_RPC_RAW))) return BASE_RPC_RAW
+  if (IS_BROWSER) {
+    if (BASE_RPC_RAW && !isCorsRestrictedRpc(BASE_RPC_RAW)) return BASE_RPC_RAW
+    return '/api/rpc'
+  }
+  if (BASE_RPC_RAW) return BASE_RPC_RAW
   return 'https://base-mainnet.public.blastapi.io'
 }
 
