@@ -24,14 +24,30 @@ const CACHE_TTL = 1000 * 60 * 60 // 1 hour
 let migratedCoinsSet: Set<string> | null = null
 let lastFetchTime = 0
 
+const BASE_RPC_RAW =
+  (import.meta.env.VITE_BASE_READ_RPC_URL as string | undefined)?.trim() ||
+  (import.meta.env.VITE_BASE_RPC as string | undefined)?.trim() ||
+  ''
+
+const IS_BROWSER = typeof window !== 'undefined'
+
+function isCorsRestrictedRpc(url: string): boolean {
+  // Alchemy browser CORS is opt-in; avoid hard failures by default.
+  return /(^|\/\/)base-mainnet\.g\.alchemy\.com/i.test(url) || /\.g\.alchemy\.com\//i.test(url)
+}
+
+function getBaseRpcUrl(): string {
+  if (BASE_RPC_RAW && !(IS_BROWSER && isCorsRestrictedRpc(BASE_RPC_RAW))) return BASE_RPC_RAW
+  return 'https://base-mainnet.public.blastapi.io'
+}
+
 /**
  * Get the public client for Base
  */
 function getPublicClient() {
-  const rpcUrl = import.meta.env.VITE_BASE_RPC || 'https://mainnet.base.org'
   return createPublicClient({
     chain: base,
-    transport: http(rpcUrl),
+    transport: http(getBaseRpcUrl()),
   })
 }
 

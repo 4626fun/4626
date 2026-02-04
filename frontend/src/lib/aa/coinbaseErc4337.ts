@@ -35,12 +35,16 @@ if (ENTRYPOINT_V06 !== ENTRYPOINT_V06_EXPECTED) {
  * Verify the bundler supports EntryPoint v0.6.
  * Throws if the bundler doesn't support v0.6.
  */
-async function verifyBundlerSupportsV06(bundlerUrl: string): Promise<void> {
+async function verifyBundlerSupportsV06(
+  bundlerUrl: string,
+  options?: { includeCredentials?: boolean },
+): Promise<void> {
+  const credentials = options?.includeCredentials ? 'include' : 'omit'
   try {
     const response = await fetch(bundlerUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
+      credentials,
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: 1,
@@ -106,6 +110,45 @@ function isDebugEnabled(): boolean {
 }
 
 const AA_DEBUG = isDebugEnabled()
+
+function normalizeUrl(value: string): string {
+  const v = value.trim()
+  if (!v) return v
+  try {
+    const base = typeof window !== 'undefined' ? window.location.origin : undefined
+    const u = base ? new URL(v, base) : new URL(v)
+    return u.toString()
+  } catch {
+    return v
+  }
+}
+
+function isSameOriginUrl(value: string): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const u = new URL(value, window.location.origin)
+    return u.origin === window.location.origin
+  } catch {
+    return false
+  }
+}
+
+function isPaymasterProxyUrl(value: string): boolean {
+  try {
+    const base = typeof window !== 'undefined' ? window.location.origin : undefined
+    const u = base ? new URL(value, base) : new URL(value)
+    return u.pathname === '/api/paymaster'
+  } catch {
+    return false
+  }
+}
+
+function resolveBundlerUrlForNonPaymaster(bundlerUrl: string): string {
+  const envBundler = (import.meta.env as Record<string, string | undefined>)['VITE_CDP_BUNDLER_URL']
+  if (!envBundler?.trim()) return bundlerUrl
+  if (!isPaymasterProxyUrl(bundlerUrl)) return bundlerUrl
+  return normalizeUrl(envBundler)
+}
 
 const HEX_STRING_RE = /^0x[0-9a-fA-F]+$/
 
@@ -1078,6 +1121,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   publicClient: PublicClientLike
   walletClient: WalletClientLike
   bundlerUrl: string
+  paymasterUrl?: string
   smartWallet: Address
   ownerAddress: Address
   calls: Array<{ to: Address; value?: bigint; data?: Hex }>
@@ -1087,15 +1131,34 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   skipPreflightSimulation?: boolean
   skipPaymaster?: boolean
 }): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
-  const { publicClient, walletClient, bundlerUrl, smartWallet, ownerAddress, calls, version = '1', userOpSignMode = 'auto', ownerIsContract: ownerIsContractOverride, skipPreflightSimulation, skipPaymaster = false } = params
+  const {
+    publicClient,
+    walletClient,
+    bundlerUrl: bundlerUrlInput,
+    paymasterUrl: paymasterUrlInput,
+    smartWallet,
+    ownerAddress,
+    calls,
+    version = '1',
+    userOpSignMode = 'auto',
+    ownerIsContract: ownerIsContractOverride,
+    skipPreflightSimulation,
+    skipPaymaster = false,
+  } = params
   
   // Input validation
-  if (!bundlerUrl) throw new Error('Missing bundler URL')
+  if (!bundlerUrlInput) throw new Error('Missing bundler URL')
   if (!smartWallet) throw new Error('Missing smart wallet address')
   if (!ownerAddress) throw new Error('Missing owner address')
   if (!publicClient) throw new Error('Missing public client')
   if (!walletClient) throw new Error('Missing wallet client')
   if (!calls || calls.length === 0) throw new Error('No calls provided')
+
+  const normalizedBundlerUrl = normalizeUrl(bundlerUrlInput)
+  const paymasterUrl = normalizeUrl(paymasterUrlInput ?? bundlerUrlInput)
+  const bundlerUrlForBundler = resolveBundlerUrlForNonPaymaster(normalizedBundlerUrl)
+  const shouldSendSessionToBundler = isPaymasterProxyUrl(bundlerUrlForBundler)
+  const shouldSendSessionToPaymaster = isSameOriginUrl(paymasterUrl)
 
   // Pre-flight simulation: check if the underlying call would succeed
   // This helps diagnose contract-level reverts vs ERC-4337 issues
@@ -1159,28 +1222,37 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     version,
   })
 
-  // CDP uses a single endpoint for bundler + paymaster JSON-RPC methods.
+  // CDP can use separate endpoints for bundler + paymaster JSON-RPC methods.
   // If `bundlerUrl` is our same-origin proxy (`/api/paymaster`), we MUST include cookies
   // so the backend can validate the SIWE session (`cv_auth_session`).
   const sessionToken = typeof window !== 'undefined' ? getStoredSessionToken() : null
-  const transportHeaders = {
-    ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
-    ...(AA_DEBUG ? { 'X-CV-Paymaster-Debug': '1' } : {}),
-  } as Record<string, string>
-  const transport = http(bundlerUrl, {
-    fetchOptions: {
-      credentials: 'include',
-      headers: Object.keys(transportHeaders).length > 0 ? transportHeaders : undefined,
-    },
-  })
-  const paymasterClient = createPaymasterClient({ transport })
+  const buildTransport = (
+    url: string,
+    options: { includeSession: boolean; includeDebug?: boolean },
+  ) => {
+    const sameOrigin = isSameOriginUrl(url)
+    const sendSession = options.includeSession && sameOrigin
+    const headers: Record<string, string> = {
+      ...(sendSession && sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+      ...(sendSession && options.includeDebug && AA_DEBUG ? { 'X-CV-Paymaster-Debug': '1' } : {}),
+    }
+    return http(url, {
+      fetchOptions: {
+        credentials: sendSession ? 'include' : 'omit',
+        headers: Object.keys(headers).length > 0 ? headers : undefined,
+      },
+    })
+  }
+  const paymasterTransport = buildTransport(paymasterUrl, { includeSession: shouldSendSessionToPaymaster, includeDebug: true })
+  const bundlerTransport = buildTransport(bundlerUrlForBundler, { includeSession: shouldSendSessionToBundler })
+  const paymasterClient = createPaymasterClient({ transport: paymasterTransport })
   const bundlerClient = createBundlerClient({
     client: publicClient as any,
-    transport,
+    transport: bundlerTransport,
   })
 
   // ENFORCE: Verify bundler supports EntryPoint v0.6 before sending
-  await verifyBundlerSupportsV06(bundlerUrl)
+  await verifyBundlerSupportsV06(bundlerUrlForBundler, { includeCredentials: shouldSendSessionToBundler })
 
   // Check if the owner might be a smart wallet (for EIP-1271 verification gas estimation)
   // Smart wallet signature verification requires significantly more gas than EOA

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Copy, ExternalLink, ShieldCheck } from 'lucide-react'
-import { useAccount, useChainId, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
+import { useAccount, useBlockNumber, useChainId, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
 import { base } from 'wagmi/chains'
-import { encodeFunctionData, erc20Abi, formatUnits, getAddress, isAddress, parseUnits, type Address } from 'viem'
+import { encodeFunctionData, erc20Abi, formatUnits, getAddress, isAddress, parseAbiItem, parseUnits, type Address } from 'viem'
 import { useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 
 import { useMiniAppContext } from '@/hooks'
 import { ConnectButton } from '@/components/ConnectButton'
+import { CONTRACTS } from '@/config/contracts'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 
@@ -16,8 +17,30 @@ type SignManifestResult = { header: string; payload: string; signature: string }
 const DEFAULT_DOMAIN = '4626.fun'
 const MAX_DOMAIN_LEN = 255
 const CANONICAL_SMART_WALLET = '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5'
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
-const LEGACY_VAULTS = [
+type LegacyVaultHint = {
+  id: string
+  label: string
+  vault?: string
+  wrapper?: string
+  shareOft?: string
+  vesting?: string
+  vaultHint?: string
+}
+
+type LegacyVaultResolved = {
+  id: string
+  label: string
+  vault: string
+  wrapper: string
+  shareOft: string
+  vesting: string
+  vaultHint?: string
+  resolvedFrom: 'static' | 'registry' | 'unknown'
+}
+
+const LEGACY_VAULT_HINTS: LegacyVaultHint[] = [
   {
     id: 'legacy-1',
     label: 'Legacy ShareOFT (0x5f65…)',
@@ -34,7 +57,110 @@ const LEGACY_VAULTS = [
     vault: '0x62f30a8815C1EBF8639d554f17E4200832F0Ba77',
     vesting: '0x35f40efa13748560715af00af8abc221bab2fe07',
   },
+  {
+    id: 'legacy-3',
+    label: 'Legacy vault (0x2648…2D75)',
+    vaultHint: '0x264855c3...2D7537CB6',
+  },
+  {
+    id: 'legacy-4',
+    label: 'Legacy vault (0xcF30…91d0)',
+    vaultHint: '0xcF30B1e8...54ED91d0C',
+  },
+  {
+    id: 'legacy-5',
+    label: 'Legacy vault (0xc8A5…0EBD)',
+    vaultHint: '0xc8A5093d...d4Ff0EBD4',
+  },
+]
+
+function parseVaultHint(hint?: string): { prefix: string; suffix: string } | null {
+  if (!hint) return null
+  const raw = hint.trim()
+  if (!raw) return null
+  if (isAddress(raw)) return { prefix: raw.toLowerCase(), suffix: '' }
+  const parts = raw.split('...')
+  if (parts.length !== 2) return null
+  const prefix = parts[0].trim().toLowerCase()
+  const suffix = parts[1].trim().toLowerCase()
+  if (!prefix || !suffix) return null
+  return { prefix, suffix }
+}
+
+function matchVaultHint(hint: string | undefined, vaults: string[]): string | null {
+  const parsed = parseVaultHint(hint)
+  if (!parsed) return null
+  if (parsed.suffix === '' && isAddress(parsed.prefix)) return parsed.prefix
+  const matches = vaults.filter((vault) => vault.startsWith(parsed.prefix) && vault.endsWith(parsed.suffix))
+  return matches.length === 1 ? matches[0] : null
+}
+
+function getLegacyVestingStartBlock(): bigint {
+  const raw = import.meta.env.VITE_BASE_VESTING_START_BLOCK as string | undefined
+  if (!raw) return 15_000_000n
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return 15_000_000n
+  return BigInt(Math.floor(n))
+}
+
+const CREATOR_REGISTRY_ABI = [
+  {
+    type: 'function',
+    name: 'getAllCreatorCoins',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address[]' }],
+  },
+  {
+    type: 'function',
+    name: 'getCreatorCoin',
+    stateMutability: 'view',
+    inputs: [{ name: '_token', type: 'address' }],
+    outputs: [
+      { name: 'token', type: 'address' },
+      { name: 'name', type: 'string' },
+      { name: 'symbol', type: 'string' },
+      { name: 'vault', type: 'address' },
+      { name: 'shareOFT', type: 'address' },
+      { name: 'wrapper', type: 'address' },
+      { name: 'oracle', type: 'address' },
+      { name: 'gaugeController', type: 'address' },
+      { name: 'creator', type: 'address' },
+      { name: 'pool', type: 'address' },
+      { name: 'poolFee', type: 'uint24' },
+      { name: 'primaryChainId', type: 'uint16' },
+      { name: 'isActive', type: 'bool' },
+      { name: 'registeredAt', type: 'uint256' },
+    ],
+  },
 ] as const
+
+const CREATOR_SHARE_VESTING_EVENT = parseAbiItem(
+  'event CreatorShareVestingDeployed(address indexed shareOFT, address indexed beneficiary, address vesting, uint256 amount, uint64 startTimestamp, uint64 durationSeconds)',
+)
+
+async function fetchLegacyVesting(
+  publicClient: any,
+  shareOft: Address,
+  beneficiary: Address,
+): Promise<Address | null> {
+  const batcher = CONTRACTS.creatorVaultBatcher
+  if (!batcher || !isAddress(batcher)) return null
+  try {
+    const logs = await publicClient.getLogs({
+      address: batcher as Address,
+      event: CREATOR_SHARE_VESTING_EVENT,
+      args: { shareOFT: shareOft, beneficiary },
+      fromBlock: getLegacyVestingStartBlock(),
+      toBlock: 'latest',
+    })
+    const log = logs[logs.length - 1]
+    const vesting = (log?.args as any)?.vesting as Address | undefined
+    return vesting && isAddress(vesting) ? vesting : null
+  } catch {
+    return null
+  }
+}
 
 const VESTING_ABI = [
   { name: 'releasable', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -68,6 +194,20 @@ const VAULT_ABI = [
     outputs: [],
   },
   { name: 'claimQueuedWithdrawal', type: 'function', stateMutability: 'nonpayable', inputs: [], outputs: [{ type: 'uint256' }] },
+] as const
+
+const QUEUED_WITHDRAWAL_ABI = [
+  {
+    name: 'queuedWithdrawals',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [
+      { name: 'shares', type: 'uint256' },
+      { name: 'unlockBlock', type: 'uint256' },
+      { name: 'receiver', type: 'address' },
+    ],
+  },
 ] as const
 
 type TxState = {
@@ -133,6 +273,7 @@ function LegacyWithdrawals() {
   const publicClient = usePublicClient({ chainId: base.id })
   const { wallets: privyWallets } = useWallets()
   const { client: smartWalletClient } = useSmartWallets()
+  const { data: blockNumber } = useBlockNumber({ chainId: base.id, watch: true })
 
   const connectedAddress = useMemo(() => {
     if (!address || !isAddress(address)) return null
@@ -181,6 +322,31 @@ function LegacyWithdrawals() {
   const [receiver, setReceiver] = useState<string>('')
   const [amounts, setAmounts] = useState<Record<string, string>>({})
   const [txStates, setTxStates] = useState<Record<string, TxState>>({})
+  const [legacyOverrides, setLegacyOverrides] = useState<Record<string, Partial<LegacyVaultResolved>>>({})
+  const [legacyResolveStatus, setLegacyResolveStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [legacyResolveError, setLegacyResolveError] = useState<string | null>(null)
+
+  const legacyVaults = useMemo<LegacyVaultResolved[]>(() => {
+    return LEGACY_VAULT_HINTS.map((hint) => {
+      const override = legacyOverrides[hint.id] ?? {}
+      return {
+        id: hint.id,
+        label: hint.label,
+        vaultHint: hint.vaultHint,
+        vault: override.vault ?? hint.vault ?? ZERO_ADDRESS,
+        wrapper: override.wrapper ?? hint.wrapper ?? ZERO_ADDRESS,
+        shareOft: override.shareOft ?? hint.shareOft ?? ZERO_ADDRESS,
+        vesting: override.vesting ?? hint.vesting ?? ZERO_ADDRESS,
+        resolvedFrom: override.resolvedFrom ?? (hint.vault ? 'static' : 'unknown'),
+      }
+    })
+  }, [legacyOverrides])
+
+  const unresolvedHintIds = useMemo(() => {
+    return LEGACY_VAULT_HINTS.filter((hint) => hint.vaultHint && !legacyOverrides[hint.id]?.vault)
+      .map((hint) => hint.id)
+      .join(',')
+  }, [legacyOverrides])
 
   useEffect(() => {
     if (connectedAddress && !receiver) setReceiver(connectedAddress)
@@ -215,6 +381,102 @@ function LegacyWithdrawals() {
     if (!detectedCsw.address) return false
     return detectedCsw.address.toLowerCase() !== canonicalCswAddress.toLowerCase()
   }, [canonicalCswAddress, detectedCsw.address])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!publicClient || !unresolvedHintIds) return () => {}
+
+    const registryAddress = CONTRACTS.registry
+    if (!registryAddress || !isAddress(registryAddress)) return () => {}
+
+    setLegacyResolveStatus('loading')
+    setLegacyResolveError(null)
+
+    ;(async () => {
+      try {
+        const tokens = (await publicClient.readContract({
+          address: registryAddress as Address,
+          abi: CREATOR_REGISTRY_ABI,
+          functionName: 'getAllCreatorCoins',
+        })) as Address[]
+
+        if (!tokens || tokens.length === 0) {
+          if (!cancelled) setLegacyResolveStatus('done')
+          return
+        }
+
+        const calls = tokens.map((token) => ({
+          address: registryAddress as Address,
+          abi: CREATOR_REGISTRY_ABI,
+          functionName: 'getCreatorCoin',
+          args: [token],
+        }))
+
+        const results: any[] = []
+        const chunkSize = 120
+        for (let i = 0; i < calls.length; i += chunkSize) {
+          const chunk = calls.slice(i, i + chunkSize)
+          const chunkResults = await publicClient.multicall({ contracts: chunk, allowFailure: true })
+          results.push(...chunkResults)
+        }
+
+        const vaultMap = new Map<string, { vault: Address; wrapper: Address; shareOft: Address }>()
+        results.forEach((res) => {
+          if (res.status !== 'success') return
+          const info = res.result as any
+          const vault = info?.vault as Address | undefined
+          const wrapper = info?.wrapper as Address | undefined
+          const shareOft = (info?.shareOFT ?? info?.shareOft) as Address | undefined
+          if (!vault || !wrapper || !shareOft) return
+          if (!isAddress(vault) || !isAddress(wrapper) || !isAddress(shareOft)) return
+          vaultMap.set(String(vault).toLowerCase(), {
+            vault: getAddress(vault),
+            wrapper: getAddress(wrapper),
+            shareOft: getAddress(shareOft),
+          })
+        })
+
+        const vaultKeys = Array.from(vaultMap.keys())
+        const updates: Record<string, Partial<LegacyVaultResolved>> = {}
+
+        for (const hint of LEGACY_VAULT_HINTS) {
+          if (!hint.vaultHint) continue
+          const match = matchVaultHint(hint.vaultHint, vaultKeys)
+          if (!match) continue
+          const record = vaultMap.get(match)
+          if (!record) continue
+          updates[hint.id] = {
+            vault: record.vault,
+            wrapper: record.wrapper,
+            shareOft: record.shareOft,
+            resolvedFrom: 'registry',
+          }
+        }
+
+        for (const [id, update] of Object.entries(updates)) {
+          if (!update.shareOft || !isAddress(update.shareOft)) continue
+          const vesting = await fetchLegacyVesting(publicClient, update.shareOft as Address, canonicalCswAddress as Address)
+          if (vesting) {
+            updates[id] = { ...update, vesting: getAddress(vesting) }
+          }
+        }
+
+        if (!cancelled && Object.keys(updates).length > 0) {
+          setLegacyOverrides((prev) => ({ ...prev, ...updates }))
+        }
+        if (!cancelled) setLegacyResolveStatus('done')
+      } catch (e) {
+        if (!cancelled) {
+          setLegacyResolveStatus('error')
+          setLegacyResolveError('Failed to resolve legacy deployments from the registry.')
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [publicClient, canonicalCswAddress, unresolvedHintIds])
 
   const updateTx = (key: string, patch: Partial<TxState>) => {
     setTxStates((prev) => {
@@ -281,7 +543,12 @@ function LegacyWithdrawals() {
       }
       throw new Error('Connect the canonical smart wallet or an owner wallet to continue.')
     } catch (e: any) {
-      updateTx(key, { status: 'error', error: e?.shortMessage || e?.message || 'Transaction failed' })
+      const msg = String(e?.shortMessage || e?.message || 'Transaction failed')
+      const lower = msg.toLowerCase()
+      const friendly = lower.includes('requested resource not available') || lower.includes('resource not available')
+        ? 'Bundler endpoint does not support ERC-4337 methods. Set `VITE_CDP_BUNDLER_URL` and retry.'
+        : msg
+      updateTx(key, { status: 'error', error: friendly })
     }
   }
 
@@ -382,22 +649,41 @@ function LegacyWithdrawals() {
               <div className="text-xs text-zinc-600">Queue withdrawals will send Creator Coin to this address.</div>
             </div>
 
+            {legacyResolveStatus === 'loading' ? (
+              <div className="text-xs text-zinc-500">Resolving legacy deployments from registry…</div>
+            ) : null}
+            {legacyResolveError ? <div className="text-xs text-amber-300/80">{legacyResolveError}</div> : null}
+
             <div className="grid gap-6">
-              {LEGACY_VAULTS.map((legacy) => {
+              {legacyVaults.map((legacy) => {
                 const amountInput = amounts[legacy.id] ?? ''
                 const parsedAmount = parseAmount(amountInput)
                 const sharesToQueue = parsedAmount ? parsedAmount * 1000n : null
+                const hasShareOft = isAddress(legacy.shareOft)
+                const hasWrapper = isAddress(legacy.wrapper)
+                const hasVault = isAddress(legacy.vault)
+                const hasVesting = isAddress(legacy.vesting)
+                const hasResolvedContracts = hasShareOft && hasWrapper && hasVault
                 const balanceQuery = useReadContract({
                   address: legacy.shareOft as Address,
                   abi: erc20Abi,
                   functionName: 'balanceOf',
                   args: [connectedAddress ?? '0x0000000000000000000000000000000000000000'],
-                  query: { enabled: !!connectedAddress },
+                  query: { enabled: !!connectedAddress && hasShareOft },
                 })
                 const releasableQuery = useReadContract({
                   address: legacy.vesting as Address,
                   abi: VESTING_ABI,
                   functionName: 'releasable',
+                  query: { enabled: hasVesting },
+                })
+                const queuedQuery = useReadContract({
+                  address: legacy.vault as Address,
+                  abi: QUEUED_WITHDRAWAL_ABI,
+                  functionName: 'queuedWithdrawals',
+                  args: [canonicalCswAddress],
+                  chainId: base.id,
+                  query: { enabled: canUseSmartWallet && isBase && hasVault },
                 })
                 const releaseKey = `release-${legacy.id}`
                 const unwrapKey = `unwrap-${legacy.id}`
@@ -406,19 +692,57 @@ function LegacyWithdrawals() {
 
                 const balance = balanceQuery.data as bigint | undefined
                 const releasable = releasableQuery.data as bigint | undefined
-                const canUnwrap = isConnected && isBase && canUseSmartWallet && !!parsedAmount
-                const canQueue = isConnected && isBase && canUseSmartWallet && !!parsedAmount && receiverValid
-                const canClaim = isConnected && isBase && canUseSmartWallet
+                const queued = queuedQuery.data as
+                  | readonly [bigint, bigint, Address]
+                  | { shares: bigint; unlockBlock: bigint; receiver: Address }
+                  | undefined
+                const isQueuedObject = (
+                  value: typeof queued,
+                ): value is { shares: bigint; unlockBlock: bigint; receiver: Address } => {
+                  return Boolean(value) && !Array.isArray(value)
+                }
+                const queuedTuple = Array.isArray(queued)
+                  ? queued
+                  : isQueuedObject(queued)
+                    ? ([queued.shares, queued.unlockBlock, queued.receiver] as const)
+                    : null
+                const queuedShares = queuedTuple ? queuedTuple[0] : undefined
+                const queuedUnlockBlock = queuedTuple ? queuedTuple[1] : undefined
+                const hasQueued = typeof queuedShares === 'bigint' && queuedShares > 0n
+                const currentBlock = typeof blockNumber === 'bigint' ? blockNumber : null
+                const isUnlocked =
+                  hasQueued && typeof queuedUnlockBlock === 'bigint' && currentBlock !== null
+                    ? currentBlock >= queuedUnlockBlock
+                    : false
+                const blocksRemaining =
+                  hasQueued && typeof queuedUnlockBlock === 'bigint' && currentBlock !== null && queuedUnlockBlock > currentBlock
+                    ? queuedUnlockBlock - currentBlock
+                    : null
+                const canUnwrap = isConnected && isBase && canUseSmartWallet && hasResolvedContracts && !!parsedAmount
+                const canQueue = isConnected && isBase && canUseSmartWallet && hasVault && !!parsedAmount && receiverValid
+                const canClaim = isConnected && isBase && canUseSmartWallet && hasVault && hasQueued && isUnlocked
 
                 return (
                   <div key={legacy.id} className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="text-sm text-zinc-300">{legacy.label}</div>
-                        <div className="text-xs text-zinc-600 font-mono">ShareOFT {legacy.shareOft}</div>
-                        <div className="text-xs text-zinc-600 font-mono">Wrapper {legacy.wrapper}</div>
-                        <div className="text-xs text-zinc-600 font-mono">Vault {legacy.vault}</div>
-                        <div className="text-xs text-zinc-600 font-mono">Vesting {legacy.vesting}</div>
+                        <div className="text-xs text-zinc-600 font-mono">ShareOFT {hasShareOft ? legacy.shareOft : '—'}</div>
+                        <div className="text-xs text-zinc-600 font-mono">Wrapper {hasWrapper ? legacy.wrapper : '—'}</div>
+                        <div className="text-xs text-zinc-600 font-mono">Vault {hasVault ? legacy.vault : '—'}</div>
+                        <div className="text-xs text-zinc-600 font-mono">Vesting {hasVesting ? legacy.vesting : '—'}</div>
+                        {!hasResolvedContracts ? (
+                          <div className="text-xs text-amber-300/80">
+                            {legacyResolveStatus === 'loading'
+                              ? 'Resolving wrapper/shareOFT/vault from registry…'
+                              : 'Registry match not found for this vault.'}
+                          </div>
+                        ) : null}
+                        {!hasVesting ? (
+                          <div className="text-xs text-amber-300/80">
+                            Vesting contract not found for the canonical CSW.
+                          </div>
+                        ) : null}
                       </div>
                       <div className="text-xs text-zinc-500">
                         Balance: <span className="text-zinc-200">{formatToken(balance)}</span>
@@ -440,7 +764,7 @@ function LegacyWithdrawals() {
                               functionName: 'release',
                             })
                           }
-                          disabled={!isBase || !walletClient}
+                          disabled={!isBase || !walletClient || !canUseSmartWallet || !hasVesting}
                           className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           Release from vesting
@@ -517,6 +841,17 @@ function LegacyWithdrawals() {
                       <div className="rounded-lg border border-white/10 p-4 space-y-2">
                         <div className="text-sm text-zinc-300">Step 4 · Claim queued withdrawal</div>
                         <div className="text-xs text-zinc-500">Use after 10 blocks have passed.</div>
+                        {hasQueued ? (
+                          <div className="text-xs text-zinc-500">
+                            {isUnlocked
+                              ? 'Queued withdrawal is ready to claim.'
+                              : blocksRemaining !== null
+                                ? `Unlocks in ~${blocksRemaining.toString()} blocks.`
+                                : 'Queued withdrawal pending.'}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-zinc-500">No queued withdrawal found.</div>
+                        )}
                         <button
                           type="button"
                           onClick={() =>

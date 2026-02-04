@@ -12,16 +12,26 @@ if (typeof window !== 'undefined') {
   try {
     const params = new URLSearchParams(window.location.search)
     const debugEnabled = params.get('debug') === '1' || window.localStorage.getItem('cv:debug') === 'true'
-    if (debugEnabled && !(window as any).__cvPrivyAnalyticsFetchPatched) {
+    const needsAlchemyRewrite = true
+    if ((debugEnabled || needsAlchemyRewrite) && !(window as any).__cvFetchPatched) {
       const originalFetch = window.fetch.bind(window)
+      const alchemyBaseRpc = /(^|\/\/)base-mainnet\.g\.alchemy\.com/i
+      const safeBaseRpc = 'https://mainnet.base.org'
       window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
-        if (url.includes('https://auth.privy.io/api/v1/analytics_events')) {
+        if (debugEnabled && url.includes('https://auth.privy.io/api/v1/analytics_events')) {
           return Promise.resolve(new Response(null, { status: 204 }))
+        }
+        if (alchemyBaseRpc.test(url)) {
+          if (input instanceof Request) {
+            const rewritten = new Request(safeBaseRpc, input)
+            return originalFetch(rewritten, init)
+          }
+          return originalFetch(safeBaseRpc, init)
         }
         return originalFetch(input, init)
       }
-      ;(window as any).__cvPrivyAnalyticsFetchPatched = true
+      ;(window as any).__cvFetchPatched = true
     }
   } catch {
     // ignore

@@ -27,7 +27,9 @@ import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { RequestCreatorAccess } from '@/components/RequestCreatorAccess'
 import { CONTRACTS } from '@/config/contracts'
-import { useCreatorAllowlist, useFarcasterAuth, useMiniAppContext } from '@/hooks'
+import { useCreatorAllowlist, useFarcasterAuth, useMiniAppContext, useDeploymentTracker } from '@/hooks'
+import { DeploymentSuccess, AlreadyDeployedBanner } from '@/components/DeploymentSuccess'
+import type { DeploymentRecord } from '@/hooks/useDeploymentTracker'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { logger } from '@/lib/logger'
 import { useZoraCoin, useZoraProfile } from '@/lib/zora/hooks'
@@ -72,7 +74,7 @@ const BATCHER_PHASE1_WITH_SALT_SELECTOR = '297cb1e6'
 
 // Minimum age for a Creator Coin before allowing vault deployment.
 // Rationale: reduce launch-manipulation surface area on brand new coins with thin/no trading history.
-const DEFAULT_MIN_COIN_AGE_DAYS = 30
+const DEFAULT_MIN_COIN_AGE_DAYS = 7
 const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
 const BASE_CHAIN_ID_HEX = `0x${base.id.toString(16)}`
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}`
@@ -4437,6 +4439,32 @@ function DeployVaultMain() {
   const canonicalIdentityAddress = identity.canonicalIdentity.address
   const deploySender = (canonicalIdentityAddress as Address | null) ?? null
 
+  // Deployment tracking: 1 deployment per owner per version
+  const deploymentTracker = useDeploymentTracker(deploySender, deploymentVersion)
+  const [justCompletedDeployment, setJustCompletedDeployment] = useState<DeploymentRecord | null>(null)
+  const alreadyDeployed = !!(justCompletedDeployment || deploymentTracker.hasDeployed)
+
+  // Handler for when deployment completes successfully
+  const handleDeploymentSuccess = useCallback((addresses: ServerDeployResponse['addresses']) => {
+    if (!deploySender || !creatorToken || !isAddress(creatorToken)) return
+
+    const record = deploymentTracker.recordDeployment({
+      creatorToken: creatorToken as Address,
+      contracts: {
+        vault: addresses.vault,
+        wrapper: addresses.wrapper,
+        shareOFT: addresses.shareOFT,
+        gaugeController: addresses.gaugeController,
+        ccaStrategy: addresses.ccaStrategy,
+        oracle: addresses.oracle,
+      },
+    })
+
+    if (record) {
+      setJustCompletedDeployment(record)
+    }
+  }, [creatorToken, deploySender, deploymentTracker])
+
   const canonicalIdentityBytecodeQuery = useQuery({
     queryKey: ['bytecode', 'canonicalIdentity', canonicalIdentityAddress],
     enabled: !!publicClient && !!canonicalIdentityAddress,
@@ -5400,7 +5428,21 @@ function DeployVaultMain() {
               </div>
             </div>
 
-            {isAdmin ? (
+          {/* Deployment Status */}
+          {justCompletedDeployment ? (
+            <DeploymentSuccess
+              deployment={justCompletedDeployment}
+              tokenSymbol={underlyingSymbolUpper || undefined}
+              shareSymbol={derivedShareSymbol || undefined}
+            />
+          ) : deploymentTracker.hasDeployed && deploymentTracker.existingDeployment ? (
+            <AlreadyDeployedBanner
+              deployment={deploymentTracker.existingDeployment}
+              tokenSymbol={underlyingSymbolUpper || undefined}
+            />
+          ) : null}
+
+          {!alreadyDeployed && isAdmin ? (
               <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-[11px] uppercase tracking-wide text-amber-200">Launch checklist (admin)</div>
@@ -5439,7 +5481,7 @@ function DeployVaultMain() {
             ) : null}
 
             {/* Review */}
-            {tokenIsValid && (
+          {!alreadyDeployed && tokenIsValid && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
@@ -5539,7 +5581,9 @@ function DeployVaultMain() {
               </motion.div>
             )}
 
-            {/* Essentials */}
+          {!alreadyDeployed && (
+            <>
+          {/* Essentials */}
             <div className="card rounded-xl p-6 space-y-6">
               <div className="flex items-start justify-between gap-6">
                 <div className="space-y-1">
@@ -5627,7 +5671,8 @@ function DeployVaultMain() {
                     ) : null}
                   </>
                 )}
-              </div>
+            </div>
+          </div>
 
             {/* Deploy */}
             <div className="card rounded-xl p-8 space-y-4">
@@ -5831,7 +5876,7 @@ function DeployVaultMain() {
                     floorPriceQ96Aligned={marketFloorQuery.data?.floorPriceQ96Aligned ?? null}
                     marketFloorTwapDurationSec={marketFloorQuery.data?.creatorZora.durationSec ?? null}
                     marketFloorDiscountBps={marketFloorQuery.data?.zoraEth.discountBps ?? null}
-                    onSuccess={() => {}}
+                    onSuccess={handleDeploymentSuccess}
                     switchAuthCta={switchAuthCta}
                     smartWalletClient={smartWalletClient}
                     canonicalSmartWallet={canonicalIdentityIsContract ? (canonicalIdentityAddress as Address) : null}
@@ -5880,10 +5925,11 @@ function DeployVaultMain() {
                 Requires a 5,000,000 {underlyingSymbolUpper || 'TOKENS'} deposit. Some wallets may prompt multiple confirmations.
               </div>
             </div>
+            </>
+          )}
 
           </div>
         </div>
-      </div>
       </section>
     </div>
   )

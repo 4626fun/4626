@@ -3,6 +3,18 @@ import { base } from 'viem/chains'
 
 const PROTOCOL_REWARDS_ADDRESS = `0x${'7777777F279eba3d3Ad8F4E708545291A6fDBA8B'}` as Address
 
+const BASE_RPC_RAW =
+  (import.meta.env.VITE_BASE_READ_RPC_URL as string | undefined)?.trim() ||
+  (import.meta.env.VITE_BASE_RPC as string | undefined)?.trim() ||
+  ''
+
+const IS_BROWSER = typeof window !== 'undefined'
+
+function isCorsRestrictedRpc(url: string): boolean {
+  // Alchemy browser CORS is opt-in; avoid hard failures by default.
+  return /(^|\/\/)base-mainnet\.g\.alchemy\.com/i.test(url) || /\.g\.alchemy\.com\//i.test(url)
+}
+
 const protocolRewardsAbi = [
   {
     type: 'function',
@@ -14,9 +26,8 @@ const protocolRewardsAbi = [
 ] as const
 
 function getBaseRpcUrl(): string {
-  const url = import.meta.env.VITE_BASE_RPC
-  // Avoid defaulting to `mainnet.base.org` (can 429). Prefer community endpoints as best-effort fallback.
-  if (typeof url === 'string' && url.length > 0) return url
+  // Avoid CORS-restricted RPCs in the browser. Prefer community endpoints as best-effort fallback.
+  if (BASE_RPC_RAW && !(IS_BROWSER && isCorsRestrictedRpc(BASE_RPC_RAW))) return BASE_RPC_RAW
   return 'https://base-mainnet.public.blastapi.io'
 }
 

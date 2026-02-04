@@ -18,10 +18,19 @@ import { coinbaseWallet, walletConnect, injected } from 'wagmi/connectors'
 const WALLETCONNECT_PROJECT_ID =
   (import.meta.env.VITE_WALLETCONNECT_PROJECT_ID as string) || 'bc3dfd319b4a0ecaa25cdee7e36bd0c4'
 
-const BASE_RPC_URL =
-  (import.meta.env.VITE_BASE_RPC as string | undefined)?.trim() ||
+const BASE_RPC_URL_RAW =
   (import.meta.env.VITE_BASE_READ_RPC_URL as string | undefined)?.trim() ||
+  (import.meta.env.VITE_BASE_RPC as string | undefined)?.trim() ||
   ''
+
+const IS_BROWSER = typeof window !== 'undefined'
+
+function isCorsRestrictedRpc(url: string): boolean {
+  // Alchemy browser CORS is opt-in; avoid hard failures by default.
+  return /(^|\/\/)base-mainnet\.g\.alchemy\.com/i.test(url) || /\.g\.alchemy\.com\//i.test(url)
+}
+
+const BASE_RPC_URL = IS_BROWSER && isCorsRestrictedRpc(BASE_RPC_URL_RAW) ? '' : BASE_RPC_URL_RAW
 
 function uniqueNonEmptyStrings(values: Array<string | undefined | null>): string[] {
   const out: string[] = []
@@ -38,17 +47,24 @@ function uniqueNonEmptyStrings(values: Array<string | undefined | null>): string
 
 // Browser RPC reality: some providers (or API keys) block browser `fetch` via CORS / allowlists.
 // Use a fallback list so reads don't hard-fail when a single endpoint is unreachable.
-const BASE_READ_RPC_URLS = uniqueNonEmptyStrings([
-  BASE_RPC_URL,
-  // Base public RPCs (best-effort fallbacks)
-  'https://mainnet.base.org',
-  'https://base-mainnet.public.blastapi.io',
-])
+const BASE_READ_RPC_URLS = uniqueNonEmptyStrings(
+  [
+    BASE_RPC_URL,
+    // Base public RPCs (best-effort fallbacks)
+    'https://base-mainnet.public.blastapi.io',
+    'https://base.llamarpc.com',
+    'https://base.meowrpc.com',
+    'https://mainnet.base.org',
+  ].filter((url) => {
+    if (!url) return false
+    return !(IS_BROWSER && isCorsRestrictedRpc(url))
+  }),
+)
 
 const WALLETCONNECT_APP_URL =
   (import.meta.env.VITE_APP_URL as string | undefined)?.trim() ||
   (typeof window !== 'undefined' ? window.location.origin : 'https://4626.fun')
-const WALLETCONNECT_ICON_URL = `${WALLETCONNECT_APP_URL.replace(/\/$/, '')}/pwa-512.png`
+const WALLETCONNECT_ICON_URL = `${WALLETCONNECT_APP_URL.replace(/\/$/, '')}/miniapp-icon.svg`
 
 export const wagmiConfig = createConfig({
   chains: [base],
