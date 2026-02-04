@@ -56,7 +56,7 @@ function ActivityRow({ coin }: { coin: ZoraCoin }) {
   return (
     <Link
       to={`/explore/creators/base/${address}`}
-      className="grid grid-cols-[80px_minmax(150px,2fr)_minmax(100px,1fr)_minmax(80px,1fr)_minmax(100px,1fr)_50px] gap-4 items-center px-4 py-3 hover:bg-zinc-800/30 transition-colors text-sm"
+      className="grid grid-cols-[64px_56px_minmax(0,1fr)_minmax(0,1fr)] sm:grid-cols-[80px_minmax(150px,2fr)_minmax(100px,1fr)_minmax(80px,1fr)_minmax(100px,1fr)_50px] gap-4 items-center px-4 py-3 hover:bg-zinc-800/30 transition-colors text-sm"
     >
       {/* Type indicator */}
       <div className="flex items-center gap-2">
@@ -67,13 +67,13 @@ function ActivityRow({ coin }: { coin: ZoraCoin }) {
             <ArrowUpRight className="w-3 h-3 text-red-500" />
           )}
         </div>
-        <span className={`text-sm font-medium ${isBuy ? 'text-green-500' : 'text-red-500'}`}>
+        <span className={`text-sm font-medium hidden sm:inline ${isBuy ? 'text-green-500' : 'text-red-500'}`}>
           {isBuy ? 'Buy' : 'Sell'}
         </span>
       </div>
 
       {/* Token */}
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center gap-3 min-w-0 justify-center sm:justify-start">
         {avatarUrl ? (
           <img src={avatarUrl} alt={name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
         ) : (
@@ -81,27 +81,33 @@ function ActivityRow({ coin }: { coin: ZoraCoin }) {
             <span className="text-xs font-medium text-zinc-400">{symbol.slice(0, 2).toUpperCase()}</span>
           </div>
         )}
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 hidden sm:block">
           <div className="text-sm font-medium text-white truncate">{name}</div>
           <div className="text-xs text-zinc-500 truncate">{symbol}</div>
         </div>
       </div>
 
       {/* Volume */}
-      <span className="text-sm text-white tabular-nums">{volume}</span>
+      <div className="flex flex-col items-end">
+        <span className="text-[10px] uppercase tracking-[0.16em] text-zinc-500 sm:hidden">Vol</span>
+        <span className="text-sm text-white tabular-nums">{volume}</span>
+      </div>
 
       {/* Time */}
-      <span className="text-sm text-zinc-500">{time}</span>
+      <div className="flex flex-col items-end">
+        <span className="text-[10px] uppercase tracking-[0.16em] text-zinc-500 sm:hidden">Time</span>
+        <span className="text-sm text-zinc-500">{time}</span>
+      </div>
 
       {/* Account */}
-      <span className="text-sm text-zinc-400 font-mono">{formatAddress(creatorAddress)}</span>
+      <span className="hidden sm:block text-sm text-zinc-400 font-mono">{formatAddress(creatorAddress)}</span>
 
       {/* External link */}
       <a
         href={`https://basescan.org/address/${address}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-zinc-500 hover:text-white transition-colors"
+        className="hidden sm:block text-zinc-500 hover:text-white transition-colors"
         onClick={(e) => e.stopPropagation()}
       >
         <ExternalLink className="w-4 h-4" />
@@ -112,7 +118,7 @@ function ActivityRow({ coin }: { coin: ZoraCoin }) {
 
 function ActivityTableHeader() {
   return (
-    <div className="grid grid-cols-[80px_minmax(150px,2fr)_minmax(100px,1fr)_minmax(80px,1fr)_minmax(100px,1fr)_50px] gap-4 items-center px-4 py-3 text-[10px] text-zinc-500 uppercase tracking-wider border-b border-zinc-800 bg-zinc-900/50">
+    <div className="hidden sm:grid grid-cols-[80px_minmax(150px,2fr)_minmax(100px,1fr)_minmax(80px,1fr)_minmax(100px,1fr)_50px] gap-4 items-center px-4 py-3 text-[10px] text-zinc-500 uppercase tracking-wider border-b border-zinc-800 bg-zinc-900/50">
       <span>Type</span>
       <span>Token</span>
       <span>Volume (24h)</span>
@@ -125,22 +131,22 @@ function ActivityTableHeader() {
 
 function ActivityRowSkeleton() {
   return (
-    <div className="grid grid-cols-[80px_minmax(150px,2fr)_minmax(100px,1fr)_minmax(80px,1fr)_minmax(100px,1fr)_50px] gap-4 items-center px-4 py-3">
+    <div className="grid grid-cols-[64px_56px_minmax(0,1fr)_minmax(0,1fr)] sm:grid-cols-[80px_minmax(150px,2fr)_minmax(100px,1fr)_minmax(80px,1fr)_minmax(100px,1fr)_50px] gap-4 items-center px-4 py-3">
       <div className="flex items-center gap-2">
         <div className="w-6 h-6 rounded-full bg-zinc-800 animate-pulse" />
-        <div className="h-4 w-8 bg-zinc-800 rounded animate-pulse" />
+        <div className="hidden sm:block h-4 w-8 bg-zinc-800 rounded animate-pulse" />
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 justify-center sm:justify-start">
         <div className="w-8 h-8 rounded-full bg-zinc-800 animate-pulse" />
-        <div className="space-y-2 flex-1">
+        <div className="space-y-2 flex-1 hidden sm:block">
           <div className="h-4 w-24 bg-zinc-800 rounded animate-pulse" />
           <div className="h-3 w-12 bg-zinc-800 rounded animate-pulse" />
         </div>
       </div>
       <div className="h-4 w-16 bg-zinc-800 rounded animate-pulse" />
       <div className="h-4 w-12 bg-zinc-800 rounded animate-pulse" />
-      <div className="h-4 w-20 bg-zinc-800 rounded animate-pulse" />
-      <div className="h-4 w-4 bg-zinc-800 rounded animate-pulse" />
+      <div className="hidden sm:block h-4 w-20 bg-zinc-800 rounded animate-pulse" />
+      <div className="hidden sm:block h-4 w-4 bg-zinc-800 rounded animate-pulse" />
     </div>
   )
 }
@@ -280,7 +286,7 @@ export function ExploreTransactions() {
           className="rounded-2xl border border-zinc-800 bg-zinc-900/50"
         >
           {/* Sticky header */}
-          <div className="sticky top-24 z-50 border-b border-zinc-800 bg-zinc-950 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
+          <div className="hidden sm:block sticky top-24 z-50 border-b border-zinc-800 bg-zinc-950 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
             <ActivityTableHeader />
           </div>
 

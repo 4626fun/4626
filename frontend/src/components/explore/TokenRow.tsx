@@ -207,15 +207,15 @@ export function TokenRow({ rank, coin, linkPrefix = '/explore/creators', timefra
           className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-r from-transparent to-zinc-950 opacity-80"
           aria-hidden="true"
         />
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0 justify-center sm:justify-start">
           {avatarUrl ? (
-            <img src={avatarUrl} alt={name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+            <img src={avatarUrl} alt={name} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover flex-shrink-0" />
           ) : (
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center flex-shrink-0">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center flex-shrink-0">
               <span className="text-[11px] font-medium text-zinc-400">{name.slice(0, 2).toUpperCase()}</span>
             </div>
           )}
-          <div className="min-w-0">
+          <div className="min-w-0 hidden sm:block">
             {isSameNameSymbol ? (
               // Single display for matching name/symbol (common for creator coins)
               <div className="text-[15px] font-medium text-white truncate">{symbol || name}</div>
@@ -385,9 +385,9 @@ export function TokenRowSkeleton() {
         <div className="h-3 w-6 bg-zinc-800 rounded animate-pulse ml-auto" />
       </div>
       <div className={`${stickyCellClass} px-3 py-2 shadow-[6px_0_16px_-12px_rgba(0,0,0,0.9)]`} style={{ left: stickyLeft.name }}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 justify-center sm:justify-start">
           <div className="w-7 h-7 rounded-full bg-zinc-800 animate-pulse" />
-          <div className="space-y-1">
+          <div className="space-y-1 hidden sm:block">
             <div className="h-3 w-24 bg-zinc-800 rounded animate-pulse" />
             <div className="h-2 w-12 bg-zinc-800 rounded animate-pulse" />
           </div>

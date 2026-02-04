@@ -170,7 +170,7 @@ export function PoolRow({ rank, coin, timeframe = '1d', migratedCoins }: PoolRow
           className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-r from-transparent to-zinc-950 opacity-80"
           aria-hidden="true"
         />
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 justify-center sm:justify-start">
           {avatarUrl ? (
             <img src={avatarUrl} alt={name} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
           ) : (
@@ -178,7 +178,7 @@ export function PoolRow({ rank, coin, timeframe = '1d', migratedCoins }: PoolRow
               <span className="text-[10px] font-medium text-zinc-400">{name.slice(0, 2).toUpperCase()}</span>
             </div>
           )}
-          <div className="min-w-0">
+          <div className="min-w-0 hidden sm:block">
             <div className="text-sm font-medium text-white truncate">{name}</div>
             {creatorHandle && <div className="text-[10px] text-zinc-500 truncate">@{creatorHandle}</div>}
           </div>
@@ -339,9 +339,9 @@ export function PoolRowSkeleton() {
         <div className="h-3 w-6 bg-zinc-800 rounded animate-pulse ml-auto" />
       </div>
       <div className={`${stickyCellClass} px-3 py-2 shadow-[6px_0_16px_-12px_rgba(0,0,0,0.9)]`} style={{ left: stickyLeft.name }}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 justify-center sm:justify-start">
           <div className="w-7 h-7 rounded-lg bg-zinc-800 animate-pulse" />
-          <div className="space-y-1">
+          <div className="space-y-1 hidden sm:block">
             <div className="h-3 w-24 bg-zinc-800 rounded animate-pulse" />
             <div className="h-2 w-12 bg-zinc-800 rounded animate-pulse" />
           </div>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ExternalLink, ArrowLeft, Copy, Check, Share2, Globe, Users, Coins, TrendingUp, Calendar } from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
@@ -8,6 +8,8 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchZoraCoin } from '@/lib/zora/client'
 import { useZoraProfile, useZoraProfileCoins } from '@/lib/zora/hooks'
 import type { ZoraCoin, ZoraProfile } from '@/lib/zora/types'
+
+const CONTENT_COINS_PAGE_SIZE = 20
 
 function isSupportedChain(chain: string): boolean {
   return chain.toLowerCase() === 'base'
@@ -69,14 +71,17 @@ function DexscreenerChart({ pairAddress, tokenAddress }: { pairAddress?: string;
     : `https://dexscreener.com/base/${tokenAddress}?embed=1&theme=dark&trades=0&info=0`
 
   return (
-    <div className="w-full h-[400px] rounded-xl overflow-hidden bg-zinc-900/50">
-      <iframe
-        src={embedUrl}
-        title="Price Chart"
-        className="w-full h-full border-0"
-        loading="lazy"
-        allow="clipboard-write"
-      />
+    <div className="w-full rounded-xl overflow-hidden bg-zinc-900/50">
+      <div className="w-full min-h-[280px] sm:min-h-[360px] md:min-h-[420px] aspect-[4/3] sm:aspect-[16/9] md:aspect-[16/10]">
+        <iframe
+          src={embedUrl}
+          title="Price Chart"
+          className="w-full h-full border-0"
+          loading="lazy"
+          allow="clipboard-write"
+          allowFullScreen
+        />
+      </div>
     </div>
   )
 }
@@ -279,6 +284,7 @@ export function ExploreCreatorDetail() {
   const chain = String(params.chain ?? '').trim()
   const tokenAddressRaw = String(params.tokenAddress ?? '').trim()
   const [activeTab, setActiveTab] = useState<'chart' | 'coins'>('chart')
+  const [contentCoinsPage, setContentCoinsPage] = useState(1)
 
   const tokenAddress = isAddress(tokenAddressRaw) ? getAddress(tokenAddressRaw) : null
 
@@ -316,6 +322,19 @@ export function ExploreCreatorDetail() {
   const contentCoins = useMemo(() => {
     return createdCoins.filter((c) => c.coinType !== 'CREATOR')
   }, [createdCoins])
+
+  const totalContentPages = Math.max(1, Math.ceil(contentCoins.length / CONTENT_COINS_PAGE_SIZE))
+  const contentPage = Math.min(Math.max(contentCoinsPage, 1), totalContentPages)
+  const pagedContentCoins = useMemo(() => {
+    const start = (contentPage - 1) * CONTENT_COINS_PAGE_SIZE
+    return contentCoins.slice(start, start + CONTENT_COINS_PAGE_SIZE)
+  }, [contentCoins, contentPage])
+
+  useEffect(() => {
+    if (contentCoinsPage > totalContentPages) {
+      setContentCoinsPage(totalContentPages)
+    }
+  }, [contentCoinsPage, totalContentPages])
 
   if (!chain || !isSupportedChain(chain)) {
     return <Navigate replace to="/explore/creators" />
@@ -495,10 +514,37 @@ export function ExploreCreatorDetail() {
             {activeTab === 'coins' && (
               <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 overflow-hidden">
                 <div className="p-4 border-b border-zinc-800">
-                  <h3 className="text-white font-medium">Content Coins by {displayName}</h3>
-                  <p className="text-xs text-zinc-500 mt-1">
-                    All content coins created by this creator on Zora
-                  </p>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-white font-medium">Content Coins by {displayName}</h3>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        All content coins created by this creator on Zora
+                      </p>
+                    </div>
+                    {contentCoins.length > CONTENT_COINS_PAGE_SIZE && (
+                      <div className="flex items-center gap-2 text-xs text-zinc-500">
+                        <button
+                          type="button"
+                          onClick={() => setContentCoinsPage((p) => Math.max(1, p - 1))}
+                          disabled={contentPage <= 1}
+                          className="px-3 py-1.5 rounded-full border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700 disabled:opacity-40 disabled:hover:text-zinc-400"
+                        >
+                          Prev
+                        </button>
+                        <span className="tabular-nums text-zinc-500">
+                          Page {contentPage} of {totalContentPages}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setContentCoinsPage((p) => Math.min(totalContentPages, p + 1))}
+                          disabled={contentPage >= totalContentPages}
+                          className="px-3 py-1.5 rounded-full border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700 disabled:opacity-40 disabled:hover:text-zinc-400"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 
                 {profileCoinsLoading ? (
@@ -511,11 +557,11 @@ export function ExploreCreatorDetail() {
                   </div>
                 ) : (
                   <div className="divide-y divide-zinc-800/50">
-                    {contentCoins.map((contentCoin, index) => (
+                    {pagedContentCoins.map((contentCoin, index) => (
                       <ContentCoinRow 
                         key={contentCoin.address || contentCoin.id || index} 
                         coin={contentCoin} 
-                        rank={index + 1} 
+                        rank={(contentPage - 1) * CONTENT_COINS_PAGE_SIZE + index + 1}
                       />
                     ))}
                   </div>
