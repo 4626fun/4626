@@ -1085,8 +1085,9 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   userOpSignMode?: UserOpSignMode
   ownerIsContract?: boolean
   skipPreflightSimulation?: boolean
+  skipPaymaster?: boolean
 }): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
-  const { publicClient, walletClient, bundlerUrl, smartWallet, ownerAddress, calls, version = '1', userOpSignMode = 'auto', ownerIsContract: ownerIsContractOverride, skipPreflightSimulation } = params
+  const { publicClient, walletClient, bundlerUrl, smartWallet, ownerAddress, calls, version = '1', userOpSignMode = 'auto', ownerIsContract: ownerIsContractOverride, skipPreflightSimulation, skipPaymaster = false } = params
   
   // Input validation
   if (!bundlerUrl) throw new Error('Missing bundler URL')
@@ -1287,7 +1288,12 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     }
   }
 
-  await attemptSend(true)
+  const usePaymaster = !skipPaymaster
+  if (usePaymaster) {
+    await attemptSend(true)
+  } else {
+    await attemptSend(false)
+  }
 
   const shouldFallbackWithoutPaymaster = (error: unknown): boolean => {
     const hasPrefundBalance = typeof smartWalletBalance === 'bigint' && smartWalletBalance > 0n
@@ -1299,7 +1305,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     return false
   }
 
-  if (lastError && shouldFallbackWithoutPaymaster(lastError)) {
+  if (usePaymaster && lastError && shouldFallbackWithoutPaymaster(lastError)) {
     attemptedWithoutPaymaster = true
     const hasPrefundBalance = typeof smartWalletBalance === 'bigint' && smartWalletBalance > 0n
     if (isPaymasterUnavailableError(lastError) && !allowPaymasterFallback && hasPrefundBalance) {

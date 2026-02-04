@@ -272,6 +272,7 @@ function LegacyWithdrawals() {
           ownerAddress: connectedAddress as Address,
           calls: [{ to: config.address, data }],
           version: '1',
+          skipPaymaster: true,
         })
         updateTx(key, { status: 'pending', hash: result.transactionHash })
         await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
