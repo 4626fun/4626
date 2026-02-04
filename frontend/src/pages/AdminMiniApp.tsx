@@ -8,7 +8,7 @@ import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 
 import { useMiniAppContext } from '@/hooks'
 import { ConnectButton } from '@/components/ConnectButton'
-import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
+import { resolveCdpBundlerUrl, resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 
 type SignManifestResult = { header: string; payload: string; signature: string }
@@ -258,7 +258,9 @@ function LegacyWithdrawals() {
       }
       if (connectedIsCanonicalOwner && connectedAddress) {
         const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const bundlerEnv = import.meta.env.VITE_CDP_BUNDLER_URL as string | undefined
+        const paymasterUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const bundlerUrl = resolveCdpBundlerUrl(bundlerEnv, paymasterEnv) || paymasterUrl
         const data = encodeFunctionData({
           abi: config.abi as any,
           functionName: config.functionName as any,
@@ -268,6 +270,7 @@ function LegacyWithdrawals() {
           publicClient: publicClient as any,
           walletClient: walletClient as any,
           bundlerUrl,
+          paymasterUrl,
           smartWallet: canonicalCswAddress as Address,
           ownerAddress: connectedAddress as Address,
           calls: [{ to: config.address, data }],

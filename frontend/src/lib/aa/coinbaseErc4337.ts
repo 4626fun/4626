@@ -40,7 +40,7 @@ async function verifyBundlerSupportsV06(bundlerUrl: string): Promise<void> {
     const response = await fetch(bundlerUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
+      ...(isSameOriginUrl(bundlerUrl) ? { credentials: 'include' } : {}),
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: 1,
@@ -244,6 +244,18 @@ function getHexByteLength(hex: string): number | null {
   const body = hex.slice(2)
   if (body.length % 2 !== 0) return null
   return body.length / 2
+}
+
+function isSameOriginUrl(url: string): boolean {
+  if (!url) return false
+  if (url.startsWith('/')) return true
+  if (typeof window === 'undefined' || !window.location?.origin) return false
+  try {
+    const u = new URL(url, window.location.origin)
+    return u.origin === window.location.origin
+  } catch {
+    return false
+  }
 }
 
 function signatureMeta(signature: Hex) {
@@ -812,6 +824,7 @@ export async function sendCrossAppUserOperation(params: {
   publicClient: PublicClientLike
   crossAppSignMessage: CrossAppSignMessage
   bundlerUrl: string
+  paymasterUrl?: string
   smartWallet: Address
   zoraEmbeddedWalletAddress: Address
   calls: Array<{ to: Address; value?: bigint; data?: Hex }>
@@ -821,6 +834,7 @@ export async function sendCrossAppUserOperation(params: {
     publicClient, 
     crossAppSignMessage, 
     bundlerUrl, 
+    paymasterUrl,
     smartWallet, 
     zoraEmbeddedWalletAddress, 
     calls, 
@@ -859,21 +873,32 @@ export async function sendCrossAppUserOperation(params: {
   })
 
   // Set up bundler + paymaster (uses CDP for gas sponsorship)
+  const paymasterEndpoint = paymasterUrl ?? bundlerUrl
+  const paymasterSameOrigin = isSameOriginUrl(paymasterEndpoint)
+  const bundlerSameOrigin = isSameOriginUrl(bundlerUrl)
   const sessionToken = typeof window !== 'undefined' ? getStoredSessionToken() : null
-  const transportHeaders = {
-    ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
-    ...(AA_DEBUG ? { 'X-CV-Paymaster-Debug': '1' } : {}),
-  } as Record<string, string>
-  const transport = http(bundlerUrl, {
+  const sessionAuthHeader: Record<string, string> = sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+  const paymasterHeaders: Record<string, string> = paymasterSameOrigin
+    ? { ...sessionAuthHeader, ...(AA_DEBUG ? { 'X-CV-Paymaster-Debug': '1' } : {}) }
+    : {}
+  const bundlerHeaders: Record<string, string> = bundlerSameOrigin ? sessionAuthHeader : {}
+
+  const paymasterTransport = http(paymasterEndpoint, {
     fetchOptions: {
-      credentials: 'include',
-      headers: Object.keys(transportHeaders).length > 0 ? transportHeaders : undefined,
+      ...(paymasterSameOrigin ? { credentials: 'include' } : {}),
+      headers: Object.keys(paymasterHeaders).length > 0 ? paymasterHeaders : undefined,
     },
   })
-  const paymasterClient = createPaymasterClient({ transport })
+  const bundlerTransport = http(bundlerUrl, {
+    fetchOptions: {
+      ...(bundlerSameOrigin ? { credentials: 'include' } : {}),
+      headers: Object.keys(bundlerHeaders).length > 0 ? bundlerHeaders : undefined,
+    },
+  })
+  const paymasterClient = createPaymasterClient({ transport: paymasterTransport })
   const bundlerClient = createBundlerClient({
     client: publicClient as any,
-    transport,
+    transport: bundlerTransport,
   })
 
   // ENFORCE: Verify bundler supports EntryPoint v0.6 before sending
@@ -1078,6 +1103,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   publicClient: PublicClientLike
   walletClient: WalletClientLike
   bundlerUrl: string
+  paymasterUrl?: string
   smartWallet: Address
   ownerAddress: Address
   calls: Array<{ to: Address; value?: bigint; data?: Hex }>
@@ -1086,7 +1112,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   ownerIsContract?: boolean
   skipPreflightSimulation?: boolean
 }): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
-  const { publicClient, walletClient, bundlerUrl, smartWallet, ownerAddress, calls, version = '1', userOpSignMode = 'auto', ownerIsContract: ownerIsContractOverride, skipPreflightSimulation } = params
+  const { publicClient, walletClient, bundlerUrl, paymasterUrl, smartWallet, ownerAddress, calls, version = '1', userOpSignMode = 'auto', ownerIsContract: ownerIsContractOverride, skipPreflightSimulation } = params
   
   // Input validation
   if (!bundlerUrl) throw new Error('Missing bundler URL')
@@ -1161,21 +1187,32 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // CDP uses a single endpoint for bundler + paymaster JSON-RPC methods.
   // If `bundlerUrl` is our same-origin proxy (`/api/paymaster`), we MUST include cookies
   // so the backend can validate the SIWE session (`cv_auth_session`).
+  const paymasterEndpoint = paymasterUrl ?? bundlerUrl
+  const paymasterSameOrigin = isSameOriginUrl(paymasterEndpoint)
+  const bundlerSameOrigin = isSameOriginUrl(bundlerUrl)
   const sessionToken = typeof window !== 'undefined' ? getStoredSessionToken() : null
-  const transportHeaders = {
-    ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
-    ...(AA_DEBUG ? { 'X-CV-Paymaster-Debug': '1' } : {}),
-  } as Record<string, string>
-  const transport = http(bundlerUrl, {
+  const sessionAuthHeader: Record<string, string> = sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+  const paymasterHeaders: Record<string, string> = paymasterSameOrigin
+    ? { ...sessionAuthHeader, ...(AA_DEBUG ? { 'X-CV-Paymaster-Debug': '1' } : {}) }
+    : {}
+  const bundlerHeaders: Record<string, string> = bundlerSameOrigin ? sessionAuthHeader : {}
+
+  const paymasterTransport = http(paymasterEndpoint, {
     fetchOptions: {
-      credentials: 'include',
-      headers: Object.keys(transportHeaders).length > 0 ? transportHeaders : undefined,
+      ...(paymasterSameOrigin ? { credentials: 'include' } : {}),
+      headers: Object.keys(paymasterHeaders).length > 0 ? paymasterHeaders : undefined,
     },
   })
-  const paymasterClient = createPaymasterClient({ transport })
+  const bundlerTransport = http(bundlerUrl, {
+    fetchOptions: {
+      ...(bundlerSameOrigin ? { credentials: 'include' } : {}),
+      headers: Object.keys(bundlerHeaders).length > 0 ? bundlerHeaders : undefined,
+    },
+  })
+  const paymasterClient = createPaymasterClient({ transport: paymasterTransport })
   const bundlerClient = createBundlerClient({
     client: publicClient as any,
-    transport,
+    transport: bundlerTransport,
   })
 
   // ENFORCE: Verify bundler supports EntryPoint v0.6 before sending
