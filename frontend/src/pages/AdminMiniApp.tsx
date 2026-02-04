@@ -159,14 +159,19 @@ function LegacyWithdrawals() {
     const raw = typeof (csw as any)?.address === 'string' ? String((csw as any).address) : ''
     return isAddress(raw) ? getAddress(raw) : null
   }, [privyWallets])
-
-  const detectedCswAddress = privySmartWalletAddress ?? privyWalletCswAddress
+  const canonicalCswAddress = useMemo(() => getAddress(CANONICAL_SMART_WALLET), [])
+  const privyCswAddress = privySmartWalletAddress ?? privyWalletCswAddress
+  const privyCswIsCanonical = useMemo(() => {
+    if (!privyCswAddress) return false
+    return privyCswAddress.toLowerCase() === canonicalCswAddress.toLowerCase()
+  }, [canonicalCswAddress, privyCswAddress])
 
   const canonicalOwnerQuery = useReadContract({
     address: CANONICAL_SMART_WALLET as Address,
     abi: COINBASE_SMART_WALLET_OWNER_LINK_ABI,
     functionName: 'isOwnerAddress',
     args: [connectedAddress ?? '0x0000000000000000000000000000000000000000'],
+    chainId: base.id,
     query: { enabled: !!connectedAddress },
   })
   const connectedIsCanonicalOwner = canonicalOwnerQuery.data === true
@@ -181,6 +186,31 @@ function LegacyWithdrawals() {
 
   const isBase = chainId === base.id
   const isCanonical = connectedAddress?.toLowerCase() === CANONICAL_SMART_WALLET.toLowerCase()
+  const detectedCsw = useMemo(() => {
+    if (isCanonical) return { address: canonicalCswAddress, source: 'connected' as const }
+    if (connectedIsCanonicalOwner) return { address: canonicalCswAddress, source: 'owner' as const }
+    if (privyCswIsCanonical) return { address: canonicalCswAddress, source: 'privy' as const }
+    if (privyCswAddress) return { address: privyCswAddress, source: 'privy-noncanonical' as const }
+    return { address: null, source: null }
+  }, [canonicalCswAddress, connectedIsCanonicalOwner, isCanonical, privyCswAddress, privyCswIsCanonical])
+  const detectedCswLabel = useMemo(() => {
+    switch (detectedCsw.source) {
+      case 'privy':
+        return 'Privy smart wallet'
+      case 'privy-noncanonical':
+        return 'Privy smart wallet (non-canonical)'
+      case 'connected':
+        return 'Connected wallet'
+      case 'owner':
+        return 'Owner check'
+      default:
+        return null
+    }
+  }, [detectedCsw.source])
+  const detectedCswMismatch = useMemo(() => {
+    if (!detectedCsw.address) return false
+    return detectedCsw.address.toLowerCase() !== canonicalCswAddress.toLowerCase()
+  }, [canonicalCswAddress, detectedCsw.address])
 
   const updateTx = (key: string, patch: Partial<TxState>) => {
     setTxStates((prev) => {
@@ -257,9 +287,22 @@ function LegacyWithdrawals() {
               <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-2 text-sm">
                 <div className="text-zinc-400">Connected wallet</div>
                 <div className="font-mono text-zinc-200">{connectedAddress}</div>
-                {detectedCswAddress ? (
+                <div className="text-xs text-zinc-500">
+                  Canonical CSW: <span className="font-mono text-zinc-300">{shortAddress(canonicalCswAddress)}</span>
+                </div>
+                {detectedCsw.address ? (
                   <div className="text-xs text-zinc-500">
-                    Detected CSW: <span className="font-mono text-zinc-300">{shortAddress(detectedCswAddress)}</span>
+                    Detected CSW{detectedCswLabel ? ` (${detectedCswLabel})` : ''}:{' '}
+                    <span className="font-mono text-zinc-300">{shortAddress(detectedCsw.address)}</span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-amber-300/80">
+                    CSW not detected yet. Sign in with wallet or connect the CSW directly.
+                  </div>
+                )}
+                {detectedCswMismatch ? (
+                  <div className="text-xs text-amber-300/80">
+                    Detected smart wallet does not match the canonical CSW. Switch to the canonical CSW to proceed.
                   </div>
                 ) : null}
                 {connectedIsCanonicalOwner && !isCanonical ? (
