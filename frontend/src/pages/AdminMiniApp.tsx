@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Copy, ExternalLink, ShieldCheck } from 'lucide-react'
-import { useAccount, useChainId, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
+import { useAccount, useBlockNumber, useChainId, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
 import { base } from 'wagmi/chains'
 import { encodeFunctionData, erc20Abi, formatUnits, getAddress, isAddress, parseUnits, type Address } from 'viem'
 import { useWallets } from '@privy-io/react-auth'
@@ -70,6 +70,20 @@ const VAULT_ABI = [
   { name: 'claimQueuedWithdrawal', type: 'function', stateMutability: 'nonpayable', inputs: [], outputs: [{ type: 'uint256' }] },
 ] as const
 
+const QUEUED_WITHDRAWAL_ABI = [
+  {
+    name: 'queuedWithdrawals',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [
+      { name: 'shares', type: 'uint256' },
+      { name: 'unlockBlock', type: 'uint256' },
+      { name: 'receiver', type: 'address' },
+    ],
+  },
+] as const
+
 type TxState = {
   status: 'idle' | 'pending' | 'success' | 'error'
   hash?: `0x${string}`
@@ -133,6 +147,7 @@ function LegacyWithdrawals() {
   const publicClient = usePublicClient({ chainId: base.id })
   const { wallets: privyWallets } = useWallets()
   const { client: smartWalletClient } = useSmartWallets()
+  const { data: blockNumber } = useBlockNumber({ chainId: base.id, watch: true })
 
   const connectedAddress = useMemo(() => {
     if (!address || !isAddress(address)) return null
@@ -283,7 +298,12 @@ function LegacyWithdrawals() {
       }
       throw new Error('Connect the canonical smart wallet or an owner wallet to continue.')
     } catch (e: any) {
-      updateTx(key, { status: 'error', error: e?.shortMessage || e?.message || 'Transaction failed' })
+      const msg = String(e?.shortMessage || e?.message || 'Transaction failed')
+      const lower = msg.toLowerCase()
+      const friendly = lower.includes('requested resource not available') || lower.includes('resource not available')
+        ? 'Bundler endpoint does not support ERC-4337 methods. Set `VITE_CDP_BUNDLER_URL` and retry.'
+        : msg
+      updateTx(key, { status: 'error', error: friendly })
     }
   }
 
@@ -401,6 +421,14 @@ function LegacyWithdrawals() {
                   abi: VESTING_ABI,
                   functionName: 'releasable',
                 })
+                const queuedQuery = useReadContract({
+                  address: legacy.vault as Address,
+                  abi: QUEUED_WITHDRAWAL_ABI,
+                  functionName: 'queuedWithdrawals',
+                  args: [canonicalCswAddress],
+                  chainId: base.id,
+                  query: { enabled: canUseSmartWallet && isBase },
+                })
                 const releaseKey = `release-${legacy.id}`
                 const unwrapKey = `unwrap-${legacy.id}`
                 const queueKey = `queue-${legacy.id}`
@@ -408,9 +436,25 @@ function LegacyWithdrawals() {
 
                 const balance = balanceQuery.data as bigint | undefined
                 const releasable = releasableQuery.data as bigint | undefined
+                const queued = queuedQuery.data as
+                  | readonly [bigint, bigint, Address]
+                  | { shares: bigint; unlockBlock: bigint; receiver: Address }
+                  | undefined
+                const queuedShares = Array.isArray(queued) ? queued[0] : queued?.shares
+                const queuedUnlockBlock = Array.isArray(queued) ? queued[1] : queued?.unlockBlock
+                const hasQueued = typeof queuedShares === 'bigint' && queuedShares > 0n
+                const currentBlock = typeof blockNumber === 'bigint' ? blockNumber : null
+                const isUnlocked =
+                  hasQueued && typeof queuedUnlockBlock === 'bigint' && currentBlock !== null
+                    ? currentBlock >= queuedUnlockBlock
+                    : false
+                const blocksRemaining =
+                  hasQueued && typeof queuedUnlockBlock === 'bigint' && currentBlock !== null && queuedUnlockBlock > currentBlock
+                    ? queuedUnlockBlock - currentBlock
+                    : null
                 const canUnwrap = isConnected && isBase && canUseSmartWallet && !!parsedAmount
                 const canQueue = isConnected && isBase && canUseSmartWallet && !!parsedAmount && receiverValid
-                const canClaim = isConnected && isBase && canUseSmartWallet
+                const canClaim = isConnected && isBase && canUseSmartWallet && hasQueued && isUnlocked
 
                 return (
                   <div key={legacy.id} className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-4">
@@ -519,6 +563,17 @@ function LegacyWithdrawals() {
                       <div className="rounded-lg border border-white/10 p-4 space-y-2">
                         <div className="text-sm text-zinc-300">Step 4 · Claim queued withdrawal</div>
                         <div className="text-xs text-zinc-500">Use after 10 blocks have passed.</div>
+                        {hasQueued ? (
+                          <div className="text-xs text-zinc-500">
+                            {isUnlocked
+                              ? 'Queued withdrawal is ready to claim.'
+                              : blocksRemaining !== null
+                                ? `Unlocks in ~${blocksRemaining.toString()} blocks.`
+                                : 'Queued withdrawal pending.'}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-zinc-500">No queued withdrawal found.</div>
+                        )}
                         <button
                           type="button"
                           onClick={() =>
