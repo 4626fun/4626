@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Copy, ExternalLink, ShieldCheck } from 'lucide-react'
 import { useAccount, useBlockNumber, useChainId, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
 import { base } from 'wagmi/chains'
@@ -785,7 +786,7 @@ function AgentRegistration() {
   return (
     <section id="agent-registration" className="cinematic-section">
       <div className="max-w-4xl mx-auto px-4 sm:px-6">
-        <div className="rounded-2xl border border-white/5 bg-white/[0.03] overflow-hidden">
+        <div className="rounded-2xl border border-white/5 bg-white/3 overflow-hidden">
           <div className="px-6 py-6 sm:px-8 sm:py-8 space-y-6">
             <div className="space-y-2">
               <div className="label">Agent registry</div>
@@ -1382,7 +1383,7 @@ function LegacyWithdrawals() {
   return (
     <section id="legacy-withdrawals" className="cinematic-section">
       <div className="max-w-4xl mx-auto px-4 sm:px-6">
-        <div className="rounded-2xl border border-white/5 bg-white/[0.03] overflow-hidden">
+        <div className="rounded-2xl border border-white/5 bg-white/3 overflow-hidden">
           <div className="px-6 py-6 sm:px-8 sm:py-8 space-y-6">
             <div className="space-y-2">
               <div className="label">Legacy withdraw</div>
@@ -1859,6 +1860,61 @@ export function AdminOps() {
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
 
+  const dashboardItems = useMemo(
+    () => [
+      {
+        id: 'waitlist',
+        label: 'Approve users',
+        description: 'Review waitlist signups and access status.',
+        to: '/admin/waitlist',
+        kind: 'route' as const,
+      },
+      {
+        id: 'creator-access',
+        label: 'Approve deploy list',
+        description: 'Creator launch approvals and allowlist.',
+        to: '/admin/creator-access',
+        kind: 'route' as const,
+      },
+      {
+        id: 'deploy-strategies',
+        label: 'Deploy strategies',
+        description: 'Charm + Ajna strategy deployments.',
+        to: '/admin/deploy-strategies',
+        kind: 'route' as const,
+      },
+      {
+        id: 'deployment-status',
+        label: 'Manage deployments',
+        description: 'Protocol + vault status checks.',
+        to: '/status',
+        kind: 'route' as const,
+      },
+      {
+        id: 'agent-registry',
+        label: 'Agent registry',
+        description: 'Register/update ERC-8004 agent.',
+        to: '#agent-registration',
+        kind: 'anchor' as const,
+      },
+      {
+        id: 'legacy-withdrawals',
+        label: 'Withdraw legacy assets',
+        description: 'Withdraw old ShareOFT balances.',
+        to: '#legacy-withdrawals',
+        kind: 'anchor' as const,
+      },
+      {
+        id: 'manifest-signing',
+        label: 'Manifest signing',
+        description: 'Generate accountAssociation JSON.',
+        to: '#manifest-signing',
+        kind: 'anchor' as const,
+      },
+    ],
+    [],
+  )
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -1941,9 +1997,49 @@ export function AdminOps() {
 
   return (
     <div className="relative pb-24 md:pb-0">
-      <section className="cinematic-section">
+      <section id="admin-dashboard" className="cinematic-section">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
-          <div className="rounded-2xl border border-white/5 bg-white/[0.03] overflow-hidden">
+          <div className="rounded-2xl border border-white/5 bg-white/3 overflow-hidden">
+            <div className="px-6 py-6 sm:px-8 sm:py-8 space-y-6">
+              <div className="space-y-2">
+                <div className="label">Admin Ops</div>
+                <div className="text-xl sm:text-2xl text-zinc-100 font-medium tracking-tight">Dashboard</div>
+                <div className="text-sm text-zinc-600 max-w-prose">
+                  Jump to the admin tools you use most often.
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {dashboardItems.map((item) =>
+                  item.kind === 'route' ? (
+                    <Link
+                      key={item.id}
+                      to={item.to}
+                      className="rounded-xl border border-white/10 bg-black/30 px-4 py-4 text-left hover:border-white/20 transition-colors"
+                    >
+                      <div className="text-sm text-zinc-100">{item.label}</div>
+                      <div className="text-xs text-zinc-500 mt-1">{item.description}</div>
+                    </Link>
+                  ) : (
+                    <a
+                      key={item.id}
+                      href={item.to}
+                      className="rounded-xl border border-white/10 bg-black/30 px-4 py-4 text-left hover:border-white/20 transition-colors"
+                    >
+                      <div className="text-sm text-zinc-100">{item.label}</div>
+                      <div className="text-xs text-zinc-500 mt-1">{item.description}</div>
+                    </a>
+                  ),
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="manifest-signing" className="cinematic-section">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+          <div className="rounded-2xl border border-white/5 bg-white/3 overflow-hidden">
             <div className="px-6 py-6 sm:px-8 sm:py-8 space-y-6">
               <div className="space-y-2">
                 <div className="label">Admin Ops</div>

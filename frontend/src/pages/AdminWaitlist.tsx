@@ -107,6 +107,13 @@ export function AdminWaitlist() {
   
   // Detect address mismatch (connected wallet differs from auth session)
   const hasAddressMismatch = address && authAddress && address.toLowerCase() !== authAddress.toLowerCase()
+  const handleSignIn = async () => {
+    if (authBusy) return
+    if (hasAddressMismatch) {
+      await signOut()
+    }
+    await signIn({ method: 'siwe' })
+  }
 
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -224,27 +231,37 @@ export function AdminWaitlist() {
                   Session mismatch: signed in as a different wallet.
                 </div>
                 <div className="text-[11px] text-zinc-500">
-                  Sign out first, then sign in with your connected wallet.
+                  Refresh the session to match your connected wallet.
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void signOut()}
-                  disabled={authBusy}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-5 py-3 text-sm text-red-200 hover:text-white hover:border-red-500/30 transition-colors disabled:opacity-60"
-                >
-                  {authBusy ? 'Signing out...' : 'Sign out'}
-                </button>
+                <div className="flex flex-col items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleSignIn()}
+                    disabled={authBusy}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/5 border border-white/10 px-5 py-3 text-sm text-zinc-200 hover:text-white hover:border-white/20 transition-colors disabled:opacity-60"
+                  >
+                    {authBusy ? 'Refreshing…' : 'Refresh session'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void signOut()}
+                    disabled={authBusy}
+                    className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                  >
+                    {authBusy ? 'Signing out…' : 'Sign out'}
+                  </button>
+                </div>
               </>
             ) : (
               <>
                 <div className="text-xs text-zinc-600">Sign in (no transaction) to verify admin access.</div>
                 <button
                   type="button"
-                  onClick={() => void signIn({ method: 'siwe' })}
+                  onClick={() => void handleSignIn()}
                   disabled={authBusy}
                   className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/5 border border-white/10 px-5 py-3 text-sm text-zinc-200 hover:text-white hover:border-white/20 transition-colors disabled:opacity-60"
                 >
-                  {authBusy ? 'Signing in...' : 'Sign in with wallet (EOA)'}
+                  {authBusy ? 'Signing in…' : 'Sign in with wallet (EOA)'}
                 </button>
               </>
             )}

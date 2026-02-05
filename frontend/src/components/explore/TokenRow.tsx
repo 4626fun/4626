@@ -216,6 +216,7 @@ export function TokenRow({
   const columns = getExploreColumns({ variant: 'creators', timeframe })
   const gridTemplateColumns = getGridTemplateColumns(columns)
   const stickyLeft = getStickyLeftMap(columns)
+  const feeGroupSpan = useMemo(() => buildGroupSpans(columns).find((g) => g.id === 'fees') ?? null, [columns])
 
   // Sticky identity cells: reduce “overlay” feel with a subtle divider + softer bg.
   const stickyCellClass =
@@ -387,34 +388,43 @@ export function TokenRow({
         </span>
       </Link>
       {isExpanded ? (
-        <div className="px-6 py-3 text-[11px] text-zinc-400 border-b border-zinc-800/50 bg-zinc-950/40 min-w-max">
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            <div>
-              <span className="text-zinc-500">Creator</span>{' '}
-              <span className="text-zinc-200">{formatFeeAmount(volume, feeRates.total, feeRates.creator)}</span>
-            </div>
-            <div>
-              <span className="text-zinc-500">Platform</span>{' '}
-              <span className="text-zinc-200">{formatFeeAmount(volume, feeRates.total, feeRates.platform)}</span>
-            </div>
-            <div>
-              <span className="text-zinc-500">LP Lock</span>{' '}
-              <span className="text-zinc-200">
-                {feeRates.lpRewards > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.lpRewards) : '-'}
-              </span>
-            </div>
-            <div>
-              <span className="text-zinc-500">Zora</span>{' '}
-              <span className="text-zinc-200">{formatFeeAmount(volume, feeRates.total, feeRates.protocol)}</span>
-            </div>
-            <div>
-              <span className="text-zinc-500">Doppler</span>{' '}
-              <span className="text-zinc-200">
-                {feeRates.doppler > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.doppler) : '-'}
-              </span>
+        <div className="text-[11px] text-zinc-400 border-b border-zinc-800/50 bg-zinc-950/40 min-w-max">
+          <div className="grid" style={{ gridTemplateColumns }}>
+            <div
+              className="px-3 py-3"
+              style={{
+                gridColumn: feeGroupSpan ? `${feeGroupSpan.start + 1} / ${feeGroupSpan.end + 2}` : '1 / -1',
+              }}
+            >
+              <div className="grid gap-2">
+                <div>
+                  <span className="text-zinc-500">Creator</span>{' '}
+                  <span className="text-zinc-200">{formatFeeAmount(volume, feeRates.total, feeRates.creator)}</span>
+                </div>
+                <div>
+                  <span className="text-zinc-500">Platform</span>{' '}
+                  <span className="text-zinc-200">{formatFeeAmount(volume, feeRates.total, feeRates.platform)}</span>
+                </div>
+                <div>
+                  <span className="text-zinc-500">LP Lock</span>{' '}
+                  <span className="text-zinc-200">
+                    {feeRates.lpRewards > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.lpRewards) : '-'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-zinc-500">Zora</span>{' '}
+                  <span className="text-zinc-200">{formatFeeAmount(volume, feeRates.total, feeRates.protocol)}</span>
+                </div>
+                <div>
+                  <span className="text-zinc-500">Doppler</span>{' '}
+                  <span className="text-zinc-200">
+                    {feeRates.doppler > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.doppler) : '-'}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="mt-3 border-t border-zinc-800/60 pt-3">
+          <div className="mt-3 border-t border-zinc-800/60 pt-3 px-3 pb-3">
             <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">CSW owners</div>
             {cswCandidates.length === 0 ? (
               <div className="text-zinc-500">No creator or payout address available.</div>
@@ -461,10 +471,11 @@ export function TokenTableHeader({ timeframe = '1d', currentSort, onSortChange }
           const slice = columns.slice(g.start, g.end + 1)
           const hasSticky = slice.some((c) => c.sticky)
           const left = hasSticky ? stickyLeft[columns[g.start].id] : undefined
+          const alignClass = g.id === 'identity' ? 'text-left' : 'text-center'
           return (
             <div
               key={g.id}
-              className={`px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 border-b border-zinc-800/60 text-left ${
+              className={`px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 border-b border-zinc-800/60 ${alignClass} ${
                 hasSticky ? stickyGroupClass : ''
               }`}
               style={{
