@@ -166,7 +166,11 @@ export function ExploreContent() {
               id="explore-content-header"
               onScroll={(e) => {
                 const body = document.getElementById('explore-content-body')
-                if (body) body.scrollLeft = e.currentTarget.scrollLeft
+                const scrolled = e.currentTarget.scrollLeft > 0
+                if (body) {
+                  body.scrollLeft = e.currentTarget.scrollLeft
+                  body.dataset.scrolled = scrolled ? '1' : '0'
+                }
               }}
             >
               <div className="min-w-max">
@@ -179,9 +183,12 @@ export function ExploreContent() {
           <div 
             className="overflow-x-auto scrollbar-hide" 
             id="explore-content-body"
+            data-scrolled="0"
             onScroll={(e) => {
               const header = document.getElementById('explore-content-header')
+              const scrolled = e.currentTarget.scrollLeft > 0
               if (header) header.scrollLeft = e.currentTarget.scrollLeft
+              e.currentTarget.dataset.scrolled = scrolled ? '1' : '0'
             }}
           >
             <div className="min-w-max divide-y divide-zinc-800/50">

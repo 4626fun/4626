@@ -12,11 +12,7 @@ export type ExploreTableColumnId =
   | 'marketCap'
   | 'volume'
   | 'priceChange'
-  | 'creatorFee'
-  | 'platformFee'
-  | 'lpLock'
-  | 'zoraFee'
-  | 'dopplerFee'
+  | 'totalFees'
   | 'payoutTo'
 
 export type ExploreColumnAlign = 'left' | 'right' | 'center'
@@ -39,12 +35,12 @@ export type ExploreTableGroup = {
   label: string
 }
 
-export const EXPLORE_TABLE_GROUPS: ExploreTableGroup[] = [
+export const EXPLORE_TABLE_GROUPS = [
   { id: 'identity', label: 'Identity' },
   { id: 'market', label: 'Market' },
   { id: 'fees', label: 'Fees' },
   { id: 'payout', label: 'Payout' },
-] as const
+] as const satisfies ReadonlyArray<ExploreTableGroup>
 
 function getVolumeLabel(timeframe: string): string {
   const labels: Record<string, string> = {
@@ -64,19 +60,15 @@ export function getExploreColumns(opts: { variant: ExploreTableVariant; timefram
   // A DeFiLlama-like table is intentionally dense and fixed-width, with horizontal scroll.
   return [
     { id: 'rank', label: '#', group: 'identity', widthPx: 48, align: 'right', sticky: true },
-    { id: 'name', label: nameLabel, group: 'identity', widthPx: 280, align: 'left', sticky: true },
-    { id: 'feeBadge', label: 'Fee', group: 'identity', widthPx: 56, align: 'center' },
+    { id: 'name', label: nameLabel, group: 'identity', widthPx: 260, align: 'left', sticky: true },
 
     { id: 'holders', label: 'Holders', group: 'market', widthPx: 96, align: 'right' },
     { id: 'marketCap', label: 'MCap', group: 'market', widthPx: 120, align: 'right', sortKey: 'marketCap' },
     { id: 'volume', label: getVolumeLabel(timeframe), group: 'market', widthPx: 120, align: 'right', sortKey: 'volume' },
-    { id: 'priceChange', label: 'Δ 24H', group: 'market', widthPx: 92, align: 'right', sortKey: 'priceChange' },
+    { id: 'priceChange', label: 'MCap Δ 24H', group: 'market', widthPx: 110, align: 'right', sortKey: 'priceChange' },
 
-    { id: 'creatorFee', label: 'Creator', group: 'fees', widthPx: 96, align: 'right' },
-    { id: 'platformFee', label: 'Platform', group: 'fees', widthPx: 96, align: 'right' },
-    { id: 'lpLock', label: 'LP Lock', group: 'fees', widthPx: 96, align: 'right' },
-    { id: 'zoraFee', label: 'Zora', group: 'fees', widthPx: 84, align: 'right' },
-    { id: 'dopplerFee', label: 'Doppler', group: 'fees', widthPx: 92, align: 'right' },
+    { id: 'feeBadge', label: 'Fee %', group: 'fees', widthPx: 72, align: 'center' },
+    { id: 'totalFees', label: 'Fees', group: 'fees', widthPx: 110, align: 'right' },
 
     { id: 'payoutTo', label: 'Payout To', group: 'payout', widthPx: 132, align: 'left' },
   ]

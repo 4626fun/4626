@@ -239,76 +239,26 @@ html.dark {
   display: none;
 }
 
-/* Mobile: simplify Explore tables (creators/content) */
+/* Mobile: keep Explore tables scrollable (show all columns) */
 @media (max-width: 640px) {
   #explore-creators-header,
   #explore-content-header {
-    display: none;
+    display: block;
   }
 
   #explore-creators-body,
   #explore-content-body {
-    overflow-x: visible;
+    overflow-x: auto;
   }
 
   #explore-creators-body > .min-w-max,
   #explore-content-body > .min-w-max {
-    min-width: 0;
+    min-width: max-content;
   }
 
-  #explore-creators-body > .min-w-max > a,
-  #explore-content-body > .min-w-max > a {
-    grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) !important;
-  }
-
-  /* Hide non-essential columns on mobile (keep token, mcap, vol, delta). */
-  #explore-creators-body > .min-w-max > a > :nth-child(1),
-  #explore-creators-body > .min-w-max > a > :nth-child(3),
-  #explore-creators-body > .min-w-max > a > :nth-child(4),
-  #explore-creators-body > .min-w-max > a > :nth-child(n+8),
-  #explore-content-body > .min-w-max > a > :nth-child(1),
-  #explore-content-body > .min-w-max > a > :nth-child(3),
-  #explore-content-body > .min-w-max > a > :nth-child(4),
-  #explore-content-body > .min-w-max > a > :nth-child(n+8) {
+  /* Hide token name when the table is horizontally scrolled to improve column visibility. */
+  #explore-creators-body[data-scrolled="1"] .explore-token-name,
+  #explore-content-body[data-scrolled="1"] .explore-token-name {
     display: none;
-  }
-
-  #explore-creators-body > .min-w-max > a > :nth-child(5),
-  #explore-creators-body > .min-w-max > a > :nth-child(6),
-  #explore-creators-body > .min-w-max > a > :nth-child(7),
-  #explore-content-body > .min-w-max > a > :nth-child(5),
-  #explore-content-body > .min-w-max > a > :nth-child(6),
-  #explore-content-body > .min-w-max > a > :nth-child(7) {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 2px;
-  }
-
-  #explore-creators-body > .min-w-max > a > :nth-child(5)::before,
-  #explore-content-body > .min-w-max > a > :nth-child(5)::before {
-    content: 'MCap';
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.16em;
-    color: #71717a;
-  }
-
-  #explore-creators-body > .min-w-max > a > :nth-child(6)::before,
-  #explore-content-body > .min-w-max > a > :nth-child(6)::before {
-    content: 'Vol';
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.16em;
-    color: #71717a;
-  }
-
-  #explore-creators-body > .min-w-max > a > :nth-child(7)::before,
-  #explore-content-body > .min-w-max > a > :nth-child(7)::before {
-    content: 'Delta';
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.16em;
-    color: #71717a;
   }
 }

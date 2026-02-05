@@ -97,33 +97,44 @@ function shortAddress(addr: string | undefined): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
-function formatDeltaPercent(delta: string | undefined): { text: string; positive: boolean } {
-  if (!delta) return { text: '-', positive: true }
-  const num = parseFloat(delta)
-  if (!Number.isFinite(num)) return { text: '-', positive: true }
-  const positive = num >= 0
-  const abs = Math.abs(num)
-  
-  // Format based on magnitude for cleaner display
+function formatDeltaPercentValue(value: number): { text: string; positive: boolean } {
+  if (!Number.isFinite(value)) return { text: '-', positive: true }
+  const positive = value >= 0
+  const abs = Math.abs(value)
+
   let formatted: string
   if (abs >= 1000) {
-    // Very large changes: show as whole number
     formatted = `${Math.round(abs)}%`
   } else if (abs >= 10) {
-    // Large changes: 1 decimal place
     formatted = `${abs.toFixed(1)}%`
   } else if (abs >= 0.01) {
-    // Normal changes: 2 decimal places
     formatted = `${abs.toFixed(2)}%`
   } else if (abs > 0) {
-    // Very small changes: show as <0.01%
     formatted = '<0.01%'
   } else {
     formatted = '0%'
   }
-  
+
   const sign = positive ? '+' : '-'
   return { text: `${sign}${formatted}`, positive }
+}
+
+function formatMarketCapDeltaPercent(deltaRaw: string | undefined, marketCapRaw: string | undefined): { text: string; positive: boolean } {
+  if (!deltaRaw) return { text: '-', positive: true }
+  const delta = parseFloat(deltaRaw)
+  if (!Number.isFinite(delta)) return { text: '-', positive: true }
+
+  let percent = delta
+  const abs = Math.abs(delta)
+  if (abs > 200) {
+    const marketCap = marketCapRaw ? parseFloat(marketCapRaw) : NaN
+    if (Number.isFinite(marketCap) && marketCap !== 0) {
+      const prev = marketCap - delta
+      if (prev !== 0) percent = (delta / prev) * 100
+    }
+  }
+
+  return formatDeltaPercentValue(percent)
 }
 
 function buildGroupSpans(columns: ReturnType<typeof getExploreColumns>) {
@@ -162,7 +173,7 @@ export function TokenRow({ rank, coin, linkPrefix = '/explore/creators', timefra
   const address = coin.address || ''
   const payoutTo = coin.payoutRecipientAddress
   const marketCap = coin.marketCap
-  const change = formatDeltaPercent(coin.marketCapDelta24h)
+  const change = formatMarketCapDeltaPercent(coin.marketCapDelta24h, marketCap)
   
   // Determine fee structure (checks migration status first, then creation date)
   const { isV4, isMigrated, feeRates } = getCoinFeeStatus(coin.address, coin.createdAt, migratedCoins)
@@ -175,6 +186,15 @@ export function TokenRow({ rank, coin, linkPrefix = '/explore/creators', timefra
     : isV4
       ? '1% fee (V4 - after June 2025)'
       : '3% fee (Legacy - before June 2025)'
+
+  const totalFees = formatFeeAmount(volume, feeRates.total, 1)
+  const feeBreakdown = [
+    `Creator ${formatFeeAmount(volume, feeRates.total, feeRates.creator)}`,
+    `Platform ${formatFeeAmount(volume, feeRates.total, feeRates.platform)}`,
+    `LP Lock ${feeRates.lpRewards > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.lpRewards) : '-'}`,
+    `Zora ${formatFeeAmount(volume, feeRates.total, feeRates.protocol)}`,
+    `Doppler ${feeRates.doppler > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.doppler) : '-'}`,
+  ].join(' • ')
 
   const columns = getExploreColumns({ variant: 'creators', timeframe })
   const gridTemplateColumns = getGridTemplateColumns(columns)
@@ -192,7 +212,7 @@ export function TokenRow({ rank, coin, linkPrefix = '/explore/creators', timefra
     >
       {/* Rank */}
       <span
-        className={`${stickyCellClass} z-20 text-zinc-500 tabular-nums px-3 py-2 text-right`}
+        className={`${stickyCellClass} z-20 text-zinc-500 tabular-nums px-3 py-2 text-center sm:text-right`}
         style={{ left: stickyLeft.rank }}
       >
         {rank}
@@ -215,30 +235,19 @@ export function TokenRow({ rank, coin, linkPrefix = '/explore/creators', timefra
               <span className="text-[11px] font-medium text-zinc-400">{name.slice(0, 2).toUpperCase()}</span>
             </div>
           )}
-          <div className="min-w-0 hidden sm:block">
+          <div className="min-w-0 explore-token-name">
             {isSameNameSymbol ? (
               // Single display for matching name/symbol (common for creator coins)
-              <div className="text-[15px] font-medium text-white truncate">{symbol || name}</div>
+              <div className="text-[13px] sm:text-[15px] font-medium text-white truncate">{symbol || name}</div>
             ) : (
               // Separate display when different
               <>
-                <div className="text-sm font-medium text-white truncate">{name}</div>
+                <div className="text-[13px] sm:text-sm font-medium text-white truncate">{name}</div>
                 <div className="text-[10px] text-zinc-500 truncate">{symbol}</div>
               </>
             )}
           </div>
         </div>
-      </div>
-
-      {/* Fee Version */}
-      <div className="px-3 py-2 text-center">
-        <span
-          className="inline-flex items-center rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-zinc-300"
-          title={feeTooltip}
-        >
-          {isV4 ? '1%' : '3%'}
-          {isMigrated ? <span className="ml-0.5 text-zinc-500">*</span> : null}
-        </span>
       </div>
 
       {/* Holders */}
@@ -255,23 +264,20 @@ export function TokenRow({ rank, coin, linkPrefix = '/explore/creators', timefra
         {change.text}
       </span>
 
-      {/* Creator Fee (50%) */}
-      <span className="text-zinc-200 tabular-nums px-3 py-2 text-right">{formatFeeAmount(volume, feeRates.total, feeRates.creator)}</span>
+      {/* Fee % */}
+      <div className="px-3 py-2 text-center">
+        <span
+          className="inline-flex items-center rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-zinc-300"
+          title={feeTooltip}
+        >
+          {isV4 ? '1%' : '3%'}
+          {isMigrated ? <span className="ml-0.5 text-zinc-500">*</span> : null}
+        </span>
+      </div>
 
-      {/* Platform Fee */}
-      <span className="text-zinc-200 tabular-nums px-3 py-2 text-right">{formatFeeAmount(volume, feeRates.total, feeRates.platform)}</span>
-
-      {/* LP Locked (V4 only) */}
-      <span className="text-zinc-200 tabular-nums px-3 py-2 text-right">
-        {feeRates.lpRewards > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.lpRewards) : '-'}
-      </span>
-
-      {/* Zora Protocol */}
-      <span className="text-zinc-300 tabular-nums px-3 py-2 text-right">{formatFeeAmount(volume, feeRates.total, feeRates.protocol)}</span>
-
-      {/* Doppler (V4 only) */}
-      <span className="text-zinc-300 tabular-nums px-3 py-2 text-right">
-        {feeRates.doppler > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.doppler) : '-'}
+      {/* Total Fees */}
+      <span className="text-zinc-200 tabular-nums px-3 py-2 text-right" title={feeBreakdown}>
+        {totalFees}
       </span>
 
       {/* Payout To */}
@@ -317,16 +323,10 @@ export function TokenTableHeader({ timeframe = '1d', currentSort, onSortChange }
           const labelNode =
             c.id === 'feeBadge' ? (
               <span title="Fee version: 1% (V4, after June 2025) or 3% (Legacy)">{c.label}</span>
-            ) : c.id === 'creatorFee' ? (
-              <span title="50% of fees → Creator/Payout Recipient">{c.label}</span>
-            ) : c.id === 'platformFee' ? (
-              <span title="20-25% of fees → Platform that deployed coin">{c.label}</span>
-            ) : c.id === 'lpLock' ? (
-              <span title="20% of fees → Locked as permanent LP (V4 only)">{c.label}</span>
-            ) : c.id === 'zoraFee' ? (
-              <span title="5-25% of fees → Zora Protocol">{c.label}</span>
-            ) : c.id === 'dopplerFee' ? (
-              <span title="1% of fees → Doppler LP hook (V4 only)">{c.label}</span>
+            ) : c.id === 'priceChange' ? (
+              <span title="Market cap % change over 24H">{c.label}</span>
+            ) : c.id === 'totalFees' ? (
+              <span title="Total fees (volume × fee %)">{c.label}</span>
             ) : (
               <span>{c.label}</span>
             )
@@ -387,7 +387,7 @@ export function TokenRowSkeleton() {
       <div className={`${stickyCellClass} px-3 py-2 shadow-[6px_0_16px_-12px_rgba(0,0,0,0.9)]`} style={{ left: stickyLeft.name }}>
         <div className="flex items-center gap-2 justify-center sm:justify-start">
           <div className="w-7 h-7 rounded-full bg-zinc-800 animate-pulse" />
-          <div className="space-y-1 hidden sm:block">
+          <div className="space-y-1 explore-token-name">
             <div className="h-3 w-24 bg-zinc-800 rounded animate-pulse" />
             <div className="h-2 w-12 bg-zinc-800 rounded animate-pulse" />
           </div>
