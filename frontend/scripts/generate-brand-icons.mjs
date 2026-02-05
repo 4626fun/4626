@@ -112,11 +112,11 @@ async function main() {
     },
 
     // Favicons / PWA
-    { outName: 'favicon-16x16.png', width: 16, height: 16, sources: ['favicon-16x16.png', 'favicon.svg', 'logo.svg'] },
-    { outName: 'favicon-32x32.png', width: 32, height: 32, sources: ['favicon-32x32.png', 'favicon.svg', 'logo.svg'] },
-    { outName: 'apple-touch-icon.png', width: 180, height: 180, sources: ['apple-touch-icon.png', 'logo.svg', 'favicon.svg'] },
-    { outName: 'pwa-192.png', width: 192, height: 192, sources: ['pwa-192.png', 'logo.svg', 'favicon.svg'] },
-    { outName: 'pwa-512.png', width: 512, height: 512, sources: ['pwa-512.png', 'logo.svg', 'favicon.svg'] },
+    { outName: 'favicon-16x16.png', width: 16, height: 16, sources: ['favicon-16x16.png', 'favicon.svg', 'brand/favicon.svg', 'logo.svg', 'brand/logo.svg'] },
+    { outName: 'favicon-32x32.png', width: 32, height: 32, sources: ['favicon-32x32.png', 'favicon.svg', 'brand/favicon.svg', 'logo.svg', 'brand/logo.svg'] },
+    { outName: 'apple-touch-icon.png', width: 180, height: 180, sources: ['apple-touch-icon.png', 'logo.svg', 'brand/logo.svg', 'favicon.svg', 'brand/favicon.svg'] },
+    { outName: 'pwa-192.png', width: 192, height: 192, sources: ['pwa-192.png', 'logo.svg', 'brand/logo.svg', 'favicon.svg', 'brand/favicon.svg'] },
+    { outName: 'pwa-512.png', width: 512, height: 512, sources: ['pwa-512.png', 'logo.svg', 'brand/logo.svg', 'favicon.svg', 'brand/favicon.svg'] },
   ]
 
   // eslint-disable-next-line no-console
