@@ -20,6 +20,12 @@ Re-exports [CreatorAllowlistStatus](hooks/useCreatorAllowlist.md#creatorallowlis
 
 ***
 
+### DeploymentRecord
+
+Re-exports [DeploymentRecord](hooks/useDeploymentTracker.md#deploymentrecord)
+
+***
+
 ### EpochInfo
 
 Re-exports [EpochInfo](hooks/useVaultGaugeVoting.md#epochinfo)
@@ -32,9 +38,33 @@ Re-exports [formatVotingPower](hooks/useVaultGaugeVoting.md#formatvotingpower)
 
 ***
 
+### getDeploymentForOwnerVersion
+
+Re-exports [getDeploymentForOwnerVersion](hooks/useDeploymentTracker.md#getdeploymentforownerversion)
+
+***
+
+### getDeploymentsForOwner
+
+Re-exports [getDeploymentsForOwner](hooks/useDeploymentTracker.md#getdeploymentsforowner)
+
+***
+
+### getDeploymentVersion
+
+Re-exports [getDeploymentVersion](hooks/useDeploymentTracker.md#getdeploymentversion)
+
+***
+
 ### useCreatorAllowlist
 
 Re-exports [useCreatorAllowlist](hooks/useCreatorAllowlist.md#usecreatorallowlist)
+
+***
+
+### useDeploymentTracker
+
+Re-exports [useDeploymentTracker](hooks/useDeploymentTracker.md#usedeploymenttracker)
 
 ***
 

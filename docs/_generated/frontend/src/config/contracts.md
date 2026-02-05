@@ -6,13 +6,19 @@
 
 # src/config/contracts
 
+## Type Aliases
+
+### ContractAddress
+
+> **ContractAddress** = `any`
+
 ## Variables
 
 ### AKITA
 
 > `const` **AKITA**: `object`
 
-Defined in: [config/contracts.ts:95](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/config/contracts.ts#L95)
+Defined in: [config/contracts.ts:95](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/config/contracts.ts#L95)
 
 #### Type Declaration
 
@@ -66,7 +72,7 @@ Defined in: [config/contracts.ts:95](https://github.com/wenakita/4626/blob/2cd71
 
 > `const` **CONTRACTS**: `object`
 
-Defined in: [config/contracts.ts:23](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/config/contracts.ts#L23)
+Defined in: [config/contracts.ts:23](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/config/contracts.ts#L23)
 
 #### Type Declaration
 
@@ -216,7 +222,7 @@ Defined in: [config/contracts.ts:23](https://github.com/wenakita/4626/blob/2cd71
 
 > `const` **ERC4626**: `object`
 
-Defined in: [config/contracts.ts:112](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/config/contracts.ts#L112)
+Defined in: [config/contracts.ts:112](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/config/contracts.ts#L112)
 
 #### Type Declaration
 
@@ -247,9 +253,3 @@ Defined in: [config/contracts.ts:112](https://github.com/wenakita/4626/blob/2cd7
 ##### wrapper
 
 > `readonly` **wrapper**: `` `0x${string}` ``
-
-## References
-
-### ContractAddress
-
-Re-exports [ContractAddress](contracts.defaults.md#contractaddress)

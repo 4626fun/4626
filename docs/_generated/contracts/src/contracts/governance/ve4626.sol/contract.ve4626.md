@@ -1,5 +1,5 @@
 # ve4626
-[Git Source](https://github.com/creatorvault/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/contracts/governance/ve4626.sol)
+[Git Source](https://github.com/creatorvault/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/governance/ve4626.sol)
 
 **Inherits:**
 [Ive4626](/contracts/governance/VaultGaugeVoting.sol/interface.Ive4626.md), Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyGuard

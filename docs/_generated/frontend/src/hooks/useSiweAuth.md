@@ -12,7 +12,7 @@
 
 > **useSiweAuth**(): `object`
 
-Defined in: [hooks/useSiweAuth.ts:76](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/hooks/useSiweAuth.ts#L76)
+Defined in: [hooks/useSiweAuth.ts:76](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/hooks/useSiweAuth.ts#L76)
 
 #### Returns
 
@@ -44,7 +44,15 @@ Defined in: [hooks/useSiweAuth.ts:76](https://github.com/wenakita/4626/blob/2cd7
 
 ##### signIn()
 
-> **signIn**: () => `Promise`\<`string` \| `null`\>
+> **signIn**: (`opts?`) => `Promise`\<`string` \| `null`\>
+
+###### Parameters
+
+###### opts?
+
+###### method?
+
+`SignInMethod`
 
 ###### Returns
 

@@ -12,7 +12,7 @@
 
 > **fetchProtocolRewardsBalance**(`account`): `Promise`\<`bigint`\>
 
-Defined in: [lib/onchain/protocolRewards.ts:30](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/protocolRewards.ts#L30)
+Defined in: [lib/onchain/protocolRewards.ts:45](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/protocolRewards.ts#L45)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [lib/onchain/protocolRewards.ts:30](https://github.com/wenakita/4626
 
 > **fetchProtocolRewardsBalances**(`accounts`): `Promise`\<`Record`\<`string`, `bigint`\>\>
 
-Defined in: [lib/onchain/protocolRewards.ts:40](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/protocolRewards.ts#L40)
+Defined in: [lib/onchain/protocolRewards.ts:55](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/protocolRewards.ts#L55)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [lib/onchain/protocolRewards.ts:40](https://github.com/wenakita/4626
 
 > **fetchProtocolRewardsBalancesFromApi**(`accounts`): `Promise`\<`Record`\<`string`, `bigint`\>\>
 
-Defined in: [lib/onchain/protocolRewards.ts:63](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/protocolRewards.ts#L63)
+Defined in: [lib/onchain/protocolRewards.ts:78](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/protocolRewards.ts#L78)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [lib/onchain/protocolRewards.ts:63](https://github.com/wenakita/4626
 
 > **fetchProtocolRewardsWithdrawnFromApi**(`accounts`): `Promise`\<`Record`\<`string`, `bigint`\>\>
 
-Defined in: [lib/onchain/protocolRewards.ts:98](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/protocolRewards.ts#L98)
+Defined in: [lib/onchain/protocolRewards.ts:113](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/protocolRewards.ts#L113)
 
 #### Parameters
 

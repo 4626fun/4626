@@ -12,7 +12,7 @@
 
 > **CrossAppSignMessage** = (`message`, `options`) => `Promise`\<`string`\>
 
-Defined in: [lib/aa/coinbaseErc4337.ts:688](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/aa/coinbaseErc4337.ts#L688)
+Defined in: [lib/aa/coinbaseErc4337.ts:844](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L844)
 
 Cross-app signing function type from Privy's useCrossAppAccounts
 
@@ -38,7 +38,7 @@ Cross-app signing function type from Privy's useCrossAppAccounts
 
 > **PublicClientLike** = `object` & `Record`\<`string`, `any`\>
 
-Defined in: [lib/aa/coinbaseErc4337.ts:84](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/aa/coinbaseErc4337.ts#L84)
+Defined in: [lib/aa/coinbaseErc4337.ts:88](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L88)
 
 #### Type Declaration
 
@@ -70,7 +70,7 @@ Defined in: [lib/aa/coinbaseErc4337.ts:84](https://github.com/wenakita/4626/blob
 
 > **WalletClientLike** = `object` & `Record`\<`string`, `any`\>
 
-Defined in: [lib/aa/coinbaseErc4337.ts:89](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/aa/coinbaseErc4337.ts#L89)
+Defined in: [lib/aa/coinbaseErc4337.ts:93](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L93)
 
 #### Type Declaration
 
@@ -136,7 +136,7 @@ Defined in: [lib/aa/coinbaseErc4337.ts:89](https://github.com/wenakita/4626/blob
 
 > `const` **ERC4337\_ENTRYPOINT\_V06**: `` `0x${string}` `` = `ENTRYPOINT_V06`
 
-Defined in: [lib/aa/coinbaseErc4337.ts:385](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/aa/coinbaseErc4337.ts#L385)
+Defined in: [lib/aa/coinbaseErc4337.ts:492](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L492)
 
 The canonical EntryPoint v0.6 address used by this module.
 This is the ONLY EntryPoint version supported.
@@ -147,7 +147,7 @@ This is the ONLY EntryPoint version supported.
 
 > **assertEntryPointV06**(`address`): `void`
 
-Defined in: [lib/aa/coinbaseErc4337.ts:391](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/aa/coinbaseErc4337.ts#L391)
+Defined in: [lib/aa/coinbaseErc4337.ts:498](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L498)
 
 Assert that a given address matches EntryPoint v0.6.
 Use this to verify configuration matches expectations.
@@ -164,11 +164,39 @@ Use this to verify configuration matches expectations.
 
 ***
 
+### fetchCoinbaseSmartWalletOwners()
+
+> **fetchCoinbaseSmartWalletOwners**(`params`): `Promise`\<`` `0x${string}` ``[]\>
+
+Defined in: [lib/aa/coinbaseErc4337.ts:551](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L551)
+
+#### Parameters
+
+##### params
+
+###### maxOwners?
+
+`number`
+
+###### publicClient
+
+[`PublicClientLike`](#publicclientlike)
+
+###### smartWallet
+
+`` `0x${string}` ``
+
+#### Returns
+
+`Promise`\<`` `0x${string}` ``[]\>
+
+***
+
 ### findCoinbaseSmartWalletOwnerIndex()
 
 > **findCoinbaseSmartWalletOwnerIndex**(`params`): `Promise`\<\{ `ownerCount`: `number`; `ownerIndex`: `number` \| `null`; \}\>
 
-Defined in: [lib/aa/coinbaseErc4337.ts:401](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/aa/coinbaseErc4337.ts#L401)
+Defined in: [lib/aa/coinbaseErc4337.ts:508](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L508)
 
 #### Parameters
 
@@ -200,7 +228,7 @@ Defined in: [lib/aa/coinbaseErc4337.ts:401](https://github.com/wenakita/4626/blo
 
 > **runSignatureExtractionHarness**(): `object`[]
 
-Defined in: [lib/aa/coinbaseErc4337.ts:312](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/aa/coinbaseErc4337.ts#L312)
+Defined in: [lib/aa/coinbaseErc4337.ts:419](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L419)
 
 #### Returns
 
@@ -212,7 +240,7 @@ Defined in: [lib/aa/coinbaseErc4337.ts:312](https://github.com/wenakita/4626/blo
 
 > **sendCoinbaseSmartWalletUserOperation**(`params`): `Promise`\<\{ `transactionHash`: `` `0x${string}` ``; `userOpHash`: `` `0x${string}` ``; \}\>
 
-Defined in: [lib/aa/coinbaseErc4337.ts:875](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/aa/coinbaseErc4337.ts#L875)
+Defined in: [lib/aa/coinbaseErc4337.ts:1169](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L1169)
 
 #### Parameters
 
@@ -234,9 +262,25 @@ Defined in: [lib/aa/coinbaseErc4337.ts:875](https://github.com/wenakita/4626/blo
 
 `boolean`
 
+###### paymasterUrl?
+
+`string`
+
 ###### publicClient
 
 [`PublicClientLike`](#publicclientlike)
+
+###### retryOnInvalidSignature?
+
+`boolean`
+
+###### skipPaymaster?
+
+`boolean`
+
+###### skipPreflightSimulation?
+
+`boolean`
 
 ###### smartWallet
 
@@ -264,7 +308,7 @@ Defined in: [lib/aa/coinbaseErc4337.ts:875](https://github.com/wenakita/4626/blo
 
 > **sendCrossAppUserOperation**(`params`): `Promise`\<\{ `transactionHash`: `` `0x${string}` ``; `userOpHash`: `` `0x${string}` ``; \}\>
 
-Defined in: [lib/aa/coinbaseErc4337.ts:747](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/aa/coinbaseErc4337.ts#L747)
+Defined in: [lib/aa/coinbaseErc4337.ts:903](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L903)
 
 Send a UserOperation via ERC-4337 using cross-app signing.
 
@@ -316,3 +360,39 @@ The Zora EOA that will sign
 #### Returns
 
 `Promise`\<\{ `transactionHash`: `` `0x${string}` ``; `userOpHash`: `` `0x${string}` ``; \}\>
+
+***
+
+### simulateSmartWalletCalls()
+
+> **simulateSmartWalletCalls**(`params`): `Promise`\<\{ `directCallResult?`: \{ `error?`: `string`; `errorName?`: `string`; `revertData?`: `` `0x${string}` ``; `success`: `boolean`; \}; `error?`: `string`; `errorName?`: `string`; `revertData?`: `` `0x${string}` ``; `success`: `boolean`; \}\>
+
+Defined in: [lib/aa/coinbaseErc4337.ts:1044](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/coinbaseErc4337.ts#L1044)
+
+Pre-flight simulation: test if the calls would succeed when executed from the smart wallet.
+This helps diagnose whether a UserOp failure is due to:
+1. ERC-4337 / signature issues (simulation passes but UserOp fails)
+2. Underlying call issues (simulation fails, meaning the contract call itself would revert)
+
+Returns both the smart wallet execute simulation result AND a direct target call simulation.
+The direct simulation helps identify if the target contract would revert even with correct msg.sender.
+
+#### Parameters
+
+##### params
+
+###### calls
+
+`object`[]
+
+###### publicClient
+
+[`PublicClientLike`](#publicclientlike)
+
+###### smartWallet
+
+`` `0x${string}` ``
+
+#### Returns
+
+`Promise`\<\{ `directCallResult?`: \{ `error?`: `string`; `errorName?`: `string`; `revertData?`: `` `0x${string}` ``; `success`: `boolean`; \}; `error?`: `string`; `errorName?`: `string`; `revertData?`: `` `0x${string}` ``; `success`: `boolean`; \}\>

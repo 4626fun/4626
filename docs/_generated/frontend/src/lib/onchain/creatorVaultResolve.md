@@ -12,7 +12,7 @@
 
 > **CreatorCoinInfo** = `object`
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:69](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L69)
+Defined in: [lib/onchain/creatorVaultResolve.ts:69](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L69)
 
 #### Properties
 
@@ -20,67 +20,67 @@ Defined in: [lib/onchain/creatorVaultResolve.ts:69](https://github.com/wenakita/
 
 > **creator**: `Address` \| `null`
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:78](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L78)
+Defined in: [lib/onchain/creatorVaultResolve.ts:78](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L78)
 
 ##### gaugeController
 
 > **gaugeController**: `Address` \| `null`
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:77](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L77)
+Defined in: [lib/onchain/creatorVaultResolve.ts:77](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L77)
 
 ##### isActive
 
 > **isActive**: `boolean`
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:79](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L79)
+Defined in: [lib/onchain/creatorVaultResolve.ts:79](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L79)
 
 ##### name
 
 > **name**: `string`
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:71](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L71)
+Defined in: [lib/onchain/creatorVaultResolve.ts:71](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L71)
 
 ##### oracle
 
 > **oracle**: `Address` \| `null`
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:76](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L76)
+Defined in: [lib/onchain/creatorVaultResolve.ts:76](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L76)
 
 ##### registeredAt
 
 > **registeredAt**: `bigint` \| `null`
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:80](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L80)
+Defined in: [lib/onchain/creatorVaultResolve.ts:80](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L80)
 
 ##### shareOFT
 
 > **shareOFT**: `Address` \| `null`
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:74](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L74)
+Defined in: [lib/onchain/creatorVaultResolve.ts:74](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L74)
 
 ##### symbol
 
 > **symbol**: `string`
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:72](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L72)
+Defined in: [lib/onchain/creatorVaultResolve.ts:72](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L72)
 
 ##### token
 
 > **token**: `Address`
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:70](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L70)
+Defined in: [lib/onchain/creatorVaultResolve.ts:70](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L70)
 
 ##### vault
 
 > **vault**: `Address` \| `null`
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:73](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L73)
+Defined in: [lib/onchain/creatorVaultResolve.ts:73](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L73)
 
 ##### wrapper
 
 > **wrapper**: `Address` \| `null`
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:75](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L75)
+Defined in: [lib/onchain/creatorVaultResolve.ts:75](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L75)
 
 ***
 
@@ -88,7 +88,7 @@ Defined in: [lib/onchain/creatorVaultResolve.ts:75](https://github.com/wenakita/
 
 > **CreatorVaultResolved** = `object`
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:83](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L83)
+Defined in: [lib/onchain/creatorVaultResolve.ts:83](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L83)
 
 #### Properties
 
@@ -96,19 +96,19 @@ Defined in: [lib/onchain/creatorVaultResolve.ts:83](https://github.com/wenakita/
 
 > **ccaStrategy**: `Address` \| `null`
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:86](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L86)
+Defined in: [lib/onchain/creatorVaultResolve.ts:86](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L86)
 
 ##### info
 
 > **info**: [`CreatorCoinInfo`](#creatorcoininfo)
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:85](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L85)
+Defined in: [lib/onchain/creatorVaultResolve.ts:85](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L85)
 
 ##### token
 
 > **token**: `Address`
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:84](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L84)
+Defined in: [lib/onchain/creatorVaultResolve.ts:84](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L84)
 
 ## Functions
 
@@ -116,7 +116,7 @@ Defined in: [lib/onchain/creatorVaultResolve.ts:84](https://github.com/wenakita/
 
 > **fetchCcaStrategyForToken**\<`TTransport`, `TChain`\>(`publicClient`, `token`): `Promise`\<`` `0x${string}` `` \| `null`\>
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:155](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L155)
+Defined in: [lib/onchain/creatorVaultResolve.ts:155](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L155)
 
 #### Type Parameters
 
@@ -146,7 +146,7 @@ Defined in: [lib/onchain/creatorVaultResolve.ts:155](https://github.com/wenakita
 
 > **fetchCreatorCoinInfo**\<`TTransport`, `TChain`\>(`publicClient`, `token`): `Promise`\<[`CreatorCoinInfo`](#creatorcoininfo) \| `null`\>
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:125](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L125)
+Defined in: [lib/onchain/creatorVaultResolve.ts:125](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L125)
 
 #### Type Parameters
 
@@ -176,7 +176,7 @@ Defined in: [lib/onchain/creatorVaultResolve.ts:125](https://github.com/wenakita
 
 > **resolveCreatorTokenFromAnyAddress**\<`TTransport`, `TChain`\>(`publicClient`, `addr`): `Promise`\<`` `0x${string}` `` \| `null`\>
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:96](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L96)
+Defined in: [lib/onchain/creatorVaultResolve.ts:96](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L96)
 
 #### Type Parameters
 
@@ -206,7 +206,7 @@ Defined in: [lib/onchain/creatorVaultResolve.ts:96](https://github.com/wenakita/
 
 > **resolveCreatorVaultByAnyAddress**\<`TTransport`, `TChain`\>(`publicClient`, `addressLike`): `Promise`\<[`CreatorVaultResolved`](#creatorvaultresolved) \| `null`\>
 
-Defined in: [lib/onchain/creatorVaultResolve.ts:171](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/onchain/creatorVaultResolve.ts#L171)
+Defined in: [lib/onchain/creatorVaultResolve.ts:171](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/onchain/creatorVaultResolve.ts#L171)
 
 #### Type Parameters
 

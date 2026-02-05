@@ -12,7 +12,7 @@
 
 > **FarcasterVerifiedSession** = `object`
 
-Defined in: [hooks/useFarcasterAuth.ts:7](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/hooks/useFarcasterAuth.ts#L7)
+Defined in: [hooks/useFarcasterAuth.ts:7](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/hooks/useFarcasterAuth.ts#L7)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [hooks/useFarcasterAuth.ts:7](https://github.com/wenakita/4626/blob/
 
 > **fid**: `number`
 
-Defined in: [hooks/useFarcasterAuth.ts:8](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/hooks/useFarcasterAuth.ts#L8)
+Defined in: [hooks/useFarcasterAuth.ts:8](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/hooks/useFarcasterAuth.ts#L8)
 
 ##### primaryAddress?
 
 > `optional` **primaryAddress**: `string` \| `null`
 
-Defined in: [hooks/useFarcasterAuth.ts:10](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/hooks/useFarcasterAuth.ts#L10)
+Defined in: [hooks/useFarcasterAuth.ts:10](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/hooks/useFarcasterAuth.ts#L10)
 
 ##### tokenExp?
 
 > `optional` **tokenExp**: `number`
 
-Defined in: [hooks/useFarcasterAuth.ts:9](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/hooks/useFarcasterAuth.ts#L9)
+Defined in: [hooks/useFarcasterAuth.ts:9](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/hooks/useFarcasterAuth.ts#L9)
 
 ## Functions
 
@@ -40,7 +40,7 @@ Defined in: [hooks/useFarcasterAuth.ts:9](https://github.com/wenakita/4626/blob/
 
 > **useFarcasterAuth**(): `object`
 
-Defined in: [hooks/useFarcasterAuth.ts:15](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/hooks/useFarcasterAuth.ts#L15)
+Defined in: [hooks/useFarcasterAuth.ts:15](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/hooks/useFarcasterAuth.ts#L15)
 
 #### Returns
 

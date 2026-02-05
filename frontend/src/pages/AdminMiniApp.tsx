@@ -2,7 +2,18 @@ import { useEffect, useMemo, useState } from 'react'
 import { Copy, ExternalLink, ShieldCheck } from 'lucide-react'
 import { useAccount, useBlockNumber, useChainId, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
 import { base } from 'wagmi/chains'
-import { encodeFunctionData, erc20Abi, formatUnits, getAddress, isAddress, parseAbiItem, parseUnits, type Address, type Hex } from 'viem'
+import {
+  decodeEventLog,
+  encodeFunctionData,
+  erc20Abi,
+  formatUnits,
+  getAddress,
+  isAddress,
+  parseAbiItem,
+  parseUnits,
+  type Address,
+  type Hex,
+} from 'viem'
 import { useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 
@@ -18,6 +29,8 @@ const DEFAULT_DOMAIN = '4626.fun'
 const MAX_DOMAIN_LEN = 255
 const CANONICAL_SMART_WALLET = '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5'
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+const ERC8004_IDENTITY_REGISTRY = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432'
+const ERC8004_AGENT_URI_DEFAULT = 'https://4626.fun/.well-known/agent-registration.json'
 
 type LegacyVaultHint = {
   id: string
@@ -218,6 +231,15 @@ const COINBASE_SMART_WALLET_OWNER_LINK_ABI = [
   },
 ] as const
 
+const ERC8004_IDENTITY_REGISTRY_ABI = [
+  { name: 'register', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'agentURI', type: 'string' }], outputs: [{ type: 'uint256' }] },
+  { name: 'balanceOf', type: 'function', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ type: 'uint256' }] },
+] as const
+
+const ERC8004_REGISTERED_EVENT = parseAbiItem(
+  'event Registered(uint256 indexed agentId, string agentURI, address indexed owner)',
+)
+
 const WRAPPER_ABI = [
   { name: 'unwrap', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'amount', type: 'uint256' }], outputs: [{ type: 'uint256' }] },
 ] as const
@@ -315,6 +337,315 @@ function TxMeta({ state }: { state?: TxState }) {
       {state.status === 'success' ? <div className="text-emerald-300/90">Confirmed.</div> : null}
       {state.status === 'error' ? <div className="text-red-400">{state.error ?? 'Transaction failed'}</div> : null}
     </div>
+  )
+}
+
+function AgentRegistration() {
+  const { address, isConnected } = useAccount()
+  const chainId = useChainId()
+  const { switchChainAsync, isPending: switchPending } = useSwitchChain()
+  const { data: walletClient } = useWalletClient({ chainId: base.id })
+  const publicClient = usePublicClient({ chainId: base.id })
+  const { wallets: privyWallets } = useWallets()
+  const [embeddedPrivyEoaAddress, setEmbeddedPrivyEoaAddress] = useState<string | null>(null)
+  const [agentUri, setAgentUri] = useState(ERC8004_AGENT_URI_DEFAULT)
+  const [txState, setTxState] = useState<TxState>({ status: 'idle' })
+  const [registeredAgentId, setRegisteredAgentId] = useState<string | null>(null)
+
+  const connectedAddress = useMemo(() => {
+    if (!address || !isAddress(address)) return null
+    return getAddress(address)
+  }, [address])
+
+  const embeddedPrivyWallet = useMemo(() => {
+    const ws = Array.isArray(privyWallets) ? (privyWallets as any[]) : []
+    const normalizeType = (w: any) =>
+      String(w?.wallet_client_type ?? w?.walletClientType ?? w?.connector_type ?? w?.connectorType ?? w?.type ?? '')
+        .trim()
+        .toLowerCase()
+    return (
+      ws.find((w) => {
+        const t = normalizeType(w)
+        return t === 'privy' || t.includes('privy') || t.includes('embedded')
+      }) ?? null
+    )
+  }, [privyWallets])
+
+  const canonicalCswAddress = useMemo(() => getAddress(CANONICAL_SMART_WALLET), [])
+  const isCanonical = connectedAddress?.toLowerCase() === CANONICAL_SMART_WALLET.toLowerCase()
+
+  const canonicalOwnerQuery = useReadContract({
+    address: CANONICAL_SMART_WALLET as Address,
+    abi: COINBASE_SMART_WALLET_OWNER_LINK_ABI,
+    functionName: 'isOwnerAddress',
+    args: [connectedAddress ?? ZERO_ADDRESS],
+    chainId: base.id,
+    query: { enabled: !!connectedAddress },
+  })
+  const connectedIsCanonicalOwner = canonicalOwnerQuery.data === true
+
+  const embeddedOwnerQuery = useReadContract({
+    address: CANONICAL_SMART_WALLET as Address,
+    abi: COINBASE_SMART_WALLET_OWNER_LINK_ABI,
+    functionName: 'isOwnerAddress',
+    args: [embeddedPrivyEoaAddress ? (embeddedPrivyEoaAddress as Address) : ZERO_ADDRESS],
+    chainId: base.id,
+    query: { enabled: !!embeddedPrivyEoaAddress },
+  })
+  const embeddedIsCanonicalOwner = embeddedOwnerQuery.data === true
+
+  const registryBalanceQuery = useReadContract({
+    address: ERC8004_IDENTITY_REGISTRY as Address,
+    abi: ERC8004_IDENTITY_REGISTRY_ABI,
+    functionName: 'balanceOf',
+    args: [canonicalCswAddress],
+    chainId: base.id,
+    query: { enabled: !!publicClient },
+  })
+  const registryBalance = typeof registryBalanceQuery.data === 'bigint' ? registryBalanceQuery.data : null
+
+  useEffect(() => {
+    let cancelled = false
+    if (!embeddedPrivyWallet) {
+      setEmbeddedPrivyEoaAddress(null)
+      return () => {}
+    }
+    ;(async () => {
+      try {
+        const provider = await (embeddedPrivyWallet as any).getEthereumProvider?.()
+        if (!provider?.request) return
+        const accounts = (await provider.request({ method: 'eth_accounts' })) as string[] | null
+        const a0 = Array.isArray(accounts) ? accounts[0] : null
+        const addr = typeof a0 === 'string' && isAddress(a0) ? getAddress(a0) : null
+        if (!cancelled) setEmbeddedPrivyEoaAddress(addr)
+      } catch {
+        if (!cancelled) setEmbeddedPrivyEoaAddress(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [embeddedPrivyWallet])
+
+  const isBase = chainId === base.id
+  const canSubmitViaOwner = (connectedIsCanonicalOwner || embeddedIsCanonicalOwner) && !isCanonical
+
+  const updateTx = (patch: Partial<TxState>) => {
+    setTxState((prev) => {
+      const nextStatus = patch.status ?? prev.status ?? 'idle'
+      return { ...prev, ...patch, status: nextStatus } as TxState
+    })
+  }
+
+  const extractAgentId = (receipt: { logs?: Array<{ address: string; data: Hex; topics: Hex[] }> }) => {
+    const logs = receipt.logs ?? []
+    const registryLower = ERC8004_IDENTITY_REGISTRY.toLowerCase()
+    for (const log of logs) {
+      if (String(log.address || '').toLowerCase() !== registryLower) continue
+      try {
+        const parsed = decodeEventLog({
+          abi: [ERC8004_REGISTERED_EVENT],
+          data: log.data,
+          topics: log.topics as unknown as [Hex, ...Hex[]] | [],
+        })
+        if (parsed.eventName === 'Registered') {
+          const args = parsed.args as { agentId?: bigint }
+          if (args?.agentId !== undefined) return String(args.agentId)
+        }
+      } catch {
+        continue
+      }
+    }
+    return null
+  }
+
+  async function registerAgent() {
+    if (!publicClient) return
+    updateTx({ status: 'pending', error: undefined, hash: undefined })
+    setRegisteredAgentId(null)
+    try {
+      if (!isBase) {
+        throw new Error('Please switch to Base network to continue.')
+      }
+      const trimmedUri = agentUri.trim()
+      if (!trimmedUri) throw new Error('Agent URI is required.')
+
+      const registryAddress = ERC8004_IDENTITY_REGISTRY as Address
+
+      if (isCanonical) {
+        if (!walletClient) throw new Error('Connect the canonical smart wallet to continue.')
+        const hash = await (walletClient as any).writeContract({
+          account: (walletClient as any).account,
+          chain: base as any,
+          address: registryAddress,
+          abi: ERC8004_IDENTITY_REGISTRY_ABI,
+          functionName: 'register',
+          args: [trimmedUri],
+        })
+        updateTx({ status: 'pending', hash })
+        const receipt = await (publicClient as any).waitForTransactionReceipt({ hash })
+        const agentId = extractAgentId(receipt)
+        if (agentId) setRegisteredAgentId(agentId)
+        updateTx({ status: 'success' })
+        return
+      }
+
+      if (embeddedIsCanonicalOwner && embeddedPrivyWallet && embeddedPrivyEoaAddress) {
+        const embeddedProvider = await (embeddedPrivyWallet as any).getEthereumProvider?.()
+        if (!embeddedProvider?.request) {
+          throw new Error('Privy embedded wallet provider not available')
+        }
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const data = encodeFunctionData({
+          abi: ERC8004_IDENTITY_REGISTRY_ABI as any,
+          functionName: 'register' as any,
+          args: [trimmedUri],
+        })
+        const embeddedWalletClient = {
+          request: async (args: { method: string; params?: any[] }) => embeddedProvider.request(args),
+        }
+        const result = await sendCoinbaseSmartWalletUserOperation({
+          publicClient: publicClient as any,
+          walletClient: embeddedWalletClient as any,
+          bundlerUrl,
+          smartWallet: canonicalCswAddress as Address,
+          ownerAddress: embeddedPrivyEoaAddress as Address,
+          calls: [{ to: registryAddress, data }],
+          version: '1',
+          userOpSignMode: 'signMessage',
+          skipPaymaster: true,
+        })
+        updateTx({ status: 'pending', hash: result.transactionHash })
+        const receipt = await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
+        const agentId = extractAgentId(receipt)
+        if (agentId) setRegisteredAgentId(agentId)
+        updateTx({ status: 'success' })
+        return
+      }
+
+      if (connectedIsCanonicalOwner && connectedAddress) {
+        if (!walletClient) throw new Error('Connect the owner wallet to continue.')
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const data = encodeFunctionData({
+          abi: ERC8004_IDENTITY_REGISTRY_ABI as any,
+          functionName: 'register' as any,
+          args: [trimmedUri],
+        })
+        const result = await sendCoinbaseSmartWalletUserOperation({
+          publicClient: publicClient as any,
+          walletClient: walletClient as any,
+          bundlerUrl,
+          smartWallet: canonicalCswAddress as Address,
+          ownerAddress: connectedAddress as Address,
+          calls: [{ to: registryAddress, data }],
+          version: '1',
+          skipPaymaster: true,
+        })
+        updateTx({ status: 'pending', hash: result.transactionHash })
+        const receipt = await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
+        const agentId = extractAgentId(receipt)
+        if (agentId) setRegisteredAgentId(agentId)
+        updateTx({ status: 'success' })
+        return
+      }
+
+      throw new Error('Connect the canonical smart wallet or an owner wallet to continue.')
+    } catch (e: any) {
+      const msg = String(e?.shortMessage || e?.message || 'Transaction failed')
+      const lower = msg.toLowerCase()
+      const friendly = lower.includes('requested resource not available') || lower.includes('resource not available')
+        ? 'Bundler endpoint does not support ERC-4337 methods. Set `VITE_CDP_BUNDLER_URL` and retry.'
+        : msg
+      updateTx({ status: 'error', error: friendly })
+    }
+  }
+
+  return (
+    <section id="agent-registration" className="cinematic-section">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6">
+        <div className="rounded-2xl border border-white/5 bg-white/[0.03] overflow-hidden">
+          <div className="px-6 py-6 sm:px-8 sm:py-8 space-y-6">
+            <div className="space-y-2">
+              <div className="label">Agent registry</div>
+              <div className="text-xl sm:text-2xl text-zinc-100 font-medium tracking-tight">Register ERC-8004 agent</div>
+              <div className="text-sm text-zinc-600 max-w-prose">
+                Registers the canonical CSW in the ERC-8004 Identity Registry on Base.
+              </div>
+            </div>
+
+            {!isConnected ? (
+              <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-3">
+                <div className="label">Connect</div>
+                <ConnectButton />
+              </div>
+            ) : (
+              <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-2 text-sm">
+                <div className="text-zinc-400">Connected wallet</div>
+                <div className="font-mono text-zinc-200">{connectedAddress}</div>
+                <div className="text-xs text-zinc-500">
+                  Canonical CSW: <span className="font-mono text-zinc-300">{shortAddress(canonicalCswAddress)}</span>
+                </div>
+                {canSubmitViaOwner ? (
+                  <div className="text-emerald-300/90">Owner detected. Transactions will be submitted via the canonical smart wallet.</div>
+                ) : null}
+                {!isCanonical && !canSubmitViaOwner ? (
+                  <div className="text-amber-300/80">
+                    Connected wallet is not the canonical smart wallet. Registering is disabled.
+                  </div>
+                ) : null}
+                {!isBase ? (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!switchChainAsync) return
+                      await switchChainAsync({ chainId: base.id })
+                    }}
+                    disabled={switchPending}
+                    className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {switchPending ? 'Switching…' : 'Switch to Base'}
+                  </button>
+                ) : null}
+              </div>
+            )}
+
+            <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-3">
+              <div className="text-sm text-zinc-300">Agent registration URL</div>
+              <input
+                value={agentUri}
+                onChange={(e) => setAgentUri(e.target.value)}
+                placeholder={ERC8004_AGENT_URI_DEFAULT}
+                className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
+              />
+              <div className="text-xs text-zinc-600">
+                Registry: <span className="font-mono text-zinc-400">{shortAddress(ERC8004_IDENTITY_REGISTRY)}</span> · Chain: Base
+              </div>
+              {registryBalance !== null ? (
+                <div className="text-xs text-zinc-500">
+                  Agents registered for canonical CSW: <span className="text-zinc-300">{registryBalance.toString()}</span>
+                </div>
+              ) : null}
+              {registeredAgentId ? (
+                <div className="text-xs text-emerald-300/90">
+                  Registered agentId: <span className="font-mono">{registeredAgentId}</span>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void registerAgent()}
+                disabled={txState.status === 'pending' || !isConnected || (!isCanonical && !canSubmitViaOwner)}
+                className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {txState.status === 'pending' ? 'Registering…' : 'Register agent'}
+              </button>
+              <TxMeta state={txState} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -1470,6 +1801,7 @@ export function AdminMiniApp() {
         </div>
       </section>
 
+      <AgentRegistration />
       <LegacyWithdrawals />
     </div>
   )

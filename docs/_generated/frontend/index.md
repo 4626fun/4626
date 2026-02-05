@@ -7,11 +7,11 @@
 ## Modules
 
 - [src/config/contracts](src/config/contracts.md)
-- [src/config/contracts.defaults](src/config/contracts.defaults.md)
 - [src/config/wagmi](src/config/wagmi.md)
 - [src/hooks](src/hooks.md)
 - [src/hooks/useAdminStatus](src/hooks/useAdminStatus.md)
 - [src/hooks/useCreatorAllowlist](src/hooks/useCreatorAllowlist.md)
+- [src/hooks/useDeploymentTracker](src/hooks/useDeploymentTracker.md)
 - [src/hooks/useFarcasterAuth](src/hooks/useFarcasterAuth.md)
 - [src/hooks/useMigratedCoins](src/hooks/useMigratedCoins.md)
 - [src/hooks/useMiniAppContext](src/hooks/useMiniAppContext.md)

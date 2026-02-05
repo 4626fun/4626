@@ -1,5 +1,5 @@
 # CreatorShareOFT
-[Git Source](https://github.com/creatorvault/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/contracts/services/messaging/CreatorShareOFT.sol)
+[Git Source](https://github.com/creatorvault/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/services/messaging/CreatorShareOFT.sol)
 
 **Inherits:**
 OFT, ReentrancyGuard
@@ -127,6 +127,17 @@ Tax config delegate (can call setTaxConfig on hooks on behalf of this token)
 
 ```solidity
 address public taxConfigDelegate
+```
+
+
+### _contractURI
+ERC-7572 contract-level metadata URI
+
+Returns a URL to JSON metadata including token image, description, etc.
+
+
+```solidity
+string private _contractURI
 ```
 
 
@@ -490,6 +501,52 @@ Get token description
 function description() external pure returns (string memory);
 ```
 
+### contractURI
+
+ERC-7572 contract-level metadata URI
+
+Returns a URL pointing to JSON metadata with token info including:
+- name, symbol, decimals
+- description
+- image (framed creator coin logo)
+- external_link
+- properties (vault, underlying asset, supported chains, etc.)
+
+
+```solidity
+function contractURI() external view returns (string memory);
+```
+**Returns**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`<none>`|`string`|URI string pointing to JSON metadata Default: https://api.4626.fun/v1/token/{address}/metadata|
+
+
+### setContractURI
+
+Set custom contract metadata URI
+
+
+```solidity
+function setContractURI(string calldata uri) external onlyOwner;
+```
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`uri`|`string`|New metadata URI (empty string to use default)|
+
+
+### _toHexString
+
+Convert address to lowercase hex string
+
+
+```solidity
+function _toHexString(address addr) internal pure returns (string memory);
+```
+
 ### payoutRecipient
 
 Returns the address that should receive trade fees
@@ -607,6 +664,14 @@ event TaxConfigDelegateSet(address indexed delegate);
 
 ```solidity
 event TaxHookConfigured(address indexed hook, address recipient, uint256 taxRate);
+```
+
+### ContractURIUpdated
+ERC-7572: Emitted when contract URI is updated
+
+
+```solidity
+event ContractURIUpdated();
 ```
 
 ## Errors

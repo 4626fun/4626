@@ -210,7 +210,15 @@ export function ExploreCreators() {
       const name = (coin.name || '').toLowerCase()
       const symbol = (coin.symbol || '').toLowerCase()
       const address = (coin.address || '').toLowerCase()
-      return name.includes(query) || symbol.includes(query) || address.includes(query)
+      const payout = (coin.payoutRecipientAddress || '').toLowerCase()
+      const creator = (coin.creatorAddress || '').toLowerCase()
+      return (
+        name.includes(query) ||
+        symbol.includes(query) ||
+        address.includes(query) ||
+        payout.includes(query) ||
+        creator.includes(query)
+      )
     })
   }, [allCoins, searchQuery])
 
@@ -245,7 +253,7 @@ export function ExploreCreators() {
 
   return (
     <div className="relative pb-24 md:pb-0 min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}

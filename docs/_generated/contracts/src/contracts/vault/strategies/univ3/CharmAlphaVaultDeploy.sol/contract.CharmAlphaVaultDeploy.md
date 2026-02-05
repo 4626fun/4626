@@ -1,5 +1,5 @@
 # CharmAlphaVaultDeploy
-[Git Source](https://github.com/creatorvault/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/contracts/vault/strategies/univ3/CharmAlphaVaultDeploy.sol)
+[Git Source](https://github.com/creatorvault/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/vault/strategies/univ3/CharmAlphaVaultDeploy.sol)
 
 **Inherits:**
 [CharmAlphaVault](/contracts/vault/strategies/univ3/CharmAlphaVault.sol/contract.CharmAlphaVault.md)
@@ -97,7 +97,7 @@ function initializeAndTransfer(
     int24 _limitThreshold,
     int24 _maxTwapDeviation,
     uint32 _twapDuration
-) external onlyGovernance;
+) external;
 ```
 
 ### rebalance

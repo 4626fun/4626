@@ -1,7 +1,12 @@
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronDown } from 'lucide-react'
+import { usePublicClient } from 'wagmi'
+import { base } from 'wagmi/chains'
+import { getAddress, isAddress, type Address } from 'viem'
 import type { ZoraCoin } from '@/lib/zora/types'
 import { EXPLORE_TABLE_GROUPS, getExploreColumns, getGridTemplateColumns, getStickyLeftMap } from './tableColumns'
+import { fetchCoinbaseSmartWalletOwners } from '@/lib/aa/coinbaseErc4337'
 
 type TokenRowProps = {
   rank: number
@@ -169,6 +174,7 @@ export function TokenRow({
   isExpanded,
   onToggleFees,
 }: TokenRowProps) {
+  const publicClient = usePublicClient({ chainId: base.id })
   // Use timeframe for future API support
   const volume = timeframe === '1d' ? coin.volume24h : coin.volume24h // TODO: support other timeframes
   
@@ -216,6 +222,72 @@ export function TokenRow({
     'sticky bg-zinc-950/70 backdrop-blur-sm group-hover:bg-zinc-900/40 border-r border-zinc-800/60'
 
   const canToggleFees = typeof onToggleFees === 'function'
+
+  const cswCandidates = useMemo(() => {
+    const out: Address[] = []
+    const push = (value?: string) => {
+      if (!value || !isAddress(value)) return
+      const addr = getAddress(value)
+      if (!out.includes(addr)) out.push(addr)
+    }
+    push(coin.payoutRecipientAddress)
+    push(coin.creatorAddress)
+    return out
+  }, [coin.creatorAddress, coin.payoutRecipientAddress])
+
+  const candidateKey = cswCandidates.join('|')
+  const [cswOwners, setCswOwners] = useState<{
+    status: 'idle' | 'loading' | 'ready' | 'error'
+    address: Address | null
+    owners: Address[]
+    error?: string
+  }>({ status: 'idle', address: null, owners: [] })
+
+  useEffect(() => {
+    setCswOwners({ status: 'idle', address: null, owners: [] })
+  }, [candidateKey])
+
+  useEffect(() => {
+    if (!isExpanded) return
+    if (!publicClient) return
+    if (cswOwners.status === 'loading' || cswOwners.status === 'ready') return
+    if (cswCandidates.length === 0) return
+
+    let cancelled = false
+    setCswOwners((prev) => ({ ...prev, status: 'loading', error: undefined }))
+    ;(async () => {
+      let lastError: string | undefined
+      for (const candidate of cswCandidates) {
+        try {
+          const owners = await fetchCoinbaseSmartWalletOwners({
+            publicClient,
+            smartWallet: candidate,
+            maxOwners: 24,
+          })
+          if (owners.length > 0) {
+            if (!cancelled) {
+              setCswOwners({ status: 'ready', address: candidate, owners })
+            }
+            return
+          }
+        } catch (e: any) {
+          lastError = e?.message ? String(e.message) : 'Failed to read owners'
+        }
+      }
+      if (!cancelled) {
+        setCswOwners({
+          status: 'ready',
+          address: cswCandidates[0] ?? null,
+          owners: [],
+          error: lastError,
+        })
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [cswCandidates, cswOwners.status, isExpanded, publicClient])
 
   return (
     <>
@@ -341,6 +413,29 @@ export function TokenRow({
                 {feeRates.doppler > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.doppler) : '-'}
               </span>
             </div>
+          </div>
+          <div className="mt-3 border-t border-zinc-800/60 pt-3">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">CSW owners</div>
+            {cswCandidates.length === 0 ? (
+              <div className="text-zinc-500">No creator or payout address available.</div>
+            ) : cswOwners.status === 'loading' ? (
+              <div className="text-zinc-500">Loading owners...</div>
+            ) : cswOwners.owners.length > 0 ? (
+              <div className="mt-1 flex flex-wrap gap-2">
+                {cswOwners.owners.map((owner) => (
+                  <span
+                    key={owner}
+                    className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-mono text-zinc-200"
+                  >
+                    {shortAddress(owner)}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="text-zinc-500">
+                {cswOwners.error ? cswOwners.error : 'No CSW owners found for payout/creator address.'}
+              </div>
+            )}
           </div>
         </div>
       ) : null}

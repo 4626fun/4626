@@ -4,6 +4,7 @@
     "src/lib/**/*.ts",
     "src/hooks/**/*.ts",
     "src/config/**/*.ts",
+    "src/**/*.tsx",
     "api/**/*.ts"
   ],
   "entryPointStrategy": "expand",

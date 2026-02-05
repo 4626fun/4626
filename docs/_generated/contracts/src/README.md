@@ -282,15 +282,15 @@ This layer can be deployed and enabled after the core system is live.
 
 ### Setup (Optional but Recommended)
 
-**To enable gas-free deployments, configure Coinbase Developer Platform API key:**
+**To enable gas-free deployments, configure the Coinbase CDP paymaster endpoint (server-only):**
 
-1. Get the CDP key id from [Coinbase Developer Portal](https://portal.cdp.coinbase.com/) and enable paymaster.
+1. Get CDP API key from [Coinbase Developer Portal](https://portal.cdp.coinbase.com/).
 2. Add to `.env`:
 
 ```bash
-# Client-side: use the same-origin proxy
+# Client-side: always use the same-origin proxy
 VITE_CDP_PAYMASTER_URL=/api/paymaster
-# Server-side: real CDP endpoint (keep secret)
+# Server-side: real CDP paymaster endpoint (keep secret)
 CDP_PAYMASTER_URL=https://api.developer.coinbase.com/rpc/v1/base/<CDP_API_KEY_ID>
 ```
 

@@ -10,19 +10,15 @@
 
 ### resolveCdpPaymasterUrl()
 
-> **resolveCdpPaymasterUrl**(`paymaster`, `apiKey`): `string` \| `null`
+> **resolveCdpPaymasterUrl**(`paymaster`): `string` \| `null`
 
-Defined in: [lib/aa/cdp.ts:1](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/aa/cdp.ts#L1)
+Defined in: [lib/aa/cdp.ts:1](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/aa/cdp.ts#L1)
 
 #### Parameters
 
 ##### paymaster
 
 `string` | `null` | `undefined`
-
-##### apiKey
-
-`string` | `undefined`
 
 #### Returns
 

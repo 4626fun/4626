@@ -12,7 +12,7 @@
 
 > **getPrivyAppId**(): `string` \| `null`
 
-Defined in: [lib/flags.ts:17](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/flags.ts#L17)
+Defined in: [lib/flags.ts:17](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/flags.ts#L17)
 
 #### Returns
 
@@ -24,7 +24,7 @@ Defined in: [lib/flags.ts:17](https://github.com/wenakita/4626/blob/2cd71abc9760
 
 > **isPrivyClientEnabled**(): `boolean`
 
-Defined in: [lib/flags.ts:23](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/flags.ts#L23)
+Defined in: [lib/flags.ts:23](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/flags.ts#L23)
 
 #### Returns
 
@@ -36,7 +36,7 @@ Defined in: [lib/flags.ts:23](https://github.com/wenakita/4626/blob/2cd71abc9760
 
 > **isPublicSiteMode**(): `boolean`
 
-Defined in: [lib/flags.ts:1](https://github.com/wenakita/4626/blob/2cd71abc97601febe38089cb23bfd133739e818d/frontend/src/lib/flags.ts#L1)
+Defined in: [lib/flags.ts:1](https://github.com/wenakita/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/frontend/src/lib/flags.ts#L1)
 
 #### Returns
 
