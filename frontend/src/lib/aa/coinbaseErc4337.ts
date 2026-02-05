@@ -1342,9 +1342,10 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // - verificationGasLimit: Higher for smart wallet signers (EIP-1271 can exceed 2M)
   // - paymaster validation can also push EOA flows above 150k in larger batches
   // - callGasLimit: Auto-estimated, but we don't override since batcher calls vary
+  // NOTE: Bundler enforces a 5,000,000 cap on verificationGasLimit.
   const verificationGasLimits = ownerIsContract
-    ? [1_500_000n, 3_000_000n, 5_000_000n, 8_000_000n, 12_000_000n]
-    : [400_000n, 800_000n, 1_500_000n, 3_000_000n, 5_000_000n, 8_000_000n, 12_000_000n]
+    ? [1_500_000n, 3_000_000n, 5_000_000n]
+    : [400_000n, 800_000n, 1_500_000n, 3_000_000n, 5_000_000n]
   const uniqueVerificationGasLimits = Array.from(new Set(verificationGasLimits))
   if (AA_DEBUG) {
     logger.debug('[ERC-4337] verificationGasLimit', {
