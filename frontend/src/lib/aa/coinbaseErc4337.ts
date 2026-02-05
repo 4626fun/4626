@@ -1,5 +1,5 @@
 import type { Address, Hex } from 'viem'
-import { encodeAbiParameters, getAddress, http } from 'viem'
+import { decodeAbiParameters, encodeAbiParameters, getAddress, http, isAddress } from 'viem'
 import { toAccount } from 'viem/accounts'
 import {
   createBundlerClient,
@@ -546,6 +546,55 @@ export async function findCoinbaseSmartWalletOwnerIndex(params: {
     if (String(b).toLowerCase() === expected) return { ownerIndex: i, ownerCount: count }
   }
   return { ownerIndex: null, ownerCount: count }
+}
+
+export async function fetchCoinbaseSmartWalletOwners(params: {
+  publicClient: PublicClientLike
+  smartWallet: Address
+  maxOwners?: number
+}): Promise<Address[]> {
+  const { publicClient, smartWallet, maxOwners = 32 } = params
+  const countRaw = (await publicClient.readContract({
+    address: smartWallet,
+    abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+    functionName: 'ownerCount',
+  })) as bigint
+  const count = Number(countRaw)
+  if (!Number.isFinite(count) || count <= 0) return []
+
+  let upperBound = count
+  try {
+    const nextRaw = (await publicClient.readContract({
+      address: smartWallet,
+      abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+      functionName: 'nextOwnerIndex',
+    })) as bigint
+    const next = Number(nextRaw)
+    if (Number.isFinite(next) && next > 0) upperBound = next
+  } catch {
+    // ignore; fallback to ownerCount
+  }
+
+  const limit = Math.min(upperBound, Math.max(1, maxOwners))
+  const owners: Address[] = []
+  for (let i = 0; i < limit; i += 1) {
+    try {
+      const raw = (await publicClient.readContract({
+        address: smartWallet,
+        abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+        functionName: 'ownerAtIndex',
+        args: [BigInt(i)],
+      })) as `0x${string}`
+      const decoded = decodeAbiParameters([{ type: 'address' }], raw)[0] as string
+      if (!isAddress(decoded)) continue
+      const addr = getAddress(decoded)
+      if (addr === getAddress('0x0000000000000000000000000000000000000000')) continue
+      if (!owners.includes(addr)) owners.push(addr)
+    } catch {
+      continue
+    }
+  }
+  return owners
 }
 
 type UserOpSignMode = 'eth_sign' | 'signMessage' | 'auto'
@@ -1130,6 +1179,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   ownerIsContract?: boolean
   skipPreflightSimulation?: boolean
   skipPaymaster?: boolean
+  retryOnInvalidSignature?: boolean
 }): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
   const {
     publicClient,
@@ -1144,6 +1194,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     ownerIsContract: ownerIsContractOverride,
     skipPreflightSimulation,
     skipPaymaster = false,
+    retryOnInvalidSignature = true,
   } = params
   
   // Input validation
@@ -1206,11 +1257,41 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     )
   }
 
+  // Detect smart wallet owners (EIP-1271) to tune gas + sign mode.
+  let ownerIsContract = typeof ownerIsContractOverride === 'boolean' ? ownerIsContractOverride : false
+  if (typeof ownerIsContractOverride !== 'boolean') {
+    try {
+      if (typeof (publicClient as any)?.getBytecode === 'function') {
+        const bytecode = await (publicClient as any).getBytecode({ address: ownerAddress })
+        ownerIsContract = typeof bytecode === 'string' && bytecode !== '0x'
+      }
+    } catch {
+      // ignore; fallback to ownerCount probe
+    }
+    if (!ownerIsContract) {
+      try {
+        const ownerBytecode = await publicClient.readContract({
+          address: ownerAddress,
+          abi: [{ type: 'function', name: 'ownerCount', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+          functionName: 'ownerCount',
+        }).catch(() => null)
+        // If we can call ownerCount, it's likely a Coinbase Smart Wallet
+        ownerIsContract = ownerBytecode !== null
+      } catch {
+        // Ignore - assume EOA if we can't determine
+      }
+    }
+  }
+
+  const effectiveUserOpSignMode =
+    ownerIsContract && userOpSignMode === 'auto' ? 'signMessage' : userOpSignMode
+  const usedSignMessageFallback = userOpSignMode === 'auto' && effectiveUserOpSignMode === 'signMessage'
+
   // Create the owner account for signing
   const owner = createWalletBackedLocalAccount({ 
     walletClient, 
     address: ownerAddress, 
-    userOpSignMode 
+    userOpSignMode: effectiveUserOpSignMode,
   })
   
   // Create the Coinbase Smart Account
@@ -1254,23 +1335,6 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // ENFORCE: Verify bundler supports EntryPoint v0.6 before sending
   await verifyBundlerSupportsV06(bundlerUrlForBundler, { includeCredentials: shouldSendSessionToBundler })
 
-  // Check if the owner might be a smart wallet (for EIP-1271 verification gas estimation)
-  // Smart wallet signature verification requires significantly more gas than EOA
-  let ownerIsContract = typeof ownerIsContractOverride === 'boolean' ? ownerIsContractOverride : false
-  if (typeof ownerIsContractOverride !== 'boolean') {
-    try {
-      const ownerBytecode = await publicClient.readContract({
-        address: ownerAddress,
-        abi: [{ type: 'function', name: 'ownerCount', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
-        functionName: 'ownerCount',
-      }).catch(() => null)
-      // If we can call ownerCount, it's likely a Coinbase Smart Wallet
-      ownerIsContract = ownerBytecode !== null
-    } catch {
-      // Ignore - assume EOA if we can't determine
-    }
-  }
-
   // Send the UserOperation via EntryPoint v0.6 with CDP paymaster
   // toCoinbaseSmartAccount uses entryPoint06Address by default
   // 
@@ -1279,7 +1343,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // - paymaster validation can also push EOA flows above 150k in larger batches
   // - callGasLimit: Auto-estimated, but we don't override since batcher calls vary
   const verificationGasLimits = ownerIsContract
-    ? [1_000_000n, 2_500_000n, 5_000_000n]
+    ? [1_500_000n, 3_000_000n, 5_000_000n, 8_000_000n, 12_000_000n]
     : [200_000n, 400_000n, 800_000n, 1_500_000n, 2_500_000n, 5_000_000n]
   const uniqueVerificationGasLimits = Array.from(new Set(verificationGasLimits))
   if (AA_DEBUG) {
@@ -1396,6 +1460,29 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     const lc = errMsg.toLowerCase()
     const metaDetail = formatMetaMessages(lastError)
     const metaSuffix = metaDetail ? ` (CDP: ${metaDetail})` : ''
+
+    if (
+      retryOnInvalidSignature &&
+      userOpSignMode === 'auto' &&
+      !usedSignMessageFallback &&
+      (lc.includes('invalid signature') || lc.includes('signature check failed'))
+    ) {
+      return await sendCoinbaseSmartWalletUserOperation({
+        publicClient,
+        walletClient,
+        bundlerUrl: bundlerUrlInput,
+        paymasterUrl: paymasterUrlInput,
+        smartWallet,
+        ownerAddress,
+        calls,
+        version,
+        userOpSignMode: 'signMessage',
+        ownerIsContract: ownerIsContractOverride,
+        skipPreflightSimulation,
+        skipPaymaster,
+        retryOnInvalidSignature: false,
+      })
+    }
 
     // Provide helpful error messages for common failures
     if (lc.includes('insufficient funds') || lc.includes('insufficient balance')) {

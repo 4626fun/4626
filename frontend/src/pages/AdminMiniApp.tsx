@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Copy, ExternalLink, ShieldCheck } from 'lucide-react'
 import { useAccount, useBlockNumber, useChainId, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
 import { base } from 'wagmi/chains'
-import { encodeFunctionData, erc20Abi, formatUnits, getAddress, isAddress, parseAbiItem, parseUnits, type Address } from 'viem'
+import { encodeFunctionData, erc20Abi, formatUnits, getAddress, isAddress, parseAbiItem, parseUnits, type Address, type Hex } from 'viem'
 import { useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 
@@ -61,12 +61,17 @@ const LEGACY_VAULT_HINTS: LegacyVaultHint[] = [
     id: 'legacy-3',
     label: 'Legacy vault (0x2648…2D75)',
     vault: '0x264855c322db4224ddb3aa84f1d64392d7537cb6',
+    wrapper: '0x772f102B8747C70aFDd1A616bBa22a6C8286A026',
+    shareOft: '0xbbBA5b9c70D2edEf732f1DeA19Cca0e36789e69d',
     vaultHint: '0x264855c3...2D7537CB6',
   },
   {
     id: 'legacy-4',
     label: 'Legacy vault (0xcF30…91d0)',
     vault: '0xcf30b1e8c682a2adcede2b22601b75f54ed91d0c',
+    wrapper: '0xE7675FA61c4431194481F3Fb31d1e4a73177eE6C',
+    shareOft: '0x7DDe0A769Aeda835fC441f66B271678661dD4626',
+    vesting: '0xE40c781BaCE1282D1B721FBa2Ff86B6F8fe94Ad9',
     vaultHint: '0xcF30B1e8...54ED91d0C',
   },
   {
@@ -229,6 +234,19 @@ const VAULT_ABI = [
     outputs: [],
   },
   { name: 'claimQueuedWithdrawal', type: 'function', stateMutability: 'nonpayable', inputs: [], outputs: [{ type: 'uint256' }] },
+  {
+    name: 'redeem',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'shares', type: 'uint256' },
+      { name: 'receiver', type: 'address' },
+      { name: 'owner', type: 'address' },
+    ],
+    outputs: [{ type: 'uint256' }],
+  },
+  { name: 'previewRedeem', type: 'function', stateMutability: 'view', inputs: [{ name: 'shares', type: 'uint256' }], outputs: [{ type: 'uint256' }] },
+  { name: 'largeWithdrawalThreshold', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 ] as const
 
 const QUEUED_WITHDRAWAL_ABI = [
@@ -682,6 +700,75 @@ function LegacyWithdrawals() {
     }
   }
 
+  async function sendBatchTx(key: string, calls: Array<{ to: Address; data: Hex }>) {
+    if (!publicClient) return
+    updateTx(key, { status: 'pending', error: undefined, hash: undefined })
+    try {
+      if (!isBase) {
+        throw new Error('Please switch to Base network to continue.')
+      }
+      if (!calls.length) {
+        throw new Error('No actions to submit.')
+      }
+      if (isCanonical) {
+        throw new Error('Connect an owner wallet to submit 1-click withdrawals.')
+      }
+      if (embeddedIsCanonicalOwner && embeddedPrivyWallet && embeddedPrivyEoaAddress) {
+        const embeddedProvider = await (embeddedPrivyWallet as any).getEthereumProvider?.()
+        if (!embeddedProvider?.request) {
+          throw new Error('Privy embedded wallet provider not available')
+        }
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const embeddedWalletClient = {
+          request: async (args: { method: string; params?: any[] }) => embeddedProvider.request(args),
+        }
+        const result = await sendCoinbaseSmartWalletUserOperation({
+          publicClient: publicClient as any,
+          walletClient: embeddedWalletClient as any,
+          bundlerUrl,
+          smartWallet: canonicalCswAddress as Address,
+          ownerAddress: embeddedPrivyEoaAddress as Address,
+          calls,
+          version: '1',
+          userOpSignMode: 'signMessage',
+          skipPaymaster: true,
+        })
+        updateTx(key, { status: 'pending', hash: result.transactionHash })
+        await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
+        updateTx(key, { status: 'success' })
+        return
+      }
+      if (connectedIsCanonicalOwner && connectedAddress) {
+        if (!walletClient) throw new Error('Connect the owner wallet to continue.')
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const result = await sendCoinbaseSmartWalletUserOperation({
+          publicClient: publicClient as any,
+          walletClient: walletClient as any,
+          bundlerUrl,
+          smartWallet: canonicalCswAddress as Address,
+          ownerAddress: connectedAddress as Address,
+          calls,
+          version: '1',
+          skipPaymaster: true,
+        })
+        updateTx(key, { status: 'pending', hash: result.transactionHash })
+        await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
+        updateTx(key, { status: 'success' })
+        return
+      }
+      throw new Error('Connect the canonical smart wallet or an owner wallet to continue.')
+    } catch (e: any) {
+      const msg = String(e?.shortMessage || e?.message || 'Transaction failed')
+      const lower = msg.toLowerCase()
+      const friendly = lower.includes('requested resource not available') || lower.includes('resource not available')
+        ? 'Bundler endpoint does not support ERC-4337 methods. Set `VITE_CDP_BUNDLER_URL` and retry.'
+        : msg
+      updateTx(key, { status: 'error', error: friendly })
+    }
+  }
+
   function parseAmount(input: string): bigint | null {
     const raw = input.trim()
     if (!raw) return null
@@ -830,13 +917,31 @@ function LegacyWithdrawals() {
                   chainId: base.id,
                   query: { enabled: canUseSmartWallet && isBase && hasVault },
                 })
+                const thresholdQuery = useReadContract({
+                  address: legacy.vault as Address,
+                  abi: VAULT_ABI,
+                  functionName: 'largeWithdrawalThreshold',
+                  chainId: base.id,
+                  query: { enabled: isBase && hasVault },
+                })
+                const previewRedeemQuery = useReadContract({
+                  address: legacy.vault as Address,
+                  abi: VAULT_ABI,
+                  functionName: 'previewRedeem',
+                  args: [sharesToQueue ?? 0n],
+                  chainId: base.id,
+                  query: { enabled: isBase && hasVault && !!sharesToQueue },
+                })
                 const releaseKey = `release-${legacy.id}`
                 const unwrapKey = `unwrap-${legacy.id}`
                 const queueKey = `queue-${legacy.id}`
                 const claimKey = `claim-${legacy.id}`
+                const oneClickKey = `oneclick-${legacy.id}`
 
                 const balance = balanceQuery.data as bigint | undefined
                 const releasable = releasableQuery.data as bigint | undefined
+                const largeWithdrawalThreshold = thresholdQuery.data as bigint | undefined
+                const previewRedeem = previewRedeemQuery.data as bigint | undefined
                 const hasReleasable = typeof releasable === 'bigint' && releasable > 0n
                 const isBalanceZero = typeof balance === 'bigint' && balance === 0n
                 const queued = queuedQuery.data as
@@ -865,9 +970,90 @@ function LegacyWithdrawals() {
                   hasQueued && typeof queuedUnlockBlock === 'bigint' && currentBlock !== null && queuedUnlockBlock > currentBlock
                     ? queuedUnlockBlock - currentBlock
                     : null
+                const maxAvailable =
+                  (typeof balance === 'bigint' ? balance : 0n) + (hasReleasable ? (releasable ?? 0n) : 0n)
+                const oneClickAmount = parsedAmount ?? (maxAvailable > 0n ? maxAvailable : null)
+                const oneClickShares = typeof oneClickAmount === 'bigint' ? oneClickAmount * 1000n : null
+                const exceedsAvailable =
+                  typeof oneClickAmount === 'bigint' && typeof maxAvailable === 'bigint' ? oneClickAmount > maxAvailable : false
+                const previewRedeemOneClickQuery = useReadContract({
+                  address: legacy.vault as Address,
+                  abi: VAULT_ABI,
+                  functionName: 'previewRedeem',
+                  args: [oneClickShares ?? 0n],
+                  chainId: base.id,
+                  query: { enabled: isBase && hasVault && !!oneClickShares },
+                })
+                const previewRedeemOneClick = previewRedeemOneClickQuery.data as bigint | undefined
+                const shouldQueue =
+                  typeof previewRedeem === 'bigint' && typeof largeWithdrawalThreshold === 'bigint'
+                    ? previewRedeem >= largeWithdrawalThreshold
+                    : true
+                const shouldQueueOneClick =
+                  typeof previewRedeemOneClick === 'bigint' && typeof largeWithdrawalThreshold === 'bigint'
+                    ? previewRedeemOneClick >= largeWithdrawalThreshold
+                    : true
                 const canUnwrap = isConnected && isBase && canUseSmartWallet && hasResolvedContracts && !!parsedAmount
-                const canQueue = isConnected && isBase && canUseSmartWallet && hasVault && !!parsedAmount && receiverValid
+                const canQueue = isConnected && isBase && canUseSmartWallet && hasVault && !!parsedAmount && receiverValid && shouldQueue
+                const canRedeem = isConnected && isBase && canUseSmartWallet && hasVault && !!parsedAmount && receiverValid && !shouldQueue
                 const canClaim = isConnected && isBase && canUseSmartWallet && hasVault && hasQueued && isUnlocked
+                const canOneClick =
+                  isConnected &&
+                  isBase &&
+                  canUseSmartWallet &&
+                  hasResolvedContracts &&
+                  receiverValid &&
+                  typeof oneClickAmount === 'bigint' &&
+                  oneClickAmount > 0n &&
+                  !exceedsAvailable
+                const queueConfig = {
+                  address: legacy.vault as Address,
+                  abi: VAULT_ABI,
+                  functionName: 'queueWithdrawal',
+                  args: [sharesToQueue ?? 0n, receiver as Address],
+                }
+                const redeemConfig = {
+                  address: legacy.vault as Address,
+                  abi: VAULT_ABI,
+                  functionName: 'redeem',
+                  args: [sharesToQueue ?? 0n, receiver as Address, canonicalCswAddress as Address],
+                }
+                const oneClickCalls: Array<{ to: Address; data: Hex }> = []
+                if (hasVesting && hasReleasable) {
+                  oneClickCalls.push({
+                    to: legacy.vesting as Address,
+                    data: encodeFunctionData({ abi: VESTING_ABI as any, functionName: 'release' }),
+                  })
+                }
+                if (typeof oneClickAmount === 'bigint' && oneClickAmount > 0n) {
+                  oneClickCalls.push({
+                    to: legacy.wrapper as Address,
+                    data: encodeFunctionData({
+                      abi: WRAPPER_ABI as any,
+                      functionName: 'unwrap',
+                      args: [oneClickAmount],
+                    }),
+                  })
+                  if (shouldQueueOneClick) {
+                    oneClickCalls.push({
+                      to: legacy.vault as Address,
+                      data: encodeFunctionData({
+                        abi: VAULT_ABI as any,
+                        functionName: 'queueWithdrawal',
+                        args: [oneClickShares ?? 0n, receiver as Address],
+                      }),
+                    })
+                  } else {
+                    oneClickCalls.push({
+                      to: legacy.vault as Address,
+                      data: encodeFunctionData({
+                        abi: VAULT_ABI as any,
+                        functionName: 'redeem',
+                        args: [oneClickShares ?? 0n, receiver as Address, canonicalCswAddress as Address],
+                      }),
+                    })
+                  }
+                }
 
                 return (
                   <div key={legacy.id} className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-4">
@@ -899,6 +1085,29 @@ function LegacyWithdrawals() {
                             Release from vesting to move ShareOFT into the canonical smart wallet.
                           </div>
                         ) : null}
+                        {exceedsAvailable ? (
+                          <div className="text-xs text-amber-300/80">
+                            One-click amount exceeds available ShareOFT.
+                          </div>
+                        ) : null}
+                    </div>
+
+                    <div className="rounded-lg border border-white/10 p-4 space-y-2">
+                      <div className="text-sm text-zinc-300">One-click withdraw</div>
+                      <div className="text-xs text-zinc-500">
+                        {shouldQueueOneClick
+                          ? 'Release + unwrap + queue in a single transaction.'
+                          : 'Release + unwrap + withdraw now in a single transaction.'}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => sendBatchTx(oneClickKey, oneClickCalls)}
+                        disabled={!canOneClick}
+                        className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        One-click withdraw
+                      </button>
+                      <TxMeta state={txStates[oneClickKey]} />
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-4">
@@ -968,24 +1177,21 @@ function LegacyWithdrawals() {
 
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="rounded-lg border border-white/10 p-4 space-y-2">
-                        <div className="text-sm text-zinc-300">Step 3 · Queue withdrawal</div>
+                        <div className="text-sm text-zinc-300">
+                          {shouldQueue ? 'Step 3 · Queue withdrawal' : 'Step 3 · Withdraw now'}
+                        </div>
                         <div className="text-xs text-zinc-500">
-                          Large withdrawals require queueing. Wait 10 blocks, then claim.
+                          {shouldQueue
+                            ? 'Large withdrawals require queueing. Wait 10 blocks, then claim.'
+                            : 'Small withdrawals redeem immediately (no queue).'}
                         </div>
                         <button
                           type="button"
-                          onClick={() =>
-                            sendTx(queueKey, {
-                              address: legacy.vault as Address,
-                              abi: VAULT_ABI,
-                              functionName: 'queueWithdrawal',
-                              args: [sharesToQueue ?? 0n, receiver as Address],
-                            })
-                          }
-                          disabled={!canQueue}
+                          onClick={() => sendTx(queueKey, shouldQueue ? queueConfig : redeemConfig)}
+                          disabled={shouldQueue ? !canQueue : !canRedeem}
                           className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          Queue withdrawal
+                          {shouldQueue ? 'Queue withdrawal' : 'Withdraw now'}
                         </button>
                         <TxMeta state={txStates[queueKey]} />
                       </div>
