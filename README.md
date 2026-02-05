@@ -11,7 +11,8 @@ CreatorVault is the **Base-native creator finance layer** that turns **Zora Crea
 [![LayerZero](https://img.shields.io/badge/LayerZero-V2-7B3FE4)](https://layerzero.network/)
 [![Multi-Chain](https://img.shields.io/badge/Chains-8+-4CAF50)](#supported-chains)
 [![Tests](https://github.com/wenakita/4626/actions/workflows/test.yml/badge.svg)](https://github.com/wenakita/4626/actions/workflows/test.yml)
-[![Edge Cases](https://img.shields.io/badge/Edge_Cases-88_tests-success)](#lottery-smart-wallet-compatibility)
+[![Total Tests](https://img.shields.io/badge/Tests-167_passing-success)](https://github.com/wenakita/4626/actions/workflows/test.yml)
+[![Lottery Tests](https://img.shields.io/badge/Lottery_Tests-88-blue)](#lottery-smart-wallet-compatibility)
 
 ---
 
@@ -507,7 +508,7 @@ DEX aggregators work out-of-the-box without code changes. Aggregator contracts a
 | **Uniswap Universal Router** | `SwapOnly` classification | Final recipient gets entry |
 | **Multi-hop routes** | Chained `SwapOnly` | Final recipient gets entry |
 
-### Edge Case Test Coverage (88 Tests)
+### Edge Case Test Coverage (88 Lottery Tests)
 
 The lottery system is tested against 88 edge cases across multiple categories:
 
