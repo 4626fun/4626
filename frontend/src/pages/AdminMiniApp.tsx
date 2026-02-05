@@ -479,6 +479,20 @@ function AgentRegistration() {
     return null
   }
 
+  const applyRegisteredAgentId = (agentId: string | null): boolean => {
+    if (!agentId) return false
+    setRegisteredAgentId(agentId)
+    setAgentIdInput(agentId)
+    updateResolveState({ status: 'success' })
+    return true
+  }
+
+  const handleRegistrationReceipt = async (receipt: { logs?: Array<{ address: string; data: Hex; topics: Hex[] }> }) => {
+    const agentId = extractAgentId(receipt)
+    if (applyRegisteredAgentId(agentId)) return
+    await resolveAgentIdFromChain({ skipBalanceCheck: true })
+  }
+
   async function registerAgent() {
     if (!publicClient) return
     updateRegisterTx({ status: 'pending', error: undefined, hash: undefined })
@@ -504,11 +518,7 @@ function AgentRegistration() {
         })
         updateRegisterTx({ status: 'pending', hash })
         const receipt = await (publicClient as any).waitForTransactionReceipt({ hash })
-        const agentId = extractAgentId(receipt)
-        if (agentId) {
-          setRegisteredAgentId(agentId)
-          setAgentIdInput(agentId)
-        }
+        await handleRegistrationReceipt(receipt)
         updateRegisterTx({ status: 'success' })
         return
       }
@@ -541,11 +551,7 @@ function AgentRegistration() {
         })
         updateRegisterTx({ status: 'pending', hash: result.transactionHash })
         const receipt = await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
-        const agentId = extractAgentId(receipt)
-        if (agentId) {
-          setRegisteredAgentId(agentId)
-          setAgentIdInput(agentId)
-        }
+        await handleRegistrationReceipt(receipt)
         updateRegisterTx({ status: 'success' })
         return
       }
@@ -571,11 +577,7 @@ function AgentRegistration() {
         })
         updateRegisterTx({ status: 'pending', hash: result.transactionHash })
         const receipt = await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
-        const agentId = extractAgentId(receipt)
-        if (agentId) {
-          setRegisteredAgentId(agentId)
-          setAgentIdInput(agentId)
-        }
+        await handleRegistrationReceipt(receipt)
         updateRegisterTx({ status: 'success' })
         return
       }
@@ -690,14 +692,14 @@ function AgentRegistration() {
     }
   }
 
-  async function resolveAgentIdFromChain() {
+  async function resolveAgentIdFromChain(opts?: { skipBalanceCheck?: boolean }) {
     if (!publicClient) return
     updateResolveState({ status: 'loading', error: undefined })
     try {
       if (!isBase) {
         throw new Error('Please switch to Base network to continue.')
       }
-      if (registryBalance === 0n) {
+      if (!opts?.skipBalanceCheck && registryBalance === 0n) {
         throw new Error('No agents registered for the canonical CSW yet.')
       }
 
