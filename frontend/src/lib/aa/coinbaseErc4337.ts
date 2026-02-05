@@ -1461,6 +1461,30 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     const metaDetail = formatMetaMessages(lastError)
     const metaSuffix = metaDetail ? ` (CDP: ${metaDetail})` : ''
 
+    try {
+      const logPayload = {
+        smartWallet,
+        ownerAddress,
+        ownerIsContract,
+        userOpSignMode,
+        calls: calls.map((call) => ({
+          to: call.to,
+          value: typeof call.value === 'bigint' ? call.value.toString() : call.value,
+          data: typeof call.data === 'string' ? call.data.slice(0, 18) : null,
+        })),
+        bundlerUrl: bundlerUrlInput,
+        paymasterUrl: paymasterUrlInput ?? bundlerUrlInput,
+        skipPaymaster,
+        attemptedWithoutPaymaster,
+        verificationGasLimits: uniqueVerificationGasLimits.map((v) => v.toString()),
+        error: errMsg,
+        metaDetail,
+      }
+      console.error('[ERC-4337] UserOp failed', logPayload)
+    } catch {
+      // ignore logging failures
+    }
+
     if (
       retryOnInvalidSignature &&
       userOpSignMode === 'auto' &&
