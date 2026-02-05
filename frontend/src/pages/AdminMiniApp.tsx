@@ -233,6 +233,7 @@ const COINBASE_SMART_WALLET_OWNER_LINK_ABI = [
 
 const ERC8004_IDENTITY_REGISTRY_ABI = [
   { name: 'register', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'agentURI', type: 'string' }], outputs: [{ type: 'uint256' }] },
+  { name: 'setAgentURI', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'agentId', type: 'uint256' }, { name: 'newURI', type: 'string' }], outputs: [] },
   { name: 'balanceOf', type: 'function', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ type: 'uint256' }] },
 ] as const
 
@@ -349,8 +350,13 @@ function AgentRegistration() {
   const { wallets: privyWallets } = useWallets()
   const [embeddedPrivyEoaAddress, setEmbeddedPrivyEoaAddress] = useState<string | null>(null)
   const [agentUri, setAgentUri] = useState(ERC8004_AGENT_URI_DEFAULT)
-  const [txState, setTxState] = useState<TxState>({ status: 'idle' })
+  const [registerTxState, setRegisterTxState] = useState<TxState>({ status: 'idle' })
+  const [updateTxState, setUpdateTxState] = useState<TxState>({ status: 'idle' })
   const [registeredAgentId, setRegisteredAgentId] = useState<string | null>(null)
+  const [agentIdInput, setAgentIdInput] = useState<string>('')
+  const [resolveState, setResolveState] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; error?: string }>({
+    status: 'idle',
+  })
 
   const connectedAddress = useMemo(() => {
     if (!address || !isAddress(address)) return null
@@ -430,11 +436,25 @@ function AgentRegistration() {
   const isBase = chainId === base.id
   const canSubmitViaOwner = (connectedIsCanonicalOwner || embeddedIsCanonicalOwner) && !isCanonical
 
-  const updateTx = (patch: Partial<TxState>) => {
-    setTxState((prev) => {
+  const updateRegisterTx = (patch: Partial<TxState>) => {
+    setRegisterTxState((prev) => {
       const nextStatus = patch.status ?? prev.status ?? 'idle'
       return { ...prev, ...patch, status: nextStatus } as TxState
     })
+  }
+
+  const updateUpdateTx = (patch: Partial<TxState>) => {
+    setUpdateTxState((prev) => {
+      const nextStatus = patch.status ?? prev.status ?? 'idle'
+      return { ...prev, ...patch, status: nextStatus } as TxState
+    })
+  }
+
+  const updateResolveState = (patch: Partial<{ status: 'idle' | 'loading' | 'success' | 'error'; error?: string }>) => {
+    setResolveState((prev) => ({
+      status: patch.status ?? prev.status,
+      error: patch.error ?? (patch.status === 'error' ? prev.error : undefined),
+    }))
   }
 
   const extractAgentId = (receipt: { logs?: Array<{ address: string; data: Hex; topics: Hex[] }> }) => {
@@ -461,7 +481,7 @@ function AgentRegistration() {
 
   async function registerAgent() {
     if (!publicClient) return
-    updateTx({ status: 'pending', error: undefined, hash: undefined })
+    updateRegisterTx({ status: 'pending', error: undefined, hash: undefined })
     setRegisteredAgentId(null)
     try {
       if (!isBase) {
@@ -482,11 +502,14 @@ function AgentRegistration() {
           functionName: 'register',
           args: [trimmedUri],
         })
-        updateTx({ status: 'pending', hash })
+        updateRegisterTx({ status: 'pending', hash })
         const receipt = await (publicClient as any).waitForTransactionReceipt({ hash })
         const agentId = extractAgentId(receipt)
-        if (agentId) setRegisteredAgentId(agentId)
-        updateTx({ status: 'success' })
+        if (agentId) {
+          setRegisteredAgentId(agentId)
+          setAgentIdInput(agentId)
+        }
+        updateRegisterTx({ status: 'success' })
         return
       }
 
@@ -516,11 +539,14 @@ function AgentRegistration() {
           userOpSignMode: 'signMessage',
           skipPaymaster: true,
         })
-        updateTx({ status: 'pending', hash: result.transactionHash })
+        updateRegisterTx({ status: 'pending', hash: result.transactionHash })
         const receipt = await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
         const agentId = extractAgentId(receipt)
-        if (agentId) setRegisteredAgentId(agentId)
-        updateTx({ status: 'success' })
+        if (agentId) {
+          setRegisteredAgentId(agentId)
+          setAgentIdInput(agentId)
+        }
+        updateRegisterTx({ status: 'success' })
         return
       }
 
@@ -543,11 +569,14 @@ function AgentRegistration() {
           version: '1',
           skipPaymaster: true,
         })
-        updateTx({ status: 'pending', hash: result.transactionHash })
+        updateRegisterTx({ status: 'pending', hash: result.transactionHash })
         const receipt = await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
         const agentId = extractAgentId(receipt)
-        if (agentId) setRegisteredAgentId(agentId)
-        updateTx({ status: 'success' })
+        if (agentId) {
+          setRegisteredAgentId(agentId)
+          setAgentIdInput(agentId)
+        }
+        updateRegisterTx({ status: 'success' })
         return
       }
 
@@ -558,7 +587,151 @@ function AgentRegistration() {
       const friendly = lower.includes('requested resource not available') || lower.includes('resource not available')
         ? 'Bundler endpoint does not support ERC-4337 methods. Set `VITE_CDP_BUNDLER_URL` and retry.'
         : msg
-      updateTx({ status: 'error', error: friendly })
+      updateRegisterTx({ status: 'error', error: friendly })
+    }
+  }
+
+  async function updateAgentUri() {
+    if (!publicClient) return
+    updateUpdateTx({ status: 'pending', error: undefined, hash: undefined })
+    try {
+      if (!isBase) {
+        throw new Error('Please switch to Base network to continue.')
+      }
+      const trimmedUri = agentUri.trim()
+      if (!trimmedUri) throw new Error('Agent URI is required.')
+      const rawId = agentIdInput.trim()
+      if (!/^\d+$/.test(rawId)) throw new Error('Agent ID must be a non-negative integer.')
+      const agentId = BigInt(rawId)
+
+      const registryAddress = ERC8004_IDENTITY_REGISTRY as Address
+
+      if (isCanonical) {
+        if (!walletClient) throw new Error('Connect the canonical smart wallet to continue.')
+        const hash = await (walletClient as any).writeContract({
+          account: (walletClient as any).account,
+          chain: base as any,
+          address: registryAddress,
+          abi: ERC8004_IDENTITY_REGISTRY_ABI,
+          functionName: 'setAgentURI',
+          args: [agentId, trimmedUri],
+        })
+        updateUpdateTx({ status: 'pending', hash })
+        await (publicClient as any).waitForTransactionReceipt({ hash })
+        updateUpdateTx({ status: 'success' })
+        return
+      }
+
+      if (embeddedIsCanonicalOwner && embeddedPrivyWallet && embeddedPrivyEoaAddress) {
+        const embeddedProvider = await (embeddedPrivyWallet as any).getEthereumProvider?.()
+        if (!embeddedProvider?.request) {
+          throw new Error('Privy embedded wallet provider not available')
+        }
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const data = encodeFunctionData({
+          abi: ERC8004_IDENTITY_REGISTRY_ABI as any,
+          functionName: 'setAgentURI' as any,
+          args: [agentId, trimmedUri],
+        })
+        const embeddedWalletClient = {
+          request: async (args: { method: string; params?: any[] }) => embeddedProvider.request(args),
+        }
+        const result = await sendCoinbaseSmartWalletUserOperation({
+          publicClient: publicClient as any,
+          walletClient: embeddedWalletClient as any,
+          bundlerUrl,
+          smartWallet: canonicalCswAddress as Address,
+          ownerAddress: embeddedPrivyEoaAddress as Address,
+          calls: [{ to: registryAddress, data }],
+          version: '1',
+          userOpSignMode: 'signMessage',
+          skipPaymaster: true,
+        })
+        updateUpdateTx({ status: 'pending', hash: result.transactionHash })
+        await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
+        updateUpdateTx({ status: 'success' })
+        return
+      }
+
+      if (connectedIsCanonicalOwner && connectedAddress) {
+        if (!walletClient) throw new Error('Connect the owner wallet to continue.')
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const data = encodeFunctionData({
+          abi: ERC8004_IDENTITY_REGISTRY_ABI as any,
+          functionName: 'setAgentURI' as any,
+          args: [agentId, trimmedUri],
+        })
+        const result = await sendCoinbaseSmartWalletUserOperation({
+          publicClient: publicClient as any,
+          walletClient: walletClient as any,
+          bundlerUrl,
+          smartWallet: canonicalCswAddress as Address,
+          ownerAddress: connectedAddress as Address,
+          calls: [{ to: registryAddress, data }],
+          version: '1',
+          skipPaymaster: true,
+        })
+        updateUpdateTx({ status: 'pending', hash: result.transactionHash })
+        await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
+        updateUpdateTx({ status: 'success' })
+        return
+      }
+
+      throw new Error('Connect the canonical smart wallet or an owner wallet to continue.')
+    } catch (e: any) {
+      const msg = String(e?.shortMessage || e?.message || 'Transaction failed')
+      const lower = msg.toLowerCase()
+      const friendly = lower.includes('requested resource not available') || lower.includes('resource not available')
+        ? 'Bundler endpoint does not support ERC-4337 methods. Set `VITE_CDP_BUNDLER_URL` and retry.'
+        : msg
+      updateUpdateTx({ status: 'error', error: friendly })
+    }
+  }
+
+  async function resolveAgentIdFromChain() {
+    if (!publicClient) return
+    updateResolveState({ status: 'loading', error: undefined })
+    try {
+      if (!isBase) {
+        throw new Error('Please switch to Base network to continue.')
+      }
+      if (registryBalance === 0n) {
+        throw new Error('No agents registered for the canonical CSW yet.')
+      }
+
+      const latest = await publicClient.getBlockNumber()
+      const window = 2_000_000n
+      const fromBlock = latest > window ? latest - window : 0n
+      let logs = (await publicClient.getLogs({
+        address: ERC8004_IDENTITY_REGISTRY as Address,
+        event: ERC8004_REGISTERED_EVENT,
+        args: { owner: canonicalCswAddress },
+        fromBlock,
+        toBlock: 'latest',
+      })) as Array<{ args?: { agentId?: bigint } }>
+
+      if (!logs.length && fromBlock !== 0n) {
+        logs = (await publicClient.getLogs({
+          address: ERC8004_IDENTITY_REGISTRY as Address,
+          event: ERC8004_REGISTERED_EVENT,
+          args: { owner: canonicalCswAddress },
+          fromBlock: 0n,
+          toBlock: 'latest',
+        })) as Array<{ args?: { agentId?: bigint } }>
+      }
+
+      const last = logs[logs.length - 1]
+      const agentId = last?.args?.agentId
+      if (agentId === undefined) {
+        throw new Error('No registration log found for the canonical CSW.')
+      }
+      setAgentIdInput(String(agentId))
+      updateResolveState({ status: 'success' })
+    } catch (e: any) {
+      const msg = String(e?.shortMessage || e?.message || 'Failed to resolve agent ID')
+      updateResolveState({ status: 'error', error: msg })
     }
   }
 
@@ -632,15 +805,44 @@ function AgentRegistration() {
                   Registered agentId: <span className="font-mono">{registeredAgentId}</span>
                 </div>
               ) : null}
+              <div className="text-xs text-zinc-600">Agent ID (for updates)</div>
+              <input
+                value={agentIdInput}
+                onChange={(e) => setAgentIdInput(e.target.value)}
+                placeholder="e.g. 1"
+                className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => void resolveAgentIdFromChain()}
+                disabled={resolveState.status === 'loading' || !isConnected || (!isCanonical && !canSubmitViaOwner)}
+                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {resolveState.status === 'loading' ? 'Resolving…' : 'Resolve agent ID from chain'}
+              </button>
+              {resolveState.status === 'error' ? (
+                <div className="text-xs text-red-400">{resolveState.error}</div>
+              ) : resolveState.status === 'success' ? (
+                <div className="text-xs text-emerald-300/90">Agent ID resolved.</div>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void updateAgentUri()}
+                disabled={updateTxState.status === 'pending' || !isConnected || (!isCanonical && !canSubmitViaOwner)}
+                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {updateTxState.status === 'pending' ? 'Updating…' : 'Update agent URI'}
+              </button>
+              <TxMeta state={updateTxState} />
               <button
                 type="button"
                 onClick={() => void registerAgent()}
-                disabled={txState.status === 'pending' || !isConnected || (!isCanonical && !canSubmitViaOwner)}
+                disabled={registerTxState.status === 'pending' || !isConnected || (!isCanonical && !canSubmitViaOwner)}
                 className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {txState.status === 'pending' ? 'Registering…' : 'Register agent'}
+                {registerTxState.status === 'pending' ? 'Registering…' : 'Register agent'}
               </button>
-              <TxMeta state={txState} />
+              <TxMeta state={registerTxState} />
             </div>
           </div>
         </div>
