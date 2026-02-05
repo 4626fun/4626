@@ -451,20 +451,31 @@ export function TokenTableHeader({ timeframe = '1d', currentSort, onSortChange }
   const groupSpans = buildGroupSpans(columns)
 
   const stickyHeaderCellClass = 'sticky z-50 bg-zinc-950 border-r border-zinc-800/60'
+  const stickyGroupClass = 'sticky z-40 bg-zinc-950 border-r border-zinc-800/60'
 
   return (
     <div className="bg-zinc-950 border-b border-zinc-800">
       {/* Group labels */}
       <div className="grid" style={{ gridTemplateColumns }}>
-        {groupSpans.map((g) => (
-          <div
-            key={g.id}
-            className="px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 border-b border-zinc-800/60 text-center"
-            style={{ gridColumn: `${g.start + 1} / ${g.end + 2}` }}
-          >
-            {g.label}
-          </div>
-        ))}
+        {groupSpans.map((g) => {
+          const slice = columns.slice(g.start, g.end + 1)
+          const hasSticky = slice.some((c) => c.sticky)
+          const left = hasSticky ? stickyLeft[columns[g.start].id] : undefined
+          return (
+            <div
+              key={g.id}
+              className={`px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 border-b border-zinc-800/60 text-left ${
+                hasSticky ? stickyGroupClass : ''
+              }`}
+              style={{
+                gridColumn: `${g.start + 1} / ${g.end + 2}`,
+                ...(hasSticky ? { left } : null),
+              }}
+            >
+              {g.label}
+            </div>
+          )
+        })}
       </div>
 
       {/* Column labels */}

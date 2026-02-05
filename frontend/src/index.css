@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.js";
 
 @layer base {
   body {
@@ -56,7 +55,8 @@
 
   /* Minimal Cards - No heavy chrome */
   .card {
-    @apply bg-vault-card/40 border-glass border rounded-2xl backdrop-blur-sm;
+    @apply bg-vault-card/40 border rounded-2xl backdrop-blur-sm;
+    border-color: rgba(255, 255, 255, 0.08);
   }
   
   /* Cinematic Sections with Letterbox Feel */

@@ -278,9 +278,9 @@ const AdminWaitlist = lazy(async () => {
   return { default: m.AdminWaitlist }
 })
 
-const AdminMiniApp = lazy(async () => {
-  const m = await import('./pages/AdminMiniApp')
-  return { default: m.AdminMiniApp }
+const AdminOps = lazy(async () => {
+  const m = await import('./pages/AdminOps')
+  return { default: m.AdminOps }
 })
 
 const AdminDeployStrategies = lazy(async () => {
@@ -431,10 +431,11 @@ function App() {
                 {/* Admin routes must remain reachable even in public mode (auth is enforced server-side). */}
                 <Route path="/admin/creator-access" element={<AdminCreatorAccess />} />
                 <Route path="/admin/waitlist" element={<AdminWaitlist />} />
-                <Route path="/admin/miniapp" element={<AdminMiniApp />} />
+                <Route path="/admin/ops" element={<AdminOps />} />
+                <Route path="/admin/miniapp" element={<Navigate to="/admin/ops" replace />} />
                 <Route path="/admin/deploy-strategies" element={<AdminDeployStrategies />} />
-                {/* Legacy withdrawals: allow direct miniapp entry in public mode */}
-                <Route path="/miniapp" element={<AdminMiniApp />} />
+                {/* Keep legacy entry but redirect to admin route */}
+                <Route path="/miniapp" element={<Navigate to="/admin/ops" replace />} />
 
                 {/* Optional ops page; useful while public mode is enabled. */}
                 <Route path="/status" element={<Status />} />
@@ -474,9 +475,10 @@ function App() {
                   <Route path="/status" element={<Status />} />
                   <Route path="/admin/creator-access" element={<AdminCreatorAccess />} />
                   <Route path="/admin/waitlist" element={<AdminWaitlist />} />
-                  <Route path="/admin/miniapp" element={<AdminMiniApp />} />
+                  <Route path="/admin/ops" element={<AdminOps />} />
+                  <Route path="/admin/miniapp" element={<Navigate to="/admin/ops" replace />} />
                   <Route path="/admin/deploy-strategies" element={<AdminDeployStrategies />} />
-                  <Route path="/miniapp" element={<AdminMiniApp />} />
+                  <Route path="/miniapp" element={<Navigate to="/admin/ops" replace />} />
                   <Route path="/vote" element={<GaugeVoting />} />
                   <Route path="/activate-akita" element={<Navigate to="/deploy" replace />} />
                   <Route path="/auction/bid/:address" element={<AuctionBid />} />

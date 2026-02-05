@@ -14,10 +14,11 @@ import {
   type Address,
   type Hex,
 } from 'viem'
-import { useWallets } from '@privy-io/react-auth'
+import { usePrivy, useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 
 import { useMiniAppContext } from '@/hooks'
+import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { ConnectButton } from '@/components/ConnectButton'
 import { CONTRACTS } from '@/config/contracts'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
@@ -341,6 +342,33 @@ function TxMeta({ state }: { state?: TxState }) {
   )
 }
 
+function usePaymasterSessionGuard() {
+  const siwe = useSiweAuth()
+  const privyAny = usePrivy() as any
+  const privyReady = Boolean(privyAny?.ready)
+  const privyAuthenticated = Boolean(privyAny?.authenticated)
+  const getPrivyAccessToken: (() => Promise<string | null>) | null =
+    typeof privyAny?.getAccessToken === 'function' ? privyAny.getAccessToken.bind(privyAny) : null
+
+  const ensurePaymasterSession = async (): Promise<boolean> => {
+    if (siwe.isSignedIn) return true
+    if (privyReady && privyAuthenticated && getPrivyAccessToken) {
+      try {
+        const token = await getPrivyAccessToken()
+        if (token) {
+          const addr = await siwe.signInWithPrivyToken(token)
+          if (addr) return true
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return false
+  }
+
+  return { ensurePaymasterSession }
+}
+
 function AgentRegistration() {
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
@@ -348,6 +376,7 @@ function AgentRegistration() {
   const { data: walletClient } = useWalletClient({ chainId: base.id })
   const publicClient = usePublicClient({ chainId: base.id })
   const { wallets: privyWallets } = useWallets()
+  const { ensurePaymasterSession } = usePaymasterSessionGuard()
   const [embeddedPrivyEoaAddress, setEmbeddedPrivyEoaAddress] = useState<string | null>(null)
   const [agentUri, setAgentUri] = useState(ERC8004_AGENT_URI_DEFAULT)
   const [registerTxState, setRegisterTxState] = useState<TxState>({ status: 'idle' })
@@ -528,6 +557,10 @@ function AgentRegistration() {
         if (!embeddedProvider?.request) {
           throw new Error('Privy embedded wallet provider not available')
         }
+        const sessionOk = await ensurePaymasterSession()
+        if (!sessionOk) {
+          throw new Error('Sign in required for gas sponsorship.')
+        }
         const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
         const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
         const data = encodeFunctionData({
@@ -558,6 +591,10 @@ function AgentRegistration() {
 
       if (connectedIsCanonicalOwner && connectedAddress) {
         if (!walletClient) throw new Error('Connect the owner wallet to continue.')
+        const sessionOk = await ensurePaymasterSession()
+        if (!sessionOk) {
+          throw new Error('Sign in required for gas sponsorship.')
+        }
         const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
         const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
         const data = encodeFunctionData({
@@ -629,6 +666,10 @@ function AgentRegistration() {
         if (!embeddedProvider?.request) {
           throw new Error('Privy embedded wallet provider not available')
         }
+        const sessionOk = await ensurePaymasterSession()
+        if (!sessionOk) {
+          throw new Error('Sign in required for gas sponsorship.')
+        }
         const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
         const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
         const data = encodeFunctionData({
@@ -658,6 +699,10 @@ function AgentRegistration() {
 
       if (connectedIsCanonicalOwner && connectedAddress) {
         if (!walletClient) throw new Error('Connect the owner wallet to continue.')
+        const sessionOk = await ensurePaymasterSession()
+        if (!sessionOk) {
+          throw new Error('Sign in required for gas sponsorship.')
+        }
         const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
         const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
         const data = encodeFunctionData({
@@ -860,6 +905,7 @@ function LegacyWithdrawals() {
   const { data: walletClient } = useWalletClient({ chainId: base.id })
   const publicClient = usePublicClient({ chainId: base.id })
   const { wallets: privyWallets } = useWallets()
+  const { ensurePaymasterSession } = usePaymasterSessionGuard()
   const { client: smartWalletClient } = useSmartWallets()
   const { data: blockNumber } = useBlockNumber({ chainId: base.id, watch: true })
   const [embeddedPrivyEoaAddress, setEmbeddedPrivyEoaAddress] = useState<string | null>(null)
@@ -1174,6 +1220,10 @@ function LegacyWithdrawals() {
         if (!embeddedProvider?.request) {
           throw new Error('Privy embedded wallet provider not available')
         }
+        const sessionOk = await ensurePaymasterSession()
+        if (!sessionOk) {
+          throw new Error('Sign in required for gas sponsorship.')
+        }
         const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
         const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
         const data = encodeFunctionData({
@@ -1202,6 +1252,10 @@ function LegacyWithdrawals() {
       }
       if (connectedIsCanonicalOwner && connectedAddress) {
         if (!walletClient) throw new Error('Connect the owner wallet to continue.')
+        const sessionOk = await ensurePaymasterSession()
+        if (!sessionOk) {
+          throw new Error('Sign in required for gas sponsorship.')
+        }
         const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
         const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
         const data = encodeFunctionData({
@@ -1253,6 +1307,10 @@ function LegacyWithdrawals() {
         if (!embeddedProvider?.request) {
           throw new Error('Privy embedded wallet provider not available')
         }
+        const sessionOk = await ensurePaymasterSession()
+        if (!sessionOk) {
+          throw new Error('Sign in required for gas sponsorship.')
+        }
         const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
         const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
         const embeddedWalletClient = {
@@ -1276,6 +1334,10 @@ function LegacyWithdrawals() {
       }
       if (connectedIsCanonicalOwner && connectedAddress) {
         if (!walletClient) throw new Error('Connect the owner wallet to continue.')
+        const sessionOk = await ensurePaymasterSession()
+        if (!sessionOk) {
+          throw new Error('Sign in required for gas sponsorship.')
+        }
         const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
         const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
         const result = await sendCoinbaseSmartWalletUserOperation({
@@ -1778,7 +1840,7 @@ function LegacyWithdrawals() {
   )
 }
 
-export function AdminMiniApp() {
+export function AdminOps() {
   const mini = useMiniAppContext()
   const [capabilities, setCapabilities] = useState<string[] | null>(null)
   const [capsError, setCapsError] = useState<string | null>(null)
@@ -1807,7 +1869,7 @@ export function AdminMiniApp() {
 
         if (!caps) {
           setCapabilities(null)
-          setCapsError('Capabilities not available (not running inside a Mini App).')
+          setCapsError('Capabilities not available (not running inside an embedded app host).')
           return
         }
 
@@ -1884,7 +1946,7 @@ export function AdminMiniApp() {
           <div className="rounded-2xl border border-white/5 bg-white/[0.03] overflow-hidden">
             <div className="px-6 py-6 sm:px-8 sm:py-8 space-y-6">
               <div className="space-y-2">
-                <div className="label">Mini App</div>
+                <div className="label">Admin Ops</div>
                 <div className="text-xl sm:text-2xl text-zinc-100 font-medium tracking-tight">Manifest signing (developer)</div>
                 <div className="text-sm text-zinc-600 max-w-prose">
                   Use this page <span className="text-zinc-300">inside the Base app preview</span> to generate the{' '}
@@ -1939,7 +2001,7 @@ export function AdminMiniApp() {
                 <div className="text-sm text-zinc-200 flex items-center justify-between gap-3">
                   <span>Environment</span>
                   <span className="text-[11px] font-mono text-zinc-500">
-                    {mini.isMiniApp === null ? 'Detecting…' : mini.isMiniApp ? 'Mini App' : 'Web'}
+                    {mini.isMiniApp === null ? 'Detecting…' : mini.isMiniApp ? 'Embedded' : 'Web'}
                   </span>
                 </div>
 
@@ -2010,6 +2072,3 @@ export function AdminMiniApp() {
     </div>
   )
 }
-
-
-

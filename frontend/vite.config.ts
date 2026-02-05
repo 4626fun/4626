@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 import fs from 'fs'
 import path from 'path'
@@ -206,7 +207,7 @@ export default defineConfig(({ command }) => {
   })()
 
   return {
-    plugins: [react(), ...(command === 'serve' ? [localApiRoutesPlugin()] : [])],
+    plugins: [react(), tailwindcss(), ...(command === 'serve' ? [localApiRoutesPlugin()] : [])],
     // In remote/WSL/devcontainer setups, binding to 127.0.0.1 can make the dev server
     // unreachable from the host browser. `host: true` binds to 0.0.0.0.
     server: {
