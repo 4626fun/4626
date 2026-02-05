@@ -12,6 +12,11 @@ if (typeof window !== 'undefined') {
   try {
     const params = new URLSearchParams(window.location.search)
     const debugEnabled = params.get('debug') === '1' || window.localStorage.getItem('cv:debug') === 'true'
+    const disablePrivyAnalytics =
+      debugEnabled ||
+      params.get('privy_analytics') === '0' ||
+      window.localStorage.getItem('cv:privy:analytics') === 'off' ||
+      ['1', 'true', 'yes'].includes(String(import.meta.env.VITE_PRIVY_DISABLE_ANALYTICS ?? '').trim().toLowerCase())
     const needsAlchemyRewrite = true
     if ((debugEnabled || needsAlchemyRewrite) && !(window as any).__cvFetchPatched) {
       const originalFetch = window.fetch.bind(window)
@@ -19,7 +24,7 @@ if (typeof window !== 'undefined') {
       const safeBaseRpc = '/api/rpc'
       window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
-        if (debugEnabled && url.includes('https://auth.privy.io/api/v1/analytics_events')) {
+        if (disablePrivyAnalytics && url.includes('https://auth.privy.io/api/v1/analytics_events')) {
           return Promise.resolve(new Response(null, { status: 204 }))
         }
         if (alchemyBaseRpc.test(url)) {
