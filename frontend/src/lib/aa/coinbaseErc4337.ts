@@ -1344,7 +1344,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // - callGasLimit: Auto-estimated, but we don't override since batcher calls vary
   const verificationGasLimits = ownerIsContract
     ? [1_500_000n, 3_000_000n, 5_000_000n, 8_000_000n, 12_000_000n]
-    : [200_000n, 400_000n, 800_000n, 1_500_000n, 2_500_000n, 5_000_000n]
+    : [400_000n, 800_000n, 1_500_000n, 3_000_000n, 5_000_000n, 8_000_000n, 12_000_000n]
   const uniqueVerificationGasLimits = Array.from(new Set(verificationGasLimits))
   if (AA_DEBUG) {
     logger.debug('[ERC-4337] verificationGasLimit', {
