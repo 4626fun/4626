@@ -22,7 +22,7 @@ CreatorVault is the **Base-native creator finance layer** that turns **Zora Crea
 {
   "name": "CreatorVault",
   "version": "1.0.0",
-  "description": "Omnichain vault platform for creator coins with gas-free deployment, cross-chain OFT, pluggable yield strategies, and gamified lottery incentives",
+  "description": "Omnichain vault platform for creator coins with gas-free deployment, cross-chain OFT, pluggable yield strategies, and instant lottery incentives",
   "key_features": [
     "ERC-4626 vault (Yearn V3 architecture)",
     "LayerZero V2 omnichain share token (OFT)",
@@ -37,7 +37,7 @@ CreatorVault is the **Base-native creator finance layer** that turns **Zora Crea
     "sell_fee": "6.9%",
     "fee_mechanism": "6.9% fee collected on all DEX trades (buys and sells)",
     "fee_allocation": "100% to GaugeController -> Lottery prize pool",
-    "lottery": "Percentage-based entries: $1 traded = 0.0004% chance to win, Chainlink VRF for fairness"
+    "lottery": "Instant lottery: $1 traded = 0.0004% instant win chance, Chainlink VRF for fairness"
   },
   "tech_stack": [
     "Solidity 0.8.20",
@@ -65,7 +65,7 @@ CreatorVault is the **Base-native creator finance layer** that turns **Zora Crea
 - **Omnichain Shares**: **LayerZero V2 OFT** enables share tokens to move across 8+ chains with unified liquidity and cross-chain yield.
 - **Pluggable Yield Strategies**: **ERC-4626** vault supports multiple strategies (e.g., Uniswap V4 LP, lending protocols, RWA yield) with configurable allocations.
 - **Fair Launch via CCA**: **Uniswap Continuous Clearing Auction** provides transparent, DeFi-native price discovery with no front-running.
-- **Gamified Lottery**: 6.9% fee on all DEX trades (buys + sells) funds **Chainlink VRF lottery** - percentage-based entries where **$1 traded = 0.0004% chance to win** (e.g., $10k trade = 4% chance).
+- **Instant Lottery**: 6.9% fee on all DEX trades (buys + sells) funds **Chainlink VRF lottery** - every trade is an instant lottery roll where **$1 traded = 0.0004% win chance** (e.g., $10k trade = 4% instant win chance).
 - **Security**: Virtual shares offset, flash loan protection, anti-whale guards, minimum deposits, and queued large withdrawals.
 - **Creator-first**: Each creator owns their vault ecosystem - fees flow to lottery prize pool, full branding control.
 
@@ -76,9 +76,9 @@ CreatorVault is the **Base-native creator finance layer** that turns **Zora Crea
 1. **Trade Event** -> User buys or sells share tokens (■AKITA, ■BRET, etc.) on a DEX (Uniswap V4 pool).
 2. **Fee Collection** -> 6.9% of the trade amount is automatically deducted and sent to the **GaugeController** contract.
 3. **GaugeController Routing** -> 100% of collected fees are routed to the **CreatorLotteryManager** prize pool.
-4. **Lottery Entry** -> Trader automatically receives lottery entries proportional to their trading volume. Entry percentage scales linearly: **$1 traded = 0.0004% chance**, $100 = 0.04%, $1,000 = 0.4%, $10,000 = 4% (works for both buys and sells).
-5. **Prize Drawing** -> **Chainlink VRF 2.5** provides provably fair randomness for weekly/monthly prize draws.
-6. **Winner Payout** -> Winner receives accumulated prize pool in ETH (or wrapped vault shares at their choice).
+4. **Instant Lottery Roll** -> Trader's win probability is calculated instantly based on their trade size. Win chance scales linearly: **$1 traded = 0.0004% chance**, $100 = 0.04%, $1,000 = 0.4%, $10,000 = 4% (works for both buys and sells).
+5. **Instant Prize Roll** -> **Chainlink VRF 2.5** provides provably fair randomness for each trade - win chance is checked instantly.
+6. **Winner Payout** -> If the trader wins, they receive the accumulated prize pool immediately in ETH (or wrapped vault shares at their choice).
 
 **Key Details:**
 - **6.9% on buys AND sells** -> Consistent fee on all trading activity funds the lottery prize pool.
@@ -125,7 +125,7 @@ Onchain, CreatorVault consists of:
    - **Omnichain fungible token** - same token on all chains.
    - Collects **6.9% fee on all DEX trades** (buys and sells) via `setAddressType` for DEX pools.
    - Routes fees to **CreatorGaugeController** (which funds the lottery and, when enabled, voter rewards).
-   - Triggers automatic lottery entries for all traders.
+   - Triggers instant lottery roll for all traders (win or lose determined immediately).
 
 4. **CreatorGaugeController**
    - Receives 100% of trading fees from all share tokens.
@@ -136,10 +136,10 @@ Onchain, CreatorVault consists of:
 
 5. **CreatorLotteryManager**
    - **Shared service** (one per chain): triggered by approved swap contracts.
-   - Manages lottery entries (percentage-based: $1 traded = 0.0004% chance).
-   - Integrates **Chainlink VRF 2.5** for provably fair randomness.
-   - Holds prize pool (accumulated fees) and distributes prizes to winners.
-   - Executes prize draws (weekly/monthly cadence).
+   - Calculates instant win probability (percentage-based: $1 traded = 0.0004% chance).
+   - Integrates **Chainlink VRF 2.5** for provably fair randomness on every qualifying trade.
+   - Holds prize pool (accumulated fees) and distributes prizes to winners instantly.
+   - **Instant lottery** - each trade is an independent roll, winners paid immediately.
    - Optional boosts:
      - personal boost via `ve4626BoostManager`
      - vote-directed boost via `VaultGaugeVoting` (bounded weekly budget)
@@ -206,8 +206,8 @@ CreatorShareOFT.transfer hook
 CreatorGaugeController
    v Route by configured split (jackpot reserve + optional burn + optional voter rewards slice)
 CreatorLotteryManager (prize pool)
-   v Calculate percentage-based chances ($1 = 0.0004%)
-User accumulates chances -> Weekly VRF draw -> Winner receives prize pool
+   v Calculate percentage-based win chance ($1 = 0.0004%)
+   v Instant Chainlink VRF roll -> Winner (if lucky) receives prize pool immediately
 ```
 
 ### Incentives Layer (optional): ve4626 + ve(3,3)
@@ -236,39 +236,39 @@ This layer can be deployed and enabled after the core system is live.
 
 ### Lottery Mechanics (Provably Fair)
 
-1. **Entry Allocation** (Percentage-Based):
-   - Every DEX trade (buy or sell) earns lottery entries proportional to USD trade value.
-   - **Entry Formula**: For every **$1 traded** = **0.0004% chance** to win.
+1. **Instant Win Chance** (Percentage-Based):
+   - Every DEX trade (buy or sell) has an instant chance to win proportional to USD trade value.
+   - **Win Formula**: For every **$1 traded** = **0.0004% instant win chance**.
    - **Examples**:
-     - $1 trade = 0.0004% chance
-     - $10 trade = 0.004% chance
-     - $100 trade = 0.04% chance
-     - $1,000 trade = 0.4% chance
-     - $10,000 trade = 4% chance
-   - Chances accumulate across multiple trades until the next draw.
+     - $1 trade = 0.0004% chance to win instantly
+     - $10 trade = 0.004% chance to win instantly
+     - $100 trade = 0.04% chance to win instantly
+     - $1,000 trade = 0.4% chance to win instantly
+     - $10,000 trade = 4% chance to win instantly
+   - Each trade is an independent roll - win or lose is determined immediately.
 
 2. **Prize Pool Growth**:
    - 100% of 6.9% trading fees -> Lottery prize pool.
    - Example: $1M daily volume (buys + sells) -> $69,000 in fees -> Prize pool.
 
-3. **Drawing Process**:
-   - Weekly or monthly cadence (governance-configurable).
-   - **Chainlink VRF 2.5** requests random number onchain.
-   - Random number selects winner based on cumulative percentage chances.
-   - Example: If total chances = 100%, a trader with 4% has 4/100 probability of winning.
-   - Winner receives entire prize pool (or splits if multiple winners in future versions).
+3. **Instant Drawing Process**:
+   - Every trade triggers an instant lottery roll - no waiting for weekly/monthly draws.
+   - **Chainlink VRF 2.5** requests random number onchain for each qualifying trade.
+   - Random number determines if trader wins based on their trade-size percentage chance.
+   - Example: $10,000 trade = 4% chance -> VRF roll -> if lucky, instant win.
+   - Winner receives entire accumulated prize pool immediately.
 
 4. **Transparency**:
-   - All trade volumes, percentage chances, draws, and payouts are onchain and auditable.
+   - All trades, win probabilities, VRF rolls, and payouts are onchain and auditable.
    - VRF randomness is cryptographically verifiable.
    - Anyone can verify the math: (Trader's USD volume) x 0.0004% = Win chance.
 
 ### Incentive Alignment
 
 - **Creators**: Lottery drives trading volume -> more liquidity -> higher token price -> more fees collected -> larger prize pools.
-- **Traders**: Every trade earns percentage-based lottery chances (larger trades = higher win probability) -> FOMO + gamification -> more trading activity.
+- **Traders**: Every trade triggers instant lottery roll (larger trades = higher win probability) -> FOMO + gamification -> more trading activity.
 - **Whales**: $10,000 trade = 4% chance to win -> Incentivizes large trades while keeping small traders competitive.
-- **Holders**: Prize pool grows with trading volume -> incentive to participate in ecosystem -> can trade to accumulate chances.
+- **Holders**: Prize pool grows with trading volume -> incentive to participate in ecosystem -> every trade is a new chance to win.
 - **Platform**: Sustainable revenue via 6.9% trading fees -> 100% allocated to lottery prize pool (no platform take in v1).
 
 ---
@@ -808,4 +808,4 @@ For the Vercel API surface, avoid “hidden” dynamic imports: add endpoints by
 
 **CreatorVault | Omnichain Vaults for Creator Coins | Powered by LayerZero V2 + Uniswap CCA**
 
-*Enabling any creator to launch institutional-grade vault infrastructure with zero gas fees, fair launch price discovery, and gamified community incentives - all in one click.*
+*Enabling any creator to launch institutional-grade vault infrastructure with zero gas fees, fair launch price discovery, and instant lottery incentives - all in one click.*
