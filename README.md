@@ -10,6 +10,8 @@ CreatorVault is the **Base-native creator finance layer** that turns **Zora Crea
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.20-363636)](https://docs.soliditylang.org/)
 [![LayerZero](https://img.shields.io/badge/LayerZero-V2-7B3FE4)](https://layerzero.network/)
 [![Multi-Chain](https://img.shields.io/badge/Chains-8+-4CAF50)](#supported-chains)
+[![Tests](https://github.com/wenakita/4626/actions/workflows/test.yml/badge.svg)](https://github.com/wenakita/4626/actions/workflows/test.yml)
+[![Edge Cases](https://img.shields.io/badge/Edge_Cases-88_tests-success)](#lottery-smart-wallet-compatibility)
 
 ---
 
@@ -45,7 +47,7 @@ CreatorVault is the **Base-native creator finance layer** that turns **Zora Crea
     "Yearn V3 (vault architecture)"
   ],
   "chains": ["Base (hub)", "Ethereum", "Arbitrum", "BSC", "Avalanche", "Monad", "Sonic", "HyperEVM"],
-  "github": "https://github.com/wenakita/CreatorVault",
+  "github": "https://github.com/wenakita/4626",
   "first_deployment": "akita Creator Coin (Base: 0x5b674196812451b7cec024fe9d22d2c0b172fa75)"
 }
 ```
@@ -351,8 +353,8 @@ pnpm dev
 
 ```bash
 # Clone repository
-git clone https://github.com/wenakita/CreatorVault.git
-cd CreatorVault
+git clone https://github.com/wenakita/4626.git
+cd 4626
 
 # Install dependencies
 pnpm install
@@ -477,6 +479,193 @@ CreatorVault/
 
 ---
 
+## Lottery Smart Wallet Compatibility
+
+**The lottery system supports all wallet types including smart contract wallets and ERC-4337 accounts.**
+
+### Supported Wallets
+
+| Wallet Type | Status | Notes |
+|-------------|--------|-------|
+| **EOA (Externally Owned Account)** | Supported | Standard Ethereum wallets |
+| **Coinbase Smart Wallet** | Supported | ERC-4337 account abstraction |
+| **Safe (Gnosis)** | Supported | Multi-signature wallets |
+| **Argent** | Supported | Social recovery wallets |
+| **Proxy Wallets** | Supported | Transparent/UUPS proxies |
+| **ERC-4337 Accounts** | Supported | Via bundler transactions |
+
+### DEX Aggregator Support (Zero-Integration)
+
+DEX aggregators work out-of-the-box without code changes. Aggregator contracts are marked as `SwapOnly`, ensuring the final user recipient receives lottery entries:
+
+| Aggregator | Support Method | User Entry |
+|------------|----------------|------------|
+| **1inch** | `SwapOnly` classification | Final recipient gets entry |
+| **Paraswap** | `SwapOnly` classification | Final recipient gets entry |
+| **LlamaSwap** | `SwapOnly` classification | Final recipient gets entry |
+| **CoW Swap** | `SwapOnly` classification | Final recipient gets entry |
+| **Uniswap Universal Router** | `SwapOnly` classification | Final recipient gets entry |
+| **Multi-hop routes** | Chained `SwapOnly` | Final recipient gets entry |
+
+### Edge Case Test Coverage (88 Tests)
+
+The lottery system is tested against 88 edge cases across multiple categories:
+
+<details>
+<summary><strong>Wallet Type Tests (5 tests)</strong></summary>
+
+- EOA wallets receive lottery entries
+- Coinbase Smart Wallet receives entries
+- Safe multisig receives entries
+- Argent wallet receives entries
+- Proxy wallets receive entries
+
+</details>
+
+<details>
+<summary><strong>Transaction Origin Tests (3 tests)</strong></summary>
+
+- Direct EOA transactions work correctly
+- ERC-4337 bundler transactions attribute entry to recipient (not bundler)
+- Different `tx.origin` vs recipient handled correctly
+
+</details>
+
+<details>
+<summary><strong>Aggregator Scenarios (4 tests)</strong></summary>
+
+- Single-hop aggregator routes
+- Multi-hop with 2 aggregators
+- Multi-hop with 3 aggregators
+- Split route aggregations
+
+</details>
+
+<details>
+<summary><strong>Address Type Tests (4 tests)</strong></summary>
+
+- `SwapOnly` to Unknown triggers lottery
+- `SwapOnly` to `SwapOnly` skips lottery (intermediate hop)
+- `NoFees` sender skips lottery
+- Unknown to Unknown skips lottery (not a buy)
+
+</details>
+
+<details>
+<summary><strong>Amount Edge Cases (4 tests)</strong></summary>
+
+- Zero amount (allowed, no lottery)
+- 1 wei (triggers lottery)
+- Very large amounts (100k+ tokens)
+- Max uint128 transfers
+
+</details>
+
+<details>
+<summary><strong>State Edge Cases (7 tests)</strong></summary>
+
+- Lottery disabled
+- Fees disabled
+- No gauge controller (reverts on set to zero)
+- Gauge controller required for fees
+- Lottery manager reverts (transfer still succeeds)
+- No lottery manager (no revert)
+- Lottery enable/disable toggle
+
+</details>
+
+<details>
+<summary><strong>ILotteryBeneficiary Interface (5 tests)</strong></summary>
+
+- Returns valid address (uses returned address)
+- Returns zero address (falls back to recipient)
+- Reverts (falls back to recipient)
+- Returns self (uses self)
+- High gas consumption (still works)
+
+</details>
+
+<details>
+<summary><strong>Multiple Swap Tests (3 tests)</strong></summary>
+
+- Same block, same user (all entries logged)
+- Same block, different users (all entries logged)
+- Different blocks (entries logged per block)
+
+</details>
+
+<details>
+<summary><strong>Protocol-Specific Tests (2 tests)</strong></summary>
+
+- CoW Swap settlement contracts
+- Uniswap Universal Router
+
+</details>
+
+<details>
+<summary><strong>DeFi Recipient Tests (3 tests)</strong></summary>
+
+- Yield vault as recipient
+- Bridge contract as recipient
+- Timelock as recipient
+
+</details>
+
+<details>
+<summary><strong>Permission Tests (2 tests)</strong></summary>
+
+- Non-owner cannot set address type
+- Cannot set zero address
+
+</details>
+
+<details>
+<summary><strong>Advanced Edge Cases (18 tests)</strong></summary>
+
+- Self-transfer (no lottery)
+- Aggregator self-transfer (no lottery)
+- Address type change mid-transaction
+- Sandwich attack (all entries logged)
+- MEV bot marked as SwapOnly (no entry)
+- Circular transfers (no exploit)
+- Very deep aggregator chain (10 hops)
+- `transferFrom` EOA to EOA (no lottery)
+- `transferFrom` aggregator to user (triggers lottery)
+- Small amount (1 wei triggers lottery)
+- Max uint balance transfer
+- Rapid successive transfers (100 in same block)
+- Transfer to different smart wallet types
+- Nested smart wallet call with bundler origin
+- Batch transfer to multiple recipients
+- Zero address recipient (reverts)
+- Transfer to ShareOFT contract (allowed)
+- Lottery enabled toggle behavior
+
+</details>
+
+<details>
+<summary><strong>Fuzz Tests (2 tests)</strong></summary>
+
+- Random recipient addresses (256 runs)
+- Random amounts 1 wei to 1000 ETH (256 runs)
+
+</details>
+
+### Running Tests
+
+```bash
+# Run all lottery tests
+forge test --match-path "test/CreatorShareOFT.Lottery.t.sol" -v
+
+# Run all edge case tests
+forge test --match-path "test/CreatorShareOFT.EdgeCases.t.sol" -v
+
+# Run specific test
+forge test --match-test test_SmartWallet_CanParticipateInLottery -vvv
+```
+
+---
+
 ## Usage Examples
 
 ### For Creators
@@ -595,7 +784,7 @@ For the Vercel API surface, avoid “hidden” dynamic imports: add endpoints by
 ## Links
 
 - **Website**: [erc4626.fun](https://erc4626.fun)
-- **GitHub**: [github.com/wenakita/CreatorVault](https://github.com/wenakita/CreatorVault)
+- **GitHub**: [github.com/wenakita/4626](https://github.com/wenakita/4626)
 - **Docs**: [docs.erc4626.fun](https://docs.erc4626.fun) *(coming soon)*
 - **Coinbase Creator Coins**: [Coinbase Ecosystem](https://www.coinbase.com)
 - **LayerZero**: [docs.layerzero.network](https://docs.layerzero.network)
