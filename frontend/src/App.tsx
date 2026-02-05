@@ -150,7 +150,8 @@ function AppAllowlistGatePrivyEnabled() {
   const allowQuery = useCreatorAllowlist(isBypassAdmin ? null : effectiveAddress)
   const allowed = allowQuery.data?.allowed === true
   const isPublicWaitlistRoute = location.pathname === '/waitlist' || location.pathname === '/leaderboard'
-  const isAdminRoute = location.pathname === '/admin' || location.pathname.startsWith('/admin/')
+  const isMiniappRoute = location.pathname === '/miniapp' || location.pathname.startsWith('/miniapp/')
+  const isAdminRoute = location.pathname === '/admin' || location.pathname.startsWith('/admin/') || isMiniappRoute
   const marketingUrl = getMarketingBaseUrl()
   const isLocalDev =
     typeof window !== 'undefined' &&
@@ -412,6 +413,7 @@ function App() {
             <Route path="/coin/*" element={<ExternalRedirect to={`${appBase}/coin`} />} />
             <Route path="/creator/*" element={<ExternalRedirect to={`${appBase}/creator`} />} />
             <Route path="/admin/*" element={<AppRedirect base={appBase} />} />
+            <Route path="/miniapp" element={<AppRedirect base={appBase} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         ) : (
@@ -473,6 +475,7 @@ function App() {
                   <Route path="/admin/waitlist" element={<AdminWaitlist />} />
                   <Route path="/admin/miniapp" element={<AdminMiniApp />} />
                   <Route path="/admin/deploy-strategies" element={<AdminDeployStrategies />} />
+                  <Route path="/miniapp" element={<AdminMiniApp />} />
                   <Route path="/vote" element={<GaugeVoting />} />
                   <Route path="/activate-akita" element={<Navigate to="/deploy" replace />} />
                   <Route path="/auction/bid/:address" element={<AuctionBid />} />
