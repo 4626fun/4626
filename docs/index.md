@@ -1,62 +1,69 @@
 ---
-title: 4626 Protocol
+title: CreatorVault
 sidebar_position: 1
 slug: /
 ---
 
-# 4626 Protocol
+# CreatorVault
 
-4626 is a DeFi protocol for tokenized creator vaults on Base. It transforms Zora Creator Coins into yield-generating, cross-chain capable vault shares with integrated lottery mechanics and ve(3,3) governance.
+**Zora coin + Smart Wallet + Farcaster identity + Base groupchats = the creator economy OS on Base.**
 
----
+CreatorVault is the **Base-native creator finance layer** that turns **Zora Creator Coins (Coinbase Creator Coins)** into composable, onchain "creator economies" with FriendTech-like loops: discover → take action → share → engage.
 
-## What 4626 does
+## What is CreatorVault?
 
-| Problem | Solution |
-|---------|----------|
-| Creator tokens are illiquid | ERC-4626 vaults with automated yield strategies |
-| Token launches favor insiders | Continuous Clearing Auction for fair price discovery |
-| Assets locked to single chain | LayerZero OFT for cross-chain transfers |
-| Passive holding is unrewarding | ve(3,3) voting directs jackpot probability |
-| DeFi is complex | Account abstraction for 1-click vault activation |
+In one click, creators deploy institutional-grade **ERC-4626 vault** infrastructure (Yearn V3 architecture) with:
 
----
+- Cross-chain **LayerZero V2 OFT** shares
+- Pluggable **yield strategies**
+- A **6.9% trading-fee lottery** (on all DEX trades) powered by **Chainlink VRF**
+- Fair launch via **Uniswap CCA**
+- Execution through **EIP-4337** account abstraction (optimized for Coinbase Smart Wallet)
 
-## Documentation
+## Core Features
 
-| Section | Description |
+| Feature | Description |
 |---------|-------------|
-| [Overview](/overview) | Protocol architecture and core concepts |
-| [Contracts](/contracts) | Smart contract documentation |
-| [Guides](/guides) | Step-by-step tutorials |
-| [Operations](/operations) | Deployment and automation |
-| [Governance](/governance) | ve(3,3) voting system |
-| [Reference](/reference) | Addresses, glossary, and technical details |
+| **One-Click Deployment** | Deploy vault + wrapper + OFT + oracle + CCA in a single gas-free transaction |
+| **Omnichain Shares** | LayerZero V2 OFT enables share tokens on 8+ chains |
+| **Pluggable Yield** | ERC-4626 vault supports multiple strategies |
+| **Fair Launch** | Uniswap Continuous Clearing Auction for transparent price discovery |
+| **Instant Lottery** | 6.9% fee on trades funds Chainlink VRF lottery |
+| **Security** | Virtual shares offset, flash loan protection, anti-whale guards |
 
----
+## Quick Links
 
-## Quick links
+- [Getting Started](/getting-started) - Installation and deployment guide
+- [Architecture](/architecture) - How CreatorVault works under the hood
+- [Tokenomics](/tokenomics) - Fee structure and lottery mechanics
+- [Security](/security) - Security features and audits
+- [API Reference](/api) - Auto-generated contract and frontend documentation
 
-**For developers:**
-- [Contract architecture](/overview/architecture)
-- [Token model](/overview/token-model)
-- [Strategy system](/contracts/strategies)
+## Tech Stack
 
-**For operators:**
-- [Deploy a vault](/guides/deploy-vault)
-- [Pre-launch checklist](/operations/deployment/pre-launch)
-- [Automation](/operations/automation)
+- **Solidity 0.8.20** - Smart contracts
+- **LayerZero V2** - Cross-chain messaging
+- **Chainlink VRF 2.5** - Lottery randomness
+- **Uniswap V4** - Continuous Clearing Auction + liquidity
+- **EIP-4337 / EIP-5792** - Account abstraction + batching
+- **Yearn V3** - Vault architecture
 
-**For integrators:**
-- [API reference](/api)
-- [Contract addresses](/reference/addresses)
+## First Deployment: akita
 
----
+akita is the first Creator Coin to launch with CreatorVault:
 
-## Source
+| Item | Value |
+|------|-------|
+| **Creator Coin** | akita (Base) |
+| **Token Address** | `0x5b674196812451b7cec024fe9d22d2c0b172fa75` |
+| **Vault Symbol** | ▢AKITA |
+| **OFT Symbol** | ■AKITA |
+| **DEX Pair** | akita/ZORA (Uniswap V4, 3% fee tier) |
 
-Documentation source lives in `4626/docs/`. The `apps/docs-site/docs/` directory is generated.
+## Links
 
-API documentation is auto-generated from:
-- Contract NatSpec comments via `forge doc`
-- Frontend TypeScript via `typedoc`
+- **Website**: [erc4626.fun](https://erc4626.fun)
+- **GitHub**: [github.com/wenakita/4626](https://github.com/wenakita/4626)
+- **Coinbase Creator Coins**: [Coinbase Ecosystem](https://www.coinbase.com)
+- **LayerZero**: [docs.layerzero.network](https://docs.layerzero.network)
+- **Uniswap CCA**: [cca.uniswap.org](https://cca.uniswap.org)

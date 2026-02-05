@@ -5,24 +5,22 @@ sidebar_position: 1
 
 # Overview
 
-This section introduces the 4626 protocol architecture, token model, and core concepts.
+CreatorVault is the **Base-native creator finance layer** that turns **Zora Creator Coins** into composable, onchain "creator economies."
 
----
+## What is CreatorVault?
 
-## Contents
+CreatorVault provides a complete vault-as-a-service platform for Creator Coins. Each feature is designed to maximize creator revenue and community engagement:
 
-| Document | Description |
-|----------|-------------|
-| [Introduction](./introduction) | What 4626 is and how it works |
-| [Token Model](./token-model) | Understanding TOKEN, ▢TOKEN, and ■TOKEN |
-| [Architecture](./architecture) | System design and contract relationships |
-| [Fee Flow](./fee-flow) | How fees are collected and distributed |
+- **One-Click Deployment**: Deploy vault + wrapper + OFT + oracle + CCA in a single gas-free transaction
+- **Omnichain Shares**: LayerZero V2 OFT enables share tokens on 8+ chains
+- **Pluggable Yield**: ERC-4626 vault supports multiple strategies
+- **Fair Launch**: Uniswap Continuous Clearing Auction for transparent price discovery
+- **Instant Lottery**: 6.9% fee on trades funds Chainlink VRF lottery
+- **Security**: Virtual shares offset, flash loan protection, anti-whale guards
 
----
+## Quick Links
 
-## Start here
-
-1. Read the [Introduction](./introduction) for a complete overview
-2. Understand the [Token Model](./token-model)
-3. Study the [Architecture](./architecture) for technical details
-4. Learn about [Fee Flow](./fee-flow) for economics
+- [Introduction](/overview/introduction) - Detailed introduction
+- [Architecture](/overview/architecture) - System architecture
+- [Token Model](/overview/token-model) - How tokens work
+- [Fee Flow](/overview/fee-flow) - How fees are distributed

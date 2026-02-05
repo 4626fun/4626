@@ -5,138 +5,68 @@ sidebar_position: 2
 
 # Glossary
 
-Key terms and definitions used throughout 4626 documentation.
+Key terms and definitions for CreatorVault.
 
----
+## A
 
-## Tokens
+**Account Abstraction (AA)**: ERC-4337 standard enabling smart contract wallets with features like gas sponsorship and batched transactions.
 
-### TOKEN
-The underlying creator coin. Issued by Zora's Creator Coin platform. This is what users deposit into vaults.
+## B
 
-### ▢TOKEN (Vault Shares)
-ERC-4626 vault share token issued when depositing TOKEN. Represents proportional ownership of vault assets. The ▢ symbol is pronounced "box" or "vault share."
+**Basis Points (BPS)**: Unit of measurement where 10,000 BPS = 100%. Used for fee calculations.
 
-### ■TOKEN (Wrapped Shares / ShareOFT)
-LayerZero OFT wrapper around vault shares. Enables cross-chain transfers and DEX trading. The ■ symbol is pronounced "filled box" or "share token."
+## C
 
-### ve4626
-Vote-escrowed 4626 token. Created by locking ■4626 or ▢4626. Provides voting power in governance.
+**CCA (Continuous Clearing Auction)**: Uniswap V4 auction mechanism for fair price discovery.
 
----
+**Creator Coin**: Underlying token created by a creator (e.g., via Zora).
 
-## Contracts
+## E
 
-### CreatorOVault
-The main ERC-4626 tokenized vault. Accepts TOKEN deposits, issues ▢TOKEN shares, deploys to strategies.
+**ERC-4626**: Token vault standard defining deposit, withdraw, and share mechanics.
 
-### CreatorOVaultWrapper
-Converts between ▢TOKEN and ■TOKEN. Normalizes the 1000x decimals offset.
+**ERC-4337**: Account abstraction standard for smart contract wallets.
 
-### CreatorShareOFT
-LayerZero OFT implementation for ■TOKEN. Implements buy fee and lottery integration.
+## G
 
-### CreatorGaugeController
-Fee distribution hub. Receives trading fees and splits to lottery, burn, and voters.
+**Gauge Controller**: Contract that receives trading fees and splits them according to configuration.
 
-### VaultGaugeVoting
-Weekly epoch voting contract. ve4626 holders vote to direct lottery probability.
+## L
 
----
+**LayerZero**: Cross-chain messaging protocol enabling omnichain tokens.
 
-## Mechanisms
+**Lottery**: Instant win system powered by Chainlink VRF.
 
-### CCA (Continuous Clearing Auction)
-Uniswap's fair launch mechanism. All bidders pay the same clearing price. No sniping or MEV advantages.
+## O
 
-### Clearing Price
-The price at which supply meets demand in a CCA. All filled bids pay this price regardless of their max bid.
+**OFT (Omnichain Fungible Token)**: LayerZero standard for cross-chain tokens.
 
-### Graduation
-When a CCA auction ends and converts to a V4 liquidity pool.
+## P
 
-### Price Per Share (PPS)
-The value of one vault share in terms of underlying assets. Calculated as totalAssets / totalSupply.
+**PPS (Price Per Share)**: Value of one vault share in terms of underlying tokens.
 
-### Profit Unlocking
-Gradual release of vault profits over time. Prevents manipulation of price per share.
+**Paymaster**: ERC-4337 contract that sponsors gas fees for users.
 
----
+## S
 
-## Governance
+**ShareOFT**: The OFT-wrapped vault shares (■TOKEN).
 
-### Epoch
-A 7-day voting period in the governance system. Starts Thursday 00:00 UTC.
+**Smart Wallet**: ERC-4337 compatible wallet (e.g., Coinbase Smart Wallet).
 
-### ve(3,3)
-Vote-escrow tokenomics model. Users lock tokens for voting power that decays over time. Combines with game theory for positive-sum outcomes.
+## T
 
-### Gauge
-A voting target that receives vote weight. In 4626, vaults are gauges.
+**TWAP (Time-Weighted Average Price)**: Price oracle mechanism resistant to manipulation.
 
-### Bribe
-External incentive deposited to attract votes for a specific vault.
+## V
 
-### Probability Direction
-Using votes to allocate lottery win probability to specific vaults.
+**Vault**: ERC-4626 contract holding creator coins and minting shares.
 
----
+**Vault Shares**: ERC-20 tokens representing ownership of vault (▢TOKEN).
 
-## DeFi Terms
+**ve4626**: Vote-escrow token for governance participation.
 
-### ERC-4626
-Ethereum standard for tokenized vaults. Defines deposit, withdraw, mint, redeem, and accounting functions.
+**VRF (Verifiable Random Function)**: Chainlink service providing provably fair randomness.
 
-### OFT (Omnichain Fungible Token)
-LayerZero standard for cross-chain fungible tokens. Enables seamless transfers between chains.
+## W
 
-### TVL (Total Value Locked)
-Total assets deposited in a protocol or vault.
-
-### APY (Annual Percentage Yield)
-Annualized return rate including compounding.
-
-### Slippage
-Difference between expected and executed trade price.
-
----
-
-## Security Terms
-
-### Decimals Offset
-Virtual shares added to vault accounting. Prevents first-depositor inflation attacks.
-
-### Flash Loan Protection
-Minimum delay between deposit and withdrawal. Prevents same-block manipulation.
-
-### Large Withdrawal Queue
-Queuing system for withdrawals above threshold. Prevents MEV extraction on big exits.
-
-### Inflation Attack
-Exploit where attacker manipulates share prices by depositing dust and inflating assets.
-
----
-
-## Basis Points
-
-A common unit in DeFi. 1 basis point = 0.01%.
-
-| Value | Percentage |
-|-------|------------|
-| 1 bps | 0.01% |
-| 100 bps | 1% |
-| 690 bps | 6.9% |
-| 1000 bps | 10% |
-| 10000 bps | 100% |
-
----
-
-## Chain IDs
-
-| Network | Chain ID | LZ EID |
-|---------|----------|--------|
-| Base | 8453 | 30184 |
-| Base Sepolia | 84532 | 40245 |
-| Ethereum | 1 | 30101 |
-| Arbitrum | 42161 | 30110 |
-| Optimism | 10 | 30111 |
+**Wrapper**: Contract that converts vault shares (▢TOKEN) to OFT tokens (■TOKEN).

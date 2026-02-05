@@ -1,242 +1,67 @@
 ---
-title: Launch a token
-sidebar_position: 3
+title: Launch Token
+sidebar_position: 1
 ---
 
-# Launch a token
+# Launch Your Token
 
-This guide covers launching ■TOKEN via Continuous Clearing Auction for fair price discovery.
+Guide to launching a new creator token with CreatorVault.
 
-**Prerequisites:**
-- Vault deployed and activated
-- ■TOKEN supply ready
-- CCA strategy configured
+## Prerequisites
 
----
+- Creator Coin deployed (e.g., via Zora)
+- 50,000,000 tokens for initial CCA deposit
+- Coinbase Smart Wallet (recommended) or EOA
 
-## Overview
+## Step 1: Prepare Your Tokens
 
-The CCA launch process:
+Ensure you have at least 50M tokens in your wallet for the initial CCA deposit.
 
-```
-1. Prepare ■TOKEN supply
-2. Configure CCA strategy
-3. Create auction
-4. Monitor during auction
-5. Complete after graduation
-6. Trading begins on V4
-```
+## Step 2: Navigate to Deploy
 
----
+Go to [erc4626.fun/deploy](https://erc4626.fun/deploy)
 
-## Preparation
+## Step 3: Connect Wallet
 
-### Have ■TOKEN ready
+Connect your Coinbase Smart Wallet (or other EIP-4337 wallet).
 
-Ensure sufficient ■TOKEN exists for the auction:
+## Step 4: Enter Token Address
 
-```solidity
-// Check supply
-uint256 balance = shareOFT.balanceOf(owner);
+Enter your Creator Coin contract address.
 
-// If needed, mint via deposit + wrap flow
-creatorCoin.approve(address(wrapper), amount);
-wrapper.deposit(amount, owner);
-```
+## Step 5: Configure Vault
 
-### Configure strategy
+- **Vault Name**: e.g., "akita Vault"
+- **Vault Symbol**: e.g., "▢AKITA"
+- **OFT Name**: e.g., "akita Share"
+- **OFT Symbol**: e.g., "■AKITA"
 
-```solidity
-CCALaunchStrategy strategy = new CCALaunchStrategy(
-    shareOFT,
-    owner
-);
+## Step 6: Deploy
 
-// Set recipients
-strategy.setFundsRecipient(treasury);    // Raised ETH
-strategy.setTokensRecipient(vault);      // Unsold tokens
+Click **"Deploy + Launch"** and sign the transaction.
 
-// Set V4 configuration
-strategy.setFeeRecipient(gaugeController);
-strategy.setTaxRateBps(690);             // 6.9% tax
-strategy.setPoolFeeTier(3000);           // 0.3% pool fee
-```
+With Coinbase Smart Wallet:
+- Single signature for all contracts
+- Gas sponsored by CDP paymaster
+- Atomic deployment (all-or-nothing)
 
----
+## Step 7: Start Auction
 
-## Create auction
+After deployment, your CCA auction will automatically start.
 
-### Transfer tokens to strategy
+## What Gets Deployed
 
-```solidity
-uint256 auctionAmount = 10_000_000e18; // 10M ■TOKEN
-shareOFT.transfer(address(strategy), auctionAmount);
-```
+| Contract | Purpose |
+|----------|---------|
+| CreatorOVault | ERC-4626 vault |
+| CreatorOVaultWrapper | OFT wrapping |
+| CreatorShareOFT | Cross-chain token |
+| CreatorGaugeController | Fee distribution |
+| CreatorOracle | Price tracking |
+| CCA Strategy | Fair launch auction |
 
-### Initialize auction
+## Next Steps
 
-```solidity
-address auction = strategy.createAuction(
-    auctionAmount,
-    0.0001 ether,    // Min price per token
-    0.01 ether,      // Max price per token
-    7 days,          // Duration
-    ""               // Config data
-);
-```
-
-### Auction parameters
-
-| Parameter | Description | Typical value |
-|-----------|-------------|---------------|
-| Amount | ■TOKEN to auction | 10-50% of supply |
-| Min price | Floor price | Based on creator coin |
-| Max price | Ceiling price | 10-100x min |
-| Duration | Auction length | 7 days |
-
----
-
-## During auction
-
-### Monitor progress
-
-```solidity
-IContinuousClearingAuction auction = IContinuousClearingAuction(auctionAddress);
-
-// Current state
-uint256 clearingPrice = auction.clearingPrice();
-uint256 raised = auction.currencyRaised();
-bool graduated = auction.isGraduated();
-```
-
-### Keeper tasks
-
-```solidity
-// Trigger checkpoints periodically
-strategy.checkpoint();
-```
-
-### User bidding
-
-Users submit bids via the auction:
-
-```solidity
-// User bids 1 ETH with max price
-auction.submitBid{value: 1 ether}(
-    maxPrice,        // Max ETH per token willing to pay
-    tokenAmount,     // Tokens desired
-    bidder,          // Bid owner
-    0,               // prevTickPrice (0 for simple bids)
-    ""               // Hook data
-);
-```
-
----
-
-## After graduation
-
-### Check graduation
-
-```solidity
-require(strategy.isGraduated(), "Auction not graduated");
-```
-
-### Complete auction
-
-```solidity
-// Configures V4 pool with tax hook
-strategy.completeAuction();
-```
-
-### Sweep funds
-
-```solidity
-// Send raised ETH to recipient
-strategy.sweepCurrency();
-
-// Return unsold tokens
-strategy.sweepUnsoldTokens();
-```
-
----
-
-## Post-launch
-
-### V4 pool active
-
-Trading begins automatically on the V4 pool with:
-- 6.9% tax on buys
-- Liquidity from auction
-- Price based on clearing price
-
-### Verify tax hook
-
-```solidity
-// Tax hook should be configured
-// Fees route to GaugeController
-// Lottery entries activate for buyers
-```
-
-### Monitor trading
-
-```solidity
-// Check fee collection
-uint256 pending = gaugeController.pendingFees();
-
-// Trigger distribution if needed
-if (pending >= threshold) {
-    gaugeController.distribute();
-}
-```
-
----
-
-## Timeline
-
-| Phase | Duration | Activities |
-|-------|----------|------------|
-| Setup | 1-2 days | Deploy, configure, transfer tokens |
-| Auction | 7 days | Users bid, checkpoints run |
-| Graduation | Automatic | V4 pool created |
-| Post-launch | Ongoing | Trading, fee distribution |
-
----
-
-## Best practices
-
-### Pricing
-
-- Research comparable tokens
-- Set min price conservatively
-- Max price should allow upside
-
-### Communication
-
-- Announce auction dates clearly
-- Explain bidding mechanics
-- Share auction address widely
-
-### Monitoring
-
-- Run checkpoints every few hours
-- Watch for unusual activity
-- Be ready to answer questions
-
----
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Low participation | Extend marketing, check pricing |
-| Graduation fails | Ensure V4 contracts configured |
-| Tax hook not working | Verify configuration post-graduation |
-| Sweep fails | Wait for graduation to complete |
-
----
-
-## Related
-
-- [Auction concept](/concepts/auction) - How CCA works
-- [CCA Strategy](/contracts/strategies/cca-launch) - Contract details
-- [Fee flow](/overview/fee-flow) - Post-launch economics
+- Monitor your auction at `/auction/{token}`
+- Configure additional strategies
+- Set up voter rewards (optional)

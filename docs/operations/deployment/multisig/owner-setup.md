@@ -1,236 +1,30 @@
 ---
-title: Owner setup
+title: Owner Setup
+sidebar_position: 3
 ---
 
-# Owner setup
+# Multisig Owner Setup
 
-How to configure multisig ownership for deployed strategies.
+Configure Safe multisig as contract owner.
 
-The `StrategyDeploymentBatcher` accepts a custom `owner` parameter, allowing multisig wallets to own all deployed strategies.
+## Role Assignment
 
----
-
-## Your multisig
-
-```
-0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3
-```
-
----
-
-## What changed
-
-### Before:
-```solidity
-function batchDeployStrategies(
-    address underlyingToken,
-    address quoteToken,
-    address creatorVault,
-    address _ajnaFactory,
-    uint24 v3FeeTier,
-    uint160 initialSqrtPriceX96
-) external
-```
-**Owner was:** `msg.sender` (the caller)
-
-### After:
-```solidity
-function batchDeployStrategies(
-    address underlyingToken,
-    address quoteToken,
-    address creatorVault,
-    address _ajnaFactory,
-    uint24 v3FeeTier,
-    uint160 initialSqrtPriceX96,
-    address owner  //  NEW PARAMETER
-) external
-```
-**Owner is:** The specified `owner` address (your multisig)
-
----
-
-## How to deploy
-
-### Transaction 1: Deploy All Strategies
-```solidity
-DeploymentResult memory result = batcher.batchDeployStrategies(
-    creatorToken,                                           // CREATOR token
-    0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913,            // USDC on Base
-    creatorVault,                                           // Your CreatorOVault
-    ajnaFactory,                                            // Ajna factory (or address(0))
-    3000,                                                   // 0.3% fee tier
-    sqrtPriceX96,                                           // Initial price
-    0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3             //  YOUR MULTISIG
-);
-```
-
-**Result:**
-- CharmAlphaVault deployed (`pendingGovernance = your multisig`)
-- No separate CharmAlphaStrategy deployed (rebalance is embedded in CharmAlphaVaultDeploy)
-- CreatorCharmStrategy deployed (`owner = your multisig`)
-- AjnaStrategy deployed (`owner = your multisig`)
-
----
-
-### Transaction 2: Accept Governance (FROM MULTISIG)
-
-**Important:** This transaction MUST be sent from your multisig wallet!
+Assign roles from Safe:
 
 ```solidity
-CharmAlphaVault(result.charmVault).acceptGovernance();
+// Set management role
+vault.setManagement(managementAddress);
+
+// Set keeper role
+vault.setKeeper(keeperAddress);
+
+// Set emergency admin
+vault.setEmergencyAdmin(emergencyAddress);
 ```
 
-**After this:**
-- Your multisig is now the full owner of CharmAlphaVault
-- You can adjust fees, caps, strategy, etc.
+## Security Best Practices
 
----
-
-## Ownership summary
-
-| Contract | Owner | Type |
-|----------|-------|------|
-| **CharmAlphaVault** | Your Multisig | Governance (after accepting) |
-| **CharmAlphaStrategy** | Not deployed | Embedded |
-| **CreatorCharmStrategy** | Your Multisig | Owner |
-| **AjnaStrategy** | Your Multisig | Owner |
-
----
-
-## Why multisig is better
-
-| Aspect | EOA | Multisig |
-|--------|-----|----------|
-| **Security** | Single point of failure | Multiple signers required |
-| **Key Loss** | If lost, funds gone forever | Other signers can recover |
-| **Compromise** | One key = full access | Attacker needs multiple keys |
-| **Transparency** | No visibility | All signers see transactions |
-| **Accountability** | No audit trail | Who signed what is recorded |
-
-**Your multisig (`0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3`) is the RIGHT choice!** 
-
----
-
-## Complete deployment flow
-
-```
-┌─────────────────────────────────────────────────────┐
-│ Step 1: ANYONE calls batchDeployStrategies()       │
-│ (Can be EOA, can be multisig, can be different)    │
-└─────────────────────────────────────────────────────┘
-                      ↓
-        ┌────────────────────────────┐
-        │  Contracts Deployed:       │
-        │  - CharmAlphaVault         │
-        │  - (no separate CharmAlphaStrategy) │
-        │  - CreatorCharmStrategy    │
-        │  - AjnaStrategy            │
-        └────────────────────────────┘
-                      ↓
-        ┌────────────────────────────┐
-        │  Ownership Status:         │
-        │  pendingGovernance = 0x7d..│
-        │  keeper = 0x7d...          │
-        │  owner = 0x7d...           │
-        └────────────────────────────┘
-                      ↓
-┌─────────────────────────────────────────────────────┐
-│ Step 2: MULTISIG calls acceptGovernance()           │
-│ Must be called by: 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3 │
-└─────────────────────────────────────────────────────┘
-                      ↓
-        ┌────────────────────────────┐
-        │  MULTISIG NOW OWNS ALL  │
-        └────────────────────────────┘
-```
-
----
-
-## Important notes
-
-### 1. Accept Governance MUST Come From Multisig
-```solidity
-// WRONG - Called from different address
-EOA.call(charmVault.acceptGovernance())  // Will REVERT
-
-// CORRECT - Called from multisig
-Multisig(0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3).call(
-    charmVault.acceptGovernance()
-)
-```
-
-### 2. You Don't Need to Deploy From Multisig
-- Anyone can call `batchDeployStrategies()` (costs gas)
-- The `owner` parameter determines ownership
-- Multisig only needs to accept governance (cheap transaction)
-
-### 3. Ownership is Immediate for Most Contracts
-- **CreatorCharmStrategy:** Owned immediately 
-- **AjnaStrategy:** Owned immediately 
-- **CharmAlphaStrategy:** Not deployed (embedded) 
-- **CharmAlphaVault:** Requires acceptance 
-
----
-
-## Checklist
-
-- [ ] 1. Call `batchDeployStrategies()` with multisig address as `owner` parameter
-- [ ] 2. Note the returned `result.charmVault` address
-- [ ] 3. From your multisig, call `CharmAlphaVault(address).acceptGovernance()`
-- [ ] 4. Verify ownership by calling `CharmAlphaVault.governance()` → should return your multisig
-- [ ] 5. Test a governance function (like `setProtocolFee()`) from multisig 
-- [ ] 6. Add strategies to your CreatorOVault
-- [ ] 7. Start accepting deposits!
-
----
-
-## Example deployment script
-
-```javascript
-// Step 1: Deploy (can be from any address)
-const batcher = new ethers.Contract(batcherAddress, batcherABI, signer);
-const tx = await batcher.batchDeployStrategies(
-    creatorToken,
-    "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC
-    vaultAddress,
-    ajnaFactory,
-    3000,
-    sqrtPriceX96,
-    "0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3"  // Your multisig
-);
-const receipt = await tx.wait();
-
-// Parse event to get addresses
-const event = receipt.events.find(e => e.event === "StrategiesDeployed");
-const charmVaultAddress = event.args.result.charmVault;
-
-// Step 2: Accept from multisig (using Safe SDK or direct call)
-const charmVault = new ethers.Contract(
-    charmVaultAddress, 
-    charmVaultABI, 
-    multisigSigner  // Must be multisig signer
-);
-await charmVault.acceptGovernance();
-
-console.log("Multisig now owns CharmAlphaVault!");
-```
-
----
-
-## Security best practices
-
-1. **Use multisig for ownership** (you're doing this!)
-2. **Require multiple signers** (2-of-3 or 3-of-5 recommended)
-3. **Keep signer keys separate** (different hardware wallets)
-4. **Test on testnet first** (Base Sepolia)
-5. **Verify all contract addresses** before accepting governance
-6. **Document all transactions** for audit trail
-
----
-
-##  **YOU'RE ALL SET!**
-
-Your multisig `0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3` will own all deployed strategies!
-
-This is **much more secure** than using an EOA. Great decision! 🛡️
-
+- Owner: Multisig only
+- Management: Can be EOA or multisig
+- Keeper: Bot-friendly EOA
+- EmergencyAdmin: Hot wallet for quick response

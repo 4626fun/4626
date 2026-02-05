@@ -1,85 +1,34 @@
 ---
 title: Governance
-sidebar_position: 5
+sidebar_position: 6
 ---
 
 # Governance
 
-The protocol uses ve(3,3) governance where token holders lock assets for voting power and direct lottery probability to vaults.
+User-facing guide to CreatorVault governance.
 
----
+## ve(3,3) System
 
-## Why participate
+CreatorVault implements a ve(3,3) model for governance:
 
-| Benefit | Mechanism |
-|---------|-----------|
-| Voting power | Direct lottery probability to preferred vaults |
-| Fee share | Earn 9.61% of trading fees pro-rata |
-| Bribes | Protocols pay for your votes |
+- **ve4626** - Lock tokens for voting power
+- **Gauge Voting** - Direct probability budgets
+- **Voter Rewards** - Earn from trading fees
 
----
+## Participation
 
-## How it works
+1. **Lock tokens** in ve4626
+2. **Vote** on vault gauge allocations
+3. **Earn** 9.61% of trading fees
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant ve4626
-    participant GaugeVoting
-    participant Rewards
-    
-    User->>ve4626: lock(■TOKEN, 2 years)
-    ve4626-->>User: veNFT position
-    
-    User->>GaugeVoting: vote(vaults, weights)
-    
-    Note over GaugeVoting: Epoch ends (7 days)
-    
-    User->>Rewards: claim(epoch)
-    Rewards-->>User: ■TOKEN rewards
-```
+## Benefits
 
-1. **Lock** ■TOKEN or ▢TOKEN in ve4626 (7 days to 4 years)
-2. **Vote** for vaults each epoch (weekly)
-3. **Earn** rewards from fees and bribes
-4. **Claim** after epoch ends
+| Benefit | Description |
+|---------|-------------|
+| Voting power | Influence probability allocations |
+| Lottery boost | Up to 2.5x win chance multiplier |
+| Fee share | 9.61% of trading fees |
 
-Voting power decays linearly over the lock period.
+## Current Progress
 
----
-
-## Epochs
-
-Voting operates in 7-day epochs starting Thursday 00:00 UTC.
-
-- Vote during the epoch
-- Votes determine probability for that epoch
-- Claim rewards after epoch ends
-
----
-
-## Probability direction
-
-Vaults with more votes give their buyers higher lottery win rates.
-
-```
-Vault votes / Total votes = Probability boost
-```
-
----
-
-## Contracts
-
-| Contract | Purpose | Documentation |
-|----------|---------|---------------|
-| ve4626 | Lock tokens, get voting power | [API](/contracts/governance/ve4626) |
-| VaultGaugeVoting | Cast and track votes | [API](/contracts/governance/vault-gauge-voting) |
-| VoterRewardsDistributor | Claim fee rewards | [API](/api/contracts) |
-| BribeDepot | External vote incentives | [API](/api/contracts) |
-
----
-
-## Related
-
-- [Fee Flow](/overview/fee-flow) - How fees are distributed
-- [Lottery](/concepts/lottery) - Probability mechanics
+See [ve(3,3) Progress](/governance/ve33-progress) for implementation status.

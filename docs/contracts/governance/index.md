@@ -1,58 +1,25 @@
 ---
-title: Governance
-sidebar_position: 3
+title: Governance Contracts
+sidebar_position: 2
 ---
 
-# Governance contracts
+# Governance Contracts
 
-Smart contract documentation for the ve(3,3) governance system.
+Contracts that manage fee distribution and the ve(3,3) incentive system.
 
-For user-facing documentation, see [Governance](/governance).
-
----
-
-## Contracts
+## Overview
 
 | Contract | Purpose |
 |----------|---------|
-| [CreatorGaugeController](./gauge-controller) | Fee collection and distribution |
-| [VaultGaugeVoting](./vault-gauge-voting) | Weekly epoch voting |
-| [ve4626](./ve4626) | Vote-escrowed token |
-| VoterRewardsDistributor | Epoch reward claims |
-| BribeDepot | External vote incentives |
+| **[GaugeController](/contracts/governance/gauge-controller)** | Fee splitting and distribution |
+| **[VaultGaugeVoting](/contracts/governance/vault-gauge-voting)** | Vote-directed probability budgets |
+| **[ve4626](/contracts/governance/ve4626)** | Vote-escrow token |
+| **[VoterRewardsDistributor](/contracts/governance/voter-rewards-distributor)** | Voter reward claims |
 
----
+## Fee Split (Default)
 
-## Contract relationships
-
-```
-ve4626 holders
-      │
-      │ Vote for vaults
-      ▼
-┌─────────────────┐
-│ VaultGaugeVoting│
-│ (weekly epochs) │
-└─────────────────┘
-      │
-      │ Directs probability
-      ▼
-┌─────────────────┐      ┌─────────────────┐
-│ LotteryManager  │      │ GaugeController │
-│ (jackpot draws) │◄─────│ (fee routing)   │
-└─────────────────┘      └─────────────────┘
-                                │
-                                ▼
-                         ┌─────────────────┐
-                         │ VoterRewards    │
-                         │ Distributor     │
-                         └─────────────────┘
-```
-
----
-
-## Related
-
-- [Governance](/governance) - User-facing documentation
-- [Fee Flow](/overview/fee-flow) - Distribution mechanics
-- [Lottery](/concepts/lottery) - Probability direction
+| Allocation | Percentage | Description |
+|------------|------------|-------------|
+| Lottery | 69% | Instant lottery prize pool |
+| Burn | 21.39% | Increases PPS for holders |
+| Voter Rewards | 9.61% | Distributed to ve4626 voters |

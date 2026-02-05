@@ -1,54 +1,24 @@
 ---
-title: Core contracts
+title: Core Contracts
 sidebar_position: 1
 ---
 
-# Core contracts
+# Core Contracts
 
-The core contracts implement the fundamental vault and token system.
+The foundational contracts that power CreatorVault.
 
----
+## Overview
 
-## Contracts
+| Contract | Purpose |
+|----------|---------|
+| **[CreatorRegistry](/contracts/core/creator-registry)** | Central registry for all platform contracts |
+| **[CreatorOVault](/contracts/core/creator-ovault)** | ERC-4626 vault for creator coins |
+| **[CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper)** | Wraps vault shares into OFT |
+| **[CreatorShareOFT](/contracts/core/creator-share-oft)** | LayerZero OFT for cross-chain transfers |
 
-| Contract | Description |
-|----------|-------------|
-| [CreatorOVault](./creator-ovault) | ERC-4626 tokenized vault |
-| [CreatorOVaultWrapper](./creator-ovault-wrapper) | ▢TOKEN ↔ ■TOKEN converter |
-| [CreatorShareOFT](./creator-share-oft) | LayerZero OFT for cross-chain |
+## Deployment Order
 
----
-
-## Relationships
-
-```
-                TOKEN (Creator Coin)
-                        │
-                        ▼
-               ┌─────────────────┐
-               │  CreatorOVault  │◄──── Yield Strategies
-               │   (ERC-4626)    │
-               │   [▢TOKEN]      │
-               └─────────────────┘
-                        │
-                        ▼
-               ┌─────────────────┐
-               │     Wrapper     │
-               └─────────────────┘
-                        │
-                        ▼
-               ┌─────────────────┐
-               │ CreatorShareOFT │◄──── LayerZero
-               │   [■TOKEN]      │◄──── DEX Trading
-               └─────────────────┘◄──── CCA Auction
-```
-
----
-
-## Token flow
-
-1. User deposits TOKEN → Vault mints ▢TOKEN
-2. User wraps ▢TOKEN → Wrapper mints ■TOKEN
-3. ■TOKEN can be traded, bridged, or auctioned
-4. User unwraps ■TOKEN → Wrapper burns, returns ▢TOKEN
-5. User withdraws ▢TOKEN → Vault burns, returns TOKEN
+1. **CreatorRegistry** - Deploy first (shared infrastructure)
+2. **CreatorOVault** - Per-creator vault
+3. **CreatorOVaultWrapper** - Links vault to OFT
+4. **CreatorShareOFT** - Enables cross-chain and trading fees

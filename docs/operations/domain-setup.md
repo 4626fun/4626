@@ -1,54 +1,33 @@
 ---
 title: Domain Setup
+sidebar_position: 3
 ---
 
 # Domain Setup
 
-## Current Domain
+Configure custom domains for your CreatorVault deployment.
 
-**Production domain:** `4626.fun`
+## Vercel Setup
 
-- Frontend: https://4626.fun
-- Documentation: https://docs.4626.fun
+1. Add domain in Vercel project settings
+2. Configure DNS records
+3. Enable HTTPS
 
-## Farcaster Mini App Requirements (must pass)
+## DNS Configuration
 
-### Canonical domain
+| Type | Name | Value |
+|------|------|-------|
+| A | @ | 76.76.21.21 |
+| CNAME | www | cname.vercel-dns.com |
 
-- Use **apex** `4626.fun` as canonical.
-- Avoid `4626.fun` → `www.4626.fun` redirects (Farcaster tooling expects the manifest on the exact signed domain).
+## SSL Certificate
 
-### Manifest serving
+Vercel automatically provisions SSL certificates.
 
-Ensure the manifest is reachable at the exact domain you signed:
+## Environment Variables
 
-- `https://4626.fun/.well-known/farcaster.json`
-  - HTTP **200**
-  - `Content-Type: application/json`
-  - **No redirects**
-
-Quick check:
+Update `VITE_APP_URL` for production:
 
 ```bash
-curl -s -D - https://4626.fun/.well-known/farcaster.json -o /dev/null | sed -n '1,20p'
+VITE_APP_URL=https://yourdomain.com
 ```
-
-### Embed meta tag
-
-The root HTML must contain a valid Mini App embed tag (not legacy-only):
-
-- `meta name="fc:miniapp"` JSON must use `"version":"1"` (not `"next"`).
-
-## DNS configuration
-
-The domain is configured via Vercel with automatic SSL/TLS provisioning.
-
-## Historical Notes
-
-Legacy domain setup documentation (referencing old `creatorvault.fun` domain) has been archived to `_archive/`. These files are retained for reference only and do not reflect current infrastructure.
-
-Archived files:
-- `_archive/CLOUDFLARE_SETUP.md`
-- `_archive/CUSTOM_DOMAIN_SETUP.md`
-- `_archive/DOMAIN_SETUP_FINAL.md`
-- `_archive/VERCEL_PROJECT_FIX.md`

@@ -1,27 +1,28 @@
 ---
-title: Create2 Registry
+title: CREATE2 Registry
+sidebar_position: 4
 ---
 
-# CREATE2 Registry Deployment
+# CREATE2 Registry
 
-This repo deploys `CreatorRegistry` via CREATE2 for deterministic addresses across chains.
+Deterministic contract deployment using CREATE2.
 
-## Deterministic address requirements
-- Use the EIP-2470 factory at `0x4e59b44847b379578588920cA78FbF26c0B4956C`
-- Use the same salt on every chain
-- Keep the init code identical (bytecode + constructor args)
+## Overview
 
-Any change to the owner address or compiler settings changes the init code hash.
+CREATE2 enables deploying contracts to the same address across chains.
 
-## Vanity salt search
-Use `script/FindRegistryCreate2Salt.s.sol` to search for a salt that yields a vanity address:
+## Usage
 
+```solidity
+// Compute deterministic address
+address predicted = factory.computeAddress(salt, bytecodeHash);
+
+// Deploy using CREATE2
+factory.deploy(salt, bytecode);
 ```
-SALT_START=0 SALT_ITERS=1000000 forge script script/FindRegistryCreate2Salt.s.sol:FindRegistryCreate2Salt -vvvv
-```
 
-Copy the salt into `REGISTRY_SALT` in `script/DeployBaseMainnet.s.sol` before deploying.
+## Benefits
 
-## AA deployment
-Account abstraction is optional for protocol deployments. Deterministic CREATE2 does not require AA.
-Use AA/bundlers only if you want a single-click or paymaster-managed deploy flow.
+- Same contract address on all chains
+- Predictable deployment addresses
+- Easier cross-chain configuration

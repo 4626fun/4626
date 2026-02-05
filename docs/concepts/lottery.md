@@ -3,64 +3,91 @@ title: Lottery
 sidebar_position: 3
 ---
 
-# Lottery
+# Instant Lottery
 
-The lottery rewards random buyers with jackpot prizes funded by trading fees.
+CreatorVault features an instant lottery powered by Chainlink VRF where every trade is a chance to win.
 
----
+## How It Works
 
-## How it works
+1. **Trade** any amount of ■TOKEN on a DEX
+2. **Win chance calculated** based on trade size
+3. **Chainlink VRF** generates random number instantly
+4. **Winner (if lucky)** receives 69% of prize pool
+5. **Prize paid** in vault shares from ALL active vaults
 
-1. User buys ■TOKEN on a DEX
-2. Buy automatically enters the lottery
-3. 69% of the 6.9% buy fee funds the jackpot
-4. When jackpot threshold is reached, a random winner is selected via Chainlink VRF
-5. Winner receives prize in vault shares
+## Win Probability
 
----
+**Formula**: For every **$1 traded** = **0.0004% instant win chance**
 
-## Probability direction
+| Trade Size | Win Chance |
+|------------|------------|
+| $1 | 0.0004% |
+| $10 | 0.004% |
+| $100 | 0.04% |
+| $1,000 | 0.4% |
+| $10,000 | 4% |
 
-ve4626 holders vote weekly to direct probability to specific vaults. Vaults with more votes give their buyers higher win rates.
+Each trade is an **independent roll** - win or lose is determined immediately.
 
-| Vote share | Effect |
-|------------|--------|
-| 0% | Base probability only |
-| 10% | +10% relative boost |
-| 50% | +50% relative boost |
+## Prize Pool
 
-See [Governance](/governance) for voting mechanics.
+### How It Grows
 
----
+69% of the 6.9% trading fee goes to the lottery prize pool:
 
-## Eligibility
+| Daily Volume | Total Fees | To Lottery |
+|--------------|------------|------------|
+| $100K | $6,900 | ~$4,761 |
+| $1M | $69,000 | ~$47,610 |
+| $10M | $690,000 | ~$476,100 |
 
-Only EOAs can win. Contracts are excluded to prevent gaming.
+### What Winners Receive
 
----
+Winners receive **69% of the accumulated jackpot** in **vault shares from ALL active creator vaults**.
 
-## Jackpot distribution
+This means a diversified portfolio:
+- ■AKITA shares
+- ■DRAGON shares (if active)
+- ■BRET shares (if active)
+- etc.
 
-Distribution triggers when:
-- Reserve exceeds threshold (configurable)
-- Minimum interval has passed since last draw
+## Chainlink VRF
 
-Winners receive vault shares (■TOKEN or ▢TOKEN) which can be redeemed or held for yield.
+**Chainlink VRF 2.5** provides provably fair randomness:
 
----
+- Cryptographically verifiable
+- Cannot be manipulated
+- Results auditable onchain
+- Instant response per trade
 
-## Security
+## Transparency
 
-| Protection | Purpose |
-|------------|---------|
-| Chainlink VRF | Verifiable, unpredictable randomness |
-| EOA-only | Prevents contract gaming |
-| Amount-weighted entries | Prevents dust spam |
+| Data | Verification |
+|------|--------------|
+| Trade volume | Onchain (ShareOFT transfers) |
+| Win probability | Math: (USD volume) × 0.0004% |
+| VRF result | Chainlink VRF logs |
+| Payout amount | Onchain (GaugeController) |
 
----
+## Boosts (Optional)
 
-## Related
+The ve(3,3) system enables probability boosts:
 
-- [Fee flow](/overview/fee-flow) - How fees fund the jackpot
-- [Governance](/governance) - Voting mechanics
-- [GaugeController](/contracts/governance/gauge-controller) - Contract API
+| Boost Type | Source | Max Boost |
+|------------|--------|-----------|
+| **Personal boost** | ve4626BoostManager | Up to 2.5x |
+| **Vote-directed boost** | VaultGaugeVoting | Weekly budget |
+
+## Smart Wallet Support
+
+The lottery supports ALL wallet types:
+
+| Wallet | Status |
+|--------|--------|
+| EOA | ✅ Supported |
+| Coinbase Smart Wallet | ✅ Supported |
+| Safe (Gnosis) | ✅ Supported |
+| Argent | ✅ Supported |
+| ERC-4337 Accounts | ✅ Supported |
+
+DEX aggregators (1inch, Paraswap, etc.) also work - the final recipient gets the lottery entry.

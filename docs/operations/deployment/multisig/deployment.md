@@ -1,73 +1,25 @@
 ---
-title: Deployment
+title: Multisig Deployment
+sidebar_position: 2
 ---
 
-# **DEPLOYMENT WITH MULTISIG OWNER**
+# Deploy with Multisig
 
-## Quick start
+Deploying CreatorVault with Safe multisig as owner.
 
-Your multisig will now own all deployed strategies!
+## Steps
 
----
+1. **Deploy Safe** - Create multisig wallet
+2. **Deploy contracts** - Set Safe as pending owner
+3. **Accept ownership** - Safe accepts ownership
+4. **Configure** - Execute config via Safe
 
-## Your multisig address
-
-```
-0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3
-```
-
----
-
-## Deployment command
+## Ownership Transfer
 
 ```solidity
-// Step 1: Deploy all strategies
-DeploymentResult memory result = batcher.batchDeployStrategies(
-    creatorToken,                                      // Your CREATOR token
-    0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913,       // USDC on Base
-    vaultAddress,                                      // Your CreatorOVault
-    ajnaFactory,                                       // Ajna factory (or address(0))
-    3000,                                              // 0.3% fee tier
-    sqrtPriceX96,                                      // Initial price (99/1 ratio)
-    0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3        //  YOUR MULTISIG
-);
+// From deployer EOA
+vault.transferOwnership(safeAddress);
 
-// No follow-up acceptance required for the automated path.
+// From Safe multisig
+vault.acceptOwnership();
 ```
-
----
-
-## What you get
-
-| Contract | Owner | Status |
-|----------|-------|--------|
-| **CharmAlphaVaultDeploy** | Your Multisig | Immediate |
-| **CreatorCharmStrategy** | Your Multisig | Immediate |
-| **AjnaStrategy** | Your Multisig | Immediate |
-
----
-
-## Why this is better
-
-**Multiple signers required** for any governance action  
-**No single point of failure** if one key is compromised  
-**Transparent audit trail** of all governance decisions  
-**Industry best practice** (used by all major DeFi protocols)
-
----
-
-##  **RESULT:**
-
-Your multisig `0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3` will control:
-- Protocol fees
-- Supply caps  
-- Strategy updates
-- Emergency functions
-- All governance parameters
-
-**Much more secure than a single EOA!** 🛡️
-
----
-
-See `MULTISIG_OWNER_SETUP.md` for complete details.
-

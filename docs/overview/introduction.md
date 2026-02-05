@@ -3,59 +3,49 @@ title: Introduction
 sidebar_position: 1
 ---
 
-# Introduction
+# Introduction to CreatorVault
 
-4626 creates tokenized vaults for Zora Creator Coins. Each vault is ERC-4626 compliant, generates yield through automated strategies, and supports cross-chain transfers via LayerZero.
+**Zora coin + Smart Wallet + Farcaster identity + Base groupchats = the creator economy OS on Base.**
 
----
+## The Vision
 
-## Core concepts
+CreatorVault unifies Zora coins, Smart Wallet AA execution, and Farcaster identity into a Base-native vault + incentive layer for creator economies.
 
-### Vaults
+In one click, creators deploy institutional-grade **ERC-4626 vault** infrastructure with:
 
-A vault accepts deposits of a creator coin and issues shares representing proportional ownership. The vault deploys assets to yield strategies and distributes returns to shareholders.
+- Cross-chain **LayerZero V2 OFT** shares
+- Pluggable **yield strategies**
+- A **6.9% trading-fee lottery** powered by **Chainlink VRF**
+- Fair launch via **Uniswap CCA**
+- Execution through **EIP-4337** account abstraction
 
-### Tokens
+## Core Principles
 
-| Symbol | Purpose |
-|--------|---------|
-| TOKEN | Creator coin (underlying asset) |
-| ▢TOKEN | Vault shares (receipt for deposits) |
-| ■TOKEN | Wrapped shares (cross-chain OFT) |
+### Provenance (Zora)
+Creator Coins and Content Coins are the discovery layer and identity anchor.
 
-See [Token model](/overview/token-model) for details.
+### Execution (Smart Wallet AA)
+Creators can deploy and operate vault infrastructure via EIP-4337/EIP-5792-style batching.
 
-### Strategies
+### Social Context (Farcaster → Base)
+Farcaster identity is used as a trust signal, and Base group chats are the natural coordination surface.
 
-**Launch:** CCA auctions ■TOKEN for ETH using Uniswap's Continuous Clearing Auction.
+## First Deployment
 
-**Yield:** Charm, Ajna, and V4 strategies deploy TOKEN for yield.
+akita is the first Creator Coin to launch with CreatorVault:
 
-### Fees
+| Item | Value |
+|------|-------|
+| **Creator Coin** | akita (Base) |
+| **Token Address** | `0x5b674196812451b7cec024fe9d22d2c0b172fa75` |
+| **Vault Symbol** | ▢AKITA |
+| **OFT Symbol** | ■AKITA |
 
-6.9% buy fee on DEX purchases, split between lottery (69%), burn (21.39%), and voters (9.61%). See [Fee flow](/overview/fee-flow).
+## Tech Stack
 
-### Governance
-
-ve4626 holders vote to direct lottery probability. See [Governance](/governance).
-
----
-
-## Key contracts
-
-| Contract | Purpose |
-|----------|---------|
-| CreatorOVault | Vault accepting deposits |
-| CreatorOVaultWrapper | Converts ▢TOKEN ↔ ■TOKEN |
-| CreatorShareOFT | Cross-chain OFT with fee/lottery |
-| CreatorGaugeController | Fee distribution |
-| VaultGaugeVoting | Probability voting |
-
----
-
-## Getting started
-
-1. [Architecture](/overview/architecture) - System design
-2. [Token model](/overview/token-model) - Three-token system
-3. [Deploy vault](/guides/deploy-vault) - Step-by-step guide
-4. [Launch token](/guides/launch-token) - CCA auction setup
+- **Solidity 0.8.20** - Smart contracts
+- **LayerZero V2** - Cross-chain messaging
+- **Chainlink VRF 2.5** - Lottery randomness
+- **Uniswap V4** - Continuous Clearing Auction + liquidity
+- **EIP-4337 / EIP-5792** - Account abstraction + batching
+- **Yearn V3** - Vault architecture

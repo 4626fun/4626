@@ -1,157 +1,99 @@
 ---
 title: CreatorShareOFT
-sidebar_position: 3
+sidebar_position: 4
 ---
 
 # CreatorShareOFT
 
-The user-facing tradeable token.
-Implements LayerZero OFT for cross-chain transfers with integrated buy fee and lottery entry.
-
-> **Summary**
-> - Wraps vault shares for DEX listing and bridging
-> - Collects 6.9% fee on DEX purchases
-> - Triggers lottery entries on qualifying trades
-
----
-
-## Source
-
-| Contract | Path |
-|----------|------|
-| CreatorShareOFT | [`contracts/services/messaging/CreatorShareOFT.sol`](https://github.com/wenakita/4626/blob/main/contracts/services/messaging/CreatorShareOFT.sol) |
-
----
+LayerZero V2 Omnichain Fungible Token for cross-chain transfers and fee collection.
 
 ## Purpose
 
-CreatorShareOFT (■[creatorCoin]) is the token users interact with directly.
-It wraps vault shares and adds protocol-level functionality.
+The CreatorShareOFT:
+- Enables cross-chain transfers via LayerZero V2
+- Collects 6.9% fee on all DEX trades
+- Routes fees to GaugeController
+- Triggers lottery entries for traders
 
-The ShareOFT is responsible for:
-- Serving as the tradeable asset on DEXs
-- Bridging tokens to other chains via LayerZero
-- Capturing 6.9% fee on DEX purchases
-- Notifying the lottery of qualifying trades
+## Key Functions
 
-The ShareOFT is not responsible for:
-- Custody of the underlying creatorCoin (vault handles this)
-- Fee distribution (GaugeController handles this)
-- Lottery winner selection (LotteryManager handles this)
+### LayerZero OFT
 
----
+```solidity
+// Send tokens cross-chain
+function send(
+    SendParam calldata sendParam,
+    MessagingFee calldata fee,
+    address refundAddress
+) external payable returns (MessagingReceipt memory);
 
-## Invariants
-
-1. Buy fee maximum is 10% (configurable, default 6.9%)
-2. Only the vault and authorized minters can mint tokens
-3. Total supply remains consistent across all chains
-4. Fee classification is deterministic based on address registration
-
----
-
-## Core Flows
-
-### Buy Fee Detection
-
-The following diagram shows how the contract detects buy transactions and applies fees.
-Transfers from swap addresses to normal addresses trigger the fee.
-
-```mermaid
-flowchart TD
-    Transfer[Transfer Event]
-    Transfer -->|check sender| Class{Sender Type?}
-    Class -->|SwapOnly| Buy[Buy Detected]
-    Class -->|Other| NoFee[No Fee]
-    Buy -->|6.9% to| GC[GaugeController]
-    Buy -->|93.1% to| User[Buyer]
-    Buy -->|notify| Lottery[LotteryManager]
+// Quote cross-chain send fee
+function quoteSend(
+    SendParam calldata sendParam,
+    bool payInLzToken
+) external view returns (MessagingFee memory);
 ```
 
-*This diagram shows fee detection only. Fee distribution is handled by GaugeController.*
+### Address Types
 
-### Address Classification
+```solidity
+// Set address type for fee calculation
+function setAddressType(address addr, OperationType opType) external onlyOwner;
 
-| Classification | Addresses | Behavior |
-|----------------|-----------|----------|
-| SwapOnly | DEX pools, routers | Outgoing transfers trigger fee |
-| NoFees | Vault, controller | Exempt from fees |
-| Unknown | User wallets | No fees (default) |
+// Operation types:
+// - Unknown (default, no fees)
+// - SwapOnly (DEX pools, aggregators - triggers fees)
+// - NoFees (exempt from fees)
+```
 
-Buy = transfer from SwapOnly → normal address.
-Sells and transfers incur no fee.
+### Configuration
 
-### Cross-Chain Transfer
+```solidity
+// Set the gauge controller for fee routing
+function setGaugeController(address controller) external onlyOwner;
 
-As a LayerZero OFT, tokens can bridge to any chain with a peer ShareOFT:
+// Enable/disable lottery
+function setLotteryEnabled(bool enabled) external onlyOwner;
 
-1. Burn tokens on source chain
-2. Send message via LayerZero
-3. Mint equivalent tokens on destination chain
+// Enable/disable fees
+function setFeesEnabled(bool enabled) external onlyOwner;
+```
 
----
+## Fee Collection Flow
 
-## Access Control
+```
+User trades on Uniswap V4 (marked as SwapOnly)
+   ↓
+transfer() hook detects SwapOnly sender
+   ↓
+6.9% fee calculated
+   ↓
+Fee sent to GaugeController
+   ↓
+Lottery entry triggered for buyer
+```
 
-| Role | Permissions |
-|------|-------------|
-| Owner | Set address classifications, fee parameters |
-| Minter | Mint and burn tokens |
-| LayerZero | Receive cross-chain messages |
+## Address Type Matrix
 
----
+| From \ To | Unknown | SwapOnly | NoFees |
+|-----------|---------|----------|--------|
+| **Unknown** | No fee | No fee | No fee |
+| **SwapOnly** | **6.9% fee + lottery** | No fee (hop) | No fee |
+| **NoFees** | No fee | No fee | No fee |
 
-## Failure Modes
+## Events
 
-### Common Reverts
+```solidity
+event FeesCollected(address indexed from, address indexed to, uint256 amount, uint256 fee);
+event LotteryEntryCreated(address indexed buyer, uint256 amount);
+event AddressTypeSet(address indexed addr, OperationType opType);
+```
 
-| Error | Cause |
-|-------|-------|
-| `NotAuthorized` | Non-minter attempting to mint |
-| `InvalidClassification` | Invalid address type |
-| `PeerNotSet` | Bridging to unconfigured chain |
+## DEX Aggregator Support
 
-### Operational Pitfalls
+DEX aggregators are marked as `SwapOnly`:
+- 1inch, Paraswap, LlamaSwap, CoW Swap
+- Uniswap Universal Router
+- Multi-hop routes
 
-- DEX addresses must be registered as SwapOnly before trading begins
-- Cross-chain peer addresses must be configured before bridging
-- Fee percentage changes affect ongoing trades
-
----
-
-## Integration Notes
-
-### For DEX Integrators
-
-- Register pool and router addresses as SwapOnly
-- Fee is deducted from the transfer amount
-- Buyer receives 93.1% of the transferred amount
-
-### For Bridge Users
-
-- Ensure peer ShareOFT is deployed on destination chain
-- Bridge fees paid in native gas token
-- Minting on destination requires LayerZero message confirmation
-
-### Non-Guarantees
-
-- Fee detection depends on correct address classification
-- Bridge timing depends on LayerZero confirmation
-- Lottery entry does not guarantee lottery win
-
----
-
-## Related Contracts
-
-- [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) — Minting on wrap
-- [CreatorGaugeController](/contracts/governance/gauge-controller) — Fee recipient
-- [CreatorLotteryManager](/contracts/services/lottery-manager) — Lottery entry
-
----
-
-### Implementation Reference
-
-This document describes design intent.
-For exact behavior and edge cases, refer to the Solidity implementation.
-
-[View on GitHub](https://github.com/wenakita/4626/blob/main/contracts/services/messaging/CreatorShareOFT.sol)
+The final recipient receives the lottery entry, not the aggregator.

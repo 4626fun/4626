@@ -1,128 +1,64 @@
 ---
 title: Architecture
-sidebar_position: 3
+sidebar_position: 2
 ---
 
-# System architecture
+# System Architecture
 
-Contract hierarchy and relationships in the 4626 protocol.
+CreatorVault's architecture is built for **provenance, identity, and execution**.
 
-<div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '1rem', opacity: 0.8}}>
-  <img src="/brands/base/base-logomark.svg" width="20" height="20" alt="Base" />
-  <span>Deployed on Base (Chain ID: 8453)</span>
-</div>
+## System Components
 
----
+Onchain, CreatorVault consists of:
 
-## Asset and strategy flow
+- **Shared infrastructure** (deployed once per chain, referenced via `CreatorRegistry`)
+- **Per-creator vault stack** (deployed per creator coin)
+- **Optional incentives layer** (ve(3,3) voting, voter rewards, bribes)
 
-This is the canonical diagram for understanding how assets move through the system.
+## Contract Relationships
 
 ```mermaid
-flowchart LR
-    U[Users]
-    V[CreatorOVault<br/>▢ creatorCoin]
-    C[creatorCoin]
-
-    subgraph Strategies["Yield Strategies"]
-        A[Ajna]
-        CH[Charm V3]
-        O[Other]
-    end
-
-    U -->|deposit creatorCoin| V
-    V -->|mint/burn ▢shares| U
-
-    V -->|allocate creatorCoin| C
-    C -->|supply creatorCoin| A
-    C -->|supply creatorCoin| CH
-    C -->|supply creatorCoin| O
+graph TD
+    A[Creator Coin] -->|deposit| B[CreatorOVault]
+    B -->|mint shares| C[▢TOKEN Vault Shares]
+    C -->|wrap| D[CreatorOVaultWrapper]
+    D -->|mint OFT| E[■TOKEN ShareOFT]
+    E -->|bridge| F[LayerZero V2]
+    E -->|trade fee| G[CreatorGaugeController]
+    G -->|69%| H[Lottery Prize Pool]
+    G -->|21.39%| I[Burn - PPS Increase]
+    G -->|9.61%| J[Voter Rewards]
+    H --> K[CreatorLotteryManager]
+    K -->|VRF| L[Chainlink VRF]
 ```
 
-### Legend
+## Deployment Flow
 
-| Symbol | Meaning |
-|--------|---------|
-| **creatorCoin** | Underlying ERC-20 asset (the only thing strategies receive) |
-| **▢[creatorCoin]** | ERC-4626 vault shares (accounting only, never enters strategies) |
-| **■[creatorCoin]** | Wrapped OFT representation (bridging and UX, never enters strategies) |
+```
+User clicks "Deploy" → wallet/bundler executes a phased sequence
 
-> **Invariant:** Yield strategies operate exclusively on the underlying creatorCoin.
-> Vault shares (▢[creatorCoin]) and wrapped OFT shares (■[creatorCoin]) are accounting and representation layers only and are never deposited into strategies.
+Phase 1 — Deterministic deploy (CreatorVaultDeployer):
+- Deploy per-creator contracts
+- Register in CreatorRegistry
 
----
+Phase 2 — Configuration:
+- Wire roles + addresses
+- Set required approvals
 
-## Layer separation
-
-The protocol has three orthogonal layers:
-
-### Asset layer
-
-The underlying creatorCoin (ERC-20) is the only asset that moves between contracts. When users deposit, the vault receives creatorCoin. When strategies deploy capital, they receive creatorCoin. All yield is generated on creatorCoin.
-
-### Accounting layer
-
-- **CreatorOVault** issues ▢[creatorCoin] as receipt tokens for deposits
-- **CreatorShareOFT** wraps ▢[creatorCoin] into ■[creatorCoin] for trading and bridging
-
-These tokens track ownership but never leave the accounting layer. Strategies are unaware of their existence.
-
-### Yield execution layer
-
-Strategies (Ajna, Charm, etc.) receive creatorCoin from the vault, deploy it to external protocols, and return creatorCoin (plus yield) when harvested.
-
----
-
-## Core contracts
-
-| Contract | Purpose | Documentation |
-|----------|---------|---------------|
-| CreatorOVault | ERC-4626 vault, issues ▢TOKEN | [Details](/contracts/core/creator-ovault) |
-| CreatorOVaultWrapper | Converts ▢TOKEN ↔ ■TOKEN | [Details](/contracts/core/creator-ovault-wrapper) |
-| CreatorShareOFT | LayerZero OFT, collects fees | [Details](/contracts/core/creator-share-oft) |
-| CreatorRegistry | Global registry | [API](/api/contracts) |
-
----
-
-## Supporting systems
-
-| System | Canonical documentation |
-|--------|------------------------|
-| Fee distribution | [Fee Flow](/overview/fee-flow) |
-| Strategies | [Strategies](/contracts/strategies) |
-| Governance | [Governance](/governance) |
-| Cross-chain | [LayerZero OFT](/integrations/oft) |
-| Security | [Vault Concepts](/concepts/vault) |
-
----
-
-## Access control
-
-```mermaid
-flowchart TD
-    subgraph Roles
-        Owner[Owner<br/>creator multisig]
-        Mgmt[Management<br/>operator]
-        Keeper[Keeper<br/>automation]
-        Emergency[Emergency Admin]
-    end
-    
-    Owner --> |full control| Vault[Vault]
-    Owner --> |strategy mgmt| Strategies
-    Owner --> |shutdown| Emergency
-    
-    Mgmt --> |parameters| Strategies
-    Mgmt --> |assign| Keeper
-    
-    Keeper --> |deploy| Strategies
-    Keeper --> |report| Vault
-    
-    Emergency --> |pause| Vault
-    Emergency --> |withdraw| Strategies
+Phase 3 — Activation + launch:
+- Deposit → wrap → start CCA
+- Execute via VaultActivationBatcher
 ```
 
----
+## Hub Chain Model
 
-## Deployment addresses
+**Base is the hub chain** - all deployments start on Base, then OFT can be bridged to other chains.
 
-See [Reference: Addresses](/reference/addresses).
+### Cross-Chain Flow
+
+1. Deploy vault, wrapper, OFT on Base
+2. Configure lottery and gauge controller
+3. Start CCA auction
+4. Users bridge ■TOKEN via LayerZero V2
+5. Trading on any chain triggers lottery entries
+6. Winners notified cross-chain via LayerZero

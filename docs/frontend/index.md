@@ -1,77 +1,60 @@
 ---
 title: Frontend
-sidebar_position: 3
+sidebar_position: 10
 ---
 
-# Frontend
+# Frontend Documentation
 
-Documentation for the 4626 frontend application.
+Documentation for the CreatorVault frontend application.
 
-**Who this is for:** Frontend developers and integrators.
+## Tech Stack
 
----
+- **Vite** - Build tool
+- **React** - UI framework
+- **TypeScript** - Type safety
+- **Tailwind CSS** - Styling
+- **wagmi/viem** - Ethereum interactions
 
-## Overview
-
-The frontend is a React application built with:
-- Vite for bundling
-- Wagmi for wallet connections
-- Privy for authentication
-- TanStack Query for data fetching
-
----
-
-## Key features
-
-| Feature | Description |
-|---------|-------------|
-| Vault dashboard | View and manage creator vaults |
-| Deposit/withdraw | ERC-4626 compliant interactions |
-| Account abstraction | 1-click operations via smart wallets |
-| Cross-chain | LayerZero OFT transfers |
-
----
-
-## Directory structure
+## Structure
 
 ```
-frontend/src/
-├── components/     # React components
-├── hooks/          # Custom React hooks
-├── lib/            # Utility libraries
-├── config/         # Configuration files
-├── pages/          # Route pages
-└── types/          # TypeScript types
+frontend/
+  src/
+    components/    # UI components
+    pages/         # Route pages
+    hooks/         # Custom React hooks
+    lib/           # Utilities and APIs
+    config/        # Configuration
+  public/          # Static assets
+  api/             # Vercel API routes
 ```
 
----
+## Development
 
-## Configuration
+```bash
+cd frontend
+pnpm install
+pnpm dev
+```
 
-Contract addresses are configured in `frontend/src/config/contracts.ts`.
+## API Reference
 
-See the [API Reference](/api/frontend) for auto-generated TypeScript documentation.
+See [Frontend API](/api/frontend) for auto-generated TypeDoc documentation.
 
----
-
-## Key components
+## Key Components
 
 | Component | Purpose |
 |-----------|---------|
-| `LaunchVaultAA` | 1-click vault activation |
-| `CompleteAuction` | Auction graduation flow |
-| `VaultDashboard` | Vault overview and stats |
-| `DepositWithdraw` | ERC-4626 deposit/withdraw UI |
-
----
+| `DeployPage` | Vault deployment wizard |
+| `VaultDashboard` | Vault management UI |
+| `LotteryStatus` | Lottery information display |
+| `TradeWidget` | DEX trading interface |
 
 ## Hooks
 
 | Hook | Purpose |
 |------|---------|
-| `useVault` | Vault data and operations |
-| `useTokenMetadata` | Token information |
-| `useSiweAuth` | Sign-in with Ethereum |
-| `useVaultGaugeVoting` | Governance voting |
-
-See [Frontend API](/api/frontend) for complete documentation.
+| `useVault` | Vault interactions |
+| `useLottery` | Lottery data |
+| `useCreatorCoin` | Token information |
+| `useMiniAppContext` | Farcaster frame context |

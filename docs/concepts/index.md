@@ -3,26 +3,22 @@ title: Concepts
 sidebar_position: 2
 ---
 
-# Core concepts
+# Core Concepts
 
-This section explains the fundamental mechanisms that power the 4626 protocol.
+This section explains the core mechanics of CreatorVault.
 
----
-
-## Contents
+## Key Concepts
 
 | Concept | Description |
 |---------|-------------|
-| [Vault](./vault) | ERC-4626 tokenized vault mechanics |
-| [Auction](./auction) | CCA launch mechanism for fair price discovery |
-| [Lottery](./lottery) | Jackpot system and probability direction |
+| **[Vault](/concepts/vault)** | ERC-4626 vault that holds creator coins and generates yield |
+| **[Auction](/concepts/auction)** | Uniswap CCA for fair launch price discovery |
+| **[Lottery](/concepts/lottery)** | Instant lottery powered by Chainlink VRF |
 
----
+## How They Work Together
 
-## Key principles
-
-**Vault:** The foundation. Accepts creator coin deposits, issues shares, deploys to yield strategies. Share value increases as the vault generates returns.
-
-**Auction:** Fair price discovery via CCA. All bidders pay the same clearing price. No sniping or MEV advantages.
-
-**Lottery:** Engagement incentive funded by trading fees. Random prizes for buyers, with probability directed by governance voters.
+1. **Creator deploys vault** → Vault holds creator coins
+2. **CCA auction launches** → Fair price discovery
+3. **Trading begins** → 6.9% fee collected
+4. **Lottery runs** → Instant win chances for traders
+5. **Yield accumulates** → PPS increases for holders
