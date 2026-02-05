@@ -1010,7 +1010,7 @@ async function validateInnerCalls(params: {
     payoutRouterBurnStreamArg?: Address | null
     vaultBurnStreamArg?: Address | null
   }) => void
-}): Promise<{ expectedCreatorToken: Address }> {
+}): Promise<{ expectedCreatorToken: Address; mode: string }> {
   const contracts = getApiContracts()
   if (!contracts.creatorVaultBatcher) throw new Error('creator_vault_batcher_not_configured')
   const creatorVaultBatcher = getAddress(contracts.creatorVaultBatcher)
@@ -1686,7 +1686,7 @@ async function validateInnerCalls(params: {
     }
   }
 
-  return { expectedCreatorToken }
+  return { expectedCreatorToken, mode: mode ?? 'unknown' }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -1889,10 +1889,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             : undefined,
         })
         expectedCreatorToken = validated.expectedCreatorToken
+        const isLegacyWithdraw = String(validated.mode) === 'legacy_withdraw'
+        if (!isLegacyWithdraw) {
+          // Only sponsor approved creators (Supabase/Postgres allowlist).
+          await assertCreatorAllowlisted({ sessionAddress, creatorToken: expectedCreatorToken })
+        }
       }
-
-      // Only sponsor approved creators (Supabase/Postgres allowlist).
-      await assertCreatorAllowlisted({ sessionAddress, creatorToken: expectedCreatorToken })
     }
   } catch (err: unknown) {
     if (err instanceof Error && err.message === 'rate_limited') {
