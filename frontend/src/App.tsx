@@ -430,6 +430,8 @@ function App() {
                 <Route path="/admin/waitlist" element={<AdminWaitlist />} />
                 <Route path="/admin/miniapp" element={<AdminMiniApp />} />
                 <Route path="/admin/deploy-strategies" element={<AdminDeployStrategies />} />
+                {/* Legacy withdrawals: allow direct miniapp entry in public mode */}
+                <Route path="/miniapp" element={<AdminMiniApp />} />
 
                 {/* Optional ops page; useful while public mode is enabled. */}
                 <Route path="/status" element={<Status />} />
