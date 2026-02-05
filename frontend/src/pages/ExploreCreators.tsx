@@ -143,6 +143,7 @@ function formatCompactUsd(v: number | null): string {
 export function ExploreCreators() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [searchQuery, setSearchQuery] = useState('')
+  const [expandedFees, setExpandedFees] = useState<string | null>(null)
 
   const currentTimeFilter = searchParams.get('time') || '1d'
   const currentSort = searchParams.get('sort') || 'volume'
@@ -374,16 +375,22 @@ export function ExploreCreators() {
                 </div>
               ) : (
                 // Token rows
-                filteredCoins.map((coin, index) => (
-                  <TokenRow
-                    key={coin.address || index}
-                    rank={index + 1}
-                    coin={coin}
-                    linkPrefix="/explore/creators"
-                    timeframe={currentTimeFilter}
-                    migratedCoins={migratedCoins ?? undefined}
-                  />
-                ))
+                filteredCoins.map((coin, index) => {
+                  const rowId = coin.address ? String(coin.address).toLowerCase() : `row-${index}`
+                  const isExpanded = expandedFees === rowId
+                  return (
+                    <TokenRow
+                      key={coin.address || index}
+                      rank={index + 1}
+                      coin={coin}
+                      linkPrefix="/explore/creators"
+                      timeframe={currentTimeFilter}
+                      migratedCoins={migratedCoins ?? undefined}
+                      isExpanded={isExpanded}
+                      onToggleFees={() => setExpandedFees((prev) => (prev === rowId ? null : rowId))}
+                    />
+                  )
+                })
               )}
 
               {/* Loading more indicator */}

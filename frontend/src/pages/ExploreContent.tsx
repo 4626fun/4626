@@ -21,6 +21,7 @@ const PAGE_SIZE = 20
 export function ExploreContent() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [searchQuery, setSearchQuery] = useState('')
+  const [expandedFees, setExpandedFees] = useState<string | null>(null)
 
   const currentTimeFilter = searchParams.get('time') || '1d'
   const currentSort = searchParams.get('sort') || 'volume'
@@ -210,15 +211,21 @@ export function ExploreContent() {
                 </div>
               ) : (
                 // Pool rows
-                filteredCoins.map((coin, index) => (
-                  <PoolRow
-                    key={coin.address || index}
-                    rank={index + 1}
-                    coin={coin}
-                    timeframe={currentTimeFilter}
-                    migratedCoins={migratedCoins ?? undefined}
-                  />
-                ))
+                filteredCoins.map((coin, index) => {
+                  const rowId = coin.address ? String(coin.address).toLowerCase() : `row-${index}`
+                  const isExpanded = expandedFees === rowId
+                  return (
+                    <PoolRow
+                      key={coin.address || index}
+                      rank={index + 1}
+                      coin={coin}
+                      timeframe={currentTimeFilter}
+                      migratedCoins={migratedCoins ?? undefined}
+                      isExpanded={isExpanded}
+                      onToggleFees={() => setExpandedFees((prev) => (prev === rowId ? null : rowId))}
+                    />
+                  )
+                })
               )}
 
               {/* Loading more indicator */}

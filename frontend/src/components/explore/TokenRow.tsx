@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { ChevronDown } from 'lucide-react'
 import type { ZoraCoin } from '@/lib/zora/types'
 import { EXPLORE_TABLE_GROUPS, getExploreColumns, getGridTemplateColumns, getStickyLeftMap } from './tableColumns'
 
@@ -9,6 +10,8 @@ type TokenRowProps = {
   timeframe?: string
   /** Set of migrated coin addresses (lowercase) for accurate fee detection */
   migratedCoins?: Set<string>
+  isExpanded?: boolean
+  onToggleFees?: () => void
 }
 
 type TokenTableHeaderProps = {
@@ -157,7 +160,15 @@ function buildGroupSpans(columns: ReturnType<typeof getExploreColumns>) {
   return out
 }
 
-export function TokenRow({ rank, coin, linkPrefix = '/explore/creators', timeframe = '1d', migratedCoins }: TokenRowProps) {
+export function TokenRow({
+  rank,
+  coin,
+  linkPrefix = '/explore/creators',
+  timeframe = '1d',
+  migratedCoins,
+  isExpanded,
+  onToggleFees,
+}: TokenRowProps) {
   // Use timeframe for future API support
   const volume = timeframe === '1d' ? coin.volume24h : coin.volume24h // TODO: support other timeframes
   
@@ -204,87 +215,136 @@ export function TokenRow({ rank, coin, linkPrefix = '/explore/creators', timefra
   const stickyCellClass =
     'sticky bg-zinc-950/70 backdrop-blur-sm group-hover:bg-zinc-900/40 border-r border-zinc-800/60'
 
-  return (
-    <Link
-      to={detailPath}
-      className="group grid items-center text-xs hover:bg-zinc-800/30 transition-colors cursor-pointer min-w-max"
-      style={{ gridTemplateColumns }}
-    >
-      {/* Rank */}
-      <span
-        className={`${stickyCellClass} z-20 text-zinc-500 tabular-nums px-3 py-2 text-center sm:text-right`}
-        style={{ left: stickyLeft.rank }}
-      >
-        {rank}
-      </span>
+  const canToggleFees = typeof onToggleFees === 'function'
 
-      {/* Token Name */}
-      <div
-        className={`${stickyCellClass} relative z-30 px-3 py-2`}
-        style={{ left: stickyLeft.name }}
+  return (
+    <>
+      <Link
+        to={detailPath}
+        className="group grid items-center text-xs hover:bg-zinc-800/30 transition-colors cursor-pointer min-w-max"
+        style={{ gridTemplateColumns }}
       >
+        {/* Rank */}
+        <span
+          className={`${stickyCellClass} z-20 text-zinc-500 tabular-nums px-3 py-2 text-center sm:text-right`}
+          style={{ left: stickyLeft.rank }}
+        >
+          {rank}
+        </span>
+
+        {/* Token Name */}
         <div
-          className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-r from-transparent to-zinc-950 opacity-80"
-          aria-hidden="true"
-        />
-        <div className="flex items-center gap-2.5 min-w-0 justify-center sm:justify-start">
-          {avatarUrl ? (
-            <img src={avatarUrl} alt={name} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover flex-shrink-0" />
-          ) : (
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center flex-shrink-0">
-              <span className="text-[11px] font-medium text-zinc-400">{name.slice(0, 2).toUpperCase()}</span>
-            </div>
-          )}
-          <div className="min-w-0 explore-token-name">
-            {isSameNameSymbol ? (
-              // Single display for matching name/symbol (common for creator coins)
-              <div className="text-[13px] sm:text-[15px] font-medium text-white truncate">{symbol || name}</div>
+          className={`${stickyCellClass} relative z-30 px-3 py-2`}
+          style={{ left: stickyLeft.name }}
+        >
+          <div
+            className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-r from-transparent to-zinc-950 opacity-80"
+            aria-hidden="true"
+          />
+          <div className="flex items-center gap-2.5 min-w-0 justify-center sm:justify-start">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={name} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover flex-shrink-0" />
             ) : (
-              // Separate display when different
-              <>
-                <div className="text-[13px] sm:text-sm font-medium text-white truncate">{name}</div>
-                <div className="text-[10px] text-zinc-500 truncate">{symbol}</div>
-              </>
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center flex-shrink-0">
+                <span className="text-[11px] font-medium text-zinc-400">{name.slice(0, 2).toUpperCase()}</span>
+              </div>
             )}
+            <div className="min-w-0 explore-token-name">
+              {isSameNameSymbol ? (
+                // Single display for matching name/symbol (common for creator coins)
+                <div className="text-[13px] sm:text-[15px] font-medium text-white truncate">{symbol || name}</div>
+              ) : (
+                // Separate display when different
+                <>
+                  <div className="text-[13px] sm:text-sm font-medium text-white truncate">{name}</div>
+                  <div className="text-[10px] text-zinc-500 truncate">{symbol}</div>
+                </>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Holders */}
-      <span className="text-white tabular-nums px-3 py-2 text-right">{coin.uniqueHolders?.toLocaleString() || '-'}</span>
+        {/* Holders */}
+        <span className="text-white tabular-nums px-3 py-2 text-right">{coin.uniqueHolders?.toLocaleString() || '-'}</span>
 
-      {/* Market cap */}
-      <span className="text-white tabular-nums px-3 py-2 text-right">{formatCompactNumber(marketCap)}</span>
+        {/* Market cap */}
+        <span className="text-white tabular-nums px-3 py-2 text-right">{formatCompactNumber(marketCap)}</span>
 
-      {/* Volume */}
-      <span className="text-white tabular-nums px-3 py-2 text-right">{formatCompactNumber(volume)}</span>
+        {/* Volume */}
+        <span className="text-white tabular-nums px-3 py-2 text-right">{formatCompactNumber(volume)}</span>
 
-      {/* Δ 24H */}
-      <span className={`tabular-nums px-3 py-2 text-right ${change.positive ? 'text-emerald-300' : 'text-rose-300'}`}>
-        {change.text}
-      </span>
-
-      {/* Fee % */}
-      <div className="px-3 py-2 text-center">
-        <span
-          className="inline-flex items-center rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-zinc-300"
-          title={feeTooltip}
-        >
-          {isV4 ? '1%' : '3%'}
-          {isMigrated ? <span className="ml-0.5 text-zinc-500">*</span> : null}
+        {/* Δ 24H */}
+        <span className={`tabular-nums px-3 py-2 text-right ${change.positive ? 'text-emerald-300' : 'text-rose-300'}`}>
+          {change.text}
         </span>
-      </div>
 
-      {/* Total Fees */}
-      <span className="text-zinc-200 tabular-nums px-3 py-2 text-right" title={feeBreakdown}>
-        {totalFees}
-      </span>
+        {/* Fee % */}
+        <div className="px-3 py-2 text-center">
+          <span
+            className="inline-flex items-center rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-zinc-300"
+            title={feeTooltip}
+          >
+            {isV4 ? '1%' : '3%'}
+            {isMigrated ? <span className="ml-0.5 text-zinc-500">*</span> : null}
+          </span>
+        </div>
 
-      {/* Payout To */}
-      <span className="text-zinc-400 font-mono text-[10px] truncate px-3 py-2" title={payoutTo || undefined}>
-        {shortAddress(payoutTo)}
-      </span>
-    </Link>
+        {/* Total Fees */}
+        <div className="px-3 py-2 text-right flex items-center justify-end gap-1 text-zinc-200 tabular-nums" title={feeBreakdown}>
+          <span>{totalFees}</span>
+          {canToggleFees ? (
+            <button
+              type="button"
+              aria-label="Toggle fee breakdown"
+              aria-expanded={Boolean(isExpanded)}
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                onToggleFees?.()
+              }}
+              className="inline-flex items-center justify-center rounded-full border border-white/10 p-1 text-zinc-400 hover:text-white hover:border-white/20 transition-colors"
+            >
+              <ChevronDown className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+            </button>
+          ) : null}
+        </div>
+
+        {/* Payout To */}
+        <span className="text-zinc-400 font-mono text-[10px] truncate px-3 py-2" title={payoutTo || undefined}>
+          {shortAddress(payoutTo)}
+        </span>
+      </Link>
+      {isExpanded ? (
+        <div className="px-6 py-3 text-[11px] text-zinc-400 border-b border-zinc-800/50 bg-zinc-950/40 min-w-max">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <div>
+              <span className="text-zinc-500">Creator</span>{' '}
+              <span className="text-zinc-200">{formatFeeAmount(volume, feeRates.total, feeRates.creator)}</span>
+            </div>
+            <div>
+              <span className="text-zinc-500">Platform</span>{' '}
+              <span className="text-zinc-200">{formatFeeAmount(volume, feeRates.total, feeRates.platform)}</span>
+            </div>
+            <div>
+              <span className="text-zinc-500">LP Lock</span>{' '}
+              <span className="text-zinc-200">
+                {feeRates.lpRewards > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.lpRewards) : '-'}
+              </span>
+            </div>
+            <div>
+              <span className="text-zinc-500">Zora</span>{' '}
+              <span className="text-zinc-200">{formatFeeAmount(volume, feeRates.total, feeRates.protocol)}</span>
+            </div>
+            <div>
+              <span className="text-zinc-500">Doppler</span>{' '}
+              <span className="text-zinc-200">
+                {feeRates.doppler > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.doppler) : '-'}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   )
 }
 

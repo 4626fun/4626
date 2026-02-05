@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { ChevronDown } from 'lucide-react'
 import type { ZoraCoin } from '@/lib/zora/types'
 import { EXPLORE_TABLE_GROUPS, getExploreColumns, getGridTemplateColumns, getStickyLeftMap } from './tableColumns'
 
@@ -8,6 +9,8 @@ type PoolRowProps = {
   timeframe?: string
   /** Set of migrated coin addresses (lowercase) for accurate fee detection */
   migratedCoins?: Set<string>
+  isExpanded?: boolean
+  onToggleFees?: () => void
 }
 
 type PoolTableHeaderProps = {
@@ -152,7 +155,14 @@ function buildGroupSpans(columns: ReturnType<typeof getExploreColumns>) {
   return out
 }
 
-export function PoolRow({ rank, coin, timeframe = '1d', migratedCoins }: PoolRowProps) {
+export function PoolRow({
+  rank,
+  coin,
+  timeframe = '1d',
+  migratedCoins,
+  isExpanded,
+  onToggleFees,
+}: PoolRowProps) {
   // Use timeframe for future API support
   const volume = timeframe === '1d' ? coin.volume24h : coin.volume24h // TODO: support other timeframes
   
@@ -192,7 +202,10 @@ export function PoolRow({ rank, coin, timeframe = '1d', migratedCoins }: PoolRow
   const stickyCellClass =
     'sticky bg-zinc-950/70 backdrop-blur-sm group-hover:bg-zinc-900/40 border-r border-zinc-800/60'
 
+  const canToggleFees = typeof onToggleFees === 'function'
+
   return (
+    <>
     <Link
       to={detailPath}
       className="group grid items-center text-xs hover:bg-zinc-800/30 transition-colors cursor-pointer min-w-max"
@@ -250,15 +263,61 @@ export function PoolRow({ rank, coin, timeframe = '1d', migratedCoins }: PoolRow
       </div>
 
       {/* Total Fees */}
-      <span className="text-zinc-200 tabular-nums px-3 py-2 text-right" title={feeBreakdown}>
-        {totalFees}
-      </span>
+      <div className="px-3 py-2 text-right flex items-center justify-end gap-1 text-zinc-200 tabular-nums" title={feeBreakdown}>
+        <span>{totalFees}</span>
+        {canToggleFees ? (
+          <button
+            type="button"
+            aria-label="Toggle fee breakdown"
+            aria-expanded={Boolean(isExpanded)}
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              onToggleFees?.()
+            }}
+            className="inline-flex items-center justify-center rounded-full border border-white/10 p-1 text-zinc-400 hover:text-white hover:border-white/20 transition-colors"
+          >
+            <ChevronDown className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+          </button>
+        ) : null}
+      </div>
 
       {/* Payout To */}
       <span className="text-zinc-400 font-mono text-[10px] truncate px-3 py-2" title={payoutTo || undefined}>
         {shortAddress(payoutTo)}
       </span>
     </Link>
+    {isExpanded ? (
+      <div className="px-6 py-3 text-[11px] text-zinc-400 border-b border-zinc-800/50 bg-zinc-950/40 min-w-max">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <div>
+            <span className="text-zinc-500">Creator</span>{' '}
+            <span className="text-zinc-200">{formatFeeAmount(volume, feeRates.total, feeRates.creator)}</span>
+          </div>
+          <div>
+            <span className="text-zinc-500">Platform</span>{' '}
+            <span className="text-zinc-200">{formatFeeAmount(volume, feeRates.total, feeRates.platform)}</span>
+          </div>
+          <div>
+            <span className="text-zinc-500">LP Lock</span>{' '}
+            <span className="text-zinc-200">
+              {feeRates.lpRewards > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.lpRewards) : '-'}
+            </span>
+          </div>
+          <div>
+            <span className="text-zinc-500">Zora</span>{' '}
+            <span className="text-zinc-200">{formatFeeAmount(volume, feeRates.total, feeRates.protocol)}</span>
+          </div>
+          <div>
+            <span className="text-zinc-500">Doppler</span>{' '}
+            <span className="text-zinc-200">
+              {feeRates.doppler > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.doppler) : '-'}
+            </span>
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   )
 }
 
