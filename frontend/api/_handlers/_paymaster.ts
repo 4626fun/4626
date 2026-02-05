@@ -527,6 +527,18 @@ const SHARE_OFT_VIEW_ABI = [
   { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
 
+const LEGACY_VESTING_VIEW_ABI = [
+  { type: 'function', name: 'token', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'beneficiary', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+] as const
+
+const SELECTOR_VESTING_RELEASE = '0x86d1a69f'
+const SELECTOR_WRAPPER_UNWRAP = '0xde0e9a3e'
+const SELECTOR_VAULT_REDEEM = '0xba087652'
+const SELECTOR_VAULT_QUEUE = '0xd58457b2'
+const SELECTOR_VAULT_CLAIM = '0x6659283e'
+const LEGACY_VAULT_SELECTORS = new Set<string>([SELECTOR_VAULT_REDEEM, SELECTOR_VAULT_QUEUE, SELECTOR_VAULT_CLAIM])
+
 const CREATOR_VAULT_BATCHER_PHASE1_EVENT = [
   {
     type: 'event',
@@ -1037,6 +1049,7 @@ async function validateInnerCalls(params: {
   let expectedVault: Address | null = null
   let expectedWrapper: Address | null = null
   let expectedShareOFT: Address | null = null
+  let expectedVesting: Address | null = null
   let expectedCodeIds: { vault: Hex } | null = null
   let expectedVersion: string | null = null
 
@@ -1140,6 +1153,97 @@ async function validateInnerCalls(params: {
       mode = 'approve_only'
       expectedCreatorToken = approveOnlyToken
     } else {
+      const legacyResolved = await (async () => {
+        const client = await getBaseClient()
+        let legacyVault: Address | null = null
+        let legacyWrapper: Address | null = null
+        let legacyShareOFT: Address | null = null
+        let legacyVesting: Address | null = null
+
+        const setVault = (next: Address) => {
+          if (!legacyVault) {
+            legacyVault = next
+            return
+          }
+          if (getAddress(legacyVault) !== getAddress(next)) throw new Error('legacy_vault_mismatch')
+        }
+
+        const setShareOft = (next: Address) => {
+          if (!legacyShareOFT) {
+            legacyShareOFT = next
+            return
+          }
+          if (getAddress(legacyShareOFT) !== getAddress(next)) throw new Error('legacy_shareoft_mismatch')
+        }
+
+        for (const c of innerCalls) {
+          const selector = getSelector(c.data)
+          if (selector === SELECTOR_VESTING_RELEASE) {
+            legacyVesting = c.target
+            const [token, beneficiary] = (await Promise.all([
+              client.readContract({ address: c.target, abi: LEGACY_VESTING_VIEW_ABI, functionName: 'token' }).catch(() => null),
+              client.readContract({ address: c.target, abi: LEGACY_VESTING_VIEW_ABI, functionName: 'beneficiary' }).catch(() => null),
+            ])) as [Address | null, Address | null]
+            if (beneficiary && isAddress(beneficiary)) {
+              if (getAddress(beneficiary) !== getAddress(params.sender)) {
+                throw new Error('legacy_vesting_beneficiary_mismatch')
+              }
+            }
+            if (token && isAddress(token)) {
+              const share = getAddress(token)
+              setShareOft(share)
+              const vaultFromShare = (await client.readContract({
+                address: share,
+                abi: SHARE_OFT_VIEW_ABI,
+                functionName: 'vault',
+              }).catch(() => null)) as Address | null
+              if (vaultFromShare && isAddress(vaultFromShare)) {
+                setVault(getAddress(vaultFromShare))
+              }
+            }
+            continue
+          }
+          if (selector === SELECTOR_WRAPPER_UNWRAP) {
+            legacyWrapper = c.target
+            const [wrapperVault, wrapperShare] = (await Promise.all([
+              client.readContract({ address: c.target, abi: WRAPPER_VIEW_ABI, functionName: 'vault' }).catch(() => null),
+              client.readContract({ address: c.target, abi: WRAPPER_VIEW_ABI, functionName: 'shareOFT' }).catch(() => null),
+            ])) as [Address | null, Address | null]
+            if (wrapperVault && isAddress(wrapperVault)) setVault(getAddress(wrapperVault))
+            if (wrapperShare && isAddress(wrapperShare)) setShareOft(getAddress(wrapperShare))
+            continue
+          }
+          if (LEGACY_VAULT_SELECTORS.has(selector)) {
+            setVault(c.target)
+            continue
+          }
+          return null
+        }
+
+        if (!legacyVault) return null
+        const asset = (await client.readContract({
+          address: legacyVault,
+          abi: ERC4626_ASSET_ABI,
+          functionName: 'asset',
+        }).catch(() => null)) as Address | null
+        if (!asset || !isAddress(asset)) throw new Error('legacy_vault_asset_not_found')
+        return {
+          creatorToken: getAddress(asset),
+          vault: legacyVault,
+          wrapper: legacyWrapper,
+          shareOFT: legacyShareOFT,
+          vesting: legacyVesting,
+        }
+      })()
+
+      if (legacyResolved?.creatorToken && legacyResolved?.vault) {
+        mode = 'legacy_withdraw'
+        expectedCreatorToken = legacyResolved.creatorToken
+        expectedVault = legacyResolved.vault
+        expectedWrapper = legacyResolved.wrapper ?? null
+        expectedShareOFT = legacyResolved.shareOFT ?? null
+        expectedVesting = legacyResolved.vesting ?? null
+      } else {
       const sample = innerCalls
         .slice(0, 3)
         .map((c) => `${c.target}:${getSelector(c.data)}`)
@@ -1147,6 +1251,7 @@ async function validateInnerCalls(params: {
       throw new Error(
         `missing_primary_call(expectedBatcher=${creatorVaultBatcher},expectedActivation=${vaultActivationBatcher},seen=${sample})`,
       )
+      }
     }
   }
 
@@ -1385,6 +1490,22 @@ async function validateInnerCalls(params: {
       }
 
       throw new Error('selfcall_not_allowed')
+    }
+
+    if (mode === 'legacy_withdraw') {
+      if (expectedVesting && c.target === expectedVesting) {
+        if (selector !== SELECTOR_VESTING_RELEASE) throw new Error('legacy_vesting_selector_not_allowed')
+        continue
+      }
+      if (expectedWrapper && c.target === expectedWrapper) {
+        if (selector !== SELECTOR_WRAPPER_UNWRAP) throw new Error('legacy_wrapper_selector_not_allowed')
+        continue
+      }
+      if (expectedVault && c.target === expectedVault) {
+        if (!LEGACY_VAULT_SELECTORS.has(selector)) throw new Error('legacy_vault_selector_not_allowed')
+        continue
+      }
+      throw new Error('legacy_target_not_allowed')
     }
 
     if (c.target === creatorVaultBatcher) {
