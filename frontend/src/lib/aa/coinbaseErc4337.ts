@@ -1180,6 +1180,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   skipPreflightSimulation?: boolean
   skipPaymaster?: boolean
   retryOnInvalidSignature?: boolean
+  retryOnPrefund?: boolean
 }): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
   const {
     publicClient,
@@ -1195,6 +1196,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     skipPreflightSimulation,
     skipPaymaster = false,
     retryOnInvalidSignature = true,
+    retryOnPrefund = true,
   } = params
   
   // Input validation
@@ -1461,6 +1463,10 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     const lc = errMsg.toLowerCase()
     const metaDetail = formatMetaMessages(lastError)
     const metaSuffix = metaDetail ? ` (CDP: ${metaDetail})` : ''
+    const isPrefundError =
+      lc.includes('sender balance and deposit together') ||
+      lc.includes('prefund') ||
+      lc.includes('must be at least')
 
     try {
       const logPayload = {
@@ -1484,6 +1490,25 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       console.error('[ERC-4337] UserOp failed', logPayload)
     } catch {
       // ignore logging failures
+    }
+
+    if (retryOnPrefund && skipPaymaster && isPrefundError) {
+      return await sendCoinbaseSmartWalletUserOperation({
+        publicClient,
+        walletClient,
+        bundlerUrl: bundlerUrlInput,
+        paymasterUrl: paymasterUrlInput,
+        smartWallet,
+        ownerAddress,
+        calls,
+        version,
+        userOpSignMode,
+        ownerIsContract: ownerIsContractOverride,
+        skipPreflightSimulation,
+        skipPaymaster: false,
+        retryOnInvalidSignature,
+        retryOnPrefund: false,
+      })
     }
 
     if (
@@ -1510,6 +1535,12 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     }
 
     // Provide helpful error messages for common failures
+    if (isPrefundError) {
+      throw new Error(
+        'Smart wallet does not have enough ETH for gas. ' +
+          'Add ETH to the canonical CSW or enable gas sponsorship.'
+      )
+    }
     if (lc.includes('insufficient funds') || lc.includes('insufficient balance')) {
       throw new Error('Paymaster rejected: insufficient sponsorship funds. Contact support.')
     }

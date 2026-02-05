@@ -547,7 +547,6 @@ function AgentRegistration() {
           calls: [{ to: registryAddress, data }],
           version: '1',
           userOpSignMode: 'signMessage',
-          skipPaymaster: true,
         })
         updateRegisterTx({ status: 'pending', hash: result.transactionHash })
         const receipt = await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
@@ -573,7 +572,6 @@ function AgentRegistration() {
           ownerAddress: connectedAddress as Address,
           calls: [{ to: registryAddress, data }],
           version: '1',
-          skipPaymaster: true,
         })
         updateRegisterTx({ status: 'pending', hash: result.transactionHash })
         const receipt = await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
@@ -648,7 +646,6 @@ function AgentRegistration() {
           calls: [{ to: registryAddress, data }],
           version: '1',
           userOpSignMode: 'signMessage',
-          skipPaymaster: true,
         })
         updateUpdateTx({ status: 'pending', hash: result.transactionHash })
         await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
@@ -673,7 +670,6 @@ function AgentRegistration() {
           ownerAddress: connectedAddress as Address,
           calls: [{ to: registryAddress, data }],
           version: '1',
-          skipPaymaster: true,
         })
         updateUpdateTx({ status: 'pending', hash: result.transactionHash })
         await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
