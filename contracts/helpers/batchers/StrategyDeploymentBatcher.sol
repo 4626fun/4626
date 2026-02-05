@@ -7,9 +7,27 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "../../vault/strategies/univ3/CreatorCharmStrategy.sol";
 import "../../vault/strategies/AjnaStrategy.sol";
-import "../../vault/strategies/univ3/CharmAlphaVaultDeploy.sol";
 import "../../interfaces/uniswap/IUniswapV3Factory.sol";
 import "../../interfaces/uniswap/IUniswapV3Pool.sol";
+
+/**
+ * @notice Charm Finance Alpha Vault Factory
+ * @dev Base: 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa
+ *      Vaults created via this factory appear on alpha.charm.fi UI
+ */
+interface ICharmFactory {
+    function createVault(
+        address pool,
+        address manager,
+        uint256 maxTotalSupply,
+        int24 baseThreshold,
+        int24 limitThreshold,
+        uint24 fullRangeWeight,
+        uint32 period,
+        string memory name,
+        string memory symbol
+    ) external returns (address vault);
+}
 
 /**
  * @title StrategyDeploymentBatcher
@@ -23,6 +41,10 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
     // Base Network Constants
     address public constant V3_FACTORY = 0x33128a8fC17869897dcE68Ed026d694621f6FDfD;
     address public constant UNISWAP_ROUTER = 0x2626664c2603336E57B271c5C0b26F421741e481;
+    
+    /// @notice Charm Finance Alpha Vault Factory on Base
+    /// @dev Vaults created via this factory appear on alpha.charm.fi UI
+    address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;
 
     struct DeploymentResult {
         address charmVault;
@@ -90,31 +112,28 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
         }
 
         // ═══════════════════════════════════════════════════════════
-        // STEP 2: Deploy Charm Alpha Vault (batcher is temp governance)
+        // STEP 2: Deploy Charm Alpha Vault via Charm Factory (shows on alpha.charm.fi UI)
         // ═══════════════════════════════════════════════════════════
-        result.charmVault = address(new CharmAlphaVaultDeploy(
+        // NOTE: Using Charm's official factory ensures vault appears on their UI
+        // Parameters: manager=owner can rebalance, baseThreshold=3000 ticks, 
+        //             limitThreshold=6000 ticks, fullRangeWeight=0 (no full range), period=1800s (30min)
+        result.charmVault = ICharmFactory(CHARM_FACTORY).createVault(
             result.v3Pool,
-            10000,              // 1% protocol fee
-            type(uint256).max,  // No supply cap (unlimited)
-            vaultName,          // Standard name (e.g., "CreatorVault: akita/USDC")
-            vaultSymbol         // Standard symbol (e.g., "CV-akita-USDC")
-        ));
-
-        // ═══════════════════════════════════════════════════════════
-        // STEP 3: Initialize embedded rebalance logic (Atomic / Simple path)
-        // ═══════════════════════════════════════════════════════════
-        // No separate CharmAlphaStrategy contract is needed here; CharmAlphaVaultDeploy embeds it.
-        result.charmStrategy = address(0);
-
-        // Initialize vault: configure embedded params, do initial rebalance, transfer keeper, transfer governance.
-        CharmAlphaVaultDeploy(result.charmVault).initializeAndTransfer(
-            owner,  // Transfer governance to creator
-            owner,  // Transfer keeper to creator
-            3000,   // Base threshold
-            6000,   // Limit threshold
-            100,    // Max TWAP deviation
-            1800    // 30 min TWAP
+            owner,                 // manager (can call rebalance)
+            type(uint256).max,     // maxTotalSupply (unlimited)
+            3000,                  // baseThreshold (ticks)
+            6000,                  // limitThreshold (ticks)
+            0,                     // fullRangeWeight (0 = no full range position)
+            1800,                  // period (30 minutes between rebalances)
+            vaultName,
+            vaultSymbol
         );
+
+        // ═══════════════════════════════════════════════════════════
+        // STEP 3: No separate initialization needed - factory handles it
+        // ═══════════════════════════════════════════════════════════
+        // Charm's factory creates a fully initialized vault with owner as manager
+        result.charmStrategy = address(0);
 
         // ═══════════════════════════════════════════════════════════
         // STEP 4: Deploy Creator Charm Strategy V2 (Vault Integration)

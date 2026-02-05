@@ -68,15 +68,23 @@ interface IUniswapV3Pool {
     function initialize(uint160 sqrtPriceX96) external;
 }
 
-interface ICharmAlphaVaultDeploy {
-    function initializeAndTransfer(
-        address newGovernance,
-        address newKeeper,
+/**
+ * @notice Charm Finance Alpha Vault Factory
+ * @dev Base: 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa
+ *      Vaults created via this factory appear on alpha.charm.fi UI
+ */
+interface ICharmFactory {
+    function createVault(
+        address pool,
+        address manager,
+        uint256 maxTotalSupply,
         int24 baseThreshold,
         int24 limitThreshold,
-        int24 maxTwapDeviation,
-        uint32 twapDuration
-    ) external;
+        uint24 fullRangeWeight,
+        uint32 period,
+        string memory name,
+        string memory symbol
+    ) external returns (address vault);
 }
 
 interface ICreatorCharmStrategy {
@@ -102,6 +110,10 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint24 public constant V3_FEE_TIER = 3000; // 0.3% CREATOR/USDC pool
+    
+    /// @notice Charm Finance Alpha Vault Factory on Base
+    /// @dev Vaults created via this factory appear on alpha.charm.fi UI
+    address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;
 
     struct CodeIds {
         bytes32 vault;
@@ -759,30 +771,24 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         out.v3Pool = v3Pool;
 
         // ───────────────────────────────
-        // 2) Deploy Charm alpha vault (embeds initial rebalance logic)
+        // 2) Deploy Charm alpha vault via Charm Factory (shows on alpha.charm.fi UI)
         // ───────────────────────────────
-        bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
-        bytes32 charmVaultSalt = _saltFor(baseSalt, "charmVaultV3");
-
-        // protocolFee: 1% (1e6 = 100%), maxTotalSupply: unlimited
-        bytes memory charmVaultArgs = abi.encode(
+        // NOTE: Using Charm's official factory ensures vault appears on their UI
+        // Parameters: manager=protocolTreasury can rebalance, baseThreshold=3000 ticks, 
+        //             limitThreshold=6000 ticks, fullRangeWeight=0 (no full range), period=1800s (30min)
+        out.charmVault = ICharmFactory(CHARM_FACTORY).createVault(
             v3Pool,
-            uint256(10_000),
-            type(uint256).max,
+            protocolTreasury,      // manager (can call rebalance)
+            type(uint256).max,     // maxTotalSupply (unlimited)
+            3000,                  // baseThreshold (ticks, must be multiple of tickSpacing)
+            6000,                  // limitThreshold (ticks)
+            0,                     // fullRangeWeight (0 = no full range position)
+            1800,                  // period (30 minutes between rebalances)
             params.charmVaultName,
             params.charmVaultSymbol
         );
-        out.charmVault = create2Deployer.deploy(charmVaultSalt, codeIds.charmAlphaVaultDeploy, charmVaultArgs);
-
-        // Initialize embedded rebalance params + transfer governance/keeper to protocol.
-        ICharmAlphaVaultDeploy(out.charmVault).initializeAndTransfer(
-            protocolTreasury,
-            protocolTreasury,
-            3000, // baseThreshold (must be multiple of tickSpacing)
-            6000, // limitThreshold (must be multiple of tickSpacing)
-            100,  // maxTwapDeviation (ticks)
-            1800  // twapDuration (seconds)
-        );
+        
+        bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
 
         // ───────────────────────────────
         // 3) Deploy Charm strategy adapter + initialize approvals

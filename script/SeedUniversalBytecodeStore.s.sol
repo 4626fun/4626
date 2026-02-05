@@ -100,14 +100,7 @@ contract SeedUniversalBytecodeStore is Script {
                 supportsChunking
             );
         }
-        if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store,
-                vm.getCode("out/CharmAlphaVaultDeploy.sol/CharmAlphaVaultDeploy.json"),
-                "CharmAlphaVaultDeploy",
-                supportsChunking
-            );
-        }
+        // CharmAlphaVaultDeploy removed - now using Charm's official factory
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(
                 store,
