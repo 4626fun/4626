@@ -60,11 +60,13 @@ const LEGACY_VAULT_HINTS: LegacyVaultHint[] = [
   {
     id: 'legacy-3',
     label: 'Legacy vault (0x2648…2D75)',
+    vault: '0x264855c322db4224ddb3aa84f1d64392d7537cb6',
     vaultHint: '0x264855c3...2D7537CB6',
   },
   {
     id: 'legacy-4',
     label: 'Legacy vault (0xcF30…91d0)',
+    vault: '0xcf30b1e8c682a2adcede2b22601b75f54ed91d0c',
     vaultHint: '0xcF30B1e8...54ED91d0C',
   },
   {
@@ -138,6 +140,9 @@ const CREATOR_REGISTRY_ABI = [
 const CREATOR_SHARE_VESTING_EVENT = parseAbiItem(
   'event CreatorShareVestingDeployed(address indexed shareOFT, address indexed beneficiary, address vesting, uint256 amount, uint64 startTimestamp, uint64 durationSeconds)',
 )
+const PHASE1_DEPLOYED_EVENT = parseAbiItem(
+  'event Phase1Deployed(address indexed creatorToken, address indexed owner, address oftBootstrapRegistry, address vault, address wrapper, address shareOFT)',
+)
 
 async function fetchLegacyVesting(
   publicClient: any,
@@ -159,6 +164,36 @@ async function fetchLegacyVesting(
     return vesting && isAddress(vesting) ? vesting : null
   } catch {
     return null
+  }
+}
+
+async function fetchLegacyPhase1Map(publicClient: any): Promise<Map<string, { vault: Address; wrapper: Address; shareOft: Address }>> {
+  const batcher = CONTRACTS.creatorVaultBatcher
+  if (!batcher || !isAddress(batcher)) return new Map()
+  try {
+    const logs = await publicClient.getLogs({
+      address: batcher as Address,
+      event: PHASE1_DEPLOYED_EVENT,
+      fromBlock: getLegacyVestingStartBlock(),
+      toBlock: 'latest',
+    })
+    const map = new Map<string, { vault: Address; wrapper: Address; shareOft: Address }>()
+    for (const log of logs ?? []) {
+      const args = (log as any)?.args ?? {}
+      const vault = args.vault as Address | undefined
+      const wrapper = args.wrapper as Address | undefined
+      const shareOft = args.shareOFT as Address | undefined
+      if (!vault || !wrapper || !shareOft) continue
+      if (!isAddress(vault) || !isAddress(wrapper) || !isAddress(shareOft)) continue
+      map.set(String(vault).toLowerCase(), {
+        vault: getAddress(vault),
+        wrapper: getAddress(wrapper),
+        shareOft: getAddress(shareOft),
+      })
+    }
+    return map
+  } catch {
+    return new Map()
   }
 }
 
@@ -274,6 +309,7 @@ function LegacyWithdrawals() {
   const { wallets: privyWallets } = useWallets()
   const { client: smartWalletClient } = useSmartWallets()
   const { data: blockNumber } = useBlockNumber({ chainId: base.id, watch: true })
+  const [embeddedPrivyEoaAddress, setEmbeddedPrivyEoaAddress] = useState<string | null>(null)
 
   const connectedAddress = useMemo(() => {
     if (!address || !isAddress(address)) return null
@@ -302,6 +338,19 @@ function LegacyWithdrawals() {
     const raw = typeof (csw as any)?.address === 'string' ? String((csw as any).address) : ''
     return isAddress(raw) ? getAddress(raw) : null
   }, [privyWallets])
+  const embeddedPrivyWallet = useMemo(() => {
+    const ws = Array.isArray(privyWallets) ? (privyWallets as any[]) : []
+    const normalizeType = (w: any) =>
+      String(w?.wallet_client_type ?? w?.walletClientType ?? w?.connector_type ?? w?.connectorType ?? w?.type ?? '')
+        .trim()
+        .toLowerCase()
+    return (
+      ws.find((w) => {
+        const t = normalizeType(w)
+        return t === 'privy' || t.includes('privy') || t.includes('embedded')
+      }) ?? null
+    )
+  }, [privyWallets])
   const canonicalCswAddress = useMemo(() => getAddress(CANONICAL_SMART_WALLET), [])
   const privyCswAddress = privySmartWalletAddress ?? privyWalletCswAddress
   const privyCswIsCanonical = useMemo(() => {
@@ -318,6 +367,15 @@ function LegacyWithdrawals() {
     query: { enabled: !!connectedAddress },
   })
   const connectedIsCanonicalOwner = canonicalOwnerQuery.data === true
+  const embeddedOwnerQuery = useReadContract({
+    address: CANONICAL_SMART_WALLET as Address,
+    abi: COINBASE_SMART_WALLET_OWNER_LINK_ABI,
+    functionName: 'isOwnerAddress',
+    args: [embeddedPrivyEoaAddress ? (embeddedPrivyEoaAddress as Address) : ZERO_ADDRESS],
+    chainId: base.id,
+    query: { enabled: !!embeddedPrivyEoaAddress },
+  })
+  const embeddedIsCanonicalOwner = embeddedOwnerQuery.data === true
 
   const [receiver, setReceiver] = useState<string>('')
   const [amounts, setAmounts] = useState<Record<string, string>>({})
@@ -351,11 +409,39 @@ function LegacyWithdrawals() {
   useEffect(() => {
     if (connectedAddress && !receiver) setReceiver(connectedAddress)
   }, [connectedAddress, receiver])
+  useEffect(() => {
+    let cancelled = false
+    if (!embeddedPrivyWallet) {
+      setEmbeddedPrivyEoaAddress(null)
+      return () => {}
+    }
+    ;(async () => {
+      try {
+        const provider = await (embeddedPrivyWallet as any).getEthereumProvider?.()
+        if (!provider?.request) return
+        const accounts = (await provider.request({ method: 'eth_accounts' })) as string[] | null
+        const a0 = Array.isArray(accounts) ? accounts[0] : null
+        const addr = typeof a0 === 'string' && isAddress(a0) ? getAddress(a0) : null
+        if (!cancelled) setEmbeddedPrivyEoaAddress(addr)
+      } catch {
+        if (!cancelled) setEmbeddedPrivyEoaAddress(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [embeddedPrivyWallet])
 
   const isBase = chainId === base.id
   const isCanonical = connectedAddress?.toLowerCase() === CANONICAL_SMART_WALLET.toLowerCase()
-  const canSubmitViaOwner = connectedIsCanonicalOwner && !isCanonical
-  const canUseSmartWallet = (isCanonical || connectedIsCanonicalOwner) && !!walletClient && !!publicClient
+  const hasEmbeddedSigner = Boolean(embeddedPrivyEoaAddress && embeddedPrivyWallet)
+  const canSubmitViaOwner = (connectedIsCanonicalOwner || embeddedIsCanonicalOwner) && !isCanonical
+  const canUseSmartWallet = Boolean(
+    publicClient &&
+      ((isCanonical && walletClient) ||
+        (embeddedIsCanonicalOwner && hasEmbeddedSigner) ||
+        (connectedIsCanonicalOwner && walletClient)),
+  )
   const detectedCsw = useMemo(() => {
     if (isCanonical) return { address: canonicalCswAddress, source: 'connected' as const }
     if (connectedIsCanonicalOwner) return { address: canonicalCswAddress, source: 'owner' as const }
@@ -436,12 +522,23 @@ function LegacyWithdrawals() {
           })
         })
 
+        const phase1Map = await fetchLegacyPhase1Map(publicClient)
+        for (const [vaultKey, record] of phase1Map.entries()) {
+          if (!vaultMap.has(vaultKey)) vaultMap.set(vaultKey, record)
+        }
+
         const vaultKeys = Array.from(vaultMap.keys())
         const updates: Record<string, Partial<LegacyVaultResolved>> = {}
 
         for (const hint of LEGACY_VAULT_HINTS) {
-          if (!hint.vaultHint) continue
-          const match = matchVaultHint(hint.vaultHint, vaultKeys)
+          const hintVault = hint.vault && isAddress(hint.vault) ? getAddress(hint.vault) : null
+          const hintVaultKey = hintVault ? hintVault.toLowerCase() : null
+          const match =
+            hintVaultKey && vaultMap.has(hintVaultKey)
+              ? hintVaultKey
+              : hint.vaultHint
+                ? matchVaultHint(hint.vaultHint, vaultKeys)
+                : null
           if (!match) continue
           const record = vaultMap.get(match)
           if (!record) continue
@@ -498,13 +595,14 @@ function LegacyWithdrawals() {
       args?: readonly unknown[]
     },
   ) {
-    if (!walletClient || !publicClient) return
+    if (!publicClient) return
     updateTx(key, { status: 'pending', error: undefined, hash: undefined })
     try {
       if (!isBase) {
         throw new Error('Please switch to Base network to continue.')
       }
       if (isCanonical) {
+        if (!walletClient) throw new Error('Connect the canonical smart wallet to continue.')
         const hash = await (walletClient as any).writeContract({
           account: (walletClient as any).account,
           chain: base as any,
@@ -518,7 +616,39 @@ function LegacyWithdrawals() {
         updateTx(key, { status: 'success' })
         return
       }
+      if (embeddedIsCanonicalOwner && embeddedPrivyWallet && embeddedPrivyEoaAddress) {
+        const embeddedProvider = await (embeddedPrivyWallet as any).getEthereumProvider?.()
+        if (!embeddedProvider?.request) {
+          throw new Error('Privy embedded wallet provider not available')
+        }
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const data = encodeFunctionData({
+          abi: config.abi as any,
+          functionName: config.functionName as any,
+          args: config.args ?? [],
+        })
+        const embeddedWalletClient = {
+          request: async (args: { method: string; params?: any[] }) => embeddedProvider.request(args),
+        }
+        const result = await sendCoinbaseSmartWalletUserOperation({
+          publicClient: publicClient as any,
+          walletClient: embeddedWalletClient as any,
+          bundlerUrl,
+          smartWallet: canonicalCswAddress as Address,
+          ownerAddress: embeddedPrivyEoaAddress as Address,
+          calls: [{ to: config.address, data }],
+          version: '1',
+          userOpSignMode: 'signMessage',
+          skipPaymaster: true,
+        })
+        updateTx(key, { status: 'pending', hash: result.transactionHash })
+        await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
+        updateTx(key, { status: 'success' })
+        return
+      }
       if (connectedIsCanonicalOwner && connectedAddress) {
+        if (!walletClient) throw new Error('Connect the owner wallet to continue.')
         const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
         const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
         const data = encodeFunctionData({
@@ -611,12 +741,25 @@ function LegacyWithdrawals() {
                     Owner detected. Transactions will be submitted via the canonical smart wallet.
                   </div>
                 ) : null}
+                {embeddedPrivyEoaAddress && !embeddedIsCanonicalOwner ? (
+                  <div className="text-xs text-amber-300/80">
+                    Privy embedded wallet is not linked to the canonical CSW.{' '}
+                    <a className="underline hover:text-amber-200" href="/deploy#gasfree">
+                      Enable gas-free deploys
+                    </a>{' '}
+                    to use it for signing.
+                  </div>
+                ) : embeddedIsCanonicalOwner ? (
+                  <div className="text-xs text-emerald-300/80">
+                    Privy embedded wallet linked. Signatures use Privy by default.
+                  </div>
+                ) : null}
                 {connectedIsCanonicalOwner && !isCanonical ? (
                   <div className="text-xs text-zinc-500">
                     Optional: switch to the canonical CSW for direct signing.
                   </div>
                 ) : null}
-                {!isCanonical && !connectedIsCanonicalOwner ? (
+                {!isCanonical && !canSubmitViaOwner ? (
                   <div className="text-amber-300/80">
                     Connected wallet is not the canonical smart wallet. Unwrap/queue actions are disabled.
                   </div>
@@ -664,12 +807,14 @@ function LegacyWithdrawals() {
                 const hasVault = isAddress(legacy.vault)
                 const hasVesting = isAddress(legacy.vesting)
                 const hasResolvedContracts = hasShareOft && hasWrapper && hasVault
+                const balanceAccount = canUseSmartWallet ? canonicalCswAddress : connectedAddress ?? ZERO_ADDRESS
+                const balanceLabel = canUseSmartWallet ? 'CSW balance' : 'Connected balance'
                 const balanceQuery = useReadContract({
                   address: legacy.shareOft as Address,
                   abi: erc20Abi,
                   functionName: 'balanceOf',
-                  args: [connectedAddress ?? '0x0000000000000000000000000000000000000000'],
-                  query: { enabled: !!connectedAddress && hasShareOft },
+                  args: [balanceAccount as Address],
+                  query: { enabled: hasShareOft && canUseSmartWallet },
                 })
                 const releasableQuery = useReadContract({
                   address: legacy.vesting as Address,
@@ -692,6 +837,8 @@ function LegacyWithdrawals() {
 
                 const balance = balanceQuery.data as bigint | undefined
                 const releasable = releasableQuery.data as bigint | undefined
+                const hasReleasable = typeof releasable === 'bigint' && releasable > 0n
+                const isBalanceZero = typeof balance === 'bigint' && balance === 0n
                 const queued = queuedQuery.data as
                   | readonly [bigint, bigint, Address]
                   | { shares: bigint; unlockBlock: bigint; receiver: Address }
@@ -744,9 +891,14 @@ function LegacyWithdrawals() {
                           </div>
                         ) : null}
                       </div>
-                      <div className="text-xs text-zinc-500">
-                        Balance: <span className="text-zinc-200">{formatToken(balance)}</span>
-                      </div>
+                        <div className="text-xs text-zinc-500">
+                          {balanceLabel}: <span className="text-zinc-200">{formatToken(balance)}</span>
+                        </div>
+                        {hasReleasable && isBalanceZero ? (
+                          <div className="text-xs text-amber-300/80">
+                            Release from vesting to move ShareOFT into the canonical smart wallet.
+                          </div>
+                        ) : null}
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-4">

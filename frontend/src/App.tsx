@@ -170,6 +170,11 @@ function AppAllowlistGatePrivyEnabled() {
     return <ExternalRedirect to={marketingUrl} />
   }
 
+  // Always allow admin/miniapp routes to render, even if allowlist checks fail.
+  if (isAdminRoute) {
+    return <Outlet />
+  }
+
   if (allowlistModeQuery.isError) return <ExternalRedirect to={marketingUrl} />
 
   // If allowlist is not enforced (e.g. local dev / no DB / no env allowlist), don't gate.
@@ -182,10 +187,6 @@ function AppAllowlistGatePrivyEnabled() {
   }
 
   const debugAddress = effectiveAddress
-
-  if (isAdminRoute) {
-    return <Outlet />
-  }
 
   if (!effectiveAddress) {
     return <AppAccessGate variant="signin" marketingUrl={marketingUrl} debugAddress={debugAddress} />
