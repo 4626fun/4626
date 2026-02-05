@@ -6,16 +6,32 @@ function isProbablyPostgresUrl(value: string | null | undefined): boolean {
   return /^postgres(ql)?:\/\//i.test(v)
 }
 
+function isSupabaseDatabaseUrl(value: string | null | undefined): boolean {
+  if (!isProbablyPostgresUrl(value)) return false
+  try {
+    const u = new URL(String(value))
+    const host = u.hostname.toLowerCase()
+    return host.includes('supabase.') || host.includes('pooler.supabase.com')
+  } catch {
+    return false
+  }
+}
+
 type DbSource = 'vercel_postgres' | 'database_url'
 
 function getDbConfig(): { source: DbSource; connectionString: string } | null {
   const fromDatabaseUrl = process.env.DATABASE_URL
-  // In production on Vercel, do NOT read DATABASE_URL here.
+  const hasSupabaseEnv = Boolean(process.env.SUPABASE_URL || process.env.SUPABASE_SERVICE_ROLE_KEY)
+  const preferDatabaseUrl = isSupabaseDatabaseUrl(fromDatabaseUrl) && hasSupabaseEnv
+  // In production on Vercel, do NOT read DATABASE_URL by default.
   // - Many projects set DATABASE_URL for external providers (e.g. Supabase) that are incompatible with @vercel/postgres.
   // - Vercel Postgres sets POSTGRES_URL / POSTGRES_URL_NON_POOLING automatically.
-  // We still allow DATABASE_URL for local dev.
+  // Exception: if DATABASE_URL looks like Supabase and Supabase envs are set, prefer it.
   const isVercel = Boolean(process.env.VERCEL) || Boolean(process.env.VERCEL_ENV)
   const fromVercelPool = process.env.POSTGRES_URL
+  if (preferDatabaseUrl && isProbablyPostgresUrl(fromDatabaseUrl)) {
+    return { source: 'database_url', connectionString: (fromDatabaseUrl ?? '').trim() }
+  }
   if (isProbablyPostgresUrl(fromVercelPool)) return { source: 'vercel_postgres', connectionString: (fromVercelPool ?? '').trim() }
 
   const fromVercelDirect = process.env.POSTGRES_URL_NON_POOLING

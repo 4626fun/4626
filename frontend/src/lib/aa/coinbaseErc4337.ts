@@ -316,11 +316,15 @@ function isPaymasterUnavailableError(error: unknown): boolean {
   return (
     lc.includes('resource not available') ||
     lc.includes('requested resource not available') ||
-    lc.includes('request denied') ||
-    lc.includes('not authenticated') ||
     lc.includes('cdp paymaster endpoint is not configured') ||
     lc.includes('method not allowed')
   )
+}
+
+function isPaymasterPolicyError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error ?? '')
+  const lc = msg.toLowerCase()
+  return lc.includes('request denied') || lc.includes('not authenticated')
 }
 
 function formatMetaMessages(error: unknown): string | null {
@@ -1438,6 +1442,8 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     const hasPrefundBalance = typeof smartWalletBalance === 'bigint' && smartWalletBalance > 0n
     // If the paymaster rejects (policy/availability), allow a non-sponsored fallback.
     // This is required for non-deploy flows (e.g. legacy withdrawals) that the paymaster denies.
+    if (isPaymasterPolicyError(error)) return false
+    if (!allowPaymasterFallback && (isPaymasterStakeError(error) || isPaymasterUnavailableError(error))) return false
     if (isPaymasterUnavailableError(error) && hasPrefundBalance) return true
     if (isPaymasterStakeError(error) || isPaymasterUnavailableError(error)) return true
     if (!ownerIsContract && shouldRetryVerificationGas(error)) return true

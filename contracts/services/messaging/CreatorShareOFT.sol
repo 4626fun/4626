@@ -17,6 +17,21 @@ interface ICreatorLotteryManager {
 }
 
 /**
+ * @title ILotteryBeneficiary
+ * @notice Interface for aggregators/multicall contracts to specify lottery beneficiary
+ * @dev Implement this on aggregator contracts to ensure users get lottery entries
+ *      when swapping through your protocol.
+ */
+interface ILotteryBeneficiary {
+    /**
+     * @notice Returns the actual user who should receive lottery entries
+     * @return beneficiary The address that should receive lottery entries
+     *         Return address(0) to use the contract itself as beneficiary
+     */
+    function getLotteryBeneficiary() external view returns (address beneficiary);
+}
+
+/**
  * @title ISimpleSellTaxHook
  * @notice Interface for the V4 tax hook that requires token owner to configure
  * @dev Hook at 0xca975B9dAF772C71161f3648437c3616E5Be0088 on Base
@@ -347,20 +362,26 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
 
     /**
      * @dev Trigger lottery entry for buyer
+     * @param recipient The actual recipient of the swap (buyer's wallet)
      * @param amount Amount of tokens bought
-     * @notice Uses tx.origin to get actual buyer since msg.sender is the DEX router.
-     *         Only EOAs can win - prevents gaming via contracts.
-     *         Users should only interact with trusted DEX frontends.
+     * @notice Uses the actual transfer recipient address to support:
+     *         - EOA wallets (traditional)
+     *         - Smart contract wallets (Coinbase Smart Wallet, Safe, etc.)
+     *         - ERC-4337 account abstraction (where tx.origin is the bundler)
+     *         - DEX aggregators (via ILotteryBeneficiary callback)
+     *         
+     *         Security: VRF-based randomness and economic requirements (min swap size,
+     *         probability scaling with USD value) prevent gaming without blocking
+     *         legitimate smart wallet users.
      */
-    function _triggerLottery(address, uint256 amount) internal {
+    function _triggerLottery(address recipient, uint256 amount) internal {
         if (!lotteryEnabled) return;
         if (address(registry) == address(0)) return;
+        if (recipient == address(0)) return;
         
-        // Use tx.origin to get actual buyer (recipient is router, not user)
-        address buyer = tx.origin;
-        
-        // Only EOAs can win lottery - prevents gaming via contracts
-        if (buyer.code.length > 0) return;
+        // Determine the actual lottery beneficiary
+        address buyer = _resolveLotteryBeneficiary(recipient);
+        if (buyer == address(0)) return;
         
         address mgr = registry.getLotteryManager(uint16(block.chainid));
         if (mgr == address(0)) return;
@@ -370,6 +391,39 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
             if (id > 0) emit LotteryTriggered(buyer, amount, id);
         } catch {
             // Lottery failure should not block the transfer
+        }
+    }
+    
+    /**
+     * @dev Resolve the actual lottery beneficiary from a recipient address
+     * @param recipient The transfer recipient
+     * @return buyer The address that should receive lottery entries
+     * 
+     * @notice Resolution order:
+     *         1. If recipient is EOA → use recipient
+     *         2. If recipient implements ILotteryBeneficiary → use returned address
+     *         3. Otherwise → use recipient (smart wallet case)
+     * 
+     * @dev This allows DEX aggregators and multicall contracts to specify
+     *      the actual user who should receive lottery entries by implementing
+     *      ILotteryBeneficiary.getLotteryBeneficiary()
+     */
+    function _resolveLotteryBeneficiary(address recipient) internal view returns (address buyer) {
+        // If recipient is EOA, use directly
+        if (recipient.code.length == 0) {
+            return recipient;
+        }
+        
+        // Check if recipient implements ILotteryBeneficiary
+        // This allows aggregators/multicall to specify the real user
+        try ILotteryBeneficiary(recipient).getLotteryBeneficiary() returns (address beneficiary) {
+            // If beneficiary is returned and valid, use it
+            // If beneficiary is address(0), fall back to recipient
+            return beneficiary == address(0) ? recipient : beneficiary;
+        } catch {
+            // Contract doesn't implement interface - use recipient directly
+            // This handles smart wallets (Coinbase, Safe) that don't need to redirect
+            return recipient;
         }
     }
 

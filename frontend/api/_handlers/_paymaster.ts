@@ -965,6 +965,10 @@ async function assertSessionOwnsSender(params: { sender: Address; sessionAddress
   // Deployed accounts: verify onchain ownership.
   const code = await client.getBytecode({ address: params.sender })
   if (code && code !== '0x') {
+    if (getAddress(params.sessionAddress) === getAddress(params.sender)) {
+      // Allow SIWE/Privy sessions that are tied to the smart wallet itself.
+      return
+    }
     const isOwner = await client.readContract({
       address: params.sender,
       abi: COINBASE_SMART_WALLET_OWNER_ABI,

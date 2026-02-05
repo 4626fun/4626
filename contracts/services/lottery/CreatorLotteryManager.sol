@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 /**
  * @title CreatorLotteryManager
- * @author 0xakita.eth (CreatorVault)
+ * @author 0xakita.eth 
  * @notice SHARED swap-based lottery service for ALL Creator Coins
  * 
  * @dev ARCHITECTURE:
@@ -290,7 +290,9 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
     /**
      * @notice Process swap-based lottery entry for ANY Creator Coin
-     * @param buyer User who made the swap (from tx.origin)
+     * @param buyer User's wallet address (recipient of the swap)
+     *        Supports EOAs, smart contract wallets (Coinbase Smart Wallet, Safe),
+     *        and ERC-4337 accounts. Passed by the calling swap contract.
      * @param tokenIn Token swapped (■TOKEN / ShareOFT)
      * @param amountIn Amount swapped
      * @return entryId VRF request ID (0 if no entry)

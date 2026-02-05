@@ -466,6 +466,7 @@ contract CreatorCharmStrategy is IStrategy, ReentrancyGuard, Ownable {
 
     /**
      * @notice Safe Charm deposit - SINGLE ATOMIC
+     * @dev Pre-checks range, uses slippage protection, graceful failure handling
      */
     function _depositToCharmSafe(
         uint256 creatorAmount, 
@@ -475,9 +476,12 @@ contract CreatorCharmStrategy is IStrategy, ReentrancyGuard, Ownable {
         if (creatorAmount == 0 && usdcAmount == 0) return 0;
 
         // PRE-CHECK: Is Charm vault in range?
-        (bool inRange,,,) = isCharmInRange();
+        (bool inRange, int24 currentTick, int24 lower, int24 upper) = isCharmInRange();
         if (!inRange) {
-            emit DepositFailed("Charm vault out of range");
+            emit DepositFailed(string(abi.encodePacked(
+                "Out of range: tick ", _int24ToString(currentTick),
+                " not in [", _int24ToString(lower), ",", _int24ToString(upper), "]"
+            )));
             return 0;
         }
 
@@ -498,9 +502,56 @@ contract CreatorCharmStrategy is IStrategy, ReentrancyGuard, Ownable {
             shares = _shares;
         } catch Error(string memory reason) {
             emit DepositFailed(reason);
-        } catch {
-            emit DepositFailed("Deposit failed");
+        } catch (bytes memory lowLevelData) {
+            // Try to decode the error for debugging
+            if (lowLevelData.length > 0) {
+                emit DepositFailed(string(abi.encodePacked("Low-level: ", _bytesToHex(lowLevelData))));
+            } else {
+                emit DepositFailed("Unknown error");
+            }
         }
+    }
+    
+    /**
+     * @notice Convert int24 to string for error messages
+     */
+    function _int24ToString(int24 value) internal pure returns (string memory) {
+        if (value == 0) return "0";
+        
+        bool negative = value < 0;
+        uint256 absValue = negative ? uint256(uint24(-value)) : uint256(uint24(value));
+        
+        bytes memory buffer = new bytes(10);
+        uint256 i = buffer.length;
+        while (absValue > 0) {
+            i--;
+            buffer[i] = bytes1(uint8(48 + absValue % 10));
+            absValue /= 10;
+        }
+        if (negative) {
+            i--;
+            buffer[i] = "-";
+        }
+        
+        bytes memory result = new bytes(buffer.length - i);
+        for (uint256 j = 0; j < result.length; j++) {
+            result[j] = buffer[i + j];
+        }
+        return string(result);
+    }
+    
+    /**
+     * @notice Convert bytes to hex string for error debugging
+     */
+    function _bytesToHex(bytes memory data) internal pure returns (string memory) {
+        bytes memory hexChars = "0123456789abcdef";
+        uint256 len = data.length > 4 ? 4 : data.length; // Only first 4 bytes (selector)
+        bytes memory result = new bytes(len * 2);
+        for (uint256 i = 0; i < len; i++) {
+            result[i * 2] = hexChars[uint8(data[i]) >> 4];
+            result[i * 2 + 1] = hexChars[uint8(data[i]) & 0x0f];
+        }
+        return string(result);
     }
 
     /**
