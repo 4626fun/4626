@@ -51,6 +51,7 @@ const METHODS_REQUIRING_USEROP = new Set<string>([
 
 const ENTRYPOINT_V06 = getAddress(`0x${'5ff137d4b0fdcd49dca30c7cf57e578a026d2789'}`)
 const BASE_CHAIN_ID = 8453
+const ERC8004_IDENTITY_REGISTRY_DEFAULT = getAddress('0x8004A169FB4a3325136EB29fA0ceB6D2e539a432')
 
 // Coinbase Smart Wallet callData
 const COINBASE_SMART_WALLET_ABI = [
@@ -435,6 +436,8 @@ const SELECTOR_CREATE2_DEPLOY_FROM_STORE = '0xd76fad23' // deploy(bytes32,bytes3
 
 const SELECTOR_VAULT_SET_BURN_STREAM = '0xf3a1c8b6' // setBurnStream(address)
 const SELECTOR_VAULT_SET_WHITELIST = '0x53d6fd59' // setWhitelist(address,bool)
+const SELECTOR_ERC8004_REGISTER = '0xf2c298be' // register(string)
+const SELECTOR_ERC8004_SET_AGENT_URI = '0x0af28bd3' // setAgentURI(uint256,string)
 
 const ALLOWED_BATCHER_SELECTORS = new Set<string>([
   SELECTOR_BATCHER_DEPLOY_PHASE1,
@@ -455,6 +458,7 @@ const ALLOWED_ACTIVATION_SELECTORS = new Set<string>([
 const ALLOWED_TOKEN_SELECTORS = new Set<string>([SELECTOR_ERC20_APPROVE, SELECTOR_COIN_SET_PAYOUT_RECIPIENT])
 const ALLOWED_PERMIT2_SELECTORS = new Set<string>([SELECTOR_PERMIT2_PERMIT_TRANSFER_FROM])
 const ALLOWED_SELF_SELECTORS = new Set<string>([SELECTOR_CSW_ADD_OWNER_ADDRESS, SELECTOR_CSW_REMOVE_OWNER_AT_INDEX])
+const ALLOWED_ERC8004_SELECTORS = new Set<string>([SELECTOR_ERC8004_REGISTER, SELECTOR_ERC8004_SET_AGENT_URI])
 
 const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
   {
@@ -478,6 +482,12 @@ const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
 
 function asOwnerBytes(owner: Address): Hex {
   return encodeAbiParameters([{ type: 'address' }], [owner]) as Hex
+}
+
+function getErc8004RegistryAddress(): Address | null {
+  const raw = (process.env.ERC8004_AGENT_REGISTRY ?? '').trim()
+  if (raw && isAddress(raw)) return getAddress(raw)
+  return ERC8004_IDENTITY_REGISTRY_DEFAULT
 }
 
 function readDeploySessionHeaders(req: VercelRequest): { token: string; signature: string } | null {
@@ -1010,7 +1020,7 @@ async function validateInnerCalls(params: {
     payoutRouterBurnStreamArg?: Address | null
     vaultBurnStreamArg?: Address | null
   }) => void
-}): Promise<{ expectedCreatorToken: Address; mode: string }> {
+}): Promise<{ expectedCreatorToken: Address | null; mode: string }> {
   const contracts = getApiContracts()
   if (!contracts.creatorVaultBatcher) throw new Error('creator_vault_batcher_not_configured')
   const creatorVaultBatcher = getAddress(contracts.creatorVaultBatcher)
@@ -1043,8 +1053,28 @@ async function validateInnerCalls(params: {
     if (c.value !== 0n) throw new Error('value_transfer_not_allowed')
   }
 
+  const erc8004Registry = getErc8004RegistryAddress()
+  if (erc8004Registry) {
+    const isAgentRegistryCall =
+      innerCalls.length > 0 &&
+      innerCalls.every((c) => c.target === erc8004Registry && ALLOWED_ERC8004_SELECTORS.has(getSelector(c.data)))
+    if (isAgentRegistryCall) {
+      return { expectedCreatorToken: null, mode: 'agent_registry' }
+    }
+  }
+
   // Pass 1: detect the "primary" token from the deploy/activate call.
-  let mode: 'deploy_phase1' | 'deploy_phase2' | 'deploy_phase3' | 'launch_auction' | 'deploy' | 'activate' | 'approve_only' | null = null
+  let mode:
+    | 'deploy_phase1'
+    | 'deploy_phase2'
+    | 'deploy_phase3'
+    | 'launch_auction'
+    | 'deploy'
+    | 'activate'
+    | 'approve_only'
+    | 'legacy_withdraw'
+    | 'agent_registry'
+    | null = null
   let expectedCreatorToken: Address | null = null
   let expectedVault: Address | null = null
   let expectedWrapper: Address | null = null
