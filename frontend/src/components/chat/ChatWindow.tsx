@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Minus, X, Send, Loader2 } from 'lucide-react'
+import { Minus, X, Send, Loader2, ArrowLeft } from 'lucide-react'
 import { useXmtp, type ChatMessage } from '@/lib/xmtp/provider'
 
 type Props = {
@@ -19,6 +19,7 @@ type Props = {
   minimized: boolean
   onMinimize: () => void
   onClose: () => void
+  variant?: 'desktop' | 'mobile'
 }
 
 function formatTimestamp(date: Date): string {
@@ -42,6 +43,7 @@ export function ChatWindow({
   minimized,
   onMinimize,
   onClose,
+  variant = 'desktop',
 }: Props) {
   const { loadMessages, sendMessage, subscribeToMessages, status } = useXmtp()
 
@@ -116,44 +118,79 @@ export function ChatWindow({
     }
   }
 
+  const isMobile = variant === 'mobile'
+
   return (
     <div
-      className="flex flex-col bg-zinc-900/95 backdrop-blur-xl border border-white/10 rounded-t-xl overflow-hidden shadow-2xl"
-      style={{ width: 320, height: minimized ? 40 : 420 }}
+      className={`flex flex-col bg-zinc-900/95 backdrop-blur-xl border border-white/10 overflow-hidden shadow-2xl ${
+        isMobile ? 'h-full w-full rounded-none' : 'rounded-t-xl'
+      }`}
+      style={isMobile ? undefined : { width: 320, height: minimized ? 40 : 420 }}
     >
       {/* Header */}
-      <div
-        className="flex items-center justify-between gap-2 px-3 py-2 bg-zinc-800/80 border-b border-white/10 cursor-pointer select-none flex-shrink-0"
-        onClick={onMinimize}
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-medium text-zinc-300 uppercase flex-shrink-0">
-            {conversationName.slice(0, 2)}
+      {isMobile ? (
+        <div className="flex items-center justify-between gap-2 px-4 py-3 bg-black border-b border-white/10 flex-shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-full hover:bg-white/10 text-zinc-200 transition-colors"
+            aria-label="Back to chats"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <div className="flex-1 min-w-0 text-center">
+            <div className="text-sm font-semibold text-zinc-100 truncate">
+              {conversationName}
+            </div>
           </div>
-          <span className="text-sm text-zinc-200 font-medium truncate">{conversationName}</span>
-        </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onMinimize() }}
-            className="p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-zinc-200 transition-colors"
+            onClick={onClose}
+            className="p-2 rounded-full hover:bg-white/10 text-zinc-200 transition-colors"
+            aria-label="Close chat"
           >
-            <Minus className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onClose() }}
-            className="p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-zinc-200 transition-colors"
-          >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
-      </div>
+      ) : (
+        <div
+          className="flex items-center justify-between gap-2 px-3 py-2 bg-zinc-800/80 border-b border-white/10 cursor-pointer select-none flex-shrink-0"
+          onClick={onMinimize}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-medium text-zinc-300 uppercase flex-shrink-0">
+              {conversationName.slice(0, 2)}
+            </div>
+            <span className="text-sm text-zinc-200 font-medium truncate">{conversationName}</span>
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onMinimize() }}
+              className="p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-zinc-200 transition-colors"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onClose() }}
+              className="p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-zinc-200 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
-      {!minimized && (
+      {(!minimized || isMobile) && (
         <>
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
+          <div
+            ref={scrollRef}
+            className={`flex-1 overflow-y-auto px-3 py-2 space-y-2 ${
+              isMobile ? 'bg-black' : ''
+            }`}
+          >
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-5 h-5 text-zinc-500 animate-spin" />

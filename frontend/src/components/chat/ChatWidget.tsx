@@ -15,7 +15,7 @@
  * └──────────────────────────────────────────┘
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { X } from 'lucide-react'
 import { XmtpChatProvider, type ChatConversation, useXmtp } from '@/lib/xmtp/provider'
@@ -41,6 +41,16 @@ function ChatWidgetInner() {
   const [newDmAddress, setNewDmAddress] = useState('')
   const [newDmError, setNewDmError] = useState('')
   const [newDmLoading, setNewDmLoading] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(max-width: 767px)')
+    const handleChange = () => setIsMobile(mq.matches)
+    handleChange()
+    mq.addEventListener('change', handleChange)
+    return () => mq.removeEventListener('change', handleChange)
+  }, [])
 
   // Don't render anything if wallet is not connected
   if (!isConnected) return null
@@ -65,7 +75,10 @@ function ChatWidgetInner() {
       })
       return next
     })
-  }, [])
+    if (isMobile) {
+      setBarExpanded(false)
+    }
+  }, [isMobile])
 
   const handleMinimize = useCallback((id: string) => {
     setOpenWindows((prev) =>
@@ -111,30 +124,75 @@ function ChatWidgetInner() {
     }
   }, [newDmAddress, startDm, handleOpenChat])
 
+  const activeMobileWindow = openWindows[openWindows.length - 1]
+  const showMobileBar = barExpanded && !activeMobileWindow
+
   return (
-    <div className="fixed bottom-0 right-4 z-50 flex items-end gap-2 pointer-events-none">
-      {/* Chat windows — stack from right to left */}
-      {openWindows.map((win) => (
-        <div key={win.id} className="pointer-events-auto">
-          <ChatWindow
-            conversationId={win.id}
-            conversationName={win.name}
-            conversationType={win.type}
-            minimized={win.minimized}
-            onMinimize={() => handleMinimize(win.id)}
-            onClose={() => handleClose(win.id)}
+    <>
+      <div className="fixed inset-0 z-50 pointer-events-none md:hidden">
+        {showMobileBar && (
+          <div className="absolute inset-0 pointer-events-auto">
+            <ChatBar
+              expanded
+              variant="mobile"
+              onToggle={() => setBarExpanded(false)}
+              onOpenChat={handleOpenChat}
+              onNewDm={handleNewDm}
+            />
+          </div>
+        )}
+
+        {activeMobileWindow && (
+          <div className="absolute inset-0 pointer-events-auto">
+            <ChatWindow
+              conversationId={activeMobileWindow.id}
+              conversationName={activeMobileWindow.name}
+              conversationType={activeMobileWindow.type}
+              minimized={false}
+              variant="mobile"
+              onMinimize={() => handleMinimize(activeMobileWindow.id)}
+              onClose={() => handleClose(activeMobileWindow.id)}
+            />
+          </div>
+        )}
+
+        {!showMobileBar && !activeMobileWindow && (
+          <div className="absolute top-4 right-4 pointer-events-auto">
+            <ChatBar
+              expanded={false}
+              variant="mobile"
+              onToggle={() => setBarExpanded(true)}
+              onOpenChat={handleOpenChat}
+              onNewDm={handleNewDm}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="fixed bottom-0 right-4 z-50 hidden md:flex items-end gap-2 pointer-events-none">
+        {/* Chat windows — stack from right to left */}
+        {openWindows.map((win) => (
+          <div key={win.id} className="pointer-events-auto">
+            <ChatWindow
+              conversationId={win.id}
+              conversationName={win.name}
+              conversationType={win.type}
+              minimized={win.minimized}
+              onMinimize={() => handleMinimize(win.id)}
+              onClose={() => handleClose(win.id)}
+            />
+          </div>
+        ))}
+
+        {/* Chat bar — always on far right */}
+        <div className="pointer-events-auto">
+          <ChatBar
+            expanded={barExpanded}
+            onToggle={() => setBarExpanded((v) => !v)}
+            onOpenChat={handleOpenChat}
+            onNewDm={handleNewDm}
           />
         </div>
-      ))}
-
-      {/* Chat bar — always on far right */}
-      <div className="pointer-events-auto">
-        <ChatBar
-          expanded={barExpanded}
-          onToggle={() => setBarExpanded((v) => !v)}
-          onOpenChat={handleOpenChat}
-          onNewDm={handleNewDm}
-        />
       </div>
 
       {/* New DM modal overlay */}
@@ -188,7 +246,7 @@ function ChatWidgetInner() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }
 

@@ -6,7 +6,7 @@
  */
 
 import { useMemo } from 'react'
-import { MessageSquare, ChevronDown, Plus, Loader2, Wifi, WifiOff } from 'lucide-react'
+import { MessageSquare, ChevronDown, Plus, Loader2, Wifi, WifiOff, X } from 'lucide-react'
 import { useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
 
 type Props = {
@@ -14,6 +14,7 @@ type Props = {
   onToggle: () => void
   onOpenChat: (convo: ChatConversation) => void
   onNewDm: () => void
+  variant?: 'desktop' | 'mobile'
 }
 
 function formatTime(date?: Date): string {
@@ -26,7 +27,7 @@ function formatTime(date?: Date): string {
   return `${Math.floor(diff / 86_400_000)}d`
 }
 
-export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm }: Props) {
+export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'desktop' }: Props) {
   const { status, error, connect, conversations } = useXmtp()
 
   const totalUnread = useMemo(
@@ -37,38 +38,99 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm }: Props) {
   const isConnected = status === 'connected'
   const isLoading = status === 'signing' || status === 'connecting'
 
-  return (
-    <div className="flex flex-col" style={{ width: 280 }}>
-      {/* Header / toggle pill */}
+  if (variant === 'mobile' && !expanded) {
+    return (
       <button
         type="button"
         onClick={onToggle}
-        className="flex items-center justify-between gap-2 rounded-t-xl px-4 py-2.5 bg-zinc-900 border border-white/10 border-b-0 text-zinc-200 hover:bg-zinc-800 transition-colors select-none"
+        className="relative flex items-center justify-center w-12 h-12 rounded-full bg-zinc-900 text-zinc-200 shadow-lg hover:bg-zinc-800 transition-colors"
+        aria-label="Open messenger"
       >
-        <span className="flex items-center gap-2">
-          <MessageSquare className="w-4 h-4" />
-          <span className="text-sm font-medium">Chats</span>
-          {totalUnread > 0 && (
-            <span className="flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-brand-primary text-[10px] font-bold text-black px-1">
-              {totalUnread > 99 ? '99+' : totalUnread}
-            </span>
-          )}
-        </span>
-        <span className="flex items-center gap-1.5">
-          {isConnected ? (
-            <Wifi className="w-3 h-3 text-emerald-400" />
-          ) : (
-            <WifiOff className="w-3 h-3 text-zinc-500" />
-          )}
-          <ChevronDown
-            className={`w-4 h-4 text-zinc-400 transition-transform ${expanded ? '' : 'rotate-180'}`}
-          />
-        </span>
+        <MessageSquare className="w-5 h-5" />
+        {totalUnread > 0 && (
+          <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-brand-primary text-[10px] font-bold text-black px-1">
+            {totalUnread > 99 ? '99+' : totalUnread}
+          </span>
+        )}
       </button>
+    )
+  }
+
+  const containerClasses =
+    variant === 'mobile'
+      ? 'flex flex-col h-full w-full bg-black text-white'
+      : 'flex flex-col'
+
+  return (
+    <div className={containerClasses} style={variant === 'desktop' ? { width: 280 } : undefined}>
+      {/* Header / toggle pill */}
+      {variant === 'desktop' ? (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex items-center justify-between gap-2 rounded-t-xl px-4 py-2.5 bg-zinc-900 border border-white/10 border-b-0 text-zinc-200 hover:bg-zinc-800 transition-colors select-none"
+        >
+          <span className="flex items-center gap-2">
+            <MessageSquare className="w-4 h-4" />
+            <span className="text-sm font-medium">Chats</span>
+            {totalUnread > 0 && (
+              <span className="flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-brand-primary text-[10px] font-bold text-black px-1">
+                {totalUnread > 99 ? '99+' : totalUnread}
+              </span>
+            )}
+          </span>
+          <span className="flex items-center gap-1.5">
+            {isConnected ? (
+              <Wifi className="w-3 h-3 text-emerald-400" />
+            ) : (
+              <WifiOff className="w-3 h-3 text-zinc-500" />
+            )}
+            <ChevronDown
+              className={`w-4 h-4 text-zinc-400 transition-transform ${expanded ? '' : 'rotate-180'}`}
+            />
+          </span>
+        </button>
+      ) : (
+        <div className="flex items-center justify-between px-4 pt-4 pb-3">
+          <div className="text-2xl font-semibold tracking-tight">Messenger</div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onNewDm}
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-white/10 text-zinc-100 hover:bg-white/20 transition-colors"
+              aria-label="New message"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onToggle}
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-white/10 text-zinc-100 hover:bg-white/20 transition-colors"
+              aria-label="Close messenger"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Expandable panel */}
       {expanded && (
-        <div className="flex flex-col bg-zinc-900/95 backdrop-blur-xl border border-white/10 border-t-0 rounded-b-xl overflow-hidden max-h-[420px]">
+        <div
+          className={
+            variant === 'mobile'
+              ? 'flex flex-col flex-1 bg-black'
+              : 'flex flex-col bg-zinc-900/95 backdrop-blur-xl border border-white/10 border-t-0 rounded-b-xl overflow-hidden max-h-[420px]'
+          }
+        >
+          {variant === 'mobile' && (
+            <div className="px-4 pb-3">
+              <div className="flex items-center gap-2 rounded-full bg-zinc-900 px-4 py-2 text-sm text-zinc-500">
+                <MessageSquare className="w-4 h-4 text-zinc-400" />
+                Ask Meta AI or Search
+              </div>
+            </div>
+          )}
           {/* Not connected state */}
           {!isConnected && !isLoading && (
             <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
@@ -104,14 +166,16 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm }: Props) {
           {isConnected && (
             <>
               {/* New chat button */}
-              <button
-                type="button"
-                onClick={onNewDm}
-                className="flex items-center gap-2 px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-white/5 transition-colors border-b border-white/5"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                New message
-              </button>
+              {variant === 'desktop' && (
+                <button
+                  type="button"
+                  onClick={onNewDm}
+                  className="flex items-center gap-2 px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-white/5 transition-colors border-b border-white/5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  New message
+                </button>
+              )}
 
               {conversations.length === 0 ? (
                 <div className="px-4 py-8 text-center text-xs text-zinc-500">
