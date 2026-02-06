@@ -20,14 +20,22 @@ export function ConnectButtonWeb3() {
     typeof window !== 'undefined' &&
     Array.isArray((window as any)?.ethereum?.providers) &&
     ((window as any).ethereum.providers as any[]).length > 1
+  const lockedEthereumProviderGlobal =
+    typeof window !== 'undefined' &&
+    (() => {
+      const descriptor = Object.getOwnPropertyDescriptor(window, 'ethereum')
+      if (!descriptor) return false
+      return typeof descriptor.get === 'function' && typeof descriptor.set !== 'function'
+    })()
+  const shouldHideInjectedConnector = hasMultipleInjectedProviders || lockedEthereumProviderGlobal
 
   const filteredConnectors = useMemo(() => {
-    if (!hasMultipleInjectedProviders) return connectors
+    if (!shouldHideInjectedConnector) return connectors
     return connectors.filter((connector) => {
       const id = String((connector as any)?.id ?? '').toLowerCase()
       return !id.includes('injected')
     })
-  }, [connectors, hasMultipleInjectedProviders])
+  }, [connectors, shouldHideInjectedConnector])
 
   const formatAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`
 
@@ -133,6 +141,10 @@ export function ConnectButtonWeb3() {
             {hasMultipleInjectedProviders ? (
               <div className="px-4 py-2 text-[11px] text-zinc-500">
                 Multiple wallet extensions detected. Use Coinbase Wallet or WalletConnect.
+              </div>
+            ) : lockedEthereumProviderGlobal ? (
+              <div className="px-4 py-2 text-[11px] text-zinc-500">
+                Wallet extension collision detected (`window.ethereum` is locked). Use Coinbase Wallet or WalletConnect.
               </div>
             ) : null}
             {filteredConnectors.map((connector) => (
