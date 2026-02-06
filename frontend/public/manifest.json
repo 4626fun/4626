@@ -8,14 +8,14 @@
   "theme_color": "#3B82F6",
   "icons": [
     {
-      "src": "/miniapp-icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
+      "src": "/miniapp-icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
     },
     {
-      "src": "/miniapp-icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
+      "src": "/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
     }
   ]
 }

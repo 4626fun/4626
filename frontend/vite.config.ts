@@ -240,12 +240,10 @@ export default defineConfig(({ command }) => {
     sourcemap: enableSourcemap,
     rollupOptions: {
       output: {
+        // Keep chunking conservative to avoid circular init order bugs across wallet SDKs.
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
-          web3: ['wagmi', 'viem', '@coinbase/onchainkit'],
-          privy: ['@privy-io/react-auth', '@privy-io/wagmi', '@privy-io/cross-app-connect'],
           charts: ['d3', 'recharts'],
-          zora: ['@zoralabs/coins-sdk'],
         },
       },
     },
