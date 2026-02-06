@@ -288,6 +288,26 @@ const QUEUED_WITHDRAWAL_ABI = [
   },
 ] as const
 
+const COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI = [
+  {
+    type: 'function',
+    name: 'executeBatch',
+    stateMutability: 'payable',
+    inputs: [
+      {
+        name: 'calls',
+        type: 'tuple[]',
+        components: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
 type TxState = {
   status: 'idle' | 'pending' | 'success' | 'error'
   hash?: `0x${string}`
@@ -324,6 +344,75 @@ function formatToken(value: bigint | undefined): string {
 function buildTxHref(hash?: string): string | null {
   if (!hash) return null
   return `https://basescan.org/tx/${hash}`
+}
+
+function shouldFallbackToOwnerDirectExecute(error: unknown): boolean {
+  const msg = String((error as any)?.shortMessage || (error as any)?.message || error || '').toLowerCase()
+  return (
+    (msg.includes('method not supported') && msg.includes('eth_sign')) ||
+    msg.includes('eth_sign is required for this wallet owner') ||
+    msg.includes('invalid signature') ||
+    msg.includes('signature check failed') ||
+    msg.includes('userop signature verification failed')
+  )
+}
+
+async function sendEmbeddedOwnerSmartWalletCall(params: {
+  publicClient: any
+  embeddedProvider: { request: (args: { method: string; params?: any[] }) => Promise<unknown> }
+  bundlerUrl: string
+  smartWallet: Address
+  ownerAddress: Address
+  calls: Array<{ to: Address; value?: bigint; data?: Hex }>
+}): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
+  const { publicClient, embeddedProvider, bundlerUrl, smartWallet, ownerAddress, calls } = params
+  const embeddedWalletClient = {
+    request: async (args: { method: string; params?: any[] }) => embeddedProvider.request(args),
+  }
+
+  try {
+    return await sendCoinbaseSmartWalletUserOperation({
+      publicClient: publicClient as any,
+      walletClient: embeddedWalletClient as any,
+      bundlerUrl,
+      smartWallet,
+      ownerAddress,
+      calls,
+      version: '1',
+      userOpSignMode: 'eth_sign',
+      // Keep EOA signing strict in Admin/Ops AA path.
+      allowEoaSignMessageFallback: false,
+      skipPaymaster: false,
+    })
+  } catch (error: unknown) {
+    if (!shouldFallbackToOwnerDirectExecute(error)) throw error
+
+    const executeBatchData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI as any,
+      functionName: 'executeBatch' as any,
+      args: [
+        calls.map((call) => ({
+          target: call.to,
+          value: call.value ?? 0n,
+          data: call.data ?? '0x',
+        })),
+      ],
+    })
+    const txHashRaw = await embeddedProvider.request({
+      method: 'eth_sendTransaction',
+      params: [
+        {
+          from: ownerAddress,
+          to: smartWallet,
+          data: executeBatchData,
+        },
+      ],
+    })
+    if (typeof txHashRaw !== 'string' || !txHashRaw.startsWith('0x')) {
+      throw new Error('Direct owner transaction fallback did not return a valid transaction hash.')
+    }
+    return { userOpHash: txHashRaw as Hex, transactionHash: txHashRaw as Hex }
+  }
 }
 
 function TxMeta({ state }: { state?: TxState }) {
@@ -569,20 +658,13 @@ function AgentRegistration() {
           functionName: 'register' as any,
           args: [trimmedUri],
         })
-        const embeddedWalletClient = {
-          request: async (args: { method: string; params?: any[] }) => embeddedProvider.request(args),
-        }
-        const result = await sendCoinbaseSmartWalletUserOperation({
+        const result = await sendEmbeddedOwnerSmartWalletCall({
           publicClient: publicClient as any,
-          walletClient: embeddedWalletClient as any,
+          embeddedProvider,
           bundlerUrl,
           smartWallet: canonicalCswAddress as Address,
           ownerAddress: embeddedPrivyEoaAddress as Address,
           calls: [{ to: registryAddress, data }],
-          version: '1',
-          userOpSignMode: 'eth_sign',
-          allowEoaSignMessageFallback: true,
-          skipPaymaster: false,
         })
         updateRegisterTx({ status: 'pending', hash: result.transactionHash })
         const receipt = await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
@@ -679,20 +761,13 @@ function AgentRegistration() {
           functionName: 'setAgentURI' as any,
           args: [agentId, trimmedUri],
         })
-        const embeddedWalletClient = {
-          request: async (args: { method: string; params?: any[] }) => embeddedProvider.request(args),
-        }
-        const result = await sendCoinbaseSmartWalletUserOperation({
+        const result = await sendEmbeddedOwnerSmartWalletCall({
           publicClient: publicClient as any,
-          walletClient: embeddedWalletClient as any,
+          embeddedProvider,
           bundlerUrl,
           smartWallet: canonicalCswAddress as Address,
           ownerAddress: embeddedPrivyEoaAddress as Address,
           calls: [{ to: registryAddress, data }],
-          version: '1',
-          userOpSignMode: 'eth_sign',
-          allowEoaSignMessageFallback: true,
-          skipPaymaster: false,
         })
         updateUpdateTx({ status: 'pending', hash: result.transactionHash })
         await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
@@ -1234,20 +1309,13 @@ function LegacyWithdrawals() {
           functionName: config.functionName as any,
           args: config.args ?? [],
         })
-        const embeddedWalletClient = {
-          request: async (args: { method: string; params?: any[] }) => embeddedProvider.request(args),
-        }
-        const result = await sendCoinbaseSmartWalletUserOperation({
+        const result = await sendEmbeddedOwnerSmartWalletCall({
           publicClient: publicClient as any,
-          walletClient: embeddedWalletClient as any,
+          embeddedProvider,
           bundlerUrl,
           smartWallet: canonicalCswAddress as Address,
           ownerAddress: embeddedPrivyEoaAddress as Address,
           calls: [{ to: config.address, data }],
-          version: '1',
-          userOpSignMode: 'eth_sign',
-          allowEoaSignMessageFallback: true,
-          skipPaymaster: false,
         })
         updateTx(key, { status: 'pending', hash: result.transactionHash })
         await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
@@ -1317,20 +1385,13 @@ function LegacyWithdrawals() {
         }
         const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
         const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-        const embeddedWalletClient = {
-          request: async (args: { method: string; params?: any[] }) => embeddedProvider.request(args),
-        }
-        const result = await sendCoinbaseSmartWalletUserOperation({
+        const result = await sendEmbeddedOwnerSmartWalletCall({
           publicClient: publicClient as any,
-          walletClient: embeddedWalletClient as any,
+          embeddedProvider,
           bundlerUrl,
           smartWallet: canonicalCswAddress as Address,
           ownerAddress: embeddedPrivyEoaAddress as Address,
           calls,
-          version: '1',
-          userOpSignMode: 'eth_sign',
-          allowEoaSignMessageFallback: true,
-          skipPaymaster: false,
         })
         updateTx(key, { status: 'pending', hash: result.transactionHash })
         await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
