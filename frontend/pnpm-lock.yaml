@@ -81,6 +81,9 @@ importers:
       '@xmtp/agent-sdk':
         specifier: ^2.0.2
         version: 2.0.2(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
+      '@xmtp/browser-sdk':
+        specifier: ^6.3.0
+        version: 6.3.0
       '@xmtp/content-type-primitives':
         specifier: ^3.0.1
         version: 3.0.1
@@ -2960,6 +2963,10 @@ packages:
     resolution: {integrity: sha512-jDBmWF6dyz3S+PeDxsfvfQOv6DceAlUxUKwDeHbW73yvUxvzgZBehJ4JGuk62LT6juNa4Z0fvWvynQEwyXk7eQ==}
     engines: {node: '>=22'}
 
+  '@xmtp/browser-sdk@6.3.0':
+    resolution: {integrity: sha512-MjGf49DfRijJbq0Pov+DoB3SmM2qE5uMJ/P7qFLzrx5h6C20JkJq0dew/kz7FkCOVxVaFfBrmE8GB8/mRxi65g==}
+    engines: {node: '>=22'}
+
   '@xmtp/content-type-primitives@3.0.0':
     resolution: {integrity: sha512-gxK6+k0ywOz39LFJjrUF3fOXWXR3aAmIkF7e0rFz7c27izDimZC5E2oja9iz/CYyzDS6lf9Pm31qRcGTMSYaHg==}
 
@@ -2976,6 +2983,10 @@ packages:
 
   '@xmtp/node-sdk@5.2.0':
     resolution: {integrity: sha512-68PlLMlh7d6ap0UYvjGOUNXcq0a8IOqEfrU5G2tPyx3gwyeF+d+vQJwaa1GBKDaAH2GtK+bKh0CQau9f/tEeKQ==}
+    engines: {node: '>=22'}
+
+  '@xmtp/wasm-bindings@1.9.1':
+    resolution: {integrity: sha512-xc6TA7ExjBgrfVLFwdN0UZz9TW4S4v8oxpOmuzOqb/Rbd6QPmqEfbD8FVO2ssUPSKG5r32Plpg/YGam+pkresg==}
     engines: {node: '>=22'}
 
   '@zoralabs/coins-sdk@0.4.3':
@@ -11154,6 +11165,11 @@ snapshots:
       - utf-8-validate
       - zod
 
+  '@xmtp/browser-sdk@6.3.0':
+    dependencies:
+      '@xmtp/content-type-primitives': 3.0.0
+      '@xmtp/wasm-bindings': 1.9.1
+
   '@xmtp/content-type-primitives@3.0.0':
     dependencies:
       '@xmtp/node-bindings': 1.8.0
@@ -11170,6 +11186,8 @@ snapshots:
     dependencies:
       '@xmtp/content-type-primitives': 3.0.0
       '@xmtp/node-bindings': 1.9.1
+
+  '@xmtp/wasm-bindings@1.9.1': {}
 
   '@zoralabs/coins-sdk@0.4.3(abitype@1.2.3(typescript@5.9.3)(zod@4.3.6))(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))':
     dependencies:

@@ -747,7 +747,15 @@ function createWalletBackedLocalAccount(params: {
       }
 
       // Force specific mode if requested
-      if (userOpSignMode === 'eth_sign') return await tryEthSign()
+      if (userOpSignMode === 'eth_sign') {
+        try {
+          return await tryEthSign()
+        } catch (ethSignError: unknown) {
+          if (isUserRejection(ethSignError)) throw ethSignError
+          if (!allowSignMessageFallback || !isEthSignBlocked(ethSignError)) throw ethSignError
+          return await tryPersonalSign()
+        }
+      }
       if (userOpSignMode === 'signMessage') return await tryPersonalSign()
 
       // Auto mode: try eth_sign first, fall back to signMessage
@@ -1197,6 +1205,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   version?: '1' | '1.1'
   userOpSignMode?: UserOpSignMode
   ownerIsContract?: boolean
+  allowEoaSignMessageFallback?: boolean
   skipPreflightSimulation?: boolean
   skipPaymaster?: boolean
   retryOnInvalidSignature?: boolean
@@ -1213,6 +1222,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     version = '1',
     userOpSignMode = 'auto',
     ownerIsContract: ownerIsContractOverride,
+    allowEoaSignMessageFallback = false,
     skipPreflightSimulation,
     skipPaymaster = false,
     retryOnInvalidSignature = true,
@@ -1305,13 +1315,16 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     }
   }
 
+  const shouldCoerceToEthSign =
+    !ownerIsContract && userOpSignMode === 'signMessage' && !allowEoaSignMessageFallback
+
   const effectiveUserOpSignMode =
-    !ownerIsContract && userOpSignMode === 'signMessage'
+    shouldCoerceToEthSign
       ? 'eth_sign'
       : ownerIsContract && userOpSignMode === 'auto'
         ? 'signMessage'
         : userOpSignMode
-  if (!ownerIsContract && userOpSignMode === 'signMessage') {
+  if (shouldCoerceToEthSign) {
     logger.warn('[ERC-4337] Coercing sign mode for EOA owner', {
       requested: userOpSignMode,
       effective: effectiveUserOpSignMode,
@@ -1325,7 +1338,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     walletClient, 
     address: ownerAddress, 
     userOpSignMode: effectiveUserOpSignMode,
-    allowSignMessageFallback: ownerIsContract,
+    allowSignMessageFallback: ownerIsContract || allowEoaSignMessageFallback,
   })
   
   // Create the Coinbase Smart Account
@@ -1538,6 +1551,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         version,
         userOpSignMode,
         ownerIsContract: ownerIsContractOverride,
+        allowEoaSignMessageFallback,
         skipPreflightSimulation,
         skipPaymaster: false,
         retryOnInvalidSignature,
@@ -1562,6 +1576,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         version,
         userOpSignMode: 'signMessage',
         ownerIsContract: ownerIsContractOverride,
+        allowEoaSignMessageFallback,
         skipPreflightSimulation,
         skipPaymaster,
         retryOnInvalidSignature: false,
