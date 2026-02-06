@@ -3,11 +3,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   clearCookie,
+  consumeNonce,
   COOKIE_NONCE,
   COOKIE_SESSION,
+  ensureNonceSchema,
   handleOptions,
   hostMatchesDomain,
-  makeNonceToken,
   makeSessionToken,
   parseCookies,
   parseSiweMessage,
@@ -18,6 +19,10 @@ import {
   setNoStore,
   verifySiweSignature,
 } from '../../../server/auth/_shared.js'
+import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
+import { getDb } from '../../../server/_lib/postgres.js'
+import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
+import { upsertProfileByWallet } from '../../../server/_lib/profileSync.js'
 
 
 type VerifyBody = { message?: string; signature?: string; nonceToken?: string }
@@ -71,6 +76,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Message expired' } satisfies ApiEnvelope<never>)
   }
 
+  if (parsed.chainId !== 8453) {
+    return res.status(400).json({ success: false, error: 'Invalid chain' } satisfies ApiEnvelope<never>)
+  }
+
+  let canonicalOrigin = ''
+  try {
+    canonicalOrigin = getCanonicalOrigin(req)
+  } catch {
+    return res.status(503).json({ success: false, error: 'Auth service unavailable' } satisfies ApiEnvelope<never>)
+  }
+  if (parsed.uri !== canonicalOrigin) {
+    return res.status(400).json({ success: false, error: 'URI mismatch' } satisfies ApiEnvelope<never>)
+  }
+
+  const db = await getDb()
+  if (!db) {
+    return res.status(503).json({ success: false, error: 'Auth service unavailable' } satisfies ApiEnvelope<never>)
+  }
+  try {
+    await ensureNonceSchema(db as any)
+    const consumed = await consumeNonce(db as any, parsed.nonce)
+    if (!consumed) {
+      return res.status(400).json({ success: false, error: 'Nonce already used or expired' } satisfies ApiEnvelope<never>)
+    }
+  } catch {
+    return res.status(503).json({ success: false, error: 'Auth service unavailable' } satisfies ApiEnvelope<never>)
+  }
+
   const verified = await verifySiweSignature({ message, signature })
   if (!verified) {
     return res.status(401).json({ success: false, error: 'Signature invalid' } satisfies ApiEnvelope<never>)
@@ -80,11 +113,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCookie(req, res, COOKIE_SESSION, token, { httpOnly: true, maxAgeSeconds: 60 * 60 * 24 * 7 })
   clearCookie(req, res, COOKIE_NONCE)
 
+  try {
+    await ensureWaitlistSchema(db as any)
+    await upsertProfileByWallet(db as any, { primaryWallet: verified.address })
+  } catch {
+    // best-effort: auth should succeed even if DB is unavailable
+  }
+
   return res.status(200).json({
     success: true,
     data: { address: verified.address, sessionToken: token } satisfies VerifyResponse,
   } satisfies ApiEnvelope<VerifyResponse>)
 }
-
 
 

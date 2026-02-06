@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { parseWebhookEvent, verifyAppKeyWithNeynar } from '@farcaster/miniapp-node'
 
 import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../server/auth/_shared.js'
+import { requireNeynarApiKey } from '../../server/_lib/neynarConfig.js'
 import { getDb } from '../../server/_lib/postgres.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -71,16 +72,9 @@ function normalizeParsedWebhook(raw: any): ParsedWebhook | null {
 }
 
 async function parseWebhookPayload(raw: any): Promise<ParsedWebhook | null> {
-  const hasNeynarKey = Boolean((process.env.NEYNAR_API_KEY || '').trim())
-  if (hasNeynarKey) {
-    try {
-      const parsed = await parseWebhookEvent(raw, verifyAppKeyWithNeynar)
-      return normalizeParsedWebhook(parsed)
-    } catch (err) {
-      throw err
-    }
-  }
-  return normalizeParsedWebhook(raw)
+  requireNeynarApiKey({ context: 'webhook' })
+  const parsed = await parseWebhookEvent(raw, verifyAppKeyWithNeynar)
+  return normalizeParsedWebhook(parsed)
 }
 
 async function upsertNotificationDetails(params: {
@@ -133,6 +127,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     parsed = await parseWebhookPayload(body)
   } catch (err) {
+    const message = err instanceof Error ? err.message : 'unknown'
+    console.error('Webhook verification failed:', message)
+    if (message === 'webhook_verification_unavailable' || message.startsWith('neynar_api_key_missing')) {
+      return res.status(503).json({ success: false, error: 'Webhook verification unavailable' } satisfies ApiEnvelope<never>)
+    }
     return res.status(401).json({ success: false, error: 'Invalid webhook signature' } satisfies ApiEnvelope<never>)
   }
 
@@ -156,4 +155,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     data: { ok: true, event: eventType, stored } satisfies WebhookOk,
   } satisfies ApiEnvelope<WebhookOk>)
 }
-

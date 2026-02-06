@@ -311,6 +311,51 @@ export async function updateDeploySession(params: {
   `
 }
 
+export async function transitionDeploySession(params: {
+  id: string
+  fromStep: DeploySessionStep
+  toStep: DeploySessionStep
+  lastError?: string | null
+  lastUserOpHash?: string | null
+  lastTxHash?: string | null
+  payloadPatch?: any
+}): Promise<boolean> {
+  const db = await getDb()
+  if (!db) throw new Error('db_not_configured')
+  await ensureDeploySessionsSchema()
+
+  const patch = params.payloadPatch
+  const result =
+    patch && typeof patch === 'object'
+      ? await db.sql`
+          UPDATE deploys
+          SET
+            payload = COALESCE(payload, '{}'::jsonb) || ${patch},
+            step = ${params.toStep},
+            last_error = COALESCE(${params.lastError ?? null}, last_error),
+            last_userop_hash = COALESCE(${params.lastUserOpHash ?? null}, last_userop_hash),
+            last_tx_hash = COALESCE(${params.lastTxHash ?? null}, last_tx_hash),
+            updated_at = NOW()
+          WHERE id = ${params.id}
+            AND step = ${params.fromStep}
+          RETURNING id;
+        `
+      : await db.sql`
+          UPDATE deploys
+          SET
+            step = ${params.toStep},
+            last_error = COALESCE(${params.lastError ?? null}, last_error),
+            last_userop_hash = COALESCE(${params.lastUserOpHash ?? null}, last_userop_hash),
+            last_tx_hash = COALESCE(${params.lastTxHash ?? null}, last_tx_hash),
+            updated_at = NOW()
+          WHERE id = ${params.id}
+            AND step = ${params.fromStep}
+          RETURNING id;
+        `
+
+  return Array.isArray(result.rows) && result.rows.length > 0
+}
+
 function mapRow(r: any): DeploySessionRecord {
   return {
     id: String(r.id),
@@ -330,4 +375,3 @@ function mapRow(r: any): DeploySessionRecord {
     lastTxHash: r.last_tx_hash ? String(r.last_tx_hash) : null,
   }
 }
-

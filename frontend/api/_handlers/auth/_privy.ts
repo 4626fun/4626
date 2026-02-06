@@ -9,6 +9,9 @@ import {
   setNoStore,
   makeSessionToken,
 } from '../../../server/auth/_shared.js'
+import { getDb } from '../../../server/_lib/postgres.js'
+import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
+import { upsertProfileByWallet } from '../../../server/_lib/profileSync.js'
 
 import { PrivyClient } from '@privy-io/server-auth'
 
@@ -82,6 +85,53 @@ function extractAnyEvmWalletAddress(user: any): string | null {
   return null
 }
 
+type EmbeddedWalletMeta = {
+  address: string | null
+  chainType: string | null
+  walletClientType: string | null
+}
+
+function extractEmbeddedWalletMeta(user: any): EmbeddedWalletMeta {
+  const linked = Array.isArray(user?.linkedAccounts) ? user.linkedAccounts : []
+  const primaryWallet = user?.wallet && typeof user.wallet === 'object' ? [{ ...user.wallet, type: 'wallet' }] : []
+  const all = [...primaryWallet, ...linked]
+  const normalizeChain = (v: any): string | null => {
+    const s = normalizeLower(v)
+    return s.length > 0 ? s : null
+  }
+  const normalizeClientType = (v: any): string | null => {
+    const s = normalizeLower(v)
+    return s.length > 0 ? s : null
+  }
+  const parseWallet = (raw: any): EmbeddedWalletMeta => {
+    const addr = typeof raw?.address === 'string' ? String(raw.address).trim() : ''
+    return {
+      address: isValidEvmAddress(addr) ? addr.toLowerCase() : null,
+      chainType: normalizeChain(raw?.chainType ?? raw?.chain_type),
+      walletClientType: normalizeClientType(
+        raw?.walletClientType ??
+          raw?.wallet_client_type ??
+          raw?.walletType ??
+          raw?.wallet_type ??
+          raw?.connectorType ??
+          raw?.connector_type,
+      ),
+    }
+  }
+  const isEmbedded = (clientType: string | null) =>
+    clientType ? clientType.includes('privy') || clientType.includes('embedded') : false
+
+  for (const raw of all) {
+    const meta = parseWallet(raw)
+    if (meta.address && isEmbedded(meta.walletClientType)) return meta
+  }
+  for (const raw of all) {
+    const meta = parseWallet(raw)
+    if (meta.address) return meta
+  }
+  return { address: null, chainType: null, walletClientType: null }
+}
+
 function getPrivyServerAuth(): { appId: string; appSecret: string } | null {
   const appId = (process.env.PRIVY_APP_ID || '').trim()
   const appSecret = (process.env.PRIVY_APP_SECRET || '').trim()
@@ -137,6 +187,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const sessionToken = makeSessionToken({ address })
     setCookie(req, res, COOKIE_SESSION, sessionToken, { httpOnly: true, maxAgeSeconds: 60 * 60 * 24 * 7 })
+
+    try {
+      const db = await getDb()
+      if (db) {
+        const embeddedMeta = extractEmbeddedWalletMeta(user)
+        await ensureWaitlistSchema(db as any)
+        await upsertProfileByWallet(db as any, {
+          primaryWallet: address,
+          embeddedWallet: embeddedMeta.address,
+          embeddedWalletChain: embeddedMeta.chainType,
+          embeddedWalletClientType: embeddedMeta.walletClientType,
+          privyUserId: claims.userId,
+        })
+      }
+    } catch {
+      // best-effort: auth should succeed even if DB is unavailable
+    }
 
     return res.status(200).json({
       success: true,

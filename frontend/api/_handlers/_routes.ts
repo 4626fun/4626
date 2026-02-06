@@ -121,6 +121,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'waitlist/csw-link': () => import('./waitlist/_csw-link.js'),
   'waitlist/ledger': () => import('./waitlist/_ledger.js'),
   'waitlist/leaderboard': () => import('./waitlist/_leaderboard.js'),
+  'waitlist/me': () => import('./waitlist/_me.js'),
   'waitlist/position': () => import('./waitlist/_position.js'),
   'waitlist/profile-complete': () => import('./waitlist/_profile-complete.js'),
   'waitlist/task-claim': () => import('./waitlist/_task-claim.js'),

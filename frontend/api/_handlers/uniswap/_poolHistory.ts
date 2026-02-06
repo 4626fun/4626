@@ -1,4 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 /**
  * Get historical pool data for a token
@@ -87,11 +89,19 @@ async function fetchGraphQL<T>(subgraphUrl: string, query: string, variables: Re
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300')
+  setCors(req, res)
+  setNoStore(res)
+  if (handleOptions(req, res)) return
 
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
+  }
+
+  const clientIp = getClientIp(req)
+  const rate = checkRateLimit(rateLimitKey('graph', clientIp), RATE_LIMITS.general)
+  if (!rate.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
   }
 
   if (!THEGRAPH_API_KEY) {
@@ -332,7 +342,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('Pool history error:', error)
     return res.status(500).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Internal server error',
+      error: 'Internal server error',
     })
   }
 }

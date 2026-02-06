@@ -8,11 +8,13 @@
     "build": "vite build",
     "postbuild": "node scripts/generate-brand-icons.mjs --out dist",
     "lint": "eslint . --ext ts,tsx --max-warnings 0",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "preview": "vite preview",
     "generate:brand-icons": "node scripts/generate-brand-icons.mjs --out dist",
     "capture:miniapp-screens": "node scripts/capture-miniapp-screenshots.mjs",
-    "docs": "pnpm exec typedoc"
+    "docs": "pnpm exec typedoc",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@coinbase/cdp-sdk": "^1.44.0",
@@ -73,7 +75,8 @@
     "tsx": "^4.21.0",
     "typedoc": "^0.28.16",
     "typedoc-plugin-markdown": "^4.9.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

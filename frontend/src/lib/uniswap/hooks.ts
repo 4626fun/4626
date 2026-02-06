@@ -84,7 +84,7 @@ export function useUniswapServiceStatus() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            query: '{ _meta { block { number } } }',
+            query: 'query HealthMeta { _meta { block { number } } }',
           }),
         })
         

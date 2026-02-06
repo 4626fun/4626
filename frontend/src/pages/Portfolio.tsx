@@ -5,6 +5,7 @@ import { useAccount } from 'wagmi'
 import { ArrowDownLeft, ArrowUpRight, MoreHorizontal, Plus } from 'lucide-react'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { apiFetch } from '@/lib/apiBase'
 import { fetchDebankTokenList, type DebankToken, type DebankTokenList } from '@/lib/debank/client'
 import { fetchZoraCoin } from '@/lib/zora/client'
 import type { ZoraCoin } from '@/lib/zora/types'
@@ -31,6 +32,13 @@ function formatAmount(v: number | null | undefined): string {
   if (n >= 100) return n.toLocaleString(undefined, { maximumFractionDigits: 2 })
   if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 4 })
   return n.toLocaleString(undefined, { maximumFractionDigits: 6 })
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value
+  return d.toLocaleString()
 }
 
 function isEvmAddress(v: string): boolean {
@@ -113,6 +121,30 @@ export function Portfolio() {
 
   const [tab, setTab] = useState<'overview' | 'tokens' | 'nfts' | 'activity'>('overview')
   const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y'>('1D')
+
+  type SetupProfile = {
+    primaryWallet: string | null
+    embeddedWallet: string | null
+    embeddedWalletChain: string | null
+    embeddedWalletClientType: string | null
+    cswAddress: string | null
+    privyUserId: string | null
+    appAccessStatus: string | null
+    updatedAt: string | null
+  }
+
+  const setupQuery = useQuery({
+    queryKey: ['portfolio', 'setup', effectiveAddress],
+    enabled: Boolean(effectiveAddress),
+    staleTime: 60_000,
+    retry: 0,
+    queryFn: async (): Promise<SetupProfile | null> => {
+      const res = await apiFetch('/api/waitlist/me', { method: 'GET', headers: { Accept: 'application/json' } })
+      const json = (await res.json().catch(() => null)) as { success?: boolean; data?: SetupProfile | null } | null
+      if (!res.ok || !json?.success) return null
+      return json.data ?? null
+    },
+  })
 
   const tokenListQuery = useQuery({
     queryKey: ['portfolio', 'debankTokenList', effectiveAddress],
@@ -279,7 +311,7 @@ export function Portfolio() {
                 type="button"
                 onClick={() => setTab(t)}
                 className={`rounded-full px-3 py-1.5 border ${
-                  tab === t ? 'border-white/10 bg-white/[0.06] text-white' : 'border-transparent text-zinc-500 hover:text-zinc-200'
+                  tab === t ? 'border-white/10 bg-white/6 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-200'
                 } transition-colors`}
               >
                 {t === 'nfts' ? 'NFTs' : t[0]!.toUpperCase() + t.slice(1)}
@@ -291,6 +323,50 @@ export function Portfolio() {
         {/* Overview */}
         {tab === 'overview' ? (
           <div className="mt-6 space-y-4">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.02 }}
+              className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-[12px] text-white">Setup</div>
+                  <div className="text-[11px] text-zinc-600">Read-only snapshot from auth + onchain.</div>
+                </div>
+                <div className="text-[11px] text-zinc-500">
+                  {setupQuery.isLoading ? 'Syncing…' : setupQuery.data ? 'Synced' : 'Not synced'}
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2 text-[12px] text-zinc-300">
+                <div className="rounded-xl border border-zinc-800/80 bg-black/30 p-3">
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-[0.14em]">Connected wallet</div>
+                  <div className="mt-1 font-mono text-zinc-200">{effectiveAddress ? shortAddr(effectiveAddress) : '—'}</div>
+                  <div className="text-[10px] text-zinc-600 mt-1">
+                    SIWE: {siwe.authAddress ? shortAddr(siwe.authAddress) : 'Not signed in'}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-zinc-800/80 bg-black/30 p-3">
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-[0.14em]">Supabase profile</div>
+                  {setupQuery.data ? (
+                    <div className="mt-2 space-y-1 text-[11px]">
+                      <div>Primary: <span className="font-mono text-zinc-200">{setupQuery.data.primaryWallet ? shortAddr(setupQuery.data.primaryWallet) : '—'}</span></div>
+                      <div>Embedded: <span className="font-mono text-zinc-200">{setupQuery.data.embeddedWallet ? shortAddr(setupQuery.data.embeddedWallet) : '—'}</span></div>
+                      <div>CSW: <span className="font-mono text-zinc-200">{setupQuery.data.cswAddress ? shortAddr(setupQuery.data.cswAddress) : '—'}</span></div>
+                      <div className="text-zinc-500">
+                        Access: <span className="text-zinc-300">{setupQuery.data.appAccessStatus ?? '—'}</span>
+                        {' · '}Updated: <span className="text-zinc-300">{formatDateTime(setupQuery.data.updatedAt)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-[11px] text-zinc-500">
+                      No profile record yet. Sign in to sync.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+
             <div className="grid lg:grid-cols-3 gap-4">
               {/* Chart card */}
               <motion.div
@@ -317,7 +393,7 @@ export function Portfolio() {
                         type="button"
                         onClick={() => setTimeframe(t)}
                         className={`rounded-full px-3 py-1.5 text-[11px] border ${
-                          timeframe === t ? 'border-white/10 bg-white/[0.06] text-white' : 'border-zinc-900 text-zinc-500 hover:text-zinc-200'
+                          timeframe === t ? 'border-white/10 bg-white/6 text-white' : 'border-zinc-900 text-zinc-500 hover:text-zinc-200'
                         } transition-colors`}
                       >
                         {t}
@@ -340,7 +416,7 @@ export function Portfolio() {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    className="rounded-xl border border-zinc-800 bg-black/30 p-4 text-left hover:bg-white/[0.04] transition-colors disabled:opacity-70"
+                    className="rounded-xl border border-zinc-800 bg-black/30 p-4 text-left hover:bg-white/4 transition-colors disabled:opacity-70"
                     disabled
                   >
                     <div className="text-[12px] text-zinc-300 font-medium flex items-center gap-2">
@@ -350,7 +426,7 @@ export function Portfolio() {
                   </button>
                   <button
                     type="button"
-                    className="rounded-xl border border-zinc-800 bg-black/30 p-4 text-left hover:bg-white/[0.04] transition-colors disabled:opacity-70"
+                    className="rounded-xl border border-zinc-800 bg-black/30 p-4 text-left hover:bg-white/4 transition-colors disabled:opacity-70"
                     disabled
                   >
                     <div className="text-[12px] text-zinc-300 font-medium flex items-center gap-2">
@@ -360,7 +436,7 @@ export function Portfolio() {
                   </button>
                   <button
                     type="button"
-                    className="rounded-xl border border-zinc-800 bg-black/30 p-4 text-left hover:bg-white/[0.04] transition-colors disabled:opacity-70"
+                    className="rounded-xl border border-zinc-800 bg-black/30 p-4 text-left hover:bg-white/4 transition-colors disabled:opacity-70"
                     disabled
                   >
                     <div className="text-[12px] text-zinc-300 font-medium flex items-center gap-2">
@@ -370,7 +446,7 @@ export function Portfolio() {
                   </button>
                   <button
                     type="button"
-                    className="rounded-xl border border-zinc-800 bg-black/30 p-4 text-left hover:bg-white/[0.04] transition-colors disabled:opacity-70"
+                    className="rounded-xl border border-zinc-800 bg-black/30 p-4 text-left hover:bg-white/4 transition-colors disabled:opacity-70"
                     disabled
                   >
                     <div className="text-[12px] text-zinc-300 font-medium flex items-center gap-2">

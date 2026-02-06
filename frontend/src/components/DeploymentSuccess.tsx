@@ -76,7 +76,7 @@ export interface DeploymentSuccessProps {
   onNewDeploy?: () => void
 }
 
-export function DeploymentSuccess({ deployment, tokenSymbol, shareSymbol, onNewDeploy }: DeploymentSuccessProps) {
+export function DeploymentSuccess({ deployment, shareSymbol }: DeploymentSuccessProps) {
   const nextSteps = useMemo<NextStep[]>(() => {
     const steps: NextStep[] = []
     

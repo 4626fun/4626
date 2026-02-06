@@ -7,7 +7,7 @@ import { base } from 'viem/chains'
 import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
 import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../../server/auth/_shared.js'
-import { decryptWithSecret, getDeploySessionById, signDeployToken, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
+import { decryptWithSecret, getDeploySessionById, signDeployToken, transitionDeploySession, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 
@@ -16,6 +16,8 @@ declare const process: { env: Record<string, string | undefined> }
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 type StatusRequest = { sessionId: string }
+
+const CONCURRENT_MODIFICATION = 'concurrent_modification'
 
 const COINBASE_SMART_WALLET_OWNERS_ABI = [
   { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -120,17 +122,35 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   if (!txHash) return
 
   if (step === 'cleanup_sent') {
-    await updateDeploySession({ id: rec.id, step: 'cancelled', lastTxHash: txHash, lastError: null })
+    const transitioned = await transitionDeploySession({
+      id: rec.id,
+      fromStep: 'cleanup_sent',
+      toStep: 'cancelled',
+      lastTxHash: txHash,
+      lastError: null,
+    })
+    if (!transitioned) throw new Error(CONCURRENT_MODIFICATION)
     return
   }
 
   if (step === 'phase2_sent') {
-    await updateDeploySession({ id: rec.id, step: 'phase2_confirmed', lastTxHash: txHash })
+    const confirmed = await transitionDeploySession({
+      id: rec.id,
+      fromStep: 'phase2_sent',
+      toStep: 'phase2_confirmed',
+      lastTxHash: txHash,
+    })
+    if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
 
     const payload: any = rec.payload ?? {}
     const phase3Calls = Array.isArray(payload.phase3Calls) ? (payload.phase3Calls as any[]) : []
     if (phase3Calls.length === 0) {
-      await updateDeploySession({ id: rec.id, step: 'completed' })
+      const completed = await transitionDeploySession({
+        id: rec.id,
+        fromStep: 'phase2_confirmed',
+        toStep: 'completed',
+      })
+      if (!completed) throw new Error(CONCURRENT_MODIFICATION)
       return
     }
 
@@ -181,7 +201,12 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       removeOwnerCall,
     ] as any[]
 
-    await updateDeploySession({ id: rec.id, step: 'phase3_sent' })
+    const phase3Started = await transitionDeploySession({
+      id: rec.id,
+      fromStep: 'phase2_confirmed',
+      toStep: 'phase3_sent',
+    })
+    if (!phase3Started) throw new Error(CONCURRENT_MODIFICATION)
     const nextHash = await sendUserOperation(bundler, {
       account,
       calls,
@@ -192,8 +217,19 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   }
 
   if (step === 'phase3_sent') {
-    await updateDeploySession({ id: rec.id, step: 'phase3_confirmed', lastTxHash: txHash })
-    await updateDeploySession({ id: rec.id, step: 'completed' })
+    const confirmed = await transitionDeploySession({
+      id: rec.id,
+      fromStep: 'phase3_sent',
+      toStep: 'phase3_confirmed',
+      lastTxHash: txHash,
+    })
+    if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
+    const completed = await transitionDeploySession({
+      id: rec.id,
+      fromStep: 'phase3_confirmed',
+      toStep: 'completed',
+    })
+    if (!completed) throw new Error(CONCURRENT_MODIFICATION)
   }
 }
 
@@ -227,7 +263,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     await advanceDeploySession(rec, req)
     rec = (await getDeploySessionById(sessionId)) ?? rec
-  } catch {
+  } catch (err) {
+    if (err instanceof Error && err.message === CONCURRENT_MODIFICATION) {
+      return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
+    }
     // Best-effort: if background advancement fails, still return current state.
   }
 
@@ -245,4 +284,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     },
   } satisfies ApiEnvelope<any>)
 }
-

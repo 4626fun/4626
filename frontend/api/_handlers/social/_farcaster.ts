@@ -1,12 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { logger } from '../../../server/_lib/logger.js'
+import { readNeynarApiKey } from '../../../server/_lib/neynarConfig.js'
 import { getAddress, isAddress } from 'viem'
 import { handleOptions, setCors } from '../../../server/auth/_shared.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
-// Server-only secret. Do NOT use client-exposed env vars here.
-const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || ''
 const NEYNAR_API_BASE = 'https://api.neynar.com/v2/farcaster'
 
 function normalizeAddress(value: unknown): string | null {
@@ -55,7 +54,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid fid parameter' })
   }
 
-  if (!NEYNAR_API_KEY) {
+  const neynarApiKey = readNeynarApiKey({ context: 'api/social/farcaster' })
+  if (!neynarApiKey) {
     return res.status(500).json({ success: false, error: 'Neynar API not configured' })
   }
 
@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const now = Math.floor(Date.now() / 1000)
 
     const headers = {
-      api_key: NEYNAR_API_KEY,
+      api_key: neynarApiKey,
       'Content-Type': 'application/json',
     } as const
 

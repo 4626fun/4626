@@ -13,6 +13,51 @@ const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7 // 7d
 
 const EIP1271_MAGICVALUE = '0x1626ba7e' as const
 
+type DbWithSql = {
+  sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
+}
+
+let nonceSchemaEnsured = false
+
+export async function ensureNonceSchema(db: DbWithSql): Promise<void> {
+  if (nonceSchemaEnsured) return
+  try {
+    await db.sql`
+      CREATE TABLE IF NOT EXISTS auth_nonces (
+        nonce TEXT PRIMARY KEY,
+        issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        expires_at TIMESTAMPTZ NOT NULL,
+        consumed_at TIMESTAMPTZ
+      );
+    `
+    await db.sql`CREATE INDEX IF NOT EXISTS auth_nonces_expires_idx ON auth_nonces (expires_at);`
+    nonceSchemaEnsured = true
+  } catch (err) {
+    nonceSchemaEnsured = false
+    throw err
+  }
+}
+
+export async function storeNonce(db: DbWithSql, nonce: string, expiresAt: Date): Promise<void> {
+  await db.sql`
+    INSERT INTO auth_nonces (nonce, expires_at)
+    VALUES (${nonce}, ${expiresAt.toISOString()})
+    ON CONFLICT (nonce) DO NOTHING;
+  `
+}
+
+export async function consumeNonce(db: DbWithSql, nonce: string): Promise<boolean> {
+  const result = await db.sql`
+    UPDATE auth_nonces
+    SET consumed_at = NOW()
+    WHERE nonce = ${nonce}
+      AND consumed_at IS NULL
+      AND expires_at > NOW()
+    RETURNING nonce;
+  `
+  return Array.isArray(result.rows) && result.rows.length > 0
+}
+
 function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
@@ -494,5 +539,4 @@ export async function verifySiweSignature(params: { message: string; signature: 
     return null
   }
 }
-
 

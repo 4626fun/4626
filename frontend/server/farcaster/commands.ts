@@ -1,6 +1,7 @@
 import type { Address } from 'viem'
 import { isAddress, getAddress } from 'viem'
 import { logger } from '../_lib/logger.js'
+import { readNeynarApiKey } from '../_lib/neynarConfig.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -40,7 +41,7 @@ function formatHelp(): string {
 }
 
 async function lookupProfile(query: string): Promise<FarcasterCommandResult> {
-  const apiKey = process.env.NEYNAR_API_KEY
+  const apiKey = readNeynarApiKey({ context: 'farcaster/lookupProfile' })
   if (!apiKey) {
     return { ok: false, response: 'Farcaster API not configured.' }
   }
@@ -121,7 +122,7 @@ async function postCast(params: {
   senderWallet: Address
   groupId: string
 }): Promise<FarcasterCommandResult> {
-  const apiKey = process.env.NEYNAR_API_KEY
+  const apiKey = readNeynarApiKey({ context: 'farcaster/postCast' })
   const signerUuid = process.env.NEYNAR_SIGNER_UUID
 
   if (!apiKey || !signerUuid) {
@@ -270,7 +271,7 @@ async function validateFrame(url: string): Promise<FarcasterCommandResult> {
 }
 
 async function getCreatorStats(senderWallet: Address): Promise<FarcasterCommandResult> {
-  const apiKey = process.env.NEYNAR_API_KEY
+  const apiKey = readNeynarApiKey({ context: 'farcaster/getCreatorStats' })
   if (!apiKey) {
     return { ok: false, response: 'Farcaster API not configured.' }
   }

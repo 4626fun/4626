@@ -9,7 +9,7 @@ import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinba
 
 import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { logger } from '../../../../server/_lib/logger.js'
-import { decryptWithSecret, getDeploySessionById, signDeployToken, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
+import { decryptWithSecret, getDeploySessionById, signDeployToken, transitionDeploySession, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 
@@ -181,9 +181,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (phase2Calls.length === 0) throw new Error('missing_phase2_calls')
 
-    // Decide whether we still need to run phase2/phase3. Keep it simple: run phase2 if not already confirmed.
-    const shouldRunPhase2 = !['phase2_confirmed', 'phase3_sent', 'phase3_confirmed', 'cleanup_sent', 'completed'].includes(rec.step)
-    const shouldRunPhase3 = phase3Calls.length > 0 && !['phase3_confirmed', 'cleanup_sent', 'completed'].includes(rec.step)
+    // Decide whether we still need to run phase2/phase3 for the current persisted state.
+    const shouldRunPhase2 = ['created', 'phase1_sent', 'phase1_confirmed'].includes(rec.step)
+    const shouldRunPhase3 = phase3Calls.length > 0 && rec.step === 'phase2_confirmed'
+    const isInFlight = ['phase2_sent', 'phase3_sent', 'cleanup_sent'].includes(rec.step)
 
     // Cleanup call (remove the temporary owner). Attach it to the last UserOp we send.
     const removeOwnerCall = (() => {
@@ -197,9 +198,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })()
 
     if (shouldRunPhase2) {
+      const transitioned = await transitionDeploySession({
+        id: rec.id,
+        fromStep: rec.step,
+        toStep: 'phase2_sent',
+      })
+      if (!transitioned) {
+        return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
+      }
       const calls = [...phase2Calls.map((c) => ({ to: getAddress(c.to), value: BigInt(c.value ?? 0), data: c.data as Hex }))] as any[]
-      if (!shouldRunPhase3) calls.push(removeOwnerCall)
-      await updateDeploySession({ id: rec.id, step: 'phase2_sent' })
+      if (phase3Calls.length === 0) calls.push(removeOwnerCall)
       const lastUserOpHash = await sendUserOperation(bundlerClient, {
         account,
         calls,
@@ -213,12 +221,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (shouldRunPhase3) {
+      const transitioned = await transitionDeploySession({
+        id: rec.id,
+        fromStep: rec.step,
+        toStep: 'phase3_sent',
+      })
+      if (!transitioned) {
+        return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
+      }
       const calls = [
         ...phase3Calls.map((c) => ({ to: getAddress(c.to), value: BigInt(c.value ?? 0), data: c.data as Hex })),
         removeOwnerCall,
       ] as any[]
 
-      await updateDeploySession({ id: rec.id, step: 'phase3_sent' })
       const lastUserOpHash = await sendUserOperation(bundlerClient, {
         account,
         calls,
@@ -231,7 +246,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<any>)
     }
 
-    await updateDeploySession({ id: rec.id, step: 'completed' })
+    if (isInFlight) {
+      return res.status(409).json({ success: false, error: 'Already in progress' } satisfies ApiEnvelope<null>)
+    }
+
+    const transitioned = await transitionDeploySession({
+      id: rec.id,
+      fromStep: rec.step,
+      toStep: 'completed',
+    })
+    if (!transitioned) {
+      return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
+    }
 
     return res.status(200).json({
       success: true,
@@ -248,7 +274,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch {
       // ignore
     }
-    return res.status(500).json({ success: false, error: msg } satisfies ApiEnvelope<null>)
+    return res.status(500).json({ success: false, error: 'Internal server error' } satisfies ApiEnvelope<null>)
   }
 }
-

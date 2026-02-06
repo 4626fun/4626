@@ -1,5 +1,6 @@
 import { type ApiEnvelope, handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { readNeynarApiKey } from '../../../server/_lib/neynarConfig.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
 import { checkRateLimit, rateLimitKey, getClientIp } from '../../../server/_lib/rateLimit.js'
@@ -38,7 +39,7 @@ function isValidEmail(v: string): boolean {
 
 // Verify Farcaster follow using Neynar API
 async function verifyFarcasterFollow(userFid: number): Promise<boolean> {
-  const apiKey = (process.env.NEYNAR_API_KEY || '').trim()
+  const apiKey = readNeynarApiKey({ context: 'waitlist/verify-social' })
   if (!apiKey) {
     console.warn('NEYNAR_API_KEY not configured, using honor system for Farcaster')
     return true // Honor system fallback

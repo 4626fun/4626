@@ -1,4 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 /**
  * Uniswap V4 Subgraph GraphQL Proxy
@@ -30,18 +32,34 @@ type GraphQLRequest = {
   variables?: Record<string, unknown>
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+const ALLOWED_OPERATIONS = new Set([
+  'GetPoolsByToken',
+  'GetPoolHourData',
+  'GetPoolDayData',
+  'GetToken',
+  'GetTokenDayData',
+  'HealthMeta',
+])
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end()
-  }
+function extractOperationName(query: string): string | null {
+  const match = query.match(/^\s*query\s+([_A-Za-z][_0-9A-Za-z]*)\b/)
+  return match?.[1] ?? null
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  setCors(req, res)
+  setNoStore(res)
+  if (handleOptions(req, res)) return
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
+  }
+
+  const clientIp = getClientIp(req)
+  const rate = checkRateLimit(rateLimitKey('graph', clientIp), RATE_LIMITS.general)
+  if (!rate.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
   }
 
   // Check for required env vars
@@ -50,7 +68,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({
       success: false,
       error: 'Uniswap data service not configured',
-      hint: 'Set THEGRAPH_API_KEY environment variable',
     })
   }
 
@@ -61,10 +78,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ success: false, error: 'Missing GraphQL query' })
     }
 
-    // Validate query is read-only (no mutations)
-    const queryLower = body.query.toLowerCase()
-    if (queryLower.includes('mutation') || queryLower.includes('subscription')) {
-      return res.status(400).json({ success: false, error: 'Only queries are allowed' })
+    const opName = extractOperationName(body.query)
+    if (!opName || !ALLOWED_OPERATIONS.has(opName)) {
+      return res.status(400).json({ success: false, error: 'Operation not allowed' })
     }
 
     const subgraphUrl = getSubgraphUrl()
@@ -81,12 +97,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
 
     if (!response.ok) {
-      const errorText = await response.text()
+      const errorText = await response.text().catch(() => '')
       console.error('Subgraph error:', response.status, errorText)
-      return res.status(response.status).json({
-        success: false,
-        error: `Subgraph error: ${response.status}`,
-      })
+      throw new Error(`subgraph_status_${response.status}`)
     }
 
     const data = await response.json()
@@ -97,7 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('Uniswap query error:', error)
     return res.status(500).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Internal server error',
+      error: 'Internal server error',
     })
   }
 }

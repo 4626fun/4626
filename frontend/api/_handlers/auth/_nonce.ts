@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, COOKIE_NONCE, handleOptions, makeNonce, makeNonceToken, setCookie, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { type ApiEnvelope, COOKIE_NONCE, ensureNonceSchema, handleOptions, makeNonce, makeNonceToken, setCookie, setCors, setNoStore, storeNonce } from '../../../server/auth/_shared.js'
+import { getDb } from '../../../server/_lib/postgres.js'
 
 type NonceResponse = {
   nonce: string
@@ -28,6 +29,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const proto = typeof req.headers?.['x-forwarded-proto'] === 'string' ? req.headers['x-forwarded-proto'] : 'http'
   const uri = `${proto === 'https' ? 'https' : 'http'}://${domain}`
 
+  try {
+    const db = await getDb()
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Nonce service unavailable' } satisfies ApiEnvelope<never>)
+    }
+    await ensureNonceSchema(db as any)
+    await storeNonce(db as any, nonce, new Date(Date.now() + 15 * 60 * 1000))
+  } catch {
+    return res.status(503).json({ success: false, error: 'Nonce service unavailable' } satisfies ApiEnvelope<never>)
+  }
+
   // Store nonce in an HttpOnly cookie so the verify step can bind signature → browser session.
   setCookie(req, res, COOKIE_NONCE, nonce, { httpOnly: true, maxAgeSeconds: 60 * 15 })
 
@@ -43,5 +55,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies NonceResponse,
   } satisfies ApiEnvelope<NonceResponse>)
 }
-
 

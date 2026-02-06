@@ -4,6 +4,7 @@ import { normalizeReferralCode, getClientIp, getUserAgent, hashForAttribution } 
 import { checkRateLimit, RATE_LIMITS, rateLimitKey, getClientIp as getRateLimitIp } from '../../server/_lib/rateLimit.js'
 import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../server/_lib/waitlistPoints.js'
 import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
+import { buildDeterministicSyntheticEmail } from '../../server/_lib/profileSync.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -40,23 +41,6 @@ function isValidEmail(v: string): boolean {
 
 function isSyntheticEmail(v: string): boolean {
   return v.endsWith('@noemail.4626.fun')
-}
-
-function buildDeterministicSyntheticEmail(seed?: string | null): string {
-  const domain = 'noemail.4626.fun'
-  const safeSeed = typeof seed === 'string' ? seed.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) : ''
-  const fnv1a32 = (input: string): number => {
-    let h = 0x811c9dc5
-    for (let i = 0; i < input.length; i++) {
-      h ^= input.charCodeAt(i)
-      h = Math.imul(h, 0x01000193)
-    }
-    return h >>> 0
-  }
-  const seedNorm = typeof seed === 'string' ? seed.trim().toLowerCase() : ''
-  const token = fnv1a32(seedNorm || 'anon').toString(36).padStart(7, '0').slice(0, 12)
-  const prefix = safeSeed.length > 0 ? safeSeed.toLowerCase() : 'anon'
-  return `${prefix}+${token}@${domain}`
 }
 
 function normalizeAddress(v: string): string {
