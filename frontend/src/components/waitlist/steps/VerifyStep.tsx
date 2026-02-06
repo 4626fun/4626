@@ -75,7 +75,6 @@ export const VerifyStep = memo(function VerifyStep({
 }: VerifyStepProps) {
   const hasCreatorCoin = !!creatorCoin?.address
   const showSubmitButton = verifiedWallet && (hasCreatorCoin || creatorCoinDeclaredMissing)
-  const short = (v: string) => `${v.slice(0, 6)}…${v.slice(-4)}`
   const ownerWallets = useMemo(() => creatorCoin?.ownerWallets ?? [], [creatorCoin?.ownerWallets])
   const payoutRecipient = useMemo(() => creatorCoin?.payoutRecipient ?? null, [creatorCoin?.payoutRecipient])
   const canonicalSmartWallet = useMemo(() => creatorCoin?.canonicalSmartWallet ?? null, [creatorCoin?.canonicalSmartWallet])
@@ -103,7 +102,7 @@ export const VerifyStep = memo(function VerifyStep({
     if (privyVerifyBusy) return 'Opening…'
     if (!showPrivyReady) return 'Privy is not ready.'
     if (!privyReady) return 'Loading…'
-    return 'No transaction. ~10 seconds.'
+    return ''
   }, [privyReady, privyVerifyBusy, showPrivyReady])
   const ownershipError =
     ownershipGateActive && !walletOwnershipValid
@@ -153,7 +152,7 @@ export const VerifyStep = memo(function VerifyStep({
           </button>
 
           <div className="flex items-center justify-between">
-            <div className="text-[12px] text-zinc-500">{helperText}</div>
+          <div className="text-[12px] text-zinc-500">{helperText || '\u00A0'}</div>
             <button
               type="button"
               className="text-[12px] text-zinc-400 hover:text-zinc-200 transition-colors"
@@ -298,8 +297,8 @@ export const VerifyStep = memo(function VerifyStep({
                 <div className="text-[14px] text-white font-medium truncate">
                   {creatorCoin?.symbol ? creatorCoin.symbol : creatorCoinDeclaredMissing ? 'No coin found' : 'Creator Coin'}
                 </div>
-                <div className="text-[12px] text-zinc-500 truncate">
-                  {creatorCoin?.address ? short(creatorCoin.address) : creatorCoinDeclaredMissing ? 'You can still join.' : 'Creator coin lookup'}
+                <div className="text-[12px] text-zinc-500 font-mono break-all leading-snug">
+                  {creatorCoin?.address ? creatorCoin.address : creatorCoinDeclaredMissing ? 'You can still join.' : 'Creator coin lookup'}
                 </div>
               </div>
               {creatorCoin?.symbol ? <CheckCircle2 className="w-5 h-5 text-[#0052FF] shrink-0" /> : null}
@@ -308,7 +307,7 @@ export const VerifyStep = memo(function VerifyStep({
             <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[12px] text-zinc-500">Connected wallet</div>
-                <div className="text-[12px] text-zinc-300 font-mono">{short(verifiedWallet)}</div>
+                <div className="text-[12px] text-zinc-300 font-mono break-all text-right">{verifiedWallet}</div>
               </div>
               <div className="mt-2 flex items-center justify-between gap-3">
                 <div className="text-[12px] text-zinc-500">Network</div>
@@ -327,8 +326,8 @@ export const VerifyStep = memo(function VerifyStep({
             {hasCreatorCoin ? (
               <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
                 <div className="text-[12px] text-zinc-500">Payout recipient</div>
-                <div className="mt-1 text-[12px] text-zinc-300 font-mono">
-                  {payoutRecipient ? short(payoutRecipient) : 'Unavailable'}
+                <div className="mt-1 text-[12px] text-zinc-300 font-mono break-all">
+                  {payoutRecipient || 'Unavailable'}
                 </div>
                 <div className="mt-3 text-[12px] text-zinc-500">Owner wallets</div>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -344,7 +343,7 @@ export const VerifyStep = memo(function VerifyStep({
                               : 'border-white/10 bg-white/[0.03] text-zinc-300'
                           }`}
                         >
-                          {short(wallet)}
+                          <span className="break-all">{wallet}</span>
                         </span>
                       )
                     })
@@ -360,14 +359,14 @@ export const VerifyStep = memo(function VerifyStep({
                 <div className="text-[12px] text-zinc-500">Smart wallet signals</div>
                 <div className="mt-2 flex items-center justify-between gap-3">
                   <div className="text-[12px] text-zinc-500">From Zora</div>
-                  <div className="text-[12px] text-zinc-300 font-mono">
-                    {canonicalSmartWallet ? short(canonicalSmartWallet) : 'Unavailable'}
+                  <div className="text-[12px] text-zinc-300 font-mono break-all text-right">
+                    {canonicalSmartWallet || 'Unavailable'}
                   </div>
                 </div>
                 {coinbaseSmartWalletAddress ? (
                   <div className="mt-2 flex items-center justify-between gap-3">
                     <div className="text-[12px] text-zinc-500">{isBaseApp ? 'Base app wallet' : 'Privy wallet'}</div>
-                    <div className="text-[12px] text-zinc-300 font-mono">{short(coinbaseSmartWalletAddress)}</div>
+                    <div className="text-[12px] text-zinc-300 font-mono break-all text-right">{coinbaseSmartWalletAddress}</div>
                   </div>
                 ) : null}
                 {cswMismatch ? (
@@ -404,7 +403,7 @@ export const VerifyStep = memo(function VerifyStep({
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[14px] text-white font-medium">{isBaseApp ? 'Base app wallet detected' : 'Smart wallet detected'}</div>
-              <div className="text-[12px] text-zinc-500 mt-0.5 font-mono">{short(cswAddress)}</div>
+              <div className="text-[12px] text-zinc-500 mt-0.5 font-mono break-all">{cswAddress}</div>
             </div>
           </div>
         </motion.div>
@@ -428,9 +427,6 @@ export const VerifyStep = memo(function VerifyStep({
               'Join Waitlist'
             )}
           </button>
-          <div className="mt-3 text-center text-[12px] text-zinc-600">
-            Takes ~10 seconds. No transaction.
-          </div>
         </motion.div>
       ) : null}
 
