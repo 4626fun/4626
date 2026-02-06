@@ -1561,33 +1561,20 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
 
   const containerClass =
     variant === 'page'
-      ? 'relative min-h-[100svh] flex items-center justify-center overflow-hidden px-4 sm:px-6 py-12 sm:py-16 bg-[#020202]'
+      ? 'relative min-h-[100svh] flex items-center justify-center overflow-hidden px-4 sm:px-6 py-12 sm:py-16 bg-black'
       : 'cinematic-section'
 
   const innerWrapClass = variant === 'page' ? 'relative z-10 w-full max-w-[470px]' : 'max-w-3xl mx-auto px-6 py-14'
 
   const cardWrapClass =
     variant === 'page'
-      ? 'relative overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(165deg,rgba(12,14,24,0.84),rgba(6,8,14,0.94))] shadow-[0_44px_140px_-66px_rgba(0,82,255,0.88)] backdrop-blur-2xl p-5 sm:p-7'
+      ? 'relative overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(165deg,rgba(10,10,12,0.86),rgba(4,4,6,0.96))] shadow-[0_44px_140px_-72px_rgba(0,0,0,0.95)] backdrop-blur-2xl p-5 sm:p-7'
       : 'relative overflow-hidden rounded-[32px] border border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl p-5 sm:p-7'
 
   return (
     <section id={variant === 'embedded' ? sectionId : undefined} className={containerClass}>
       {variant === 'page' ? (
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <motion.div
-            className="absolute -left-20 -top-16 h-[22rem] w-[22rem] rounded-full bg-[#0052FF]/25 blur-3xl"
-            animate={{ x: [0, 20, 0], y: [0, -12, 0], scale: [1, 1.08, 1] }}
-            transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
-          />
-          <motion.div
-            className="absolute -right-24 bottom-[-6rem] h-[20rem] w-[20rem] rounded-full bg-cyan-400/12 blur-3xl"
-            animate={{ x: [0, -18, 0], y: [0, 10, 0], scale: [1, 1.06, 1] }}
-            transition={{ duration: 13, repeat: Infinity, ease: 'easeInOut' }}
-          />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_14%,rgba(0,82,255,0.2),transparent_34%),radial-gradient(circle_at_84%_76%,rgba(16,185,129,0.08),transparent_34%)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:100%_68px] opacity-[0.08]" />
-        </div>
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-black" />
       ) : null}
       <div className={innerWrapClass}>
         {variant === 'page' ? (
@@ -1617,8 +1604,8 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
           transition={variant === 'page' ? { duration: SHELL_FLOAT_MS, repeat: Infinity, ease: 'easeInOut' } : undefined}
         >
           <div className="pointer-events-none absolute inset-0">
-            <div className="absolute inset-x-0 top-0 h-28 bg-[radial-gradient(ellipse_at_top,rgba(0,82,255,0.3),transparent_72%)]" />
-            <div className="absolute left-6 right-6 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
+            <div className="absolute inset-x-0 top-0 h-20 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.06),transparent)]" />
+            <div className="absolute left-6 right-6 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
           </div>
           <div className="relative z-[1]">
           {/* Show reset on done step */}
