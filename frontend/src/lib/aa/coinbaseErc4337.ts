@@ -260,6 +260,13 @@ async function logUserOpEstimate(params: {
     }
   } catch (e: unknown) {
     const revertInfo = extractRevertInfo(e)
+    const lowerError = String(revertInfo.error ?? '').toLowerCase()
+    if (lowerError.includes('could not find an account to execute')) {
+      logger.debug('[ERC-4337] estimateUserOperationGas skipped', {
+        reason: 'Missing local account context in debug pre-estimate path',
+      })
+      return
+    }
     const errDetails: Record<string, unknown> = { 
       error: revertInfo.error,
       revertData: revertInfo.revertData,
@@ -664,8 +671,9 @@ function createWalletBackedLocalAccount(params: {
   walletClient: WalletClientLike
   address: Address
   userOpSignMode?: UserOpSignMode
+  allowSignMessageFallback?: boolean
 }) {
-  const { walletClient, address, userOpSignMode = 'auto' } = params
+  const { walletClient, address, userOpSignMode = 'auto', allowSignMessageFallback = true } = params
 
   return toAccount({
     address,
@@ -753,8 +761,16 @@ function createWalletBackedLocalAccount(params: {
           throw ethSignError
         }
         
-        // If eth_sign is blocked/unsupported, try signMessage fallback
+        // If eth_sign is blocked/unsupported, try signMessage fallback when enabled.
+        // For EOA owners, fallback to personal_sign is often invalid for UserOp digests;
+        // require eth_sign to avoid AA40/AA24 retry loops.
         if (isEthSignBlocked(ethSignError)) {
+          if (!allowSignMessageFallback) {
+            throw new Error(
+              'eth_sign is required for this wallet owner, but your wallet blocked it. ' +
+              'Connect a wallet that supports eth_sign (for example Coinbase Wallet) and retry.'
+            )
+          }
           try {
             return await tryPersonalSign()
           } catch (personalSignError: unknown) {
@@ -1290,7 +1306,18 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }
 
   const effectiveUserOpSignMode =
-    ownerIsContract && userOpSignMode === 'auto' ? 'signMessage' : userOpSignMode
+    !ownerIsContract && userOpSignMode === 'signMessage'
+      ? 'eth_sign'
+      : ownerIsContract && userOpSignMode === 'auto'
+        ? 'signMessage'
+        : userOpSignMode
+  if (!ownerIsContract && userOpSignMode === 'signMessage') {
+    logger.warn('[ERC-4337] Coercing sign mode for EOA owner', {
+      requested: userOpSignMode,
+      effective: effectiveUserOpSignMode,
+      ownerAddress,
+    })
+  }
   const usedSignMessageFallback = userOpSignMode === 'auto' && effectiveUserOpSignMode === 'signMessage'
 
   // Create the owner account for signing
@@ -1298,6 +1325,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     walletClient, 
     address: ownerAddress, 
     userOpSignMode: effectiveUserOpSignMode,
+    allowSignMessageFallback: ownerIsContract,
   })
   
   // Create the Coinbase Smart Account

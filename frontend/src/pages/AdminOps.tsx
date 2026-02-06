@@ -580,7 +580,7 @@ function AgentRegistration() {
           ownerAddress: embeddedPrivyEoaAddress as Address,
           calls: [{ to: registryAddress, data }],
           version: '1',
-          userOpSignMode: 'signMessage',
+          userOpSignMode: 'eth_sign',
           skipPaymaster: false,
         })
         updateRegisterTx({ status: 'pending', hash: result.transactionHash })
@@ -689,7 +689,7 @@ function AgentRegistration() {
           ownerAddress: embeddedPrivyEoaAddress as Address,
           calls: [{ to: registryAddress, data }],
           version: '1',
-          userOpSignMode: 'signMessage',
+          userOpSignMode: 'eth_sign',
           skipPaymaster: false,
         })
         updateUpdateTx({ status: 'pending', hash: result.transactionHash })
@@ -1243,7 +1243,7 @@ function LegacyWithdrawals() {
           ownerAddress: embeddedPrivyEoaAddress as Address,
           calls: [{ to: config.address, data }],
           version: '1',
-          userOpSignMode: 'signMessage',
+          userOpSignMode: 'eth_sign',
           skipPaymaster: false,
         })
         updateTx(key, { status: 'pending', hash: result.transactionHash })
@@ -1325,7 +1325,7 @@ function LegacyWithdrawals() {
           ownerAddress: embeddedPrivyEoaAddress as Address,
           calls,
           version: '1',
-          userOpSignMode: 'signMessage',
+          userOpSignMode: 'eth_sign',
           skipPaymaster: false,
         })
         updateTx(key, { status: 'pending', hash: result.transactionHash })
