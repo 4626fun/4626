@@ -581,6 +581,7 @@ function AgentRegistration() {
           calls: [{ to: registryAddress, data }],
           version: '1',
           userOpSignMode: 'eth_sign',
+          allowEoaSignMessageFallback: true,
           skipPaymaster: false,
         })
         updateRegisterTx({ status: 'pending', hash: result.transactionHash })
@@ -690,6 +691,7 @@ function AgentRegistration() {
           calls: [{ to: registryAddress, data }],
           version: '1',
           userOpSignMode: 'eth_sign',
+          allowEoaSignMessageFallback: true,
           skipPaymaster: false,
         })
         updateUpdateTx({ status: 'pending', hash: result.transactionHash })
@@ -1244,6 +1246,7 @@ function LegacyWithdrawals() {
           calls: [{ to: config.address, data }],
           version: '1',
           userOpSignMode: 'eth_sign',
+          allowEoaSignMessageFallback: true,
           skipPaymaster: false,
         })
         updateTx(key, { status: 'pending', hash: result.transactionHash })
@@ -1326,6 +1329,7 @@ function LegacyWithdrawals() {
           calls,
           version: '1',
           userOpSignMode: 'eth_sign',
+          allowEoaSignMessageFallback: true,
           skipPaymaster: false,
         })
         updateTx(key, { status: 'pending', hash: result.transactionHash })

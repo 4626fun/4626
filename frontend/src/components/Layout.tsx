@@ -2,6 +2,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { Home, LayoutDashboard, HelpCircle, Mail, ShieldCheck } from 'lucide-react'
 import { VaultNavBar } from './brand/VaultNavBar'
+import { ChatWidget } from './chat/ChatWidget'
 import { isPublicSiteMode } from '@/lib/flags'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { OnboardingModal, hasCompletedOnboarding } from '@/components/OnboardingModal'
@@ -80,6 +81,9 @@ export function Layout() {
           <Outlet />
         </Suspense>
       </main>
+
+      {/* Chat widget — appears on every page, bottom-right */}
+      <ChatWidget />
 
       {/* Mobile Nav - Minimal */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 border-t border-vault-border/60 bg-vault-bg/80 backdrop-blur-xl">

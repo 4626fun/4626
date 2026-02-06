@@ -15,7 +15,7 @@ const FARCASTER_AUTH_CONFIG = {
 
 export function MarketingLayout() {
   return (
-    <div className="min-h-screen flex flex-col bg-vault-bg">
+    <div className="min-h-screen flex flex-col bg-black">
       <main className="flex-1">
         <Suspense
           fallback={
@@ -32,4 +32,3 @@ export function MarketingLayout() {
     </div>
   )
 }
-
