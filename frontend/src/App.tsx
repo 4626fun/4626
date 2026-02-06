@@ -5,6 +5,7 @@ import { useAccount, useConnect } from 'wagmi'
 import { useCreatorAllowlist } from '@/hooks'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
+import { AdminLayout } from './components/AdminLayout'
 import { Layout } from './components/Layout'
 import { MarketingLayout } from './components/MarketingLayout'
 import { Home } from './pages/Home'
@@ -429,11 +430,14 @@ function App() {
                 <Route path="/waitlist" element={<Waitlist />} />
 
                 {/* Admin routes must remain reachable even in public mode (auth is enforced server-side). */}
-                <Route path="/admin/creator-access" element={<AdminCreatorAccess />} />
-                <Route path="/admin/waitlist" element={<AdminWaitlist />} />
-                <Route path="/admin/ops" element={<AdminOps />} />
-                <Route path="/admin/miniapp" element={<Navigate to="/admin/ops" replace />} />
-                <Route path="/admin/deploy-strategies" element={<AdminDeployStrategies />} />
+                <Route path="/admin" element={<AdminLayout />}>
+                  <Route index element={<Navigate to="/admin/waitlist" replace />} />
+                  <Route path="creator-access" element={<AdminCreatorAccess />} />
+                  <Route path="waitlist" element={<AdminWaitlist />} />
+                  <Route path="ops" element={<AdminOps />} />
+                  <Route path="miniapp" element={<Navigate to="/admin/ops" replace />} />
+                  <Route path="deploy-strategies" element={<AdminDeployStrategies />} />
+                </Route>
                 {/* Keep legacy entry but redirect to admin route */}
                 <Route path="/miniapp" element={<Navigate to="/admin/ops" replace />} />
 
@@ -474,11 +478,14 @@ function App() {
                   <Route path="/faq" element={<Faq />} />
                   <Route path="/faq/how-it-works" element={<FaqHowItWorks />} />
                   <Route path="/status" element={<Status />} />
-                  <Route path="/admin/creator-access" element={<AdminCreatorAccess />} />
-                  <Route path="/admin/waitlist" element={<AdminWaitlist />} />
-                  <Route path="/admin/ops" element={<AdminOps />} />
-                  <Route path="/admin/miniapp" element={<Navigate to="/admin/ops" replace />} />
-                  <Route path="/admin/deploy-strategies" element={<AdminDeployStrategies />} />
+                  <Route path="/admin" element={<AdminLayout />}>
+                    <Route index element={<Navigate to="/admin/waitlist" replace />} />
+                    <Route path="creator-access" element={<AdminCreatorAccess />} />
+                    <Route path="waitlist" element={<AdminWaitlist />} />
+                    <Route path="ops" element={<AdminOps />} />
+                    <Route path="miniapp" element={<Navigate to="/admin/ops" replace />} />
+                    <Route path="deploy-strategies" element={<AdminDeployStrategies />} />
+                  </Route>
                   <Route path="/miniapp" element={<Navigate to="/admin/ops" replace />} />
                   <Route path="/vote" element={<GaugeVoting />} />
                   <Route path="/activate-akita" element={<Navigate to="/deploy" replace />} />

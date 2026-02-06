@@ -1,6 +1,20 @@
 import { memo, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, CheckCircle2, ChevronRight, Mail, ShieldCheck, Wallet, X } from 'lucide-react'
+import {
+  AlertTriangle,
+  BadgeCheck,
+  CheckCircle2,
+  ChevronRight,
+  CircleDot,
+  Coins,
+  Mail,
+  ShieldCheck,
+  Sparkles,
+  TrendingUp,
+  Users,
+  Wallet,
+  X,
+} from 'lucide-react'
 import type { WaitlistState } from '../waitlistTypes'
 import { ConnectButtonWeb3 } from '@/components/ConnectButtonWeb3'
 
@@ -19,6 +33,52 @@ const scaleIn = {
   initial: { opacity: 0, scale: 0.96 },
   animate: { opacity: 1, scale: 1 },
   transition: { duration: 0.18, ease: baseEase },
+}
+const staggerContainer = {
+  initial: {},
+  animate: {
+    transition: {
+      staggerChildren: 0.055,
+      delayChildren: 0.03,
+    },
+  },
+}
+const staggerItem = {
+  initial: { opacity: 0, y: 8 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.22, ease: baseEase },
+  },
+}
+
+const usdCompactFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  notation: 'compact',
+  maximumFractionDigits: 1,
+})
+
+const numberCompactFormatter = new Intl.NumberFormat('en-US', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+})
+
+function shortAddress(value: string | null | undefined, head = 6, tail = 4): string {
+  const addr = typeof value === 'string' ? value.trim() : ''
+  if (!addr) return 'Unavailable'
+  if (addr.length <= head + tail + 1) return addr
+  return `${addr.slice(0, head)}…${addr.slice(-tail)}`
+}
+
+function formatUsdCompact(value: number | null | undefined): string | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null
+  return usdCompactFormatter.format(value)
+}
+
+function formatCountCompact(value: number | null | undefined): string | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null
+  return numberCompactFormatter.format(value)
 }
 
 type VerifyStepProps = {
@@ -116,25 +176,44 @@ export const VerifyStep = memo(function VerifyStep({
   )
   const hasDistinctSmartWalletSignals =
     Boolean(canonicalSmartWallet && coinbaseSmartWalletAddress && canonicalSmartWalletLower !== coinbaseSmartWalletLower)
+  const connectedWalletShort = useMemo(() => shortAddress(verifiedWallet, 8, 6), [verifiedWallet])
+  const creatorCoinAddressShort = useMemo(() => shortAddress(creatorCoin?.address, 8, 6), [creatorCoin?.address])
+  const payoutRecipientShort = useMemo(() => shortAddress(payoutRecipient, 8, 6), [payoutRecipient])
+  const coinMarketCap = useMemo(() => formatUsdCompact(creatorCoin?.marketCapUsd), [creatorCoin?.marketCapUsd])
+  const coinVolume = useMemo(() => formatUsdCompact(creatorCoin?.volume24hUsd), [creatorCoin?.volume24hUsd])
+  const coinHolders = useMemo(() => formatCountCompact(creatorCoin?.holders), [creatorCoin?.holders])
+  const ownerWalletPreview = useMemo(() => ownerWallets.slice(0, 8), [ownerWallets])
+  const ownershipStatusLabel = walletOwnershipValid ? 'Owner verified' : 'Owner wallet required'
+  const ownershipStatusClass = walletOwnershipValid
+    ? 'border-emerald-400/35 bg-emerald-500/10 text-emerald-200'
+    : 'border-amber-400/35 bg-amber-500/10 text-amber-100'
+  const panelClass = 'rounded-2xl border border-white/[0.09] bg-white/[0.015] backdrop-blur-md'
+  const microPanelClass = 'rounded-xl border border-white/[0.08] bg-white/[0.02]'
 
   return (
     <motion.div
       key="verify"
       {...fadeUp}
-      className="space-y-5"
+      className="space-y-5 sm:space-y-6"
     >
       {/* Header */}
-      <motion.div {...scaleIn} className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <h1 className="text-[30px] sm:text-[34px] font-light tracking-tight text-white leading-[1.08]">
+      <motion.div {...scaleIn} className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="font-display text-[30px] sm:text-[35px] font-medium tracking-[-0.022em] text-white leading-[1.05]">
             {headerTitle}
           </h1>
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-zinc-400">
-            <ShieldCheck className="w-3.5 h-3.5 text-zinc-500" />
+          <div className="shrink-0 inline-flex items-center gap-2 rounded-full border border-[#5A96FF]/35 bg-[#0052FF]/10 px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] text-[#BFD4FF] backdrop-blur-md">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#74A7FF]" />
             No gas
           </div>
         </div>
-        <div className="text-[13px] text-zinc-500 leading-relaxed">{headerSubtitle}</div>
+        <div className="max-w-[34ch] text-[13px] text-zinc-400 leading-relaxed">{headerSubtitle}</div>
+        {verifiedWallet ? (
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.12] bg-white/[0.03] px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-zinc-300">
+            <Sparkles className="h-3 w-3 text-[#8AB5FF]" />
+            Founding Creator Access
+          </div>
+        ) : null}
       </motion.div>
 
       {/* Single primary CTA + progressive disclosure */}
@@ -142,7 +221,7 @@ export const VerifyStep = memo(function VerifyStep({
         <motion.div {...scaleIn} className="space-y-3.5">
           <button
             type="button"
-            className="group w-full flex items-center justify-between gap-3 min-h-[58px] rounded-2xl bg-[#0052FF] text-white font-medium text-[15px] px-5 py-4 shadow-[0_10px_30px_-16px_rgba(0,82,255,0.8)] transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] hover:bg-[#0047E1] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+            className="group relative w-full overflow-hidden flex items-center justify-between gap-3 min-h-[58px] rounded-2xl border border-[#5A96FF]/35 bg-gradient-to-r from-[#004CE8] via-[#005CFF] to-[#2A79FF] text-white font-medium text-[15px] px-5 py-4 shadow-[0_16px_48px_-20px_rgba(0,82,255,0.95)] transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] hover:brightness-110 hover:shadow-[0_20px_56px_-22px_rgba(26,105,255,0.98)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             disabled={!canContinue}
             onClick={() => {
               if (looksLikeWalletLoginDisabled && typeof onPrivyEmailContinue === 'function') {
@@ -152,15 +231,17 @@ export const VerifyStep = memo(function VerifyStep({
               }
             }}
           >
-            <span className="flex items-center gap-3">
+            <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/70 opacity-70" />
+            <span className="pointer-events-none absolute -left-16 top-0 h-full w-16 -skew-x-12 bg-white/20 blur-md transition-transform duration-700 ease-out group-hover:translate-x-[400px]" />
+            <span className="relative flex items-center gap-3">
               <img src={BASE_SQUARE_WHITE} alt="" className="w-3.5 h-3.5" aria-hidden="true" />
               Continue
             </span>
-            <ChevronRight className="w-4 h-4 opacity-90" />
+            <ChevronRight className="relative w-4 h-4 opacity-90" />
           </button>
 
           <div className="flex items-center justify-between">
-          <div className="text-[12px] text-zinc-500">{helperText || '\u00A0'}</div>
+            <div className="text-[12px] text-zinc-500">{helperText || '\u00A0'}</div>
             <button
               type="button"
               className="text-[12px] text-zinc-400 hover:text-zinc-200 transition-colors"
@@ -173,7 +254,7 @@ export const VerifyStep = memo(function VerifyStep({
           {privyVerifyError ? (
             <motion.div
               {...fadeUp}
-              className="rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-[12px] text-red-200/90"
+              className="rounded-2xl border border-red-500/25 bg-red-500/[0.07] px-4 py-3 text-[12px] text-red-200/90"
             >
               {privyVerifyError}
             </motion.div>
@@ -201,15 +282,15 @@ export const VerifyStep = memo(function VerifyStep({
               transition={{ duration: 0.2, ease: baseEase }}
             >
               <div className="mx-auto w-full max-w-[440px] px-4 pb-4">
-                <div className="rounded-3xl border border-zinc-800/70 bg-zinc-950/90 backdrop-blur-xl p-4">
+                <div className="rounded-3xl border border-zinc-700/60 bg-zinc-950/90 backdrop-blur-2xl p-4 shadow-[0_30px_90px_-45px_rgba(0,0,0,0.85)]">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="text-[12px] text-zinc-500">Having trouble?</div>
-                      <div className="text-[16px] text-white mt-1">Try another option</div>
+                      <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Having trouble?</div>
+                      <div className="text-[16px] text-white mt-1 font-display">Try another option</div>
                     </div>
                     <button
                       type="button"
-                      className="rounded-xl border border-zinc-800 bg-black/30 p-2 text-zinc-400 hover:text-zinc-200 transition-colors"
+                      className="rounded-xl border border-zinc-700 bg-black/30 p-2 text-zinc-400 hover:text-zinc-200 transition-colors"
                       onClick={() => setShowTrouble(false)}
                       aria-label="Close"
                     >
@@ -224,7 +305,7 @@ export const VerifyStep = memo(function VerifyStep({
                   ) : null}
 
                   <div className="mt-4 grid gap-2">
-                    <div className="rounded-2xl border border-zinc-800/70 bg-black/20 px-4 py-3">
+                    <div className="rounded-2xl border border-zinc-800/70 bg-black/25 px-4 py-3">
                       <div className="flex items-center gap-2 text-[12px] text-zinc-300">
                         <Wallet className="w-4 h-4 text-zinc-500" />
                         Use Coinbase Wallet / WalletConnect
@@ -244,7 +325,7 @@ export const VerifyStep = memo(function VerifyStep({
                       ) : null}
                     </div>
 
-                    <div className="rounded-2xl border border-zinc-800/70 bg-black/20 px-4 py-3">
+                    <div className="rounded-2xl border border-zinc-800/70 bg-black/25 px-4 py-3">
                       <div className="flex items-center gap-2 text-[12px] text-zinc-300">
                         <Mail className="w-4 h-4 text-zinc-500" />
                         Continue with email
@@ -271,138 +352,191 @@ export const VerifyStep = memo(function VerifyStep({
 
       {/* Loading Creator Coin */}
       {verifiedWallet && creatorCoinBusy ? (
-        <motion.div {...fadeUp} className="flex items-center justify-center gap-3 py-5">
+        <motion.div
+          {...fadeUp}
+          className="flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] py-4"
+        >
           <div className="w-5 h-5 rounded-full border-2 border-zinc-700 border-t-[#0052FF] animate-spin" />
-          <span className="text-[14px] text-zinc-400">Reading Zora profile and creator coin owners…</span>
+          <span className="text-[13px] text-zinc-400">Reading Zora profile and creator coin owners…</span>
         </motion.div>
       ) : null}
 
       {/* Verified summary (fills the empty state) */}
       {verifiedWallet && (hasCreatorCoin || creatorCoinDeclaredMissing) ? (
-        <motion.div {...scaleIn} className="rounded-3xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Ownership</div>
-              <div className="text-[16px] text-white mt-1">Review before join</div>
-            </div>
-          </div>
+        <motion.div
+          {...scaleIn}
+          className="relative overflow-hidden rounded-[26px] border border-white/12 bg-[linear-gradient(165deg,rgba(13,17,28,0.78),rgba(8,11,20,0.92))] p-4 sm:p-5 shadow-[0_34px_110px_-60px_rgba(0,82,255,0.95)]"
+        >
+          <motion.div
+            className="relative space-y-3"
+            variants={staggerContainer}
+            initial="initial"
+            animate="animate"
+          >
+            <motion.div variants={staggerItem} className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[11px] uppercase tracking-[0.17em] text-zinc-500">Ownership</div>
+                <div className="mt-1 text-[18px] text-white font-display">Review before join</div>
+              </div>
+              <div className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] ${ownershipStatusClass}`}>
+                <BadgeCheck className="h-3.5 w-3.5" />
+                {ownershipStatusLabel}
+              </div>
+            </motion.div>
 
-          <div className="mt-4 grid gap-3">
-            <div className="flex items-center gap-3">
-              {creatorCoin?.imageUrl ? (
-                <img
-                  src={creatorCoin.imageUrl}
-                  alt={creatorCoin.symbol || 'Creator Coin'}
-                  className="w-12 h-12 rounded-2xl border border-white/10 object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="w-12 h-12 rounded-2xl border border-white/10 bg-black/40 flex items-center justify-center text-[13px] text-zinc-500 font-medium">
-                  {(creatorCoin?.symbol || 'CC').slice(0, 2)}
+            <motion.div variants={staggerItem} className={`${panelClass} p-3.5 sm:p-4`}>
+              <div className="flex items-center gap-3">
+                {creatorCoin?.imageUrl ? (
+                  <img
+                    src={creatorCoin.imageUrl}
+                    alt={creatorCoin.symbol || 'Creator Coin'}
+                    className="h-12 w-12 rounded-2xl border border-white/15 object-cover shadow-[0_14px_30px_-18px_rgba(58,123,255,0.85)]"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="h-12 w-12 rounded-2xl border border-white/15 bg-gradient-to-br from-zinc-900 to-zinc-800 flex items-center justify-center text-[12px] text-zinc-300 font-semibold">
+                    {(creatorCoin?.symbol || 'CC').slice(0, 2)}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-[15px] text-white font-medium truncate">
+                    {creatorCoin?.symbol ? creatorCoin.symbol : creatorCoinDeclaredMissing ? 'No coin found' : 'Creator Coin'}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-zinc-400 font-mono truncate" title={creatorCoin?.address || undefined}>
+                    {creatorCoin?.address ? creatorCoinAddressShort : creatorCoinDeclaredMissing ? 'No on-chain coin detected' : 'Creator coin lookup'}
+                  </div>
                 </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="text-[14px] text-white font-medium truncate">
-                  {creatorCoin?.symbol ? creatorCoin.symbol : creatorCoinDeclaredMissing ? 'No coin found' : 'Creator Coin'}
-                </div>
-                <div
-                  className="text-[11px] text-zinc-500 font-mono whitespace-nowrap overflow-hidden text-ellipsis leading-snug"
-                  title={creatorCoin?.address || undefined}
-                >
-                  {creatorCoin?.address ? creatorCoin.address : creatorCoinDeclaredMissing ? 'You can still join.' : 'Creator coin lookup'}
+                <div className="shrink-0">
+                  {creatorCoin?.symbol ? (
+                    <CheckCircle2 className="h-5 w-5 text-[#84B2FF]" />
+                  ) : (
+                    <div className="rounded-full border border-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-400">
+                      Ready
+                    </div>
+                  )}
                 </div>
               </div>
-              {creatorCoin?.symbol ? <CheckCircle2 className="w-5 h-5 text-[#0052FF] shrink-0" /> : null}
-            </div>
 
-            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-              <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
-                <div className="text-[12px] text-zinc-500">Connected wallet</div>
-                <div
-                  className="min-w-0 justify-self-end text-right text-[11px] text-zinc-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
-                  title={verifiedWallet || undefined}
-                >
-                  {verifiedWallet}
+              {hasCreatorCoin ? (
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className={`${microPanelClass} px-3 py-2.5`}>
+                    <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                      <Coins className="h-3.5 w-3.5" />
+                      Market cap
+                    </div>
+                    <div className="mt-1 text-[13px] text-zinc-100">{coinMarketCap || 'Unavailable'}</div>
+                  </div>
+                  <div className={`${microPanelClass} px-3 py-2.5`}>
+                    <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                      <Users className="h-3.5 w-3.5" />
+                      Holders
+                    </div>
+                    <div className="mt-1 text-[13px] text-zinc-100">{coinHolders || 'Unavailable'}</div>
+                  </div>
+                  <div className={`${microPanelClass} px-3 py-2.5`}>
+                    <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                      <TrendingUp className="h-3.5 w-3.5" />
+                      24h volume
+                    </div>
+                    <div className="mt-1 text-[13px] text-zinc-100">{coinVolume || 'Unavailable'}</div>
+                  </div>
                 </div>
-              </div>
-              <div className="mt-2 grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
-                <div className="text-[12px] text-zinc-500">Network</div>
-                <div className="justify-self-end text-[12px] text-zinc-300">Base</div>
+              ) : null}
+            </motion.div>
+
+            <motion.div variants={staggerItem} className={`${panelClass} px-4 py-3`}>
+              <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:items-center">
+                <div className="min-w-0">
+                  <div className="text-[11px] uppercase tracking-[0.15em] text-zinc-500">Connected wallet</div>
+                  <div className="mt-1 text-[13px] text-zinc-100 font-medium">{connectedWalletShort}</div>
+                  <div
+                    className="mt-1 text-[10px] text-zinc-500 font-mono truncate"
+                    title={verifiedWallet || undefined}
+                  >
+                    {verifiedWallet}
+                  </div>
+                </div>
+                <div className="sm:text-right">
+                  <div className="text-[11px] uppercase tracking-[0.15em] text-zinc-500">Network</div>
+                  <div className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-[#74A7FF]/35 bg-[#0052FF]/10 px-2.5 py-1 text-[11px] text-[#C5D8FF]">
+                    <CircleDot className="h-3 w-3 animate-pulse" />
+                    Base
+                  </div>
+                </div>
               </div>
               {ownershipGateActive ? (
-                <div className="mt-2 grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
-                  <div className="text-[12px] text-zinc-500">Owner match</div>
-                  <div className={`justify-self-end text-[12px] ${walletOwnershipValid ? 'text-emerald-300' : 'text-amber-300'}`}>
+                <div className={`mt-3 flex items-center justify-between ${microPanelClass} px-3 py-2`}>
+                  <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Owner match</div>
+                  <div className={`text-[12px] ${walletOwnershipValid ? 'text-emerald-300' : 'text-amber-300'}`}>
                     {walletOwnershipValid ? 'Matched' : 'Not matched'}
                   </div>
                 </div>
               ) : null}
-            </div>
+            </motion.div>
 
             {hasCreatorCoin ? (
-              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
-                  <div className="text-[12px] text-zinc-500">Payout recipient</div>
-                  <div
-                    className="min-w-0 justify-self-end text-right text-[11px] text-zinc-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
-                    title={payoutRecipient || undefined}
-                  >
-                    {payoutRecipient || 'Unavailable'}
-                  </div>
+              <motion.div variants={staggerItem} className={`${panelClass} px-4 py-3`}>
+                <div className="text-[11px] uppercase tracking-[0.15em] text-zinc-500">Payout recipient</div>
+                <div className="mt-1 text-[13px] text-zinc-100 font-medium">{payoutRecipientShort}</div>
+                <div className="mt-1 text-[10px] text-zinc-500 font-mono truncate" title={payoutRecipient || undefined}>
+                  {payoutRecipient || 'Unavailable'}
                 </div>
-                <div className="mt-3 text-[12px] text-zinc-500">Owner wallets</div>
-                <div className="mt-2 space-y-1.5">
+              </motion.div>
+            ) : null}
+
+            {hasCreatorCoin ? (
+              <motion.div variants={staggerItem} className={`${panelClass} px-4 py-3`}>
+                <div className="text-[11px] uppercase tracking-[0.15em] text-zinc-500">Owner wallets</div>
+                <div className="mt-2 flex flex-wrap gap-2">
                   {ownerWallets.length > 0 ? (
-                    ownerWallets.map((wallet) => {
+                    ownerWalletPreview.map((wallet) => {
                       const isConnected = verifiedWalletLower === wallet.toLowerCase()
                       return (
-                        <div
+                        <span
                           key={wallet}
-                          className={`rounded-lg border px-2.5 py-1.5 ${
+                          className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-mono ${
                             isConnected
-                              ? 'border-emerald-400/40 bg-emerald-500/10'
-                              : 'border-white/10 bg-white/[0.03]'
+                              ? 'border-emerald-400/40 bg-emerald-500/12 text-emerald-200'
+                              : 'border-white/[0.12] bg-white/[0.02] text-zinc-300'
                           }`}
+                          title={wallet}
                         >
-                          <span
-                            className={`block text-[11px] font-mono whitespace-nowrap overflow-hidden text-ellipsis ${
-                              isConnected ? 'text-emerald-300' : 'text-zinc-300'
-                            }`}
-                            title={wallet}
-                          >
-                            {wallet}
-                          </span>
-                        </div>
+                          <CircleDot className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{shortAddress(wallet, 7, 5)}</span>
+                        </span>
                       )
                     })
                   ) : (
                     <span className="text-[12px] text-zinc-500">Owner list unavailable.</span>
                   )}
                 </div>
-              </div>
+                {ownerWallets.length > ownerWalletPreview.length ? (
+                  <div className="mt-2 text-[11px] text-zinc-500">
+                    +{ownerWallets.length - ownerWalletPreview.length} more owner wallet(s)
+                  </div>
+                ) : null}
+              </motion.div>
             ) : null}
 
             {(canonicalSmartWallet || coinbaseSmartWalletAddress) ? (
-              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                <div className="text-[12px] text-zinc-500">Smart wallet</div>
+              <motion.div variants={staggerItem} className={`${panelClass} px-4 py-3`}>
+                <div className="text-[11px] uppercase tracking-[0.15em] text-zinc-500">Smart wallet</div>
                 {canonicalSmartWallet ? (
-                  <div className="mt-2 grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
-                    <div className="text-[12px] text-zinc-500">Canonical (Zora)</div>
-                    <div
-                      className="min-w-0 justify-self-end text-right text-[11px] text-zinc-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
-                      title={canonicalSmartWallet}
-                    >
+                  <div className={`mt-2 ${microPanelClass} px-3 py-2.5`}>
+                    <div className="text-[11px] text-zinc-500">Canonical (Zora)</div>
+                    <div className="mt-1 text-[13px] text-zinc-100 font-medium">{shortAddress(canonicalSmartWallet, 8, 6)}</div>
+                    <div className="mt-1 text-[10px] text-zinc-500 font-mono truncate" title={canonicalSmartWallet}>
                       {canonicalSmartWallet}
                     </div>
                   </div>
                 ) : null}
                 {coinbaseSmartWalletAddress && hasDistinctSmartWalletSignals ? (
-                  <div className="mt-2 grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
-                    <div className="text-[12px] text-zinc-500">{isBaseApp ? 'Base app' : 'Privy'}</div>
-                    <div
-                      className="min-w-0 justify-self-end text-right text-[11px] text-zinc-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
-                      title={coinbaseSmartWalletAddress}
-                    >
+                  <div className={`mt-2 ${microPanelClass} px-3 py-2.5`}>
+                    <div className="text-[11px] text-zinc-500">{isBaseApp ? 'Base app' : 'Privy'}</div>
+                    <div className="mt-1 text-[13px] text-zinc-100 font-medium">
+                      {shortAddress(coinbaseSmartWalletAddress, 8, 6)}
+                    </div>
+                    <div className="mt-1 text-[10px] text-zinc-500 font-mono truncate" title={coinbaseSmartWalletAddress}>
                       {coinbaseSmartWalletAddress}
                     </div>
                   </div>
@@ -412,23 +546,23 @@ export const VerifyStep = memo(function VerifyStep({
                     Base app smart wallet differs from Zora canonical wallet. Connect the owner wallet you control.
                   </div>
                 ) : null}
-              </div>
+              </motion.div>
             ) : null}
 
             {ownershipError ? (
-              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-[12px] text-amber-200/90">
+              <motion.div variants={staggerItem} className="rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-[12px] text-amber-200/90">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                   <div>{ownershipError}</div>
                 </div>
-              </div>
+              </motion.div>
             ) : null}
             {creatorCoinDeclaredMissing ? (
-              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-[12px] text-zinc-400">
+              <motion.div variants={staggerItem} className={`${panelClass} px-4 py-3 text-[12px] text-zinc-400`}>
                 Creator coin not found for this wallet. You can still join and update ownership later.
-              </div>
+              </motion.div>
             ) : null}
-          </div>
+          </motion.div>
         </motion.div>
       ) : null}
 
@@ -437,10 +571,12 @@ export const VerifyStep = memo(function VerifyStep({
         <motion.div {...scaleIn} className="pt-2">
           <button
             type="button"
-            className="w-full flex items-center justify-center gap-2 min-h-[58px] rounded-2xl bg-[#0052FF] text-white font-medium text-[15px] px-6 py-4 shadow-[0_10px_30px_-16px_rgba(0,82,255,0.8)] transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] hover:bg-[#0047E1] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+            className="group relative w-full overflow-hidden flex items-center justify-center gap-2 min-h-[58px] rounded-2xl border border-[#5A96FF]/35 bg-gradient-to-r from-[#004CE8] via-[#005CFF] to-[#2A79FF] text-white font-semibold text-[15px] px-6 py-4 shadow-[0_16px_48px_-20px_rgba(0,82,255,0.95)] transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] hover:brightness-110 hover:shadow-[0_20px_56px_-22px_rgba(26,105,255,0.98)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             disabled={busy || !canSubmit}
             onClick={onSubmit}
           >
+            <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/70 opacity-70" />
+            <span className="pointer-events-none absolute -left-16 top-0 h-full w-16 -skew-x-12 bg-white/20 blur-md transition-transform duration-700 ease-out group-hover:translate-x-[420px]" />
             {busy ? (
               <>
                 <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
