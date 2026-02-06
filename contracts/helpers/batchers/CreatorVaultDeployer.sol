@@ -850,12 +850,14 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     }
 
     function _pullCreatorTokens(address creatorToken, address owner, uint256 amount) internal {
-        IERC20(creatorToken).safeTransferFrom(owner, address(this), amount);
+        if (owner != msg.sender) revert NotOwner();
+        IERC20(creatorToken).safeTransferFrom(msg.sender, address(this), amount);
     }
 
     function _permitAndPull(address creatorToken, address owner, uint256 amount, PermitData calldata permit) internal {
-        IERC20Permit(creatorToken).permit(owner, address(this), amount, permit.deadline, permit.v, permit.r, permit.s);
-        IERC20(creatorToken).safeTransferFrom(owner, address(this), amount);
+        if (owner != msg.sender) revert NotOwner();
+        IERC20Permit(creatorToken).permit(msg.sender, address(this), amount, permit.deadline, permit.v, permit.r, permit.s);
+        IERC20(creatorToken).safeTransferFrom(msg.sender, address(this), amount);
     }
 
     function _requirePhase1CodeIds(CodeIds calldata codeIds) internal pure {
@@ -915,4 +917,3 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         return string(b);
     }
 }
-

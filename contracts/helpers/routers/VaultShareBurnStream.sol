@@ -60,6 +60,8 @@ contract VaultShareBurnStream is ReentrancyGuard {
     // EPOCH HELPERS (THU 00:00 UTC)
     // ================================
 
+    // Deterministic epoch bucketing helper; this is not used as a randomness source.
+    // slither-disable-next-line weak-prng
     function epochStart(uint256 ts) public pure returns (uint256) {
         return ts - (ts % EPOCH_DURATION);
     }
@@ -200,4 +202,3 @@ contract VaultShareBurnStream is ReentrancyGuard {
         }
     }
 }
-

@@ -11,7 +11,6 @@ CreatorVault is the **Base-native creator finance layer** that turns **Zora Crea
 [![LayerZero](https://img.shields.io/badge/LayerZero-V2-7B3FE4)](https://layerzero.network/)
 [![Multi-Chain](https://img.shields.io/badge/Chains-8+-4CAF50)](#supported-chains)
 [![Tests](https://github.com/wenakita/4626/actions/workflows/test.yml/badge.svg)](https://github.com/wenakita/4626/actions/workflows/test.yml)
-[![Total Tests](https://img.shields.io/badge/Tests-167_passing-success)](https://github.com/wenakita/4626/actions/workflows/test.yml)
 [![Lottery Tests](https://img.shields.io/badge/Lottery_Tests-88-blue)](#lottery-smart-wallet-compatibility)
 
 ---
@@ -369,7 +368,7 @@ forge test -vvv
 
 ### Deploy a Vault (Web UI)
 
-1. Navigate to [erc4626.fun/deploy](https://erc4626.fun/deploy)
+1. Navigate to [app.4626.fun/deploy](https://app.4626.fun/deploy)
 2. Connect Coinbase Smart Wallet
 3. Enter your Creator Coin address (e.g., 0x5b67...75 for akita)
 4. Send 50,000,000 tokens to your smart wallet (for initial CCA deposit)
@@ -429,19 +428,36 @@ CreatorVault/
 
 ---
 
-## First Deployment: akita
+## Reference Deployment: AKITA (Base)
 
-**akita is the first Creator Coin to launch with CreatorVault:**
+**AKITA is the current reference Creator Coin stack used by the app defaults.**
+Source of truth: `frontend/src/config/contracts.defaults.ts`.
 
 | Item | Value |
 |------|-------|
 | **Creator Coin** | akita (Base) |
 | **Token Address** | `0x5b674196812451b7cec024fe9d22d2c0b172fa75` |
+| **Vault (CreatorOVault)** | `0xA015954E2606d08967Aee3787456bB3A86a46A42` |
+| **Wrapper (CreatorOVaultWrapper)** | `0x58Cd1E9248F89138208A601e95A531d3c0fa0c4f` |
+| **Share OFT (CreatorShareOFT)** | `0x4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57` |
+| **Gauge Controller** | `0xB471B53cD0A30289Bc3a2dc3c6dd913288F8baA1` |
+| **CCA Strategy** | `0x00c7897e0554b34A477D9D144AcC613Cdc97046F` |
+| **Oracle** | `0x8C044aeF10d05bcC53912869db89f6e1f37bC6fC` |
 | **Vault Symbol** | ▢AKITA |
 | **OFT Symbol** | ■AKITA |
-| **DEX Pair** | akita/ZORA (Uniswap V4, 3% fee tier) |
-| **Lottery Prize Pool** | Growing daily via 6.9% trading fees (buys + sells) |
-| **CCA Launch** | [View live auction](https://erc4626.fun/auction/demo) |
+| **DEX Pairing Path** | Launches through Uniswap CCA (then migrates to active market liquidity) |
+| **Lottery Prize Source** | 6.9% trading fees routed via `CreatorGaugeController` (69% jackpot reserve by default) |
+| **Auction Route** | [Open auction page](https://app.4626.fun/auction/bid/0x00c7897e0554b34A477D9D144AcC613Cdc97046F) |
+
+---
+
+## Identity + Portfolio (Current App Model)
+
+- **Canonical wallet graph**: profile identity is modeled across `profiles`, `wallets`, and `profile_wallets` (not just flat wallet columns).
+- **Wallet sync endpoint**: `POST /api/wallet/sync` refreshes linked wallets from Privy and updates canonical mappings.
+- **Portfolio provenance API**: `GET/PATCH /api/portfolio/me` supports source-aware profile fields and manual overrides.
+- **Public portfolio route**: `/portfolio/:address` (app host) renders public profile view by wallet address.
+- **Deploy guardrails**: deploy session creation checks canonical wallet linkage and fails closed on ownership mismatch.
 
 ---
 
@@ -674,7 +690,7 @@ forge test --match-test test_SmartWallet_CanParticipateInLottery -vvv
 **Deploy a vault for your Creator Coin:**
 
 ```solidity
-// Via Factory (or use web UI at erc4626.fun/deploy)
+// Via Factory (or use web UI at app.4626.fun/deploy)
 (address vault, address wrapper, address shareOFT) = factory.deployCreatorVault(
     0x5b67...75,                       // Your Creator Coin address
     "TOKEN Vault",                     // Vault name
@@ -765,6 +781,12 @@ forge script script/DeployCreatorVault.s.sol \
 cd frontend && pnpm dev
 ```
 
+### Environment Notes (Server vs Client)
+
+- `NEYNAR_API_KEY` is **server-only** and required for webhook verification paths.
+- `VITE_*` env vars are client-exposed by design. Do not put secrets in `VITE_` keys.
+- `WALLET_SYNC_LEGACY_FALLBACK=true` keeps legacy wallet-upsert fallback enabled during staged migration.
+
 ### Repo build philosophy (Zora-style)
 
 This repo is intentionally split into:
@@ -784,9 +806,10 @@ For the Vercel API surface, avoid “hidden” dynamic imports: add endpoints by
 
 ## Links
 
-- **Website**: [erc4626.fun](https://erc4626.fun)
+- **Website**: [4626.fun](https://4626.fun)
+- **App**: [app.4626.fun](https://app.4626.fun)
 - **GitHub**: [github.com/wenakita/4626](https://github.com/wenakita/4626)
-- **Docs**: [docs.erc4626.fun](https://docs.erc4626.fun) *(coming soon)*
+- **Docs Site (source)**: [`apps/docs-site`](apps/docs-site)
 - **Coinbase Creator Coins**: [Coinbase Ecosystem](https://www.coinbase.com)
 - **LayerZero**: [docs.layerzero.network](https://docs.layerzero.network)
 - **Uniswap CCA**: [cca.uniswap.org](https://cca.uniswap.org)
@@ -797,7 +820,7 @@ For the Vercel API surface, avoid “hidden” dynamic imports: add endpoints by
 ## Brand Assets
 
 **Logos, icons, and brand guidelines are available in `/frontend/public/`:**
-
+a
 - **Logo** (SVG, PNG): `/frontend/public/logo.svg`
 - **Favicon**: `/frontend/public/favicon.ico`
 - **Protocol logos**: `/frontend/public/protocols/` (Uniswap, LayerZero, Chainlink, etc.)

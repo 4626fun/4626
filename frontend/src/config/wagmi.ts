@@ -68,7 +68,7 @@ const BASE_READ_RPC_URLS = uniqueNonEmptyStrings(
 const WALLETCONNECT_APP_URL =
   (import.meta.env.VITE_APP_URL as string | undefined)?.trim() ||
   (typeof window !== 'undefined' ? window.location.origin : 'https://4626.fun')
-const WALLETCONNECT_ICON_URL = `${WALLETCONNECT_APP_URL.replace(/\/$/, '')}/miniapp-icon.svg`
+const WALLETCONNECT_ICON_URL = `${WALLETCONNECT_APP_URL.replace(/\/$/, '')}/miniapp-icon.png`
 
 function isLockedEthereumProviderGlobal(): boolean {
   if (!IS_BROWSER) return false

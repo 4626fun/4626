@@ -38,6 +38,12 @@ export type KeeprConfigV1 = {
     syncMaxMembersPerBatch?: number
     syncCooldownSeconds?: number
   }
+  /** Optional contract addresses for CRE automation workflows */
+  contracts?: {
+    ccaStrategy?: `0x${string}`
+    oracle?: `0x${string}`
+    vrfHub?: `0x${string}`
+  }
 }
 
 function sha256Hex(input: string): string {

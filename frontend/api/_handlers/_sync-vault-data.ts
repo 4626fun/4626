@@ -3,6 +3,7 @@ import { logger } from '../../server/_lib/logger.js';
 
 // Declare process for Node.js environment
 declare const process: { env: Record<string, string | undefined> };
+const BASE_CHAIN_ID = 8453;
 
 // Dynamic import for Prisma to avoid build errors when not configured
 let prisma: any = null;
@@ -123,6 +124,12 @@ async function fetchFromCharmGraphQL(vaultAddress: string, first: number = 100, 
   return result.data?.vault ?? null;
 }
 
+function readCronSecretHeader(req: VercelRequest): string {
+  const raw = req.headers['x-cron-secret'];
+  if (Array.isArray(raw)) return String(raw[0] ?? '');
+  return typeof raw === 'string' ? raw : '';
+}
+
 async function syncVaultSnapshots(vaultAddress: string) {
   logger.info('[sync-vault-data] Syncing vault', { vaultAddress });
   
@@ -168,7 +175,7 @@ async function syncVaultSnapshots(vaultAddress: string) {
         },
         create: {
           vaultAddress: vaultAddress.toLowerCase(),
-          chainId: 1,
+          chainId: BASE_CHAIN_ID,
           timestamp,
           feeApr: snap.feeApr ? parseFloat(snap.feeApr) : null,
           annualVsHold: snap.annualVsHoldPerfSince ? parseFloat(snap.annualVsHoldPerfSince) : null,
@@ -201,7 +208,7 @@ async function syncVaultSnapshots(vaultAddress: string) {
       where: { vaultAddress: vaultAddress.toLowerCase() },
       create: {
         vaultAddress: vaultAddress.toLowerCase(),
-        chainId: 1,
+        chainId: BASE_CHAIN_ID,
         lastSyncAt: new Date(),
         lastTimestamp: latestTimestamp,
         syncErrors: 0,
@@ -225,7 +232,7 @@ async function syncVaultSnapshots(vaultAddress: string) {
       where: { vaultAddress: vaultAddress.toLowerCase() },
       create: {
         vaultAddress: vaultAddress.toLowerCase(),
-        chainId: 1,
+        chainId: BASE_CHAIN_ID,
         lastSyncAt: new Date(),
         syncErrors: 1,
         lastError: error.message,
@@ -272,7 +279,7 @@ async function updateDailyStats(vaultAddress: string) {
     },
     create: {
       vaultAddress: vaultAddress.toLowerCase(),
-      chainId: 1,
+      chainId: BASE_CHAIN_ID,
       date: today,
       avgFeeApr: feeAprs.length > 0 ? feeAprs.reduce((a: number, b: number) => a + b, 0) / feeAprs.length : null,
       minFeeApr: feeAprs.length > 0 ? Math.min(...feeAprs) : null,
@@ -296,8 +303,8 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  // Verify cron secret for security (optional but recommended)
-  const cronSecret = req.headers['x-cron-secret'] || req.query.secret;
+  // Verify cron secret from header only to avoid query-string secret leakage.
+  const cronSecret = readCronSecretHeader(req);
   if (process.env.CRON_SECRET && cronSecret !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -327,8 +334,9 @@ export default async function handler(
         const result = await syncVaultSnapshots(address);
         await updateDailyStats(address);
         results.push({ name, ...result, success: true });
-      } catch (error: any) {
-        results.push({ name, vault: address, success: false, error: error.message });
+      } catch (error: unknown) {
+        logger.error('[sync-vault-data] Vault sync failed', { name, address, error });
+        results.push({ name, vault: address, success: false, error: 'Sync failed' });
       }
     }
     
@@ -338,11 +346,11 @@ export default async function handler(
       results,
     });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('[sync-vault-data] Fatal error', error);
     return res.status(500).json({
       success: false,
-      error: error.message,
+      error: 'Internal server error',
     });
   } finally {
     const db = await getPrisma();

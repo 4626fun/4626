@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { CheckCircle2, ChevronRight, Mail, ShieldCheck, Wallet, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronRight, Mail, ShieldCheck, Wallet, X } from 'lucide-react'
 import type { WaitlistState } from '../waitlistTypes'
 import { ConnectButtonWeb3 } from '@/components/ConnectButtonWeb3'
 
@@ -31,6 +31,11 @@ type VerifyStepProps = {
   // CSW detection (simplified - just show detection, no owner linking at signup)
   showDeployOwnerLink?: boolean
   cswAddress?: string | null
+  isBaseApp?: boolean
+  coinbaseSmartWalletAddress?: string | null
+  walletOwnershipValid: boolean
+  ownershipEvidenceAvailable: boolean
+  cswMismatch?: boolean
   // Auto-fetched Creator Coin
   creatorCoin: WaitlistState['creatorCoin']
   creatorCoinDeclaredMissing: boolean
@@ -51,8 +56,11 @@ export const VerifyStep = memo(function VerifyStep({
   privyReady,
   privyVerifyBusy,
   privyVerifyError,
-  showDeployOwnerLink,
-  cswAddress,
+  isBaseApp,
+  coinbaseSmartWalletAddress,
+  walletOwnershipValid,
+  ownershipEvidenceAvailable,
+  cswMismatch,
   creatorCoin,
   creatorCoinDeclaredMissing,
   creatorCoinBusy,
@@ -65,12 +73,23 @@ export const VerifyStep = memo(function VerifyStep({
 }: VerifyStepProps) {
   const hasCreatorCoin = !!creatorCoin?.address
   const showSubmitButton = verifiedWallet && (hasCreatorCoin || creatorCoinDeclaredMissing)
-  const short = (v: string) => `${v.slice(0, 6)}…${v.slice(-4)}`
-  const headerTitle = !verifiedWallet ? 'Connect wallet' : showSubmitButton ? 'Join the waitlist' : 'Checking your wallet'
+  const ownerWallets = useMemo(() => creatorCoin?.ownerWallets ?? [], [creatorCoin?.ownerWallets])
+  const payoutRecipient = useMemo(() => creatorCoin?.payoutRecipient ?? null, [creatorCoin?.payoutRecipient])
+  const canonicalSmartWallet = useMemo(() => creatorCoin?.canonicalSmartWallet ?? null, [creatorCoin?.canonicalSmartWallet])
+  const verifiedWalletLower = useMemo(
+    () => (typeof verifiedWallet === 'string' ? verifiedWallet.trim().toLowerCase() : ''),
+    [verifiedWallet],
+  )
+  const ownershipGateActive = Boolean(hasCreatorCoin && ownershipEvidenceAvailable)
+  const headerTitle = !verifiedWallet ? 'Connect owner wallet' : showSubmitButton ? 'Join the waitlist' : 'Checking ownership'
   const headerSubtitle = !verifiedWallet
-    ? 'Use a wallet connected to your creator coin. We’ll look it up automatically.'
+    ? isBaseApp
+      ? 'Base app detected. Connect the wallet that owns your creator coin.'
+      : 'Connect the wallet that owns your creator coin. We will verify on-chain ownership.'
     : showSubmitButton
-      ? 'Welcome — you’re all set. Join the waitlist for early access updates.'
+      ? ownershipGateActive && !walletOwnershipValid
+        ? 'Connect a payout recipient or owner wallet to continue.'
+        : 'Ownership verified. Join the waitlist for early access updates.'
       : 'One moment…'
   const looksLikeWalletLoginDisabled =
     typeof privyVerifyError === 'string' && /wallet (login|sign-in) is not enabled|wallet sign-in isn’t available/i.test(privyVerifyError)
@@ -81,8 +100,22 @@ export const VerifyStep = memo(function VerifyStep({
     if (privyVerifyBusy) return 'Opening…'
     if (!showPrivyReady) return 'Privy is not ready.'
     if (!privyReady) return 'Loading…'
-    return 'No transaction. ~10 seconds.'
+    return ''
   }, [privyReady, privyVerifyBusy, showPrivyReady])
+  const ownershipError =
+    ownershipGateActive && !walletOwnershipValid
+      ? 'Connected wallet is not in the creator coin owner set. Switch to an owner or payout recipient wallet.'
+      : null
+  const canonicalSmartWalletLower = useMemo(
+    () => (typeof canonicalSmartWallet === 'string' ? canonicalSmartWallet.trim().toLowerCase() : ''),
+    [canonicalSmartWallet],
+  )
+  const coinbaseSmartWalletLower = useMemo(
+    () => (typeof coinbaseSmartWalletAddress === 'string' ? coinbaseSmartWalletAddress.trim().toLowerCase() : ''),
+    [coinbaseSmartWalletAddress],
+  )
+  const hasDistinctSmartWalletSignals =
+    Boolean(canonicalSmartWallet && coinbaseSmartWalletAddress && canonicalSmartWalletLower !== coinbaseSmartWalletLower)
 
   return (
     <motion.div
@@ -127,7 +160,7 @@ export const VerifyStep = memo(function VerifyStep({
           </button>
 
           <div className="flex items-center justify-between">
-            <div className="text-[12px] text-zinc-500">{helperText}</div>
+          <div className="text-[12px] text-zinc-500">{helperText || '\u00A0'}</div>
             <button
               type="button"
               className="text-[12px] text-zinc-400 hover:text-zinc-200 transition-colors"
@@ -240,7 +273,7 @@ export const VerifyStep = memo(function VerifyStep({
       {verifiedWallet && creatorCoinBusy ? (
         <motion.div {...fadeUp} className="flex items-center justify-center gap-3 py-5">
           <div className="w-5 h-5 rounded-full border-2 border-zinc-700 border-t-[#0052FF] animate-spin" />
-          <span className="text-[14px] text-zinc-400">Finding your Creator Coin…</span>
+          <span className="text-[14px] text-zinc-400">Reading Zora profile and creator coin owners…</span>
         </motion.div>
       ) : null}
 
@@ -249,8 +282,8 @@ export const VerifyStep = memo(function VerifyStep({
         <motion.div {...scaleIn} className="rounded-3xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Ready</div>
-              <div className="text-[16px] text-white mt-1">Review & join</div>
+              <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Ownership</div>
+              <div className="text-[16px] text-white mt-1">Review before join</div>
             </div>
           </div>
 
@@ -272,43 +305,129 @@ export const VerifyStep = memo(function VerifyStep({
                 <div className="text-[14px] text-white font-medium truncate">
                   {creatorCoin?.symbol ? creatorCoin.symbol : creatorCoinDeclaredMissing ? 'No coin found' : 'Creator Coin'}
                 </div>
-                <div className="text-[12px] text-zinc-500 truncate">
-                  {creatorCoin?.symbol ? 'Creator coin detected' : 'You can still join.'}
+                <div
+                  className="text-[11px] text-zinc-500 font-mono whitespace-nowrap overflow-hidden text-ellipsis leading-snug"
+                  title={creatorCoin?.address || undefined}
+                >
+                  {creatorCoin?.address ? creatorCoin.address : creatorCoinDeclaredMissing ? 'You can still join.' : 'Creator coin lookup'}
                 </div>
               </div>
               {creatorCoin?.symbol ? <CheckCircle2 className="w-5 h-5 text-[#0052FF] shrink-0" /> : null}
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-[12px] text-zinc-500">Wallet</div>
-                <div className="text-[12px] text-zinc-300 font-mono">{short(verifiedWallet)}</div>
+              <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
+                <div className="text-[12px] text-zinc-500">Connected wallet</div>
+                <div
+                  className="min-w-0 justify-self-end text-right text-[11px] text-zinc-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
+                  title={verifiedWallet || undefined}
+                >
+                  {verifiedWallet}
+                </div>
               </div>
-              <div className="mt-2 flex items-center justify-between gap-3">
+              <div className="mt-2 grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
                 <div className="text-[12px] text-zinc-500">Network</div>
-                <div className="text-[12px] text-zinc-300">Base</div>
+                <div className="justify-self-end text-[12px] text-zinc-300">Base</div>
               </div>
+              {ownershipGateActive ? (
+                <div className="mt-2 grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
+                  <div className="text-[12px] text-zinc-500">Owner match</div>
+                  <div className={`justify-self-end text-[12px] ${walletOwnershipValid ? 'text-emerald-300' : 'text-amber-300'}`}>
+                    {walletOwnershipValid ? 'Matched' : 'Not matched'}
+                  </div>
+                </div>
+              ) : null}
             </div>
-          </div>
-        </motion.div>
-      ) : null}
 
-      {/* No Creator Coin found */}
-      {/* If no Creator Coin found, we auto-continue (minimal flow). */}
-
-      {/* CSW Detected - Simple confirmation (no points display) */}
-      {showDeployOwnerLink && cswAddress ? (
-        <motion.div {...scaleIn} className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-[14px] text-white font-medium">Smart Wallet Detected</div>
-              <div className="text-[12px] text-zinc-500 mt-0.5 font-mono">
-                {short(cswAddress)}
+            {hasCreatorCoin ? (
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
+                  <div className="text-[12px] text-zinc-500">Payout recipient</div>
+                  <div
+                    className="min-w-0 justify-self-end text-right text-[11px] text-zinc-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
+                    title={payoutRecipient || undefined}
+                  >
+                    {payoutRecipient || 'Unavailable'}
+                  </div>
+                </div>
+                <div className="mt-3 text-[12px] text-zinc-500">Owner wallets</div>
+                <div className="mt-2 space-y-1.5">
+                  {ownerWallets.length > 0 ? (
+                    ownerWallets.map((wallet) => {
+                      const isConnected = verifiedWalletLower === wallet.toLowerCase()
+                      return (
+                        <div
+                          key={wallet}
+                          className={`rounded-lg border px-2.5 py-1.5 ${
+                            isConnected
+                              ? 'border-emerald-400/40 bg-emerald-500/10'
+                              : 'border-white/10 bg-white/[0.03]'
+                          }`}
+                        >
+                          <span
+                            className={`block text-[11px] font-mono whitespace-nowrap overflow-hidden text-ellipsis ${
+                              isConnected ? 'text-emerald-300' : 'text-zinc-300'
+                            }`}
+                            title={wallet}
+                          >
+                            {wallet}
+                          </span>
+                        </div>
+                      )
+                    })
+                  ) : (
+                    <span className="text-[12px] text-zinc-500">Owner list unavailable.</span>
+                  )}
+                </div>
               </div>
-            </div>
+            ) : null}
+
+            {(canonicalSmartWallet || coinbaseSmartWalletAddress) ? (
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                <div className="text-[12px] text-zinc-500">Smart wallet</div>
+                {canonicalSmartWallet ? (
+                  <div className="mt-2 grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
+                    <div className="text-[12px] text-zinc-500">Canonical (Zora)</div>
+                    <div
+                      className="min-w-0 justify-self-end text-right text-[11px] text-zinc-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
+                      title={canonicalSmartWallet}
+                    >
+                      {canonicalSmartWallet}
+                    </div>
+                  </div>
+                ) : null}
+                {coinbaseSmartWalletAddress && hasDistinctSmartWalletSignals ? (
+                  <div className="mt-2 grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
+                    <div className="text-[12px] text-zinc-500">{isBaseApp ? 'Base app' : 'Privy'}</div>
+                    <div
+                      className="min-w-0 justify-self-end text-right text-[11px] text-zinc-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
+                      title={coinbaseSmartWalletAddress}
+                    >
+                      {coinbaseSmartWalletAddress}
+                    </div>
+                  </div>
+                ) : null}
+                {cswMismatch ? (
+                  <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-200/90">
+                    Base app smart wallet differs from Zora canonical wallet. Connect the owner wallet you control.
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {ownershipError ? (
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-[12px] text-amber-200/90">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <div>{ownershipError}</div>
+                </div>
+              </div>
+            ) : null}
+            {creatorCoinDeclaredMissing ? (
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-[12px] text-zinc-400">
+                Creator coin not found for this wallet. You can still join and update ownership later.
+              </div>
+            ) : null}
           </div>
         </motion.div>
       ) : null}
@@ -331,9 +450,6 @@ export const VerifyStep = memo(function VerifyStep({
               'Join Waitlist'
             )}
           </button>
-          <div className="mt-3 text-center text-[12px] text-zinc-600">
-            Takes ~10 seconds. No transaction.
-          </div>
         </motion.div>
       ) : null}
 

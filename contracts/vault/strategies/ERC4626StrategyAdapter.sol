@@ -116,9 +116,8 @@ contract ERC4626StrategyAdapter is IStrategy, Ownable, ReentrancyGuard {
     function deposit(uint256 amount) external override onlyVault whenActive nonReentrant returns (uint256 deposited) {
         if (amount == 0) return 0;
 
-        // Pull assets from the vault.
-        // Pull assets from the vault (onlyVault guards access).
-        ASSET.safeTransferFrom(vault, address(this), amount);
+        // Pull assets from the vault. `onlyVault` guarantees msg.sender is the trusted vault.
+        ASSET.safeTransferFrom(msg.sender, address(this), amount);
 
         // Maintain idle buffer: deposit only excess idle into the ERC4626 vault.
         uint256 total = getTotalAssets();
@@ -283,5 +282,4 @@ contract ERC4626StrategyAdapter is IStrategy, Ownable, ReentrancyGuard {
         IERC20(token).safeTransfer(to, amount);
     }
 }
-
 

@@ -41,8 +41,9 @@ function isSafeSubpath(p: string): boolean {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  let subpath = ''
   try {
-    const subpath = getApiSubpath(req)
+    subpath = getApiSubpath(req)
     if (!isSafeSubpath(subpath)) {
       return res.status(404).json({ success: false, error: 'Not found' })
     }
@@ -55,20 +56,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return await h(req, res)
   } catch (e: unknown) {
-    // Prevent Vercel from treating thrown exceptions as a hard crash.
-    // Surface a minimal, actionable message for debugging.
-    const message = e instanceof Error ? e.message : String(e)
-    const stack = e instanceof Error ? e.stack : null
+    const errorMessage = e instanceof Error ? e.message : String(e)
+    console.error('[api] Unhandled route error', {
+      route: subpath || '(unknown)',
+      error: errorMessage || 'unknown_error',
+    })
     try {
       if (!res.headersSent) res.setHeader('Cache-Control', 'no-store')
     } catch {
       // ignore
     }
-    return res.status(500).json({
-      success: false,
-      error: message || 'Unhandled API error',
-      ...(stack ? { stack } : null),
-    })
+    return res.status(500).json({ success: false, error: 'Internal server error' })
   }
 }
-

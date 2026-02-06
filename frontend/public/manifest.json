@@ -8,8 +8,8 @@
   "theme_color": "#3B82F6",
   "icons": [
     {
-      "src": "/pwa-192.png",
-      "sizes": "192x192",
+      "src": "/miniapp-icon.png",
+      "sizes": "1024x1024",
       "type": "image/png"
     },
     {

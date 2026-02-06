@@ -60,6 +60,8 @@ contract UniversalBytecodeStoreV2 {
     mapping(bytes32 => uint256) public sizes;
 
     /// @dev codeId => chunk pointers (each chunk pointer's runtime contains the chunk bytes).
+    ///      Mapping slots are zero-initialized by the EVM.
+    // slither-disable-next-line uninitialized-state
     mapping(bytes32 => address[]) internal chunkPointers;
 
     event Stored(bytes32 indexed codeId, address indexed pointer, uint256 size);
@@ -142,4 +144,3 @@ contract UniversalBytecodeStoreV2 {
         }
     }
 }
-

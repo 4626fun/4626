@@ -67,6 +67,11 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'keepr/joinStatus': () => import('./keepr/_joinStatus.js'),
   'keepr/nonce': () => import('./keepr/_nonce.js'),
   'keepr/vault/upsert': () => import('./keepr/vault/_upsert.js'),
+  'keepr/actions/pending': () => import('./keepr/actions/_pending.js'),
+  'keepr/actions/updateStatus': () => import('./keepr/actions/_updateStatus.js'),
+
+  // CRE workflow endpoints
+  'cre/vaults/active': () => import('./cre/vaults/_active.js'),
 
   'auth/admin': () => import('./auth/_admin.js'),
   'auth/logout': () => import('./auth/_logout.js'),
