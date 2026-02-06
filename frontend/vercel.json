@@ -85,6 +85,6 @@
     { "src": "/__api/(.*)", "dest": "/api/$1", "continue": true },
     { "src": "/api/(.*)", "dest": "/api/[...path]" },
     { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/index.html" }
+    { "src": "/((?!assets/).*)", "dest": "/index.html" }
   ]
 }
