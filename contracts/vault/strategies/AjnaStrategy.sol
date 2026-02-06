@@ -189,9 +189,8 @@ contract AjnaStrategy is IStrategy, Ownable, ReentrancyGuard {
     function deposit(uint256 amount) external override onlyVault whenActive nonReentrant returns (uint256 deployed) {
         if (amount == 0) return 0;
 
-        // Transfer tokens from vault
-        // Pull CREATOR from the vault (onlyVault guards access).
-        CREATOR_COIN.safeTransferFrom(vault, address(this), amount);
+        // Pull CREATOR from the vault. `onlyVault` guarantees msg.sender is the trusted vault.
+        CREATOR_COIN.safeTransferFrom(msg.sender, address(this), amount);
 
         // Deploy to Ajna pool
         if (ajnaPool != address(0)) {

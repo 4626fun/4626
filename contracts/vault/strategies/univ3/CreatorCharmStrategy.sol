@@ -336,9 +336,9 @@ contract CreatorCharmStrategy is IStrategy, ReentrancyGuard, Ownable {
             return 0;
         }
 
-        // Pull CREATOR tokens from the vault (onlyVault enforces caller).
+        // Pull CREATOR tokens from the vault. `onlyVault` guarantees msg.sender is the trusted vault.
         if (amount > 0) {
-            CREATOR.safeTransferFrom(vault, address(this), amount);
+            CREATOR.safeTransferFrom(msg.sender, address(this), amount);
         }
 
         uint256 totalCreator = CREATOR.balanceOf(address(this));
