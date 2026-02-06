@@ -8,8 +8,58 @@ import { PrivyClientProvider } from '@/lib/privy/client'
 import { ThemeProvider } from '@/lib/theme'
 import './index.css'
 
+const EXTENSION_ETHEREUM_ERROR_PATTERNS: RegExp[] = [
+  /Cannot redefine property:\s*ethereum/i,
+  /Cannot set property ethereum of #<Window> which has only a getter/i,
+  /MetaMask encountered an error setting the global Ethereum provider/i,
+  /Cannot access '\$a' before initialization/i,
+]
+
+function readErrorMessage(value: unknown): string {
+  if (!value) return ''
+  if (value instanceof Error) return value.message || ''
+  return String((value as any)?.message ?? value)
+}
+
+function isKnownExtensionWalletError(message: string, source: string): boolean {
+  if (!message) return false
+  const hitPattern = EXTENSION_ETHEREUM_ERROR_PATTERNS.some((pattern) => pattern.test(message))
+  if (!hitPattern) return false
+  const src = String(source || '').toLowerCase()
+  if (!src) return true
+  return (
+    src.includes('chrome-extension://') ||
+    src.includes('moz-extension://') ||
+    src.includes('evmask.js') ||
+    src.includes('requestprovider.js') ||
+    src.includes('inpage.js') ||
+    src.includes('formatters.js')
+  )
+}
+
 if (typeof window !== 'undefined') {
   try {
+    // Keep app rendering stable when multiple wallet extensions race to inject window.ethereum.
+    window.addEventListener(
+      'error',
+      (event) => {
+        if (isKnownExtensionWalletError(event.message || '', event.filename || '')) {
+          event.preventDefault()
+        }
+      },
+      true,
+    )
+    window.addEventListener(
+      'unhandledrejection',
+      (event) => {
+        const message = readErrorMessage((event as PromiseRejectionEvent).reason)
+        if (isKnownExtensionWalletError(message, '')) {
+          event.preventDefault()
+        }
+      },
+      true,
+    )
+
     const params = new URLSearchParams(window.location.search)
     const debugEnabled = params.get('debug') === '1' || window.localStorage.getItem('cv:debug') === 'true'
     const disablePrivyAnalytics =
