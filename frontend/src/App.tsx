@@ -465,6 +465,7 @@ function App() {
                   <Route path="/swap" element={<Swap />} />
                   <Route path="/positions" element={<Positions />} />
                   <Route path="/portfolio" element={<Portfolio />} />
+                  <Route path="/portfolio/:address" element={<Portfolio />} />
                   <Route path="/launch" element={<Navigate to="/deploy" replace />} />
                   <Route path="/deploy" element={<DeployVault />} />
                   <Route path="/coin/:address/manage" element={<CoinManage />} />

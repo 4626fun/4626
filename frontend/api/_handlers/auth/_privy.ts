@@ -12,6 +12,8 @@ import {
 import { getDb } from '../../../server/_lib/postgres.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { upsertProfileByWallet } from '../../../server/_lib/profileSync.js'
+import { classifyLinkedAccounts } from '../../../server/_lib/walletMapping.js'
+import { syncUserWallets } from '../../../server/_lib/walletSync.js'
 
 import { PrivyClient } from '@privy-io/server-auth'
 
@@ -21,115 +23,6 @@ type PrivyVerifyResponse = {
   address: string
   sessionToken: string
   privyUserId: string
-}
-
-function isValidEvmAddress(v: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(v)
-}
-
-function normalizeLower(v: unknown): string {
-  return typeof v === 'string' ? v.trim().toLowerCase() : ''
-}
-
-function extractBaseAccountAddress(user: any): string | null {
-  const linked = Array.isArray(user?.linkedAccounts) ? user.linkedAccounts : []
-  const primaryWallet = user?.wallet && typeof user.wallet === 'object' ? [{ ...user.wallet, type: 'wallet' }] : []
-  const all = [...primaryWallet, ...linked]
-
-  for (const raw of all) {
-    const type = normalizeLower((raw as any)?.type)
-    if (type !== 'wallet') continue
-
-    const addr = typeof (raw as any)?.address === 'string' ? String((raw as any).address).trim() : ''
-    if (!isValidEvmAddress(addr)) continue
-
-    const chainType = normalizeLower((raw as any)?.chainType ?? (raw as any)?.chain_type)
-    if (chainType && chainType !== 'ethereum') continue
-
-    const walletClientType = normalizeLower(
-      (raw as any)?.walletClientType ??
-        (raw as any)?.wallet_client_type ??
-        (raw as any)?.walletType ??
-        (raw as any)?.wallet_type ??
-        (raw as any)?.connectorType ??
-        (raw as any)?.connector_type,
-    )
-
-    // Base Account / Coinbase Smart Wallet path.
-    if (walletClientType === 'base_account' || walletClientType.includes('base_account')) {
-      return addr.toLowerCase()
-    }
-  }
-
-  return null
-}
-
-function extractAnyEvmWalletAddress(user: any): string | null {
-  const linked = Array.isArray(user?.linkedAccounts) ? user.linkedAccounts : []
-  const primaryWallet = user?.wallet && typeof user.wallet === 'object' ? [{ ...user.wallet, type: 'wallet' }] : []
-  const all = [...primaryWallet, ...linked]
-
-  for (const raw of all) {
-    const type = normalizeLower((raw as any)?.type)
-    if (type !== 'wallet') continue
-
-    const addr = typeof (raw as any)?.address === 'string' ? String((raw as any).address).trim() : ''
-    if (!isValidEvmAddress(addr)) continue
-
-    const chainType = normalizeLower((raw as any)?.chainType ?? (raw as any)?.chain_type)
-    if (chainType && chainType !== 'ethereum') continue
-
-    return addr.toLowerCase()
-  }
-
-  return null
-}
-
-type EmbeddedWalletMeta = {
-  address: string | null
-  chainType: string | null
-  walletClientType: string | null
-}
-
-function extractEmbeddedWalletMeta(user: any): EmbeddedWalletMeta {
-  const linked = Array.isArray(user?.linkedAccounts) ? user.linkedAccounts : []
-  const primaryWallet = user?.wallet && typeof user.wallet === 'object' ? [{ ...user.wallet, type: 'wallet' }] : []
-  const all = [...primaryWallet, ...linked]
-  const normalizeChain = (v: any): string | null => {
-    const s = normalizeLower(v)
-    return s.length > 0 ? s : null
-  }
-  const normalizeClientType = (v: any): string | null => {
-    const s = normalizeLower(v)
-    return s.length > 0 ? s : null
-  }
-  const parseWallet = (raw: any): EmbeddedWalletMeta => {
-    const addr = typeof raw?.address === 'string' ? String(raw.address).trim() : ''
-    return {
-      address: isValidEvmAddress(addr) ? addr.toLowerCase() : null,
-      chainType: normalizeChain(raw?.chainType ?? raw?.chain_type),
-      walletClientType: normalizeClientType(
-        raw?.walletClientType ??
-          raw?.wallet_client_type ??
-          raw?.walletType ??
-          raw?.wallet_type ??
-          raw?.connectorType ??
-          raw?.connector_type,
-      ),
-    }
-  }
-  const isEmbedded = (clientType: string | null) =>
-    clientType ? clientType.includes('privy') || clientType.includes('embedded') : false
-
-  for (const raw of all) {
-    const meta = parseWallet(raw)
-    if (meta.address && isEmbedded(meta.walletClientType)) return meta
-  }
-  for (const raw of all) {
-    const meta = parseWallet(raw)
-    if (meta.address) return meta
-  }
-  return { address: null, chainType: null, walletClientType: null }
 }
 
 function getPrivyServerAuth(): { appId: string; appSecret: string } | null {
@@ -142,10 +35,14 @@ function getPrivyServerAuth(): { appId: string; appSecret: string } | null {
 function getBearerToken(req: VercelRequest): string | null {
   const h = req.headers?.authorization
   const raw = typeof h === 'string' ? h.trim() : ''
-  if (!raw) return null
-  if (!raw.toLowerCase().startsWith('bearer ')) return null
+  if (!raw || !raw.toLowerCase().startsWith('bearer ')) return null
   const token = raw.slice('bearer '.length).trim()
   return token.length > 0 ? token : null
+}
+
+function isLegacyFallbackEnabled(): boolean {
+  const raw = String(process.env.WALLET_SYNC_LEGACY_FALLBACK ?? 'true').trim().toLowerCase()
+  return raw !== '0' && raw !== 'false' && raw !== 'off'
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -175,31 +72,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const claims = await client.verifyAuthToken(token)
     const user = await client.getUserById(claims.userId)
 
-    const baseAccount = extractBaseAccountAddress(user)
-    const fallback = !baseAccount ? extractAnyEvmWalletAddress(user) : null
-    const address = baseAccount || fallback
-    if (!address) {
+    const classified = classifyLinkedAccounts(user as any)
+    const sessionAddress = classified.canonicalSmartWallet?.address ?? classified.primaryWalletAddress ?? null
+    if (!sessionAddress) {
       return res.status(400).json({
         success: false,
         error: 'No EVM wallet is linked in Privy. Connect a wallet and retry.',
       } satisfies ApiEnvelope<never>)
     }
 
-    const sessionToken = makeSessionToken({ address })
+    const sessionToken = makeSessionToken({ address: sessionAddress })
     setCookie(req, res, COOKIE_SESSION, sessionToken, { httpOnly: true, maxAgeSeconds: 60 * 60 * 24 * 7 })
 
     try {
       const db = await getDb()
       if (db) {
-        const embeddedMeta = extractEmbeddedWalletMeta(user)
         await ensureWaitlistSchema(db as any)
-        await upsertProfileByWallet(db as any, {
-          primaryWallet: address,
-          embeddedWallet: embeddedMeta.address,
-          embeddedWalletChain: embeddedMeta.chainType,
-          embeddedWalletClientType: embeddedMeta.walletClientType,
-          privyUserId: claims.userId,
-        })
+        const syncResult = await syncUserWallets(db as any, user as any)
+
+        if (isLegacyFallbackEnabled()) {
+          try {
+            await upsertProfileByWallet(db as any, {
+              primaryWallet: syncResult.primaryWalletAddress ?? sessionAddress,
+              embeddedWallet: syncResult.embeddedEoa?.address ?? null,
+              embeddedWalletChain: syncResult.embeddedEoa?.chainType ?? null,
+              embeddedWalletClientType: syncResult.embeddedEoa?.clientType ?? null,
+              privyUserId: claims.userId,
+              cswAddress: syncResult.canonicalSmartWallet?.address ?? null,
+              baseSubAccount: syncResult.canonicalSmartWallet?.address ?? null,
+            })
+          } catch {
+            // Compatibility write should not block auth.
+          }
+        }
       }
     } catch {
       // best-effort: auth should succeed even if DB is unavailable
@@ -207,11 +112,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({
       success: true,
-      data: { address, sessionToken, privyUserId: claims.userId } satisfies PrivyVerifyResponse,
+      data: { address: sessionAddress, sessionToken, privyUserId: claims.userId } satisfies PrivyVerifyResponse,
     } satisfies ApiEnvelope<PrivyVerifyResponse>)
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Privy verification failed'
-    // Avoid leaking details; keep message generic unless it’s clearly a client issue.
     const lower = String(msg || '').toLowerCase()
     const isAuthish =
       lower.includes('jwt') ||
@@ -225,4 +129,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 }
-

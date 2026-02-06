@@ -21,22 +21,70 @@ import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionMa
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {IDistributionContract} from "liquidity-launcher/src/interfaces/IDistributionContract.sol";
-import {ILBPStrategyBasic} from "liquidity-launcher/src/interfaces/ILBPStrategyBasic.sol";
-import {MigratorParameters} from "liquidity-launcher/src/types/MigratorParameters.sol";
-import {StrategyPlanner} from "liquidity-launcher/src/libraries/StrategyPlanner.sol";
-import {ParamsBuilder} from "liquidity-launcher/src/libraries/ParamsBuilder.sol";
+import {Plan, StrategyPlanner} from "liquidity-launcher/src/libraries/StrategyPlanner.sol";
 import {TokenPricing} from "liquidity-launcher/src/libraries/TokenPricing.sol";
 import {TokenDistribution} from "liquidity-launcher/src/libraries/TokenDistribution.sol";
-import {MigrationData} from "liquidity-launcher/src/types/MigrationData.sol";
 import {BasePositionParams, FullRangeParams, OneSidedParams} from "liquidity-launcher/src/types/PositionTypes.sol";
+
+interface ILBPStrategyBasicCompat is IDistributionContract {
+    event AuctionCreated(address indexed auction);
+    event Migrated(PoolKey indexed key, uint160 initialSqrtPriceX96);
+    event TokensSwept(address indexed operator, uint256 amount);
+    event CurrencySwept(address indexed operator, uint256 amount);
+
+    error InvalidSweepBlock(uint256 sweepBlock, uint256 migrationBlock);
+    error TokenSplitTooHigh(uint24 tokenSplit, uint24 maxTokenSplit);
+    error InvalidTickSpacing(int24 tickSpacing, int24 minTickSpacing, int24 maxTickSpacing);
+    error InvalidFee(uint24 fee, uint24 maxFee);
+    error InvalidPositionRecipient(address positionRecipient);
+    error AuctionSupplyIsZero();
+    error InvalidFundsRecipient(address invalidFundsRecipient, address expectedFundsRecipient);
+    error InvalidEndBlock(uint256 endBlock, uint256 migrationBlock);
+    error InvalidCurrency(address actual, address expected);
+    error MigrationNotAllowed(uint256 migrationBlock, uint256 currentBlock);
+    error CurrencyAmountTooHigh(uint256 currencyAmount, uint256 maxCurrencyAmount);
+    error NoCurrencyRaised();
+    error InsufficientCurrency(uint256 amountNeeded, uint256 amountAvailable);
+    error SweepNotAllowed(uint256 sweepBlock, uint256 currentBlock);
+    error NotOperator(address caller, address operator);
+    error NativeCurrencyTransferNotFromAuction(address sender, address expectedSender);
+
+    function migrate() external;
+    function sweepToken() external;
+    function sweepCurrency() external;
+}
 
 /// @title LBPStrategyWithTaxHook
 /// @notice Fork of Uniswap Liquidity Launcher LBPStrategyBasic that creates the v4 pool
 ///         with an external hook address (e.g. the existing Base tax hook).
 /// @dev Hooks are immutable per pool key. To use a non-strategy hook, the pool must be initialized with it.
-contract LBPStrategyWithTaxHook is ILBPStrategyBasic {
+contract LBPStrategyWithTaxHook is ILBPStrategyBasicCompat {
+    struct MigratorParameters {
+        uint64 migrationBlock;
+        address currency;
+        uint24 poolLPFee;
+        int24 poolTickSpacing;
+        uint24 tokenSplitToAuction;
+        address auctionFactory;
+        address positionRecipient;
+        uint64 sweepBlock;
+        address operator;
+        bool createOneSidedTokenPosition;
+        bool createOneSidedCurrencyPosition;
+    }
+
+    struct MigrationData {
+        uint160 sqrtPriceX96;
+        uint128 initialTokenAmount;
+        uint128 initialCurrencyAmount;
+        uint128 leftoverCurrency;
+        uint128 liquidity;
+        bool shouldCreateOneSided;
+        bool hasOneSidedParams;
+    }
+
     using CurrencyLibrary for Currency;
-    using StrategyPlanner for BasePositionParams;
+    using StrategyPlanner for *;
     using TokenDistribution for uint128;
     using TokenPricing for uint256;
 
@@ -150,7 +198,7 @@ contract LBPStrategyWithTaxHook is ILBPStrategyBasic {
         emit AuctionCreated(address(_auction));
     }
 
-    /// @inheritdoc ILBPStrategyBasic
+    /// @inheritdoc ILBPStrategyBasicCompat
     function migrate() external {
         _validateMigration();
 
@@ -158,14 +206,15 @@ contract LBPStrategyWithTaxHook is ILBPStrategyBasic {
 
         PoolKey memory key = _initializePool(data);
 
-        bytes memory plan = _createPositionPlan(data);
+        (bytes memory plan, bool hasOneSidedParams) = _createPositionPlan(data);
+        data.hasOneSidedParams = hasOneSidedParams;
 
         _transferAssetsAndExecutePlan(data, plan);
 
         emit Migrated(key, data.sqrtPriceX96);
     }
 
-    /// @inheritdoc ILBPStrategyBasic
+    /// @inheritdoc ILBPStrategyBasicCompat
     function sweepToken() external {
         if (block.number < sweepBlock) revert SweepNotAllowed(sweepBlock, block.number);
         if (msg.sender != operator) revert NotOperator(msg.sender, operator);
@@ -177,7 +226,7 @@ contract LBPStrategyWithTaxHook is ILBPStrategyBasic {
         }
     }
 
-    /// @inheritdoc ILBPStrategyBasic
+    /// @inheritdoc ILBPStrategyBasicCompat
     function sweepCurrency() external {
         if (block.number < sweepBlock) revert SweepNotAllowed(sweepBlock, block.number);
         if (msg.sender != operator) revert NotOperator(msg.sender, operator);
@@ -209,7 +258,7 @@ contract LBPStrategyWithTaxHook is ILBPStrategyBasic {
                 || migratorParams.positionRecipient == ActionConstants.ADDRESS_THIS
         ) {
             revert InvalidPositionRecipient(migratorParams.positionRecipient);
-        } else if (_totalSupply.calculateAuctionSupply(migratorParams.tokenSplitToAuction) == 0) {
+        } else if (_totalSupply.calculateTokenSplit(migratorParams.tokenSplitToAuction) == 0) {
             revert AuctionSupplyIsZero();
         }
     }
@@ -257,8 +306,9 @@ contract LBPStrategyWithTaxHook is ILBPStrategyBasic {
         uint256 priceX192 = auction.clearingPrice().convertToPriceX192(currency < poolToken);
         data.sqrtPriceX96 = priceX192.convertToSqrtPriceX96();
 
-        (data.initialTokenAmount, data.leftoverCurrency, data.initialCurrencyAmount) =
+        (data.initialTokenAmount, data.initialCurrencyAmount) =
             priceX192.calculateAmounts(currencyRaised, currency < poolToken, reserveSupply);
+        data.leftoverCurrency = currencyRaised - data.initialCurrencyAmount;
 
         data.liquidity = LiquidityAmounts.getLiquidityForAmounts(
             data.sqrtPriceX96,
@@ -289,11 +339,10 @@ contract LBPStrategyWithTaxHook is ILBPStrategyBasic {
         return key;
     }
 
-    function _createPositionPlan(MigrationData memory data) private view returns (bytes memory plan) {
-        bytes memory actions;
-        bytes[] memory params;
-
+    function _createPositionPlan(MigrationData memory data) private view returns (bytes memory, bool) {
         address poolToken = getPoolToken();
+
+        Plan memory plan = StrategyPlanner.init();
 
         BasePositionParams memory baseParams = BasePositionParams({
             currency: currency,
@@ -306,21 +355,23 @@ contract LBPStrategyWithTaxHook is ILBPStrategyBasic {
             hooks: IHooks(taxHook)
         });
 
+        plan = plan.planFullRangePosition(
+            baseParams, FullRangeParams({tokenAmount: data.initialTokenAmount, currencyAmount: data.initialCurrencyAmount})
+        );
+
+        bool hasOneSidedParams = false;
         if (data.shouldCreateOneSided) {
-            (actions, params) = _createFullRangePositionPlan(
-                baseParams, data.initialTokenAmount, data.initialCurrencyAmount, ParamsBuilder.FULL_RANGE_WITH_ONE_SIDED_SIZE
+            uint128 amount = data.leftoverCurrency > 0 ? data.leftoverCurrency : reserveSupply - data.initialTokenAmount;
+            bool inToken = data.leftoverCurrency == 0;
+            uint256 paramsBefore = plan.params.length;
+            plan = plan.planOneSidedPosition(
+                baseParams, OneSidedParams({amount: amount, inToken: inToken})
             );
-            (actions, params) = _createOneSidedPositionPlan(
-                baseParams, actions, params, data.initialTokenAmount, data.leftoverCurrency
-            );
-            data.hasOneSidedParams = params.length == ParamsBuilder.FULL_RANGE_WITH_ONE_SIDED_SIZE;
-        } else {
-            (actions, params) =
-                _createFullRangePositionPlan(baseParams, data.initialTokenAmount, data.initialCurrencyAmount, ParamsBuilder.FULL_RANGE_SIZE);
+            hasOneSidedParams = plan.params.length > paramsBefore;
         }
 
-        (actions, params) = baseParams.planFinalTakePair(actions, params);
-        return abi.encode(actions, params);
+        plan = plan.planTakePair(baseParams);
+        return (plan.encode(), hasOneSidedParams);
     }
 
     function _transferAssetsAndExecutePlan(MigrationData memory data, bytes memory plan) private {
@@ -347,30 +398,6 @@ contract LBPStrategyWithTaxHook is ILBPStrategyBasic {
             : data.initialCurrencyAmount;
     }
 
-    function _createFullRangePositionPlan(
-        BasePositionParams memory baseParams,
-        uint128 tokenAmount,
-        uint128 currencyAmount,
-        uint256 paramsArraySize
-    ) private pure returns (bytes memory, bytes[] memory) {
-        FullRangeParams memory fullRangeParams = FullRangeParams({tokenAmount: tokenAmount, currencyAmount: currencyAmount});
-        return baseParams.planFullRangePosition(fullRangeParams, paramsArraySize);
-    }
-
-    function _createOneSidedPositionPlan(
-        BasePositionParams memory baseParams,
-        bytes memory actions,
-        bytes[] memory params,
-        uint128 tokenAmount,
-        uint128 leftoverCurrency
-    ) private view returns (bytes memory, bytes[] memory) {
-        uint128 amount = leftoverCurrency > 0 ? leftoverCurrency : reserveSupply - tokenAmount;
-        bool inToken = leftoverCurrency == 0;
-
-        OneSidedParams memory oneSidedParams = OneSidedParams({amount: amount, inToken: inToken});
-        return baseParams.planOneSidedPosition(oneSidedParams, actions, params);
-    }
-
     /// @dev Only accept native currency transfers from the auction when currency is native.
     receive() external payable {
         if (Currency.wrap(currency).isAddressZero()) {
@@ -378,4 +405,3 @@ contract LBPStrategyWithTaxHook is ILBPStrategyBasic {
         }
     }
 }
-

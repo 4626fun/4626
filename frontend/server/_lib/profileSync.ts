@@ -72,6 +72,16 @@ export async function upsertProfileByWallet(db: Db, input: ProfileWalletUpsertIn
       SELECT id, email
       FROM profiles
       WHERE LOWER(csw_address) = ${cswAddress}
+         OR LOWER(primary_smart_wallet) = ${cswAddress}
+      LIMIT 1;
+    `
+    existing = (res?.rows?.[0] as { id: number; email?: string | null } | undefined) ?? null
+  }
+  if (!existing && embeddedWallet) {
+    const res = await db.sql`
+      SELECT id, email
+      FROM profiles
+      WHERE LOWER(primary_embedded_eoa) = ${embeddedWallet}
       LIMIT 1;
     `
     existing = (res?.rows?.[0] as { id: number; email?: string | null } | undefined) ?? null
@@ -101,6 +111,8 @@ export async function upsertProfileByWallet(db: Db, input: ProfileWalletUpsertIn
         privy_user_id = COALESCE(${privyUserId}, privy_user_id),
         csw_address = COALESCE(${cswAddress}, csw_address),
         base_sub_account = COALESCE(${baseSubAccount}, base_sub_account),
+        primary_smart_wallet = COALESCE(${cswAddress}, primary_smart_wallet),
+        primary_embedded_eoa = COALESCE(${embeddedWallet}, primary_embedded_eoa),
         updated_at = NOW()
       WHERE id = ${existing.id};
     `
@@ -118,6 +130,8 @@ export async function upsertProfileByWallet(db: Db, input: ProfileWalletUpsertIn
       privy_user_id,
       csw_address,
       base_sub_account,
+      primary_smart_wallet,
+      primary_embedded_eoa,
       updated_at
     )
     VALUES (
@@ -129,6 +143,8 @@ export async function upsertProfileByWallet(db: Db, input: ProfileWalletUpsertIn
       ${privyUserId},
       ${cswAddress},
       ${baseSubAccount},
+      ${cswAddress},
+      ${embeddedWallet},
       NOW()
     )
     ON CONFLICT (email) DO UPDATE
@@ -140,6 +156,8 @@ export async function upsertProfileByWallet(db: Db, input: ProfileWalletUpsertIn
       privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
       csw_address = COALESCE(EXCLUDED.csw_address, profiles.csw_address),
       base_sub_account = COALESCE(EXCLUDED.base_sub_account, profiles.base_sub_account),
+      primary_smart_wallet = COALESCE(EXCLUDED.primary_smart_wallet, profiles.primary_smart_wallet),
+      primary_embedded_eoa = COALESCE(EXCLUDED.primary_embedded_eoa, profiles.primary_embedded_eoa),
       updated_at = NOW();
   `
 }

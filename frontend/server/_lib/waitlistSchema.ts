@@ -1,5 +1,6 @@
 import { ensureReferralsSchema } from './referrals.js'
 import { ensureWaitlistPointsSchema } from './waitlistPoints.js'
+import { ensureCanonicalWalletsSchema } from './canonicalWalletsSchema.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
@@ -56,6 +57,14 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS csw_address TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS primary_smart_wallet TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS primary_embedded_eoa TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS display_name TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS bio TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS website TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS banner_url TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS profile_fields JSONB NULL;`
     } catch {
       // ignore (older Postgres or restricted perms)
     }
@@ -68,6 +77,9 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
 
     // Points + profile completion schema.
     await ensureWaitlistPointsSchema(db)
+
+    // Canonical wallet graph + provenance fields.
+    await ensureCanonicalWalletsSchema(db)
 
     waitlistSchemaEnsured = true
   } catch {

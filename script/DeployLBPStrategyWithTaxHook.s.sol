@@ -5,7 +5,6 @@ import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
 
 import {LBPStrategyWithTaxHook} from "../contracts/vault/strategies/launchpad/LBPStrategyWithTaxHook.sol";
-import {MigratorParameters} from "liquidity-launcher/src/types/MigratorParameters.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 
@@ -68,7 +67,7 @@ contract DeployLBPStrategyWithTaxHookScript is Script {
     function run() public {
         Env memory e = _env();
 
-        MigratorParameters memory migrator = MigratorParameters({
+        LBPStrategyWithTaxHook.MigratorParameters memory migrator = LBPStrategyWithTaxHook.MigratorParameters({
             migrationBlock: e.migrationBlock,
             currency: e.currency,
             poolLPFee: e.poolLPFee,
@@ -98,4 +97,3 @@ contract DeployLBPStrategyWithTaxHookScript is Script {
         console2.log("Next: transfer token supply to strategy, then call onTokensReceived()");
     }
 }
-

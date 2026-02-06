@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAccount } from 'wagmi'
 import { ArrowDownLeft, ArrowUpRight, MoreHorizontal, Plus } from 'lucide-react'
+import { useParams } from 'react-router-dom'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
@@ -111,38 +112,129 @@ function Sparkline({ series }: { series: number[] }) {
   )
 }
 
-export function Portfolio() {
-  const { address: wagmiAddress } = useAccount()
-  const siwe = useSiweAuth()
-  const effectiveAddress = useMemo(() => {
-    const a = (wagmiAddress || siwe.authAddress || '').trim()
-    return a && a.startsWith('0x') ? a : null
-  }, [siwe.authAddress, wagmiAddress])
-
-  const [tab, setTab] = useState<'overview' | 'tokens' | 'nfts' | 'activity'>('overview')
-  const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y'>('1D')
-
-  type SetupProfile = {
-    primaryWallet: string | null
-    embeddedWallet: string | null
-    embeddedWalletChain: string | null
-    embeddedWalletClientType: string | null
-    cswAddress: string | null
-    privyUserId: string | null
+type ProfileField = { value: string | null; source: string; updated_at: string }
+type PortfolioApiResponse = {
+  mode: 'self' | 'public'
+  profile: {
+    profileId: number
+    primarySmartWallet: string | null
+    primaryEmbeddedEoa: string | null
+    displayName: string | null
+    bio: string | null
+    website: string | null
+    avatarUrl: string | null
+    bannerUrl: string | null
+    profileFields: Record<string, ProfileField>
     appAccessStatus: string | null
     updatedAt: string | null
   }
+  wallets: Array<{
+    address: string
+    walletType: string | null
+    provider: string | null
+    chain: string | null
+    isPrimary: boolean
+    isCanonicalSmartWallet: boolean
+    isEmbeddedEoa: boolean
+    verifiedAt: string | null
+  }>
+  onchainSummary: {
+    totalUsdValue: number | null
+    asOf: string | null
+  }
+}
 
-  const setupQuery = useQuery({
-    queryKey: ['portfolio', 'setup', effectiveAddress],
-    enabled: Boolean(effectiveAddress),
-    staleTime: 60_000,
+export function Portfolio() {
+  const params = useParams<{ address?: string }>()
+  const { address: wagmiAddress } = useAccount()
+  const siwe = useSiweAuth()
+  const queryClient = useQueryClient()
+  const routeAddress = typeof params.address === 'string' ? params.address.trim() : ''
+  const publicAddress = routeAddress && isEvmAddress(routeAddress) ? routeAddress.toLowerCase() : null
+  const isPublicMode = Boolean(publicAddress)
+  const effectiveAddress = useMemo(() => {
+    if (publicAddress) return publicAddress
+    const a = (wagmiAddress || siwe.authAddress || '').trim()
+    return isEvmAddress(a) ? a.toLowerCase() : null
+  }, [publicAddress, siwe.authAddress, wagmiAddress])
+
+  const [tab, setTab] = useState<'overview' | 'tokens' | 'nfts' | 'activity'>('overview')
+  const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y'>('1D')
+  const [editDisplayName, setEditDisplayName] = useState('')
+  const [editBio, setEditBio] = useState('')
+  const [editWebsite, setEditWebsite] = useState('')
+  const [editAvatarUrl, setEditAvatarUrl] = useState('')
+  const [editBannerUrl, setEditBannerUrl] = useState('')
+  const [editError, setEditError] = useState<string | null>(null)
+
+  const portfolioQuery = useQuery({
+    queryKey: ['portfolio', 'me', publicAddress ?? 'self', effectiveAddress],
+    enabled: Boolean(publicAddress || effectiveAddress),
+    staleTime: 30_000,
     retry: 0,
-    queryFn: async (): Promise<SetupProfile | null> => {
-      const res = await apiFetch('/api/waitlist/me', { method: 'GET', headers: { Accept: 'application/json' } })
-      const json = (await res.json().catch(() => null)) as { success?: boolean; data?: SetupProfile | null } | null
+    queryFn: async (): Promise<PortfolioApiResponse | null> => {
+      const endpoint = publicAddress ? `/api/portfolio/me?address=${encodeURIComponent(publicAddress)}` : '/api/portfolio/me'
+      const res = await apiFetch(endpoint, { method: 'GET', headers: { Accept: 'application/json' } })
+      const json = (await res.json().catch(() => null)) as { success?: boolean; data?: PortfolioApiResponse | null } | null
       if (!res.ok || !json?.success) return null
       return json.data ?? null
+    },
+  })
+
+  useEffect(() => {
+    const profile = portfolioQuery.data?.profile
+    setEditDisplayName(profile?.displayName ?? '')
+    setEditBio(profile?.bio ?? '')
+    setEditWebsite(profile?.website ?? '')
+    setEditAvatarUrl(profile?.avatarUrl ?? '')
+    setEditBannerUrl(profile?.bannerUrl ?? '')
+    setEditError(null)
+  }, [portfolioQuery.data?.profile])
+
+  const patchMutation = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        displayName: editDisplayName.trim() || null,
+        bio: editBio.trim() || null,
+        website: editWebsite.trim() || null,
+        avatarUrl: editAvatarUrl.trim() || null,
+        bannerUrl: editBannerUrl.trim() || null,
+      }
+      const res = await apiFetch('/api/portfolio/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const json = (await res.json().catch(() => null)) as { success?: boolean; error?: string } | null
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error || 'Profile update failed')
+      }
+      return true
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['portfolio', 'me'] })
+      setEditError(null)
+    },
+    onError: (error) => {
+      setEditError(error instanceof Error ? error.message : 'Profile update failed')
+    },
+  })
+
+  const walletSyncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiFetch('/api/wallet/sync', { method: 'POST', headers: { Accept: 'application/json' } })
+      const json = (await res.json().catch(() => null)) as { success?: boolean; error?: string } | null
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error || 'Wallet sync failed')
+      }
+      return true
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['portfolio', 'me'] })
+      setEditError(null)
+    },
+    onError: (error) => {
+      setEditError(error instanceof Error ? error.message : 'Wallet sync failed')
     },
   })
 
@@ -331,14 +423,14 @@ export function Portfolio() {
             >
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <div className="text-[12px] text-white">Setup</div>
-                  <div className="text-[11px] text-zinc-600">Read-only snapshot from auth + onchain.</div>
+                  <div className="text-[12px] text-white">{isPublicMode ? 'Public portfolio' : 'Portfolio profile'}</div>
+                  <div className="text-[11px] text-zinc-600">Canonical wallets + field provenance.</div>
                 </div>
                 <div className="text-[11px] text-zinc-500">
-                  {setupQuery.isLoading ? 'Syncing…' : setupQuery.data ? 'Synced' : 'Not synced'}
+                  {portfolioQuery.isLoading ? 'Syncing…' : portfolioQuery.data ? 'Synced' : 'Not synced'}
                 </div>
               </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-2 text-[12px] text-zinc-300">
+              <div className="mt-4 grid gap-3 md:grid-cols-3 text-[12px] text-zinc-300">
                 <div className="rounded-xl border border-zinc-800/80 bg-black/30 p-3">
                   <div className="text-[10px] text-zinc-500 uppercase tracking-[0.14em]">Connected wallet</div>
                   <div className="mt-1 font-mono text-zinc-200">{effectiveAddress ? shortAddr(effectiveAddress) : '—'}</div>
@@ -347,15 +439,27 @@ export function Portfolio() {
                   </div>
                 </div>
                 <div className="rounded-xl border border-zinc-800/80 bg-black/30 p-3">
-                  <div className="text-[10px] text-zinc-500 uppercase tracking-[0.14em]">Supabase profile</div>
-                  {setupQuery.data ? (
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-[0.14em]">Profile</div>
+                  {portfolioQuery.data?.profile ? (
                     <div className="mt-2 space-y-1 text-[11px]">
-                      <div>Primary: <span className="font-mono text-zinc-200">{setupQuery.data.primaryWallet ? shortAddr(setupQuery.data.primaryWallet) : '—'}</span></div>
-                      <div>Embedded: <span className="font-mono text-zinc-200">{setupQuery.data.embeddedWallet ? shortAddr(setupQuery.data.embeddedWallet) : '—'}</span></div>
-                      <div>CSW: <span className="font-mono text-zinc-200">{setupQuery.data.cswAddress ? shortAddr(setupQuery.data.cswAddress) : '—'}</span></div>
+                      <div>
+                        Display: <span className="text-zinc-200">{portfolioQuery.data.profile.displayName ?? '—'}</span>
+                      </div>
+                      <div>
+                        Embedded:{' '}
+                        <span className="font-mono text-zinc-200">
+                          {portfolioQuery.data.profile.primaryEmbeddedEoa ? shortAddr(portfolioQuery.data.profile.primaryEmbeddedEoa) : '—'}
+                        </span>
+                      </div>
+                      <div>
+                        CSW:{' '}
+                        <span className="font-mono text-zinc-200">
+                          {portfolioQuery.data.profile.primarySmartWallet ? shortAddr(portfolioQuery.data.profile.primarySmartWallet) : '—'}
+                        </span>
+                      </div>
                       <div className="text-zinc-500">
-                        Access: <span className="text-zinc-300">{setupQuery.data.appAccessStatus ?? '—'}</span>
-                        {' · '}Updated: <span className="text-zinc-300">{formatDateTime(setupQuery.data.updatedAt)}</span>
+                        Access: <span className="text-zinc-300">{portfolioQuery.data.profile.appAccessStatus ?? '—'}</span>
+                        {' · '}Updated: <span className="text-zinc-300">{formatDateTime(portfolioQuery.data.profile.updatedAt)}</span>
                       </div>
                     </div>
                   ) : (
@@ -364,7 +468,94 @@ export function Portfolio() {
                     </div>
                   )}
                 </div>
+                <div className="rounded-xl border border-zinc-800/80 bg-black/30 p-3">
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-[0.14em]">On-chain summary</div>
+                  <div className="mt-2 text-[11px]">
+                    Total: <span className="text-zinc-200">{formatUsd(portfolioQuery.data?.onchainSummary?.totalUsdValue)}</span>
+                  </div>
+                  <div className="text-[10px] text-zinc-600 mt-1">As of {formatDateTime(portfolioQuery.data?.onchainSummary?.asOf ?? null)}</div>
+                  {!isPublicMode ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void walletSyncMutation.mutateAsync()
+                      }}
+                      className="mt-3 rounded-lg border border-zinc-700 px-2 py-1 text-[10px] text-zinc-200 hover:bg-white/5 disabled:opacity-60"
+                      disabled={walletSyncMutation.isPending}
+                    >
+                      {walletSyncMutation.isPending ? 'Refreshing…' : 'Refresh wallets'}
+                    </button>
+                  ) : null}
+                </div>
               </div>
+
+              <div className="mt-3 rounded-xl border border-zinc-800/80 bg-black/30 p-3">
+                <div className="text-[10px] text-zinc-500 uppercase tracking-[0.14em] mb-2">Linked wallets</div>
+                {portfolioQuery.data?.wallets?.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {portfolioQuery.data.wallets.map((wallet) => (
+                      <div key={wallet.address} className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-[10px] text-zinc-300">
+                        <span className="font-mono">{shortAddr(wallet.address)}</span>
+                        {wallet.isCanonicalSmartWallet ? <span className="ml-1 text-indigo-300">CSW</span> : null}
+                        {wallet.isEmbeddedEoa ? <span className="ml-1 text-emerald-300">Embedded</span> : null}
+                        {wallet.isPrimary ? <span className="ml-1 text-amber-300">Primary</span> : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-zinc-500">No linked wallets yet.</div>
+                )}
+              </div>
+
+              {!isPublicMode ? (
+                <div className="mt-3 rounded-xl border border-zinc-800/80 bg-black/30 p-3">
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-[0.14em] mb-2">Manual profile fields</div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <input
+                      className="rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-[12px] text-zinc-200"
+                      placeholder="Display name"
+                      value={editDisplayName}
+                      onChange={(e) => setEditDisplayName(e.target.value)}
+                    />
+                    <input
+                      className="rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-[12px] text-zinc-200"
+                      placeholder="Website"
+                      value={editWebsite}
+                      onChange={(e) => setEditWebsite(e.target.value)}
+                    />
+                    <input
+                      className="rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-[12px] text-zinc-200"
+                      placeholder="Avatar URL"
+                      value={editAvatarUrl}
+                      onChange={(e) => setEditAvatarUrl(e.target.value)}
+                    />
+                    <input
+                      className="rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-[12px] text-zinc-200"
+                      placeholder="Banner URL"
+                      value={editBannerUrl}
+                      onChange={(e) => setEditBannerUrl(e.target.value)}
+                    />
+                  </div>
+                  <textarea
+                    className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-[12px] text-zinc-200 min-h-[84px]"
+                    placeholder="Bio"
+                    value={editBio}
+                    onChange={(e) => setEditBio(e.target.value)}
+                  />
+                  {editError ? <div className="mt-2 text-[11px] text-rose-300">{editError}</div> : null}
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => patchMutation.mutate()}
+                      className="rounded-lg border border-zinc-700 px-3 py-1.5 text-[11px] text-zinc-100 hover:bg-white/5 disabled:opacity-60"
+                      disabled={patchMutation.isPending}
+                    >
+                      {patchMutation.isPending ? 'Saving…' : 'Save profile'}
+                    </button>
+                    <div className="text-[10px] text-zinc-500">Externally sourced fields are locked for edits.</div>
+                  </div>
+                </div>
+              ) : null}
             </motion.div>
 
             <div className="grid lg:grid-cols-3 gap-4">
@@ -506,4 +697,3 @@ export function Portfolio() {
     </div>
   )
 }
-
