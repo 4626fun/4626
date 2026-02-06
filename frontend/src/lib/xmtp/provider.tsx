@@ -14,7 +14,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { useAccount, useWalletClient } from 'wagmi'
+import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { keccak256 } from 'viem'
 import {
   Client,
@@ -114,6 +114,7 @@ function truncateAddress(addr: string): string {
 export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const { address, isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
+  const publicClient = usePublicClient()
 
   const [status, setStatus] = useState<XmtpStatus>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -215,17 +216,47 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
       setStatus('connecting')
 
-      const signer: Signer = {
-        type: 'EOA',
-        getIdentifier: () => ({
-          identifier: address,
-          identifierKind: IdentifierKind.Ethereum,
-        }),
-        signMessage: async (message: string) => {
-          const s = await walletClient.signMessage({ message })
-          return hexToBytes(s)
-        },
+      // Detect whether the connected wallet is a smart contract wallet (SCW).
+      // Coinbase Smart Wallets are contracts on Base (chain 8453) and must use
+      // the SCW signer type so XMTP matches the chain ID from registration.
+      let isSmartWallet = false
+      const chainId = walletClient.chain?.id ?? 8453
+      if (publicClient) {
+        try {
+          const code = await publicClient.getCode({ address })
+          isSmartWallet = typeof code === 'string' && code !== '0x' && code.length > 2
+        } catch {
+          // If we can't determine, default to SCW on Base (safer for this app)
+          isSmartWallet = chainId === 8453
+        }
+      } else {
+        // No public client — assume SCW on Base
+        isSmartWallet = chainId === 8453
       }
+
+      const signMessageFn = async (message: string) => {
+        const s = await walletClient.signMessage({ message })
+        return hexToBytes(s)
+      }
+
+      const signer: Signer = isSmartWallet
+        ? {
+            type: 'SCW',
+            getIdentifier: () => ({
+              identifier: address,
+              identifierKind: IdentifierKind.Ethereum,
+            }),
+            signMessage: signMessageFn,
+            getChainId: () => BigInt(chainId),
+          }
+        : {
+            type: 'EOA',
+            getIdentifier: () => ({
+              identifier: address,
+              identifierKind: IdentifierKind.Ethereum,
+            }),
+            signMessage: signMessageFn,
+          }
 
       const client = await Client.create(signer, {
         env: XMTP_ENV as any,
