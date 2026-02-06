@@ -316,23 +316,23 @@ export const VerifyStep = memo(function VerifyStep({
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
+              <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
                 <div className="text-[12px] text-zinc-500">Connected wallet</div>
                 <div
-                  className="min-w-0 flex-1 text-right text-[11px] text-zinc-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
+                  className="min-w-0 justify-self-end text-right text-[11px] text-zinc-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
                   title={verifiedWallet || undefined}
                 >
                   {verifiedWallet}
                 </div>
               </div>
-              <div className="mt-2 flex items-center justify-between gap-3">
+              <div className="mt-2 grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
                 <div className="text-[12px] text-zinc-500">Network</div>
-                <div className="text-[12px] text-zinc-300">Base</div>
+                <div className="justify-self-end text-[12px] text-zinc-300">Base</div>
               </div>
               {ownershipGateActive ? (
-                <div className="mt-2 flex items-center justify-between gap-3">
+                <div className="mt-2 grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
                   <div className="text-[12px] text-zinc-500">Owner match</div>
-                  <div className={`text-[12px] ${walletOwnershipValid ? 'text-emerald-300' : 'text-amber-300'}`}>
+                  <div className={`justify-self-end text-[12px] ${walletOwnershipValid ? 'text-emerald-300' : 'text-amber-300'}`}>
                     {walletOwnershipValid ? 'Matched' : 'Not matched'}
                   </div>
                 </div>
@@ -341,12 +341,14 @@ export const VerifyStep = memo(function VerifyStep({
 
             {hasCreatorCoin ? (
               <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                <div className="text-[12px] text-zinc-500">Payout recipient</div>
-                <div
-                  className="mt-1 text-[11px] text-zinc-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
-                  title={payoutRecipient || undefined}
-                >
-                  {payoutRecipient || 'Unavailable'}
+                <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
+                  <div className="text-[12px] text-zinc-500">Payout recipient</div>
+                  <div
+                    className="min-w-0 justify-self-end text-right text-[11px] text-zinc-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
+                    title={payoutRecipient || undefined}
+                  >
+                    {payoutRecipient || 'Unavailable'}
+                  </div>
                 </div>
                 <div className="mt-3 text-[12px] text-zinc-500">Owner wallets</div>
                 <div className="mt-2 space-y-1.5">
@@ -384,10 +386,10 @@ export const VerifyStep = memo(function VerifyStep({
               <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
                 <div className="text-[12px] text-zinc-500">Smart wallet</div>
                 {canonicalSmartWallet ? (
-                  <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="mt-2 grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
                     <div className="text-[12px] text-zinc-500">Canonical (Zora)</div>
                     <div
-                      className="min-w-0 flex-1 text-right text-[11px] text-zinc-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
+                      className="min-w-0 justify-self-end text-right text-[11px] text-zinc-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
                       title={canonicalSmartWallet}
                     >
                       {canonicalSmartWallet}
@@ -395,10 +397,10 @@ export const VerifyStep = memo(function VerifyStep({
                   </div>
                 ) : null}
                 {coinbaseSmartWalletAddress && hasDistinctSmartWalletSignals ? (
-                  <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="mt-2 grid grid-cols-[112px_minmax(0,1fr)] items-center gap-x-3">
                     <div className="text-[12px] text-zinc-500">{isBaseApp ? 'Base app' : 'Privy'}</div>
                     <div
-                      className="min-w-0 flex-1 text-right text-[11px] text-zinc-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
+                      className="min-w-0 justify-self-end text-right text-[11px] text-zinc-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
                       title={coinbaseSmartWalletAddress}
                     >
                       {coinbaseSmartWalletAddress}

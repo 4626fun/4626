@@ -820,7 +820,7 @@ For the Vercel API surface, avoid “hidden” dynamic imports: add endpoints by
 ## Brand Assets
 
 **Logos, icons, and brand guidelines are available in `/frontend/public/`:**
-
+a
 - **Logo** (SVG, PNG): `/frontend/public/logo.svg`
 - **Favicon**: `/frontend/public/favicon.ico`
 - **Protocol logos**: `/frontend/public/protocols/` (Uniswap, LayerZero, Chainlink, etc.)

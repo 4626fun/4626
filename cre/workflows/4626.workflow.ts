@@ -1,0 +1,126 @@
+/**
+ * CRE Workflow: 4626 Unified Keeper
+ *
+ * Schedule: Every 5 minutes
+ *
+ * Single workflow that handles all vault automation:
+ *   1. Vault Keeper   — tend() idle funds, report() yields (per vault)
+ *   2. Auction Settle  — sweepCurrency() graduated auctions (per CCA strategy)
+ *   3. Keepr Queue     — execute pending XMTP/Neynar group actions
+ *
+ * All vaults are fetched from the registry API (keepr_vaults table).
+ * Falls back to single-vault env vars if KEEPR_API_KEY is not set.
+ */
+
+import { executeKeeper, type BatchKeeperResult } from '../actions/vault-keeper.action.js';
+import { executeSettlement, type BatchSettlementResult } from '../actions/auction-settlement.action.js';
+import { executeQueueProcessor, type QueueExecutorResult } from '../actions/keepr-queue-executor.action.js';
+import { alertCritical, alertInfo } from '../utils/alerts.js';
+
+const WORKFLOW_NAME = '4626';
+
+export interface UnifiedResult {
+  keeper: BatchKeeperResult | null;
+  settlement: BatchSettlementResult | null;
+  queue: QueueExecutorResult | null;
+  errors: string[];
+  durationMs: number;
+}
+
+/**
+ * CRE entrypoint — called on each cron trigger.
+ */
+export async function handler(): Promise<void> {
+  const start = Date.now();
+  const errors: string[] = [];
+  let keeperResult: BatchKeeperResult | null = null;
+  let settlementResult: BatchSettlementResult | null = null;
+  let queueResult: QueueExecutorResult | null = null;
+
+  // ── 1. Vault Keeper (tend + report) ──────────────────────────────────
+  try {
+    console.log('═══ Vault Keeper ═══');
+    keeperResult = await executeKeeper();
+    console.log(
+      `  vaults=${keeperResult.totalVaults} tended=${keeperResult.tended} reported=${keeperResult.reported} ` +
+        `skipped=${keeperResult.skipped} errors=${keeperResult.errors}`
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`  vault-keeper failed: ${msg}`);
+    errors.push(`vault-keeper: ${msg}`);
+  }
+
+  // ── 2. Auction Settlement (sweepCurrency + sweepUnsoldTokens) ────────
+  try {
+    console.log('═══ Auction Settlement ═══');
+    settlementResult = await executeSettlement();
+    console.log(
+      `  strategies=${settlementResult.totalStrategies} settled=${settlementResult.settled} ` +
+        `skipped=${settlementResult.skipped} errors=${settlementResult.errors}`
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`  auction-settlement failed: ${msg}`);
+    errors.push(`auction-settlement: ${msg}`);
+  }
+
+  // ── 3. Keepr Queue (XMTP group ops + Neynar/Farcaster) ──────────────
+  try {
+    console.log('═══ Keepr Queue ═══');
+    queueResult = await executeQueueProcessor();
+    console.log(
+      `  processed=${queueResult.processed} succeeded=${queueResult.succeeded} ` +
+        `failed=${queueResult.failed} retried=${queueResult.retried}`
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Queue errors are non-fatal if the API isn't configured yet
+    if (msg.includes('Missing required env var')) {
+      console.log(`  keepr-queue skipped: ${msg}`);
+    } else {
+      console.error(`  keepr-queue failed: ${msg}`);
+      errors.push(`keepr-queue: ${msg}`);
+    }
+  }
+
+  const durationMs = Date.now() - start;
+
+  // ── Summary ──────────────────────────────────────────────────────────
+  const summary = {
+    workflow: WORKFLOW_NAME,
+    timestamp: new Date().toISOString(),
+    durationMs,
+    keeper: keeperResult
+      ? { vaults: keeperResult.totalVaults, tended: keeperResult.tended, reported: keeperResult.reported }
+      : null,
+    settlement: settlementResult
+      ? { strategies: settlementResult.totalStrategies, settled: settlementResult.settled }
+      : null,
+    queue: queueResult
+      ? { processed: queueResult.processed, succeeded: queueResult.succeeded }
+      : null,
+    errors: errors.length,
+  };
+
+  console.log(JSON.stringify(summary));
+
+  if (errors.length > 0) {
+    await alertCritical(WORKFLOW_NAME, `Workflow completed with ${errors.length} error(s)`, {
+      errors,
+      durationMs,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CRE workflow configuration export
+// ---------------------------------------------------------------------------
+
+export const workflow = {
+  name: WORKFLOW_NAME,
+  schedule: '*/5 * * * *', // Every 5 minutes
+  handler,
+};
+
+export default workflow;

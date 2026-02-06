@@ -1,0 +1,179 @@
+/**
+ * Shared CRE configuration for 4626 automation workflows.
+ *
+ * All contract addresses, chain config, and ABI fragments live here so
+ * individual workflows stay focused on logic.
+ */
+
+// ---------------------------------------------------------------------------
+// Chain configuration
+// ---------------------------------------------------------------------------
+
+export const CHAINS = {
+  base: {
+    id: 8453,
+    name: 'Base',
+    rpcEnvKey: 'BASE_RPC_URL',
+    /** LayerZero Endpoint ID */
+    lzEid: 30184,
+  },
+} as const;
+
+export type ChainKey = keyof typeof CHAINS;
+
+// ---------------------------------------------------------------------------
+// Contract addresses
+// ---------------------------------------------------------------------------
+// In multi-vault mode, addresses come from the registry API (see utils/registry.ts).
+// In single-vault mode, addresses come from env vars (see secrets.example.env).
+// Individual actions handle address resolution — config.ts only exports ABIs/constants.
+
+// ---------------------------------------------------------------------------
+// Timing constants
+// ---------------------------------------------------------------------------
+
+/** Seconds between report() calls (24 hours) */
+export const REPORT_INTERVAL_SECONDS = 86_400;
+
+/** Seconds between oracle price staleness checks */
+export const ORACLE_STALENESS_THRESHOLD = 1_800; // 30 min
+
+/** Price delta (bps) that triggers a cross-chain broadcast */
+export const ORACLE_BROADCAST_DELTA_BPS = 200; // 2 %
+
+/** TWAP duration passed to updateCreatorPriceFromTWAP */
+export const TWAP_DURATION = 1_800; // 30 min
+
+/** VRF hub top-up target (2x minimumBalance = 0.01 ETH) */
+export const VRF_TOPUP_TARGET_WEI = BigInt(0.01e18);
+
+/** VRF hub minimum balance before topping up */
+export const VRF_MIN_BALANCE_WEI = BigInt(0.005e18);
+
+// ---------------------------------------------------------------------------
+// ABI fragments — only the functions each workflow needs
+// ---------------------------------------------------------------------------
+
+export const VAULT_ABI = [
+  // Read
+  { type: 'function', name: 'coinBalance', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
+  { type: 'function', name: 'deploymentThreshold', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
+  { type: 'function', name: 'minimumTotalIdle', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
+  { type: 'function', name: 'totalStrategyWeight', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
+  { type: 'function', name: 'lastReport', inputs: [], outputs: [{ type: 'uint96' }], stateMutability: 'view' },
+  { type: 'function', name: 'isShutdown', inputs: [], outputs: [{ type: 'bool' }], stateMutability: 'view' },
+  { type: 'function', name: 'paused', inputs: [], outputs: [{ type: 'bool' }], stateMutability: 'view' },
+  { type: 'function', name: 'keeper', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' },
+  { type: 'function', name: 'totalAssets', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
+  { type: 'function', name: 'totalAssetsAtLastReport', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
+  // Write
+  { type: 'function', name: 'tend', inputs: [], outputs: [], stateMutability: 'nonpayable' },
+  { type: 'function', name: 'report', inputs: [], outputs: [{ type: 'uint256' }, { type: 'uint256' }], stateMutability: 'nonpayable' },
+  { type: 'function', name: 'deployToStrategies', inputs: [], outputs: [], stateMutability: 'nonpayable' },
+] as const;
+
+export const ORACLE_ABI = [
+  // Read
+  { type: 'function', name: 'creatorPriceUSD', inputs: [], outputs: [{ type: 'int256' }], stateMutability: 'view' },
+  { type: 'function', name: 'creatorPriceTimestamp', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
+  { type: 'function', name: 'isPriceFresh', inputs: [], outputs: [{ type: 'bool' }], stateMutability: 'view' },
+  { type: 'function', name: 'v4PoolConfigured', inputs: [], outputs: [{ type: 'bool' }], stateMutability: 'view' },
+  // Write
+  {
+    type: 'function',
+    name: 'updateCreatorPriceFromTWAP',
+    inputs: [{ name: 'twapDuration', type: 'uint32' }],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'broadcastCreatorPrice',
+    inputs: [
+      { name: 'dstEids', type: 'uint32[]' },
+      { name: 'options', type: 'bytes' },
+    ],
+    outputs: [{ type: 'tuple[]', components: [{ name: 'guid', type: 'bytes32' }, { name: 'nonce', type: 'uint64' }, { name: 'fee', type: 'tuple', components: [{ name: 'nativeFee', type: 'uint256' }, { name: 'lzTokenFee', type: 'uint256' }] }] }],
+    stateMutability: 'payable',
+  },
+] as const;
+
+export const VRF_HUB_ABI = [
+  // Read
+  {
+    type: 'function',
+    name: 'getContractStatus',
+    inputs: [],
+    outputs: [
+      { name: 'balance', type: 'uint256' },
+      { name: 'minBalance', type: 'uint256' },
+      { name: 'canSendResponses', type: 'bool' },
+      { name: 'gasLimit', type: 'uint32' },
+      { name: 'supportedChainsCount', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+  { type: 'function', name: 'minimumBalance', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
+  // Write
+  { type: 'function', name: 'fundContract', inputs: [], outputs: [], stateMutability: 'payable' },
+  { type: 'function', name: 'updateLocalPrice', inputs: [], outputs: [], stateMutability: 'nonpayable' },
+  // Events
+  {
+    type: 'event',
+    name: 'ResponsePending',
+    inputs: [
+      { name: 'sequence', type: 'uint64', indexed: true },
+      { name: 'requestId', type: 'uint256', indexed: true },
+      { name: 'targetChain', type: 'uint32', indexed: false },
+      { name: 'reason', type: 'string', indexed: false },
+    ],
+  },
+] as const;
+
+export const VRF_SPOKE_ABI = [
+  {
+    type: 'function',
+    name: 'cleanupExpiredRequests',
+    inputs: [{ name: 'requestIds', type: 'uint64[]' }],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 's_requests',
+    inputs: [{ name: '', type: 'uint64' }],
+    outputs: [
+      { name: 'fulfilled', type: 'bool' },
+      { name: 'exists', type: 'bool' },
+      { name: 'provider', type: 'address' },
+      { name: 'randomWord', type: 'uint256' },
+      { name: 'timestamp', type: 'uint256' },
+      { name: 'isContract', type: 'bool' },
+    ],
+    stateMutability: 'view',
+  },
+] as const;
+
+export const CCA_AUCTION_ABI = [
+  { type: 'function', name: 'isGraduated', inputs: [], outputs: [{ type: 'bool' }], stateMutability: 'view' },
+] as const;
+
+export const CCA_STRATEGY_ABI = [
+  // Read
+  { type: 'function', name: 'currentAuction', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' },
+  // Write
+  { type: 'function', name: 'sweepCurrency', inputs: [], outputs: [], stateMutability: 'nonpayable' },
+  { type: 'function', name: 'sweepUnsoldTokens', inputs: [], outputs: [], stateMutability: 'nonpayable' },
+] as const;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+export function requireEnv(key: string): string {
+  const value = process.env[key];
+  if (!value) {
+    throw new Error(`Missing required env var: ${key}`);
+  }
+  return value;
+}
