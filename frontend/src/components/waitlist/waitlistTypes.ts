@@ -49,6 +49,9 @@ export type WaitlistState = {
     volume24hUsd: number | null
     holders: number | null
     priceUsd: number | null
+    payoutRecipient: string | null
+    ownerWallets: string[]
+    canonicalSmartWallet: string | null
   } | null
   creatorCoinDeclaredMissing: boolean
   creatorCoinBusy: boolean
