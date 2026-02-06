@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "../../vault/strategies/univ3/CreatorCharmStrategy.sol";
-import "../../vault/strategies/AjnaStrategy.sol";
 import "../../interfaces/uniswap/IUniswapV3Factory.sol";
 import "../../interfaces/uniswap/IUniswapV3Pool.sol";
+import {
+    ICreatorCharmStrategyFactory,
+    IAjnaStrategyFactory,
+    CreatorCharmStrategyFactory,
+    AjnaStrategyFactory
+} from "./StrategyDeploymentFactories.sol";
 
 /**
  * @notice Charm Finance Alpha Vault Factory
@@ -36,7 +37,6 @@ interface ICharmFactory {
  * @dev Used by AA deployment flows to create pools, vaults, and adapters.
  */
 contract StrategyDeploymentBatcher is ReentrancyGuard {
-    using SafeERC20 for IERC20;
 
     // Base Network Constants
     address public constant V3_FACTORY = 0x33128a8fC17869897dcE68Ed026d694621f6FDfD;
@@ -45,6 +45,21 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
     /// @notice Charm Finance Alpha Vault Factory on Base
     /// @dev Vaults created via this factory appear on alpha.charm.fi UI
     address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;
+    address public immutable creatorCharmStrategyFactory;
+    address public immutable ajnaStrategyFactory;
+    bytes4 private constant ADD_STRATEGY_SELECTOR = bytes4(keccak256("addStrategy(address,uint256)"));
+
+    error InvalidOwnerAddress();
+    error InvalidVaultName();
+    error InvalidVaultSymbol();
+    error ZeroUnderlying();
+    error ZeroQuote();
+    error ZeroVault();
+
+    constructor() {
+        creatorCharmStrategyFactory = address(new CreatorCharmStrategyFactory());
+        ajnaStrategyFactory = address(new AjnaStrategyFactory());
+    }
 
     struct DeploymentResult {
         address charmVault;
@@ -90,12 +105,12 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
         string memory vaultName,
         string memory vaultSymbol
     ) external nonReentrant returns (DeploymentResult memory result) {
-        require(owner != address(0), "Invalid owner address");
-        require(bytes(vaultName).length > 0, "Invalid vault name");
-        require(bytes(vaultSymbol).length > 0, "Invalid vault symbol");
-        require(underlyingToken != address(0), "Zero underlying");
-        require(quoteToken != address(0), "Zero quote");
-        require(creatorVault != address(0), "Zero vault");
+        if (owner == address(0)) revert InvalidOwnerAddress();
+        if (bytes(vaultName).length == 0) revert InvalidVaultName();
+        if (bytes(vaultSymbol).length == 0) revert InvalidVaultSymbol();
+        if (underlyingToken == address(0)) revert ZeroUnderlying();
+        if (quoteToken == address(0)) revert ZeroQuote();
+        if (creatorVault == address(0)) revert ZeroVault();
 
         // ═══════════════════════════════════════════════════════════
         // STEP 1: Create or Get V3 Pool
@@ -138,30 +153,27 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
         // ═══════════════════════════════════════════════════════════
         // STEP 4: Deploy Creator Charm Strategy V2 (Vault Integration)
         // ═══════════════════════════════════════════════════════════
-        result.creatorCharmStrategy = address(new CreatorCharmStrategy(
-            creatorVault,           // vault
-            underlyingToken,        // CREATOR token
-            quoteToken,             // USDC
-            UNISWAP_ROUTER,         // SwapRouter
-            result.charmVault,      // CharmAlphaVault
-            result.v3Pool,          // CREATOR/USDC V3 pool for pricing
-            owner                   // owner (can be multisig)
-        ));
-
-        // Initialize approvals for swapping
-        CreatorCharmStrategy(result.creatorCharmStrategy).initializeApprovals();
+        result.creatorCharmStrategy = ICreatorCharmStrategyFactory(creatorCharmStrategyFactory).deployAndInitialize(
+            creatorVault,
+            underlyingToken,
+            quoteToken,
+            UNISWAP_ROUTER,
+            result.charmVault,
+            result.v3Pool,
+            owner
+        );
 
         // ═══════════════════════════════════════════════════════════
         // STEP 5: Deploy Ajna Strategy (if factory provided)
         // ═══════════════════════════════════════════════════════════
         if (_ajnaFactory != address(0)) {
-            result.ajnaStrategy = address(new AjnaStrategy(
-                creatorVault,        // vault
-                underlyingToken,     // CREATOR token
-                _ajnaFactory,        // Ajna ERC20Pool factory
-                quoteToken,          // USDC (quote token)
-                owner                // owner (can be multisig)
-            ));
+            result.ajnaStrategy = IAjnaStrategyFactory(ajnaStrategyFactory).deploy(
+                creatorVault,
+                underlyingToken,
+                _ajnaFactory,
+                quoteToken,
+                owner
+            );
         }
 
         emit StrategiesDeployed(msg.sender, underlyingToken, result);
@@ -181,19 +193,11 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
         calls = new bytes[](numCalls);
 
         // Charm strategy
-        calls[0] = abi.encodeWithSignature(
-            "addStrategy(address,uint256)",
-            result.creatorCharmStrategy,
-            charmWeightBps
-        );
+        calls[0] = abi.encodeWithSelector(ADD_STRATEGY_SELECTOR, result.creatorCharmStrategy, charmWeightBps);
 
         // Ajna strategy (if exists)
         if (result.ajnaStrategy != address(0)) {
-            calls[1] = abi.encodeWithSignature(
-                "addStrategy(address,uint256)",
-                result.ajnaStrategy,
-                ajnaWeightBps
-            );
+            calls[1] = abi.encodeWithSelector(ADD_STRATEGY_SELECTOR, result.ajnaStrategy, ajnaWeightBps);
         }
     }
 }

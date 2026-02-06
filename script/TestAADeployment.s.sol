@@ -6,6 +6,7 @@ import "forge-std/Test.sol";
 import "../contracts/helpers/batchers/StrategyDeploymentBatcher.sol";
 import "../contracts/helpers/batchers/VaultActivationBatcher.sol";
 import "../contracts/vault/strategies/univ3/CreatorCharmStrategy.sol";
+import "../contracts/vault/strategies/AjnaStrategy.sol";
 
 /// @notice Minimal interface for Charm vault queries
 interface ICharmVaultInfo {
