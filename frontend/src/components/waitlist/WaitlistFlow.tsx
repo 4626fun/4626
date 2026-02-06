@@ -34,6 +34,7 @@ const EVM_RE = /^0x[a-fA-F0-9]{40}$/
 const SOL_RE = /^[1-9A-HJ-NP-Za-km-z]+$/
 const BASE_EASE = [0.4, 0, 0.2, 1] as const
 const BASE_MOTION_MS = 0.2
+const SHELL_FLOAT_MS = 8
 
 const CREATOR_COIN_READ_ABI = [
   {
@@ -1560,27 +1561,46 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
 
   const containerClass =
     variant === 'page'
-      ? 'min-h-[100svh] flex items-center justify-center px-4 sm:px-6 py-12 sm:py-16 bg-[#020202]'
+      ? 'relative min-h-[100svh] flex items-center justify-center overflow-hidden px-4 sm:px-6 py-12 sm:py-16 bg-[#020202]'
       : 'cinematic-section'
 
-  const innerWrapClass = variant === 'page' ? 'w-full max-w-[440px]' : 'max-w-3xl mx-auto px-6 py-14'
+  const innerWrapClass = variant === 'page' ? 'relative z-10 w-full max-w-[470px]' : 'max-w-3xl mx-auto px-6 py-14'
 
   const cardWrapClass =
     variant === 'page'
-      ? 'rounded-3xl bg-zinc-950/80 border border-zinc-800/50 backdrop-blur-xl p-5 sm:p-7'
-      : 'rounded-3xl border border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl p-5 sm:p-7'
+      ? 'relative overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(165deg,rgba(12,14,24,0.84),rgba(6,8,14,0.94))] shadow-[0_44px_140px_-66px_rgba(0,82,255,0.88)] backdrop-blur-2xl p-5 sm:p-7'
+      : 'relative overflow-hidden rounded-[32px] border border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl p-5 sm:p-7'
 
   return (
     <section id={variant === 'embedded' ? sectionId : undefined} className={containerClass}>
+      {variant === 'page' ? (
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+          <motion.div
+            className="absolute -left-20 -top-16 h-[22rem] w-[22rem] rounded-full bg-[#0052FF]/25 blur-3xl"
+            animate={{ x: [0, 20, 0], y: [0, -12, 0], scale: [1, 1.08, 1] }}
+            transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          <motion.div
+            className="absolute -right-24 bottom-[-6rem] h-[20rem] w-[20rem] rounded-full bg-cyan-400/12 blur-3xl"
+            animate={{ x: [0, -18, 0], y: [0, 10, 0], scale: [1, 1.06, 1] }}
+            transition={{ duration: 13, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_14%,rgba(0,82,255,0.2),transparent_34%),radial-gradient(circle_at_84%_76%,rgba(16,185,129,0.08),transparent_34%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:100%_68px] opacity-[0.08]" />
+        </div>
+      ) : null}
       <div className={innerWrapClass}>
         {variant === 'page' ? (
-          <div className="flex items-center justify-between mb-6 sm:mb-8">
-            <div className="flex items-center gap-3">
+          <div className="mb-6 sm:mb-8 flex items-center justify-between">
+            <div className="flex items-center gap-3.5 rounded-2xl border border-white/10 bg-black/30 px-3.5 py-2.5 backdrop-blur-md">
               <Logo width={32} height={32} showText={false} />
               <div>
-                <div className="text-[13px] text-white font-medium">Creator Vaults</div>
-                <div className="text-[11px] text-zinc-500">Waitlist</div>
+                <div className="text-[13px] text-white font-medium tracking-[0.01em]">Creator Vaults</div>
+                <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Waitlist</div>
               </div>
+            </div>
+            <div className="hidden sm:inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] uppercase tracking-[0.15em] text-zinc-400">
+              Founding Access
             </div>
           </div>
         ) : (
@@ -1591,7 +1611,16 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
           </div>
         )}
 
-        <motion.div className={cardWrapClass}>
+        <motion.div
+          className={cardWrapClass}
+          animate={variant === 'page' ? { y: [0, -2, 0] } : undefined}
+          transition={variant === 'page' ? { duration: SHELL_FLOAT_MS, repeat: Infinity, ease: 'easeInOut' } : undefined}
+        >
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute inset-x-0 top-0 h-28 bg-[radial-gradient(ellipse_at_top,rgba(0,82,255,0.3),transparent_72%)]" />
+            <div className="absolute left-6 right-6 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
+          </div>
+          <div className="relative z-[1]">
           {/* Show reset on done step */}
           {step === 'done' ? (
             <div className="flex items-center justify-between mb-5">
@@ -1607,17 +1636,18 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
           ) : null}
           {/* Step indicator (stable, no layout/slide jitter) */}
           <div className="mb-6 flex items-center justify-between">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-600">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
               {step === 'verify' ? 'Connect' : 'Complete'}
             </div>
-            <div className="flex items-center gap-2">
-              <div className={`h-2 w-2 rounded-[3px] ${step === 'verify' ? 'bg-white/20' : 'bg-white/10'}`} />
-              <div className={`h-2 w-2 rounded-[3px] ${step === 'done' ? 'bg-white/20' : 'bg-white/10'}`} />
-              <div className="ml-1 text-[11px] text-zinc-600 tabular-nums">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">
+              <div className={`h-2 w-2 rounded-[3px] ${step === 'verify' ? 'bg-[#74A7FF]' : 'bg-white/10'}`} />
+              <div className={`h-2 w-2 rounded-[3px] ${step === 'done' ? 'bg-[#74A7FF]' : 'bg-white/10'}`} />
+              <div className="ml-1 text-[11px] text-zinc-500 tabular-nums">
                 {step === 'verify' ? '1' : '2'}/2
               </div>
             </div>
           </div>
+          <div className="mb-6 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" />
 
           {/* Step transition: smooth layout */}
           <div className="relative">
@@ -1625,10 +1655,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
               {step === 'verify' ? (
                 <motion.div
                   key="step:verify"
-                  initial={{ opacity: 0, y: 10 }}
+                  initial={{ opacity: 0, y: 14, filter: 'blur(4px)' }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: BASE_MOTION_MS, ease: BASE_EASE }}
+                  exit={{ opacity: 0, y: -10, filter: 'blur(3px)' }}
+                  transition={{ duration: BASE_MOTION_MS + 0.06, ease: BASE_EASE }}
                 >
                   <VerifyStep
                     verifiedWallet={verifiedWallet}
@@ -1660,10 +1690,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
               {step === 'done' ? (
                 <motion.div
                   key="step:done"
-                  initial={{ opacity: 0, y: 10 }}
+                  initial={{ opacity: 0, y: 14, filter: 'blur(4px)' }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: BASE_MOTION_MS, ease: BASE_EASE }}
+                  exit={{ opacity: 0, y: -10, filter: 'blur(3px)' }}
+                  transition={{ duration: BASE_MOTION_MS + 0.06, ease: BASE_EASE }}
                 >
                   <DoneStep
                     displayEmail={displayEmail}
@@ -1679,6 +1709,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                 </motion.div>
               ) : null}
             </AnimatePresence>
+          </div>
           </div>
         </motion.div>
       </div>
