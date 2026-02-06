@@ -32,6 +32,28 @@ type VerifyResponse = {
   sessionToken: string
 }
 
+function normalizeOrigin(value: string): string {
+  try {
+    return new URL(value).origin
+  } catch {
+    return ''
+  }
+}
+
+function firstHeaderValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return String(value[0] ?? '').trim()
+  return String(value ?? '').split(',')[0]?.trim() ?? ''
+}
+
+function getRequestOrigin(req: VercelRequest): string {
+  const protoRaw = firstHeaderValue(req.headers?.['x-forwarded-proto'])
+  const hostRaw =
+    firstHeaderValue(req.headers?.['x-forwarded-host']) || firstHeaderValue(req.headers?.host)
+  if (!hostRaw) return ''
+  const proto = protoRaw.toLowerCase().startsWith('https') ? 'https' : 'http'
+  return `${proto}://${hostRaw}`
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -80,13 +102,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid chain' } satisfies ApiEnvelope<never>)
   }
 
-  let canonicalOrigin = ''
-  try {
-    canonicalOrigin = getCanonicalOrigin(req)
-  } catch {
-    return res.status(503).json({ success: false, error: 'Auth service unavailable' } satisfies ApiEnvelope<never>)
+  const parsedUriOrigin = normalizeOrigin(parsed.uri)
+  if (!parsedUriOrigin) {
+    return res.status(400).json({ success: false, error: 'URI mismatch' } satisfies ApiEnvelope<never>)
   }
-  if (parsed.uri !== canonicalOrigin) {
+  const requestOrigin = normalizeOrigin(getRequestOrigin(req))
+  const acceptedOrigins = new Set<string>()
+  if (requestOrigin) acceptedOrigins.add(requestOrigin)
+  try {
+    const canonicalOrigin = normalizeOrigin(getCanonicalOrigin(req))
+    if (canonicalOrigin) acceptedOrigins.add(canonicalOrigin)
+  } catch {
+    // Canonical origin may be intentionally unset in some environments; rely on request-origin binding.
+  }
+  if (!acceptedOrigins.has(parsedUriOrigin)) {
     return res.status(400).json({ success: false, error: 'URI mismatch' } satisfies ApiEnvelope<never>)
   }
 
@@ -125,5 +154,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     data: { address: verified.address, sessionToken: token } satisfies VerifyResponse,
   } satisfies ApiEnvelope<VerifyResponse>)
 }
-
 

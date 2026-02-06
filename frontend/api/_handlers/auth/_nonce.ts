@@ -12,6 +12,20 @@ type NonceResponse = {
   chainId: number
 }
 
+function firstHeaderValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return String(value[0] ?? '').trim()
+  return String(value ?? '').split(',')[0]?.trim() ?? ''
+}
+
+function getRequestOrigin(req: VercelRequest): string {
+  const protoRaw = firstHeaderValue(req.headers?.['x-forwarded-proto'])
+  const hostRaw =
+    firstHeaderValue(req.headers?.['x-forwarded-host']) || firstHeaderValue(req.headers?.host)
+  const proto = protoRaw.toLowerCase().startsWith('https') ? 'https' : 'http'
+  const host = hostRaw || 'localhost'
+  return `${proto}://${host}`
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -24,10 +38,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const nonce = makeNonce()
   const nonceToken = makeNonceToken({ nonce })
   const issuedAt = new Date().toISOString()
-  const host = typeof req.headers?.host === 'string' ? req.headers.host : ''
-  const domain = host || 'localhost'
-  const proto = typeof req.headers?.['x-forwarded-proto'] === 'string' ? req.headers['x-forwarded-proto'] : 'http'
-  const uri = `${proto === 'https' ? 'https' : 'http'}://${domain}`
+  const uri = getRequestOrigin(req)
+  const domain = new URL(uri).host
 
   try {
     const db = await getDb()
@@ -55,4 +67,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies NonceResponse,
   } satisfies ApiEnvelope<NonceResponse>)
 }
-
