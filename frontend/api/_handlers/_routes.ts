@@ -74,6 +74,8 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'auth/nonce': () => import('./auth/_nonce.js'),
   'auth/privy': () => import('./auth/_privy.js'),
   'auth/verify': () => import('./auth/_verify.js'),
+  'wallet/sync': () => import('./wallet/_sync.js'),
+  'portfolio/me': () => import('./portfolio/_me.js'),
 
   'creator-allowlist': () => import('./_creator-allowlist.js'),
   'creator-wallets/claim': () => import('./_creator-wallets-claim.js'),

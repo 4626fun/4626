@@ -1,0 +1,98 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { makeSessionToken } from '../../server/auth/_shared.ts'
+import handler from '../_handlers/wallet/_sync.ts'
+import { applyEnv, createMockReq, createMockRes } from './helpers'
+
+const { getDbMock, ensureWaitlistSchemaMock, syncUserWalletsMock, getUserByIdMock } = vi.hoisted(() => ({
+  getDbMock: vi.fn(),
+  ensureWaitlistSchemaMock: vi.fn(async () => {}),
+  syncUserWalletsMock: vi.fn(async () => ({
+    canonicalSmartWallet: { address: '0x00000000000000000000000000000000000000aa', provider: 'coinbase_wallet' },
+    embeddedEoa: { address: '0x00000000000000000000000000000000000000bb', chainType: 'evm', clientType: 'embedded' },
+    connectedWallets: [{ address: '0x00000000000000000000000000000000000000aa', walletType: 'smart_wallet', provider: 'coinbase_wallet' }],
+  })),
+  getUserByIdMock: vi.fn(async () => ({ id: 'did:privy:test-user', linkedAccounts: [] })),
+}))
+
+vi.mock('../../server/_lib/postgres.js', () => ({
+  getDb: getDbMock,
+}))
+
+vi.mock('../../server/_lib/waitlistSchema.js', () => ({
+  ensureWaitlistSchema: ensureWaitlistSchemaMock,
+}))
+
+vi.mock('../../server/_lib/walletSync.js', () => ({
+  syncUserWallets: syncUserWalletsMock,
+}))
+
+vi.mock('@privy-io/server-auth', () => ({
+  PrivyClient: class {
+    verifyAuthToken = vi.fn()
+    getUserById = getUserByIdMock
+  },
+}))
+
+describe('wallet sync endpoint', () => {
+  let restoreEnv: (() => void) | null = null
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    restoreEnv = applyEnv({
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
+      PRIVY_APP_ID: 'test-privy-id',
+      PRIVY_APP_SECRET: 'test-privy-secret',
+    })
+  })
+
+  afterEach(() => {
+    if (restoreEnv) restoreEnv()
+    restoreEnv = null
+  })
+
+  it('returns 401 without session', async () => {
+    const req = createMockReq({ method: 'POST' })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(401)
+  })
+
+  it('returns 409 when no privy mapping exists', async () => {
+    getDbMock.mockResolvedValue({
+      sql: vi.fn(async () => ({ rows: [] })),
+    })
+    const token = makeSessionToken({ address: '0x00000000000000000000000000000000000000bb' })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { cookie: `cv_auth_session=${encodeURIComponent(token)}` },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(syncUserWalletsMock).not.toHaveBeenCalled()
+  })
+
+  it('returns normalized sync payload', async () => {
+    getDbMock.mockResolvedValue({
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('from profile_wallets pw')) return { rows: [{ privy_user_id: 'did:privy:test-user' }] }
+        return { rows: [] }
+      }),
+    })
+    const token = makeSessionToken({ address: '0x00000000000000000000000000000000000000bb' })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { cookie: `cv_auth_session=${encodeURIComponent(token)}` },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.canonicalSmartWallet?.address).toBe('0x00000000000000000000000000000000000000aa')
+  })
+})

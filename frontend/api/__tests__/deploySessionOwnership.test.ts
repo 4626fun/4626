@@ -1,0 +1,122 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import handler from '../_handlers/deploy/session/_create.ts'
+import { createMockReq, createMockRes } from './helpers'
+
+const {
+  readJsonBodyMock,
+  readSessionFromRequestMock,
+  isDbConfiguredMock,
+  getDbMock,
+  ensureDeploySessionsSchemaMock,
+  insertDeploySessionMock,
+  getOrCreateCreatorAgentWalletMock,
+  ensureWaitlistSchemaMock,
+} = vi.hoisted(() => ({
+  readJsonBodyMock: vi.fn(async (req: any) => req.body),
+  readSessionFromRequestMock: vi.fn(() => ({ address: '0x0000000000000000000000000000000000000001' })),
+  isDbConfiguredMock: vi.fn(() => true),
+  getDbMock: vi.fn(),
+  ensureDeploySessionsSchemaMock: vi.fn(async () => {}),
+  insertDeploySessionMock: vi.fn(async () => ({})),
+  getOrCreateCreatorAgentWalletMock: vi.fn(async () => ({
+    walletId: 'agent_1',
+    address: '0x00000000000000000000000000000000000000f1',
+  })),
+  ensureWaitlistSchemaMock: vi.fn(async () => {}),
+}))
+
+vi.mock('../../server/auth/_shared.js', () => ({
+  handleOptions: vi.fn(() => false),
+  readJsonBody: readJsonBodyMock,
+  readSessionFromRequest: readSessionFromRequestMock,
+  setCors: vi.fn(),
+  setNoStore: vi.fn(),
+}))
+
+vi.mock('../../server/_lib/deploySessions.js', () => ({
+  ensureDeploySessionsSchema: ensureDeploySessionsSchemaMock,
+  hashDeployToken: vi.fn(() => 'hashed'),
+  insertDeploySession: insertDeploySessionMock,
+  randomDeployToken: vi.fn(() => 'deploy_token'),
+  randomId: vi.fn(() => 'sess_123'),
+}))
+
+vi.mock('../../server/_lib/postgres.js', () => ({
+  isDbConfigured: isDbConfiguredMock,
+  getDb: getDbMock,
+}))
+
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+  RATE_LIMITS: { deployCreate: { limit: 3, windowMs: 60_000 } },
+  rateLimitKey: vi.fn(() => 'rl_key'),
+}))
+
+vi.mock('../../server/_lib/supabaseAdmin.js', () => ({
+  isSupabaseAdminConfigured: vi.fn(() => false),
+  getSupabaseAdmin: vi.fn(),
+}))
+
+vi.mock('../../server/_lib/creatorAgentWallets.js', () => ({
+  getOrCreateCreatorAgentWallet: getOrCreateCreatorAgentWalletMock,
+}))
+
+vi.mock('../../server/_lib/waitlistSchema.js', () => ({
+  ensureWaitlistSchema: ensureWaitlistSchemaMock,
+}))
+
+function makeRequestBody() {
+  return {
+    smartWallet: '0x0000000000000000000000000000000000000002',
+    creatorToken: '0x0000000000000000000000000000000000000003',
+    ownerAddress: '0x0000000000000000000000000000000000000001',
+    phase2Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x' }],
+    phase3Calls: [],
+  }
+}
+
+describe('deploy session ownership guardrails', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('returns 403 when canonical smart wallet mapping is missing', async () => {
+    getDbMock.mockResolvedValue({
+      query: vi.fn(async () => ({ rows: [{}] })), // allowlist pass
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('is_canonical_smart_wallet = true')) return { rows: [] }
+        return { rows: [] }
+      }),
+    })
+
+    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(String(res.body?.error || '')).toContain('ownership')
+    expect(insertDeploySessionMock).not.toHaveBeenCalled()
+  })
+
+  it('creates session when canonical + embedded mappings are consistent', async () => {
+    getDbMock.mockResolvedValue({
+      query: vi.fn(async () => ({ rows: [{}] })), // allowlist pass
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('is_canonical_smart_wallet = true')) return { rows: [{ profile_id: 99 }] }
+        if (text.includes('is_embedded_eoa = true')) return { rows: [{ address: '0x0000000000000000000000000000000000000001' }] }
+        if (text.includes('select 1') && text.includes('from profile_wallets')) return { rows: [{ '?column?': 1 }] }
+        return { rows: [] }
+      }),
+    })
+
+    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
+  })
+})

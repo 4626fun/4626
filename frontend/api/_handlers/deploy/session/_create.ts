@@ -5,6 +5,7 @@ import { getAddress, isAddress, type Address, type Hex } from 'viem'
 import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { ensureDeploySessionsSchema, hashDeployToken, insertDeploySession, randomDeployToken, randomId } from '../../../../server/_lib/deploySessions.js'
 import { isDbConfigured, getDb } from '../../../../server/_lib/postgres.js'
+import { ensureWaitlistSchema } from '../../../../server/_lib/waitlistSchema.js'
 import { checkRateLimit, RATE_LIMITS, rateLimitKey } from '../../../../server/_lib/rateLimit.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/supabaseAdmin.js'
 import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAgentWallets.js'
@@ -29,6 +30,11 @@ type CreateDeploySessionResponse = {
   sessionId: string
   sessionOwner: Address
   expiresAt: string
+}
+
+type OwnershipCheck = {
+  ok: boolean
+  reason?: string
 }
 
 /**
@@ -94,6 +100,61 @@ async function checkCreatorAllowlist(address: Address, smartWallet: Address): Pr
   }
 }
 
+async function checkCanonicalWalletOwnership(params: {
+  smartWallet: Address
+  ownerAddress: Address
+  sessionAddress: Address
+}): Promise<OwnershipCheck> {
+  const db = await getDb()
+  if (!db) return { ok: false, reason: 'ownership_db_unavailable' }
+  await ensureWaitlistSchema(db as any)
+
+  const smartWalletLc = params.smartWallet.toLowerCase()
+  const ownerLc = params.ownerAddress.toLowerCase()
+  const sessionLc = params.sessionAddress.toLowerCase()
+
+  const canonicalRow = await db.sql`
+    SELECT profile_id
+    FROM profile_wallets
+    WHERE LOWER(address) = ${smartWalletLc}
+      AND is_canonical_smart_wallet = true
+    LIMIT 1;
+  `
+  const profileId = canonicalRow.rows?.[0]?.profile_id
+  if (!profileId) return { ok: false, reason: 'canonical_wallet_not_verified' }
+
+  const embeddedRow = await db.sql`
+    SELECT address
+    FROM profile_wallets
+    WHERE profile_id = ${profileId}
+      AND is_embedded_eoa = true
+      AND verified_at IS NOT NULL
+    LIMIT 1;
+  `
+  const embeddedAddress = typeof embeddedRow.rows?.[0]?.address === 'string' ? String(embeddedRow.rows[0].address).toLowerCase() : ''
+  if (!embeddedAddress) return { ok: false, reason: 'embedded_wallet_not_verified' }
+
+  const belongs = async (addr: string): Promise<boolean> => {
+    if (addr === smartWalletLc || addr === embeddedAddress) return true
+    const row = await db.sql`
+      SELECT 1
+      FROM profile_wallets
+      WHERE profile_id = ${profileId}
+        AND LOWER(address) = ${addr}
+      LIMIT 1;
+    `
+    return Array.isArray(row.rows) && row.rows.length > 0
+  }
+
+  const ownerBelongs = await belongs(ownerLc)
+  if (!ownerBelongs) return { ok: false, reason: 'owner_not_linked' }
+
+  const sessionBelongs = await belongs(sessionLc)
+  if (!sessionBelongs) return { ok: false, reason: 'session_not_linked' }
+
+  return { ok: true }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setNoStore(res)
   if (handleOptions(req, res)) return
@@ -138,6 +199,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (sessionAddress.toLowerCase() !== smartWallet.toLowerCase()) {
         return res.status(403).json({ success: false, error: 'Session address must match owner or smart wallet' } satisfies ApiEnvelope<null>)
       }
+    }
+
+    const ownership = await checkCanonicalWalletOwnership({
+      smartWallet,
+      ownerAddress,
+      sessionAddress,
+    })
+    if (!ownership.ok) {
+      return res.status(403).json({
+        success: false,
+        error: ownership.reason ? `Deploy ownership mismatch: ${ownership.reason}` : 'Deploy ownership mismatch',
+      } satisfies ApiEnvelope<null>)
     }
 
     // Check creator allowlist before creating session
@@ -189,7 +262,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const out: CreateDeploySessionResponse = { sessionId: id, sessionOwner, expiresAt: expiresAt.toISOString() }
     return res.status(200).json({ success: true, data: out } satisfies ApiEnvelope<CreateDeploySessionResponse>)
   } catch (e: any) {
-    return res.status(500).json({ success: false, error: e?.message ? String(e.message) : 'create_failed' } satisfies ApiEnvelope<null>)
+    return res.status(500).json({ success: false, error: 'create_failed' } satisfies ApiEnvelope<null>)
   }
 }
-
