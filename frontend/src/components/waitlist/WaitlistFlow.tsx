@@ -94,6 +94,64 @@ const COINBASE_SMART_WALLET_FACTORIES = [
   getAddress(`0x${'ba5ed110efdba3d005bfc882d75358acbbb85842'}`),
 ] as const
 
+let warnedPrivyHookFailure = false
+function warnPrivyHookFailure(scope: string, error: unknown) {
+  if (warnedPrivyHookFailure) return
+  warnedPrivyHookFailure = true
+  console.warn(`[waitlist] Privy hook unavailable in ${scope}; falling back to non-Privy mode`, error)
+}
+
+function useSafePrivyHook() {
+  try {
+    return usePrivy() as any
+  } catch (error) {
+    warnPrivyHookFailure('usePrivy', error)
+    return {
+      ready: false,
+      authenticated: false,
+      user: null,
+      logout: async () => {},
+      linkWallet: async () => {},
+    } as any
+  }
+}
+
+function useSafeConnectWalletHook(options: any) {
+  try {
+    return useConnectWallet(options) as any
+  } catch (error) {
+    warnPrivyHookFailure('useConnectWallet', error)
+    return { connectWallet: async () => {} } as any
+  }
+}
+
+function useSafeLoginHook(options: any) {
+  try {
+    return useLogin(options) as any
+  } catch (error) {
+    warnPrivyHookFailure('useLogin', error)
+    return { login: async () => {} } as any
+  }
+}
+
+function useSafeWalletsHook() {
+  try {
+    return useWallets() as any
+  } catch (error) {
+    warnPrivyHookFailure('useWallets', error)
+    return { wallets: [] } as any
+  }
+}
+
+function useSafeBaseAccountSdkHook() {
+  try {
+    return useBaseAccountSdk() as any
+  } catch (error) {
+    warnPrivyHookFailure('useBaseAccountSdk', error)
+    return { baseAccountSdk: null } as any
+  }
+}
+
 function asOwnerBytes(owner: `0x${string}`) {
   return encodeAbiParameters([{ type: 'address' }], [owner])
 }
@@ -528,30 +586,30 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     user: privyUser,
     logout: privyLogout,
     linkWallet: privyLinkWallet,
-  } = usePrivy()
+  } = useSafePrivyHook()
   const showPrivyReady = showPrivy && privyStatus === 'ready'
-  const { connectWallet: privyConnectWallet } = useConnectWallet({
+  const { connectWallet: privyConnectWallet } = useSafeConnectWalletHook({
     onSuccess: () => {
       finishPrivyVerify()
     },
-    onError: (error) => {
+    onError: (error: unknown) => {
       const code = String(error || '')
       const msg = formatPrivyConnectError(code)
       setPrivyVerifyError(msg)
     },
   })
-  const { login: privyLogin } = useLogin({
+  const { login: privyLogin } = useSafeLoginHook({
     onComplete: () => {
       finishPrivyVerify()
     },
-    onError: (error) => {
+    onError: (error: unknown) => {
       const code = String(error || '')
       const msg = formatPrivyConnectError(code)
       setPrivyVerifyError(msg)
     },
   })
-  const { wallets: privyWallets } = useWallets()
-  const { baseAccountSdk } = useBaseAccountSdk()
+  const { wallets: privyWallets } = useSafeWalletsHook()
+  const { baseAccountSdk } = useSafeBaseAccountSdkHook()
 
   // Wallet type detection can vary across Privy SDK versions/contexts.
   // Mirror deploy hardening: look across multiple fields and use substring matches.
