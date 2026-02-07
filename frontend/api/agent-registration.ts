@@ -133,37 +133,63 @@ function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
-function readRegistryConfig(): {
+function parseAgentRegistryRef(value: string): { chainId: number; registryAddress: string } | null {
+  const raw = value.trim()
+  if (!raw) return null
+  const match = raw.match(/^eip155:(\d+):(0x[a-fA-F0-9]{40})$/)
+  if (!match) return null
+  const chainId = Number(match[1])
+  if (!Number.isFinite(chainId) || chainId <= 0) return null
+  return { chainId, registryAddress: match[2].toLowerCase() }
+}
+
+function readRegistryConfig(base: RegistrationFile): {
   agentRegistry: string
   agentId: number
   chainId: number
   registryAddress: string
 } | { error: string; missing: string[] } {
-  const registryAddress = (process.env.ERC8004_AGENT_REGISTRY || '').trim()
+  const baseRegistrations = Array.isArray(base.registrations) ? base.registrations : []
+  const fallbackRegistration = baseRegistrations.find((entry) => {
+    if (!entry || typeof entry !== 'object') return false
+    if (!Number.isInteger(entry.agentId) || entry.agentId < 0) return false
+    return Boolean(parseAgentRegistryRef(String(entry.agentRegistry || '')))
+  })
+  const fallbackAgentRegistryRef = fallbackRegistration
+    ? parseAgentRegistryRef(String(fallbackRegistration.agentRegistry || ''))
+    : null
+
+  const registryAddressRaw = (process.env.ERC8004_AGENT_REGISTRY || '').trim()
   const chainIdRaw = (process.env.ERC8004_AGENT_CHAIN_ID || '').trim()
   const agentIdRaw = (process.env.ERC8004_AGENT_ID || '').trim()
   const missing: string[] = []
 
+  let registryAddress = registryAddressRaw
+  if (!registryAddress) registryAddress = fallbackAgentRegistryRef?.registryAddress || ''
   if (!registryAddress) missing.push('ERC8004_AGENT_REGISTRY')
-  if (!chainIdRaw) missing.push('ERC8004_AGENT_CHAIN_ID')
-  if (!agentIdRaw) missing.push('ERC8004_AGENT_ID')
 
-  if (missing.length > 0) {
-    return { error: 'Missing ERC-8004 registry configuration.', missing }
+  let chainId = Number(chainIdRaw)
+  if (!chainIdRaw) chainId = fallbackAgentRegistryRef?.chainId ?? NaN
+  if (!Number.isFinite(chainId) || chainId <= 0) {
+    if (!chainIdRaw) missing.push('ERC8004_AGENT_CHAIN_ID')
+    else return { error: 'ERC8004_AGENT_CHAIN_ID must be a positive number.', missing: [] }
   }
 
   if (!isAddressLike(registryAddress)) {
     return { error: 'ERC8004_AGENT_REGISTRY must be a valid address.', missing: [] }
   }
 
-  const chainId = Number(chainIdRaw)
-  if (!Number.isFinite(chainId) || chainId <= 0) {
-    return { error: 'ERC8004_AGENT_CHAIN_ID must be a positive number.', missing: [] }
+  let agentId = Number(agentIdRaw)
+  if (!agentIdRaw && fallbackRegistration) {
+    agentId = Number(fallbackRegistration.agentId)
+  }
+  if (!Number.isFinite(agentId) || agentId < 0 || Math.floor(agentId) !== agentId) {
+    if (!agentIdRaw) missing.push('ERC8004_AGENT_ID')
+    else return { error: 'ERC8004_AGENT_ID must be a non-negative integer.', missing: [] }
   }
 
-  const agentId = Number(agentIdRaw)
-  if (!Number.isFinite(agentId) || agentId < 0 || Math.floor(agentId) !== agentId) {
-    return { error: 'ERC8004_AGENT_ID must be a non-negative integer.', missing: [] }
+  if (missing.length > 0) {
+    return { error: 'Missing ERC-8004 registry configuration.', missing }
   }
 
   const agentRegistry = `eip155:${chainId}:${registryAddress.toLowerCase()}`
@@ -189,7 +215,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
 
-  const registryConfig = readRegistryConfig()
+  const origin = normalizeOrigin(req)
+  const base = readRegistrationFromEnv() ?? readRegistrationFromDisk() ?? fallbackRegistration
+  const registryConfig = readRegistryConfig(base)
   if ('error' in registryConfig) {
     return res.status(503).json({
       success: false,
@@ -197,9 +225,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       missing: registryConfig.missing,
     })
   }
-
-  const origin = normalizeOrigin(req)
-  const base = readRegistrationFromEnv() ?? readRegistrationFromDisk() ?? fallbackRegistration
 
   const name = (process.env.ERC8004_AGENT_NAME || '').trim() || base.name || 'CreatorVault Agent'
   const description =
