@@ -1568,8 +1568,8 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
 
   const cardWrapClass =
     variant === 'page'
-      ? 'relative overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(165deg,rgba(10,10,12,0.86),rgba(4,4,6,0.96))] shadow-[0_44px_140px_-72px_rgba(0,0,0,0.95)] backdrop-blur-2xl p-5 sm:p-7'
-      : 'relative overflow-hidden rounded-[32px] border border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl p-5 sm:p-7'
+      ? 'relative overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(165deg,rgba(10,10,12,0.95),rgba(4,4,6,0.98))] shadow-[0_44px_140px_-72px_rgba(0,0,0,0.95)] p-5 sm:p-7'
+      : 'relative overflow-hidden rounded-[32px] border border-zinc-800/50 bg-zinc-950/95 p-5 sm:p-7'
 
   return (
     <section id={variant === 'embedded' ? sectionId : undefined} className={containerClass}>
@@ -1579,7 +1579,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       <div className={innerWrapClass}>
         {variant === 'page' ? (
           <div className="mb-6 sm:mb-8 flex items-center justify-between">
-            <div className="flex items-center gap-3.5 rounded-2xl border border-white/10 bg-black/30 px-3.5 py-2.5 backdrop-blur-md">
+            <div className="flex items-center gap-3.5 rounded-2xl border border-white/10 bg-black/70 px-3.5 py-2.5">
               <Logo width={32} height={32} showText={false} />
               <div>
                 <div className="text-[13px] text-white font-medium tracking-[0.01em]">Creator Vaults</div>
