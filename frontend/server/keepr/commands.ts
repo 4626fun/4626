@@ -3,6 +3,8 @@ import type { Address } from 'viem'
 import { checkSharesEligibility } from '../_lib/keeprGating.js'
 import { getKeeprVaultByGroupId, setKeeprJoinLocked } from '../_lib/keeprRegistry.js'
 import { handleFarcasterCommand } from '../farcaster/commands.js'
+import { handleSendCommand } from './sendCommand.js'
+import { generateLlmResponse } from '../ai/chat.js'
 
 export type KeeprRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 
@@ -75,6 +77,24 @@ export async function handleKeeprCommand(params: {
     })
   }
 
+  // Handle /send command
+  const looksLikeSend = raw.toLowerCase().startsWith('/send') || raw.toLowerCase().startsWith('send ')
+  if (looksLikeSend) {
+    const sv = await getKeeprVaultByGroupId(params.groupId)
+    if (!sv) return { ok: false, response: 'Vault not configured. /send requires a connected vault.' }
+    const sOwner = sv.canonicalOwnerAddress
+    const sAdmins = Array.isArray(sv.config?.roles?.admins) ? sv.config.roles.admins : []
+    const sAdminsLc = sAdmins.filter(isAddressLike).map((a) => a.toLowerCase() as Address)
+    const sRole = roleForWallet({ wallet: params.senderWallet, owner: sOwner, admins: sAdminsLc })
+    return handleSendCommand({
+      groupId: params.groupId,
+      senderWallet: params.senderWallet,
+      text: raw,
+      role: sRole,
+      vault: sv,
+    })
+  }
+
   const v = await getKeeprVaultByGroupId(params.groupId)
   if (!v) {
     // Allow basic commands to explain next steps even if not configured.
@@ -93,9 +113,27 @@ export async function handleKeeprCommand(params: {
   const adminsLc = admins.filter(isAddressLike).map((a) => a.toLowerCase() as Address)
   const role = roleForWallet({ wallet: params.senderWallet, owner, admins: adminsLc })
 
-  const raw = (params.text ?? '').trim()
   const prefix = raw.toLowerCase().startsWith('/keepr') ? '/keepr' : raw.toLowerCase().startsWith('keepr') ? 'keepr' : null
-  if (!prefix) return { ok: false, response: '' }
+  if (!prefix) {
+    // Check for /ai, @keepr, or @bot → LLM response
+    const looksLikeAi =
+      raw.toLowerCase().startsWith('/ai') ||
+      raw.toLowerCase().startsWith('@keepr') ||
+      raw.toLowerCase().startsWith('@bot')
+    if (looksLikeAi) {
+      const aiText = raw.replace(/^\/?ai\s*/i, '').replace(/^@(keepr|bot)\s*/i, '').trim()
+      if (aiText) {
+        const llmResult = await generateLlmResponse({
+          groupId: params.groupId,
+          senderWallet: params.senderWallet,
+          text: aiText,
+          vault: v,
+        })
+        if (llmResult.ok) return llmResult
+      }
+    }
+    return { ok: false, response: '' }
+  }
   const parts = raw.split(/\s+/g).filter(Boolean)
   const cmd = parts[0]?.toLowerCase() === prefix ? (parts[1] ? String(parts[1]).toLowerCase() : 'help') : 'help'
   const arg = parts[0]?.toLowerCase() === prefix ? (parts[2] ? String(parts[2]) : null) : null
@@ -116,6 +154,16 @@ export async function handleKeeprCommand(params: {
         '- keepr lock (OWNER)',
         '- keepr unlock (OWNER)',
         '- keepr sync (ADMIN/OWNER)',
+        '',
+        'Token commands:',
+        '',
+        '- /send <amount> USDC to <address> (ADMIN/OWNER)',
+        '- /send <amount> ETH to <address> (ADMIN/OWNER)',
+        '',
+        'AI commands:',
+        '',
+        '- /ai <question> — ask the vault assistant',
+        '- @keepr <question> — same as /ai',
         '',
         'Farcaster commands (type /fc help for more):',
         '',

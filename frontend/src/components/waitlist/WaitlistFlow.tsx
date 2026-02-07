@@ -1642,9 +1642,9 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
               {step === 'verify' ? (
                 <motion.div
                   key="step:verify"
-                  initial={{ opacity: 0, y: 14, filter: 'blur(4px)' }}
+                  initial={{ opacity: 0, y: 14 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10, filter: 'blur(3px)' }}
+                  exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: BASE_MOTION_MS + 0.06, ease: BASE_EASE }}
                 >
                   <VerifyStep
@@ -1677,9 +1677,9 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
               {step === 'done' ? (
                 <motion.div
                   key="step:done"
-                  initial={{ opacity: 0, y: 14, filter: 'blur(4px)' }}
+                  initial={{ opacity: 0, y: 14 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10, filter: 'blur(3px)' }}
+                  exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: BASE_MOTION_MS + 0.06, ease: BASE_EASE }}
                 >
                   <DoneStep
