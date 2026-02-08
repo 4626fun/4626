@@ -100,6 +100,63 @@ const XMTP_ENV: 'production' | 'dev' | 'local' =
   RAW_XMTP_ENV === 'dev' || RAW_XMTP_ENV === 'local' || RAW_XMTP_ENV === 'production'
     ? (RAW_XMTP_ENV as 'production' | 'dev' | 'local')
     : 'production'
+const ENC_KEY_HEX_RE = /^0x[0-9a-fA-F]{64}$/
+
+function encKeyStorageKey(address: string): string {
+  return `cv:xmtp:encKey:${XMTP_ENV}:${address.toLowerCase()}`
+}
+
+function autoConnectStorageKey(address: string): string {
+  return `cv:xmtp:autoConnect:${XMTP_ENV}:${address.toLowerCase()}`
+}
+
+function readStoredEncKeyHex(address: string): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(encKeyStorageKey(address))
+    if (!raw || !ENC_KEY_HEX_RE.test(raw)) return null
+    return raw
+  } catch {
+    return null
+  }
+}
+
+function writeStoredEncKeyHex(address: string, encKeyHex: string): void {
+  if (typeof window === 'undefined') return
+  if (!ENC_KEY_HEX_RE.test(encKeyHex)) return
+  try {
+    window.localStorage.setItem(encKeyStorageKey(address), encKeyHex)
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function clearStoredEncKeyHex(address: string): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(encKeyStorageKey(address))
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function isAutoConnectEnabled(address: string): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem(autoConnectStorageKey(address)) === '1'
+  } catch {
+    return false
+  }
+}
+
+function setAutoConnectEnabled(address: string): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(autoConnectStorageKey(address), '1')
+  } catch {
+    // ignore storage errors
+  }
+}
 
 function hexToBytes(hex: string): Uint8Array {
   const h = hex.startsWith('0x') ? hex.slice(2) : hex
@@ -172,6 +229,8 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const inboxAddressCache = useRef<Map<string, string | null>>(new Map())
   const conversationsRef = useRef<ChatConversation[]>([])
   const mountedRef = useRef(true)
+  const connectInFlightRef = useRef(false)
+  const autoConnectAttemptedRef = useRef<string | null>(null)
 
   // Cleanup on unmount
   useEffect(() => {
@@ -191,8 +250,13 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       setConversations([])
       conversationsRef.current = []
       setInboxId(null)
+      autoConnectAttemptedRef.current = null
     }
   }, [isConnected, address])
+
+  useEffect(() => {
+    autoConnectAttemptedRef.current = null
+  }, [address])
 
   // ------- cleanup -------
   async function cleanup() {
@@ -256,15 +320,27 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const connect = useCallback(async () => {
     if (!address || !walletClient) return
     if (clientRef.current) return // already connected
+    if (connectInFlightRef.current) return
 
+    connectInFlightRef.current = true
     try {
-      setStatus('signing')
       setError(null)
 
-      // Derive deterministic encryption key
-      const sig = await walletClient.signMessage({ message: ENC_KEY_MESSAGE })
-      const encKeyHex = keccak256(sig)
-      const encKeyBytes = hexToBytes(encKeyHex)
+      const getEncKeyBytes = async (forceFresh: boolean): Promise<{ bytes: Uint8Array; fromCache: boolean }> => {
+        if (!forceFresh) {
+          const cachedHex = readStoredEncKeyHex(address)
+          if (cachedHex) {
+            return { bytes: hexToBytes(cachedHex), fromCache: true }
+          }
+        }
+        setStatus('signing')
+        const sig = await walletClient.signMessage({ message: ENC_KEY_MESSAGE })
+        const encKeyHex = keccak256(sig)
+        writeStoredEncKeyHex(address, encKeyHex)
+        return { bytes: hexToBytes(encKeyHex), fromCache: false }
+      }
+
+      let encKey = await getEncKeyBytes(false)
 
       setStatus('connecting')
 
@@ -310,10 +386,24 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
             signMessage: signMessageFn,
           }
 
-      const client = await Client.create(signer, {
-        env: XMTP_ENV as any,
-        dbEncryptionKey: encKeyBytes,
-      })
+      const createClient = async (dbEncryptionKey: Uint8Array) =>
+        await Client.create(signer, {
+          env: XMTP_ENV as any,
+          dbEncryptionKey,
+        })
+
+      let client: Client
+      try {
+        client = await createClient(encKey.bytes)
+      } catch (cachedKeyError) {
+        if (!encKey.fromCache) throw cachedKeyError
+        // Cached key can become stale if local storage was corrupted/mutated.
+        // Retry once with a fresh signature, then replace the cached key.
+        clearStoredEncKeyHex(address)
+        encKey = await getEncKeyBytes(true)
+        setStatus('connecting')
+        client = await createClient(encKey.bytes)
+      }
 
       if (!mountedRef.current) {
         client.close()
@@ -388,15 +478,33 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       // Request browser notification permission (non-blocking)
       void requestNotificationPermission()
 
-      if (mountedRef.current) setStatus('connected')
+      if (mountedRef.current) {
+        setAutoConnectEnabled(address)
+        setStatus('connected')
+      }
     } catch (e) {
       console.error('[xmtp] connect error:', e)
       if (mountedRef.current) {
         setStatus('error')
         setError(e instanceof Error ? e.message : 'Failed to connect to XMTP')
       }
+    } finally {
+      connectInFlightRef.current = false
     }
   }, [address, walletClient, publicClient])
+
+  // ------- auto-connect -------
+  useEffect(() => {
+    if (!isConnected || !address || !walletClient) return
+    if (!isAutoConnectEnabled(address)) return
+    if (clientRef.current || connectInFlightRef.current) return
+    if (status === 'signing' || status === 'connecting' || status === 'connected') return
+
+    const attemptKey = `${address.toLowerCase()}:${walletClient.chain?.id ?? 'unknown'}`
+    if (autoConnectAttemptedRef.current === attemptKey) return
+    autoConnectAttemptedRef.current = attemptKey
+    void connect()
+  }, [isConnected, address, walletClient, status, connect])
 
   // ------- disconnect -------
   const disconnect = useCallback(() => {

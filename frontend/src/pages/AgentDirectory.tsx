@@ -33,7 +33,7 @@ function AgentCard({
   agent: AgentRow
   onMessage: (address: string) => void
 }) {
-  const { displayName, avatar } = useIdentity(agent.creatorAddress)
+  const creatorIdentity = useIdentity(agent.creatorAddress)
   const agentIdentity = useIdentity(agent.xmtpAgentAddress)
 
   return (
@@ -42,27 +42,45 @@ function AgentCard({
         {/* Creator identity */}
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center overflow-hidden flex-shrink-0">
-            {avatar ? (
-              <img src={avatar} alt="" className="w-full h-full object-cover" />
+            {creatorIdentity.avatar ? (
+              <img src={creatorIdentity.avatar} alt="" className="w-full h-full object-cover" />
             ) : (
               <span className="text-xs font-medium text-zinc-400 uppercase">
-                {displayName.slice(0, 2)}
+                {creatorIdentity.displayName.slice(0, 2)}
               </span>
             )}
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-medium text-zinc-200 truncate">{displayName}</div>
-            <div className="text-[10px] text-zinc-600 font-mono truncate">
-              {agent.creatorAddress.slice(0, 6)}…{agent.creatorAddress.slice(-4)}
+            <div className="text-sm font-medium text-zinc-200 truncate">{creatorIdentity.displayName}</div>
+            <div className="text-[10px] text-zinc-500 truncate">
+              {creatorIdentity.secondary ?? `${agent.creatorAddress.slice(0, 6)}…${agent.creatorAddress.slice(-4)}`}
+            </div>
+            <div className="mt-1 flex items-center gap-1.5">
+              {creatorIdentity.farcasterHandle ? (
+                <span className="inline-flex items-center rounded-full border border-indigo-400/25 bg-indigo-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.08em] text-indigo-200">
+                  FC @{creatorIdentity.farcasterHandle}
+                </span>
+              ) : null}
+              {creatorIdentity.lensHandle ? (
+                <span className="inline-flex items-center rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.08em] text-cyan-200">
+                  Lens @{creatorIdentity.lensHandle}
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
+        {!creatorIdentity.secondary && (
+          <div className="text-[10px] text-zinc-600 font-mono truncate">
+            {agent.creatorAddress.slice(0, 6)}…{agent.creatorAddress.slice(-4)}
+          </div>
+        )}
 
         {/* Agent info */}
         <div className="flex items-center gap-2 text-[10px] text-zinc-500">
           <Bot className="w-3 h-3 text-brand-primary/60" />
-          <span className="font-mono truncate">
-            Agent: {agentIdentity.displayName}
+          <span className="truncate">
+            Agent: <span className="font-mono">{agentIdentity.displayName}</span>
+            {agentIdentity.secondary ? <span className="ml-1 text-zinc-600">({agentIdentity.secondary})</span> : null}
           </span>
         </div>
 

@@ -79,6 +79,7 @@ function ConversationItem({
   const subtitle = convo.lastMessageText
     ? (displaySecondary ? `${displaySecondary} · ${convo.lastMessageText}` : convo.lastMessageText)
     : (displaySecondary ?? 'No messages')
+  const lensBadge = convo.type === 'dm' && peerAddress && identity.lensHandle ? `Lens @${identity.lensHandle}` : null
 
   return (
     <button
@@ -103,6 +104,11 @@ function ConversationItem({
           <span className="text-sm text-zinc-200 font-medium truncate">
             {displayName}
           </span>
+          {lensBadge && (
+            <span className="flex-shrink-0 inline-flex items-center rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.08em] text-cyan-200">
+              {lensBadge}
+            </span>
+          )}
           <span className="text-[10px] text-zinc-500 flex-shrink-0">
             {formatTime(convo.lastMessageAt)}
           </span>

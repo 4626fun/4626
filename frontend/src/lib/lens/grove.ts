@@ -76,3 +76,21 @@ export function resolveLensUri(uri: string): string {
   }
   return uri
 }
+
+export async function fetchLensResource(uri: string, init?: RequestInit): Promise<Response> {
+  const resolved = resolveLensUri(uri).trim()
+  if (!resolved) {
+    throw new Error('Lens URI is required')
+  }
+  const response = await fetch(resolved, init)
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    throw new Error(`Lens fetch failed (${response.status}): ${text || 'Unknown error'}`)
+  }
+  return response
+}
+
+export async function fetchLensJson<T = unknown>(uri: string, init?: RequestInit): Promise<T> {
+  const response = await fetchLensResource(uri, init)
+  return (await response.json()) as T
+}

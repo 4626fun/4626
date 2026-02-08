@@ -117,6 +117,9 @@ export function ChatWindow({
       : null
   const headerAvatar = conversationType === 'dm' ? dmIdentity.avatar : (conversationImageUrl ?? null)
   const headerInitials = initials(headerName)
+  const lensBadge = conversationType === 'dm' && dmPeerAddress && dmIdentity.lensHandle
+    ? `Lens @${dmIdentity.lensHandle}`
+    : null
 
   // Load initial messages
   useEffect(() => {
@@ -218,6 +221,11 @@ export function ChatWindow({
                   {headerSubline}
                 </div>
               )}
+              {lensBadge && (
+                <div className="text-[9px] text-cyan-200 truncate">
+                  {lensBadge}
+                </div>
+              )}
             </div>
           </div>
           <button
@@ -246,6 +254,9 @@ export function ChatWindow({
               <div className="text-sm text-zinc-200 font-medium truncate">{headerName}</div>
               {headerSubline && (
                 <div className="text-[10px] text-zinc-500 truncate">{headerSubline}</div>
+              )}
+              {lensBadge && (
+                <div className="text-[9px] text-cyan-200 truncate">{lensBadge}</div>
               )}
             </div>
           </div>

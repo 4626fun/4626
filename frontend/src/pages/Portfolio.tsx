@@ -9,7 +9,7 @@ import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
 import { fetchDebankTokenList, type DebankToken, type DebankTokenList } from '@/lib/debank/client'
 import { isLensGroveEnabled } from '@/lib/flags'
-import { uploadImmutableBlob, type GroveUploadResult } from '@/lib/lens/grove'
+import { resolveLensUri, uploadImmutableBlob, type GroveUploadResult } from '@/lib/lens/grove'
 import { fetchZoraCoin } from '@/lib/zora/client'
 import type { ZoraCoin } from '@/lib/zora/types'
 
@@ -352,6 +352,8 @@ export function Portfolio() {
     for (const h of holdings) sum += typeof h.token.usdValue === 'number' && Number.isFinite(h.token.usdValue) ? h.token.usdValue : 0
     return sum
   }, [holdings])
+  const avatarLensPreviewUrl = useMemo(() => resolveLensUri(editAvatarLensUri.trim()), [editAvatarLensUri])
+  const bannerLensPreviewUrl = useMemo(() => resolveLensUri(editBannerLensUri.trim()), [editBannerLensUri])
 
   const series = useMemo(() => {
     const seed = `${effectiveAddress || 'anon'}:${timeframe}`
@@ -587,6 +589,34 @@ export function Portfolio() {
                       onChange={(e) => setEditBannerLensUri(e.target.value)}
                     />
                   </div>
+                  {(avatarLensPreviewUrl || bannerLensPreviewUrl) ? (
+                    <div className="mt-2 grid gap-2 md:grid-cols-2">
+                      {avatarLensPreviewUrl ? (
+                        <a
+                          href={avatarLensPreviewUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-cyan-300 hover:text-cyan-200 truncate"
+                        >
+                          Avatar Lens gateway: {avatarLensPreviewUrl}
+                        </a>
+                      ) : (
+                        <div className="text-[11px] text-zinc-600">Avatar Lens gateway: —</div>
+                      )}
+                      {bannerLensPreviewUrl ? (
+                        <a
+                          href={bannerLensPreviewUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-cyan-300 hover:text-cyan-200 truncate"
+                        >
+                          Banner Lens gateway: {bannerLensPreviewUrl}
+                        </a>
+                      ) : (
+                        <div className="text-[11px] text-zinc-600">Banner Lens gateway: —</div>
+                      )}
+                    </div>
+                  ) : null}
                   {lensEnabled ? (
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
                       <div className="rounded-lg border border-zinc-800 bg-black/30 p-3 space-y-2">

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { resolveLensUri, uploadImmutableJson } from './grove'
+import { fetchLensJson, resolveLensUri, uploadImmutableJson } from './grove'
 
 describe('grove upload helpers', () => {
   afterEach(() => {
@@ -49,5 +49,19 @@ describe('grove upload helpers', () => {
   it('resolves lens URIs to gateway URLs', () => {
     expect(resolveLensUri('lens://abc')).toBe('https://api.grove.storage/abc')
     expect(resolveLensUri('https://api.grove.storage/abc')).toBe('https://api.grove.storage/abc')
+  })
+
+  it('fetches and parses JSON from lens:// URI', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ name: 'creator' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchLensJson<{ name: string }>('lens://meta-1')
+    expect(fetchMock).toHaveBeenCalledWith('https://api.grove.storage/meta-1', undefined)
+    expect(result.name).toBe('creator')
   })
 })

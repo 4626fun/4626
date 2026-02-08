@@ -8,7 +8,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react'
 
 import { ConnectButton } from '@/components/ConnectButton'
 import { isLensGroveEnabled } from '@/lib/flags'
-import { uploadImmutableBlob, uploadImmutableJson } from '@/lib/lens/grove'
+import { fetchLensJson, resolveLensUri, uploadImmutableBlob, uploadImmutableJson } from '@/lib/lens/grove'
 import { useZoraCoin } from '@/lib/zora/hooks'
 
 const ZORA_COIN_READ_ABI = [
@@ -64,13 +64,17 @@ export function CoinManage() {
   const [metaCategory, setMetaCategory] = useState('creator')
   const [metaImageLensUri, setMetaImageLensUri] = useState('')
   const [metadataLensUri, setMetadataLensUri] = useState('')
+  const [lensMetadataPreview, setLensMetadataPreview] = useState<Record<string, unknown> | null>(null)
+  const [lensMetadataPreviewError, setLensMetadataPreviewError] = useState<string | null>(null)
   const [metaImageFile, setMetaImageFile] = useState<File | null>(null)
   const [lensUploadError, setLensUploadError] = useState<string | null>(null)
 
   const [txError, setTxError] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
-  const [busy, setBusy] = useState<'payout' | 'uri' | 'upload' | 'grove-image' | 'grove-metadata' | null>(null)
+  const [busy, setBusy] = useState<'payout' | 'uri' | 'upload' | 'grove-image' | 'grove-metadata' | 'grove-preview' | null>(null)
   const lensEnabled = isLensGroveEnabled()
+  const metaImageGatewayUrl = useMemo(() => resolveLensUri(metaImageLensUri.trim()), [metaImageLensUri])
+  const metadataGatewayUrl = useMemo(() => resolveLensUri(metadataLensUri.trim()), [metadataLensUri])
 
   async function updatePayout() {
     if (!coinAddress || !walletClient || !publicClient || !newPayoutIsValid) return
@@ -194,6 +198,21 @@ export function CoinManage() {
       setMetadataLensUri(result.lensUri)
     } catch (e) {
       setLensUploadError(e instanceof Error ? e.message : 'Lens upload failed')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function previewLensMetadata() {
+    if (!metadataLensUri.trim()) return
+    setLensMetadataPreview(null)
+    setLensMetadataPreviewError(null)
+    setBusy('grove-preview')
+    try {
+      const json = await fetchLensJson<Record<string, unknown>>(metadataLensUri.trim())
+      setLensMetadataPreview(json)
+    } catch (e) {
+      setLensMetadataPreviewError(e instanceof Error ? e.message : 'Failed to fetch Lens metadata')
     } finally {
       setBusy(null)
     }
@@ -453,6 +472,40 @@ export function CoinManage() {
                           placeholder="Lens metadata URI (lens://...)"
                           className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-xs text-zinc-400 placeholder:text-zinc-700 outline-none focus:border-cyan-500/50 transition-colors font-mono"
                         />
+                        {metaImageGatewayUrl ? (
+                          <a
+                            href={metaImageGatewayUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block text-[11px] text-cyan-300 hover:text-cyan-200 truncate"
+                          >
+                            Open image via gateway: {metaImageGatewayUrl}
+                          </a>
+                        ) : null}
+                        {metadataGatewayUrl ? (
+                          <a
+                            href={metadataGatewayUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block text-[11px] text-cyan-300 hover:text-cyan-200 truncate"
+                          >
+                            Open metadata via gateway: {metadataGatewayUrl}
+                          </a>
+                        ) : null}
+                        <button
+                          onClick={() => void previewLensMetadata()}
+                          disabled={busy !== null || !metadataLensUri.trim()}
+                          className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                          type="button"
+                        >
+                          {busy === 'grove-preview' ? 'Fetching metadata…' : 'Preview Lens metadata'}
+                        </button>
+                        {lensMetadataPreview ? (
+                          <pre className="max-h-44 overflow-auto rounded-md border border-zinc-800 bg-black/60 p-2 text-[10px] text-zinc-300">
+                            {JSON.stringify(lensMetadataPreview, null, 2)}
+                          </pre>
+                        ) : null}
+                        {lensMetadataPreviewError ? <div className="text-[11px] text-rose-300">{lensMetadataPreviewError}</div> : null}
                         {lensUploadError ? <div className="text-[11px] text-rose-300">{lensUploadError}</div> : null}
                       </div>
                     ) : null}
