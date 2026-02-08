@@ -311,6 +311,36 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         
         emit FeesReceived(msg.sender, amount);
     }
+
+    /**
+     * @notice Account for OFT tokens that arrived via cross-chain fee flush
+     * @dev When remote CreatorShareOFTs flush fees via OFT send(), the tokens
+     *      are minted directly to this contract by LayerZero's _credit().
+     *      This function sweeps the unaccounted balance into pendingFees.
+     *
+     *      Permissionless — anyone can trigger this (keeper, owner, etc.)
+     */
+    function receiveBridgedFees() external nonReentrant {
+        uint256 balance = shareOFT.balanceOf(address(this));
+
+        // Unaccounted = balance minus what we already know about
+        // (pendingFees + jackpotReserve are held as vault shares or OFT, 
+        //  but only pendingFees are in OFT form — jackpotReserve is vault shares)
+        uint256 accounted = pendingFees;
+        if (balance <= accounted) return;
+
+        uint256 bridgedAmount = balance - accounted;
+        pendingFees += bridgedAmount;
+        totalFeesReceived += bridgedAmount;
+
+        emit FeesReceived(address(0), bridgedAmount); // address(0) signals bridged origin
+        
+        // Auto-distribute if above threshold and enough time has passed
+        if (pendingFees >= distributionThreshold && 
+            block.timestamp >= lastDistribution + distributionInterval) {
+            _distribute();
+        }
+    }
     
     // ================================
     // RECEIVE WETH FEES (FROM V4 TAX HOOK)

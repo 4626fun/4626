@@ -189,6 +189,8 @@ export async function handleSendCommand(params: {
   }
 
   // Look up agent wallet (Privy-managed, for onchain tx)
+  // For CSW agents, the "agent wallet" IS the CSW — we use the Privy server
+  // wallet to sign transactions that execute on the CSW.
   let agentWalletId: string
   let agentWalletAddress: string
   try {

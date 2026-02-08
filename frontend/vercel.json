@@ -12,6 +12,9 @@
       "includeFiles": "public/.well-known/agent-registration.json"
     }
   },
+  "crons": [
+    { "path": "/api/agent/process", "schedule": "* * * * *" }
+  ],
   "routes": [
     {
       "src": "/(.*)",

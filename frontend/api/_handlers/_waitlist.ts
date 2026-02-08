@@ -5,6 +5,7 @@ import { checkRateLimit, RATE_LIMITS, rateLimitKey, getClientIp as getRateLimitI
 import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../server/_lib/waitlistPoints.js'
 import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
 import { buildDeterministicSyntheticEmail } from '../../server/_lib/profileSync.js'
+import { preprovisionWaitlistUser } from '../../server/_lib/waitlistPreprovision.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -599,6 +600,16 @@ export default async function handler(req: any, res: any) {
     }
 
     const data: WaitlistResponse = { created, email: String(row.email ?? ''), referralCode: referralCodeOut }
+
+    // Fire-and-forget: pre-provision server wallet + resolve identities.
+    // This runs after the response so it doesn't block signup.
+    const provisionWallet = primaryWallet.length > 0 ? primaryWallet : cswAddress.length > 0 ? cswAddress : null
+    if (signupId && provisionWallet && persona === 'creator') {
+      void preprovisionWaitlistUser(signupId, provisionWallet).catch((err) => {
+        console.warn('waitlist: preprovision error', err?.message ? String(err.message) : err)
+      })
+    }
+
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<WaitlistResponse>)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Waitlist insert failed'

@@ -1,0 +1,71 @@
+/**
+ * POST /api/v1/agents/creators/provision-wallet
+ *
+ * Provisions (or retrieves) a Privy server wallet that will act as the
+ * server-side signer for a creator's CSW-based XMTP agent.
+ *
+ * The creator must add this wallet as an owner of their Coinbase Smart Wallet
+ * so it can sign XMTP messages on behalf of the CSW.
+ */
+
+import type { VercelRequest, VercelResponse } from '@vercel/node'
+
+import { handleOptions, readJsonBody, readSessionFromRequest } from '../../../../../server/auth/_shared.js'
+import { guardAgentApiRequest } from '../../../../../server/_lib/agentApiGuard.js'
+import { getOrCreateCreatorAgentWallet } from '../../../../../server/_lib/creatorAgentWallets.js'
+
+function setPublicCors(res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+}
+
+type RequestBody = {
+  creatorAddress?: string
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  setPublicCors(res)
+  if (handleOptions(req, res)) return
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, error: 'Method not allowed' })
+  }
+
+  const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/agents/creators/provision-wallet', kind: 'build' })
+  if (!g.ok) return
+
+  const session = readSessionFromRequest(req)
+  const sessionAddress = session?.address ? String(session.address).toLowerCase() : ''
+  if (!sessionAddress) {
+    return res.status(401).json({ success: false, error: 'Sign in required' })
+  }
+
+  const body = (await readJsonBody<RequestBody>(req)) ?? {}
+  // The creator address defaults to the signed-in address
+  const creatorAddress = body.creatorAddress?.trim().toLowerCase() || sessionAddress
+
+  // Only allow provisioning for the signed-in user (no wallet for other users)
+  if (creatorAddress !== sessionAddress) {
+    return res.status(403).json({ success: false, error: 'Can only provision wallet for your own address' })
+  }
+
+  try {
+    // Use the creator's address as the idempotency key for the wallet
+    const wallet = await getOrCreateCreatorAgentWallet({
+      creatorToken: creatorAddress as `0x${string}`,
+    })
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        walletId: wallet.walletId,
+        address: wallet.address,
+      },
+    })
+  } catch (e: any) {
+    const msg = e?.message ? String(e.message) : 'Failed to provision wallet'
+    const code = msg.includes('db_not_configured') ? 503 : 500
+    return res.status(code).json({ success: false, error: msg })
+  }
+}

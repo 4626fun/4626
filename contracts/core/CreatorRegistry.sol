@@ -46,6 +46,21 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
     
     /// @notice Authorized factories that can register Creator Coins
     mapping(address => bool) public authorizedFactories;
+
+    // =================================
+    // REMOTE OFT PEER TRACKING (Hub-Centric)
+    // =================================
+    
+    /// @notice Remote OFT addresses per creator coin per chain EID
+    /// @dev creatorCoin → chainEid → remoteOFTAddress
+    mapping(address => mapping(uint32 => address)) public remoteOFTPeers;
+
+    /// @notice All chain EIDs that have a remote OFT for a given creator coin
+    mapping(address => uint32[]) private remoteOFTChains;
+
+    /// @notice Reverse lookup: remote OFT address → creator coin (for cross-chain lookups)
+    /// @dev Used when a remote OFT sends a lottery entry and we need to identify the creator
+    mapping(address => address) public remoteOFTToToken;
     
     // =================================
     // CHAIN CONFIGURATION
@@ -103,6 +118,8 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
     
     event FactoryAuthorized(address indexed factory, bool status);
     event HubChainSet(uint16 chainId, uint32 eid);
+    event RemoteOFTPeerSet(address indexed creatorCoin, uint32 indexed chainEid, address remoteOFT);
+    event RemoteOFTPeerRemoved(address indexed creatorCoin, uint32 indexed chainEid);
     
     // =================================
     // ERRORS
@@ -323,6 +340,109 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
         emit CreatorCoinUpdated(_token);
     }
     
+    // =================================
+    // REMOTE OFT PEER MANAGEMENT (Hub-Centric)
+    // =================================
+
+    /**
+     * @notice Register a remote OFT deployment for a creator coin
+     * @dev Called when a CreatorShareOFT is deployed on a remote chain.
+     *      This maps the creator coin to its remote OFT address on a given chain.
+     * @param _token Creator coin address (hub chain)
+     * @param _chainEid LayerZero EID of the remote chain
+     * @param _remoteOFT Address of the CreatorShareOFT on the remote chain
+     */
+    function setRemoteOFTPeer(
+        address _token,
+        uint32 _chainEid,
+        address _remoteOFT
+    ) external onlyAuthorizedOrOwner {
+        if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
+        if (_remoteOFT == address(0)) revert ZeroAddress();
+
+        // Clear old reverse mapping if exists
+        address oldRemoteOFT = remoteOFTPeers[_token][_chainEid];
+        if (oldRemoteOFT != address(0)) {
+            delete remoteOFTToToken[oldRemoteOFT];
+        } else {
+            // New chain — track it
+            remoteOFTChains[_token].push(_chainEid);
+        }
+
+        remoteOFTPeers[_token][_chainEid] = _remoteOFT;
+        remoteOFTToToken[_remoteOFT] = _token;
+
+        emit RemoteOFTPeerSet(_token, _chainEid, _remoteOFT);
+    }
+
+    /**
+     * @notice Remove a remote OFT peer for a creator coin
+     */
+    function removeRemoteOFTPeer(
+        address _token,
+        uint32 _chainEid
+    ) external onlyOwner {
+        if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
+
+        address remoteOFT = remoteOFTPeers[_token][_chainEid];
+        if (remoteOFT == address(0)) return;
+
+        delete remoteOFTPeers[_token][_chainEid];
+        delete remoteOFTToToken[remoteOFT];
+
+        // Remove from chain list (swap-and-pop)
+        uint32[] storage chains = remoteOFTChains[_token];
+        for (uint256 i; i < chains.length;) {
+            if (chains[i] == _chainEid) {
+                chains[i] = chains[chains.length - 1];
+                chains.pop();
+                break;
+            }
+            unchecked { ++i; }
+        }
+
+        emit RemoteOFTPeerRemoved(_token, _chainEid);
+    }
+
+    /**
+     * @notice Get the remote OFT address for a creator coin on a specific chain
+     */
+    function getRemoteOFTPeer(address _token, uint32 _chainEid) external view returns (address) {
+        return remoteOFTPeers[_token][_chainEid];
+    }
+
+    /**
+     * @notice Get all remote chain EIDs that have a deployed OFT for a creator coin
+     */
+    function getRemoteOFTChains(address _token) external view returns (uint32[] memory) {
+        return remoteOFTChains[_token];
+    }
+
+    /**
+     * @notice Get all remote OFT peers for a creator coin
+     * @return eids Array of chain EIDs
+     * @return ofts Array of remote OFT addresses (parallel with eids)
+     */
+    function getAllRemoteOFTPeers(address _token) external view returns (
+        uint32[] memory eids,
+        address[] memory ofts
+    ) {
+        eids = remoteOFTChains[_token];
+        ofts = new address[](eids.length);
+        for (uint256 i; i < eids.length;) {
+            ofts[i] = remoteOFTPeers[_token][eids[i]];
+            unchecked { ++i; }
+        }
+    }
+
+    /**
+     * @notice Get the creator coin for a remote OFT address (reverse lookup)
+     * @dev Used when a remote OFT sends a lottery entry to identify the creator
+     */
+    function getTokenForRemoteOFT(address _remoteOFT) external view returns (address) {
+        return remoteOFTToToken[_remoteOFT];
+    }
+
     // =================================
     // CREATOR COIN GETTERS
     // =================================

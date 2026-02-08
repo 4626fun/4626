@@ -181,29 +181,29 @@ function ContentCoinRow({ coin, rank }: { coin: ZoraCoin; rank: number }) {
   return (
     <Link
       to={`/explore/content/base/${address}`}
-      className="flex items-center gap-4 p-4 hover:bg-zinc-800/50 transition-colors rounded-xl"
+      className="flex items-center gap-2.5 sm:gap-4 px-3 py-3 sm:p-4 hover:bg-zinc-800/50 transition-colors rounded-xl active:scale-[0.99]"
     >
-      <span className="text-xs text-zinc-600 w-6 text-center">{rank}</span>
+      <span className="text-[11px] sm:text-xs text-zinc-600 w-5 sm:w-6 text-center flex-shrink-0">{rank}</span>
       
       {avatarUrl ? (
-        <img src={avatarUrl} alt={name} className="w-10 h-10 rounded-lg object-cover" />
+        <img src={avatarUrl} alt={name} className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg object-cover flex-shrink-0" />
       ) : (
-        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center">
-          <Coins className="w-5 h-5 text-zinc-500" />
+        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center flex-shrink-0">
+          <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-500" />
         </div>
       )}
       
       <div className="flex-1 min-w-0">
-        <div className="text-white font-medium truncate">{name}</div>
-        <div className="text-xs text-zinc-500">{symbol}</div>
+        <div className="text-[13px] sm:text-sm text-white font-medium truncate">{name}</div>
+        <div className="text-[10px] sm:text-xs text-zinc-500">{symbol}</div>
       </div>
       
-      <div className="text-right">
-        <div className="text-xs text-zinc-500">Earned</div>
-        <div className="text-sm text-green-400 font-medium">{earnings}</div>
+      <div className="text-right flex-shrink-0">
+        <div className="text-[10px] sm:text-xs text-zinc-500">Earned</div>
+        <div className="text-[13px] sm:text-sm text-green-400 font-medium">{earnings}</div>
       </div>
       
-      <div className="text-right hidden sm:block">
+      <div className="text-right hidden sm:block flex-shrink-0">
         <div className="text-xs text-zinc-500">Volume</div>
         <div className="text-sm text-white">{totalVolume}</div>
       </div>
@@ -380,16 +380,16 @@ export function ExploreCreatorDetail() {
 
   return (
     <div className="relative min-h-screen bg-black">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
         {/* Back navigation */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="mb-4"
+          className="mb-3 sm:mb-4"
         >
           <Link
             to="/explore/creators"
-            className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors"
+            className="inline-flex items-center gap-1.5 text-[13px] sm:text-sm text-zinc-400 hover:text-white transition-colors active:scale-[0.97]"
           >
             <ArrowLeft className="w-4 h-4" />
             Creators
@@ -401,32 +401,32 @@ export function ExploreCreatorDetail() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-6 mb-6"
+          className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-6 mb-4 sm:mb-6"
         >
-          <div className="flex flex-col sm:flex-row gap-6">
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
             {/* Avatar & Name */}
-            <div className="flex items-start gap-4">
+            <div className="flex items-start gap-3 sm:gap-4">
               {avatarUrl ? (
-                <img src={avatarUrl} alt={displayName} className="w-20 h-20 rounded-2xl object-cover" />
+                <img src={avatarUrl} alt={displayName} className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl object-cover flex-shrink-0" />
               ) : (
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-zinc-600 to-zinc-700 flex items-center justify-center">
-                  <span className="text-2xl font-medium text-zinc-300">{displayName.slice(0, 2).toUpperCase()}</span>
+                <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl bg-gradient-to-br from-zinc-600 to-zinc-700 flex items-center justify-center flex-shrink-0">
+                  <span className="text-lg sm:text-2xl font-medium text-zinc-300">{displayName.slice(0, 2).toUpperCase()}</span>
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <h1 className="text-2xl font-semibold text-white truncate">{displayName}</h1>
+                <h1 className="text-xl sm:text-2xl font-semibold text-white truncate">{displayName}</h1>
                 {handle && (
-                  <div className="text-zinc-400 text-sm">@{handle}</div>
+                  <div className="text-zinc-400 text-[13px] sm:text-sm">@{handle}</div>
                 )}
                 {bio && (
-                  <p className="text-zinc-500 text-sm mt-2 line-clamp-2">{bio}</p>
+                  <p className="text-zinc-500 text-[13px] sm:text-sm mt-1.5 sm:mt-2 line-clamp-2">{bio}</p>
                 )}
                 {website && (
                   <a
                     href={website.startsWith('http') ? website : `https://${website}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-cyan-400 hover:text-cyan-300 text-sm mt-1 inline-flex items-center gap-1"
+                    className="text-cyan-400 hover:text-cyan-300 text-[13px] sm:text-sm mt-1 inline-flex items-center gap-1"
                   >
                     <Globe className="w-3 h-3" />
                     {website.replace(/^https?:\/\//, '')}
@@ -435,72 +435,72 @@ export function ExploreCreatorDetail() {
               </div>
             </div>
 
-            {/* Quick Stats */}
-            <div className="flex flex-wrap gap-6 sm:ml-auto">
-              <div className="text-center">
-                <div className="text-2xl font-semibold text-white">{price}</div>
-                <div className="text-xs text-zinc-500">Coin Price</div>
-                <div className={`text-xs ${change.positive ? 'text-green-500' : 'text-red-500'}`}>
+            {/* Quick Stats — 2x2 grid on mobile, inline on desktop */}
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 sm:gap-6 sm:ml-auto">
+              <div className="text-center sm:text-center">
+                <div className="text-lg sm:text-2xl font-semibold text-white">{price}</div>
+                <div className="text-[11px] sm:text-xs text-zinc-500">Coin Price</div>
+                <div className={`text-[11px] sm:text-xs ${change.positive ? 'text-green-500' : 'text-red-500'}`}>
                   {change.positive ? '+' : '-'}{change.value}
                 </div>
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-semibold text-white">{marketCap}</div>
-                <div className="text-xs text-zinc-500">Market Cap</div>
+              <div className="text-center sm:text-center">
+                <div className="text-lg sm:text-2xl font-semibold text-white">{marketCap}</div>
+                <div className="text-[11px] sm:text-xs text-zinc-500">Market Cap</div>
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-semibold text-white">{holders}</div>
-                <div className="text-xs text-zinc-500">Holders</div>
+              <div className="text-center sm:text-center">
+                <div className="text-lg sm:text-2xl font-semibold text-white">{holders}</div>
+                <div className="text-[11px] sm:text-xs text-zinc-500">Holders</div>
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-semibold text-white">{totalCoinsCreated}</div>
-                <div className="text-xs text-zinc-500">Coins Created</div>
+              <div className="text-center sm:text-center">
+                <div className="text-lg sm:text-2xl font-semibold text-white">{totalCoinsCreated}</div>
+                <div className="text-[11px] sm:text-xs text-zinc-500">Coins Created</div>
               </div>
             </div>
           </div>
         </motion.div>
 
         {/* Main content - Two column layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4 sm:gap-6">
           {/* Left Column - Chart & Content Coins */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            className="space-y-6"
+            className="space-y-4 sm:space-y-6"
           >
             {/* Tab Navigation */}
-            <div className="flex items-center gap-2 border-b border-zinc-800 pb-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 border-b border-zinc-800 pb-2 overflow-x-auto scrollbar-hide">
               <button
                 type="button"
                 onClick={() => setActiveTab('chart')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[13px] sm:text-sm font-medium transition-colors whitespace-nowrap active:scale-[0.97] ${
                   activeTab === 'chart'
                     ? 'bg-zinc-800 text-white'
                     : 'text-zinc-500 hover:text-white hover:bg-zinc-800/50'
                 }`}
               >
-                <TrendingUp className="w-4 h-4 inline mr-2" />
-                Price Chart
+                <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 inline mr-1.5 sm:mr-2" />
+                Chart
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('coins')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[13px] sm:text-sm font-medium transition-colors whitespace-nowrap active:scale-[0.97] ${
                   activeTab === 'coins'
                     ? 'bg-zinc-800 text-white'
                     : 'text-zinc-500 hover:text-white hover:bg-zinc-800/50'
                 }`}
               >
-                <Coins className="w-4 h-4 inline mr-2" />
-                Content Coins ({contentCoins.length})
+                <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4 inline mr-1.5 sm:mr-2" />
+                Content ({contentCoins.length})
               </button>
             </div>
 
             {/* Chart Tab */}
             {activeTab === 'chart' && (
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 overflow-hidden">
-                <div className="p-4 border-b border-zinc-800">
+              <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 overflow-hidden">
+                <div className="px-3 py-3 sm:p-4 border-b border-zinc-800">
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="text-white font-medium">{displayName}</span>
@@ -529,8 +529,8 @@ export function ExploreCreatorDetail() {
 
             {/* Content Coins Tab */}
             {activeTab === 'coins' && (
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 overflow-hidden">
-                <div className="p-4 border-b border-zinc-800">
+              <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 overflow-hidden">
+                <div className="px-3 py-3 sm:p-4 border-b border-zinc-800">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <h3 className="text-white font-medium">Content Coins by {displayName}</h3>
@@ -612,7 +612,7 @@ export function ExploreCreatorDetail() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-6"
+                className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-6"
               >
                 <h3 className="text-sm font-medium text-zinc-400 mb-3">About {displayName}</h3>
                 <p className="text-sm text-zinc-300 leading-relaxed">{coin.description}</p>
@@ -625,10 +625,10 @@ export function ExploreCreatorDetail() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1 }}
-            className="space-y-4"
+            className="space-y-3 sm:space-y-4"
           >
             {/* Swap Card */}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
+            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-5">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   {avatarUrl ? (
@@ -665,7 +665,7 @@ export function ExploreCreatorDetail() {
 
             {/* Social Links Card */}
             {profile && (
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
+              <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-5">
                 <h3 className="text-sm font-medium text-zinc-400 mb-3">Social</h3>
                 <SocialLinks profile={profile} />
                 {!profile.socialAccounts && (
@@ -675,7 +675,7 @@ export function ExploreCreatorDetail() {
             )}
 
             {/* Stats Card */}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
+            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-5">
               <h3 className="text-sm font-medium text-zinc-400 mb-2">Creator Coin Stats</h3>
               <StatRow label="Market cap" value={marketCap} icon={<TrendingUp className="w-3 h-3" />} />
               <StatRow label="24H volume" value={volume24h} icon={<TrendingUp className="w-3 h-3" />} />
@@ -686,7 +686,7 @@ export function ExploreCreatorDetail() {
             </div>
 
             {/* Links Card - Custom IPFS icons */}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
+            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-5">
               <h3 className="text-sm font-medium text-zinc-400 mb-3">Links</h3>
               <div className="space-y-2">
                 <a
@@ -751,7 +751,7 @@ export function ExploreCreatorDetail() {
             </div>
 
             {/* Contract Info */}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
+            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-5">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>

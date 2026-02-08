@@ -66,6 +66,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         agents: rows.map((r) => ({
           creatorAddress: r.creatorAddress,
           xmtpAgentAddress: r.xmtpAgentAddress,
+          agentType: r.agentType ?? 'eoa',
+          cswAddress: r.cswAddress ?? null,
           listedPublicly: r.listedPublicly,
           createdAt: r.createdAt,
         })),

@@ -60,11 +60,25 @@ async function ensureSchema(db: Db): Promise<void> {
   `
   await db.sql`CREATE INDEX IF NOT EXISTS creator_xmtp_agents_listed_idx ON creator_xmtp_agents (listed_publicly, created_at DESC);`
   await db.sql`CREATE INDEX IF NOT EXISTS creator_xmtp_agents_updated_idx ON creator_xmtp_agents (updated_at DESC);`
+
+  // Migration: add CSW support columns
+  try {
+    await db.sql`ALTER TABLE creator_xmtp_agents ADD COLUMN IF NOT EXISTS agent_type TEXT NOT NULL DEFAULT 'eoa';`
+    await db.sql`ALTER TABLE creator_xmtp_agents ADD COLUMN IF NOT EXISTS privy_wallet_id TEXT;`
+    await db.sql`ALTER TABLE creator_xmtp_agents ADD COLUMN IF NOT EXISTS csw_address TEXT;`
+  } catch {
+    // Columns may already exist
+  }
 }
+
+export type AgentType = 'eoa' | 'csw'
 
 export type CreatorXmtpAgentRow = {
   creatorAddress: `0x${string}`
   xmtpAgentAddress: `0x${string}`
+  agentType: AgentType
+  privyWalletId: string | null
+  cswAddress: `0x${string}` | null
   listedPublicly: boolean
   createdAt: string
   updatedAt: string
@@ -76,10 +90,16 @@ function normalizeRow(row: any): CreatorXmtpAgentRow | null {
   if (!creatorRaw || !agentRaw) return null
   const creatorAddress = getAddress(creatorRaw).toLowerCase() as `0x${string}`
   const xmtpAgentAddress = getAddress(agentRaw).toLowerCase() as `0x${string}`
+  const agentType = (String(row?.agent_type ?? 'eoa').toLowerCase()) as AgentType
+  const privyWalletId = row?.privy_wallet_id ? String(row.privy_wallet_id).trim() : null
+  const cswRaw = row?.csw_address ? String(row.csw_address).trim() : null
+  const cswAddress = cswRaw && /^0x[a-fA-F0-9]{40}$/.test(cswRaw)
+    ? getAddress(cswRaw).toLowerCase() as `0x${string}`
+    : null
   const listedPublicly = Boolean(row?.listed_publicly)
   const createdAt = row?.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString()
   const updatedAt = row?.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString()
-  return { creatorAddress, xmtpAgentAddress, listedPublicly, createdAt, updatedAt }
+  return { creatorAddress, xmtpAgentAddress, agentType, privyWalletId, cswAddress, listedPublicly, createdAt, updatedAt }
 }
 
 export async function getOrCreateCreatorXmtpAgent(params: {
@@ -157,6 +177,86 @@ export async function getOrCreateCreatorXmtpAgent(params: {
   return {
     creatorAddress: creator as `0x${string}`,
     xmtpAgentAddress,
+    agentType: 'eoa' as AgentType,
+    privyWalletId: null,
+    cswAddress: null,
+    listedPublicly: listed,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+/**
+ * Enable a CSW-based XMTP agent for a creator.
+ * Instead of generating a new EOA, this uses the creator's existing
+ * Coinbase Smart Wallet as the XMTP identity.
+ *
+ * The Privy wallet ID is used server-side to sign XMTP messages
+ * on behalf of the CSW.
+ */
+export async function enableCswAgent(params: {
+  creatorAddress: `0x${string}`
+  cswAddress: `0x${string}`
+  privyWalletId: string
+  listedPublicly?: boolean
+}): Promise<CreatorXmtpAgentRow> {
+  if (!isDbConfigured()) throw new Error('db_not_configured')
+  const db = (await getDb()) as unknown as Db | null
+  if (!db) throw new Error('db_not_configured')
+  await ensureSchema(db)
+
+  const creator = getAddress(params.creatorAddress).toLowerCase()
+  const cswAddr = getAddress(params.cswAddress).toLowerCase()
+  const listed = typeof params.listedPublicly === 'boolean' ? params.listedPublicly : true
+
+  // For CSW agents, the XMTP agent address IS the CSW address.
+  // We store dummy encrypted key values since signing happens via Privy API.
+  await db.sql`
+    INSERT INTO creator_xmtp_agents (
+      creator_address,
+      xmtp_agent_address,
+      encrypted_private_key_b64,
+      encrypted_private_key_iv_b64,
+      encrypted_private_key_tag_b64,
+      agent_type,
+      privy_wallet_id,
+      csw_address,
+      listed_publicly,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      ${creator},
+      ${cswAddr},
+      ${'csw-managed'},
+      ${'csw-managed'},
+      ${'csw-managed'},
+      ${'csw'},
+      ${params.privyWalletId},
+      ${cswAddr},
+      ${listed},
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT (creator_address)
+    DO UPDATE SET
+      xmtp_agent_address = EXCLUDED.xmtp_agent_address,
+      encrypted_private_key_b64 = EXCLUDED.encrypted_private_key_b64,
+      encrypted_private_key_iv_b64 = EXCLUDED.encrypted_private_key_iv_b64,
+      encrypted_private_key_tag_b64 = EXCLUDED.encrypted_private_key_tag_b64,
+      agent_type = EXCLUDED.agent_type,
+      privy_wallet_id = EXCLUDED.privy_wallet_id,
+      csw_address = EXCLUDED.csw_address,
+      listed_publicly = EXCLUDED.listed_publicly,
+      updated_at = NOW();
+  `
+
+  return {
+    creatorAddress: creator as `0x${string}`,
+    xmtpAgentAddress: cswAddr as `0x${string}`,
+    agentType: 'csw',
+    privyWalletId: params.privyWalletId,
+    cswAddress: cswAddr as `0x${string}`,
     listedPublicly: listed,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -184,7 +284,8 @@ export async function listCreatorXmtpAgents(params: {
   const q =
     cursorCreatedAt && cursorCreator
       ? await db.sql`
-          SELECT creator_address, xmtp_agent_address, listed_publicly, created_at, updated_at
+          SELECT creator_address, xmtp_agent_address, agent_type, privy_wallet_id, csw_address,
+                 listed_publicly, created_at, updated_at
           FROM creator_xmtp_agents
           WHERE (${listedOnly} = FALSE OR listed_publicly = TRUE)
             AND (created_at, creator_address) < (${cursorCreatedAt}::timestamptz, ${cursorCreator})
@@ -192,7 +293,8 @@ export async function listCreatorXmtpAgents(params: {
           LIMIT ${limit};
         `
       : await db.sql`
-          SELECT creator_address, xmtp_agent_address, listed_publicly, created_at, updated_at
+          SELECT creator_address, xmtp_agent_address, agent_type, privy_wallet_id, csw_address,
+                 listed_publicly, created_at, updated_at
           FROM creator_xmtp_agents
           WHERE (${listedOnly} = FALSE OR listed_publicly = TRUE)
           ORDER BY created_at DESC, creator_address DESC

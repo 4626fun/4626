@@ -9,16 +9,23 @@ import {ICreatorRegistry} from "../interfaces/core/ICreatorRegistry.sol";
  * @author 0xakita.eth
  * @notice Registry for Creator Vault deployments (contracts deployed via script)
  * 
- * @dev DESIGN RATIONALE:
+ * @dev DEPRECATED: This factory is superseded by CreatorVaultDeployer (contracts/helpers/batchers/).
+ *      CreatorVaultDeployer handles phased deployment (Phase 1-3) with CREATE2 deterministic
+ *      addresses, hub-centric architecture support, and remote chain OFT-only deployment.
+ *      
+ *      This contract is kept for backwards compatibility with existing deployments.
+ *      New deployments should use CreatorVaultDeployer exclusively.
+ * 
+ * @dev LEGACY DESIGN RATIONALE:
  *      Original factory exceeded EVM contract size limit (88KB > 24KB)
  *      because it embedded bytecode for 6 contracts.
  *      
- *      NEW APPROACH:
+ *      LEGACY APPROACH:
  *      - Contracts deployed directly via Foundry script (no size limit)
  *      - This contract just stores deployment info
  *      - Enables lookup, enumeration, and registry integration
  * 
- * @dev DEPLOYMENT FLOW:
+ * @dev DEPLOYMENT FLOW (LEGACY):
  *      1. Deploy this factory (part of infrastructure)
  *      2. Run DeployCreatorVault.s.sol which:
  *         - Deploys all 6 contracts individually

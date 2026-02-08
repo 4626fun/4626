@@ -20,6 +20,9 @@
     "server/dexscreener/**/*.ts",
     "server/farcaster/**/*.ts",
     "server/zora/**/*.ts",
+    "server/keepr/**/*.ts",
+    "server/ai/**/*.ts",
+    "server/agent/**/*.ts",
     "src/config/contracts.defaults.ts"
   ]
 }

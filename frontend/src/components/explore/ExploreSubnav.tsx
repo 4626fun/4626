@@ -75,11 +75,11 @@ export function ExploreSubnav({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2 sm:space-y-3">
       {/* Main navigation row */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
         {/* Tabs */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide">
           {TABS.map((tab) => {
             const active = isActive(location.pathname, tab.to)
             return (
@@ -87,7 +87,7 @@ export function ExploreSubnav({
                 key={tab.to}
                 to={tab.to}
                 aria-current={active ? 'page' : undefined}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[13px] sm:text-sm font-medium transition-colors whitespace-nowrap ${
                   active
                     ? 'bg-zinc-800 text-white'
                     : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
@@ -100,24 +100,23 @@ export function ExploreSubnav({
         </div>
 
         {/* Search & Filters */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
             <input
               type="text"
               placeholder={searchPlaceholder}
-              className="w-full sm:w-[260px] h-10 pl-10 pr-4 bg-zinc-900 border border-zinc-800 rounded-full text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-700 transition-colors"
+              className="w-full sm:w-[260px] h-9 sm:h-10 pl-9 sm:pl-10 pr-4 bg-zinc-900 border border-zinc-800 rounded-full text-[13px] sm:text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-700 transition-colors"
               aria-label="Search"
               onChange={(e) => onSearch?.(e.target.value)}
             />
           </div>
 
           {/* Time filter pills */}
-          <div className="flex items-center gap-1 h-10 bg-zinc-900 border border-zinc-800 rounded-full p-1">
+          <div className="flex items-center gap-0.5 sm:gap-1 h-9 sm:h-10 bg-zinc-900 border border-zinc-800 rounded-full p-0.5 sm:p-1">
             {TIME_FILTERS.map((filter) => {
               const active = currentTimeFilter === filter.value
-              // 1d always available from Zora API, others require Uniswap service
               const isAvailable = filter.value === '1d' || uniswapAvailable
               const disabled = !isAvailable
               return (
@@ -127,7 +126,7 @@ export function ExploreSubnav({
                   onClick={() => !disabled && handleTimeFilterClick(filter.value)}
                   disabled={disabled}
                   title={disabled ? 'Requires THEGRAPH_API_KEY - Uniswap V4 historical data' : `View ${filter.label} data`}
-                  className={`h-8 px-3 rounded-full text-xs font-medium leading-none transition-colors ${
+                  className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-full text-[11px] sm:text-xs font-medium leading-none transition-colors ${
                     active
                       ? 'bg-zinc-700 text-white'
                       : disabled
@@ -143,9 +142,9 @@ export function ExploreSubnav({
         </div>
       </div>
 
-      {/* Sort options row */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide lg:hidden">
-        <span className="text-xs text-zinc-500 flex-shrink-0">Sort:</span>
+      {/* Sort options row — visible below lg, horizontally scrollable */}
+      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 scrollbar-hide lg:hidden -mx-1 px-1">
+        <span className="text-[11px] sm:text-xs text-zinc-500 flex-shrink-0">Sort:</span>
         {SORT_OPTIONS.map((option) => {
           const active = currentSort === option.value
           return (
@@ -153,7 +152,7 @@ export function ExploreSubnav({
               key={option.value}
               type="button"
               onClick={() => handleSortClick(option.value)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-medium transition-colors whitespace-nowrap active:scale-[0.97] ${
                 active
                   ? 'bg-zinc-800 text-white'
                   : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'

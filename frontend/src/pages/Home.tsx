@@ -18,7 +18,6 @@ export function Home() {
     if (!id) return
     const el = document.getElementById(id)
     if (!el) return
-    // Wait a tick for layout/animations to mount.
     requestAnimationFrame(() => {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
@@ -34,8 +33,8 @@ export function Home() {
       </div>
 
       {/* Hero - Cinematic Letterbox */}
-      <section className="cinematic-section min-h-screen flex items-center justify-center">
-        <div className="max-w-6xl mx-auto px-6 text-center space-y-16">
+      <section className="cinematic-section min-h-[85vh] sm:min-h-screen flex items-center justify-center">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center space-y-8 sm:space-y-16">
           {/* Status Indicator */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -55,7 +54,7 @@ export function Home() {
             transition={{ duration: 0.8, delay: 0.428 }}
             className="space-y-6"
           >
-            <h1 className="headline text-7xl sm:text-8xl lg:text-9xl leading-[1.05]">
+            <h1 className="headline text-4xl sm:text-6xl md:text-7xl lg:text-9xl leading-[1.08]">
               Turn Creator Coins
               <br />
               <span className="glow-brand">Into Earnings</span>
@@ -67,7 +66,7 @@ export function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.856 }}
-            className="text-xl text-zinc-500 font-light tracking-wide max-w-2xl mx-auto"
+            className="text-base sm:text-xl text-zinc-500 font-light tracking-wide max-w-2xl mx-auto"
           >
             Deposit tokens · Earn from trades · Grow together
           </motion.p>
@@ -77,21 +76,21 @@ export function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 1.284 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8"
+            className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 pt-4 sm:pt-8"
           >
             {publicMode ? (
-              <Link to="/#waitlist" className="btn-accent">
+              <Link to="/#waitlist" className="btn-accent w-full sm:w-auto text-center">
                 Join waitlist <ArrowRight className="w-4 h-4 inline ml-2" />
               </Link>
             ) : (
               <>
-                <Link to="/dashboard" className="btn-accent">
+                <Link to="/dashboard" className="btn-accent w-full sm:w-auto text-center">
                   Start Earning <ArrowRight className="w-4 h-4 inline ml-2" />
                 </Link>
-                <Link to="/deploy" className="btn-primary">
+                <Link to="/deploy" className="btn-primary w-full sm:w-auto text-center">
                   Create Vault
                 </Link>
-                <Link to="/#waitlist" className="btn-primary">
+                <Link to="/#waitlist" className="btn-primary w-full sm:w-auto text-center">
                   Join waitlist
                 </Link>
               </>
@@ -102,17 +101,17 @@ export function Home() {
 
       {/* For Creators - Minimal CTA */}
       <section className="cinematic-section">
-        <div className="max-w-5xl mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-20 items-center">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="grid lg:grid-cols-2 gap-10 sm:gap-16 lg:gap-20 items-center">
             <motion.div
               initial={{ opacity: 0, x: -30 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8 }}
-              className="space-y-8"
+              className="space-y-5 sm:space-y-8"
             >
               <span className="label">For Creators</span>
-              <h2 className="headline text-6xl leading-tight">
+              <h2 className="headline text-3xl sm:text-5xl lg:text-6xl leading-tight">
                 Launch Your
                 <br />
                 <span className="glow-brand">Vault</span>
@@ -129,7 +128,7 @@ export function Home() {
                 />
                 <span className="text-uniswap">Uniswap</span>
               </div>
-              <p className="text-zinc-500 text-lg font-light leading-relaxed">
+              <p className="text-zinc-500 text-base sm:text-lg font-light leading-relaxed">
                 Minimum deposit is <span className="font-mono text-zinc-200">5,000,000 TOKEN</span>. In the default launch,
                 this mints <span className="font-mono text-brand-primary">5,000,000 {SHARE_TOKEN}</span> and runs a{' '}
                 <span className="text-uniswap">Uniswap CCA</span> auction before the vault deploys the deposit across strategies.
@@ -152,33 +151,33 @@ export function Home() {
               transition={{ duration: 0.8, delay: 0.4 }}
               className="space-y-0"
             >
-              <div className="rounded-2xl border border-zinc-900/70 bg-black/30 backdrop-blur-sm p-6">
+              <div className="rounded-2xl border border-zinc-900/70 bg-black/30 backdrop-blur-sm p-4 sm:p-6">
                 <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-600">Default launch mechanics</div>
 
-                <div className="mt-6 space-y-0">
+                <div className="mt-4 sm:mt-6 space-y-0">
                   <div className="data-row">
                     <span className="label">Minimum deposit</span>
-                    <div className="value mono">5,000,000 TOKEN</div>
+                    <div className="value mono text-sm sm:text-base">5,000,000 TOKEN</div>
                   </div>
                   <div className="data-row">
                     <span className="label">Minted shares</span>
-                    <div className="value mono text-brand-primary">{`5,000,000 ${SHARE_TOKEN}`}</div>
+                    <div className="value mono text-sm sm:text-base text-brand-primary">{`5,000,000 ${SHARE_TOKEN}`}</div>
                   </div>
                   <div className="data-row">
                     <span className="label">Uniswap CCA auction</span>
-                    <div className="value mono">2,500,000 {SHARE_TOKEN}</div>
+                    <div className="value mono text-sm sm:text-base">2,500,000 {SHARE_TOKEN}</div>
                   </div>
                   <div className="data-row">
                     <span className="label">Creator allocation</span>
-                    <div className="value mono">2,500,000 {SHARE_TOKEN}</div>
+                    <div className="value mono text-sm sm:text-base">2,500,000 {SHARE_TOKEN}</div>
                   </div>
                   <div className="data-row border-none">
                     <span className="label">Fair Launch</span>
-                    <div className="value mono text-uniswap drop-shadow-[0_0_20px_rgba(255,0,122,0.35)]">100%</div>
+                    <div className="value mono text-uniswap drop-shadow-[0_0_20px_rgba(255,0,122,0.35)] text-sm sm:text-base">100%</div>
                   </div>
                 </div>
 
-                <div className="mt-4 text-xs text-zinc-600 font-light">
+                <div className="mt-4 text-[11px] sm:text-xs text-zinc-600 font-light">
                   <span className="font-mono text-zinc-400">TOKEN</span> = creator coin ·{' '}
                   <span className="font-mono text-zinc-400">{SHARE_TOKEN}</span> = vault share token
                 </div>
@@ -190,32 +189,32 @@ export function Home() {
 
       {/* Strategies - Terminal Display */}
       <section className="cinematic-section bg-zinc-950/20">
-        <div className="max-w-5xl mx-auto px-6">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <motion.div
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
-            className="mb-20"
+            className="mb-10 sm:mb-20"
           >
             <span className="label">Vault Strategies</span>
-            <h2 className="headline text-5xl mt-6">Deploy across on-chain strategies</h2>
-            <p className="text-zinc-600 text-sm font-light max-w-xl mt-4">
+            <h2 className="headline text-3xl sm:text-4xl lg:text-5xl mt-4 sm:mt-6">Deploy across on-chain strategies</h2>
+            <p className="text-zinc-600 text-[13px] sm:text-sm font-light max-w-xl mt-3 sm:mt-4">
               Deployed across liquidity, lending, and a reserve—designed to capture fees and yield.
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-zinc-900">
+          <div className="grid grid-cols-3 gap-px bg-zinc-900">
             <motion.div
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4 }}
-              className="bg-black p-8 space-y-4"
+              className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
             >
-              <span className="label">CREATOR/USDC LP</span>
-              <div className="value mono text-4xl glow-brand">69%</div>
-              <div className="text-zinc-600 text-xs font-light">Liquidity</div>
+              <span className="label text-[9px] sm:text-[10px]">CREATOR/USDC LP</span>
+              <div className="value mono text-xl sm:text-3xl lg:text-4xl glow-brand">69%</div>
+              <div className="text-zinc-600 text-[10px] sm:text-xs font-light">Liquidity</div>
             </motion.div>
 
             <motion.div
@@ -223,11 +222,11 @@ export function Home() {
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: 0.1 }}
-              className="bg-black p-8 space-y-4"
+              className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
             >
-              <span className="label">Ajna</span>
-              <div className="value mono text-4xl glow-brand">21.39%</div>
-              <div className="text-zinc-600 text-xs font-light">Lending</div>
+              <span className="label text-[9px] sm:text-[10px]">Ajna</span>
+              <div className="value mono text-xl sm:text-3xl lg:text-4xl glow-brand">21.39%</div>
+              <div className="text-zinc-600 text-[10px] sm:text-xs font-light">Lending</div>
             </motion.div>
 
             <motion.div
@@ -235,11 +234,11 @@ export function Home() {
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: 0.2 }}
-              className="bg-black p-8 space-y-4"
+              className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
             >
-              <span className="label">Reserve</span>
-              <div className="value mono text-4xl">9.61%</div>
-              <div className="text-zinc-600 text-xs font-light">Idle</div>
+              <span className="label text-[9px] sm:text-[10px]">Reserve</span>
+              <div className="value mono text-xl sm:text-3xl lg:text-4xl">9.61%</div>
+              <div className="text-zinc-600 text-[10px] sm:text-xs font-light">Idle</div>
             </motion.div>
           </div>
         </div>
@@ -247,17 +246,17 @@ export function Home() {
 
       {/* FAQ Teaser */}
       <section className="cinematic-section">
-        <div className="max-w-5xl mx-auto px-6">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <motion.div
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
-            className="space-y-6"
+            className="space-y-4 sm:space-y-6"
           >
             <span className="label">FAQ</span>
-            <h2 className="headline text-5xl mt-2">See the full walkthrough</h2>
-            <p className="text-zinc-600 text-sm font-light max-w-xl">
+            <h2 className="headline text-3xl sm:text-4xl lg:text-5xl mt-2">See the full walkthrough</h2>
+            <p className="text-zinc-600 text-[13px] sm:text-sm font-light max-w-xl">
               Minimum deposit → Uniswap CCA → vault strategies.
             </p>
             <div>

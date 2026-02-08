@@ -15,6 +15,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'analytics': () => import('./_analytics.js'),
   'agents': () => import('./_agents.js'),
   'agent/invokeSkill': () => import('./agent/_invokeSkill.js'),
+  'agent/process': () => import('./agent/_process.js'),
 
   // Public, agent-friendly v1 API
   'v1/spec.json': () => import('./v1/_spec.js'),
@@ -30,8 +31,10 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'v1/gauge/user': () => import('./v1/gauge/_user.js'),
   'v1/ve4626/user': () => import('./v1/ve4626/_user.js'),
   'v1/charm/strategy': () => import('./v1/charm/_strategy.js'),
+  'v1/creators/quickstart': () => import('./v1/creators/_quickstart.js'),
   'v1/agents/creators': () => import('./v1/agents/creators/_list.js'),
   'v1/agents/creators/enable': () => import('./v1/agents/creators/_enable.js'),
+  'v1/agents/creators/provision-wallet': () => import('./v1/agents/creators/_provisionWallet.js'),
   // v1 build endpoints (return unsigned tx calldata)
   // TODO: Implement these handlers
   // 'v1/build/auction/submitBid': () => import('./v1/build/auction/_submitBid.js'),
@@ -130,6 +133,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'waitlist/leaderboard': () => import('./waitlist/_leaderboard.js'),
   'waitlist/me': () => import('./waitlist/_me.js'),
   'waitlist/position': () => import('./waitlist/_position.js'),
+  'waitlist/preprovision': () => import('./waitlist/_preprovision.js'),
   'waitlist/profile-complete': () => import('./waitlist/_profile-complete.js'),
   'waitlist/task-claim': () => import('./waitlist/_task-claim.js'),
   'waitlist/update-email': () => import('./waitlist/_update-email.js'),

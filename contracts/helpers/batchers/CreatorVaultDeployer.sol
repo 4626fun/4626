@@ -35,6 +35,9 @@ interface ICreatorShareOFT {
     function setVault(address _vault) external;
     function setMinter(address minter, bool status) external;
     function setGaugeController(address _controller) external;
+    function setHubConfig(bool _isHub, uint32 _hubEid, address _hubGaugeReceiver) external;
+    function setHubLotteryPeer(uint32 _hubEid, bytes32 _hubLotteryPeer) external;
+    function setPeer(uint32 _eid, bytes32 _peer) external;
     function transferOwnership(address newOwner) external;
 }
 
@@ -451,6 +454,9 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         ICreatorShareOFT(out.shareOFT).setRegistry(address(registry));
         ICreatorShareOFT(out.shareOFT).setVault(out.vault);
         ICreatorShareOFT(out.shareOFT).setMinter(out.wrapper, true);
+        
+        // Hub-centric: mark this as the hub chain deployment (isHub=true)
+        ICreatorShareOFT(out.shareOFT).setHubConfig(true, 0, address(0));
 
         ICreatorOVault(out.vault).setWhitelist(out.wrapper, true);
         ICreatorOVault(out.vault).setWhitelist(address(this), true);
@@ -838,6 +844,123 @@ contract CreatorVaultDeployer is ReentrancyGuard {
             out.ajnaStrategy,
             params.charmWeightBps,
             params.ajnaWeightBps
+        );
+    }
+
+    // ================================
+    // REMOTE CHAIN DEPLOYMENT (Hub-Centric)
+    // ================================
+
+    struct RemoteDeployParams {
+        address creatorToken;
+        address owner;
+        string shareName;
+        string shareSymbol;
+        string version;
+        /// @notice Hub chain config
+        uint32 hubEid;               // LayerZero EID for Base
+        address hubGaugeReceiver;     // GaugeController address on Base
+        bytes32 hubLotteryPeer;       // LotteryManager address on Base (bytes32)
+        bytes32 hubOftPeer;           // Hub ShareOFT address (bytes32) for OFT peering
+    }
+
+    struct RemoteDeployResult {
+        address oftBootstrapRegistry;
+        address shareOFT;
+    }
+
+    event RemoteOFTDeployed(
+        address indexed creatorToken,
+        address indexed owner,
+        address shareOFT,
+        uint32 hubEid,
+        address hubGaugeReceiver
+    );
+
+    /**
+     * @notice Deploy a CreatorShareOFT on a remote chain (non-hub)
+     * @dev This is the ONLY deployment needed on remote chains in the hub-centric model.
+     *      No vault, wrapper, gauge, lottery, VRF, or oracle is deployed.
+     *      The OFT is configured with isHub=false and pointed at the Base hub.
+     *
+     * @param params Remote deployment parameters
+     * @param codeIds Code IDs for CREATE2 deployment
+     * @return out The deployed addresses
+     */
+    function deployRemoteOFT(
+        RemoteDeployParams calldata params,
+        CodeIds calldata codeIds
+    ) external nonReentrant returns (RemoteDeployResult memory out) {
+        return _deployRemoteOFTInternal(params, codeIds, bytes32(0));
+    }
+
+    /**
+     * @notice Deploy a CreatorShareOFT on a remote chain with a custom salt
+     */
+    function deployRemoteOFTWithSalt(
+        RemoteDeployParams calldata params,
+        CodeIds calldata codeIds,
+        bytes32 shareOftSaltOverride
+    ) external nonReentrant returns (RemoteDeployResult memory out) {
+        return _deployRemoteOFTInternal(params, codeIds, shareOftSaltOverride);
+    }
+
+    function _deployRemoteOFTInternal(
+        RemoteDeployParams calldata params,
+        CodeIds calldata codeIds,
+        bytes32 shareOftSaltOverride
+    ) internal returns (RemoteDeployResult memory out) {
+        _requireOwner(params.owner);
+        if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
+        if (codeIds.shareOFT == bytes32(0) || codeIds.oftBootstrap == bytes32(0)) revert InvalidCodeId();
+
+        // --- OFT Bootstrap Registry (shared, deploy-once-per-chain) ---
+        bytes32 oftBootstrapSalt = keccak256("CreatorVault:OFTBootstrapRegistry:v1");
+        out.oftBootstrapRegistry = create2Deployer.computeAddress(oftBootstrapSalt, codeIds.oftBootstrap);
+        if (out.oftBootstrapRegistry.code.length == 0) {
+            create2Deployer.deploy(oftBootstrapSalt, codeIds.oftBootstrap, bytes(""));
+        }
+
+        address lzEndpoint = registry.getLayerZeroEndpoint(uint16(block.chainid));
+        IOFTBootstrapRegistry(out.oftBootstrapRegistry).setLayerZeroEndpoint(uint16(block.chainid), lzEndpoint);
+
+        // --- Deploy ShareOFT ---
+        string memory shareSymbolLower = _toLower(params.shareSymbol);
+        string memory shareSymbolUpper = _toUpper(params.shareSymbol);
+
+        bytes32 shareOftSalt = shareOftSaltOverride == bytes32(0)
+            ? _deriveShareOftSalt(params.owner, shareSymbolLower, params.version)
+            : shareOftSaltOverride;
+
+        // tempOwner = this for wiring, then transfer to protocolTreasury
+        address tempOwner = address(this);
+
+        bytes memory shareOftArgs = abi.encode(params.shareName, shareSymbolUpper, out.oftBootstrapRegistry, tempOwner);
+        out.shareOFT = create2Deployer.deploy(shareOftSalt, codeIds.shareOFT, shareOftArgs);
+
+        // --- Configure as remote (non-hub) ---
+        ICreatorShareOFT(out.shareOFT).setRegistry(address(registry));
+        ICreatorShareOFT(out.shareOFT).setHubConfig(false, params.hubEid, params.hubGaugeReceiver);
+
+        // Set lottery peer (LotteryManager on Base)
+        if (params.hubLotteryPeer != bytes32(0)) {
+            ICreatorShareOFT(out.shareOFT).setHubLotteryPeer(params.hubEid, params.hubLotteryPeer);
+        }
+
+        // Set OFT peer (hub ShareOFT on Base for token bridging)
+        if (params.hubOftPeer != bytes32(0)) {
+            ICreatorShareOFT(out.shareOFT).setPeer(params.hubEid, params.hubOftPeer);
+        }
+
+        // Transfer ownership to protocol treasury
+        ICreatorShareOFT(out.shareOFT).transferOwnership(protocolTreasury);
+
+        emit RemoteOFTDeployed(
+            params.creatorToken,
+            params.owner,
+            out.shareOFT,
+            params.hubEid,
+            params.hubGaugeReceiver
         );
     }
 

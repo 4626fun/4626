@@ -6,6 +6,7 @@ import { ChatWidget } from './chat/ChatWidget'
 import { isPublicSiteMode } from '@/lib/flags'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { OnboardingModal, hasCompletedOnboarding } from '@/components/OnboardingModal'
+import { QuickstartModal, useShowQuickstart } from '@/components/QuickstartModal'
 
 type MobileNavItem = {
   label: string
@@ -53,6 +54,8 @@ export function Layout() {
   const baseItems = publicMode ? navItemsPublic : navItems
   const items = isAdmin ? [...baseItems, adminNavItem] : baseItems
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const showQuickstart = useShowQuickstart()
+  const [quickstartDismissed, setQuickstartDismissed] = useState(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -61,10 +64,14 @@ export function Layout() {
     setShowOnboarding(true)
   }, [])
 
+  // Show quickstart after onboarding is done, for authenticated creators
+  const shouldShowQuickstart = !showOnboarding && showQuickstart && !quickstartDismissed
+
   return (
     <div className="min-h-screen flex flex-col bg-vault-bg">
       <VaultNavBar />
       {showOnboarding ? <OnboardingModal onClose={() => setShowOnboarding(false)} /> : null}
+      {shouldShowQuickstart ? <QuickstartModal onClose={() => setQuickstartDismissed(true)} /> : null}
 
       {/* Main */}
       <main className="flex-1 pb-24 md:pb-0">

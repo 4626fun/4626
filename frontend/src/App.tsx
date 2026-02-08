@@ -289,6 +289,11 @@ const AdminDeployStrategies = lazy(async () => {
   return { default: m.AdminDeployStrategies }
 })
 
+const AdminAgentSetup = lazy(async () => {
+  const m = await import('./pages/AdminAgentSetup')
+  return { default: m.AdminAgentSetup }
+})
+
 const GaugeVoting = lazy(async () => {
   const m = await import('./pages/GaugeVoting')
   return { default: m.default }
@@ -438,6 +443,7 @@ function App() {
                   <Route index element={<Navigate to="/admin/waitlist" replace />} />
                   <Route path="creator-access" element={<AdminCreatorAccess />} />
                   <Route path="waitlist" element={<AdminWaitlist />} />
+                  <Route path="agent-setup" element={<AdminAgentSetup />} />
                   <Route path="ops" element={<AdminOps />} />
                   <Route path="miniapp" element={<Navigate to="/admin/ops" replace />} />
                   <Route path="deploy-strategies" element={<AdminDeployStrategies />} />
@@ -487,6 +493,7 @@ function App() {
                     <Route index element={<Navigate to="/admin/waitlist" replace />} />
                     <Route path="creator-access" element={<AdminCreatorAccess />} />
                     <Route path="waitlist" element={<AdminWaitlist />} />
+                    <Route path="agent-setup" element={<AdminAgentSetup />} />
                     <Route path="ops" element={<AdminOps />} />
                     <Route path="miniapp" element={<Navigate to="/admin/ops" replace />} />
                     <Route path="deploy-strategies" element={<AdminDeployStrategies />} />

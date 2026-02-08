@@ -30,8 +30,17 @@ type WaitlistDetail = {
   referredBySignupId: number | null
   referralClaimedAt: string | null
   profileCompletedAt: string | null
+  cswAddress: string | null
   createdAt: string
   updatedAt: string
+  // Pre-provisioning data
+  preprovisionedAt: string | null
+  preprovServerWalletId: string | null
+  preprovServerWalletAddress: string | null
+  preprovCoinAddress: string | null
+  preprovCoinSymbol: string | null
+  preprovFarcasterUsername: string | null
+  preprovZoraHandle: string | null
 }
 
 type DetailResponse = {
@@ -152,8 +161,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           : null,
     referralClaimedAt: toIso(row.referral_claimed_at),
     profileCompletedAt: toIso(row.profile_completed_at),
+    cswAddress: typeof row.csw_address === 'string' ? row.csw_address : null,
     createdAt: toIso(row.created_at) ?? '',
     updatedAt: toIso(row.updated_at) ?? '',
+    // Pre-provisioning data
+    preprovisionedAt: toIso(row.preprovisioned_at),
+    preprovServerWalletId: typeof row.preprov_server_wallet_id === 'string' ? row.preprov_server_wallet_id : null,
+    preprovServerWalletAddress: typeof row.preprov_server_wallet_address === 'string' ? row.preprov_server_wallet_address : null,
+    preprovCoinAddress: typeof row.preprov_coin_address === 'string' ? row.preprov_coin_address : null,
+    preprovCoinSymbol: typeof row.preprov_coin_symbol === 'string' ? row.preprov_coin_symbol : null,
+    preprovFarcasterUsername: typeof row.preprov_farcaster_username === 'string' ? row.preprov_farcaster_username : null,
+    preprovZoraHandle: typeof row.preprov_zora_handle === 'string' ? row.preprov_zora_handle : null,
   }
 
   return res.status(200).json({

@@ -2,12 +2,18 @@
 pragma solidity ^0.8.20;
 
 import {OFT} from "@layerzerolabs/oft-evm/contracts/OFT.sol";
+import {SendParam} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
+import {MessagingFee, MessagingReceipt} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
+import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
+import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
+import {OFTMsgCodec} from "@layerzerolabs/oft-evm/contracts/libs/OFTMsgCodec.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {ICreatorGaugeController} from "../../interfaces/core/ICreatorGaugeController.sol";
 import {ICreatorOVault} from "../../interfaces/core/ICreatorOVault.sol";
 import {ICreatorRegistry} from "../../interfaces/core/ICreatorRegistry.sol";
 
+/// @dev Hub-only: interface for local lottery manager calls on Base
 interface ICreatorLotteryManager {
     function processSwapLottery(
         address buyer,
@@ -34,7 +40,7 @@ interface ILotteryBeneficiary {
 /**
  * @title ISimpleSellTaxHook
  * @notice Interface for the V4 tax hook that requires token owner to configure
- * @dev Hook at 0xca975B9dAF772C71161f3648437c3616E5Be0088 on Base
+ * @dev Hook at 0xca975B9dAF772C71161f3648437c3616E5Be0088 on Base (hub-only)
  */
 interface ISimpleSellTaxHook {
     function setTaxConfig(
@@ -51,23 +57,36 @@ interface ISimpleSellTaxHook {
 /**
  * @title CreatorShareOFT
  * @author 0xakita.eth 
- * @notice OFT receipt token for CreatorOVault with buy fee and lottery integration
+ * @notice OFT receipt token for CreatorOVault with buy fee, lottery, and hub-centric architecture
  * 
- * @dev FEATURES:
- *      - LayerZero OFT for cross-chain share transfers
- *      - Buy fee on DEX purchases (configurable, default 6.9%)
- *      - Lottery integration for buyers
- *      - SwapOnly address classification for DEX detection
+ * @dev ARCHITECTURE:
+ *      This contract operates in two modes controlled by `isHub`:
+ *
+ *      HUB MODE (Base):
+ *      - Fees sent to local GaugeController via receiveFees()
+ *      - Lottery entries processed by local CreatorLotteryManager
+ *      - Full vault/wrapper/gauge stack available
+ *
+ *      REMOTE MODE (Arbitrum, etc.):
+ *      - Fees accumulated internally, bridged back to Base via flushFees()
+ *      - Lottery entries sent as LayerZero messages to Base hub
+ *      - Winner callbacks received from hub, emitted as local events
+ *      - No vault, wrapper, gauge, or lottery manager deployed
  * 
  * @dev FEE MECHANISM:
  *      - Register DEX pools/routers as SwapOnly
- *      - Buys (from SwapOnly → user) = fee to GaugeController
- *      - Sells and normal transfers = no fee
+ *      - Buys (from SwapOnly → user) = 6.9% fee
+ *      - Hub: fee → GaugeController → unwrap → distribute (21.39% burn, 69% lottery, 9.61% voter rewards)
+ *      - Remote: fee → pendingFees → flushFees() bridges OFT back to Base gauge
+ *      - Sells: taxed by SimpleSellTaxHook on Base only (V4 hook, not in this contract)
  * 
  * @dev BUILDS ON TOP OF ZORAS CREATOR COINS
  *      Each creator deploys their own ShareOFT (e.g., ■AKITA for AKITA vault)
  */
 contract CreatorShareOFT is OFT, ReentrancyGuard {
+    using OptionsBuilder for bytes;
+    using OFTMsgCodec for bytes;
+    using OFTMsgCodec for bytes32;
     
     // ================================
     // CONSTANTS
@@ -75,6 +94,16 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     
     uint256 public constant BASIS_POINTS = 10000;
     uint16 public constant MAX_FEE_BPS = 1000; // 10% max
+
+    /// @notice Custom LayerZero message types (extends OFT SEND=1, SEND_AND_CALL=2)
+    uint16 public constant MSG_TYPE_LOTTERY_ENTRY = 3;
+    uint16 public constant MSG_TYPE_WINNER_CALLBACK = 4;
+    
+    /// @notice Default gas limit for cross-chain lottery entry messages
+    uint128 public constant DEFAULT_LOTTERY_GAS_LIMIT = 300_000;
+
+    /// @notice Default gas limit for fee flush (OFT send)
+    uint128 public constant DEFAULT_FLUSH_GAS_LIMIT = 200_000;
     
     // ================================
     // TYPES
@@ -88,7 +117,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     }
     
     // ================================
-    // STATE
+    // STATE - CORE
     // ================================
     
     /// @notice CreatorRegistry for ecosystem contracts
@@ -97,10 +126,13 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     /// @notice Chain EID for this deployment
     uint32 public immutable chainEid;
     
-    /// @notice Associated vault
+    /// @notice Whether this is the hub chain (Base). Controls fee routing and lottery behavior.
+    bool public isHub;
+    
+    /// @notice Associated vault (hub-only, address(0) on remote chains)
     address public vault;
     
-    /// @notice All fees go here
+    /// @notice All fees go here on hub chain (address(0) on remote chains)
     address public gaugeController;
     
     /// @notice Buy fee in basis points (690 = 6.9%)
@@ -116,12 +148,44 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     /// @notice Minter permissions (for wrapper integration)
     mapping(address => bool) public isMinter;
     
-    /// @notice Tax config delegate (can call setTaxConfig on hooks on behalf of this token)
+    /// @notice Tax config delegate (hub-only, for future custom hooks)
     address public taxConfigDelegate;
     
     /// @notice ERC-7572 contract-level metadata URI
     /// @dev Returns a URL to JSON metadata including token image, description, etc.
     string private _contractURI;
+
+    // ================================
+    // STATE - REMOTE CHAIN FEE FORWARDING
+    // ================================
+
+    /// @notice Accumulated OFT fees on remote chains, waiting to be flushed to Base
+    uint256 public pendingFees;
+
+    /// @notice Minimum fees before auto-flush triggers (configurable)
+    uint256 public flushThreshold = 100e18; // 100 OFT tokens
+
+    /// @notice Address on Base that receives bridged fees (the hub GaugeController)
+    address public hubGaugeReceiver;
+
+    /// @notice LayerZero EID for the hub chain (Base)
+    uint32 public hubEid;
+
+    /// @notice Total fees flushed to hub (lifetime, remote only)
+    uint256 public totalFeesFlushed;
+
+    // ================================
+    // STATE - REMOTE CHAIN LOTTERY ENTRY
+    // ================================
+
+    /// @notice LayerZero peer for the hub LotteryManager (bytes32-encoded address)
+    bytes32 public hubLotteryPeer;
+
+    /// @notice Gas limit for lottery entry messages to hub
+    uint128 public lotteryEntryGasLimit = DEFAULT_LOTTERY_GAS_LIMIT;
+
+    /// @notice Total lottery entries sent to hub (lifetime, remote only)
+    uint256 public totalLotteryEntriesSent;
     
     // ================================
     // EVENTS
@@ -143,6 +207,29 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     
     /// @notice ERC-7572: Emitted when contract URI is updated
     event ContractURIUpdated();
+
+    /// @notice Emitted when fees are accumulated on a remote chain
+    event FeesAccumulated(uint256 amount, uint256 totalPending);
+
+    /// @notice Emitted when accumulated fees are flushed (bridged) back to the hub
+    event FeesFlushed(uint256 amount, address indexed hubReceiver, uint32 indexed hubEid);
+
+    /// @notice Emitted when a lottery entry is sent to the hub from a remote chain
+    event LotteryEntrySent(address indexed buyer, uint256 amount, uint32 indexed hubEid);
+
+    /// @notice Emitted on remote chain when the hub notifies of a lottery win
+    event LotteryWinnerNotification(
+        address indexed winner,
+        address indexed creatorCoin,
+        uint256 totalSharesPaid,
+        uint32 indexed sourceHubEid
+    );
+
+    /// @notice Hub config updated
+    event HubConfigUpdated(bool isHub, uint32 hubEid, address hubGaugeReceiver);
+    event HubLotteryPeerSet(uint32 indexed hubEid, bytes32 hubLotteryPeer);
+    event FlushThresholdUpdated(uint256 newThreshold);
+    event LotteryEntryGasLimitUpdated(uint128 newGasLimit);
     
     // ================================
     // ERRORS
@@ -152,6 +239,10 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     error ZeroAddress();
     error FeeTooHigh();
     error NotMinter();
+    error NothingToFlush();
+    error HubNotConfigured();
+    error NotHub();
+    error InvalidCallback();
     
     // ================================
     // MODIFIERS
@@ -179,6 +270,8 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      *      Registry address is same on all chains via CREATE2.
      *      LayerZero endpoint is looked up from registry at construction.
      *      This allows same constructor args → same CREATE2 address on all chains.
+     *      
+     *      After deployment, call setHubConfig() to set hub vs remote mode.
      */
     constructor(
         string memory _name,
@@ -198,7 +291,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     // ================================
     
     /**
-     * @notice Set the vault that can mint/burn shares
+     * @notice Set the vault that can mint/burn shares (hub-only)
      * @param _vault CreatorOVault address
      */
     function setVault(address _vault) external onlyOwner {
@@ -296,24 +389,21 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     /**
      * @dev Process buy with fees. Follows CEI pattern.
      * 
-     * @notice FEE FLOW - THE SOCIAL-FI ENGINE:
+     * @notice FEE FLOW:
      *         1. Fee is collected in OFT tokens (■AKITA)
-     *         2. Sent to GaugeController via receiveFees()
-     *         3. GaugeController distributes:
-     *            - 50% burned → increases PPS for all vault holders
-     *            - 31% lottery → jackpot for buyers
-     *            - 19% creator → treasury
-     *         
-     *         This makes users "win with the creator" - their vault
-     *         shares become more valuable from trading activity!
+     *         2. Hub: sent to GaugeController via receiveFees()
+     *            Remote: accumulated in pendingFees, bridged via flushFees()
+     *         3. GaugeController on Base distributes:
+     *            - 21.39% burned → increases PPS for all vault holders (ve(3,3) accrual)
+     *            - 69% lottery → jackpot reserve for buyers
+     *            - 9.61% voter rewards → ve4626 voters
      */
     function _processBuy(address from, address to, uint256 amount) internal nonReentrant returns (bool) {
         // Cache storage reads
         uint16 _buyFeeBps = buyFeeBps;
-        address _gaugeController = gaugeController;
         bool _feesEnabled = feesEnabled;
         
-        if (!_feesEnabled || _buyFeeBps == 0 || _gaugeController == address(0)) {
+        if (!_feesEnabled || _buyFeeBps == 0) {
             _transfer(from, to, amount);
             return true;
         }
@@ -328,21 +418,43 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         
         emit BuyFee(from, to, amount, feeAmount);
 
-        // Interactions: Send fees to gauge controller
-        _sendFeesToGauge(_gaugeController, feeAmount);
+        // Interactions: Route fees based on hub vs remote
+        _routeFees(feeAmount);
         
         // Trigger lottery for buyer
         _triggerLottery(to, transferAmount);
         
         return true;
     }
+
+    // ================================
+    // FEE ROUTING (HUB vs REMOTE)
+    // ================================
+
+    /**
+     * @dev Route collected fees based on chain mode
+     *      Hub: send directly to local GaugeController
+     *      Remote: accumulate internally for batch bridging
+     */
+    function _routeFees(uint256 amount) internal {
+        if (amount == 0) return;
+
+        if (isHub) {
+            _sendFeesToGauge(amount);
+        } else {
+            // Accumulate fees for batch bridging back to hub
+            pendingFees += amount;
+            emit FeesAccumulated(amount, pendingFees);
+        }
+    }
     
     /**
-     * @dev Send accumulated fees to gauge controller
+     * @dev Send fees to local gauge controller (hub-only path)
      */
-    function _sendFeesToGauge(address _gaugeController, uint256 amount) internal {
-        if (amount == 0) return;
-        
+    function _sendFeesToGauge(uint256 amount) internal {
+        address _gaugeController = gaugeController;
+        if (_gaugeController == address(0)) return;
+
         // Approve gauge controller to pull tokens
         _approve(address(this), _gaugeController, amount);
         
@@ -356,33 +468,120 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         }
     }
 
+    /**
+     * @notice Bridge accumulated fees back to the hub chain GaugeController
+     * @dev Permissionless — anyone can trigger this (keeper, user, protocol)
+     *      Uses OFT send() to burn tokens on this chain and mint on Base,
+     *      delivered to the hubGaugeReceiver address.
+     *
+     *      Caller must pass the SendParam and MessagingFee externally.
+     *      Use quoteFlushFees() to build the correct SendParam and get the fee quote.
+     *
+     * @param _sendParam The OFT SendParam (use buildFlushSendParam() to construct)
+     * @param _fee The LayerZero messaging fee (use quoteFlushFees() to quote)
+     */
+    function flushFees(
+        SendParam calldata _sendParam,
+        MessagingFee calldata _fee
+    ) external payable nonReentrant {
+        if (isHub) revert NotHub();
+        if (pendingFees == 0) revert NothingToFlush();
+        if (hubGaugeReceiver == address(0) || hubEid == 0) revert HubNotConfigured();
+
+        uint256 amount = pendingFees;
+        pendingFees = 0;
+        totalFeesFlushed += amount;
+
+        // Validate the send param matches our state
+        require(_sendParam.dstEid == hubEid, "Invalid dstEid");
+        require(_sendParam.to == bytes32(uint256(uint160(hubGaugeReceiver))), "Invalid receiver");
+        require(_sendParam.amountLD == amount, "Amount mismatch");
+
+        // Execute the OFT send (burns on this chain, mints on Base to hubGaugeReceiver)
+        _send(_sendParam, _fee, payable(msg.sender));
+
+        emit FeesFlushed(amount, hubGaugeReceiver, hubEid);
+    }
+
+    /**
+     * @notice Build the SendParam for flushing fees (helper for off-chain callers)
+     * @return sendParam The SendParam to pass to flushFees()
+     */
+    function buildFlushSendParam() external view returns (SendParam memory sendParam) {
+        sendParam = SendParam({
+            dstEid: hubEid,
+            to: bytes32(uint256(uint160(hubGaugeReceiver))),
+            amountLD: pendingFees,
+            minAmountLD: pendingFees,
+            extraOptions: OptionsBuilder.newOptions().addExecutorLzReceiveOption(DEFAULT_FLUSH_GAS_LIMIT, 0),
+            composeMsg: "",
+            oftCmd: ""
+        });
+    }
+
+    /**
+     * @notice Quote the LayerZero fee for flushing pending fees to hub
+     * @dev Call buildFlushSendParam() first, then pass it to quoteSend()
+     *      Or use this convenience function which does both.
+     * @return nativeFee The native gas fee required for the flush
+     */
+    function quoteFlushFees() external view returns (uint256 nativeFee) {
+        if (pendingFees == 0 || hubGaugeReceiver == address(0) || hubEid == 0) {
+            return 0;
+        }
+
+        // Build the message internally for quoting
+        bytes memory options = OptionsBuilder.newOptions()
+            .addExecutorLzReceiveOption(DEFAULT_FLUSH_GAS_LIMIT, 0);
+
+        // Use the internal _quote which accepts memory params
+        MessagingFee memory fee = _quote(hubEid, abi.encodePacked(
+            bytes32(uint256(uint160(hubGaugeReceiver))),
+            uint64(pendingFees) // amountSD approximation for quote
+        ), options, false);
+        
+        nativeFee = fee.nativeFee;
+    }
+
     // ================================
-    // LOTTERY
+    // LOTTERY (HUB vs REMOTE)
     // ================================
 
     /**
      * @dev Trigger lottery entry for buyer
      * @param recipient The actual recipient of the swap (buyer's wallet)
      * @param amount Amount of tokens bought
+     *
+     * @notice Hub mode: calls local CreatorLotteryManager.processSwapLottery()
+     *         Remote mode: sends a LayerZero message to hub with (buyer, token, amount)
+     *
      * @notice Uses the actual transfer recipient address to support:
      *         - EOA wallets (traditional)
      *         - Smart contract wallets (Coinbase Smart Wallet, Safe, etc.)
      *         - ERC-4337 account abstraction (where tx.origin is the bundler)
      *         - DEX aggregators (via ILotteryBeneficiary callback)
-     *         
-     *         Security: VRF-based randomness and economic requirements (min swap size,
-     *         probability scaling with USD value) prevent gaming without blocking
-     *         legitimate smart wallet users.
      */
     function _triggerLottery(address recipient, uint256 amount) internal {
         if (!lotteryEnabled) return;
-        if (address(registry) == address(0)) return;
         if (recipient == address(0)) return;
         
         // Determine the actual lottery beneficiary
         address buyer = _resolveLotteryBeneficiary(recipient);
         if (buyer == address(0)) return;
-        
+
+        if (isHub) {
+            _triggerLotteryLocal(buyer, amount);
+        } else {
+            _sendLotteryEntry(buyer, amount);
+        }
+    }
+
+    /**
+     * @dev Hub-only: call local lottery manager
+     */
+    function _triggerLotteryLocal(address buyer, uint256 amount) internal {
+        if (address(registry) == address(0)) return;
+
         address mgr = registry.getLotteryManager(uint16(block.chainid));
         if (mgr == address(0)) return;
         
@@ -392,6 +591,61 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         } catch {
             // Lottery failure should not block the transfer
         }
+    }
+
+    /**
+     * @dev Remote-only: send lottery entry to hub via LayerZero
+     *      Payload: (buyer, tokenAddress, amount, sourceChainEid)
+     *      The hub LotteryManager will process VRF + payout locally
+     */
+    function _sendLotteryEntry(address buyer, uint256 amount) internal {
+        if (hubLotteryPeer == bytes32(0) || hubEid == 0) return;
+        
+        bytes memory payload = abi.encode(
+            MSG_TYPE_LOTTERY_ENTRY,
+            buyer,
+            address(this), // tokenIn (this ShareOFT)
+            amount,
+            uint32(block.chainid) // sourceChainId for winner callback routing
+        );
+
+        bytes memory options = OptionsBuilder.newOptions()
+            .addExecutorLzReceiveOption(lotteryEntryGasLimit, 0);
+
+        // Quote the fee
+        MessagingFee memory fee = _quote(hubEid, payload, options, false);
+
+        // Only send if contract has enough native gas
+        if (address(this).balance >= fee.nativeFee) {
+            _lzSend(hubEid, payload, options, fee, payable(address(this)));
+            totalLotteryEntriesSent++;
+            emit LotteryEntrySent(buyer, amount, hubEid);
+        }
+        // If insufficient gas, silently skip (lottery should not block transfers)
+    }
+
+    /**
+     * @notice Quote the LayerZero fee for a lottery entry message
+     * @param amount The trade amount
+     * @return fee The native gas fee required
+     */
+    function quoteLotteryEntry(uint256 amount) external view returns (MessagingFee memory fee) {
+        if (hubLotteryPeer == bytes32(0) || hubEid == 0) {
+            return MessagingFee(0, 0);
+        }
+
+        bytes memory payload = abi.encode(
+            MSG_TYPE_LOTTERY_ENTRY,
+            address(0), // placeholder buyer
+            address(this),
+            amount,
+            uint32(block.chainid)
+        );
+
+        bytes memory options = OptionsBuilder.newOptions()
+            .addExecutorLzReceiveOption(lotteryEntryGasLimit, 0);
+
+        fee = _quote(hubEid, payload, options, false);
     }
     
     /**
@@ -403,10 +657,6 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      *         1. If recipient is EOA → use recipient
      *         2. If recipient implements ILotteryBeneficiary → use returned address
      *         3. Otherwise → use recipient (smart wallet case)
-     * 
-     * @dev This allows DEX aggregators and multicall contracts to specify
-     *      the actual user who should receive lottery entries by implementing
-     *      ILotteryBeneficiary.getLotteryBeneficiary()
      */
     function _resolveLotteryBeneficiary(address recipient) internal view returns (address buyer) {
         // If recipient is EOA, use directly
@@ -415,20 +665,113 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         }
         
         // Check if recipient implements ILotteryBeneficiary
-        // This allows aggregators/multicall to specify the real user
         try ILotteryBeneficiary(recipient).getLotteryBeneficiary() returns (address beneficiary) {
-            // If beneficiary is returned and valid, use it
-            // If beneficiary is address(0), fall back to recipient
             return beneficiary == address(0) ? recipient : beneficiary;
         } catch {
-            // Contract doesn't implement interface - use recipient directly
-            // This handles smart wallets (Coinbase, Safe) that don't need to redirect
             return recipient;
         }
     }
 
     // ================================
-    // ADMIN
+    // WINNER CALLBACK RECEIVER (REMOTE ONLY)
+    // ================================
+
+    /**
+     * @notice Override _lzReceive to handle both OFT token transfers and custom messages
+     * @dev OFT messages use the standard OFTMsgCodec format.
+     *      Custom messages (winner callbacks) are prefixed with MSG_TYPE_WINNER_CALLBACK.
+     *      We differentiate by checking if the payload starts with our custom msg type.
+     */
+    function _lzReceive(
+        Origin calldata _origin,
+        bytes32 _guid,
+        bytes calldata _message,
+        address _executor,
+        bytes calldata _extraData
+    ) internal virtual override {
+        // Check if this is a custom message (winner callback from hub LotteryManager)
+        if (_message.length >= 66) {
+            // Try to decode as custom message
+            uint16 msgType = abi.decode(_message[:32], (uint16));
+            
+            if (msgType == MSG_TYPE_WINNER_CALLBACK) {
+                _handleWinnerCallback(_origin, _message);
+                return;
+            }
+        }
+
+        // Default: standard OFT token transfer handling
+        super._lzReceive(_origin, _guid, _message, _executor, _extraData);
+    }
+
+    /**
+     * @dev Handle winner callback from hub LotteryManager
+     *      Emits LotteryWinnerNotification on the user's chain
+     */
+    function _handleWinnerCallback(Origin calldata _origin, bytes calldata _message) internal {
+        // Verify sender is the hub lottery peer
+        if (hubLotteryPeer == bytes32(0) || _origin.sender != hubLotteryPeer) {
+            revert InvalidCallback();
+        }
+
+        (
+            , // msgType (already checked)
+            address winner,
+            address creatorCoin,
+            uint256 totalSharesPaid
+        ) = abi.decode(_message, (uint16, address, address, uint256));
+
+        emit LotteryWinnerNotification(winner, creatorCoin, totalSharesPaid, _origin.srcEid);
+    }
+
+    // ================================
+    // ADMIN - HUB CONFIGURATION
+    // ================================
+
+    /**
+     * @notice Configure hub vs remote mode
+     * @param _isHub True for hub chain (Base), false for remote chains
+     * @param _hubEid LayerZero EID for the hub chain (set on remote chains)
+     * @param _hubGaugeReceiver Address of GaugeController on hub (for fee bridging)
+     */
+    function setHubConfig(bool _isHub, uint32 _hubEid, address _hubGaugeReceiver) external onlyOwner {
+        isHub = _isHub;
+        hubEid = _hubEid;
+        hubGaugeReceiver = _hubGaugeReceiver;
+        emit HubConfigUpdated(_isHub, _hubEid, _hubGaugeReceiver);
+    }
+
+    /**
+     * @notice Set the hub lottery peer (LotteryManager address on Base)
+     * @param _hubEid LayerZero EID for the hub chain
+     * @param _hubLotteryPeer bytes32-encoded address of the hub LotteryManager
+     */
+    function setHubLotteryPeer(uint32 _hubEid, bytes32 _hubLotteryPeer) external onlyOwner {
+        hubEid = _hubEid;
+        hubLotteryPeer = _hubLotteryPeer;
+        emit HubLotteryPeerSet(_hubEid, _hubLotteryPeer);
+    }
+
+    /**
+     * @notice Set the flush threshold for auto-bridging fees
+     * @param _threshold Minimum accumulated fees before flush
+     */
+    function setFlushThreshold(uint256 _threshold) external onlyOwner {
+        flushThreshold = _threshold;
+        emit FlushThresholdUpdated(_threshold);
+    }
+
+    /**
+     * @notice Set the gas limit for lottery entry messages
+     * @param _gasLimit Gas limit for the lzReceive on the hub
+     */
+    function setLotteryEntryGasLimit(uint128 _gasLimit) external onlyOwner {
+        lotteryEntryGasLimit = _gasLimit;
+        emit LotteryEntryGasLimitUpdated(_gasLimit);
+    }
+
+    // ================================
+    // ADMIN - EXISTING
     // ================================
     
     /**
@@ -454,7 +797,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     }
 
     /**
-     * @notice Set gauge controller (fee recipient)
+     * @notice Set gauge controller — fee recipient (hub-only)
      */
     function setGaugeController(address _controller) external onlyOwner {
         if (_controller == address(0)) revert ZeroAddress();
@@ -487,7 +830,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     }
     
     /**
-     * @notice Set the tax config delegate (for future custom hooks)
+     * @notice Set the tax config delegate (hub-only, for future custom hooks)
      * @dev NOTE: The existing SimpleSellTaxHook at 0xca975B9dAF772C71161f3648437c3616E5Be0088
      *      checks msg.sender == token.owner(), so ONLY the ■TOKEN owner can configure it.
      *      This delegate feature is for future hooks that accept delegated configuration.
@@ -499,7 +842,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     }
     
     /**
-     * @notice Get tax hook configuration data for the owner to call directly
+     * @notice Get tax hook configuration data for the owner to call directly (hub-only)
      * @dev Since the SimpleSellTaxHook requires msg.sender == token.owner(),
      *      this helper returns the exact parameters for the owner to call.
      * 
@@ -528,6 +871,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     
     /**
      * @notice Convert shares to underlying Creator Coin amount
+     * @dev On remote chains (vault == address(0)), returns shares 1:1
      */
     function convertToAssets(uint256 shares) public view returns (uint256) {
         if (vault == address(0)) return shares;
@@ -572,7 +916,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      * @notice Get contract version
      */
     function version() external pure returns (string memory) {
-        return "1.0.0-creatortech";
+        return "2.0.0-hub-centric";
     }
     
     /**
@@ -587,6 +931,27 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      */
     function description() external pure returns (string memory) {
         return "CreatorVault Share Token - Represents proportional ownership of assets in a Creator Coin Omnichain Vault. Enables cross-chain transfers via LayerZero.";
+    }
+
+    /**
+     * @notice Check if fees can be flushed (remote chains only)
+     */
+    function canFlush() external view returns (bool) {
+        return !isHub && pendingFees > 0 && hubGaugeReceiver != address(0) && hubEid != 0;
+    }
+
+    /**
+     * @notice Get remote chain status
+     */
+    function getRemoteStatus() external view returns (
+        uint256 _pendingFees,
+        uint256 _totalFeesFlushed,
+        uint256 _totalLotteryEntriesSent,
+        bool _isHub,
+        uint32 _hubEid,
+        address _hubGaugeReceiver
+    ) {
+        return (pendingFees, totalFeesFlushed, totalLotteryEntriesSent, isHub, hubEid, hubGaugeReceiver);
     }
     
     // ================================
@@ -644,14 +1009,14 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     }
     
     // ================================
-    // PAYOUT RECIPIENT (for external hooks)
+    // PAYOUT RECIPIENT (for external hooks, hub-only)
     // ================================
     
     /**
      * @notice Returns the address that should receive trade fees
-     * @dev Called by external tax hooks (like the 6.9% V4 hook) to determine
-     *      where to send collected fees. Returns the GaugeController which
-     *      handles distribution (90% jackpot, 5% burn, 5% protocol).
+     * @dev Called by external tax hooks (like the 6.9% V4 sell hook on Base) to determine
+     *      where to send collected fees. Returns the GaugeController which handles
+     *      distribution (21.39% burn, 69% lottery, 9.61% voter rewards).
      * 
      * @return The gauge controller address, or owner if not set
      */
@@ -668,4 +1033,15 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         return account == owner() || 
                (gaugeController != address(0) && account == gaugeController);
     }
+
+    // ================================
+    // GAS FUNDING
+    // ================================
+
+    /**
+     * @notice Accept native gas for lottery entry and fee flush operations
+     * @dev On remote chains, the contract needs native gas to send LayerZero messages.
+     *      Fund via direct transfer or this receive function.
+     */
+    receive() external payable {}
 }

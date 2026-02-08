@@ -253,57 +253,57 @@ export function ExploreCreators() {
 
   return (
     <div className="relative pb-24 md:pb-0 min-h-screen">
-      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-8">
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-4 sm:py-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="mb-8"
+          className="mb-5 sm:mb-8"
         >
-          <h1 className="text-3xl sm:text-4xl font-medium text-white mb-2">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-medium text-white mb-1 sm:mb-2">
             Top Creators on Base
           </h1>
-          <p className="text-zinc-400 text-sm">
+          <p className="text-zinc-400 text-[13px] sm:text-sm">
             Creator Coins ranked by volume, market cap, and more.
           </p>
 
-          {/* Uniswap-style metrics strip */}
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 px-4 py-3">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Total creators</div>
-              <div className="mt-1 text-[22px] font-medium text-white tabular-nums">
+          {/* Metrics strip — compact 2x2 on mobile, 4-col on desktop */}
+          <div className="mt-4 sm:mt-6 grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 px-3 sm:px-4 py-2.5 sm:py-3">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.16em] text-zinc-500">Creators</div>
+              <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {metricsQuery.data?.totals.creatorsTotal?.toLocaleString() ?? '—'}
               </div>
-              <div className="mt-1 text-[12px] text-zinc-500">
+              <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
                 {metricsQuery.data?.totals.creatorsNew24h != null ? `+${metricsQuery.data.totals.creatorsNew24h} today` : '—'}
               </div>
             </div>
 
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 px-4 py-3">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Creator coin TVL</div>
-              <div className="mt-1 text-[22px] font-medium text-white tabular-nums">
+            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 px-3 sm:px-4 py-2.5 sm:py-3">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.16em] text-zinc-500">TVL</div>
+              <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {formatCompactUsd(metricsQuery.data?.totals.creatorCoinsMarketCapUsd ?? null)}
               </div>
-              <div className="mt-1 text-[12px] text-zinc-500">
-                {metricsQuery.data?.totals.partial ? `Sampled ${metricsQuery.data.totals.sampledCreators.toLocaleString()} creators` : 'All creators'}
+              <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
+                {metricsQuery.data?.totals.partial ? `Sampled ${metricsQuery.data.totals.sampledCreators.toLocaleString()}` : 'All creators'}
               </div>
             </div>
 
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 px-4 py-3">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">1D volume</div>
-              <div className="mt-1 text-[22px] font-medium text-white tabular-nums">
+            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 px-3 sm:px-4 py-2.5 sm:py-3">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.16em] text-zinc-500">1D Vol</div>
+              <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {formatCompactUsd(metricsQuery.data?.totals.creatorCoinsVolume24hUsd ?? null)}
               </div>
-              <div className="mt-1 text-[12px] text-zinc-500">Across creator coins</div>
+              <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">Across creator coins</div>
             </div>
 
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 px-4 py-3">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Updated</div>
-              <div className="mt-1 text-[22px] font-medium text-white tabular-nums">
+            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 px-3 sm:px-4 py-2.5 sm:py-3">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.16em] text-zinc-500">Updated</div>
+              <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {metricsQuery.data?.updatedAt ? new Date(metricsQuery.data.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
               </div>
-              <div className="mt-1 text-[12px] text-zinc-500">Cached ~5 min</div>
+              <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">Cached ~5 min</div>
             </div>
           </div>
         </motion.div>

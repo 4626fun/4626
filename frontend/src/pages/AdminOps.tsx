@@ -93,6 +93,10 @@ const LEGACY_VAULT_HINTS: LegacyVaultHint[] = [
   {
     id: 'legacy-5',
     label: 'Legacy vault (0xc8A5…0EBD)',
+    vault: '0xc8A5093d7613E9c0998d2070dF94904d4Ff0EBD4',
+    wrapper: '0x9BEA3CA394d8E10E7151426757CED860E9f9917D',
+    shareOft: '0xF7202bd063C3BBBB8cEf106511bD2DD2ec204626',
+    vesting: '0x7A9980F8bdc840Eba8bF6Dc6081A8df7e78A46aB',
     vaultHint: '0xc8A5093d...d4Ff0EBD4',
   },
 ]
@@ -275,6 +279,23 @@ const VAULT_ABI = [
   { name: 'largeWithdrawalThreshold', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 ] as const
 
+const VAULT_EMERGENCY_ABI = [
+  { name: 'asset', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { name: 'isShutdown', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
+  { name: 'shutdownVault', type: 'function', stateMutability: 'nonpayable', inputs: [], outputs: [] },
+  { name: 'emergencyWithdrawFromStrategies', type: 'function', stateMutability: 'nonpayable', inputs: [], outputs: [] },
+  {
+    name: 'emergencyWithdraw',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'amount', type: 'uint256' },
+      { name: 'to', type: 'address' },
+    ],
+    outputs: [],
+  },
+] as const
+
 const QUEUED_WITHDRAWAL_ABI = [
   {
     name: 'queuedWithdrawals',
@@ -393,9 +414,9 @@ async function sendEmbeddedOwnerSmartWalletCall(params: {
       ownerAddress,
       calls,
       version: '1',
-      userOpSignMode: 'eth_sign',
-      // Keep EOA signing strict in Admin/Ops AA path.
-      allowEoaSignMessageFallback: false,
+      // Embedded providers often block `eth_sign`; allow auto fallback to signMessage/personal_sign.
+      userOpSignMode: 'auto',
+      allowEoaSignMessageFallback: true,
       skipPaymaster: false,
     })
   } catch (error: unknown) {
@@ -741,6 +762,8 @@ function AgentRegistration() {
           ownerAddress: connectedAddress as Address,
           calls: [{ to: registryAddress, data }],
           version: '1',
+          userOpSignMode: 'auto',
+          allowEoaSignMessageFallback: true,
           skipPaymaster: false,
         })
         updateRegisterTx({ status: 'pending', hash: result.transactionHash })
@@ -843,6 +866,8 @@ function AgentRegistration() {
           ownerAddress: connectedAddress as Address,
           calls: [{ to: registryAddress, data }],
           version: '1',
+          userOpSignMode: 'auto',
+          allowEoaSignMessageFallback: true,
           skipPaymaster: false,
         })
         updateUpdateTx({ status: 'pending', hash: result.transactionHash })
@@ -1390,6 +1415,8 @@ function LegacyWithdrawals() {
           ownerAddress: connectedAddress as Address,
           calls: [{ to: config.address, data }],
           version: '1',
+          userOpSignMode: 'auto',
+          allowEoaSignMessageFallback: true,
           skipPaymaster: false,
         })
         updateTx(key, { status: 'pending', hash: result.transactionHash })
@@ -1461,6 +1488,8 @@ function LegacyWithdrawals() {
           ownerAddress: connectedAddress as Address,
           calls,
           version: '1',
+          userOpSignMode: 'auto',
+          allowEoaSignMessageFallback: true,
           skipPaymaster: false,
         })
         updateTx(key, { status: 'pending', hash: result.transactionHash })
@@ -1634,6 +1663,30 @@ function LegacyWithdrawals() {
                   chainId: base.id,
                   query: { enabled: isBase && hasVault },
                 })
+                const vaultAssetQuery = useReadContract({
+                  address: legacy.vault as Address,
+                  abi: VAULT_EMERGENCY_ABI,
+                  functionName: 'asset',
+                  chainId: base.id,
+                  query: { enabled: isBase && hasVault },
+                })
+                const vaultAssetRaw = vaultAssetQuery.data as Address | undefined
+                const vaultAsset = vaultAssetRaw && isAddress(vaultAssetRaw) ? getAddress(vaultAssetRaw) : null
+                const vaultShutdownQuery = useReadContract({
+                  address: legacy.vault as Address,
+                  abi: VAULT_EMERGENCY_ABI,
+                  functionName: 'isShutdown',
+                  chainId: base.id,
+                  query: { enabled: isBase && hasVault },
+                })
+                const vaultAssetBalanceQuery = useReadContract({
+                  address: (vaultAsset ?? ZERO_ADDRESS) as Address,
+                  abi: erc20Abi,
+                  functionName: 'balanceOf',
+                  args: [legacy.vault as Address],
+                  chainId: base.id,
+                  query: { enabled: isBase && hasVault && !!vaultAsset },
+                })
                 const previewRedeemQuery = useReadContract({
                   address: legacy.vault as Address,
                   abi: VAULT_ABI,
@@ -1647,10 +1700,15 @@ function LegacyWithdrawals() {
                 const queueKey = `queue-${legacy.id}`
                 const claimKey = `claim-${legacy.id}`
                 const oneClickKey = `oneclick-${legacy.id}`
+                const shutdownKey = `shutdown-${legacy.id}`
+                const emergencyPullKey = `emergency-pull-${legacy.id}`
+                const emergencyDrainKey = `emergency-drain-${legacy.id}`
 
                 const balance = balanceQuery.data as bigint | undefined
                 const releasable = releasableQuery.data as bigint | undefined
                 const largeWithdrawalThreshold = thresholdQuery.data as bigint | undefined
+                const vaultIsShutdown = vaultShutdownQuery.data === true
+                const vaultAssetBalance = vaultAssetBalanceQuery.data as bigint | undefined
                 const previewRedeem = previewRedeemQuery.data as bigint | undefined
                 const hasReleasable = typeof releasable === 'bigint' && releasable > 0n
                 const isBalanceZero = typeof balance === 'bigint' && balance === 0n
@@ -1716,6 +1774,19 @@ function LegacyWithdrawals() {
                   typeof oneClickAmount === 'bigint' &&
                   oneClickAmount > 0n &&
                   !exceedsAvailable
+                const canEmergencyShutdown =
+                  isConnected && isBase && canUseSmartWallet && hasVault && !vaultIsShutdown
+                const canEmergencyPull =
+                  isConnected && isBase && canUseSmartWallet && hasVault && vaultIsShutdown
+                const canEmergencyDrain =
+                  isConnected &&
+                  isBase &&
+                  canUseSmartWallet &&
+                  hasVault &&
+                  vaultIsShutdown &&
+                  receiverValid &&
+                  typeof vaultAssetBalance === 'bigint' &&
+                  vaultAssetBalance > 0n
                 const queueConfig = {
                   address: legacy.vault as Address,
                   abi: VAULT_ABI,
@@ -1727,6 +1798,22 @@ function LegacyWithdrawals() {
                   abi: VAULT_ABI,
                   functionName: 'redeem',
                   args: [sharesToQueue ?? 0n, receiver as Address, canonicalCswAddress as Address],
+                }
+                const emergencyShutdownConfig = {
+                  address: legacy.vault as Address,
+                  abi: VAULT_EMERGENCY_ABI,
+                  functionName: 'shutdownVault',
+                }
+                const emergencyPullConfig = {
+                  address: legacy.vault as Address,
+                  abi: VAULT_EMERGENCY_ABI,
+                  functionName: 'emergencyWithdrawFromStrategies',
+                }
+                const emergencyDrainConfig = {
+                  address: legacy.vault as Address,
+                  abi: VAULT_EMERGENCY_ABI,
+                  functionName: 'emergencyWithdraw',
+                  args: [vaultAssetBalance ?? 0n, receiver as Address],
                 }
                 const oneClickCalls: Array<{ to: Address; data: Hex }> = []
                 if (hasVesting && hasReleasable) {
@@ -1744,24 +1831,26 @@ function LegacyWithdrawals() {
                       args: [oneClickAmount],
                     }),
                   })
-                  if (shouldQueueOneClick) {
-                    oneClickCalls.push({
-                      to: legacy.vault as Address,
-                      data: encodeFunctionData({
-                        abi: VAULT_ABI as any,
-                        functionName: 'queueWithdrawal',
-                        args: [oneClickShares ?? 0n, receiver as Address],
-                      }),
-                    })
-                  } else {
-                    oneClickCalls.push({
-                      to: legacy.vault as Address,
-                      data: encodeFunctionData({
-                        abi: VAULT_ABI as any,
-                        functionName: 'redeem',
-                        args: [oneClickShares ?? 0n, receiver as Address, canonicalCswAddress as Address],
-                      }),
-                    })
+                  if (receiverValid) {
+                    if (shouldQueueOneClick) {
+                      oneClickCalls.push({
+                        to: legacy.vault as Address,
+                        data: encodeFunctionData({
+                          abi: VAULT_ABI as any,
+                          functionName: 'queueWithdrawal',
+                          args: [oneClickShares ?? 0n, receiver as Address],
+                        }),
+                      })
+                    } else {
+                      oneClickCalls.push({
+                        to: legacy.vault as Address,
+                        data: encodeFunctionData({
+                          abi: VAULT_ABI as any,
+                          functionName: 'redeem',
+                          args: [oneClickShares ?? 0n, receiver as Address, canonicalCswAddress as Address],
+                        }),
+                      })
+                    }
                   }
                 }
 
@@ -1935,6 +2024,68 @@ function LegacyWithdrawals() {
                           Claim withdrawal
                         </button>
                         <TxMeta state={txStates[claimKey]} />
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-red-500/25 bg-red-500/[0.04] p-4 space-y-3">
+                      <div className="text-sm text-red-200">Emergency recovery (advanced)</div>
+                      <div className="text-xs text-red-200/80">
+                        Use only when normal withdraw flow is blocked. Sequence: shutdown vault, pull from strategies, then drain vault
+                        asset to receiver.
+                      </div>
+                      <div className="grid gap-2 text-xs text-zinc-400 sm:grid-cols-2">
+                        <div>
+                          Vault shutdown:{' '}
+                          <span className={vaultIsShutdown ? 'text-emerald-300' : 'text-zinc-300'}>
+                            {vaultIsShutdown ? 'Yes' : 'No'}
+                          </span>
+                        </div>
+                        <div>
+                          Vault asset:{' '}
+                          <span className="font-mono text-zinc-300">{vaultAsset ? shortAddress(vaultAsset) : 'Unknown'}</span>
+                        </div>
+                        <div className="sm:col-span-2">
+                          Idle vault asset balance:{' '}
+                          <span className="text-zinc-200">{formatToken(vaultAssetBalance)}</span>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => sendTx(shutdownKey, emergencyShutdownConfig)}
+                            disabled={!canEmergencyShutdown}
+                            className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Shutdown vault
+                          </button>
+                          <TxMeta state={txStates[shutdownKey]} />
+                        </div>
+
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => sendTx(emergencyPullKey, emergencyPullConfig)}
+                            disabled={!canEmergencyPull}
+                            className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Pull from strategies
+                          </button>
+                          <TxMeta state={txStates[emergencyPullKey]} />
+                        </div>
+
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => sendTx(emergencyDrainKey, emergencyDrainConfig)}
+                            disabled={!canEmergencyDrain}
+                            className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Drain vault asset
+                          </button>
+                          <TxMeta state={txStates[emergencyDrainKey]} />
+                        </div>
                       </div>
                     </div>
                   </div>

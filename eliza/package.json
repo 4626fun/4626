@@ -1,0 +1,23 @@
+{
+  "name": "@creatorvault/eliza-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node --experimental-specifier-resolution=node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@elizaos/core": "^1.0.0",
+    "@xmtp/agent-sdk": "^2.0.2",
+    "pg": "^8.13.0",
+    "viem": "^2.45.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.0"
+  }
+}

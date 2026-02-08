@@ -18,6 +18,11 @@ const ADMIN_TABS = [
     description: 'Allowlist requests and approvals',
   },
   {
+    label: 'Agent Setup',
+    to: '/admin/agent-setup',
+    description: 'XMTP agent, vault link, gating',
+  },
+  {
     label: 'Ops',
     to: '/admin/ops',
     description: 'Manifest signing, legacy withdrawals',
@@ -149,7 +154,7 @@ export function AdminLayout() {
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 space-y-6">
       {/* Tab navigation */}
       <div className="rounded-xl border border-white/10 bg-black/30 p-2">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           {ADMIN_TABS.map((tab) => {
             const active = activeTab?.to === tab.to
             return (

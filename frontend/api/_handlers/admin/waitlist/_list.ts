@@ -10,6 +10,7 @@ type WaitlistListItem = {
   email: string
   persona: string | null
   primaryWallet: string | null
+  cswAddress: string | null
   solanaWallet: string | null
   embeddedWallet: string | null
   embeddedWalletChain: string | null
@@ -20,6 +21,11 @@ type WaitlistListItem = {
   appAccessDecidedAt: string | null
   createdAt: string
   updatedAt: string
+  // Pre-provisioning status
+  preprovisioned: boolean
+  preprovFarcasterUsername: string | null
+  preprovZoraHandle: string | null
+  preprovCoinSymbol: string | null
 }
 
 type ListResponse = {
@@ -82,6 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
        email,
        persona,
        primary_wallet,
+       csw_address,
        solana_wallet,
        embedded_wallet,
        embedded_wallet_chain,
@@ -91,7 +98,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
        app_access_status,
        app_access_decided_at,
        created_at,
-       updated_at
+       updated_at,
+       preprovisioned_at,
+       preprov_farcaster_username,
+       preprov_zora_handle,
+       preprov_coin_symbol
      FROM profiles
      ${where}
      ORDER BY created_at DESC
@@ -104,6 +115,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     email: typeof row.email === 'string' ? row.email : String(row.email || ''),
     persona: typeof row.persona === 'string' ? row.persona : null,
     primaryWallet: typeof row.primary_wallet === 'string' ? row.primary_wallet : null,
+    cswAddress: typeof row.csw_address === 'string' ? row.csw_address : null,
     solanaWallet: typeof row.solana_wallet === 'string' ? row.solana_wallet : null,
     embeddedWallet: typeof row.embedded_wallet === 'string' ? row.embedded_wallet : null,
     embeddedWalletChain: typeof row.embedded_wallet_chain === 'string' ? row.embedded_wallet_chain : null,
@@ -114,6 +126,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     appAccessDecidedAt: toIso(row.app_access_decided_at) || null,
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at),
+    preprovisioned: Boolean(row.preprovisioned_at),
+    preprovFarcasterUsername: typeof row.preprov_farcaster_username === 'string' ? row.preprov_farcaster_username : null,
+    preprovZoraHandle: typeof row.preprov_zora_handle === 'string' ? row.preprov_zora_handle : null,
+    preprovCoinSymbol: typeof row.preprov_coin_symbol === 'string' ? row.preprov_coin_symbol : null,
   }))
 
   return res.status(200).json({

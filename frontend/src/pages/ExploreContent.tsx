@@ -120,18 +120,18 @@ export function ExploreContent() {
 
   return (
     <div className="relative pb-24 md:pb-0 min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="mb-8"
+          className="mb-5 sm:mb-8"
         >
-          <h1 className="text-3xl sm:text-4xl font-medium text-white mb-2">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-medium text-white mb-1 sm:mb-2">
             Top Content on Base
           </h1>
-          <p className="text-zinc-400 text-sm">
+          <p className="text-zinc-400 text-[13px] sm:text-sm">
             Content Coins ranked by volume, market cap, and more.
           </p>
         </motion.div>

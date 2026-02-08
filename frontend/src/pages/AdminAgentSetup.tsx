@@ -1,0 +1,759 @@
+import { useMemo, useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
+import { Bot, CheckCircle, Copy, ExternalLink, Link2, Shield, Loader2, AlertTriangle, Wallet, Zap } from 'lucide-react'
+import { encodeFunctionData, getAddress } from 'viem'
+
+import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { apiFetch } from '@/lib/apiBase'
+
+type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+
+type AgentData = {
+  creatorAddress: string
+  xmtpAgentAddress: string
+  agentType?: 'eoa' | 'csw'
+  cswAddress?: string | null
+  listedPublicly: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+type VaultUpsertResponse = {
+  vaultAddress: `0x${string}`
+  groupId: string
+  configHash: string
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function isAddressLike(v: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/i.test(v)
+}
+
+function truncAddr(addr: string): string {
+  if (addr.length < 12) return addr
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
+}
+
+function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider ${
+        ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
+      }`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-emerald-400' : 'bg-zinc-500'}`} />
+      {label}
+    </span>
+  )
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void navigator.clipboard.writeText(text)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      }}
+      className="text-zinc-500 hover:text-zinc-300 transition-colors"
+      title="Copy"
+    >
+      {copied ? <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+    </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+// Coinbase Smart Wallet ABI for addOwnerAddress + isOwnerAddress
+const CSW_ABI = [
+  {
+    type: 'function' as const,
+    name: 'addOwnerAddress',
+    stateMutability: 'nonpayable' as const,
+    inputs: [{ name: 'owner', type: 'address' as const }],
+    outputs: [],
+  },
+  {
+    type: 'function' as const,
+    name: 'isOwnerAddress',
+    stateMutability: 'view' as const,
+    inputs: [{ name: 'account', type: 'address' as const }],
+    outputs: [{ name: '', type: 'bool' as const }],
+  },
+] as const
+
+export function AdminAgentSetup() {
+  const { address } = useAccount()
+  const { authAddress } = useSiweAuth()
+  const queryClient = useQueryClient()
+  const publicClient = usePublicClient()
+  const { data: walletClient } = useWalletClient()
+
+  const creatorAddress = useMemo(() => {
+    const addr = authAddress ?? address
+    return addr ? String(addr).toLowerCase() : null
+  }, [authAddress, address])
+
+  // -----------------------------------------------------------------------
+  // Agent status
+  // -----------------------------------------------------------------------
+  const agentQuery = useQuery({
+    queryKey: ['admin', 'agent', creatorAddress],
+    queryFn: async (): Promise<AgentData | null> => {
+      if (!creatorAddress) return null
+      const res = await apiFetch('/api/v1/agents/creators?listed=false&limit=200')
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<{ agents: AgentData[] }> | null
+      if (!res.ok || !json?.success || !json.data) return null
+      const match = json.data.agents.find((a) => a.creatorAddress.toLowerCase() === creatorAddress)
+      return match ?? null
+    },
+    enabled: Boolean(creatorAddress),
+    staleTime: 15_000,
+  })
+
+  const [agentMode, setAgentMode] = useState<'csw' | 'eoa'>('csw')
+
+  // -----------------------------------------------------------------------
+  // Server wallet provisioning (for CSW mode — needed to sign server-side)
+  // -----------------------------------------------------------------------
+  const serverWalletQuery = useQuery({
+    queryKey: ['admin', 'serverWallet', creatorAddress],
+    queryFn: async (): Promise<{ walletId: string; address: string } | null> => {
+      if (!creatorAddress) return null
+      const res = await apiFetch('/api/v1/agents/creators/provision-wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ creatorAddress }),
+      })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<{ walletId: string; address: string }> | null
+      if (!res.ok || !json?.success || !json.data) return null
+      return json.data
+    },
+    enabled: Boolean(creatorAddress) && agentMode === 'csw',
+    staleTime: 60_000,
+  })
+
+  // -----------------------------------------------------------------------
+  // Check if the server wallet is already an owner of the CSW
+  // -----------------------------------------------------------------------
+  const isOwnerQuery = useQuery({
+    queryKey: ['admin', 'isOwner', creatorAddress, serverWalletQuery.data?.address],
+    queryFn: async (): Promise<boolean> => {
+      if (!creatorAddress || !serverWalletQuery.data?.address || !publicClient) return false
+      try {
+        const result = await publicClient.readContract({
+          address: getAddress(creatorAddress) as `0x${string}`,
+          abi: CSW_ABI,
+          functionName: 'isOwnerAddress',
+          args: [getAddress(serverWalletQuery.data.address) as `0x${string}`],
+        })
+        return Boolean(result)
+      } catch {
+        // Not a CSW or contract call failed
+        return false
+      }
+    },
+    enabled: Boolean(creatorAddress) && Boolean(serverWalletQuery.data?.address) && Boolean(publicClient),
+    staleTime: 15_000,
+  })
+
+  // -----------------------------------------------------------------------
+  // Add server wallet as owner of CSW
+  // -----------------------------------------------------------------------
+  const addOwnerMutation = useMutation({
+    mutationFn: async () => {
+      if (!walletClient || !creatorAddress || !serverWalletQuery.data?.address) {
+        throw new Error('Wallet not connected or server wallet not provisioned')
+      }
+      const data = encodeFunctionData({
+        abi: CSW_ABI,
+        functionName: 'addOwnerAddress',
+        args: [getAddress(serverWalletQuery.data.address) as `0x${string}`],
+      })
+      const hash = await walletClient.sendTransaction({
+        to: getAddress(creatorAddress) as `0x${string}`,
+        data,
+        chain: walletClient.chain,
+      })
+      if (publicClient) {
+        await publicClient.waitForTransactionReceipt({ hash })
+      }
+      return hash
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'isOwner'] })
+    },
+  })
+
+  // -----------------------------------------------------------------------
+  // Enable agent
+  // -----------------------------------------------------------------------
+  const enableMutation = useMutation({
+    mutationFn: async (params: {
+      listed: boolean
+      agentType?: 'eoa' | 'csw'
+      cswAddress?: string
+      privyWalletId?: string
+    }) => {
+      const body: Record<string, any> = { listedPublicly: params.listed }
+      if (params.agentType === 'csw') {
+        body.agentType = 'csw'
+        body.cswAddress = params.cswAddress
+        body.privyWalletId = params.privyWalletId
+      }
+      const res = await apiFetch('/api/v1/agents/creators/enable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<AgentData> | null
+      if (!res.ok || !json?.success) throw new Error(json?.error ?? 'Failed to enable agent')
+      return json.data!
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'agent'] })
+    },
+  })
+
+  const agent = agentQuery.data
+  const serverWallet = serverWalletQuery.data
+  const isServerWalletOwner = isOwnerQuery.data === true
+
+  // -----------------------------------------------------------------------
+  // Vault link form state
+  // -----------------------------------------------------------------------
+  const [vaultAddress, setVaultAddress] = useState('')
+  const [groupId, setGroupId] = useState('')
+  const [creatorCoinAddress, setCreatorCoinAddress] = useState('')
+  const [gatingEnabled, setGatingEnabled] = useState(true)
+  const [gatingMode, setGatingMode] = useState<'shares' | 'none'>('shares')
+  const [minShares, setMinShares] = useState('1')
+  const [joinLocked, setJoinLocked] = useState(false)
+
+  const vaultFormValid = useMemo(() => {
+    return (
+      isAddressLike(vaultAddress) &&
+      groupId.trim().length > 0 &&
+      isAddressLike(creatorCoinAddress) &&
+      creatorAddress !== null
+    )
+  }, [vaultAddress, groupId, creatorCoinAddress, creatorAddress])
+
+  const vaultMutation = useMutation({
+    mutationFn: async () => {
+      if (!creatorAddress) throw new Error('Not signed in')
+
+      const config = {
+        version: 1,
+        chainId: 8453,
+        vault: {
+          vaultAddress: vaultAddress.toLowerCase() as `0x${string}`,
+          creatorCoinAddress: creatorCoinAddress.toLowerCase() as `0x${string}`,
+          canonicalOwnerAddress: creatorAddress as `0x${string}`,
+        },
+        xmtp: {
+          groupId: groupId.trim(),
+          agentInboxId: agent?.xmtpAgentAddress ?? undefined,
+        },
+        gating: {
+          enabled: gatingEnabled,
+          joinLocked,
+          mode: gatingMode,
+          thresholds: gatingMode === 'shares' ? { minShares: String(minShares || '1') } : undefined,
+          failClosed: true,
+        },
+        roles: {
+          owner: creatorAddress as `0x${string}`,
+        },
+      }
+
+      const res = await apiFetch('/api/keepr/vault/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config }),
+      })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<VaultUpsertResponse> | null
+      if (!res.ok || !json?.success) throw new Error(json?.error ?? 'Failed to link vault')
+      return json.data!
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'agent'] })
+    },
+  })
+
+  // -----------------------------------------------------------------------
+  // Render
+  // -----------------------------------------------------------------------
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-display text-white">Agent Setup</h2>
+          <p className="text-xs text-zinc-500 mt-1">Enable your XMTP agent, link a vault group, and configure gating.</p>
+        </div>
+        {creatorAddress && (
+          <span className="text-[10px] font-mono text-zinc-600">{truncAddr(creatorAddress)}</span>
+        )}
+      </div>
+
+      {/* Step 1: Enable Agent */}
+      <div className="rounded-xl border border-white/10 bg-black/30 overflow-hidden">
+        <div className="px-5 py-4 border-b border-white/5 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+            <Bot className="w-4 h-4 text-indigo-400" />
+          </div>
+          <div>
+            <div className="text-sm text-white font-medium">1. XMTP Agent</div>
+            <div className="text-[10px] text-zinc-500">Set up your creator agent identity</div>
+          </div>
+          <div className="ml-auto">
+            {agentQuery.isLoading ? (
+              <Loader2 className="w-4 h-4 text-zinc-500 animate-spin" />
+            ) : agent ? (
+              <StatusBadge ok label={agent.agentType === 'csw' ? 'CSW Active' : 'Active'} />
+            ) : (
+              <StatusBadge ok={false} label="Not enabled" />
+            )}
+          </div>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          {agent ? (
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Agent Address</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs text-zinc-300">{truncAddr(agent.xmtpAgentAddress)}</span>
+                    <CopyButton text={agent.xmtpAgentAddress} />
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Type</div>
+                  <span className="text-xs text-zinc-300">
+                    {agent.agentType === 'csw' ? 'Zora Smart Wallet' : 'Generated EOA'}
+                  </span>
+                </div>
+              </div>
+              {agent.agentType === 'csw' && agent.cswAddress && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Canonical Smart Wallet</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs text-emerald-400">{truncAddr(agent.cswAddress)}</span>
+                    <CopyButton text={agent.cswAddress} />
+                    <a
+                      href={`https://basescan.org/address/${agent.cswAddress}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-zinc-500 hover:text-zinc-300 transition-colors"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-xs">
+                <a
+                  href={`https://xmtp.chat/dm/${agent.xmtpAgentAddress}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors"
+                >
+                  Test on xmtp.chat <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+              <div className="flex items-center gap-2">
+                {!agent.listedPublicly && (
+                  <button
+                    type="button"
+                    onClick={() => void enableMutation.mutateAsync({ listed: true })}
+                    disabled={enableMutation.isPending}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+                  >
+                    {enableMutation.isPending ? 'Updating...' : 'Make public'}
+                  </button>
+                )}
+                {agent.listedPublicly && (
+                  <button
+                    type="button"
+                    onClick={() => void enableMutation.mutateAsync({ listed: false })}
+                    disabled={enableMutation.isPending}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-zinc-500/20 bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20 transition-colors disabled:opacity-50"
+                  >
+                    {enableMutation.isPending ? 'Updating...' : 'Unlist'}
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Agent mode selector */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setAgentMode('csw')}
+                  className={`text-left rounded-lg border p-3 transition-colors ${
+                    agentMode === 'csw'
+                      ? 'border-emerald-500/30 bg-emerald-500/5'
+                      : 'border-white/10 bg-black/20 hover:border-white/20'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Wallet className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-medium text-white">Use my Zora Wallet</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-500 leading-relaxed">
+                    Your existing Coinbase Smart Wallet becomes the agent. Same address, same identity.
+                  </p>
+                  {agentMode === 'csw' && (
+                    <span className="inline-flex items-center gap-1 mt-2 text-[9px] text-emerald-400 uppercase tracking-wider">
+                      <Zap className="w-2.5 h-2.5" /> Recommended
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAgentMode('eoa')}
+                  className={`text-left rounded-lg border p-3 transition-colors ${
+                    agentMode === 'eoa'
+                      ? 'border-indigo-500/30 bg-indigo-500/5'
+                      : 'border-white/10 bg-black/20 hover:border-white/20'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Bot className="w-4 h-4 text-indigo-400" />
+                    <span className="text-xs font-medium text-white">Generate new identity</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-500 leading-relaxed">
+                    Creates a separate XMTP identity. Agent wallet address will be different from yours.
+                  </p>
+                </button>
+              </div>
+
+              {/* CSW flow */}
+              {agentMode === 'csw' && (
+                <div className="space-y-3 rounded-lg border border-emerald-500/10 bg-emerald-500/[0.02] p-4">
+                  {creatorAddress && (
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Your Smart Wallet</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-emerald-400">{truncAddr(creatorAddress)}</span>
+                        <CopyButton text={creatorAddress} />
+                      </div>
+                    </div>
+                  )}
+
+                  {serverWalletQuery.isLoading && (
+                    <div className="flex items-center gap-2 text-xs text-zinc-400">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Provisioning server signer...
+                    </div>
+                  )}
+
+                  {serverWallet && (
+                    <>
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Server Signer</div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-zinc-300">{truncAddr(serverWallet.address)}</span>
+                          <CopyButton text={serverWallet.address} />
+                        </div>
+                        <p className="text-[10px] text-zinc-600 mt-1">
+                          This address signs XMTP messages on behalf of your Smart Wallet.
+                        </p>
+                      </div>
+
+                      {isOwnerQuery.isLoading ? (
+                        <div className="flex items-center gap-2 text-xs text-zinc-400">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Checking owner status...
+                        </div>
+                      ) : isServerWalletOwner ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-xs text-emerald-400">
+                            <CheckCircle className="w-3.5 h-3.5" /> Server signer is an authorized owner
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void enableMutation.mutateAsync({
+                              listed: true,
+                              agentType: 'csw',
+                              cswAddress: creatorAddress!,
+                              privyWalletId: serverWallet.walletId,
+                            })}
+                            disabled={enableMutation.isPending || !creatorAddress}
+                            className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+                          >
+                            {enableMutation.isPending ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Activating...
+                              </>
+                            ) : (
+                              <>
+                                <Wallet className="w-3.5 h-3.5" /> Activate CSW Agent
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <p className="text-xs text-amber-400">
+                            Add the server signer as an owner of your Smart Wallet so it can sign on your behalf.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => void addOwnerMutation.mutateAsync()}
+                            disabled={addOwnerMutation.isPending || !walletClient}
+                            className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+                          >
+                            {addOwnerMutation.isPending ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending transaction...
+                              </>
+                            ) : (
+                              <>
+                                <Shield className="w-3.5 h-3.5" /> Add Owner (onchain tx)
+                              </>
+                            )}
+                          </button>
+                          {addOwnerMutation.isError && (
+                            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
+                              <AlertTriangle className="w-3.5 h-3.5 text-red-400 mt-0.5 shrink-0" />
+                              <span className="text-xs text-red-300">{(addOwnerMutation.error as Error)?.message}</span>
+                            </div>
+                          )}
+                          {addOwnerMutation.isSuccess && (
+                            <div className="flex items-center gap-2 text-xs text-emerald-400">
+                              <CheckCircle className="w-3.5 h-3.5" /> Owner added! Verifying...
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* EOA flow */}
+              {agentMode === 'eoa' && (
+                <div className="space-y-3">
+                  <p className="text-xs text-zinc-400">
+                    This will generate a new XMTP identity (EOA) for your creator agent.
+                    The private key is encrypted and stored securely.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void enableMutation.mutateAsync({ listed: true })}
+                    disabled={enableMutation.isPending || !creatorAddress}
+                    className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 transition-colors disabled:opacity-50"
+                  >
+                    {enableMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating...
+                      </>
+                    ) : (
+                      <>
+                        <Bot className="w-3.5 h-3.5" /> Enable Agent
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {enableMutation.isError && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-red-400 mt-0.5 shrink-0" />
+              <span className="text-xs text-red-300">{(enableMutation.error as Error)?.message}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Step 2: Link Vault Group */}
+      <div className="rounded-xl border border-white/10 bg-black/30 overflow-hidden">
+        <div className="px-5 py-4 border-b border-white/5 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+            <Link2 className="w-4 h-4 text-amber-400" />
+          </div>
+          <div>
+            <div className="text-sm text-white font-medium">2. Link Vault Group</div>
+            <div className="text-[10px] text-zinc-500">Connect your vault to an XMTP group chat</div>
+          </div>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          {!agent ? (
+            <p className="text-xs text-zinc-500">Enable your agent first (Step 1) before linking a vault.</p>
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Vault Address</label>
+                  <input
+                    type="text"
+                    value={vaultAddress}
+                    onChange={(e) => setVaultAddress(e.target.value)}
+                    placeholder="0x..."
+                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-zinc-200 font-mono placeholder:text-zinc-700 focus:outline-none focus:border-amber-500/30"
+                  />
+                  {vaultAddress && !isAddressLike(vaultAddress) && (
+                    <span className="text-[10px] text-red-400 mt-1">Invalid address</span>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Creator Coin Address</label>
+                  <input
+                    type="text"
+                    value={creatorCoinAddress}
+                    onChange={(e) => setCreatorCoinAddress(e.target.value)}
+                    placeholder="0x..."
+                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-zinc-200 font-mono placeholder:text-zinc-700 focus:outline-none focus:border-amber-500/30"
+                  />
+                  {creatorCoinAddress && !isAddressLike(creatorCoinAddress) && (
+                    <span className="text-[10px] text-red-400 mt-1">Invalid address</span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">XMTP Group ID</label>
+                <input
+                  type="text"
+                  value={groupId}
+                  onChange={(e) => setGroupId(e.target.value)}
+                  placeholder="Paste the XMTP conversation/group ID"
+                  className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-zinc-200 font-mono placeholder:text-zinc-700 focus:outline-none focus:border-amber-500/30"
+                />
+                <p className="text-[10px] text-zinc-600 mt-1">
+                  Find this in your XMTP client's group settings, or create a new group and copy its ID.
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Step 3: Gating Config */}
+      <div className="rounded-xl border border-white/10 bg-black/30 overflow-hidden">
+        <div className="px-5 py-4 border-b border-white/5 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+            <Shield className="w-4 h-4 text-violet-400" />
+          </div>
+          <div>
+            <div className="text-sm text-white font-medium">3. Access Gating</div>
+            <div className="text-[10px] text-zinc-500">Control who can join your vault group</div>
+          </div>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          {!agent ? (
+            <p className="text-xs text-zinc-500">Enable your agent first.</p>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={gatingEnabled}
+                    onChange={(e) => setGatingEnabled(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-500/60" />
+                </label>
+                <span className="text-xs text-zinc-300">Require vault shares to join</span>
+              </div>
+
+              {gatingEnabled && (
+                <div className="grid gap-4 sm:grid-cols-2 pl-12">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Gating Mode</label>
+                    <select
+                      value={gatingMode}
+                      onChange={(e) => setGatingMode(e.target.value as 'shares' | 'none')}
+                      className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-violet-500/30"
+                    >
+                      <option value="shares">Share balance check</option>
+                      <option value="none">No check (open)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Min Shares</label>
+                    <input
+                      type="text"
+                      value={minShares}
+                      onChange={(e) => setMinShares(e.target.value)}
+                      placeholder="1"
+                      className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-zinc-200 font-mono placeholder:text-zinc-700 focus:outline-none focus:border-violet-500/30"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={joinLocked}
+                    onChange={(e) => setJoinLocked(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500/60" />
+                </label>
+                <div>
+                  <span className="text-xs text-zinc-300">Lock joins</span>
+                  <p className="text-[10px] text-zinc-600">Prevent new members from joining even if they pass gating checks</p>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Submit */}
+      {agent && (
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void vaultMutation.mutateAsync()}
+            disabled={!vaultFormValid || vaultMutation.isPending}
+            className="inline-flex items-center gap-2 text-sm px-5 py-2.5 rounded-lg bg-brand-primary/10 border border-brand-primary/20 text-brand-primary hover:bg-brand-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {vaultMutation.isPending ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…
+              </>
+            ) : (
+              'Save vault configuration'
+            )}
+          </button>
+
+          {vaultMutation.isSuccess && (
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+              <CheckCircle className="w-3.5 h-3.5" /> Vault linked successfully
+            </span>
+          )}
+        </div>
+      )}
+
+      {vaultMutation.isError && (
+        <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3">
+          <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+          <div className="text-xs text-red-300">
+            <span className="font-medium">Failed to save:</span> {(vaultMutation.error as Error)?.message}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

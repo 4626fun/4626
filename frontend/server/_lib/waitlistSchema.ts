@@ -65,6 +65,16 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS banner_url TEXT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS profile_fields JSONB NULL;`
+
+      // Pre-provisioning columns (quickstart data prepared at waitlist signup)
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprovisioned_at TIMESTAMPTZ NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_server_wallet_id TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_server_wallet_address TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_coin_address TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_coin_symbol TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_farcaster_username TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_farcaster_pfp TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_zora_handle TEXT NULL;`
     } catch {
       // ignore (older Postgres or restricted perms)
     }

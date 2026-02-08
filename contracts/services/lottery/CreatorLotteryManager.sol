@@ -4,36 +4,40 @@ pragma solidity ^0.8.20;
 /**
  * @title CreatorLotteryManager
  * @author 0xakita.eth 
- * @notice SHARED swap-based lottery service for ALL Creator Coins
+ * @notice SHARED swap-based lottery service for ALL Creator Coins (hub-only, deployed on Base)
  * 
- * @dev ARCHITECTURE:
- *      This is a SHARED service deployed once per chain.
+ * @dev ARCHITECTURE (Hub-Centric):
+ *      This is a SHARED service deployed ONLY on the hub chain (Base).
  *      It serves ALL Creator Coins by looking up their contracts from the registry.
+ *      Remote chain OFTs send lottery entry messages here via LayerZero.
  * 
  * @dev LOTTERY MECHANICS:
- *      1. User trades ANY share token (■AKITA, ■DRAGON, etc) → lottery entry created
- *      2. Win probability scales with trade size ($1 = base, $1000 = max)
- *      3. sToken holders get boosted win chances
- *      4. Winners receive % from ALL active creator vaults (diversified prize!)
- *      5. Winners are broadcast to ALL chains via LayerZero
+ *      1. User trades ANY share token (■AKITA, ■DRAGON, etc) on ANY chain
+ *      2. Hub: local processSwapLottery() is called directly
+ *         Remote: OFT sends MSG_TYPE_LOTTERY_ENTRY via LayerZero to this contract
+ *      3. Win probability scales with trade size ($1 = base, $1000 = max)
+ *      4. ve4626 lockers get boosted win chances
+ *      5. Winners receive % from ALL active creator vaults (diversified prize!)
+ *      6. Winner callback sent to source chain OFT for UX notification
  * 
  * @dev MULTI-TOKEN PRIZE PAYOUT:
- *      Winner gets shares from EVERY active creator vault:
+ *      Winner gets shares from EVERY active creator vault on Base:
  *        - ■AKITA shares (69% of AKITA vault jackpot)
  *        - wsDRAGON shares (69% of DRAGON vault jackpot)
  *        - wsXYZ shares (69% of XYZ vault jackpot)
  *        - ... etc for ALL active creators
- *      Result: Winner gets a diversified portfolio of ALL creator tokens! 🎁
+ *      Result: Winner gets a diversified portfolio of ALL creator tokens!
  * 
- * @dev CROSS-CHAIN FLOW (Hub = Base):
- *      Winner on Base:
- *        1. Pay from ALL local vaults
- *        2. Broadcast to all remote chains
+ * @dev CROSS-CHAIN FLOW (Hub-Centric):
+ *      Trade on Base:
+ *        1. OFT calls processSwapLottery() directly
+ *        2. VRF + payout happen locally
  *      
- *      Winner on Remote:
- *        1. Notify hub (Base)
- *        2. Hub broadcasts to ALL chains (including source)
- *        3. Each chain pays from ALL their local vaults
+ *      Trade on Remote (e.g., Arbitrum):
+ *        1. Remote OFT sends MSG_TYPE_LOTTERY_ENTRY to this contract
+ *        2. This contract processes VRF locally on Base
+ *        3. If win: pay from ALL hub vaults
+ *        4. Send MSG_TYPE_WINNER_CALLBACK to source chain OFT
  */
 
 import {OApp, Origin, MessagingFee} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
@@ -54,22 +58,13 @@ import {ICreatorOracle} from "../../interfaces/ICreatorOracle.sol";
 // ================================
 
 interface ICreatorRegistryLottery {
-    function getLayerZeroEndpoint(uint16 _chainId) external view returns (address);
-    function getEidForChainId(uint256 _chainId) external view returns (uint32);
-    function getSupportedChains() external view returns (uint16[] memory);
-    function isHubChain() external view returns (bool);
-    function getGasReserve(uint16 chainId) external view returns (address);
-    function getRemoteVaults() external view returns (uint32[] memory eids, address[] memory vaults);
-    
     // Per-creator lookups
     function getVaultForToken(address _token) external view returns (address);
     function getShareOFTForToken(address _token) external view returns (address);
     function getTokenForShareOFT(address _shareOFT) external view returns (address);
     function getOracleForToken(address _token) external view returns (address);
     function getGaugeControllerForToken(address _token) external view returns (address);
-    function isCreatorCoinRegistered(address _token) external view returns (bool);
     function isCreatorCoinActive(address _token) external view returns (bool);
-    function getLotteryManager(uint16 _chainId) external view returns (address);
     
     // Global queries
     function getAllCreatorCoins() external view returns (address[] memory);
@@ -111,13 +106,14 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     uint256 public constant MIN_SWAP_USD = 1_000_000;      // $1 (6 decimals)
     uint256 public constant MAX_SWAP_USD = 1_000_000_000_000; // $1M
     uint256 public constant BASIS_POINTS = 10_000;
-    uint256 public constant BASE_CHAIN_ID = 8453;
 
-    uint16 public constant MSG_TYPE_WINNER_BROADCAST = 1;
-    uint16 public constant MSG_TYPE_WINNER_NOTIFY = 2;
+    /// @notice Message types for hub-centric architecture
+    uint16 public constant MSG_TYPE_LOTTERY_ENTRY = 3;
+    uint16 public constant MSG_TYPE_WINNER_CALLBACK = 4;
 
     uint128 public constant DEFAULT_GAS_LIMIT = 200_000;
     uint128 public constant DEFAULT_MSG_VALUE = 0;
+    uint128 public constant DEFAULT_CALLBACK_GAS_LIMIT = 100_000;
     
     /// @notice Maximum boost for ve4626 lockers (2.5x = 25000 bps)
     uint256 public constant MAX_VE_BOOST = 25000;
@@ -160,7 +156,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
     LotteryConfig public lotteryConfig;
 
-    /// @notice VRF request tracking - now includes creator coin
+    /// @notice VRF request tracking - includes creator coin and source chain
     enum VRFType { LOCAL, CROSS_CHAIN }
 
     struct VRFRequest {
@@ -168,9 +164,20 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         address creatorCoin;     // Which creator coin this entry is for
         uint256 amountUSD;
         VRFType vrfType;
+        uint32 sourceChainEid;   // 0 = local (hub), non-zero = remote chain lottery entry
     }
 
     mapping(uint256 => VRFRequest) public vrfRequests;
+
+    /// @notice Authorized remote OFT peers that can send lottery entries
+    /// @dev Maps (srcEid, senderBytes32) → authorized
+    mapping(uint32 => mapping(bytes32 => bool)) public authorizedRemoteOFTs;
+
+    /// @notice Gas limit for winner callback messages
+    uint128 public callbackGasLimit = DEFAULT_CALLBACK_GAS_LIMIT;
+
+    /// @notice Total remote lottery entries received
+    uint256 public totalRemoteLotteryEntries;
 
     /// @notice Global statistics (vault share units)
     uint256 public totalLotteryEntries;
@@ -216,14 +223,24 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     );
     event SwapContractAuthorized(address indexed swapContract, bool authorized);
     event LotteryConfigUpdated(uint256 minSwap, uint256 rewardPercentage, bool isActive);
-    event WinnerBroadcast(uint32 indexed dstEid, address indexed creatorCoin, address indexed winner, uint16 payoutBps);
-    event CrossChainBroadcastFailed(uint32 indexed dstEid, address indexed winner, string reason);
     event CrossChainJackpotPaid(address indexed creatorCoin, address indexed winner, uint256 shares, uint256 tokenValue);
     event LotteryWon(address indexed creatorCoin, uint256 indexed entryId, address indexed winner, uint256 shares, uint256 tokenValue);
     event MultiTokenJackpotWon(address indexed triggeringCoin, address indexed winner, uint256 numVaultsPaid);
-    event WinnerNotifiedToHub(address indexed creatorCoin, address indexed winner, uint16 payoutBps);
-    event HubNotificationFailed(address indexed winner, string reason);
-    event WinnerReceivedFromRemote(uint32 indexed srcEid, address indexed creatorCoin, address indexed winner, uint16 payoutBps);
+    event RemoteLotteryEntryReceived(
+        uint32 indexed srcEid,
+        address indexed buyer,
+        address indexed tokenIn,
+        uint256 amount,
+        uint32 sourceChainId
+    );
+    event WinnerCallbackSent(
+        uint32 indexed dstEid,
+        address indexed winner,
+        address indexed creatorCoin,
+        uint256 totalSharesPaid
+    );
+    event RemoteOFTAuthorized(uint32 indexed srcEid, bytes32 sender, bool authorized);
+    event CallbackGasLimitUpdated(uint128 newGasLimit);
     event VRFConsumerUpdated(address indexed consumer);
     event TargetEidUpdated(uint32 indexed targetEid);
     event VRFIntegratorUpdated(address indexed integrator, bool trusted);
@@ -346,7 +363,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     }
 
     /**
-     * @notice Request cross-chain VRF
+     * @notice Request cross-chain VRF (hub local call path, sourceChainEid = 0)
      */
     function _requestCrossChainVRF(
         address creatorCoin,
@@ -354,46 +371,11 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         uint256 swapValueUSD,
         uint256 winChancePPM
     ) internal returns (uint256) {
-        if (address(vrfIntegrator) == address(0) || targetEid == 0) {
-            return 0;
-        }
-        if (!trustedVrfIntegrators[address(vrfIntegrator)]) {
-            return 0;
-        }
-
-        try vrfIntegrator.quoteFee() returns (MessagingFee memory fee) {
-            uint256 availableFee = address(this).balance;
-
-            if (availableFee >= fee.nativeFee) {
-                // slither-disable-next-line arbitrary-send-eth,unused-return,reentrancy-benign
-                try vrfIntegrator.requestRandomWordsPayable{value: fee.nativeFee}(targetEid) returns (
-                    MessagingReceipt memory,
-                    uint64 sequence
-                ) {
-                    vrfRequests[uint256(sequence)] = VRFRequest({
-                        user: buyer,
-                        creatorCoin: creatorCoin,
-                        amountUSD: swapValueUSD,
-                        vrfType: VRFType.CROSS_CHAIN
-                    });
-                    totalLotteryEntries++;
-                    creatorStats[creatorCoin].entries++;
-
-                    emit LotteryEntryCreated(creatorCoin, buyer, swapValueUSD, winChancePPM, uint256(sequence));
-                    return uint256(sequence);
-                } catch {
-                    return 0;
-                }
-            }
-        } catch {
-            return 0;
-        }
-
-        return 0;
+        return _requestCrossChainVRFWithSource(creatorCoin, buyer, swapValueUSD, winChancePPM, 0);
     }
 
     /**
-     * @notice Request local VRF
+     * @notice Request local VRF (hub local call path, sourceChainEid = 0)
      */
     function _requestLocalVRF(
         address creatorCoin,
@@ -401,26 +383,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         uint256 swapValueUSD,
         uint256 winChancePPM
     ) internal returns (uint256) {
-        if (address(localVRFConsumer) == address(0)) {
-            return 0;
-        }
-
-        // slither-disable-next-line reentrancy-benign
-        try localVRFConsumer.requestRandomWords() returns (uint256 requestId) {
-            vrfRequests[requestId] = VRFRequest({
-                user: buyer,
-                creatorCoin: creatorCoin,
-                amountUSD: swapValueUSD,
-                vrfType: VRFType.LOCAL
-            });
-            totalLotteryEntries++;
-            creatorStats[creatorCoin].entries++;
-
-            emit LotteryEntryCreated(creatorCoin, buyer, swapValueUSD, winChancePPM, requestId);
-            return requestId;
-        } catch {
-            return 0;
-        }
+        return _requestLocalVRFWithSource(creatorCoin, buyer, swapValueUSD, winChancePPM, 0);
     }
 
     // ================================
@@ -455,7 +418,13 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         uint256 randomResult = randomWords[0] % 1_000_000;
 
         if (randomResult < winChancePPM) {
-            uint256 reward = _processWin(request.creatorCoin, request.user, request.amountUSD, requestId);
+            uint256 reward = _processWin(
+                request.creatorCoin,
+                request.user,
+                request.amountUSD,
+                requestId,
+                request.sourceChainEid
+            );
             emit LotteryResultProcessed(request.creatorCoin, request.user, request.amountUSD, true, reward, requestId);
         } else {
             emit LotteryResultProcessed(request.creatorCoin, request.user, request.amountUSD, false, 0, requestId);
@@ -587,95 +556,41 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         return (gaugeBoostPPM * scaledAmount) / maxScale;
     }
 
+    /**
+     * @notice Process a lottery win (hub-only, all wins are paid on Base)
+     * @param sourceChainEid The EID of the chain where the trade originated (0 = local hub)
+     */
     function _processWin(
         address creatorCoin,
         address user,
         uint256 swapAmountUSD,
-        uint256 requestId
+        uint256 requestId,
+        uint32 sourceChainEid
     ) internal returns (uint256) {
         totalWinners++;
         creatorStats[creatorCoin].winners++;
         emit LotteryWinner(creatorCoin, user, swapAmountUSD, 0, requestId);
 
-        if (registry.isHubChain()) {
-            uint256 localPayout = _payoutLocalJackpot(creatorCoin, user, uint16(lotteryConfig.rewardPercentage));
-            _broadcastWinnerToRemoteChains(creatorCoin, user, uint16(lotteryConfig.rewardPercentage));
-            return localPayout;
-        } else {
-            _notifyHubOfWinner(creatorCoin, user, uint16(lotteryConfig.rewardPercentage));
-            return 0;
+        // All wins are paid from hub vaults
+        uint256 localPayout = _payoutLocalJackpot(creatorCoin, user, uint16(lotteryConfig.rewardPercentage));
+
+        // If the trade originated on a remote chain, send a winner callback
+        // so the user gets notified on the chain they traded on
+        if (sourceChainEid != 0) {
+            _sendWinnerCallback(sourceChainEid, user, creatorCoin, localPayout);
         }
+
+        return localPayout;
     }
 
     // ================================
-    // CROSS-CHAIN MESSAGING
+    // CROSS-CHAIN MESSAGING (Hub-Centric)
     // ================================
 
-    function _notifyHubOfWinner(address creatorCoin, address winner, uint16 payoutBps) internal {
-        uint32 hubEid = registry.getEidForChainId(BASE_CHAIN_ID);
-
-        bytes memory payload = abi.encode(MSG_TYPE_WINNER_NOTIFY, creatorCoin, winner, payoutBps);
-        bytes memory options = _buildOptions(hubEid);
-
-        address gasReserve = registry.getGasReserve(uint16(block.chainid));
-
-        MessagingFee memory fee = this._quoteBroadcast(hubEid, payload, options);
-        uint256 availableGas = gasReserve != address(0) ? gasReserve.balance : address(this).balance;
-        require(availableGas >= fee.nativeFee, "Insufficient gas");
-        this._sendBroadcast{value: fee.nativeFee}(hubEid, payload, options, fee);
-        emit WinnerNotifiedToHub(creatorCoin, winner, payoutBps);
-    }
-
-    function _broadcastWinnerToRemoteChains(address creatorCoin, address winner, uint16 payoutBps) internal {
-        (uint32[] memory eids, address[] memory vaults) = registry.getRemoteVaults();
-        if (vaults.length == 0) return;
-
-        bytes memory payload = abi.encode(creatorCoin, winner, payoutBps);
-        address gasReserve = registry.getGasReserve(uint16(block.chainid));
-
-        for (uint i = 0; i < eids.length; i++) {
-            uint32 dstEid = eids[i];
-            bytes memory options = _buildOptions(dstEid);
-
-            // slither-disable-next-line calls-loop
-            MessagingFee memory fee = this._quoteBroadcast(dstEid, payload, options);
-            uint256 availableGas = gasReserve != address(0) ? gasReserve.balance : address(this).balance;
-            if (availableGas < fee.nativeFee) revert("Insufficient gas");
-            // slither-disable-next-line calls-loop
-            this._sendBroadcast{value: fee.nativeFee}(dstEid, payload, options, fee);
-            emit WinnerBroadcast(dstEid, creatorCoin, winner, payoutBps);
-        }
-    }
-
-    function _buildOptions(uint32 dstEid) internal view returns (bytes memory) {
-        bytes memory enforcedOpts = enforcedOptions[dstEid][MSG_TYPE_WINNER_BROADCAST];
-
-        if (enforcedOpts.length > 0) {
-            return enforcedOpts;
-        }
-
-        return OptionsBuilder.newOptions()
-            .addExecutorLzReceiveOption(DEFAULT_GAS_LIMIT, DEFAULT_MSG_VALUE);
-    }
-
-    function _quoteBroadcast(
-        uint32 dstEid,
-        bytes memory payload,
-        bytes memory options
-    ) external view returns (MessagingFee memory) {
-        return _quote(dstEid, payload, options, false);
-    }
-
-    function _sendBroadcast(
-        uint32 dstEid,
-        bytes memory payload,
-        bytes memory options,
-        MessagingFee memory fee
-    ) external payable {
-        require(msg.sender == address(this), "Internal only");
-        _lzSend(dstEid, payload, options, fee, payable(address(this)));
-    }
-
+    /**
+     * @notice Receive LayerZero messages (lottery entries from remote OFTs)
+     * @dev Only accepts MSG_TYPE_LOTTERY_ENTRY from authorized remote OFTs
+     */
     function _lzReceive(
         Origin calldata _origin,
         bytes32,
@@ -683,34 +598,192 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         address,
         bytes calldata
     ) internal override {
-        bytes32 senderPeer = peers[_origin.srcEid];
-        require(senderPeer != bytes32(0), "Unknown source");
-        require(_origin.sender == senderPeer, "Invalid sender");
+        // Verify sender is an authorized remote OFT
+        require(
+            authorizedRemoteOFTs[_origin.srcEid][_origin.sender],
+            "Unauthorized remote OFT"
+        );
 
-        // Check for winner notify message (from remote to hub)
-        if (_payload.length >= 66) {
-            // Try to decode as notify message first
-            (uint16 msgType, address notifyCreatorCoin, address notifyWinner, uint16 notifyPayoutBps) = abi.decode(
-                _payload, 
-                (uint16, address, address, uint16)
-            );
+        // Decode message type
+        require(_payload.length >= 32, "Invalid payload");
+        uint16 msgType = abi.decode(_payload[:32], (uint16));
 
-            if (msgType == MSG_TYPE_WINNER_NOTIFY && registry.isHubChain()) {
-                emit WinnerReceivedFromRemote(_origin.srcEid, notifyCreatorCoin, notifyWinner, notifyPayoutBps);
-                _payoutLocalJackpot(notifyCreatorCoin, notifyWinner, notifyPayoutBps);
-                _broadcastWinnerToRemoteChains(notifyCreatorCoin, notifyWinner, notifyPayoutBps);
-                return;
-            }
+        if (msgType == MSG_TYPE_LOTTERY_ENTRY) {
+            _handleLotteryEntry(_origin.srcEid, _payload);
+        } else {
+            revert("Unknown message type");
+        }
+    }
+
+    /**
+     * @dev Handle a lottery entry from a remote chain OFT
+     *      Payload: (msgType, buyer, tokenIn, amount, sourceChainId)
+     */
+    function _handleLotteryEntry(uint32 srcEid, bytes calldata _payload) internal {
+        (
+            , // msgType (already checked)
+            address buyer,
+            address tokenIn,
+            uint256 amount,
+            uint32 sourceChainId
+        ) = abi.decode(_payload, (uint16, address, address, uint256, uint32));
+
+        if (buyer == address(0) || tokenIn == address(0) || amount == 0) return;
+
+        totalRemoteLotteryEntries++;
+        emit RemoteLotteryEntryReceived(srcEid, buyer, tokenIn, amount, sourceChainId);
+
+        // Derive creator coin from tokenIn (■TOKEN)
+        address creatorCoin = registry.getTokenForShareOFT(tokenIn);
+        if (creatorCoin == address(0)) return;
+        if (!registry.isCreatorCoinActive(creatorCoin)) return;
+
+        // Calculate USD value using per-creator oracle
+        uint256 swapValueUSD = _calculateTokenUSD(creatorCoin, tokenIn, amount);
+        if (swapValueUSD < lotteryConfig.minSwapAmount) return;
+        if (!lotteryConfig.isActive) return;
+
+        // Get vault for this creator coin (for ve(3,3) vault weighting)
+        address vault = registry.getVaultForToken(creatorCoin);
+
+        // Calculate win probability with ve(3,3) boosts
+        uint256 baseWinChance = calculateWinChance(swapValueUSD);
+        uint256 boostedWinChance = _applyBoost(buyer, vault, swapValueUSD, baseWinChance);
+
+        // Request VRF with sourceChainEid so we can send callback on win
+        uint256 entryId;
+        if (useLocalVRF && address(localVRFConsumer) != address(0)) {
+            entryId = _requestLocalVRFWithSource(creatorCoin, buyer, swapValueUSD, boostedWinChance, srcEid);
+        } else {
+            entryId = _requestCrossChainVRFWithSource(creatorCoin, buyer, swapValueUSD, boostedWinChance, srcEid);
         }
 
-        require(!registry.isHubChain(), "Hub doesn't receive broadcasts");
+        if (entryId > 0) {
+            emit LotteryEntryCreated(creatorCoin, buyer, swapValueUSD, boostedWinChance, entryId);
+        }
+    }
 
-        // Decode as broadcast message (hub to remote)
-        (address broadcastCreatorCoin, address broadcastWinner, uint16 broadcastPayoutBps) = abi.decode(
-            _payload, 
-            (address, address, uint16)
+    /**
+     * @notice Request local VRF with source chain tracking
+     */
+    function _requestLocalVRFWithSource(
+        address creatorCoin,
+        address buyer,
+        uint256 swapValueUSD,
+        uint256 /* winChancePPM */,
+        uint32 sourceChainEid
+    ) internal returns (uint256) {
+        if (address(localVRFConsumer) == address(0)) return 0;
+
+        try localVRFConsumer.requestRandomWords() returns (uint256 requestId) {
+            vrfRequests[requestId] = VRFRequest({
+                user: buyer,
+                creatorCoin: creatorCoin,
+                amountUSD: swapValueUSD,
+                vrfType: VRFType.LOCAL,
+                sourceChainEid: sourceChainEid
+            });
+            totalLotteryEntries++;
+            creatorStats[creatorCoin].entries++;
+            return requestId;
+        } catch {
+            return 0;
+        }
+    }
+
+    /**
+     * @notice Request cross-chain VRF with source chain tracking
+     */
+    function _requestCrossChainVRFWithSource(
+        address creatorCoin,
+        address buyer,
+        uint256 swapValueUSD,
+        uint256 /* winChancePPM */,
+        uint32 sourceChainEid
+    ) internal returns (uint256) {
+        if (address(vrfIntegrator) == address(0) || targetEid == 0) return 0;
+        if (!trustedVrfIntegrators[address(vrfIntegrator)]) return 0;
+
+        try vrfIntegrator.quoteFee() returns (MessagingFee memory fee) {
+            if (address(this).balance >= fee.nativeFee) {
+                try vrfIntegrator.requestRandomWordsPayable{value: fee.nativeFee}(targetEid) returns (
+                    MessagingReceipt memory,
+                    uint64 sequence
+                ) {
+                    vrfRequests[uint256(sequence)] = VRFRequest({
+                        user: buyer,
+                        creatorCoin: creatorCoin,
+                        amountUSD: swapValueUSD,
+                        vrfType: VRFType.CROSS_CHAIN,
+                        sourceChainEid: sourceChainEid
+                    });
+                    totalLotteryEntries++;
+                    creatorStats[creatorCoin].entries++;
+                    return uint256(sequence);
+                } catch {
+                    return 0;
+                }
+            }
+        } catch {
+            return 0;
+        }
+        return 0;
+    }
+
+    /**
+     * @dev Send winner callback to the source chain OFT
+     *      Payload: (msgType, winner, creatorCoin, totalSharesPaid)
+     *      Target: the remote CreatorShareOFT that sent the lottery entry
+     */
+    function _sendWinnerCallback(
+        uint32 dstEid,
+        address winner,
+        address creatorCoin,
+        uint256 totalSharesPaid
+    ) internal {
+        // Build callback payload (matches CreatorShareOFT._handleWinnerCallback decoder)
+        bytes memory payload = abi.encode(
+            MSG_TYPE_WINNER_CALLBACK,
+            winner,
+            creatorCoin,
+            totalSharesPaid
         );
-        _payoutLocalJackpot(broadcastCreatorCoin, broadcastWinner, broadcastPayoutBps);
+
+        bytes memory options = _buildOptions(dstEid);
+
+        MessagingFee memory fee = _quote(dstEid, payload, options, false);
+
+        // Only send if contract has enough gas, don't block payout
+        if (address(this).balance >= fee.nativeFee) {
+            _lzSend(dstEid, payload, options, fee, payable(address(this)));
+            emit WinnerCallbackSent(dstEid, winner, creatorCoin, totalSharesPaid);
+        }
+        // If insufficient gas, silently skip — payout already happened on hub
+    }
+
+    function _buildOptions(uint32 dstEid) internal view returns (bytes memory) {
+        bytes memory enforcedOpts = enforcedOptions[dstEid][MSG_TYPE_WINNER_CALLBACK];
+
+        if (enforcedOpts.length > 0) {
+            return enforcedOpts;
+        }
+
+        return OptionsBuilder.newOptions()
+            .addExecutorLzReceiveOption(callbackGasLimit, DEFAULT_MSG_VALUE);
+    }
+
+    /**
+     * @notice Quote the fee for a winner callback message
+     */
+    function quoteWinnerCallback(
+        uint32 dstEid,
+        address winner,
+        address creatorCoin,
+        uint256 totalSharesPaid
+    ) external view returns (MessagingFee memory fee) {
+        bytes memory payload = abi.encode(MSG_TYPE_WINNER_CALLBACK, winner, creatorCoin, totalSharesPaid);
+        bytes memory options = _buildOptions(dstEid);
+        return _quote(dstEid, payload, options, false);
     }
 
     /**
@@ -859,7 +932,10 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         emit LotteryConfigUpdated(_minSwap, _rewardPercentage, _isActive);
     }
 
-    function setWinnerBroadcastOptions(
+    /**
+     * @notice Set enforced options for winner callback messages
+     */
+    function setCallbackOptions(
         uint32 dstEid,
         uint128 gasLimit,
         uint128 msgValue
@@ -870,11 +946,46 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         EnforcedOptionParam[] memory params = new EnforcedOptionParam[](1);
         params[0] = EnforcedOptionParam({
             eid: dstEid,
-            msgType: MSG_TYPE_WINNER_BROADCAST,
+            msgType: MSG_TYPE_WINNER_CALLBACK,
             options: options
         });
 
         _setEnforcedOptions(params);
+    }
+
+    /**
+     * @notice Authorize a remote OFT as a valid lottery entry sender
+     * @param srcEid The source chain EID
+     * @param sender The bytes32-encoded address of the remote OFT
+     * @param authorized Whether to authorize or deauthorize
+     */
+    function setAuthorizedRemoteOFT(uint32 srcEid, bytes32 sender, bool authorized) external onlyOwner {
+        authorizedRemoteOFTs[srcEid][sender] = authorized;
+        emit RemoteOFTAuthorized(srcEid, sender, authorized);
+    }
+
+    /**
+     * @notice Batch authorize remote OFTs
+     */
+    function batchSetAuthorizedRemoteOFTs(
+        uint32[] calldata srcEids,
+        bytes32[] calldata senders,
+        bool authorized
+    ) external onlyOwner {
+        require(srcEids.length == senders.length, "Length mismatch");
+        for (uint256 i; i < srcEids.length;) {
+            authorizedRemoteOFTs[srcEids[i]][senders[i]] = authorized;
+            emit RemoteOFTAuthorized(srcEids[i], senders[i], authorized);
+            unchecked { ++i; }
+        }
+    }
+
+    /**
+     * @notice Set the gas limit for winner callback messages
+     */
+    function setCallbackGasLimit(uint128 _gasLimit) external onlyOwner {
+        callbackGasLimit = _gasLimit;
+        emit CallbackGasLimitUpdated(_gasLimit);
     }
 
     function pause() external onlyOwner {
@@ -927,15 +1038,11 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         return (stats.entries, stats.winners, stats.rewardsPaid, jackpotBalance);
     }
 
-    function quoteWinnerBroadcast(
-        uint32 dstEid,
-        address creatorCoin,
-        address winner,
-        uint16 payoutBps
-    ) external view returns (MessagingFee memory fee) {
-        bytes memory payload = abi.encode(creatorCoin, winner, payoutBps);
-        bytes memory options = _buildOptions(dstEid);
-        return _quote(dstEid, payload, options, false);
+    /**
+     * @notice Get remote lottery entry statistics
+     */
+    function getRemoteLotteryStats() external view returns (uint256) {
+        return totalRemoteLotteryEntries;
     }
 
     // ================================
