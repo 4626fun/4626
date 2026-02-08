@@ -70,6 +70,13 @@ jobs:
           DEPLOY_SESSION_TOKEN_HMAC_SECRET: test-deploy-hmac-secret-123456
           CANONICAL_ORIGIN: https://creatorvault.fun
 
+      - name: Verify production agent registration endpoint
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        run: pnpm --dir frontend check:agent-registration
+        env:
+          AGENT_REGISTRATION_URL: https://4626.fun/.well-known/agent-registration.json
+          AGENT_REGISTRATION_EXPECTED_ID: '2205'
+
   lottery-edge-cases:
     runs-on: ubuntu-latest
     steps:

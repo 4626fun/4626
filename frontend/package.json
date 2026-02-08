@@ -14,7 +14,9 @@
     "capture:miniapp-screens": "node scripts/capture-miniapp-screenshots.mjs",
     "docs": "pnpm exec typedoc",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "agent:start": "tsx server/agent/runtime.ts",
+    "check:agent-registration": "node scripts/check-agent-registration.mjs"
   },
   "dependencies": {
     "@coinbase/cdp-sdk": "^1.44.0",
