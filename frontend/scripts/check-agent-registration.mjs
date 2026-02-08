@@ -17,6 +17,19 @@ function parseExpectedAgentId(raw) {
   return n
 }
 
+function normalizeRegistryRef(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function parseExpectedAgentRegistry(raw) {
+  if (!raw) return null
+  const normalized = normalizeRegistryRef(raw)
+  if (!/^eip155:\d+:0x[a-f0-9]{40}$/.test(normalized)) {
+    throw new Error('AGENT_REGISTRATION_EXPECTED_REGISTRY must match eip155:<chainId>:0x<40-hex>.')
+  }
+  return normalized
+}
+
 async function fetchJsonWithRetries(url, timeoutMs, retries) {
   let lastError = null
   for (let attempt = 1; attempt <= retries; attempt += 1) {
@@ -41,7 +54,7 @@ async function fetchJsonWithRetries(url, timeoutMs, retries) {
   throw lastError || new Error('Failed to fetch agent registration payload.')
 }
 
-function validatePayload(payload, expectedAgentId) {
+function validatePayload(payload, expectedAgentId, expectedAgentRegistry) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new Error('Response body must be a JSON object.')
   }
@@ -61,15 +74,20 @@ function validatePayload(payload, expectedAgentId) {
     throw new Error('`registrations[0].agentId` must be a non-negative integer.')
   }
 
-  if (typeof first.agentRegistry !== 'string' || first.agentRegistry.trim().length === 0) {
-    throw new Error('`registrations[0].agentRegistry` must be a non-empty string.')
+  const agentRegistry = normalizeRegistryRef(first.agentRegistry)
+  if (!/^eip155:\d+:0x[a-f0-9]{40}$/.test(agentRegistry)) {
+    throw new Error('`registrations[0].agentRegistry` must match eip155:<chainId>:0x<40-hex>.')
   }
 
   if (expectedAgentId !== null && agentId !== expectedAgentId) {
     throw new Error(`Expected agentId ${expectedAgentId}, received ${agentId}.`)
   }
 
-  return { agentId, agentRegistry: first.agentRegistry }
+  if (expectedAgentRegistry !== null && agentRegistry !== expectedAgentRegistry) {
+    throw new Error(`Expected agentRegistry ${expectedAgentRegistry}, received ${agentRegistry}.`)
+  }
+
+  return { agentId, agentRegistry }
 }
 
 async function main() {
@@ -77,6 +95,7 @@ async function main() {
   const retries = Number(process.env.AGENT_REGISTRATION_RETRIES || DEFAULT_RETRIES)
   const timeoutMs = Number(process.env.AGENT_REGISTRATION_TIMEOUT_MS || DEFAULT_TIMEOUT_MS)
   const expectedAgentId = parseExpectedAgentId(process.env.AGENT_REGISTRATION_EXPECTED_ID || '')
+  const expectedAgentRegistry = parseExpectedAgentRegistry(process.env.AGENT_REGISTRATION_EXPECTED_REGISTRY || '')
 
   if (!Number.isFinite(retries) || retries <= 0) {
     throw new Error('AGENT_REGISTRATION_RETRIES must be a positive number.')
@@ -86,7 +105,7 @@ async function main() {
   }
 
   const { payload, status } = await fetchJsonWithRetries(url, timeoutMs, retries)
-  const { agentId, agentRegistry } = validatePayload(payload, expectedAgentId)
+  const { agentId, agentRegistry } = validatePayload(payload, expectedAgentId, expectedAgentRegistry)
 
   console.log(`agent-registration check passed`)
   console.log(`url=${url}`)
@@ -100,4 +119,3 @@ main().catch((error) => {
   console.error(`agent-registration check failed: ${message}`)
   process.exit(1)
 })
-

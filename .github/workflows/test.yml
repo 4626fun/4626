@@ -76,6 +76,7 @@ jobs:
         env:
           AGENT_REGISTRATION_URL: https://4626.fun/.well-known/agent-registration.json
           AGENT_REGISTRATION_EXPECTED_ID: '2205'
+          AGENT_REGISTRATION_EXPECTED_REGISTRY: eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432
 
   lottery-edge-cases:
     runs-on: ubuntu-latest

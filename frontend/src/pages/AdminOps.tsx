@@ -24,6 +24,7 @@ import { ConnectButton } from '@/components/ConnectButton'
 import { CONTRACTS } from '@/config/contracts'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
+import { logger } from '@/lib/logger'
 
 type SignManifestResult = { header: string; payload: string; signature: string }
 
@@ -357,6 +358,19 @@ function shouldFallbackToOwnerDirectExecute(error: unknown): boolean {
   )
 }
 
+function summarizeErrorReason(error: unknown): string {
+  const err = error as any
+  const candidate =
+    err?.shortMessage ||
+    err?.details ||
+    err?.message ||
+    err?.cause?.shortMessage ||
+    err?.cause?.message ||
+    String(error ?? 'Unknown error')
+  const text = String(candidate || 'Unknown error').replace(/\s+/g, ' ').trim()
+  return text.length > 280 ? `${text.slice(0, 277)}...` : text
+}
+
 async function sendEmbeddedOwnerSmartWalletCall(params: {
   publicClient: any
   embeddedProvider: { request: (args: { method: string; params?: any[] }) => Promise<unknown> }
@@ -386,6 +400,13 @@ async function sendEmbeddedOwnerSmartWalletCall(params: {
     })
   } catch (error: unknown) {
     if (!shouldFallbackToOwnerDirectExecute(error)) throw error
+    const fallbackReason = summarizeErrorReason(error)
+    logger.warn('[AdminOps][ERC-4337] Falling back to direct owner executeBatch', {
+      smartWallet,
+      ownerAddress,
+      callCount: calls.length,
+      reason: fallbackReason,
+    })
 
     const executeBatchData = encodeFunctionData({
       abi: COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI as any,
@@ -398,17 +419,43 @@ async function sendEmbeddedOwnerSmartWalletCall(params: {
         })),
       ],
     })
-    const txHashRaw = await embeddedProvider.request({
-      method: 'eth_sendTransaction',
-      params: [
-        {
-          from: ownerAddress,
-          to: smartWallet,
-          data: executeBatchData,
-        },
-      ],
+    let txHashRaw: unknown
+    try {
+      txHashRaw = await embeddedProvider.request({
+        method: 'eth_sendTransaction',
+        params: [
+          {
+            from: ownerAddress,
+            to: smartWallet,
+            data: executeBatchData,
+          },
+        ],
+      })
+    } catch (fallbackError: unknown) {
+      logger.error('[AdminOps][ERC-4337] Direct owner executeBatch failed to submit', {
+        smartWallet,
+        ownerAddress,
+        callCount: calls.length,
+        reason: fallbackReason,
+        error: summarizeErrorReason(fallbackError),
+      })
+      throw fallbackError
+    }
+    logger.warn('[AdminOps][ERC-4337] Direct owner executeBatch submitted', {
+      smartWallet,
+      ownerAddress,
+      callCount: calls.length,
+      reason: fallbackReason,
+      txHash: txHashRaw,
     })
     if (typeof txHashRaw !== 'string' || !txHashRaw.startsWith('0x')) {
+      logger.error('[AdminOps][ERC-4337] Direct owner fallback returned invalid tx hash', {
+        smartWallet,
+        ownerAddress,
+        callCount: calls.length,
+        reason: fallbackReason,
+        txHash: txHashRaw,
+      })
       throw new Error('Direct owner transaction fallback did not return a valid transaction hash.')
     }
     return { userOpHash: txHashRaw as Hex, transactionHash: txHashRaw as Hex }
