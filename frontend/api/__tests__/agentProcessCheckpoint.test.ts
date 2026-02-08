@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { SortDirection } from '@xmtp/agent-sdk'
 
 import {
   DEFAULT_CHECKPOINT_WINDOW_MS,
@@ -29,7 +28,7 @@ describe('agent/process checkpoints', () => {
     const opts = getMessageQueryOptions(lastProcessedMs)
     expect(opts.sentAfterNs).toBe(1_000_000_000n)
     expect(opts.limit).toBe(MAX_MESSAGES_PER_CONVERSATION)
-    expect(opts.direction).toBe(SortDirection.Ascending)
+    expect(opts.direction).toBe(0)
   })
 
   it('merges checkpoints monotonically', () => {

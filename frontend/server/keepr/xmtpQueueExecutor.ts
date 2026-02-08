@@ -1,5 +1,4 @@
 import { Agent, createSigner, createUser } from '@xmtp/agent-sdk'
-import type { Group, Identifier } from '@xmtp/agent-sdk'
 
 import { getDb } from '../_lib/postgres.js'
 import { logger } from '../_lib/logger.js'
@@ -43,6 +42,13 @@ type QueueAgentRow = {
   encryptedPrivateKeyB64: string | null
   encryptedPrivateKeyIvB64: string | null
   encryptedPrivateKeyTagB64: string | null
+}
+
+type GroupLike = {
+  members: () => Promise<any[]>
+  removeMembers: (inboxIds: string[]) => Promise<unknown>
+  sendText: (text: string) => Promise<unknown>
+  sync: () => Promise<unknown>
 }
 
 export type ExecuteKeeprActionInput = {
@@ -184,7 +190,7 @@ function isLikelyNonRetryableExecutionError(message: string): boolean {
 }
 
 async function resolveInboxIdForAddress(agent: Agent, address: `0x${string}`): Promise<string | null> {
-  const identifier: Identifier = {
+  const identifier = {
     identifier: address,
     identifierKind: ETHEREUM_IDENTIFIER_KIND as any,
   }
@@ -195,11 +201,11 @@ async function executeNormalizedAction(
   actionType: SupportedActionType,
   action: Record<string, unknown>,
   agent: Agent,
-  group: Group,
+  group: GroupLike,
 ): Promise<Record<string, unknown> | undefined> {
   if (actionType === 'xmtp.group.add_member') {
     const wallet = getWalletAddressFromAction(action)
-    await agent.addMembersWithAddresses(group, [wallet])
+    await agent.addMembersWithAddresses(group as any, [wallet])
     return { wallet }
   }
 
@@ -243,7 +249,7 @@ async function executeNormalizedAction(
       .filter(([addr, inboxId]) => !desiredSet.has(addr) && inboxId !== selfInbox)
       .map(([, inboxId]) => inboxId)
 
-    if (toAdd.length > 0) await agent.addMembersWithAddresses(group, toAdd)
+    if (toAdd.length > 0) await agent.addMembersWithAddresses(group as any, toAdd)
     if (toRemove.length > 0) await group.removeMembers(toRemove)
 
     return {
@@ -341,4 +347,3 @@ export async function executeKeeprAction(input: ExecuteKeeprActionInput): Promis
     } catch {}
   }
 }
-

@@ -13,7 +13,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { Agent, SortDirection, createUser, createSigner } from '@xmtp/agent-sdk'
+import { Agent, createUser, createSigner } from '@xmtp/agent-sdk'
 import type { Address } from 'viem'
 
 import { isDbConfigured, getDb } from '../../../server/_lib/postgres.js'
@@ -46,13 +46,13 @@ export function getCheckpointMs(lastProcessedAt: unknown, nowMs = Date.now()): n
 export function getMessageQueryOptions(lastProcessedMs: number): {
   sentAfterNs: bigint
   limit: number
-  direction: SortDirection
+  direction: number
 } {
   const ms = Math.max(0, Math.floor(lastProcessedMs))
   return {
     sentAfterNs: BigInt(ms) * 1_000_000n,
     limit: MAX_MESSAGES_PER_CONVERSATION,
-    direction: SortDirection.Ascending,
+    direction: 0, // SortDirection.Ascending in @xmtp/node-bindings.
   }
 }
 
