@@ -15,14 +15,14 @@ const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as ContractAddress
 
 export const BASE_DEFAULTS = {
   // Shared infrastructure
-  registry: addr('02c8031c39E10832A831b954Df7a2c1bf9Df052D'),
+  registry: addr('888482d648D1fCa1A735268A9e579b44Bf644626'),
   factory: addr('cCa08f9b94dD478266D0D1D2e9B7758414280FfD'),
-  lotteryManager: addr('A02A858E67c98320dCFB218831B645692E8f3483'),
+  lotteryManager: addr('77740C44A3E1d8262e8bfAB6204A29B2cbeE4626'),
   vrfConsumer: addr('0265236984DE964CB0422BaeFbDb2de7C9d590F5'),
   payoutRouterFactory: addr('9C53cEaA15AdDB436c89A1F929fF12ED2BD26ea9'),
 
   // Base↔Solana bridge integration
-  solanaBridgeAdapter: addr('5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92'),
+  solanaBridgeAdapter: addr('648A01f6e125A46c4695CA70D0EB455f053d36A2'),
 
   // CREATE2 infra
   create2Factory: addr('4e59b44847b379578588920cA78FbF26c0B4956C'),

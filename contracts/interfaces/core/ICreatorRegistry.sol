@@ -25,7 +25,10 @@ interface ICreatorRegistry {
         address wrapper;         // CreatorOVaultWrapper address
         address oracle;          // CreatorOracle address (per-creator price oracle)
         address gaugeController; // CreatorGaugeController address (per-creator fee distribution)
-        address creator;         // Creator's address (admin)
+        address creator;         // Creator's address (admin/EOA signer)
+        address canonicalWallet; // Canonical smart wallet (ERC-4337 / Coinbase Smart Wallet)
+                                 // Used as: ERC-8004 agent identity, asset holder,
+                                 // lottery prize recipient, and vault owner
         address pool;            // Primary liquidity pool
         uint24 poolFee;          // Pool fee tier (e.g., 3000 = 0.3%)
         uint16 primaryChainId;   // Chain where token originated
@@ -82,6 +85,7 @@ interface ICreatorRegistry {
     
     event CreatorCoinUpdated(address indexed token);
     event CreatorCoinStatusChanged(address indexed token, bool isActive);
+    event CanonicalWalletSet(address indexed token, address indexed wallet);
     
     event ChainRegistered(uint16 indexed chainId, string chainName);
     event ChainUpdated(uint16 indexed chainId);
@@ -143,6 +147,19 @@ interface ICreatorRegistry {
      * @notice Set active status for a Creator Coin
      */
     function setCreatorCoinStatus(address _token, bool _isActive) external;
+
+    /**
+     * @notice Set the canonical smart wallet for a creator
+     * @dev This is the creator's ERC-4337 smart wallet (e.g., Coinbase Smart Wallet).
+     *      It serves as the unified on-chain identity:
+     *      - ERC-8004 agent wallet (on-chain agent registration)
+     *      - ERC-4337 account (UserOp sender, gas sponsorship)
+     *      - Vault owner and asset holder
+     *      - Lottery prize recipient
+     * @param _token Creator Coin address
+     * @param _wallet Canonical smart wallet address
+     */
+    function setCanonicalWallet(address _token, address _wallet) external;
     
     // =================================
     // CREATOR COIN GETTERS
@@ -178,6 +195,22 @@ interface ICreatorRegistry {
      */
     function getGaugeControllerForToken(address _token) external view returns (address);
     
+    /**
+     * @notice Reverse-lookup: get the Creator Coin address for a given ShareOFT
+     */
+    function getTokenForShareOFT(address _shareOFT) external view returns (address);
+
+    /**
+     * @notice Get the canonical smart wallet for a creator
+     * @dev Returns address(0) if not set
+     */
+    function getCanonicalWallet(address _token) external view returns (address);
+
+    /**
+     * @notice Reverse-lookup: get the Creator Coin address for a canonical wallet
+     */
+    function getTokenForCanonicalWallet(address _wallet) external view returns (address);
+
     /**
      * @notice Get all registered Creator Coins
      */

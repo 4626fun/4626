@@ -28,6 +28,9 @@ type OpenWindow = {
   id: string
   name: string
   type: 'dm' | 'group'
+  peerInboxId?: string
+  peerAddress?: string
+  imageUrl?: string
   minimized: boolean
 }
 
@@ -52,9 +55,6 @@ function ChatWidgetInner() {
     return () => mq.removeEventListener('change', handleChange)
   }, [])
 
-  // Don't render anything if wallet is not connected
-  if (!isConnected) return null
-
   const handleOpenChat = useCallback((convo: ChatConversation) => {
     setOpenWindows((prev) => {
       // Already open? Just un-minimize
@@ -71,6 +71,9 @@ function ChatWidgetInner() {
         id: convo.id,
         name: convo.name,
         type: convo.type,
+        peerInboxId: convo.peerInboxId,
+        peerAddress: convo.peerAddress,
+        imageUrl: convo.imageUrl,
         minimized: false,
       })
       return next
@@ -112,6 +115,7 @@ function ChatWidgetInner() {
           id: convoId,
           type: 'dm',
           name: `${addr.slice(0, 6)}…${addr.slice(-4)}`,
+          peerAddress: addr,
           unreadCount: 0,
         })
       } else {
@@ -126,6 +130,9 @@ function ChatWidgetInner() {
 
   const activeMobileWindow = openWindows[openWindows.length - 1]
   const showMobileBar = barExpanded && !activeMobileWindow
+
+  // Don't render anything if wallet is not connected
+  if (!isConnected) return null
 
   return (
     <>
@@ -148,6 +155,9 @@ function ChatWidgetInner() {
               conversationId={activeMobileWindow.id}
               conversationName={activeMobileWindow.name}
               conversationType={activeMobileWindow.type}
+              peerInboxId={activeMobileWindow.peerInboxId}
+              peerAddress={activeMobileWindow.peerAddress}
+              conversationImageUrl={activeMobileWindow.imageUrl}
               minimized={false}
               variant="mobile"
               onMinimize={() => handleMinimize(activeMobileWindow.id)}
@@ -177,6 +187,9 @@ function ChatWidgetInner() {
               conversationId={win.id}
               conversationName={win.name}
               conversationType={win.type}
+              peerInboxId={win.peerInboxId}
+              peerAddress={win.peerAddress}
+              conversationImageUrl={win.imageUrl}
               minimized={win.minimized}
               onMinimize={() => handleMinimize(win.id)}
               onClose={() => handleClose(win.id)}

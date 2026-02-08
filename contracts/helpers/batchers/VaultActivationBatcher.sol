@@ -17,13 +17,13 @@ import {ISignatureTransfer} from "permit2/src/interfaces/ISignatureTransfer.sol"
 // ================================
 
 interface IVault {
-        function deposit(uint256 assets, address receiver) external returns (uint256 shares);
-    }
+    function deposit(uint256 assets, address receiver) external returns (uint256 shares);
+}
 
-    interface IWrapper {
-        function wrap(uint256 amount) external returns (uint256 wsTokens);
-        function shareOFT() external view returns (address);
-    }
+interface IWrapper {
+    function wrap(uint256 amount) external returns (uint256 shareTokens);
+    function shareOFT() external view returns (address);
+}
 
 interface ICCAStrategy {
     function launchAuctionSimple(uint256 amount, uint128 requiredRaise) external returns (address auction);
@@ -72,13 +72,13 @@ contract VaultActivationBatcher is ReentrancyGuard {
         address auction
     );
 
-    /// @notice Emitted when a portion of wsTokens is reserved for creator/team (e.g. vesting escrow).
+    /// @notice Emitted when a portion of ■TOKENs is reserved for creator/team (e.g. vesting escrow).
     event CreatorReserveAllocated(
         address indexed identity,
         address indexed recipient,
-        address indexed wsToken,
+        address indexed shareToken,
         uint256 amount,
-        uint8 reserveBps
+        uint8 reservePercent
     );
 
     // ================================
@@ -106,50 +106,50 @@ contract VaultActivationBatcher is ReentrancyGuard {
         address ccaStrategy,
         uint256 depositAmount,
         uint8 auctionPercent,
-        uint8 creatorReserveBps,
+        uint8 creatorReservePercent,
         address creatorReserveRecipient,
         uint128 requiredRaise
-    ) internal returns (address auction, uint256 auctionAmount, uint256 reserveAmount, address wsToken) {
+    ) internal returns (address auction, uint256 auctionAmount, uint256 reserveAmount, address shareToken) {
         if (depositAmount == 0) revert ZeroAmount();
         if (auctionPercent > 100) revert InvalidPercent();
-        if (creatorReserveBps > 100) revert InvalidReserve();
-        if (uint256(auctionPercent) + uint256(creatorReserveBps) > 100) revert InvalidReserve();
-        if (creatorReserveBps > 0 && creatorReserveRecipient == address(0)) revert ZeroAddress();
+        if (creatorReservePercent > 100) revert InvalidReserve();
+        if (uint256(auctionPercent) + uint256(creatorReservePercent) > 100) revert InvalidReserve();
+        if (creatorReservePercent > 0 && creatorReserveRecipient == address(0)) revert ZeroAddress();
 
-        // ============ STEP 2: Deposit to vault ============
+        // ============ STEP 2: Deposit to vault (creatorToken → ▢TOKEN) ============
         IERC20(creatorToken).forceApprove(vault, depositAmount);
         uint256 shares = IVault(vault).deposit(depositAmount, address(this));
 
-        // ============ STEP 3: Wrap shares to wsTokens ============
-        address vaultTokenAddress = vault; // Vault token = vault address
+        // ============ STEP 3: Wrap vault shares to ■TOKEN (▢TOKEN → ■TOKEN) ============
+        address vaultTokenAddress = vault; // ERC-4626 vault IS the share token
         IERC20(vaultTokenAddress).forceApprove(wrapper, shares);
-        uint256 wsTokens = IWrapper(wrapper).wrap(shares);
+        uint256 shareTokens = IWrapper(wrapper).wrap(shares);
 
-        // Get wsToken address from wrapper
-        wsToken = IWrapper(wrapper).shareOFT();
+        // Get ■TOKEN (ShareOFT) address from wrapper
+        shareToken = IWrapper(wrapper).shareOFT();
 
         // ============ STEP 4: Launch auction ============
         auctionAmount = 0;
         if (auctionPercent > 0) {
-            auctionAmount = (wsTokens * auctionPercent) / 100;
-            IERC20(wsToken).forceApprove(ccaStrategy, auctionAmount);
+            auctionAmount = (shareTokens * auctionPercent) / 100;
+            IERC20(shareToken).forceApprove(ccaStrategy, auctionAmount);
             auction = ICCAStrategy(ccaStrategy).launchAuctionSimple(auctionAmount, requiredRaise);
         }
 
         // Reserve portion (creator/team allocation, e.g. vesting escrow)
         reserveAmount = 0;
-        if (creatorReserveBps > 0) {
-            reserveAmount = (wsTokens * creatorReserveBps) / 100;
+        if (creatorReservePercent > 0) {
+            reserveAmount = (shareTokens * creatorReservePercent) / 100;
             if (reserveAmount > 0) {
-                IERC20(wsToken).safeTransfer(creatorReserveRecipient, reserveAmount);
-                emit CreatorReserveAllocated(identity, creatorReserveRecipient, wsToken, reserveAmount, creatorReserveBps);
+                IERC20(shareToken).safeTransfer(creatorReserveRecipient, reserveAmount);
+                emit CreatorReserveAllocated(identity, creatorReserveRecipient, shareToken, reserveAmount, creatorReservePercent);
             }
         }
 
-        // Remaining goes back to identity by default
-        uint256 remainingWsTokens = wsTokens - auctionAmount - reserveAmount;
-        if (remainingWsTokens > 0) {
-            IERC20(wsToken).safeTransfer(identity, remainingWsTokens);
+        // Remaining ■TOKENs go back to identity
+        uint256 remainingShareTokens = shareTokens - auctionAmount - reserveAmount;
+        if (remainingShareTokens > 0) {
+            IERC20(shareToken).safeTransfer(identity, remainingShareTokens);
         }
     }
 
@@ -190,8 +190,8 @@ contract VaultActivationBatcher is ReentrancyGuard {
         // Default behavior: no creator reserve; leftover goes back to msg.sender
         uint256 auctionAmount;
         uint256 reserveAmount;
-        address wsToken;
-        (auction, auctionAmount, reserveAmount, wsToken) = _executeActivateAndLaunch(
+        address shareToken;
+        (auction, auctionAmount, reserveAmount, shareToken) = _executeActivateAndLaunch(
             msg.sender,
             creatorToken,
             vault,
@@ -206,12 +206,12 @@ contract VaultActivationBatcher is ReentrancyGuard {
 
         emit BatchActivation(msg.sender, vault, depositAmount, auctionAmount, auction);
         reserveAmount; // silence unused warning (reserved is always 0 in this entrypoint)
-        wsToken; // silence unused warning
+        shareToken; // silence unused warning
     }
 
     /**
      * @notice Batch activate with an explicit creator/team reserve allocation.
-     * @dev `auctionPercent + creatorReserveBps` must be <= 100.
+     * @dev `auctionPercent + creatorReservePercent` must be <= 100.
      *      The remainder (if any) is returned to `msg.sender`.
      */
     function batchActivateWithReserve(
@@ -221,7 +221,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
         address ccaStrategy,
         uint256 depositAmount,
         uint8 auctionPercent,
-        uint8 creatorReserveBps,
+        uint8 creatorReservePercent,
         address creatorReserveRecipient,
         uint128 requiredRaise
     ) external nonReentrant returns (address auction) {
@@ -233,8 +233,8 @@ contract VaultActivationBatcher is ReentrancyGuard {
 
         uint256 auctionAmount;
         uint256 reserveAmount;
-        address wsToken;
-        (auction, auctionAmount, reserveAmount, wsToken) = _executeActivateAndLaunch(
+        address shareToken;
+        (auction, auctionAmount, reserveAmount, shareToken) = _executeActivateAndLaunch(
             msg.sender,
             creatorToken,
             vault,
@@ -242,14 +242,14 @@ contract VaultActivationBatcher is ReentrancyGuard {
             ccaStrategy,
             depositAmount,
             auctionPercent,
-            creatorReserveBps,
+            creatorReservePercent,
             creatorReserveRecipient,
             requiredRaise
         );
 
         emit BatchActivation(msg.sender, vault, depositAmount, auctionAmount, auction);
         reserveAmount; // emitted via CreatorReserveAllocated
-        wsToken; // emitted via CreatorReserveAllocated
+        shareToken; // emitted via CreatorReserveAllocated
     }
 
     /**
@@ -293,8 +293,8 @@ contract VaultActivationBatcher is ReentrancyGuard {
         // Default behavior: no creator reserve; leftover goes back to identity
         uint256 auctionAmount;
         uint256 reserveAmount;
-        address wsToken;
-        (auction, auctionAmount, reserveAmount, wsToken) = _executeActivateAndLaunch(
+        address shareToken;
+        (auction, auctionAmount, reserveAmount, shareToken) = _executeActivateAndLaunch(
             identity,
             creatorToken,
             vault,
@@ -309,12 +309,12 @@ contract VaultActivationBatcher is ReentrancyGuard {
 
         emit BatchActivationFor(msg.sender, identity, vault, depositAmount, auctionAmount, auction);
         reserveAmount; // silence unused warning
-        wsToken; // silence unused warning
+        shareToken; // silence unused warning
     }
 
     /**
      * @notice Permit2 (identity-funded) activate with creator/team reserve allocation.
-     * @dev Remaining wsTokens are returned to `identity` (never msg.sender).
+     * @dev Remaining ■TOKENs are returned to `identity` (never msg.sender).
      */
     function batchActivateWithPermit2ForWithReserve(
         address identity,
@@ -324,7 +324,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
         address ccaStrategy,
         uint256 depositAmount,
         uint8 auctionPercent,
-        uint8 creatorReserveBps,
+        uint8 creatorReservePercent,
         address creatorReserveRecipient,
         uint128 requiredRaise,
         ISignatureTransfer.PermitTransferFrom calldata permit,
@@ -350,8 +350,8 @@ contract VaultActivationBatcher is ReentrancyGuard {
 
         uint256 auctionAmount;
         uint256 reserveAmount;
-        address wsToken;
-        (auction, auctionAmount, reserveAmount, wsToken) = _executeActivateAndLaunch(
+        address shareToken;
+        (auction, auctionAmount, reserveAmount, shareToken) = _executeActivateAndLaunch(
             identity,
             creatorToken,
             vault,
@@ -359,14 +359,14 @@ contract VaultActivationBatcher is ReentrancyGuard {
             ccaStrategy,
             depositAmount,
             auctionPercent,
-            creatorReserveBps,
+            creatorReservePercent,
             creatorReserveRecipient,
             requiredRaise
         );
 
         emit BatchActivationFor(msg.sender, identity, vault, depositAmount, auctionAmount, auction);
         reserveAmount;
-        wsToken;
+        shareToken;
     }
 
     /**
@@ -410,8 +410,8 @@ contract VaultActivationBatcher is ReentrancyGuard {
         // Default behavior: no creator reserve; leftover goes back to identity
         uint256 auctionAmount;
         uint256 reserveAmount;
-        address wsToken;
-        (auction, auctionAmount, reserveAmount, wsToken) = _executeActivateAndLaunch(
+        address shareToken;
+        (auction, auctionAmount, reserveAmount, shareToken) = _executeActivateAndLaunch(
             identity,
             creatorToken,
             vault,
@@ -426,12 +426,12 @@ contract VaultActivationBatcher is ReentrancyGuard {
 
         emit BatchActivationFor(msg.sender, identity, vault, depositAmount, auctionAmount, auction);
         reserveAmount; // silence unused warning
-        wsToken; // silence unused warning
+        shareToken; // silence unused warning
     }
 
     /**
      * @notice Permit2 (operator-funded) activate with creator/team reserve allocation.
-     * @dev Remaining wsTokens are returned to `identity` (never msg.sender).
+     * @dev Remaining ■TOKENs are returned to `identity` (never msg.sender).
      */
     function batchActivateWithPermit2FromOperatorWithReserve(
         address identity,
@@ -441,7 +441,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
         address ccaStrategy,
         uint256 depositAmount,
         uint8 auctionPercent,
-        uint8 creatorReserveBps,
+        uint8 creatorReservePercent,
         address creatorReserveRecipient,
         uint128 requiredRaise,
         ISignatureTransfer.PermitTransferFrom calldata permit,
@@ -467,8 +467,8 @@ contract VaultActivationBatcher is ReentrancyGuard {
 
         uint256 auctionAmount;
         uint256 reserveAmount;
-        address wsToken;
-        (auction, auctionAmount, reserveAmount, wsToken) = _executeActivateAndLaunch(
+        address shareToken;
+        (auction, auctionAmount, reserveAmount, shareToken) = _executeActivateAndLaunch(
             identity,
             creatorToken,
             vault,
@@ -476,13 +476,13 @@ contract VaultActivationBatcher is ReentrancyGuard {
             ccaStrategy,
             depositAmount,
             auctionPercent,
-            creatorReserveBps,
+            creatorReservePercent,
             creatorReserveRecipient,
             requiredRaise
         );
 
         emit BatchActivationFor(msg.sender, identity, vault, depositAmount, auctionAmount, auction);
         reserveAmount;
-        wsToken;
+        shareToken;
     }
 }

@@ -10,6 +10,19 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IBaseSolanaBridge} from "./interfaces/IBaseSolanaBridge.sol";
 import {ICrossChainERC20Factory} from "./interfaces/ICrossChainERC20Factory.sol";
 import {ICreatorRegistry} from "../../interfaces/core/ICreatorRegistry.sol";
+import {ICreatorGaugeController} from "../../interfaces/core/ICreatorGaugeController.sol";
+
+/**
+ * @title ICreatorLotteryManager
+ * @notice Minimal interface for the hub-only lottery manager.
+ */
+interface ICreatorLotteryManager {
+    function processSwapLottery(
+        address buyer,
+        address tokenIn,
+        uint256 amountIn
+    ) external payable returns (uint256 entryId);
+}
 
 /**
  * @title ICCAuction
@@ -111,6 +124,15 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     /// @dev Must be configured by the adapter owner.
     mapping(address => bool) public allowedCcaAuctions;
 
+    /// @notice Authorized fee keeper Solana pubkeys (keeper role, not Keepr brand).
+    mapping(bytes32 => bool) public authorizedFeeKeepers;
+
+    /// @notice Authorized entry keeper Solana pubkeys.
+    mapping(bytes32 => bool) public authorizedEntryKeepers;
+
+    /// @notice CreatorLotteryManager on Base (hub).
+    address public lotteryManager;
+
     // ================================
     // EVENTS
     // ================================
@@ -128,7 +150,26 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     event CCAExited(address indexed twin, address indexed auction, uint256 bidId);
     
     // Lottery Events
-    event LotteryEntryFromSolana(address indexed twin, address indexed recipient, address wsToken, uint256 amount);
+    event LotteryEntryFromSolana(address indexed twin, address indexed recipient, address shareToken, uint256 amount);
+
+    // Solana Spoke Relay Events
+    event SolanaFeeReceived(
+        address indexed keeperTwin,
+        address indexed shareOFT,
+        address indexed gauge,
+        uint256 amount
+    );
+    event SolanaLotteryEntryRelayed(
+        address indexed keeperTwin,
+        bytes32 indexed buyerSolanaPubkey,
+        address indexed shareOFT,
+        uint256 amountSolanaUnits,
+        uint256 amount18,
+        address buyerTwin
+    );
+    event FeeKeeperSet(bytes32 indexed keeperPubkey, bool allowed);
+    event EntryKeeperSet(bytes32 indexed keeperPubkey, bool allowed);
+    event LotteryManagerSet(address indexed lotteryManager);
 
     // ================================
     // ERRORS
@@ -144,6 +185,10 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     error InvalidAddress();
     error UnauthorizedTwin(address caller, address expectedTwin);
     error BridgeFailed();
+    error UnauthorizedFeeKeeper(bytes32 keeperPubkey);
+    error UnauthorizedEntryKeeper(bytes32 keeperPubkey);
+    error LotteryManagerNotSet();
+    error GaugeNotFound(address shareOFT);
 
     // ================================
     // CONSTRUCTOR
@@ -173,9 +218,9 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Register a wsToken for Solana bridging
+     * @notice Register a ■TOKEN (ShareOFT) for Solana bridging
      * @dev Creates a wrapped SPL token on Solana via the bridge
-     * @param baseToken The wsToken address on Base
+     * @param baseToken The ■TOKEN (ShareOFT) address on Base
      * @param solanaMint The SPL token mint address on Solana (as bytes32)
      * @param solanaDecimals The SPL token decimals on Solana
      */
@@ -237,8 +282,8 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Bridge wsTokens from Base to Solana
-     * @param token The wsToken to bridge
+     * @notice Bridge ■TOKENs (ShareOFT) from Base to Solana
+     * @param token The ■TOKEN to bridge
      * @param amount Amount to bridge
      * @param solanaDestination Destination address on Solana (as bytes32)
      */
@@ -445,20 +490,20 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Buy wsToken on Uniswap V4 to enter the lottery
+     * @notice Buy ■TOKEN (ShareOFT) on Uniswap V4 to enter the lottery
      * @dev This triggers a lottery entry for the Solana user!
      * 
      * @param creatorToken The Creator Coin whose ShareOFT should be purchased (resolved via registry)
      * @param amountIn Amount of SOL (or other token) to spend
-     * @param amountOutMin Minimum wsToken to receive
-     * @param recipient Who receives the wsToken (usually Twin contract)
+     * @param amountOutMin Minimum ■TOKEN to receive
+     * @param recipient Who receives the ■TOKEN (usually Twin contract)
      * 
-     * @return amountOut Amount of wsToken received
+     * @return amountOut Amount of ■TOKEN received
      * 
      * @dev LOTTERY ENTRY FLOW:
      *      1. Solana user bridges SOL with attached call to this function
-     *      2. This contract swaps SOL for wsToken on Uniswap V4
-     *      3. The wsToken transfer triggers the 6.9% fee hook
+     *      2. This contract swaps SOL for ■TOKEN on Uniswap V4
+     *      3. The ■TOKEN transfer triggers the 6.9% fee hook
      *      4. Hook registers a lottery entry for the buyer
      *      5. Solana user is now in the jackpot draw!
      */
@@ -474,8 +519,8 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         if (amountIn == 0) revert InvalidAmount();
 
         if (!ICreatorRegistry(registry).isCreatorCoinRegistered(creatorToken)) revert CreatorCoinNotRegistered(creatorToken);
-        address wsToken = ICreatorRegistry(registry).getShareOFTForToken(creatorToken);
-        if (wsToken == address(0)) revert InvalidAddress();
+        address shareToken = ICreatorRegistry(registry).getShareOFTForToken(creatorToken);
+        if (shareToken == address(0)) revert InvalidAddress();
 
         ICreatorRegistry.ChainConfig memory cfg = ICreatorRegistry(registry).getChainConfig(uint16(block.chainid));
         if (cfg.chainId == 0 || cfg.swapRouter == address(0)) revert DexRouterNotConfigured(uint16(block.chainid));
@@ -487,10 +532,10 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         // Approve router
         IERC20(tokenIn).forceApprove(router, amountIn);
         
-        // Swap on Uniswap V4 - this triggers lottery entry via the tax hook!
+        // Swap on Uniswap V4 — triggers lottery entry via the tax hook!
         IUniswapV4Router.ExactInputSingleParams memory params = IUniswapV4Router.ExactInputSingleParams({
             tokenIn: tokenIn,
-            tokenOut: wsToken,
+            tokenOut: shareToken,
             fee: 3000, // 0.3% fee tier
             recipient: recipient,
             amountIn: amountIn,
@@ -500,11 +545,11 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         
         amountOut = IUniswapV4Router(router).exactInputSingle(params);
         
-        emit LotteryEntryFromSolana(msg.sender, recipient, wsToken, amountOut);
+        emit LotteryEntryFromSolana(msg.sender, recipient, shareToken, amountOut);
     }
 
     /**
-     * @notice Buy wsToken with native ETH to enter lottery
+     * @notice Buy ■TOKEN (ShareOFT) with native ETH to enter lottery
      * @dev For users who bridged ETH or have ETH in their Twin
      */
     function buyAndEnterLotteryWithETH(
@@ -517,8 +562,8 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         if (msg.value == 0) revert InvalidAmount();
 
         if (!ICreatorRegistry(registry).isCreatorCoinRegistered(creatorToken)) revert CreatorCoinNotRegistered(creatorToken);
-        address wsToken = ICreatorRegistry(registry).getShareOFTForToken(creatorToken);
-        if (wsToken == address(0)) revert InvalidAddress();
+        address shareToken = ICreatorRegistry(registry).getShareOFTForToken(creatorToken);
+        if (shareToken == address(0)) revert InvalidAddress();
 
         ICreatorRegistry.ChainConfig memory cfg = ICreatorRegistry(registry).getChainConfig(uint16(block.chainid));
         if (cfg.chainId == 0 || cfg.swapRouter == address(0)) revert DexRouterNotConfigured(uint16(block.chainid));
@@ -526,15 +571,15 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         address weth = cfg.wrappedNativeToken;
         if (weth == address(0)) revert InvalidAddress();
 
-        // Wrap ETH → WETH and swap WETH for wsToken.
+        // Wrap ETH → WETH and swap WETH for ■TOKEN.
         // NOTE: this assumes the configured swapRouter expects ERC20 input.
         IWETH(weth).deposit{value: msg.value}();
         IERC20(weth).forceApprove(router, msg.value);
         
-        // Swap WETH for wsToken - triggers lottery!
+        // Swap WETH for ■TOKEN — triggers lottery!
         IUniswapV4Router.ExactInputSingleParams memory params = IUniswapV4Router.ExactInputSingleParams({
             tokenIn: weth,
-            tokenOut: wsToken,
+            tokenOut: shareToken,
             fee: 3000,
             recipient: recipient,
             amountIn: msg.value,
@@ -544,7 +589,108 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         
         amountOut = IUniswapV4Router(router).exactInputSingle(params);
         
-        emit LotteryEntryFromSolana(msg.sender, recipient, wsToken, amountOut);
+        emit LotteryEntryFromSolana(msg.sender, recipient, shareToken, amountOut);
+    }
+
+    // ================================
+    // SOLANA SPOKE RELAY (KEEPER)
+    // ================================
+
+    /// @dev Lottery entry from Solana spoke.
+    struct LotteryEntry {
+        bytes32 buyerSolanaPubkey;
+        address shareOFT;
+        uint256 amountSolanaUnits;
+    }
+
+    /**
+     * @notice Receive fees from Solana spoke via keeper Twin.
+     * @dev Called by the keeper's Twin after bridging withheld fees to Base.
+     *      The keeper Twin must have approved this adapter for the shareOFT.
+     *
+     * @param keeperPubkey Solana pubkey of the authorized fee keeper
+     * @param shareOFT The ShareOFT token on Base (fee is denominated in this)
+     * @param amount Amount of fees to forward (in Base token units)
+     */
+    function receiveFeeFromSolana(
+        bytes32 keeperPubkey,
+        address shareOFT,
+        uint256 amount
+    ) external nonReentrant onlyTwin(keeperPubkey) {
+        if (!authorizedFeeKeepers[keeperPubkey]) revert UnauthorizedFeeKeeper(keeperPubkey);
+        if (amount == 0) revert InvalidAmount();
+
+        // Resolve the gauge controller for this creator token via registry.
+        address creatorCoin = ICreatorRegistry(registry).getTokenForShareOFT(shareOFT);
+        if (creatorCoin == address(0)) revert TokenNotRegistered();
+
+        address gauge = ICreatorRegistry(registry).getGaugeControllerForToken(creatorCoin);
+        if (gauge == address(0)) revert GaugeNotFound(shareOFT);
+
+        // Pull fees from keeper Twin (msg.sender) into this adapter.
+        IERC20(shareOFT).safeTransferFrom(msg.sender, address(this), amount);
+
+        // Approve gauge and forward fees.
+        IERC20(shareOFT).forceApprove(gauge, amount);
+        ICreatorGaugeController(gauge).receiveFees(amount);
+
+        emit SolanaFeeReceived(msg.sender, shareOFT, gauge, amount);
+    }
+
+    /**
+     * @notice Process lottery entries from Solana spoke via keeper Twin.
+     * @dev Called by the keeper's Twin to relay lottery entries to Base
+     *      LotteryManager. Scales amounts from Solana decimals to Base decimals.
+     *
+     * @param keeperPubkey Solana pubkey of the authorized entry keeper
+     * @param entries Array of lottery entries from Solana
+     */
+    function processLotteryEntryFromSolana(
+        bytes32 keeperPubkey,
+        LotteryEntry[] calldata entries
+    ) external nonReentrant onlyTwin(keeperPubkey) {
+        if (!authorizedEntryKeepers[keeperPubkey]) revert UnauthorizedEntryKeeper(keeperPubkey);
+        if (lotteryManager == address(0)) revert LotteryManagerNotSet();
+
+        for (uint256 i = 0; i < entries.length; i++) {
+            LotteryEntry calldata entry = entries[i];
+            if (!isRegistered[entry.shareOFT]) {
+                continue;
+            }
+
+            // Scale amount from Solana decimals to Base decimals.
+            uint8 solDecimals = tokenToSolanaDecimals[entry.shareOFT];
+            uint8 baseDecimals = tokenToBaseDecimals[entry.shareOFT];
+            uint256 amount18;
+
+            if (baseDecimals >= solDecimals) {
+                amount18 = entry.amountSolanaUnits * (10 ** (baseDecimals - solDecimals));
+            } else {
+                amount18 = entry.amountSolanaUnits / (10 ** (solDecimals - baseDecimals));
+            }
+
+            if (amount18 == 0) continue;
+
+            // Resolve buyer's Twin address on Base.
+            address buyerTwin = IBaseSolanaBridge(BRIDGE).getPredictedTwinAddress(entry.buyerSolanaPubkey);
+
+            // Register lottery entry on Base.
+            // tokenIn MUST be the ShareOFT (not creatorCoin).
+            ICreatorLotteryManager(lotteryManager).processSwapLottery(
+                buyerTwin,
+                entry.shareOFT,
+                amount18
+            );
+
+            emit SolanaLotteryEntryRelayed(
+                msg.sender,
+                entry.buyerSolanaPubkey,
+                entry.shareOFT,
+                entry.amountSolanaUnits,
+                amount18,
+                buyerTwin
+            );
+        }
     }
 
     // ================================
@@ -682,11 +828,11 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
             return _toUint64(remote);
         }
 
-        uint256 diff = uint256(baseDecimals - solanaDecimals);
-        if (diff > 77) revert InvalidAmount();
-        uint256 factor = 10 ** diff;
-        if (baseAmount % factor != 0) revert InvalidAmount();
-        return _toUint64(baseAmount / factor);
+        uint256 diffDown = uint256(baseDecimals - solanaDecimals);
+        if (diffDown > 77) revert InvalidAmount();
+        uint256 factorDown = 10 ** diffDown;
+        if (baseAmount % factorDown != 0) revert InvalidAmount();
+        return _toUint64(baseAmount / factorDown);
     }
 
     function _toUint64(uint256 v) internal pure returns (uint64) {
@@ -724,6 +870,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     // ================================
 
     function setRegistry(address _registry) external onlyOwner {
+        if (_registry == address(0)) revert InvalidAddress();
         registry = _registry;
     }
 
@@ -731,6 +878,38 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         if (auction == address(0)) revert InvalidAddress();
         allowedCcaAuctions[auction] = allowed;
         emit CcaAuctionAllowed(auction, allowed);
+    }
+
+    /**
+     * @notice Set authorized fee keeper Solana pubkey.
+     * @param keeperPubkey Solana pubkey of the keeper
+     * @param allowed Whether the keeper is allowed to relay fees
+     */
+    function setFeeKeeper(bytes32 keeperPubkey, bool allowed) external onlyOwner {
+        if (keeperPubkey == bytes32(0)) revert InvalidAddress();
+        authorizedFeeKeepers[keeperPubkey] = allowed;
+        emit FeeKeeperSet(keeperPubkey, allowed);
+    }
+
+    /**
+     * @notice Set authorized entry keeper Solana pubkey.
+     * @param keeperPubkey Solana pubkey of the keeper
+     * @param allowed Whether the keeper is allowed to relay lottery entries
+     */
+    function setEntryKeeper(bytes32 keeperPubkey, bool allowed) external onlyOwner {
+        if (keeperPubkey == bytes32(0)) revert InvalidAddress();
+        authorizedEntryKeepers[keeperPubkey] = allowed;
+        emit EntryKeeperSet(keeperPubkey, allowed);
+    }
+
+    /**
+     * @notice Set the LotteryManager address on Base.
+     * @param _lotteryManager The CreatorLotteryManager contract address
+     */
+    function setLotteryManager(address _lotteryManager) external onlyOwner {
+        if (_lotteryManager == address(0)) revert InvalidAddress();
+        lotteryManager = _lotteryManager;
+        emit LotteryManagerSet(_lotteryManager);
     }
 
     /**

@@ -101,6 +101,8 @@ scripts/
 !apps/docs-site/scripts/**
 !frontend/scripts/
 !frontend/scripts/**
+!scripts/solana/
+!scripts/solana/**
 # script/ - Keep deployment scripts
 !script/DeployBase.s.sol
 !script/DeployInfrastructure.s.sol

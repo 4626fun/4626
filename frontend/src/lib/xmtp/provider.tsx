@@ -39,6 +39,7 @@ export type ChatConversation = {
   name: string
   imageUrl?: string
   peerInboxId?: string
+  peerAddress?: string
   lastMessageText?: string
   lastMessageAt?: Date
   unreadCount: number
@@ -212,11 +213,15 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     const isDm = 'peerInboxId' in convo
     let name = ''
     let peerInboxId: string | undefined
+    let peerAddress: string | undefined
 
     if (isDm) {
       try {
         peerInboxId = await (convo as Dm).peerInboxId()
-        name = truncateAddress(peerInboxId)
+        const states = await clientRef.current?.preferences.fetchInboxStates([peerInboxId])
+        const resolved = getEthereumAddressFromInboxState(states?.[0])
+        peerAddress = resolved ?? undefined
+        name = resolved ? truncateAddress(resolved) : truncateAddress(peerInboxId)
       } catch {
         name = 'DM'
       }
@@ -240,6 +245,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       name,
       imageUrl: isDm ? undefined : (convo as Group).imageUrl,
       peerInboxId,
+      peerAddress,
       lastMessageText,
       lastMessageAt,
       unreadCount: 0,
@@ -390,7 +396,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         setError(e instanceof Error ? e.message : 'Failed to connect to XMTP')
       }
     }
-  }, [address, walletClient])
+  }, [address, walletClient, publicClient])
 
   // ------- disconnect -------
   const disconnect = useCallback(() => {

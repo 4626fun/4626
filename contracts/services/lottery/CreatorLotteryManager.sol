@@ -23,8 +23,8 @@ pragma solidity ^0.8.20;
  * @dev MULTI-TOKEN PRIZE PAYOUT:
  *      Winner gets shares from EVERY active creator vault on Base:
  *        - ■AKITA shares (69% of AKITA vault jackpot)
- *        - wsDRAGON shares (69% of DRAGON vault jackpot)
- *        - wsXYZ shares (69% of XYZ vault jackpot)
+ *        - ■DRAGON shares (69% of DRAGON vault jackpot)
+ *        - ■XYZ shares (69% of XYZ vault jackpot)
  *        - ... etc for ALL active creators
  *      Result: Winner gets a diversified portfolio of ALL creator tokens!
  * 
@@ -65,7 +65,10 @@ interface ICreatorRegistryLottery {
     function getOracleForToken(address _token) external view returns (address);
     function getGaugeControllerForToken(address _token) external view returns (address);
     function isCreatorCoinActive(address _token) external view returns (bool);
-    
+
+    // Chain infrastructure
+    function getLayerZeroEndpoint(uint16 _chainId) external view returns (address);
+
     // Global queries
     function getAllCreatorCoins() external view returns (address[] memory);
 }

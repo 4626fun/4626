@@ -26,7 +26,7 @@ interface ICreatorCoin {
 
 interface ICreatorOVaultWrapper {
     function setShareOFT(address _shareOFT) external;
-    function wrap(uint256 amount) external returns (uint256 wsTokens);
+    function wrap(uint256 amount) external returns (uint256 shareTokens);
     function transferOwnership(address newOwner) external;
 }
 
@@ -56,6 +56,10 @@ interface ICCALaunchStrategy {
 
 interface IOwnableTransfer {
     function transferOwnership(address newOwner) external;
+}
+
+interface ISolanaBridgeAdapter {
+    function bridgeToSolana(address token, uint256 amount, bytes32 solanaDestination) external payable;
 }
 
 interface IOFTBootstrapRegistry {
@@ -118,6 +122,18 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     /// @dev Vaults created via this factory appear on alpha.charm.fi UI
     address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;
 
+    // ── Fixed Three-Way Split Constants ──────────────────────────────
+    /// @notice Minimum deposit amount (5M tokens, 18 decimals)
+    uint256 public constant MIN_DEPOSIT = 5_000_000e18;
+    /// @notice Maximum deposit amount (50M tokens, 18 decimals)
+    uint256 public constant MAX_DEPOSIT = 50_000_000e18;
+    /// @notice Percentage of ■TOKENs allocated to CCA auction
+    uint8 public constant AUCTION_PERCENT = 40;
+    /// @notice Percentage of ■TOKENs bridged to Solana
+    uint8 public constant SOLANA_PERCENT = 20;
+    /// @notice Percentage of ■TOKENs vested to the creator
+    uint8 public constant VESTING_PERCENT = 40;
+
     struct CodeIds {
         bytes32 vault;
         bytes32 wrapper;
@@ -149,7 +165,6 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         string shareSymbol;
         string version;
         uint256 depositAmount;
-        uint8 auctionPercent;
         uint128 requiredRaise;
         uint256 floorPriceQ96;
         bytes auctionSteps;
@@ -179,7 +194,6 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         address oracle;
         string version;
         uint256 depositAmount;
-        uint8 auctionPercent;
         uint128 requiredRaise;
         uint256 floorPriceQ96;
         bytes auctionSteps;
@@ -251,7 +265,7 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     }
 
     error ZeroAddress();
-    error InvalidPercent();
+    error InvalidDepositAmount();
     error InvalidCodeId();
     error NotOwner();
     error Phase1Missing();
@@ -282,6 +296,11 @@ contract CreatorVaultDeployer is ReentrancyGuard {
 
     /// @notice Pending auction allocations keyed by creator/owner/version salt.
     mapping(bytes32 => PendingAuction) public pendingAuctions;
+
+    /// @notice SolanaBridgeAdapter address for bridging the Solana allocation.
+    address public solanaBridgeAdapter;
+    /// @notice Solana deployer/multisig wallet address (bytes32 pubkey) to receive bridged tokens.
+    bytes32 public solanaDestination;
 
     event Phase1Deployed(
         address indexed creatorToken,
@@ -345,6 +364,17 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         uint256 amount,
         uint64 startTimestamp,
         uint64 durationSeconds
+    );
+
+    event SolanaAllocationBridged(
+        address indexed shareOFT,
+        uint256 amount,
+        bytes32 solanaDestination
+    );
+
+    event SolanaConfigSet(
+        address indexed adapter,
+        bytes32 solanaDestination
     );
 
     constructor(
@@ -504,7 +534,6 @@ contract CreatorVaultDeployer is ReentrancyGuard {
                 oracle: coreOut.oracle,
                 version: params.version,
                 depositAmount: params.depositAmount,
-                auctionPercent: params.auctionPercent,
                 requiredRaise: params.requiredRaise,
                 floorPriceQ96: params.floorPriceQ96,
                 auctionSteps: params.auctionSteps
@@ -546,7 +575,6 @@ contract CreatorVaultDeployer is ReentrancyGuard {
                 oracle: coreOut.oracle,
                 version: params.version,
                 depositAmount: params.depositAmount,
-                auctionPercent: params.auctionPercent,
                 requiredRaise: params.requiredRaise,
                 floorPriceQ96: params.floorPriceQ96,
                 auctionSteps: params.auctionSteps
@@ -669,7 +697,8 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
         if (params.vault == address(0) || params.wrapper == address(0) || params.shareOFT == address(0)) revert ZeroAddress();
         if (params.gaugeController == address(0) || params.ccaStrategy == address(0) || params.oracle == address(0)) revert ZeroAddress();
-        if (params.auctionPercent > 100) revert InvalidPercent();
+        // Enforce deposit bounds: min 5M, max 50M.
+        if (params.depositAmount < MIN_DEPOSIT || params.depositAmount > MAX_DEPOSIT) revert InvalidDepositAmount();
 
         // Require phase-1 + phase-2 contracts to exist.
         if (params.vault.code.length == 0 || params.wrapper.code.length == 0 || params.shareOFT.code.length == 0) revert Phase1Missing();
@@ -683,14 +712,17 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         out.ccaStrategy = params.ccaStrategy;
         out.oracle = params.oracle;
 
-        // Deposit + wrap + deferred auction (launch in later phase)
+        // Deposit + wrap
         IERC20(params.creatorToken).forceApprove(params.vault, params.depositAmount);
         uint256 shares = ICreatorOVault(params.vault).deposit(params.depositAmount, address(this));
 
         IERC20(params.vault).forceApprove(params.wrapper, shares);
-        uint256 wsTokens = ICreatorOVaultWrapper(params.wrapper).wrap(shares);
+        uint256 shareTokens = ICreatorOVaultWrapper(params.wrapper).wrap(shares);
 
-        uint256 auctionAmount = (wsTokens * params.auctionPercent) / 100;
+        // ── Fixed Three-Way Split: 40% CCA / 20% Solana / 40% Vesting ──
+        uint256 auctionAmount = (shareTokens * AUCTION_PERCENT) / 100;   // 40%
+        uint256 solanaAmount  = (shareTokens * SOLANA_PERCENT) / 100;    // 20%
+        uint256 vestingAmount = shareTokens - auctionAmount - solanaAmount; // 40% (remainder)
         if (auctionAmount > 0) {
             PendingAuction storage pending = pendingAuctions[baseSalt];
             if (pending.amount != 0) revert AuctionAlreadyPending();
@@ -702,8 +734,22 @@ contract CreatorVaultDeployer is ReentrancyGuard {
             emit AuctionDeferred(params.creatorToken, params.owner, params.shareOFT, params.ccaStrategy, auctionAmount);
         }
 
-        uint256 remaining = wsTokens - auctionAmount;
-        if (remaining > 0) {
+        // 2. Solana allocation — bridge 20% to Solana via SolanaBridgeAdapter
+        if (solanaAmount > 0 && solanaBridgeAdapter != address(0) && solanaDestination != bytes32(0)) {
+            IERC20(params.shareOFT).forceApprove(solanaBridgeAdapter, solanaAmount);
+            ISolanaBridgeAdapter(solanaBridgeAdapter).bridgeToSolana(
+                params.shareOFT,
+                solanaAmount,
+                solanaDestination
+            );
+            emit SolanaAllocationBridged(params.shareOFT, solanaAmount, solanaDestination);
+        } else if (solanaAmount > 0) {
+            // If Solana adapter not configured, add Solana portion to vesting.
+            vestingAmount += solanaAmount;
+        }
+
+        // 3. Creator vesting
+        if (vestingAmount > 0) {
             // Vest the creator’s ShareOFT allocation to reduce immediate sell pressure.
             // Default: linear over 365 days, no cliff, starting now.
             CreatorLinearVesting vesting = new CreatorLinearVesting(
@@ -712,12 +758,12 @@ contract CreatorVaultDeployer is ReentrancyGuard {
                 uint64(block.timestamp),
                 uint64(365 days)
             );
-            IERC20(params.shareOFT).safeTransfer(address(vesting), remaining);
+            IERC20(params.shareOFT).safeTransfer(address(vesting), vestingAmount);
             emit CreatorShareVestingDeployed(
                 params.shareOFT,
                 params.owner,
                 address(vesting),
-                remaining,
+                vestingAmount,
                 uint64(block.timestamp),
                 uint64(365 days)
             );
@@ -962,6 +1008,23 @@ contract CreatorVaultDeployer is ReentrancyGuard {
             params.hubEid,
             params.hubGaugeReceiver
         );
+    }
+
+    // ================================
+    // SOLANA CONFIG (ADMIN)
+    // ================================
+
+    /**
+     * @notice Set the SolanaBridgeAdapter and destination for the 20% Solana allocation.
+     * @dev Must be called before deployPhase2AndLaunch for Solana bridging to activate.
+     *      If not set, the 20% Solana allocation falls back to creator vesting.
+     */
+    function setSolanaConfig(address _adapter, bytes32 _destination) external {
+        // Only protocol treasury can configure Solana bridging.
+        if (msg.sender != protocolTreasury) revert NotOwner();
+        solanaBridgeAdapter = _adapter;
+        solanaDestination = _destination;
+        emit SolanaConfigSet(_adapter, _destination);
     }
 
     // ================================

@@ -41,6 +41,9 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
     /// @notice Reverse lookup: gaugeController → token
     mapping(address => address) public gaugeControllerToToken;
     
+    /// @notice Reverse lookup: canonicalWallet → token
+    mapping(address => address) public canonicalWalletToToken;
+    
     /// @notice All registered Creator Coin addresses
     address[] private registeredTokens;
     
@@ -207,6 +210,7 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
             oracle: address(0),
             gaugeController: address(0),
             creator: _creator,
+            canonicalWallet: address(0),
             pool: _pool,
             poolFee: _poolFee,
             primaryChainId: currentChainId,
@@ -326,6 +330,35 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
         creatorCoins[_token].isActive = _isActive;
         
         emit CreatorCoinStatusChanged(_token, _isActive);
+    }
+    
+    /**
+     * @notice Set the canonical smart wallet (ERC-4337) for a creator
+     * @dev This wallet serves as the creator's unified on-chain identity:
+     *      - ERC-4337 account (UserOp sender, gas sponsorship via paymaster)
+     *      - ERC-8004 agent identity (on-chain agent registration)
+     *      - Vault owner and primary asset holder
+     *      - Lottery prize recipient
+     *      Only the registry owner or the creator themselves can set this.
+     */
+    function setCanonicalWallet(address _token, address _wallet) external override {
+        if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
+        if (_wallet == address(0)) revert ZeroAddress();
+        
+        // Only owner or the creator can set the canonical wallet
+        address creator = creatorCoins[_token].creator;
+        if (msg.sender != owner() && msg.sender != creator) revert NotAuthorized();
+        
+        // Clear old reverse mapping if exists
+        address oldWallet = creatorCoins[_token].canonicalWallet;
+        if (oldWallet != address(0)) {
+            delete canonicalWalletToToken[oldWallet];
+        }
+        
+        creatorCoins[_token].canonicalWallet = _wallet;
+        canonicalWalletToToken[_wallet] = _token;
+        
+        emit CanonicalWalletSet(_token, _wallet);
     }
     
     /**
@@ -499,6 +532,24 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
      */
     function getTokenForShareOFT(address _shareOFT) external view returns (address) {
         return shareOFTToToken[_shareOFT];
+    }
+    
+    /**
+     * @notice Get the canonical smart wallet for a creator
+     * @param _token Creator Coin address
+     * @return The creator's canonical ERC-4337 smart wallet (address(0) if not set)
+     */
+    function getCanonicalWallet(address _token) external view override returns (address) {
+        return creatorCoins[_token].canonicalWallet;
+    }
+    
+    /**
+     * @notice Get the Creator Coin for a canonical wallet (reverse lookup)
+     * @param _wallet Canonical smart wallet address
+     * @return The creator coin address (address(0) if not found)
+     */
+    function getTokenForCanonicalWallet(address _wallet) external view override returns (address) {
+        return canonicalWalletToToken[_wallet];
     }
     
     // =================================

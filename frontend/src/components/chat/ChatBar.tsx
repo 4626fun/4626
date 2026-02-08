@@ -5,9 +5,10 @@
  * When expanded: a panel listing all conversations.
  */
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { MessageSquare, ChevronDown, Plus, Loader2, Wifi, WifiOff, X } from 'lucide-react'
 import { useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
+import { useIdentity } from '@/hooks/useIdentity'
 
 type Props = {
   expanded: boolean
@@ -25,6 +26,100 @@ function formatTime(date?: Date): string {
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`
   return `${Math.floor(diff / 86_400_000)}d`
+}
+
+function initials(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return '??'
+  return trimmed.slice(0, 2).toUpperCase()
+}
+
+function truncateAddress(addr: string): string {
+  if (addr.length <= 10) return addr
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
+}
+
+function ConversationItem({
+  convo,
+  onOpenChat,
+}: {
+  convo: ChatConversation
+  onOpenChat: (convo: ChatConversation) => void
+}) {
+  const { resolveInboxAddress } = useXmtp()
+  const [resolvedPeer, setResolvedPeer] = useState<{ inboxId: string; address: string | null } | null>(null)
+
+  useEffect(() => {
+    if (convo.type !== 'dm') return
+    if (convo.peerAddress) return
+    if (!convo.peerInboxId) return
+    let cancelled = false
+    resolveInboxAddress(convo.peerInboxId).then((addr) => {
+      if (!cancelled) setResolvedPeer({ inboxId: convo.peerInboxId!, address: addr })
+    })
+    return () => { cancelled = true }
+  }, [convo.type, convo.peerAddress, convo.peerInboxId, resolveInboxAddress])
+
+  const peerAddress =
+    convo.peerAddress ??
+    (convo.peerInboxId && resolvedPeer?.inboxId === convo.peerInboxId ? resolvedPeer.address : null)
+
+  const identity = useIdentity(convo.type === 'dm' ? peerAddress : null)
+  const displayName =
+    convo.type === 'dm' && peerAddress
+      ? identity.displayName
+      : convo.name
+  const displaySecondary =
+    convo.type === 'dm' && peerAddress
+      ? (identity.secondary ?? truncateAddress(peerAddress))
+      : null
+  const avatar = convo.type === 'dm'
+    ? identity.avatar
+    : (convo.imageUrl ?? null)
+  const subtitle = convo.lastMessageText
+    ? (displaySecondary ? `${displaySecondary} · ${convo.lastMessageText}` : convo.lastMessageText)
+    : (displaySecondary ?? 'No messages')
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpenChat({
+        ...convo,
+        name: displayName,
+        peerAddress: peerAddress ?? convo.peerAddress,
+      })}
+      className="flex items-start gap-3 w-full px-4 py-3 text-left hover:bg-white/5 transition-colors border-b border-white/5 last:border-b-0"
+    >
+      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[11px] font-medium text-zinc-300 uppercase">
+        {avatar ? (
+          <img src={avatar} alt="" className="w-full h-full object-cover" />
+        ) : (
+          initials(displayName)
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm text-zinc-200 font-medium truncate">
+            {displayName}
+          </span>
+          <span className="text-[10px] text-zinc-500 flex-shrink-0">
+            {formatTime(convo.lastMessageAt)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-2 mt-0.5">
+          <span className="text-xs text-zinc-500 truncate">
+            {subtitle}
+          </span>
+          {convo.unreadCount > 0 && (
+            <span className="flex-shrink-0 flex items-center justify-center min-w-[16px] h-[16px] rounded-full bg-brand-primary text-[9px] font-bold text-black px-1">
+              {convo.unreadCount}
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
+  )
 }
 
 export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'desktop' }: Props) {
@@ -184,43 +279,11 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
               ) : (
                 <div className="overflow-y-auto flex-1">
                   {conversations.map((convo) => (
-                    <button
+                    <ConversationItem
                       key={convo.id}
-                      type="button"
-                      onClick={() => onOpenChat(convo)}
-                      className="flex items-start gap-3 w-full px-4 py-3 text-left hover:bg-white/5 transition-colors border-b border-white/5 last:border-b-0"
-                    >
-                      {/* Avatar */}
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-[11px] font-medium text-zinc-300 uppercase">
-                        {convo.type === 'group' ? (
-                          convo.name.slice(0, 2)
-                        ) : (
-                          convo.name.slice(0, 2)
-                        )}
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm text-zinc-200 font-medium truncate">
-                            {convo.name}
-                          </span>
-                          <span className="text-[10px] text-zinc-500 flex-shrink-0">
-                            {formatTime(convo.lastMessageAt)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between gap-2 mt-0.5">
-                          <span className="text-xs text-zinc-500 truncate">
-                            {convo.lastMessageText ?? 'No messages'}
-                          </span>
-                          {convo.unreadCount > 0 && (
-                            <span className="flex-shrink-0 flex items-center justify-center min-w-[16px] h-[16px] rounded-full bg-brand-primary text-[9px] font-bold text-black px-1">
-                              {convo.unreadCount}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </button>
+                      convo={convo}
+                      onOpenChat={onOpenChat}
+                    />
                   ))}
                 </div>
               )}

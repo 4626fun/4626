@@ -17,6 +17,9 @@ type Props = {
   conversationId: string
   conversationName: string
   conversationType: 'dm' | 'group'
+  peerInboxId?: string
+  peerAddress?: string
+  conversationImageUrl?: string
   minimized: boolean
   onMinimize: () => void
   onClose: () => void
@@ -35,6 +38,17 @@ function formatTimestamp(date: Date): string {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
     ' ' +
     date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function initials(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return '??'
+  return trimmed.slice(0, 2).toUpperCase()
+}
+
+function truncateAddress(addr: string): string {
+  if (addr.length <= 10) return addr
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
 /** Inline sender label that resolves inboxId → address → display name */
@@ -58,20 +72,51 @@ export function ChatWindow({
   conversationId,
   conversationName,
   conversationType,
+  peerInboxId,
+  peerAddress,
+  conversationImageUrl,
   minimized,
   onMinimize,
   onClose,
   variant = 'desktop',
 }: Props) {
-  const { loadMessages, sendMessage, subscribeToMessages, status } = useXmtp()
+  const { loadMessages, sendMessage, subscribeToMessages, status, resolveInboxAddress } = useXmtp()
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [resolvedPeer, setResolvedPeer] = useState<{ inboxId: string; address: string | null } | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (conversationType !== 'dm') return
+    if (peerAddress) return
+    if (!peerInboxId) return
+    let cancelled = false
+    resolveInboxAddress(peerInboxId).then((addr) => {
+      if (!cancelled) setResolvedPeer({ inboxId: peerInboxId, address: addr })
+    })
+    return () => { cancelled = true }
+  }, [conversationType, peerInboxId, peerAddress, resolveInboxAddress])
+
+  const dmPeerAddress =
+    conversationType === 'dm'
+      ? (peerAddress ?? (peerInboxId && resolvedPeer?.inboxId === peerInboxId ? resolvedPeer.address : null))
+      : null
+  const dmIdentity = useIdentity(dmPeerAddress)
+  const headerName =
+    conversationType === 'dm' && dmPeerAddress
+      ? dmIdentity.displayName
+      : conversationName
+  const headerSubline =
+    conversationType === 'dm' && dmPeerAddress
+      ? (dmIdentity.secondary ?? truncateAddress(dmPeerAddress))
+      : null
+  const headerAvatar = conversationType === 'dm' ? dmIdentity.avatar : (conversationImageUrl ?? null)
+  const headerInitials = initials(headerName)
 
   // Load initial messages
   useEffect(() => {
@@ -156,9 +201,23 @@ export function ChatWindow({
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <div className="flex-1 min-w-0 text-center">
-            <div className="text-sm font-semibold text-zinc-100 truncate">
-              {conversationName}
+          <div className="flex-1 min-w-0 flex items-center justify-center gap-2">
+            <div className="w-7 h-7 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[10px] font-medium text-zinc-300 uppercase flex-shrink-0">
+              {headerAvatar ? (
+                <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
+              ) : (
+                headerInitials
+              )}
+            </div>
+            <div className="min-w-0 text-left">
+              <div className="text-sm font-semibold text-zinc-100 truncate">
+                {headerName}
+              </div>
+              {headerSubline && (
+                <div className="text-[10px] text-zinc-500 truncate">
+                  {headerSubline}
+                </div>
+              )}
             </div>
           </div>
           <button
@@ -176,10 +235,19 @@ export function ChatWindow({
           onClick={onMinimize}
         >
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-medium text-zinc-300 uppercase flex-shrink-0">
-              {conversationName.slice(0, 2)}
+            <div className="w-6 h-6 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[9px] font-medium text-zinc-300 uppercase flex-shrink-0">
+              {headerAvatar ? (
+                <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
+              ) : (
+                headerInitials
+              )}
             </div>
-            <span className="text-sm text-zinc-200 font-medium truncate">{conversationName}</span>
+            <div className="min-w-0">
+              <div className="text-sm text-zinc-200 font-medium truncate">{headerName}</div>
+              {headerSubline && (
+                <div className="text-[10px] text-zinc-500 truncate">{headerSubline}</div>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
             <button

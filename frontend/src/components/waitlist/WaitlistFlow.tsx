@@ -27,6 +27,7 @@ import { DoneStep } from './steps/DoneStep'
 import { useWaitlistApi } from './useWaitlistApi'
 import { useWaitlistVerification } from './useWaitlistVerification'
 import { useWaitlistReferral, getStoredReferralCode } from './useWaitlistReferral'
+import { Logo } from '@/components/brand/Logo'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const EVM_RE = /^0x[a-fA-F0-9]{40}$/
@@ -1590,10 +1591,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
             </div>
           </div>
         ) : (
-          <div className="space-y-4 mb-6">
-            <span className="text-[11px] uppercase tracking-[0.15em] text-zinc-600 font-medium">Waitlist</span>
-            <div className="text-[40px] sm:text-[48px] font-light tracking-tight text-white leading-tight">Early access</div>
-            <div className="text-[15px] text-zinc-500 font-light">Verify your wallet to join.</div>
+          <div className="mb-6">
+            <div className="text-[40px] sm:text-[48px] font-light tracking-tight text-white leading-tight">
+              Waitlist
+            </div>
           </div>
         )}
 
@@ -1617,20 +1618,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
               <div className="w-8" />
             </div>
           ) : null}
-          {/* Step indicator (stable, no layout/slide jitter) */}
-          <div className="mb-6 flex items-center justify-between">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-              {step === 'verify' ? 'Connect' : 'Complete'}
-            </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">
-              <div className={`h-2 w-2 rounded-[3px] ${step === 'verify' ? 'bg-[#74A7FF]' : 'bg-white/10'}`} />
-              <div className={`h-2 w-2 rounded-[3px] ${step === 'done' ? 'bg-[#74A7FF]' : 'bg-white/10'}`} />
-              <div className="ml-1 text-[11px] text-zinc-500 tabular-nums">
-                {step === 'verify' ? '1' : '2'}/2
-              </div>
-            </div>
-          </div>
-          <div className="mb-6 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" />
+          {/* Step indicator removed for simpler layout */}
 
           {/* Step transition: smooth layout */}
           <div className="relative">

@@ -115,9 +115,9 @@ contract SimulatePhase2Deployment is Script {
         CreatorOVault(payable(predictedVault)).setWhitelist(predictedWrapper, true);
         CreatorOVault(payable(predictedVault)).setGaugeController(predictedGauge);
 
-        CreatorShareOFT(predictedShare).setVault(predictedVault);
-        CreatorShareOFT(predictedShare).setMinter(predictedWrapper, true);
-        CreatorShareOFT(predictedShare).setGaugeController(predictedGauge);
+        CreatorShareOFT(payable(predictedShare)).setVault(predictedVault);
+        CreatorShareOFT(payable(predictedShare)).setMinter(predictedWrapper, true);
+        CreatorShareOFT(payable(predictedShare)).setGaugeController(predictedGauge);
 
         CreatorGaugeController(payable(predictedGauge)).setVault(predictedVault);
         CreatorGaugeController(payable(predictedGauge)).setWrapper(predictedWrapper);
@@ -131,8 +131,8 @@ contract SimulatePhase2Deployment is Script {
 
         // Invariant checks (read-only)
         require(address(CreatorOVaultWrapper(predictedWrapper).shareOFT()) == predictedShare, "wrapper->shareOFT");
-        require(CreatorShareOFT(predictedShare).vault() == predictedVault, "shareOFT->vault");
-        require(CreatorShareOFT(predictedShare).isMinter(predictedWrapper), "wrapper not minter");
+        require(CreatorShareOFT(payable(predictedShare)).vault() == predictedVault, "shareOFT->vault");
+        require(CreatorShareOFT(payable(predictedShare)).isMinter(predictedWrapper), "wrapper not minter");
         require(CreatorOVault(payable(predictedVault)).gaugeController() == predictedGauge, "vault->gauge");
         require(CreatorOVault(payable(predictedVault)).whitelist(predictedWrapper), "wrapper not whitelisted");
         require(CCALaunchStrategy(payable(predictedCCA)).approvedLaunchers(VAULT_ACTIVATION_BATCHER), "launcher not approved");

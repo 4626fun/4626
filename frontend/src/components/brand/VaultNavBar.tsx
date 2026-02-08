@@ -57,6 +57,8 @@ export function VaultNavBar() {
   const mini = useMiniAppContext()
   const baseItems = publicMode ? NAV_ITEMS_PUBLIC : NAV_ITEMS
   const items = isAdmin ? [...baseItems, ADMIN_ITEM] : baseItems
+  const isWaitlistView = location.pathname === '/waitlist' || location.hash === '#waitlist'
+  const showConnect = !publicMode && !isWaitlistView
 
   return (
     <header className="hidden md:block sticky top-0 left-0 right-0 z-50 transition-all duration-500">
@@ -140,7 +142,7 @@ export function VaultNavBar() {
             </div>
           ) : null}
           <ThemeToggle />
-          {!publicMode ? <ConnectButton /> : null}
+          {showConnect ? <ConnectButton /> : null}
         </div>
 
         <div className="md:hidden text-white/50 hover:text-white cursor-pointer" title="Menu">

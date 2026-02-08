@@ -13,9 +13,10 @@ import {
   ShieldCheck,
   MessageSquare,
 } from 'lucide-react'
-import { AKITA } from '../config/contracts'
+import { AKITA, CONTRACTS } from '../config/contracts'
+import { ClaimPrizeToSolana } from '../components/ClaimPrizeToSolana'
 import { ConnectButton } from '../components/ConnectButton'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useXmtp } from '@/lib/xmtp/provider'
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { CcaAuctionPanel } from '@/components/cca/CcaAuctionPanel'
@@ -146,8 +147,14 @@ function VaultChatCard() {
 
 export function Vault() {
   const params = useParams()
+  const [searchParams] = useSearchParams()
   const addressParamRaw = typeof params.address === 'string' ? params.address.trim() : ''
   const addressParam = addressParamRaw && isAddress(addressParamRaw) ? (getAddress(addressParamRaw) as Address) : null
+
+  // Solana claim deep-link: ?claim=solana&solanaPubkey=...&prizeAmount=...
+  const solanaClaimMode = searchParams.get('claim') === 'solana'
+  const solanaPubkeyParam = searchParams.get('solanaPubkey')
+  const prizeAmountParam = searchParams.get('prizeAmount') ?? ''
 
   const akitaFallback = useMemo(() => {
     if (!addressParam) return false
@@ -210,6 +217,33 @@ export function Vault() {
 
   const creatorDecimals = typeof tokenDecimals === 'number' ? tokenDecimals : 18
   const shareTokenDecimals = typeof shareDecimals === 'number' ? shareDecimals : 18
+
+  const prizeAmountRaw = useMemo(() => {
+    if (!prizeAmountParam) return 0n
+    const trimmed = prizeAmountParam.trim()
+    if (!trimmed) return 0n
+
+    try {
+      if (trimmed.includes('.')) {
+        return parseUnits(trimmed, shareTokenDecimals ?? 18)
+      }
+      if (/^\d+$/.test(trimmed)) {
+        return BigInt(trimmed)
+      }
+      return 0n
+    } catch {
+      return 0n
+    }
+  }, [prizeAmountParam, shareTokenDecimals])
+
+  const prizeAmountDisplay = useMemo(() => {
+    if (!prizeAmountParam) return '0'
+    const trimmed = prizeAmountParam.trim()
+    if (!trimmed) return '0'
+    if (trimmed.includes('.')) return trimmed
+    if (!/^\d+$/.test(trimmed)) return '0'
+    return formatUnits(BigInt(trimmed), shareTokenDecimals ?? 18)
+  }, [prizeAmountParam, shareTokenDecimals])
 
   const { data: tokenBalance } = useReadContract({
     address: (tokenAddress ?? ZERO_ADDRESS) as `0x${string}`,
@@ -575,6 +609,32 @@ export function Vault() {
           </div>
         </div>
       </section>
+
+      {/* Solana Lottery Prize Claim — deep-linked from Solana frontend */}
+      {solanaClaimMode && solanaPubkeyParam && shareOFTAddress && (
+        <section id="solana-claim" className="cinematic-section">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.8 }}
+              className="mb-10 sm:mb-16"
+            >
+              <span className="label">Lottery Prize</span>
+              <h2 className="headline text-3xl sm:text-5xl mt-4 sm:mt-6">Claim to Solana</h2>
+            </motion.div>
+            <ClaimPrizeToSolana
+              solanaPubkey={solanaPubkeyParam}
+              prizeToken={shareOFTAddress}
+              prizeAmount={prizeAmountDisplay}
+              prizeAmountRaw={prizeAmountRaw}
+              tokenSymbol={shareSymbol ?? 'SHARE'}
+              tokenDecimals={shareTokenDecimals}
+              adapterAddress={CONTRACTS.solanaBridgeAdapter as `0x${string}`}
+            />
+          </div>
+        </section>
+      )}
 
       {/* Deposit/Withdraw */}
       {canManageVault ? (

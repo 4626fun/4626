@@ -134,11 +134,9 @@ export const VerifyStep = memo(function VerifyStep({
   const payoutRecipient = useMemo(() => creatorCoin?.payoutRecipient ?? null, [creatorCoin?.payoutRecipient])
   const canonicalSmartWallet = useMemo(() => creatorCoin?.canonicalSmartWallet ?? null, [creatorCoin?.canonicalSmartWallet])
   const ownershipGateActive = Boolean(hasCreatorCoin && ownershipEvidenceAvailable)
-  const headerTitle = !verifiedWallet ? 'Connect owner wallet' : showSubmitButton ? 'Join the waitlist' : 'Checking ownership'
+  const headerTitle = !verifiedWallet ? 'Your email' : showSubmitButton ? 'Join the waitlist' : 'Checking ownership'
   const headerSubtitle = !verifiedWallet
-    ? isBaseApp
-      ? 'Base app detected. Connect the wallet that owns your creator coin.'
-      : 'Connect the wallet that owns your creator coin. We will verify on-chain ownership.'
+    ? ''
     : showSubmitButton
       ? ownershipGateActive && !walletOwnershipValid
         ? 'Connect a payout recipient or owner wallet to continue.'
@@ -148,6 +146,7 @@ export const VerifyStep = memo(function VerifyStep({
     typeof privyVerifyError === 'string' && /wallet (login|sign-in) is not enabled|wallet sign-in isn’t available/i.test(privyVerifyError)
   const [showTrouble, setShowTrouble] = useState(false)
   const canContinue = showPrivyReady && privyReady && !privyVerifyBusy && !busy
+  const showPrivyError = Boolean(privyVerifyError) && !looksLikeWalletLoginDisabled
 
   const helperText = useMemo(() => {
     if (privyVerifyBusy) return 'Opening…'
@@ -194,7 +193,9 @@ export const VerifyStep = memo(function VerifyStep({
         <h1 className="font-display text-[30px] sm:text-[35px] font-medium tracking-[-0.022em] text-white leading-[1.05]">
           {headerTitle}
         </h1>
-        <div className="max-w-[34ch] text-[13px] text-zinc-400 leading-relaxed">{headerSubtitle}</div>
+        {headerSubtitle ? (
+          <div className="max-w-[52ch] text-[13px] text-zinc-400 leading-relaxed">{headerSubtitle}</div>
+        ) : null}
         {verifiedWallet ? (
           <div className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.12] bg-white/[0.03] px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-zinc-300">
             <Sparkles className="h-3 w-3 text-[#8AB5FF]" />
@@ -222,10 +223,14 @@ export const VerifyStep = memo(function VerifyStep({
             <span className="pointer-events-none absolute -left-16 top-0 h-full w-16 -skew-x-12 bg-white/20 blur-md transition-transform duration-700 ease-out group-hover:translate-x-[400px]" />
             <span className="relative flex items-center gap-3">
               <img src={BASE_SQUARE_WHITE} alt="" className="w-3.5 h-3.5" aria-hidden="true" />
-              Continue
+              Sign Up
             </span>
             <ChevronRight className="relative w-4 h-4 opacity-90" />
           </button>
+
+          <div className="text-[12px] text-zinc-500">
+            Creates a Privy embedded EOA for your account. You can link a wallet later.
+          </div>
 
           <div className="flex items-center justify-between">
             <div className="text-[12px] text-zinc-500">{helperText || '\u00A0'}</div>
@@ -238,7 +243,7 @@ export const VerifyStep = memo(function VerifyStep({
             </button>
           </div>
 
-          {privyVerifyError ? (
+          {showPrivyError ? (
             <motion.div
               {...fadeUp}
               className="rounded-2xl border border-red-500/25 bg-red-500/[0.07] px-4 py-3 text-[12px] text-red-200/90"
@@ -274,6 +279,9 @@ export const VerifyStep = memo(function VerifyStep({
                     <div>
                       <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Having trouble?</div>
                       <div className="text-[16px] text-white mt-1 font-display">Try another option</div>
+                      <div className="mt-2 text-[12px] text-zinc-400">
+                        This links your account so we can verify creator-coin ownership and unlock deploy.
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -285,50 +293,8 @@ export const VerifyStep = memo(function VerifyStep({
                     </button>
                   </div>
 
-                  {looksLikeWalletLoginDisabled ? (
-                    <div className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-[12px] text-amber-200/90">
-                      Wallet sign-in is disabled for this Privy app. Enable Wallet login in Privy to link Base Account.
-                    </div>
-                  ) : null}
-
-                  <div className="mt-4 grid gap-2">
-                    <div className="rounded-2xl border border-zinc-800/70 bg-black/25 px-4 py-3">
-                      <div className="flex items-center gap-2 text-[12px] text-zinc-300">
-                        <Wallet className="w-4 h-4 text-zinc-500" />
-                        Use Coinbase Wallet / WalletConnect
-                      </div>
-                      <div className="mt-3">
-                        <ConnectButtonWeb3 />
-                      </div>
-                      {onFallbackSignIn ? (
-                        <button
-                          type="button"
-                          className="mt-3 w-full rounded-xl border border-zinc-800 bg-black/30 px-4 py-3 text-[13px] text-zinc-200 hover:text-white hover:border-zinc-700 hover:bg-zinc-800/40 transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] disabled:opacity-50"
-                          disabled={busy}
-                          onClick={() => void onFallbackSignIn()}
-                        >
-                          Sign in (no transaction)
-                        </button>
-                      ) : null}
-                    </div>
-
-                    <div className="rounded-2xl border border-zinc-800/70 bg-black/25 px-4 py-3">
-                      <div className="flex items-center gap-2 text-[12px] text-zinc-300">
-                        <Mail className="w-4 h-4 text-zinc-500" />
-                        Continue with email
-                      </div>
-                      <div className="text-[11px] text-zinc-600 mt-1">
-                        Useful if wallet popups are blocked. Deploy still requires Wallet login enabled in Privy.
-                      </div>
-                      <button
-                        type="button"
-                        className="mt-3 w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-[13px] text-zinc-200 hover:text-white hover:border-white/20 transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] disabled:opacity-50"
-                        disabled={busy || privyVerifyBusy || typeof onPrivyEmailContinue !== 'function'}
-                        onClick={() => void onPrivyEmailContinue?.()}
-                      >
-                        Continue with email
-                      </button>
-                    </div>
+                  <div className="mt-3 text-[11px] text-zinc-500">
+                    Need help? <a className="text-zinc-300 hover:text-white" href="mailto:4626dotfun@gmail.com">4626dotfun@gmail.com</a>
                   </div>
                 </div>
               </div>

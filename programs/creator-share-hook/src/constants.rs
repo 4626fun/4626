@@ -1,0 +1,25 @@
+/// Default fee in basis points (6.9% = 690 bps).
+/// Collected via SPL Token-2022 TransferFeeConfig, NOT by this hook.
+pub const DEFAULT_FEE_BPS: u16 = 690;
+
+/// Maximum number of entries in the PendingEntries ring buffer.
+/// Each LotteryEntry is 48 bytes; 16 * 48 = 768 bytes.
+/// Using zero-copy deserialization to avoid stack overflow on SBF.
+pub const MAX_PENDING_ENTRIES: usize = 16;
+
+/// Emergency drain threshold — 80% of MAX_PENDING_ENTRIES.
+/// When the buffer exceeds this, Keepr triggers an immediate drain cycle.
+pub const EMERGENCY_DRAIN_THRESHOLD: usize = 12;
+
+/// Seed prefixes for PDA derivation.
+pub const CREATOR_CONFIG_SEED: &[u8] = b"creator_config";
+pub const PENDING_ENTRIES_SEED: &[u8] = b"pending_entries";
+pub const WINNER_RECORD_SEED: &[u8] = b"winner_record";
+pub const EXTRA_ACCOUNT_META_LIST_SEED: &[u8] = b"extra-account-metas";
+
+/// Maximum number of known AMM programs per creator config.
+pub const MAX_AMM_PROGRAMS: usize = 8;
+
+/// Default flush threshold in token units (smallest denomination).
+/// Fees below this threshold are accumulated until the next flush.
+pub const DEFAULT_FLUSH_THRESHOLD: u64 = 0;

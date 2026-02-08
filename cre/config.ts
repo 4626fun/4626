@@ -17,6 +17,14 @@ export const CHAINS = {
     /** LayerZero Endpoint ID */
     lzEid: 30184,
   },
+  solana: {
+    name: 'Solana',
+    rpcEnvKey: 'SOLANA_RPC_URL',
+    programId:
+      process.env.SOLANA_PROGRAM_ID ??
+      process.env.CREATOR_SHARE_HOOK_PROGRAM_ID ??
+      'EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU',
+  },
 } as const;
 
 export type ChainKey = keyof typeof CHAINS;
@@ -164,6 +172,65 @@ export const CCA_STRATEGY_ABI = [
   // Write
   { type: 'function', name: 'sweepCurrency', inputs: [], outputs: [], stateMutability: 'nonpayable' },
   { type: 'function', name: 'sweepUnsoldTokens', inputs: [], outputs: [], stateMutability: 'nonpayable' },
+] as const;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Solana timing constants
+// ---------------------------------------------------------------------------
+
+/** Seconds between Solana entry relay polls */
+export const SOLANA_ENTRY_RELAY_INTERVAL = 30;
+
+/** Seconds between Solana fee flush polls */
+export const SOLANA_FEE_FLUSH_INTERVAL = 300; // 5 min
+
+/** Price deviation threshold for alerting (bps) */
+export const SOLANA_PRICE_DEVIATION_ALERT_BPS = 1500; // 15%
+
+/** Price deviation threshold for auto-recenter (bps) */
+export const SOLANA_PRICE_DEVIATION_RECENTER_BPS = 2000; // 20%
+
+/** Price deviation threshold for halt (bps) */
+export const SOLANA_PRICE_DEVIATION_HALT_BPS = 5000; // 50%
+
+// ---------------------------------------------------------------------------
+// Solana ABI fragments (Base-side contracts for Keepr relay)
+// ---------------------------------------------------------------------------
+
+export const SOLANA_BRIDGE_ADAPTER_ABI = [
+  {
+    type: 'function',
+    name: 'receiveFeeFromSolana',
+    inputs: [
+      { name: 'keeperPubkey', type: 'bytes32' },
+      { name: 'shareOFT', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'processLotteryEntryFromSolana',
+    inputs: [
+      { name: 'keeperPubkey', type: 'bytes32' },
+      {
+        name: 'entries',
+        type: 'tuple[]',
+        components: [
+          { name: 'buyerSolanaPubkey', type: 'bytes32' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'amountSolanaUnits', type: 'uint256' },
+        ],
+      },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
 ] as const;
 
 // ---------------------------------------------------------------------------
