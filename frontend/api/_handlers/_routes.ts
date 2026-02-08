@@ -15,7 +15,9 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'analytics': () => import('./_analytics.js'),
   'agents': () => import('./_agents.js'),
   'agent/invokeSkill': () => import('./agent/_invokeSkill.js'),
-  'agent/process': () => import('./agent/_process.js'),
+  // agent/process is deployed as a standalone function (api/agent/process.ts)
+  // to isolate the heavy @xmtp/node-bindings (~214 MB) from the catch-all bundle.
+  // 'agent/process': () => import('./agent/_process.js'),
 
   // Public, agent-friendly v1 API
   'v1/spec.json': () => import('./v1/_spec.js'),

@@ -10,6 +10,10 @@
     },
     "api/agent-registration.ts": {
       "includeFiles": "public/.well-known/agent-registration.json"
+    },
+    "api/agent/process.ts": {
+      "maxDuration": 60,
+      "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node}"
     }
   },
   "crons": [
@@ -86,6 +90,7 @@
       "continue": true
     },
     { "src": "/__api/(.*)", "dest": "/api/$1", "continue": true },
+    { "src": "/api/agent/process", "dest": "/api/agent/process" },
     { "src": "/api/(.*)", "dest": "/api/[...path]" },
     { "handle": "filesystem" },
     { "src": "/((?!assets/).*)", "dest": "/index.html" }
