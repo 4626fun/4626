@@ -149,6 +149,7 @@ function useResolvedAccessState(): AccessState {
   const accepted = !allowlistEnforced || isBypassAdmin || allowlisted
 
   const loading =
+    !siwe.sessionHydrated ||
     siwe.busy ||
     allowlistModeQuery.isLoading ||
     (allowlistEnforced && !isBypassAdmin && !!effectiveAddress && allowQuery.isLoading) ||

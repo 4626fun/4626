@@ -91,6 +91,7 @@ export function useSiweAuth() {
     typeof privyAny?.getAccessToken === 'function' ? privyAny.getAccessToken.bind(privyAny) : null
 
   const [authAddress, setAuthAddress] = useState<string | null>(null)
+  const [sessionHydrated, setSessionHydrated] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const autoPrivyAttemptKeyRef = useRef<string>('')
@@ -119,7 +120,14 @@ export function useSiweAuth() {
   }, [])
 
   useEffect(() => {
-    void refresh()
+    let cancelled = false
+    void (async () => {
+      await refresh()
+      if (!cancelled) setSessionHydrated(true)
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [refresh])
 
   const signInWithPrivyToken = useCallback(
@@ -337,6 +345,5 @@ export function useSiweAuth() {
     }
   }, [])
 
-  return { authAddress, isSignedIn, busy, error, signIn, signInWithPrivyToken, signOut, refresh }
+  return { authAddress, isSignedIn, busy, error, signIn, signInWithPrivyToken, signOut, refresh, sessionHydrated }
 }
-
