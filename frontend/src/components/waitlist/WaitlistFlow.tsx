@@ -1522,6 +1522,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     if (step !== 'verify') return
     if (persona !== 'creator') return
     if (!verifiedWallet) return
+    if (!siweAuthAddress || siweAuthAddress.toLowerCase() !== verifiedWallet.toLowerCase()) return
     if (!creatorCoin?.address) return
     if (claimCoinBusy) return
     const key = `${verifiedWallet.toLowerCase()}:${creatorCoin.address.toLowerCase()}`
@@ -1529,7 +1530,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     claimCoinForWalletRef.current = key
     void claimCreatorCoin(creatorCoin.address, 'auto')
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [claimCoinBusy, creatorCoin?.address, persona, step, verifiedWallet])
+  }, [claimCoinBusy, creatorCoin?.address, persona, siweAuthAddress, step, verifiedWallet])
 
   useEffect(() => {
     try {
