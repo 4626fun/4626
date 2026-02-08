@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import { Component, createContext, useContext, useMemo } from 'react'
 import { getPrivyAppId, isPrivyClientEnabled } from '@/lib/flags'
 import { PrivyProvider } from '@privy-io/react-auth'
-import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana'
 import { SmartWalletsProvider } from '@privy-io/react-auth/smart-wallets'
 import { base } from 'viem/chains'
 
@@ -84,7 +83,16 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
 
   // Zora's Privy App ID - enables cross-app wallet sharing (Global Wallet)
   const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
-  const solanaConnectors = useMemo(() => toSolanaWalletConnectors({ shouldAutoConnect: false }), [])
+  // Keep Solana connector config lightweight to avoid importing Privy's Solana bundle
+  // (which requires optional peers that are not installed in this app).
+  const solanaConnectors = useMemo(
+    () => ({
+      onMount: () => {},
+      onUnmount: () => {},
+      get: () => [],
+    }),
+    [],
+  )
   const externalWallets = useMemo(
     () => ({
       // WalletConnect is handled through wagmi in this app; disable Privy's WC core to avoid duplicate init.
