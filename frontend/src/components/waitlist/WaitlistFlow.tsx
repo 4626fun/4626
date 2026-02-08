@@ -27,7 +27,6 @@ import { DoneStep } from './steps/DoneStep'
 import { useWaitlistApi } from './useWaitlistApi'
 import { useWaitlistVerification } from './useWaitlistVerification'
 import { useWaitlistReferral, getStoredReferralCode } from './useWaitlistReferral'
-import { Logo } from '@/components/brand/Logo'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const EVM_RE = /^0x[a-fA-F0-9]{40}$/

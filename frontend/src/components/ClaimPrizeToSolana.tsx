@@ -180,7 +180,7 @@ export function ClaimPrizeToSolana({
   const [bridgeTxHash, setBridgeTxHash] = useState<`0x${string}` | undefined>();
   const [copied, setCopied] = useState(false);
 
-  const { address: connectedAddress, isConnected } = useAccount();
+  const { isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
 
@@ -256,11 +256,6 @@ export function ClaimPrizeToSolana({
       onClaimComplete?.();
     }
   }, [bridgeConfirmed, step, onClaimComplete]);
-
-  // Check if the connected wallet IS the Twin (meaning we can send txs directly)
-  const isConnectedAsTwin = isConnected && connectedAddress && twinAddress
-    ? connectedAddress.toLowerCase() === twinAddress.toLowerCase()
-    : false;
 
   const hasSufficientAllowance = currentAllowance >= prizeAmountRaw;
   const hasPrize = prizeBalance !== null && prizeBalance > 0n;

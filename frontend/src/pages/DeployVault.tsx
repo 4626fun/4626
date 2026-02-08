@@ -1367,6 +1367,19 @@ function DeployVaultBatcher({
     if (lower.includes('no_session') || lower.includes('not authenticated') || lower.includes('request denied - no_session')) {
       return `Gas sponsorship requires a session. Click “${switchAuthLabel ?? 'Sign in with wallet'}” and retry.`
     }
+    if (lower.includes('session address must match owner or smart wallet')) {
+      return (
+        'Your current auth session does not match the deploy sender expected by the server. ' +
+        `Click “${switchAuthLabel ?? 'Sign in with wallet'}” to re-auth, or disable server-continue (` +
+        'set `VITE_DEPLOY_USE_SERVER_CONTINUE=false`) and retry.'
+      )
+    }
+    if (lower.includes('deploy ownership mismatch')) {
+      return (
+        'Deploy session ownership validation failed. Re-auth to refresh wallet linkage, then retry. ' +
+        'If needed, disable server-continue (`VITE_DEPLOY_USE_SERVER_CONTINUE=false`) and run phases client-side.'
+      )
+    }
     if (lower.includes('signature check failed') || lower.includes('invalid userop signature')) {
       return (
         "UserOp signature failed. This usually means the signer isn’t an onchain owner or didn’t sign the raw UserOp hash with `eth_sign`. " +
@@ -2462,6 +2475,225 @@ function DeployVaultBatcher({
         // Helper to convert calls format
         const toCalls = (calls: Array<{ target: Address; value: bigint; data: Hex }>) =>
           calls.map((c) => ({ to: c.target, value: c.value, data: c.data }))
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        let embeddedOwnerVerifiedForKey: string | null = null
+        let embeddedProviderCache: any | null = null
+        let embeddedProviderAddressCache: string | null = null
+        let embeddedEthSignUnsupported = false
+        let embeddedWalletClientAdapterCache: any | null = null
+
+        const ownerSlotForPhase = (phaseLabel: 'phase1' | 'phase2' | 'phase3' | 'phase4') =>
+          phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : phaseLabel === 'phase3' ? 'userOp3' : 'userOp4'
+        const txSlotForPhase = (phaseLabel: 'phase1' | 'phase2' | 'phase3' | 'phase4') =>
+          phaseLabel === 'phase1' ? 'tx1' : phaseLabel === 'phase2' ? 'tx2' : phaseLabel === 'phase3' ? 'tx3' : 'tx4'
+        const persistUserOpResult = (
+          phaseLabel: 'phase1' | 'phase2' | 'phase3' | 'phase4',
+          logPhaseLabel: string,
+          result: { userOpHash: Hex; transactionHash: Hex },
+          context: string,
+        ) => {
+          setTxId(result.transactionHash)
+          setPhaseTxs((s) => ({
+            ...s,
+            [ownerSlotForPhase(phaseLabel)]: result.userOpHash,
+            [txSlotForPhase(phaseLabel)]: result.transactionHash,
+          }))
+          logger.warn(`[DeployVault] ${logPhaseLabel}_confirmed via ${context}`, {
+            userOpHash: result.userOpHash,
+            txHash: result.transactionHash,
+          })
+        }
+
+        const getEmbeddedOwnerCacheKey = () => {
+          if (!canonicalSmartWallet || !embeddedPrivyEoaAddress) return null
+          return `${canonicalSmartWallet.toLowerCase()}:${embeddedPrivyEoaAddress.toLowerCase()}`
+        }
+
+        const ensureEmbeddedOwnerVerifiedForRun = async () => {
+          if (!canonicalSmartWallet || !embeddedPrivyEoaAddress) {
+            throw new Error('Embedded EOA signer is not available')
+          }
+          const cacheKey = getEmbeddedOwnerCacheKey()
+          if (cacheKey && embeddedOwnerVerifiedForKey === cacheKey) return
+          const verifyOwner = await isCoinbaseSmartWalletOwner({
+            smartWallet: canonicalSmartWallet,
+            ownerAddress: embeddedPrivyEoaAddress,
+          })
+          if (!verifyOwner) {
+            logger.error('[DeployVault] Embedded EOA is NOT an owner on-chain!', {
+              canonicalSmartWallet,
+              embeddedPrivyEoaAddress,
+            })
+            throw new Error(
+              `Your Privy embedded wallet (${embeddedPrivyEoaAddress}) is not an owner of your Zora wallet. ` +
+                'Click "Enable Gas-Free Deploys" first.',
+            )
+          }
+          embeddedOwnerVerifiedForKey = cacheKey
+        }
+
+        const getEmbeddedProviderForRun = async () => {
+          if (!embeddedPrivyWallet || !embeddedPrivyEoaAddress) {
+            throw new Error('Embedded wallet provider not available')
+          }
+          if (embeddedProviderCache) return embeddedProviderCache
+
+          const embeddedProvider = await (embeddedPrivyWallet as any).getEthereumProvider()
+          if (!embeddedProvider?.request) {
+            throw new Error('Embedded wallet provider not available')
+          }
+
+          await ensureProviderOnBase(embeddedProvider, 'Privy embedded wallet', { allowSwitch: false })
+          const accounts = (await embeddedProvider.request({ method: 'eth_accounts' })) as string[]
+          const providerAddress = accounts[0]?.toLowerCase()
+          if (providerAddress !== embeddedPrivyEoaAddress.toLowerCase()) {
+            logger.error('[DeployVault] Provider address mismatch!', {
+              expected: embeddedPrivyEoaAddress,
+              got: providerAddress,
+            })
+            throw new Error('Embedded wallet address mismatch. Please refresh and try again.')
+          }
+
+          embeddedProviderCache = embeddedProvider
+          embeddedProviderAddressCache = providerAddress ?? null
+          return embeddedProviderCache
+        }
+
+        const signUserOpHashWithEmbeddedProvider = async (params: { provider: any; signerAddr: Address; hashToSign: Hex }) => {
+          const { provider, signerAddr, hashToSign } = params
+          const trySecp256k1Sign = async () => {
+            if (AA_DEBUG) {
+              logger.debug('[DeployVault] Trying secp256k1_sign fallback for embedded EOA')
+            }
+            const rawResult = await withTimeout(
+              provider.request({
+                method: 'secp256k1_sign',
+                params: [hashToSign],
+              }),
+              30_000,
+              'secp256k1_sign',
+            )
+            const sig = ensureSignatureHex(rawResult, 'secp256k1_sign')
+            debugSignatureReady('secp256k1_sign', sig, { signer: signerAddr })
+            return sig
+          }
+
+          if (embeddedEthSignUnsupported) {
+            if (AA_DEBUG) {
+              logger.debug('[DeployVault] Skipping eth_sign (unsupported earlier in this deploy run)')
+            }
+            return await trySecp256k1Sign()
+          }
+
+          try {
+            const rawResult = await withTimeout(
+              provider.request({
+                method: 'eth_sign',
+                params: [signerAddr, hashToSign],
+              }),
+              30_000,
+              'eth_sign',
+            )
+            const sig = ensureSignatureHex(rawResult, 'eth_sign')
+            debugSignatureReady('eth_sign', sig, { signer: signerAddr })
+            return sig
+          } catch (ethSignError: any) {
+            const msg = ethSignError?.message ? String(ethSignError.message) : 'eth_sign failed'
+            logger.warn('[DeployVault] eth_sign failed for embedded EOA', { error: msg })
+            if (isEthSignUnsupported(ethSignError)) {
+              embeddedEthSignUnsupported = true
+              try {
+                return await trySecp256k1Sign()
+              } catch (fallbackError: any) {
+                const fallbackMsg = fallbackError?.message ? String(fallbackError.message) : 'secp256k1_sign failed'
+                logger.warn('[DeployVault] secp256k1_sign failed for embedded EOA', { error: fallbackMsg })
+              }
+            }
+            throw new Error(
+              'Embedded wallet does not support eth_sign or secp256k1_sign. ' +
+                'UserOp signing for Coinbase Smart Wallet requires raw signing. ' +
+                'Use Coinbase Wallet (Base Account) or connect an owner EOA.',
+            )
+          }
+        }
+
+        const getEmbeddedWalletClientAdapterForRun = async () => {
+          if (embeddedWalletClientAdapterCache) return embeddedWalletClientAdapterCache
+          const provider = await getEmbeddedProviderForRun()
+          embeddedWalletClientAdapterCache = {
+            request: async (args: { method: string; params?: any[] }) => {
+              logger.info('[DeployVault] Embedded provider request', { method: args.method })
+              if (args.method === 'eth_sign') {
+                const [signerAddrRaw, hashToSignRaw] = Array.isArray(args.params) ? args.params : []
+                const signerAddrCandidate =
+                  typeof signerAddrRaw === 'string' && isAddress(signerAddrRaw)
+                    ? signerAddrRaw
+                    : embeddedPrivyEoaAddress
+                if (!signerAddrCandidate || !isAddress(signerAddrCandidate)) {
+                  throw new Error('Embedded wallet signer address is unavailable')
+                }
+                const signerAddr = getAddress(signerAddrCandidate) as Address
+                const hashToSign = String(hashToSignRaw ?? '') as Hex
+                if (AA_DEBUG) {
+                  logger.debug('[DeployVault] eth_sign called', {
+                    signer: signerAddr,
+                    hashLength: typeof hashToSign === 'string' ? hashToSign.length : null,
+                    hashLooksValid: isUserOpHashLike(hashToSign),
+                    providerAddress: embeddedProviderAddressCache,
+                  })
+                }
+                return await signUserOpHashWithEmbeddedProvider({ provider, signerAddr, hashToSign })
+              }
+
+              try {
+                const result = await provider.request(args)
+                logger.info('[DeployVault] Embedded provider response', { method: args.method })
+                return result
+              } catch (e: any) {
+                logger.error('[DeployVault] Embedded provider error', { method: args.method, error: e?.message })
+                throw e
+              }
+            },
+            signMessage: async (args: { account: Address; message: any }) => {
+              const msg = typeof args.message === 'object' && 'raw' in args.message ? args.message.raw : args.message
+              const msgHex = typeof msg === 'string' && msg.startsWith('0x') ? msg : `0x${Buffer.from(String(msg)).toString('hex')}`
+
+              if (AA_DEBUG) {
+                logger.debug('[DeployVault] signMessage', { account: args.account, msgLength: msgHex?.length })
+              }
+
+              const rawResult = await withTimeout(
+                provider.request({
+                  method: 'personal_sign',
+                  params: [msgHex, args.account],
+                }),
+                30_000,
+                'personal_sign',
+              )
+              const sig = ensureSignatureHex(rawResult, 'personal_sign')
+              debugSignatureReady('personal_sign', sig, { signer: args.account })
+              return sig
+            },
+            signTypedData: async (args: any) => {
+              if (AA_DEBUG) {
+                logger.debug('[DeployVault] signTypedData', { primaryType: args.primaryType })
+              }
+              const rawResult = await withTimeout(
+                provider.request({
+                  method: 'eth_signTypedData_v4',
+                  params: [embeddedPrivyEoaAddress, JSON.stringify(args)],
+                }),
+                30_000,
+                'eth_signTypedData_v4',
+              )
+              const sig = ensureSignatureHex(rawResult, 'eth_signTypedData_v4')
+              debugSignatureReady('eth_signTypedData_v4', sig, { signer: embeddedPrivyEoaAddress })
+              return sig
+            },
+          }
+          return embeddedWalletClientAdapterCache
+        }
 
         const sendPhaseCalls = async (
           calls: Array<{ target: Address; value: bigint; data: Hex }>,
@@ -2636,9 +2868,6 @@ function DeployVaultBatcher({
           // When connected via Coinbase Wallet SDK, we can use ERC-4337 directly
           if (isCoinbaseWalletDirect && connectedAddress && wagmiWalletClient && publicClient && canonicalSmartWallet) {
             logger.info(`[DeployVault] Using Coinbase Wallet direct for ${logPhaseLabel}`)
-            
-            const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
 
             await ensureBaseChain('Coinbase Wallet')
             
@@ -2652,245 +2881,10 @@ function DeployVaultBatcher({
               version: '1',
             })
             
-            setTxId(result.transactionHash)
-            setPhaseTxs((s) => ({
-              ...s,
-              [
-                phaseLabel === 'phase1'
-                  ? 'userOp1'
-                  : phaseLabel === 'phase2'
-                    ? 'userOp2'
-                    : phaseLabel === 'phase3'
-                      ? 'userOp3'
-                      : 'userOp4'
-              ]: result.userOpHash,
-              [
-                phaseLabel === 'phase1'
-                  ? 'tx1'
-                  : phaseLabel === 'phase2'
-                    ? 'tx2'
-                    : phaseLabel === 'phase3'
-                      ? 'tx3'
-                      : 'tx4'
-              ]: result.transactionHash,
-            }))
-            logger.warn(`[DeployVault] ${logPhaseLabel}_confirmed via Coinbase Wallet`)
+            persistUserOpResult(phaseLabel, logPhaseLabel, result, 'Coinbase Wallet')
             return
           }
           
-          // PATH 1.5: Privy embedded EOA is owner of canonical smart wallet
-          // Use ERC-4337 with the embedded EOA signing directly (simple ecrecover, no EIP-1271)
-          if (canonicalSmartWallet && embeddedEoaIsCanonicalOwner && embeddedPrivyWallet && embeddedPrivyEoaAddress) {
-            logger.info(`[DeployVault] Using ERC-4337 via Privy embedded EOA for ${logPhaseLabel}`, {
-              canonicalSmartWallet,
-              embeddedPrivyEoaAddress,
-              embeddedEoaIsCanonicalOwner,
-            })
-            
-            // Double-check the embedded EOA is actually an owner on-chain
-            const verifyOwner = await isCoinbaseSmartWalletOwner({
-              smartWallet: canonicalSmartWallet,
-              ownerAddress: embeddedPrivyEoaAddress,
-            })
-            if (!verifyOwner) {
-              logger.error('[DeployVault] Embedded EOA is NOT an owner on-chain!', {
-                canonicalSmartWallet,
-                embeddedPrivyEoaAddress,
-              })
-              throw new Error(
-                `Your Privy embedded wallet (${embeddedPrivyEoaAddress}) is not an owner of your Zora wallet. ` +
-                'Click "Enable Gas-Free Deploys" first.'
-              )
-            }
-            
-            const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-            
-            // Get the embedded wallet's Ethereum provider for signing
-            const embeddedProvider = await (embeddedPrivyWallet as any).getEthereumProvider()
-            if (!embeddedProvider?.request) {
-              throw new Error('Embedded wallet provider not available')
-            }
-
-            await ensureProviderOnBase(embeddedProvider, 'Privy embedded wallet', { allowSwitch: false })
-            
-            // Verify the provider's account matches our expected address
-            const accounts = await embeddedProvider.request({ method: 'eth_accounts' }) as string[]
-            const providerAddress = accounts[0]?.toLowerCase()
-            if (providerAddress !== embeddedPrivyEoaAddress.toLowerCase()) {
-              logger.error('[DeployVault] Provider address mismatch!', {
-                expected: embeddedPrivyEoaAddress,
-                got: providerAddress,
-              })
-              throw new Error('Embedded wallet address mismatch. Please refresh and try again.')
-            }
-            
-            // Create a wallet client adapter that uses the embedded EOA for signing
-            // viem's toCoinbaseSmartAccount handles ReplaySafeHash wrapping internally,
-            // so we just sign what viem passes us (already the EIP-712 hash)
-            const embeddedWalletClientAdapter = {
-              request: async (args: { method: string; params: any[] }) => {
-                logger.info('[DeployVault] Embedded provider request', { method: args.method })
-                
-                // eth_sign: sign the hash that viem passes
-                // viem already wrapped with ReplaySafeHash, so this is the EIP-712 digest
-                if (args.method === 'eth_sign') {
-                  const [signerAddr, hashToSign] = args.params
-                  
-                  if (AA_DEBUG) {
-                    logger.debug('[DeployVault] eth_sign called', {
-                      signer: signerAddr,
-                      hashLength: typeof hashToSign === 'string' ? hashToSign.length : null,
-                      hashLooksValid: isUserOpHashLike(hashToSign),
-                    })
-                  }
-                  
-                  // Try raw eth_sign first - produces signature over raw hash
-                  // SignatureCheckerLib accepts: ecrecover(hash, sig)
-                  try {
-                    const rawResult = await withTimeout(
-                      embeddedProvider.request({
-                        method: 'eth_sign',
-                        params: [signerAddr, hashToSign],
-                      }),
-                      30_000,
-                      'eth_sign',
-                    )
-                    const sig = ensureSignatureHex(rawResult, 'eth_sign')
-                    debugSignatureReady('eth_sign', sig, { signer: signerAddr })
-                    return sig
-                  } catch (ethSignError: any) {
-                    const msg = ethSignError?.message ? String(ethSignError.message) : 'eth_sign failed'
-                    logger.warn('[DeployVault] eth_sign failed for embedded EOA', { error: msg })
-                  if (isEthSignUnsupported(ethSignError)) {
-                    if (AA_DEBUG) {
-                      logger.debug('[DeployVault] Trying secp256k1_sign fallback for embedded EOA')
-                    }
-                    try {
-                      const rawResult = await withTimeout(
-                        embeddedProvider.request({
-                          method: 'secp256k1_sign',
-                          params: [hashToSign],
-                        }),
-                        30_000,
-                        'secp256k1_sign',
-                      )
-                      const sig = ensureSignatureHex(rawResult, 'secp256k1_sign')
-                      debugSignatureReady('secp256k1_sign', sig, { signer: signerAddr })
-                      return sig
-                    } catch (fallbackError: any) {
-                      const fallbackMsg = fallbackError?.message
-                        ? String(fallbackError.message)
-                        : 'secp256k1_sign failed'
-                      logger.warn('[DeployVault] secp256k1_sign failed for embedded EOA', { error: fallbackMsg })
-                    }
-                  }
-                  throw new Error(
-                    'Embedded wallet does not support eth_sign or secp256k1_sign. ' +
-                      'UserOp signing for Coinbase Smart Wallet requires raw signing. ' +
-                      'Use Coinbase Wallet (Base Account) or connect an owner EOA.'
-                  )
-                  }
-                }
-                
-                // Pass through other requests
-                try {
-                  const result = await embeddedProvider.request(args)
-                  logger.info('[DeployVault] Embedded provider response', { method: args.method })
-                  return result
-                } catch (e: any) {
-                  logger.error('[DeployVault] Embedded provider error', { method: args.method, error: e?.message })
-                  throw e
-                }
-              },
-              signMessage: async (args: { account: Address; message: any }) => {
-                const msg = typeof args.message === 'object' && 'raw' in args.message
-                  ? args.message.raw
-                  : args.message
-                const msgHex = typeof msg === 'string' && msg.startsWith('0x') ? msg : `0x${Buffer.from(String(msg)).toString('hex')}`
-                
-                if (AA_DEBUG) {
-                  logger.debug('[DeployVault] signMessage', { account: args.account, msgLength: msgHex?.length })
-                }
-                
-                // personal_sign (EIP-191) - SignatureCheckerLib accepts this
-                const rawResult = await withTimeout(
-                  embeddedProvider.request({
-                    method: 'personal_sign',
-                    params: [msgHex, args.account],
-                  }),
-                  30_000,
-                  'personal_sign',
-                )
-                const sig = ensureSignatureHex(rawResult, 'personal_sign')
-                debugSignatureReady('personal_sign', sig, { signer: args.account })
-                return sig
-              },
-              signTypedData: async (args: any) => {
-                if (AA_DEBUG) {
-                  logger.debug('[DeployVault] signTypedData', { primaryType: args.primaryType })
-                }
-                const rawResult = await withTimeout(
-                  embeddedProvider.request({
-                    method: 'eth_signTypedData_v4',
-                    params: [embeddedPrivyEoaAddress, JSON.stringify(args)],
-                  }),
-                  30_000,
-                  'eth_signTypedData_v4',
-                )
-                const sig = ensureSignatureHex(rawResult, 'eth_signTypedData_v4')
-                debugSignatureReady('eth_signTypedData_v4', sig, { signer: embeddedPrivyEoaAddress })
-                return sig
-              },
-            }
-            
-            logger.info('[DeployVault] Sending ERC-4337 UserOp via embedded EOA', {
-              canonicalSmartWallet,
-              embeddedEoa: embeddedPrivyEoaAddress,
-              callCount: calls.length,
-            })
-            
-            const result = await sendCoinbaseSmartWalletUserOperation({
-              publicClient: publicClient as any,
-              walletClient: embeddedWalletClientAdapter as any,
-              bundlerUrl,
-              smartWallet: canonicalSmartWallet,
-              ownerAddress: embeddedPrivyEoaAddress,
-              calls: toCalls(calls),
-              version: '1',
-              userOpSignMode: 'eth_sign',
-            })
-            
-            setTxId(result.transactionHash)
-            setPhaseTxs((s) => ({
-              ...s,
-              [
-                phaseLabel === 'phase1'
-                  ? 'userOp1'
-                  : phaseLabel === 'phase2'
-                    ? 'userOp2'
-                    : phaseLabel === 'phase3'
-                      ? 'userOp3'
-                      : 'userOp4'
-              ]: result.userOpHash,
-              [
-                phaseLabel === 'phase1'
-                  ? 'tx1'
-                  : phaseLabel === 'phase2'
-                    ? 'tx2'
-                    : phaseLabel === 'phase3'
-                      ? 'tx3'
-                      : 'tx4'
-              ]: result.transactionHash,
-            }))
-            logger.warn(`[DeployVault] ${logPhaseLabel}_confirmed via ERC-4337 (embedded EOA signer)`, {
-              userOpHash: result.userOpHash,
-              txHash: result.transactionHash,
-            })
-            preferEmbeddedEoaRef.current = true
-            return
-          }
-
           // PATH 2: Privy app smart wallet is an owner (EIP-1271 signer)
           // Original deploy pattern: avoid this path when the embedded EOA owner flow is available.
           if (
@@ -2907,9 +2901,6 @@ function DeployVaultBatcher({
               canonicalSmartWallet,
               privySmartWalletAddress,
             })
-
-            const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
 
             await ensureProviderOnBase(smartWalletClient, 'Privy smart wallet')
 
@@ -3028,32 +3019,7 @@ function DeployVaultBatcher({
                 ownerIsContract: true,
               })
 
-              setTxId(result.transactionHash)
-              setPhaseTxs((s) => ({
-                ...s,
-                [
-                  phaseLabel === 'phase1'
-                    ? 'userOp1'
-                    : phaseLabel === 'phase2'
-                      ? 'userOp2'
-                      : phaseLabel === 'phase3'
-                        ? 'userOp3'
-                        : 'userOp4'
-                ]: result.userOpHash,
-                [
-                  phaseLabel === 'phase1'
-                    ? 'tx1'
-                    : phaseLabel === 'phase2'
-                      ? 'tx2'
-                      : phaseLabel === 'phase3'
-                        ? 'tx3'
-                        : 'tx4'
-                ]: result.transactionHash,
-              }))
-              logger.warn(`[DeployVault] ${logPhaseLabel}_confirmed via ERC-4337 (privy smart wallet owner)`, {
-                userOpHash: result.userOpHash,
-                txHash: result.transactionHash,
-              })
+              persistUserOpResult(phaseLabel, logPhaseLabel, result, 'ERC-4337 (privy smart wallet owner)')
               return
             } catch (e) {
               const msg = e instanceof Error ? e.message : String(e ?? '')
@@ -3092,9 +3058,6 @@ function DeployVaultBatcher({
 
             logger.info(`[DeployVault] Using ERC-4337 via connected EOA for ${logPhaseLabel}`)
 
-            const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-            const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-
             await ensureBaseChain('your wallet')
 
             logger.info('[DeployVault] Sending ERC-4337 UserOp via connected EOA', {
@@ -3113,32 +3076,7 @@ function DeployVaultBatcher({
               version: '1',
             })
 
-            setTxId(result.transactionHash)
-            setPhaseTxs((s) => ({
-              ...s,
-              [
-                phaseLabel === 'phase1'
-                  ? 'userOp1'
-                  : phaseLabel === 'phase2'
-                    ? 'userOp2'
-                    : phaseLabel === 'phase3'
-                      ? 'userOp3'
-                      : 'userOp4'
-              ]: result.userOpHash,
-              [
-                phaseLabel === 'phase1'
-                  ? 'tx1'
-                  : phaseLabel === 'phase2'
-                    ? 'tx2'
-                    : phaseLabel === 'phase3'
-                      ? 'tx3'
-                      : 'tx4'
-              ]: result.transactionHash,
-            }))
-            logger.warn(`[DeployVault] ${logPhaseLabel}_confirmed via ERC-4337 (connected EOA signer)`, {
-              userOpHash: result.userOpHash,
-              txHash: result.transactionHash,
-            })
+            persistUserOpResult(phaseLabel, logPhaseLabel, result, 'ERC-4337 (connected EOA signer)')
             return true
           }
 
@@ -3155,160 +3093,8 @@ function DeployVaultBatcher({
                 embeddedEoaIsCanonicalOwner,
               })
 
-              // Double-check the embedded EOA is actually an owner on-chain
-              const verifyOwner = await isCoinbaseSmartWalletOwner({
-                smartWallet: canonicalSmartWallet,
-                ownerAddress: embeddedPrivyEoaAddress,
-              })
-              if (!verifyOwner) {
-                logger.error('[DeployVault] Embedded EOA is NOT an owner on-chain!', {
-                  canonicalSmartWallet,
-                  embeddedPrivyEoaAddress,
-                })
-                throw new Error(
-                  `Your Privy embedded wallet (${embeddedPrivyEoaAddress}) is not an owner of your Zora wallet. ` +
-                    'Click "Enable Gas-Free Deploys" first.'
-                )
-              }
-
-              const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-              const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-
-              // Get the embedded wallet's Ethereum provider for signing
-              const embeddedProvider = await (embeddedPrivyWallet as any).getEthereumProvider()
-              if (!embeddedProvider?.request) {
-                throw new Error('Embedded wallet provider not available')
-              }
-
-              await ensureProviderOnBase(embeddedProvider, 'Privy embedded wallet', { allowSwitch: false })
-
-              // Verify the provider's account matches our expected address
-              const accounts = await embeddedProvider.request({ method: 'eth_accounts' }) as string[]
-              const providerAddress = accounts[0]?.toLowerCase()
-              if (providerAddress !== embeddedPrivyEoaAddress.toLowerCase()) {
-                logger.error('[DeployVault] Provider address mismatch!', {
-                  expected: embeddedPrivyEoaAddress,
-                  got: providerAddress,
-                })
-                throw new Error('Embedded wallet address mismatch. Please refresh and try again.')
-              }
-
-              // Create a wallet client adapter that uses the embedded EOA for signing
-              // viem's toCoinbaseSmartAccount handles ReplaySafeHash wrapping internally,
-              // so we just sign what viem passes us (already the EIP-712 hash)
-              const embeddedWalletClientAdapter = {
-                request: async (args: { method: string; params: any[] }) => {
-                  logger.info('[DeployVault] Embedded provider request', { method: args.method })
-
-                  // eth_sign: sign the hash that viem passes
-                  // viem already wrapped with ReplaySafeHash, so this is the EIP-712 digest
-                  if (args.method === 'eth_sign') {
-                    const [signerAddr, hashToSign] = args.params
-
-                    if (AA_DEBUG) {
-                      logger.debug('[DeployVault] eth_sign called', {
-                        signer: signerAddr,
-                        hashLength: typeof hashToSign === 'string' ? hashToSign.length : null,
-                        hashLooksValid: isUserOpHashLike(hashToSign),
-                      })
-                    }
-
-                    // Try raw eth_sign first - produces signature over raw hash
-                    // SignatureCheckerLib accepts: ecrecover(hash, sig)
-                    try {
-                      const rawResult = await withTimeout(
-                        embeddedProvider.request({
-                          method: 'eth_sign',
-                          params: [signerAddr, hashToSign],
-                        }),
-                        30_000,
-                        'eth_sign',
-                      )
-                      const sig = ensureSignatureHex(rawResult, 'eth_sign')
-                      debugSignatureReady('eth_sign', sig, { signer: signerAddr })
-                      return sig
-                    } catch (ethSignError: any) {
-                      const msg = ethSignError?.message ? String(ethSignError.message) : 'eth_sign failed'
-                      logger.warn('[DeployVault] eth_sign failed for embedded EOA', { error: msg })
-                      if (isEthSignUnsupported(ethSignError)) {
-                        if (AA_DEBUG) {
-                          logger.debug('[DeployVault] Trying secp256k1_sign fallback for embedded EOA')
-                        }
-                        try {
-                          const rawResult = await withTimeout(
-                            embeddedProvider.request({
-                              method: 'secp256k1_sign',
-                              params: [hashToSign],
-                            }),
-                            30_000,
-                            'secp256k1_sign',
-                          )
-                          const sig = ensureSignatureHex(rawResult, 'secp256k1_sign')
-                          debugSignatureReady('secp256k1_sign', sig, { signer: signerAddr })
-                          return sig
-                        } catch (fallbackError: any) {
-                          const fallbackMsg = fallbackError?.message
-                            ? String(fallbackError.message)
-                            : 'secp256k1_sign failed'
-                          logger.warn('[DeployVault] secp256k1_sign failed for embedded EOA', { error: fallbackMsg })
-                        }
-                      }
-                      throw new Error(
-                        'Embedded wallet does not support eth_sign or secp256k1_sign. ' +
-                          'UserOp signing for Coinbase Smart Wallet requires raw signing. ' +
-                          'Use Coinbase Wallet (Base Account) or connect an owner EOA.'
-                      )
-                    }
-                  }
-
-                  // Pass through other requests
-                  try {
-                    const result = await embeddedProvider.request(args)
-                    logger.info('[DeployVault] Embedded provider response', { method: args.method })
-                    return result
-                  } catch (e: any) {
-                    logger.error('[DeployVault] Embedded provider error', { method: args.method, error: e?.message })
-                    throw e
-                  }
-                },
-                signMessage: async (args: { account: Address; message: any }) => {
-                  const msg = typeof args.message === 'object' && 'raw' in args.message ? args.message.raw : args.message
-                  const msgHex = typeof msg === 'string' && msg.startsWith('0x') ? msg : `0x${Buffer.from(String(msg)).toString('hex')}`
-
-                  if (AA_DEBUG) {
-                    logger.debug('[DeployVault] signMessage', { account: args.account, msgLength: msgHex?.length })
-                  }
-
-                  // personal_sign (EIP-191) - SignatureCheckerLib accepts this
-                  const rawResult = await withTimeout(
-                    embeddedProvider.request({
-                      method: 'personal_sign',
-                      params: [msgHex, args.account],
-                    }),
-                    30_000,
-                    'personal_sign',
-                  )
-                  const sig = ensureSignatureHex(rawResult, 'personal_sign')
-                  debugSignatureReady('personal_sign', sig, { signer: args.account })
-                  return sig
-                },
-                signTypedData: async (args: any) => {
-                  if (AA_DEBUG) {
-                    logger.debug('[DeployVault] signTypedData', { primaryType: args.primaryType })
-                  }
-                  const rawResult = await withTimeout(
-                    embeddedProvider.request({
-                      method: 'eth_signTypedData_v4',
-                      params: [embeddedPrivyEoaAddress, JSON.stringify(args)],
-                    }),
-                    30_000,
-                    'eth_signTypedData_v4',
-                  )
-                  const sig = ensureSignatureHex(rawResult, 'eth_signTypedData_v4')
-                  debugSignatureReady('eth_signTypedData_v4', sig, { signer: embeddedPrivyEoaAddress })
-                  return sig
-                },
-              }
+              await ensureEmbeddedOwnerVerifiedForRun()
+              const embeddedWalletClientAdapter = await getEmbeddedWalletClientAdapterForRun()
 
               logger.info('[DeployVault] Sending ERC-4337 UserOp via embedded EOA', {
                 canonicalSmartWallet,
@@ -3327,32 +3113,7 @@ function DeployVaultBatcher({
                 userOpSignMode: 'eth_sign',
               })
 
-              setTxId(result.transactionHash)
-              setPhaseTxs((s) => ({
-                ...s,
-                [
-                  phaseLabel === 'phase1'
-                    ? 'userOp1'
-                    : phaseLabel === 'phase2'
-                      ? 'userOp2'
-                      : phaseLabel === 'phase3'
-                        ? 'userOp3'
-                        : 'userOp4'
-                ]: result.userOpHash,
-                [
-                  phaseLabel === 'phase1'
-                    ? 'tx1'
-                    : phaseLabel === 'phase2'
-                      ? 'tx2'
-                      : phaseLabel === 'phase3'
-                        ? 'tx3'
-                        : 'tx4'
-                ]: result.transactionHash,
-              }))
-              logger.warn(`[DeployVault] ${logPhaseLabel}_confirmed via ERC-4337 (embedded EOA signer)`, {
-                userOpHash: result.userOpHash,
-                txHash: result.transactionHash,
-              })
+              persistUserOpResult(phaseLabel, logPhaseLabel, result, 'ERC-4337 (embedded EOA signer)')
               preferEmbeddedEoaRef.current = true
               return true
             } catch (e: any) {
@@ -3455,6 +3216,37 @@ function DeployVaultBatcher({
           }
 
           try {
+            // Pre-flight: ensure we know which app session address the server will see.
+            // This makes ownership mismatches obvious before session creation.
+            try {
+              const authRes = await fetch('/api/auth/me', {
+                method: 'GET',
+                headers: { Accept: 'application/json' },
+              })
+              const authJson = (await authRes.json().catch(() => null)) as ApiEnvelope<{ address: string } | null> | null
+              const rawAuthAddress = typeof authJson?.data?.address === 'string' ? authJson.data.address : null
+              const authAddress = rawAuthAddress && isAddress(rawAuthAddress) ? getAddress(rawAuthAddress) : null
+              const expectedSessionSender = getAddress(owner)
+              const matchesExpectedSender = !!authAddress && authAddress.toLowerCase() === expectedSessionSender.toLowerCase()
+              logger.info('[DeployVault] deploy session auth pre-flight', {
+                authResOk: authRes.ok,
+                authAddress,
+                expectedSessionSender,
+                matchesExpectedSender,
+                useServerContinue,
+              })
+              if (!matchesExpectedSender) {
+                logger.warn('[DeployVault] Auth session sender differs from expected deploy sender', {
+                  authAddress,
+                  expectedSessionSender,
+                })
+              }
+            } catch (authError) {
+              logger.warn('[DeployVault] Failed to preflight auth session before deploy session creation', {
+                error: authError instanceof Error ? authError.message : String(authError),
+              })
+            }
+
             // Create a deploy session BEFORE we install the temporary owner.
             // The paymaster uses the recorded deploy session to allow self-calls to owner mgmt.
             const createRes = await fetch('/api/deploy/session/create', {

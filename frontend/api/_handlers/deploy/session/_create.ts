@@ -193,14 +193,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ success: false, error: 'Invalid addresses' } satisfies ApiEnvelope<null>)
     }
 
-    // Validate that sessionAddress matches ownerAddress or is an owner of the smart wallet
-    if (sessionAddress.toLowerCase() !== ownerAddress.toLowerCase()) {
-      // Allow if sessionAddress is the smartWallet (CSW case)
-      if (sessionAddress.toLowerCase() !== smartWallet.toLowerCase()) {
-        return res.status(403).json({ success: false, error: 'Session address must match owner or smart wallet' } satisfies ApiEnvelope<null>)
-      }
-    }
-
+    // Ownership is validated below against canonical profile linkage.
+    // Do not hard-require sessionAddress===owner/smartWallet here because
+    // embedded EOAs and other linked wallets are valid operators.
     const ownership = await checkCanonicalWalletOwnership({
       smartWallet,
       ownerAddress,

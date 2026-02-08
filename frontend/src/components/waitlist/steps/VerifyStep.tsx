@@ -6,17 +6,12 @@ import {
   CheckCircle2,
   ChevronRight,
   Coins,
-  Mail,
   Sparkles,
   TrendingUp,
   Users,
-  Wallet,
   X,
 } from 'lucide-react'
 import type { WaitlistState } from '../waitlistTypes'
-import { ConnectButtonWeb3 } from '@/components/ConnectButtonWeb3'
-
-// Note: ConnectButtonWeb3 and Wallet are used in the "Having trouble?" sheet
 
 // Base brand motion: cubic-bezier(0.4, 0, 0.2, 1), 120-240ms for snappy UI
 const baseEase = [0.4, 0, 0.2, 1] as const
@@ -114,7 +109,6 @@ export const VerifyStep = memo(function VerifyStep({
   privyReady,
   privyVerifyBusy,
   privyVerifyError,
-  isBaseApp,
   walletOwnershipValid,
   ownershipEvidenceAvailable,
   cswMismatch,
@@ -125,7 +119,6 @@ export const VerifyStep = memo(function VerifyStep({
   canSubmit,
   onPrivyContinue,
   onPrivyEmailContinue,
-  onFallbackSignIn,
   onSubmit,
 }: VerifyStepProps) {
   const hasCreatorCoin = !!creatorCoin?.address
