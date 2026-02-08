@@ -39,6 +39,8 @@ In one click, creators deploy institutional-grade **ERC-4626 vault** infrastruct
 - [Security](/security) - Security features and audits
 - [Lens Integration](/lens) - Lens + Grove Phase 1 guidance for this repo
 - [API Reference](/api) - Auto-generated contract and frontend documentation
+- [Terms of Service](/terms)
+- [Privacy Policy](/privacy)
 
 ## Tech Stack
 

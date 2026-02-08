@@ -1561,7 +1561,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
 
   const containerClass =
     variant === 'page'
-      ? 'relative min-h-[100svh] flex items-center justify-center overflow-hidden px-4 sm:px-6 py-12 sm:py-16 bg-black'
+      ? 'waitlist-page relative min-h-[100svh] flex items-center justify-center overflow-hidden px-4 sm:px-6 py-12 sm:py-16 bg-black'
       : 'cinematic-section'
 
   const innerWrapClass = variant === 'page' ? 'relative z-10 w-full max-w-[470px]' : 'max-w-3xl mx-auto px-6 py-14'
@@ -1574,23 +1574,17 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   return (
     <section id={variant === 'embedded' ? sectionId : undefined} className={containerClass}>
       {variant === 'page' ? (
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-black" />
+        <>
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-black" />
+          <style>{`
+            .waitlist-page .space-y-3.5 > div[class*="text-[12px]"][class*="text-zinc-500"] {
+              display: none;
+            }
+          `}</style>
+        </>
       ) : null}
       <div className={innerWrapClass}>
-        {variant === 'page' ? (
-          <div className="mb-6 sm:mb-8 flex items-center justify-between">
-            <div className="flex items-center gap-3.5 rounded-2xl border border-white/10 bg-black/70 px-3.5 py-2.5">
-              <Logo width={32} height={32} showText={false} />
-              <div>
-                <div className="text-[13px] text-white font-medium tracking-[0.01em]">Creator Vaults</div>
-                <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Waitlist</div>
-              </div>
-            </div>
-            <div className="hidden sm:inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] uppercase tracking-[0.15em] text-zinc-400">
-              Founding Access
-            </div>
-          </div>
-        ) : (
+        {variant === 'page' ? null : (
           <div className="mb-6">
             <div className="text-[40px] sm:text-[48px] font-light tracking-tight text-white leading-tight">
               Waitlist

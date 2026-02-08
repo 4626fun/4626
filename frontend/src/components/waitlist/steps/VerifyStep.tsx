@@ -229,7 +229,7 @@ export const VerifyStep = memo(function VerifyStep({
           </button>
 
           <div className="text-[12px] text-zinc-500">
-            Creates a Privy embedded EOA for your account. You can link a wallet later.
+            Creates a Privy embedded EOA for your account.
           </div>
 
           <div className="flex items-center justify-between">
@@ -267,20 +267,25 @@ export const VerifyStep = memo(function VerifyStep({
               onClick={() => setShowTrouble(false)}
             />
             <motion.div
-              className="fixed left-0 right-0 bottom-0 z-50"
-              initial={{ y: 24, opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center px-4"
+              initial={{ y: 16, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 24, opacity: 0 }}
+              exit={{ y: 16, opacity: 0 }}
               transition={{ duration: 0.2, ease: baseEase }}
             >
-              <div className="mx-auto w-full max-w-[440px] px-4 pb-4">
-                <div className="rounded-3xl border border-zinc-700/60 bg-zinc-950/90 backdrop-blur-2xl p-4 shadow-[0_30px_90px_-45px_rgba(0,0,0,0.85)]">
+              <div className="w-full max-w-[440px]">
+                <div className="rounded-3xl border border-zinc-700/60 bg-zinc-950/90 backdrop-blur-2xl p-5 shadow-[0_30px_90px_-45px_rgba(0,0,0,0.85)]">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Having trouble?</div>
-                      <div className="text-[16px] text-white mt-1 font-display">Try another option</div>
+                      <div className="text-[16px] text-white mt-1 font-display">Try these quick fixes</div>
                       <div className="mt-2 text-[12px] text-zinc-400">
-                        This links your account so we can verify creator-coin ownership and unlock deploy.
+                        If the sign up button does not open, try:
+                      </div>
+                      <div className="mt-2 space-y-1 text-[12px] text-zinc-300">
+                        <div>1) Allow popups for this site.</div>
+                        <div>2) Refresh and try again.</div>
+                        <div>3) Switch browsers or devices.</div>
                       </div>
                     </div>
                     <button
