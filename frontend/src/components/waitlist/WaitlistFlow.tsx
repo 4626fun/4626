@@ -1595,7 +1595,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
             <div className="text-[40px] sm:text-[48px] font-light tracking-tight text-white leading-tight">Early access</div>
             <div className="text-[15px] text-zinc-500 font-light">Verify your wallet to join.</div>
           </div>
-        ) : null}
+        )}
 
         <motion.div
           className={cardWrapClass}

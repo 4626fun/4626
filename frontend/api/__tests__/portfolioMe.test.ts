@@ -17,7 +17,10 @@ vi.mock('../../server/_lib/waitlistSchema.js', () => ({
   ensureWaitlistSchema: ensureWaitlistSchemaMock,
 }))
 
-function createPortfolioDb(source: 'manual' | 'farcaster') {
+function createPortfolioDb(
+  source: 'manual' | 'farcaster',
+  extraProfileFields: Record<string, { value: string | null; source: string; updated_at: string }> = {},
+) {
   const profile: any = {
     id: 1,
     primary_smart_wallet: '0x00000000000000000000000000000000000000aa',
@@ -33,6 +36,8 @@ function createPortfolioDb(source: 'manual' | 'farcaster') {
       display_name: { value: 'Alice', source, updated_at: new Date().toISOString() },
       bio: { value: 'hello', source: 'manual', updated_at: new Date().toISOString() },
       avatar_lens_uri: { value: null, source: 'manual', updated_at: new Date().toISOString() },
+      banner_lens_uri: { value: null, source: 'manual', updated_at: new Date().toISOString() },
+      ...extraProfileFields,
     },
   }
 
@@ -176,5 +181,26 @@ describe('portfolio /api/portfolio/me', () => {
     expect(res.body?.data?.profile?.avatarLensUri).toBe('lens://avatar-123')
     expect(res.body?.data?.profile?.bannerLensUri).toBe('lens://banner-456')
     expect(res.body?.data?.profile?.profileFields?.avatar_lens_uri?.value).toBe('lens://avatar-123')
+    expect(res.body?.data?.profile?.profileFields?.banner_lens_uri?.value).toBe('lens://banner-456')
+    expect(res.body?.data?.profile?.profileFields?.avatar_lens_uri?.source).toBe('manual')
+  })
+
+  it('rejects patching externally sourced Lens URI fields', async () => {
+    getDbMock.mockResolvedValue(
+      createPortfolioDb('manual', {
+        avatar_lens_uri: { value: 'lens://old', source: 'farcaster', updated_at: new Date().toISOString() },
+      }),
+    )
+    const token = makeSessionToken({ address: '0x00000000000000000000000000000000000000bb' })
+    const req = createMockReq({
+      method: 'PATCH',
+      headers: { cookie: `cv_auth_session=${encodeURIComponent(token)}` },
+      body: { avatarLensUri: 'lens://new' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(String(res.body?.error || '')).toContain('externally managed')
   })
 })

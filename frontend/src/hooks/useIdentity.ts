@@ -1,11 +1,13 @@
 /**
  * useIdentity — resolve an Ethereum address to a human-readable display name.
  *
- * Resolution order: Base Name → ENS → Farcaster → truncated address
+ * Resolution order: Farcaster → ENS → Base Name → truncated address
  * Results are cached in-memory for the session.
  */
 
 import { useEffect, useState } from 'react'
+import { createPublicClient, http } from 'viem'
+import { mainnet } from 'viem/chains'
 import { getBasename, formatBasename } from '@/lib/basename-api'
 
 // ---------------------------------------------------------------------------
@@ -13,6 +15,7 @@ import { getBasename, formatBasename } from '@/lib/basename-api'
 // ---------------------------------------------------------------------------
 const identityCache = new Map<string, { displayName: string; avatar: string | null }>()
 const pendingLookups = new Map<string, Promise<{ displayName: string; avatar: string | null }>>()
+const ensClient = createPublicClient({ chain: mainnet, transport: http() })
 
 function truncate(addr: string): string {
   if (!addr || addr.length <= 10) return addr || '?'
@@ -29,17 +32,7 @@ async function resolveIdentity(address: string): Promise<{ displayName: string; 
 
   const promise = (async () => {
     try {
-      // 1. Try Base Name (fastest for Base ecosystem)
-      const basename = await getBasename(address)
-      if (basename) {
-        const result = { displayName: formatBasename(basename) || basename, avatar: null }
-        identityCache.set(address.toLowerCase(), result)
-        return result
-      }
-    } catch { /* continue to fallback */ }
-
-    try {
-      // 2. Try Farcaster via Neynar (client-side, VITE key)
+      // 1. Try Farcaster via Neynar (client-side, VITE key)
       const neynarKey = (import.meta.env.VITE_NEYNAR_API_KEY as string | undefined) ?? ''
       if (neynarKey) {
         const res = await fetch(
@@ -52,7 +45,7 @@ async function resolveIdentity(address: string): Promise<{ displayName: string; 
           const user = key && Array.isArray(data[key]) ? data[key][0] : null
           if (user?.username) {
             const result = {
-              displayName: `@${user.username}`,
+              displayName: user.display_name || `@${user.username}`,
               avatar: user.pfp_url ?? user.pfp?.url ?? null,
             }
             identityCache.set(address.toLowerCase(), result)
@@ -62,7 +55,27 @@ async function resolveIdentity(address: string): Promise<{ displayName: string; 
       }
     } catch { /* continue to fallback */ }
 
-    // 3. Fallback: truncated address
+    try {
+      // 2. Try ENS (mainnet)
+      const ensName = await ensClient.getEnsName({ address: address as `0x${string}` })
+      if (ensName) {
+        const result = { displayName: ensName, avatar: null }
+        identityCache.set(address.toLowerCase(), result)
+        return result
+      }
+    } catch { /* continue to fallback */ }
+
+    try {
+      // 3. Try Base Name (Base primary)
+      const basename = await getBasename(address)
+      if (basename) {
+        const result = { displayName: formatBasename(basename) || basename, avatar: null }
+        identityCache.set(address.toLowerCase(), result)
+        return result
+      }
+    } catch { /* continue to fallback */ }
+
+    // 4. Fallback: truncated address
     identityCache.set(address.toLowerCase(), fallback)
     return fallback
   })()

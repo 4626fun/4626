@@ -290,6 +290,7 @@ export async function getOnchainReputation(address: string): Promise<OnchainRepu
         twitter: talentSocials.twitter || talent?.socials?.twitter || basename.twitter || zora?.twitter,
         github: talentSocials.github || talent?.socials?.github || basename.github || undefined,
         farcaster: talent?.socials?.farcaster,
+        lens: talentSocials.lens || talent?.socials?.lens || undefined,
         website: talentSocials.website,
       },
       aggregated: {

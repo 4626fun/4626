@@ -49,6 +49,7 @@ export interface TalentPassport {
     discord?: string
     telegram?: string
     farcaster?: string
+    lens?: string
   }
   // Enhanced social accounts with follower counts
   social_accounts?: SocialAccount[]
@@ -69,6 +70,7 @@ export interface CreatorSocials {
   twitter?: string
   github?: string
   farcaster?: string
+  lens?: string
   linkedin?: string
   instagram?: string
   tiktok?: string
@@ -295,6 +297,14 @@ function extractSocials(profile: any): Record<string, string> {
         case 'youtube':
           socials.youtube = `https://youtube.com/@${identifier}`
           break
+        case 'lens': {
+          const lensUrl =
+            (typeof account.profile_url === 'string' && account.profile_url.trim()) ||
+            (typeof account.url === 'string' && account.url.trim()) ||
+            ''
+          if (lensUrl) socials.lens = lensUrl
+          break
+        }
       }
     }
   }
@@ -347,6 +357,14 @@ function extractSocialAccounts(profile: any): SocialAccount[] {
         case 'linkedin':
           platform = 'linkedin'
           url = `https://linkedin.com/in/${identifier}`
+          break
+        case 'lens':
+          platform = 'lens'
+          url =
+            (typeof account.profile_url === 'string' && account.profile_url.trim()) ||
+            (typeof account.url === 'string' && account.url.trim()) ||
+            ''
+          if (!url) continue
           break
         default:
           continue
@@ -419,6 +437,8 @@ export async function getTalentSocials(walletAddress: string): Promise<CreatorSo
         putIfMissing('github', profileUrl, handle ? `https://github.com/${handle}` : null)
       } else if (source === 'linkedin') {
         putIfMissing('linkedin', profileUrl, handle ? `https://linkedin.com/in/${handle}` : null)
+      } else if (source === 'lens') {
+        putIfMissing('lens', profileUrl, null)
       }
     }
 

@@ -343,7 +343,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
   }
-
   const displayName = hasDisplayName ? normalizeManualText(body.displayName, 64) : null
   const bio = hasBio ? normalizeManualText(body.bio, 480) : null
   const website = hasWebsite ? normalizeManualText(body.website, 280) : null

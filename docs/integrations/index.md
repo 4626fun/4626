@@ -12,6 +12,7 @@ Guides for integrating with CreatorVault.
 | Integration | Description |
 |-------------|-------------|
 | **[OFT](/integrations/oft)** | LayerZero cross-chain integration |
+| **[Lens](/lens)** | Lens + Grove Phase 1 storage/profile conventions |
 | **[Solana](/integrations/solana-integration)** | Future Solana support |
 
 ## API Reference

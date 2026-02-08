@@ -37,6 +37,7 @@ In one click, creators deploy institutional-grade **ERC-4626 vault** infrastruct
 - [Architecture](/architecture) - How CreatorVault works under the hood
 - [Tokenomics](/tokenomics) - Fee structure and lottery mechanics
 - [Security](/security) - Security features and audits
+- [Lens Integration](/lens) - Lens + Grove Phase 1 guidance for this repo
 - [API Reference](/api) - Auto-generated contract and frontend documentation
 
 ## Tech Stack
