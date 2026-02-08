@@ -370,13 +370,54 @@ function buildTxHref(hash?: string): string | null {
 
 function shouldFallbackToOwnerDirectExecute(error: unknown): boolean {
   const msg = String((error as any)?.shortMessage || (error as any)?.message || error || '').toLowerCase()
+  const userRejected =
+    msg.includes('user rejected') ||
+    msg.includes('user denied') ||
+    msg.includes('user cancelled') ||
+    msg.includes('action_rejected')
+  if (userRejected) return false
   return (
     (msg.includes('method not supported') && msg.includes('eth_sign')) ||
     msg.includes('eth_sign is required for this wallet owner') ||
     msg.includes('invalid signature') ||
     msg.includes('signature check failed') ||
-    msg.includes('userop signature verification failed')
+    msg.includes('userop signature verification failed') ||
+    msg.includes('verificationgaslimit') ||
+    msg.includes('aa40') ||
+    msg.includes('didn\'t pay prefund') ||
+    msg.includes('request denied -') ||
+    msg.includes('paymaster unavailable') ||
+    msg.includes('sponsorship')
   )
+}
+
+function extractMetaMessages(error: unknown): string | null {
+  const seen = new Set<unknown>()
+  const queue: unknown[] = [error]
+  const out: string[] = []
+
+  while (queue.length > 0 && out.length < 6) {
+    const item = queue.shift()
+    if (!item || typeof item !== 'object' || seen.has(item)) continue
+    seen.add(item)
+
+    const anyItem = item as any
+    const meta = anyItem?.metaMessages
+    if (Array.isArray(meta)) {
+      for (const m of meta) {
+        const text = typeof m === 'string' ? m : JSON.stringify(m)
+        const normalized = String(text ?? '').replace(/\s+/g, ' ').trim()
+        if (normalized) out.push(normalized)
+        if (out.length >= 6) break
+      }
+    }
+
+    if (anyItem?.cause) queue.push(anyItem.cause)
+  }
+
+  if (out.length === 0) return null
+  const limited = out.slice(0, 3)
+  return `${limited.join(' | ')}${out.length > limited.length ? ' | ...' : ''}`
 }
 
 function summarizeErrorReason(error: unknown): string {
@@ -388,8 +429,19 @@ function summarizeErrorReason(error: unknown): string {
     err?.cause?.shortMessage ||
     err?.cause?.message ||
     String(error ?? 'Unknown error')
-  const text = String(candidate || 'Unknown error').replace(/\s+/g, ' ').trim()
-  return text.length > 280 ? `${text.slice(0, 277)}...` : text
+  const base = String(candidate || 'Unknown error').replace(/\s+/g, ' ').trim()
+  const meta = extractMetaMessages(error)
+  const text = meta ? `${base} (CDP: ${meta})` : base
+  return text.length > 560 ? `${text.slice(0, 557)}...` : text
+}
+
+function toFriendlyTxError(error: unknown): string {
+  const msg = summarizeErrorReason(error)
+  const lower = msg.toLowerCase()
+  if (lower.includes('requested resource not available') || lower.includes('resource not available')) {
+    return 'Bundler endpoint does not support ERC-4337 methods. Set `VITE_CDP_BUNDLER_URL` and retry.'
+  }
+  return msg
 }
 
 async function sendEmbeddedOwnerSmartWalletCall(params: {
@@ -414,10 +466,12 @@ async function sendEmbeddedOwnerSmartWalletCall(params: {
       ownerAddress,
       calls,
       version: '1',
-      // Embedded providers often block `eth_sign`; prefer signMessage for deterministic behavior.
-      userOpSignMode: 'signMessage',
-      allowEoaSignMessageFallback: true,
+      // EOA UserOps should use raw eth_sign; signMessage can cause AA40 loops.
+      userOpSignMode: 'eth_sign',
+      allowEoaSignMessageFallback: false,
       skipPaymaster: false,
+      // Avoid recursive signature-mode retries for deterministic embedded behavior.
+      retryOnInvalidSignature: false,
     })
   } catch (error: unknown) {
     if (!shouldFallbackToOwnerDirectExecute(error)) throw error
@@ -763,7 +817,7 @@ function AgentRegistration() {
           calls: [{ to: registryAddress, data }],
           version: '1',
           userOpSignMode: 'auto',
-          allowEoaSignMessageFallback: true,
+          allowEoaSignMessageFallback: false,
           skipPaymaster: false,
         })
         updateRegisterTx({ status: 'pending', hash: result.transactionHash })
@@ -775,12 +829,7 @@ function AgentRegistration() {
 
       throw new Error('Connect the canonical smart wallet or an owner wallet to continue.')
     } catch (e: any) {
-      const msg = String(e?.shortMessage || e?.message || 'Transaction failed')
-      const lower = msg.toLowerCase()
-      const friendly = lower.includes('requested resource not available') || lower.includes('resource not available')
-        ? 'Bundler endpoint does not support ERC-4337 methods. Set `VITE_CDP_BUNDLER_URL` and retry.'
-        : msg
-      updateRegisterTx({ status: 'error', error: friendly })
+      updateRegisterTx({ status: 'error', error: toFriendlyTxError(e) })
     }
   }
 
@@ -867,7 +916,7 @@ function AgentRegistration() {
           calls: [{ to: registryAddress, data }],
           version: '1',
           userOpSignMode: 'auto',
-          allowEoaSignMessageFallback: true,
+          allowEoaSignMessageFallback: false,
           skipPaymaster: false,
         })
         updateUpdateTx({ status: 'pending', hash: result.transactionHash })
@@ -878,12 +927,7 @@ function AgentRegistration() {
 
       throw new Error('Connect the canonical smart wallet or an owner wallet to continue.')
     } catch (e: any) {
-      const msg = String(e?.shortMessage || e?.message || 'Transaction failed')
-      const lower = msg.toLowerCase()
-      const friendly = lower.includes('requested resource not available') || lower.includes('resource not available')
-        ? 'Bundler endpoint does not support ERC-4337 methods. Set `VITE_CDP_BUNDLER_URL` and retry.'
-        : msg
-      updateUpdateTx({ status: 'error', error: friendly })
+      updateUpdateTx({ status: 'error', error: toFriendlyTxError(e) })
     }
   }
 
@@ -1416,7 +1460,7 @@ function LegacyWithdrawals() {
           calls: [{ to: config.address, data }],
           version: '1',
           userOpSignMode: 'auto',
-          allowEoaSignMessageFallback: true,
+          allowEoaSignMessageFallback: false,
           skipPaymaster: false,
         })
         updateTx(key, { status: 'pending', hash: result.transactionHash })
@@ -1426,12 +1470,7 @@ function LegacyWithdrawals() {
       }
       throw new Error('Connect the canonical smart wallet or an owner wallet to continue.')
     } catch (e: any) {
-      const msg = String(e?.shortMessage || e?.message || 'Transaction failed')
-      const lower = msg.toLowerCase()
-      const friendly = lower.includes('requested resource not available') || lower.includes('resource not available')
-        ? 'Bundler endpoint does not support ERC-4337 methods. Set `VITE_CDP_BUNDLER_URL` and retry.'
-        : msg
-      updateTx(key, { status: 'error', error: friendly })
+      updateTx(key, { status: 'error', error: toFriendlyTxError(e) })
     }
   }
 
@@ -1489,7 +1528,7 @@ function LegacyWithdrawals() {
           calls,
           version: '1',
           userOpSignMode: 'auto',
-          allowEoaSignMessageFallback: true,
+          allowEoaSignMessageFallback: false,
           skipPaymaster: false,
         })
         updateTx(key, { status: 'pending', hash: result.transactionHash })
@@ -1499,12 +1538,7 @@ function LegacyWithdrawals() {
       }
       throw new Error('Connect the canonical smart wallet or an owner wallet to continue.')
     } catch (e: any) {
-      const msg = String(e?.shortMessage || e?.message || 'Transaction failed')
-      const lower = msg.toLowerCase()
-      const friendly = lower.includes('requested resource not available') || lower.includes('resource not available')
-        ? 'Bundler endpoint does not support ERC-4337 methods. Set `VITE_CDP_BUNDLER_URL` and retry.'
-        : msg
-      updateTx(key, { status: 'error', error: friendly })
+      updateTx(key, { status: 'error', error: toFriendlyTxError(e) })
     }
   }
 
