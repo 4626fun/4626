@@ -1567,7 +1567,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
 
   const cardWrapClass =
     variant === 'page'
-      ? 'relative overflow-hidden rounded-[32px] border border-white/10 bg-black shadow-[0_44px_140px_-72px_rgba(0,0,0,0.95)] p-5 sm:p-7'
+      ? 'relative overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(165deg,rgba(10,10,12,0.95),rgba(4,4,6,0.98))] shadow-[0_44px_140px_-72px_rgba(0,0,0,0.95)] p-5 sm:p-7'
       : 'relative overflow-hidden rounded-[32px] border border-zinc-800/50 bg-zinc-950/95 p-5 sm:p-7'
 
   return (
@@ -1576,7 +1576,20 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-black" />
       ) : null}
       <div className={innerWrapClass}>
-        {variant !== 'page' ? (
+        {variant === 'page' ? (
+          <div className="mb-6 sm:mb-8 flex items-center justify-between">
+            <div className="flex items-center gap-3.5 rounded-2xl border border-white/10 bg-black/70 px-3.5 py-2.5">
+              <Logo width={32} height={32} showText={false} />
+              <div>
+                <div className="text-[13px] text-white font-medium tracking-[0.01em]">Creator Vaults</div>
+                <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Waitlist</div>
+              </div>
+            </div>
+            <div className="hidden sm:inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] uppercase tracking-[0.15em] text-zinc-400">
+              Founding Access
+            </div>
+          </div>
+        ) : (
           <div className="space-y-4 mb-6">
             <span className="text-[11px] uppercase tracking-[0.15em] text-zinc-600 font-medium">Waitlist</span>
             <div className="text-[40px] sm:text-[48px] font-light tracking-tight text-white leading-tight">Early access</div>

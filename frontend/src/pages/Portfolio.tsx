@@ -8,6 +8,8 @@ import { useParams } from 'react-router-dom'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
 import { fetchDebankTokenList, type DebankToken, type DebankTokenList } from '@/lib/debank/client'
+import { isLensGroveEnabled } from '@/lib/flags'
+import { uploadImmutableBlob, type GroveUploadResult } from '@/lib/lens/grove'
 import { fetchZoraCoin } from '@/lib/zora/client'
 import type { ZoraCoin } from '@/lib/zora/types'
 
@@ -124,6 +126,8 @@ type PortfolioApiResponse = {
     website: string | null
     avatarUrl: string | null
     bannerUrl: string | null
+    avatarLensUri: string | null
+    bannerLensUri: string | null
     profileFields: Record<string, ProfileField>
     appAccessStatus: string | null
     updatedAt: string | null
@@ -165,7 +169,14 @@ export function Portfolio() {
   const [editWebsite, setEditWebsite] = useState('')
   const [editAvatarUrl, setEditAvatarUrl] = useState('')
   const [editBannerUrl, setEditBannerUrl] = useState('')
+  const [editAvatarLensUri, setEditAvatarLensUri] = useState('')
+  const [editBannerLensUri, setEditBannerLensUri] = useState('')
   const [editError, setEditError] = useState<string | null>(null)
+  const [avatarUploadFile, setAvatarUploadFile] = useState<File | null>(null)
+  const [bannerUploadFile, setBannerUploadFile] = useState<File | null>(null)
+  const [lensUploadBusy, setLensUploadBusy] = useState<'avatar' | 'banner' | null>(null)
+  const [lensUploadError, setLensUploadError] = useState<string | null>(null)
+  const lensEnabled = isLensGroveEnabled()
 
   const portfolioQuery = useQuery({
     queryKey: ['portfolio', 'me', publicAddress ?? 'self', effectiveAddress],
@@ -188,8 +199,34 @@ export function Portfolio() {
     setEditWebsite(profile?.website ?? '')
     setEditAvatarUrl(profile?.avatarUrl ?? '')
     setEditBannerUrl(profile?.bannerUrl ?? '')
+    setEditAvatarLensUri(profile?.avatarLensUri ?? '')
+    setEditBannerLensUri(profile?.bannerLensUri ?? '')
     setEditError(null)
+    setLensUploadError(null)
   }, [portfolioQuery.data?.profile])
+
+  async function handleLensUpload(
+    target: 'avatar' | 'banner',
+    file: File | null,
+  ) {
+    if (!file || lensUploadBusy) return
+    setLensUploadBusy(target)
+    setLensUploadError(null)
+    try {
+      const result: GroveUploadResult = await uploadImmutableBlob(file, file.type || 'application/octet-stream')
+      if (target === 'avatar') {
+        setEditAvatarUrl(result.gatewayUrl)
+        setEditAvatarLensUri(result.lensUri)
+      } else {
+        setEditBannerUrl(result.gatewayUrl)
+        setEditBannerLensUri(result.lensUri)
+      }
+    } catch (error) {
+      setLensUploadError(error instanceof Error ? error.message : 'Lens upload failed')
+    } finally {
+      setLensUploadBusy(null)
+    }
+  }
 
   const patchMutation = useMutation({
     mutationFn: async () => {
@@ -199,6 +236,8 @@ export function Portfolio() {
         website: editWebsite.trim() || null,
         avatarUrl: editAvatarUrl.trim() || null,
         bannerUrl: editBannerUrl.trim() || null,
+        avatarLensUri: editAvatarLensUri.trim() || null,
+        bannerLensUri: editBannerLensUri.trim() || null,
       }
       const res = await apiFetch('/api/portfolio/me', {
         method: 'PATCH',
@@ -535,7 +574,57 @@ export function Portfolio() {
                       value={editBannerUrl}
                       onChange={(e) => setEditBannerUrl(e.target.value)}
                     />
+                    <input
+                      className="rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-[12px] text-zinc-400 font-mono"
+                      placeholder="Avatar Lens URI"
+                      value={editAvatarLensUri}
+                      onChange={(e) => setEditAvatarLensUri(e.target.value)}
+                    />
+                    <input
+                      className="rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-[12px] text-zinc-400 font-mono"
+                      placeholder="Banner Lens URI"
+                      value={editBannerLensUri}
+                      onChange={(e) => setEditBannerLensUri(e.target.value)}
+                    />
                   </div>
+                  {lensEnabled ? (
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div className="rounded-lg border border-zinc-800 bg-black/30 p-3 space-y-2">
+                        <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Lens Grove avatar</div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setAvatarUploadFile(e.target.files?.[0] ?? null)}
+                          className="text-[11px] text-zinc-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void handleLensUpload('avatar', avatarUploadFile)}
+                          disabled={!avatarUploadFile || lensUploadBusy !== null}
+                          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-[11px] text-zinc-100 hover:bg-white/5 disabled:opacity-60"
+                        >
+                          {lensUploadBusy === 'avatar' ? 'Uploading…' : 'Upload to Lens Grove'}
+                        </button>
+                      </div>
+                      <div className="rounded-lg border border-zinc-800 bg-black/30 p-3 space-y-2">
+                        <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Lens Grove banner</div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setBannerUploadFile(e.target.files?.[0] ?? null)}
+                          className="text-[11px] text-zinc-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void handleLensUpload('banner', bannerUploadFile)}
+                          disabled={!bannerUploadFile || lensUploadBusy !== null}
+                          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-[11px] text-zinc-100 hover:bg-white/5 disabled:opacity-60"
+                        >
+                          {lensUploadBusy === 'banner' ? 'Uploading…' : 'Upload to Lens Grove'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                   <textarea
                     className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-[12px] text-zinc-200 min-h-[84px]"
                     placeholder="Bio"
@@ -543,6 +632,7 @@ export function Portfolio() {
                     onChange={(e) => setEditBio(e.target.value)}
                   />
                   {editError ? <div className="mt-2 text-[11px] text-rose-300">{editError}</div> : null}
+                  {lensUploadError ? <div className="mt-2 text-[11px] text-rose-300">{lensUploadError}</div> : null}
                   <div className="mt-2 flex items-center gap-2">
                     <button
                       type="button"

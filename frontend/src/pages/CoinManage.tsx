@@ -7,6 +7,8 @@ import { base } from 'wagmi/chains'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 
 import { ConnectButton } from '@/components/ConnectButton'
+import { isLensGroveEnabled } from '@/lib/flags'
+import { uploadImmutableBlob, uploadImmutableJson } from '@/lib/lens/grove'
 import { useZoraCoin } from '@/lib/zora/hooks'
 
 const ZORA_COIN_READ_ABI = [
@@ -60,10 +62,15 @@ export function CoinManage() {
   const [metaDescription, setMetaDescription] = useState('')
   const [metaImageUri, setMetaImageUri] = useState('')
   const [metaCategory, setMetaCategory] = useState('creator')
+  const [metaImageLensUri, setMetaImageLensUri] = useState('')
+  const [metadataLensUri, setMetadataLensUri] = useState('')
+  const [metaImageFile, setMetaImageFile] = useState<File | null>(null)
+  const [lensUploadError, setLensUploadError] = useState<string | null>(null)
 
   const [txError, setTxError] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
-  const [busy, setBusy] = useState<'payout' | 'uri' | 'upload' | null>(null)
+  const [busy, setBusy] = useState<'payout' | 'uri' | 'upload' | 'grove-image' | 'grove-metadata' | null>(null)
+  const lensEnabled = isLensGroveEnabled()
 
   async function updatePayout() {
     if (!coinAddress || !walletClient || !publicClient || !newPayoutIsValid) return
@@ -157,6 +164,36 @@ export function CoinManage() {
       await navigator.clipboard.writeText(JSON.stringify(metadataJson, null, 2))
     } catch (e: any) {
       setTxError(e?.message || 'Failed to build metadata JSON')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function uploadMetaImageToGrove() {
+    if (!metaImageFile) return
+    setLensUploadError(null)
+    setBusy('grove-image')
+    try {
+      const result = await uploadImmutableBlob(metaImageFile, metaImageFile.type || 'application/octet-stream')
+      setMetaImageUri(result.gatewayUrl)
+      setMetaImageLensUri(result.lensUri)
+    } catch (e) {
+      setLensUploadError(e instanceof Error ? e.message : 'Lens upload failed')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function uploadMetadataJsonToGrove() {
+    if (!canBuildMetadataJson) return
+    setLensUploadError(null)
+    setBusy('grove-metadata')
+    try {
+      const result = await uploadImmutableJson(metadataJson)
+      setNewUri(result.gatewayUrl)
+      setMetadataLensUri(result.lensUri)
+    } catch (e) {
+      setLensUploadError(e instanceof Error ? e.message : 'Lens upload failed')
     } finally {
       setBusy(null)
     }
@@ -332,6 +369,12 @@ export function CoinManage() {
                         className="sm:col-span-2 w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none focus:border-cyan-500/50 transition-colors font-mono"
                       />
                       <input
+                        value={metaImageLensUri}
+                        onChange={(e) => setMetaImageLensUri(e.target.value)}
+                        placeholder="Lens image URI (lens://...)"
+                        className="sm:col-span-2 w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-400 placeholder:text-zinc-700 outline-none focus:border-cyan-500/50 transition-colors font-mono"
+                      />
+                      <input
                         value={metaCategory}
                         onChange={(e) => setMetaCategory(e.target.value)}
                         placeholder="Category (e.g. creator)"
@@ -377,6 +420,42 @@ export function CoinManage() {
                         'Validate + copy JSON'
                       )}
                     </button>
+                    {lensEnabled ? (
+                      <div className="rounded-lg border border-zinc-900/60 p-3 space-y-3">
+                        <div className="text-xs text-zinc-500">Lens Grove uploads (optional)</div>
+                        <div className="space-y-2">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setMetaImageFile(e.target.files?.[0] ?? null)}
+                            className="text-[11px] text-zinc-400"
+                          />
+                          <button
+                            onClick={() => void uploadMetaImageToGrove()}
+                            disabled={busy !== null || !metaImageFile}
+                            className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                            type="button"
+                          >
+                            {busy === 'grove-image' ? 'Uploading image…' : 'Upload image to Lens Grove'}
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => void uploadMetadataJsonToGrove()}
+                          disabled={busy !== null || !canBuildMetadataJson}
+                          className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                          type="button"
+                        >
+                          {busy === 'grove-metadata' ? 'Uploading metadata…' : 'Upload metadata JSON to Lens Grove'}
+                        </button>
+                        <input
+                          value={metadataLensUri}
+                          onChange={(e) => setMetadataLensUri(e.target.value)}
+                          placeholder="Lens metadata URI (lens://...)"
+                          className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-xs text-zinc-400 placeholder:text-zinc-700 outline-none focus:border-cyan-500/50 transition-colors font-mono"
+                        />
+                        {lensUploadError ? <div className="text-[11px] text-rose-300">{lensUploadError}</div> : null}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 

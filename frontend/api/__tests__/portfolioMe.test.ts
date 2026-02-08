@@ -32,6 +32,7 @@ function createPortfolioDb(source: 'manual' | 'farcaster') {
     profile_fields: {
       display_name: { value: 'Alice', source, updated_at: new Date().toISOString() },
       bio: { value: 'hello', source: 'manual', updated_at: new Date().toISOString() },
+      avatar_lens_uri: { value: null, source: 'manual', updated_at: new Date().toISOString() },
     },
   }
 
@@ -157,5 +158,23 @@ describe('portfolio /api/portfolio/me', () => {
     expect(res.body?.data?.profile?.displayName).toBe('Alice Updated')
     expect(res.body?.data?.profile?.bio).toBe('updated bio')
     expect(res.body?.data?.profile?.profileFields?.display_name?.source).toBe('manual')
+  })
+
+  it('stores lens URIs in profile fields', async () => {
+    getDbMock.mockResolvedValue(createPortfolioDb('manual'))
+    const token = makeSessionToken({ address: '0x00000000000000000000000000000000000000bb' })
+    const req = createMockReq({
+      method: 'PATCH',
+      headers: { cookie: `cv_auth_session=${encodeURIComponent(token)}` },
+      body: { avatarLensUri: 'lens://avatar-123', bannerLensUri: 'lens://banner-456' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.profile?.avatarLensUri).toBe('lens://avatar-123')
+    expect(res.body?.data?.profile?.bannerLensUri).toBe('lens://banner-456')
+    expect(res.body?.data?.profile?.profileFields?.avatar_lens_uri?.value).toBe('lens://avatar-123')
   })
 })

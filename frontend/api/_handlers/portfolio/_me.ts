@@ -34,6 +34,8 @@ type PortfolioProfile = {
   website: string | null
   avatarUrl: string | null
   bannerUrl: string | null
+  avatarLensUri: string | null
+  bannerLensUri: string | null
   profileFields: ProfileFieldsMap
   appAccessStatus: string | null
   updatedAt: string | null
@@ -55,9 +57,19 @@ type PatchBody = {
   website?: string | null
   avatarUrl?: string | null
   bannerUrl?: string | null
+  avatarLensUri?: string | null
+  bannerLensUri?: string | null
 }
 
-const MANUAL_FIELD_KEYS = ['display_name', 'bio', 'website', 'avatar_url', 'banner_url'] as const
+const MANUAL_FIELD_KEYS = [
+  'display_name',
+  'bio',
+  'website',
+  'avatar_url',
+  'banner_url',
+  'avatar_lens_uri',
+  'banner_lens_uri',
+] as const
 
 function normalizeLower(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
@@ -111,6 +123,10 @@ function getFieldValue(row: any, fields: ProfileFieldsMap, key: keyof PortfolioP
         ? 'avatar_url'
         : key === 'bannerUrl'
           ? 'banner_url'
+          : key === 'avatarLensUri'
+            ? 'avatar_lens_uri'
+            : key === 'bannerLensUri'
+              ? 'banner_lens_uri'
           : key
   const fromProvenance = fields[snake]
   if (fromProvenance && Object.prototype.hasOwnProperty.call(fromProvenance, 'value')) return fromProvenance.value
@@ -223,6 +239,8 @@ async function buildResponse(db: any, mode: 'self' | 'public', row: any): Promis
     website: getFieldValue(row, profileFields, 'website'),
     avatarUrl: getFieldValue(row, profileFields, 'avatarUrl'),
     bannerUrl: getFieldValue(row, profileFields, 'bannerUrl'),
+    avatarLensUri: getFieldValue(row, profileFields, 'avatarLensUri'),
+    bannerLensUri: getFieldValue(row, profileFields, 'bannerLensUri'),
     profileFields,
     appAccessStatus: asNullableString(row.app_access_status),
     updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
@@ -295,8 +313,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const hasWebsite = Object.prototype.hasOwnProperty.call(body, 'website')
   const hasAvatarUrl = Object.prototype.hasOwnProperty.call(body, 'avatarUrl')
   const hasBannerUrl = Object.prototype.hasOwnProperty.call(body, 'bannerUrl')
+  const hasAvatarLensUri = Object.prototype.hasOwnProperty.call(body, 'avatarLensUri')
+  const hasBannerLensUri = Object.prototype.hasOwnProperty.call(body, 'bannerLensUri')
   const hasAny =
-    hasDisplayName || hasBio || hasWebsite || hasAvatarUrl || hasBannerUrl
+    hasDisplayName || hasBio || hasWebsite || hasAvatarUrl || hasBannerUrl || hasAvatarLensUri || hasBannerLensUri
 
   if (!hasAny) {
     return res.status(400).json({ success: false, error: 'No updatable fields provided' } satisfies ApiEnvelope<never>)
@@ -312,7 +332,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         (key === 'bio' && hasBio) ||
         (key === 'website' && hasWebsite) ||
         (key === 'avatar_url' && hasAvatarUrl) ||
-        (key === 'banner_url' && hasBannerUrl)
+        (key === 'banner_url' && hasBannerUrl) ||
+        (key === 'avatar_lens_uri' && hasAvatarLensUri) ||
+        (key === 'banner_lens_uri' && hasBannerLensUri)
       ) {
         return res.status(400).json({
           success: false,
@@ -327,6 +349,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const website = hasWebsite ? normalizeManualText(body.website, 280) : null
   const avatarUrl = hasAvatarUrl ? normalizeManualText(body.avatarUrl, 500) : null
   const bannerUrl = hasBannerUrl ? normalizeManualText(body.bannerUrl, 500) : null
+  const avatarLensUri = hasAvatarLensUri ? normalizeManualText(body.avatarLensUri, 500) : null
+  const bannerLensUri = hasBannerLensUri ? normalizeManualText(body.bannerLensUri, 500) : null
+
+  if (hasAvatarLensUri && avatarLensUri && !avatarLensUri.startsWith('lens://')) {
+    return res.status(400).json({ success: false, error: 'avatarLensUri must start with lens://' } satisfies ApiEnvelope<never>)
+  }
+  if (hasBannerLensUri && bannerLensUri && !bannerLensUri.startsWith('lens://')) {
+    return res.status(400).json({ success: false, error: 'bannerLensUri must start with lens://' } satisfies ApiEnvelope<never>)
+  }
 
   const nowIso = new Date().toISOString()
   const mergedFields: ProfileFieldsMap = { ...currentFields }
@@ -335,6 +366,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (hasWebsite) mergedFields.website = { value: website, source: 'manual', updated_at: nowIso }
   if (hasAvatarUrl) mergedFields.avatar_url = { value: avatarUrl, source: 'manual', updated_at: nowIso }
   if (hasBannerUrl) mergedFields.banner_url = { value: bannerUrl, source: 'manual', updated_at: nowIso }
+  if (hasAvatarLensUri) mergedFields.avatar_lens_uri = { value: avatarLensUri, source: 'manual', updated_at: nowIso }
+  if (hasBannerLensUri) mergedFields.banner_lens_uri = { value: bannerLensUri, source: 'manual', updated_at: nowIso }
 
   await db.sql`
     UPDATE profiles

@@ -26,3 +26,11 @@ export function isPrivyClientEnabled(): boolean {
   if (!getPrivyAppId()) return false
   return true
 }
+
+export function isLensGroveEnabled(): boolean {
+  const raw = String(import.meta.env.VITE_ENABLE_LENS_GROVE ?? '')
+    .trim()
+    .toLowerCase()
+  if (!raw) return true
+  return raw === '1' || raw === 'true' || raw === 'yes'
+}
