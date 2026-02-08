@@ -679,6 +679,8 @@ function createWalletBackedLocalAccount(params: {
   allowSignMessageFallback?: boolean
 }) {
   const { walletClient, address, userOpSignMode = 'auto', allowSignMessageFallback = true } = params
+  // Avoid repeating blocked `eth_sign` attempts within the same UserOp submission flow.
+  let preferPersonalSignForAutoMode = userOpSignMode === 'signMessage'
 
   return toAccount({
     address,
@@ -766,6 +768,9 @@ function createWalletBackedLocalAccount(params: {
       // Auto mode: try eth_sign first, fall back to signMessage
       // This order is preferred because eth_sign produces a raw signature,
       // but most wallets block it for security reasons.
+      if (preferPersonalSignForAutoMode) {
+        return await tryPersonalSign()
+      }
       try {
         return await tryEthSign()
       } catch (ethSignError: unknown) {
@@ -778,6 +783,7 @@ function createWalletBackedLocalAccount(params: {
         // For EOA owners, fallback to personal_sign is often invalid for UserOp digests;
         // require eth_sign to avoid AA40/AA24 retry loops.
         if (isEthSignBlocked(ethSignError)) {
+          preferPersonalSignForAutoMode = true
           if (!allowSignMessageFallback) {
             throw new Error(
               'eth_sign is required for this wallet owner, but your wallet blocked it. ' +

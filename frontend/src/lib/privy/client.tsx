@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Component, createContext, useContext, useMemo } from 'react'
 import { getPrivyAppId, isPrivyClientEnabled } from '@/lib/flags'
 import { PrivyProvider } from '@privy-io/react-auth'
+import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana'
 import { SmartWalletsProvider } from '@privy-io/react-auth/smart-wallets'
 import { base } from 'viem/chains'
 
@@ -72,14 +73,31 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
   }
 
   const appearance = {
-    // Solana connectors are not configured; avoid Phantom to prevent Solana warnings.
-    walletList: ['metamask', 'coinbase_wallet', 'detected_wallets', 'wallet_connect'],
+    // Wallet-only auth should keep wallet login options at the top.
+    showWalletLoginFirst: true,
+    // This app is EVM-only in current flows; hide Solana wallet choices.
+    walletChainType: 'ethereum-only',
+    walletList: ['metamask', 'coinbase_wallet', 'detected_ethereum_wallets'],
   } as const
   // Featured guidelines: keep auth in-app and avoid email/phone verification flows.
   const loginMethods = ['wallet'] as const
 
   // Zora's Privy App ID - enables cross-app wallet sharing (Global Wallet)
   const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
+  const solanaConnectors = useMemo(() => toSolanaWalletConnectors({ shouldAutoConnect: false }), [])
+  const externalWallets = useMemo(
+    () => ({
+      // WalletConnect is handled through wagmi in this app; disable Privy's WC core to avoid duplicate init.
+      walletConnect: { enabled: false },
+      // Enable cross-app wallets from Zora so users get the same wallet they created on Zora.
+      crossApp: {
+        providerAppIds: [ZORA_PRIVY_APP_ID],
+      },
+      // Provide Solana connector config to satisfy Privy runtime validation when Solana is enabled in dashboard.
+      solana: { connectors: solanaConnectors },
+    }),
+    [solanaConnectors],
+  )
 
   const baseConfig: PrivyProviderConfig = {
     appearance,
@@ -90,12 +108,7 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
     loginMethods,
     defaultChain: base,
     supportedChains: [base],
-    // Enable cross-app wallets from Zora so users get the same wallet they created on Zora
-    externalWallets: {
-      crossApp: {
-        providerAppIds: [ZORA_PRIVY_APP_ID],
-      },
-    },
+    externalWallets,
   } as any
 
   const safeConfig: PrivyProviderConfig = {
@@ -104,12 +117,7 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
     loginMethods,
     defaultChain: base,
     supportedChains: [base],
-    // Enable cross-app wallets from Zora
-    externalWallets: {
-      crossApp: {
-        providerAppIds: [ZORA_PRIVY_APP_ID],
-      },
-    },
+    externalWallets,
   } as any
 
   return (

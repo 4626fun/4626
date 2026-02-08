@@ -414,8 +414,8 @@ async function sendEmbeddedOwnerSmartWalletCall(params: {
       ownerAddress,
       calls,
       version: '1',
-      // Embedded providers often block `eth_sign`; allow auto fallback to signMessage/personal_sign.
-      userOpSignMode: 'auto',
+      // Embedded providers often block `eth_sign`; prefer signMessage for deterministic behavior.
+      userOpSignMode: 'signMessage',
       allowEoaSignMessageFallback: true,
       skipPaymaster: false,
     })
