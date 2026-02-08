@@ -117,84 +117,56 @@ async function updateActionStatus(params: {
 // Action execution
 // ---------------------------------------------------------------------------
 
-/**
- * Execute a single keepr action.
- *
- * Currently supports XMTP group operations as placeholders. The actual XMTP
- * client integration depends on the XMTP SDK being available in the CRE
- * environment.
- */
-async function executeAction(action: PendingAction): Promise<{ success: boolean; error?: string }> {
-  const actionType = action.actionType ?? (action.action as any)?.action ?? 'unknown';
-  const payload = action.action;
+async function executeAction(
+  action: PendingAction,
+): Promise<{ success: boolean; retryable: boolean; error?: string }> {
+  const baseUrl = getApiBaseUrl();
+  const secret = getApiSecret();
 
   try {
-    switch (actionType) {
-      case 'add_member':
-      case 'addMember': {
-        // XMTP: Add member to group
-        const walletAddress = (payload as any)?.walletAddress ?? (payload as any)?.address;
-        if (!walletAddress) {
-          return { success: false, error: 'Missing walletAddress in action payload' };
-        }
-        // Placeholder: actual XMTP SDK call would go here
-        await alertInfo(WORKFLOW_NAME, `Would add member ${walletAddress} to group ${action.groupId}`, {
-          actionId: action.id,
-          vault: action.vaultAddress,
-        });
-        return { success: true };
-      }
+    const response = await fetch(`${baseUrl}/keepr/actions/execute`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${secret}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        id: action.id,
+        vaultAddress: action.vaultAddress,
+        groupId: action.groupId,
+        actionType: action.actionType,
+        action: action.action,
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
 
-      case 'remove_member':
-      case 'removeMember': {
-        // XMTP: Remove member from group
-        const walletAddress = (payload as any)?.walletAddress ?? (payload as any)?.address;
-        if (!walletAddress) {
-          return { success: false, error: 'Missing walletAddress in action payload' };
-        }
-        await alertInfo(WORKFLOW_NAME, `Would remove member ${walletAddress} from group ${action.groupId}`, {
-          actionId: action.id,
-          vault: action.vaultAddress,
-        });
-        return { success: true };
-      }
+    const body = (await response.json().catch(() => null)) as
+      | ApiResponse<{
+          executed: boolean;
+          retryable: boolean;
+          actionType: string;
+          error?: string;
+          details?: Record<string, unknown>;
+        }>
+      | null;
 
-      case 'send_message':
-      case 'sendMessage': {
-        // XMTP: Send message to group
-        const message = (payload as any)?.message ?? (payload as any)?.content;
-        if (!message) {
-          return { success: false, error: 'Missing message in action payload' };
-        }
-        await alertInfo(WORKFLOW_NAME, `Would send message to group ${action.groupId}`, {
-          actionId: action.id,
-          vault: action.vaultAddress,
-          messageLength: String(message).length,
-        });
-        return { success: true };
-      }
-
-      case 'sync_members':
-      case 'syncMembers': {
-        // XMTP: Sync group membership
-        await alertInfo(WORKFLOW_NAME, `Would sync members for group ${action.groupId}`, {
-          actionId: action.id,
-          vault: action.vaultAddress,
-        });
-        return { success: true };
-      }
-
-      default: {
-        await alertWarning(WORKFLOW_NAME, `Unknown action type: ${actionType}`, {
-          actionId: action.id,
-          vault: action.vaultAddress,
-        });
-        return { success: false, error: `Unknown action type: ${actionType}` };
-      }
+    if (response.ok && body?.success && body.data?.executed) {
+      return { success: true, retryable: false };
     }
+
+    const errorMessage =
+      body?.error ??
+      body?.data?.error ??
+      `Execution failed: ${response.status} ${response.statusText}`;
+
+    let retryable = Boolean(body?.data?.retryable);
+    if (response.status >= 500) retryable = true;
+    if (response.status >= 400 && response.status < 500) retryable = false;
+
+    return { success: false, retryable, error: errorMessage };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { success: false, error: message };
+    return { success: false, retryable: true, error: message };
   }
 }
 
@@ -250,7 +222,7 @@ export async function executeQueueProcessor(): Promise<QueueExecutorResult> {
       result.actions.push({ id: action.id, actionType: action.actionType, outcome: 'executed' });
     } else {
       // Decide: retry or fail
-      const shouldRetry = action.attemptCount < 4; // Max 5 total attempts (attempt_count is pre-increment)
+      const shouldRetry = execResult.retryable && action.attemptCount < 4; // Max 5 total attempts (attempt_count is pre-increment)
       if (shouldRetry) {
         // Exponential backoff: 60s, 120s, 240s, 480s
         const delay = 60 * Math.pow(2, action.attemptCount);
@@ -284,6 +256,7 @@ export async function executeQueueProcessor(): Promise<QueueExecutorResult> {
           actionType: action.actionType,
           error: execResult.error,
           attempts: action.attemptCount + 1,
+          retryable: execResult.retryable,
         });
       }
     }

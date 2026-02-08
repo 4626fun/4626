@@ -13,11 +13,11 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { Agent, createUser, createSigner } from '@xmtp/agent-sdk'
+import { Agent, SortDirection, createUser, createSigner } from '@xmtp/agent-sdk'
 import type { Address } from 'viem'
 
 import { isDbConfigured, getDb } from '../../../server/_lib/postgres.js'
-import { decryptPrivateKey } from '../../../server/_lib/creatorXmtpAgents.js'
+import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../../server/_lib/creatorXmtpAgents.js'
 import { createPrivyScwSigner } from '../../../server/_lib/privyXmtpSigner.js'
 import { handleKeeprCommand } from '../../../server/keepr/commands.js'
 import { logger } from '../../../server/_lib/logger.js'
@@ -29,13 +29,48 @@ type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 const XMTP_ENV = ((process.env.XMTP_ENV ?? 'production').trim()) as 'production' | 'dev' | 'local'
 const MAX_AGENTS = Number(process.env.MAX_AGENTS ?? '10') // Lower limit for serverless
 const MAX_MESSAGES_PER_AGENT = 20 // Process at most N messages per invocation
+export const MAX_MESSAGES_PER_CONVERSATION = 50
+export const DEFAULT_CHECKPOINT_WINDOW_MS = 120_000
 const EXECUTION_TIMEOUT_MS = 55_000 // Leave 5s buffer for Vercel's 60s limit
 
-// Track last-processed timestamps per agent to avoid reprocessing.
-// This is in-memory so it resets between cold starts, which is acceptable —
-// worst case we re-process messages we already handled (they'll be no-ops
-// since the command handler is idempotent).
-const processedTimestamps = new Map<string, number>()
+const ETHEREUM_IDENTIFIER_KIND = 0
+
+export function getCheckpointMs(lastProcessedAt: unknown, nowMs = Date.now()): number {
+  if (lastProcessedAt) {
+    const parsed = new Date(lastProcessedAt as any).getTime()
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return nowMs - DEFAULT_CHECKPOINT_WINDOW_MS
+}
+
+export function getMessageQueryOptions(lastProcessedMs: number): {
+  sentAfterNs: bigint
+  limit: number
+  direction: SortDirection
+} {
+  const ms = Math.max(0, Math.floor(lastProcessedMs))
+  return {
+    sentAfterNs: BigInt(ms) * 1_000_000n,
+    limit: MAX_MESSAGES_PER_CONVERSATION,
+    direction: SortDirection.Ascending,
+  }
+}
+
+export function getEthereumAddressFromInboxState(state: any): string | null {
+  const identifiers = Array.isArray(state?.identifiers) ? state.identifiers : []
+  for (const id of identifiers) {
+    const kind = id?.identifierKind
+    const identifier = typeof id?.identifier === 'string' ? id.identifier : ''
+    if ((kind === ETHEREUM_IDENTIFIER_KIND || kind === 'Ethereum') && /^0x[a-fA-F0-9]{40}$/.test(identifier)) {
+      return identifier.toLowerCase()
+    }
+  }
+  return null
+}
+
+export function mergeCheckpointMs(previousMs: number, candidateMs: number): number {
+  return Math.max(previousMs, candidateMs)
+}
 
 function isAuthorized(req: VercelRequest): boolean {
   // Vercel Cron sets the Authorization header with the CRON_SECRET
@@ -90,6 +125,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!db) {
       return res.status(503).json({ success: false, error: 'DB connection failed' } satisfies ApiEnvelope<never>)
     }
+    await ensureCreatorXmtpAgentsSchema(db as any)
 
     // Load agents
     const agentRows = await db.sql`
@@ -99,6 +135,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         agent_type,
         privy_wallet_id,
         csw_address,
+        last_processed_message_at,
         encrypted_private_key_b64,
         encrypted_private_key_iv_b64,
         encrypted_private_key_tag_b64
@@ -160,7 +197,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await client.conversations.sync()
         const conversations = await client.conversations.list()
 
-        const lastProcessed = processedTimestamps.get(creatorAddress) ?? (Date.now() - 120_000) // Default: 2 min ago
+        const lastProcessed = getCheckpointMs(row.last_processed_message_at)
         let newestTimestamp = lastProcessed
         let messagesThisAgent = 0
 
@@ -170,8 +207,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           try {
             await convo.sync()
-            // Get recent messages — filter by timestamp below
-            const messages = await convo.messages()
+            // Query only recent messages to bound serverless work.
+            const messages = await convo.messages(getMessageQueryOptions(lastProcessed))
 
             for (const msg of messages) {
               // Only process messages newer than our last checkpoint
@@ -186,9 +223,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               // Resolve sender address
               let senderAddr: string | null = null
               try {
-                const state = await (client as any).getLatestInboxState(msg.senderInboxId)
-                const addrs: string[] = state?.accountAddresses ?? state?.account_addresses ?? []
-                senderAddr = addrs[0] ?? null
+                const states = await client.preferences.fetchInboxStates([msg.senderInboxId])
+                senderAddr = getEthereumAddressFromInboxState(states?.[0])
               } catch {}
 
               if (!senderAddr) continue
@@ -213,7 +249,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               totalProcessed++
               messagesThisAgent++
 
-              if (msgTs > newestTimestamp) newestTimestamp = msgTs
+              newestTimestamp = mergeCheckpointMs(newestTimestamp, msgTs)
             }
           } catch (err) {
             logger.error('[agent/process] Conversation error', {
@@ -224,7 +260,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         }
 
-        processedTimestamps.set(creatorAddress, newestTimestamp)
+        const checkpointToPersist = mergeCheckpointMs(lastProcessed, newestTimestamp)
+        if (checkpointToPersist > lastProcessed) {
+          const newestIso = new Date(checkpointToPersist).toISOString()
+          await db.sql`
+            UPDATE creator_xmtp_agents
+            SET
+              last_processed_message_at = GREATEST(
+                COALESCE(last_processed_message_at, TO_TIMESTAMP(0)),
+                ${newestIso}::timestamptz
+              ),
+              updated_at = NOW()
+            WHERE LOWER(creator_address) = ${creatorAddress};
+          `
+        }
         agentsProcessed++
       } catch (err) {
         logger.error('[agent/process] Agent error', {

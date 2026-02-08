@@ -14,6 +14,10 @@
     "api/agent/process.ts": {
       "maxDuration": 60,
       "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node}"
+    },
+    "api/keepr/actions/execute.ts": {
+      "maxDuration": 60,
+      "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node}"
     }
   },
   "crons": [
@@ -91,6 +95,7 @@
     },
     { "src": "/__api/(.*)", "dest": "/api/$1", "continue": true },
     { "src": "/api/agent/process", "dest": "/api/agent/process" },
+    { "src": "/api/keepr/actions/execute", "dest": "/api/keepr/actions/execute" },
     { "src": "/api/(.*)", "dest": "/api/[...path]" },
     { "handle": "filesystem" },
     { "src": "/((?!assets/).*)", "dest": "/index.html" }

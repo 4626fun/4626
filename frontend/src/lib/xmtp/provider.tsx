@@ -94,7 +94,11 @@ export function useXmtp() {
 const ENC_KEY_MESSAGE =
   'Enable encrypted messaging on CreatorVault (4626.fun)\n\nThis signature encrypts your local message database.\nNo blockchain transaction will occur.'
 
-const XMTP_ENV = (import.meta.env.VITE_XMTP_ENV as string) === 'dev' ? 'dev' : 'production'
+const RAW_XMTP_ENV = String(import.meta.env.VITE_XMTP_ENV ?? '').trim().toLowerCase()
+const XMTP_ENV: 'production' | 'dev' | 'local' =
+  RAW_XMTP_ENV === 'dev' || RAW_XMTP_ENV === 'local' || RAW_XMTP_ENV === 'production'
+    ? (RAW_XMTP_ENV as 'production' | 'dev' | 'local')
+    : 'production'
 
 function hexToBytes(hex: string): Uint8Array {
   const h = hex.startsWith('0x') ? hex.slice(2) : hex
@@ -108,6 +112,18 @@ function hexToBytes(hex: string): Uint8Array {
 function truncateAddress(addr: string): string {
   if (addr.length <= 10) return addr
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
+}
+
+function getEthereumAddressFromInboxState(state: any): string | null {
+  const identifiers = Array.isArray(state?.identifiers) ? state.identifiers : []
+  for (const id of identifiers) {
+    const kind = id?.identifierKind
+    const identifier = typeof id?.identifier === 'string' ? id.identifier : ''
+    if ((kind === IdentifierKind.Ethereum || kind === 0 || kind === 'Ethereum') && /^0x[a-fA-F0-9]{40}$/.test(identifier)) {
+      return identifier.toLowerCase()
+    }
+  }
+  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -153,6 +169,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const perConvoStreamsRef = useRef<Map<string, AsyncStreamProxy<any>>>(new Map())
   const perConvoCbRef = useRef<Map<string, Set<(msg: ChatMessage) => void>>>(new Map())
   const inboxAddressCache = useRef<Map<string, string | null>>(new Map())
+  const conversationsRef = useRef<ChatConversation[]>([])
   const mountedRef = useRef(true)
 
   // Cleanup on unmount
@@ -171,6 +188,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       setStatus('idle')
       setError(null)
       setConversations([])
+      conversationsRef.current = []
       setInboxId(null)
     }
   }, [isConnected, address])
@@ -184,8 +202,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     }
     perConvoStreamsRef.current.clear()
     perConvoCbRef.current.clear()
-    try { clientRef.current?.close() } catch {}
-    clientRef.current = null
+      try { clientRef.current?.close() } catch {}
+      clientRef.current = null
+      conversationsRef.current = []
   }
 
   // ------- build conversation summary -------
@@ -303,6 +322,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       const convos = await client.conversations.list()
       const summaries = await Promise.all(convos.map(buildConvoSummary))
       summaries.sort((a, b) => (b.lastMessageAt?.getTime() ?? 0) - (a.lastMessageAt?.getTime() ?? 0))
+      conversationsRef.current = summaries
       if (mountedRef.current) setConversations(summaries)
 
       // Stream new conversations
@@ -312,7 +332,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           const summary = await buildConvoSummary(convo as any)
           setConversations((prev) => {
             if (prev.find((c) => c.id === summary.id)) return prev
-            return [summary, ...prev]
+            const next = [summary, ...prev]
+            conversationsRef.current = next
+            return next
           })
         },
       })
@@ -327,7 +349,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
           // Browser notification for background messages
           if (!chatMsg.isSelf) {
-            const convoName = conversations.find((c) => c.id === convoId)?.name ?? 'New message'
+            const convoName = conversationsRef.current.find((c) => c.id === convoId)?.name ?? 'New message'
             showNotification(convoName, chatMsg.content)
           }
 
@@ -343,7 +365,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
             if (!chatMsg.isSelf) updated.unreadCount += 1
             const next = [...prev]
             next.splice(idx, 1)
-            return [updated, ...next]
+            const reordered = [updated, ...next]
+            conversationsRef.current = reordered
+            return reordered
           })
 
           // Notify per-conversation subscribers
@@ -374,6 +398,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     setStatus('idle')
     setError(null)
     setConversations([])
+    conversationsRef.current = []
     setInboxId(null)
   }, [])
 
@@ -433,7 +458,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       const summary = await buildConvoSummary(dm as any)
       setConversations((prev) => {
         if (prev.find((c) => c.id === summary.id)) return prev
-        return [summary, ...prev]
+        const next = [summary, ...prev]
+        conversationsRef.current = next
+        return next
       })
       return dm.id
     } catch (e) {
@@ -451,9 +478,11 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       perConvoCbRef.current.get(conversationId)!.add(cb)
 
       // Clear unread when subscribing
-      setConversations((prev) =>
-        prev.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c)),
-      )
+      setConversations((prev) => {
+        const next = prev.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c))
+        conversationsRef.current = next
+        return next
+      })
 
       return () => {
         perConvoCbRef.current.get(conversationId)?.delete(cb)
@@ -469,9 +498,8 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     const client = clientRef.current
     if (!client) return null
     try {
-      const state = await (client as any).getLatestInboxState(targetInboxId)
-      const addrs: string[] = state?.accountAddresses ?? state?.account_addresses ?? []
-      const addr = addrs.length > 0 ? addrs[0] : null
+      const states = await client.preferences.fetchInboxStates([targetInboxId])
+      const addr = getEthereumAddressFromInboxState(states?.[0])
       inboxAddressCache.current.set(targetInboxId, addr)
       return addr
     } catch {

@@ -8,6 +8,7 @@
  */
 
 import type { Plugin, IAgentRuntime, Memory, Content, UUID } from '@elizaos/core'
+import { createHash, randomUUID } from 'node:crypto'
 import { XmtpService } from './service.js'
 import type { XmtpConfig, XmtpMessage } from './service.js'
 
@@ -19,24 +20,16 @@ export type { XmtpConfig, XmtpMessage } from './service.js'
 // ---------------------------------------------------------------------------
 
 function generateUUID(): UUID {
-  return crypto.randomUUID() as UUID
+  return randomUUID() as UUID
 }
 
 function xmtpRoomId(conversationId: string): UUID {
-  // Deterministic room ID from XMTP conversation ID
-  // Use a simple hash-to-UUID approach
-  const hash = simpleHash(conversationId)
-  return formatAsUUID(hash)
+  // Deterministic room ID from XMTP conversation ID (SHA-256 based).
+  return formatAsUUID(sha256Hex32(conversationId))
 }
 
-function simpleHash(input: string): string {
-  let h = 0
-  for (let i = 0; i < input.length; i++) {
-    h = ((h << 5) - h + input.charCodeAt(i)) | 0
-  }
-  // Pad to 32 hex chars
-  const hex = Math.abs(h).toString(16).padStart(8, '0')
-  return (hex + hex + hex + hex).slice(0, 32)
+function sha256Hex32(input: string): string {
+  return createHash('sha256').update(input, 'utf8').digest('hex').slice(0, 32)
 }
 
 function formatAsUUID(hex32: string): UUID {
@@ -84,7 +77,7 @@ export const xmtpPlugin: Plugin = {
       try {
         const roomId = xmtpRoomId(msg.conversationId)
         const entityId = msg.senderAddress
-          ? formatAsUUID(simpleHash(msg.senderAddress))
+          ? formatAsUUID(sha256Hex32(msg.senderAddress))
           : generateUUID()
 
         // Create a Memory object from the XMTP message

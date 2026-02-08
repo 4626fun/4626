@@ -27,6 +27,56 @@ function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
+async function markJoinRequestQueued(params: {
+  vaultAddress: `0x${string}`
+  groupId: string
+  wallet: `0x${string}`
+  actionId: number
+  reason: string
+}) {
+  try {
+    const db = await getDb()
+    if (!db) return
+    await ensureKeeprSchema()
+
+    await db.sql`
+      UPDATE keepr_join_requests
+      SET
+        status = 'queued',
+        group_id = ${params.groupId},
+        action_id = ${params.actionId},
+        last_reason = ${params.reason},
+        last_checked_at = NOW(),
+        next_check_at = NULL,
+        updated_at = NOW()
+      WHERE vault_address = ${String(params.vaultAddress).toLowerCase()}
+        AND wallet_address = ${params.wallet}
+        AND status IN ('watching', 'failed', 'cancelled', 'queued');
+    `
+    await db.sql`
+      INSERT INTO keepr_join_requests (vault_address, group_id, wallet_address, status, last_reason, last_checked_at, next_check_at, action_id, updated_at)
+      SELECT
+        ${String(params.vaultAddress).toLowerCase()},
+        ${params.groupId},
+        ${params.wallet},
+        ${'queued'},
+        ${params.reason},
+        NOW(),
+        NULL,
+        ${params.actionId},
+        NOW()
+      WHERE NOT EXISTS (
+        SELECT 1 FROM keepr_join_requests
+        WHERE vault_address = ${String(params.vaultAddress).toLowerCase()}
+          AND wallet_address = ${params.wallet}
+          AND status IN ('queued', 'added')
+      );
+    `
+  } catch {
+    // best effort
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -105,6 +155,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const dedupeKey = `join:add_member:${vaultAddress}:${vault.groupId}:${wallet}`
     const { id } = await enqueueKeeprAction({ vaultAddress, groupId: vault.groupId, action, actionType: 'xmtp.group.add_member', dedupeKey })
+    await markJoinRequestQueued({
+      vaultAddress,
+      groupId: vault.groupId,
+      wallet,
+      actionId: id,
+      reason: 'gating_disabled',
+    })
     return res.status(200).json({
       success: true,
       data: { eligible: true, reason: 'eligible', action, actionId: id, actionStatus: 'queued' } satisfies JoinResponse,
@@ -246,6 +303,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const dedupeKey = `join:add_member:${vaultAddress}:${vault.groupId}:${wallet}`
   const { id } = await enqueueKeeprAction({ vaultAddress, groupId: vault.groupId, action, actionType: 'xmtp.group.add_member', dedupeKey })
+  await markJoinRequestQueued({
+    vaultAddress,
+    groupId: vault.groupId,
+    wallet,
+    actionId: id,
+    reason: String(eligibility.reason),
+  })
 
   return res.status(200).json({
     success: true,
@@ -259,4 +323,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies JoinResponse,
   } satisfies ApiEnvelope<JoinResponse>)
 }
-

@@ -23,6 +23,59 @@ type UpdateResponse = {
 const VALID_STATUSES = new Set(['executing', 'executed', 'failed', 'retry'])
 const MAX_ATTEMPTS = 5
 
+async function syncJoinRequestStatus(params: {
+  db: Awaited<ReturnType<typeof getDb>>
+  actionId: number
+  status: 'executed' | 'failed' | 'retry'
+  errorMessage: string | null
+  retryDelaySeconds: number
+}) {
+  const { db, actionId, status, errorMessage, retryDelaySeconds } = params
+  if (!db) return
+
+  if (status === 'executed') {
+    await db.sql`
+      UPDATE keepr_join_requests
+      SET
+        status = 'added',
+        last_reason = ${'executed'},
+        last_checked_at = NOW(),
+        next_check_at = NULL,
+        updated_at = NOW()
+      WHERE action_id = ${actionId}
+        AND status IN ('watching', 'queued', 'failed');
+    `
+    return
+  }
+
+  if (status === 'failed') {
+    await db.sql`
+      UPDATE keepr_join_requests
+      SET
+        status = 'failed',
+        last_reason = COALESCE(${errorMessage}, last_reason, ${'action_failed'}),
+        last_checked_at = NOW(),
+        next_check_at = NULL,
+        updated_at = NOW()
+      WHERE action_id = ${actionId}
+        AND status IN ('watching', 'queued', 'failed');
+    `
+    return
+  }
+
+  await db.sql`
+    UPDATE keepr_join_requests
+    SET
+      status = 'queued',
+      last_reason = COALESCE(${errorMessage}, last_reason, ${'action_retry'}),
+      last_checked_at = NOW(),
+      next_check_at = NOW() + (${retryDelaySeconds} || ' seconds')::interval,
+      updated_at = NOW()
+    WHERE action_id = ${actionId}
+      AND status IN ('watching', 'queued', 'failed');
+  `
+}
+
 /**
  * POST /api/keepr/actions/updateStatus
  *
@@ -111,6 +164,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         RETURNING id;
       `
       const updated = (result.rows?.length ?? 0) > 0
+      if (updated) {
+        await syncJoinRequestStatus({
+          db,
+          actionId: id,
+          status: 'executed',
+          errorMessage,
+          retryDelaySeconds: retryDelay,
+        })
+      }
       return res.status(200).json({
         success: true,
         data: { id, status, updated },
@@ -129,6 +191,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         RETURNING id;
       `
       const updated = (result.rows?.length ?? 0) > 0
+      if (updated) {
+        await syncJoinRequestStatus({
+          db,
+          actionId: id,
+          status: 'failed',
+          errorMessage,
+          retryDelaySeconds: retryDelay,
+        })
+      }
       return res.status(200).json({
         success: true,
         data: { id, status, updated },
@@ -171,6 +242,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         RETURNING id;
       `
       const updated = (result.rows?.length ?? 0) > 0
+      if (updated) {
+        await syncJoinRequestStatus({
+          db,
+          actionId: id,
+          status: 'retry',
+          errorMessage,
+          retryDelaySeconds: retryDelay,
+        })
+      }
       return res.status(200).json({
         success: true,
         data: { id, status, updated },

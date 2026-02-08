@@ -43,7 +43,7 @@ export function decryptPrivateKey(params: { ciphertextB64: string; ivB64: string
   return plaintext as `0x${string}`
 }
 
-async function ensureSchema(db: Db): Promise<void> {
+export async function ensureCreatorXmtpAgentsSchema(db: Db): Promise<void> {
   if (schemaEnsured) return
   schemaEnsured = true
   await db.sql`
@@ -66,6 +66,7 @@ async function ensureSchema(db: Db): Promise<void> {
     await db.sql`ALTER TABLE creator_xmtp_agents ADD COLUMN IF NOT EXISTS agent_type TEXT NOT NULL DEFAULT 'eoa';`
     await db.sql`ALTER TABLE creator_xmtp_agents ADD COLUMN IF NOT EXISTS privy_wallet_id TEXT;`
     await db.sql`ALTER TABLE creator_xmtp_agents ADD COLUMN IF NOT EXISTS csw_address TEXT;`
+    await db.sql`ALTER TABLE creator_xmtp_agents ADD COLUMN IF NOT EXISTS last_processed_message_at TIMESTAMPTZ;`
   } catch {
     // Columns may already exist
   }
@@ -109,7 +110,7 @@ export async function getOrCreateCreatorXmtpAgent(params: {
   if (!isDbConfigured()) throw new Error('db_not_configured')
   const db = (await getDb()) as unknown as Db | null
   if (!db) throw new Error('db_not_configured')
-  await ensureSchema(db)
+  await ensureCreatorXmtpAgentsSchema(db)
 
   const creator = getAddress(params.creatorAddress).toLowerCase()
   const listed = typeof params.listedPublicly === 'boolean' ? params.listedPublicly : true
@@ -203,7 +204,7 @@ export async function enableCswAgent(params: {
   if (!isDbConfigured()) throw new Error('db_not_configured')
   const db = (await getDb()) as unknown as Db | null
   if (!db) throw new Error('db_not_configured')
-  await ensureSchema(db)
+  await ensureCreatorXmtpAgentsSchema(db)
 
   const creator = getAddress(params.creatorAddress).toLowerCase()
   const cswAddr = getAddress(params.cswAddress).toLowerCase()
@@ -271,7 +272,7 @@ export async function listCreatorXmtpAgents(params: {
   if (!isDbConfigured()) throw new Error('db_not_configured')
   const db = (await getDb()) as unknown as Db | null
   if (!db) throw new Error('db_not_configured')
-  await ensureSchema(db)
+  await ensureCreatorXmtpAgentsSchema(db)
 
   const limit = Math.max(1, Math.min(200, Math.floor(params.limit)))
   const listedOnly = params.listedOnly ?? true
@@ -311,4 +312,3 @@ export async function listCreatorXmtpAgents(params: {
   const nextCursor = last ? { createdAt: last.createdAt, creatorAddress: last.creatorAddress } : null
   return { rows: out, nextCursor }
 }
-

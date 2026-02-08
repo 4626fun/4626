@@ -16,7 +16,7 @@ import type { MessageContext } from '@xmtp/agent-sdk'
 import type { Address } from 'viem'
 
 import { getDb, isDbConfigured } from '../_lib/postgres.js'
-import { decryptPrivateKey } from '../_lib/creatorXmtpAgents.js'
+import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../_lib/creatorXmtpAgents.js'
 import { createPrivyScwSigner } from '../_lib/privyXmtpSigner.js'
 import { handleKeeprCommand } from '../keepr/commands.js'
 import { logger } from '../_lib/logger.js'
@@ -60,6 +60,7 @@ async function loadAgentRows(): Promise<AgentRow[]> {
   if (!isDbConfigured()) throw new Error('Database not configured')
   const db = await getDb()
   if (!db) throw new Error('Database connection failed')
+  await ensureCreatorXmtpAgentsSchema(db as any)
 
   const res = await db.sql`
     SELECT

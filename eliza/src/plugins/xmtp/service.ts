@@ -9,6 +9,20 @@ import { Agent, createUser, createSigner, filter } from '@xmtp/agent-sdk'
 import type { MessageContext, ConversationContext } from '@xmtp/agent-sdk'
 import type { Plugin } from '@elizaos/core'
 
+const ETHEREUM_IDENTIFIER_KIND = 0
+
+function getEthereumAddressFromInboxState(state: any): string | null {
+  const identifiers = Array.isArray(state?.identifiers) ? state.identifiers : []
+  for (const id of identifiers) {
+    const kind = id?.identifierKind
+    const identifier = typeof id?.identifier === 'string' ? id.identifier : ''
+    if ((kind === ETHEREUM_IDENTIFIER_KIND || kind === 'Ethereum') && /^0x[a-fA-F0-9]{40}$/.test(identifier)) {
+      return identifier.toLowerCase()
+    }
+  }
+  return null
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -123,9 +137,8 @@ export class XmtpService {
     if (!this.agent) return null
     try {
       const client = this.agent.client
-      const state = await (client as any).getLatestInboxState(inboxId)
-      const addrs: string[] = state?.accountAddresses ?? state?.account_addresses ?? []
-      return addrs[0] ?? null
+      const states = await client.preferences.fetchInboxStates([inboxId])
+      return getEthereumAddressFromInboxState(states?.[0])
     } catch {
       return null
     }
