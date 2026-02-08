@@ -74,7 +74,7 @@ const ROUTE_REQUIREMENTS: Record<RouteId, { session?: boolean; accepted?: boolea
 function resolveAccess(routeId: RouteId, state: AccessState): AccessDecision {
   if (state.loading) return { allow: false, reason: 'loading' }
   const req = ROUTE_REQUIREMENTS[routeId]
-  if (req.session && (!state.walletConnected || !state.sessionValid)) {
+  if (req.session && !state.sessionValid) {
     return { allow: false, reason: 'needs-session', redirectTo: withReason('/', 'needs-session') }
   }
   if (req.accepted && !state.accepted) {
@@ -123,7 +123,9 @@ function useResolvedAccessState(): AccessState {
     const raw = typeof siwe.authAddress === 'string' ? siwe.authAddress : ''
     return isValidEvmAddress(raw) ? raw.toLowerCase() : null
   }, [siwe.authAddress])
-  const effectiveAddress = connectedAddress ?? siweAuthAddress
+  // Once a session is established, treat the authenticated address as the source of truth.
+  // This avoids gating on a transient/secondary connected wallet address.
+  const effectiveAddress = siwe.isSignedIn && siweAuthAddress ? siweAuthAddress : connectedAddress ?? siweAuthAddress
   const isBypassAdmin = effectiveAddress ? ADMIN_BYPASS_ADDRESSES.has(effectiveAddress) : false
 
   const allowlistModeQuery = useQuery({
