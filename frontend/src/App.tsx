@@ -1,9 +1,10 @@
-import { lazy, useEffect, useMemo } from 'react'
-import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
+import { createContext, lazy, useContext, useEffect, useMemo, type ReactNode } from 'react'
+import { Routes, Route, Navigate, Outlet, useLocation, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { useAccount, useConnect } from 'wagmi'
+import { useAccount } from 'wagmi'
 import { useCreatorAllowlist } from '@/hooks'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { apiFetch } from '@/lib/apiBase'
 import { AdminLayout } from './components/AdminLayout'
 import { Layout } from './components/Layout'
@@ -24,8 +25,68 @@ type CreatorAllowlistStatus = {
   allowed: boolean
 }
 
+type RouteId = 'public' | 'session' | 'accepted' | 'creator' | 'admin'
+type AccessReason = 'ok' | 'loading' | 'needs-session' | 'needs-acceptance' | 'needs-admin' | 'needs-creator' | 'not-found'
+type AccessDecision = { allow: true; reason: 'ok' } | { allow: false; reason: Exclude<AccessReason, 'ok'>; redirectTo?: string }
+
+type AccessState = {
+  loading: boolean
+  walletConnected: boolean
+  sessionValid: boolean
+  accepted: boolean
+  creator: boolean
+  admin: boolean
+  allowlistEnforced: boolean
+  effectiveAddress: string | null
+  marketingUrl: string
+}
+
 function isValidEvmAddress(v: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(v)
+}
+
+function withReason(to: string, reason: AccessReason | 'legacy-route' | 'host-redirect' | 'external-redirect' | 'invalid-params'): string {
+  try {
+    const hashIdx = to.indexOf('#')
+    const hash = hashIdx >= 0 ? to.slice(hashIdx) : ''
+    const noHash = hashIdx >= 0 ? to.slice(0, hashIdx) : to
+
+    const qIdx = noHash.indexOf('?')
+    const path = qIdx >= 0 ? noHash.slice(0, qIdx) : noHash
+    const query = qIdx >= 0 ? noHash.slice(qIdx + 1) : ''
+    const qs = new URLSearchParams(query)
+    if (!qs.has('reason')) qs.set('reason', reason)
+    const nextQuery = qs.toString()
+    return `${path}${nextQuery ? `?${nextQuery}` : ''}${hash}`
+  } catch {
+    return to
+  }
+}
+
+const ROUTE_REQUIREMENTS: Record<RouteId, { session?: boolean; accepted?: boolean; creator?: boolean; admin?: boolean }> = {
+  public: {},
+  session: { session: true },
+  accepted: { session: true, accepted: true },
+  creator: { session: true, accepted: true, creator: true },
+  admin: { session: true, admin: true },
+}
+
+function resolveAccess(routeId: RouteId, state: AccessState): AccessDecision {
+  if (state.loading) return { allow: false, reason: 'loading' }
+  const req = ROUTE_REQUIREMENTS[routeId]
+  if (req.session && (!state.walletConnected || !state.sessionValid)) {
+    return { allow: false, reason: 'needs-session', redirectTo: withReason('/', 'needs-session') }
+  }
+  if (req.accepted && !state.accepted) {
+    return { allow: false, reason: 'needs-acceptance', redirectTo: withReason('/waitlist', 'needs-acceptance') }
+  }
+  if (req.creator && !state.creator) {
+    return { allow: false, reason: 'needs-creator', redirectTo: withReason('/deploy', 'needs-creator') }
+  }
+  if (req.admin && !state.admin) {
+    return { allow: false, reason: 'needs-admin', redirectTo: withReason('/', 'needs-admin') }
+  }
+  return { allow: true, reason: 'ok' }
 }
 
 function buildAdminBypassSet(): Set<string> {
@@ -48,79 +109,23 @@ function getMarketingBaseUrl(): string {
   return `https://${host}`
 }
 
-function AppAccessGate(props: { variant: 'signin' | 'denied'; marketingUrl: string; debugAddress: string | null }) {
-  const { connectAsync, connectors, error: connectError, isPending } = useConnect()
-  const walletConnectConnector = useMemo(() => {
-    return connectors.find((c) => c.id === 'walletConnect' || c.name?.toLowerCase().includes('walletconnect'))
-  }, [connectors])
-  const coinbaseSmartWalletConnector = useMemo(() => {
-    return connectors.find((c) => c.id === 'coinbaseSmartWallet' || c.name?.toLowerCase().includes('coinbase smart wallet'))
-  }, [connectors])
-  const primaryConnector = walletConnectConnector ?? coinbaseSmartWalletConnector ?? connectors[0] ?? null
+function useResolvedAccessState(): AccessState {
+  const { address: connectedAddressRaw, isConnected } = useAccount()
+  const siwe = useSiweAuth()
+  const adminStatus = useAdminStatus()
 
-  return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="max-w-3xl mx-auto px-6 py-16">
-        <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500 mb-4">CreatorVaults</div>
-        <div className="card rounded-xl p-8 space-y-4">
-          {props.variant === 'signin' ? (
-            <>
-              <div className="text-lg font-medium">Connect wallet to continue</div>
-              <div className="text-sm text-zinc-400 leading-relaxed">
-                You’re on the app domain. Connect a wallet (Zora / Base Account / EOA) to check access.
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="text-lg font-medium">Access not enabled yet</div>
-              <div className="text-sm text-zinc-400 leading-relaxed">
-                This wallet isn’t allowlisted for the full app yet. You can join the waitlist, or connect a different wallet.
-              </div>
-            </>
-          )}
-
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3">
-              <button
-                type="button"
-                className="btn-accent"
-                disabled={isPending || !primaryConnector}
-                onClick={() => {
-                  if (!primaryConnector) return
-                  void connectAsync({ connector: primaryConnector })
-                }}
-                title={primaryConnector ? `Connect with ${primaryConnector.name}` : 'No wallet connector available'}
-              >
-                {isPending ? 'Connecting…' : 'Connect wallet'}
-              </button>
-            </div>
-            {!walletConnectConnector && primaryConnector ? (
-              <div className="text-xs text-amber-300/80">WalletConnect unavailable. Using {primaryConnector.name}.</div>
-            ) : null}
-            {connectError ? <div className="text-xs text-red-400">{connectError.message}</div> : null}
-            {props.debugAddress ? <div className="text-[11px] text-zinc-600 font-mono">wallet: {props.debugAddress}</div> : null}
-          </div>
-
-          <div className="flex items-center gap-3">
-            <a className="btn-accent inline-flex w-fit" href={props.marketingUrl}>
-              Join the waitlist
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
+  const connectedAddress = useMemo(
+    () =>
+      typeof connectedAddressRaw === 'string' && connectedAddressRaw.startsWith('0x') ? connectedAddressRaw.toLowerCase() : null,
+    [connectedAddressRaw],
   )
-}
+  const siweAuthAddress = useMemo(() => {
+    const raw = typeof siwe.authAddress === 'string' ? siwe.authAddress : ''
+    return isValidEvmAddress(raw) ? raw.toLowerCase() : null
+  }, [siwe.authAddress])
+  const effectiveAddress = connectedAddress ?? siweAuthAddress
+  const isBypassAdmin = effectiveAddress ? ADMIN_BYPASS_ADDRESSES.has(effectiveAddress) : false
 
-function AppAllowlistGate() {
-  return <AppAllowlistGatePrivyEnabled />
-}
-
-function AppAllowlistGatePrivyEnabled() {
-  const location = useLocation()
-  const { address: connectedAddressRaw } = useAccount()
-
-  // Detect whether allowlist gating is even enabled server-side.
   const allowlistModeQuery = useQuery({
     queryKey: ['creatorAllowlist', 'mode'],
     queryFn: async (): Promise<CreatorAllowlistStatus> => {
@@ -134,74 +139,79 @@ function AppAllowlistGatePrivyEnabled() {
     retry: 0,
   })
 
-  const connectedAddress = useMemo(
-    () =>
-      typeof connectedAddressRaw === 'string' && connectedAddressRaw.startsWith('0x') ? connectedAddressRaw.toLowerCase() : null,
-    [connectedAddressRaw],
-  )
-  const siwe = useSiweAuth()
-  const siweAuthAddress = useMemo(() => {
-    const raw = typeof siwe.authAddress === 'string' ? siwe.authAddress : ''
-    return isValidEvmAddress(raw) ? raw.toLowerCase() : null
-  }, [siwe.authAddress])
-  const effectiveAddress = connectedAddress ?? siweAuthAddress
-  // Allow specific operator addresses to access the full app even while allowlist is enforced.
-  // (Not just /admin/* routes.)
-  const isBypassAdmin = effectiveAddress ? ADMIN_BYPASS_ADDRESSES.has(effectiveAddress) : false
-  const allowQuery = useCreatorAllowlist(isBypassAdmin ? null : effectiveAddress)
-  const allowed = allowQuery.data?.allowed === true
-  const isPublicWaitlistRoute = location.pathname === '/waitlist' || location.pathname === '/leaderboard'
-  const isMiniappRoute = location.pathname === '/miniapp' || location.pathname.startsWith('/miniapp/')
-  const isAdminRoute = location.pathname === '/admin' || location.pathname.startsWith('/admin/') || isMiniappRoute
-  const marketingUrl = getMarketingBaseUrl()
-  const isLocalDev =
-    typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1' ||
-      window.location.hostname === '0.0.0.0') &&
-    import.meta.env.DEV
-
-  const allowlistMode = allowlistModeQuery.data?.mode
+  const allowlistMode = allowlistModeQuery.data?.mode ?? 'disabled'
   const allowlistEnforced = allowlistMode === 'enforced'
+  const allowQuery = useCreatorAllowlist(isBypassAdmin ? null : effectiveAddress)
+  const allowlisted = allowQuery.data?.allowed === true
+  const accepted = !allowlistEnforced || isBypassAdmin || allowlisted
 
-  if (isPublicWaitlistRoute) {
-    // In production, the marketing domain owns the waitlist/leaderboard.
-    // In local dev, keep these routes in-app so you can iterate on the UI.
-    if (isLocalDev) return <Outlet />
-    return <ExternalRedirect to={marketingUrl} />
+  const loading =
+    siwe.busy ||
+    allowlistModeQuery.isLoading ||
+    (allowlistEnforced && !isBypassAdmin && !!effectiveAddress && allowQuery.isLoading) ||
+    (siwe.isSignedIn && adminStatus.isLoading)
+
+  return {
+    loading,
+    walletConnected: isConnected,
+    sessionValid: siwe.isSignedIn,
+    accepted,
+    creator: accepted,
+    admin: adminStatus.isAdmin || isBypassAdmin,
+    allowlistEnforced,
+    effectiveAddress,
+    marketingUrl: getMarketingBaseUrl(),
   }
+}
 
-  // Always allow admin/miniapp routes to render, even if allowlist checks fail.
-  if (isAdminRoute) {
-    return <Outlet />
+const AccessContext = createContext<AccessState | null>(null)
+
+function useAccessContext(): AccessState {
+  const value = useContext(AccessContext)
+  if (!value) {
+    throw new Error('AccessContext is not available')
   }
+  return value
+}
 
-  if (allowlistModeQuery.isError) return <ExternalRedirect to={marketingUrl} />
+function AccessStateProvider(props: { children: ReactNode }) {
+  const value = useResolvedAccessState()
+  return <AccessContext.Provider value={value}>{props.children}</AccessContext.Provider>
+}
 
-  // If allowlist is not enforced (e.g. local dev / no DB / no env allowlist), don't gate.
-  if (!allowlistEnforced) return <Outlet />
+function GuardPending() {
+  return (
+    <div className="min-h-screen bg-black text-white">
+      <div className="max-w-3xl mx-auto px-6 py-16">
+        <div className="card rounded-xl p-8 space-y-3">
+          <div className="text-lg font-medium">Loading access state…</div>
+          <div className="text-sm text-zinc-400">Resolving wallet/session permissions.</div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
-  // Allow bypass admins into the app even before SIWE is established.
-  // (Admin API routes will still require SIWE; this only prevents a client-side redirect loop.)
-  if (isBypassAdmin) {
-    return <Outlet />
+function RequireRouteAccess(props: { routeId: RouteId; children?: React.ReactNode }) {
+  const access = useAccessContext()
+  const decision = resolveAccess(props.routeId, access)
+  if (!decision.allow) {
+    if (decision.reason === 'loading') return <GuardPending />
+    return <Navigate to={decision.redirectTo ?? withReason('/', decision.reason)} replace />
   }
+  return props.children ? <>{props.children}</> : <Outlet />
+}
 
-  const debugAddress = effectiveAddress
+function RequireSession(props: { children?: React.ReactNode }) {
+  return <RequireRouteAccess routeId="session">{props.children}</RequireRouteAccess>
+}
 
-  if (!effectiveAddress) {
-    return <AppAccessGate variant="signin" marketingUrl={marketingUrl} debugAddress={debugAddress} />
-  }
+function RequireAccepted(props: { children?: React.ReactNode }) {
+  return <RequireRouteAccess routeId="accepted">{props.children}</RequireRouteAccess>
+}
 
-  if (allowQuery.isLoading) {
-    return <AppAccessGate variant="signin" marketingUrl={marketingUrl} debugAddress={debugAddress} />
-  }
-
-  if (!allowed && !isBypassAdmin) {
-    return <ExternalRedirect to={marketingUrl} />
-  }
-
-  return <Outlet />
+function RequireAdmin(props: { children?: React.ReactNode }) {
+  return <RequireRouteAccess routeId="admin">{props.children}</RequireRouteAccess>
 }
 
 const Vault = lazy(async () => {
@@ -363,16 +373,71 @@ const Portfolio = lazy(async () => {
   return { default: m.Portfolio }
 })
 
-function ExternalRedirect({ to }: { to: string }) {
-  if (typeof window !== 'undefined') window.location.replace(to)
+function ExternalRedirect({ to, reason = 'external-redirect' }: { to: string; reason?: 'external-redirect' | 'host-redirect' }) {
+  const target = withReason(to, reason)
+  if (typeof window !== 'undefined') window.location.replace(target)
   return null
 }
 
 function AppRedirect({ base }: { base: string }) {
   const location = useLocation()
-  const target = `${base}${location.pathname}${location.search}${location.hash}`
+  const target = withReason(`${base}${location.pathname}${location.search}${location.hash}`, 'host-redirect')
   if (typeof window !== 'undefined') window.location.replace(target)
   return null
+}
+
+function NotFoundPage() {
+  const location = useLocation()
+  const access = useAccessContext()
+  const hostMode = getHostMode()
+  const appBase = getAppBaseUrl()
+
+  const appCta = useMemo(() => {
+    if (!access.sessionValid) {
+      return { href: withReason('/', 'needs-session'), label: 'Connect And Sign In', hint: 'Connect wallet and establish a session.' }
+    }
+    if (!access.accepted) {
+      return { href: withReason('/waitlist', 'needs-acceptance'), label: 'Join Waitlist', hint: 'This route requires accepted app access.' }
+    }
+    return { href: withReason('/explore/creators', 'not-found'), label: 'Go To Explore', hint: 'Your session is valid. Continue to the canonical landing route.' }
+  }, [access.accepted, access.sessionValid])
+
+  return (
+    <div className="min-h-screen bg-black text-white">
+      <div className="max-w-3xl mx-auto px-6 py-16">
+        <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500 mb-4">CreatorVaults</div>
+        <div className="card rounded-xl p-8 space-y-4">
+          <div className="text-xl font-medium">Route Not Found</div>
+          <div className="text-sm text-zinc-400">No page matches <span className="font-mono text-zinc-300">{location.pathname}</span>.</div>
+          {hostMode === 'marketing' ? (
+            <div className="space-y-3">
+              <div className="text-xs text-zinc-500">You are on the marketing domain.</div>
+              <div className="flex flex-wrap gap-3">
+                <a className="btn-accent inline-flex" href={withReason('/#waitlist', 'not-found')}>
+                  Go To Waitlist
+                </a>
+                <a className="btn-primary inline-flex" href={withReason(`${appBase}/`, 'not-found')}>
+                  Open App Home
+                </a>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="text-xs text-zinc-500">{appCta.hint}</div>
+              <div className="flex flex-wrap gap-3">
+                <Link className="btn-accent inline-flex" to={appCta.href}>
+                  {appCta.label}
+                </Link>
+                <a className="btn-primary inline-flex" href={withReason(access.marketingUrl, 'not-found')}>
+                  Open Marketing Site
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function App() {
@@ -403,20 +468,16 @@ function App() {
   }, [])
 
   return (
-    <>
-      {/* Noise texture overlay */}
-      <div className="noise-overlay" />
-
+    <AccessStateProvider>
       <Routes>
         {hostMode === 'marketing' ? (
           <Route element={<MarketingLayout />}>
             <Route path="/" element={<WaitlistLanding />} />
-            {/* Back-compat */}
-            <Route path="/waitlist" element={<Navigate to="/" replace />} />
+            <Route path="/404" element={<NotFoundPage />} />
+            <Route path="/waitlist" element={<Navigate to={withReason('/', 'legacy-route')} replace />} />
             <Route path="/portfolio" element={<WaitlistProfile />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
 
-            {/* If someone hits an app route on the marketing domain, push them to app.* */}
             <Route path="/explore/*" element={<ExternalRedirect to={`${appBase}/explore`} />} />
             <Route path="/deploy" element={<ExternalRedirect to={`${appBase}/deploy`} />} />
             <Route path="/dashboard" element={<ExternalRedirect to={`${appBase}/explore`} />} />
@@ -425,97 +486,95 @@ function App() {
             <Route path="/creator/*" element={<ExternalRedirect to={`${appBase}/creator`} />} />
             <Route path="/admin/*" element={<AppRedirect base={appBase} />} />
             <Route path="/miniapp" element={<AppRedirect base={appBase} />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
-        ) : (
-          <>
-            {publicMode ? (
-              <Route element={<Layout />}>
-                {/* App host */}
-                {/* Keep Home on "/" so "/#waitlist" works reliably. */}
-                <Route path="/" element={<Home />} />
-                <Route path="/home" element={<Navigate to="/" replace />} />
-                {/* Back-compat: preserve /waitlist URLs */}
-                <Route path="/waitlist" element={<Waitlist />} />
+        ) : publicMode ? (
+          <Route element={<Layout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/404" element={<NotFoundPage />} />
+            <Route path="/home" element={<Navigate to={withReason('/', 'legacy-route')} replace />} />
+            <Route path="/waitlist" element={<Waitlist />} />
 
-                {/* Admin routes must remain reachable even in public mode (auth is enforced server-side). */}
+            <Route element={<RequireSession />}>
+              <Route element={<RequireAdmin />}>
                 <Route path="/admin" element={<AdminLayout />}>
-                  <Route index element={<Navigate to="/admin/waitlist" replace />} />
+                  <Route index element={<Navigate to={withReason('/admin/waitlist', 'legacy-route')} replace />} />
                   <Route path="creator-access" element={<AdminCreatorAccess />} />
                   <Route path="waitlist" element={<AdminWaitlist />} />
                   <Route path="agent-setup" element={<AdminAgentSetup />} />
                   <Route path="ops" element={<AdminOps />} />
-                  <Route path="miniapp" element={<Navigate to="/admin/ops" replace />} />
+                  <Route path="miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
                   <Route path="deploy-strategies" element={<AdminDeployStrategies />} />
                 </Route>
-                {/* Keep legacy entry but redirect to admin route */}
-                <Route path="/miniapp" element={<Navigate to="/admin/ops" replace />} />
+                <Route path="/miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
+              </Route>
+            </Route>
 
-                {/* Optional ops page; useful while public mode is enabled. */}
+            <Route path="/status" element={<Status />} />
+            <Route path="/agents" element={<AgentDirectory />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+        ) : (
+          <Route element={<Layout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/404" element={<NotFoundPage />} />
+            <Route path="/waitlist" element={<Waitlist />} />
+            <Route path="/home" element={<Navigate to={withReason('/', 'legacy-route')} replace />} />
+
+            <Route element={<RequireSession />}>
+              <Route element={<RequireAccepted />}>
+                <Route path="/explore" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
+                <Route path="/explore/creators" element={<ExploreCreators />} />
+                <Route path="/explore/content" element={<ExploreContent />} />
+                <Route path="/explore/transactions" element={<ExploreTransactions />} />
+                <Route path="/explore/creators/:chain/:tokenAddress" element={<ExploreCreatorDetail />} />
+                <Route path="/explore/creators/:chain/:tokenAddress/transactions" element={<ExploreCreatorTransactions />} />
+                <Route path="/explore/content/:chain/:contentCoinAddress" element={<ExploreContentDetail />} />
+                <Route path="/explore/content/:chain/:contentCoinAddress/transactions" element={<ExploreContentTransactions />} />
+                <Route path="/explore/content/:chain/pool/:poolIdOrPoolKeyHash" element={<ExploreContentPoolAlias />} />
+                <Route path="/explore/tokens" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
+                <Route path="/explore/pools" element={<Navigate to={withReason('/explore/content', 'legacy-route')} replace />} />
+                <Route path="/swap" element={<Swap />} />
+                <Route path="/positions" element={<Positions />} />
+                <Route path="/portfolio" element={<Portfolio />} />
+                <Route path="/portfolio/:address" element={<Portfolio />} />
+                <Route path="/launch" element={<Navigate to={withReason('/deploy', 'legacy-route')} replace />} />
+                <Route path="/deploy" element={<DeployVault />} />
+                <Route path="/coin/:address/manage" element={<CoinManage />} />
+                <Route path="/creator/earnings" element={<CreatorEarnings />} />
+                <Route path="/creator/:identifier/earnings" element={<CreatorEarnings />} />
+                <Route path="/faq" element={<Faq />} />
+                <Route path="/faq/how-it-works" element={<FaqHowItWorks />} />
                 <Route path="/status" element={<Status />} />
+                <Route path="/vote" element={<GaugeVoting />} />
+                <Route path="/activate-akita" element={<Navigate to={withReason('/deploy', 'legacy-route')} replace />} />
+                <Route path="/auction/bid/:address" element={<AuctionBid />} />
+                <Route path="/complete-auction" element={<CompleteAuction />} />
+                <Route path="/complete-auction/:strategy" element={<CompleteAuction />} />
+                <Route path="/dashboard" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
+                <Route path="/vault/:address" element={<Vault />} />
                 <Route path="/agents" element={<AgentDirectory />} />
-
-                <Route path="*" element={<Navigate to="/" replace />} />
+                <Route path="/auction-demo" element={<AuctionDemo />} />
               </Route>
-            ) : (
-              <Route element={<AppAllowlistGate />}>
-                <Route element={<Layout />}>
-                  {/* App host */}
-                  <Route path="/" element={<Home />} />
-                  {/* Keep /waitlist route as a back-compat target (marketing is on 4626.fun). */}
-                  <Route path="/waitlist" element={<Waitlist />} />
-                  <Route path="/home" element={<Home />} />
 
-                  <Route path="/explore" element={<Navigate to="/explore/creators" replace />} />
-                  <Route path="/explore/creators" element={<ExploreCreators />} />
-                  <Route path="/explore/content" element={<ExploreContent />} />
-                  <Route path="/explore/transactions" element={<ExploreTransactions />} />
-                  <Route path="/explore/creators/:chain/:tokenAddress" element={<ExploreCreatorDetail />} />
-                  <Route path="/explore/creators/:chain/:tokenAddress/transactions" element={<ExploreCreatorTransactions />} />
-                  <Route path="/explore/content/:chain/:contentCoinAddress" element={<ExploreContentDetail />} />
-                  <Route path="/explore/content/:chain/:contentCoinAddress/transactions" element={<ExploreContentTransactions />} />
-                  <Route path="/explore/content/:chain/pool/:poolIdOrPoolKeyHash" element={<ExploreContentPoolAlias />} />
-                  <Route path="/explore/tokens" element={<Navigate to="/explore/creators" replace />} />
-                  <Route path="/explore/pools" element={<Navigate to="/explore/content" replace />} />
-                  <Route path="/swap" element={<Swap />} />
-                  <Route path="/positions" element={<Positions />} />
-                  <Route path="/portfolio" element={<Portfolio />} />
-                  <Route path="/portfolio/:address" element={<Portfolio />} />
-                  <Route path="/launch" element={<Navigate to="/deploy" replace />} />
-                  <Route path="/deploy" element={<DeployVault />} />
-                  <Route path="/coin/:address/manage" element={<CoinManage />} />
-                  <Route path="/creator/earnings" element={<CreatorEarnings />} />
-                  <Route path="/creator/:identifier/earnings" element={<CreatorEarnings />} />
-                  <Route path="/faq" element={<Faq />} />
-                  <Route path="/faq/how-it-works" element={<FaqHowItWorks />} />
-                  <Route path="/status" element={<Status />} />
-                  <Route path="/admin" element={<AdminLayout />}>
-                    <Route index element={<Navigate to="/admin/waitlist" replace />} />
-                    <Route path="creator-access" element={<AdminCreatorAccess />} />
-                    <Route path="waitlist" element={<AdminWaitlist />} />
-                    <Route path="agent-setup" element={<AdminAgentSetup />} />
-                    <Route path="ops" element={<AdminOps />} />
-                    <Route path="miniapp" element={<Navigate to="/admin/ops" replace />} />
-                    <Route path="deploy-strategies" element={<AdminDeployStrategies />} />
-                  </Route>
-                  <Route path="/miniapp" element={<Navigate to="/admin/ops" replace />} />
-                  <Route path="/vote" element={<GaugeVoting />} />
-                  <Route path="/activate-akita" element={<Navigate to="/deploy" replace />} />
-                  <Route path="/auction/bid/:address" element={<AuctionBid />} />
-                  <Route path="/complete-auction" element={<CompleteAuction />} />
-                  <Route path="/complete-auction/:strategy" element={<CompleteAuction />} />
-                  <Route path="/dashboard" element={<Navigate to="/explore/creators" replace />} />
-                  <Route path="/vault/:address" element={<Vault />} />
-                  <Route path="/agents" element={<AgentDirectory />} />
-                  <Route path="/auction-demo" element={<AuctionDemo />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
+              <Route element={<RequireAdmin />}>
+                <Route path="/admin" element={<AdminLayout />}>
+                  <Route index element={<Navigate to={withReason('/admin/waitlist', 'legacy-route')} replace />} />
+                  <Route path="creator-access" element={<AdminCreatorAccess />} />
+                  <Route path="waitlist" element={<AdminWaitlist />} />
+                  <Route path="agent-setup" element={<AdminAgentSetup />} />
+                  <Route path="ops" element={<AdminOps />} />
+                  <Route path="miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
+                  <Route path="deploy-strategies" element={<AdminDeployStrategies />} />
                 </Route>
+                <Route path="/miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
               </Route>
-            )}
-          </>
+            </Route>
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
         )}
       </Routes>
-    </>
+    </AccessStateProvider>
   )
 }
 

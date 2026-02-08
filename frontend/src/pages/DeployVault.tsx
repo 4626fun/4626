@@ -4066,20 +4066,46 @@ function DeployVaultMain() {
     }
   }, [privyAuthenticated, smartWalletClient])
 
-  const [searchParams] = useSearchParams()
-  const prefillToken = useMemo(() => searchParams.get('token') ?? '', [searchParams])
-  const autoLogin = useMemo(() => {
-    const raw = (searchParams.get('autologin') ?? '').trim().toLowerCase()
-    return raw === '1' || raw === 'true' || raw === 'yes'
-  }, [searchParams])
-  const authHint = useMemo(() => {
-    const raw = (searchParams.get('auth') ?? '').trim().toLowerCase()
-    return raw === 'email' || raw === 'wallet' ? (raw as 'email' | 'wallet') : null
-  }, [searchParams])
-  const fromWaitlist = useMemo(() => {
-    const raw = (searchParams.get('from') ?? '').trim().toLowerCase()
-    return raw === 'waitlist'
-  }, [searchParams])
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialQueryRef = useRef<{
+    prefillToken: string
+    autoLogin: boolean
+    authHint: 'email' | 'wallet' | null
+    fromWaitlist: boolean
+    debugEnabledFromQuery: boolean
+  } | null>(null)
+
+  if (!initialQueryRef.current) {
+    const autoLoginRaw = (searchParams.get('autologin') ?? '').trim().toLowerCase()
+    const authRaw = (searchParams.get('auth') ?? '').trim().toLowerCase()
+    const fromRaw = (searchParams.get('from') ?? '').trim().toLowerCase()
+    initialQueryRef.current = {
+      prefillToken: searchParams.get('token') ?? '',
+      autoLogin: autoLoginRaw === '1' || autoLoginRaw === 'true' || autoLoginRaw === 'yes',
+      authHint: authRaw === 'email' || authRaw === 'wallet' ? (authRaw as 'email' | 'wallet') : null,
+      fromWaitlist: fromRaw === 'waitlist',
+      debugEnabledFromQuery: (searchParams.get('debug') ?? '').trim() === '1',
+    }
+  }
+
+  const prefillToken = initialQueryRef.current.prefillToken
+  const autoLogin = initialQueryRef.current.autoLogin
+  const authHint = initialQueryRef.current.authHint
+  const fromWaitlist = initialQueryRef.current.fromWaitlist
+  const debugEnabledFromQuery = initialQueryRef.current.debugEnabledFromQuery
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams)
+    let changed = false
+    for (const key of ['autologin', 'auth', 'from', 'shareOftSaltOverride', 'debug']) {
+      if (next.has(key)) {
+        next.delete(key)
+        changed = true
+      }
+    }
+    if (!changed) return
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
   const baseEase = useMemo(() => [0.4, 0, 0.2, 1] as const, [])
   const cdpPaymasterUrl = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
   const paymasterStatus = useMemo(() => {
@@ -5123,14 +5149,14 @@ function DeployVaultMain() {
   const fundingGateOk = walletHasMinDeposit
 
   const debugControlsVisible = useMemo(() => {
+    if (debugEnabledFromQuery) return true
     if (typeof window === 'undefined') return false
     try {
-      const params = new URLSearchParams(window.location.search)
-      return params.get('debug') === '1' || window.localStorage.getItem('cv:debug') === 'true'
+      return window.localStorage.getItem('cv:debug') === 'true'
     } catch {
       return false
     }
-  }, [])
+  }, [debugEnabledFromQuery])
 
   const toggleDebugLogs = useCallback(() => {
     if (typeof window === 'undefined') return

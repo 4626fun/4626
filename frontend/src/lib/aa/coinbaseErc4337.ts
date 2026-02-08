@@ -320,10 +320,15 @@ function isPaymasterStakeError(error: unknown): boolean {
 function isPaymasterUnavailableError(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error ?? '')
   const lc = msg.toLowerCase()
+  // NOTE: Do NOT match generic viem wrapper text like 'resource not available' /
+  // 'requested resource not available'. Viem uses that shortMessage for ALL -32002
+  // JSON-RPC errors, so matching it would misclassify upstream CDP policy rejections
+  // as "paymaster unavailable" and trigger unwanted no-paymaster fallback.
+  // Only match our own specific error strings that indicate genuine unavailability.
   return (
-    lc.includes('resource not available') ||
-    lc.includes('requested resource not available') ||
     lc.includes('cdp paymaster endpoint is not configured') ||
+    lc.includes('server misconfigured') ||
+    lc.includes('upstream request failed') ||
     lc.includes('method not allowed')
   )
 }
@@ -1494,13 +1499,23 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   if (usePaymaster && lastError && shouldFallbackWithoutPaymaster(lastError)) {
     attemptedWithoutPaymaster = true
     const hasPrefundBalance = typeof smartWalletBalance === 'bigint' && smartWalletBalance > 0n
+    const paymasterErrorMsg = lastError instanceof Error ? lastError.message : String(lastError ?? '')
+    const paymasterMeta = formatMetaMessages(lastError)
     if (isPaymasterUnavailableError(lastError) && !allowPaymasterFallback && hasPrefundBalance) {
       logger.warn('[ERC-4337] Paymaster unavailable; retrying with smart wallet balance', {
         smartWallet,
         balance: formatGasValue(smartWalletBalance),
+        paymasterError: paymasterErrorMsg.slice(0, 300),
+        paymasterMeta,
       })
     } else {
-      logger.warn('[ERC-4337] Retrying without sponsorship')
+      logger.warn('[ERC-4337] Retrying without sponsorship', {
+        paymasterError: paymasterErrorMsg.slice(0, 300),
+        paymasterMeta,
+        isStakeError: isPaymasterStakeError(lastError),
+        isUnavailableError: isPaymasterUnavailableError(lastError),
+        isGasRetry: shouldRetryVerificationGas(lastError),
+      })
     }
     await attemptSend(false)
   }
@@ -1565,22 +1580,30 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       !usedSignMessageFallback &&
       (lc.includes('invalid signature') || lc.includes('signature check failed'))
     ) {
-      return await sendCoinbaseSmartWalletUserOperation({
-        publicClient,
-        walletClient,
-        bundlerUrl: bundlerUrlInput,
-        paymasterUrl: paymasterUrlInput,
-        smartWallet,
-        ownerAddress,
-        calls,
-        version,
-        userOpSignMode: 'signMessage',
-        ownerIsContract: ownerIsContractOverride,
-        allowEoaSignMessageFallback,
-        skipPreflightSimulation,
-        skipPaymaster,
-        retryOnInvalidSignature: false,
-      })
+      // Only retry with signMessage if the owner is a contract (ERC-1271) or
+      // the caller explicitly allows the EOA signMessage fallback.
+      // For EOA owners without the flag, shouldCoerceToEthSign would convert
+      // 'signMessage' back to 'eth_sign', producing the same invalid signature.
+      // personal_sign cannot produce valid raw-digest signatures for
+      // CoinbaseSmartWallet, so retrying would be pointless.
+      if (ownerIsContract || allowEoaSignMessageFallback) {
+        return await sendCoinbaseSmartWalletUserOperation({
+          publicClient,
+          walletClient,
+          bundlerUrl: bundlerUrlInput,
+          paymasterUrl: paymasterUrlInput,
+          smartWallet,
+          ownerAddress,
+          calls,
+          version,
+          userOpSignMode: 'signMessage',
+          ownerIsContract: ownerIsContractOverride,
+          allowEoaSignMessageFallback,
+          skipPreflightSimulation,
+          skipPaymaster,
+          retryOnInvalidSignature: false,
+        })
+      }
     }
 
     // Provide helpful error messages for common failures

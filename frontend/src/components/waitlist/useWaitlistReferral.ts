@@ -76,10 +76,24 @@ export function useWaitlistReferral({
     }
   }
 
+  function consumeReferralQueryParam() {
+    if (typeof window === 'undefined') return
+    try {
+      const url = new URL(window.location.href)
+      if (!url.searchParams.has('ref')) return
+      url.searchParams.delete('ref')
+      const next = `${url.pathname}${url.search}${url.hash}`
+      window.history.replaceState(window.history.state, '', next)
+    } catch {
+      // ignore
+    }
+  }
+
   // If user arrives with ?ref=CODE, store it and record a click.
   useEffect(() => {
     if (!refParam) return
     storeReferralCode(refParam)
+    consumeReferralQueryParam()
     void (async () => {
       try {
         await apiFetch('/api/referrals/click', {
