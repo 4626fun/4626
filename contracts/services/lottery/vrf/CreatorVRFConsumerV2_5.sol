@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 /**
  * @title CreatorVRFConsumerV2_5
- * @author 0xakita.eth (CreatorVault)
+ * @author 0xakita.eth
  * @notice Multi-chain VRF Consumer for Creator Coin lottery system
  * @dev Accepts requests from multiple chains AND direct local requests from Base.
  *      Sends randomness back to the originating chain or calls local callbacks.
