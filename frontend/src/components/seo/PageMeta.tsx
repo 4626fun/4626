@@ -1,0 +1,131 @@
+/**
+ * PageMeta — lightweight client-side metadata for SPA pages.
+ *
+ * IMPORTANT (per workspace SEO rules):
+ * This is a client-side-only component. Crawlers will NOT see this metadata
+ * reliably. All pages default to `noindex,follow` until SSR/prerender is
+ * added for SEO-critical routes (Creator, Vault pages).
+ *
+ * For users: sets document.title and meta description for tab/share UX.
+ * For bots: sets robots to noindex,follow (safe default for SPA).
+ */
+
+import { useEffect } from 'react'
+
+const SITE_NAME = 'CreatorVault'
+const ORIGIN = 'https://app.4626.fun'
+
+type PageMetaProps = {
+  /** Page title (will be appended with site name) */
+  title?: string
+  /** Meta description */
+  description?: string
+  /**
+   * Override robots directive. Default: 'noindex,follow'
+   * Only set 'index,follow' when SSR/prerender is confirmed for this route.
+   */
+  robots?: string
+  /** Canonical path (relative, e.g. '/vault/0x...') */
+  canonicalPath?: string
+  /** OG image URL */
+  ogImage?: string
+}
+
+function setOrCreateMeta(name: string, content: string, attr: 'name' | 'property' = 'name') {
+  let el = document.querySelector(`meta[${attr}="${name}"]`) as HTMLMetaElement | null
+  if (!el) {
+    el = document.createElement('meta')
+    el.setAttribute(attr, name)
+    document.head.appendChild(el)
+  }
+  el.setAttribute('content', content)
+}
+
+function setOrCreateLink(rel: string, href: string) {
+  let el = document.querySelector(`link[rel="${rel}"]`) as HTMLLinkElement | null
+  if (!el) {
+    el = document.createElement('link')
+    el.setAttribute('rel', rel)
+    document.head.appendChild(el)
+  }
+  el.setAttribute('href', href)
+}
+
+export function PageMeta({
+  title,
+  description,
+  robots = 'noindex,follow',
+  canonicalPath,
+  ogImage,
+}: PageMetaProps) {
+  useEffect(() => {
+    // Title
+    const fullTitle = title ? `${title} | ${SITE_NAME}` : SITE_NAME
+    document.title = fullTitle
+
+    // Robots
+    setOrCreateMeta('robots', robots)
+
+    // Description
+    if (description) {
+      setOrCreateMeta('description', description)
+      setOrCreateMeta('og:description', description, 'property')
+      setOrCreateMeta('twitter:description', description, 'name')
+    }
+
+    // OG tags
+    setOrCreateMeta('og:title', fullTitle, 'property')
+    setOrCreateMeta('og:site_name', SITE_NAME, 'property')
+    setOrCreateMeta('og:type', 'website', 'property')
+    setOrCreateMeta('twitter:card', 'summary_large_image', 'name')
+    setOrCreateMeta('twitter:title', fullTitle, 'name')
+
+    if (ogImage) {
+      setOrCreateMeta('og:image', ogImage, 'property')
+      setOrCreateMeta('twitter:image', ogImage, 'name')
+    }
+
+    // Canonical
+    if (canonicalPath) {
+      const canonical = `${ORIGIN}${canonicalPath}`
+      setOrCreateLink('canonical', canonical)
+      setOrCreateMeta('og:url', canonical, 'property')
+    }
+  }, [title, description, robots, canonicalPath, ogImage])
+
+  return null
+}
+
+/**
+ * Common page metadata presets
+ */
+export const META = {
+  home: {
+    title: 'Home',
+    description: 'CreatorVault — tokenized creator vaults on Base.',
+  },
+  explore: {
+    title: 'Explore Creators',
+    description: 'Discover and invest in creator vaults on Base.',
+  },
+  deploy: {
+    title: 'Deploy Vault',
+    description: 'Launch your ERC-4626 creator vault on Base.',
+  },
+  agents: {
+    title: 'Creator Agents',
+    description: 'Browse and message creator XMTP agents.',
+  },
+  faq: {
+    title: 'FAQ',
+    description: 'Frequently asked questions about CreatorVault.',
+  },
+  vault: (symbol: string) => ({
+    title: `${symbol} Vault`,
+    description: `Deposit and manage ${symbol} in the CreatorVault.`,
+  }),
+  creator: (name: string) => ({
+    title: name,
+    description: `${name}'s creator vault and earnings on CreatorVault.`,
+  }),
+} as const

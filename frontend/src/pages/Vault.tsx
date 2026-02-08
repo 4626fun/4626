@@ -11,10 +11,13 @@ import {
   ExternalLink,
   Clock,
   ShieldCheck,
+  MessageSquare,
 } from 'lucide-react'
 import { AKITA } from '../config/contracts'
 import { ConnectButton } from '../components/ConnectButton'
 import { Link, useParams } from 'react-router-dom'
+import { useXmtp } from '@/lib/xmtp/provider'
+import { PageMeta, META } from '@/components/seo/PageMeta'
 import { CcaAuctionPanel } from '@/components/cca/CcaAuctionPanel'
 import { useTokenMetadata } from '@/hooks/useTokenMetadata'
 import { useZoraCoin } from '@/lib/zora/hooks'
@@ -87,6 +90,56 @@ function TokenAvatar({
           {badge}
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function VaultChatCard() {
+  const { status, connect } = useXmtp()
+  const isXmtpConnected = status === 'connected'
+  const isXmtpLoading = status === 'signing' || status === 'connecting'
+
+  const handleChat = async () => {
+    if (!isXmtpConnected) {
+      await connect()
+      return
+    }
+    // Open the agent directory or start a DM — for now we just connect
+    // and let the ChatWidget handle conversation discovery
+  }
+
+  return (
+    <div className="card p-5 space-y-3">
+      <div className="flex items-center gap-2">
+        <MessageSquare className="w-4 h-4 text-brand-primary" />
+        <span className="label">Vault Chat</span>
+      </div>
+      <p className="text-xs text-zinc-500 leading-relaxed">
+        Join the vault group chat to connect with the creator and other holders.
+      </p>
+      <button
+        type="button"
+        onClick={handleChat}
+        disabled={isXmtpLoading}
+        className="w-full flex items-center justify-center gap-2 rounded-xl bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary text-xs font-medium py-2.5 transition-colors disabled:opacity-50"
+      >
+        {isXmtpLoading ? (
+          <>
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            {status === 'signing' ? 'Sign to enable…' : 'Connecting…'}
+          </>
+        ) : isXmtpConnected ? (
+          <>
+            <MessageSquare className="w-3.5 h-3.5" />
+            Open Chat
+          </>
+        ) : (
+          <>
+            <MessageSquare className="w-3.5 h-3.5" />
+            Enable Chat
+          </>
+        )}
+      </button>
     </div>
   )
 }
@@ -322,8 +375,15 @@ export function Vault() {
     )
   }
 
+  const vaultMeta = META.vault(underlyingSymbol)
+
   return (
     <div className="relative pb-24 md:pb-0">
+      <PageMeta
+        title={vaultMeta.title}
+        description={vaultMeta.description}
+        canonicalPath={vaultAddress ? `/vault/${vaultAddress}` : undefined}
+      />
       {/* Particle atmosphere */}
       <div className="particles">
         <div className="absolute top-1/3 right-1/4 w-px h-px bg-amber-500 rounded-full" style={{ animation: 'particle-float 10s ease-in-out infinite' }} />
@@ -655,6 +715,9 @@ export function Vault() {
 
             {/* Position Panel */}
             <div className="lg:col-span-2 space-y-8">
+              {/* Chat with Creator */}
+              <VaultChatCard />
+
               <div>
                 <span className="label mb-6 block">Your Holdings</span>
                 

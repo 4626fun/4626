@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Minus, X, Send, Loader2, ArrowLeft } from 'lucide-react'
 import { useXmtp, type ChatMessage } from '@/lib/xmtp/provider'
+import { useIdentity } from '@/hooks/useIdentity'
 
 type Props = {
   conversationId: string
@@ -34,6 +35,23 @@ function formatTimestamp(date: Date): string {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
     ' ' +
     date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+/** Inline sender label that resolves inboxId → address → display name */
+function SenderLabel({ inboxId }: { inboxId: string }) {
+  const { resolveInboxAddress } = useXmtp()
+  const [address, setAddress] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    resolveInboxAddress(inboxId).then((addr) => {
+      if (!cancelled) setAddress(addr)
+    })
+    return () => { cancelled = true }
+  }, [inboxId, resolveInboxAddress])
+
+  const { displayName } = useIdentity(address)
+  return <span>{address ? displayName : `${inboxId.slice(0, 8)}…`}</span>
 }
 
 export function ChatWindow({
@@ -208,7 +226,7 @@ export function ChatWindow({
                   {/* Sender label for group chats */}
                   {conversationType === 'group' && !msg.isSelf && (
                     <span className="text-[9px] text-zinc-500 mb-0.5 px-1">
-                      {msg.senderInboxId.slice(0, 8)}…
+                      <SenderLabel inboxId={msg.senderInboxId} />
                     </span>
                   )}
                   <div

@@ -64,6 +64,8 @@ type XmtpContextValue = {
   sendMessage: (conversationId: string, text: string) => Promise<void>
   startDm: (peerAddress: `0x${string}`) => Promise<string | null>
   subscribeToMessages: (conversationId: string, cb: (msg: ChatMessage) => void) => () => void
+  /** Resolve an XMTP inboxId to an Ethereum address (cached). */
+  resolveInboxAddress: (inboxId: string) => Promise<string | null>
 }
 
 const noop = () => {}
@@ -78,6 +80,7 @@ const XmtpContext = createContext<XmtpContextValue>({
   sendMessage: async () => {},
   startDm: async () => null,
   subscribeToMessages: () => noop,
+  resolveInboxAddress: async () => null,
 })
 
 export function useXmtp() {
@@ -108,6 +111,29 @@ function truncateAddress(addr: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Browser notifications
+// ---------------------------------------------------------------------------
+async function requestNotificationPermission(): Promise<boolean> {
+  if (typeof window === 'undefined' || !('Notification' in window)) return false
+  if (Notification.permission === 'granted') return true
+  if (Notification.permission === 'denied') return false
+  const result = await Notification.requestPermission()
+  return result === 'granted'
+}
+
+function showNotification(title: string, body: string) {
+  if (typeof document === 'undefined' || !document.hidden) return // only when tab is in background
+  if (Notification.permission !== 'granted') return
+  try {
+    new Notification(title, {
+      body: body.slice(0, 120),
+      icon: '/icon-192.png',
+      tag: 'xmtp-message', // collapse multiple
+    })
+  } catch { /* ignore */ }
+}
+
+// ---------------------------------------------------------------------------
 // Provider
 // ---------------------------------------------------------------------------
 
@@ -126,6 +152,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const msgStreamRef = useRef<AsyncStreamProxy<any> | null>(null)
   const perConvoStreamsRef = useRef<Map<string, AsyncStreamProxy<any>>>(new Map())
   const perConvoCbRef = useRef<Map<string, Set<(msg: ChatMessage) => void>>>(new Map())
+  const inboxAddressCache = useRef<Map<string, string | null>>(new Map())
   const mountedRef = useRef(true)
 
   // Cleanup on unmount
@@ -298,6 +325,12 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           const convoId = msg.conversationId
           const chatMsg = decodedToChat(msg, client.inboxId!)
 
+          // Browser notification for background messages
+          if (!chatMsg.isSelf) {
+            const convoName = conversations.find((c) => c.id === convoId)?.name ?? 'New message'
+            showNotification(convoName, chatMsg.content)
+          }
+
           // Update conversation list (bump to top + last message)
           setConversations((prev) => {
             const idx = prev.findIndex((c) => c.id === convoId)
@@ -321,6 +354,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         },
       })
       msgStreamRef.current = allMsgStream
+
+      // Request browser notification permission (non-blocking)
+      void requestNotificationPermission()
 
       if (mountedRef.current) setStatus('connected')
     } catch (e) {
@@ -426,6 +462,24 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  // ------- resolve inboxId → Ethereum address -------
+  const resolveInboxAddress = useCallback(async (targetInboxId: string): Promise<string | null> => {
+    const cached = inboxAddressCache.current.get(targetInboxId)
+    if (cached !== undefined) return cached
+    const client = clientRef.current
+    if (!client) return null
+    try {
+      const state = await (client as any).getLatestInboxState(targetInboxId)
+      const addrs: string[] = state?.accountAddresses ?? state?.account_addresses ?? []
+      const addr = addrs.length > 0 ? addrs[0] : null
+      inboxAddressCache.current.set(targetInboxId, addr)
+      return addr
+    } catch {
+      inboxAddressCache.current.set(targetInboxId, null)
+      return null
+    }
+  }, [])
+
   return (
     <XmtpContext.Provider
       value={{
@@ -439,6 +493,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         sendMessage,
         startDm,
         subscribeToMessages,
+        resolveInboxAddress,
       }}
     >
       {children}

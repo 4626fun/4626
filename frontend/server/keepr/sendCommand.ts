@@ -54,6 +54,58 @@ function recordSend(groupId: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Transaction limits — per-vault daily caps and per-tx maximums
+// ---------------------------------------------------------------------------
+const PER_TX_MAX: Record<string, number> = { usdc: 1000, eth: 1 }
+const DAILY_CAP: Record<string, number> = { usdc: 5000, eth: 5 }
+
+type DailyLedger = { date: string; totals: Record<string, number> }
+const dailyLedgers = new Map<string, DailyLedger>()
+
+function todayKey(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function getDailySpent(vaultAddress: string, token: string): number {
+  const ledger = dailyLedgers.get(vaultAddress)
+  if (!ledger || ledger.date !== todayKey()) return 0
+  return ledger.totals[token] ?? 0
+}
+
+function recordDailySpend(vaultAddress: string, token: string, amount: number) {
+  const today = todayKey()
+  let ledger = dailyLedgers.get(vaultAddress)
+  if (!ledger || ledger.date !== today) {
+    ledger = { date: today, totals: {} }
+    dailyLedgers.set(vaultAddress, ledger)
+  }
+  ledger.totals[token] = (ledger.totals[token] ?? 0) + amount
+}
+
+function checkLimits(
+  token: string,
+  amount: number,
+  vaultAddress: string,
+): { allowed: true } | { allowed: false; reason: string } {
+  const maxTx = PER_TX_MAX[token]
+  if (maxTx !== undefined && amount > maxTx) {
+    return { allowed: false, reason: `Max per transaction: ${maxTx} ${token.toUpperCase()}` }
+  }
+  const cap = DAILY_CAP[token]
+  if (cap !== undefined) {
+    const spent = getDailySpent(vaultAddress, token)
+    if (spent + amount > cap) {
+      const remaining = Math.max(0, cap - spent)
+      return {
+        allowed: false,
+        reason: `Daily cap reached. Remaining today: ${remaining.toFixed(2)} ${token.toUpperCase()} (cap: ${cap})`,
+      }
+    }
+  }
+  return { allowed: true }
+}
+
+// ---------------------------------------------------------------------------
 // Parser
 // ---------------------------------------------------------------------------
 
@@ -130,6 +182,12 @@ export async function handleSendCommand(params: {
   }
   const recipient = getAddress(parsed.recipient) as Address
 
+  // Check transaction limits
+  const limitsCheck = checkLimits(parsed.token, amountNum, params.vault.vaultAddress)
+  if (!limitsCheck.allowed) {
+    return { ok: false, response: `Limit exceeded: ${limitsCheck.reason}` }
+  }
+
   // Look up agent wallet (Privy-managed, for onchain tx)
   let agentWalletId: string
   let agentWalletAddress: string
@@ -186,6 +244,8 @@ export async function handleSendCommand(params: {
       })
       txHash = String(result?.data?.hash ?? result?.hash ?? 'pending')
     }
+
+    recordDailySpend(params.vault.vaultAddress, parsed.token, amountNum)
 
     logger.info('[send] Transfer sent', {
       groupId: params.groupId,

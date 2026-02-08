@@ -298,6 +298,10 @@ const AuctionDemo = lazy(async () => {
   const m = await import('./pages/AuctionDemo')
   return { default: m.default }
 })
+const AgentDirectory = lazy(async () => {
+  const m = await import('./pages/AgentDirectory')
+  return { default: m.AgentDirectory }
+})
 
 const ExploreCreators = lazy(async () => {
   const m = await import('./pages/ExploreCreators')
@@ -443,6 +447,7 @@ function App() {
 
                 {/* Optional ops page; useful while public mode is enabled. */}
                 <Route path="/status" element={<Status />} />
+                <Route path="/agents" element={<AgentDirectory />} />
 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
@@ -494,6 +499,7 @@ function App() {
                   <Route path="/complete-auction/:strategy" element={<CompleteAuction />} />
                   <Route path="/dashboard" element={<Navigate to="/explore/creators" replace />} />
                   <Route path="/vault/:address" element={<Vault />} />
+                  <Route path="/agents" element={<AgentDirectory />} />
                   <Route path="/auction-demo" element={<AuctionDemo />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
