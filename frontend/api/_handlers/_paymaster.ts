@@ -547,7 +547,15 @@ const SELECTOR_WRAPPER_UNWRAP = '0xde0e9a3e'
 const SELECTOR_VAULT_REDEEM = '0xba087652'
 const SELECTOR_VAULT_QUEUE = '0xd58457b2'
 const SELECTOR_VAULT_CLAIM = '0x6659283e'
+const SELECTOR_VAULT_SHUTDOWN = '0xe5236cc9'          // shutdownVault()
+const SELECTOR_VAULT_EMERGENCY_PULL = '0x53e0cf11'    // emergencyWithdrawFromStrategies()
+const SELECTOR_VAULT_EMERGENCY_WITHDRAW = '0x2f940c70' // emergencyWithdraw(uint256,address)
 const LEGACY_VAULT_SELECTORS = new Set<string>([SELECTOR_VAULT_REDEEM, SELECTOR_VAULT_QUEUE, SELECTOR_VAULT_CLAIM])
+const LEGACY_VAULT_EMERGENCY_SELECTORS = new Set<string>([SELECTOR_VAULT_SHUTDOWN, SELECTOR_VAULT_EMERGENCY_PULL, SELECTOR_VAULT_EMERGENCY_WITHDRAW])
+/** All selectors allowed on a legacy vault target (normal withdraw + emergency ops). */
+const ALL_LEGACY_VAULT_SELECTORS = new Set<string>(
+  Array.from(LEGACY_VAULT_SELECTORS).concat(Array.from(LEGACY_VAULT_EMERGENCY_SELECTORS)),
+)
 
 const CREATOR_VAULT_BATCHER_PHASE1_EVENT = [
   {
@@ -1247,7 +1255,7 @@ async function validateInnerCalls(params: {
             if (wrapperShare && isAddress(wrapperShare)) setShareOft(getAddress(wrapperShare))
             continue
           }
-          if (LEGACY_VAULT_SELECTORS.has(selector)) {
+          if (ALL_LEGACY_VAULT_SELECTORS.has(selector)) {
             setVault(c.target)
             continue
           }
@@ -1536,7 +1544,12 @@ async function validateInnerCalls(params: {
         continue
       }
       if (expectedVault && c.target === expectedVault) {
-        if (!LEGACY_VAULT_SELECTORS.has(selector)) throw new Error('legacy_vault_selector_not_allowed')
+        if (!ALL_LEGACY_VAULT_SELECTORS.has(selector)) throw new Error('legacy_vault_selector_not_allowed')
+        // emergencyWithdraw(uint256,address) – validate recipient is the sender
+        if (selector === SELECTOR_VAULT_EMERGENCY_WITHDRAW) {
+          const to = decodeAddressArgFromCalldata(c.data, 1)
+          if (!to || getAddress(to) !== params.sender) throw new Error('legacy_emergency_withdraw_recipient_mismatch')
+        }
         continue
       }
       throw new Error('legacy_target_not_allowed')

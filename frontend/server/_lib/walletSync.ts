@@ -18,6 +18,12 @@ function normalizeLower(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
 }
 
+function normalizeAddress(value: unknown): string | null {
+  const raw = normalizeLower(value)
+  if (!/^0x[a-f0-9]{40}$/.test(raw)) return null
+  return raw
+}
+
 function getPrivyUserId(user: PrivyUserLike): string | null {
   const id = typeof user?.id === 'string' ? user.id.trim() : ''
   return id.length > 0 ? id : null
@@ -70,6 +76,134 @@ async function findExistingProfile(db: Db, privyUserId: string | null, wallets: 
   }
 
   return null
+}
+
+type PersistedIdentity = {
+  primaryWallet: string | null
+  canonicalSmartWallet: string | null
+  embeddedEoa: string | null
+}
+
+async function readPersistedIdentity(db: Db, profileId: number): Promise<PersistedIdentity | null> {
+  const result = await db.sql`
+    SELECT
+      primary_wallet,
+      primary_smart_wallet,
+      csw_address,
+      base_sub_account,
+      primary_embedded_eoa,
+      embedded_wallet
+    FROM profiles
+    WHERE id = ${profileId}
+    LIMIT 1;
+  `
+  const row = result.rows?.[0] as any
+  if (!row) return null
+  return {
+    primaryWallet: normalizeAddress(row.primary_wallet),
+    canonicalSmartWallet:
+      normalizeAddress(row.primary_smart_wallet) ??
+      normalizeAddress(row.csw_address) ??
+      normalizeAddress(row.base_sub_account),
+    embeddedEoa:
+      normalizeAddress(row.primary_embedded_eoa) ??
+      normalizeAddress(row.embedded_wallet),
+  }
+}
+
+function withWalletIfMissing(
+  wallets: MappedWallet[],
+  wallet: MappedWallet | null,
+): MappedWallet[] {
+  if (!wallet) return wallets
+  if (wallets.some((w) => normalizeLower(w.address) === normalizeLower(wallet.address))) return wallets
+  return [...wallets, wallet]
+}
+
+function applyPersistedIdentity(params: {
+  classification: ClassifiedLinkedAccounts
+  persisted: PersistedIdentity | null
+}): ClassifiedLinkedAccounts {
+  const { classification, persisted } = params
+  if (!persisted) return classification
+
+  let allWallets = [...classification.allWallets]
+  allWallets = withWalletIfMissing(
+    allWallets,
+    persisted.primaryWallet
+      ? {
+          address: persisted.primaryWallet,
+          walletType: 'external_eoa',
+          provider: 'unknown',
+          chain: 'evm',
+          clientType: null,
+        }
+      : null,
+  )
+  allWallets = withWalletIfMissing(
+    allWallets,
+    persisted.canonicalSmartWallet
+      ? {
+          address: persisted.canonicalSmartWallet,
+          walletType: 'smart_wallet',
+          provider: 'unknown',
+          chain: 'evm',
+          clientType: null,
+        }
+      : null,
+  )
+  allWallets = withWalletIfMissing(
+    allWallets,
+    persisted.embeddedEoa
+      ? {
+          address: persisted.embeddedEoa,
+          walletType: 'embedded_eoa',
+          provider: 'privy',
+          chain: 'evm',
+          clientType: null,
+        }
+      : null,
+  )
+
+  const canonicalSmartWallet =
+    persisted.canonicalSmartWallet
+      ? { address: persisted.canonicalSmartWallet, provider: classification.canonicalSmartWallet?.provider ?? 'unknown' }
+      : classification.canonicalSmartWallet
+  const embeddedEoa =
+    persisted.embeddedEoa
+      ? {
+          address: persisted.embeddedEoa,
+          chainType: classification.embeddedEoa?.chainType ?? 'evm',
+          clientType: classification.embeddedEoa?.clientType ?? null,
+        }
+      : classification.embeddedEoa
+
+  const primaryWalletAddress =
+    persisted.primaryWallet ??
+    classification.primaryWalletAddress ??
+    embeddedEoa?.address ??
+    canonicalSmartWallet?.address ??
+    null
+
+  allWallets = withWalletIfMissing(
+    allWallets,
+    primaryWalletAddress
+      ? {
+          address: primaryWalletAddress,
+          walletType: 'external_eoa',
+          provider: 'unknown',
+          chain: 'evm',
+          clientType: null,
+        }
+      : null,
+  )
+
+  return {
+    embeddedEoa,
+    canonicalSmartWallet,
+    allWallets,
+    primaryWalletAddress,
+  }
 }
 
 async function clearRoleFlags(db: Db, profileId: number, classification: ClassifiedLinkedAccounts): Promise<void> {
@@ -210,15 +344,17 @@ export async function syncUserWallets(db: Db, privyUser: PrivyUserLike): Promise
   const classification = classifyLinkedAccounts(privyUser)
   const privyUserId = getPrivyUserId(privyUser)
   const existing = await findExistingProfile(db, privyUserId, classification.allWallets)
-  const profileId = await insertOrUpdateProfile({ db, existing, privyUserId, classification })
+  const persisted = existing?.id ? await readPersistedIdentity(db, existing.id) : null
+  const effectiveClassification = applyPersistedIdentity({ classification, persisted })
+  const profileId = await insertOrUpdateProfile({ db, existing, privyUserId, classification: effectiveClassification })
 
-  await clearRoleFlags(db, profileId, classification)
+  await clearRoleFlags(db, profileId, effectiveClassification)
 
-  const canonicalAddress = classification.canonicalSmartWallet?.address ?? null
-  const embeddedAddress = classification.embeddedEoa?.address ?? null
-  const primaryAddress = classification.primaryWalletAddress ?? null
+  const canonicalAddress = effectiveClassification.canonicalSmartWallet?.address ?? null
+  const embeddedAddress = effectiveClassification.embeddedEoa?.address ?? null
+  const primaryAddress = effectiveClassification.primaryWalletAddress ?? null
 
-  for (const wallet of classification.allWallets) {
+  for (const wallet of effectiveClassification.allWallets) {
     await db.sql`
       INSERT INTO wallets (address, chain, wallet_type, provider)
       VALUES (${wallet.address}, ${wallet.chain}, ${wallet.walletType}, ${wallet.provider})
@@ -271,13 +407,13 @@ export async function syncUserWallets(db: Db, privyUser: PrivyUserLike): Promise
 
   return {
     profileId,
-    canonicalSmartWallet: classification.canonicalSmartWallet,
-    embeddedEoa: classification.embeddedEoa,
-    connectedWallets: classification.allWallets.map((wallet) => ({
+    canonicalSmartWallet: effectiveClassification.canonicalSmartWallet,
+    embeddedEoa: effectiveClassification.embeddedEoa,
+    connectedWallets: effectiveClassification.allWallets.map((wallet) => ({
       address: wallet.address,
       walletType: wallet.walletType,
       provider: wallet.provider,
     })),
-    primaryWalletAddress: classification.primaryWalletAddress,
+    primaryWalletAddress: effectiveClassification.primaryWalletAddress,
   }
 }

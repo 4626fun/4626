@@ -1,10 +1,37 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { PrivyClient } from '@privy-io/server-auth'
 
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { getDb, isDbConfigured } from '../../../../server/_lib/postgres.js'
 import { getSessionAddress, isAdminAddress } from '../../../../server/_lib/session.js'
 import { normalizeReferralCode } from '../../../../server/_lib/referrals.js'
 import { ensureWaitlistSchema } from '../../../../server/_lib/waitlistSchema.js'
+
+const DEFAULT_BASE_RPCS = ['https://mainnet.base.org', 'https://base.llamarpc.com']
+
+const COINBASE_SMART_WALLET_OWNERS_ABI = [
+  { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'ownerAtIndex', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'bytes' }] },
+  { type: 'function', name: 'nextOwnerIndex', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+] as const
+
+type WalletGraphItem = {
+  address: string
+  walletType: string | null
+  provider: string | null
+  chain: string | null
+  isPrimary: boolean
+  isCanonicalSmartWallet: boolean
+  isEmbeddedEoa: boolean
+}
+
+type PrivyWalletContext = {
+  embeddedWallet4626: string | null
+  embeddedWalletZora: string | null
+  privySmartWallet: string | null
+  crossAppEmbeddedWallets: string[]
+  crossAppSmartWallets: string[]
+}
 
 type WaitlistDetail = {
   id: number
@@ -41,6 +68,15 @@ type WaitlistDetail = {
   preprovCoinSymbol: string | null
   preprovFarcasterUsername: string | null
   preprovZoraHandle: string | null
+  walletGraph: WalletGraphItem[]
+  resolvedPrimaryWallet: string | null
+  resolvedCswAddress: string | null
+  resolvedCswOwners: string[]
+  embeddedWallet4626: string | null
+  embeddedWalletZora: string | null
+  privySmartWallet: string | null
+  crossAppEmbeddedWallets: string[]
+  crossAppSmartWallets: string[]
 }
 
 type DetailResponse = {
@@ -55,6 +91,331 @@ function toIso(value: any): string | null {
   } catch {
     return null
   }
+}
+
+function getBaseRpcUrls(): string[] {
+  const raw = (process.env.BASE_RPC_URL ?? '').trim()
+  if (!raw) return DEFAULT_BASE_RPCS
+  const parts = raw.split(',').map((s) => s.trim()).filter(Boolean)
+  const urls = parts.length > 0 ? [...parts, ...DEFAULT_BASE_RPCS] : [...DEFAULT_BASE_RPCS]
+  return [...new Set(urls)]
+}
+
+function normalizeAddress(value: unknown): string | null {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (!/^0x[a-fA-F0-9]{40}$/.test(raw)) return null
+  return raw.toLowerCase()
+}
+
+function uniqueAddresses(values: Array<string | null | undefined>): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const value of values) {
+    const normalized = normalizeAddress(value)
+    if (!normalized || seen.has(normalized)) continue
+    seen.add(normalized)
+    out.push(normalized)
+  }
+  return out
+}
+
+function decodeOwnerAddress(value: unknown): string | null {
+  const raw = typeof value === 'string' ? value.toLowerCase() : ''
+  if (!raw.startsWith('0x')) return null
+  if (raw.length === 42) return normalizeAddress(raw)
+  if (raw.length === 66) return normalizeAddress(`0x${raw.slice(-40)}`)
+  return null
+}
+
+function readLinkedAccounts(user: any): any[] {
+  const linkedAccounts = Array.isArray(user?.linkedAccounts) ? user.linkedAccounts : []
+  const linkedAccountsSnake = Array.isArray(user?.linked_accounts) ? user.linked_accounts : []
+  return [...linkedAccounts, ...linkedAccountsSnake]
+}
+
+async function fetchPrivyWalletContext(privyUserId: string | null): Promise<PrivyWalletContext> {
+  const fallback: PrivyWalletContext = {
+    embeddedWallet4626: null,
+    embeddedWalletZora: null,
+    privySmartWallet: null,
+    crossAppEmbeddedWallets: [],
+    crossAppSmartWallets: [],
+  }
+  if (!privyUserId) return fallback
+
+  const appId = (process.env.PRIVY_APP_ID || '').trim()
+  const appSecret = (process.env.PRIVY_APP_SECRET || '').trim()
+  if (!appId || !appSecret) return fallback
+
+  try {
+    const client = new PrivyClient(appId, appSecret)
+    const user: any = await client.getUserById(privyUserId)
+    const linked = readLinkedAccounts(user)
+
+    const embeddedWallet4626 = normalizeAddress(user?.wallet?.address)
+    const linkedEmbedded = uniqueAddresses(
+      linked
+        .filter((account) => String(account?.type || '').toLowerCase() === 'wallet')
+        .filter((account) => {
+          const clientType = String(account?.walletClientType ?? account?.wallet_client_type ?? '').toLowerCase()
+          const connector = String(account?.connectorType ?? account?.connector_type ?? '').toLowerCase()
+          return clientType.includes('privy') || connector.includes('embedded')
+        })
+        .map((account) => account?.address),
+    )
+
+    const privySmartWallet = normalizeAddress(
+      linked.find((account) => String(account?.type || '').toLowerCase() === 'smart_wallet')?.address ??
+        null,
+    )
+
+    const crossAppEmbeddedWallets = uniqueAddresses(
+      linked
+        .filter((account) => String(account?.type || '').toLowerCase() === 'cross_app')
+        .flatMap((account) => (Array.isArray(account?.embeddedWallets) ? account.embeddedWallets : []))
+        .map((wallet) => wallet?.address),
+    )
+
+    const crossAppSmartWallets = uniqueAddresses(
+      linked
+        .filter((account) => String(account?.type || '').toLowerCase() === 'cross_app')
+        .flatMap((account) => (Array.isArray(account?.smartWallets) ? account.smartWallets : []))
+        .map((wallet) => wallet?.address),
+    )
+
+    const embeddedWalletZora =
+      crossAppEmbeddedWallets.find((address) => address !== embeddedWallet4626) ??
+      linkedEmbedded.find((address) => address !== embeddedWallet4626) ??
+      null
+
+    return {
+      embeddedWallet4626: embeddedWallet4626 ?? linkedEmbedded[0] ?? null,
+      embeddedWalletZora,
+      privySmartWallet,
+      crossAppEmbeddedWallets,
+      crossAppSmartWallets,
+    }
+  } catch {
+    return fallback
+  }
+}
+
+function extractVerificationSubjects(verifications: unknown): string[] {
+  if (!Array.isArray(verifications)) return []
+  return uniqueAddresses(
+    verifications.map((entry: any) => (typeof entry?.subject === 'string' ? entry.subject : null)),
+  )
+}
+
+async function fetchWalletGraph(db: any, profileId: number): Promise<WalletGraphItem[]> {
+  if (!db?.query) return []
+  const result = await db.query(
+    `SELECT
+       pw.address,
+       pw.is_primary,
+       pw.is_canonical_smart_wallet,
+       pw.is_embedded_eoa,
+       w.wallet_type,
+       w.provider,
+       w.chain
+     FROM profile_wallets pw
+     LEFT JOIN wallets w ON LOWER(w.address) = LOWER(pw.address)
+     WHERE pw.profile_id = $1
+     ORDER BY pw.is_primary DESC, pw.is_canonical_smart_wallet DESC, pw.updated_at DESC;`,
+    [profileId],
+  )
+
+  return (result.rows ?? [])
+    .map((row: any) => {
+      const address = normalizeAddress(row.address)
+      if (!address) return null
+      return {
+        address,
+        walletType: typeof row.wallet_type === 'string' ? row.wallet_type : null,
+        provider: typeof row.provider === 'string' ? row.provider : null,
+        chain: typeof row.chain === 'string' ? row.chain : null,
+        isPrimary: Boolean(row.is_primary),
+        isCanonicalSmartWallet: Boolean(row.is_canonical_smart_wallet),
+        isEmbeddedEoa: Boolean(row.is_embedded_eoa),
+      } satisfies WalletGraphItem
+    })
+    .filter(Boolean) as WalletGraphItem[]
+}
+
+async function fetchSmartWalletOwners(smartWallet: string): Promise<string[]> {
+  const rpcs = getBaseRpcUrls()
+  const { createPublicClient, http } = await import('viem')
+  const { base } = await import('viem/chains')
+  for (const rpc of rpcs) {
+    try {
+      const client = createPublicClient({
+        chain: base,
+        transport: http(rpc, { timeout: 10_000 }),
+      })
+      const countRaw = (await client.readContract({
+        address: smartWallet as `0x${string}`,
+        abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+        functionName: 'ownerCount',
+      })) as bigint
+
+      const count = Number(countRaw)
+      if (!Number.isFinite(count) || count <= 0) return []
+
+      let upperBound = count
+      try {
+        const nextRaw = (await client.readContract({
+          address: smartWallet as `0x${string}`,
+          abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+          functionName: 'nextOwnerIndex',
+        })) as bigint
+        const next = Number(nextRaw)
+        if (Number.isFinite(next) && next > 0) upperBound = next
+      } catch {
+        // ignore and use ownerCount
+      }
+
+      const maxScan = Math.min(Math.max(upperBound, count), 24)
+      const owners: string[] = []
+      const seen = new Set<string>()
+      for (let i = 0; i < maxScan; i++) {
+        try {
+          const ownerBytes = (await client.readContract({
+            address: smartWallet as `0x${string}`,
+            abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+            functionName: 'ownerAtIndex',
+            args: [BigInt(i)],
+          })) as string
+          const owner = decodeOwnerAddress(ownerBytes)
+          if (!owner || seen.has(owner)) continue
+          seen.add(owner)
+          owners.push(owner)
+        } catch {
+          // continue
+        }
+      }
+      return owners
+    } catch {
+      // try next RPC
+    }
+  }
+  return []
+}
+
+async function fetchPrimaryWalletMatches(db: any, addresses: string[]): Promise<Set<string>> {
+  const out = new Set<string>()
+  if (!db?.query || addresses.length === 0) return out
+  const result = await db.query(
+    `SELECT LOWER(primary_wallet) AS primary_wallet
+     FROM profiles
+     WHERE LOWER(primary_wallet) = ANY($1);`,
+    [addresses],
+  )
+  for (const row of result.rows ?? []) {
+    const address = normalizeAddress(row.primary_wallet)
+    if (address) out.add(address)
+  }
+  return out
+}
+
+function pickPreferredOwner(params: {
+  owners: string[]
+  ownerPrimaryMatches: Set<string>
+  embeddedWallet4626: string | null
+  verificationSubjects: string[]
+}): string | null {
+  const { owners, ownerPrimaryMatches, embeddedWallet4626, verificationSubjects } = params
+  if (owners.length === 0) return null
+  const notEmbedded = owners.filter((owner) => owner !== embeddedWallet4626)
+  const preferredPrimary = notEmbedded.find((owner) => ownerPrimaryMatches.has(owner))
+  if (preferredPrimary) return preferredPrimary
+  const preferredVerification = notEmbedded.find((owner) => verificationSubjects.includes(owner))
+  if (preferredVerification) return preferredVerification
+  return notEmbedded[0] ?? owners[0] ?? null
+}
+
+async function resolveIdentity(params: {
+  db: any
+  row: any
+  walletGraph: WalletGraphItem[]
+  privyContext: PrivyWalletContext
+}): Promise<{
+  resolvedPrimaryWallet: string | null
+  resolvedCswAddress: string | null
+  resolvedCswOwners: string[]
+}> {
+  const { db, row, walletGraph, privyContext } = params
+  const verificationSubjects = extractVerificationSubjects(row.verifications)
+
+  const candidateScores = new Map<string, number>()
+  const addCandidate = (value: unknown, score: number) => {
+    const address = normalizeAddress(value)
+    if (!address) return
+    const current = candidateScores.get(address) ?? 0
+    candidateScores.set(address, Math.max(current, score))
+  }
+
+  addCandidate(row.primary_smart_wallet, 4)
+  addCandidate(row.csw_address, 4)
+  addCandidate(row.base_sub_account, 3)
+  addCandidate(privyContext.privySmartWallet, 2)
+  for (const wallet of privyContext.crossAppSmartWallets) addCandidate(wallet, 2)
+  for (const wallet of walletGraph) {
+    if (wallet.walletType === 'smart_wallet') addCandidate(wallet.address, wallet.isCanonicalSmartWallet ? 5 : 2)
+    if (wallet.isCanonicalSmartWallet) addCandidate(wallet.address, 5)
+  }
+
+  const candidates = Array.from(candidateScores.entries()).map(([address, score]) => ({ address, baseScore: score }))
+  if (candidates.length === 0) {
+    return {
+      resolvedPrimaryWallet: normalizeAddress(row.primary_wallet) ?? null,
+      resolvedCswAddress: null,
+      resolvedCswOwners: [],
+    }
+  }
+
+  const snapshots: Array<{ address: string; owners: string[]; baseScore: number }> = []
+  for (const candidate of candidates) {
+    const owners = await fetchSmartWalletOwners(candidate.address)
+    snapshots.push({ address: candidate.address, owners, baseScore: candidate.baseScore })
+  }
+
+  const ownerUniverse = uniqueAddresses(snapshots.flatMap((snapshot) => snapshot.owners))
+  const ownerPrimaryMatches = await fetchPrimaryWalletMatches(db, ownerUniverse)
+  const embeddedWallet4626 =
+    normalizeAddress(privyContext.embeddedWallet4626) ??
+    normalizeAddress(row.primary_embedded_eoa) ??
+    normalizeAddress(row.embedded_wallet)
+
+  const ranked = snapshots
+    .map((snapshot) => {
+      let score = snapshot.baseScore
+      if (snapshot.owners.length >= 2) score += 1
+      if (embeddedWallet4626 && snapshot.owners.includes(embeddedWallet4626)) score += 1
+      if (snapshot.owners.some((owner) => verificationSubjects.includes(owner))) score += 2
+      if (snapshot.owners.some((owner) => owner !== embeddedWallet4626 && ownerPrimaryMatches.has(owner))) score += 3
+      return { ...snapshot, score }
+    })
+    .sort((a, b) => b.score - a.score || b.owners.length - a.owners.length || b.baseScore - a.baseScore)
+
+  const best = ranked[0]
+  const resolvedCswAddress = best?.address ?? null
+  const resolvedCswOwners = best?.owners ?? []
+
+  const preferredOwner = pickPreferredOwner({
+    owners: resolvedCswOwners,
+    ownerPrimaryMatches,
+    embeddedWallet4626,
+    verificationSubjects,
+  })
+
+  const primaryFromProfile = normalizeAddress(row.primary_wallet)
+  const resolvedPrimaryWallet =
+    preferredOwner ??
+    (primaryFromProfile && primaryFromProfile !== resolvedCswAddress ? primaryFromProfile : null) ??
+    embeddedWallet4626 ??
+    null
+
+  return { resolvedPrimaryWallet, resolvedCswAddress, resolvedCswOwners }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -132,8 +493,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ success: true, data: { admin, signup: null } satisfies DetailResponse } satisfies ApiEnvelope<DetailResponse>)
   }
 
+  const profileId = typeof row.id === 'number' ? row.id : Number(row.id)
+  const walletGraph = await fetchWalletGraph(db, profileId)
+  const privyContext = await fetchPrivyWalletContext(typeof row.privy_user_id === 'string' ? row.privy_user_id : null)
+  const resolvedIdentity = await resolveIdentity({ db, row, walletGraph, privyContext })
+
   const detail: WaitlistDetail = {
-    id: typeof row.id === 'number' ? row.id : Number(row.id),
+    id: profileId,
     email: typeof row.email === 'string' ? row.email : String(row.email || ''),
     persona: typeof row.persona === 'string' ? row.persona : null,
     primaryWallet: typeof row.primary_wallet === 'string' ? row.primary_wallet : null,
@@ -172,6 +538,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     preprovCoinSymbol: typeof row.preprov_coin_symbol === 'string' ? row.preprov_coin_symbol : null,
     preprovFarcasterUsername: typeof row.preprov_farcaster_username === 'string' ? row.preprov_farcaster_username : null,
     preprovZoraHandle: typeof row.preprov_zora_handle === 'string' ? row.preprov_zora_handle : null,
+    walletGraph,
+    resolvedPrimaryWallet: resolvedIdentity.resolvedPrimaryWallet,
+    resolvedCswAddress: resolvedIdentity.resolvedCswAddress,
+    resolvedCswOwners: resolvedIdentity.resolvedCswOwners,
+    embeddedWallet4626:
+      privyContext.embeddedWallet4626 ??
+      (typeof row.primary_embedded_eoa === 'string' ? row.primary_embedded_eoa : null) ??
+      (typeof row.embedded_wallet === 'string' ? row.embedded_wallet : null),
+    embeddedWalletZora: privyContext.embeddedWalletZora,
+    privySmartWallet: privyContext.privySmartWallet,
+    crossAppEmbeddedWallets: privyContext.crossAppEmbeddedWallets,
+    crossAppSmartWallets: privyContext.crossAppSmartWallets,
   }
 
   return res.status(200).json({

@@ -82,6 +82,23 @@ type WaitlistDetail = {
   preprovCoinSymbol: string | null
   preprovFarcasterUsername: string | null
   preprovZoraHandle: string | null
+  walletGraph: Array<{
+    address: string
+    walletType: string | null
+    provider: string | null
+    chain: string | null
+    isPrimary: boolean
+    isCanonicalSmartWallet: boolean
+    isEmbeddedEoa: boolean
+  }>
+  resolvedPrimaryWallet: string | null
+  resolvedCswAddress: string | null
+  resolvedCswOwners: string[]
+  embeddedWallet4626: string | null
+  embeddedWalletZora: string | null
+  privySmartWallet: string | null
+  crossAppEmbeddedWallets: string[]
+  crossAppSmartWallets: string[]
 }
 
 type AdminWaitlistDetailResponse = {
@@ -239,6 +256,16 @@ function DetailPanel({
   onApprove: () => void
   onDeny: () => void
 }) {
+  const resolvedPrimaryWallet = detail.resolvedPrimaryWallet || detail.primaryWallet
+  const resolvedCswOwners = (Array.isArray(detail.resolvedCswOwners) ? detail.resolvedCswOwners : []).filter(
+    (owner): owner is string => typeof owner === 'string' && owner.length > 0,
+  )
+  const crossAppEmbeddedWallets = (Array.isArray(detail.crossAppEmbeddedWallets) ? detail.crossAppEmbeddedWallets : []).filter(
+    (address): address is string => typeof address === 'string' && address.length > 0,
+  )
+  const crossAppSmartWallets = (Array.isArray(detail.crossAppSmartWallets) ? detail.crossAppSmartWallets : []).filter(
+    (address): address is string => typeof address === 'string' && address.length > 0,
+  )
   return (
     <div className="space-y-4">
       {/* Access decision */}
@@ -250,8 +277,8 @@ function DetailPanel({
               <StatusBadge status={detail.appAccessStatus} />
             </div>
             <div className="text-[10px] sm:text-[11px] text-zinc-600 mt-1">
-              {detail.appAccessDecidedAt ? `Decided ${formatDate(detail.appAccessDecidedAt)}` : 'Not decided yet'}
-              {detail.appAccessDecidedBy ? ` by ${shortAddr(detail.appAccessDecidedBy)}` : ''}
+              {Boolean(detail.appAccessDecidedAt) ? `Decided ${formatDate(detail.appAccessDecidedAt)}` : 'Not decided yet'}
+              {Boolean(detail.appAccessDecidedBy) ? ` by ${shortAddr(detail.appAccessDecidedBy)}` : ''}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -286,7 +313,7 @@ function DetailPanel({
         <div className="flex items-center gap-2">
           <Zap className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
           <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-600">Pre-provisioning</div>
-          {detail.preprovisionedAt ? (
+          {Boolean(detail.preprovisionedAt) ? (
             <span className="ml-auto text-[10px] text-emerald-400 flex items-center gap-1 shrink-0">
               <CheckCircle className="w-2.5 h-2.5" /> Ready
             </span>
@@ -296,7 +323,7 @@ function DetailPanel({
             </span>
           )}
         </div>
-        {detail.preprovisionedAt ? (
+        {Boolean(detail.preprovisionedAt) ? (
           <div className="space-y-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
               <div className="flex items-start gap-2">
@@ -315,7 +342,7 @@ function DetailPanel({
                   <div className="text-[12px] text-zinc-300">
                     {detail.preprovCoinSymbol ? `$${detail.preprovCoinSymbol}` : 'Not detected'}
                   </div>
-                  {detail.preprovCoinAddress && (
+                  {Boolean(detail.preprovCoinAddress) && (
                     <div className="text-[10px] font-mono text-zinc-700 truncate">{shortAddr(detail.preprovCoinAddress)}</div>
                   )}
                 </div>
@@ -356,8 +383,19 @@ function DetailPanel({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
           <DetailField label="Email" value={detail.email} />
           <DetailField label="Persona" value={detail.persona} />
-          <DetailField label="Primary wallet (EOA)" value={detail.primaryWallet} mono />
-          <DetailField label="CSW address" value={detail.cswAddress} mono />
+          <DetailField label="Primary wallet (resolved EOA)" value={detail.resolvedPrimaryWallet || detail.primaryWallet} mono />
+          <DetailField label="Canonical CSW (resolved)" value={detail.resolvedCswAddress || detail.cswAddress} mono />
+          <DetailField label="Privy smart wallet (4626.fun)" value={detail.privySmartWallet} mono />
+          <DetailField label="Privy embedded EOA (4626.fun)" value={detail.embeddedWallet4626 || detail.embeddedWallet} mono />
+          <DetailField label="Privy embedded EOA (Zora cross-app)" value={detail.embeddedWalletZora} mono />
+          {crossAppEmbeddedWallets.length > 0 && (
+            <DetailField label="Cross-app embedded wallets" value={crossAppEmbeddedWallets.join(', ')} mono />
+          )}
+          {crossAppSmartWallets.length > 0 && (
+            <DetailField label="Cross-app smart wallets" value={crossAppSmartWallets.join(', ')} mono />
+          )}
+          <DetailField label="Legacy profile primary wallet" value={detail.primaryWallet} mono />
+          <DetailField label="Legacy CSW address" value={detail.cswAddress} mono />
           <DetailField label="Embedded wallet" value={detail.embeddedWallet} mono />
           {(detail.embeddedWalletChain || detail.embeddedWalletClientType) && (
             <DetailField
@@ -372,6 +410,18 @@ function DetailPanel({
           <DetailField label="Privy user ID" value={detail.privyUserId} mono />
           <DetailField label="Has creator coin" value={detail.hasCreatorCoin === null ? null : detail.hasCreatorCoin ? 'Yes' : 'No'} />
         </div>
+        {resolvedCswOwners.length > 0 && (
+          <div className="space-y-1.5 pt-1 border-t border-white/5">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-600">Resolved CSW owners</div>
+            <div className="space-y-1">
+              {resolvedCswOwners.map((owner) => (
+                <div key={owner} className="text-[12px] font-mono text-zinc-300 break-all">
+                  {owner}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Referral info */}
@@ -381,7 +431,7 @@ function DetailPanel({
           <DetailField label="Referral code" value={detail.referralCode} />
           <DetailField label="Referred by" value={detail.referredByCode} />
           <DetailField label="Code claimed" value={formatDate(detail.referralClaimedAt)} />
-          {detail.referredBySignupId && (
+          {Boolean(detail.referredBySignupId) && (
             <DetailField label="Referrer signup ID" value={String(detail.referredBySignupId)} />
           )}
         </div>
@@ -398,7 +448,7 @@ function DetailPanel({
       </div>
 
       {/* Verifications */}
-      {detail.verifications && (
+      {Boolean(detail.verifications) && (
         <div className="rounded-lg border border-white/10 bg-black/20 p-3 sm:p-4 space-y-2">
           <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-600">Verifications</div>
           <pre className="rounded-lg border border-white/10 bg-black/40 p-2 sm:p-3 text-[10px] sm:text-[11px] text-zinc-300 overflow-auto max-h-40 sm:max-h-48">
@@ -408,10 +458,10 @@ function DetailPanel({
       )}
 
       {/* Quick links */}
-      {detail.primaryWallet && (
+      {resolvedPrimaryWallet && (
         <div className="flex flex-wrap gap-x-3 gap-y-1.5">
           <a
-            href={`https://basescan.org/address/${detail.primaryWallet}`}
+            href={`https://basescan.org/address/${resolvedPrimaryWallet}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors py-1"
@@ -419,14 +469,14 @@ function DetailPanel({
             Basescan <ExternalLink className="w-2.5 h-2.5" />
           </a>
           <a
-            href={`https://zora.co/@${detail.preprovZoraHandle || detail.primaryWallet}`}
+            href={`https://zora.co/@${detail.preprovZoraHandle || resolvedPrimaryWallet}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors py-1"
           >
             Zora <ExternalLink className="w-2.5 h-2.5" />
           </a>
-          {detail.preprovFarcasterUsername && (
+          {Boolean(detail.preprovFarcasterUsername) && (
             <a
               href={`https://warpcast.com/${detail.preprovFarcasterUsername}`}
               target="_blank"
