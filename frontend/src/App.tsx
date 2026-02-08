@@ -123,9 +123,10 @@ function useResolvedAccessState(): AccessState {
     const raw = typeof siwe.authAddress === 'string' ? siwe.authAddress : ''
     return isValidEvmAddress(raw) ? raw.toLowerCase() : null
   }, [siwe.authAddress])
-  // Once a session is established, treat the authenticated address as the source of truth.
-  // This avoids gating on a transient/secondary connected wallet address.
-  const effectiveAddress = siwe.isSignedIn && siweAuthAddress ? siweAuthAddress : connectedAddress ?? siweAuthAddress
+  // Use the actively connected wallet for allowlist/admin bypass checks, while still allowing
+  // a bearer/cookie-backed session to satisfy session gates.
+  const effectiveAddress = connectedAddress ?? siweAuthAddress
+  const hasSession = Boolean(siweAuthAddress)
   const isBypassAdmin = effectiveAddress ? ADMIN_BYPASS_ADDRESSES.has(effectiveAddress) : false
 
   const allowlistModeQuery = useQuery({
@@ -151,12 +152,12 @@ function useResolvedAccessState(): AccessState {
     siwe.busy ||
     allowlistModeQuery.isLoading ||
     (allowlistEnforced && !isBypassAdmin && !!effectiveAddress && allowQuery.isLoading) ||
-    (siwe.isSignedIn && adminStatus.isLoading)
+    (hasSession && adminStatus.isLoading)
 
   return {
     loading,
     walletConnected: isConnected,
-    sessionValid: siwe.isSignedIn,
+    sessionValid: hasSession,
     accepted,
     creator: accepted,
     admin: adminStatus.isAdmin || isBypassAdmin,
