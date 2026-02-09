@@ -45,7 +45,7 @@ const fallbackRegistration: RegistrationFile = {
       agentRegistry: 'eip155:8453:0x0000000000000000000000000000000000000000',
     },
   ],
-  supportedTrust: [],
+  supportedTrust: ['reputation', 'crypto-economic', 'tee-attestation'],
 }
 
 const registrationPaths = [

@@ -22,6 +22,7 @@ type AgentData = {
 type VaultUpsertResponse = {
   vaultAddress: `0x${string}`
   groupId: string
+  lensGroupAddress: `0x${string}` | null
   configHash: string
 }
 
@@ -233,24 +234,34 @@ export function AdminAgentSetup() {
   // -----------------------------------------------------------------------
   const [vaultAddress, setVaultAddress] = useState('')
   const [groupId, setGroupId] = useState('')
+  const [lensGroupAddress, setLensGroupAddress] = useState('')
+  const [lensMetadataUri, setLensMetadataUri] = useState('')
   const [creatorCoinAddress, setCreatorCoinAddress] = useState('')
   const [gatingEnabled, setGatingEnabled] = useState(true)
   const [gatingMode, setGatingMode] = useState<'shares' | 'none'>('shares')
   const [minShares, setMinShares] = useState('1')
   const [joinLocked, setJoinLocked] = useState(false)
 
+  const lensGroupValid = useMemo(() => {
+    const raw = lensGroupAddress.trim()
+    return raw.length === 0 || isAddressLike(raw)
+  }, [lensGroupAddress])
+
   const vaultFormValid = useMemo(() => {
     return (
       isAddressLike(vaultAddress) &&
       groupId.trim().length > 0 &&
+      lensGroupValid &&
       isAddressLike(creatorCoinAddress) &&
       creatorAddress !== null
     )
-  }, [vaultAddress, groupId, creatorCoinAddress, creatorAddress])
+  }, [vaultAddress, groupId, lensGroupValid, creatorCoinAddress, creatorAddress])
 
   const vaultMutation = useMutation({
     mutationFn: async () => {
       if (!creatorAddress) throw new Error('Not signed in')
+      const lensGroupAddressTrimmed = lensGroupAddress.trim()
+      const lensMetadataUriTrimmed = lensMetadataUri.trim()
 
       const config = {
         version: 1,
@@ -264,6 +275,15 @@ export function AdminAgentSetup() {
           groupId: groupId.trim(),
           agentInboxId: agent?.xmtpAgentAddress ?? undefined,
         },
+        lens:
+          lensGroupAddressTrimmed || lensMetadataUriTrimmed
+            ? {
+                groupAddress: lensGroupAddressTrimmed
+                  ? (lensGroupAddressTrimmed.toLowerCase() as `0x${string}`)
+                  : undefined,
+                metadataUri: lensMetadataUriTrimmed || undefined,
+              }
+            : undefined,
         gating: {
           enabled: gatingEnabled,
           joinLocked,
@@ -588,7 +608,7 @@ export function AdminAgentSetup() {
           </div>
           <div>
             <div className="text-sm text-white font-medium">2. Link Vault Group</div>
-            <div className="text-[10px] text-zinc-500">Connect your vault to an XMTP group chat</div>
+            <div className="text-[10px] text-zinc-500">Connect your vault to XMTP chat and optional Lens group identity</div>
           </div>
         </div>
 
@@ -639,6 +659,35 @@ export function AdminAgentSetup() {
                   Find this in your XMTP client's group settings, or create a new group and copy its ID.
                 </p>
               </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Lens Group Address (optional)</label>
+                  <input
+                    type="text"
+                    value={lensGroupAddress}
+                    onChange={(e) => setLensGroupAddress(e.target.value)}
+                    placeholder="0x..."
+                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-zinc-200 font-mono placeholder:text-zinc-700 focus:outline-none focus:border-amber-500/30"
+                  />
+                  {lensGroupAddress && !lensGroupValid && (
+                    <span className="text-[10px] text-red-400 mt-1">Invalid Lens group address</span>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Lens Group Metadata URI (optional)</label>
+                  <input
+                    type="text"
+                    value={lensMetadataUri}
+                    onChange={(e) => setLensMetadataUri(e.target.value)}
+                    placeholder="lens://... or https://..."
+                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-zinc-200 placeholder:text-zinc-700 focus:outline-none focus:border-amber-500/30"
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] text-zinc-600">
+                Lens groups are useful for membership/discovery. XMTP remains the active chat transport.
+              </p>
             </>
           )}
         </div>

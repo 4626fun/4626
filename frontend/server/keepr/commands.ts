@@ -39,6 +39,7 @@ function formatVaultStatus(v: Awaited<ReturnType<typeof getKeeprVaultByGroupId>>
     '- vaultAddress: ' + v.vaultAddress,
     '- chainId: ' + String(v.chainId),
     '- groupId: ' + v.groupId,
+    '- lensGroupAddress: ' + String(v.lensGroupAddress ?? 'n/a'),
     '- canonicalOwner: ' + v.canonicalOwnerAddress,
     '- gating:',
     '  - enabled: ' + String(v.gatingEnabled),
@@ -269,4 +270,3 @@ export async function handleKeeprCommand(params: {
 
   return { ok: false, response: 'Unknown command. Try `/keepr help`.' }
 }
-

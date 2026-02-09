@@ -35,6 +35,17 @@ const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 const ERC8004_IDENTITY_REGISTRY = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432'
 const ERC8004_AGENT_URI_DEFAULT = 'https://4626.fun/.well-known/agent-registration.json'
 
+function toRegistrationDataUri(payload: unknown): string {
+  const json = JSON.stringify(payload)
+  const bytes = new TextEncoder().encode(json)
+  let binary = ''
+  bytes.forEach((b) => {
+    binary += String.fromCharCode(b)
+  })
+  const base64 = btoa(binary)
+  return `data:application/json;base64,${base64}`
+}
+
 type LegacyVaultHint = {
   id: string
   label: string
@@ -222,6 +233,44 @@ async function fetchLegacyPhase1Map(publicClient: any): Promise<Map<string, { va
   }
 }
 
+async function resolveShareOftFromVault(publicClient: any, vaultAddress: Address): Promise<Address | null> {
+  const registryAddress = CONTRACTS.registry
+  if (!registryAddress || !isAddress(registryAddress)) return null
+
+  const tokens = (await publicClient.readContract({
+    address: registryAddress as Address,
+    abi: CREATOR_REGISTRY_ABI,
+    functionName: 'getAllCreatorCoins',
+  })) as Address[]
+
+  if (!tokens || tokens.length === 0) return null
+
+  const target = vaultAddress.toLowerCase()
+  const calls = tokens.map((token) => ({
+    address: registryAddress as Address,
+    abi: CREATOR_REGISTRY_ABI,
+    functionName: 'getCreatorCoin',
+    args: [token],
+  }))
+
+  const chunkSize = 120
+  for (let i = 0; i < calls.length; i += chunkSize) {
+    const chunk = calls.slice(i, i + chunkSize)
+    const results = await publicClient.multicall({ contracts: chunk, allowFailure: true })
+    for (const res of results) {
+      if (res.status !== 'success') continue
+      const info = res.result as any
+      const vault = info?.vault as Address | undefined
+      const shareOft = (info?.shareOFT ?? info?.shareOft) as Address | undefined
+      if (!vault || !shareOft) continue
+      if (!isAddress(vault) || !isAddress(shareOft)) continue
+      if (String(vault).toLowerCase() === target) return getAddress(shareOft)
+    }
+  }
+
+  return null
+}
+
 const VESTING_ABI = [
   { name: 'releasable', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { name: 'release', type: 'function', stateMutability: 'nonpayable', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -247,6 +296,11 @@ const ERC8004_IDENTITY_REGISTRY_ABI = [
 const ERC8004_REGISTERED_EVENT = parseAbiItem(
   'event Registered(uint256 indexed agentId, string agentURI, address indexed owner)',
 )
+
+const SHARE_OFT_METADATA_ABI = [
+  { name: 'contractURI', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
+  { name: 'setContractURI', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'uri', type: 'string' }], outputs: [] },
+] as const
 
 const WRAPPER_ABI = [
   { name: 'unwrap', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'amount', type: 'uint256' }], outputs: [{ type: 'uint256' }] },
@@ -591,6 +645,10 @@ function AgentRegistration() {
   const { ensurePaymasterSession } = usePaymasterSessionGuard()
   const [embeddedPrivyEoaAddress, setEmbeddedPrivyEoaAddress] = useState<string | null>(null)
   const [agentUri, setAgentUri] = useState(ERC8004_AGENT_URI_DEFAULT)
+  const [agentUriState, setAgentUriState] = useState<{
+    status: 'idle' | 'loading' | 'success' | 'error'
+    error?: string
+  }>({ status: 'idle' })
   const [registerTxState, setRegisterTxState] = useState<TxState>({ status: 'idle' })
   const [updateTxState, setUpdateTxState] = useState<TxState>({ status: 'idle' })
   const [registeredAgentId, setRegisteredAgentId] = useState<string | null>(null)
@@ -696,6 +754,23 @@ function AgentRegistration() {
       status: patch.status ?? prev.status,
       error: patch.error ?? (patch.status === 'error' ? prev.error : undefined),
     }))
+  }
+
+  const buildContentAddressedUri = async () => {
+    setAgentUriState({ status: 'loading' })
+    try {
+      const res = await fetch('/.well-known/agent-registration.json', { cache: 'no-store' })
+      if (!res.ok) {
+        throw new Error(`Failed to load registration file (${res.status}).`)
+      }
+      const json = await res.json()
+      const dataUri = toRegistrationDataUri(json)
+      setAgentUri(dataUri)
+      setAgentUriState({ status: 'success' })
+    } catch (e: any) {
+      const msg = String(e?.message || 'Failed to build data URI.')
+      setAgentUriState({ status: 'error', error: msg })
+    }
   }
 
   const extractAgentId = (receipt: { logs?: Array<{ address: string; data: Hex; topics: Hex[] }> }) => {
@@ -1026,13 +1101,30 @@ function AgentRegistration() {
             )}
 
             <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-3">
-              <div className="text-sm text-zinc-300">Agent registration URL</div>
+              <div className="text-sm text-zinc-300">Agent registration URI</div>
               <input
                 value={agentUri}
                 onChange={(e) => setAgentUri(e.target.value)}
                 placeholder={ERC8004_AGENT_URI_DEFAULT}
                 className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
               />
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-600">
+                <span>Use a content-addressed URI (data: or ipfs://) to pass validation.</span>
+                <button
+                  type="button"
+                  onClick={() => void buildContentAddressedUri()}
+                  className="text-zinc-300 hover:text-white transition-colors"
+                >
+                  Use data URI
+                </button>
+              </div>
+              {agentUriState.status === 'loading' ? (
+                <div className="text-xs text-zinc-500">Building content-addressed URI…</div>
+              ) : agentUriState.status === 'error' ? (
+                <div className="text-xs text-red-400">{agentUriState.error}</div>
+              ) : agentUriState.status === 'success' ? (
+                <div className="text-xs text-emerald-300/90">Content-addressed URI ready.</div>
+              ) : null}
               <div className="text-xs text-zinc-600">
                 Registry: <span className="font-mono text-zinc-400">{shortAddress(ERC8004_IDENTITY_REGISTRY)}</span> · Chain: Base
               </div>
@@ -1084,6 +1176,375 @@ function AgentRegistration() {
                 {registerTxState.status === 'pending' ? 'Registering…' : 'Register agent'}
               </button>
               <TxMeta state={registerTxState} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function ShareTokenMetadata() {
+  const { address, isConnected } = useAccount()
+  const chainId = useChainId()
+  const { switchChainAsync, isPending: switchPending } = useSwitchChain()
+  const { data: walletClient } = useWalletClient({ chainId: base.id })
+  const publicClient = usePublicClient({ chainId: base.id })
+  const { wallets: privyWallets } = useWallets()
+  const { ensurePaymasterSession } = usePaymasterSessionGuard()
+  const [embeddedPrivyEoaAddress, setEmbeddedPrivyEoaAddress] = useState<string | null>(null)
+  const [shareOftInput, setShareOftInput] = useState('')
+  const [vaultInput, setVaultInput] = useState('')
+  const [contractUri, setContractUri] = useState('')
+  const [metadataState, setMetadataState] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; error?: string }>({
+    status: 'idle',
+  })
+  const [resolveState, setResolveState] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; error?: string }>({
+    status: 'idle',
+  })
+  const [txState, setTxState] = useState<TxState>({ status: 'idle' })
+  const [metadataPreview, setMetadataPreview] = useState<{ lensUri?: string; gatewayUrl?: string } | null>(null)
+
+  const connectedAddress = useMemo(() => {
+    if (!address || !isAddress(address)) return null
+    return getAddress(address)
+  }, [address])
+
+  const embeddedPrivyWallet = useMemo(() => {
+    const ws = Array.isArray(privyWallets) ? (privyWallets as any[]) : []
+    const normalizeType = (w: any) =>
+      String(w?.wallet_client_type ?? w?.walletClientType ?? w?.connector_type ?? w?.connectorType ?? w?.type ?? '')
+        .trim()
+        .toLowerCase()
+    return (
+      ws.find((w) => {
+        const t = normalizeType(w)
+        return t === 'privy' || t.includes('privy') || t.includes('embedded')
+      }) ?? null
+    )
+  }, [privyWallets])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!embeddedPrivyWallet) {
+      setEmbeddedPrivyEoaAddress(null)
+      return () => {}
+    }
+    ;(async () => {
+      try {
+        const provider = await (embeddedPrivyWallet as any).getEthereumProvider?.()
+        if (!provider?.request) return
+        const accounts = (await provider.request({ method: 'eth_accounts' })) as string[] | null
+        const a0 = Array.isArray(accounts) ? accounts[0] : null
+        const addr = typeof a0 === 'string' && isAddress(a0) ? getAddress(a0) : null
+        if (!cancelled) setEmbeddedPrivyEoaAddress(addr)
+      } catch {
+        if (!cancelled) setEmbeddedPrivyEoaAddress(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [embeddedPrivyWallet])
+
+  const isBase = chainId === base.id
+  const canonicalCswAddress = useMemo(() => getAddress(CANONICAL_SMART_WALLET), [])
+  const isCanonical = connectedAddress?.toLowerCase() === canonicalCswAddress.toLowerCase()
+
+  const canonicalOwnerQuery = useReadContract({
+    address: CANONICAL_SMART_WALLET as Address,
+    abi: COINBASE_SMART_WALLET_OWNER_LINK_ABI,
+    functionName: 'isOwnerAddress',
+    args: [connectedAddress ?? ZERO_ADDRESS],
+    chainId: base.id,
+    query: { enabled: !!connectedAddress },
+  })
+  const connectedIsCanonicalOwner = canonicalOwnerQuery.data === true
+
+  const embeddedOwnerQuery = useReadContract({
+    address: CANONICAL_SMART_WALLET as Address,
+    abi: COINBASE_SMART_WALLET_OWNER_LINK_ABI,
+    functionName: 'isOwnerAddress',
+    args: [embeddedPrivyEoaAddress ? (embeddedPrivyEoaAddress as Address) : ZERO_ADDRESS],
+    chainId: base.id,
+    query: { enabled: !!embeddedPrivyEoaAddress },
+  })
+  const embeddedIsCanonicalOwner = embeddedOwnerQuery.data === true
+
+  const shareOftAddress = useMemo(() => {
+    const raw = shareOftInput.trim()
+    return raw && isAddress(raw) ? (getAddress(raw) as Address) : null
+  }, [shareOftInput])
+
+  const vaultAddress = useMemo(() => {
+    const raw = vaultInput.trim()
+    return raw && isAddress(raw) ? (getAddress(raw) as Address) : null
+  }, [vaultInput])
+
+  const contractUriQuery = useReadContract({
+    address: (shareOftAddress ?? ZERO_ADDRESS) as Address,
+    abi: SHARE_OFT_METADATA_ABI,
+    functionName: 'contractURI',
+    chainId: base.id,
+    query: { enabled: !!shareOftAddress },
+  })
+  const currentContractUri = typeof contractUriQuery.data === 'string' ? contractUriQuery.data : null
+
+  async function generateGroveMetadata() {
+    if (!shareOftAddress) {
+      setMetadataState({ status: 'error', error: 'ShareOFT address is required.' })
+      return
+    }
+    setMetadataState({ status: 'loading' })
+    setMetadataPreview(null)
+    try {
+      const qs = new URLSearchParams({ address: shareOftAddress, chain: String(base.id), store: 'true' })
+      const res = await fetch(`/api/lens/share-token-metadata?${qs.toString()}`)
+      const payload = (await res.json().catch(() => null)) as any
+      if (!res.ok || !payload?.success) {
+        throw new Error(payload?.error || `Request failed (${res.status}).`)
+      }
+      const data = payload?.data ?? {}
+      const lensUri = data?.contractUri || data?.grove?.lensUri
+      const gatewayUrl = data?.grove?.gatewayUrl
+      if (lensUri) setContractUri(String(lensUri))
+      setMetadataPreview({ lensUri, gatewayUrl })
+      setMetadataState({ status: 'success' })
+    } catch (e: any) {
+      setMetadataState({ status: 'error', error: String(e?.message || 'Failed to generate metadata') })
+    }
+  }
+
+  async function resolveShareOft() {
+    if (!publicClient) return
+    setResolveState({ status: 'loading' })
+    try {
+      if (!isBase) {
+        throw new Error('Please switch to Base network to continue.')
+      }
+      if (!vaultAddress) {
+        throw new Error('Vault address is required.')
+      }
+      const shareOft = await resolveShareOftFromVault(publicClient as any, vaultAddress)
+      if (!shareOft) {
+        throw new Error('No ShareOFT found for this vault.')
+      }
+      setShareOftInput(shareOft)
+      setResolveState({ status: 'success' })
+    } catch (e: any) {
+      setResolveState({ status: 'error', error: String(e?.message || 'Failed to resolve ShareOFT') })
+    }
+  }
+
+  async function setShareTokenContractUri() {
+    if (!publicClient) return
+    setTxState({ status: 'pending' })
+    try {
+      if (!isBase) {
+        throw new Error('Please switch to Base network to continue.')
+      }
+      if (!shareOftAddress) {
+        throw new Error('ShareOFT address is required.')
+      }
+      const trimmedUri = contractUri.trim()
+      if (!trimmedUri) throw new Error('Contract URI is required.')
+
+      if (isCanonical) {
+        if (!walletClient) throw new Error('Connect the canonical smart wallet to continue.')
+        const hash = await (walletClient as any).writeContract({
+          account: (walletClient as any).account,
+          chain: base as any,
+          address: shareOftAddress,
+          abi: SHARE_OFT_METADATA_ABI,
+          functionName: 'setContractURI',
+          args: [trimmedUri],
+        })
+        setTxState({ status: 'pending', hash })
+        await (publicClient as any).waitForTransactionReceipt({ hash })
+        setTxState({ status: 'success', hash })
+        return
+      }
+
+      if (embeddedIsCanonicalOwner && embeddedPrivyWallet && embeddedPrivyEoaAddress) {
+        const embeddedProvider = await (embeddedPrivyWallet as any).getEthereumProvider?.()
+        if (!embeddedProvider?.request) {
+          throw new Error('Privy embedded wallet provider not available')
+        }
+        const sessionOk = await ensurePaymasterSession()
+        if (!sessionOk) {
+          throw new Error('Sign in required for gas sponsorship.')
+        }
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const data = encodeFunctionData({
+          abi: SHARE_OFT_METADATA_ABI as any,
+          functionName: 'setContractURI' as any,
+          args: [trimmedUri],
+        })
+        const result = await sendEmbeddedOwnerSmartWalletCall({
+          publicClient: publicClient as any,
+          embeddedProvider,
+          bundlerUrl,
+          smartWallet: canonicalCswAddress as Address,
+          ownerAddress: embeddedPrivyEoaAddress as Address,
+          calls: [{ to: shareOftAddress, data }],
+        })
+        setTxState({ status: 'pending', hash: result.transactionHash })
+        await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
+        setTxState({ status: 'success', hash: result.transactionHash })
+        return
+      }
+
+      if (connectedIsCanonicalOwner && connectedAddress) {
+        if (!walletClient) throw new Error('Connect the owner wallet to continue.')
+        const sessionOk = await ensurePaymasterSession()
+        if (!sessionOk) {
+          throw new Error('Sign in required for gas sponsorship.')
+        }
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const data = encodeFunctionData({
+          abi: SHARE_OFT_METADATA_ABI as any,
+          functionName: 'setContractURI' as any,
+          args: [trimmedUri],
+        })
+        const result = await sendCoinbaseSmartWalletUserOperation({
+          publicClient: publicClient as any,
+          walletClient: walletClient as any,
+          bundlerUrl,
+          smartWallet: canonicalCswAddress as Address,
+          ownerAddress: connectedAddress as Address,
+          calls: [{ to: shareOftAddress, data }],
+          version: '1',
+          userOpSignMode: 'auto',
+          allowEoaSignMessageFallback: false,
+          skipPaymaster: false,
+        })
+        setTxState({ status: 'pending', hash: result.transactionHash })
+        await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
+        setTxState({ status: 'success', hash: result.transactionHash })
+        return
+      }
+
+      throw new Error('Connect the canonical smart wallet or an owner wallet to continue.')
+    } catch (e: any) {
+      setTxState({ status: 'error', error: toFriendlyTxError(e) })
+    }
+  }
+
+  return (
+    <section id="share-token-metadata" className="cinematic-section">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6">
+        <div className="rounded-2xl border border-white/5 bg-white/3 overflow-hidden">
+          <div className="px-6 py-6 sm:px-8 sm:py-8 space-y-6">
+            <div className="space-y-2">
+              <div className="label">Admin Ops</div>
+              <div className="text-xl sm:text-2xl text-zinc-100 font-medium tracking-tight">Share token metadata</div>
+              <div className="text-sm text-zinc-600 max-w-prose">
+                Generate contract metadata, pin it to Lens Grove, then set the ShareOFT <span className="font-mono text-zinc-400">contractURI</span>.
+              </div>
+            </div>
+
+            {!isConnected ? (
+              <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-3">
+                <div className="label">Connect</div>
+                <ConnectButton />
+              </div>
+            ) : (
+              <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-2 text-sm">
+                <div className="text-zinc-400">Connected wallet</div>
+                <div className="font-mono text-zinc-200">{connectedAddress}</div>
+                <div className="text-xs text-zinc-500">
+                  Canonical CSW: <span className="font-mono text-zinc-300">{shortAddress(canonicalCswAddress)}</span>
+                </div>
+                {!isBase ? (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!switchChainAsync) return
+                      await switchChainAsync({ chainId: base.id })
+                    }}
+                    disabled={switchPending}
+                    className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {switchPending ? 'Switching…' : 'Switch to Base'}
+                  </button>
+                ) : null}
+              </div>
+            )}
+
+            <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-3">
+              <div className="text-sm text-zinc-300">Vault address (optional)</div>
+              <input
+                value={vaultInput}
+                onChange={(e) => setVaultInput(e.target.value)}
+                placeholder="0x..."
+                className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => void resolveShareOft()}
+                disabled={resolveState.status === 'loading' || !vaultAddress}
+                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {resolveState.status === 'loading' ? 'Resolving…' : 'Resolve ShareOFT from vault'}
+              </button>
+              {resolveState.status === 'error' ? <div className="text-xs text-red-400">{resolveState.error}</div> : null}
+
+              <div className="text-sm text-zinc-300">ShareOFT address</div>
+              <input
+                value={shareOftInput}
+                onChange={(e) => setShareOftInput(e.target.value)}
+                placeholder="0x..."
+                className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
+              />
+              <div className="text-xs text-zinc-600">
+                Current contractURI:{' '}
+                <span className="font-mono text-zinc-400">{currentContractUri ? shortAddress(currentContractUri) : '—'}</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void generateGroveMetadata()}
+                disabled={metadataState.status === 'loading' || !shareOftAddress}
+                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {metadataState.status === 'loading' ? 'Generating…' : 'Generate Grove metadata'}
+              </button>
+              {metadataState.status === 'error' ? <div className="text-xs text-red-400">{metadataState.error}</div> : null}
+
+              {metadataPreview?.lensUri ? (
+                <div className="text-xs text-zinc-500">
+                  Grove URI: <span className="font-mono text-zinc-300">{metadataPreview.lensUri}</span>
+                </div>
+              ) : null}
+              {metadataPreview?.gatewayUrl ? (
+                <a
+                  className="text-xs text-brand-accent hover:text-brand-primary"
+                  href={metadataPreview.gatewayUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  View Grove gateway
+                </a>
+              ) : null}
+
+              <div className="text-xs text-zinc-600">Contract URI</div>
+              <input
+                value={contractUri}
+                onChange={(e) => setContractUri(e.target.value)}
+                placeholder="lens://..."
+                className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => void setShareTokenContractUri()}
+                disabled={txState.status === 'pending' || !shareOftAddress || !contractUri.trim()}
+                className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {txState.status === 'pending' ? 'Setting…' : 'Set contractURI on ShareOFT'}
+              </button>
+              <TxMeta state={txState} />
             </div>
           </div>
         </div>
@@ -2202,6 +2663,13 @@ export function AdminOps() {
         kind: 'anchor' as const,
       },
       {
+        id: 'share-token-metadata',
+        label: 'Share token metadata',
+        description: 'Pin ShareOFT metadata to Lens Grove.',
+        to: '#share-token-metadata',
+        kind: 'anchor' as const,
+      },
+      {
         id: 'manifest-signing',
         label: 'Manifest signing',
         description: 'Generate accountAssociation JSON.',
@@ -2461,6 +2929,7 @@ export function AdminOps() {
       </section>
 
       <AgentRegistration />
+      <ShareTokenMetadata />
       <LegacyWithdrawals />
     </div>
   )

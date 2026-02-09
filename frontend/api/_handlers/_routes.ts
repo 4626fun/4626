@@ -156,6 +156,10 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'frames/vault': () => import('./frames/_vault.js'),
   'frames/gallery': () => import('./frames/_gallery.js'),
 
+  'lens/mapping': () => import('./lens/_mapping.js'),
+  'lens/graph': () => import('./lens/_graph.js'),
+  'lens/share-token-metadata': () => import('./lens/_share-token-metadata.js'),
+
   'zora/coin': () => import('./zora/_coin.js'),
   'zora/explore': () => import('./zora/_explore.js'),
   'zora/metrics': () => import('./zora/_metrics.js'),

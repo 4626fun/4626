@@ -15,6 +15,10 @@ export type KeeprConfigV1 = {
     groupId: string
     agentInboxId?: string
   }
+  lens?: {
+    groupAddress?: `0x${string}`
+    metadataUri?: string
+  }
   gating: {
     enabled: boolean
     joinLocked: boolean
@@ -72,6 +76,7 @@ export type KeeprVaultRow = {
   vaultAddress: `0x${string}`
   chainId: number
   groupId: string
+  lensGroupAddress: `0x${string}` | null
   creatorCoinAddress: `0x${string}`
   canonicalOwnerAddress: `0x${string}`
   shareTokenAddress: `0x${string}` | null
@@ -90,6 +95,7 @@ function mapVaultRow(row: any): KeeprVaultRow {
     vaultAddress: String(row.vault_address).toLowerCase() as `0x${string}`,
     chainId: Number(row.chain_id),
     groupId: String(row.group_id),
+    lensGroupAddress: row.lens_group_address ? (String(row.lens_group_address).toLowerCase() as `0x${string}`) : null,
     creatorCoinAddress: String(row.creator_coin_address).toLowerCase() as `0x${string}`,
     canonicalOwnerAddress: String(row.canonical_owner_address).toLowerCase() as `0x${string}`,
     shareTokenAddress: row.share_token_address ? (String(row.share_token_address).toLowerCase() as `0x${string}`) : null,
@@ -116,6 +122,11 @@ export async function upsertKeeprVault(params: { config: KeeprConfigV1; actorWal
   if (!Number.isFinite(chainId)) throw new Error('invalid_chain_id')
   const groupId = String(cfg?.xmtp?.groupId ?? '').trim()
   if (!groupId) throw new Error('missing_group_id')
+  const lensGroupAddressRaw = String(cfg?.lens?.groupAddress ?? '').trim()
+  const lensGroupAddress = lensGroupAddressRaw ? lensGroupAddressRaw.toLowerCase() : null
+  if (lensGroupAddress && (!lensGroupAddress.startsWith('0x') || lensGroupAddress.length !== 42)) {
+    throw new Error('invalid_lens_group_address')
+  }
 
   const hash = computeConfigHash(cfg)
 
@@ -130,6 +141,7 @@ export async function upsertKeeprVault(params: { config: KeeprConfigV1; actorWal
       vault_address,
       chain_id,
       group_id,
+      lens_group_address,
       creator_coin_address,
       canonical_owner_address,
       share_token_address,
@@ -146,6 +158,7 @@ export async function upsertKeeprVault(params: { config: KeeprConfigV1; actorWal
       ${vaultAddress},
       ${chainId},
       ${groupId},
+      ${lensGroupAddress},
       ${String(cfg.vault.creatorCoinAddress).toLowerCase()},
       ${String(cfg.vault.canonicalOwnerAddress).toLowerCase()},
       ${cfg.vault.shareTokenAddress ? String(cfg.vault.shareTokenAddress).toLowerCase() : null},
@@ -162,6 +175,7 @@ export async function upsertKeeprVault(params: { config: KeeprConfigV1; actorWal
     ON CONFLICT (vault_address) DO UPDATE SET
       chain_id = EXCLUDED.chain_id,
       group_id = EXCLUDED.group_id,
+      lens_group_address = EXCLUDED.lens_group_address,
       creator_coin_address = EXCLUDED.creator_coin_address,
       canonical_owner_address = EXCLUDED.canonical_owner_address,
       share_token_address = EXCLUDED.share_token_address,
@@ -185,6 +199,7 @@ export async function upsertKeeprVault(params: { config: KeeprConfigV1; actorWal
       ${{
         configHash: hash,
         groupId,
+        lensGroupAddress,
         chainId,
         gatingEnabled,
         joinLocked,
@@ -300,4 +315,3 @@ export async function setKeeprJoinLocked(params: {
     );
   `
 }
-

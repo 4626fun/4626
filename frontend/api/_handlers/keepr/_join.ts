@@ -16,6 +16,7 @@ type JoinBody = {
 type JoinResponse = {
   eligible: boolean
   reason: string
+  lensGroupAddress?: `0x${string}`
   nextSteps?: string[]
   action?: any
   actionId?: number
@@ -143,6 +144,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<JoinResponse>)
   }
 
+  const sharedJoinContext = {
+    lensGroupAddress: vault.lensGroupAddress ?? undefined,
+  }
+
   if (!vault.gatingEnabled || vault.gatingMode === 'none') {
     // Gating disabled: allow join (this endpoint is already proof-based).
 
@@ -164,7 +169,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     return res.status(200).json({
       success: true,
-      data: { eligible: true, reason: 'eligible', action, actionId: id, actionStatus: 'queued' } satisfies JoinResponse,
+      data: { ...sharedJoinContext, eligible: true, reason: 'eligible', action, actionId: id, actionStatus: 'queued' } satisfies JoinResponse,
     } satisfies ApiEnvelope<JoinResponse>)
   }
 
@@ -172,6 +177,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({
       success: true,
       data: {
+        ...sharedJoinContext,
         eligible: false,
         reason: 'unsupported_gating_mode',
         nextSteps: ['This vault is not configured for share-based gating.'],
@@ -195,6 +201,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({
       success: true,
       data: {
+        ...sharedJoinContext,
         eligible: false,
         reason: 'vault_misconfigured',
         nextSteps: ['The vault gating config is incomplete. Contact the creator.'],
@@ -229,6 +236,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       success: true,
       data: {
+        ...sharedJoinContext,
         eligible: false,
         reason: 'verification_failed',
         actionStatus: 'watching',
@@ -284,6 +292,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       success: true,
       data: {
+        ...sharedJoinContext,
         eligible: false,
         reason: 'ineligible',
         actionStatus: 'watching',
@@ -314,6 +323,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   return res.status(200).json({
     success: true,
     data: {
+      ...sharedJoinContext,
       eligible: true,
       reason: 'eligible',
       action,

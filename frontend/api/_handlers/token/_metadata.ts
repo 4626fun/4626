@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import type { Address } from 'viem'
-import { createPublicClient, http, isAddress } from 'viem'
-import { base } from 'viem/chains'
+import { isAddress } from 'viem'
 
 import {
   DEFAULT_CHAIN_ID,
@@ -12,23 +11,9 @@ import {
   setCache,
   setCors,
 } from '../../../server/zora/_shared.js'
+import { buildShareTokenMetadata } from '../../../server/_lib/shareTokenMetadata.js'
 
 declare const process: { env: Record<string, string | undefined> }
-
-// ABI fragments for reading ShareOFT and registry data
-const SHARE_OFT_ABI = [
-  { type: 'function', name: 'name', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
-  { type: 'function', name: 'symbol', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
-  { type: 'function', name: 'decimals', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] },
-  { type: 'function', name: 'vault', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'registry', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'version', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
-  { type: 'function', name: 'description', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
-] as const
-
-const VAULT_ABI = [
-  { type: 'function', name: 'asset', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-] as const
 
 /**
  * ERC-7572 Token Metadata API
@@ -58,102 +43,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const chainId = getNumberQuery(req, 'chain') ?? DEFAULT_CHAIN_ID
 
   try {
-    const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
-    const client = createPublicClient({
-      chain: base,
-      transport: http(rpcUrl),
+    const metadata = await buildShareTokenMetadata({
+      address: address as Address,
+      chainId,
+      rpcUrl: process.env.BASE_RPC_URL,
+      apiHost: process.env.API_HOST,
+      appHost: process.env.APP_HOST,
+      zoraKey: requireServerKey(),
     })
-
-    // Read ShareOFT basic data
-    const [name, symbol, decimals, vault, version, description] = await Promise.all([
-      client.readContract({ address: address as Address, abi: SHARE_OFT_ABI, functionName: 'name' }).catch(() => 'Unknown'),
-      client.readContract({ address: address as Address, abi: SHARE_OFT_ABI, functionName: 'symbol' }).catch(() => '■TOKEN'),
-      client.readContract({ address: address as Address, abi: SHARE_OFT_ABI, functionName: 'decimals' }).catch(() => 18),
-      client.readContract({ address: address as Address, abi: SHARE_OFT_ABI, functionName: 'vault' }).catch(() => null),
-      client.readContract({ address: address as Address, abi: SHARE_OFT_ABI, functionName: 'version' }).catch(() => '1.0.0'),
-      client.readContract({ address: address as Address, abi: SHARE_OFT_ABI, functionName: 'description' }).catch(() => null),
-    ])
-
-    // Get underlying creator coin address from vault
-    let creatorCoin: Address | null = null
-    if (vault && isAddress(vault as string)) {
-      try {
-        creatorCoin = await client.readContract({
-          address: vault as Address,
-          abi: VAULT_ABI,
-          functionName: 'asset',
-        }) as Address
-      } catch {
-        // Vault might not exist or have different interface
-      }
-    }
-
-    // Fetch creator coin metadata from Zora API for the image
-    let creatorCoinImage: string | null = null
-    let creatorCoinName: string | null = null
-    
-    const zoraKey = requireServerKey()
-    if (zoraKey && creatorCoin && isAddress(creatorCoin)) {
-      try {
-        const sdk: any = await import('@zoralabs/coins-sdk')
-        sdk.setApiKey(zoraKey)
-        const coinResponse = await sdk.getCoin({
-          address: creatorCoin,
-          chain: chainId,
-        })
-        const coinData = coinResponse.data?.zora20Token
-        if (coinData) {
-          // Zora coins SDK returns mediaContent with different sizes
-          creatorCoinImage = coinData.mediaContent?.previewImage?.medium 
-            || coinData.mediaContent?.previewImage?.small
-            || coinData.mediaContent?.originalUri
-            || null
-          creatorCoinName = coinData.name || null
-        }
-      } catch (e) {
-        console.warn('[token/metadata] Failed to fetch Zora coin data:', e)
-      }
-    }
-
-    // Build the API base URL for image generation
-    const apiHost = process.env.API_HOST || 'api.4626.fun'
-    const appHost = process.env.APP_HOST || '4626.fun'
-    const protocol = apiHost.includes('localhost') ? 'http' : 'https'
-    const apiBaseUrl = `${protocol}://${apiHost}`
-    const appBaseUrl = `${protocol}://${appHost}`
-
-    // Generate framed image URL (PNG by default for wallet compatibility)
-    const imageUrl = creatorCoin
-      ? `${apiBaseUrl}/v1/token/${address}/image?chain=${chainId}&format=png`
-      : `${appBaseUrl}/logo.svg` // Fallback to default logo
-
-    // Build ERC-7572 compliant metadata
-    const metadata = {
-      name: String(name),
-      symbol: String(symbol),
-      decimals: Number(decimals),
-      description: description 
-        ? String(description)
-        : `${symbol} - CreatorVault Share Token representing ownership in a Creator Coin vault. Enables cross-chain transfers via LayerZero.`,
-      image: imageUrl,
-      external_link: `${appBaseUrl}/vault/${address}`,
-      // Extended properties
-      properties: {
-        category: 'Creator Vault Share Token',
-        version: String(version),
-        chainId,
-        vault: vault || null,
-        underlyingAsset: creatorCoin || null,
-        underlyingAssetName: creatorCoinName,
-        underlyingAssetImage: creatorCoinImage,
-        // Social links
-        twitter: 'https://x.com/4626fun',
-        website: 'https://4626.fun',
-        // Token capabilities
-        isOFT: true,
-        supportedChains: [8453, 1, 42161, 56, 43114], // Base, Ethereum, Arbitrum, BSC, Avalanche
-      },
-    }
 
     // Cache for 1 hour (metadata doesn't change often)
     setCache(res, 3600)

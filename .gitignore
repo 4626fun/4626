@@ -44,6 +44,7 @@ target/deploy/*-keypair.json
 !.cursor/skills/
 !.cursor/skills/**
 .cursor/rules/ERC-4337-Wallet-Invariants.mdc
+/.anchor/
 frontend/v4-subgraph/
 *.swp
 *.swo

@@ -44,11 +44,12 @@ function isAddressLike(value: string): boolean {
 }
 
 function parseSupportedTrust(raw: string | undefined): string[] {
-  if (!raw) return []
-  return raw
+  if (!raw) return ['reputation', 'crypto-economic', 'tee-attestation']
+  const entries = raw
     .split(/[\s,]+/g)
     .map((entry) => entry.trim())
     .filter(Boolean)
+  return entries.length > 0 ? entries : ['reputation', 'crypto-economic', 'tee-attestation']
 }
 
 function getErc8004Meta(req: VercelRequest): {
@@ -113,7 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const erc8004 = getErc8004Meta(req)
   const byo = {
     registrationUrlTemplate: 'https://{your-domain}/.well-known/agent-registration.json',
-    agentUriHint: 'Use your registration URL as agentURI when registering your agent.',
+    agentUriHint: 'Use an IPFS or data: URI (content-addressed) for agentURI when registering your agent.',
     requiredFields: ['type', 'name', 'description', 'image', 'services', 'x402Support', 'active', 'registrations'],
     specUrl: 'https://eips.ethereum.org/EIPS/eip-8004',
   }

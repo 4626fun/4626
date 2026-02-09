@@ -11,6 +11,7 @@ type UpsertBody = {
 type UpsertResponse = {
   vaultAddress: `0x${string}`
   groupId: string
+  lensGroupAddress: `0x${string}` | null
   configHash: string
 }
 
@@ -42,9 +43,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const canonicalOwner = typeof config?.vault?.canonicalOwnerAddress === 'string' ? config.vault.canonicalOwnerAddress.trim() : ''
   const vaultAddress = typeof config?.vault?.vaultAddress === 'string' ? config.vault.vaultAddress.trim() : ''
   const groupId = typeof config?.xmtp?.groupId === 'string' ? config.xmtp.groupId.trim() : ''
+  const lensGroupAddress = typeof config?.lens?.groupAddress === 'string' ? config.lens.groupAddress.trim() : ''
 
   if (!isAddressLike(owner) || !isAddressLike(canonicalOwner) || !isAddressLike(vaultAddress) || !groupId) {
     return res.status(400).json({ success: false, error: 'Invalid config fields' } satisfies ApiEnvelope<never>)
+  }
+  if (lensGroupAddress && !isAddressLike(lensGroupAddress)) {
+    return res.status(400).json({ success: false, error: 'Invalid lens group address' } satisfies ApiEnvelope<never>)
   }
 
   if (owner.toLowerCase() !== canonicalOwner.toLowerCase()) {
@@ -68,8 +73,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     data: {
       vaultAddress: row.vaultAddress,
       groupId: row.groupId,
+      lensGroupAddress: row.lensGroupAddress,
       configHash,
     } satisfies UpsertResponse,
   } satisfies ApiEnvelope<UpsertResponse>)
 }
-

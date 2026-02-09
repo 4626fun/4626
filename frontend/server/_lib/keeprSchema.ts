@@ -13,6 +13,7 @@ export async function ensureKeeprSchema(): Promise<void> {
         vault_address TEXT PRIMARY KEY,
         chain_id INTEGER NOT NULL,
         group_id TEXT NOT NULL,
+        lens_group_address TEXT,
         creator_coin_address TEXT NOT NULL,
         canonical_owner_address TEXT NOT NULL,
         share_token_address TEXT,
@@ -31,11 +32,22 @@ export async function ensureKeeprSchema(): Promise<void> {
     `
 
     await db.sql`CREATE INDEX IF NOT EXISTS keepr_vaults_group_id_idx ON keepr_vaults (group_id);`
+    await db.sql`CREATE INDEX IF NOT EXISTS keepr_vaults_lens_group_idx ON keepr_vaults (lens_group_address);`
     await db.sql`CREATE INDEX IF NOT EXISTS keepr_vaults_owner_idx ON keepr_vaults (canonical_owner_address);`
 
     // Back-compat: if table exists from a previous deployment, add new columns safely.
     try {
       await db.sql`ALTER TABLE keepr_vaults ADD COLUMN IF NOT EXISTS last_sync_at TIMESTAMPTZ;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE keepr_vaults ADD COLUMN IF NOT EXISTS lens_group_address TEXT;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`CREATE INDEX IF NOT EXISTS keepr_vaults_lens_group_idx ON keepr_vaults (lens_group_address);`
     } catch {
       // ignore
     }
@@ -266,4 +278,3 @@ export async function ensureKeeprSchema(): Promise<void> {
     throw err
   }
 }
-
