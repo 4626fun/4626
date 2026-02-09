@@ -79,6 +79,22 @@ export type UniswapPool = {
   createdAtTimestamp: string
 }
 
+export type UniswapSwap = {
+  id: string
+  timestamp: string
+  transaction: {
+    id: string
+    timestamp: string
+  }
+  token0: { id: string; symbol: string; decimals: string }
+  token1: { id: string; symbol: string; decimals: string }
+  sender: string
+  origin: string
+  amount0: string
+  amount1: string
+  amountUSD: string
+}
+
 export type UniswapToken = {
   id: string
   symbol: string

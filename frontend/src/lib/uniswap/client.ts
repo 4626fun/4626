@@ -9,6 +9,7 @@ import type {
   UniswapPool,
   UniswapPoolDayData,
   UniswapPoolHourData,
+  UniswapSwap,
   UniswapToken,
   UniswapTokenDayData,
   HistoricalVolumeData,
@@ -347,4 +348,38 @@ export async function getToken(tokenAddress: string): Promise<UniswapToken | nul
   })
   
   return data?.token ?? null
+}
+
+/**
+ * Get recent swaps for a pool
+ */
+export async function getPoolSwaps(poolId: string, first: number = 20): Promise<UniswapSwap[]> {
+  const query = `
+    query GetPoolSwaps($pool: String!, $first: Int!) {
+      swaps(
+        where: { pool: $pool }
+        orderBy: timestamp
+        orderDirection: desc
+        first: $first
+      ) {
+        id
+        timestamp
+        transaction { id timestamp }
+        token0 { id symbol decimals }
+        token1 { id symbol decimals }
+        sender
+        origin
+        amount0
+        amount1
+        amountUSD
+      }
+    }
+  `
+
+  const data = await fetchGraphQL<{ swaps: UniswapSwap[] }>(query, {
+    pool: poolId.toLowerCase(),
+    first,
+  })
+
+  return data?.swaps ?? []
 }

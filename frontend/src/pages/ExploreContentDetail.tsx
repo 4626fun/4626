@@ -1,103 +1,156 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ExternalLink, ArrowLeft, Copy, Check, Share2, Globe, Image as ImageIcon } from 'lucide-react'
+import {
+  Activity,
+  ArrowLeft,
+  BarChart3,
+  Check,
+  Copy,
+  Droplets,
+  ExternalLink,
+  Image as ImageIcon,
+  Link2,
+  Share2,
+  TrendingUp,
+} from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { getAddress, isAddress } from 'viem'
 import { useQuery } from '@tanstack/react-query'
 
+import { PageMeta } from '@/components/seo/PageMeta'
 import { fetchZoraCoin } from '@/lib/zora/client'
+import { usePoolHistory } from '@/lib/uniswap/hooks'
+import { getPoolSwaps, getPoolsByToken } from '@/lib/uniswap/client'
+import type { UniswapPool, UniswapSwap } from '@/lib/uniswap/types'
 
 function isSupportedChain(chain: string): boolean {
   return chain.toLowerCase() === 'base'
 }
 
-function formatPrice(price: string | number | undefined): string {
-  if (!price) return '$0.00'
-  const num = typeof price === 'string' ? parseFloat(price) : price
-  if (isNaN(num)) return '$0.00'
-  if (num < 0.0001) return `$${num.toExponential(2)}`
-  if (num < 0.01) return `$${num.toFixed(6)}`
-  if (num < 1) return `$${num.toFixed(4)}`
-  if (num < 1000) return `$${num.toFixed(2)}`
-  return `$${num.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+type PeriodKey = '1H' | '1D' | '1W' | '1M' | '1Y'
+type MetricKey = 'liquidity' | 'volume' | 'fees' | 'price'
+
+const PERIOD_TO_TIMEFRAME: Record<PeriodKey, '1h' | '1d' | '1w' | '1m' | '1y'> = {
+  '1H': '1h',
+  '1D': '1d',
+  '1W': '1w',
+  '1M': '1m',
+  '1Y': '1y',
 }
 
-function formatNumber(value: string | number | undefined): string {
+const PERIODS: PeriodKey[] = ['1H', '1D', '1W', '1M', '1Y']
+
+const METRICS: Array<{ key: MetricKey; label: string; icon: React.ReactNode }> = [
+  { key: 'liquidity', label: 'Liquidity', icon: <Droplets className="w-3.5 h-3.5" /> },
+  { key: 'volume', label: 'Volume', icon: <BarChart3 className="w-3.5 h-3.5" /> },
+  { key: 'fees', label: 'Fees', icon: <Activity className="w-3.5 h-3.5" /> },
+  { key: 'price', label: 'Price', icon: <TrendingUp className="w-3.5 h-3.5" /> },
+]
+
+const IPFS_GATEWAY = 'https://ipfs.decentralized-content.com/ipfs/'
+
+function parseNumber(value: string | number | null | undefined): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  if (typeof value === 'string') {
+    const n = Number.parseFloat(value)
+    return Number.isFinite(n) ? n : 0
+  }
+  return 0
+}
+
+function formatUsd(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '$0.00'
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`
+  if (value < 0.01) return `$${value.toFixed(6)}`
+  return `$${value.toFixed(2)}`
+}
+
+function formatTokenPrice(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '$0.00'
+  if (value < 0.0001) return `$${value.toExponential(2)}`
+  if (value < 0.01) return `$${value.toFixed(6)}`
+  if (value < 1) return `$${value.toFixed(4)}`
+  if (value < 1000) return `$${value.toFixed(2)}`
+  return `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+}
+
+function formatPercent(value: number): string {
+  if (!Number.isFinite(value)) return '0.00%'
+  const sign = value >= 0 ? '+' : '-'
+  return `${sign}${Math.abs(value).toFixed(2)}%`
+}
+
+function formatCount(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '0'
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`
+  if (value >= 1_000) return `${(value / 1_000).toFixed(2)}K`
+  return value.toLocaleString()
+}
+
+function formatSupply(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '-'
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`
+  if (value >= 1_000) return `${(value / 1_000).toFixed(2)}K`
+  return value.toLocaleString(undefined, { maximumFractionDigits: 0 })
+}
+
+function formatCreatedAt(value?: string): string {
   if (!value) return '-'
-  const num = typeof value === 'string' ? parseFloat(value) : value
-  if (isNaN(num)) return '-'
-  if (num >= 1_000_000_000) return `$${(num / 1_000_000_000).toFixed(2)}B`
-  if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(2)}M`
-  if (num >= 1_000) return `$${(num / 1_000).toFixed(2)}K`
-  return `$${num.toFixed(2)}`
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '-'
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function formatChange(delta: string | undefined): { value: string; positive: boolean } {
-  if (!delta) return { value: '0.00%', positive: true }
-  const num = parseFloat(delta)
-  if (isNaN(num)) return { value: '0.00%', positive: true }
-  const positive = num >= 0
-  const absNum = Math.abs(num)
-  return { value: `${absNum.toFixed(2)}%`, positive }
+function toDisplayAssetUrl(value?: string): string | undefined {
+  const v = value?.trim()
+  if (!v) return undefined
+  if (v.startsWith('ipfs://')) {
+    const path = v.slice('ipfs://'.length).replace(/^ipfs\//, '').replace(/^\/+/, '')
+    if (!path) return undefined
+    return `${IPFS_GATEWAY}${path}`
+  }
+  return v
 }
 
-const TIME_PERIODS = ['1H', '1D', '1W', '1M', '1Y'] as const
+function formatTokenAmount(value: number): string {
+  const abs = Math.abs(value)
+  if (!Number.isFinite(abs) || abs === 0) return '0'
+  if (abs < 0.0001) return abs.toExponential(2)
+  if (abs < 1) return abs.toFixed(6)
+  if (abs < 1000) return abs.toFixed(4)
+  return abs.toLocaleString(undefined, { maximumFractionDigits: 2 })
+}
 
-function PriceChart({ data, positive }: { data: number[]; positive: boolean }) {
-  const width = 600
-  const height = 300
-  const padding = { top: 20, right: 20, bottom: 20, left: 20 }
-  
-  const chartWidth = width - padding.left - padding.right
-  const chartHeight = height - padding.top - padding.bottom
+function shortAddress(addr: string): string {
+  if (!addr) return ''
+  if (addr.length <= 12) return addr
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`
+}
 
-  const pathD = useMemo(() => {
-    if (!data || data.length < 2) return ''
-    const min = Math.min(...data)
-    const max = Math.max(...data)
-    const range = max - min || 1
+function formatTimestamp(ts: number): string {
+  const ms = ts < 1_000_000_000_000 ? ts * 1000 : ts
+  const d = new Date(ms)
+  if (Number.isNaN(d.getTime())) return '-'
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
 
-    const points = data.map((value, i) => {
-      const x = padding.left + (i / (data.length - 1)) * chartWidth
-      const y = padding.top + chartHeight - ((value - min) / range) * chartHeight
-      return `${x},${y}`
-    })
-
-    return `M${points.join(' L')}`
-  }, [data, chartWidth, chartHeight, padding.left, padding.top])
-
-  const areaD = useMemo(() => {
-    if (!pathD) return ''
-    const firstX = padding.left
-    const lastX = padding.left + chartWidth
-    const bottomY = padding.top + chartHeight
-    return `${pathD} L${lastX},${bottomY} L${firstX},${bottomY} Z`
-  }, [pathD, chartWidth, chartHeight, padding.left, padding.top])
-
-  const strokeColor = positive ? '#22c55e' : '#ef4444'
-  const gradientId = `chart-gradient-content-${positive ? 'up' : 'down'}`
-
-  return (
-    <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="overflow-visible">
-      <defs>
-        <linearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor={strokeColor} stopOpacity="0.15" />
-          <stop offset="100%" stopColor={strokeColor} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {areaD && <path d={areaD} fill={`url(#${gradientId})`} />}
-      {pathD && (
-        <path
-          d={pathD}
-          fill="none"
-          stroke={strokeColor}
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      )}
-    </svg>
-  )
+function calcCoefficientOfVariation(values: number[]): number | null {
+  const cleaned = values.filter((v) => Number.isFinite(v) && v > 0)
+  if (cleaned.length < 2) return null
+  const mean = cleaned.reduce((a, b) => a + b, 0) / cleaned.length
+  if (mean <= 0) return null
+  const variance = cleaned.reduce((acc, v) => acc + (v - mean) ** 2, 0) / cleaned.length
+  const std = Math.sqrt(variance)
+  return (std / mean) * 100
 }
 
 function CopyButton({ text, className = '' }: { text: string; className?: string }) {
@@ -106,7 +159,7 @@ function CopyButton({ text, className = '' }: { text: string; className?: string
   const handleCopy = async () => {
     await navigator.clipboard.writeText(text)
     setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    setTimeout(() => setCopied(false), 1800)
   }
 
   return (
@@ -114,19 +167,103 @@ function CopyButton({ text, className = '' }: { text: string; className?: string
       type="button"
       onClick={handleCopy}
       className={`text-zinc-400 hover:text-white transition-colors ${className}`}
-      title="Copy address"
+      title="Copy"
     >
-      {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+      {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
     </button>
   )
 }
 
-function StatRow({ label, value }: { label: string; value: string }) {
+function StatRow({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
-    <div className="flex items-center justify-between py-3 border-b border-zinc-800 last:border-0">
-      <span className="text-sm text-zinc-400">{label}</span>
-      <span className="text-sm text-white font-medium">{value}</span>
+    <div className="py-3 border-b border-zinc-800 last:border-0">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-zinc-500 uppercase tracking-[0.12em]">{label}</span>
+        <span className="text-sm text-white font-medium tabular-nums">{value}</span>
+      </div>
+      {note ? <div className="text-[11px] text-zinc-600 mt-1">{note}</div> : null}
     </div>
+  )
+}
+
+function MetricBarsChart({
+  points,
+  metric,
+}: {
+  points: Array<{ timestamp: number; tvlUSD: number; volumeUSD: number; feesUSD: number; close?: number }>
+  metric: MetricKey
+}) {
+  const values = useMemo(() => {
+    return points.map((p) => {
+      if (metric === 'liquidity') return p.tvlUSD
+      if (metric === 'volume') return p.volumeUSD
+      if (metric === 'fees') return p.feesUSD
+      return p.close ?? 0
+    })
+  }, [points, metric])
+
+  const max = Math.max(1, ...values)
+
+  const formatValue = (v: number): string => {
+    if (metric === 'price') return formatTokenPrice(v)
+    return formatUsd(v)
+  }
+
+  return (
+    <div className="h-[320px] rounded-xl border border-zinc-800/80 bg-[#0b0b0e] p-4">
+      <div className="h-full w-full flex items-end gap-[3px]">
+        {values.length === 0 ? (
+          <div className="w-full h-full flex items-center justify-center text-zinc-600 text-sm">No historical pool data</div>
+        ) : (
+          values.map((v, idx) => {
+            const h = Math.max(2, (v / max) * 100)
+            const older = idx < values.length / 2
+            const color =
+              metric === 'liquidity'
+                ? older
+                  ? 'bg-amber-500/55'
+                  : 'bg-sky-500/70'
+                : metric === 'volume'
+                  ? older
+                    ? 'bg-fuchsia-500/40'
+                    : 'bg-fuchsia-400/70'
+                  : metric === 'fees'
+                    ? older
+                      ? 'bg-emerald-500/40'
+                      : 'bg-emerald-400/70'
+                    : older
+                      ? 'bg-zinc-500/40'
+                      : 'bg-zinc-300/70'
+
+            return (
+              <div
+                key={`${points[idx]?.timestamp ?? idx}-${idx}`}
+                className={`rounded-t-[3px] ${color} hover:opacity-100 opacity-90 transition-opacity`}
+                style={{ height: `${h}%`, width: `${100 / values.length}%` }}
+                title={`${formatTimestamp(points[idx]?.timestamp ?? 0)}\n${formatValue(v)}`}
+              />
+            )
+          })
+        )}
+      </div>
+    </div>
+  )
+}
+
+function LinkRow({ href, label, value }: { href: string; label: string; value: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/40 hover:bg-zinc-800 transition-colors group"
+    >
+      <div className="min-w-0">
+        <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">{label}</div>
+        <div className="text-sm text-white truncate">{value}</div>
+      </div>
+      <ExternalLink className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
+    </a>
   )
 }
 
@@ -134,36 +271,51 @@ export function ExploreContentDetail() {
   const params = useParams()
   const chain = String(params.chain ?? '').trim()
   const contentCoinAddressRaw = String(params.contentCoinAddress ?? '').trim()
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('1D')
+
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodKey>('1D')
+  const [selectedMetric, setSelectedMetric] = useState<MetricKey>('liquidity')
 
   const contentCoinAddress = isAddress(contentCoinAddressRaw) ? getAddress(contentCoinAddressRaw) : null
+  const timeframe = PERIOD_TO_TIMEFRAME[selectedPeriod]
 
-  const { data: coin, isLoading } = useQuery({
+  const { data: coin, isLoading: coinLoading } = useQuery({
     queryKey: ['coin', contentCoinAddress],
     queryFn: async () => {
       if (!contentCoinAddress) return null
       return fetchZoraCoin(contentCoinAddress as `0x${string}`, 8453)
     },
-    enabled: !!contentCoinAddress,
+    enabled: Boolean(contentCoinAddress),
     staleTime: 30_000,
   })
 
-  // Generate chart data based on price change
-  const chartData = useMemo(() => {
-    const changeVal = parseFloat(coin?.marketCapDelta24h || '0') / 100
-    const positive = changeVal >= 0
-    const baseValue = 100
-    const points = 100
-    
-    return Array.from({ length: points }, (_, i) => {
-      const progress = i / (points - 1)
-      const noise = (Math.random() - 0.5) * 5
-      return Math.max(0, positive
-        ? baseValue + progress * Math.abs(changeVal) * baseValue * 0.5 + noise
-        : baseValue - progress * Math.abs(changeVal) * baseValue * 0.5 + noise
-      )
-    })
-  }, [coin?.marketCapDelta24h])
+  const { data: pools = [], isLoading: poolsLoading } = useQuery({
+    queryKey: ['uniswap', 'poolsByToken', contentCoinAddress],
+    queryFn: async () => {
+      if (!contentCoinAddress) return []
+      return getPoolsByToken(contentCoinAddress)
+    },
+    enabled: Boolean(contentCoinAddress),
+    staleTime: 60_000,
+  })
+
+  const { data: history, isLoading: historyLoading } = usePoolHistory(contentCoinAddress ?? undefined, timeframe, {
+    enabled: Boolean(contentCoinAddress),
+  })
+
+  const primaryPool = useMemo<UniswapPool | null>(() => {
+    if (!pools || pools.length === 0) return null
+    return [...pools].sort((a, b) => parseNumber(b.totalValueLockedUSD) - parseNumber(a.totalValueLockedUSD))[0]
+  }, [pools])
+
+  const { data: swaps = [], isLoading: swapsLoading } = useQuery({
+    queryKey: ['uniswap', 'poolSwaps', primaryPool?.id],
+    queryFn: async () => {
+      if (!primaryPool?.id) return []
+      return getPoolSwaps(primaryPool.id, 25)
+    },
+    enabled: Boolean(primaryPool?.id),
+    staleTime: 30_000,
+  })
 
   if (!chain || !isSupportedChain(chain)) {
     return <Navigate replace to="/explore/content" />
@@ -173,245 +325,421 @@ export function ExploreContentDetail() {
     return <Navigate replace to="/explore/content" />
   }
 
-  const mediaUrl = coin?.mediaContent?.previewImage?.medium || coin?.mediaContent?.originalUri
-  const avatarUrl = coin?.creatorProfile?.avatar?.previewImage?.medium
-  const name = coin?.name || 'Loading...'
-  const symbol = coin?.symbol || '...'
-  const price = formatPrice(coin?.tokenPrice?.priceInUsdc)
-  const change = formatChange(coin?.marketCapDelta24h)
-  const tvl = formatNumber(coin?.marketCap)
-  const volume24h = formatNumber(coin?.volume24h)
-  const totalVolume = formatNumber(coin?.totalVolume)
+  const symbol = coin?.symbol || 'CONTENT'
+  const name = coin?.name || 'Content Coin'
+  const mediaUrl = toDisplayAssetUrl(coin?.mediaContent?.previewImage?.medium || coin?.mediaContent?.originalUri)
   const creatorHandle = coin?.creatorProfile?.handle
+  const description = coin?.description?.trim() || 'A content coin deployed on Zora and traded with CreatorVault liquidity routing.'
+  const holdersCount = parseNumber(coin?.uniqueHolders)
+  const totalSupplyCount = parseNumber(coin?.totalSupply)
+  const marketCapUsd = parseNumber(coin?.marketCap)
+  const createdLabel = formatCreatedAt(coin?.createdAt)
+  const canonicalPath = `/explore/content/${chain.toLowerCase()}/${contentCoinAddress}`
+
+  const pairLabel = primaryPool ? `${primaryPool.token0.symbol} / ${primaryPool.token1.symbol}` : `${symbol} / ZORA`
+  const token0Price = parseNumber(primaryPool?.token0Price)
+  const token1Price = parseNumber(primaryPool?.token1Price)
+  const tvlUsd = history?.tvlUSD ?? parseNumber(primaryPool?.totalValueLockedUSD) ?? parseNumber(coin?.marketCap)
+  const volumeUsd = history?.volumeUSD ?? parseNumber(coin?.volume24h)
+  const feesUsd = history?.feesUSD
+  const priceUsd = parseNumber(coin?.tokenPrice?.priceInUsdc)
+  const priceDelta = history?.priceChangePercent ?? parseNumber(coin?.marketCapDelta24h)
+
+  const points = history?.dataPoints ?? []
+  const activityRows = useMemo(() => {
+    const contentAddressLower = contentCoinAddress?.toLowerCase() ?? ''
+    return (swaps ?? []).map((swap: UniswapSwap) => {
+      const amount0 = parseNumber(swap.amount0)
+      const amount1 = parseNumber(swap.amount1)
+      const amountUsd = parseNumber(swap.amountUSD)
+      const contentInToken0 = swap.token0.id.toLowerCase() === contentAddressLower
+      const contentAmount = contentInToken0 ? amount0 : amount1
+      const side = contentAmount < 0 ? 'Buy' : contentAmount > 0 ? 'Sell' : 'Swap'
+      const wallet = swap.origin || swap.sender
+      const ts = parseNumber(swap.timestamp || swap.transaction?.timestamp || 0)
+      return {
+        id: swap.id,
+        timestamp: ts,
+        side,
+        amountUsd,
+        amount0,
+        amount1,
+        token0Symbol: swap.token0.symbol || 'TOKEN0',
+        token1Symbol: swap.token1.symbol || 'TOKEN1',
+        wallet,
+        txHash: swap.transaction?.id ?? '',
+      }
+    })
+  }, [swaps, contentCoinAddress])
+
+  const liquidityCV = calcCoefficientOfVariation(points.map((p) => p.tvlUSD))
+  const priceCV = calcCoefficientOfVariation(points.map((p) => p.close ?? 0))
+
+  const loading = coinLoading || poolsLoading
 
   return (
     <div className="relative min-h-screen bg-black">
+      <PageMeta
+        title={`${name} (${symbol})`}
+        description={description}
+        canonicalPath={canonicalPath}
+        ogImage={mediaUrl}
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {/* Back navigation */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="mb-4"
-        >
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-4">
           <Link
             to="/explore/content"
             className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            Content
+            Content Pools
           </Link>
         </motion.div>
 
-        {/* Main content - Two column layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
-          {/* Left Column - Chart */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            {/* Price Header */}
-            <div className="mb-6">
-              <div className="flex items-center gap-3 mb-2">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6">
+          <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
+            <div className="mb-6 rounded-3xl border border-zinc-800/80 bg-zinc-900/40 overflow-hidden">
+              <div className="relative px-4 py-6 sm:px-7 sm:py-7">
                 {mediaUrl ? (
-                  <img src={mediaUrl} alt={name} className="w-8 h-8 rounded-lg object-cover" />
-                ) : (
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-zinc-600 to-zinc-700 flex items-center justify-center">
-                    <ImageIcon className="w-4 h-4 text-zinc-400" />
-                  </div>
-                )}
-                <span className="text-zinc-400 text-lg">{name}</span>
-                <span className="text-zinc-600 text-lg">{symbol}</span>
-              </div>
-              
-              <div className="flex items-baseline gap-3">
-                {isLoading ? (
-                  <div className="h-12 w-40 bg-zinc-800 rounded animate-pulse" />
-                ) : (
                   <>
-                    <span className="text-5xl font-medium text-white tabular-nums">{price}</span>
-                    <span className={`text-lg font-medium ${change.positive ? 'text-green-500' : 'text-red-500'}`}>
-                      {change.positive ? '+' : '-'}{change.value}
-                    </span>
+                    <img
+                      src={mediaUrl}
+                      alt={name}
+                      className="absolute inset-0 w-full h-full object-cover opacity-18 pointer-events-none"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-br from-black/85 via-black/70 to-zinc-900/90 pointer-events-none" />
                   </>
-                )}
+                ) : null}
+                <div className="absolute -top-24 -right-16 w-64 h-64 rounded-full bg-fuchsia-500/15 blur-3xl pointer-events-none" />
+                <div className="absolute -bottom-24 -left-16 w-64 h-64 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
+
+                <div className="relative">
+                  <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+                    <span className="inline-flex items-center rounded-full border border-zinc-700/80 bg-zinc-900/75 px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-zinc-300">
+                      Zora Content Coin
+                    </span>
+                    <a
+                      href={`https://zora.co/coin/base:${contentCoinAddress}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white"
+                    >
+                      View on Zora <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+
+                  <div className="flex items-center gap-4 mb-5">
+                    {mediaUrl ? (
+                      <img src={mediaUrl} alt={name} className="w-14 h-14 rounded-2xl object-cover border border-zinc-700/80 shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" />
+                    ) : (
+                      <div className="w-14 h-14 rounded-2xl border border-zinc-700 bg-zinc-800/80 flex items-center justify-center text-sm text-zinc-300">
+                        {symbol.slice(0, 2)}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <h2 className="text-2xl sm:text-4xl text-white font-semibold tracking-tight truncate">{name}</h2>
+                      <div className="mt-1 flex items-center gap-2 text-sm text-zinc-300">
+                        <span className="text-zinc-200">{symbol}</span>
+                        <span className="text-zinc-600">•</span>
+                        <span className="inline-flex items-center rounded-full bg-zinc-800/80 px-2 py-0.5 text-xs text-zinc-300 border border-zinc-700/80">
+                          {creatorHandle ? `@${creatorHandle}` : 'Unknown creator'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-sm sm:text-[15px] text-zinc-300/95 leading-relaxed max-w-3xl">{description}</p>
+
+                  <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className="rounded-2xl border border-zinc-700/60 bg-zinc-900/70 p-3">
+                      <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Market Cap</div>
+                      <div className="text-[15px] text-white mt-1.5 tabular-nums">{formatUsd(marketCapUsd)}</div>
+                    </div>
+                    <div className="rounded-2xl border border-zinc-700/60 bg-zinc-900/70 p-3">
+                      <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Holders</div>
+                      <div className="text-[15px] text-white mt-1.5 tabular-nums">{formatCount(holdersCount)}</div>
+                    </div>
+                    <div className="rounded-2xl border border-zinc-700/60 bg-zinc-900/70 p-3">
+                      <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Supply</div>
+                      <div className="text-[15px] text-white mt-1.5 tabular-nums">{formatSupply(totalSupplyCount)}</div>
+                    </div>
+                    <div className="rounded-2xl border border-zinc-700/60 bg-zinc-900/70 p-3">
+                      <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Created</div>
+                      <div className="text-[15px] text-white mt-1.5 tabular-nums">{createdLabel}</div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Chart */}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 overflow-hidden">
-              {/* Time period selector */}
-              <div className="flex items-center gap-1 p-4 border-b border-zinc-800">
-                {TIME_PERIODS.map((period) => (
-                  <button
-                    key={period}
-                    type="button"
-                    onClick={() => setSelectedPeriod(period)}
-                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                      selectedPeriod === period
-                        ? 'bg-zinc-700 text-white'
-                        : 'text-zinc-500 hover:text-white hover:bg-zinc-800'
-                    }`}
+            <div className="mb-5">
+              <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500 mb-2">Pools</div>
+
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <div className="flex items-center gap-2">
+                    {mediaUrl ? (
+                      <img src={mediaUrl} alt={name} className="w-8 h-8 rounded-lg object-cover" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center">
+                        <ImageIcon className="w-4 h-4 text-zinc-400" />
+                      </div>
+                    )}
+                    <h1 className="text-2xl sm:text-3xl text-white font-semibold tracking-tight">{pairLabel}</h1>
+                    <span className="text-zinc-500 text-sm">{shortAddress(contentCoinAddress)}</span>
+                    <CopyButton text={contentCoinAddress} />
+                  </div>
+                  <div className="mt-2 space-y-1 text-zinc-300 text-sm">
+                    {token0Price > 0 && token1Price > 0 ? (
+                      <>
+                        <div>
+                          1 {primaryPool?.token0.symbol} = {token0Price.toFixed(6)} {primaryPool?.token1.symbol}
+                        </div>
+                        <div>
+                          1 {primaryPool?.token1.symbol} = {token1Price.toFixed(6)} {primaryPool?.token0.symbol}
+                        </div>
+                      </>
+                    ) : (
+                      <div>Liquidity-focused view enabled. Price is shown as secondary due to low-liquidity variance.</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <Link
+                    to={`/swap?token=${contentCoinAddress}`}
+                    className="inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-medium text-white bg-fuchsia-600 hover:bg-fuchsia-500 transition-colors flex-1 sm:flex-none"
                   >
-                    {period}
-                  </button>
-                ))}
-              </div>
-
-              {/* Chart area */}
-              <div className="h-[350px] p-4">
-                {isLoading ? (
-                  <div className="h-full w-full bg-zinc-800/30 rounded animate-pulse" />
-                ) : (
-                  <PriceChart data={chartData} positive={change.positive} />
-                )}
+                    Swap
+                  </Link>
+                  <a
+                    href={primaryPool?.id ? `https://app.uniswap.org/explore/pools/base/${primaryPool.id}` : `https://app.uniswap.org/explore/tokens/base/${contentCoinAddress}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white bg-zinc-800 hover:bg-zinc-700 transition-colors flex-1 sm:flex-none"
+                  >
+                    Add liquidity <ExternalLink className="w-4 h-4" />
+                  </a>
+                </div>
               </div>
             </div>
 
-            {/* Content Preview - Below chart */}
-            {mediaUrl && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.2 }}
-                className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/30 overflow-hidden"
-              >
-                <img src={mediaUrl} alt={name} className="w-full aspect-video object-cover" />
-              </motion.div>
-            )}
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1">
+                  {PERIODS.map((period) => (
+                    <button
+                      key={period}
+                      type="button"
+                      onClick={() => setSelectedPeriod(period)}
+                      className={`px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
+                        selectedPeriod === period
+                          ? 'bg-zinc-700 text-white'
+                          : 'text-zinc-500 hover:text-white hover:bg-zinc-800'
+                      }`}
+                    >
+                      {period}
+                    </button>
+                  ))}
+                </div>
 
-            {/* Description */}
-            {coin?.description && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-                className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-6"
-              >
-                <h3 className="text-sm font-medium text-zinc-400 mb-3">About</h3>
-                <p className="text-sm text-zinc-300 leading-relaxed">{coin.description}</p>
-              </motion.div>
-            )}
+                <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1">
+                  {METRICS.map((m) => (
+                    <button
+                      key={m.key}
+                      type="button"
+                      onClick={() => setSelectedMetric(m.key)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
+                        selectedMetric === m.key
+                          ? 'bg-zinc-700 text-white'
+                          : 'text-zinc-500 hover:text-white hover:bg-zinc-800'
+                      }`}
+                    >
+                      {m.icon}
+                      <span className="hidden sm:inline">{m.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {loading || historyLoading ? (
+                <div className="h-[320px] rounded-xl bg-zinc-800/40 animate-pulse" />
+              ) : (
+                <MetricBarsChart points={points} metric={selectedMetric} />
+              )}
+
+              <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
+                <span>Oldest</span>
+                <span className="text-zinc-400">{METRICS.find((m) => m.key === selectedMetric)?.label} over {selectedPeriod}</span>
+                <span>Latest</span>
+              </div>
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/30 overflow-hidden">
+              <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+                <div>
+                  <div className="text-sm text-white font-medium">Recent Activity</div>
+                  <div className="text-xs text-zinc-500">Latest swaps from the primary pool</div>
+                </div>
+                <Link
+                  to={`/explore/content/${chain.toLowerCase()}/${contentCoinAddress}/transactions`}
+                  className="text-xs text-zinc-400 hover:text-white"
+                >
+                  Full transactions
+                </Link>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-sm">
+                  <thead className="bg-zinc-900/70">
+                    <tr className="text-left text-zinc-500 text-xs uppercase tracking-[0.12em]">
+                      <th className="px-4 py-3">Time</th>
+                      <th className="px-4 py-3">Type</th>
+                      <th className="px-4 py-3 text-right">USD</th>
+                      <th className="px-4 py-3 text-right">{primaryPool?.token0.symbol ?? 'Token0'}</th>
+                      <th className="px-4 py-3 text-right">{primaryPool?.token1.symbol ?? 'Token1'}</th>
+                      <th className="px-4 py-3 text-right">Wallet</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {swapsLoading ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-zinc-600">
+                          Loading swaps...
+                        </td>
+                      </tr>
+                    ) : activityRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-zinc-600">
+                          No swap data available for this pool yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      activityRows.map((row) => (
+                        <tr key={row.id} className="border-t border-zinc-800/70">
+                          <td className="px-4 py-3 text-zinc-400">{formatTimestamp(row.timestamp)}</td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                                row.side === 'Buy'
+                                  ? 'bg-emerald-500/15 text-emerald-300'
+                                  : row.side === 'Sell'
+                                    ? 'bg-rose-500/15 text-rose-300'
+                                    : 'bg-zinc-600/25 text-zinc-300'
+                              }`}
+                            >
+                              {row.side}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right text-white tabular-nums">{formatUsd(row.amountUsd)}</td>
+                          <td className="px-4 py-3 text-right text-zinc-300 tabular-nums">
+                            {formatTokenAmount(row.amount0)} {row.token0Symbol}
+                          </td>
+                          <td className="px-4 py-3 text-right text-zinc-300 tabular-nums">
+                            {formatTokenAmount(row.amount1)} {row.token1Symbol}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {row.txHash ? (
+                              <a
+                                href={`https://basescan.org/tx/${row.txHash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-zinc-300 hover:text-white"
+                              >
+                                {shortAddress(row.wallet)}
+                              </a>
+                            ) : (
+                              <span className="text-zinc-400">{shortAddress(row.wallet)}</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </motion.div>
 
-          {/* Right Column - Info Card */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
+            transition={{ duration: 0.35, delay: 0.06 }}
             className="space-y-4"
           >
-            {/* Swap Card */}
             <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  {mediaUrl ? (
-                    <img src={mediaUrl} alt={name} className="w-10 h-10 rounded-lg object-cover" />
-                  ) : (
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-zinc-600 to-zinc-700 flex items-center justify-center">
-                      <ImageIcon className="w-5 h-5 text-zinc-400" />
-                    </div>
-                  )}
-                  <div>
-                    <div className="text-white font-medium">{name}</div>
-                    <div className="text-xs text-zinc-500">{symbol}</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CopyButton text={contentCoinAddress} />
-                  <button
-                    type="button"
-                    className="text-zinc-400 hover:text-white transition-colors"
-                    title="Share"
-                  >
-                    <Share2 className="w-4 h-4" />
-                  </button>
-                </div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Pool Snapshot</div>
+                <button
+                  type="button"
+                  className="text-zinc-400 hover:text-white transition-colors"
+                  title="Share"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(window.location.href)
+                  }}
+                >
+                  <Share2 className="w-4 h-4" />
+                </button>
               </div>
 
-              <Link
-                to={`/swap?token=${contentCoinAddress}`}
-                className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-[#FF007A] hover:bg-[#FF007A]/90 text-white font-semibold text-base transition-colors"
-              >
-                Swap
-              </Link>
+              <StatRow label="TVL" value={formatUsd(tvlUsd)} />
+              <StatRow label={`Volume (${selectedPeriod})`} value={formatUsd(volumeUsd)} />
+              <StatRow label={`Fees (${selectedPeriod})`} value={formatUsd(feesUsd ?? 0)} note="Based on subgraph pool history." />
+              <StatRow label="Token Price" value={formatTokenPrice(priceUsd)} note="Secondary signal - can be noisy in thin liquidity." />
+              <StatRow
+                label="Price Change"
+                value={formatPercent(priceDelta)}
+                note="Use liquidity + volume for more stable market read."
+              />
+              <StatRow
+                label="Fee Tier"
+                value={primaryPool ? `${(parseNumber(primaryPool.feeTier) / 10_000).toFixed(2)}%` : '-'}
+              />
             </div>
 
-            {/* Creator Card */}
-            {creatorHandle && (
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
+              <div className="text-xs uppercase tracking-[0.12em] text-zinc-500 mb-2">Stability</div>
+              <div className="text-sm text-zinc-400 leading-relaxed mb-3">
+                In low-liquidity markets, spot price can swing hard between CONTENT, CREATOR, ZORA, and ETH paths.
+                Liquidity variation is generally a better stability anchor.
+              </div>
+              <StatRow label="Liquidity Variance" value={liquidityCV == null ? '-' : `${liquidityCV.toFixed(2)}% CV`} />
+              <StatRow label="Price Variance" value={priceCV == null ? '-' : `${priceCV.toFixed(2)}% CV`} />
+            </div>
+
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
+              <div className="text-xs uppercase tracking-[0.12em] text-zinc-500 mb-3">Links</div>
+              <div className="space-y-2">
+                <LinkRow href={`https://zora.co/coin/base:${contentCoinAddress}`} label="Zora" value={shortAddress(contentCoinAddress)} />
+                <LinkRow href={`https://basescan.org/token/${contentCoinAddress}`} label="Basescan" value={shortAddress(contentCoinAddress)} />
+                {primaryPool?.id ? (
+                  <LinkRow href={`https://app.uniswap.org/explore/pools/base/${primaryPool.id}`} label="Uniswap Pool" value={shortAddress(primaryPool.id)} />
+                ) : null}
+              </div>
+
+              <div className="mt-3 pt-3 border-t border-zinc-800">
+                <div className="text-xs text-zinc-500 mb-1">Token</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-white font-medium">{name}</span>
+                  <span className="text-xs text-zinc-500">{symbol}</span>
+                  <CopyButton text={contentCoinAddress} />
+                </div>
+                {creatorHandle ? <div className="text-xs text-zinc-500 mt-2">Creator: @{creatorHandle}</div> : null}
+              </div>
+            </div>
+
+            {mediaUrl ? (
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 overflow-hidden">
+                <img src={mediaUrl} alt={name} className="w-full aspect-video object-cover" />
+              </div>
+            ) : (
               <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
-                <h3 className="text-sm font-medium text-zinc-400 mb-3">Creator</h3>
-                <div className="flex items-center gap-3">
-                  {avatarUrl ? (
-                    <img src={avatarUrl} alt={creatorHandle} className="w-10 h-10 rounded-full object-cover" />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-zinc-600 to-zinc-700 flex items-center justify-center">
-                      <span className="text-sm font-medium text-zinc-300">{creatorHandle.slice(0, 2)}</span>
-                    </div>
-                  )}
-                  <div>
-                    <div className="text-white font-medium">@{creatorHandle}</div>
-                  </div>
+                <div className="text-zinc-500 text-sm flex items-center gap-2">
+                  <Link2 className="w-4 h-4" />
+                  No media preview available.
                 </div>
               </div>
             )}
-
-            {/* Stats Card */}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
-              <h3 className="text-sm font-medium text-zinc-400 mb-2">Stats</h3>
-              <StatRow label="TVL" value={tvl} />
-              <StatRow label="24H volume" value={volume24h} />
-              <StatRow label="All-time volume" value={totalVolume} />
-            </div>
-
-            {/* Links Card */}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
-              <h3 className="text-sm font-medium text-zinc-400 mb-3">Links</h3>
-              <div className="space-y-2">
-                <a
-                  href={`https://zora.co/coin/base:${contentCoinAddress}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center">
-                      <Globe className="w-4 h-4 text-zinc-300" />
-                    </div>
-                    <span className="text-sm text-white">Zora</span>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
-                </a>
-                
-                <a
-                  href={`https://basescan.org/token/${contentCoinAddress}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center">
-                      <img src="https://basescan.org/images/favicon.ico" alt="Basescan" className="w-4 h-4" />
-                    </div>
-                    <span className="text-sm text-white">Basescan</span>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
-                </a>
-              </div>
-            </div>
-
-            {/* Contract Info */}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-medium text-zinc-400 mb-1">Contract address</h3>
-                  <span className="text-xs text-zinc-500 font-mono">
-                    {contentCoinAddress.slice(0, 6)}...{contentCoinAddress.slice(-4)}
-                  </span>
-                </div>
-                <CopyButton text={contentCoinAddress} className="p-2 rounded-lg hover:bg-zinc-800" />
-              </div>
-            </div>
           </motion.div>
         </div>
       </div>

@@ -36,6 +36,7 @@ const ALLOWED_OPERATIONS = new Set([
   'GetPoolsByToken',
   'GetPoolHourData',
   'GetPoolDayData',
+  'GetPoolSwaps',
   'GetToken',
   'GetTokenDayData',
   'HealthMeta',
