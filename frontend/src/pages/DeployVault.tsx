@@ -2482,6 +2482,7 @@ function DeployVaultBatcher({
         let embeddedProviderAddressCache: string | null = null
         let embeddedEthSignUnsupported = false
         let embeddedWalletClientAdapterCache: any | null = null
+        let connectedOwnerIsContractCache: boolean | null = null
 
         const ownerSlotForPhase = (phaseLabel: 'phase1' | 'phase2' | 'phase3' | 'phase4') =>
           phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : phaseLabel === 'phase3' ? 'userOp3' : 'userOp4'
@@ -2695,6 +2696,31 @@ function DeployVaultBatcher({
           return embeddedWalletClientAdapterCache
         }
 
+        const detectConnectedOwnerIsContractForRun = async (): Promise<boolean> => {
+          if (typeof connectedOwnerIsContractCache === 'boolean') return connectedOwnerIsContractCache
+          if (!connectedAddress || !publicClient) {
+            connectedOwnerIsContractCache = false
+            return false
+          }
+          try {
+            let bytecode: string | null = null
+            if (typeof (publicClient as any)?.getBytecode === 'function') {
+              bytecode = await (publicClient as any).getBytecode({ address: connectedAddress as Address })
+            } else if (typeof (publicClient as any)?.getCode === 'function') {
+              bytecode = await (publicClient as any).getCode({ address: connectedAddress as Address })
+            }
+            connectedOwnerIsContractCache = typeof bytecode === 'string' && bytecode !== '0x'
+          } catch {
+            connectedOwnerIsContractCache = false
+          }
+          if (connectedOwnerIsContractCache && AA_DEBUG) {
+            logger.debug('[DeployVault] Connected owner detected as contract signer (EIP-1271 path)', {
+              connectedAddress,
+            })
+          }
+          return connectedOwnerIsContractCache
+        }
+
         const sendPhaseCalls = async (
           calls: Array<{ target: Address; value: bigint; data: Hex }>,
           phaseLabel: 'phase1' | 'phase2' | 'phase3' | 'phase4',
@@ -2703,14 +2729,17 @@ function DeployVaultBatcher({
           const logPhaseLabel = opts?.segment ? `${phaseLabel}.${opts.segment}` : phaseLabel
           const hasEmbeddedEoaSigner = embeddedEoaIsCanonicalOwner && embeddedPrivyWallet && embeddedPrivyEoaAddress
           const connectedOwnerReady = connectedIsCanonicalOwner && connectedAddress && wagmiWalletClient
-          const preferEmbeddedEoaSigner =
-            preferEmbeddedEoaRef.current || (hasEmbeddedEoaSigner && (!connectedOwnerReady || !connectedIsCanonicalOwner))
+          const connectedOwnerIsContract = connectedOwnerReady
+            ? await detectConnectedOwnerIsContractForRun()
+            : false
+          const preferEmbeddedEoaSigner = hasEmbeddedEoaSigner || preferEmbeddedEoaRef.current
           if (preferEmbeddedEoaSigner && !preferEmbeddedEoaRef.current) {
             logger.info('[DeployVault] Preferring embedded EOA signer for this phase', {
               canonicalSmartWallet,
               embeddedPrivyEoaAddress,
               connectedIsCanonicalOwner,
               connectedOwnerReady,
+              connectedOwnerIsContract,
             })
           }
           const batcherAddressLc = getAddress(batcherAddress).toLowerCase()
@@ -2865,8 +2894,15 @@ function DeployVaultBatcher({
           }
 
           // PATH 1: Direct Coinbase Wallet connection
-          // When connected via Coinbase Wallet SDK, we can use ERC-4337 directly
-          if (isCoinbaseWalletDirect && connectedAddress && wagmiWalletClient && publicClient && canonicalSmartWallet) {
+          // Only use this when embedded signer path is not available.
+          if (
+            isCoinbaseWalletDirect &&
+            connectedAddress &&
+            wagmiWalletClient &&
+            publicClient &&
+            canonicalSmartWallet &&
+            !hasEmbeddedEoaSigner
+          ) {
             logger.info(`[DeployVault] Using Coinbase Wallet direct for ${logPhaseLabel}`)
 
             await ensureBaseChain('Coinbase Wallet')
@@ -3064,20 +3100,51 @@ function DeployVaultBatcher({
               canonicalSmartWallet,
               connectedEOA: connectedAddress,
               callCount: calls.length,
+              connectedOwnerIsContract,
             })
 
-            const result = await sendCoinbaseSmartWalletUserOperation({
-              publicClient: publicClient as any,
-              walletClient: wagmiWalletClient as any,
-              bundlerUrl,
-              smartWallet: canonicalSmartWallet,
-              ownerAddress: connectedAddress as Address,
-              calls: toCalls(calls),
-              version: '1',
-            })
+            try {
+              const result = await sendCoinbaseSmartWalletUserOperation({
+                publicClient: publicClient as any,
+                walletClient: wagmiWalletClient as any,
+                bundlerUrl,
+                smartWallet: canonicalSmartWallet,
+                ownerAddress: connectedAddress as Address,
+                calls: toCalls(calls),
+                version: '1',
+                ownerIsContract: connectedOwnerIsContract,
+              })
 
-            persistUserOpResult(phaseLabel, logPhaseLabel, result, 'ERC-4337 (connected EOA signer)')
-            return true
+              persistUserOpResult(phaseLabel, logPhaseLabel, result, 'ERC-4337 (connected EOA signer)')
+              return true
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : String(e ?? '')
+              const lc = msg.toLowerCase()
+              const shouldFallbackToEmbedded =
+                Boolean(hasEmbeddedEoaSigner) &&
+                (
+                  connectedOwnerIsContract ||
+                  lc.includes('signature verification used more gas') ||
+                  lc.includes('verificationgaslimit') ||
+                  lc.includes('aa40') ||
+                  lc.includes('total gas used by the user operation') ||
+                  (lc.includes('total gas used') && lc.includes('allowed limit')) ||
+                  lc.includes('invalid fields') ||
+                  lc.includes('invalid signature') ||
+                  lc.includes('signature check failed')
+                )
+              if (shouldFallbackToEmbedded) {
+                preferEmbeddedEoaRef.current = true
+                logger.warn('[DeployVault] Connected owner signer failed; retrying with embedded EOA', {
+                  phaseLabel: logPhaseLabel,
+                  connectedEOA: connectedAddress,
+                  connectedOwnerIsContract,
+                  error: msg,
+                })
+                return false
+              }
+              throw e
+            }
           }
 
           const tryEmbeddedEoaSigner = async (): Promise<boolean> => {
