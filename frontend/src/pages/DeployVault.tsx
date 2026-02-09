@@ -1423,7 +1423,7 @@ function DeployVaultBatcher({
         setPhase('done')
         clearDeploySession()
         if (expectedRef.current) {
-          logger.warn('[DeployVault] deploy_success (server-continued)', { creatorToken, owner, deploymentVersion, sessionId })
+          logger.info('[DeployVault] deploy_success (server-continued)', { creatorToken, owner, deploymentVersion, sessionId })
           onSuccess(expectedRef.current)
         }
         return
@@ -2425,7 +2425,7 @@ function DeployVaultBatcher({
         assertSafe(phase3Calls)
         assertSafe(phase4Calls)
 
-        logger.warn('[DeployVault] deploy_start', {
+        logger.info('[DeployVault] deploy_start', {
           creatorToken,
           owner,
           deploymentVersion,
@@ -2500,7 +2500,7 @@ function DeployVaultBatcher({
             [ownerSlotForPhase(phaseLabel)]: result.userOpHash,
             [txSlotForPhase(phaseLabel)]: result.transactionHash,
           }))
-          logger.warn(`[DeployVault] ${logPhaseLabel}_confirmed via ${context}`, {
+          logger.info(`[DeployVault] ${logPhaseLabel}_confirmed via ${context}`, {
             userOpHash: result.userOpHash,
             txHash: result.transactionHash,
           })
@@ -3419,7 +3419,7 @@ function DeployVaultBatcher({
         }
 
         setPhase('done')
-        logger.warn('[DeployVault] deploy_success', { creatorToken, owner, deploymentVersion })
+        logger.info('[DeployVault] deploy_success', { creatorToken, owner, deploymentVersion })
         onSuccess(expected)
         return
       }
@@ -3455,7 +3455,7 @@ function DeployVaultBatcher({
             }))
             // Show success message - user should refresh to see vault
             setPhase('done')
-            logger.warn('[DeployVault] deploy_success (recovered from estimation error)', { txHash })
+            logger.info('[DeployVault] deploy_success (recovered from estimation error)', { txHash })
             if (expected) onSuccess(expected)
             return
           }
