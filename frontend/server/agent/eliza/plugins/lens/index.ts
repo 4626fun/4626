@@ -4,18 +4,31 @@
  * Calls server-side Lens modules directly instead of routing
  * through the OpenClaw HTTP bridge.
  *
- *   /lens mapping <address>  → Resolve wallet to Lens profile mapping
- *   /lens graph <address>    → Generate Lens identity graph
+ *   /lens mapping <address>   → Resolve wallet to Lens profile mapping
+ *   /lens graph <address>     → Generate Lens identity graph
+ *   /lens feed <address>      → Fetch recent posts from a Lens account
+ *   /lens followers <address> → List followers of a Lens account
  *   /share metadata <address> → Generate ShareOFT metadata
  */
 
 import type { Action, Content, HandlerCallback, IAgentRuntime, Memory, Plugin, State } from '@elizaos/core'
+import {
+  PostsQuery,
+  PostType,
+  FollowersQuery,
+  FollowersOrderBy,
+  FollowingQuery,
+  FollowingOrderBy,
+  AccountQuery,
+  evmAddress,
+} from '@lens-protocol/client'
 
 // Direct imports — no HTTP bridge needed
 import { resolveLensUserByOwner } from '../../../../_lib/lensAccounts.js'
 import { resolveCanonicalSmartWalletAddress } from '../../../../_lib/canonicalWalletResolver.js'
 import { tryUploadImmutableJson } from '../../../../_lib/lensGrove.js'
 import { buildShareTokenMetadata } from '../../../../_lib/shareTokenMetadata.js'
+import { getLensPublicClient } from '../../../../_lib/lensClient.js'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -302,13 +315,291 @@ const shareTokenMetadataAction: Action = {
 }
 
 // ---------------------------------------------------------------------------
+// Lens Feed Action — fetch recent posts from a Lens account
+// ---------------------------------------------------------------------------
+
+const lensFeedAction: Action = {
+  name: 'LENS_FEED',
+  similes: ['lens feed', 'lens posts', 'lens timeline'],
+  description: 'Fetch recent posts from a Lens account by wallet address.',
+
+  validate: async (_runtime: IAgentRuntime, message: Memory) => {
+    const text = (message.content?.text ?? '').trim().toLowerCase()
+    return text.startsWith('/lens feed') || text.startsWith('/lens posts')
+  },
+
+  handler: async (
+    _runtime: IAgentRuntime,
+    message: Memory,
+    _state?: State,
+    options?: Record<string, unknown>,
+    callback?: HandlerCallback,
+  ) => {
+    const fromOptions = typeof options?.address === 'string' ? options.address : null
+    const fromText = parseAddressFromText(message.content?.text ?? '')
+    const address = fromOptions ?? fromText
+    if (!address) {
+      await respond(callback, 'Missing address. Provide a wallet address.')
+      return
+    }
+
+    try {
+      const walletRaw = address.trim().toLowerCase()
+      const canonicalWallet = (await resolveCanonicalSmartWalletAddress(walletRaw)) ?? walletRaw
+
+      // Resolve to Lens account first
+      const lensUser = await resolveLensUserByOwner(canonicalWallet)
+      if (!lensUser) {
+        await respond(callback, { feed: null, message: 'No Lens profile found for this wallet.' })
+        return
+      }
+
+      const client = getLensPublicClient()
+      const limit = typeof options?.limit === 'number' ? Math.min(options.limit, 25) : 10
+
+      const result = await client.query(PostsQuery, {
+        request: {
+          filter: {
+            authors: [evmAddress(lensUser.accountAddress)],
+            postTypes: [PostType.Root, PostType.Comment],
+          },
+        },
+      })
+
+      const items = (result?.value?.items ?? []).slice(0, limit)
+      const posts = items.map((p: any) => ({
+        id: p.id,
+        type: p.__typename,
+        content: p.metadata?.content ?? null,
+        contentFocus: p.metadata?.mainContentFocus ?? null,
+        timestamp: p.timestamp,
+        stats: p.stats ?? null,
+        app: p.app?.address ?? null,
+      }))
+
+      await respond(callback, {
+        account: {
+          address: lensUser.accountAddress,
+          handle: lensUser.handle,
+          displayName: lensUser.displayName,
+        },
+        posts,
+        count: posts.length,
+      })
+    } catch (err: any) {
+      await respond(callback, `Lens feed error: ${err.message}`)
+    }
+  },
+
+  examples: [
+    [
+      { name: 'user', content: { text: '/lens feed 0x1234567890abcdef1234567890abcdef12345678' } },
+      { name: 'agent', content: { text: '{"account":{"handle":"@user"},"posts":[...],"count":10}' } },
+    ],
+  ],
+}
+
+// ---------------------------------------------------------------------------
+// Lens Followers Action — list followers of a Lens account
+// ---------------------------------------------------------------------------
+
+const lensFollowersAction: Action = {
+  name: 'LENS_FOLLOWERS',
+  similes: ['lens followers', 'lens following'],
+  description: 'List followers or following of a Lens account by wallet address.',
+
+  validate: async (_runtime: IAgentRuntime, message: Memory) => {
+    const text = (message.content?.text ?? '').trim().toLowerCase()
+    return text.startsWith('/lens followers') || text.startsWith('/lens following')
+  },
+
+  handler: async (
+    _runtime: IAgentRuntime,
+    message: Memory,
+    _state?: State,
+    options?: Record<string, unknown>,
+    callback?: HandlerCallback,
+  ) => {
+    const fromOptions = typeof options?.address === 'string' ? options.address : null
+    const fromText = parseAddressFromText(message.content?.text ?? '')
+    const address = fromOptions ?? fromText
+    if (!address) {
+      await respond(callback, 'Missing address. Provide a wallet address.')
+      return
+    }
+
+    const text = (message.content?.text ?? '').trim().toLowerCase()
+    const isFollowing = text.includes('following')
+
+    try {
+      const walletRaw = address.trim().toLowerCase()
+      const canonicalWallet = (await resolveCanonicalSmartWalletAddress(walletRaw)) ?? walletRaw
+
+      const lensUser = await resolveLensUserByOwner(canonicalWallet)
+      if (!lensUser) {
+        await respond(callback, { result: null, message: 'No Lens profile found for this wallet.' })
+        return
+      }
+
+      const client = getLensPublicClient()
+      const limit = typeof options?.limit === 'number' ? Math.min(options.limit, 50) : 20
+
+      if (isFollowing) {
+        const result = await client.query(FollowingQuery, {
+          request: {
+            account: evmAddress(lensUser.accountAddress),
+            orderBy: FollowingOrderBy.AccountScore,
+          },
+        })
+
+        const items = (result?.value?.items ?? []).slice(0, limit)
+        const following = items.map((f: any) => ({
+          address: f.following?.address ?? f.address,
+          username: f.following?.username?.value ?? f.username?.value ?? null,
+          displayName: f.following?.metadata?.name ?? f.metadata?.name ?? null,
+        }))
+
+        await respond(callback, {
+          account: {
+            address: lensUser.accountAddress,
+            handle: lensUser.handle,
+            displayName: lensUser.displayName,
+          },
+          direction: 'following',
+          accounts: following,
+          count: following.length,
+        })
+      } else {
+        const result = await client.query(FollowersQuery, {
+          request: {
+            account: evmAddress(lensUser.accountAddress),
+            orderBy: FollowersOrderBy.AccountScore,
+          },
+        })
+
+        const items = (result?.value?.items ?? []).slice(0, limit)
+        const followers = items.map((f: any) => ({
+          address: f.follower?.address ?? f.address,
+          username: f.follower?.username?.value ?? f.username?.value ?? null,
+          displayName: f.follower?.metadata?.name ?? f.metadata?.name ?? null,
+        }))
+
+        await respond(callback, {
+          account: {
+            address: lensUser.accountAddress,
+            handle: lensUser.handle,
+            displayName: lensUser.displayName,
+          },
+          direction: 'followers',
+          accounts: followers,
+          count: followers.length,
+        })
+      }
+    } catch (err: any) {
+      await respond(callback, `Lens followers error: ${err.message}`)
+    }
+  },
+
+  examples: [
+    [
+      { name: 'user', content: { text: '/lens followers 0x1234567890abcdef1234567890abcdef12345678' } },
+      { name: 'agent', content: { text: '{"account":{"handle":"@user"},"direction":"followers","accounts":[...],"count":20}' } },
+    ],
+  ],
+}
+
+// ---------------------------------------------------------------------------
+// Lens Account Info Action — get detailed account info
+// ---------------------------------------------------------------------------
+
+const lensAccountAction: Action = {
+  name: 'LENS_ACCOUNT',
+  similes: ['lens account', 'lens profile', 'lens info'],
+  description: 'Get detailed Lens account information for a wallet address.',
+
+  validate: async (_runtime: IAgentRuntime, message: Memory) => {
+    const text = (message.content?.text ?? '').trim().toLowerCase()
+    return text.startsWith('/lens account') || text.startsWith('/lens profile') || text.startsWith('/lens info')
+  },
+
+  handler: async (
+    _runtime: IAgentRuntime,
+    message: Memory,
+    _state?: State,
+    options?: Record<string, unknown>,
+    callback?: HandlerCallback,
+  ) => {
+    const fromOptions = typeof options?.address === 'string' ? options.address : null
+    const fromText = parseAddressFromText(message.content?.text ?? '')
+    const address = fromOptions ?? fromText
+    if (!address) {
+      await respond(callback, 'Missing address. Provide a wallet address.')
+      return
+    }
+
+    try {
+      const walletRaw = address.trim().toLowerCase()
+      const canonicalWallet = (await resolveCanonicalSmartWalletAddress(walletRaw)) ?? walletRaw
+
+      const lensUser = await resolveLensUserByOwner(canonicalWallet)
+      if (!lensUser) {
+        await respond(callback, { account: null, message: 'No Lens profile found for this wallet.' })
+        return
+      }
+
+      const client = getLensPublicClient()
+      const accountResult = await client.query(AccountQuery, {
+        request: { address: evmAddress(lensUser.accountAddress) },
+      })
+
+      const acct = accountResult?.value
+      if (!acct) {
+        await respond(callback, { account: null, message: 'Could not fetch account details.' })
+        return
+      }
+
+      await respond(callback, {
+        account: {
+          address: acct.address,
+          owner: acct.owner,
+          username: acct.username?.value ?? null,
+          localName: acct.username?.localName ?? null,
+          displayName: acct.metadata?.name ?? null,
+          bio: acct.metadata?.bio ?? null,
+          picture: acct.metadata?.picture ?? null,
+          score: acct.score ?? 0,
+          createdAt: acct.createdAt,
+          operations: acct.operations ?? null,
+        },
+      })
+    } catch (err: any) {
+      await respond(callback, `Lens account error: ${err.message}`)
+    }
+  },
+
+  examples: [
+    [
+      { name: 'user', content: { text: '/lens account 0x1234567890abcdef1234567890abcdef12345678' } },
+      { name: 'agent', content: { text: '{"account":{"address":"0x...","username":"lens/user","score":42}}' } },
+    ],
+  ],
+}
+
+// ---------------------------------------------------------------------------
 // Plugin export
 // ---------------------------------------------------------------------------
 
 export const lensPlugin: Plugin = {
   name: 'creatorvault-lens',
-  description: 'Lens mapping, graph, and ShareOFT metadata tools — direct server-side calls.',
-  actions: [lensMappingAction, lensGraphAction, shareTokenMetadataAction],
+  description: 'Lens mapping, graph, feed, followers, account info, and ShareOFT metadata tools — direct server-side calls.',
+  actions: [
+    lensMappingAction,
+    lensGraphAction,
+    lensFeedAction,
+    lensFollowersAction,
+    lensAccountAction,
+    shareTokenMetadataAction,
+  ],
 }
 
 export default lensPlugin

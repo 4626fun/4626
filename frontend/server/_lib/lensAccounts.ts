@@ -1,3 +1,17 @@
+/**
+ * Lens account resolution — uses the official `@lens-protocol/client` SDK.
+ *
+ * Replaces raw GraphQL `fetch()` with typed SDK queries for type safety,
+ * pagination, and access to the full Lens V3 API surface.
+ */
+import { AccountsBulkQuery, evmAddress } from '@lens-protocol/client'
+
+import { getLensPublicClient } from './lensClient.js'
+
+// ---------------------------------------------------------------------------
+// Types — kept backward-compatible with all existing callers.
+// ---------------------------------------------------------------------------
+
 type LensAccount = {
   address: string
   owner: string | null
@@ -20,8 +34,9 @@ export type LensUser = {
   ownerAddress: string | null
 }
 
-const LENS_API_URL = 'https://api.lens.xyz/graphql'
-const LENS_SERVER_API_KEY = process.env.LENS_SERVER_API_KEY ?? ''
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function getString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null
@@ -65,74 +80,57 @@ function pickBestLensAccount(accounts: LensAccount[]): LensAccount | null {
   return [...accounts].sort((a, b) => score(b) - score(a))[0] ?? null
 }
 
+// ---------------------------------------------------------------------------
+// SDK-based account fetching
+// ---------------------------------------------------------------------------
+
 async function fetchLensAccounts(request: { ownedBy?: string[] }): Promise<LensAccount[]> {
   const hasOwnedBy = Array.isArray(request.ownedBy) && request.ownedBy.length > 0
   if (!hasOwnedBy) return []
 
-  const body = {
-    query: `
-      query AccountsBulk($request: AccountsBulkRequest!) {
-        accountsBulk(request: $request) {
-          address
-          owner
-          username {
-            value
-            localName
-          }
-          metadata {
-            name
-            picture
-          }
-        }
-      }
-    `,
-    variables: { request },
-  }
+  const client = getLensPublicClient()
 
-  const headers: Record<string, string> = { 'content-type': 'application/json' }
-  if (LENS_SERVER_API_KEY) {
-    headers['x-api-key'] = LENS_SERVER_API_KEY
-  }
-
-  const res = await fetch(LENS_API_URL, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) return []
-
-  const payload = (await res.json().catch(() => null)) as
-    | { data?: { accountsBulk?: unknown }; errors?: unknown[] }
-    | null
-  if (!payload || !payload.data || !Array.isArray(payload.data.accountsBulk)) return []
-
-  return payload.data.accountsBulk
-    .map((item): LensAccount | null => {
-      if (!item || typeof item !== 'object') return null
-      const row = item as Record<string, unknown>
-      const address = getString(row.address)
-      if (!address) return null
-      const owner = getString(row.owner)
-      const usernameValue =
-        row.username && typeof row.username === 'object'
-          ? (row.username as Record<string, unknown>)
-          : null
-      const metadata =
-        row.metadata && typeof row.metadata === 'object'
-          ? (row.metadata as Record<string, unknown>)
-          : null
-      const username = usernameValue
-        ? { value: getString(usernameValue.value), localName: getString(usernameValue.localName) }
-        : null
-      return {
-        address,
-        owner,
-        username,
-        metadata: metadata ? { name: getString(metadata.name), picture: metadata.picture } : null,
-      }
+  try {
+    const result = await client.query(AccountsBulkQuery, {
+      request: {
+        addresses: request.ownedBy!.map((addr) => evmAddress(addr)),
+      },
     })
-    .filter((item): item is LensAccount => Boolean(item))
+
+    // The SDK returns { value: Account[] } or similar
+    const accounts = result?.value
+    if (!Array.isArray(accounts)) return []
+
+    return accounts
+      .map((item: any): LensAccount | null => {
+        if (!item || typeof item !== 'object') return null
+        const address = getString(item.address)
+        if (!address) return null
+        const owner = getString(item.owner)
+        const usernameObj = item.username
+        const metadataObj = item.metadata
+        const username = usernameObj
+          ? { value: getString(usernameObj.value), localName: getString(usernameObj.localName) }
+          : null
+        return {
+          address,
+          owner,
+          username,
+          metadata: metadataObj
+            ? { name: getString(metadataObj.name), picture: metadataObj.picture }
+            : null,
+        }
+      })
+      .filter((item): item is LensAccount => Boolean(item))
+  } catch (err) {
+    console.error('[lensAccounts] SDK query failed:', err instanceof Error ? err.message : err)
+    return []
+  }
 }
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
 export async function resolveLensUserByOwner(address: string): Promise<LensUser | null> {
   const accounts = await fetchLensAccounts({ ownedBy: [address] })

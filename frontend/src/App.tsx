@@ -8,10 +8,8 @@ import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { apiFetch } from '@/lib/apiBase'
 import { AdminLayout } from './components/AdminLayout'
 import { Layout } from './components/Layout'
-import { MarketingLayout } from './components/MarketingLayout'
 import { Home } from './pages/Home'
-import { isPublicSiteMode } from './lib/flags'
-import { getHostMode, getAppBaseUrl } from './lib/host'
+// host.ts: getHostMode/getAppBaseUrl still available for other consumers
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type CreatorAllowlistMode = 'disabled' | 'enforced'
@@ -101,12 +99,10 @@ function buildAdminBypassSet(): Set<string> {
 
 const ADMIN_BYPASS_ADDRESSES = buildAdminBypassSet()
 
+/** After the domain merge, marketing URL is the same origin. */
 function getMarketingBaseUrl(): string {
   if (typeof window === 'undefined') return 'https://4626.fun'
-  const host = window.location.hostname.toLowerCase()
-  if (host === 'localhost' || host.endsWith('.localhost') || host === '127.0.0.1' || host === '0.0.0.0') return 'https://4626.fun'
-  if (host.startsWith('app.')) return `https://${host.slice(4)}`
-  return `https://${host}`
+  return window.location.origin
 }
 
 function useResolvedAccessState(): AccessState {
@@ -170,7 +166,7 @@ function useResolvedAccessState(): AccessState {
 
 const AccessContext = createContext<AccessState | null>(null)
 
-function useAccessContext(): AccessState {
+export function useAccessContext(): AccessState {
   const value = useContext(AccessContext)
   if (!value) {
     throw new Error('AccessContext is not available')
@@ -243,19 +239,9 @@ const Waitlist = lazy(async () => {
   return { default: m.Waitlist }
 })
 
-const WaitlistLanding = lazy(async () => {
-  const m = await import('./pages/WaitlistLanding')
-  return { default: m.WaitlistLanding }
-})
-
 const Leaderboard = lazy(async () => {
   const m = await import('./pages/Leaderboard')
   return { default: m.Leaderboard }
-})
-
-const WaitlistProfile = lazy(async () => {
-  const m = await import('./pages/WaitlistProfile')
-  return { default: m.WaitlistProfile }
 })
 
 const CoinManage = lazy(async () => {
@@ -381,24 +367,9 @@ const Portfolio = lazy(async () => {
   return { default: m.Portfolio }
 })
 
-function ExternalRedirect({ to, reason = 'external-redirect' }: { to: string; reason?: 'external-redirect' | 'host-redirect' }) {
-  const target = withReason(to, reason)
-  if (typeof window !== 'undefined') window.location.replace(target)
-  return null
-}
-
-function AppRedirect({ base }: { base: string }) {
-  const location = useLocation()
-  const target = withReason(`${base}${location.pathname}${location.search}${location.hash}`, 'host-redirect')
-  if (typeof window !== 'undefined') window.location.replace(target)
-  return null
-}
-
 function NotFoundPage() {
   const location = useLocation()
   const access = useAccessContext()
-  const hostMode = getHostMode()
-  const appBase = getAppBaseUrl()
 
   const appCta = useMemo(() => {
     if (!access.sessionValid) {
@@ -417,31 +388,14 @@ function NotFoundPage() {
         <div className="card rounded-xl p-8 space-y-4">
           <div className="text-xl font-medium">Route Not Found</div>
           <div className="text-sm text-zinc-400">No page matches <span className="font-mono text-zinc-300">{location.pathname}</span>.</div>
-          {hostMode === 'marketing' ? (
-            <div className="space-y-3">
-              <div className="text-xs text-zinc-500">You are on the marketing domain.</div>
-              <div className="flex flex-wrap gap-3">
-                <a className="btn-accent inline-flex" href={withReason('/#waitlist', 'not-found')}>
-                  Go To Waitlist
-                </a>
-                <a className="btn-primary inline-flex" href={withReason(`${appBase}/`, 'not-found')}>
-                  Open App Home
-                </a>
-              </div>
+          <div className="space-y-3">
+            <div className="text-xs text-zinc-500">{appCta.hint}</div>
+            <div className="flex flex-wrap gap-3">
+              <Link className="btn-accent inline-flex" to={appCta.href}>
+                {appCta.label}
+              </Link>
             </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="text-xs text-zinc-500">{appCta.hint}</div>
-              <div className="flex flex-wrap gap-3">
-                <Link className="btn-accent inline-flex" to={appCta.href}>
-                  {appCta.label}
-                </Link>
-                <a className="btn-primary inline-flex" href={withReason(access.marketingUrl, 'not-found')}>
-                  Open Marketing Site
-                </a>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
@@ -449,10 +403,6 @@ function NotFoundPage() {
 }
 
 function App() {
-  const publicMode = isPublicSiteMode()
-  const hostMode = getHostMode()
-  const appBase = getAppBaseUrl()
-
   // Prefetch the most common routes after first paint to reduce perceived load time.
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -478,111 +428,67 @@ function App() {
   return (
     <AccessStateProvider>
       <Routes>
-        {hostMode === 'marketing' ? (
-          <Route element={<MarketingLayout />}>
-            <Route path="/" element={<WaitlistLanding />} />
-            <Route path="/404" element={<NotFoundPage />} />
-            <Route path="/waitlist" element={<Navigate to={withReason('/', 'legacy-route')} replace />} />
-            <Route path="/portfolio" element={<WaitlistProfile />} />
-            <Route path="/leaderboard" element={<Leaderboard />} />
+        <Route element={<Layout />}>
+          {/* Public routes (no session required) */}
+          <Route path="/" element={<Home />} />
+          <Route path="/404" element={<NotFoundPage />} />
+          <Route path="/waitlist" element={<Waitlist />} />
+          <Route path="/home" element={<Navigate to={withReason('/', 'legacy-route')} replace />} />
+          <Route path="/leaderboard" element={<Leaderboard />} />
 
-            <Route path="/explore/*" element={<ExternalRedirect to={`${appBase}/explore`} />} />
-            <Route path="/deploy" element={<ExternalRedirect to={`${appBase}/deploy`} />} />
-            <Route path="/dashboard" element={<ExternalRedirect to={`${appBase}/explore`} />} />
-            <Route path="/vault/*" element={<ExternalRedirect to={`${appBase}/vault`} />} />
-            <Route path="/coin/*" element={<ExternalRedirect to={`${appBase}/coin`} />} />
-            <Route path="/creator/*" element={<ExternalRedirect to={`${appBase}/creator`} />} />
-            <Route path="/admin/*" element={<AppRedirect base={appBase} />} />
-            <Route path="/miniapp" element={<AppRedirect base={appBase} />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Route>
-        ) : publicMode ? (
-          <Route element={<Layout />}>
-            <Route path="/" element={<Home />} />
-            <Route path="/404" element={<NotFoundPage />} />
-            <Route path="/home" element={<Navigate to={withReason('/', 'legacy-route')} replace />} />
-            <Route path="/waitlist" element={<Waitlist />} />
-
-            <Route element={<RequireSession />}>
-              <Route element={<RequireAdmin />}>
-                <Route path="/admin" element={<AdminLayout />}>
-                  <Route index element={<Navigate to={withReason('/admin/waitlist', 'legacy-route')} replace />} />
-                  <Route path="creator-access" element={<AdminCreatorAccess />} />
-                  <Route path="waitlist" element={<AdminWaitlist />} />
-                  <Route path="agent-setup" element={<AdminAgentSetup />} />
-                  <Route path="ops" element={<AdminOps />} />
-                  <Route path="miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
-                  <Route path="deploy-strategies" element={<AdminDeployStrategies />} />
-                </Route>
-                <Route path="/miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
-              </Route>
+          {/* Session-gated routes */}
+          <Route element={<RequireSession />}>
+            <Route element={<RequireAccepted />}>
+              <Route path="/explore" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
+              <Route path="/explore/creators" element={<ExploreCreators />} />
+              <Route path="/explore/content" element={<ExploreContent />} />
+              <Route path="/explore/transactions" element={<ExploreTransactions />} />
+              <Route path="/explore/creators/:chain/:tokenAddress" element={<ExploreCreatorDetail />} />
+              <Route path="/explore/creators/:chain/:tokenAddress/transactions" element={<ExploreCreatorTransactions />} />
+              <Route path="/explore/content/:chain/:contentCoinAddress" element={<ExploreContentDetail />} />
+              <Route path="/explore/content/:chain/:contentCoinAddress/transactions" element={<ExploreContentTransactions />} />
+              <Route path="/explore/content/:chain/pool/:poolIdOrPoolKeyHash" element={<ExploreContentPoolAlias />} />
+              <Route path="/explore/tokens" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
+              <Route path="/explore/pools" element={<Navigate to={withReason('/explore/content', 'legacy-route')} replace />} />
+              <Route path="/swap" element={<Swap />} />
+              <Route path="/positions" element={<Positions />} />
+              <Route path="/portfolio" element={<Portfolio />} />
+              <Route path="/portfolio/:address" element={<Portfolio />} />
+              <Route path="/launch" element={<Navigate to={withReason('/deploy', 'legacy-route')} replace />} />
+              <Route path="/deploy" element={<DeployVault />} />
+              <Route path="/coin/:address/manage" element={<CoinManage />} />
+              <Route path="/creator/earnings" element={<CreatorEarnings />} />
+              <Route path="/creator/:identifier/earnings" element={<CreatorEarnings />} />
+              <Route path="/faq" element={<Faq />} />
+              <Route path="/faq/how-it-works" element={<FaqHowItWorks />} />
+              <Route path="/status" element={<Status />} />
+              <Route path="/vote" element={<GaugeVoting />} />
+              <Route path="/activate-akita" element={<Navigate to={withReason('/deploy', 'legacy-route')} replace />} />
+              <Route path="/auction/bid/:address" element={<AuctionBid />} />
+              <Route path="/complete-auction" element={<CompleteAuction />} />
+              <Route path="/complete-auction/:strategy" element={<CompleteAuction />} />
+              <Route path="/dashboard" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
+              <Route path="/vault/:address" element={<Vault />} />
+              <Route path="/agents" element={<AgentDirectory />} />
+              <Route path="/agents/uri-service" element={<AgentUriService />} />
+              <Route path="/auction-demo" element={<AuctionDemo />} />
             </Route>
 
-            <Route path="/status" element={<Status />} />
-            <Route path="/agents" element={<AgentDirectory />} />
-            <Route path="/agents/uri-service" element={<AgentUriService />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Route>
-        ) : (
-          <Route element={<Layout />}>
-            <Route path="/" element={<Home />} />
-            <Route path="/404" element={<NotFoundPage />} />
-            <Route path="/waitlist" element={<Waitlist />} />
-            <Route path="/home" element={<Navigate to={withReason('/', 'legacy-route')} replace />} />
-
-            <Route element={<RequireSession />}>
-              <Route element={<RequireAccepted />}>
-                <Route path="/explore" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
-                <Route path="/explore/creators" element={<ExploreCreators />} />
-                <Route path="/explore/content" element={<ExploreContent />} />
-                <Route path="/explore/transactions" element={<ExploreTransactions />} />
-                <Route path="/explore/creators/:chain/:tokenAddress" element={<ExploreCreatorDetail />} />
-                <Route path="/explore/creators/:chain/:tokenAddress/transactions" element={<ExploreCreatorTransactions />} />
-                <Route path="/explore/content/:chain/:contentCoinAddress" element={<ExploreContentDetail />} />
-                <Route path="/explore/content/:chain/:contentCoinAddress/transactions" element={<ExploreContentTransactions />} />
-                <Route path="/explore/content/:chain/pool/:poolIdOrPoolKeyHash" element={<ExploreContentPoolAlias />} />
-                <Route path="/explore/tokens" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
-                <Route path="/explore/pools" element={<Navigate to={withReason('/explore/content', 'legacy-route')} replace />} />
-                <Route path="/swap" element={<Swap />} />
-                <Route path="/positions" element={<Positions />} />
-                <Route path="/portfolio" element={<Portfolio />} />
-                <Route path="/portfolio/:address" element={<Portfolio />} />
-                <Route path="/launch" element={<Navigate to={withReason('/deploy', 'legacy-route')} replace />} />
-                <Route path="/deploy" element={<DeployVault />} />
-                <Route path="/coin/:address/manage" element={<CoinManage />} />
-                <Route path="/creator/earnings" element={<CreatorEarnings />} />
-                <Route path="/creator/:identifier/earnings" element={<CreatorEarnings />} />
-                <Route path="/faq" element={<Faq />} />
-                <Route path="/faq/how-it-works" element={<FaqHowItWorks />} />
-                <Route path="/status" element={<Status />} />
-                <Route path="/vote" element={<GaugeVoting />} />
-                <Route path="/activate-akita" element={<Navigate to={withReason('/deploy', 'legacy-route')} replace />} />
-                <Route path="/auction/bid/:address" element={<AuctionBid />} />
-                <Route path="/complete-auction" element={<CompleteAuction />} />
-                <Route path="/complete-auction/:strategy" element={<CompleteAuction />} />
-                <Route path="/dashboard" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
-                <Route path="/vault/:address" element={<Vault />} />
-                <Route path="/agents" element={<AgentDirectory />} />
-                <Route path="/agents/uri-service" element={<AgentUriService />} />
-                <Route path="/auction-demo" element={<AuctionDemo />} />
+            <Route element={<RequireAdmin />}>
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<Navigate to={withReason('/admin/waitlist', 'legacy-route')} replace />} />
+                <Route path="creator-access" element={<AdminCreatorAccess />} />
+                <Route path="waitlist" element={<AdminWaitlist />} />
+                <Route path="agent-setup" element={<AdminAgentSetup />} />
+                <Route path="ops" element={<AdminOps />} />
+                <Route path="miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
+                <Route path="deploy-strategies" element={<AdminDeployStrategies />} />
               </Route>
-
-              <Route element={<RequireAdmin />}>
-                <Route path="/admin" element={<AdminLayout />}>
-                  <Route index element={<Navigate to={withReason('/admin/waitlist', 'legacy-route')} replace />} />
-                  <Route path="creator-access" element={<AdminCreatorAccess />} />
-                  <Route path="waitlist" element={<AdminWaitlist />} />
-                  <Route path="agent-setup" element={<AdminAgentSetup />} />
-                  <Route path="ops" element={<AdminOps />} />
-                  <Route path="miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
-                  <Route path="deploy-strategies" element={<AdminDeployStrategies />} />
-                </Route>
-                <Route path="/miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
-              </Route>
+              <Route path="/miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
             </Route>
-            <Route path="*" element={<NotFoundPage />} />
           </Route>
-        )}
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
       </Routes>
     </AccessStateProvider>
   )

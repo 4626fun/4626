@@ -82,6 +82,12 @@ function parseXmtpEnv(): 'production' | 'dev' | 'local' {
   return 'production'
 }
 
+function getDbEncryptionKey(): `0x${string}` | undefined {
+  const raw = (process.env.XMTP_DB_ENCRYPTION_KEY ?? '').trim()
+  if (!raw) return undefined
+  return (raw.startsWith('0x') ? raw : `0x${raw}`) as `0x${string}`
+}
+
 function normalizeActionType(actionType?: string | null, actionPayloadType?: string | null): SupportedActionType | null {
   const raw = String(actionType ?? actionPayloadType ?? '').trim()
   if (!raw) return null
@@ -303,7 +309,11 @@ export async function executeKeeprAction(input: ExecuteKeeprActionInput): Promis
       signer = createSigner(createUser(privKey))
     }
 
-    agent = await Agent.create(signer, { env: parseXmtpEnv() })
+    const encKey = getDbEncryptionKey()
+    agent = await Agent.create(signer, {
+      env: parseXmtpEnv(),
+      ...(encKey ? { dbEncryptionKey: encKey } : {}),
+    } as any)
     const conversationCtx = await agent.getConversationContext(input.groupId)
     if (!conversationCtx) {
       return { success: false, retryable: false, actionType: normalizedActionType, error: 'group_not_found' }

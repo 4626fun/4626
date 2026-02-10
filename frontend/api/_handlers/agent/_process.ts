@@ -27,6 +27,11 @@ declare const process: { env: Record<string, string | undefined> }
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 const XMTP_ENV = ((process.env.XMTP_ENV ?? 'production').trim()) as 'production' | 'dev' | 'local'
+const XMTP_DB_ENCRYPTION_KEY = (() => {
+  const raw = (process.env.XMTP_DB_ENCRYPTION_KEY ?? '').trim()
+  if (!raw) return undefined
+  return (raw.startsWith('0x') ? raw : `0x${raw}`) as `0x${string}`
+})()
 const MAX_AGENTS = Number(process.env.MAX_AGENTS ?? '10') // Lower limit for serverless
 const MAX_MESSAGES_PER_AGENT = 20 // Process at most N messages per invocation
 export const MAX_MESSAGES_PER_CONVERSATION = 50
@@ -188,8 +193,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         agent = await Agent.create(signer, {
-          env: XMTP_ENV as any,
-        })
+          env: XMTP_ENV,
+          ...(XMTP_DB_ENCRYPTION_KEY ? { dbEncryptionKey: XMTP_DB_ENCRYPTION_KEY } : {}),
+        } as any)
 
         const client = agent.client
 

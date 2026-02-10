@@ -34,6 +34,29 @@ export type XmtpConfig = {
   signer?: any
   /** XMTP network: 'production' | 'dev' | 'local' */
   env?: 'production' | 'dev' | 'local'
+  /**
+   * Stable path (or factory) for the XMTP local database.
+   * If provided, the SDK reuses the same installation across restarts
+   * instead of creating a new one each time.
+   *
+   * Can be a string (absolute path to the .db3 file), a function
+   * `(inboxId: string) => string`, or `null` for in-memory.
+   */
+  dbPath?: string | null | ((inboxId: string) => string)
+  /**
+   * Hex-encoded encryption key for the XMTP local database (0x-prefixed, 32 bytes).
+   * Required by the SDK to encrypt/decrypt the persisted .db3 files.
+   * Must be the same key across restarts so the DB can be reopened.
+   *
+   * Generate with: `openssl rand -hex 32` (then prefix with 0x).
+   */
+  dbEncryptionKey?: `0x${string}`
+  /**
+   * If true, revoke all other installations for this inbox after
+   * connecting. Use this to recover from the 10/10 installation limit.
+   * Defaults to false.
+   */
+  revokeOtherInstallations?: boolean
 }
 
 export type XmtpMessage = {
@@ -91,9 +114,33 @@ export class XmtpService {
       throw new Error('Either privateKey or signer must be provided')
     }
 
-    this.agent = await Agent.create(signer, {
+    const createOpts: Record<string, unknown> = {
       env: this.config.env ?? 'production',
-    })
+    }
+
+    // Persist the local database so the SDK reuses the same installation
+    // across restarts instead of registering a new one each time.
+    if (this.config.dbPath !== undefined) {
+      createOpts.dbPath = this.config.dbPath
+    }
+
+    // Encrypt the local database so it can be safely reopened across restarts.
+    if (this.config.dbEncryptionKey) {
+      createOpts.dbEncryptionKey = this.config.dbEncryptionKey
+    }
+
+    this.agent = await Agent.create(signer, createOpts as any)
+
+    // Revoke stale installations if requested (recovers from 10/10 limit)
+    if (this.config.revokeOtherInstallations) {
+      try {
+        console.log('[xmtp-service] Revoking all other installations…')
+        await this.agent.client.revokeAllOtherInstallations()
+        console.log('[xmtp-service] Stale installations revoked')
+      } catch (err) {
+        console.error('[xmtp-service] Failed to revoke installations:', err)
+      }
+    }
 
     // Handle text messages
     this.agent.on('text', (ctx) => void this.handleIncoming(ctx))

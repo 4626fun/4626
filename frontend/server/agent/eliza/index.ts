@@ -58,11 +58,14 @@ import { createPrivyScwSigner } from '../../_lib/privyXmtpSigner.js'
 import { buildAgentRegistration } from '../../_lib/agentRegistration.js'
 import { tryUploadImmutableJson } from '../../_lib/lensGrove.js'
 import { logger } from '../../_lib/logger.js'
+import path from 'node:path'
+import fs from 'node:fs'
 
 declare const process: {
   env: Record<string, string | undefined>
   on: (event: string, cb: (...args: any[]) => void) => void
   exit: (code?: number) => void
+  cwd: () => string
 }
 
 // ---------------------------------------------------------------------------
@@ -72,6 +75,41 @@ declare const process: {
 const XMTP_ENV = ((process.env.XMTP_ENV ?? 'production').trim()) as 'production' | 'dev' | 'local'
 const POLL_INTERVAL_MS = 60_000
 const MAX_AGENTS = Number(process.env.MAX_AGENTS ?? '50')
+
+/**
+ * Directory where XMTP local databases are persisted.
+ * Defaults to `<cwd>/.xmtp-data/` — override with XMTP_DB_DIRECTORY.
+ */
+const XMTP_DB_DIR = (process.env.XMTP_DB_DIRECTORY ?? '').trim() || path.join(process.cwd(), '.xmtp-data')
+
+/** Whether to revoke all other installations on startup (recovers from 10/10 limit). */
+const XMTP_REVOKE_OTHER = (process.env.XMTP_REVOKE_OTHER_INSTALLATIONS ?? 'true').trim().toLowerCase() === 'true'
+
+/**
+ * Encryption key for the XMTP local database (0x-prefixed hex, 32 bytes).
+ * Required by the SDK to encrypt/decrypt the persisted .db3 files.
+ * Without this, the DB may not be reopenable across restarts.
+ */
+const XMTP_DB_ENCRYPTION_KEY = (() => {
+  const raw = (process.env.XMTP_DB_ENCRYPTION_KEY ?? '').trim()
+  if (!raw) return undefined
+  const hex = raw.startsWith('0x') ? raw : `0x${raw}`
+  return hex as `0x${string}`
+})()
+
+/**
+ * Build a stable `dbPath` function for the XMTP SDK.
+ * Ensures the directory exists and returns a deterministic path
+ * per inboxId so the same installation is reused across restarts.
+ */
+function makeDbPath(): (inboxId: string) => string {
+  fs.mkdirSync(XMTP_DB_DIR, { recursive: true, mode: 0o700 })
+  return (inboxId: string) => {
+    const p = path.join(XMTP_DB_DIR, `xmtp-${XMTP_ENV}-${inboxId}.db3`)
+    logger.info(`[xmtp] Using local database: ${p}`)
+    return p
+  }
+}
 
 // ERC-8004 identity (loaded from env vars in a separate module to avoid circular imports)
 import { erc8004Identity } from './identity.js'
@@ -355,8 +393,8 @@ async function startAgent(row: AgentRow): Promise<RunningAgent> {
   // Create XmtpService with the appropriate config
   const xmtp = new XmtpService(
     signer.type === 'eoa'
-      ? { privateKey: signer.privateKey, env: XMTP_ENV }
-      : { signer, env: XMTP_ENV },
+      ? { privateKey: signer.privateKey, env: XMTP_ENV, dbPath: makeDbPath(), dbEncryptionKey: XMTP_DB_ENCRYPTION_KEY, revokeOtherInstallations: XMTP_REVOKE_OTHER }
+      : { signer, env: XMTP_ENV, dbPath: makeDbPath(), dbEncryptionKey: XMTP_DB_ENCRYPTION_KEY, revokeOtherInstallations: XMTP_REVOKE_OTHER },
   )
 
   // Wire message handler through the ElizaOS plugin pipeline
@@ -456,7 +494,13 @@ async function shutdown() {
  * (i.e. no multi-agent DB is configured).
  */
 async function startSingleAgentEoa(privateKey: `0x${string}`): Promise<RunningAgent> {
-  const xmtp = new XmtpService({ privateKey, env: XMTP_ENV })
+  const xmtp = new XmtpService({
+    privateKey,
+    env: XMTP_ENV,
+    dbPath: makeDbPath(),
+    dbEncryptionKey: XMTP_DB_ENCRYPTION_KEY,
+    revokeOtherInstallations: XMTP_REVOKE_OTHER,
+  })
 
   xmtp.setMessageHandler(async (msg) => {
     logger.info(
@@ -504,7 +548,13 @@ async function startSingleAgentCsw(params: {
     chainId: params.chainId ?? 8453,
   })
 
-  const xmtp = new XmtpService({ signer, env: XMTP_ENV })
+  const xmtp = new XmtpService({
+    signer,
+    env: XMTP_ENV,
+    dbPath: makeDbPath(),
+    dbEncryptionKey: XMTP_DB_ENCRYPTION_KEY,
+    revokeOtherInstallations: XMTP_REVOKE_OTHER,
+  })
 
   xmtp.setMessageHandler(async (msg) => {
     logger.info(

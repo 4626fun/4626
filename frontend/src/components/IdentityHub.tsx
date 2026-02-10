@@ -8,7 +8,7 @@ import { getAddress, isAddress } from 'viem'
 import { useMiniAppContext } from '@/hooks/useMiniAppContext'
 import { useFarcasterAuth } from '@/hooks/useFarcasterAuth'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { getHostMode, getAppBaseUrl } from '@/lib/host'
+// host.ts imports removed after domain merge (no longer needed here)
 import { getBasenameProfile } from '@/lib/basename-api'
 import { getOnchainReputation } from '@/lib/reputation-aggregator'
 import { useZoraProfile } from '@/lib/zora/hooks'
@@ -38,8 +38,6 @@ function safeHttpUrl(url: string | null | undefined): string | null {
 
 export function IdentityHub() {
   const location = useLocation()
-  const hostMode = getHostMode()
-  const appBase = getAppBaseUrl()
 
   const mini = useMiniAppContext()
   const farcasterAuth = useFarcasterAuth()
@@ -179,31 +177,16 @@ export function IdentityHub() {
   }, [location.pathname])
 
   const continueHref = useMemo(() => {
-    if (hostMode === 'marketing') return '/portfolio'
     return '/deploy'
-  }, [hostMode])
+  }, [])
 
   const enableGasFreeHref = useMemo(() => {
-    const targetHash = 'gasfree'
-    if (hostMode === 'app') return `/deploy#${targetHash}`
-    // From marketing → app host: put query BEFORE hash (otherwise it becomes part of the fragment).
-    // Keep autologin as fallback; the smoother token handoff is handled by the Waitlist "Continue" CTA.
-    return `${appBase}/deploy?from=waitlist&autologin=1&auth=wallet#${targetHash}`
-  }, [appBase, hostMode])
+    return '/deploy#gasfree'
+  }, [])
 
   const deployHref = useMemo(() => {
-    if (hostMode === 'app') return '/deploy'
-    // Best-effort: if we already have a bearer session token on marketing, hand it off to the app host
-    // via URL hash (not sent to servers) to avoid a second Privy email-code prompt.
-    try {
-      const raw = sessionStorage.getItem('cv_siwe_session_token')
-      const token = typeof raw === 'string' ? raw.trim() : ''
-      if (token) return `${appBase}/deploy?from=waitlist#cv_session=${encodeURIComponent(token)}`
-    } catch {
-      // ignore
-    }
-    return `${appBase}/deploy?from=waitlist&autologin=1&auth=wallet`
-  }, [appBase, hostMode])
+    return '/deploy'
+  }, [])
 
   const showJoinWaitlist = state === 'guest'
   const showEnableGasFree = state === 'waitlisted' && !!canonicalCswAddress && !!embeddedEoa && gasFreeQuery.data !== true
@@ -346,9 +329,7 @@ export function IdentityHub() {
                 </a>
               ) : null}
 
-              {!privyReady && hostMode === 'marketing' ? (
-                <div className="text-[11px] text-zinc-600">Loading…</div>
-              ) : null}
+              {/* Loading indicator removed after domain merge (was marketing-only) */}
 
               {mini.isBaseApp ? (
                 <div className="text-[11px] text-zinc-600">Base App detected · {isConnected ? 'wallet connected' : 'no wallet connection'}</div>

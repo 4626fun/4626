@@ -148,7 +148,10 @@ docs/keepr/
 
 # XMTP local dev files
 frontend/.xmtp/
+frontend/.xmtp-data/
 frontend/xmtp-dev-*.db3*
+frontend/xmtp-production-*.db3*
+.xmtp-data/
 
 # Test and development files (keep local)
 bsc-production-ready.json

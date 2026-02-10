@@ -62,19 +62,6 @@ type FarcasterUser = {
   avatar: string | null
 }
 
-type LensAccount = {
-  address: string
-  owner: string | null
-  username: {
-    value: string | null
-    localName: string | null
-  } | null
-  metadata: {
-    name: string | null
-    picture: unknown
-  } | null
-}
-
 type LensUser = {
   displayName: string
   handle: string | null
@@ -121,7 +108,17 @@ async function fetchFarcasterUser(address: string): Promise<FarcasterUser | null
   }
 }
 
-const LENS_API_URL = 'https://api.lens.xyz/graphql'
+// ---------------------------------------------------------------------------
+// Lens resolution — uses the official @lens-protocol/client SDK
+// ---------------------------------------------------------------------------
+
+import { PublicClient as LensPublicClient, mainnet as lensMainnet, AccountsBulkQuery, evmAddress } from '@lens-protocol/client'
+
+let _lensClient: InstanceType<typeof LensPublicClient> | null = null
+function getLensClient(): InstanceType<typeof LensPublicClient> {
+  if (!_lensClient) _lensClient = LensPublicClient.create({ environment: lensMainnet })
+  return _lensClient
+}
 
 function getString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null
@@ -141,7 +138,7 @@ function extractLensPictureUrl(value: unknown): string | null {
   )
 }
 
-function normalizeLensHandle(input: LensAccount['username']): string | null {
+function normalizeLensHandle(input: { value?: string | null; localName?: string | null } | null | undefined): string | null {
   const local = getString(input?.localName)
   if (local) return local
   const value = getString(input?.value)
@@ -153,111 +150,53 @@ function normalizeLensHandle(input: LensAccount['username']): string | null {
   return value
 }
 
-function pickBestLensAccount(accounts: LensAccount[]): LensAccount | null {
+async function fetchLensUser(address: string): Promise<LensUser | null> {
+  const client = getLensClient()
+
+  try {
+    // Try exact address match first, then fall back to ownedBy
+    const exactResult = await client.query(AccountsBulkQuery, {
+      request: { addresses: [evmAddress(address)] },
+    })
+    const exactAccounts = exactResult?.value
+    let best = pickBest(Array.isArray(exactAccounts) ? exactAccounts : [])
+
+    if (!best) {
+      const ownedResult = await client.query(AccountsBulkQuery, {
+        request: { ownedBy: [evmAddress(address)] },
+      })
+      const ownedAccounts = ownedResult?.value
+      best = pickBest(Array.isArray(ownedAccounts) ? ownedAccounts : [])
+    }
+
+    if (!best) return null
+
+    const handle = normalizeLensHandle(best.username)
+    const displayName = getString(best.metadata?.name) ?? (handle ? `@${handle}` : truncate(String(best.address)))
+
+    return {
+      displayName,
+      handle,
+      username: getString(best.username?.value),
+      avatar: extractLensPictureUrl(best.metadata?.picture),
+      accountAddress: String(best.address),
+      ownerAddress: best.owner ? String(best.owner) : null,
+    }
+  } catch {
+    return null
+  }
+}
+
+function pickBest(accounts: any[]): any | null {
   if (!accounts.length) return null
-  const score = (account: LensAccount): number => {
+  const score = (acct: any): number => {
     let rank = 0
-    if (normalizeLensHandle(account.username)) rank += 3
-    if (getString(account.metadata?.name)) rank += 2
-    if (extractLensPictureUrl(account.metadata?.picture)) rank += 1
+    if (normalizeLensHandle(acct.username)) rank += 3
+    if (getString(acct.metadata?.name)) rank += 2
+    if (extractLensPictureUrl(acct.metadata?.picture)) rank += 1
     return rank
   }
   return [...accounts].sort((a, b) => score(b) - score(a))[0] ?? null
-}
-
-async function fetchLensAccounts(request: {
-  addresses?: string[]
-  ownedBy?: string[]
-}): Promise<LensAccount[]> {
-  const hasAddresses = Array.isArray(request.addresses) && request.addresses.length > 0
-  const hasOwnedBy = Array.isArray(request.ownedBy) && request.ownedBy.length > 0
-  if (hasAddresses === hasOwnedBy) return []
-
-  const body = {
-    query: `
-      query AccountsBulk($request: AccountsBulkRequest!) {
-        accountsBulk(request: $request) {
-          address
-          owner
-          username {
-            value
-            localName
-          }
-          metadata {
-            name
-            picture
-          }
-        }
-      }
-    `,
-    variables: { request },
-  }
-
-  const res = await fetch(LENS_API_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) return []
-
-  const payload = (await res.json().catch(() => null)) as
-    | { data?: { accountsBulk?: unknown }; errors?: unknown[] }
-    | null
-  if (!payload || !payload.data || !Array.isArray(payload.data.accountsBulk)) return []
-
-  return payload.data.accountsBulk
-    .map((item): LensAccount | null => {
-      if (!item || typeof item !== 'object') return null
-      const row = item as Record<string, unknown>
-      const address = getString(row.address)
-      if (!address) return null
-      const owner = getString(row.owner)
-      const usernameValue =
-        row.username && typeof row.username === 'object'
-          ? (row.username as Record<string, unknown>)
-          : null
-      const metadata =
-        row.metadata && typeof row.metadata === 'object'
-          ? (row.metadata as Record<string, unknown>)
-          : null
-
-      return {
-        address,
-        owner,
-        username: usernameValue
-          ? {
-              value: getString(usernameValue.value),
-              localName: getString(usernameValue.localName),
-            }
-          : null,
-        metadata: metadata
-          ? {
-              name: getString(metadata.name),
-              picture: metadata.picture,
-            }
-          : null,
-      }
-    })
-    .filter((value): value is LensAccount => Boolean(value))
-}
-
-async function fetchLensUser(address: string): Promise<LensUser | null> {
-  const exactAccounts = await fetchLensAccounts({ addresses: [address] })
-  const pickedExact = pickBestLensAccount(exactAccounts)
-  const account = pickedExact ?? pickBestLensAccount(await fetchLensAccounts({ ownedBy: [address] }))
-  if (!account) return null
-
-  const handle = normalizeLensHandle(account.username)
-  const displayName = getString(account.metadata?.name) ?? (handle ? `@${handle}` : truncate(account.address))
-
-  return {
-    displayName,
-    handle,
-    username: getString(account.username?.value),
-    avatar: extractLensPictureUrl(account.metadata?.picture),
-    accountAddress: account.address,
-    ownerAddress: account.owner,
-  }
 }
 
 async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {

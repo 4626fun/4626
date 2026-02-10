@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { getAppBaseUrl } from '@/lib/host'
 import { useAccount, usePublicClient } from 'wagmi'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
@@ -476,6 +476,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   const sectionId = props.sectionId ?? 'waitlist'
 
   const location = useLocation()
+  const navigate = useNavigate()
   const [flow, dispatchFlow] = useReducer(flowReducer, initialFlowState)
   const [verification, dispatchVerification] = useReducer(verificationReducer, initialVerificationState)
   const [waitlist, dispatchWaitlist] = useReducer(waitlistReducer, initialWaitlistState)
@@ -919,71 +920,9 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   }, [])
   const isBypassAdmin = !!connectedAddress && adminBypassSet.has(connectedAddress)
 
-  // Smooth handoff: check allowlist on the app host so marketing → app works.
-  // Keep the CTA slot stable (checking → ready/waitlist) to avoid jarring layout jumps.
+  // Check allowlist so we can show the right CTA on the DoneStep.
   const [deployAccessState, setDeployAccessState] = useState<'checking' | 'ready' | 'waitlist'>('checking')
-  const [deployHandoffToken, setDeployHandoffToken] = useState<string | null>(null)
-  const [deployHandoffBusy, setDeployHandoffBusy] = useState(false)
 
-  const isOnAppHost = useMemo(() => {
-    if (typeof window === 'undefined') return false
-    // On the app host, getAppBaseUrl() returns the current origin; on marketing it returns app.<root>.
-    return window.location.origin === appUrl
-  }, [appUrl])
-
-  const readStoredSessionToken = useCallback((): string | null => {
-    try {
-      const raw = sessionStorage.getItem('cv_siwe_session_token')
-      const token = typeof raw === 'string' ? raw.trim() : ''
-      return token.length > 0 ? token : null
-    } catch {
-      return null
-    }
-  }, [])
-
-  // Prefetch a CreatorVault session token so marketing -> app does NOT require a second Privy email code.
-  useEffect(() => {
-    let cancelled = false
-    const run = async () => {
-      if (step !== 'done') return
-      if (deployAccessState !== 'ready') return
-      if (isOnAppHost) return
-      if (deployHandoffToken) return
-
-      const existing = readStoredSessionToken()
-      if (existing) {
-        if (!cancelled) setDeployHandoffToken(existing)
-        return
-      }
-      if (!privyAuthed || typeof privyGetAccessToken !== 'function') return
-
-      try {
-        if (!cancelled) setDeployHandoffBusy(true)
-        const privyToken = await privyGetAccessToken()
-        if (!privyToken) return
-        await siwe.signInWithPrivyToken(privyToken)
-        const next = readStoredSessionToken()
-        if (!cancelled) setDeployHandoffToken(next)
-      } catch {
-        // ignore - we'll fall back to autologin.
-      } finally {
-        if (!cancelled) setDeployHandoffBusy(false)
-      }
-    }
-    void run()
-    return () => {
-      cancelled = true
-    }
-  }, [
-    deployAccessState,
-    deployHandoffToken,
-    isOnAppHost,
-    privyAuthed,
-    privyGetAccessToken,
-    readStoredSessionToken,
-    siwe,
-    step,
-  ])
   useEffect(() => {
     let cancelled = false
     const run = async () => {
@@ -1008,69 +947,23 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       cancelled = true
     }
   }, [apiFetch, isBypassAdmin, step, verifiedWallet])
-  const deployHref = useMemo(() => {
-    if (isOnAppHost) return '/deploy'
-    const baseUrl = appUrl.replace(/\/+$/, '')
-    const authHint = contactPreference === 'email' ? 'email' : 'wallet'
-    const token = deployHandoffToken
-    if (token) {
-      return `${baseUrl}/deploy?from=waitlist&auth=${encodeURIComponent(authHint)}#cv_session=${encodeURIComponent(token)}`
-    }
-    // Fallback: autologin prompts Privy on the app host (may require another email code on a new domain).
-    return `${baseUrl}/deploy?from=waitlist&autologin=1&auth=${encodeURIComponent(authHint)}`
-  }, [appUrl, contactPreference, deployHandoffToken, isOnAppHost])
 
-  const handleContinueToDeploy = useCallback(async () => {
-    if (typeof window === 'undefined') return
-    if (isOnAppHost) {
-      window.location.href = '/deploy'
-      return
-    }
-    const baseUrl = appUrl.replace(/\/+$/, '')
-    const authHint = contactPreference === 'email' ? 'email' : 'wallet'
+  // Same-origin navigation: no cross-domain handoff needed.
+  const handleContinueToDeploy = useCallback(() => {
+    navigate('/deploy')
+  }, [navigate])
 
-    let token = deployHandoffToken ?? readStoredSessionToken()
-    if (!token && privyAuthed && typeof privyGetAccessToken === 'function') {
-      try {
-        setDeployHandoffBusy(true)
-        const privyToken = await privyGetAccessToken().catch(() => null)
-        if (privyToken) {
-          await siwe.signInWithPrivyToken(privyToken)
-          token = readStoredSessionToken()
-          setDeployHandoffToken(token)
-        }
-      } catch {
-        // ignore
-      } finally {
-        setDeployHandoffBusy(false)
-      }
-    }
-
-    const href = token
-      ? `${baseUrl}/deploy?from=waitlist&auth=${encodeURIComponent(authHint)}#cv_session=${encodeURIComponent(token)}`
-      : `${baseUrl}/deploy?from=waitlist&autologin=1&auth=${encodeURIComponent(authHint)}`
-    window.location.href = href
-  }, [
-    appUrl,
-    contactPreference,
-    deployHandoffToken,
-    isOnAppHost,
-    privyAuthed,
-    privyGetAccessToken,
-    readStoredSessionToken,
-    siwe,
-  ])
   const primaryCta = useMemo(() => {
     if (deployAccessState !== 'ready') return null
     return {
       label: 'Continue to Deploy',
-      href: deployHref,
+      href: '/deploy',
       onClick: handleContinueToDeploy,
-      disabled: deployHandoffBusy,
-      busy: deployHandoffBusy,
+      disabled: false,
+      busy: false,
       busyLabel: 'Preparing Deploy…',
     }
-  }, [deployAccessState, deployHref, deployHandoffBusy, handleContinueToDeploy])
+  }, [deployAccessState, handleContinueToDeploy])
 
   // Simplified flow: verify → done (2 steps)
 
@@ -1785,6 +1678,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     referralCode={referralCode}
                     referralLink={referralLink}
                     primaryCta={primaryCta}
+                    deployAccessState={deployAccessState}
                     onCopyReferral={handleCopyReferral}
                     copyToast={inviteToast}
                   />

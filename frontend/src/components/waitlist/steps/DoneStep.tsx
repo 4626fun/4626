@@ -1,6 +1,7 @@
-import { memo, useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
-import { CheckCircle2, ArrowRight, Copy, Bot, Coins, User, Loader2 } from 'lucide-react'
+import { memo, useCallback, useEffect, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { CheckCircle2, ArrowRight, Copy, Bot, Coins, User, Loader2, Share2, Trophy } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { WaitlistDoneCelebrationBackground } from '../WaitlistDoneCelebrationBackground'
 import type { WaitlistState } from '../waitlistTypes'
 import { apiFetch } from '@/lib/apiBase'
@@ -44,6 +45,8 @@ type DoneStepProps = {
         busyLabel?: string
       }
     | null
+  /** Current state of the deploy access check: checking, ready, or waitlist. */
+  deployAccessState?: 'checking' | 'ready' | 'waitlist'
   onCopyReferral: () => void
   copyToast?: string | null
 }
@@ -138,122 +141,201 @@ function PreprovisionStatus() {
   )
 }
 
+/** Pulsing skeleton button shown while the allowlist check is in flight. */
+function CtaLoadingSkeleton() {
+  return (
+    <motion.div {...fadeUp}>
+      <div className="w-full flex items-center justify-center gap-2 px-4 py-3 sm:py-3.5 rounded-xl bg-zinc-800/60 border border-zinc-700/40 animate-pulse">
+        <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
+        <span className="text-[14px] sm:text-[15px] text-zinc-500 font-medium">Checking access...</span>
+      </div>
+    </motion.div>
+  )
+}
+
+/** CTA shown when the user is waitlisted (not yet approved). */
+function WaitlistedCta({
+  waitlistPosition,
+  referralLink,
+  onCopyReferral,
+}: {
+  waitlistPosition: WaitlistState['waitlistPosition']
+  referralLink: string
+  onCopyReferral: () => void
+}) {
+  const rank = waitlistPosition?.rank?.total
+  const navigate = useNavigate()
+
+  return (
+    <motion.div {...fadeUp} className="space-y-3">
+      <div className="rounded-xl border border-amber-500/20 bg-amber-500/6 px-4 py-3 text-center space-y-1.5">
+        <div className="text-[13px] text-amber-200/90 font-medium">
+          {rank ? `You're #${rank} on the waitlist` : "You're on the waitlist"}
+        </div>
+        <div className="text-[11px] text-zinc-500">
+          Share your link to move up. We approve in batches.
+        </div>
+      </div>
+
+      <button
+        type="button"
+        className="w-full flex items-center justify-center gap-2 px-4 py-3 sm:py-3.5 rounded-xl border border-zinc-700/50 bg-zinc-800/40 text-white text-[14px] sm:text-[15px] font-medium transition-all duration-200 hover:bg-zinc-700/50 active:scale-[0.98] cursor-pointer"
+        onClick={onCopyReferral}
+      >
+        <Share2 className="w-4 h-4" />
+        Copy Referral Link
+      </button>
+
+      <button
+        type="button"
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-zinc-400 text-[13px] font-medium transition-colors hover:text-zinc-200"
+        onClick={() => navigate('/leaderboard')}
+      >
+        <Trophy className="w-3.5 h-3.5" />
+        View Leaderboard
+      </button>
+    </motion.div>
+  )
+}
+
 export const DoneStep = memo(function DoneStep({
   displayEmail,
   isBypassAdmin,
-  appUrl,
+  waitlistPosition,
   referralCode,
   referralLink,
   primaryCta,
+  deployAccessState,
   onCopyReferral,
   copyToast,
 }: DoneStepProps) {
+  const navigate = useNavigate()
+  const [exiting, setExiting] = useState(false)
+
+  const handleDeployClick = useCallback(async () => {
+    if (!primaryCta?.onClick) return
+    setExiting(true)
+    // Let the exit animation play, then navigate
+    await new Promise((r) => setTimeout(r, 280))
+    primaryCta.onClick()
+  }, [primaryCta])
+
   return (
-    <motion.div {...fadeUp} className="relative overflow-hidden space-y-5 sm:space-y-6">
-      {/* Celebration background */}
-      <div className="absolute inset-0 -z-10">
-        <WaitlistDoneCelebrationBackground className="absolute inset-0" />
-        <div className="absolute inset-0 bg-[#020202]/60" />
-      </div>
-
-      {/* Success Header */}
-      <motion.div {...scaleIn} className="text-center space-y-3 sm:space-y-4">
-        <div className="flex justify-center">
-          <div className="relative">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-[#0052FF]/10 border border-[#0052FF]/20 flex items-center justify-center">
-              <CheckCircle2 className="w-7 h-7 sm:w-8 sm:h-8 text-[#0052FF]" />
-            </div>
-            <motion.div
-              className="absolute inset-0 rounded-2xl border border-[#0052FF]/30"
-              initial={{ scale: 1, opacity: 0.5 }}
-              animate={{ scale: 1.5, opacity: 0 }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: 'easeOut' }}
-            />
+    <AnimatePresence mode="wait">
+      {!exiting ? (
+        <motion.div
+          key="done-card"
+          {...fadeUp}
+          exit={{ opacity: 0, scale: 0.96, y: -8 }}
+          transition={{ duration: 0.24, ease: baseEase }}
+          className="relative overflow-hidden space-y-5 sm:space-y-6"
+        >
+          {/* Celebration background */}
+          <div className="absolute inset-0 -z-10">
+            <WaitlistDoneCelebrationBackground className="absolute inset-0" />
+            <div className="absolute inset-0 bg-[#020202]/60" />
           </div>
-        </div>
-        
-        <div>
-          <h1 className="text-[24px] sm:text-[28px] font-light text-white tracking-tight">
-            You're on the waitlist!
-          </h1>
-          {displayEmail && (
-            <p className="text-[13px] sm:text-[14px] text-zinc-500 mt-1 truncate px-2">{displayEmail}</p>
-          )}
-          <p className="text-[12px] sm:text-[13px] text-zinc-600 mt-2">
-            We'll notify you when it's your turn.
-          </p>
-        </div>
-      </motion.div>
 
-      {/* Pre-provisioning status */}
-      <PreprovisionStatus />
-
-      {/* Primary CTA */}
-      {primaryCta ? (
-        <motion.div {...fadeUp}>
-          <a
-            href={primaryCta.href}
-            onClick={async (e) => {
-              if (primaryCta.disabled) {
-                e.preventDefault()
-                return
-              }
-              if (typeof primaryCta.onClick === 'function') {
-                e.preventDefault()
-                await primaryCta.onClick()
-              }
-            }}
-            aria-disabled={primaryCta.disabled ? 'true' : undefined}
-            className={[
-              'w-full flex items-center justify-center gap-2 px-4 py-3 sm:py-3.5 rounded-xl bg-[#0052FF] text-white text-[14px] sm:text-[15px] font-medium transition-all duration-200 active:scale-[0.98]',
-              primaryCta.disabled
-                ? 'opacity-60 cursor-not-allowed pointer-events-none'
-                : 'hover:bg-[#0047E1] cursor-pointer',
-            ].join(' ')}
-          >
-            {primaryCta.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            {primaryCta.busy ? primaryCta.busyLabel ?? primaryCta.label : primaryCta.label}
-            <ArrowRight className="w-4 h-4" />
-          </a>
-        </motion.div>
-      ) : null}
-
-      {/* Quick Referral Link */}
-      {referralCode && (
-        <motion.div {...fadeUp} className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3">
-          <div className="flex items-center gap-2">
-            <div className="flex-1 min-w-0">
-              <div className="text-[11px] text-zinc-600 mb-1">Share with friends</div>
-              <div className="font-mono text-[11px] sm:text-[12px] text-zinc-400 truncate">
-                {referralLink}
+          {/* Success Header */}
+          <motion.div {...scaleIn} className="text-center space-y-3 sm:space-y-4">
+            <div className="flex justify-center">
+              <div className="relative">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-[#0052FF]/10 border border-[#0052FF]/20 flex items-center justify-center">
+                  <CheckCircle2 className="w-7 h-7 sm:w-8 sm:h-8 text-[#0052FF]" />
+                </div>
+                <motion.div
+                  className="absolute inset-0 rounded-2xl border border-[#0052FF]/30"
+                  initial={{ scale: 1, opacity: 0.5 }}
+                  animate={{ scale: 1.5, opacity: 0 }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: 'easeOut' }}
+                />
               </div>
             </div>
-            <button
-              type="button"
-              className="p-2.5 sm:p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors shrink-0"
-              onClick={onCopyReferral}
-            >
-              <Copy className="w-4 h-4 text-zinc-400" />
-            </button>
-          </div>
-          {copyToast && (
-            <div className="text-[11px] text-emerald-400 mt-2">{copyToast}</div>
+
+            <div>
+              <h1 className="text-[24px] sm:text-[28px] font-light text-white tracking-tight">
+                You're on the waitlist!
+              </h1>
+              {displayEmail && (
+                <p className="text-[13px] sm:text-[14px] text-zinc-500 mt-1 truncate px-2">{displayEmail}</p>
+              )}
+              <p className="text-[12px] sm:text-[13px] text-zinc-600 mt-2">
+                We'll notify you when it's your turn.
+              </p>
+            </div>
+          </motion.div>
+
+          {/* Pre-provisioning status */}
+          <PreprovisionStatus />
+
+          {/* CTA area: loading skeleton, deploy button, or waitlisted state */}
+          {deployAccessState === 'checking' && !primaryCta ? (
+            <CtaLoadingSkeleton />
+          ) : primaryCta ? (
+            <motion.div {...fadeUp}>
+              <button
+                type="button"
+                disabled={primaryCta.disabled}
+                onClick={handleDeployClick}
+                className={[
+                  'w-full flex items-center justify-center gap-2 px-4 py-3 sm:py-3.5 rounded-xl bg-[#0052FF] text-white text-[14px] sm:text-[15px] font-medium transition-all duration-200 active:scale-[0.98]',
+                  primaryCta.disabled
+                    ? 'opacity-60 cursor-not-allowed'
+                    : 'hover:bg-[#0047E1] cursor-pointer',
+                ].join(' ')}
+              >
+                {primaryCta.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {primaryCta.busy ? primaryCta.busyLabel ?? primaryCta.label : primaryCta.label}
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </motion.div>
+          ) : deployAccessState === 'waitlist' ? (
+            <WaitlistedCta
+              waitlistPosition={waitlistPosition ?? null}
+              referralLink={referralLink}
+              onCopyReferral={onCopyReferral}
+            />
+          ) : null}
+
+          {/* Quick Referral Link */}
+          {referralCode && (
+            <motion.div {...fadeUp} className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] text-zinc-600 mb-1">Share with friends</div>
+                  <div className="font-mono text-[11px] sm:text-[12px] text-zinc-400 truncate">
+                    {referralLink}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="p-2.5 sm:p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors shrink-0"
+                  onClick={onCopyReferral}
+                >
+                  <Copy className="w-4 h-4 text-zinc-400" />
+                </button>
+              </div>
+              {copyToast && (
+                <div className="text-[11px] text-emerald-400 mt-2">{copyToast}</div>
+              )}
+            </motion.div>
+          )}
+
+          {/* Admin Link */}
+          {isBypassAdmin && (
+            <motion.div {...fadeUp} className="flex items-center justify-center text-[13px]">
+              <button
+                type="button"
+                onClick={() => navigate('/deploy')}
+                className="text-[#0052FF] hover:text-[#3373FF] transition-colors py-1"
+              >
+                Deploy (Admin)
+              </button>
+            </motion.div>
           )}
         </motion.div>
-      )}
-
-      {/* Admin Link */}
-      {isBypassAdmin && (
-        <motion.div {...fadeUp} className="flex items-center justify-center text-[13px]">
-          <a
-            href={`${appUrl}/deploy`}
-            className="text-[#0052FF] hover:text-[#3373FF] transition-colors py-1"
-          >
-            Deploy (Admin)
-          </a>
-        </motion.div>
-      )}
-    </motion.div>
+      ) : null}
+    </AnimatePresence>
   )
 })
 

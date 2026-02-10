@@ -120,10 +120,9 @@ export function useSiweAuth() {
     }
   }, [])
 
-  // Cross-subdomain handoff (marketing -> app):
-  // - We mint a short-lived `sessionToken` on the marketing host
-  // - Redirect to the app host with `#cv_session=...` (hash is not sent to servers)
-  // - The app host consumes the hash and stores it in sessionStorage so `apiFetch` can attach it.
+  // Legacy backward-compat: consume any leftover `#cv_session=...` hash from old
+  // cross-domain handoff URLs (bookmarks, shared links). After the domain merge this
+  // path is rarely hit, but we keep it for one release cycle to avoid breaking stragglers.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const existing = getStoredSessionToken()
@@ -131,7 +130,6 @@ export function useSiweAuth() {
     const rawHash = String(window.location.hash || '')
     if (!rawHash || rawHash.length < 2) return
     const hash = rawHash.startsWith('#') ? rawHash.slice(1) : rawHash
-    // Only treat key=value hashes as a handoff payload.
     if (!hash.includes('=') || !hash.toLowerCase().includes(`${HANDOFF_HASH_KEY}=`)) return
 
     try {
@@ -141,7 +139,7 @@ export function useSiweAuth() {
 
       setStoredSessionToken(token)
 
-      // Remove only the handoff token from the URL (avoid leaking via copy/paste).
+      // Remove the handoff token from the URL (avoid leaking via copy/paste).
       params.delete(HANDOFF_HASH_KEY)
       const nextHash = params.toString()
       const nextUrl = `${window.location.pathname}${window.location.search}${nextHash ? `#${nextHash}` : ''}`

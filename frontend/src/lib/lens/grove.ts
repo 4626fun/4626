@@ -1,11 +1,29 @@
-export const LENS_MAINNET_CHAIN_ID = 232
+import {
+  StorageClient,
+  immutable,
+  production,
+  type FileUploadResponse,
+} from '@lens-chain/storage-client'
 
-type GroveUploadItem = {
-  storage_key: string
-  gateway_url: string
-  uri: string
-  status_url?: string
+export const LENS_MAINNET_CHAIN_ID = 232
+export const BASE_CHAIN_ID = 8453
+
+// ---------------------------------------------------------------------------
+// Shared StorageClient singleton (production environment)
+// ---------------------------------------------------------------------------
+
+let _storageClient: StorageClient | null = null
+
+function getStorageClient(): StorageClient {
+  if (!_storageClient) {
+    _storageClient = StorageClient.create(production)
+  }
+  return _storageClient
 }
+
+// ---------------------------------------------------------------------------
+// Result types — backward-compatible with existing callers.
+// ---------------------------------------------------------------------------
 
 export type GroveUploadResult = {
   storageKey: string
@@ -14,78 +32,60 @@ export type GroveUploadResult = {
   statusUrl: string | null
 }
 
-function parseGroveJson(text: string): GroveUploadItem[] {
-  const parsed = JSON.parse(text) as GroveUploadItem | GroveUploadItem[]
-  return Array.isArray(parsed) ? parsed : [parsed]
-}
-
-function normalizeUploadItem(item: GroveUploadItem): GroveUploadResult {
-  if (!item.storage_key || !item.gateway_url || !item.uri) {
-    throw new Error('Grove response missing required fields')
-  }
+function toGroveUploadResult(res: FileUploadResponse): GroveUploadResult {
   return {
-    storageKey: item.storage_key,
-    gatewayUrl: item.gateway_url,
-    lensUri: item.uri,
-    statusUrl: item.status_url ?? null,
+    storageKey: res.storageKey,
+    gatewayUrl: res.gatewayUrl,
+    lensUri: res.uri,
+    statusUrl: null,
   }
 }
 
-async function parseGroveResponse(response: Response): Promise<GroveUploadResult> {
-  if (!response.ok && response.status !== 202) {
-    const text = await response.text().catch(() => '')
-    throw new Error(`Grove upload failed (${response.status}): ${text || 'Unknown error'}`)
-  }
-  const text = await response.text()
-  if (!text.trim()) {
-    throw new Error('Grove upload returned empty response')
-  }
-  const items = parseGroveJson(text)
-  if (!items.length) throw new Error('Grove upload returned empty payload')
-  return normalizeUploadItem(items[0])
-}
+// ---------------------------------------------------------------------------
+// Immutable uploads
+// ---------------------------------------------------------------------------
 
 /**
- * One-step immutable upload to Grove.
- *
- * Per the Lens docs the one-step shortcut sends the raw binary body with a
- * `Content-Type` header — **not** multipart form-data.
- *
- * @see https://lens.xyz/docs/protocol/grove
+ * Upload a Blob (binary file) immutably to Grove.
  */
 export async function uploadImmutableBlob(
   input: Blob,
   contentType: string,
   chainId: number = LENS_MAINNET_CHAIN_ID,
 ): Promise<GroveUploadResult> {
-  const response = await fetch(`https://api.grove.storage/?chain_id=${chainId}`, {
-    method: 'POST',
-    headers: { 'Content-Type': contentType || 'application/octet-stream' },
-    body: input,
-  })
-  return parseGroveResponse(response)
+  const client = getStorageClient()
+  const file = new File([input], 'upload', { type: contentType || 'application/octet-stream' })
+  const result = await client.uploadFile(file, { acl: immutable(chainId) })
+  return toGroveUploadResult(result)
 }
 
+/**
+ * Upload JSON data immutably to Grove.
+ */
 export async function uploadImmutableJson(
   data: unknown,
   chainId: number = LENS_MAINNET_CHAIN_ID,
 ): Promise<GroveUploadResult> {
-  const body = JSON.stringify(data, null, 2)
-  const response = await fetch(`https://api.grove.storage/?chain_id=${chainId}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body,
-  })
-  return parseGroveResponse(response)
+  const client = getStorageClient()
+  const result = await client.uploadAsJson(data, { acl: immutable(chainId) })
+  return toGroveUploadResult(result)
 }
+
+// ---------------------------------------------------------------------------
+// URI resolution — delegates to StorageClient.resolve()
+// ---------------------------------------------------------------------------
 
 export function resolveLensUri(uri: string): string {
   if (!uri) return ''
   if (uri.startsWith('lens://')) {
-    return `https://api.grove.storage/${uri.slice('lens://'.length)}`
+    return getStorageClient().resolve(uri)
   }
   return uri
 }
+
+// ---------------------------------------------------------------------------
+// Fetch helpers — use resolved URIs
+// ---------------------------------------------------------------------------
 
 export async function fetchLensResource(uri: string, init?: RequestInit): Promise<Response> {
   const resolved = resolveLensUri(uri).trim()
