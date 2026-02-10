@@ -5,7 +5,7 @@
  * streams incoming messages, and provides a send interface.
  */
 
-import { Agent, createUser, createSigner, filter } from '@xmtp/agent-sdk'
+import { Agent, createUser, createSigner, filter, getInstallationInfo } from '@xmtp/agent-sdk'
 import type { MessageContext, ConversationContext } from '@xmtp/agent-sdk'
 import type { Plugin } from '@elizaos/core'
 
@@ -140,6 +140,21 @@ export class XmtpService {
       } catch (err) {
         console.error('[xmtp-service] Failed to revoke installations:', err)
       }
+    }
+
+    // Post-create guard: if we're near the 10-installation limit, proactively
+    // revoke all other installations to prevent future 10/10 errors.
+    try {
+      const info = await getInstallationInfo(this.agent.client)
+      if (info.totalInstallations >= 8) {
+        console.warn(
+          `[xmtp-service] Inbox has ${info.totalInstallations}/10 installations — auto-revoking others to prevent limit`,
+        )
+        await this.agent.client.revokeAllOtherInstallations()
+        console.log('[xmtp-service] Proactive revocation complete')
+      }
+    } catch (err) {
+      console.warn('[xmtp-service] Post-create installation check failed (non-fatal):', err)
     }
 
     // Handle text messages

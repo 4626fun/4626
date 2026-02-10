@@ -1,4 +1,6 @@
-import { Agent, createSigner, createUser } from '@xmtp/agent-sdk'
+import { Agent, createSigner, createUser, getInstallationInfo } from '@xmtp/agent-sdk'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 
 import { getDb } from '../_lib/postgres.js'
 import { logger } from '../_lib/logger.js'
@@ -86,6 +88,22 @@ function getDbEncryptionKey(): `0x${string}` | undefined {
   const raw = (process.env.XMTP_DB_ENCRYPTION_KEY ?? '').trim()
   if (!raw) return undefined
   return (raw.startsWith('0x') ? raw : `0x${raw}`) as `0x${string}`
+}
+
+/**
+ * Build a stable dbPath for the queue executor so Agent.create() reuses
+ * the same installation across invocations instead of registering a new one
+ * every time (which burns through the 10-installation limit).
+ */
+const KEEPR_XMTP_DB_DIR = (process.env.XMTP_DB_DIRECTORY ?? '').trim() || path.join(process.cwd(), '.xmtp-data')
+
+function makeKeeprDbPath(vaultAddress: string): string {
+  fs.mkdirSync(KEEPR_XMTP_DB_DIR, { recursive: true, mode: 0o700 })
+  const env = parseXmtpEnv()
+  const safe = vaultAddress.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const p = path.join(KEEPR_XMTP_DB_DIR, `keepr-${env}-${safe}.db3`)
+  logger.info(`[keepr/xmtp-queue] Using local database: ${p}`)
+  return p
 }
 
 function normalizeActionType(actionType?: string | null, actionPayloadType?: string | null): SupportedActionType | null {
@@ -310,10 +328,26 @@ export async function executeKeeprAction(input: ExecuteKeeprActionInput): Promis
     }
 
     const encKey = getDbEncryptionKey()
+    const dbPath = makeKeeprDbPath(normalizedVaultAddress)
     agent = await Agent.create(signer, {
       env: parseXmtpEnv(),
+      dbPath,
       ...(encKey ? { dbEncryptionKey: encKey } : {}),
     } as any)
+
+    // Post-create guard: if near the 10-installation limit, proactively revoke
+    // all other installations to prevent future 10/10 errors.
+    try {
+      const info = await getInstallationInfo(agent.client)
+      if (info.totalInstallations >= 8) {
+        logger.warn('[keepr/xmtp-queue] Inbox has %d/10 installations — auto-revoking others', info.totalInstallations)
+        await agent.client.revokeAllOtherInstallations()
+        logger.info('[keepr/xmtp-queue] Proactive revocation complete')
+      }
+    } catch (err) {
+      logger.warn('[keepr/xmtp-queue] Post-create installation check failed (non-fatal)', { error: String(err) })
+    }
+
     const conversationCtx = await agent.getConversationContext(input.groupId)
     if (!conversationCtx) {
       return { success: false, retryable: false, actionType: normalizedActionType, error: 'group_not_found' }
