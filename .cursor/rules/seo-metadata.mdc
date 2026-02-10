@@ -11,7 +11,7 @@ SEO Metadata Rules:
 - Titles must be unique per URL and intent-aligned
 - Descriptions must summarize value, not stuff keywords
 - Robots must be explicitly defined and match the indexability decision (`index,follow` vs `noindex,follow`)
-- Canonical URLs must be explicitly defined (one per entity) and should be absolute (production origin, e.g. `https://creatorvault.fun/...`)
+- Canonical URLs must be explicitly defined (one per entity) and should be absolute (production origin, e.g. `https://4626.fun/...`)
 - Open Graph and Twitter metadata are required for indexable pages
 
 If metadata is missing or duplicated:
