@@ -44,9 +44,10 @@
     "vitest": "^2.1.0"
   },
   "overrides": {
-    "node-fetch": ">=2.6.7",
-    "axios": ">=1.13.5",
-    "esbuild": ">=0.25.0"
+    "axios": "1.13.5",
+    "cross-fetch": "3.2.0",
+    "esbuild": "0.27.3",
+    "node-fetch": "2.7.0"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -165,6 +165,15 @@ function setAutoConnectEnabled(address: string): void {
   }
 }
 
+function clearAutoConnect(address: string): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(autoConnectStorageKey(address))
+  } catch {
+    // ignore storage errors
+  }
+}
+
 function hexToBytes(hex: string): Uint8Array {
   const h = hex.startsWith('0x') ? hex.slice(2) : hex
   const bytes = new Uint8Array(h.length / 2)
@@ -512,6 +521,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         const msg = e instanceof Error ? e.message : 'Failed to connect to XMTP'
         if (isInstallationLimitError(msg)) {
           setInstallationLimitInboxId(extractInstallationLimitInboxId(msg))
+          // Disable auto-connect so the 10/10 error doesn't fire on every page load.
+          // Auto-connect is re-enabled after a successful resetInstallations() → connect().
+          if (address) clearAutoConnect(address)
         }
         setStatus('error')
         setError(msg)
@@ -644,7 +656,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     if (!isConnected || !address || !walletClient) return
     if (!isAutoConnectEnabled(address)) return
     if (clientRef.current || connectInFlightRef.current) return
-    if (status === 'signing' || status === 'connecting' || status === 'connected') return
+    if (status === 'signing' || status === 'connecting' || status === 'connected' || status === 'error') return
 
     const attemptKey = `${address.toLowerCase()}:${walletClient.chain?.id ?? 'unknown'}`
     if (autoConnectAttemptedRef.current === attemptKey) return

@@ -1227,12 +1227,12 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         headers: { Accept: 'application/json' },
       })
       const challengeJson = safeJsonParse<any>(await challengeRes.text().catch(() => ''))
-      if (!challengeRes.ok || !challengeJson?.success || !challengeJson?.data?.message || !challengeJson?.data?.nonce) {
+      if (!challengeRes.ok || !challengeJson?.success || !challengeJson?.data?.message || !challengeJson?.data?.challengeToken) {
         const msg = challengeJson?.error ?? 'Failed to get ownership challenge.'
         throw new Error(typeof msg === 'string' ? msg : 'Failed to get ownership challenge.')
       }
 
-      const { message, nonce } = challengeJson.data as { message: string; nonce: string }
+      const { message, challengeToken } = challengeJson.data as { message: string; challengeToken: string }
 
       // Step 2: Sign the challenge message with the connected wallet.
       // The CSW contract's isValidSignature will verify this signer is an owner.
@@ -1242,7 +1242,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       const verifyRes = await apiFetch('/api/waitlist/csw-proof', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ nonce, cswAddress: csw, signature }),
+        body: JSON.stringify({ challengeToken, cswAddress: csw, signature }),
       })
       const verifyJson = safeJsonParse<any>(await verifyRes.text().catch(() => ''))
       if (!verifyRes.ok || !verifyJson?.success || !verifyJson?.data?.verified) {
