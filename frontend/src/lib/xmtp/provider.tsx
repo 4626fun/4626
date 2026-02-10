@@ -58,7 +58,11 @@ type XmtpContextValue = {
   status: XmtpStatus
   error: string | null
   inboxId: string | null
+  /** InboxId extracted from a 10/10 installations error (if present). */
+  installationLimitInboxId: string | null
   connect: () => Promise<void>
+  /** Emergency recovery: revoke installations to free a slot, then reconnect. */
+  resetInstallations: () => Promise<void>
   disconnect: () => void
   conversations: ChatConversation[]
   loadMessages: (conversationId: string) => Promise<ChatMessage[]>
@@ -74,7 +78,9 @@ const XmtpContext = createContext<XmtpContextValue>({
   status: 'idle',
   error: null,
   inboxId: null,
+  installationLimitInboxId: null,
   connect: async () => {},
+  resetInstallations: async () => {},
   disconnect: noop,
   conversations: [],
   loadMessages: async () => [],
@@ -172,6 +178,19 @@ function truncateAddress(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
+function extractInstallationLimitInboxId(message: string): string | null {
+  const msg = String(message || '')
+  // Example:
+  // "Cannot register a new installation because the InboxID <hex> has already registered 10/10 installations..."
+  const m = msg.match(/InboxID\s+([0-9a-fA-F]{64})/)
+  return m?.[1] ? m[1].toLowerCase() : null
+}
+
+function isInstallationLimitError(message: string): boolean {
+  const m = String(message || '').toLowerCase()
+  return m.includes('registered 10/10 installations') || m.includes('10/10 installations')
+}
+
 function getEthereumAddressFromInboxState(state: any): string | null {
   const identifiers = Array.isArray(state?.identifiers) ? state.identifiers : []
   for (const id of identifiers) {
@@ -220,6 +239,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [conversations, setConversations] = useState<ChatConversation[]>([])
   const [inboxId, setInboxId] = useState<string | null>(null)
+  const [installationLimitInboxId, setInstallationLimitInboxId] = useState<string | null>(null)
 
   const clientRef = useRef<Client | null>(null)
   const convoStreamRef = useRef<AsyncStreamProxy<any> | null>(null)
@@ -250,6 +270,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       setConversations([])
       conversationsRef.current = []
       setInboxId(null)
+      setInstallationLimitInboxId(null)
       autoConnectAttemptedRef.current = null
     }
   }, [isConnected, address])
@@ -325,6 +346,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     connectInFlightRef.current = true
     try {
       setError(null)
+      setInstallationLimitInboxId(null)
 
       const getEncKeyBytes = async (forceFresh: boolean): Promise<{ bytes: Uint8Array; fromCache: boolean }> => {
         if (!forceFresh) {
@@ -485,13 +507,94 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.error('[xmtp] connect error:', e)
       if (mountedRef.current) {
+        const msg = e instanceof Error ? e.message : 'Failed to connect to XMTP'
+        if (isInstallationLimitError(msg)) {
+          setInstallationLimitInboxId(extractInstallationLimitInboxId(msg))
+        }
         setStatus('error')
-        setError(e instanceof Error ? e.message : 'Failed to connect to XMTP')
+        setError(msg)
       }
     } finally {
       connectInFlightRef.current = false
     }
   }, [address, walletClient, publicClient])
+
+  const resetInstallations = useCallback(async () => {
+    if (!address || !walletClient) throw new Error('Connect wallet first.')
+    const targetInboxId = installationLimitInboxId
+    if (!targetInboxId) {
+      throw new Error('No inboxId available to reset installations.')
+    }
+
+    // This consumes inbox updates. Only do it when you are already blocked.
+    setStatus('signing')
+    setError(null)
+
+    const chainId = walletClient.chain?.id ?? 8453
+    const signMessageFn = async (message: string) => {
+      const s = await walletClient.signMessage({ message })
+      return hexToBytes(s)
+    }
+
+    // Use the same signer shape we use for normal Client.create.
+    let isSmartWallet = false
+    if (publicClient) {
+      try {
+        const code = await publicClient.getCode({ address })
+        isSmartWallet = typeof code === 'string' && code !== '0x' && code.length > 2
+      } catch {
+        isSmartWallet = chainId === 8453
+      }
+    } else {
+      isSmartWallet = chainId === 8453
+    }
+
+    const signer: Signer = isSmartWallet
+      ? {
+          type: 'SCW',
+          getIdentifier: () => ({
+            identifier: address,
+            identifierKind: IdentifierKind.Ethereum,
+          }),
+          signMessage: signMessageFn,
+          getChainId: () => BigInt(chainId),
+        }
+      : {
+          type: 'EOA',
+          getIdentifier: () => ({
+            identifier: address,
+            identifierKind: IdentifierKind.Ethereum,
+          }),
+          signMessage: signMessageFn,
+        }
+
+    setStatus('connecting')
+    try {
+      const states = (await (Client as any).fetchInboxStates([targetInboxId], XMTP_ENV as any)) as any[]
+      const state = Array.isArray(states) ? states[0] : null
+      const installs = Array.isArray(state?.installations) ? state.installations : []
+      const toRevoke = installs
+        .map((i: any) => i?.bytes ?? i)
+        .filter(Boolean)
+
+      if (toRevoke.length === 0) {
+        // Nothing to revoke; attempt a normal connect.
+        await connect()
+        return
+      }
+
+      await (Client as any).revokeInstallations(signer, targetInboxId, toRevoke, XMTP_ENV as any)
+
+      setInstallationLimitInboxId(null)
+      setError(null)
+      await connect()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to reset XMTP installations'
+      setStatus('error')
+      setError(msg)
+      throw err
+    }
+  }, [address, walletClient, installationLimitInboxId, publicClient, connect])
 
   // ------- auto-connect -------
   useEffect(() => {
@@ -628,7 +731,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         status,
         error,
         inboxId,
+        installationLimitInboxId,
         connect,
+        resetInstallations,
         disconnect,
         conversations,
         loadMessages,

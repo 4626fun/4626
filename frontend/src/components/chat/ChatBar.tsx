@@ -91,7 +91,7 @@ function ConversationItem({
       })}
       className="flex items-start gap-3 w-full px-4 py-3 text-left hover:bg-white/5 transition-colors border-b border-white/5 last:border-b-0"
     >
-      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[11px] font-medium text-zinc-300 uppercase">
+      <div className="shrink-0 w-8 h-8 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[11px] font-medium text-zinc-300 uppercase">
         {avatar ? (
           <img src={avatar} alt="" className="w-full h-full object-cover" />
         ) : (
@@ -105,11 +105,11 @@ function ConversationItem({
             {displayName}
           </span>
           {lensBadge && (
-            <span className="flex-shrink-0 inline-flex items-center rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.08em] text-cyan-200">
+            <span className="shrink-0 inline-flex items-center rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.08em] text-cyan-200">
               {lensBadge}
             </span>
           )}
-          <span className="text-[10px] text-zinc-500 flex-shrink-0">
+          <span className="text-[10px] text-zinc-500 shrink-0">
             {formatTime(convo.lastMessageAt)}
           </span>
         </div>
@@ -118,7 +118,7 @@ function ConversationItem({
             {subtitle}
           </span>
           {convo.unreadCount > 0 && (
-            <span className="flex-shrink-0 flex items-center justify-center min-w-[16px] h-[16px] rounded-full bg-brand-primary text-[9px] font-bold text-black px-1">
+            <span className="shrink-0 flex items-center justify-center min-w-[16px] h-[16px] rounded-full bg-brand-primary text-[9px] font-bold text-black px-1">
               {convo.unreadCount}
             </span>
           )}
@@ -129,7 +129,7 @@ function ConversationItem({
 }
 
 export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'desktop' }: Props) {
-  const { status, error, connect, conversations } = useXmtp()
+  const { status, error, connect, conversations, resetInstallations, installationLimitInboxId } = useXmtp()
 
   const totalUnread = useMemo(
     () => conversations.reduce((sum, c) => sum + c.unreadCount, 0),
@@ -250,6 +250,16 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
               >
                 Enable Chat
               </button>
+              {installationLimitInboxId ? (
+                <button
+                  type="button"
+                  onClick={() => void resetInstallations()}
+                  className="px-4 py-2 rounded-lg bg-amber-500/10 text-amber-300 text-xs font-medium hover:bg-amber-500/15 transition-colors"
+                  title="Revokes existing XMTP installations for this inbox so you can register a new one."
+                >
+                  Reset XMTP installations
+                </button>
+              ) : null}
             </div>
           )}
 
