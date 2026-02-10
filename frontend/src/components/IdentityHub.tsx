@@ -184,14 +184,24 @@ export function IdentityHub() {
   }, [hostMode])
 
   const enableGasFreeHref = useMemo(() => {
-    const target = `/deploy#gasfree`
-    if (hostMode === 'app') return target
-    // From marketing → app host, preserve the waitlist handoff params to reduce friction.
-    return `${appBase}${target}?from=waitlist&autologin=1&auth=wallet`
+    const targetHash = 'gasfree'
+    if (hostMode === 'app') return `/deploy#${targetHash}`
+    // From marketing → app host: put query BEFORE hash (otherwise it becomes part of the fragment).
+    // Keep autologin as fallback; the smoother token handoff is handled by the Waitlist "Continue" CTA.
+    return `${appBase}/deploy?from=waitlist&autologin=1&auth=wallet#${targetHash}`
   }, [appBase, hostMode])
 
   const deployHref = useMemo(() => {
     if (hostMode === 'app') return '/deploy'
+    // Best-effort: if we already have a bearer session token on marketing, hand it off to the app host
+    // via URL hash (not sent to servers) to avoid a second Privy email-code prompt.
+    try {
+      const raw = sessionStorage.getItem('cv_siwe_session_token')
+      const token = typeof raw === 'string' ? raw.trim() : ''
+      if (token) return `${appBase}/deploy?from=waitlist#cv_session=${encodeURIComponent(token)}`
+    } catch {
+      // ignore
+    }
     return `${appBase}/deploy?from=waitlist&autologin=1&auth=wallet`
   }, [appBase, hostMode])
 
@@ -239,12 +249,12 @@ export function IdentityHub() {
                     Gas-free
                   </span>
                 ) : state === 'waitlisted' ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] text-zinc-400">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/3 px-2 py-1 text-[10px] text-zinc-400">
                     <ShieldCheck className="w-3 h-3 text-zinc-500" />
                     Waitlisted
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] text-zinc-500">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/3 px-2 py-1 text-[10px] text-zinc-500">
                     Guest
                   </span>
                 )}

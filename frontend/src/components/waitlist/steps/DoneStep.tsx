@@ -34,7 +34,16 @@ type DoneStepProps = {
   waitlistPosition: WaitlistState['waitlistPosition']
   referralCode: string | null
   referralLink: string
-  primaryCta?: { label: string; href: string } | null
+  primaryCta?:
+    | {
+        label: string
+        href: string
+        onClick?: () => void | Promise<void>
+        disabled?: boolean
+        busy?: boolean
+        busyLabel?: string
+      }
+    | null
   onCopyReferral: () => void
   copyToast?: string | null
 }
@@ -184,9 +193,26 @@ export const DoneStep = memo(function DoneStep({
         <motion.div {...fadeUp}>
           <a
             href={primaryCta.href}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 sm:py-3.5 rounded-xl bg-[#0052FF] text-white text-[14px] sm:text-[15px] font-medium hover:bg-[#0047E1] transition-all duration-200 active:scale-[0.98]"
+            onClick={async (e) => {
+              if (primaryCta.disabled) {
+                e.preventDefault()
+                return
+              }
+              if (typeof primaryCta.onClick === 'function') {
+                e.preventDefault()
+                await primaryCta.onClick()
+              }
+            }}
+            aria-disabled={primaryCta.disabled ? 'true' : undefined}
+            className={[
+              'w-full flex items-center justify-center gap-2 px-4 py-3 sm:py-3.5 rounded-xl bg-[#0052FF] text-white text-[14px] sm:text-[15px] font-medium transition-all duration-200 active:scale-[0.98]',
+              primaryCta.disabled
+                ? 'opacity-60 cursor-not-allowed pointer-events-none'
+                : 'hover:bg-[#0047E1] cursor-pointer',
+            ].join(' ')}
           >
-            {primaryCta.label}
+            {primaryCta.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            {primaryCta.busy ? primaryCta.busyLabel ?? primaryCta.label : primaryCta.label}
             <ArrowRight className="w-4 h-4" />
           </a>
         </motion.div>

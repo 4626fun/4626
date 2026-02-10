@@ -9,6 +9,7 @@ type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type MeResponse = { address: string } | null
 
 const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
+const HANDOFF_HASH_KEY = 'cv_session'
 
 type PrivySessionResponse = { address: string; sessionToken: string; privyUserId?: string } | null
 
@@ -116,6 +117,37 @@ export function useSiweAuth() {
       setAuthAddress(a)
     } catch {
       setAuthAddress(null)
+    }
+  }, [])
+
+  // Cross-subdomain handoff (marketing -> app):
+  // - We mint a short-lived `sessionToken` on the marketing host
+  // - Redirect to the app host with `#cv_session=...` (hash is not sent to servers)
+  // - The app host consumes the hash and stores it in sessionStorage so `apiFetch` can attach it.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const existing = getStoredSessionToken()
+    if (existing) return
+    const rawHash = String(window.location.hash || '')
+    if (!rawHash || rawHash.length < 2) return
+    const hash = rawHash.startsWith('#') ? rawHash.slice(1) : rawHash
+    // Only treat key=value hashes as a handoff payload.
+    if (!hash.includes('=') || !hash.toLowerCase().includes(`${HANDOFF_HASH_KEY}=`)) return
+
+    try {
+      const params = new URLSearchParams(hash)
+      const token = (params.get(HANDOFF_HASH_KEY) ?? '').trim()
+      if (!token) return
+
+      setStoredSessionToken(token)
+
+      // Remove only the handoff token from the URL (avoid leaking via copy/paste).
+      params.delete(HANDOFF_HASH_KEY)
+      const nextHash = params.toString()
+      const nextUrl = `${window.location.pathname}${window.location.search}${nextHash ? `#${nextHash}` : ''}`
+      window.history.replaceState({}, '', nextUrl)
+    } catch {
+      // ignore
     }
   }, [])
 
