@@ -38,6 +38,7 @@ type GroveAttachment = {
 type LensMappingResponse = {
   mapping: LensMapping | null
   grove?: GroveAttachment
+  groveStatus?: 'stored' | 'unavailable' | 'skipped'
 }
 
 type LensMappingRequest = {

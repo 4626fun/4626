@@ -48,6 +48,7 @@ type GroveAttachment = {
 type LensGraphResponse = {
   graph: LensGraph | null
   grove?: GroveAttachment
+  groveStatus?: 'stored' | 'unavailable' | 'skipped'
 }
 
 type LensGraphRequest = {

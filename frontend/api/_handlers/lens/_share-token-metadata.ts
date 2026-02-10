@@ -25,6 +25,7 @@ type ShareTokenMetadataResponse = {
   metadata: Record<string, unknown>
   grove?: GroveAttachment
   contractUri?: string
+  groveStatus?: 'stored' | 'unavailable' | 'skipped'
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

@@ -41,12 +41,13 @@ function setCache(res: VercelResponse, seconds: number = 30) {
   res.setHeader('Cache-Control', `public, s-maxage=${seconds}, stale-while-revalidate=${seconds * 5}`)
 }
 
-let _client: ReturnType<typeof createPublicClient> | null = null
+// Use `any` for the cached client to avoid OP Stack chain type mismatch (TS2589/TS2719).
+let _client: any = null
 function getClient() {
-  if (_client) return _client
+  if (_client) return _client as ReturnType<typeof createPublicClient>
   const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
   _client = createPublicClient({ chain: base, transport: http(rpc, { timeout: 12_000 }) })
-  return _client
+  return _client as ReturnType<typeof createPublicClient>
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

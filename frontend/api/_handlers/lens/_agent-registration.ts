@@ -15,6 +15,7 @@ type LensAgentRegistrationResponse = {
     storageKey: string
     statusUrl: string | null
   }
+  groveStatus?: 'stored' | 'unavailable' | 'skipped'
 }
 
 type LensAgentRegistrationRequest = {

@@ -118,7 +118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           id: lensOwnerId,
           label: lensUser.ownerAddress ?? '',
           type: 'lens-owner',
-          address: lensUser.ownerAddress ?? undefined,
+          address: lensUser.ownerAddress ?? '',
         })
         edges.push({ source: lensAccountId, target: lensOwnerId, type: 'lens_to_owner' })
       }
