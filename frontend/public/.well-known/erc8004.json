@@ -1,0 +1,16 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#domain-verification-v1",
+  "domain": "4626.fun",
+  "agentId": 2205,
+  "agentRegistry": "eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
+  "verifiedEndpoints": [
+    "https://4626.fun",
+    "https://4626.fun/api/v1/spec.json",
+    "https://4626.fun/api/v1/agents/feedback",
+    "https://4626.fun/api/lens/reputation-graph",
+    "https://4626.fun/api/lens/feedback-payload",
+    "https://4626.fun/api/v1/agents/wallet-intelligence"
+  ],
+  "registrationUrl": "https://4626.fun/.well-known/agent-registration.json",
+  "generatedAt": "2026-02-09T00:00:00.000Z"
+}

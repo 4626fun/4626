@@ -290,7 +290,13 @@ const COINBASE_SMART_WALLET_OWNER_LINK_ABI = [
 const ERC8004_IDENTITY_REGISTRY_ABI = [
   { name: 'register', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'agentURI', type: 'string' }], outputs: [{ type: 'uint256' }] },
   { name: 'setAgentURI', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'agentId', type: 'uint256' }, { name: 'newURI', type: 'string' }], outputs: [] },
+  { name: 'setAgentWallet', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'agentId', type: 'uint256' }, { name: 'newWallet', type: 'address' }, { name: 'deadline', type: 'uint256' }, { name: 'signature', type: 'bytes' }], outputs: [] },
+  { name: 'unsetAgentWallet', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'agentId', type: 'uint256' }], outputs: [] },
+  { name: 'setMetadata', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'agentId', type: 'uint256' }, { name: 'metadataKey', type: 'string' }, { name: 'metadataValue', type: 'bytes' }], outputs: [] },
   { name: 'balanceOf', type: 'function', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ type: 'uint256' }] },
+  { name: 'ownerOf', type: 'function', stateMutability: 'view', inputs: [{ name: 'tokenId', type: 'uint256' }], outputs: [{ type: 'address' }] },
+  { name: 'getAgentWallet', type: 'function', stateMutability: 'view', inputs: [{ name: 'agentId', type: 'uint256' }], outputs: [{ type: 'address' }] },
+  { name: 'getMetadata', type: 'function', stateMutability: 'view', inputs: [{ name: 'agentId', type: 'uint256' }, { name: 'metadataKey', type: 'string' }], outputs: [{ type: 'bytes' }] },
 ] as const
 
 const ERC8004_REGISTERED_EVENT = parseAbiItem(
@@ -661,6 +667,8 @@ function AgentRegistration() {
   const [resolveState, setResolveState] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; error?: string }>({
     status: 'idle',
   })
+  const [walletBindTxState, setWalletBindTxState] = useState<TxState>({ status: 'idle' })
+  const [onChainAgentWallet, setOnChainAgentWallet] = useState<string | null>(null)
 
   const connectedAddress = useMemo(() => {
     if (!address || !isAddress(address)) return null
@@ -1094,6 +1102,143 @@ function AgentRegistration() {
     }
   }
 
+  // ── Read on-chain agentWallet ──────────────────────────────────────────
+  const agentWalletQuery = useReadContract({
+    address: ERC8004_IDENTITY_REGISTRY as Address,
+    abi: ERC8004_IDENTITY_REGISTRY_ABI,
+    functionName: 'getAgentWallet',
+    args: [agentIdInput.trim() ? BigInt(agentIdInput.trim()) : 0n],
+    chainId: base.id,
+    query: { enabled: !!publicClient && /^\d+$/.test(agentIdInput.trim()) },
+  })
+
+  useEffect(() => {
+    const raw = agentWalletQuery.data
+    if (typeof raw === 'string' && isAddress(raw) && raw !== ZERO_ADDRESS) {
+      setOnChainAgentWallet(getAddress(raw))
+    } else {
+      setOnChainAgentWallet(null)
+    }
+  }, [agentWalletQuery.data])
+
+  // ── setAgentWallet (EIP-712 + ERC-1271 flow) ──────────────────────────
+  async function bindAgentWallet() {
+    if (!publicClient || !walletClient) return
+    setWalletBindTxState({ status: 'pending', error: undefined, hash: undefined })
+    try {
+      if (!isBase) throw new Error('Please switch to Base network.')
+      const rawId = agentIdInput.trim()
+      if (!/^\d+$/.test(rawId)) throw new Error('Agent ID must be a non-negative integer.')
+      const agentId = BigInt(rawId)
+      const newWallet = getAddress(CANONICAL_SMART_WALLET)
+
+      // 1. Build EIP-712 typed data
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 240) // 4 min
+      const domain = {
+        name: 'ERC8004IdentityRegistry',
+        version: '1',
+        chainId: base.id,
+        verifyingContract: ERC8004_IDENTITY_REGISTRY as Address,
+      } as const
+      const types = {
+        AgentWalletSet: [
+          { name: 'agentId', type: 'uint256' },
+          { name: 'newWallet', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'deadline', type: 'uint256' },
+        ],
+      } as const
+      const message = {
+        agentId,
+        newWallet,
+        owner: canonicalCswAddress,
+        deadline,
+      }
+
+      // 2. Sign with the CSW (ERC-1271) — the CSW IS the newWallet
+      const signature = await (walletClient as any).signTypedData({
+        account: (walletClient as any).account,
+        domain,
+        types,
+        primaryType: 'AgentWalletSet',
+        message,
+      })
+
+      // 3. Encode and submit the setAgentWallet tx
+      const registryAddress = ERC8004_IDENTITY_REGISTRY as Address
+      const data = encodeFunctionData({
+        abi: ERC8004_IDENTITY_REGISTRY_ABI as any,
+        functionName: 'setAgentWallet' as any,
+        args: [agentId, newWallet, deadline, signature],
+      })
+
+      if (isCanonical) {
+        const hash = await (walletClient as any).sendTransaction({
+          account: (walletClient as any).account,
+          chain: base as any,
+          to: registryAddress,
+          data,
+        })
+        setWalletBindTxState({ status: 'pending', hash })
+        await (publicClient as any).waitForTransactionReceipt({ hash })
+        setWalletBindTxState({ status: 'success', hash })
+        void agentWalletQuery.refetch()
+        return
+      }
+
+      if (embeddedIsCanonicalOwner && embeddedPrivyWallet && embeddedPrivyEoaAddress) {
+        const embeddedProvider = await (embeddedPrivyWallet as any).getEthereumProvider?.()
+        if (!embeddedProvider?.request) throw new Error('Privy embedded wallet provider not available')
+        const sessionOk = await ensurePaymasterSession()
+        if (!sessionOk) throw new Error('Sign in required for gas sponsorship.')
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const result = await sendEmbeddedOwnerSmartWalletCall({
+          publicClient: publicClient as any,
+          embeddedProvider,
+          bundlerUrl,
+          smartWallet: canonicalCswAddress as Address,
+          ownerAddress: embeddedPrivyEoaAddress as Address,
+          calls: [{ to: registryAddress, data }],
+        })
+        setWalletBindTxState({ status: 'pending', hash: result.transactionHash })
+        await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
+        setWalletBindTxState({ status: 'success', hash: result.transactionHash })
+        void agentWalletQuery.refetch()
+        return
+      }
+
+      if (connectedIsCanonicalOwner && connectedAddress) {
+        if (!walletClient) throw new Error('Connect the owner wallet to continue.')
+        const sessionOk = await ensurePaymasterSession()
+        if (!sessionOk) throw new Error('Sign in required for gas sponsorship.')
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const result = await sendCoinbaseSmartWalletUserOperation({
+          publicClient: publicClient as any,
+          walletClient: walletClient as any,
+          bundlerUrl,
+          smartWallet: canonicalCswAddress as Address,
+          ownerAddress: connectedAddress as Address,
+          calls: [{ to: registryAddress, data }],
+          version: '1',
+          userOpSignMode: 'auto',
+          allowEoaSignMessageFallback: false,
+          skipPaymaster: false,
+        })
+        setWalletBindTxState({ status: 'pending', hash: result.transactionHash })
+        await (publicClient as any).waitForTransactionReceipt({ hash: result.transactionHash })
+        setWalletBindTxState({ status: 'success', hash: result.transactionHash })
+        void agentWalletQuery.refetch()
+        return
+      }
+
+      throw new Error('Connect the canonical smart wallet or an owner wallet to continue.')
+    } catch (e: any) {
+      setWalletBindTxState({ status: 'error', error: toFriendlyTxError(e) })
+    }
+  }
+
   return (
     <section id="agent-registration" className="cinematic-section">
       <div className="max-w-4xl mx-auto px-4 sm:px-6">
@@ -1250,6 +1395,42 @@ function AgentRegistration() {
                 {registerTxState.status === 'pending' ? 'Registering…' : 'Register agent'}
               </button>
               <TxMeta state={registerTxState} />
+            </div>
+
+            {/* ── Agent Wallet Binding (setAgentWallet) ─────────────── */}
+            <div className="border-t border-white/5 pt-6 space-y-3">
+              <h4 className="text-sm font-medium text-zinc-300 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                On-chain Agent Wallet (EIP-712 / ERC-1271)
+              </h4>
+              <p className="text-xs text-zinc-500">
+                Cryptographically bind the canonical CSW as the verified <code className="text-zinc-400">agentWallet</code> for this agent on the Identity Registry.
+                Other agents and verifiers can call <code className="text-zinc-400">getAgentWallet(agentId)</code> to confirm wallet ownership.
+              </p>
+              {onChainAgentWallet ? (
+                <div className="text-xs text-emerald-300/90">
+                  On-chain agentWallet: <span className="font-mono">{onChainAgentWallet}</span>
+                  {onChainAgentWallet.toLowerCase() === CANONICAL_SMART_WALLET.toLowerCase() && (
+                    <span className="ml-2 text-emerald-400">(matches canonical CSW)</span>
+                  )}
+                </div>
+              ) : agentWalletQuery.isFetched ? (
+                <div className="text-xs text-amber-400/80">No agentWallet set on-chain for this agent.</div>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void bindAgentWallet()}
+                disabled={
+                  walletBindTxState.status === 'pending' ||
+                  !isConnected ||
+                  (!isCanonical && !canSubmitViaOwner) ||
+                  !/^\d+$/.test(agentIdInput.trim())
+                }
+                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {walletBindTxState.status === 'pending' ? 'Binding wallet…' : 'Bind CSW as agentWallet'}
+              </button>
+              <TxMeta state={walletBindTxState} />
             </div>
           </div>
         </div>
