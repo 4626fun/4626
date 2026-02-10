@@ -132,16 +132,16 @@ export function createPrivyScwSigner(params: {
   const ownerIndex = params.ownerIndex ?? 0
 
   // Lazy-init the public client (only created on first signMessage call).
-  // Use `any` for the cached client to avoid OP Stack chain type mismatch (TS2589/TS2719).
+  // Typed as `any` end-to-end to avoid TS2589 with viem OP Stack chains on TS 5.9.
   let _client: any = null
-  function getClient() {
+  function getClient(): any {
     if (!_client) {
       _client = createPublicClient({
         chain: base,
         transport: http(params.rpcUrl ?? process.env.BASE_RPC_URL ?? 'https://mainnet.base.org'),
       }) as any
     }
-    return _client as ReturnType<typeof createPublicClient>
+    return _client
   }
 
   return {
