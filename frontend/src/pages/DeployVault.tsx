@@ -182,22 +182,6 @@ function logNonEoaSignature(signature: Hex, context: string) {
   return meta
 }
 
-function isEthSignUnsupported(error: unknown): boolean {
-  const code = (error as any)?.code
-  if (code === -32601) return true // Method not found
-  const msg = error instanceof Error ? error.message : String(error ?? '')
-  const lc = msg.toLowerCase()
-  return (
-    lc.includes('not supported') ||
-    lc.includes('unsupported') ||
-    lc.includes('method not found') ||
-    lc.includes('does not support')
-  )
-}
-
-function isUserOpHashLike(value: unknown): boolean {
-  return isHexString(value) && value.length === 66
-}
 
 type SignatureExtraction = { signature: Hex | null; source: string | null }
 
@@ -1085,12 +1069,8 @@ function DeployVaultBatcher({
   privySmartWalletAddress,
   privySmartWalletIsCanonicalOwner,
   privySmartWalletCanSign,
-  embeddedEoaIsCanonicalOwner,
-  embeddedPrivyWallet,
-  embeddedPrivyEoaAddress,
   connectorId,
   wagmiWalletClient,
-  connectedIsCanonicalOwner,
 }: {
   creatorToken: Address
   owner: Address
@@ -1116,23 +1096,14 @@ function DeployVaultBatcher({
   privySmartWalletAddress: Address | null
   privySmartWalletIsCanonicalOwner: boolean
   privySmartWalletCanSign: boolean
-  // Whether the Privy embedded EOA is an owner of the canonical smart wallet (enables gas-free ERC-4337)
-  embeddedEoaIsCanonicalOwner: boolean
-  // The Privy embedded wallet object (for signing)
-  embeddedPrivyWallet: any
-  // The Privy embedded EOA address
-  embeddedPrivyEoaAddress: Address | null
   // For direct Coinbase Wallet connection (supports eth_sign)
   connectorId: string | undefined
   wagmiWalletClient: any
-  // Whether the connected EOA is an owner of the canonical smart wallet
-  connectedIsCanonicalOwner: boolean
 }) {
   const { address: connectedAddress } = useAccount()
   const chainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
   const publicClient = usePublicClient({ chainId: base.id })
-  const preferEmbeddedEoaRef = useRef(false)
   
   // Detect Coinbase Wallet direct connection (not via Privy)
   const isCoinbaseWalletDirect = connectorId === 'coinbaseWalletSDK' || connectorId === 'com.coinbase.wallet'
@@ -2477,13 +2448,6 @@ function DeployVaultBatcher({
           calls.map((c) => ({ to: c.target, value: c.value, data: c.data }))
         const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
         const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-        let embeddedOwnerVerifiedForKey: string | null = null
-        let embeddedProviderCache: any | null = null
-        let embeddedProviderAddressCache: string | null = null
-        let embeddedEthSignUnsupported = false
-        let embeddedWalletClientAdapterCache: any | null = null
-        let connectedOwnerIsContractCache: boolean | null = null
-
         const ownerSlotForPhase = (phaseLabel: 'phase1' | 'phase2' | 'phase3' | 'phase4') =>
           phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : phaseLabel === 'phase3' ? 'userOp3' : 'userOp4'
         const txSlotForPhase = (phaseLabel: 'phase1' | 'phase2' | 'phase3' | 'phase4') =>
@@ -2505,243 +2469,12 @@ function DeployVaultBatcher({
             txHash: result.transactionHash,
           })
         }
-
-        const getEmbeddedOwnerCacheKey = () => {
-          if (!canonicalSmartWallet || !embeddedPrivyEoaAddress) return null
-          return `${canonicalSmartWallet.toLowerCase()}:${embeddedPrivyEoaAddress.toLowerCase()}`
-        }
-
-        const ensureEmbeddedOwnerVerifiedForRun = async () => {
-          if (!canonicalSmartWallet || !embeddedPrivyEoaAddress) {
-            throw new Error('Embedded EOA signer is not available')
-          }
-          const cacheKey = getEmbeddedOwnerCacheKey()
-          if (cacheKey && embeddedOwnerVerifiedForKey === cacheKey) return
-          const verifyOwner = await isCoinbaseSmartWalletOwner({
-            smartWallet: canonicalSmartWallet,
-            ownerAddress: embeddedPrivyEoaAddress,
-          })
-          if (!verifyOwner) {
-            logger.error('[DeployVault] Embedded EOA is NOT an owner on-chain!', {
-              canonicalSmartWallet,
-              embeddedPrivyEoaAddress,
-            })
-            throw new Error(
-              `Your Privy embedded wallet (${embeddedPrivyEoaAddress}) is not an owner of your Zora wallet. ` +
-                'Click "Enable Gas-Free Deploys" first.',
-            )
-          }
-          embeddedOwnerVerifiedForKey = cacheKey
-        }
-
-        const getEmbeddedProviderForRun = async () => {
-          if (!embeddedPrivyWallet || !embeddedPrivyEoaAddress) {
-            throw new Error('Embedded wallet provider not available')
-          }
-          if (embeddedProviderCache) return embeddedProviderCache
-
-          const embeddedProvider = await (embeddedPrivyWallet as any).getEthereumProvider()
-          if (!embeddedProvider?.request) {
-            throw new Error('Embedded wallet provider not available')
-          }
-
-          await ensureProviderOnBase(embeddedProvider, 'Privy embedded wallet', { allowSwitch: false })
-          const accounts = (await embeddedProvider.request({ method: 'eth_accounts' })) as string[]
-          const providerAddress = accounts[0]?.toLowerCase()
-          if (providerAddress !== embeddedPrivyEoaAddress.toLowerCase()) {
-            logger.error('[DeployVault] Provider address mismatch!', {
-              expected: embeddedPrivyEoaAddress,
-              got: providerAddress,
-            })
-            throw new Error('Embedded wallet address mismatch. Please refresh and try again.')
-          }
-
-          embeddedProviderCache = embeddedProvider
-          embeddedProviderAddressCache = providerAddress ?? null
-          return embeddedProviderCache
-        }
-
-        const signUserOpHashWithEmbeddedProvider = async (params: { provider: any; signerAddr: Address; hashToSign: Hex }) => {
-          const { provider, signerAddr, hashToSign } = params
-          const trySecp256k1Sign = async () => {
-            if (AA_DEBUG) {
-              logger.debug('[DeployVault] Trying secp256k1_sign fallback for embedded EOA')
-            }
-            const rawResult = await withTimeout(
-              provider.request({
-                method: 'secp256k1_sign',
-                params: [hashToSign],
-              }),
-              30_000,
-              'secp256k1_sign',
-            )
-            const sig = ensureSignatureHex(rawResult, 'secp256k1_sign')
-            debugSignatureReady('secp256k1_sign', sig, { signer: signerAddr })
-            return sig
-          }
-
-          if (embeddedEthSignUnsupported) {
-            if (AA_DEBUG) {
-              logger.debug('[DeployVault] Skipping eth_sign (unsupported earlier in this deploy run)')
-            }
-            return await trySecp256k1Sign()
-          }
-
-          try {
-            const rawResult = await withTimeout(
-              provider.request({
-                method: 'eth_sign',
-                params: [signerAddr, hashToSign],
-              }),
-              30_000,
-              'eth_sign',
-            )
-            const sig = ensureSignatureHex(rawResult, 'eth_sign')
-            debugSignatureReady('eth_sign', sig, { signer: signerAddr })
-            return sig
-          } catch (ethSignError: any) {
-            const msg = ethSignError?.message ? String(ethSignError.message) : 'eth_sign failed'
-            logger.warn('[DeployVault] eth_sign failed for embedded EOA', { error: msg })
-            if (isEthSignUnsupported(ethSignError)) {
-              embeddedEthSignUnsupported = true
-              try {
-                return await trySecp256k1Sign()
-              } catch (fallbackError: any) {
-                const fallbackMsg = fallbackError?.message ? String(fallbackError.message) : 'secp256k1_sign failed'
-                logger.warn('[DeployVault] secp256k1_sign failed for embedded EOA', { error: fallbackMsg })
-              }
-            }
-            throw new Error(
-              'Embedded wallet does not support eth_sign or secp256k1_sign. ' +
-                'UserOp signing for Coinbase Smart Wallet requires raw signing. ' +
-                'Use Coinbase Wallet (Base Account) or connect an owner EOA.',
-            )
-          }
-        }
-
-        const getEmbeddedWalletClientAdapterForRun = async () => {
-          if (embeddedWalletClientAdapterCache) return embeddedWalletClientAdapterCache
-          const provider = await getEmbeddedProviderForRun()
-          embeddedWalletClientAdapterCache = {
-            request: async (args: { method: string; params?: any[] }) => {
-              logger.info('[DeployVault] Embedded provider request', { method: args.method })
-              if (args.method === 'eth_sign') {
-                const [signerAddrRaw, hashToSignRaw] = Array.isArray(args.params) ? args.params : []
-                const signerAddrCandidate =
-                  typeof signerAddrRaw === 'string' && isAddress(signerAddrRaw)
-                    ? signerAddrRaw
-                    : embeddedPrivyEoaAddress
-                if (!signerAddrCandidate || !isAddress(signerAddrCandidate)) {
-                  throw new Error('Embedded wallet signer address is unavailable')
-                }
-                const signerAddr = getAddress(signerAddrCandidate) as Address
-                const hashToSign = String(hashToSignRaw ?? '') as Hex
-                if (AA_DEBUG) {
-                  logger.debug('[DeployVault] eth_sign called', {
-                    signer: signerAddr,
-                    hashLength: typeof hashToSign === 'string' ? hashToSign.length : null,
-                    hashLooksValid: isUserOpHashLike(hashToSign),
-                    providerAddress: embeddedProviderAddressCache,
-                  })
-                }
-                return await signUserOpHashWithEmbeddedProvider({ provider, signerAddr, hashToSign })
-              }
-
-              try {
-                const result = await provider.request(args)
-                logger.info('[DeployVault] Embedded provider response', { method: args.method })
-                return result
-              } catch (e: any) {
-                logger.error('[DeployVault] Embedded provider error', { method: args.method, error: e?.message })
-                throw e
-              }
-            },
-            signMessage: async (args: { account: Address; message: any }) => {
-              const msg = typeof args.message === 'object' && 'raw' in args.message ? args.message.raw : args.message
-              const msgHex = typeof msg === 'string' && msg.startsWith('0x') ? msg : `0x${Buffer.from(String(msg)).toString('hex')}`
-
-              if (AA_DEBUG) {
-                logger.debug('[DeployVault] signMessage', { account: args.account, msgLength: msgHex?.length })
-              }
-
-              const rawResult = await withTimeout(
-                provider.request({
-                  method: 'personal_sign',
-                  params: [msgHex, args.account],
-                }),
-                30_000,
-                'personal_sign',
-              )
-              const sig = ensureSignatureHex(rawResult, 'personal_sign')
-              debugSignatureReady('personal_sign', sig, { signer: args.account })
-              return sig
-            },
-            signTypedData: async (args: any) => {
-              if (AA_DEBUG) {
-                logger.debug('[DeployVault] signTypedData', { primaryType: args.primaryType })
-              }
-              const rawResult = await withTimeout(
-                provider.request({
-                  method: 'eth_signTypedData_v4',
-                  params: [embeddedPrivyEoaAddress, JSON.stringify(args)],
-                }),
-                30_000,
-                'eth_signTypedData_v4',
-              )
-              const sig = ensureSignatureHex(rawResult, 'eth_signTypedData_v4')
-              debugSignatureReady('eth_signTypedData_v4', sig, { signer: embeddedPrivyEoaAddress })
-              return sig
-            },
-          }
-          return embeddedWalletClientAdapterCache
-        }
-
-        const detectConnectedOwnerIsContractForRun = async (): Promise<boolean> => {
-          if (typeof connectedOwnerIsContractCache === 'boolean') return connectedOwnerIsContractCache
-          if (!connectedAddress || !publicClient) {
-            connectedOwnerIsContractCache = false
-            return false
-          }
-          try {
-            let bytecode: string | null = null
-            if (typeof (publicClient as any)?.getBytecode === 'function') {
-              bytecode = await (publicClient as any).getBytecode({ address: connectedAddress as Address })
-            } else if (typeof (publicClient as any)?.getCode === 'function') {
-              bytecode = await (publicClient as any).getCode({ address: connectedAddress as Address })
-            }
-            connectedOwnerIsContractCache = typeof bytecode === 'string' && bytecode !== '0x'
-          } catch {
-            connectedOwnerIsContractCache = false
-          }
-          if (connectedOwnerIsContractCache && AA_DEBUG) {
-            logger.debug('[DeployVault] Connected owner detected as contract signer (EIP-1271 path)', {
-              connectedAddress,
-            })
-          }
-          return connectedOwnerIsContractCache
-        }
-
         const sendPhaseCalls = async (
           calls: Array<{ target: Address; value: bigint; data: Hex }>,
           phaseLabel: 'phase1' | 'phase2' | 'phase3' | 'phase4',
           opts?: { noSplit?: boolean; segment?: string },
         ) => {
           const logPhaseLabel = opts?.segment ? `${phaseLabel}.${opts.segment}` : phaseLabel
-          const hasEmbeddedEoaSigner = embeddedEoaIsCanonicalOwner && embeddedPrivyWallet && embeddedPrivyEoaAddress
-          const connectedOwnerReady = connectedIsCanonicalOwner && connectedAddress && wagmiWalletClient
-          const connectedOwnerIsContract = connectedOwnerReady
-            ? await detectConnectedOwnerIsContractForRun()
-            : false
-          const preferEmbeddedEoaSigner = hasEmbeddedEoaSigner || preferEmbeddedEoaRef.current
-          if (preferEmbeddedEoaSigner && !preferEmbeddedEoaRef.current) {
-            logger.info('[DeployVault] Preferring embedded EOA signer for this phase', {
-              canonicalSmartWallet,
-              embeddedPrivyEoaAddress,
-              connectedIsCanonicalOwner,
-              connectedOwnerReady,
-              connectedOwnerIsContract,
-            })
-          }
           const batcherAddressLc = getAddress(batcherAddress).toLowerCase()
           const batcherCallCount = calls.reduce((acc, c) => {
             return getAddress(c.target).toLowerCase() === batcherAddressLc ? acc + 1 : acc
@@ -2894,14 +2627,12 @@ function DeployVaultBatcher({
           }
 
           // PATH 1: Direct Coinbase Wallet connection
-          // Only use this when embedded signer path is not available.
           if (
             isCoinbaseWalletDirect &&
             connectedAddress &&
             wagmiWalletClient &&
             publicClient &&
-            canonicalSmartWallet &&
-            !hasEmbeddedEoaSigner
+            canonicalSmartWallet
           ) {
             logger.info(`[DeployVault] Using Coinbase Wallet direct for ${logPhaseLabel}`)
 
@@ -2922,16 +2653,13 @@ function DeployVaultBatcher({
           }
           
           // PATH 2: Privy app smart wallet is an owner (EIP-1271 signer)
-          // Original deploy pattern: avoid this path when the embedded EOA owner flow is available.
           if (
             canonicalSmartWallet &&
-            !embeddedEoaIsCanonicalOwner &&
             privySmartWalletIsCanonicalOwner &&
             privySmartWalletCanSign &&
             smartWalletClient &&
             privySmartWalletAddress &&
-            publicClient &&
-            !preferEmbeddedEoaRef.current
+            publicClient
           ) {
             logger.info(`[DeployVault] Using ERC-4337 via Privy smart wallet owner for ${logPhaseLabel}`, {
               canonicalSmartWallet,
@@ -3073,8 +2801,7 @@ function DeployVaultBatcher({
                 (lc.includes('total gas used') && lc.includes('allowed limit')) ||
                 lc.includes('invalid fields')
               if (shouldFallback) {
-                preferEmbeddedEoaRef.current = true
-                logger.warn('[DeployVault] Privy smart wallet signer failed; continuing without it', {
+                logger.warn('[DeployVault] Privy smart wallet signer failed; setup still required', {
                   phaseLabel: logPhaseLabel,
                   privySmartWalletAddress,
                   error: msg,
@@ -3085,143 +2812,14 @@ function DeployVaultBatcher({
             }
           }
           
-          const tryConnectedEoaSigner = async (): Promise<boolean> => {
-            // PATH 3: Connected EOA is owner of canonical smart wallet
-            // Use ERC-4337 with the EOA signing UserOps for the canonical wallet
-            if (!canonicalSmartWallet || !connectedIsCanonicalOwner || !connectedAddress || !wagmiWalletClient || !publicClient) {
-              return false
-            }
-
-            logger.info(`[DeployVault] Using ERC-4337 via connected EOA for ${logPhaseLabel}`)
-
-            await ensureBaseChain('your wallet')
-
-            logger.info('[DeployVault] Sending ERC-4337 UserOp via connected EOA', {
-              canonicalSmartWallet,
-              connectedEOA: connectedAddress,
-              callCount: calls.length,
-              connectedOwnerIsContract,
-            })
-
-            try {
-              const result = await sendCoinbaseSmartWalletUserOperation({
-                publicClient: publicClient as any,
-                walletClient: wagmiWalletClient as any,
-                bundlerUrl,
-                smartWallet: canonicalSmartWallet,
-                ownerAddress: connectedAddress as Address,
-                calls: toCalls(calls),
-                version: '1',
-                ownerIsContract: connectedOwnerIsContract,
-              })
-
-              persistUserOpResult(phaseLabel, logPhaseLabel, result, 'ERC-4337 (connected EOA signer)')
-              return true
-            } catch (e) {
-              const msg = e instanceof Error ? e.message : String(e ?? '')
-              const lc = msg.toLowerCase()
-              const shouldFallbackToEmbedded =
-                Boolean(hasEmbeddedEoaSigner) &&
-                (
-                  connectedOwnerIsContract ||
-                  lc.includes('signature verification used more gas') ||
-                  lc.includes('verificationgaslimit') ||
-                  lc.includes('aa40') ||
-                  lc.includes('total gas used by the user operation') ||
-                  (lc.includes('total gas used') && lc.includes('allowed limit')) ||
-                  lc.includes('invalid fields') ||
-                  lc.includes('invalid signature') ||
-                  lc.includes('signature check failed')
-                )
-              if (shouldFallbackToEmbedded) {
-                preferEmbeddedEoaRef.current = true
-                logger.warn('[DeployVault] Connected owner signer failed; retrying with embedded EOA', {
-                  phaseLabel: logPhaseLabel,
-                  connectedEOA: connectedAddress,
-                  connectedOwnerIsContract,
-                  error: msg,
-                })
-                return false
-              }
-              throw e
-            }
-          }
-
-          const tryEmbeddedEoaSigner = async (): Promise<boolean> => {
-            // PATH 2: Privy embedded EOA is owner of canonical smart wallet
-            // Use ERC-4337 with the embedded EOA signing directly (simple ecrecover, no EIP-1271)
-            if (!canonicalSmartWallet || !embeddedEoaIsCanonicalOwner || !embeddedPrivyWallet || !embeddedPrivyEoaAddress) {
-              return false
-            }
-            try {
-              logger.info(`[DeployVault] Using ERC-4337 via Privy embedded EOA for ${logPhaseLabel}`, {
-                canonicalSmartWallet,
-                embeddedPrivyEoaAddress,
-                embeddedEoaIsCanonicalOwner,
-              })
-
-              await ensureEmbeddedOwnerVerifiedForRun()
-              const embeddedWalletClientAdapter = await getEmbeddedWalletClientAdapterForRun()
-
-              logger.info('[DeployVault] Sending ERC-4337 UserOp via embedded EOA', {
-                canonicalSmartWallet,
-                embeddedEoa: embeddedPrivyEoaAddress,
-                callCount: calls.length,
-              })
-
-              const result = await sendCoinbaseSmartWalletUserOperation({
-                publicClient: publicClient as any,
-                walletClient: embeddedWalletClientAdapter as any,
-                bundlerUrl,
-                smartWallet: canonicalSmartWallet,
-                ownerAddress: embeddedPrivyEoaAddress,
-                calls: toCalls(calls),
-                version: '1',
-                userOpSignMode: 'eth_sign',
-              })
-
-              persistUserOpResult(phaseLabel, logPhaseLabel, result, 'ERC-4337 (embedded EOA signer)')
-              preferEmbeddedEoaRef.current = true
-              return true
-            } catch (e: any) {
-              const msg = e instanceof Error ? e.message : String(e ?? '')
-              const lc = msg.toLowerCase()
-              const shouldFallback =
-                isEthSignUnsupported(e) ||
-                lc.includes('eth_sign') ||
-                lc.includes('secp256k1_sign') ||
-                lc.includes('raw signing') ||
-                lc.includes('does not support')
-              if (shouldFallback) {
-                logger.warn('[DeployVault] Embedded EOA signer unavailable; falling back to connected owner', {
-                  error: msg,
-                })
-                return false
-              }
-              throw e
-            }
-          }
-
-          // PATH 2/3: prefer a connected EOA when available unless we explicitly prefer embedded EOA.
-          if (!preferEmbeddedEoaSigner) {
-            const connectedOk = await tryConnectedEoaSigner()
-            if (connectedOk) return
-          }
-
-          const embeddedOk = await tryEmbeddedEoaSigner()
-          if (embeddedOk) return
-
-          if (preferEmbeddedEoaSigner) {
-            const connectedOk = await tryConnectedEoaSigner()
-            if (connectedOk) return
-          }
-          
+          // No additional signer fallback branches: keep deploy deterministic.
+          // If Coinbase direct is unavailable and app smart wallet owner path failed,
+          // we require explicit setup before continuing.
           // No valid ERC-4337 path available
           throw new Error(
-            'ERC-4337 deployment requires one of:\n' +
+            'ERC-4337 deployment requires ONE of the following (pick any one):\n' +
             '1. Connect with Coinbase Wallet (recommended)\n' +
-            '2. Add your app smart wallet as an owner of your Zora wallet (EIP-1271)\n' +
-            '3. Connect with an EOA that is an owner of your Zora smart wallet',
+            '2. Add your app smart wallet as an owner of your Zora wallet (EIP-1271)',
           )
         }
 
@@ -3651,13 +3249,12 @@ function DeployVaultBatcher({
       </div>
 
       {/* Show deploy button only if we have a valid ERC-4337 path */}
-      {isCoinbaseWalletDirect || embeddedEoaIsCanonicalOwner || connectedIsCanonicalOwner ? (
+      {isCoinbaseWalletDirect || privySmartWalletIsCanonicalOwner ? (
         <div className="space-y-2">
           <div className="text-[10px] text-green-400/80 flex items-center gap-1">
             <span>✓</span> Gas-free ERC-4337 {
               isCoinbaseWalletDirect ? 'via Coinbase Wallet' :
-              embeddedEoaIsCanonicalOwner ? 'via Privy embedded wallet' :
-              'via connected wallet (owner)'
+              'via app smart wallet owner'
             }
           </div>
           <button type="button" onClick={() => void submit()} disabled={disabled} className="btn-accent w-full rounded-lg">
@@ -3673,7 +3270,6 @@ function DeployVaultBatcher({
           <div className="text-[11px] text-zinc-400 space-y-1">
             <div>Option 1: Connect with <strong className="text-amber-200">Coinbase Wallet</strong> (instant)</div>
             <div>Option 2: Add your app smart wallet as owner (EIP-1271 setup below)</div>
-            <div>Option 3: Connect with an EOA that is an owner of your Zora smart wallet</div>
           </div>
         </div>
       )}
@@ -3734,9 +3330,6 @@ function DeployVaultMain() {
   const { client: smartWalletClient } = useSmartWallets()
   const siwe = useSiweAuth()
   // State for adding Privy embedded EOA as owner (legacy gas-free ERC-4337)
-  const [addPrivySwOwnerBusy, setAddPrivySwOwnerBusy] = useState(false)
-  const [addPrivySwOwnerTxHash, setAddPrivySwOwnerTxHash] = useState<string | null>(null)
-  const [addPrivySwOwnerError, setAddPrivySwOwnerError] = useState<string | null>(null)
   // State for adding Privy app smart wallet as owner (EIP-1271 signer)
   const [addPrivySmartWalletOwnerBusy, setAddPrivySmartWalletOwnerBusy] = useState(false)
   const [addPrivySmartWalletOwnerTxHash, setAddPrivySmartWalletOwnerTxHash] = useState<string | null>(null)
@@ -3855,71 +3448,6 @@ function DeployVaultMain() {
       onClick: () => void run(),
     }
   }, [login, logout, privyAuthenticated, privyReady])
-
-  const embeddedPrivyWallet = useMemo(() => {
-    const ws = Array.isArray(wallets) ? (wallets as any[]) : []
-    return (
-      ws.find((w) => {
-        const t = String(
-          (w as any)?.wallet_client_type ??
-            (w as any)?.walletClientType ??
-            (w as any)?.connector_type ??
-            (w as any)?.connectorType ??
-            '',
-        ).toLowerCase()
-        return t === 'privy' || t.includes('privy') || t.includes('embedded')
-      }) ?? null
-    )
-  }, [wallets])
-
-  // Privy embedded wallet objects are not consistent about what `wallet.address` means
-  // (it can be the Privy app smart wallet, not the embedded EOA).
-  // The ONLY reliable source of the embedded EOA is the embedded provider’s `eth_accounts`.
-  const [embeddedPrivyEoaFromProvider, setEmbeddedPrivyEoaFromProvider] = useState<Address | null>(null)
-
-  const embeddedPrivyEoaAddress = useMemo(() => {
-    try {
-      if (embeddedPrivyEoaFromProvider) return embeddedPrivyEoaFromProvider
-      const w: any = embeddedPrivyWallet as any
-      const raw = typeof w?.address === 'string' ? String(w.address) : ''
-      return raw && isAddress(raw) ? (getAddress(raw) as Address) : null
-    } catch {
-      return null
-    }
-  }, [embeddedPrivyEoaFromProvider, embeddedPrivyWallet])
-
-  useEffect(() => {
-    if (!privyAuthenticated || !embeddedPrivyWallet) return
-    let mounted = true
-    const run = async () => {
-      try {
-        const provider = await (embeddedPrivyWallet as any).getEthereumProvider?.()
-        if (!provider?.request || !mounted) return
-        // Capture the embedded EOA from the provider (preferred).
-        try {
-          const accounts = (await provider.request({ method: 'eth_accounts' })) as unknown
-          const first = Array.isArray(accounts) ? String(accounts[0] ?? '') : ''
-          const normalized = first && isAddress(first) ? (getAddress(first) as Address) : null
-          if (mounted) setEmbeddedPrivyEoaFromProvider(normalized)
-        } catch {
-          // ignore
-        }
-        const current = await provider.request({ method: 'eth_chainId' }).catch(() => null)
-        if (typeof current === 'string' && current.toLowerCase() !== BASE_CHAIN_ID_HEX) {
-          await provider.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: BASE_CHAIN_ID_HEX }],
-          })
-        }
-      } catch {
-        // ignore - user may reject or provider may not support switching
-      }
-    }
-    void run()
-    return () => {
-      mounted = false
-    }
-  }, [embeddedPrivyWallet, privyAuthenticated])
 
   useEffect(() => {
     if (!privyAuthenticated || !smartWalletClient) return
@@ -4385,21 +3913,6 @@ function DeployVaultMain() {
     return typeof b === 'string' && b !== '0x'
   }, [canonicalIdentityBytecodeQuery.data])
 
-  const embeddedEoaIsCanonicalOwnerQuery = useQuery({
-    queryKey: ['coinbaseSmartWalletOwner', 'embedded', canonicalIdentityAddress, embeddedPrivyEoaAddress],
-    enabled: !!canonicalIdentityIsContract && !!canonicalIdentityAddress && !!embeddedPrivyEoaAddress,
-    staleTime: 0, // Always refetch - ownership can change externally (e.g. via Basescan)
-    refetchOnWindowFocus: true,
-    refetchOnMount: true,
-    retry: 1,
-    queryFn: async () => {
-      const canonical = canonicalIdentityAddress as Address
-      const embedded = embeddedPrivyEoaAddress as Address
-      return await isCoinbaseSmartWalletOwner({ smartWallet: canonical, ownerAddress: embedded })
-    },
-  })
-  const embeddedEoaIsCanonicalOwner = embeddedEoaIsCanonicalOwnerQuery.data === true
-
   const privySmartWalletIsCanonicalOwnerQuery = useQuery({
     queryKey: ['coinbaseSmartWalletOwner', 'privySmartWallet', canonicalIdentityAddress, privySmartWalletAddress],
     enabled: !!canonicalIdentityIsContract && !!canonicalIdentityAddress && !!privySmartWalletAddress,
@@ -4418,165 +3931,20 @@ function DeployVaultMain() {
   // NOTE: Embedded EOA signing requires eth_sign support.
   // App smart wallet signing uses EIP-1271 and costs more verification gas.
 
-  // Add Privy embedded EOA as owner of canonical - enables gas-free ERC-4337 deployments
-  // Uses embedded EOA (not smart wallet) to avoid nested EIP-1271 signature complexity
-  const handleAddPrivySmartWalletAsOwner = useCallback(async () => {
-    if (addPrivySwOwnerBusy) return
-    if (!canonicalIdentityIsContract || !canonicalIdentityAddress) {
-      setAddPrivySwOwnerError('Missing canonical smart wallet address.')
-      return
-    }
-    // Use embedded EOA instead of smart wallet for simpler signature verification
-    if (!embeddedPrivyEoaAddress) {
-      setAddPrivySwOwnerError('Privy embedded wallet not ready. Please wait and retry.')
-      return
-    }
-
-    setAddPrivySwOwnerBusy(true)
-    setAddPrivySwOwnerError(null)
-    setAddPrivySwOwnerTxHash(null)
-
-    try {
-      // Encode the addOwnerAddress call - add embedded EOA as owner
-      const addOwnerData = encodeFunctionData({
-        abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
-        functionName: 'addOwnerAddress',
-        args: [embeddedPrivyEoaAddress],
-      })
-
-      if (!connectedWalletAddress || !walletClient || !publicClient) {
-        throw new Error('Wallet not connected. Please connect a wallet that is an owner of your Zora smart wallet.')
-      }
-
-    await ensureBaseChain('your wallet')
-      
-      // Verify connected wallet is an owner
-      const isOwner = await isCoinbaseSmartWalletOwner({
-        smartWallet: canonicalIdentityAddress as Address,
-        ownerAddress: connectedWalletAddress as Address,
-      })
-      
-      if (!isOwner) {
-        throw new Error(
-          'Your connected wallet is not an owner of your Zora smart wallet.\n\n' +
-          'Connect with a wallet that controls your Zora identity.'
-        )
-      }
-
-      // Try ERC-4337 first for ALL wallets (gas-free via paymaster)
-      // Any owner can sign UserOps for a Coinbase Smart Wallet
-      const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-      const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-      
-      try {
-        logger.info('[DeployVault] Trying ERC-4337 to add Privy SW as owner (gas-free)', {
-          connector: connector?.id,
-          owner: connectedWalletAddress,
-        })
-        
-        const result = await sendCoinbaseSmartWalletUserOperation({
-          publicClient: publicClient as any,
-          walletClient: walletClient as any,
-          bundlerUrl,
-          smartWallet: canonicalIdentityAddress as Address,
-          ownerAddress: connectedWalletAddress as Address,
-          calls: [{
-            to: canonicalIdentityAddress as Address,
-            value: 0n,
-            data: addOwnerData,
-          }],
-          version: '1',
-        })
-        
-        setAddPrivySwOwnerTxHash(result.transactionHash)
-        logger.info('[DeployVault] Embedded EOA added as owner via ERC-4337 (gas-free)', {
-          userOpHash: result.userOpHash,
-          txHash: result.transactionHash,
-          embeddedEoa: embeddedPrivyEoaAddress,
-          connector: connector?.id,
-        })
-        
-        await embeddedEoaIsCanonicalOwnerQuery.refetch()
-        return
-      } catch (erc4337Error: any) {
-        const errMsg = erc4337Error?.message?.toLowerCase() || ''
-        
-        // If wallet doesn't support eth_sign, fall back to direct transaction
-        if (errMsg.includes('eth_sign') || errMsg.includes('method not supported') || errMsg.includes('user rejected')) {
-          logger.warn('[DeployVault] ERC-4337 failed, falling back to direct tx', { 
-            error: erc4337Error?.message,
-            connector: connector?.id,
-          })
-          
-          // Fall through to direct transaction
-        } else {
-          // Other errors - rethrow
-          throw erc4337Error
-        }
-      }
-      
-      // Fallback: Direct transaction (requires gas)
-      // Only reached if ERC-4337 fails due to signing issues
-      logger.info('[DeployVault] Using direct tx fallback to add embedded EOA as owner (requires gas)')
-      
-      const txHash = await walletClient.sendTransaction({
-        to: canonicalIdentityAddress as Address,
-        data: addOwnerData,
-        value: 0n,
-        chain: base,
-      })
-      
-      setAddPrivySwOwnerTxHash(txHash)
-      logger.info('[DeployVault] Embedded EOA added as owner via direct tx', {
-        txHash,
-        canonical: canonicalIdentityAddress,
-        embeddedEoa: embeddedPrivyEoaAddress,
-      })
-      
-      // Wait for confirmation
-      await publicClient.waitForTransactionReceipt({ hash: txHash })
-      await embeddedEoaIsCanonicalOwnerQuery.refetch()
-    } catch (e: any) {
-      const msg = typeof e?.message === 'string' ? e.message : 'Failed to add embedded wallet as owner'
-      setAddPrivySwOwnerError(msg)
-      logger.error('[DeployVault] Failed to add embedded EOA as owner', { error: e })
-    } finally {
-      setAddPrivySwOwnerBusy(false)
-    }
-  }, [
-    addPrivySwOwnerBusy,
-    canonicalIdentityAddress,
-    canonicalIdentityIsContract,
-    connectedWalletAddress,
-    connector?.id,
-    embeddedPrivyEoaAddress,
-    embeddedEoaIsCanonicalOwnerQuery,
-    ensureBaseChain,
-    publicClient,
-    walletClient,
-  ])
-
   // Add Privy app smart wallet as owner (EIP-1271 signer for canonical wallet)
-  const handleAddPrivyAppSmartWalletOwner = useCallback(async () => {
-    if (addPrivySmartWalletOwnerBusy) return
+  const handleAddPrivyAppSmartWalletOwner = useCallback(async (): Promise<boolean> => {
+    if (addPrivySmartWalletOwnerBusy) return false
     if (!canonicalIdentityIsContract || !canonicalIdentityAddress) {
       setAddPrivySmartWalletOwnerError('Missing canonical smart wallet address.')
-      return
+      return false
     }
     if (!privySmartWalletAddress) {
       setAddPrivySmartWalletOwnerError('Privy smart wallet not ready. Please wait and retry.')
-      return
+      return false
     }
     if (privySmartWalletAddress.toLowerCase() === canonicalIdentityAddress.toLowerCase()) {
       setAddPrivySmartWalletOwnerError('Your Privy smart wallet already matches the canonical wallet.')
-      return
-    }
-    if (typeof window !== 'undefined') {
-      const ok = window.confirm(
-        'This will add your app smart wallet as an owner of your canonical Zora smart wallet. ' +
-          'The canonical wallet will remain the sender. Proceed?'
-      )
-      if (!ok) return
+      return true
     }
 
     setAddPrivySmartWalletOwnerBusy(true)
@@ -4611,74 +3979,45 @@ function DeployVaultMain() {
       const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
       const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
 
-      try {
-        logger.info('[DeployVault] Trying ERC-4337 to add app smart wallet as owner (gas-free)', {
-          connector: connector?.id,
-          owner: connectedWalletAddress,
-          smartWallet: privySmartWalletAddress,
-        })
-
-        const result = await sendCoinbaseSmartWalletUserOperation({
-          publicClient: publicClient as any,
-          walletClient: walletClient as any,
-          bundlerUrl,
-          smartWallet: canonicalIdentityAddress as Address,
-          ownerAddress: connectedWalletAddress as Address,
-          calls: [{
-            to: canonicalIdentityAddress as Address,
-            value: 0n,
-            data: addOwnerData,
-          }],
-          version: '1',
-        })
-
-        setAddPrivySmartWalletOwnerTxHash(result.transactionHash)
-        logger.info('[DeployVault] App smart wallet added as owner via ERC-4337 (gas-free)', {
-          userOpHash: result.userOpHash,
-          txHash: result.transactionHash,
-          smartWallet: privySmartWalletAddress,
-          connector: connector?.id,
-        })
-
-        await privySmartWalletIsCanonicalOwnerQuery.refetch()
-        return
-      } catch (erc4337Error: any) {
-        const errMsg = erc4337Error?.message?.toLowerCase() || ''
-        if (errMsg.includes('eth_sign') || errMsg.includes('method not supported') || errMsg.includes('user rejected')) {
-          logger.warn('[DeployVault] ERC-4337 failed, falling back to direct tx', {
-            error: erc4337Error?.message,
-            connector: connector?.id,
-          })
-        } else {
-          throw erc4337Error
-        }
-      }
-
-      logger.info('[DeployVault] Using direct tx fallback to add app smart wallet as owner (requires gas)')
-
-      const txHash = await walletClient.sendTransaction({
-        to: canonicalIdentityAddress as Address,
-        data: addOwnerData,
-        value: 0n,
-        chain: base,
-      })
-
-      setAddPrivySmartWalletOwnerTxHash(txHash)
-      logger.info('[DeployVault] App smart wallet added as owner via direct tx', {
-        txHash,
-        canonical: canonicalIdentityAddress,
+      logger.info('[DeployVault] Trying ERC-4337 to add app smart wallet as owner (gas-free)', {
+        connector: connector?.id,
+        owner: connectedWalletAddress,
         smartWallet: privySmartWalletAddress,
       })
 
-      await publicClient.waitForTransactionReceipt({ hash: txHash })
+      const result = await sendCoinbaseSmartWalletUserOperation({
+        publicClient: publicClient as any,
+        walletClient: walletClient as any,
+        bundlerUrl,
+        smartWallet: canonicalIdentityAddress as Address,
+        ownerAddress: connectedWalletAddress as Address,
+        calls: [{
+          to: canonicalIdentityAddress as Address,
+          value: 0n,
+          data: addOwnerData,
+        }],
+        version: '1',
+      })
+
+      setAddPrivySmartWalletOwnerTxHash(result.transactionHash)
+      logger.info('[DeployVault] App smart wallet added as owner via ERC-4337 (gas-free)', {
+        userOpHash: result.userOpHash,
+        txHash: result.transactionHash,
+        smartWallet: privySmartWalletAddress,
+        connector: connector?.id,
+      })
+
       await privySmartWalletIsCanonicalOwnerQuery.refetch()
+      return true
     } catch (e: any) {
       const msg = typeof e?.message === 'string' ? e.message : 'Failed to add app smart wallet as owner'
       setAddPrivySmartWalletOwnerError(msg)
       logger.error('[DeployVault] Failed to add app smart wallet as owner', { error: e })
+      return false
     } finally {
       setAddPrivySmartWalletOwnerBusy(false)
     }
+    return false
   }, [
     addPrivySmartWalletOwnerBusy,
     canonicalIdentityAddress,
@@ -4719,7 +4058,6 @@ function DeployVaultMain() {
   })
 
   const executionCanOperateCanonical = executionCanOperateCanonicalQuery.data === true
-  const connectedIsCanonicalOwner = executionCanOperateCanonical
   const executionCanOperateCanonicalPending = (!!identity.blockingReason || canonicalIdentityIsContract) && executionCanOperateCanonicalQuery.isFetching
 
   // Check if connected EOA is an owner of the Creator Coin itself (via ownerAt)
@@ -5067,13 +4405,15 @@ function DeployVaultMain() {
     if (!privySmartWalletAddress || !canonicalIdentityAddress) return false
     return privySmartWalletAddress.toLowerCase() === canonicalIdentityAddress.toLowerCase()
   }, [privySmartWalletAddress, canonicalIdentityAddress])
+
+  const isCoinbaseWalletDirect = connector?.id === 'coinbaseWalletSDK' || connector?.id === 'com.coinbase.wallet'
+  const autoSmartWalletOwnerAttemptKeyRef = useRef<string | null>(null)
   
   // Smart wallet is ready only if it matches canonical OR an authorized owner signer is available
   const smartWalletCapabilityReady =
+    isCoinbaseWalletDirect ||
     (privySmartWalletReady &&
-      (smartWalletMatchesCanonical || (privySmartWalletIsCanonicalOwner && privySmartWalletCanSign))) ||
-    embeddedEoaIsCanonicalOwner ||
-    connectedIsCanonicalOwner
+      (smartWalletMatchesCanonical || (privySmartWalletIsCanonicalOwner && privySmartWalletCanSign)))
 
   const canDeploy =
     tokenIsValid &&
@@ -5094,6 +4434,31 @@ function DeployVaultMain() {
     bytecodeInfraOk &&
     !identityBlockingReason &&
     smartWalletCapabilityReady
+
+  useEffect(() => {
+    if (isCoinbaseWalletDirect) return
+    if (!privySmartWalletAddress || !privySmartWalletCanSign) return
+    if (privySmartWalletIsCanonicalOwner) return
+    if (!canonicalIdentityIsContract || !canonicalIdentityAddress) return
+    if (!connectedWalletAddress) return
+    if (addPrivySmartWalletOwnerBusy) return
+
+    const attemptKey = `${canonicalIdentityAddress.toLowerCase()}:${connectedWalletAddress.toLowerCase()}:${privySmartWalletAddress.toLowerCase()}`
+    if (autoSmartWalletOwnerAttemptKeyRef.current === attemptKey) return
+
+    autoSmartWalletOwnerAttemptKeyRef.current = attemptKey
+    void handleAddPrivyAppSmartWalletOwner()
+  }, [
+    addPrivySmartWalletOwnerBusy,
+    canonicalIdentityAddress,
+    canonicalIdentityIsContract,
+    connectedWalletAddress,
+    handleAddPrivyAppSmartWalletOwner,
+    isCoinbaseWalletDirect,
+    privySmartWalletAddress,
+    privySmartWalletCanSign,
+    privySmartWalletIsCanonicalOwner,
+  ])
 
   const vrfConsumerAddress = (CONTRACTS.vrfConsumer ?? null) as Address | null
   const vrfConsumerConfigured = isAddress(String(vrfConsumerAddress ?? ''))
@@ -5688,27 +5053,22 @@ function DeployVaultMain() {
                     </div>
                   ) : null}
 
-                  {/* App smart wallet signer (explicit opt-in) */}
-                  {privySmartWalletAddress && !privySmartWalletIsCanonicalOwner ? (
+                  {/* App smart wallet signer (automatic) */}
+                  {!isCoinbaseWalletDirect && privySmartWalletAddress && !privySmartWalletIsCanonicalOwner ? (
                     <div className="p-4 rounded-lg border border-purple-500/20 bg-purple-500/10 space-y-3">
-                      <div className="text-sm font-medium text-purple-200">Use app smart wallet as signer (optional)</div>
+                      <div className="text-sm font-medium text-purple-200">Smart wallet signer setup</div>
                       <div className="text-[11px] text-purple-200/70">
-                        Adds your app smart wallet as an owner of the canonical Zora smart wallet (EIP-1271).
-                        The canonical wallet remains the sender. Higher verification gas, but no eth_sign required.
+                        We’re automatically adding your app smart wallet as an owner of the canonical Zora smart wallet (EIP-1271).
+                        The canonical wallet remains the sender.
                       </div>
                       {!privySmartWalletCanSign ? (
                         <div className="text-[11px] text-amber-200/80">
                           Smart wallet signing is not supported in this environment. Use Coinbase Wallet or an owner EOA.
                         </div>
                       ) : null}
-                      <button
-                        type="button"
-                        className="btn-primary w-full"
-                        disabled={addPrivySmartWalletOwnerBusy || !privySmartWalletCanSign}
-                        onClick={() => void handleAddPrivyAppSmartWalletOwner()}
-                      >
-                        {addPrivySmartWalletOwnerBusy ? 'Confirming…' : 'Enable Smart Wallet Signer'}
-                      </button>
+                      {addPrivySmartWalletOwnerBusy ? (
+                        <div className="text-[11px] text-purple-200/80">Setting up smart wallet signer…</div>
+                      ) : null}
                       {addPrivySmartWalletOwnerTxHash && (
                         <div className="text-[11px] text-green-400">
                           ✓ Success!{' '}
@@ -5729,37 +5089,6 @@ function DeployVaultMain() {
                     <div className="flex items-center gap-2 text-[11px] text-green-400 mb-2">
                       <span>✓</span>
                       <span>Smart wallet signer ready</span>
-                    </div>
-                  ) : null}
-
-                  {/* Gas-free setup or status */}
-                  {embeddedPrivyEoaAddress && !embeddedEoaIsCanonicalOwner ? (
-                    <div className="p-4 rounded-lg border border-blue-500/20 bg-blue-500/10 space-y-3">
-                      <div className="text-sm font-medium text-blue-200">One-time setup</div>
-                      <div className="text-[11px] text-blue-200/70">
-                        Enable gas-free deployments. This is completely free.
-                      </div>
-                      <button
-                        type="button"
-                        className="btn-primary w-full"
-                        disabled={addPrivySwOwnerBusy}
-                        onClick={() => void handleAddPrivySmartWalletAsOwner()}
-                      >
-                        {addPrivySwOwnerBusy ? 'Confirming…' : 'Enable Gas-Free Deploys'}
-                      </button>
-                      {addPrivySwOwnerTxHash && (
-                        <div className="text-[11px] text-green-400">
-                          ✓ Success! <button type="button" className="underline" onClick={() => void embeddedEoaIsCanonicalOwnerQuery.refetch()}>Refresh</button>
-                        </div>
-                      )}
-                      {addPrivySwOwnerError && (
-                        <div className="text-[11px] text-red-400">{addPrivySwOwnerError}</div>
-                      )}
-                    </div>
-                  ) : embeddedEoaIsCanonicalOwner ? (
-                    <div className="flex items-center gap-2 text-[11px] text-green-400 mb-2">
-                      <span>✓</span>
-                      <span>Gas-free deployment ready</span>
                     </div>
                   ) : null}
 
@@ -5788,12 +5117,8 @@ function DeployVaultMain() {
                     privySmartWalletAddress={privySmartWalletAddress}
                     privySmartWalletIsCanonicalOwner={privySmartWalletIsCanonicalOwner}
                     privySmartWalletCanSign={privySmartWalletCanSign}
-                    embeddedEoaIsCanonicalOwner={embeddedEoaIsCanonicalOwner}
-                    embeddedPrivyWallet={embeddedPrivyWallet}
-                    embeddedPrivyEoaAddress={embeddedPrivyEoaAddress}
                     connectorId={connector?.id}
                     wagmiWalletClient={walletClient}
-                    connectedIsCanonicalOwner={executionCanOperateCanonical}
                   />
                 </>
               ) : (
