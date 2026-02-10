@@ -1,5 +1,15 @@
 /**
- * XMTP Agent Runtime
+ * @deprecated — Use the unified ElizaOS runtime instead:
+ *   pnpm agent:eliza
+ *   (or: tsx server/agent/eliza/index.ts)
+ *
+ * The ElizaOS runtime replaces this file with the same multi-agent
+ * orchestrator plus wallet intelligence, ERC-8004 reputation, and
+ * Lens plugin support. This file is kept as a reference only.
+ *
+ * ---
+ *
+ * XMTP Agent Runtime (Legacy)
  *
  * Long-lived Node.js process that runs creator XMTP agents.
  * Each agent listens for messages and dispatches to the Keepr command pipeline.

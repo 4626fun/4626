@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "agent:start": "tsx server/agent/runtime.ts",
+    "agent:eliza": "tsx server/agent/eliza/index.ts",
     "check:agent-registration": "node scripts/check-agent-registration.mjs"
   },
   "dependencies": {
@@ -62,6 +63,7 @@
     "wagmi": "^2.19.5"
   },
   "devDependencies": {
+    "@elizaos/core": "^1.7.2",
     "@tailwindcss/vite": "^4.1.18",
     "@types/node": "^25.2.1",
     "@types/react": "^19.2.13",
