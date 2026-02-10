@@ -109,15 +109,36 @@ async function fetchFarcasterUser(address: string): Promise<FarcasterUser | null
 }
 
 // ---------------------------------------------------------------------------
-// Lens resolution — uses the official @lens-protocol/client SDK
+// Lens resolution — uses the Lens V3 GraphQL API directly
+// (avoids pnpm-hoisting issues with @lens-protocol/client sub-packages)
 // ---------------------------------------------------------------------------
 
-import { PublicClient as LensPublicClient, mainnet as lensMainnet, AccountsBulkQuery, evmAddress } from '@lens-protocol/client'
+const LENS_API_URL = 'https://api.lens.xyz/graphql'
 
-let _lensClient: InstanceType<typeof LensPublicClient> | null = null
-function getLensClient(): InstanceType<typeof LensPublicClient> {
-  if (!_lensClient) _lensClient = LensPublicClient.create({ environment: lensMainnet })
-  return _lensClient
+const ACCOUNTS_BULK_GQL = /* GraphQL */ `
+  query AccountsBulk($request: AccountsBulkRequest!) {
+    accountsBulk(request: $request) {
+      address
+      owner
+      username { value localName }
+      metadata { name picture }
+    }
+  }
+`
+
+async function lensGql<T>(query: string, variables?: Record<string, unknown>): Promise<T | null> {
+  try {
+    const res = await fetch(LENS_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, variables }),
+    })
+    if (!res.ok) return null
+    const json = (await res.json()) as { data?: T; errors?: unknown[] }
+    return json.data ?? null
+  } catch {
+    return null
+  }
 }
 
 function getString(value: unknown): string | null {
@@ -150,23 +171,29 @@ function normalizeLensHandle(input: { value?: string | null; localName?: string 
   return value
 }
 
-async function fetchLensUser(address: string): Promise<LensUser | null> {
-  const client = getLensClient()
+type AccountsBulkData = {
+  accountsBulk: Array<{
+    address: string | null
+    owner: string | null
+    username: { value: string | null; localName: string | null } | null
+    metadata: { name: string | null; picture: unknown } | null
+  }>
+}
 
+async function fetchLensUser(address: string): Promise<LensUser | null> {
   try {
-    // Try exact address match first, then fall back to ownedBy
-    const exactResult = await client.query(AccountsBulkQuery, {
-      request: { addresses: [evmAddress(address)] },
+    // Try exact address match first
+    const exactData = await lensGql<AccountsBulkData>(ACCOUNTS_BULK_GQL, {
+      request: { addresses: [address] },
     })
-    const exactAccounts = exactResult?.value
-    let best = pickBest(Array.isArray(exactAccounts) ? exactAccounts : [])
+    let best = pickBest(exactData?.accountsBulk ?? [])
 
     if (!best) {
-      const ownedResult = await client.query(AccountsBulkQuery, {
-        request: { ownedBy: [evmAddress(address)] },
+      // Fall back to ownedBy
+      const ownedData = await lensGql<AccountsBulkData>(ACCOUNTS_BULK_GQL, {
+        request: { ownedBy: [address] },
       })
-      const ownedAccounts = ownedResult?.value
-      best = pickBest(Array.isArray(ownedAccounts) ? ownedAccounts : [])
+      best = pickBest(ownedData?.accountsBulk ?? [])
     }
 
     if (!best) return null

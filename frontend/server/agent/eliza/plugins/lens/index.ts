@@ -12,23 +12,87 @@
  */
 
 import type { Action, Content, HandlerCallback, IAgentRuntime, Memory, Plugin, State } from '@elizaos/core'
-import {
-  PostsQuery,
-  PostType,
-  FollowersQuery,
-  FollowersOrderBy,
-  FollowingQuery,
-  FollowingOrderBy,
-  AccountQuery,
-  evmAddress,
-} from '@lens-protocol/client'
 
 // Direct imports — no HTTP bridge needed
 import { resolveLensUserByOwner } from '../../../../_lib/lensAccounts.js'
 import { resolveCanonicalSmartWalletAddress } from '../../../../_lib/canonicalWalletResolver.js'
 import { tryUploadImmutableJson } from '../../../../_lib/lensGrove.js'
 import { buildShareTokenMetadata } from '../../../../_lib/shareTokenMetadata.js'
-import { getLensPublicClient } from '../../../../_lib/lensClient.js'
+import { lensGql } from '../../../../_lib/lensClient.js'
+
+// ---------------------------------------------------------------------------
+// GraphQL queries (replaces SDK typed-document imports)
+// ---------------------------------------------------------------------------
+
+const POSTS_QUERY = /* GraphQL */ `
+  query Posts($request: PostsRequest!) {
+    posts(request: $request) {
+      items {
+        ... on Post {
+          id
+          timestamp
+          metadata {
+            ... on TextOnlyMetadata { content mainContentFocus }
+            ... on ArticleMetadata { content mainContentFocus }
+            ... on ImageMetadata { content mainContentFocus }
+            ... on VideoMetadata { content mainContentFocus }
+            ... on AudioMetadata { content mainContentFocus }
+            ... on LinkMetadata { content mainContentFocus }
+          }
+          stats { reactions comments reposts }
+          app { address }
+        }
+      }
+    }
+  }
+`
+
+const FOLLOWERS_QUERY = /* GraphQL */ `
+  query Followers($request: FollowersRequest!) {
+    followers(request: $request) {
+      items {
+        follower {
+          address
+          username { value }
+          metadata { name }
+        }
+      }
+    }
+  }
+`
+
+const FOLLOWING_QUERY = /* GraphQL */ `
+  query Following($request: FollowingRequest!) {
+    following(request: $request) {
+      items {
+        following {
+          address
+          username { value }
+          metadata { name }
+        }
+      }
+    }
+  }
+`
+
+const ACCOUNT_QUERY = /* GraphQL */ `
+  query Account($request: AccountRequest!) {
+    account(request: $request) {
+      address
+      owner
+      username { value localName }
+      metadata { name bio picture }
+      score
+      createdAt
+      operations {
+        canFollow
+        canUnfollow
+        canBlock
+        canUnblock
+      }
+    }
+  }
+`
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -354,19 +418,18 @@ const lensFeedAction: Action = {
         return
       }
 
-      const client = getLensPublicClient()
       const limit = typeof options?.limit === 'number' ? Math.min(options.limit, 25) : 10
 
-      const result = await client.query(PostsQuery, {
+      const result = await lensGql<{ posts: { items: any[] } }>(POSTS_QUERY, {
         request: {
           filter: {
-            authors: [evmAddress(lensUser.accountAddress)],
-            postTypes: [PostType.Root, PostType.Comment],
+            authors: [lensUser.accountAddress],
+            postTypes: ['ROOT', 'COMMENT'],
           },
         },
       })
 
-      const items = (result?.value?.items ?? []).slice(0, limit)
+      const items = (result?.posts?.items ?? []).slice(0, limit)
       const posts = items.map((p: any) => ({
         id: p.id,
         type: p.__typename,
@@ -441,18 +504,17 @@ const lensFollowersAction: Action = {
         return
       }
 
-      const client = getLensPublicClient()
       const limit = typeof options?.limit === 'number' ? Math.min(options.limit, 50) : 20
 
       if (isFollowing) {
-        const result = await client.query(FollowingQuery, {
+        const result = await lensGql<{ following: { items: any[] } }>(FOLLOWING_QUERY, {
           request: {
-            account: evmAddress(lensUser.accountAddress),
-            orderBy: FollowingOrderBy.AccountScore,
+            account: lensUser.accountAddress,
+            orderBy: 'ACCOUNT_SCORE',
           },
         })
 
-        const items = (result?.value?.items ?? []).slice(0, limit)
+        const items = (result?.following?.items ?? []).slice(0, limit)
         const following = items.map((f: any) => ({
           address: f.following?.address ?? f.address,
           username: f.following?.username?.value ?? f.username?.value ?? null,
@@ -470,14 +532,14 @@ const lensFollowersAction: Action = {
           count: following.length,
         })
       } else {
-        const result = await client.query(FollowersQuery, {
+        const result = await lensGql<{ followers: { items: any[] } }>(FOLLOWERS_QUERY, {
           request: {
-            account: evmAddress(lensUser.accountAddress),
-            orderBy: FollowersOrderBy.AccountScore,
+            account: lensUser.accountAddress,
+            orderBy: 'ACCOUNT_SCORE',
           },
         })
 
-        const items = (result?.value?.items ?? []).slice(0, limit)
+        const items = (result?.followers?.items ?? []).slice(0, limit)
         const followers = items.map((f: any) => ({
           address: f.follower?.address ?? f.address,
           username: f.follower?.username?.value ?? f.username?.value ?? null,
@@ -547,12 +609,11 @@ const lensAccountAction: Action = {
         return
       }
 
-      const client = getLensPublicClient()
-      const accountResult = await client.query(AccountQuery, {
-        request: { address: evmAddress(lensUser.accountAddress) },
+      const accountResult = await lensGql<{ account: any }>(ACCOUNT_QUERY, {
+        request: { address: lensUser.accountAddress },
       })
 
-      const acct = accountResult?.value
+      const acct = accountResult?.account
       if (!acct) {
         await respond(callback, { account: null, message: 'Could not fetch account details.' })
         return

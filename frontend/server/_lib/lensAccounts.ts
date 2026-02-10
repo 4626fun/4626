@@ -1,12 +1,10 @@
 /**
- * Lens account resolution — uses the official `@lens-protocol/client` SDK.
+ * Lens account resolution — uses the Lens V3 GraphQL API directly.
  *
- * Replaces raw GraphQL `fetch()` with typed SDK queries for type safety,
- * pagination, and access to the full Lens V3 API surface.
+ * Avoids importing from `@lens-protocol/client` sub-packages which are
+ * not hoisted by pnpm, causing TS2305 errors at build time.
  */
-import { AccountsBulkQuery, evmAddress } from '@lens-protocol/client'
-
-import { getLensPublicClient } from './lensClient.js'
+import { lensGql } from './lensClient.js'
 
 // ---------------------------------------------------------------------------
 // Types — kept backward-compatible with all existing callers.
@@ -32,6 +30,36 @@ export type LensUser = {
   avatar: string | null
   accountAddress: string
   ownerAddress: string | null
+}
+
+// ---------------------------------------------------------------------------
+// GraphQL
+// ---------------------------------------------------------------------------
+
+const ACCOUNTS_BULK_QUERY = /* GraphQL */ `
+  query AccountsBulk($request: AccountsBulkRequest!) {
+    accountsBulk(request: $request) {
+      address
+      owner
+      username {
+        value
+        localName
+      }
+      metadata {
+        name
+        picture
+      }
+    }
+  }
+`
+
+type AccountsBulkResponse = {
+  accountsBulk: Array<{
+    address: string | null
+    owner: string | null
+    username: { value: string | null; localName: string | null } | null
+    metadata: { name: string | null; picture: unknown } | null
+  }>
 }
 
 // ---------------------------------------------------------------------------
@@ -81,49 +109,40 @@ function pickBestLensAccount(accounts: LensAccount[]): LensAccount | null {
 }
 
 // ---------------------------------------------------------------------------
-// SDK-based account fetching
+// GraphQL-based account fetching
 // ---------------------------------------------------------------------------
 
 async function fetchLensAccounts(request: { ownedBy?: string[] }): Promise<LensAccount[]> {
   const hasOwnedBy = Array.isArray(request.ownedBy) && request.ownedBy.length > 0
   if (!hasOwnedBy) return []
 
-  const client = getLensPublicClient()
-
   try {
-    const result = await client.query(AccountsBulkQuery, {
-      request: {
-        addresses: request.ownedBy!.map((addr) => evmAddress(addr)),
-      },
+    const data = await lensGql<AccountsBulkResponse>(ACCOUNTS_BULK_QUERY, {
+      request: { addresses: request.ownedBy },
     })
 
-    // The SDK returns { value: Account[] } or similar
-    const accounts = result?.value
+    const accounts = data?.accountsBulk
     if (!Array.isArray(accounts)) return []
 
     return accounts
-      .map((item: any): LensAccount | null => {
+      .map((item): LensAccount | null => {
         if (!item || typeof item !== 'object') return null
         const address = getString(item.address)
         if (!address) return null
-        const owner = getString(item.owner)
-        const usernameObj = item.username
-        const metadataObj = item.metadata
-        const username = usernameObj
-          ? { value: getString(usernameObj.value), localName: getString(usernameObj.localName) }
-          : null
         return {
           address,
-          owner,
-          username,
-          metadata: metadataObj
-            ? { name: getString(metadataObj.name), picture: metadataObj.picture }
+          owner: getString(item.owner),
+          username: item.username
+            ? { value: getString(item.username.value), localName: getString(item.username.localName) }
+            : null,
+          metadata: item.metadata
+            ? { name: getString(item.metadata.name), picture: item.metadata.picture }
             : null,
         }
       })
       .filter((item): item is LensAccount => Boolean(item))
   } catch (err) {
-    console.error('[lensAccounts] SDK query failed:', err instanceof Error ? err.message : err)
+    console.error('[lensAccounts] GraphQL query failed:', err instanceof Error ? err.message : err)
     return []
   }
 }

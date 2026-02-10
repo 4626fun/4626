@@ -1,23 +1,34 @@
 /**
- * Shared Lens Protocol client singleton.
+ * Shared Lens Protocol GraphQL helpers.
  *
- * Uses the official `@lens-protocol/client` SDK instead of raw GraphQL.
- * The PublicClient provides typed, paginated access to the full Lens V3 API
- * surface (accounts, posts, feeds, follows, groups, actions).
+ * Uses the Lens V3 public GraphQL endpoint directly to avoid pnpm-hoisting
+ * issues with `@lens-protocol/client` sub-package re-exports.
  */
-import { PublicClient, mainnet } from '@lens-protocol/client'
 
-let _publicClient: InstanceType<typeof PublicClient> | null = null
+const LENS_API_URL = 'https://api.lens.xyz/graphql'
 
 /**
- * Returns a shared Lens PublicClient (unauthenticated).
- * Suitable for read-only queries (account lookup, feed reads, etc.).
+ * Execute a typed GraphQL query against the Lens V3 API.
  */
-export function getLensPublicClient(): InstanceType<typeof PublicClient> {
-  if (!_publicClient) {
-    _publicClient = PublicClient.create({
-      environment: mainnet,
-    })
+export async function lensGql<T = unknown>(
+  query: string,
+  variables?: Record<string, unknown>,
+): Promise<T> {
+  const res = await fetch(LENS_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, variables }),
+  })
+
+  if (!res.ok) {
+    throw new Error(`Lens API HTTP ${res.status}: ${res.statusText}`)
   }
-  return _publicClient
+
+  const json = (await res.json()) as { data?: T; errors?: { message: string }[] }
+
+  if (json.errors?.length) {
+    throw new Error(`Lens API error: ${json.errors[0]!.message}`)
+  }
+
+  return json.data as T
 }

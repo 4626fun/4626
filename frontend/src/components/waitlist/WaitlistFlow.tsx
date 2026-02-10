@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { getAppBaseUrl } from '@/lib/host'
-import { useAccount, usePublicClient } from 'wagmi'
+import { useAccount, usePublicClient, useSignMessage } from 'wagmi'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { isPrivyClientEnabled } from '@/lib/flags'
 import { usePrivyClientStatus } from '@/lib/privy/client'
@@ -204,6 +204,10 @@ const initialWaitlistState: WaitlistState = {
   cswLinked: false,
   cswLinkBusy: false,
   cswLinkError: null,
+  // CSW ERC-1271 ownership proof
+  cswProofVerified: false,
+  cswProofBusy: false,
+  cswProofError: null,
   waitlistPosition: null,
 }
 
@@ -490,6 +494,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   const { apiFetch } = useWaitlistApi(appUrl)
   const { address: connectedAddressRaw } = useAccount()
   const publicClient = usePublicClient({ chainId: base.id })
+  const { signMessageAsync } = useSignMessage()
   const siwe = useSiweAuth()
   const miniApp = useMiniAppContext()
 
@@ -557,6 +562,9 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     referralCode,
     actionsDone,
     waitlistPosition,
+    cswProofVerified,
+    cswProofBusy,
+    cswProofError,
   } = waitlist
 
   const privyStatus = usePrivyClientStatus()
@@ -1140,6 +1148,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     if (verifiedSolana && isValidSolanaAddress(verifiedSolana)) {
       out.push({ method: 'solana', subject: verifiedSolana, timestamp: ts })
     }
+    // Include CSW ERC-1271 ownership proof if verified
+    if (cswProofVerified && effectiveCswAddress) {
+      out.push({ method: 'csw-erc1271', subject: effectiveCswAddress, timestamp: ts })
+    }
     return out
   }
 
@@ -1202,6 +1214,46 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       patchWaitlist({ claimCoinError: e?.message ? String(e.message) : 'Claim failed' })
     } finally {
       patchWaitlist({ claimCoinBusy: false })
+    }
+  }
+
+  async function proveCswOwnership() {
+    const csw = effectiveCswAddress
+    if (!csw || cswProofBusy || cswProofVerified) return
+    patchWaitlist({ cswProofBusy: true, cswProofError: null })
+    try {
+      // Step 1: Get a challenge from the server
+      const challengeRes = await apiFetch(`/api/waitlist/csw-proof?cswAddress=${encodeURIComponent(csw)}`, {
+        headers: { Accept: 'application/json' },
+      })
+      const challengeJson = safeJsonParse<any>(await challengeRes.text().catch(() => ''))
+      if (!challengeRes.ok || !challengeJson?.success || !challengeJson?.data?.message || !challengeJson?.data?.nonce) {
+        const msg = challengeJson?.error ?? 'Failed to get ownership challenge.'
+        throw new Error(typeof msg === 'string' ? msg : 'Failed to get ownership challenge.')
+      }
+
+      const { message, nonce } = challengeJson.data as { message: string; nonce: string }
+
+      // Step 2: Sign the challenge message with the connected wallet.
+      // The CSW contract's isValidSignature will verify this signer is an owner.
+      const signature = await signMessageAsync({ message })
+
+      // Step 3: Submit the signature for on-chain ERC-1271 verification
+      const verifyRes = await apiFetch('/api/waitlist/csw-proof', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ nonce, cswAddress: csw, signature }),
+      })
+      const verifyJson = safeJsonParse<any>(await verifyRes.text().catch(() => ''))
+      if (!verifyRes.ok || !verifyJson?.success || !verifyJson?.data?.verified) {
+        const msg = verifyJson?.error ?? 'ERC-1271 verification failed.'
+        throw new Error(typeof msg === 'string' ? msg : 'ERC-1271 verification failed.')
+      }
+
+      patchWaitlist({ cswProofVerified: true, cswProofBusy: false, cswProofError: null })
+    } catch (e: any) {
+      const msg = e?.shortMessage ?? e?.message ?? 'Ownership proof failed.'
+      patchWaitlist({ cswProofBusy: false, cswProofError: typeof msg === 'string' ? msg : 'Ownership proof failed.' })
     }
   }
 
@@ -1320,7 +1372,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   useEffect(() => {
     const w = typeof verifiedWallet === 'string' && isValidEvmAddress(verifiedWallet) ? verifiedWallet : null
     if (!w) {
-      patchWaitlist({ creatorCoin: null, creatorCoinBusy: false, creatorCoinDeclaredMissing: false })
+      patchWaitlist({ creatorCoin: null, creatorCoinBusy: false, creatorCoinDeclaredMissing: false, cswProofVerified: false, cswProofBusy: false, cswProofError: null })
       creatorCoinForWalletRef.current = null
       setZoraProfileSmartWalletAddress(null)
       return
@@ -1652,6 +1704,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     creatorCoin={creatorCoin}
                     creatorCoinDeclaredMissing={creatorCoinDeclaredMissing}
                     creatorCoinBusy={creatorCoinBusy}
+                    cswProofVerified={cswProofVerified}
+                    cswProofBusy={cswProofBusy}
+                    cswProofError={cswProofError}
+                    onProveCswOwnership={proveCswOwnership}
                     busy={busy}
                     canSubmit={canSubmit}
                     onPrivyContinue={openPrivyLogin}

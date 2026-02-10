@@ -6,6 +6,9 @@ import {
   CheckCircle2,
   ChevronRight,
   Coins,
+  Fingerprint,
+  Loader2,
+  ShieldCheck,
   Sparkles,
   TrendingUp,
   Users,
@@ -93,6 +96,11 @@ type VerifyStepProps = {
   creatorCoin: WaitlistState['creatorCoin']
   creatorCoinDeclaredMissing: boolean
   creatorCoinBusy: boolean
+  // CSW ERC-1271 ownership proof
+  cswProofVerified?: boolean
+  cswProofBusy?: boolean
+  cswProofError?: string | null
+  onProveCswOwnership?: () => void | Promise<void>
   // Submission
   busy: boolean
   canSubmit: boolean
@@ -115,6 +123,10 @@ export const VerifyStep = memo(function VerifyStep({
   creatorCoin,
   creatorCoinDeclaredMissing,
   creatorCoinBusy,
+  cswProofVerified,
+  cswProofBusy,
+  cswProofError,
+  onProveCswOwnership,
   busy,
   canSubmit,
   onPrivyContinue,
@@ -421,6 +433,59 @@ export const VerifyStep = memo(function VerifyStep({
                 ) : null}
               </div>
             </motion.div>
+
+            {/* CSW ERC-1271 Ownership Proof */}
+            {canonicalSmartWallet && walletOwnershipValid ? (
+              <motion.div variants={staggerItem} className={`${panelClass} px-4 py-3`}>
+                {cswProofVerified ? (
+                  <div className="flex items-center gap-3">
+                    <ShieldCheck className="h-5 w-5 text-emerald-400 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[13px] text-emerald-200 font-medium">Smart wallet ownership verified</div>
+                      <div className="text-[11px] text-zinc-500 mt-0.5">
+                        ERC-1271 signature confirmed on Base
+                      </div>
+                    </div>
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <Fingerprint className="h-5 w-5 text-[#8AB5FF] mt-0.5 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[13px] text-zinc-200 font-medium">Prove smart wallet ownership</div>
+                        <div className="text-[11px] text-zinc-500 mt-0.5 leading-relaxed">
+                          Sign a message to cryptographically prove you control this Coinbase Smart Wallet. Verified on-chain via ERC-1271.
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="w-full flex items-center justify-center gap-2 rounded-xl border border-[#5A96FF]/25 bg-[#0052FF]/10 hover:bg-[#0052FF]/20 text-[#8AB5FF] text-[13px] font-medium px-4 py-2.5 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                      disabled={cswProofBusy || busy}
+                      onClick={onProveCswOwnership}
+                    >
+                      {cswProofBusy ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Verifying…
+                        </>
+                      ) : (
+                        <>
+                          <Fingerprint className="h-4 w-4" />
+                          Sign to Prove Ownership
+                        </>
+                      )}
+                    </button>
+                    {cswProofError ? (
+                      <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2 text-[11px] text-red-300/90">
+                        {cswProofError}
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </motion.div>
+            ) : null}
 
             {cswMismatch ? (
               <motion.div variants={staggerItem} className="rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-[12px] text-amber-200/90">

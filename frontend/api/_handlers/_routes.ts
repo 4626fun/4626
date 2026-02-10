@@ -140,6 +140,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'referrals/leaderboard': () => import('./referrals/_leaderboard.js'),
   'waitlist': () => import('./_waitlist.js'),
   'waitlist/csw-link': () => import('./waitlist/_csw-link.js'),
+  'waitlist/csw-proof': () => import('./waitlist/_csw-proof.js'),
   'waitlist/ledger': () => import('./waitlist/_ledger.js'),
   'waitlist/leaderboard': () => import('./waitlist/_leaderboard.js'),
   'waitlist/me': () => import('./waitlist/_me.js'),
