@@ -61,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/agents/identity/set-agent-wallet', kind: 'write' })
   if (!g.ok) return
 
-  const body = readJsonBody(req)
+  const body = await readJsonBody<Record<string, unknown>>(req)
   const action = String(body?.action ?? 'prepare').trim().toLowerCase()
   const agentIdRaw = String(body?.agentId ?? '').trim()
   const newWalletRaw = String(body?.newWallet ?? '').trim()

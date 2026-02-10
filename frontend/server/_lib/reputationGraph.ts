@@ -103,7 +103,7 @@ let _client: any = null
 function getClient() {
   if (_client) return _client as ReturnType<typeof createPublicClient>
   const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
-  _client = createPublicClient({ chain: base, transport: http(rpc, { timeout: 15_000 }) })
+  _client = createPublicClient({ chain: base, transport: http(rpc, { timeout: 15_000 }) }) as any
   return _client as ReturnType<typeof createPublicClient>
 }
 

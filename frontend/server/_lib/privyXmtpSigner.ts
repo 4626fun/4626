@@ -139,7 +139,7 @@ export function createPrivyScwSigner(params: {
       _client = createPublicClient({
         chain: base,
         transport: http(params.rpcUrl ?? process.env.BASE_RPC_URL ?? 'https://mainnet.base.org'),
-      })
+      }) as any
     }
     return _client as ReturnType<typeof createPublicClient>
   }
