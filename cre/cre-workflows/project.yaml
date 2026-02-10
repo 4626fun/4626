@@ -13,10 +13,15 @@
 
 staging-settings:
   rpcs:
+    # CRE CLI requires an Ethereum mainnet RPC for secrets/deploy operations.
+    - chain-name: ethereum-mainnet
+      url: https://eth.llamarpc.com
     - chain-name: ethereum-mainnet-base-1
       url: https://mainnet.base.org
 
 production-settings:
   rpcs:
+    - chain-name: ethereum-mainnet
+      url: https://eth.llamarpc.com
     - chain-name: ethereum-mainnet-base-1
       url: https://mainnet.base.org
