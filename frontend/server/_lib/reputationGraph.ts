@@ -76,6 +76,10 @@ export type ReputationGraph = {
   agentRegistry: string
   reputationRegistry: string
   chainId: number
+  /** XMTP messaging address (CSW or EOA) if known */
+  xmtpAddress?: string
+  /** Agent wallet address (typically the CSW) if known */
+  agentWallet?: string
   nodes: ReputationGraphNode[]
   edges: ReputationGraphEdge[]
   groups: ReputationGraphGroup[]
@@ -128,13 +132,15 @@ export async function buildReputationGraph(params: {
   const tagGroups = new Map<string, string[]>()
   const reviewerNodeIds: string[] = []
 
-  // 2. Agent node
+  // 2. Agent node — include XMTP/CSW address if available
   const agentNodeId = `agent:${agentId}`
+  const xmtpAddress = (process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim().toLowerCase() || undefined
   nodes.push({
     id: agentNodeId,
     label: `Agent #${agentId}`,
     type: 'agent',
     agentId,
+    ...(xmtpAddress ? { address: xmtpAddress } : {}),
   })
 
   // 3. Read all feedback
@@ -316,6 +322,7 @@ export async function buildReputationGraph(params: {
     agentRegistry,
     reputationRegistry: reputationRegistryRef,
     chainId,
+    ...(xmtpAddress ? { xmtpAddress, agentWallet: xmtpAddress } : {}),
     nodes,
     edges,
     groups,

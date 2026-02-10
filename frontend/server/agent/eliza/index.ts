@@ -55,6 +55,8 @@ import { XmtpService } from './plugins/xmtp/service.js'
 import { getDb, isDbConfigured } from '../../_lib/postgres.js'
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../_lib/creatorXmtpAgents.js'
 import { createPrivyScwSigner } from '../../_lib/privyXmtpSigner.js'
+import { buildAgentRegistration } from '../../_lib/agentRegistration.js'
+import { tryUploadImmutableJson } from '../../_lib/lensGrove.js'
 import { logger } from '../../_lib/logger.js'
 
 declare const process: {
@@ -528,6 +530,33 @@ async function startSingleAgentCsw(params: {
   return { creatorAddress: 'single-agent-csw', xmtp }
 }
 
+// ---------------------------------------------------------------------------
+// Grove registration upload (fire-and-forget on startup)
+// ---------------------------------------------------------------------------
+
+async function uploadRegistrationToGrove(): Promise<void> {
+  try {
+    const origin = (process.env.VITE_APP_URL ?? 'https://4626.fun').trim()
+    const { payload, error } = buildAgentRegistration(origin)
+    if (error || !payload) {
+      logger.warn('[eliza] Skipping Grove registration upload:', error)
+      return
+    }
+
+    const attempt = await tryUploadImmutableJson(payload)
+    if (attempt.ok) {
+      logger.info('[eliza] Agent registration uploaded to Grove', {
+        lensUri: attempt.result.lensUri,
+        gatewayUrl: attempt.result.gatewayUrl,
+      })
+    } else {
+      logger.warn('[eliza] Grove registration upload failed (non-blocking):', attempt.error)
+    }
+  } catch (err) {
+    logger.warn('[eliza] Grove registration upload error (non-blocking):', err)
+  }
+}
+
 async function main() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   console.log('  CreatorVault ElizaOS Agent (Unified)')
@@ -617,6 +646,9 @@ async function main() {
     console.log(`\n  The agent presents as your Coinbase Smart Wallet on XMTP.`)
     console.log(`  No private key extraction needed — Privy signs on your behalf.`)
     console.log(`\n  Listening for messages... (Ctrl+C to stop)\n`)
+
+    // Fire-and-forget: upload enriched agent registration to Lens Grove
+    void uploadRegistrationToGrove()
 
     // Graceful shutdown
     process.on('SIGINT', () => void shutdown())

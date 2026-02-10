@@ -225,6 +225,36 @@ export function buildAgentRegistration(origin: string): {
     : '0x8004baa17c55a88189ae136b182e5fda19de9b63'
   const reputationRegistry = `eip155:${registryConfig.chainId}:${reputationRegistryAddr}`
 
+  // ---------------------------------------------------------------------------
+  // Dynamic XMTP / agentWallet injection
+  // ---------------------------------------------------------------------------
+  // If XMTP_AGENT_CSW_ADDRESS is set, ensure the XMTP and agentWallet services
+  // reflect the actual CSW address rather than a hardcoded value.
+  const cswAddress = (process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim()
+  const xmtpEnv = (process.env.XMTP_ENV ?? 'production').trim()
+
+  if (cswAddress && isAddressLike(cswAddress)) {
+    const xmtpEndpoint = `xmtp://${cswAddress}`
+    const walletEndpoint = `eip155:${registryConfig.chainId}:${cswAddress}`
+
+    // Upsert XMTP service
+    const xmtpIdx = services.findIndex((s) => s.name === 'XMTP')
+    const xmtpService: RegistrationService = {
+      name: 'XMTP',
+      endpoint: xmtpEndpoint,
+      version: xmtpEnv,
+      description: `XMTP messaging endpoint — DM or group chat with the agent. Identity is a Coinbase Smart Wallet on chain ${registryConfig.chainId}.`,
+    }
+    if (xmtpIdx >= 0) services[xmtpIdx] = xmtpService
+    else services.splice(1, 0, xmtpService) // Insert after 'web'
+
+    // Upsert agentWallet service
+    const walletIdx = services.findIndex((s) => s.name === 'agentWallet')
+    const walletService: RegistrationService = { name: 'agentWallet', endpoint: walletEndpoint }
+    if (walletIdx >= 0) services[walletIdx] = walletService
+    else services.splice(services.findIndex((s) => s.name === 'XMTP') + 1, 0, walletService)
+  }
+
   const payload: RegistrationFile = {
     ...base,
     type: REGISTRATION_TYPE,
