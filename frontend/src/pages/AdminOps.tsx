@@ -33,7 +33,15 @@ const MAX_DOMAIN_LEN = 255
 const CANONICAL_SMART_WALLET = '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5'
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 const ERC8004_IDENTITY_REGISTRY = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432'
-const ERC8004_AGENT_URI_DEFAULT = 'https://4626.fun/.well-known/agent-registration.json'
+// NOTE:
+// On-chain `agentURI` should be content-addressed (WA040). Do not default to http(s).
+const ERC8004_AGENT_URI_DEFAULT = ''
+const ERC8004_AGENT_URI_PLACEHOLDER = 'lens://... (recommended) or data:application/json;base64,...'
+
+function isContentAddressedAgentUri(uri: string): boolean {
+  const u = uri.trim().toLowerCase()
+  return u.startsWith('lens://') || u.startsWith('ipfs://') || u.startsWith('data:') || u.startsWith('ar://')
+}
 
 function toRegistrationDataUri(payload: unknown): string {
   const json = JSON.stringify(payload)
@@ -816,11 +824,14 @@ function AgentRegistration() {
   useEffect(() => {
     if (autoPublishedAgentUri.current) return
     const trimmed = agentUri.trim()
-    if (trimmed && trimmed !== ERC8004_AGENT_URI_DEFAULT) {
+    if (trimmed) {
       autoPublishedAgentUri.current = true
       return
     }
     autoPublishedAgentUri.current = true
+    // Immediately generate a data: URI (fast, no external deps) so the default is content-addressed.
+    // Then attempt Lens Grove for a shorter lens:// URI.
+    void buildContentAddressedUri()
     void publishAgentRegistrationToLens()
   }, [agentUri, publishAgentRegistrationToLens])
 
@@ -870,6 +881,12 @@ function AgentRegistration() {
       }
       const trimmedUri = agentUri.trim()
       if (!trimmedUri) throw new Error('Agent URI is required.')
+      if (!isContentAddressedAgentUri(trimmedUri)) {
+        throw new Error(
+          'Agent URI must be content-addressed (lens://, ipfs://, data:) to clear WA040. ' +
+            'Use "Publish to Lens Grove" or "Use data URI (fallback)".',
+        )
+      }
 
       const registryAddress = ERC8004_IDENTITY_REGISTRY as Address
 
@@ -968,6 +985,12 @@ function AgentRegistration() {
       }
       const trimmedUri = agentUri.trim()
       if (!trimmedUri) throw new Error('Agent URI is required.')
+      if (!isContentAddressedAgentUri(trimmedUri)) {
+        throw new Error(
+          'Agent URI must be content-addressed (lens://, ipfs://, data:) to clear WA040. ' +
+            'Use "Publish to Lens Grove" or "Use data URI (fallback)".',
+        )
+      }
       const rawId = agentIdInput.trim()
       if (!/^\d+$/.test(rawId)) throw new Error('Agent ID must be a non-negative integer.')
       const agentId = BigInt(rawId)
@@ -1293,7 +1316,7 @@ function AgentRegistration() {
               <input
                 value={agentUri}
                 onChange={(e) => setAgentUri(e.target.value)}
-                placeholder={ERC8004_AGENT_URI_DEFAULT}
+                placeholder={ERC8004_AGENT_URI_PLACEHOLDER}
                 className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
               />
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-600">
@@ -3209,7 +3232,7 @@ function LegacyWithdrawals() {
                       </div>
                     </div>
 
-                    <div className="rounded-lg border border-red-500/25 bg-red-500/[0.04] p-4 space-y-3">
+                    <div className="rounded-lg border border-red-500/25 bg-red-500/4 p-4 space-y-3">
                       <div className="text-sm text-red-200">Emergency recovery (advanced)</div>
                       <div className="text-xs text-red-200/80">
                         Use only when normal withdraw flow is blocked. Sequence: shutdown vault, pull from strategies, then drain vault
