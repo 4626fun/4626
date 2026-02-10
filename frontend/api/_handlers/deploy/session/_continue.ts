@@ -176,15 +176,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       version: '1',
     })
 
-    const phase2Calls = Array.isArray(payload.phase2Calls) ? (payload.phase2Calls as any[]) : []
-    const phase3Calls = Array.isArray(payload.phase3Calls) ? (payload.phase3Calls as any[]) : []
+    const toBigInt = (v: any): bigint => {
+      if (typeof v === 'bigint') return v
+      if (typeof v === 'number' && Number.isFinite(v)) return BigInt(Math.trunc(v))
+      if (typeof v === 'string') {
+        const s = v.trim()
+        if (!s) return 0n
+        if (s.startsWith('0x') || s.startsWith('0X')) return BigInt(s)
+        return BigInt(s)
+      }
+      return 0n
+    }
 
-    if (phase2Calls.length === 0) throw new Error('missing_phase2_calls')
+    const normalizeCalls = (raw: any[]): Array<{ to: Address; value: bigint; data: Hex }> => {
+      if (!Array.isArray(raw)) return []
+      return raw
+        .map((c) => ({
+          to: getAddress(c.to),
+          value: toBigInt(c.value ?? 0),
+          data: c.data as Hex,
+        }))
+        .filter((c) => typeof c.data === 'string' && c.data.startsWith('0x'))
+    }
 
-    // Decide whether we still need to run phase2/phase3 for the current persisted state.
-    const shouldRunPhase2 = ['created', 'phase1_sent', 'phase1_confirmed'].includes(rec.step)
-    const shouldRunPhase3 = phase3Calls.length > 0 && rec.step === 'phase2_confirmed'
-    const isInFlight = ['phase2_sent', 'phase3_sent', 'cleanup_sent'].includes(rec.step)
+    const phase1Calls = normalizeCalls(Array.isArray(payload.phase1Calls) ? payload.phase1Calls : [])
+    const phase2CoreCalls = normalizeCalls(Array.isArray(payload.phase2CoreCalls) ? payload.phase2CoreCalls : [])
+    const phase2FinalizeCallsRaw = normalizeCalls(
+      Array.isArray(payload.phase2FinalizeCalls) ? payload.phase2FinalizeCalls : [],
+    )
+    const legacyPhase2Calls = normalizeCalls(Array.isArray(payload.phase2Calls) ? payload.phase2Calls : [])
+    const phase2FinalizeCalls = phase2FinalizeCallsRaw.length > 0 ? phase2FinalizeCallsRaw : legacyPhase2Calls
+    const phase3Calls = normalizeCalls(Array.isArray(payload.phase3Calls) ? payload.phase3Calls : [])
+    const phase4Calls = normalizeCalls(Array.isArray(payload.phase4Calls) ? payload.phase4Calls : [])
+    const postPhase2Calls = [...phase3Calls, ...phase4Calls]
+
+    const isInFlight = ['phase1_sent', 'phase2_core_sent', 'phase2_sent', 'phase3_sent', 'cleanup_sent'].includes(rec.step)
 
     // Cleanup call (remove the temporary owner). Attach it to the last UserOp we send.
     const removeOwnerCall = (() => {
@@ -197,53 +223,83 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return { to: smartWallet, value: 0n, data } as const
     })()
 
-    if (shouldRunPhase2) {
+    const hasPostPhase2 = postPhase2Calls.length > 0
+    const sendStage = async (toStep: string, stageCalls: Array<{ to: Address; value: bigint; data: Hex }>, attachCleanup: boolean) => {
       const transitioned = await transitionDeploySession({
         id: rec.id,
         fromStep: rec.step,
-        toStep: 'phase2_sent',
+        toStep: toStep as any,
       })
       if (!transitioned) {
         return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
       }
-      const calls = [...phase2Calls.map((c) => ({ to: getAddress(c.to), value: BigInt(c.value ?? 0), data: c.data as Hex }))] as any[]
-      if (phase3Calls.length === 0) calls.push(removeOwnerCall)
+      const calls = [...stageCalls]
+      if (attachCleanup) calls.push(removeOwnerCall)
       const lastUserOpHash = await sendUserOperation(bundlerClient, {
         account,
         calls,
         paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
       })
-      await updateDeploySession({ id: rec.id, step: 'phase2_sent', lastUserOpHash, lastTxHash: null })
-      return res.status(200).json({
-        success: true,
-        data: { id: rec.id, step: 'phase2_sent', lastUserOpHash },
-      } satisfies ApiEnvelope<any>)
+      await updateDeploySession({ id: rec.id, step: toStep as any, lastUserOpHash, lastTxHash: null })
+      return res.status(200).json({ success: true, data: { id: rec.id, step: toStep, lastUserOpHash } } satisfies ApiEnvelope<any>)
     }
 
-    if (shouldRunPhase3) {
-      const transitioned = await transitionDeploySession({
-        id: rec.id,
-        fromStep: rec.step,
-        toStep: 'phase3_sent',
-      })
-      if (!transitioned) {
-        return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
+    // Kick off whichever stage is next based on persisted step.
+    // Note: we intentionally key off the persisted step (not call-array emptiness), because
+    // the payload contains *all* calls for the full deploy.
+    const runFromCreated = () => {
+      if (phase1Calls.length > 0) {
+        const attachCleanup = phase2CoreCalls.length === 0 && phase2FinalizeCalls.length === 0 && !hasPostPhase2
+        return sendStage('phase1_sent', phase1Calls, attachCleanup)
       }
-      const calls = [
-        ...phase3Calls.map((c) => ({ to: getAddress(c.to), value: BigInt(c.value ?? 0), data: c.data as Hex })),
-        removeOwnerCall,
-      ] as any[]
+      if (phase2CoreCalls.length > 0) {
+        const attachCleanup = phase2FinalizeCalls.length === 0 && !hasPostPhase2
+        return sendStage('phase2_core_sent', phase2CoreCalls, attachCleanup)
+      }
+      if (phase2FinalizeCalls.length > 0) {
+        const attachCleanup = !hasPostPhase2
+        return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
+      }
+      if (postPhase2Calls.length > 0) return sendStage('phase3_sent', postPhase2Calls, true)
+      return null
+    }
 
-      const lastUserOpHash = await sendUserOperation(bundlerClient, {
-        account,
-        calls,
-        paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
-      })
-      await updateDeploySession({ id: rec.id, step: 'phase3_sent', lastUserOpHash, lastTxHash: null })
-      return res.status(200).json({
-        success: true,
-        data: { id: rec.id, step: 'phase3_sent', lastUserOpHash },
-      } satisfies ApiEnvelope<any>)
+    const runFromPhase1Confirmed = () => {
+      if (phase2CoreCalls.length > 0) {
+        const attachCleanup = phase2FinalizeCalls.length === 0 && !hasPostPhase2
+        return sendStage('phase2_core_sent', phase2CoreCalls, attachCleanup)
+      }
+      if (phase2FinalizeCalls.length > 0) {
+        const attachCleanup = !hasPostPhase2
+        return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
+      }
+      if (postPhase2Calls.length > 0) return sendStage('phase3_sent', postPhase2Calls, true)
+      return null
+    }
+
+    const runFromPhase2CoreConfirmed = () => {
+      if (phase2FinalizeCalls.length > 0) {
+        const attachCleanup = !hasPostPhase2
+        return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
+      }
+      if (postPhase2Calls.length > 0) return sendStage('phase3_sent', postPhase2Calls, true)
+      return null
+    }
+
+    if (rec.step === 'created') {
+      const started = await runFromCreated()
+      if (started) return started
+    }
+    if (rec.step === 'phase1_confirmed') {
+      const started = await runFromPhase1Confirmed()
+      if (started) return started
+    }
+    if (rec.step === 'phase2_core_confirmed') {
+      const started = await runFromPhase2CoreConfirmed()
+      if (started) return started
+    }
+    if (rec.step === 'phase2_confirmed' && postPhase2Calls.length > 0) {
+      return await sendStage('phase3_sent', postPhase2Calls, true)
     }
 
     if (isInFlight) {

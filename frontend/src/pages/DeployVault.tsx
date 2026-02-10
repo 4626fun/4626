@@ -22,7 +22,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { coinABI } from '@zoralabs/protocol-deployments'
 import { ChevronDown } from 'lucide-react'
-import { useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
+import { useCrossAppAccounts, useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { RequestCreatorAccess } from '@/components/RequestCreatorAccess'
@@ -48,6 +48,7 @@ import { computeMarketFloorQuote } from '@/lib/cca/marketFloor'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { 
+  sendCrossAppUserOperation,
   sendCoinbaseSmartWalletUserOperation, 
   simulateSmartWalletCalls,
   ERC4337_ENTRYPOINT_V06,
@@ -324,6 +325,49 @@ async function isCoinbaseSmartWalletOwner(params: {
 }
 
 const shortAddress = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`
+
+function extractCrossAppEmbeddedWalletAddresses(privyUser: any): Address[] {
+  const linked = Array.isArray(privyUser?.linked_accounts)
+    ? privyUser.linked_accounts
+    : Array.isArray(privyUser?.linkedAccounts)
+      ? privyUser.linkedAccounts
+      : []
+
+  const out: Address[] = []
+  const seen = new Set<string>()
+  const push = (addr: unknown) => {
+    if (typeof addr !== 'string' || !isAddress(addr)) return
+    const a = getAddress(addr) as Address
+    const key = a.toLowerCase()
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push(a)
+  }
+
+  for (const a of linked) {
+    const t = String((a as any)?.type ?? '').toLowerCase()
+    if (!t.includes('cross')) continue
+
+    // Newer shapes expose `embeddedWallets`; older shapes may have `embedded_wallets`.
+    const wallets = Array.isArray((a as any)?.embeddedWallets)
+      ? (a as any).embeddedWallets
+      : Array.isArray((a as any)?.embedded_wallets)
+        ? (a as any).embedded_wallets
+        : []
+
+    if (wallets.length > 0) {
+      for (const w of wallets) {
+        push((w as any)?.address)
+      }
+      continue
+    }
+
+    // Fallback: some linked accounts surface an address directly.
+    push((a as any)?.address)
+  }
+
+  return out
+}
 
 function formatEthPerTokenForUi(weiPerToken: bigint): string {
   if (weiPerToken <= 0n) return '0'
@@ -1107,6 +1151,17 @@ function DeployVaultBatcher({
   // Detect Coinbase Wallet direct connection (not via Privy)
   const isCoinbaseWalletDirect = connectorId === 'coinbaseWalletSDK' || connectorId === 'com.coinbase.wallet'
 
+  // Cross-app wallets (Zora Global Wallet) via Privy popup signing.
+  const privyAny = usePrivy() as any
+  const privyUser = privyAny?.user ?? null
+  const crossAppAny = useCrossAppAccounts() as any
+  const crossAppSignMessage: ((message: string, options: { address: string }) => Promise<string>) | null =
+    typeof crossAppAny?.signMessage === 'function' ? crossAppAny.signMessage.bind(crossAppAny) : null
+  const crossAppSendTransaction:
+    | ((requestData: any, options: { address: string }) => Promise<string>)
+    | null = typeof crossAppAny?.sendTransaction === 'function' ? crossAppAny.sendTransaction.bind(crossAppAny) : null
+  const crossAppWalletCandidates = useMemo(() => extractCrossAppEmbeddedWalletAddresses(privyUser), [privyUser])
+
   const ensureBaseChain = useCallback(async (label: string) => {
     if (chainId === base.id) return
     if (typeof switchChainAsync !== 'function') {
@@ -1387,6 +1442,9 @@ function DeployVaultBatcher({
       const sjson = (await sres.json().catch(() => null)) as ApiEnvelope<any> | null
       if (!sres.ok || !sjson?.success) throw new Error(sjson?.error || 'Failed to fetch deploy status')
       const step = String(sjson.data?.step ?? '')
+      if (step === 'created' || step.startsWith('phase1')) setPhase('phase1')
+      else if (step.startsWith('phase2')) setPhase('phase2')
+      else if (step.startsWith('phase3')) setPhase('phase3')
       if (step === 'completed') {
         const lastTxHash = (sjson.data?.lastTxHash ?? null) as Hex | null
         if (lastTxHash) setTxId(lastTxHash)
@@ -1405,7 +1463,7 @@ function DeployVaultBatcher({
       if (Date.now() - started > 10 * 60 * 1000) {
         throw new Error('Server deploy did not complete in time. Check status and retry continue.')
       }
-      if (step === 'phase2_sent' || step === 'phase3_sent' || step === 'cleanup_sent') {
+      if (step.endsWith('_sent') || step === 'cleanup_sent') {
         backoff = true
       }
       if (backoff) delayMs = Math.min(delayMs * 2, 8000)
@@ -1423,7 +1481,7 @@ function DeployVaultBatcher({
     ;(async () => {
       setBusy(true)
       setError(null)
-      setPhase('phase2')
+      setPhase('phase1')
       try {
         await ensurePaymasterSession()
         const statusRes = await fetch('/api/deploy/session/status', {
@@ -2653,6 +2711,43 @@ function DeployVaultBatcher({
             persistUserOpResult(phaseLabel, logPhaseLabel, result, 'Coinbase Wallet')
             return
           }
+
+          // PATH 1.5: Zora Global Wallet (cross-app popup signing via Privy)
+          // This uses an EOA owner signature (personal_sign) and works without requiring eth_sign support.
+          if (canonicalSmartWallet && publicClient && crossAppSignMessage && crossAppWalletCandidates.length > 0) {
+            for (const candidate of crossAppWalletCandidates) {
+              try {
+                logger.info(`[DeployVault] Using ERC-4337 via Zora popup (cross-app) for ${logPhaseLabel}`, {
+                  canonicalSmartWallet,
+                  zoraEmbeddedWalletAddress: candidate,
+                })
+                const result = await sendCrossAppUserOperation({
+                  publicClient: publicClient as any,
+                  crossAppSignMessage,
+                  bundlerUrl,
+                  smartWallet: canonicalSmartWallet,
+                  zoraEmbeddedWalletAddress: candidate as Address,
+                  calls: toCalls(calls),
+                  version: '1',
+                })
+                persistUserOpResult(phaseLabel, logPhaseLabel, result, 'Zora popup (cross-app)')
+                return
+              } catch (e) {
+                // Only fall through on non-owner / unsupported cases; other errors should surface.
+                const msg = e instanceof Error ? e.message : String(e ?? '')
+                const lc = msg.toLowerCase()
+                const shouldTryNext =
+                  lc.includes('not an owner') ||
+                  lc.includes('not an onchain owner') ||
+                  lc.includes('not linked') ||
+                  lc.includes('cross-app') ||
+                  lc.includes('cross app') ||
+                  lc.includes('not supported') ||
+                  lc.includes('user rejected')
+                if (!shouldTryNext) throw e
+              }
+            }
+          }
           
           // PATH 2: Privy app smart wallet is an owner (EIP-1271 signer)
           // Original deploy pattern: avoid this path when the embedded EOA owner flow is available.
@@ -2674,28 +2769,15 @@ function DeployVaultBatcher({
             const smartWalletClientAdapter = {
               request: async (args: { method: string; params: any[] }) => {
                 const client: any = smartWalletClient as any
-                const account: any = client?.account
-                if (args.method === 'eth_sign') {
-                  const [, hashToSign] = args.params ?? []
-                  if (AA_DEBUG) {
-                    logger.debug('[DeployVault] Privy smart wallet eth_sign', {
-                      hasAccountSign: typeof account?.sign === 'function',
-                      hasAccountSignMessage: typeof account?.signMessage === 'function',
-                      hasClientSignMessage: typeof client?.signMessage === 'function',
-                    })
+                // For Privy smart wallets, prefer the native provider `request()` paths for eth_sign / personal_sign.
+                // Some client.account helpers can return non-standard signature envelopes that bundlers reject.
+                if (args.method === 'eth_sign' || args.method === 'personal_sign') {
+                  if (typeof client?.request !== 'function') {
+                    throw new Error('Privy smart wallet client does not support request()')
                   }
-                  let rawResult: unknown
-                  if (typeof account?.sign === 'function') {
-                    rawResult = await account.sign({ hash: hashToSign })
-                  } else if (typeof account?.signMessage === 'function') {
-                    rawResult = await account.signMessage({ message: { raw: hashToSign } })
-                  } else if (typeof client?.signMessage === 'function') {
-                    rawResult = await client.signMessage({ account: privySmartWalletAddress, message: { raw: hashToSign } })
-                  } else {
-                    throw new Error('Privy smart wallet does not support raw signing')
-                  }
-                  const sig = ensureSignatureHex(rawResult, 'privySmartWallet.eth_sign')
-                  logNonEoaSignature(sig, 'privySmartWallet.eth_sign')
+                  const rawResult = await client.request(args)
+                  const sig = ensureSignatureHex(rawResult, `privySmartWallet.${args.method}`)
+                  logNonEoaSignature(sig, `privySmartWallet.${args.method}`)
                   return sig
                 }
                 if (typeof client?.request === 'function') {
@@ -2722,6 +2804,27 @@ function DeployVaultBatcher({
                     hasSignMessage,
                     hasRequest,
                   })
+                }
+
+                // Prefer `personal_sign` via the EIP-1193 request path when available.
+                // This tends to produce a plain hex signature (vs some SDK helpers returning envelopes).
+                if (hasRequest) {
+                  try {
+                    const rawResult = await withTimeout(
+                      client.request({
+                        method: 'personal_sign',
+                        params: [msg, privySmartWalletAddress],
+                      }),
+                      20_000,
+                      'privySmartWallet.personal_sign',
+                    )
+                    const sig = ensureSignatureHex(rawResult, 'privySmartWallet.personal_sign')
+                    logNonEoaSignature(sig, 'privySmartWallet.personal_sign')
+                    debugSignatureReady('privySmartWallet.personal_sign', sig, { signer: privySmartWalletAddress })
+                    return sig
+                  } catch {
+                    // Fall through to signMessage helper if personal_sign isn't supported.
+                  }
                 }
 
                 if (hasSignMessage) {
@@ -2782,7 +2885,9 @@ function DeployVaultBatcher({
                 ownerAddress: privySmartWalletAddress,
                 calls: toCalls(calls),
                 version: '1',
-                userOpSignMode: 'eth_sign',
+                // Contract owners (EIP-1271) should default to signMessage/personal_sign.
+                // Forcing eth_sign often produces non-EOA signatures and can trigger bundler rejections.
+                userOpSignMode: 'auto',
                 ownerIsContract: true,
               })
 
@@ -2867,8 +2972,6 @@ function DeployVaultBatcher({
         })()
 
         if (useServerContinue) {
-          let shouldUseServerContinueForRun = true
-          let serverContinueStartedOnchain = false
           let sessionId: string | null = null
           const cancelSession = async () => {
             if (!sessionId) return
@@ -2884,115 +2987,129 @@ function DeployVaultBatcher({
           }
 
           try {
-            // Pre-flight: ensure we know which app session address the server will see.
-            // This makes ownership mismatches obvious before session creation.
-            try {
-              const authRes = await fetch('/api/auth/me', {
-                method: 'GET',
-                headers: { Accept: 'application/json' },
-              })
-              const authJson = (await authRes.json().catch(() => null)) as ApiEnvelope<{ address: string } | null> | null
-              const rawAuthAddress = typeof authJson?.data?.address === 'string' ? authJson.data.address : null
-              const authAddress = rawAuthAddress && isAddress(rawAuthAddress) ? getAddress(rawAuthAddress) : null
-              const expectedSessionSender = getAddress(owner)
-              const matchesExpectedSender = !!authAddress && authAddress.toLowerCase() === expectedSessionSender.toLowerCase()
-              logger.info('[DeployVault] deploy session auth pre-flight', {
-                authResOk: authRes.ok,
-                authAddress,
-                expectedSessionSender,
-                matchesExpectedSender,
-                useServerContinue,
-              })
-              if (!matchesExpectedSender) {
-                logger.warn('[DeployVault] Auth session sender differs from expected deploy sender', {
-                  authAddress,
-                  expectedSessionSender,
-                })
-                shouldUseServerContinueForRun = false
-              }
-            } catch (authError) {
-              logger.warn('[DeployVault] Failed to preflight auth session before deploy session creation', {
-                error: authError instanceof Error ? authError.message : String(authError),
-              })
-              // If we cannot confirm auth session identity, avoid server-continue and
-              // proceed with client-side continuation for this run.
-              shouldUseServerContinueForRun = false
+            // Create a deploy session for the canonical CSW sender.
+            // After installation of the temporary owner, the server will submit all phases and then clean up.
+            const createRes = await fetch('/api/deploy/session/create', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                smartWallet: owner,
+                creatorToken,
+                ownerAddress: owner,
+                phase1Calls: phase1Calls.map((c) => ({ to: c.target, value: String(c.value ?? 0n), data: c.data })),
+                phase2CoreCalls: [...phase2ApproveCalls, phase2CoreCall].map((c) => ({
+                  to: c.target,
+                  value: String(c.value ?? 0n),
+                  data: c.data,
+                })),
+                phase2FinalizeCalls: phase2FinalizeAndPostCalls.map((c) => ({
+                  to: c.target,
+                  value: String(c.value ?? 0n),
+                  data: c.data,
+                })),
+                phase3Calls: phase3Calls.map((c) => ({ to: c.target, value: String(c.value ?? 0n), data: c.data })),
+                phase4Calls: phase4Calls.map((c) => ({ to: c.target, value: String(c.value ?? 0n), data: c.data })),
+                version: deploymentVersion,
+              }),
+            })
+            const createJson = (await createRes.json().catch(() => null)) as ApiEnvelope<any> | null
+            if (!createRes.ok || !createJson?.success) {
+              throw new Error(createJson?.error || 'Failed to create deploy session')
             }
+            sessionId = String(createJson.data?.sessionId ?? '').trim()
+            const sessionOwnerRaw = String(createJson.data?.sessionOwner ?? '').trim()
+            if (!sessionId || !isAddress(sessionOwnerRaw)) throw new Error('Invalid deploy session response')
+            const sessionOwner = getAddress(sessionOwnerRaw) as Address
+            persistDeploySession(sessionId)
 
-            if (!shouldUseServerContinueForRun) {
-              logger.warn('[DeployVault] Skipping server-continue for this run; using client-side continuation')
-              // Continue with client-side phase execution below.
-            } else {
-              // Create a deploy session BEFORE we install the temporary owner.
-              // The paymaster uses the recorded deploy session to allow self-calls to owner mgmt.
-              const createRes = await fetch('/api/deploy/session/create', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  smartWallet: owner,
-                  creatorToken,
-                  ownerAddress: owner,
-                  // Server runs finalize+post (must include batcher call for paymaster primary-call requirement)
-                  phase2Calls: phase2FinalizeAndPostCalls.map((c) => ({ to: c.target, value: String(c.value ?? 0n), data: c.data })),
-                  // Server also runs strategies + deferred auction (optional)
-                  phase3Calls: [...phase3Calls, ...phase4Calls].map((c) => ({ to: c.target, value: String(c.value ?? 0n), data: c.data })),
-                  version: deploymentVersion,
-                }),
-              })
-              const createJson = (await createRes.json().catch(() => null)) as ApiEnvelope<any> | null
-              if (!createRes.ok || !createJson?.success) {
-                throw new Error(createJson?.error || 'Failed to create deploy session')
-              }
-              sessionId = String(createJson.data?.sessionId ?? '').trim()
-              const sessionOwner = String(createJson.data?.sessionOwner ?? '').trim()
-              if (!sessionId || !isAddress(sessionOwner)) throw new Error('Invalid deploy session response')
-              persistDeploySession(sessionId)
-
-              // Install the temporary owner (agent wallet) during the Phase2 core UserOp.
+            // Install the temporary owner via a single user-approved transaction.
+            // This MUST be an owner EOA transaction (not a smart wallet self-call).
+            const alreadyInstalled = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionOwner })
+            if (!alreadyInstalled) {
               const addOwnerData = encodeFunctionData({
                 abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
                 functionName: 'addOwnerAddress',
-                args: [getAddress(sessionOwner as Address)],
-              })
-              await sendPhaseCalls(
-                [
-                  { target: owner, value: 0n, data: addOwnerData },
-                  phase2CoreCall,
-                ],
-                'phase2',
-                { noSplit: true, segment: 'core' },
-              )
-              serverContinueStartedOnchain = true
-              await waitForContractsDeployed({
-                publicClient: publicClient as any,
-                addresses: [expected.gaugeController, expected.ccaStrategy, expected.oracle],
-                label: 'Phase 2 core',
+                args: [sessionOwner],
               })
 
-              // Ask the server to continue (finalize_post + phase3/4 + cleanup).
-              const continueRes = await fetch('/api/deploy/session/continue', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId }),
-              })
-              const continueJson = (await continueRes.json().catch(() => null)) as ApiEnvelope<any> | null
-              if (!continueRes.ok || !continueJson?.success) {
-                throw new Error(continueJson?.error || 'Failed to continue deploy')
+              let installed = false
+              // Prefer a direct connected EOA (Coinbase Wallet) if available.
+              if (isCoinbaseWalletDirect && connectedAddress && wagmiWalletClient) {
+                const isOwner = await isCoinbaseSmartWalletOwner({
+                  smartWallet: owner,
+                  ownerAddress: connectedAddress as Address,
+                })
+                if (isOwner) {
+                  await ensureBaseChain('Coinbase Wallet')
+                  const rawTxHash = await (wagmiWalletClient as any).sendTransaction({
+                    to: owner,
+                    data: addOwnerData,
+                    value: 0n,
+                    account: connectedAddress,
+                    chain: base,
+                  })
+                  const txHash = ensureSignatureHex(rawTxHash, 'coinbaseWallet.sendTransaction(addOwner)') as Hex
+                  if (txHash.length !== 66) throw new Error('Invalid tx hash returned from Coinbase Wallet')
+                  setTxId(txHash)
+                  if (!publicClient) throw new Error('Missing Base public client')
+                  await publicClient.waitForTransactionReceipt({ hash: txHash })
+                  installed = true
+                }
               }
 
-              await pollServerDeploySession(sessionId)
-              return
+              // Fallback: Zora Global Wallet cross-app sendTransaction (popup).
+              if (!installed && crossAppSendTransaction && crossAppWalletCandidates.length > 0) {
+                for (const candidate of crossAppWalletCandidates) {
+                  const isOwner = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: candidate })
+                  if (!isOwner) continue
+
+                  logger.info('[DeployVault] Installing deploy-session owner (one-time)', {
+                    smartWallet: owner,
+                    sessionOwner,
+                    signer: candidate,
+                  })
+                  const rawTxHash = await crossAppSendTransaction(
+                    {
+                      chainId: base.id,
+                      to: owner,
+                      data: addOwnerData,
+                      value: 0n,
+                    },
+                    { address: candidate },
+                  )
+                  const txHash = ensureSignatureHex(rawTxHash, 'crossApp.sendTransaction') as Hex
+                  if (txHash.length !== 66) throw new Error('Invalid tx hash returned from cross-app sendTransaction')
+                  setTxId(txHash)
+                  if (!publicClient) throw new Error('Missing Base public client')
+                  await publicClient.waitForTransactionReceipt({ hash: txHash })
+                  installed = true
+                  break
+                }
+              }
+              if (!installed) {
+                throw new Error(
+                  'Server continuation requires an owner EOA to install a temporary deploy-session owner. ' +
+                    'Connect Coinbase Wallet (EOA) or link your Zora global wallet (cross-app) and retry.',
+                )
+              }
             }
+
+            // Kick off server continuation; status polling will advance remaining phases.
+            const continueRes = await fetch('/api/deploy/session/continue', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sessionId }),
+            })
+            const continueJson = (await continueRes.json().catch(() => null)) as ApiEnvelope<any> | null
+            if (!continueRes.ok || !continueJson?.success) {
+              throw new Error(continueJson?.error || 'Failed to continue deploy')
+            }
+
+            await pollServerDeploySession(sessionId)
+            return
           } catch (err) {
             await cancelSession()
-            if (!serverContinueStartedOnchain) {
-              logger.warn('[DeployVault] Server-continue unavailable; falling back to client-side continuation', {
-                error: err instanceof Error ? err.message : String(err),
-              })
-              // Continue with client-side phase execution below.
-            } else {
-              throw err
-            }
+            throw err
           }
         }
 
@@ -3089,8 +3206,17 @@ function DeployVaultBatcher({
   return (
     <div className="space-y-3">
       <div className="text-[11px] text-zinc-500 leading-relaxed">
-        One click will submit <span className="text-zinc-200">up to 4</span> onchain operations (Phases 1–4) via your smart wallet.
-        Progress is tracked below.
+        {useServerContinue ? (
+          <>
+            One click will ask you to approve <span className="text-zinc-200">one</span> setup transaction. After that, the server
+            submits Phases 1–4 via your smart wallet and cleans up the temporary owner. Progress is tracked below.
+          </>
+        ) : (
+          <>
+            One click will submit <span className="text-zinc-200">up to 4</span> onchain operations (Phases 1–4) via your smart wallet.
+            Progress is tracked below.
+          </>
+        )}
       </div>
       {authIsStale ? (
         <div className="text-[11px] text-amber-300/70">
@@ -4021,15 +4147,13 @@ function DeployVaultMain() {
         await privySmartWalletIsCanonicalOwnerQuery.refetch()
         return true
       } catch (erc4337Error: any) {
-        const errMsg = erc4337Error?.message?.toLowerCase() || ''
-        if (errMsg.includes('eth_sign') || errMsg.includes('method not supported') || errMsg.includes('user rejected')) {
-          logger.warn('[DeployVault] ERC-4337 failed, falling back to direct tx', {
-            error: erc4337Error?.message,
-            connector: connector?.id,
-          })
-        } else {
-          throw erc4337Error
-        }
+        // Adding owners is frequently *not* sponsorable via a self-call UserOp depending on
+        // the smart wallet's internal access rules. When it fails, fall back to a normal tx
+        // from the connected EOA (requires gas, but is the most reliable path).
+        logger.warn('[DeployVault] ERC-4337 failed, falling back to direct tx', {
+          error: erc4337Error?.message,
+          connector: connector?.id,
+        })
       }
 
       logger.info('[DeployVault] Using direct tx fallback to add app smart wallet as owner (requires gas)')

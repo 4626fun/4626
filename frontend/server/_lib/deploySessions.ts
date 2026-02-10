@@ -8,6 +8,8 @@ export type DeploySessionStep =
   | 'created'
   | 'phase1_sent'
   | 'phase1_confirmed'
+  | 'phase2_core_sent'
+  | 'phase2_core_confirmed'
   | 'phase2_sent'
   | 'phase2_confirmed'
   | 'phase3_sent'

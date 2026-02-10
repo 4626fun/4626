@@ -104,7 +104,7 @@ async function getOwnerAccount(rec: any) {
 
 async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void> {
   const step = String(rec.step ?? '')
-  if (!['phase2_sent', 'phase3_sent', 'cleanup_sent'].includes(step)) return
+  if (!['phase1_sent', 'phase2_core_sent', 'phase2_sent', 'phase3_sent', 'cleanup_sent'].includes(step)) return
   if (!rec.lastUserOpHash) return
 
   const origin = getCanonicalOrigin(req)
@@ -133,27 +133,45 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     return
   }
 
-  if (step === 'phase2_sent') {
-    const confirmed = await transitionDeploySession({
-      id: rec.id,
-      fromStep: 'phase2_sent',
-      toStep: 'phase2_confirmed',
-      lastTxHash: txHash,
-    })
-    if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
-
-    const payload: any = rec.payload ?? {}
-    const phase3Calls = Array.isArray(payload.phase3Calls) ? (payload.phase3Calls as any[]) : []
-    if (phase3Calls.length === 0) {
-      const completed = await transitionDeploySession({
-        id: rec.id,
-        fromStep: 'phase2_confirmed',
-        toStep: 'completed',
-      })
-      if (!completed) throw new Error(CONCURRENT_MODIFICATION)
-      return
+  const payload: any = rec.payload ?? {}
+  const toBigInt = (v: any): bigint => {
+    if (typeof v === 'bigint') return v
+    if (typeof v === 'number' && Number.isFinite(v)) return BigInt(Math.trunc(v))
+    if (typeof v === 'string') {
+      const s = v.trim()
+      if (!s) return 0n
+      if (s.startsWith('0x') || s.startsWith('0X')) return BigInt(s)
+      return BigInt(s)
     }
+    return 0n
+  }
+  const normalizeCalls = (raw: any[]): Array<{ to: Address; value: bigint; data: Hex }> => {
+    if (!Array.isArray(raw)) return []
+    return raw
+      .map((c) => ({
+        to: getAddress(c.to),
+        value: toBigInt(c.value ?? 0),
+        data: c.data as Hex,
+      }))
+      .filter((c) => typeof c.data === 'string' && c.data.startsWith('0x'))
+  }
+  const phase2CoreCalls = normalizeCalls(Array.isArray(payload.phase2CoreCalls) ? payload.phase2CoreCalls : [])
+  const phase2FinalizeCallsRaw = normalizeCalls(Array.isArray(payload.phase2FinalizeCalls) ? payload.phase2FinalizeCalls : [])
+  const legacyPhase2Calls = normalizeCalls(Array.isArray(payload.phase2Calls) ? payload.phase2Calls : [])
+  const phase2FinalizeCalls = phase2FinalizeCallsRaw.length > 0 ? phase2FinalizeCallsRaw : legacyPhase2Calls
+  const phase3Calls = normalizeCalls(Array.isArray(payload.phase3Calls) ? payload.phase3Calls : [])
+  const phase4Calls = normalizeCalls(Array.isArray(payload.phase4Calls) ? payload.phase4Calls : [])
+  const postPhase2Calls = [...phase3Calls, ...phase4Calls]
 
+  type AuthedCtx = {
+    bundler: any
+    paymasterClient: any
+    account: any
+    removeOwnerCall: { to: Address; value: bigint; data: Hex }
+  }
+  let ctx: AuthedCtx | null = null
+  const getCtx = async (): Promise<AuthedCtx> => {
+    if (ctx) return ctx
     const { ownerAccount, sessionOwner } = await getOwnerAccount(rec)
     const smartWallet = getAddress(rec.smartWallet)
     const ownerIndex = await findOwnerIndex({
@@ -174,10 +192,8 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
         },
       },
     })
-
     const paymasterClient = createPaymasterClient({ transport: authedTransport })
     const bundler = createBundlerClient({ client: publicClient as any, transport: authedTransport })
-
     const account = await toCoinbaseSmartAccount({
       client: publicClient as any,
       address: smartWallet,
@@ -185,7 +201,6 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       ownerIndex,
       version: '1',
     })
-
     const removeOwnerCall = (() => {
       const ownerBytes = asOwnerBytes(sessionOwner)
       const data = encodeFunctionData({
@@ -196,23 +211,92 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       return { to: smartWallet, value: 0n, data } as const
     })()
 
-    const calls = [
-      ...phase3Calls.map((c) => ({ to: getAddress(c.to), value: BigInt(c.value ?? 0), data: c.data as Hex })),
-      removeOwnerCall,
-    ] as any[]
+    ctx = { bundler, paymasterClient, account, removeOwnerCall }
+    return ctx
+  }
 
-    const phase3Started = await transitionDeploySession({
-      id: rec.id,
-      fromStep: 'phase2_confirmed',
-      toStep: 'phase3_sent',
-    })
-    if (!phase3Started) throw new Error(CONCURRENT_MODIFICATION)
+  const startStage = async (
+    fromStep: string,
+    toStep: string,
+    calls: Array<{ to: Address; value: bigint; data: Hex }>,
+    attachCleanup: boolean,
+  ) => {
+    const transitioned = await transitionDeploySession({ id: rec.id, fromStep: fromStep as any, toStep: toStep as any })
+    if (!transitioned) throw new Error(CONCURRENT_MODIFICATION)
+    const { bundler, paymasterClient, account, removeOwnerCall } = await getCtx()
+    const fullCalls = [...calls]
+    if (attachCleanup) fullCalls.push(removeOwnerCall)
     const nextHash = await sendUserOperation(bundler, {
       account,
-      calls,
+      calls: fullCalls,
       paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
     })
-    await updateDeploySession({ id: rec.id, step: 'phase3_sent', lastUserOpHash: nextHash, lastTxHash: null })
+    await updateDeploySession({ id: rec.id, step: toStep as any, lastUserOpHash: nextHash, lastTxHash: null })
+  }
+
+  if (step === 'phase1_sent') {
+    const confirmed = await transitionDeploySession({
+      id: rec.id,
+      fromStep: 'phase1_sent',
+      toStep: 'phase1_confirmed',
+      lastTxHash: txHash,
+    })
+    if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
+
+    if (phase2CoreCalls.length > 0) {
+      await startStage('phase1_confirmed', 'phase2_core_sent', phase2CoreCalls, phase2FinalizeCalls.length === 0 && postPhase2Calls.length === 0)
+      return
+    }
+    if (phase2FinalizeCalls.length > 0) {
+      await startStage('phase1_confirmed', 'phase2_sent', phase2FinalizeCalls, postPhase2Calls.length === 0)
+      return
+    }
+    if (postPhase2Calls.length > 0) {
+      await startStage('phase1_confirmed', 'phase3_sent', postPhase2Calls, true)
+      return
+    }
+    const completed = await transitionDeploySession({ id: rec.id, fromStep: 'phase1_confirmed', toStep: 'completed' })
+    if (!completed) throw new Error(CONCURRENT_MODIFICATION)
+    return
+  }
+
+  if (step === 'phase2_core_sent') {
+    const confirmed = await transitionDeploySession({
+      id: rec.id,
+      fromStep: 'phase2_core_sent',
+      toStep: 'phase2_core_confirmed',
+      lastTxHash: txHash,
+    })
+    if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
+
+    if (phase2FinalizeCalls.length > 0) {
+      await startStage('phase2_core_confirmed', 'phase2_sent', phase2FinalizeCalls, postPhase2Calls.length === 0)
+      return
+    }
+    if (postPhase2Calls.length > 0) {
+      await startStage('phase2_core_confirmed', 'phase3_sent', postPhase2Calls, true)
+      return
+    }
+    const completed = await transitionDeploySession({ id: rec.id, fromStep: 'phase2_core_confirmed', toStep: 'completed' })
+    if (!completed) throw new Error(CONCURRENT_MODIFICATION)
+    return
+  }
+
+  if (step === 'phase2_sent') {
+    const confirmed = await transitionDeploySession({
+      id: rec.id,
+      fromStep: 'phase2_sent',
+      toStep: 'phase2_confirmed',
+      lastTxHash: txHash,
+    })
+    if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
+
+    if (postPhase2Calls.length > 0) {
+      await startStage('phase2_confirmed', 'phase3_sent', postPhase2Calls, true)
+      return
+    }
+    const completed = await transitionDeploySession({ id: rec.id, fromStep: 'phase2_confirmed', toStep: 'completed' })
+    if (!completed) throw new Error(CONCURRENT_MODIFICATION)
     return
   }
 

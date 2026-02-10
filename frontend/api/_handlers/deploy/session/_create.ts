@@ -12,16 +12,25 @@ import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAg
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
-type Call = { to: Address; value?: bigint; data: Hex }
+// JSON comes over the wire, so `value` may be a string/number.
+type Call = { to: Address; value?: bigint | number | string; data: Hex }
 
 type CreateDeploySessionRequest = {
   smartWallet: Address
   creatorToken: Address
   ownerAddress: Address
-  // Calls that the server will submit after the user signs the first UserOp.
-  // These are executed by the Coinbase Smart Wallet via ERC-4337.
-  phase2Calls: Call[]
+  // Calls that the server will submit after the user approves a one-time setup
+  // transaction that installs `sessionOwner` as a temporary onchain CSW owner.
+  // These calls are executed by the Coinbase Smart Wallet via ERC-4337.
+  // New (preferred): split Phase 2 into multiple UserOps server-side.
+  phase1Calls?: Call[]
+  phase2CoreCalls?: Call[]
+  phase2FinalizeCalls?: Call[]
+  // Back-compat: older clients submit a single Phase 2 array.
+  phase2Calls?: Call[]
+  // Phase 3 (strategies) + Phase 4 (deferred auction) are also executed server-side.
   phase3Calls?: Call[]
+  phase4Calls?: Call[]
   // Optional metadata for debugging/UI.
   version?: string
 }
@@ -214,10 +223,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ success: false, error: 'Creator access required. Please apply for access first.' } satisfies ApiEnvelope<null>)
     }
 
+    const phase1Calls = Array.isArray(body.phase1Calls) ? body.phase1Calls : []
+    const phase2CoreCalls = Array.isArray(body.phase2CoreCalls) ? body.phase2CoreCalls : []
+    const phase2FinalizeCalls = Array.isArray(body.phase2FinalizeCalls) ? body.phase2FinalizeCalls : []
     const phase2Calls = Array.isArray(body.phase2Calls) ? body.phase2Calls : []
     const phase3Calls = Array.isArray(body.phase3Calls) ? body.phase3Calls : []
-    if (phase2Calls.length === 0) {
-      return res.status(400).json({ success: false, error: 'Missing phase2Calls' } satisfies ApiEnvelope<null>)
+    const phase4Calls = Array.isArray(body.phase4Calls) ? body.phase4Calls : []
+
+    const hasAnyWork =
+      phase1Calls.length > 0 ||
+      phase2CoreCalls.length > 0 ||
+      phase2FinalizeCalls.length > 0 ||
+      phase2Calls.length > 0 ||
+      phase3Calls.length > 0 ||
+      phase4Calls.length > 0
+    if (!hasAnyWork) {
+      return res.status(400).json({ success: false, error: 'Missing deploy calls' } satisfies ApiEnvelope<null>)
     }
 
     const deployToken = randomDeployToken()
@@ -248,8 +269,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         agentWalletId: agentWallet.walletId,
         agentWalletAddress: agentWallet.address,
         version: String(body.version ?? ''),
+        phase1Calls,
+        phase2CoreCalls,
+        phase2FinalizeCalls,
         phase2Calls,
         phase3Calls,
+        phase4Calls,
       },
       expiresAt,
     })
