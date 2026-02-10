@@ -103,6 +103,8 @@
     "overrides": {
       "@coinbase/wallet-sdk": "4.3.7",
       "cbw-sdk": "npm:@coinbase/wallet-sdk@4.3.7",
+      "axios": ">=1.13.5",
+      "node-fetch": ">=2.6.7",
       "hono": ">=4.11.7",
       "path-to-regexp": ">=8.0.0",
       "undici": ">=6.23.0"

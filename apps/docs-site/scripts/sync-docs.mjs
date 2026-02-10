@@ -1,10 +1,12 @@
 /**
  * Docs Sync Script - Multi-Source Pipeline
  * 
- * Merges documentation from three sources:
- * 1. docs/ - Manual documentation (source of truth)
- * 2. docs/_generated/contracts/src/ - Solidity API docs from forge doc
- * 3. docs/_generated/frontend/ - TypeScript API docs from typedoc
+ * Merges documentation from five sources:
+ * 1. docs/              - Manual documentation (source of truth)
+ * 2. docs/_generated/   - Auto-generated API docs (forge doc, typedoc)
+ * 3. cre/               - CRE automation workflows (README + docs)
+ * 4. frontend/docs/     - Frontend design docs & guides
+ * 5. frontend/README.md - Frontend overview
  * 
  * Output: apps/docs-site/docs/ (never edit directly)
  */
@@ -46,6 +48,28 @@ const SOURCES = {
     exclude: [],
     label: 'Frontend API (typedoc)',
   },
+  cre: {
+    dir: path.join(REPO_ROOT, 'cre'),
+    destPrefix: 'operations/cre',
+    exclude: [
+      'node_modules/**', 'cre-workflows/**/node_modules/**',
+      '**/*.ts', '**/*.js', '**/*.mjs', '**/*.json', '**/*.yaml', '**/*.yml',
+      '**/*.env*', '**/patches/**', '**/dist/**', '**/.cre/**', '**/*.wasm',
+    ],
+    label: 'CRE workflows',
+  },
+  frontendDocs: {
+    dir: path.join(REPO_ROOT, 'frontend'),
+    destPrefix: 'frontend',
+    exclude: [
+      'node_modules/**', 'dist/**', 'src/**', 'api/**', 'server/**',
+      'abis/**', 'public/**', 'scripts/**', 'v4-subgraph/**',
+      '**/*.ts', '**/*.tsx', '**/*.js', '**/*.mjs', '**/*.json',
+      '**/*.css', '**/*.html', '**/*.svg', '**/*.png', '**/*.env*',
+      '**/patches/**',
+    ],
+    label: 'Frontend docs',
+  },
 };
 
 const STRICT_MODE = process.argv.includes('--strict');
@@ -60,6 +84,8 @@ const stats = {
     manual: 0,
     contracts: 0,
     frontend: 0,
+    cre: 0,
+    frontendDocs: 0,
   },
 };
 
@@ -153,6 +179,11 @@ function normalizeFrontmatter(content, relativePath, sidebarPosition, sourceType
   if (sourceType === 'contracts' || sourceType === 'frontend') {
     parsed.data.generated = true;
   }
+
+  // Mark workspace-sourced docs
+  if (sourceType === 'cre' || sourceType === 'frontendDocs') {
+    parsed.data.synced_from = sourceType === 'cre' ? 'cre/' : 'frontend/';
+  }
   
   // Fix broken links in generated docs
   const fixedContent = fixGeneratedLinks(parsed.content, sourceType);
@@ -182,6 +213,36 @@ async function sourceExists(sourceDir) {
   } catch {
     return false;
   }
+}
+
+/**
+ * Rename map for workspace-sourced docs.
+ * Keys are sourceKey, values are maps of original filename -> destination filename.
+ */
+const RENAME_MAP = {
+  cre: {
+    'README.md': 'index.md',
+  },
+  frontendDocs: {
+    'README.md': 'overview.md',
+    'DESIGN_SYSTEM.md': 'design-system.md',
+  },
+};
+
+/**
+ * Apply rename rules for a file path within a given source
+ */
+function applyRename(file, sourceKey) {
+  const renames = RENAME_MAP[sourceKey];
+  if (!renames) return file;
+
+  const basename = path.basename(file);
+  const dir = path.dirname(file);
+  const newName = renames[basename];
+  if (newName) {
+    return dir === '.' ? newName : path.join(dir, newName);
+  }
+  return file;
 }
 
 /**
@@ -242,7 +303,8 @@ async function processSource(sourceKey) {
   // Process each file
   for (const file of files) {
     const sourcePath = path.join(source.dir, file);
-    const destRelative = source.destPrefix ? path.join(source.destPrefix, file) : file;
+    const renamedFile = applyRename(file, sourceKey);
+    const destRelative = source.destPrefix ? path.join(source.destPrefix, renamedFile) : renamedFile;
     const destPath = path.join(DEST_DIR, destRelative);
     
     try {
@@ -405,6 +467,8 @@ async function sync() {
   console.log(`   Manual docs:     ${stats.bySource.manual}`);
   console.log(`   Contract API:    ${stats.bySource.contracts}`);
   console.log(`   Frontend API:    ${stats.bySource.frontend}`);
+  console.log(`   CRE workflows:   ${stats.bySource.cre}`);
+  console.log(`   Frontend docs:   ${stats.bySource.frontendDocs}`);
   console.log(`   ─────────────────────────`);
   console.log(`   Total copied:    ${stats.copied}`);
   console.log(`   Errors:          ${stats.errors.length}`);

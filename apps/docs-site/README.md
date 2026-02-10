@@ -4,34 +4,37 @@ Docusaurus-based documentation site for CreatorVault.
 
 ## Documentation Model
 
-This site publishes curated documentation from `4626/docs/`.
+This site publishes curated documentation from multiple sources across the monorepo.
 
-### Three Layers
+### Five Sources
 
-| Layer | Location | Purpose |
-|-------|----------|---------|
-| **Code** (authoritative, internal) | `4626/contracts/`, `4626/frontend/` | Source of truth for implementation |
-| **Canonical docs** (public-facing, curated) | `4626/docs/` | Human-written documentation |
-| **Published docs** (generated) | `apps/docs-site/docs/` | Build output — do not edit |
+| Source | Location | Destination | Purpose |
+|--------|----------|-------------|---------|
+| **Manual docs** | `docs/` | `/` (root) | Human-written documentation (source of truth) |
+| **Contract API** | `docs/_generated/contracts/` | `/api/contracts/` | Solidity NatSpec (forge doc) |
+| **Frontend API** | `docs/_generated/frontend/` | `/api/frontend/` | TypeScript TSDoc (typedoc) |
+| **CRE workflows** | `cre/` | `/operations/cre/` | Automation docs (README + guides) |
+| **Frontend docs** | `frontend/` | `/frontend/` | Design system, guides, overview |
 
 ### Key Rules
 
 - **Code ≠ Docs** — Documentation describes code, it does not mirror it 1:1.
-- `contracts/` and `frontend/` are conceptual inputs, but only `docs/` is a filesystem input.
-- Documentation describing contracts lives in `4626/docs/contracts/`.
-- Documentation describing frontend lives in `4626/docs/frontend/`.
+- `docs/` is the primary manual source. `cre/` and `frontend/` contribute workspace-level docs (READMEs, design docs).
+- Documentation describing contracts lives in `docs/contracts/`.
+- Documentation describing frontend lives in `docs/frontend/` (manual) + `frontend/docs/` (workspace).
 - Missing documentation for some code areas is allowed and intentional.
 
 ### What the Sync Script Does
 
 | Action | Description |
 |--------|-------------|
-| ✅ Reads from | `4626/docs/` (manual) + `4626/docs/_generated/` (API) |
-| ✅ Publishes | Markdown files to `docs-site/docs/` |
-| ✅ Normalizes | Adds frontmatter (title, sidebar_position) |
-| ✅ Fixes links | Transforms broken links in generated API docs |
-| ✅ Validates | Internal links (in strict mode) |
-| ✅ Brand assets | Syncs `frontend/public/brand/` → `static/brand/` |
+| Reads from | `docs/` (manual) + `docs/_generated/` (API) + `cre/` + `frontend/` |
+| Publishes | Markdown files to `docs-site/docs/` |
+| Normalizes | Adds frontmatter (title, sidebar_position) |
+| Renames | `README.md` → `index.md` (cre) or `overview.md` (frontend) |
+| Fixes links | Transforms broken links in generated API docs |
+| Validates | Internal links (in strict mode) |
+| Brand assets | Syncs `frontend/public/brand/` → `static/brand/` |
 
 ### API Docs Pipeline
 
