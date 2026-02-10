@@ -149,6 +149,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/auth/logout': () => import('./api/_handlers/auth/_logout'),
         '/api/creator-wallets/claim': () => import('./api/_handlers/_creator-wallets-claim'),
         '/api/deploy/smartWalletOwner': () => import('./api/_handlers/deploy/_smartWalletOwner'),
+        '/api/rpc': () => import('./api/_handlers/rpc/_proxy'),
 
         // Keepr (local dev)
         '/api/keepr/nonce': () => import('./api/_handlers/keepr/_nonce'),
@@ -161,6 +162,16 @@ function localApiRoutesPlugin(): Plugin {
         '/api/onchain/protocolRewardsClaimable': () => import('./api/_handlers/onchain/_protocolRewardsClaimable'),
         '/api/onchain/protocolRewardsWithdrawn': () => import('./api/_handlers/onchain/_protocolRewardsWithdrawn'),
         '/api/agent/invokeSkill': () => import('./api/_handlers/agent/_invokeSkill'),
+        '/api/lens/mapping': () => import('./api/_handlers/lens/_mapping'),
+        '/api/lens/graph': () => import('./api/_handlers/lens/_graph'),
+        '/api/lens/share-token-metadata': () => import('./api/_handlers/lens/_share-token-metadata'),
+        '/api/lens/agent-registration': () => import('./api/_handlers/lens/_agent-registration'),
+        '/api/lens/reputation-graph': () => import('./api/_handlers/lens/_reputation-graph'),
+        '/api/lens/feedback-payload': () => import('./api/_handlers/lens/_feedback-payload'),
+        // ERC-8004 feedback
+        '/api/v1/agents/feedback': () => import('./api/_handlers/v1/agents/feedback/_read'),
+        '/api/v1/agents/feedback/submit': () => import('./api/_handlers/v1/agents/feedback/_submit'),
+        '/api/v1/agents/wallet-intelligence': () => import('./api/_handlers/v1/agents/_wallet-intelligence'),
         // Referrals
         '/api/referrals/click': () => import('./api/_handlers/referrals/_click'),
         '/api/referrals/me': () => import('./api/_handlers/referrals/_me'),
@@ -169,6 +180,8 @@ function localApiRoutesPlugin(): Plugin {
         '/api/social/farcaster': () => import('./api/_handlers/social/_farcaster'),
         '/api/social/twitter': () => import('./api/_handlers/social/_twitter'),
         '/api/social/talent': () => import('./api/_handlers/social/_talent'),
+        '/api/openclaw/tools': () => import('./api/_handlers/openclaw/_tools'),
+        '/api/openclaw/execute': () => import('./api/_handlers/openclaw/_execute'),
       }
 
       server.middlewares.use(async (req, res, next) => {

@@ -37,6 +37,9 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'v1/agents/creators': () => import('./v1/agents/creators/_list.js'),
   'v1/agents/creators/enable': () => import('./v1/agents/creators/_enable.js'),
   'v1/agents/creators/provision-wallet': () => import('./v1/agents/creators/_provisionWallet.js'),
+  'v1/agents/feedback': () => import('./v1/agents/feedback/_read.js'),
+  'v1/agents/feedback/submit': () => import('./v1/agents/feedback/_submit.js'),
+  'v1/agents/wallet-intelligence': () => import('./v1/agents/_wallet-intelligence.js'),
   // v1 build endpoints (return unsigned tx calldata)
   // TODO: Implement these handlers
   // 'v1/build/auction/submitBid': () => import('./v1/build/auction/_submitBid.js'),
@@ -159,6 +162,12 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'lens/mapping': () => import('./lens/_mapping.js'),
   'lens/graph': () => import('./lens/_graph.js'),
   'lens/share-token-metadata': () => import('./lens/_share-token-metadata.js'),
+  'lens/agent-registration': () => import('./lens/_agent-registration.js'),
+  'lens/reputation-graph': () => import('./lens/_reputation-graph.js'),
+  'lens/feedback-payload': () => import('./lens/_feedback-payload.js'),
+
+  'openclaw/tools': () => import('./openclaw/_tools.js'),
+  'openclaw/execute': () => import('./openclaw/_execute.js'),
 
   'zora/coin': () => import('./zora/_coin.js'),
   'zora/explore': () => import('./zora/_explore.js'),
