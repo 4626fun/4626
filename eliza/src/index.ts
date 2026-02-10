@@ -28,6 +28,9 @@
 
 import { xmtpPlugin, getXmtpService } from './plugins/xmtp/index.js'
 import { keeprPlugin } from './plugins/keepr/index.js'
+import { lensPlugin } from './plugins/lens/index.js'
+import { walletIntelPlugin } from './plugins/walletIntel/index.js'
+import { reputationPlugin } from './plugins/reputation/index.js'
 import { creatorVaultCharacter } from './character.js'
 
 // ---------------------------------------------------------------------------
@@ -51,6 +54,8 @@ type LlmProvider = {
   transformBody?: (messages: any[]) => any
   extractContent?: (json: any) => string | null
 }
+
+export { lensPlugin, walletIntelPlugin, reputationPlugin }
 
 const PROVIDERS: LlmProvider[] = [
   {
@@ -151,8 +156,15 @@ async function handleMessage(msg: {
   const text = msg.content.trim()
   const lower = text.toLowerCase()
 
-  // Route to Keepr actions
-  for (const action of keeprPlugin.actions ?? []) {
+  // Route to all plugin actions (Keepr, Lens, Wallet Intel, Reputation)
+  const allActions = [
+    ...(keeprPlugin.actions ?? []),
+    ...(lensPlugin.actions ?? []),
+    ...(walletIntelPlugin.actions ?? []),
+    ...(reputationPlugin.actions ?? []),
+  ]
+
+  for (const action of allActions) {
     const fakeMemory = {
       content: {
         text,
@@ -166,18 +178,18 @@ async function handleMessage(msg: {
 
     const matches = await action.validate({} as any, fakeMemory)
     if (matches) {
-      let response = ''
+      const parts: string[] = []
       await action.handler(
         {} as any,
         fakeMemory,
         undefined,
         undefined,
         async (content: any) => {
-          response = content?.text ?? ''
+          if (content?.text) parts.push(content.text)
           return []
         },
       )
-      return response || null
+      return parts.join('\n\n') || null
     }
   }
 
@@ -251,9 +263,13 @@ async function main() {
   }
 
   const llmProvider = resolveProvider()
+  const plugins = [keeprPlugin, lensPlugin, walletIntelPlugin, reputationPlugin]
+  const actionCount = plugins.reduce((n, p) => n + (p.actions?.length ?? 0), 0)
   console.log(`  LLM provider: ${llmProvider?.name ?? 'none (conversational AI disabled)'}`)
   console.log(`  XMTP env: ${process.env.XMTP_ENV ?? 'production'}`)
   console.log(`  Character: ${creatorVaultCharacter.name}`)
+  console.log(`  Plugins: ${plugins.map(p => p.name).join(', ')}`)
+  console.log(`  Actions: ${actionCount} total`)
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
   // Initialize XMTP plugin
