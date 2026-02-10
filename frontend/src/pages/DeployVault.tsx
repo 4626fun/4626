@@ -22,7 +22,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { coinABI } from '@zoralabs/protocol-deployments'
 import { ChevronDown } from 'lucide-react'
-import { useCrossAppAccounts, useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
+import { useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { RequestCreatorAccess } from '@/components/RequestCreatorAccess'
@@ -48,7 +48,6 @@ import { computeMarketFloorQuote } from '@/lib/cca/marketFloor'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { 
-  sendCrossAppUserOperation,
   sendCoinbaseSmartWalletUserOperation, 
   simulateSmartWalletCalls,
   ERC4337_ENTRYPOINT_V06,
@@ -325,49 +324,6 @@ async function isCoinbaseSmartWalletOwner(params: {
 }
 
 const shortAddress = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`
-
-function extractCrossAppEmbeddedWalletAddresses(privyUser: any): Address[] {
-  const linked = Array.isArray(privyUser?.linked_accounts)
-    ? privyUser.linked_accounts
-    : Array.isArray(privyUser?.linkedAccounts)
-      ? privyUser.linkedAccounts
-      : []
-
-  const out: Address[] = []
-  const seen = new Set<string>()
-  const push = (addr: unknown) => {
-    if (typeof addr !== 'string' || !isAddress(addr)) return
-    const a = getAddress(addr) as Address
-    const key = a.toLowerCase()
-    if (seen.has(key)) return
-    seen.add(key)
-    out.push(a)
-  }
-
-  for (const a of linked) {
-    const t = String((a as any)?.type ?? '').toLowerCase()
-    if (!t.includes('cross')) continue
-
-    // Newer shapes expose `embeddedWallets`; older shapes may have `embedded_wallets`.
-    const wallets = Array.isArray((a as any)?.embeddedWallets)
-      ? (a as any).embeddedWallets
-      : Array.isArray((a as any)?.embedded_wallets)
-        ? (a as any).embedded_wallets
-        : []
-
-    if (wallets.length > 0) {
-      for (const w of wallets) {
-        push((w as any)?.address)
-      }
-      continue
-    }
-
-    // Fallback: some linked accounts surface an address directly.
-    push((a as any)?.address)
-  }
-
-  return out
-}
 
 function formatEthPerTokenForUi(weiPerToken: bigint): string {
   if (weiPerToken <= 0n) return '0'
@@ -1151,16 +1107,7 @@ function DeployVaultBatcher({
   // Detect Coinbase Wallet direct connection (not via Privy)
   const isCoinbaseWalletDirect = connectorId === 'coinbaseWalletSDK' || connectorId === 'com.coinbase.wallet'
 
-  // Cross-app wallets (Zora Global Wallet) via Privy popup signing.
-  const privyAny = usePrivy() as any
-  const privyUser = privyAny?.user ?? null
-  const crossAppAny = useCrossAppAccounts() as any
-  const crossAppSignMessage: ((message: string, options: { address: string }) => Promise<string>) | null =
-    typeof crossAppAny?.signMessage === 'function' ? crossAppAny.signMessage.bind(crossAppAny) : null
-  const crossAppSendTransaction:
-    | ((requestData: any, options: { address: string }) => Promise<string>)
-    | null = typeof crossAppAny?.sendTransaction === 'function' ? crossAppAny.sendTransaction.bind(crossAppAny) : null
-  const crossAppWalletCandidates = useMemo(() => extractCrossAppEmbeddedWalletAddresses(privyUser), [privyUser])
+  // NOTE: Zora cross-app integration is read-only in this app, so we do not use it for signing/transactions.
 
   const ensureBaseChain = useCallback(async (label: string) => {
     if (chainId === base.id) return
@@ -1210,10 +1157,10 @@ function DeployVaultBatcher({
   }, [smartWalletAddrForAuth, smartWalletClient])
 
   // Check if connected wallet supports EIP-5792 wallet_sendCalls
-  // Coinbase Wallet and Zora Wallet (via cross-app-connect) support this
+  // Coinbase Wallet supports this (cross-app wallets are read-only in this app).
   const canUseWalletSendCalls = useMemo(() => {
     if (!connectorId) return false
-    const supportedConnectors = ['coinbaseWalletSDK', 'zora-global-wallet']
+    const supportedConnectors = ['coinbaseWalletSDK']
     return supportedConnectors.includes(connectorId)
   }, [connectorId])
 
@@ -2712,43 +2659,6 @@ function DeployVaultBatcher({
             return
           }
 
-          // PATH 1.5: Zora Global Wallet (cross-app popup signing via Privy)
-          // This uses an EOA owner signature (personal_sign) and works without requiring eth_sign support.
-          if (canonicalSmartWallet && publicClient && crossAppSignMessage && crossAppWalletCandidates.length > 0) {
-            for (const candidate of crossAppWalletCandidates) {
-              try {
-                logger.info(`[DeployVault] Using ERC-4337 via Zora popup (cross-app) for ${logPhaseLabel}`, {
-                  canonicalSmartWallet,
-                  zoraEmbeddedWalletAddress: candidate,
-                })
-                const result = await sendCrossAppUserOperation({
-                  publicClient: publicClient as any,
-                  crossAppSignMessage,
-                  bundlerUrl,
-                  smartWallet: canonicalSmartWallet,
-                  zoraEmbeddedWalletAddress: candidate as Address,
-                  calls: toCalls(calls),
-                  version: '1',
-                })
-                persistUserOpResult(phaseLabel, logPhaseLabel, result, 'Zora popup (cross-app)')
-                return
-              } catch (e) {
-                // Only fall through on non-owner / unsupported cases; other errors should surface.
-                const msg = e instanceof Error ? e.message : String(e ?? '')
-                const lc = msg.toLowerCase()
-                const shouldTryNext =
-                  lc.includes('not an owner') ||
-                  lc.includes('not an onchain owner') ||
-                  lc.includes('not linked') ||
-                  lc.includes('cross-app') ||
-                  lc.includes('cross app') ||
-                  lc.includes('not supported') ||
-                  lc.includes('user rejected')
-                if (!shouldTryNext) throw e
-              }
-            }
-          }
-          
           // PATH 2: Privy app smart wallet is an owner (EIP-1271 signer)
           // Original deploy pattern: avoid this path when the embedded EOA owner flow is available.
           if (
@@ -3033,14 +2943,11 @@ function DeployVaultBatcher({
               })
 
               let installed = false
-              // Prefer a direct connected EOA (Coinbase Wallet) if available.
-              if (isCoinbaseWalletDirect && connectedAddress && wagmiWalletClient) {
-                const isOwner = await isCoinbaseSmartWalletOwner({
-                  smartWallet: owner,
-                  ownerAddress: connectedAddress as Address,
-                })
+              // Setup tx must be sent by an EOA owner (not the smart wallet itself).
+              if (connectedAddress && wagmiWalletClient && connectedAddress.toLowerCase() !== owner.toLowerCase()) {
+                const isOwner = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: connectedAddress as Address })
                 if (isOwner) {
-                  await ensureBaseChain('Coinbase Wallet')
+                  await ensureBaseChain('Owner wallet')
                   const rawTxHash = await (wagmiWalletClient as any).sendTransaction({
                     to: owner,
                     data: addOwnerData,
@@ -3048,48 +2955,18 @@ function DeployVaultBatcher({
                     account: connectedAddress,
                     chain: base,
                   })
-                  const txHash = ensureSignatureHex(rawTxHash, 'coinbaseWallet.sendTransaction(addOwner)') as Hex
-                  if (txHash.length !== 66) throw new Error('Invalid tx hash returned from Coinbase Wallet')
+                  const txHash = ensureSignatureHex(rawTxHash, 'ownerWallet.sendTransaction(addOwner)') as Hex
+                  if (txHash.length !== 66) throw new Error('Invalid tx hash returned from owner wallet')
                   setTxId(txHash)
                   if (!publicClient) throw new Error('Missing Base public client')
                   await publicClient.waitForTransactionReceipt({ hash: txHash })
                   installed = true
-                }
-              }
-
-              // Fallback: Zora Global Wallet cross-app sendTransaction (popup).
-              if (!installed && crossAppSendTransaction && crossAppWalletCandidates.length > 0) {
-                for (const candidate of crossAppWalletCandidates) {
-                  const isOwner = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: candidate })
-                  if (!isOwner) continue
-
-                  logger.info('[DeployVault] Installing deploy-session owner (one-time)', {
-                    smartWallet: owner,
-                    sessionOwner,
-                    signer: candidate,
-                  })
-                  const rawTxHash = await crossAppSendTransaction(
-                    {
-                      chainId: base.id,
-                      to: owner,
-                      data: addOwnerData,
-                      value: 0n,
-                    },
-                    { address: candidate },
-                  )
-                  const txHash = ensureSignatureHex(rawTxHash, 'crossApp.sendTransaction') as Hex
-                  if (txHash.length !== 66) throw new Error('Invalid tx hash returned from cross-app sendTransaction')
-                  setTxId(txHash)
-                  if (!publicClient) throw new Error('Missing Base public client')
-                  await publicClient.waitForTransactionReceipt({ hash: txHash })
-                  installed = true
-                  break
                 }
               }
               if (!installed) {
                 throw new Error(
                   'Server continuation requires an owner EOA to install a temporary deploy-session owner. ' +
-                    'Connect Coinbase Wallet (EOA) or link your Zora global wallet (cross-app) and retry.',
+                    'Connect an owner EOA wallet (e.g. Coinbase Wallet) and retry.',
                 )
               }
             }
