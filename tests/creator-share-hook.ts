@@ -30,6 +30,11 @@ const EXTRA_ACCOUNT_META_LIST_SEED = Buffer.from("extra-account-metas");
 
 const MAX_AMM_PROGRAMS = 8;
 
+const makeBytes32 = (seed: number) =>
+  Array.from({ length: 32 }, (_, i) => (seed + i) % 256);
+const HUB_CREATOR_COIN = makeBytes32(1);
+const HUB_SHARE_OFT = makeBytes32(2);
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -96,6 +101,8 @@ describe("creator_share_hook", () => {
       await program.methods
         .initializeCreator({
           keeperAuthority: keeper.publicKey,
+          hubCreatorCoin: HUB_CREATOR_COIN,
+          hubShareOft: HUB_SHARE_OFT,
           feeBps: 690,
           flushThreshold: new BN(1000),
           lotteryEnabled: true,
@@ -123,6 +130,16 @@ describe("creator_share_hook", () => {
       assert.ok(
         config.keeperAuthority.equals(keeper.publicKey),
         "keeper matches"
+      );
+      assert.deepEqual(
+        Array.from(config.hubCreatorCoin),
+        HUB_CREATOR_COIN,
+        "hub creator coin matches"
+      );
+      assert.deepEqual(
+        Array.from(config.hubShareOft),
+        HUB_SHARE_OFT,
+        "hub share oft matches"
       );
       assert.equal(config.feeBps, 690, "feeBps is 690");
       assert.equal(
@@ -170,6 +187,8 @@ describe("creator_share_hook", () => {
         await program.methods
           .initializeCreator({
             keeperAuthority: keeper.publicKey,
+          hubCreatorCoin: HUB_CREATOR_COIN,
+          hubShareOft: HUB_SHARE_OFT,
             feeBps: 690,
             flushThreshold: new BN(0),
             lotteryEnabled: true,
@@ -198,6 +217,8 @@ describe("creator_share_hook", () => {
         await program.methods
           .initializeCreator({
             keeperAuthority: keeper.publicKey,
+          hubCreatorCoin: HUB_CREATOR_COIN,
+          hubShareOft: HUB_SHARE_OFT,
             feeBps: 10001,
             flushThreshold: new BN(0),
             lotteryEnabled: true,
@@ -228,6 +249,8 @@ describe("creator_share_hook", () => {
         await program.methods
           .initializeCreator({
             keeperAuthority: keeper.publicKey,
+          hubCreatorCoin: HUB_CREATOR_COIN,
+          hubShareOft: HUB_SHARE_OFT,
             feeBps: 690,
             flushThreshold: new BN(0),
             lotteryEnabled: true,
@@ -254,6 +277,8 @@ describe("creator_share_hook", () => {
       await program.methods
         .initializeCreator({
           keeperAuthority: keeper.publicKey,
+          hubCreatorCoin: HUB_CREATOR_COIN,
+          hubShareOft: HUB_SHARE_OFT,
           feeBps: 100,
           flushThreshold: new BN(5000),
           lotteryEnabled: false,
@@ -280,6 +305,8 @@ describe("creator_share_hook", () => {
       await program.methods
         .initializeCreator({
           keeperAuthority: keeper.publicKey,
+          hubCreatorCoin: HUB_CREATOR_COIN,
+          hubShareOft: HUB_SHARE_OFT,
           feeBps: 0,
           flushThreshold: new BN(0),
           lotteryEnabled: true,
@@ -305,6 +332,8 @@ describe("creator_share_hook", () => {
       await program.methods
         .initializeCreator({
           keeperAuthority: keeper.publicKey,
+          hubCreatorCoin: HUB_CREATOR_COIN,
+          hubShareOft: HUB_SHARE_OFT,
           feeBps: 10000,
           flushThreshold: new BN(0),
           lotteryEnabled: true,
@@ -332,6 +361,8 @@ describe("creator_share_hook", () => {
     it("updates fee_bps only", async () => {
       await program.methods
         .updateConfig({
+          hubCreatorCoin: null,
+          hubShareOft: null,
           feeBps: 500,
           flushThreshold: null,
           lotteryEnabled: null,
@@ -357,6 +388,8 @@ describe("creator_share_hook", () => {
     it("updates flush_threshold only", async () => {
       await program.methods
         .updateConfig({
+          hubCreatorCoin: null,
+          hubShareOft: null,
           feeBps: null,
           flushThreshold: new BN(5000),
           lotteryEnabled: null,
@@ -381,6 +414,8 @@ describe("creator_share_hook", () => {
     it("updates lottery_enabled only", async () => {
       await program.methods
         .updateConfig({
+          hubCreatorCoin: null,
+          hubShareOft: null,
           feeBps: null,
           flushThreshold: null,
           lotteryEnabled: false,
@@ -399,6 +434,8 @@ describe("creator_share_hook", () => {
       // Re-enable for subsequent tests
       await program.methods
         .updateConfig({
+          hubCreatorCoin: null,
+          hubShareOft: null,
           feeBps: null,
           flushThreshold: null,
           lotteryEnabled: true,
@@ -413,6 +450,8 @@ describe("creator_share_hook", () => {
     it("updates all fields at once", async () => {
       await program.methods
         .updateConfig({
+          hubCreatorCoin: null,
+          hubShareOft: null,
           feeBps: 690,
           flushThreshold: new BN(0),
           lotteryEnabled: true,
@@ -435,6 +474,8 @@ describe("creator_share_hook", () => {
       try {
         await program.methods
           .updateConfig({
+          hubCreatorCoin: null,
+          hubShareOft: null,
             feeBps: 10001,
             flushThreshold: null,
             lotteryEnabled: null,
@@ -458,6 +499,8 @@ describe("creator_share_hook", () => {
       try {
         await program.methods
           .updateConfig({
+          hubCreatorCoin: null,
+          hubShareOft: null,
             feeBps: 100,
             flushThreshold: null,
             lotteryEnabled: null,
@@ -816,6 +859,8 @@ describe("creator_share_hook", () => {
       await program.methods
         .initializeCreator({
           keeperAuthority: keeper2.publicKey,
+          hubCreatorCoin: HUB_CREATOR_COIN,
+          hubShareOft: HUB_SHARE_OFT,
           feeBps: 300,
           flushThreshold: new BN(500),
           lotteryEnabled: false,

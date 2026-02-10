@@ -112,9 +112,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : []
 
   const erc8004 = getErc8004Meta(req)
+  const origin = normalizeOrigin(req)
   const byo = {
     registrationUrlTemplate: 'https://{your-domain}/.well-known/agent-registration.json',
-    agentUriHint: 'Use an IPFS or data: URI (content-addressed) for agentURI when registering your agent.',
+    agentUriHint: 'Use a Lens Grove (lens://), IPFS, or data: URI (content-addressed) for agentURI when registering your agent.',
+    agentUriService: `${origin}/api/lens/agent-registration`,
     requiredFields: ['type', 'name', 'description', 'image', 'services', 'x402Support', 'active', 'registrations'],
     specUrl: 'https://eips.ethereum.org/EIPS/eip-8004',
   }

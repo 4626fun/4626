@@ -25,6 +25,7 @@ import {
 } from '../config.js';
 import { readContract } from '../utils/onchain.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
+import { loadKeeperKeypair } from '../utils/solana.js';
 
 const WORKFLOW_NAME = 'keepr-solana-price-monitor';
 
@@ -37,20 +38,6 @@ export interface PriceMonitorResult {
   solanaPriceUsd: string;
   deviationBps: number;
   action: 'none' | 'alert' | 'recenter' | 'halt';
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function loadKeeperKeypair() {
-  const { Keypair } = require('@solana/web3.js');
-  const bs58 = require('bs58');
-  const secretKeyStr = requireEnv('SOLANA_KEEPER_KEYPAIR');
-  if (secretKeyStr.startsWith('[')) {
-    return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyStr)));
-  }
-  return Keypair.fromSecretKey(bs58.decode(secretKeyStr));
 }
 
 /**

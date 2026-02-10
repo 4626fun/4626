@@ -7,6 +7,10 @@ use crate::state::*;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
 pub struct UpdateConfigParams {
+    /// New hub_creator_coin (None = keep current).
+    pub hub_creator_coin: Option<[u8; 32]>,
+    /// New hub_share_oft (None = keep current).
+    pub hub_share_oft: Option<[u8; 32]>,
     /// New fee_bps (None = keep current).
     pub fee_bps: Option<u16>,
     /// New flush_threshold (None = keep current).
@@ -40,6 +44,14 @@ pub fn update_config_handler(
     params: UpdateConfigParams,
 ) -> Result<()> {
     let config = &mut ctx.accounts.creator_config;
+
+    if let Some(hub_creator_coin) = params.hub_creator_coin {
+        config.hub_creator_coin = hub_creator_coin;
+    }
+
+    if let Some(hub_share_oft) = params.hub_share_oft {
+        config.hub_share_oft = hub_share_oft;
+    }
 
     if let Some(fee_bps) = params.fee_bps {
         if fee_bps > 10_000 {

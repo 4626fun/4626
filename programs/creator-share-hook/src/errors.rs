@@ -8,7 +8,7 @@ pub enum CreatorShareHookError {
     #[msg("Unauthorized: caller is not the config authority")]
     UnauthorizedAuthority,
 
-    #[msg("AMM program list is full (max 16)")]
+    #[msg("AMM program list is full (max 8)")]
     AmmListFull,
 
     #[msg("AMM program not found in allowlist")]

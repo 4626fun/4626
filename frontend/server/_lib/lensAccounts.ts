@@ -21,6 +21,7 @@ export type LensUser = {
 }
 
 const LENS_API_URL = 'https://api.lens.xyz/graphql'
+const LENS_SERVER_API_KEY = process.env.LENS_SERVER_API_KEY ?? ''
 
 function getString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null
@@ -88,9 +89,14 @@ async function fetchLensAccounts(request: { ownedBy?: string[] }): Promise<LensA
     variables: { request },
   }
 
+  const headers: Record<string, string> = { 'content-type': 'application/json' }
+  if (LENS_SERVER_API_KEY) {
+    headers['x-api-key'] = LENS_SERVER_API_KEY
+  }
+
   const res = await fetch(LENS_API_URL, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers,
     body: JSON.stringify(body),
   })
   if (!res.ok) return []

@@ -229,6 +229,30 @@ html.dark {
   --vault-subtext: 102 102 102; /* #666666 */
 }
 
+/* Privy modal theming */
+body {
+  --privy-border-radius-sm: 10px;
+  --privy-border-radius-md: 14px;
+  --privy-border-radius-lg: 20px;
+  --privy-border-radius-full: 9999px;
+  --privy-color-background: #0f1117;
+  --privy-color-background-2: #151926;
+  --privy-color-background-3: #1c2130;
+  --privy-color-foreground: #f4f4f5;
+  --privy-color-foreground-2: #d4d4d8;
+  --privy-color-foreground-3: #a1a1aa;
+  --privy-color-foreground-4: #3b6cff;
+  --privy-color-foreground-accent: #3b6cff;
+  --privy-color-accent: #0052ff;
+  --privy-color-accent-light: #1a66ff;
+  --privy-color-accent-lightest: #2b75ff;
+  --privy-color-accent-dark: #0047e5;
+  --privy-color-accent-darkest: #003ac0;
+  --privy-color-success: #10b981;
+  --privy-color-error: #ef4444;
+  --privy-color-error-light: #fca5a5;
+}
+
 /* Utility: Hide scrollbar */
 .scrollbar-hide {
   -ms-overflow-style: none;

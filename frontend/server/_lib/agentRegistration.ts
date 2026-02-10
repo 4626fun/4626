@@ -27,12 +27,13 @@ const REGISTRATION_TYPE = 'https://eips.ethereum.org/EIPS/eip-8004#registration-
 const fallbackRegistration: RegistrationFile = {
   type: REGISTRATION_TYPE,
   name: 'CreatorVault Agent',
-  description: 'Agent API for CreatorVault on Base.',
+  description: 'Agent API for CreatorVault on Base. Reachable via XMTP messaging, REST API, and MCP tools. Provides vault management, wallet intelligence, ERC-8004 reputation queries, and keeper automation.',
   image: 'https://4626.fun/miniapp-icon.png',
   services: [
     { name: 'web', endpoint: 'https://4626.fun' },
+    { name: 'XMTP', endpoint: 'xmtp://0xAb6d5C10b03300326CD7fAb7267Ae192842967b5', version: 'production', description: 'XMTP messaging endpoint — DM or group chat with the agent. Identity is a Coinbase Smart Wallet on Base (chain 8453).' },
+    { name: 'agentWallet', endpoint: 'eip155:8453:0xAb6d5C10b03300326CD7fAb7267Ae192842967b5' },
     { name: 'api', endpoint: 'https://4626.fun/api/v1/spec.json', version: '1.0.0' },
-    { name: 'openclaw', endpoint: 'https://4626.fun/api/openclaw/tools', version: 'v1' },
     { name: 'feedback', endpoint: 'https://4626.fun/api/v1/agents/feedback', version: '2.0' },
     { name: 'reputation-graph', endpoint: 'https://4626.fun/api/lens/reputation-graph', version: '1.0' },
     { name: 'feedback-payload', endpoint: 'https://4626.fun/api/lens/feedback-payload', version: '2.0' },
@@ -42,8 +43,8 @@ const fallbackRegistration: RegistrationFile = {
   active: true,
   registrations: [
     {
-      agentId: 0,
-      agentRegistry: 'eip155:8453:0x0000000000000000000000000000000000000000',
+      agentId: 2205,
+      agentRegistry: 'eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432',
     },
   ],
   supportedTrust: ['reputation', 'crypto-economic', 'tee-attestation'],

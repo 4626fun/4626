@@ -5,13 +5,13 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-creator_share_hook = "7sDronXrP1ZZGwE2xBL9JGgC9YehtWu7KZcwzoMFEPds"
+creator_share_hook = "EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU"
 
 [programs.localnet]
-creator_share_hook = "7sDronXrP1ZZGwE2xBL9JGgC9YehtWu7KZcwzoMFEPds"
+creator_share_hook = "EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU"
 
 [programs.mainnet]
-creator_share_hook = "7sDronXrP1ZZGwE2xBL9JGgC9YehtWu7KZcwzoMFEPds"
+creator_share_hook = "EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU"
 
 [registry]
 url = "https://api.apr.dev"

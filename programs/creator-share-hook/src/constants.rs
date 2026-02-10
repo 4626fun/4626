@@ -3,13 +3,12 @@
 pub const DEFAULT_FEE_BPS: u16 = 690;
 
 /// Maximum number of entries in the PendingEntries ring buffer.
-/// Each LotteryEntry is 48 bytes; 16 * 48 = 768 bytes.
-/// Using zero-copy deserialization to avoid stack overflow on SBF.
-pub const MAX_PENDING_ENTRIES: usize = 16;
+/// Each LotteryEntry is 48 bytes; 256 * 48 = 12,288 bytes.
+pub const MAX_PENDING_ENTRIES: usize = 256;
 
 /// Emergency drain threshold — 80% of MAX_PENDING_ENTRIES.
 /// When the buffer exceeds this, Keepr triggers an immediate drain cycle.
-pub const EMERGENCY_DRAIN_THRESHOLD: usize = 12;
+pub const EMERGENCY_DRAIN_THRESHOLD: usize = (MAX_PENDING_ENTRIES * 8) / 10;
 
 /// Seed prefixes for PDA derivation.
 pub const CREATOR_CONFIG_SEED: &[u8] = b"creator_config";

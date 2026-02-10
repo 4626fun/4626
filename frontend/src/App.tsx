@@ -321,6 +321,10 @@ const AgentDirectory = lazy(async () => {
   const m = await import('./pages/AgentDirectory')
   return { default: m.AgentDirectory }
 })
+const AgentUriService = lazy(async () => {
+  const m = await import('./pages/AgentUriService')
+  return { default: m.AgentUriService }
+})
 
 const ExploreCreators = lazy(async () => {
   const m = await import('./pages/ExploreCreators')
@@ -516,6 +520,7 @@ function App() {
 
             <Route path="/status" element={<Status />} />
             <Route path="/agents" element={<AgentDirectory />} />
+            <Route path="/agents/uri-service" element={<AgentUriService />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         ) : (
@@ -558,6 +563,7 @@ function App() {
                 <Route path="/dashboard" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
                 <Route path="/vault/:address" element={<Vault />} />
                 <Route path="/agents" element={<AgentDirectory />} />
+                <Route path="/agents/uri-service" element={<AgentUriService />} />
                 <Route path="/auction-demo" element={<AuctionDemo />} />
               </Route>
 

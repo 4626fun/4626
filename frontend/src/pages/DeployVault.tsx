@@ -182,7 +182,6 @@ function logNonEoaSignature(signature: Hex, context: string) {
   return meta
 }
 
-
 type SignatureExtraction = { signature: Hex | null; source: string | null }
 
 function extractSignatureHex(value: unknown, depth = 0): SignatureExtraction {
@@ -2448,6 +2447,7 @@ function DeployVaultBatcher({
           calls.map((c) => ({ to: c.target, value: c.value, data: c.data }))
         const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
         const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+
         const ownerSlotForPhase = (phaseLabel: 'phase1' | 'phase2' | 'phase3' | 'phase4') =>
           phaseLabel === 'phase1' ? 'userOp1' : phaseLabel === 'phase2' ? 'userOp2' : phaseLabel === 'phase3' ? 'userOp3' : 'userOp4'
         const txSlotForPhase = (phaseLabel: 'phase1' | 'phase2' | 'phase3' | 'phase4') =>
@@ -2469,6 +2469,7 @@ function DeployVaultBatcher({
             txHash: result.transactionHash,
           })
         }
+
         const sendPhaseCalls = async (
           calls: Array<{ target: Address; value: bigint; data: Hex }>,
           phaseLabel: 'phase1' | 'phase2' | 'phase3' | 'phase4',
@@ -2627,6 +2628,7 @@ function DeployVaultBatcher({
           }
 
           // PATH 1: Direct Coinbase Wallet connection
+          // Only use this when embedded signer path is not available.
           if (
             isCoinbaseWalletDirect &&
             connectedAddress &&
@@ -2653,6 +2655,7 @@ function DeployVaultBatcher({
           }
           
           // PATH 2: Privy app smart wallet is an owner (EIP-1271 signer)
+          // Original deploy pattern: avoid this path when the embedded EOA owner flow is available.
           if (
             canonicalSmartWallet &&
             privySmartWalletIsCanonicalOwner &&
@@ -2813,11 +2816,9 @@ function DeployVaultBatcher({
           }
           
           // No additional signer fallback branches: keep deploy deterministic.
-          // If Coinbase direct is unavailable and app smart wallet owner path failed,
-          // we require explicit setup before continuing.
           // No valid ERC-4337 path available
           throw new Error(
-            'ERC-4337 deployment requires ONE of the following (pick any one):\n' +
+            'ERC-4337 deployment requires one of:\n' +
             '1. Connect with Coinbase Wallet (recommended)\n' +
             '2. Add your app smart wallet as an owner of your Zora wallet (EIP-1271)',
           )
@@ -3253,8 +3254,7 @@ function DeployVaultBatcher({
         <div className="space-y-2">
           <div className="text-[10px] text-green-400/80 flex items-center gap-1">
             <span>✓</span> Gas-free ERC-4337 {
-              isCoinbaseWalletDirect ? 'via Coinbase Wallet' :
-              'via app smart wallet owner'
+              isCoinbaseWalletDirect ? 'via Coinbase Wallet' : 'via app smart wallet owner'
             }
           </div>
           <button type="button" onClick={() => void submit()} disabled={disabled} className="btn-accent w-full rounded-lg">
@@ -3329,11 +3329,14 @@ function DeployVaultMain() {
   const { wallets } = useWallets()
   const { client: smartWalletClient } = useSmartWallets()
   const siwe = useSiweAuth()
-  // State for adding Privy embedded EOA as owner (legacy gas-free ERC-4337)
   // State for adding Privy app smart wallet as owner (EIP-1271 signer)
   const [addPrivySmartWalletOwnerBusy, setAddPrivySmartWalletOwnerBusy] = useState(false)
   const [addPrivySmartWalletOwnerTxHash, setAddPrivySmartWalletOwnerTxHash] = useState<string | null>(null)
   const [addPrivySmartWalletOwnerError, setAddPrivySmartWalletOwnerError] = useState<string | null>(null)
+  const [autoSmartWalletOwnerAttemptCount, setAutoSmartWalletOwnerAttemptCount] = useState(0)
+  const [autoSmartWalletOwnerRetryTick, setAutoSmartWalletOwnerRetryTick] = useState(0)
+  const autoSmartWalletOwnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoSmartWalletOwnerAttemptKeyRef = useRef<string | null>(null)
   const autoLoginAttemptRef = useRef(false)
   const autoBridgeAttemptRef = useRef(false)
   const [handoffState, setHandoffState] = useState<'idle' | 'signingIn' | 'bridging' | 'ready' | 'error'>('idle')
@@ -3932,7 +3935,7 @@ function DeployVaultMain() {
   // App smart wallet signing uses EIP-1271 and costs more verification gas.
 
   // Add Privy app smart wallet as owner (EIP-1271 signer for canonical wallet)
-  const handleAddPrivyAppSmartWalletOwner = useCallback(async (): Promise<boolean> => {
+  const handleAddPrivyAppSmartWalletOwner = useCallback(async (opts?: { skipConfirm?: boolean }): Promise<boolean> => {
     if (addPrivySmartWalletOwnerBusy) return false
     if (!canonicalIdentityIsContract || !canonicalIdentityAddress) {
       setAddPrivySmartWalletOwnerError('Missing canonical smart wallet address.')
@@ -3943,8 +3946,15 @@ function DeployVaultMain() {
       return false
     }
     if (privySmartWalletAddress.toLowerCase() === canonicalIdentityAddress.toLowerCase()) {
-      setAddPrivySmartWalletOwnerError('Your Privy smart wallet already matches the canonical wallet.')
+      setAddPrivySmartWalletOwnerError(null)
       return true
+    }
+    if (!opts?.skipConfirm && typeof window !== 'undefined') {
+      const ok = window.confirm(
+        'This will add your app smart wallet as an owner of your canonical Zora smart wallet. ' +
+          'The canonical wallet will remain the sender. Proceed?'
+      )
+      if (!ok) return false
     }
 
     setAddPrivySmartWalletOwnerBusy(true)
@@ -3979,34 +3989,66 @@ function DeployVaultMain() {
       const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
       const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
 
-      logger.info('[DeployVault] Trying ERC-4337 to add app smart wallet as owner (gas-free)', {
-        connector: connector?.id,
-        owner: connectedWalletAddress,
+      try {
+        logger.info('[DeployVault] Trying ERC-4337 to add app smart wallet as owner (gas-free)', {
+          connector: connector?.id,
+          owner: connectedWalletAddress,
+          smartWallet: privySmartWalletAddress,
+        })
+
+        const result = await sendCoinbaseSmartWalletUserOperation({
+          publicClient: publicClient as any,
+          walletClient: walletClient as any,
+          bundlerUrl,
+          smartWallet: canonicalIdentityAddress as Address,
+          ownerAddress: connectedWalletAddress as Address,
+          calls: [{
+            to: canonicalIdentityAddress as Address,
+            value: 0n,
+            data: addOwnerData,
+          }],
+          version: '1',
+        })
+
+        setAddPrivySmartWalletOwnerTxHash(result.transactionHash)
+        logger.info('[DeployVault] App smart wallet added as owner via ERC-4337 (gas-free)', {
+          userOpHash: result.userOpHash,
+          txHash: result.transactionHash,
+          smartWallet: privySmartWalletAddress,
+          connector: connector?.id,
+        })
+
+        await privySmartWalletIsCanonicalOwnerQuery.refetch()
+        return true
+      } catch (erc4337Error: any) {
+        const errMsg = erc4337Error?.message?.toLowerCase() || ''
+        if (errMsg.includes('eth_sign') || errMsg.includes('method not supported') || errMsg.includes('user rejected')) {
+          logger.warn('[DeployVault] ERC-4337 failed, falling back to direct tx', {
+            error: erc4337Error?.message,
+            connector: connector?.id,
+          })
+        } else {
+          throw erc4337Error
+        }
+      }
+
+      logger.info('[DeployVault] Using direct tx fallback to add app smart wallet as owner (requires gas)')
+
+      const txHash = await walletClient.sendTransaction({
+        to: canonicalIdentityAddress as Address,
+        data: addOwnerData,
+        value: 0n,
+        chain: base,
+      })
+
+      setAddPrivySmartWalletOwnerTxHash(txHash)
+      logger.info('[DeployVault] App smart wallet added as owner via direct tx', {
+        txHash,
+        canonical: canonicalIdentityAddress,
         smartWallet: privySmartWalletAddress,
       })
 
-      const result = await sendCoinbaseSmartWalletUserOperation({
-        publicClient: publicClient as any,
-        walletClient: walletClient as any,
-        bundlerUrl,
-        smartWallet: canonicalIdentityAddress as Address,
-        ownerAddress: connectedWalletAddress as Address,
-        calls: [{
-          to: canonicalIdentityAddress as Address,
-          value: 0n,
-          data: addOwnerData,
-        }],
-        version: '1',
-      })
-
-      setAddPrivySmartWalletOwnerTxHash(result.transactionHash)
-      logger.info('[DeployVault] App smart wallet added as owner via ERC-4337 (gas-free)', {
-        userOpHash: result.userOpHash,
-        txHash: result.transactionHash,
-        smartWallet: privySmartWalletAddress,
-        connector: connector?.id,
-      })
-
+      await publicClient.waitForTransactionReceipt({ hash: txHash })
       await privySmartWalletIsCanonicalOwnerQuery.refetch()
       return true
     } catch (e: any) {
@@ -4031,11 +4073,19 @@ function DeployVaultMain() {
     walletClient,
   ])
 
+  useEffect(() => {
+    return () => {
+      if (autoSmartWalletOwnerTimerRef.current) {
+        clearTimeout(autoSmartWalletOwnerTimerRef.current)
+        autoSmartWalletOwnerTimerRef.current = null
+      }
+    }
+  }, [])
+
 
   // Allow injected EOAs (Rabby/MetaMask/etc) to operate a Coinbase Smart Wallet canonical identity
   // when the EOA is an onchain owner of that smart wallet.
   // Uses server-side API to avoid client-side RPC rate limits.
-  // Also used for ERC-4337 PATH 3 (EOA signs UserOps for canonical smart wallet).
   const executionCanOperateCanonicalQuery = useQuery({
     queryKey: ['coinbaseSmartWalletOwner', canonicalIdentityAddress, connectedWalletAddress],
     // Run when: identity blocking reason OR canonical is a contract (for ERC-4337 PATH 3)
@@ -4405,9 +4455,58 @@ function DeployVaultMain() {
     if (!privySmartWalletAddress || !canonicalIdentityAddress) return false
     return privySmartWalletAddress.toLowerCase() === canonicalIdentityAddress.toLowerCase()
   }, [privySmartWalletAddress, canonicalIdentityAddress])
-
+  
   const isCoinbaseWalletDirect = connector?.id === 'coinbaseWalletSDK' || connector?.id === 'com.coinbase.wallet'
-  const autoSmartWalletOwnerAttemptKeyRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (isCoinbaseWalletDirect) return
+    if (smartWalletMatchesCanonical) return
+    if (!privySmartWalletAddress || !privySmartWalletCanSign) return
+    if (privySmartWalletIsCanonicalOwner) return
+    if (!canonicalIdentityIsContract || !canonicalIdentityAddress) return
+    if (!connectedWalletAddress) return
+    if (addPrivySmartWalletOwnerBusy) return
+    if (autoSmartWalletOwnerAttemptCount >= 3) return
+
+    const attemptKey = `${canonicalIdentityAddress.toLowerCase()}:${connectedWalletAddress.toLowerCase()}:${privySmartWalletAddress.toLowerCase()}`
+    if (autoSmartWalletOwnerAttemptKeyRef.current !== attemptKey) {
+      autoSmartWalletOwnerAttemptKeyRef.current = attemptKey
+      if (autoSmartWalletOwnerTimerRef.current) {
+        clearTimeout(autoSmartWalletOwnerTimerRef.current)
+        autoSmartWalletOwnerTimerRef.current = null
+      }
+      setAutoSmartWalletOwnerAttemptCount(0)
+    }
+
+    const run = async () => {
+      const ok = await handleAddPrivyAppSmartWalletOwner({ skipConfirm: true })
+      if (ok) return
+      if (autoSmartWalletOwnerAttemptCount >= 2) return
+      if (autoSmartWalletOwnerTimerRef.current) {
+        clearTimeout(autoSmartWalletOwnerTimerRef.current)
+      }
+      const backoffMs = 2000 * (autoSmartWalletOwnerAttemptCount + 1)
+      autoSmartWalletOwnerTimerRef.current = setTimeout(() => {
+        setAutoSmartWalletOwnerAttemptCount((count) => count + 1)
+        setAutoSmartWalletOwnerRetryTick((tick) => tick + 1)
+      }, backoffMs)
+    }
+
+    void run()
+  }, [
+    addPrivySmartWalletOwnerBusy,
+    autoSmartWalletOwnerAttemptCount,
+    autoSmartWalletOwnerRetryTick,
+    canonicalIdentityAddress,
+    canonicalIdentityIsContract,
+    connectedWalletAddress,
+    handleAddPrivyAppSmartWalletOwner,
+    isCoinbaseWalletDirect,
+    privySmartWalletAddress,
+    privySmartWalletCanSign,
+    privySmartWalletIsCanonicalOwner,
+    smartWalletMatchesCanonical,
+  ])
   
   // Smart wallet is ready only if it matches canonical OR an authorized owner signer is available
   const smartWalletCapabilityReady =
@@ -4434,31 +4533,6 @@ function DeployVaultMain() {
     bytecodeInfraOk &&
     !identityBlockingReason &&
     smartWalletCapabilityReady
-
-  useEffect(() => {
-    if (isCoinbaseWalletDirect) return
-    if (!privySmartWalletAddress || !privySmartWalletCanSign) return
-    if (privySmartWalletIsCanonicalOwner) return
-    if (!canonicalIdentityIsContract || !canonicalIdentityAddress) return
-    if (!connectedWalletAddress) return
-    if (addPrivySmartWalletOwnerBusy) return
-
-    const attemptKey = `${canonicalIdentityAddress.toLowerCase()}:${connectedWalletAddress.toLowerCase()}:${privySmartWalletAddress.toLowerCase()}`
-    if (autoSmartWalletOwnerAttemptKeyRef.current === attemptKey) return
-
-    autoSmartWalletOwnerAttemptKeyRef.current = attemptKey
-    void handleAddPrivyAppSmartWalletOwner()
-  }, [
-    addPrivySmartWalletOwnerBusy,
-    canonicalIdentityAddress,
-    canonicalIdentityIsContract,
-    connectedWalletAddress,
-    handleAddPrivyAppSmartWalletOwner,
-    isCoinbaseWalletDirect,
-    privySmartWalletAddress,
-    privySmartWalletCanSign,
-    privySmartWalletIsCanonicalOwner,
-  ])
 
   const vrfConsumerAddress = (CONTRACTS.vrfConsumer ?? null) as Address | null
   const vrfConsumerConfigured = isAddress(String(vrfConsumerAddress ?? ''))
@@ -4777,7 +4851,7 @@ function DeployVaultMain() {
                             loading="lazy"
                           />
                         ) : (
-                          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-brand-primary/20 to-brand-accent/20 flex items-center justify-center text-sm font-medium text-brand-accent">
+                          <div className="w-14 h-14 rounded-full bg-linear-to-br from-brand-primary/20 to-brand-accent/20 flex items-center justify-center text-sm font-medium text-brand-accent">
                             {String(baseSymbol).slice(0, 2).toUpperCase()}
                           </div>
                         )}
@@ -5065,8 +5139,7 @@ function DeployVaultMain() {
                         <div className="text-[11px] text-amber-200/80">
                           Smart wallet signing is not supported in this environment. Use Coinbase Wallet or an owner EOA.
                         </div>
-                      ) : null}
-                      {addPrivySmartWalletOwnerBusy ? (
+                      ) : addPrivySmartWalletOwnerBusy ? (
                         <div className="text-[11px] text-purple-200/80">Setting up smart wallet signer…</div>
                       ) : null}
                       {addPrivySmartWalletOwnerTxHash && (

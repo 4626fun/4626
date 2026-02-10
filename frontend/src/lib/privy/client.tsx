@@ -72,14 +72,16 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
   }
 
   const appearance = {
-    // Wallet-only auth should keep wallet login options at the top.
-    showWalletLoginFirst: true,
+    showWalletLoginFirst: false,
     // This app is EVM-only in current flows; hide Solana wallet choices.
     walletChainType: 'ethereum-only',
     walletList: ['metamask', 'coinbase_wallet', 'detected_ethereum_wallets'],
+    logo: '',
+    landingHeader: 'Sign in to 4626',
+    loginMessage: 'Enter your email to continue.',
+    theme: '#0f1117',
   } as const
-  // Featured guidelines: keep auth in-app and avoid email/phone verification flows.
-  const loginMethods = ['wallet'] as const
+  const loginMethods = ['email', 'google', 'twitter', 'farcaster'] as const
 
   // Zora's Privy App ID - enables cross-app wallet sharing (Global Wallet)
   const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'

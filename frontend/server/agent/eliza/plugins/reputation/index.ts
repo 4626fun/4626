@@ -12,6 +12,7 @@ import type { Action, Content, HandlerCallback, IAgentRuntime, Memory, Plugin, S
 
 // Direct imports — no HTTP bridge needed
 import { buildReputationGraph } from '../../../../_lib/reputationGraph.js'
+import { erc8004Identity } from '../../identity.js'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -20,6 +21,15 @@ import { buildReputationGraph } from '../../../../_lib/reputationGraph.js'
 function parseAgentIdFromText(text: string): number | null {
   const match = text.match(/(?:agentId\s*=\s*|#)?(\d+)/)
   return match ? parseInt(match[1], 10) : null
+}
+
+/** Resolve agent ID from options → text → own ERC-8004 identity. */
+function resolveAgentId(text: string, options?: Record<string, unknown>): number | null {
+  if (typeof options?.agentId === 'number') return options.agentId
+  const fromText = parseAgentIdFromText(text)
+  if (fromText !== null) return fromText
+  // Default to our own agent ID if configured
+  return erc8004Identity?.agentId ?? null
 }
 
 // ---------------------------------------------------------------------------
@@ -140,16 +150,16 @@ const reputationGraphAction: Action = {
     callback?: HandlerCallback,
   ) => {
     const text = message.content?.text ?? ''
-    const agentId = typeof options?.agentId === 'number'
-      ? options.agentId
-      : parseAgentIdFromText(text)
+    const agentId = resolveAgentId(text, options)
 
     if (agentId === null || isNaN(agentId)) {
-      await callback?.({ text: 'Usage: `/reputation <agentId>`\nProvide the numeric agent ID to build its reputation graph.' } as Content)
+      await callback?.({ text: 'Usage: `/reputation <agentId>`\nProvide the numeric agent ID to build its reputation graph.\n\n(Tip: set ERC8004_AGENT_ID to default to your own agent.)' } as Content)
       return
     }
 
-    await callback?.({ text: `Building reputation graph for Agent #${agentId}...` } as Content)
+    const isSelf = erc8004Identity && agentId === erc8004Identity.agentId
+    const label = isSelf ? `Agent #${agentId} (me)` : `Agent #${agentId}`
+    await callback?.({ text: `Building reputation graph for ${label}...` } as Content)
 
     try {
       const graph = await buildReputationGraph({ agentId })
@@ -161,8 +171,12 @@ const reputationGraphAction: Action = {
 
   examples: [
     [
-      { name: 'user', content: { text: '/reputation 1' } },
-      { name: 'agent', content: { text: 'Reputation Graph — Agent #1\nTotal Feedback: 12\nAverage Rating: 4.2 / 5\n...' } },
+      { name: 'user', content: { text: '/reputation 2205' } },
+      { name: 'agent', content: { text: 'Reputation Graph — Agent #2205\nTotal Feedback: 12\nAverage Rating: 4.2 / 5\n...' } },
+    ],
+    [
+      { name: 'user', content: { text: '/reputation' } },
+      { name: 'agent', content: { text: 'Building reputation graph for Agent #2205 (me)...\n...' } },
     ],
   ],
 }
@@ -185,12 +199,10 @@ const feedbackReadAction: Action = {
     callback?: HandlerCallback,
   ) => {
     const text = message.content?.text ?? ''
-    const agentId = typeof options?.agentId === 'number'
-      ? options.agentId
-      : parseAgentIdFromText(text)
+    const agentId = resolveAgentId(text, options)
 
     if (agentId === null || isNaN(agentId)) {
-      await callback?.({ text: 'Usage: `/feedback <agentId>`\nProvide the numeric agent ID to read its feedback.' } as Content)
+      await callback?.({ text: 'Usage: `/feedback <agentId>`\nProvide the numeric agent ID to read its feedback.\n\n(Tip: set ERC8004_AGENT_ID to default to your own agent.)' } as Content)
       return
     }
 
@@ -205,8 +217,12 @@ const feedbackReadAction: Action = {
 
   examples: [
     [
-      { name: 'user', content: { text: '/feedback 1' } },
-      { name: 'agent', content: { text: 'Feedback Summary — Agent #1\nTotal Reviews: 8\nAverage Rating: 3.8 / 5\n...' } },
+      { name: 'user', content: { text: '/feedback 2205' } },
+      { name: 'agent', content: { text: 'Feedback Summary — Agent #2205\nTotal Reviews: 8\nAverage Rating: 3.8 / 5\n...' } },
+    ],
+    [
+      { name: 'user', content: { text: '/feedback' } },
+      { name: 'agent', content: { text: 'Feedback Summary — Agent #2205 (me)\nTotal Reviews: 8\n...' } },
     ],
   ],
 }

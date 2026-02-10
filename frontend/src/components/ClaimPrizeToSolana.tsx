@@ -5,13 +5,13 @@
  *   1. Frontend resolves user's Twin via adapter.getTwinAddress(solanaPubkey)
  *   2. Shows prize details (token, amount) at the Twin address
  *   3. User clicks "Claim to Solana"
- *   4. Frontend constructs the EVM calls via the Twin:
+ *   4. Frontend constructs EVM calls to be executed by the Twin:
  *      a) ERC20.approve(adapter, amount) on the prizeToken
  *      b) adapter.bridgeToSolana(token, amount, solanaPubkey)
  *   5. If user has a Base wallet connected (via Privy):
- *      - Sends both txs directly from the Twin (or via the bridge attached-call pattern)
+ *      - Sends both txs directly from the EVM wallet
  *   6. If user only has Solana:
- *      - Copies calldata for manual execution or uses the Base-Solana bridge SDK
+ *      - Uses PayForRelay + bridge_call to execute the two calls from their Twin
  *   7. Prize arrives as wrapped SPL in user's Solana wallet
  *
  * Uses existing SolanaBridgeAdapter functions:
@@ -327,7 +327,7 @@ export function ClaimPrizeToSolana({
   }, [handleBridge]);
 
   // ---------------------------------------------------------------------------
-  // Calldata copy (for users without direct Base wallet)
+  // Solana relay payload (PayForRelay + bridge_call)
   // ---------------------------------------------------------------------------
 
   const approveCalldata = useMemo(() => {
@@ -348,18 +348,44 @@ export function ClaimPrizeToSolana({
     });
   }, [prizeToken, prizeAmountRaw, pubkeyBytes32]);
 
-  const handleCopyCalldata = useCallback(() => {
-    const text = [
-      `// Step 1: Approve (call on ${prizeToken})`,
-      approveCalldata,
-      '',
-      `// Step 2: Bridge (call on ${adapterAddress})`,
-      bridgeCalldata,
-    ].join('\n');
-    navigator.clipboard.writeText(text);
+  const relayPayload = useMemo(() => {
+    if (!pubkeyBytes32) return '';
+    return JSON.stringify(
+      {
+        solanaPubkey,
+        twinAddress,
+        steps: [
+          {
+            type: 'bridge_call',
+            payForRelay: true,
+            call: {
+              to: prizeToken,
+              data: approveCalldata,
+              value: '0',
+            },
+          },
+          {
+            type: 'bridge_call',
+            payForRelay: true,
+            call: {
+              to: adapterAddress,
+              data: bridgeCalldata,
+              value: '0',
+            },
+          },
+        ],
+      },
+      null,
+      2,
+    );
+  }, [pubkeyBytes32, solanaPubkey, twinAddress, prizeToken, approveCalldata, adapterAddress, bridgeCalldata]);
+
+  const handleCopyRelayPayload = useCallback(() => {
+    if (!relayPayload) return;
+    navigator.clipboard.writeText(relayPayload);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }, [approveCalldata, bridgeCalldata, prizeToken, adapterAddress]);
+  }, [relayPayload]);
 
   // ---------------------------------------------------------------------------
   // Render
@@ -505,10 +531,10 @@ export function ClaimPrizeToSolana({
           ) : (
             <div className="space-y-2">
               <p className="text-xs text-gray-400 text-center">
-                Connect your wallet on Base to claim directly, or copy the calldata below.
+                No ETH? Use PayForRelay + bridge_call from your Solana wallet.
               </p>
               <button
-                onClick={handleCopyCalldata}
+                onClick={handleCopyRelayPayload}
                 disabled={!hasPrize || !pubkeyBytes32}
                 className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
                   hasPrize
@@ -519,7 +545,7 @@ export function ClaimPrizeToSolana({
                 {copied ? (
                   <><Check className="w-4 h-4 text-emerald-400" /> Copied!</>
                 ) : (
-                  <><Copy className="w-4 h-4" /> Copy Claim Calldata</>
+                  <><Copy className="w-4 h-4" /> Copy Solana Relay Payload</>
                 )}
               </button>
             </div>
@@ -581,7 +607,7 @@ export function ClaimPrizeToSolana({
       <p className="text-xs text-gray-500 text-center mt-4">
         {isConnected
           ? 'Gas is paid in ETH on Base. Bridge fees may apply.'
-          : 'No ETH needed when claiming via the Solana bridge.'}
+          : 'No ETH needed when claiming via PayForRelay + bridge_call.'}
       </p>
     </motion.div>
   );

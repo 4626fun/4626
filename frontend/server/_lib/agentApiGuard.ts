@@ -8,6 +8,7 @@ export const AGENT_RATE_LIMITS = {
   read: { windowMs: 60_000, maxRequests: 120 },
   logs: { windowMs: 60_000, maxRequests: 30 },
   build: { windowMs: 60_000, maxRequests: 60 },
+  write: { windowMs: 60_000, maxRequests: 30 },
 } as const
 
 function setRateLimitHeaders(res: VercelResponse, result: DurableRateLimitResult) {

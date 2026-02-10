@@ -8,6 +8,10 @@ use crate::state::*;
 pub struct InitializeCreatorParams {
     /// The authorized keeper pubkey for this creator.
     pub keeper_authority: Pubkey,
+    /// Hub Creator Coin address (Base) encoded as bytes32.
+    pub hub_creator_coin: [u8; 32],
+    /// Hub ShareOFT address (Base) encoded as bytes32.
+    pub hub_share_oft: [u8; 32],
     /// Fee in basis points (informational, enforced by TransferFeeConfig).
     pub fee_bps: u16,
     /// Minimum withheld fee amount before flush_fees will execute.
@@ -74,6 +78,8 @@ pub fn handler(ctx: Context<InitializeCreator>, params: InitializeCreatorParams)
     config.creator_mint = ctx.accounts.creator_mint.key();
     config.authority = ctx.accounts.authority.key();
     config.keeper_authority = params.keeper_authority;
+    config.hub_creator_coin = params.hub_creator_coin;
+    config.hub_share_oft = params.hub_share_oft;
     config.fee_bps = params.fee_bps;
     config.flush_threshold = params.flush_threshold;
     config.lottery_enabled = params.lottery_enabled;

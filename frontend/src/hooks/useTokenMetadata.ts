@@ -36,6 +36,18 @@ function isSafeHttpUrl(input: string): boolean {
   }
 }
 
+function normalizeUrl(input: string | null | undefined): string | null {
+  const s = typeof input === 'string' ? input.trim() : ''
+  return s ? s : null
+}
+
+function normalizeImageUrl(input: string | null | undefined): string | null {
+  const s = normalizeUrl(input)
+  if (!s) return null
+  if (s.startsWith('data:image/')) return s
+  return isSafeHttpUrl(s) ? s : null
+}
+
 function toIpfsPath(raw: string): string {
   const s = String(raw || '').trim()
   if (!s) return ''
@@ -87,8 +99,11 @@ export function useTokenMetadata(tokenAddress: `0x${string}` | undefined) {
       setError(null)
 
       try {
-        const metadataUrl = ipfsToHttp(tokenURI)
-        if (!isSafeHttpUrl(metadataUrl) && !metadataUrl.startsWith('data:image/')) {
+        const metadataUrl = normalizeUrl(ipfsToHttp(tokenURI))
+        if (!metadataUrl) {
+          throw new Error('Empty tokenURI')
+        }
+        if (!isSafeHttpUrl(metadataUrl) && !metadataUrl.startsWith('data:')) {
           throw new Error('Unsafe tokenURI URL')
         }
         
@@ -98,8 +113,14 @@ export function useTokenMetadata(tokenAddress: `0x${string}` | undefined) {
         
         if (isImageExtension || isDataUri) {
           // tokenURI points directly to an image
-          setImageUrl(metadataUrl)
-          setMetadata({ image: metadataUrl })
+          const directImageUrl = normalizeImageUrl(metadataUrl)
+          if (directImageUrl) {
+            setImageUrl(directImageUrl)
+            setMetadata({ image: directImageUrl })
+          } else {
+            setImageUrl(null)
+            setMetadata(null)
+          }
           return
         }
 
@@ -125,15 +146,22 @@ export function useTokenMetadata(tokenAddress: `0x${string}` | undefined) {
 
         // Convert image URI to HTTP URL
         if (data.image) {
-          setImageUrl(ipfsToHttp(data.image))
+          setImageUrl(normalizeImageUrl(ipfsToHttp(data.image)))
+        } else {
+          setImageUrl(null)
         }
       } catch (err) {
         // If JSON parse fails, the URI might be a direct image link
         // Try using the tokenURI directly as an image
-        const directUrl = ipfsToHttp(tokenURI)
-        setImageUrl(directUrl)
-        setMetadata({ image: directUrl })
-        logger.debug('Using tokenURI directly as image', { directUrl })
+        const directUrl = normalizeImageUrl(ipfsToHttp(tokenURI))
+        if (directUrl) {
+          setImageUrl(directUrl)
+          setMetadata({ image: directUrl })
+          logger.debug('Using tokenURI directly as image', { directUrl })
+        } else {
+          setImageUrl(null)
+          setMetadata(null)
+        }
       } finally {
         setIsLoading(false)
       }

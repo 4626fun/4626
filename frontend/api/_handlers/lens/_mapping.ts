@@ -1,12 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { resolveCanonicalSmartWalletAddress } from '../../../server/_lib/canonicalWalletResolver.js'
 import { resolveLensUserByOwner } from '../../../server/_lib/lensAccounts.js'
-import { uploadImmutableJson } from '../../../server/_lib/lensGrove.js'
+import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 type LensMapping = {
+  requestedWallet: string
   wallet: string
   lens: {
     handle: string | null
@@ -80,13 +82,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const shouldStore = body.store !== false
 
   try {
-    const lensUser = await resolveLensUserByOwner(wallet)
+    const canonicalWallet = (await resolveCanonicalSmartWalletAddress(wallet)) ?? wallet
+    const lensUser = await resolveLensUserByOwner(canonicalWallet)
     if (!lensUser) {
       return res.status(200).json({ success: true, data: { mapping: null } } satisfies ApiEnvelope<LensMappingResponse>)
     }
 
     const mapping: LensMapping = {
-      wallet,
+      requestedWallet: wallet,
+      wallet: canonicalWallet,
       lens: {
         handle: lensUser.handle,
         username: lensUser.username,
@@ -96,7 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ownerAddress: lensUser.ownerAddress,
       },
       namespaces: {
-        wallet: `wallet:${wallet}`,
+        wallet: `wallet:${canonicalWallet}`,
         lensHandle: lensUser.handle ? `lens:${lensUser.handle}` : null,
         lensAccount: lensUser.accountAddress ? `lens:account:${lensUser.accountAddress.toLowerCase()}` : null,
         lensOwner: lensUser.ownerAddress ? `lens:owner:${lensUser.ownerAddress.toLowerCase()}` : null,
@@ -106,17 +110,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     let grove: GroveAttachment | undefined
+    let groveStatus: 'stored' | 'unavailable' | 'skipped' = 'skipped'
     if (shouldStore) {
-      const uploaded = await uploadImmutableJson(mapping)
-      grove = {
-        lensUri: uploaded.lensUri,
-        gatewayUrl: uploaded.gatewayUrl,
-        storageKey: uploaded.storageKey,
-        statusUrl: uploaded.statusUrl,
+      const attempt = await tryUploadImmutableJson(mapping)
+      if (attempt.ok) {
+        grove = {
+          lensUri: attempt.result.lensUri,
+          gatewayUrl: attempt.result.gatewayUrl,
+          storageKey: attempt.result.storageKey,
+          statusUrl: attempt.result.statusUrl,
+        }
+        groveStatus = 'stored'
+      } else {
+        groveStatus = 'unavailable'
       }
     }
 
-    return res.status(200).json({ success: true, data: { mapping, grove } } satisfies ApiEnvelope<LensMappingResponse>)
+    return res.status(200).json({ success: true, data: { mapping, grove, groveStatus } } satisfies ApiEnvelope<LensMappingResponse>)
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Failed to resolve Lens mapping'
     return res.status(500).json({ success: false, error: msg } satisfies ApiEnvelope<never>)

@@ -21,6 +21,12 @@ pub struct CreatorConfig {
     /// `flush_fees`, `drain_entries`, and `record_winner`.
     pub keeper_authority: Pubkey,
 
+    /// Hub Creator Coin address (Base) encoded as bytes32.
+    pub hub_creator_coin: [u8; 32],
+
+    /// Hub ShareOFT address (Base) encoded as bytes32.
+    pub hub_share_oft: [u8; 32],
+
     /// Fee in basis points (informational — actual fee is enforced by
     /// TransferFeeConfig on the mint, not by this program).
     pub fee_bps: u16,
@@ -50,9 +56,10 @@ pub struct CreatorConfig {
 
 impl CreatorConfig {
     /// Account discriminator (8) + fields.
-    /// Pubkey = 32, u16 = 2, u64 = 8, bool = 1, u8 = 1, [Pubkey; 16] = 512, u8 = 1, [u8; 64] = 64
-    /// Total: 8 + 32 + 32 + 32 + 2 + 8 + 1 + 1 + 512 + 1 + 64 = 693
-    pub const LEN: usize = 8 + 32 + 32 + 32 + 2 + 8 + 1 + 1 + 512 + 1 + 64;
+    /// Pubkey = 32, bytes32 = 32, u16 = 2, u64 = 8, bool = 1, u8 = 1, [Pubkey; 8] = 256, u8 = 1, [u8; 64] = 64
+    /// Total: 8 + 32 + 32 + 32 + 32 + 32 + 2 + 8 + 1 + 1 + 256 + 1 + 64 = 501
+    pub const LEN: usize =
+        8 + 32 + 32 + 32 + 32 + 32 + 2 + 8 + 1 + 1 + (32 * MAX_AMM_PROGRAMS) + 1 + 64;
 
     /// Check if a pubkey is in the known AMM program list.
     pub fn is_known_amm(&self, program_id: &Pubkey) -> bool {

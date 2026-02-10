@@ -45,18 +45,23 @@ async function parseGroveResponse(response: Response): Promise<GroveUploadResult
   return normalizeUploadItem(items[0])
 }
 
+/**
+ * One-step immutable upload to Grove.
+ *
+ * Per the Lens docs the one-step shortcut sends the raw binary body with a
+ * `Content-Type` header — **not** multipart form-data.
+ *
+ * @see https://lens.xyz/docs/protocol/grove
+ */
 export async function uploadImmutableBlob(
   input: Blob,
   contentType: string,
   chainId: number = LENS_MAINNET_CHAIN_ID,
 ): Promise<GroveUploadResult> {
-  const formData = new FormData()
-  const fileName = `upload-${Date.now()}`
-  const blob = contentType ? input.slice(0, input.size, contentType) : input
-  formData.append('file', blob, fileName)
   const response = await fetch(`https://api.grove.storage/?chain_id=${chainId}`, {
     method: 'POST',
-    body: formData,
+    headers: { 'Content-Type': contentType || 'application/octet-stream' },
+    body: input,
   })
   return parseGroveResponse(response)
 }
@@ -65,8 +70,13 @@ export async function uploadImmutableJson(
   data: unknown,
   chainId: number = LENS_MAINNET_CHAIN_ID,
 ): Promise<GroveUploadResult> {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-  return uploadImmutableBlob(blob, 'application/json', chainId)
+  const body = JSON.stringify(data, null, 2)
+  const response = await fetch(`https://api.grove.storage/?chain_id=${chainId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  })
+  return parseGroveResponse(response)
 }
 
 export function resolveLensUri(uri: string): string {

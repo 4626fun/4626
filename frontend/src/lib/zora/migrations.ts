@@ -36,12 +36,21 @@ function isCorsRestrictedRpc(url: string): boolean {
   return /(^|\/\/)base-mainnet\.g\.alchemy\.com/i.test(url) || /\.g\.alchemy\.com\//i.test(url)
 }
 
+function normalizeRpcUrl(url: string): string | null {
+  const s = String(url || '').trim()
+  if (!s) return null
+  if (s.startsWith('http://') || s.startsWith('https://')) return s
+  if (s.startsWith('/')) return s
+  return null
+}
+
 function getBaseRpcUrl(): string {
+  const normalized = normalizeRpcUrl(BASE_RPC_RAW)
   if (IS_BROWSER) {
-    if (BASE_RPC_RAW && !isCorsRestrictedRpc(BASE_RPC_RAW)) return BASE_RPC_RAW
+    if (normalized && !isCorsRestrictedRpc(normalized)) return normalized
     return '/api/rpc'
   }
-  if (BASE_RPC_RAW) return BASE_RPC_RAW
+  if (normalized) return normalized
   return 'https://base-mainnet.public.blastapi.io'
 }
 

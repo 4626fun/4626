@@ -22,6 +22,7 @@
 import { requireEnv, CHAINS } from '../config.js';
 import { getPublicClient } from '../utils/onchain.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
+import { loadKeeperKeypair } from '../utils/solana.js';
 
 const WORKFLOW_NAME = 'keepr-solana-winner-relay';
 
@@ -32,20 +33,6 @@ const WORKFLOW_NAME = 'keepr-solana-winner-relay';
 export interface WinnerRelayResult {
   eventsProcessed: number;
   winnersRecorded: number;
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function loadKeeperKeypair() {
-  const { Keypair } = require('@solana/web3.js');
-  const bs58 = require('bs58');
-  const secretKeyStr = requireEnv('SOLANA_KEEPER_KEYPAIR');
-  if (secretKeyStr.startsWith('[')) {
-    return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyStr)));
-  }
-  return Keypair.fromSecretKey(bs58.decode(secretKeyStr));
 }
 
 // Last processed block — persisted in memory between invocations.

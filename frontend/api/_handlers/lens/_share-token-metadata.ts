@@ -10,7 +10,7 @@ import {
   setCors,
 } from '../../../server/zora/_shared.js'
 import { buildShareTokenMetadata } from '../../../server/_lib/shareTokenMetadata.js'
-import { uploadImmutableJson, resolveLensUri } from '../../../server/_lib/lensGrove.js'
+import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -56,21 +56,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let grove: GroveAttachment | undefined
     let contractUri: string | undefined
+    let groveStatus: 'stored' | 'unavailable' | 'skipped' = 'skipped'
     if (shouldStore) {
-      const uploaded = await uploadImmutableJson(metadata)
-      grove = {
-        lensUri: uploaded.lensUri,
-        gatewayUrl: uploaded.gatewayUrl,
-        storageKey: uploaded.storageKey,
-        statusUrl: uploaded.statusUrl,
+      const attempt = await tryUploadImmutableJson(metadata)
+      if (attempt.ok) {
+        grove = {
+          lensUri: attempt.result.lensUri,
+          gatewayUrl: attempt.result.gatewayUrl,
+          storageKey: attempt.result.storageKey,
+          statusUrl: attempt.result.statusUrl,
+        }
+        contractUri = attempt.result.lensUri
+        groveStatus = 'stored'
+      } else {
+        groveStatus = 'unavailable'
       }
-      contractUri = uploaded.lensUri
     }
 
     const payload: ShareTokenMetadataResponse = {
       metadata,
       grove,
       contractUri,
+      groveStatus,
     }
 
     return res.status(200).json({ success: true, data: payload } satisfies ApiEnvelope<ShareTokenMetadataResponse>)

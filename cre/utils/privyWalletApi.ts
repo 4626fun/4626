@@ -4,23 +4,10 @@ declare const process: { env: Record<string, string | undefined> }
 
 const PRIVY_API_ORIGIN = 'https://api.privy.io'
 
-type PrivyWallet = {
-  id: string
-  address: string
-  chain_type: 'ethereum' | string
-  policy_ids: string[]
-  owner_id: string | null
-}
-
 function requireEnv(key: string): string {
   const v = (process.env[key] ?? '').trim()
   if (!v) throw new Error(`${key} missing`)
   return v
-}
-
-function optionalEnv(key: string): string | null {
-  const v = (process.env[key] ?? '').trim()
-  return v ? v : null
 }
 
 function basicAuthHeader(appId: string, appSecret: string): string {
@@ -29,13 +16,10 @@ function basicAuthHeader(appId: string, appSecret: string): string {
 }
 
 function normalizePrivyUrl(url: string): string {
-  // Privy signature payload requires full URL without trailing slash.
   return url.endsWith('/') ? url.slice(0, -1) : url
 }
 
 function stableCanonicalize(value: unknown): string {
-  // Deterministic JSON serialization (RFC8785-ish): recursively sort object keys.
-  // This is sufficient for our simple signature payloads (strings, objects, arrays).
   if (value === null || value === undefined) return 'null'
   if (typeof value === 'number') return Number.isFinite(value) ? JSON.stringify(value) : 'null'
   if (typeof value === 'boolean' || typeof value === 'string') return JSON.stringify(value)
@@ -46,12 +30,10 @@ function stableCanonicalize(value: unknown): string {
     const parts = keys.map((k) => `${JSON.stringify(k)}:${stableCanonicalize(obj[k])}`)
     return `{${parts.join(',')}}`
   }
-  // functions/symbols/etc are not valid in JSON signature payloads
   return JSON.stringify(String(value))
 }
 
 function getAuthorizationKeyPrivateKeyPem(): string {
-  // Privy authorization keys are provided as PKCS#8 base64 with `wallet-auth:` prefix.
   const raw = requireEnv('PRIVY_WALLET_AUTHORIZATION_KEY')
   const b64 = raw.replace(/^wallet-auth:/, '').trim()
   if (!b64) throw new Error('PRIVY_WALLET_AUTHORIZATION_KEY invalid')
@@ -59,27 +41,9 @@ function getAuthorizationKeyPrivateKeyPem(): string {
 }
 
 function getPrivyAuth(): { appId: string; appSecret: string } {
-  // Reuse the same env vars we already use for Privy server-auth.
   const appId = requireEnv('PRIVY_APP_ID')
   const appSecret = requireEnv('PRIVY_APP_SECRET')
   return { appId, appSecret }
-}
-
-function getPrivyOwnerId(): string {
-  // This should be the key quorum ID (preferred) or owner id configured in Privy.
-  return requireEnv('PRIVY_WALLET_OWNER_ID')
-}
-
-function getPrivyPolicyId(): string | null {
-  return optionalEnv('PRIVY_WALLET_POLICY_ID')
-}
-
-function requirePrivyPolicyId(): string | null {
-  const id = getPrivyPolicyId()
-  const nodeEnv = (process.env.NODE_ENV ?? '').trim().toLowerCase()
-  const isProd = nodeEnv === 'production' || Boolean((process.env.VERCEL ?? '').trim())
-  if (isProd && !id) throw new Error('PRIVY_WALLET_POLICY_ID missing')
-  return id
 }
 
 function makePrivyAuthorizationSignature(params: {
@@ -144,40 +108,13 @@ async function privyFetchJson<T>(params: {
   }
 }
 
-export async function createAgentWallet(params?: { idempotencyKey?: string }): Promise<{ walletId: string; address: `0x${string}` }> {
-  const ownerId = getPrivyOwnerId()
-  const policyId = requirePrivyPolicyId()
-
-  const body: any = {
-    chain_type: 'ethereum',
-    owner_id: ownerId,
-  }
-  if (policyId) body.policy_ids = [policyId]
-
-  const wallet = await privyFetchJson<PrivyWallet>({
-    method: 'POST',
-    path: '/v1/wallets',
-    body,
-    idempotencyKey: params?.idempotencyKey,
-  })
-
-  const addr = String(wallet?.address ?? '').trim()
-  if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) throw new Error('privy_create_wallet_invalid_address')
-  return { walletId: String(wallet.id), address: addr.toLowerCase() as `0x${string}` }
-}
-
 export async function walletRpc<T>(params: {
   walletId: string
   method: string
   rpcParams: any
-  chainType?: 'ethereum' | 'solana'
   idempotencyKey?: string
 }): Promise<T> {
-  const body = {
-    method: params.method,
-    params: params.rpcParams,
-    chain_type: params.chainType ?? 'ethereum',
-  }
+  const body = { method: params.method, params: params.rpcParams }
   return await privyFetchJson<T>({
     method: 'POST',
     path: `/v1/wallets/${encodeURIComponent(params.walletId)}/rpc`,
@@ -186,7 +123,11 @@ export async function walletRpc<T>(params: {
   })
 }
 
-export async function secp256k1SignHash(params: { walletId: string; hash: `0x${string}`; idempotencyKey?: string }): Promise<`0x${string}`> {
+export async function secp256k1SignHash(params: {
+  walletId: string
+  hash: `0x${string}`
+  idempotencyKey?: string
+}): Promise<`0x${string}`> {
   const res = await walletRpc<any>({
     walletId: params.walletId,
     method: 'secp256k1_sign',
@@ -197,4 +138,3 @@ export async function secp256k1SignHash(params: { walletId: string; hash: `0x${s
   if (!/^0x[0-9a-fA-F]+$/.test(sig)) throw new Error('privy_secp256k1_sign_invalid_signature')
   return sig as `0x${string}`
 }
-

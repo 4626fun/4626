@@ -439,6 +439,11 @@ const SELECTOR_VAULT_SET_WHITELIST = '0x53d6fd59' // setWhitelist(address,bool)
 const SELECTOR_ERC8004_REGISTER = '0xf2c298be' // register(string)
 const SELECTOR_ERC8004_SET_AGENT_URI = '0x0af28bd3' // setAgentURI(uint256,string)
 
+// ERC-8004 Reputation Registry selectors
+const SELECTOR_ERC8004_GIVE_FEEDBACK = '0x3c036a7e' // giveFeedback(uint256,int128,uint8,string,string,string,string,bytes32)
+const SELECTOR_ERC8004_REVOKE_FEEDBACK = '0x4ab3ca99' // revokeFeedback(uint256,uint64)
+const SELECTOR_ERC8004_APPEND_RESPONSE = '0xc2349ab2' // appendResponse(uint256,address,uint64,string,bytes32)
+
 const ALLOWED_BATCHER_SELECTORS = new Set<string>([
   SELECTOR_BATCHER_DEPLOY_PHASE1,
   SELECTOR_BATCHER_DEPLOY_PHASE1_WITH_SALT,
@@ -459,6 +464,11 @@ const ALLOWED_TOKEN_SELECTORS = new Set<string>([SELECTOR_ERC20_APPROVE, SELECTO
 const ALLOWED_PERMIT2_SELECTORS = new Set<string>([SELECTOR_PERMIT2_PERMIT_TRANSFER_FROM])
 const ALLOWED_SELF_SELECTORS = new Set<string>([SELECTOR_CSW_ADD_OWNER_ADDRESS, SELECTOR_CSW_REMOVE_OWNER_AT_INDEX])
 const ALLOWED_ERC8004_SELECTORS = new Set<string>([SELECTOR_ERC8004_REGISTER, SELECTOR_ERC8004_SET_AGENT_URI])
+const ALLOWED_ERC8004_REPUTATION_SELECTORS = new Set<string>([
+  SELECTOR_ERC8004_GIVE_FEEDBACK,
+  SELECTOR_ERC8004_REVOKE_FEEDBACK,
+  SELECTOR_ERC8004_APPEND_RESPONSE,
+])
 
 const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
   {
@@ -488,6 +498,14 @@ function getErc8004RegistryAddress(): Address | null {
   const raw = (process.env.ERC8004_AGENT_REGISTRY ?? '').trim()
   if (raw && isAddress(raw)) return getAddress(raw)
   return ERC8004_IDENTITY_REGISTRY_DEFAULT
+}
+
+const ERC8004_REPUTATION_REGISTRY_DEFAULT = getAddress('0x8004BAa17C55a88189AE136b182e5fdA19dE9b63')
+
+function getErc8004ReputationRegistryAddress(): Address | null {
+  const raw = (process.env.ERC8004_REPUTATION_REGISTRY ?? '').trim()
+  if (raw && isAddress(raw)) return getAddress(raw)
+  return ERC8004_REPUTATION_REGISTRY_DEFAULT
 }
 
 function readDeploySessionHeaders(req: VercelRequest): { token: string; signature: string } | null {
@@ -1075,6 +1093,17 @@ async function validateInnerCalls(params: {
     }
   }
 
+  // ERC-8004 Reputation Registry: allow giveFeedback / revokeFeedback / appendResponse
+  const erc8004ReputationRegistry = getErc8004ReputationRegistryAddress()
+  if (erc8004ReputationRegistry) {
+    const isReputationCall =
+      innerCalls.length > 0 &&
+      innerCalls.every((c) => c.target === erc8004ReputationRegistry && ALLOWED_ERC8004_REPUTATION_SELECTORS.has(getSelector(c.data)))
+    if (isReputationCall) {
+      return { expectedCreatorToken: null, mode: 'reputation_feedback' }
+    }
+  }
+
   // Pass 1: detect the "primary" token from the deploy/activate call.
   let mode:
     | 'deploy_phase1'
@@ -1086,6 +1115,7 @@ async function validateInnerCalls(params: {
     | 'approve_only'
     | 'legacy_withdraw'
     | 'agent_registry'
+    | 'reputation_feedback'
     | null = null
   let expectedCreatorToken: Address | null = null
   let expectedVault: Address | null = null

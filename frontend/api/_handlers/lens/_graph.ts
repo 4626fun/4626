@@ -1,8 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { resolveCanonicalSmartWalletAddress } from '../../../server/_lib/canonicalWalletResolver.js'
 import { resolveLensUserByOwner } from '../../../server/_lib/lensAccounts.js'
-import { uploadImmutableJson } from '../../../server/_lib/lensGrove.js'
+import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -28,6 +29,8 @@ type GraphGroup = {
 }
 
 type LensGraph = {
+  requestedWallet: string
+  wallet: string
   nodes: GraphNode[]
   edges: GraphEdge[]
   groups: GraphGroup[]
@@ -89,17 +92,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const shouldStore = body.store !== false
 
   try {
-    const lensUser = await resolveLensUserByOwner(wallet)
+    const canonicalWallet = (await resolveCanonicalSmartWalletAddress(wallet)) ?? wallet
+    const lensUser = await resolveLensUserByOwner(canonicalWallet)
     if (!lensUser) {
       return res.status(200).json({ success: true, data: { graph: null } } satisfies ApiEnvelope<LensGraphResponse>)
     }
 
-    const walletNodeId = `wallet:${wallet}`
+    const walletNodeId = `wallet:${canonicalWallet}`
     const lensAccountId = `lens:account:${lensUser.accountAddress.toLowerCase()}`
     const lensOwnerId = lensUser.ownerAddress ? `lens:owner:${lensUser.ownerAddress.toLowerCase()}` : null
 
     const nodes: GraphNode[] = [
-      { id: walletNodeId, label: wallet, type: 'wallet', address: wallet },
+      { id: walletNodeId, label: canonicalWallet, type: 'wallet', address: canonicalWallet },
       {
         id: lensAccountId,
         label: lensUser.handle ? `@${lensUser.handle}` : lensUser.accountAddress,
@@ -126,7 +130,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         id: 'namespace:wallet',
         label: 'Wallet namespace',
         nodeIds: [walletNodeId],
-        namespace: `wallet:${wallet}`,
+        namespace: `wallet:${canonicalWallet}`,
       },
     ]
 
@@ -149,6 +153,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const graph: LensGraph = {
+      requestedWallet: wallet,
+      wallet: canonicalWallet,
       nodes,
       edges,
       groups,
@@ -157,17 +163,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     let grove: GroveAttachment | undefined
+    let groveStatus: 'stored' | 'unavailable' | 'skipped' = 'skipped'
     if (shouldStore) {
-      const uploaded = await uploadImmutableJson(graph)
-      grove = {
-        lensUri: uploaded.lensUri,
-        gatewayUrl: uploaded.gatewayUrl,
-        storageKey: uploaded.storageKey,
-        statusUrl: uploaded.statusUrl,
+      const attempt = await tryUploadImmutableJson(graph)
+      if (attempt.ok) {
+        grove = {
+          lensUri: attempt.result.lensUri,
+          gatewayUrl: attempt.result.gatewayUrl,
+          storageKey: attempt.result.storageKey,
+          statusUrl: attempt.result.statusUrl,
+        }
+        groveStatus = 'stored'
+      } else {
+        groveStatus = 'unavailable'
       }
     }
 
-    return res.status(200).json({ success: true, data: { graph, grove } } satisfies ApiEnvelope<LensGraphResponse>)
+    return res.status(200).json({ success: true, data: { graph, grove, groveStatus } } satisfies ApiEnvelope<LensGraphResponse>)
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Failed to build Lens graph'
     return res.status(500).json({ success: false, error: msg } satisfies ApiEnvelope<never>)

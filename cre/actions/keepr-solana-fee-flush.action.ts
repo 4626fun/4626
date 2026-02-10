@@ -24,6 +24,7 @@ import {
 } from '../config.js';
 import { writeContract } from '../utils/onchain.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
+import { loadKeeperKeypair, solanaPubkeyToBytes32 } from '../utils/solana.js';
 
 const WORKFLOW_NAME = 'keepr-solana-fee-flush';
 
@@ -39,26 +40,6 @@ export interface FeeFlushResult {
   amountFlushed: string;
   bridged: boolean;
   forwardedToGauge: boolean;
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function solanaPubkeyToBytes32(pubkey: string): `0x${string}` {
-  const { PublicKey } = require('@solana/web3.js');
-  const pk = new PublicKey(pubkey);
-  return ('0x' + Buffer.from(pk.toBytes()).toString('hex')) as `0x${string}`;
-}
-
-function loadKeeperKeypair() {
-  const { Keypair } = require('@solana/web3.js');
-  const bs58 = require('bs58');
-  const secretKeyStr = requireEnv('SOLANA_KEEPER_KEYPAIR');
-  if (secretKeyStr.startsWith('[')) {
-    return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyStr)));
-  }
-  return Keypair.fromSecretKey(bs58.decode(secretKeyStr));
 }
 
 // ---------------------------------------------------------------------------
@@ -83,14 +64,19 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
       TOKEN_2022_PROGRAM_ID,
       getTransferFeeConfig,
       getMint,
-      createHarvestWithheldTokensToMintInstruction,
-      createWithdrawWithheldTokensFromMintInstruction,
+      getAccount,
       getAssociatedTokenAddressSync,
       createAssociatedTokenAccountIdempotentInstruction,
     } = require('@solana/spl-token');
 
     const connection = new Connection(solanaRpcUrl, 'confirmed');
     const keeperKeypair = loadKeeperKeypair();
+    const programPubkey = new PublicKey(CHAINS.solana.programId);
+    const flushDiscriminator = require('crypto')
+      .createHash('sha256')
+      .update('global:flush_fees')
+      .digest()
+      .subarray(0, 8);
 
     const creatorMints = (process.env.SOLANA_CREATOR_MINTS ?? '').split(',').filter(Boolean);
     const shareOFTMapping = JSON.parse(process.env.SOLANA_SHARE_OFT_MAPPING ?? '{}');
@@ -120,8 +106,7 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
         continue;
       }
 
-      // Step 2: Harvest withheld tokens from all token accounts to the mint
-      // This is permissionless — anyone can call it
+      // Step 2: Gather token accounts to harvest from
       const accountsWithFees: PublicKey[] = [];
 
       // Get ALL token accounts for this mint (not just keeper's)
@@ -166,56 +151,20 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
         accountsWithFees.push(acct.pubkey);
       }
 
-      if (accountsWithFees.length > 0) {
-        await alertInfo(WORKFLOW_NAME, `Harvesting fees from ${accountsWithFees.length} accounts for ${mintStr}`);
+      // Step 3: Derive creator_config PDA (required by flush_fees)
+      const [creatorConfigPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('creator_config'), mint.toBuffer()],
+        programPubkey,
+      );
 
-        // Batch harvest (max ~20 accounts per tx due to tx size limits)
-        const batchSize = 20;
-        for (let i = 0; i < accountsWithFees.length; i += batchSize) {
-          const batch = accountsWithFees.slice(i, i + batchSize);
-          const harvestIx = createHarvestWithheldTokensToMintInstruction(
-            mint,
-            batch,
-            TOKEN_2022_PROGRAM_ID,
-          );
-          const tx = new Transaction().add(harvestIx);
-          try {
-            await sendAndConfirmTransaction(connection, tx, [keeperKeypair], {
-              commitment: 'confirmed',
-            });
-          } catch (harvestErr: unknown) {
-            const msg = harvestErr instanceof Error ? harvestErr.message : String(harvestErr);
-            await alertWarning(WORKFLOW_NAME, `Harvest batch failed: ${msg}`);
-          }
-        }
-      }
-
-      // Step 3: Withdraw aggregated fees from the mint to the keeper's ATA
-      // Re-read the mint to get updated withheld amount
-      const updatedMint = await getMint(connection, mint, 'confirmed', TOKEN_2022_PROGRAM_ID);
-      const updatedFeeConfig = getTransferFeeConfig(updatedMint);
-      const totalWithheld = BigInt(updatedFeeConfig?.withheldAmount?.toString() ?? '0');
-
-      if (totalWithheld < MIN_FEE_THRESHOLD) {
-        await alertInfo(WORKFLOW_NAME, `Fee amount below threshold for ${mintStr}`, {
-          withheld: totalWithheld.toString(),
-          threshold: MIN_FEE_THRESHOLD.toString(),
-        });
-        continue;
-      }
-
-      // Create/ensure keeper's ATA exists
+      // Step 4: Create/ensure keeper's ATA exists
       const keeperAta = getAssociatedTokenAddressSync(
         mint,
         keeperKeypair.publicKey,
         false,
         TOKEN_2022_PROGRAM_ID,
       );
-
-      const withdrawTx = new Transaction();
-
-      // Ensure ATA exists
-      withdrawTx.add(
+      const ensureAtaTx = new Transaction().add(
         createAssociatedTokenAccountIdempotentInstruction(
           keeperKeypair.publicKey, // payer
           keeperAta,
@@ -225,30 +174,63 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
         ),
       );
 
-      // Withdraw withheld tokens from mint to keeper ATA
-      // NOTE: This requires the withdraw_withheld_tokens_from_mint authority
-      withdrawTx.add(
-        createWithdrawWithheldTokensFromMintInstruction(
-          mint,
-          keeperAta,
-          keeperKeypair.publicKey, // must be the withdraw authority
-          [],
-          TOKEN_2022_PROGRAM_ID,
-        ),
-      );
-
       try {
-        const sig = await sendAndConfirmTransaction(connection, withdrawTx, [keeperKeypair], {
+        await sendAndConfirmTransaction(connection, ensureAtaTx, [keeperKeypair], {
           commitment: 'confirmed',
         });
-        await alertInfo(WORKFLOW_NAME, `Withdrew ${totalWithheld} fee tokens for ${mintStr}`, { sig });
-        totalFeesFlushed += totalWithheld;
-        result.feesFlushed = true;
-      } catch (withdrawErr: unknown) {
-        const msg = withdrawErr instanceof Error ? withdrawErr.message : String(withdrawErr);
-        await alertCritical(WORKFLOW_NAME, `Fee withdrawal failed for ${mintStr}: ${msg}`);
+      } catch (ataErr: unknown) {
+        const msg = ataErr instanceof Error ? ataErr.message : String(ataErr);
+        await alertWarning(WORKFLOW_NAME, `Failed to ensure ATA for ${mintStr}: ${msg}`);
+      }
+
+      // Step 5: Call flush_fees on the hook program (harvest + withdraw)
+      const batchSize = 20;
+      const batches = accountsWithFees.length > 0
+        ? Array.from({ length: Math.ceil(accountsWithFees.length / batchSize) }, (_, i) =>
+            accountsWithFees.slice(i * batchSize, i * batchSize + batchSize),
+          )
+        : [[]];
+
+      for (const batch of batches) {
+        const flushIx = {
+          programId: programPubkey,
+          keys: [
+            { pubkey: keeperKeypair.publicKey, isSigner: true, isWritable: false },
+            { pubkey: creatorConfigPda, isSigner: false, isWritable: false },
+            { pubkey: mint, isSigner: false, isWritable: true },
+            { pubkey: keeperAta, isSigner: false, isWritable: true },
+            { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+            ...batch.map((acct) => ({ pubkey: acct, isSigner: false, isWritable: true })),
+          ],
+          data: flushDiscriminator,
+        };
+
+        const tx = new Transaction().add(flushIx);
+        try {
+          const sig = await sendAndConfirmTransaction(connection, tx, [keeperKeypair], {
+            commitment: 'confirmed',
+          });
+          await alertInfo(WORKFLOW_NAME, `flush_fees executed for ${mintStr}`, { sig });
+        } catch (flushErr: unknown) {
+          const msg = flushErr instanceof Error ? flushErr.message : String(flushErr);
+          await alertWarning(WORKFLOW_NAME, `flush_fees failed for ${mintStr}: ${msg}`);
+        }
+      }
+
+      // Step 6: Read fee_vault balance after flush
+      const feeVaultAccount = await getAccount(connection, keeperAta, 'confirmed', TOKEN_2022_PROGRAM_ID);
+      const feeVaultAmount = BigInt(feeVaultAccount.amount.toString());
+
+      if (feeVaultAmount < MIN_FEE_THRESHOLD) {
+        await alertInfo(WORKFLOW_NAME, `Fee amount below threshold for ${mintStr}`, {
+          withheld: feeVaultAmount.toString(),
+          threshold: MIN_FEE_THRESHOLD.toString(),
+        });
         continue;
       }
+
+      totalFeesFlushed += feeVaultAmount;
+      result.feesFlushed = true;
 
       // Step 4: Bridge fees to Base and forward to gauge
       // The bridge step happens via the Base-Solana native bridge.
@@ -266,7 +248,7 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
         address: solanaBridgeAdapter,
         abi: SOLANA_BRIDGE_ADAPTER_ABI,
         functionName: 'receiveFeeFromSolana',
-        args: [keeperBytes32, shareOFT, totalWithheld],
+        args: [keeperBytes32, shareOFT, feeVaultAmount],
       });
 
       if (txResult.success) {
@@ -275,7 +257,7 @@ export async function executeSolanaFeeFlush(): Promise<FeeFlushResult> {
         result.amountFlushed = totalFeesFlushed.toString();
         await alertInfo(WORKFLOW_NAME, 'Fees forwarded to gauge', {
           txHash: txResult.txHash,
-          amount: totalWithheld.toString(),
+          amount: feeVaultAmount.toString(),
           mint: mintStr,
         });
       } else {

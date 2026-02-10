@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Copy, ExternalLink, ShieldCheck } from 'lucide-react'
 import { useAccount, useBlockNumber, useChainId, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
@@ -649,6 +649,11 @@ function AgentRegistration() {
     status: 'idle' | 'loading' | 'success' | 'error'
     error?: string
   }>({ status: 'idle' })
+  const [lensPublishState, setLensPublishState] = useState<{
+    status: 'idle' | 'loading' | 'success' | 'error'
+    error?: string
+  }>({ status: 'idle' })
+  const [lensPublishResult, setLensPublishResult] = useState<{ lensUri?: string; gatewayUrl?: string } | null>(null)
   const [registerTxState, setRegisterTxState] = useState<TxState>({ status: 'idle' })
   const [updateTxState, setUpdateTxState] = useState<TxState>({ status: 'idle' })
   const [registeredAgentId, setRegisteredAgentId] = useState<string | null>(null)
@@ -772,6 +777,44 @@ function AgentRegistration() {
       setAgentUriState({ status: 'error', error: msg })
     }
   }
+
+  const publishAgentRegistrationToLens = useCallback(async () => {
+    setLensPublishState({ status: 'loading' })
+    setLensPublishResult(null)
+    try {
+      const res = await fetch('/api/lens/agent-registration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ store: true }),
+      })
+      const payload = (await res.json().catch(() => null)) as any
+      if (!res.ok || !payload?.success) {
+        throw new Error(payload?.error || `Request failed (${res.status}).`)
+      }
+      const grove = payload?.data?.grove
+      const lensUri = grove?.lensUri ? String(grove.lensUri) : undefined
+      const gatewayUrl = grove?.gatewayUrl ? String(grove.gatewayUrl) : undefined
+      if (lensUri) setAgentUri(lensUri)
+      setLensPublishResult({ lensUri, gatewayUrl })
+      setLensPublishState({ status: 'success' })
+    } catch (e: any) {
+      const msg = String(e?.message || 'Failed to publish registration.')
+      setLensPublishState({ status: 'error', error: msg })
+    }
+  }, [])
+
+  const autoPublishedAgentUri = useRef(false)
+
+  useEffect(() => {
+    if (autoPublishedAgentUri.current) return
+    const trimmed = agentUri.trim()
+    if (trimmed && trimmed !== ERC8004_AGENT_URI_DEFAULT) {
+      autoPublishedAgentUri.current = true
+      return
+    }
+    autoPublishedAgentUri.current = true
+    void publishAgentRegistrationToLens()
+  }, [agentUri, publishAgentRegistrationToLens])
 
   const extractAgentId = (receipt: { logs?: Array<{ address: string; data: Hex; topics: Hex[] }> }) => {
     const logs = receipt.logs ?? []
@@ -1109,15 +1152,46 @@ function AgentRegistration() {
                 className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
               />
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-600">
-                <span>Use a content-addressed URI (data: or ipfs://) to pass validation.</span>
+                <span>Default publishes to Lens Grove for a lens:// URI. Fallbacks: data:, ipfs://.</span>
                 <button
                   type="button"
                   onClick={() => void buildContentAddressedUri()}
                   className="text-zinc-300 hover:text-white transition-colors"
                 >
-                  Use data URI
+                  Use data URI (fallback)
                 </button>
               </div>
+              <button
+                type="button"
+                onClick={() => void publishAgentRegistrationToLens()}
+                disabled={lensPublishState.status === 'loading'}
+                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {lensPublishState.status === 'loading' ? 'Publishing…' : 'Publish to Lens Grove'}
+              </button>
+              {lensPublishState.status === 'error' ? (
+                <div className="text-xs text-red-400">{lensPublishState.error}</div>
+              ) : lensPublishState.status === 'success' ? (
+                <div className="text-xs text-emerald-300/90">Published to Lens Grove.</div>
+              ) : null}
+              {lensPublishResult?.lensUri ? (
+                <div className="text-xs text-zinc-500">
+                  Grove URI: <span className="font-mono text-zinc-300">{lensPublishResult.lensUri}</span>
+                </div>
+              ) : null}
+              {lensPublishResult?.gatewayUrl ? (
+                <a
+                  className="text-xs text-brand-accent hover:text-brand-primary"
+                  href={lensPublishResult.gatewayUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  View Grove gateway
+                </a>
+              ) : null}
+              <Link className="text-xs text-brand-accent hover:text-brand-primary" to="/agents/uri-service">
+                Agent URI service docs
+              </Link>
               {agentUriState.status === 'loading' ? (
                 <div className="text-xs text-zinc-500">Building content-addressed URI…</div>
               ) : agentUriState.status === 'error' ? (
@@ -1178,6 +1252,438 @@ function AgentRegistration() {
               <TxMeta state={registerTxState} />
             </div>
           </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// ERC-8004 Reputation / Feedback
+// ---------------------------------------------------------------------------
+
+const ERC8004_REPUTATION_REGISTRY = '0x8004BAa17C55a88189AE136b182e5fdA19dE9b63'
+
+const ERC8004_REPUTATION_REGISTRY_ABI = [
+  { name: 'giveFeedback', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'agentId', type: 'uint256' }, { name: 'value', type: 'int128' }, { name: 'valueDecimals', type: 'uint8' }, { name: 'tag1', type: 'string' }, { name: 'tag2', type: 'string' }, { name: 'endpoint', type: 'string' }, { name: 'feedbackURI', type: 'string' }, { name: 'feedbackHash', type: 'bytes32' }], outputs: [] },
+  { name: 'revokeFeedback', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'agentId', type: 'uint256' }, { name: 'feedbackIndex', type: 'uint64' }], outputs: [] },
+  { name: 'appendResponse', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'agentId', type: 'uint256' }, { name: 'clientAddress', type: 'address' }, { name: 'feedbackIndex', type: 'uint64' }, { name: 'responseURI', type: 'string' }, { name: 'responseHash', type: 'bytes32' }], outputs: [] },
+  { name: 'getSummary', type: 'function', stateMutability: 'view', inputs: [{ name: 'agentId', type: 'uint256' }, { name: 'clientAddresses', type: 'address[]' }, { name: 'tag1', type: 'string' }, { name: 'tag2', type: 'string' }], outputs: [{ name: 'count', type: 'uint64' }, { name: 'summaryValue', type: 'int128' }, { name: 'summaryValueDecimals', type: 'uint8' }] },
+  { name: 'getClients', type: 'function', stateMutability: 'view', inputs: [{ name: 'agentId', type: 'uint256' }], outputs: [{ type: 'address[]' }] },
+  { name: 'readAllFeedback', type: 'function', stateMutability: 'view', inputs: [{ name: 'agentId', type: 'uint256' }, { name: 'clientAddresses', type: 'address[]' }, { name: 'tag1', type: 'string' }, { name: 'tag2', type: 'string' }, { name: 'includeRevoked', type: 'bool' }], outputs: [{ name: 'clients', type: 'address[]' }, { name: 'feedbackIndexes', type: 'uint64[]' }, { name: 'values', type: 'int128[]' }, { name: 'valueDecimals', type: 'uint8[]' }, { name: 'tag1s', type: 'string[]' }, { name: 'tag2s', type: 'string[]' }, { name: 'revokedStatuses', type: 'bool[]' }] },
+] as const
+
+function AgentFeedback() {
+  const { address, isConnected } = useAccount()
+  const chainId = useChainId()
+  const { switchChainAsync, isPending: switchPending } = useSwitchChain()
+  const { data: walletClient } = useWalletClient()
+  const publicClient = usePublicClient({ chainId: base.id })
+  const { wallets: privyWallets } = useWallets()
+  const { ensurePaymasterSession } = usePaymasterSessionGuard()
+
+  const isBase = chainId === base.id
+  const connectedAddress = address ? getAddress(address) : null
+
+  // ── State ──────────────────────────────────────────────────────────────
+  const [agentIdInput, setAgentIdInput] = useState('0')
+  const [feedbackValue, setFeedbackValue] = useState('5')
+  const [feedbackTag1, setFeedbackTag1] = useState('')
+  const [feedbackTag2, setFeedbackTag2] = useState('')
+  const [feedbackReasoning, setFeedbackReasoning] = useState('')
+  const [feedbackEndpoint, setFeedbackEndpoint] = useState('')
+  const [feedbackURI, setFeedbackURI] = useState('')
+
+  const [submitState, setSubmitState] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; error?: string; txHash?: string }>({ status: 'idle' })
+
+  // ── Summary query ──────────────────────────────────────────────────────
+  const agentIdBigInt = (() => {
+    try { return BigInt(agentIdInput.trim() || '0') } catch { return 0n }
+  })()
+
+  const clientsQuery = useReadContract({
+    address: ERC8004_REPUTATION_REGISTRY as Address,
+    abi: ERC8004_REPUTATION_REGISTRY_ABI,
+    functionName: 'getClients',
+    args: [agentIdBigInt],
+    chainId: base.id,
+  })
+
+  const clientAddresses = useMemo(() => {
+    if (!clientsQuery.data || !Array.isArray(clientsQuery.data)) return [] as Address[]
+    return clientsQuery.data as Address[]
+  }, [clientsQuery.data])
+
+  const summaryQuery = useReadContract({
+    address: ERC8004_REPUTATION_REGISTRY as Address,
+    abi: ERC8004_REPUTATION_REGISTRY_ABI,
+    functionName: 'getSummary',
+    args: [agentIdBigInt, clientAddresses.length > 0 ? clientAddresses : ([] as Address[]), '', ''],
+    chainId: base.id,
+    query: { enabled: clientAddresses.length > 0 },
+  })
+
+  const summaryData = useMemo(() => {
+    if (!summaryQuery.data) return null
+    const [count, summaryValue, summaryValueDecimals] = summaryQuery.data as [bigint, bigint, number]
+    const divisor = summaryValueDecimals > 0 ? 10 ** summaryValueDecimals : 1
+    const displayValue = summaryValueDecimals === 0 ? String(Number(summaryValue)) : (Number(summaryValue) / divisor).toFixed(summaryValueDecimals)
+    return { count: Number(count), displayValue, summaryValueDecimals }
+  }, [summaryQuery.data])
+
+  // ── All feedback query ─────────────────────────────────────────────────
+  const [showAllFeedback, setShowAllFeedback] = useState(false)
+  const allFeedbackQuery = useReadContract({
+    address: ERC8004_REPUTATION_REGISTRY as Address,
+    abi: ERC8004_REPUTATION_REGISTRY_ABI,
+    functionName: 'readAllFeedback',
+    args: [agentIdBigInt, clientAddresses.length > 0 ? clientAddresses : ([] as Address[]), '', '', true],
+    chainId: base.id,
+    query: { enabled: showAllFeedback && clientAddresses.length > 0 },
+  })
+
+  const allFeedback = useMemo(() => {
+    if (!allFeedbackQuery.data) return []
+    const [clients, indexes, values, decimals, tag1s, tag2s, revoked] = allFeedbackQuery.data as [
+      Address[], bigint[], bigint[], number[], string[], string[], boolean[],
+    ]
+    return clients.map((c, i) => ({
+      client: c,
+      index: Number(indexes[i]),
+      value: Number(values[i]),
+      decimals: decimals[i],
+      tag1: tag1s[i],
+      tag2: tag2s[i],
+      isRevoked: revoked[i],
+    }))
+  }, [allFeedbackQuery.data])
+
+  // ── Submit feedback ────────────────────────────────────────────────────
+  const submitFeedback = useCallback(async () => {
+    if (!walletClient || !connectedAddress) return
+    setSubmitState({ status: 'loading' })
+    try {
+      const agentId = BigInt(agentIdInput.trim() || '0')
+      const value = BigInt(feedbackValue.trim() || '0')
+      const zeroBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`
+
+      const txHash = await walletClient.writeContract({
+        account: (walletClient as any).account,
+        chain: base as any,
+        address: ERC8004_REPUTATION_REGISTRY as Address,
+        abi: ERC8004_REPUTATION_REGISTRY_ABI,
+        functionName: 'giveFeedback',
+        args: [agentId, value, 0, feedbackTag1, feedbackTag2, feedbackEndpoint, feedbackURI, zeroBytes32],
+      })
+
+      setSubmitState({ status: 'success', txHash })
+      // Refresh queries
+      void clientsQuery.refetch()
+      void summaryQuery.refetch()
+      if (showAllFeedback) void allFeedbackQuery.refetch()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Transaction failed'
+      setSubmitState({ status: 'error', error: msg })
+    }
+  }, [walletClient, connectedAddress, agentIdInput, feedbackValue, feedbackTag1, feedbackTag2, feedbackEndpoint, feedbackURI, clientsQuery, summaryQuery, allFeedbackQuery, showAllFeedback])
+
+  // ── Submit via paymaster (ERC-4337) ────────────────────────────────────
+  const submitFeedbackViaPaymaster = useCallback(async () => {
+    if (!connectedAddress || !walletClient || !publicClient) return
+    setSubmitState({ status: 'loading' })
+    try {
+      // Ensure the paymaster has a valid app session before attempting sponsorship.
+      await ensurePaymasterSession()
+      const agentId = BigInt(agentIdInput.trim() || '0')
+      const value = BigInt(feedbackValue.trim() || '0')
+      const zeroBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`
+
+      const data = encodeFunctionData({
+        abi: ERC8004_REPUTATION_REGISTRY_ABI as any,
+        functionName: 'giveFeedback' as any,
+        args: [agentId, value, 0, feedbackTag1, feedbackTag2, feedbackEndpoint, feedbackURI, zeroBytes32],
+      })
+
+      const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+      const paymasterUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+      const bundlerUrl = paymasterUrl
+
+      const result = await sendCoinbaseSmartWalletUserOperation({
+        publicClient: publicClient as any,
+        walletClient: walletClient as any,
+        bundlerUrl,
+        paymasterUrl,
+        smartWallet: CANONICAL_SMART_WALLET as Address,
+        ownerAddress: connectedAddress as Address,
+        calls: [{ to: ERC8004_REPUTATION_REGISTRY as Address, value: 0n, data }],
+      })
+
+      setSubmitState({ status: 'success', txHash: typeof result === 'string' ? result : (result as any)?.hash ?? '' })
+      void clientsQuery.refetch()
+      void summaryQuery.refetch()
+      if (showAllFeedback) void allFeedbackQuery.refetch()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'UserOp failed'
+      setSubmitState({ status: 'error', error: msg })
+    }
+  }, [
+    connectedAddress,
+    agentIdInput,
+    feedbackValue,
+    feedbackTag1,
+    feedbackTag2,
+    feedbackEndpoint,
+    feedbackURI,
+    ensurePaymasterSession,
+    publicClient,
+    walletClient,
+    privyWallets,
+    clientsQuery,
+    summaryQuery,
+    allFeedbackQuery,
+    showAllFeedback,
+  ])
+
+  // ── Star rating helper ─────────────────────────────────────────────────
+  const stars = [1, 2, 3, 4, 5]
+  const currentStars = Number(feedbackValue) || 0
+
+  return (
+    <section className="space-y-6">
+      <div className="rounded-2xl border border-white/5 bg-white/3 overflow-hidden">
+        <div className="px-6 py-6 sm:px-8 sm:py-8 space-y-6">
+          <div className="space-y-2">
+            <div className="label">Reputation</div>
+            <div className="text-xl sm:text-2xl text-zinc-100 font-medium tracking-tight">ERC-8004 Agent Feedback</div>
+            <div className="text-sm text-zinc-600 max-w-prose">
+              Submit and view feedback on the on-chain Reputation Registry (v2.0). Feedback uses the 5-star scale with optional tags and evidence.
+            </div>
+          </div>
+
+          {/* Agent ID input */}
+          <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-3">
+            <div className="text-sm text-zinc-300">Agent ID</div>
+            <input
+              value={agentIdInput}
+              onChange={(e) => setAgentIdInput(e.target.value)}
+              placeholder="0"
+              className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
+            />
+            <div className="text-xs text-zinc-600">
+              Registry: <span className="font-mono text-zinc-400">{shortAddress(ERC8004_REPUTATION_REGISTRY)}</span> · Chain: Base
+            </div>
+          </div>
+
+          {/* Summary */}
+          <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-3">
+            <div className="text-sm text-zinc-300">Reputation summary</div>
+            {clientsQuery.isLoading || summaryQuery.isLoading ? (
+              <div className="text-xs text-zinc-500">Loading…</div>
+            ) : summaryData && summaryData.count > 0 ? (
+              <div className="space-y-2">
+                <div className="flex items-baseline gap-3">
+                  <span className="text-3xl font-bold text-zinc-100">{summaryData.displayValue}</span>
+                  <span className="text-sm text-zinc-500">/ 5</span>
+                  <span className="text-xs text-zinc-600">({summaryData.count} review{summaryData.count !== 1 ? 's' : ''})</span>
+                </div>
+                <div className="flex gap-1">
+                  {stars.map((s) => (
+                    <span key={s} className={Number(summaryData.displayValue) >= s ? 'text-amber-400' : 'text-zinc-700'}>★</span>
+                  ))}
+                </div>
+                <div className="text-xs text-zinc-600">
+                  {clientAddresses.length} unique reviewer{clientAddresses.length !== 1 ? 's' : ''}
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-zinc-500">No feedback yet for agent #{agentIdInput}.</div>
+            )}
+            <button
+              type="button"
+              onClick={() => { void clientsQuery.refetch(); void summaryQuery.refetch() }}
+              className="text-xs text-zinc-400 hover:text-white transition-colors"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {/* All feedback */}
+          <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-zinc-300">All feedback</div>
+              <button
+                type="button"
+                onClick={() => { setShowAllFeedback(!showAllFeedback); if (!showAllFeedback) void allFeedbackQuery.refetch() }}
+                className="text-xs text-zinc-400 hover:text-white transition-colors"
+              >
+                {showAllFeedback ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            {showAllFeedback && allFeedbackQuery.isLoading ? (
+              <div className="text-xs text-zinc-500">Loading…</div>
+            ) : showAllFeedback && allFeedback.length > 0 ? (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {allFeedback.map((fb) => (
+                  <div key={`${fb.client}-${fb.index}`} className="rounded-lg border border-white/5 bg-white/2 p-3 space-y-1">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-mono text-zinc-400">{shortAddress(fb.client)}</span>
+                      <span className="text-zinc-600">#{fb.index}</span>
+                      {fb.isRevoked && <span className="text-red-400/80">revoked</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-0.5">
+                        {stars.map((s) => (
+                          <span key={s} className={`text-xs ${fb.value >= s ? 'text-amber-400' : 'text-zinc-700'}`}>★</span>
+                        ))}
+                      </div>
+                      <span className="text-sm text-zinc-200">{fb.decimals === 0 ? fb.value : (fb.value / 10 ** fb.decimals).toFixed(fb.decimals)}</span>
+                    </div>
+                    {(fb.tag1 || fb.tag2) && (
+                      <div className="flex gap-1.5 text-[10px]">
+                        {fb.tag1 && <span className="px-1.5 py-0.5 rounded bg-white/5 text-zinc-400">{fb.tag1}</span>}
+                        {fb.tag2 && <span className="px-1.5 py-0.5 rounded bg-white/5 text-zinc-400">{fb.tag2}</span>}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : showAllFeedback ? (
+              <div className="text-xs text-zinc-500">No feedback found.</div>
+            ) : null}
+          </div>
+
+          {/* Submit feedback */}
+          {isConnected ? (
+            <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-4">
+              <div className="text-sm text-zinc-300">Submit feedback</div>
+
+              {/* Star selector */}
+              <div className="space-y-1">
+                <div className="text-xs text-zinc-500">Rating</div>
+                <div className="flex gap-2">
+                  {stars.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setFeedbackValue(String(s))}
+                      className={`text-2xl transition-colors ${currentStars >= s ? 'text-amber-400' : 'text-zinc-700 hover:text-zinc-500'}`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                  <span className="text-sm text-zinc-500 self-center ml-2">{currentStars}/5</span>
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <div className="text-xs text-zinc-500">Tag 1</div>
+                  <input
+                    value={feedbackTag1}
+                    onChange={(e) => setFeedbackTag1(e.target.value)}
+                    placeholder="e.g. fast, accurate"
+                    className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-zinc-500">Tag 2</div>
+                  <input
+                    value={feedbackTag2}
+                    onChange={(e) => setFeedbackTag2(e.target.value)}
+                    placeholder="e.g. good-value"
+                    className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20"
+                  />
+                </div>
+              </div>
+
+              {/* Endpoint */}
+              <div className="space-y-1">
+                <div className="text-xs text-zinc-500">Endpoint tested (optional)</div>
+                <input
+                  value={feedbackEndpoint}
+                  onChange={(e) => setFeedbackEndpoint(e.target.value)}
+                  placeholder="https://4626.fun/api/v1/..."
+                  className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
+                />
+              </div>
+
+              {/* Feedback URI (evidence) */}
+              <div className="space-y-1">
+                <div className="text-xs text-zinc-500">Evidence URI (optional, IPFS/HTTPS)</div>
+                <input
+                  value={feedbackURI}
+                  onChange={(e) => setFeedbackURI(e.target.value)}
+                  placeholder="ipfs://bafkrei... or https://..."
+                  className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
+                />
+              </div>
+
+              {/* Reasoning */}
+              <div className="space-y-1">
+                <div className="text-xs text-zinc-500">Reasoning (for your records, not stored on-chain)</div>
+                <textarea
+                  value={feedbackReasoning}
+                  onChange={(e) => setFeedbackReasoning(e.target.value)}
+                  placeholder="Describe your experience…"
+                  rows={3}
+                  className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 resize-none"
+                />
+              </div>
+
+              {!isBase ? (
+                <button
+                  type="button"
+                  onClick={async () => { if (switchChainAsync) await switchChainAsync({ chainId: base.id }) }}
+                  disabled={switchPending}
+                  className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {switchPending ? 'Switching…' : 'Switch to Base'}
+                </button>
+              ) : (
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void submitFeedback()}
+                    disabled={submitState.status === 'loading' || !walletClient}
+                    className="btn-accent flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submitState.status === 'loading' ? 'Submitting…' : 'Submit (direct)'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void submitFeedbackViaPaymaster()}
+                    disabled={submitState.status === 'loading'}
+                    className="btn-ghost flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submitState.status === 'loading' ? 'Submitting…' : 'Submit (sponsored)'}
+                  </button>
+                </div>
+              )}
+
+              {submitState.status === 'success' && submitState.txHash ? (
+                <div className="text-xs text-emerald-300/90 space-y-1">
+                  <div>Feedback submitted!</div>
+                  <a
+                    href={`https://basescan.org/tx/${submitState.txHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-zinc-400 hover:text-white transition-colors inline-flex items-center gap-1"
+                  >
+                    {shortAddress(submitState.txHash)} <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              ) : null}
+              {submitState.status === 'error' ? (
+                <div className="text-xs text-red-400/80">{submitState.error}</div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-3">
+              <div className="label">Connect to submit feedback</div>
+              <ConnectButton />
+            </div>
+          )}
         </div>
       </div>
     </section>
@@ -2929,6 +3435,7 @@ export function AdminOps() {
       </section>
 
       <AgentRegistration />
+      <AgentFeedback />
       <ShareTokenMetadata />
       <LegacyWithdrawals />
     </div>

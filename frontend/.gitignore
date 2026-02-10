@@ -32,3 +32,8 @@ yarn-error.log*
 
 /src/generated/prisma
 .env
+
+# XMTP local databases
+xmtp-*.db3
+xmtp-*.db3-shm
+xmtp-*.db3-wal

@@ -25,6 +25,7 @@ import {
 } from '../config.js';
 import { writeContract } from '../utils/onchain.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
+import { loadKeeperKeypair, solanaPubkeyToBytes32 } from '../utils/solana.js';
 
 const WORKFLOW_NAME = 'keepr-solana-entry-relay';
 
@@ -43,36 +44,12 @@ export interface EntryRelayResult {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Convert a base58 Solana pubkey to a 0x-prefixed bytes32 hex string.
- */
-function solanaPubkeyToBytes32(pubkey: string): `0x${string}` {
-  const { PublicKey } = require('@solana/web3.js');
-  const pk = new PublicKey(pubkey);
-  return ('0x' + Buffer.from(pk.toBytes()).toString('hex')) as `0x${string}`;
-}
-
-/**
- * Load the keeper Keypair from the env var (base58 secret key).
- */
-function loadKeeperKeypair() {
-  const { Keypair } = require('@solana/web3.js');
-  const bs58 = require('bs58');
-  const secretKeyStr = requireEnv('SOLANA_KEEPER_KEYPAIR');
-
-  // Support both base58 and JSON array formats
-  if (secretKeyStr.startsWith('[')) {
-    return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyStr)));
-  }
-  return Keypair.fromSecretKey(bs58.decode(secretKeyStr));
-}
-
 // PDA layout offsets for PendingEntries (Anchor account)
 // 8 (discriminator) + 32 (creator_mint) + 4 (head) + 4 (count) + 8 (overflow_count) + 1 (bump)
 const PDA_HEADER_SIZE = 8 + 32 + 4 + 4 + 8 + 1; // = 57
 const ENTRY_SIZE = 48; // 32 (buyer) + 8 (amount) + 8 (slot)
-const MAX_PENDING_ENTRIES = 16;
-const EMERGENCY_DRAIN_THRESHOLD = 12;
+const MAX_PENDING_ENTRIES = 256;
+const EMERGENCY_DRAIN_THRESHOLD = Math.floor(MAX_PENDING_ENTRIES * 0.8);
 
 // ---------------------------------------------------------------------------
 // Main execution

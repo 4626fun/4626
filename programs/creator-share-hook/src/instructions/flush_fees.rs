@@ -1,6 +1,10 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_2022::{self, Token2022};
+use anchor_spl::token_2022::Token2022;
 use anchor_spl::token_interface::Mint as MintInterface;
+use anchor_lang::solana_program::program::invoke;
+use spl_token_2022::extension::StateWithExtensions;
+use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_instruction;
+use spl_token_2022::state::Account as TokenAccount;
 
 use crate::constants::*;
 use crate::errors::CreatorShareHookError;
@@ -39,31 +43,68 @@ pub struct FlushFees<'info> {
     pub token_program: Program<'info, Token2022>,
 }
 
-pub fn handler(ctx: Context<FlushFees>) -> Result<()> {
-    // Harvest withheld fees from the mint to the fee vault.
-    // This uses the Token-2022 `harvest_withheld_tokens_to_mint` +
-    // `withdraw_withheld_tokens_from_mint` pattern.
-    //
-    // Note: In practice, the keeper will call the SPL Token-2022 CLI or
-    // a separate instruction to harvest from individual token accounts
-    // first (`harvest_withheld_tokens_to_mint`), then withdraw from the
-    // mint here. For simplicity, this instruction handles the
-    // withdraw-from-mint step.
+pub fn handler<'info>(ctx: Context<'_, '_, '_, 'info, FlushFees<'info>>) -> Result<()> {
+    let mint_key = ctx.accounts.mint.key();
 
-    // The actual CPI call to withdraw withheld tokens from the mint is:
-    // spl_token_2022::instruction::withdraw_withheld_tokens_from_mint
-    //
-    // This requires the mint's `withdraw_withheld_authority` to sign.
-    // The keeper must be set as this authority on the mint, OR the
-    // program PDA must be set as the authority and we sign with PDA seeds.
-    //
-    // For Phase 1, we emit the event and let the keeper handle the actual
-    // Token-2022 CPI separately (via the SPL CLI or direct instruction).
-    // This instruction serves as the gated trigger + event emitter.
+    // Validate fee_vault is a Token-2022 account for this mint.
+    let fee_vault_info = ctx.accounts.fee_vault.to_account_info();
+    let fee_vault_data = fee_vault_info.try_borrow_data()?;
+    let fee_vault_state = StateWithExtensions::<TokenAccount>::unpack(&fee_vault_data)?;
+    if fee_vault_state.base.mint != mint_key {
+        return err!(CreatorShareHookError::InvalidMint);
+    }
+
+    let amount_before = fee_vault_state.base.amount;
+    drop(fee_vault_data);
+
+    // Step 1: Harvest withheld fees from token accounts to the mint.
+    // The token accounts are provided as remaining_accounts.
+    if !ctx.remaining_accounts.is_empty() {
+        let sources: Vec<&Pubkey> = ctx
+            .remaining_accounts
+            .iter()
+            .map(|a| a.key)
+            .collect();
+        let harvest_ix = transfer_fee_instruction::harvest_withheld_tokens_to_mint(
+            &ctx.accounts.token_program.key(),
+            &mint_key,
+            &sources,
+        )?;
+
+        let mut harvest_accounts = Vec::with_capacity(1 + ctx.remaining_accounts.len());
+        harvest_accounts.push(ctx.accounts.mint.to_account_info());
+        harvest_accounts.extend(ctx.remaining_accounts.iter().cloned());
+
+        invoke(&harvest_ix, &harvest_accounts)?;
+    }
+
+    // Step 2: Withdraw all withheld tokens from the mint into fee_vault.
+    let withdraw_ix = transfer_fee_instruction::withdraw_withheld_tokens_from_mint(
+        &ctx.accounts.token_program.key(),
+        &mint_key,
+        fee_vault_info.key,
+        &ctx.accounts.keeper.key(),
+        &[],
+    )?;
+
+    invoke(
+        &withdraw_ix,
+        &[
+            ctx.accounts.mint.to_account_info(),
+            fee_vault_info.clone(),
+            ctx.accounts.keeper.to_account_info(),
+        ],
+    )?;
+
+    // Re-read fee_vault to compute actual withdrawn amount.
+    let fee_vault_data_after = fee_vault_info.try_borrow_data()?;
+    let fee_vault_state_after = StateWithExtensions::<TokenAccount>::unpack(&fee_vault_data_after)?;
+    let amount_after = fee_vault_state_after.base.amount;
+    let delta = amount_after.saturating_sub(amount_before);
 
     emit!(FeesFlushed {
         creator_mint: ctx.accounts.creator_config.creator_mint,
-        amount: 0, // Actual amount determined by Token-2022 state
+        amount: delta,
     });
 
     Ok(())

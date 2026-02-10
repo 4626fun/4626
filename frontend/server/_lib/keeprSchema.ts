@@ -32,7 +32,6 @@ export async function ensureKeeprSchema(): Promise<void> {
     `
 
     await db.sql`CREATE INDEX IF NOT EXISTS keepr_vaults_group_id_idx ON keepr_vaults (group_id);`
-    await db.sql`CREATE INDEX IF NOT EXISTS keepr_vaults_lens_group_idx ON keepr_vaults (lens_group_address);`
     await db.sql`CREATE INDEX IF NOT EXISTS keepr_vaults_owner_idx ON keepr_vaults (canonical_owner_address);`
 
     // Back-compat: if table exists from a previous deployment, add new columns safely.

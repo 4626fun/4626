@@ -18,9 +18,22 @@
  *   # Or directly:
  *   POSTGRES_URL=... XMTP_AGENT_KEY_ENCRYPTION_KEY=... tsx server/agent/eliza/index.ts
  *
- * Required env vars:
- *   DATABASE_URL / POSTGRES_URL     — Postgres connection string (Supabase)
- *   XMTP_AGENT_KEY_ENCRYPTION_KEY   — AES-256-GCM key for decrypting agent keys
+ * Startup modes (checked in priority order):
+ *
+ *   1. Multi-agent (DB):
+ *      DATABASE_URL / POSTGRES_URL     — Postgres connection string (Supabase)
+ *      XMTP_AGENT_KEY_ENCRYPTION_KEY   — AES-256-GCM key for decrypting agent keys
+ *
+ *   2. Single-agent CSW (recommended for production single-agent):
+ *      XMTP_AGENT_CSW_ADDRESS          — Coinbase Smart Wallet address (XMTP identity)
+ *      XMTP_AGENT_PRIVY_WALLET_ID      — Privy server wallet ID (delegated signer)
+ *      XMTP_AGENT_CSW_CHAIN_ID         — Chain ID (default: 8453 for Base)
+ *      XMTP_AGENT_CSW_OWNER_INDEX      — Owner index in CSW's MultiOwnable list (required for ERC-1271)
+ *      Requires PRIVY_APP_ID, PRIVY_APP_SECRET, PRIVY_WALLET_AUTHORIZATION_KEY,
+ *      PRIVY_WALLET_OWNER_ID to be set for Privy wallet API access.
+ *
+ *   3. Single-agent EOA (dev/testing only):
+ *      XMTP_AGENT_PRIVATE_KEY          — Raw hex private key
  *
  * Optional env vars:
  *   XMTP_ENV                — 'production' | 'dev' (default: production)
@@ -35,6 +48,7 @@ import { keeprPlugin } from './plugins/keepr/index.js'
 import { lensPlugin } from './plugins/lens/index.js'
 import { walletIntelPlugin } from './plugins/walletIntel/index.js'
 import { reputationPlugin } from './plugins/reputation/index.js'
+import { crePlugin } from './plugins/cre/index.js'
 import { creatorVaultCharacter } from './character.js'
 import { XmtpService } from './plugins/xmtp/service.js'
 
@@ -57,14 +71,19 @@ const XMTP_ENV = ((process.env.XMTP_ENV ?? 'production').trim()) as 'production'
 const POLL_INTERVAL_MS = 60_000
 const MAX_AGENTS = Number(process.env.MAX_AGENTS ?? '50')
 
+// ERC-8004 identity (loaded from env vars in a separate module to avoid circular imports)
+import { erc8004Identity } from './identity.js'
+export { erc8004Identity }
+export type { Erc8004Identity } from './identity.js'
+
 // ---------------------------------------------------------------------------
 // Plugins & Actions
 // ---------------------------------------------------------------------------
 
-const plugins = [keeprPlugin, lensPlugin, walletIntelPlugin, reputationPlugin]
+const plugins = [keeprPlugin, lensPlugin, walletIntelPlugin, reputationPlugin, crePlugin]
 const allActions = plugins.flatMap((p) => p.actions ?? [])
 
-export { keeprPlugin, lensPlugin, walletIntelPlugin, reputationPlugin }
+export { keeprPlugin, lensPlugin, walletIntelPlugin, reputationPlugin, crePlugin }
 
 // ---------------------------------------------------------------------------
 // LLM providers (for /ai fallback)
@@ -429,57 +448,210 @@ async function shutdown() {
 // Main
 // ---------------------------------------------------------------------------
 
+/**
+ * Start a single agent from XMTP_AGENT_PRIVATE_KEY env var (EOA mode).
+ * Used as a fallback when XMTP_AGENT_KEY_ENCRYPTION_KEY is not set
+ * (i.e. no multi-agent DB is configured).
+ */
+async function startSingleAgentEoa(privateKey: `0x${string}`): Promise<RunningAgent> {
+  const xmtp = new XmtpService({ privateKey, env: XMTP_ENV })
+
+  xmtp.setMessageHandler(async (msg) => {
+    logger.info(
+      `[eliza:single] ${msg.senderAddress?.slice(0, 10) ?? msg.senderInboxId.slice(0, 10)}: ${msg.content.slice(0, 80)}`,
+    )
+
+    return handleMessage({
+      conversationId: msg.conversationId,
+      conversationType: msg.conversationType,
+      senderAddress: msg.senderAddress,
+      content: msg.content,
+    })
+  })
+
+  await xmtp.start()
+
+  logger.info(`[eliza] Single EOA agent started`, { agentAddress: xmtp.address })
+
+  return { creatorAddress: 'single-agent', xmtp }
+}
+
+/**
+ * Start a single agent in CSW mode using Privy's server wallet as the
+ * delegated signer. The agent presents as the creator's Coinbase Smart
+ * Wallet on XMTP — the same pattern used for ERC-4337 UserOps and
+ * vault deployments.
+ *
+ * Required env vars:
+ *   XMTP_AGENT_CSW_ADDRESS        — The canonical Coinbase Smart Wallet address
+ *   XMTP_AGENT_PRIVY_WALLET_ID    — Privy server wallet ID (added as CSW owner)
+ *
+ * Optional:
+ *   XMTP_AGENT_CSW_CHAIN_ID       — Chain ID where the CSW is deployed (default: 8453)
+ */
+async function startSingleAgentCsw(params: {
+  cswAddress: `0x${string}`
+  privyWalletId: string
+  ownerIndex?: number
+  chainId?: number
+}): Promise<RunningAgent> {
+  const signer = createPrivyScwSigner({
+    walletId: params.privyWalletId,
+    cswAddress: params.cswAddress,
+    ownerIndex: params.ownerIndex,
+    chainId: params.chainId ?? 8453,
+  })
+
+  const xmtp = new XmtpService({ signer, env: XMTP_ENV })
+
+  xmtp.setMessageHandler(async (msg) => {
+    logger.info(
+      `[eliza:csw] ${msg.senderAddress?.slice(0, 10) ?? msg.senderInboxId.slice(0, 10)}: ${msg.content.slice(0, 80)}`,
+    )
+
+    return handleMessage({
+      conversationId: msg.conversationId,
+      conversationType: msg.conversationType,
+      senderAddress: msg.senderAddress,
+      content: msg.content,
+    })
+  })
+
+  await xmtp.start()
+
+  logger.info(`[eliza] Single CSW agent started`, {
+    agentAddress: xmtp.address,
+    cswAddress: params.cswAddress,
+    privyWalletId: params.privyWalletId.slice(0, 12) + '...',
+  })
+
+  return { creatorAddress: 'single-agent-csw', xmtp }
+}
+
 async function main() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   console.log('  CreatorVault ElizaOS Agent (Unified)')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
-  // Validate required env vars
-  if (!isDbConfigured()) {
-    logger.error('[eliza] POSTGRES_URL / DATABASE_URL not configured')
-    process.exit(1)
-  }
-  if (!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()) {
-    logger.error('[eliza] XMTP_AGENT_KEY_ENCRYPTION_KEY not configured')
-    process.exit(1)
-  }
+  const hasDb = isDbConfigured()
+  const hasEncKey = !!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()
+  const hasPrivateKey = !!(process.env.XMTP_AGENT_PRIVATE_KEY ?? '').trim()
+  const hasCswConfig = !!(process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim() &&
+    !!(process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
+  const multiAgentMode = hasDb && hasEncKey
+
+  // Determine mode label
+  const modeLabel = multiAgentMode
+    ? 'multi-agent (DB)'
+    : hasCswConfig
+      ? 'single-agent CSW (Privy delegated signer)'
+      : hasPrivateKey
+        ? 'single-agent EOA (env key)'
+        : 'none'
 
   const llmProvider = resolveProvider()
   const actionCount = allActions.length
+  console.log(`  Mode: ${modeLabel}`)
   console.log(`  LLM provider: ${llmProvider?.name ?? 'none (conversational AI disabled)'}`)
   console.log(`  XMTP env: ${XMTP_ENV}`)
-  console.log(`  Max agents: ${MAX_AGENTS}`)
   console.log(`  Character: ${creatorVaultCharacter.name}`)
   console.log(`  Plugins: ${plugins.map((p) => p.name).join(', ')}`)
   console.log(`  Actions: ${actionCount} total`)
+  if (erc8004Identity) {
+    console.log(`  ERC-8004: Agent #${erc8004Identity.agentId} on chain ${erc8004Identity.chainId}`)
+    console.log(`  Registry: ${erc8004Identity.registryAddress}`)
+    console.log(`  8004scan: https://www.8004scan.io/agents/base/${erc8004Identity.agentId}`)
+  } else {
+    console.log(`  ERC-8004: not configured (set ERC8004_AGENT_ID, ERC8004_AGENT_REGISTRY, ERC8004_AGENT_CHAIN_ID)`)
+  }
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
-  // Initial agent sync
-  await syncAgents()
+  if (multiAgentMode) {
+    // -----------------------------------------------------------------------
+    // Multi-agent mode: load agents from DB, decrypt keys, run orchestrator
+    // -----------------------------------------------------------------------
+    console.log(`  Max agents: ${MAX_AGENTS}`)
 
-  if (runningAgents.size === 0) {
-    logger.warn('[eliza] No agents found in DB. Waiting for agents to be registered...')
+    // Initial agent sync
+    await syncAgents()
+
+    if (runningAgents.size === 0) {
+      logger.warn('[eliza] No agents found in DB. Waiting for agents to be registered...')
+    }
+
+    // Periodically check for new/removed agents
+    const syncInterval = setInterval(() => {
+      void syncAgents()
+    }, POLL_INTERVAL_MS)
+
+    // Graceful shutdown
+    process.on('SIGINT', () => {
+      clearInterval(syncInterval)
+      void shutdown()
+    })
+    process.on('SIGTERM', () => {
+      clearInterval(syncInterval)
+      void shutdown()
+    })
+  } else if (hasCswConfig) {
+    // -----------------------------------------------------------------------
+    // Single-agent CSW mode: Privy server wallet signs on behalf of your CSW.
+    // Same delegation pattern used for ERC-4337 UserOps & vault deployments.
+    // -----------------------------------------------------------------------
+    const cswAddress = (process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim() as `0x${string}`
+    const privyWalletId = (process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
+    const chainId = Number(process.env.XMTP_AGENT_CSW_CHAIN_ID ?? '8453') || 8453
+    const ownerIndexRaw = (process.env.XMTP_AGENT_CSW_OWNER_INDEX ?? '').trim()
+    const ownerIndex = ownerIndexRaw ? Number(ownerIndexRaw) : undefined
+
+    console.log(`\n  CSW address: ${cswAddress}`)
+    console.log(`  Privy wallet: ${privyWalletId.slice(0, 12)}...`)
+    console.log(`  Chain ID: ${chainId}`)
+    console.log(`  Owner index: ${ownerIndex !== undefined ? ownerIndex : '(auto-detect at runtime)'}`)
+
+    const running = await startSingleAgentCsw({ cswAddress, privyWalletId, ownerIndex, chainId })
+    runningAgents.set('single-agent-csw', running)
+
+    console.log(`\n  Agent XMTP identity: ${running.xmtp.address}`)
+    console.log(`  Test: https://xmtp.chat/dm/${running.xmtp.address}`)
+    console.log(`\n  The agent presents as your Coinbase Smart Wallet on XMTP.`)
+    console.log(`  No private key extraction needed — Privy signs on your behalf.`)
+    console.log(`\n  Listening for messages... (Ctrl+C to stop)\n`)
+
+    // Graceful shutdown
+    process.on('SIGINT', () => void shutdown())
+    process.on('SIGTERM', () => void shutdown())
+  } else if (hasPrivateKey) {
+    // -----------------------------------------------------------------------
+    // Single-agent EOA mode: use XMTP_AGENT_PRIVATE_KEY directly
+    // -----------------------------------------------------------------------
+    const privateKey = (process.env.XMTP_AGENT_PRIVATE_KEY ?? '').trim() as `0x${string}`
+
+    const running = await startSingleAgentEoa(privateKey)
+    runningAgents.set('single-agent', running)
+
+    console.log(`\n  Agent address: ${running.xmtp.address}`)
+    console.log(`  Test: https://xmtp.chat/dm/${running.xmtp.address}`)
+    console.log(`\n  Listening for messages... (Ctrl+C to stop)\n`)
+
+    // Graceful shutdown
+    process.on('SIGINT', () => void shutdown())
+    process.on('SIGTERM', () => void shutdown())
+  } else {
+    logger.error(
+      '[eliza] No agent credentials configured. Set one of:\n' +
+      '  1. XMTP_AGENT_CSW_ADDRESS + XMTP_AGENT_PRIVY_WALLET_ID (CSW mode — recommended)\n' +
+      '  2. XMTP_AGENT_PRIVATE_KEY (EOA mode — dev/testing)\n' +
+      '  3. XMTP_AGENT_KEY_ENCRYPTION_KEY + DATABASE_URL (multi-agent mode)',
+    )
+    process.exit(1)
   }
-
-  // Periodically check for new/removed agents
-  const syncInterval = setInterval(() => {
-    void syncAgents()
-  }, POLL_INTERVAL_MS)
-
-  // Graceful shutdown
-  process.on('SIGINT', () => {
-    clearInterval(syncInterval)
-    void shutdown()
-  })
-  process.on('SIGTERM', () => {
-    clearInterval(syncInterval)
-    void shutdown()
-  })
 
   logger.info('[eliza] Runtime ready. Press Ctrl+C to stop.')
 }
 
 void main().catch((err) => {
-  logger.error('[eliza] Fatal error', err)
+  console.error('[eliza] Fatal error:', err instanceof Error ? err.message : err)
+  if (err instanceof Error && err.stack) console.error(err.stack)
   process.exit(1)
 })

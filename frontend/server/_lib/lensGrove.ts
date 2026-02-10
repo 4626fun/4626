@@ -49,14 +49,48 @@ export async function uploadImmutableJson(
   data: unknown,
   chainId: number = LENS_MAINNET_CHAIN_ID,
 ): Promise<GroveUploadResult> {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-  const formData = new FormData()
-  formData.append('file', blob, `lens-mapping-${Date.now()}.json`)
+  const body = JSON.stringify(data, null, 2)
   const response = await fetch(`https://api.grove.storage/?chain_id=${chainId}`, {
     method: 'POST',
-    body: formData,
+    headers: { 'Content-Type': 'application/json' },
+    body,
   })
   return parseGroveResponse(response)
+}
+
+// ---------------------------------------------------------------------------
+// Graceful variant — retry once, return null on failure instead of throwing.
+// ---------------------------------------------------------------------------
+
+export type GroveUploadAttempt =
+  | { ok: true; result: GroveUploadResult }
+  | { ok: false; error: string }
+
+/**
+ * Try to upload JSON to Grove with one automatic retry.
+ * Returns `{ ok: true, result }` on success or `{ ok: false, error }` on
+ * failure — never throws.
+ */
+export async function tryUploadImmutableJson(
+  data: unknown,
+  chainId: number = LENS_MAINNET_CHAIN_ID,
+): Promise<GroveUploadAttempt> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const result = await uploadImmutableJson(data, chainId)
+      return { ok: true, result }
+    } catch (err) {
+      // On first failure, wait briefly then retry once.
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, 1_500))
+        continue
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      return { ok: false, error: msg }
+    }
+  }
+  // Unreachable, but satisfies TS.
+  return { ok: false, error: 'Upload failed after retries' }
 }
 
 export function resolveLensUri(uri: string): string {
