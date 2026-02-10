@@ -26,6 +26,11 @@
       "version": "1.0.0"
     },
     {
+      "name": "openclaw",
+      "endpoint": "https://4626.fun/api/openclaw/tools",
+      "version": "v1"
+    },
+    {
       "name": "feedback",
       "endpoint": "https://4626.fun/api/v1/agents/feedback",
       "version": "2.0"
