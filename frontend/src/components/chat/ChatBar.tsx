@@ -251,14 +251,29 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
                 Enable Chat
               </button>
               {installationLimitInboxId ? (
-                <button
-                  type="button"
-                  onClick={() => void resetInstallations()}
-                  className="px-4 py-2 rounded-lg bg-amber-500/10 text-amber-300 text-xs font-medium hover:bg-amber-500/15 transition-colors"
-                  title="Revokes existing XMTP installations for this inbox so you can register a new one."
-                >
-                  Reset XMTP installations
-                </button>
+                <>
+                  <div className="text-[11px] text-amber-200/80 leading-relaxed">
+                    You hit XMTP’s 10-installation limit. Resetting revokes older installations to free a slot.
+                    If you want more control, use{' '}
+                    <a
+                      className="underline hover:text-amber-100"
+                      href="https://xmtp.chat/inbox-tools"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      xmtp.chat/inbox-tools
+                    </a>
+                    .
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void resetInstallations()}
+                    className="px-4 py-2 rounded-lg bg-amber-500/10 text-amber-300 text-xs font-medium hover:bg-amber-500/15 transition-colors"
+                    title="Revokes older XMTP installations to free a slot."
+                  >
+                    Reset XMTP installations
+                  </button>
+                </>
               ) : null}
             </div>
           )}

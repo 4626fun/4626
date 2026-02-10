@@ -106,6 +106,7 @@ const XMTP_ENV: 'production' | 'dev' | 'local' =
   RAW_XMTP_ENV === 'dev' || RAW_XMTP_ENV === 'local' || RAW_XMTP_ENV === 'production'
     ? (RAW_XMTP_ENV as 'production' | 'dev' | 'local')
     : 'production'
+const XMTP_APP_VERSION = '4626.fun-web'
 const ENC_KEY_HEX_RE = /^0x[0-9a-fA-F]{64}$/
 
 function encKeyStorageKey(address: string): string {
@@ -411,6 +412,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       const createClient = async (dbEncryptionKey: Uint8Array) =>
         await Client.create(signer, {
           env: XMTP_ENV as any,
+          appVersion: XMTP_APP_VERSION,
           dbEncryptionKey,
         })
 
@@ -572,15 +574,56 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     try {
       const states = (await (Client as any).fetchInboxStates([targetInboxId], XMTP_ENV as any)) as any[]
       const state = Array.isArray(states) ? states[0] : null
-      const installs = Array.isArray(state?.installations) ? state.installations : []
-      const toRevoke = installs
-        .map((i: any) => i?.bytes ?? i)
-        .filter(Boolean)
+      const recoveryIdentityRaw = String(state?.recoveryIdentity ?? '').trim()
+      const recoveryIdentity = recoveryIdentityRaw.toLowerCase()
+      if (recoveryIdentity.startsWith('0x') && recoveryIdentity.length === 42) {
+        const connectedLower = address.toLowerCase()
+        if (recoveryIdentity !== connectedLower) {
+          throw new Error(
+            `Only the recovery identity can revoke installations for this inbox. ` +
+              `Recovery is ${recoveryIdentityRaw}; connected wallet is ${address}.`,
+          )
+        }
+      }
 
-      if (toRevoke.length === 0) {
+      const installsRaw = Array.isArray(state?.installations) ? state.installations : []
+      const installs = installsRaw
+        .map((i: any) => {
+          const bytes = i?.bytes ?? i
+          const createdAt =
+            typeof i?.createdAt === 'string' && i.createdAt ? Date.parse(i.createdAt) : Number.NaN
+          return { bytes, createdAt: Number.isFinite(createdAt) ? createdAt : null }
+        })
+        .filter((i: any) => Boolean(i.bytes))
+
+      if (installs.length === 0) {
         // Nothing to revoke; attempt a normal connect.
         await connect()
         return
+      }
+
+      // Revoke only the minimum number of installations needed to get under the 10-installation limit.
+      // Keep at most 9 so `Client.create()` can register a new installation.
+      const revokeCount = Math.max(1, installs.length - 9)
+      const sorted = [...installs].sort((a, b) => {
+        // Prefer revoking oldest known installs first; fall back to stable order.
+        const aa = a.createdAt ?? 0
+        const bb = b.createdAt ?? 0
+        return aa - bb
+      })
+      const toRevoke = sorted.slice(0, revokeCount).map((i) => i.bytes)
+
+      if (typeof window !== 'undefined') {
+        const ok = window.confirm(
+          `XMTP inbox ${targetInboxId} has ${installs.length} installation(s) (max 10). ` +
+            `This will revoke ${toRevoke.length} installation(s) to free a slot.\n\n` +
+            `This may log you out on other devices and consumes inbox updates (max 256 lifetime). Continue?`,
+        )
+        if (!ok) {
+          setStatus('idle')
+          setError('XMTP reset cancelled.')
+          return
+        }
       }
 
       await (Client as any).revokeInstallations(signer, targetInboxId, toRevoke, XMTP_ENV as any)
