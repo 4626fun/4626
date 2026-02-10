@@ -1,0 +1,22 @@
+# ==========================================================================
+# CRE Project Configuration — 4626 Protocol Workflows
+# ==========================================================================
+#
+# This file defines shared settings (like RPC URLs) for all workflows
+# in this project. Each workflow has its own workflow.yaml for
+# workflow-specific configuration.
+#
+# Targets:
+#   staging-settings  — used for local simulation and testing
+#   production-settings — used for DON deployment
+# ==========================================================================
+
+staging-settings:
+  rpcs:
+    - chain-name: ethereum-mainnet-base-1
+      url: https://mainnet.base.org
+
+production-settings:
+  rpcs:
+    - chain-name: ethereum-mainnet-base-1
+      url: https://mainnet.base.org

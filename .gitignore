@@ -19,6 +19,10 @@ build/
 out/
 broadcast/
 
+# CRE build artifacts
+*.wasm
+.cre/
+
 # Rust build artifacts
 target/
 Cargo.lock

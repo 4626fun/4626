@@ -50,6 +50,16 @@ export async function ensureKeeprSchema(): Promise<void> {
     } catch {
       // ignore
     }
+    try {
+      await db.sql`ALTER TABLE keepr_vaults ADD COLUMN IF NOT EXISTS graduated_at TIMESTAMPTZ;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE keepr_vaults ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ;`
+    } catch {
+      // ignore
+    }
 
     await db.sql`
       CREATE TABLE IF NOT EXISTS keepr_nonces (

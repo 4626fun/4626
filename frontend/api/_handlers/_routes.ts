@@ -81,6 +81,11 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
 
   // CRE workflow endpoints
   'cre/vaults/active': () => import('./cre/vaults/_active.js'),
+  'cre/keeper/tend': () => import('./cre/keeper/_tend.js'),
+  'cre/keeper/report': () => import('./cre/keeper/_report.js'),
+  'cre/keeper/sweep': () => import('./cre/keeper/_sweep.js'),
+  'cre/keeper/mark-settled': () => import('./cre/keeper/_markSettled.js'),
+  'cre/keeper/alert': () => import('./cre/keeper/_alert.js'),
 
   'auth/admin': () => import('./auth/_admin.js'),
   'auth/logout': () => import('./auth/_logout.js'),

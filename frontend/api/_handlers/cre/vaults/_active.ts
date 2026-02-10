@@ -17,7 +17,11 @@ export interface VaultConfig {
   ccaStrategyAddress?: `0x${string}`
   oracleAddress?: `0x${string}`
   vrfHubAddress?: `0x${string}`
+  gaugeControllerAddress?: `0x${string}`
+  burnStreamAddress?: `0x${string}`
   groupId: string
+  graduatedAt?: string | null
+  settledAt?: string | null
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -51,20 +55,64 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ success: false, error: 'Database unavailable' } satisfies ApiEnvelope<never>)
     }
 
-    const chainId = req.query.chainId ? Number(req.query.chainId) : null
+    const chainIdRaw = req.query.chainId ? Number(req.query.chainId) : null
+    const chainId = chainIdRaw && Number.isFinite(chainIdRaw) ? chainIdRaw : null
+    const settledFilter = req.query.settled as string | undefined
 
-    const result = chainId
-      ? await db.sql`
-          SELECT vault_address, chain_id, creator_coin_address, group_id, config_json
-          FROM keepr_vaults
-          WHERE chain_id = ${chainId}
-          ORDER BY created_at ASC;
-        `
-      : await db.sql`
-          SELECT vault_address, chain_id, creator_coin_address, group_id, config_json
-          FROM keepr_vaults
-          ORDER BY created_at ASC;
-        `
+    // Use parameterized queries — pick the right branch to avoid db.sql.unsafe()
+    const hasChainFilter = chainId !== null
+    const hasSettledFalse = settledFilter === 'false'
+    const hasSettledTrue = settledFilter === 'true'
+
+    let result
+    if (hasChainFilter && hasSettledFalse) {
+      result = await db.sql`
+        SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
+               graduated_at, settled_at
+        FROM keepr_vaults
+        WHERE chain_id = ${chainId} AND settled_at IS NULL
+        ORDER BY created_at ASC;
+      `
+    } else if (hasChainFilter && hasSettledTrue) {
+      result = await db.sql`
+        SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
+               graduated_at, settled_at
+        FROM keepr_vaults
+        WHERE chain_id = ${chainId} AND settled_at IS NOT NULL
+        ORDER BY created_at ASC;
+      `
+    } else if (hasChainFilter) {
+      result = await db.sql`
+        SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
+               graduated_at, settled_at
+        FROM keepr_vaults
+        WHERE chain_id = ${chainId}
+        ORDER BY created_at ASC;
+      `
+    } else if (hasSettledFalse) {
+      result = await db.sql`
+        SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
+               graduated_at, settled_at
+        FROM keepr_vaults
+        WHERE settled_at IS NULL
+        ORDER BY created_at ASC;
+      `
+    } else if (hasSettledTrue) {
+      result = await db.sql`
+        SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
+               graduated_at, settled_at
+        FROM keepr_vaults
+        WHERE settled_at IS NOT NULL
+        ORDER BY created_at ASC;
+      `
+    } else {
+      result = await db.sql`
+        SELECT vault_address, chain_id, creator_coin_address, group_id, config_json,
+               graduated_at, settled_at
+        FROM keepr_vaults
+        ORDER BY created_at ASC;
+      `
+    }
 
     const vaults: VaultConfig[] = result.rows.map((row: any) => {
       const configJson = typeof row.config_json === 'string'
@@ -77,9 +125,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         chainId: Number(row.chain_id),
         creatorCoinAddress: row.creator_coin_address as `0x${string}`,
         groupId: String(row.group_id),
+        graduatedAt: row.graduated_at ? new Date(row.graduated_at).toISOString() : null,
+        settledAt: row.settled_at ? new Date(row.settled_at).toISOString() : null,
         ...(contracts.ccaStrategy ? { ccaStrategyAddress: contracts.ccaStrategy } : {}),
         ...(contracts.oracle ? { oracleAddress: contracts.oracle } : {}),
         ...(contracts.vrfHub ? { vrfHubAddress: contracts.vrfHub } : {}),
+        ...(contracts.gaugeController ? { gaugeControllerAddress: contracts.gaugeController } : {}),
+        ...(contracts.burnStream ? { burnStreamAddress: contracts.burnStream } : {}),
       }
     })
 

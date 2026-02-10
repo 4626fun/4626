@@ -14,6 +14,29 @@ Every 5 minutes, the unified `4626` workflow runs three tasks in sequence:
 | **Auction Settlement** | Settle graduated CCA auctions (`sweepCurrency`, `sweepUnsoldTokens`) | Feature |
 | **Keepr Queue** | Process pending XMTP group ops + Neynar/Farcaster actions | Infrastructure |
 
+### Payout Integrity Monitor
+
+A dedicated CRE workflow runs every 30 minutes to verify the full fee pipeline:
+
+| Check | What | Severity |
+|-------|------|----------|
+| **payoutRecipient** | Creator Coin's `payoutRecipient()` == GaugeController | Critical |
+| **BPS Config** | `burnShareBps + lotteryShareBps + creatorShareBps + protocolShareBps == 10000` | Critical |
+| **Vault Wiring** | GaugeController's `vault()` matches registered vault | Critical |
+| **Burn Stream** | Active epoch not stale (>24h without `drip()`) | Warning |
+| **Gauge Balance** | GaugeController holds shares and `lastDistribution` is fresh | Warning |
+
+Alerts are sent to `POST /api/cre/keeper/alert` and forwarded to the configured webhook.
+
+### Settlement Tracking
+
+Auction settlement is a one-time event (~7 days after deployment). The system tracks:
+
+- `graduated_at` — when `isGraduated()` first returns true
+- `settled_at` — after successful `sweepCurrency()` + `sweepUnsoldTokens()`
+
+Once settled, vaults are excluded from the auction-settlement workflow to avoid wasting CRE quota on redundant reads. The `sweepCurrencyBlock` on-chain check provides a secondary guard against double-sweeping.
+
 ## Solana Workflows
 
 The Solana integration runs as separate workflows (cron-driven, independent from the unified 4626 runner):
@@ -94,6 +117,8 @@ npm run solana:bridge-supply
 
 ## Architecture
 
+### Legacy Runner (local `tsx runner.ts`)
+
 ```
 cron (*/5 * * * *)
     │
@@ -120,6 +145,37 @@ cron (*/5 * * * *)
  (vault list)   (webhook)
 ```
 
+### CRE SDK Workflows (Chainlink DON)
+
+```
+Chainlink DON
+    │
+    ├── keepr-queue (every 30s)
+    │       └── HTTPClient → Vercel API
+    │
+    ├── vault-keeper (every 5m)
+    │       ├── EVMClient → read vault state (Base)
+    │       └── HTTPClient → POST /cre/keeper/tend|report
+    │
+    ├── auction-settlement (hourly, unsettled vaults only)
+    │       ├── HTTPClient → GET /cre/vaults/active?settled=false
+    │       ├── EVMClient → currentAuction, isGraduated, sweepCurrencyBlock
+    │       ├── HTTPClient → POST /cre/keeper/sweep
+    │       └── HTTPClient → POST /cre/keeper/mark-settled
+    │
+    └── payout-integrity (every 30m)
+            ├── HTTPClient → GET /cre/vaults/active
+            ├── EVMClient → payoutRecipient, BPS x4, vault, lastDistribution,
+            │                burnStream x3, balanceOf
+            └── HTTPClient → POST /cre/keeper/alert (on failure)
+```
+
+The CRE workflows use an **HTTP bridge pattern**: on-chain reads happen
+directly via `EVMClient`, but writes are delegated to Vercel API endpoints
+that execute transactions using the keeper wallet. This is because CRE's
+native write model uses a report-and-forwarder pattern requiring consumer
+contracts implementing `IReceiver.onReport()`, which is planned for Phase 4.
+
 ## Setup
 
 ### 1. Create `.env`
@@ -145,20 +201,26 @@ Optional (ERC-4337 smart wallet mode):
 - `CRE_ERC4337_OWNER` — owner address (required for Privy signer)
 - `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_WALLET_AUTHORIZATION_KEY` — required for Privy signer
 
+Optional (alerting):
+- `KEEPR_ALERT_WEBHOOK_URL` — webhook URL for payout-integrity and settlement alerts
+
 ### 2. Register Vaults
 
-Each vault is registered via `POST /api/keepr/vault/upsert`. Include CCA strategy addresses in `config_json`:
+Each vault is registered via `POST /api/keepr/vault/upsert`. Include contract addresses in `config_json`:
 
 ```json
 {
   "contracts": {
-    "ccaStrategy": "0x..."
+    "ccaStrategy": "0x...",
+    "gaugeController": "0x...",
+    "burnStream": "0x..."
   }
 }
 ```
 
 - **Vault Keeper** processes every registered vault (only needs `vault_address`)
-- **Auction Settlement** only processes vaults with `contracts.ccaStrategy`
+- **Auction Settlement** only processes vaults with `contracts.ccaStrategy` that are not yet settled
+- **Payout Integrity** only processes vaults with `contracts.gaugeController`
 - **Keepr Queue** processes all pending actions regardless of vault
 
 ### 3. Authorize the Keeper
@@ -204,16 +266,59 @@ npm test
 ```
 cre/
 ├── config.ts                           # ABIs, timing constants
-├── runner.ts                           # Local CLI runner
+├── runner.ts                           # Local CLI runner (legacy)
 ├── package.json
-├── workflows/
+│
+├── cre-workflows/                      # ← Official CRE SDK project
+│   ├── project.yaml                    # CRE project config (RPC, targets)
+│   ├── secrets.yaml                    # CRE secrets references
+│   ├── .env                            # Local simulation secrets
+│   ├── .gitignore                      # Excludes .wasm, .cre/, .env
+│   ├── contracts/abi/                  # Shared ABI exports
+│   │   ├── Vault.ts
+│   │   ├── CCAStrategy.ts
+│   │   ├── GaugeController.ts
+│   │   ├── BurnStream.ts
+│   │   ├── CreatorCoin.ts
+│   │   ├── ERC20.ts
+│   │   └── index.ts
+│   ├── keepr-queue/                    # HTTP-only queue processor
+│   │   ├── main.ts                     # CRE workflow (CronCapability + HTTPClient)
+│   │   ├── workflow.yaml
+│   │   ├── config.staging.json
+│   │   ├── config.production.json
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   ├── vault-keeper/                   # EVM reads + HTTP bridge writes
+│   │   ├── main.ts                     # CRE workflow (EVMClient + HTTPClient)
+│   │   ├── workflow.yaml
+│   │   ├── config.staging.json
+│   │   ├── config.production.json
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   ├── auction-settlement/             # Smart polling (hourly, DB-tracked)
+│   │   ├── main.ts                     # CRE workflow (EVMClient + HTTPClient)
+│   │   ├── workflow.yaml
+│   │   ├── config.staging.json
+│   │   ├── config.production.json
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   └── payout-integrity/              # Fee pipeline monitor (every 30m)
+│       ├── main.ts                     # CRE workflow (EVMClient + HTTPClient)
+│       ├── workflow.yaml
+│       ├── config.staging.json
+│       ├── config.production.json
+│       ├── package.json
+│       └── tsconfig.json
+│
+├── workflows/                          # Legacy runner workflows
 │   ├── 4626.workflow.ts                # Unified entrypoint (runs all 3)
 │   ├── vault-keeper.workflow.ts        # Standalone vault keeper
 │   ├── auction-settlement.workflow.ts  # Standalone auction settlement
 │   └── keepr-queue-executor.workflow.ts
 ├── actions/
 │   ├── vault-keeper.action.ts          # tend/report logic (multi-vault)
-│   ├── auction-settlement.action.ts    # sweep logic (multi-vault)
+│   ├── auction-settlement.action.ts    # sweep logic (multi-vault, sweepCurrencyBlock guard)
 │   └── keepr-queue-executor.action.ts  # XMTP/Neynar queue processor
 ├── utils/
 │   ├── onchain.ts                      # viem clients, read/write/dry-run
@@ -229,8 +334,85 @@ cre/
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/cre/vaults/active` | GET | Returns all registered vaults |
+| `/api/cre/vaults/active` | GET | Returns all registered vaults (supports `?settled=false` filter) |
+| `/api/cre/keeper/tend` | POST | HTTP bridge — calls `tend()` on a vault |
+| `/api/cre/keeper/report` | POST | HTTP bridge — calls `report()` on a vault |
+| `/api/cre/keeper/sweep` | POST | HTTP bridge — calls `sweepCurrency()` + `sweepUnsoldTokens()` |
+| `/api/cre/keeper/mark-settled` | POST | Records `graduated_at` / `settled_at` timestamps in DB |
+| `/api/cre/keeper/alert` | POST | Receives alerts from CRE workflows, forwards to webhook |
 | `/api/keepr/actions/pending` | GET | Returns pending queue actions |
 | `/api/keepr/actions/updateStatus` | POST | Updates action status |
 
 All require `Authorization: Bearer $KEEPR_API_KEY`.
+
+## CRE SDK Workflows
+
+### Prerequisites
+
+1. **CRE CLI** installed (`cre version` should return v1.0.10+)
+2. **Bun** v1.0+ installed
+3. **CRE account** — run `cre login` to authenticate
+
+### Running CRE Workflows
+
+```bash
+# Install dependencies for a workflow
+cd cre/cre-workflows/keepr-queue && bun install
+
+# Simulate locally (requires cre login)
+cd cre/cre-workflows
+cre workflow simulate keepr-queue --target staging-settings
+cre workflow simulate vault-keeper --target staging-settings
+cre workflow simulate auction-settlement --target staging-settings
+cre workflow simulate payout-integrity --target staging-settings
+
+# Deploy to DON (requires cre login + funded account)
+cre workflow deploy keepr-queue --target production-settings
+cre workflow deploy payout-integrity --target production-settings
+```
+
+### CRE Secrets
+
+Set secrets before deploying:
+
+```bash
+cre secrets set KEEPR_API_KEY
+cre secrets set KEEPR_API_BASE_URL
+cre secrets set KEEPR_PRIVATE_KEY
+```
+
+For local simulation, add these to `cre/cre-workflows/.env`.
+
+### CRE Quota Constraints
+
+| Resource | Limit | Impact |
+|----------|-------|--------|
+| EVM reads | 10 per execution | vault-keeper: 1 vault per run; payout-integrity: 1 vault per run |
+| HTTP calls | 5 per execution | keepr-queue: 2 actions per run |
+| Cron interval | 30s minimum | keepr-queue uses 30s; auction-settlement uses 1h |
+| Concurrent capabilities | 3 | Sequential reads within each workflow |
+| Execution timeout | 5 minutes | All workflows complete well within this |
+
+### CRE Quota Budget
+
+**auction-settlement (hourly)**:
+- 1 HTTP (fetch unsettled vaults) + 3 EVM reads (currentAuction, isGraduated, sweepCurrencyBlock) + 1 HTTP (sweep) + 1 HTTP (mark-settled) = 3 HTTP + 3 EVM reads
+
+**payout-integrity (every 30 min, 1 vault per run)**:
+- 1 HTTP (fetch vaults) + ~10 EVM reads (payoutRecipient, BPS x4, vault, lastDistribution, burnStream x3, balanceOf) + 1 HTTP (alert if needed) = 2 HTTP + 10 EVM reads
+
+### HTTP Bridge Pattern
+
+CRE workflows cannot directly write to contracts (CRE uses a report-and-forwarder
+model). Instead, the workflows delegate writes to Vercel API endpoints:
+
+```
+CRE Workflow → HTTPClient.sendRequest(POST /cre/keeper/tend) → Vercel API → viem writeContract → Base
+```
+
+The bridge endpoints authenticate with `KEEPR_API_KEY` and use the keeper wallet
+(`KEEPR_PRIVATE_KEY`) to submit transactions.
+
+**Phase 4 (Future)**: Deploy `VaultKeeperReceiver` and `AuctionSettlementReceiver`
+Solidity contracts implementing `IReceiver.onReport()` to enable native CRE writes
+via `runtime.report()` + `evmClient.writeReport()`, removing the HTTP bridge.

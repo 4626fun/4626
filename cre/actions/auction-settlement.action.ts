@@ -95,6 +95,23 @@ export async function readAuctionStateForAddress(ccaStrategyAddress: `0x${string
   return { ccaStrategyAddress, currentAuction, hasActiveAuction, isGraduated };
 }
 
+/**
+ * Check if the auction has already been swept on-chain (sweepCurrencyBlock > 0).
+ * Returns true if already swept, meaning we can skip settlement.
+ */
+export async function isAlreadySwept(auctionAddress: `0x${string}`): Promise<boolean> {
+  try {
+    const sweepBlock = await readContract<bigint>({
+      address: auctionAddress,
+      abi: CCA_AUCTION_ABI,
+      functionName: 'sweepCurrencyBlock',
+    });
+    return sweepBlock > 0n;
+  } catch {
+    return false;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Single strategy execution
 // ---------------------------------------------------------------------------
@@ -118,6 +135,14 @@ export async function executeSettlementForStrategy(ccaStrategyAddress: `0x${stri
   if (!state.isGraduated) {
     console.log(`[${shortAddr}] Auction not graduated — waiting`);
     result.skippedReason = 'not_graduated';
+    return result;
+  }
+
+  // Guard: already swept on-chain (sweepCurrencyBlock > 0)
+  const alreadySwept = await isAlreadySwept(state.currentAuction);
+  if (alreadySwept) {
+    console.log(`[${shortAddr}] Auction already swept on-chain — skipping`);
+    result.skippedReason = 'already_swept';
     return result;
   }
 

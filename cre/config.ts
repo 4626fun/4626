@@ -164,6 +164,7 @@ export const VRF_SPOKE_ABI = [
 
 export const CCA_AUCTION_ABI = [
   { type: 'function', name: 'isGraduated', inputs: [], outputs: [{ type: 'bool' }], stateMutability: 'view' },
+  { type: 'function', name: 'sweepCurrencyBlock', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
 ] as const;
 
 export const CCA_STRATEGY_ABI = [
