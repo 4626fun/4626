@@ -4,6 +4,7 @@ import { handleOptions, setCors, setNoStore } from '../../../../server/auth/_sha
 import { guardAgentApiRequest } from '../../../../server/_lib/agentApiGuard.js'
 import { buildWalletIntelligence, type WalletIntelligenceOptions } from '../../../../server/_lib/walletIntelligence.js'
 import { tryUploadImmutableJson } from '../../../../server/_lib/lensGrove.js'
+import { getCachedWalletIntelligence, cacheWalletIntelligence } from '../../../../server/_lib/walletIntelligenceCache.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -84,7 +85,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'address is required (0x...)' } satisfies ApiEnvelope<never>)
   }
 
+  const effectiveHops = hops ?? 3
+  const effectiveChainIds = chainIds ?? [8453, 1]
+  const noCache = (req.method === 'GET' && req.query.noCache === 'true') ||
+    (req.method === 'POST' && (req.body as any)?.noCache === true)
+
   try {
+    // ── Cache read (Supabase) ──
+    if (!noCache) {
+      const cached = await getCachedWalletIntelligence(address, effectiveHops, effectiveChainIds)
+      if (cached) {
+        const graph = cached.graph as any
+        return res.status(200).json({
+          success: true,
+          data: {
+            graph,
+            grove: cached.groveUri ? { lensUri: cached.groveUri, gatewayUrl: cached.groveUri.replace('lens://', 'https://api.grove.storage/'), storageKey: cached.groveUri.replace('lens://', ''), statusUrl: null } : undefined,
+            groveStatus: cached.groveUri ? 'stored' as const : 'skipped' as const,
+            cacheStatus: 'hit' as const,
+            cachedAt: cached.createdAt,
+            summary: {
+              target: graph.target,
+              canonicalWallet: graph.canonicalWallet,
+              nodeCount: graph.nodes?.length ?? 0,
+              edgeCount: graph.edges?.length ?? 0,
+              funderChainLength: graph.sources?.funderTrace?.chain?.length ?? 0,
+              knownEntities: graph.sources?.labels ? Object.values(graph.sources.labels).filter((l: any) => l.isKnownEntity).length : 0,
+              netWorth: graph.sources?.portfolio?.totalUsdValue ?? null,
+              ensName: graph.sources?.ens?.name ?? null,
+              lensHandle: graph.sources?.lens?.handle ?? null,
+            },
+          },
+        } satisfies ApiEnvelope<unknown>)
+      }
+    }
+
+    // ── Cache miss: build fresh ──
     const options: WalletIntelligenceOptions = {}
     if (hops !== undefined) options.hops = hops
     if (chainIds !== undefined) options.chainIds = chainIds
@@ -95,7 +131,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const graph = await buildWalletIntelligence(address, options)
 
-    // Optionally store on Lens Grove.
+    // ── Store on Lens Grove (immutable snapshot) ──
     let grove: { lensUri: string; gatewayUrl: string; storageKey: string; statusUrl: string | null } | undefined
     let groveStatus: 'stored' | 'unavailable' | 'skipped' = 'skipped'
 
@@ -114,12 +150,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // ── Write to Supabase cache (async, non-blocking) ──
+    void cacheWalletIntelligence(
+      address,
+      graph,
+      grove?.lensUri ?? null,
+      effectiveHops,
+      effectiveChainIds,
+    )
+
     return res.status(200).json({
       success: true,
       data: {
         graph,
         grove,
         groveStatus,
+        cacheStatus: 'miss' as const,
         summary: {
           target: graph.target,
           canonicalWallet: graph.canonicalWallet,

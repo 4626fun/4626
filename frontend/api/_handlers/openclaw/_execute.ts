@@ -458,6 +458,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const attempt = await tryUploadImmutableJson(cleanPayload)
+
+      // Index in Supabase (async, non-blocking).
+      try {
+        const { indexFeedback } = await import('../../../server/_lib/walletIntelligenceCache.js')
+        void indexFeedback({
+          agentId: agentIdRaw,
+          clientAddress: String(input.clientAddress ?? '').trim().toLowerCase(),
+          feedbackIndex: 0,
+          value: Number(input.value ?? 0),
+          valueDecimals: Number(input.valueDecimals ?? 0),
+          tag1: input.tag1 ? String(input.tag1) : undefined,
+          tag2: input.tag2 ? String(input.tag2) : undefined,
+          endpoint: input.endpoint ? String(input.endpoint) : undefined,
+          feedbackUri: attempt.ok ? attempt.result.lensUri : undefined,
+          feedbackHash,
+          groveUri: attempt.ok ? attempt.result.lensUri : undefined,
+          reasoning: input.reasoning ? String(input.reasoning) : undefined,
+        })
+      } catch {
+        // Supabase indexing is best-effort.
+      }
+
       if (attempt.ok) {
         return res.status(200).json({
           success: true,

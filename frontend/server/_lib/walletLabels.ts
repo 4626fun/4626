@@ -339,14 +339,32 @@ async function fetchWalletLabels(
 /**
  * Resolve labels for a single address using all available sources.
  *
- * Priority: Etherscan nametag > built-in known map > WalletLabels API.
- * Returns as soon as any source produces results.
+ * Priority: Supabase cache > Etherscan nametag > built-in known map > WalletLabels API.
+ * Returns as soon as any source produces results. Writes results to Supabase cache.
  */
 export async function getWalletLabelsForAddress(
   address: string,
   chainId: number = 8453,
 ): Promise<WalletLabelResult> {
   const addr = address.toLowerCase()
+
+  // 0. Check Supabase cache first.
+  try {
+    const { getCachedEntityLabels, cacheEntityLabels } = await import('./walletIntelligenceCache.js')
+    const cached = await getCachedEntityLabels(addr, chainId)
+    if (cached) return cached
+
+    // Resolve from external sources, then cache the result.
+    const result = await resolveLabelsFromSources(addr, chainId)
+    void cacheEntityLabels(result, chainId)
+    return result
+  } catch {
+    // If Supabase is not configured, fall through to direct resolution.
+    return resolveLabelsFromSources(addr, chainId)
+  }
+}
+
+async function resolveLabelsFromSources(addr: string, chainId: number): Promise<WalletLabelResult> {
   const labels: WalletLabel[] = []
 
   // 1. Try Etherscan nametag (Pro Plus — gracefully fails on free tier).
