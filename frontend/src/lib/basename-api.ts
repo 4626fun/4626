@@ -40,6 +40,11 @@ export async function getBasename(
 
     return name
   } catch (error) {
+    // viem throws before any RPC call if the chain config doesn't define the ENS Universal Resolver.
+    // Base (chainId 8453) currently doesn't in viem, so treat this as "no basename" instead of
+    // spamming production logs.
+    const msg = error instanceof Error ? error.message : String(error ?? '')
+    if (msg.includes('does not support contract "ensUniversalResolver"')) return null
     logger.error('Failed to fetch Basename', error)
     return null
   }
@@ -90,6 +95,8 @@ export async function getBasenameProfile(
       url,
     }
   } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error ?? '')
+    if (msg.includes('does not support contract "ensUniversalResolver"')) return { name: null }
     logger.error('Failed to fetch Basename profile', error)
     return { name: null }
   }

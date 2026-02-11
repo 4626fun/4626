@@ -240,7 +240,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
                 {error ? (
                   <span className="text-red-400 text-xs">{error}</span>
                 ) : (
-                  'Connect to XMTP to start chatting'
+                  'Sign in to start chatting'
                 )}
               </div>
               <button
@@ -248,7 +248,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
                 onClick={connect}
                 className="px-4 py-2 rounded-lg bg-brand-primary/20 text-brand-primary text-sm font-medium hover:bg-brand-primary/30 transition-colors"
               >
-                Enable Chat
+                Connect Messaging
               </button>
               {installationLimitInboxId ? (
                 <>

@@ -75,13 +75,47 @@ function requiresSsl(connectionString: string): boolean {
   return true
 }
 
+function parseEnvBool(value: string | undefined): boolean | undefined {
+  const v = (value ?? '').trim().toLowerCase()
+  if (!v) return undefined
+  if (v === '1' || v === 'true' || v === 'yes') return true
+  if (v === '0' || v === 'false' || v === 'no') return false
+  return undefined
+}
+
+function getSslMode(connectionString: string): string | null {
+  try {
+    const u = new URL(connectionString)
+    const mode = (u.searchParams.get('sslmode') ?? '').trim().toLowerCase()
+    return mode || null
+  } catch {
+    return null
+  }
+}
+
+function stripQueryParams(connectionString: string, keys: string[]): string {
+  try {
+    const u = new URL(connectionString)
+    for (const k of keys) u.searchParams.delete(k)
+    return u.toString()
+  } catch {
+    return connectionString
+  }
+}
+
 function sslOptionsForConnection(connectionString: string): any | undefined {
   if (!requiresSsl(connectionString)) return undefined
-  // Many hosted Postgres providers require TLS. Some libraries ignore `sslmode=require`
-  // in the URL, so pass an explicit ssl option too.
+  // Many hosted Postgres providers require TLS. We still want predictable behavior
+  // across Node runtimes and connection-string parsers (pg-connection-string has
+  // some non-libpq semantics by default), so we compute TLS verification here.
   //
-  // We use `rejectUnauthorized: false` for compatibility across providers and managed cert chains.
-  // If your provider has a standard CA chain, you can tighten this to `true`.
+  // Default: compatibility-first (do not hard-fail on unusual cert chains).
+  // To tighten security, set POSTGRES_SSL_REJECT_UNAUTHORIZED=true and provide a valid CA chain.
+  const envOverride = parseEnvBool(process.env.POSTGRES_SSL_REJECT_UNAUTHORIZED)
+  if (envOverride !== undefined) return { rejectUnauthorized: envOverride }
+
+  const mode = getSslMode(connectionString)
+  if (mode === 'verify-full' || mode === 'verify-ca') return { rejectUnauthorized: true }
   return { rejectUnauthorized: false }
 }
 
@@ -185,7 +219,15 @@ export async function getDb(): Promise<DbPool | null> {
           initError = 'Missing Pool export from pg'
           return null
         }
-        const pool = new Pool({ connectionString: cs, ssl })
+        // pg uses pg-connection-string internally when `connectionString` is set. If the URL contains
+        // `sslmode=require|prefer|verify-ca`, newer versions warn and may apply stricter (non-libpq)
+        // semantics (treating them as verify-full). That can break local/dev environments (and
+        // any setup that uses a self-signed chain).
+        //
+        // We strip sslmode from the URL and rely on the explicit `ssl` option instead, which is
+        // consistent and controlled via POSTGRES_SSL_REJECT_UNAUTHORIZED.
+        const poolConnectionString = stripQueryParams(cs, ['sslmode', 'ssl', 'sslrootcert'])
+        const pool = new Pool({ connectionString: poolConnectionString, ssl })
         // Provide a minimal `sql` tagged template wrapper compatible with callsites.
         const db: DbPool = {
           sql: async (strings: TemplateStringsArray, ...values: any[]) => {

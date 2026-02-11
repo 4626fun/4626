@@ -8,7 +8,7 @@ import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../_lib/creato
 import { createPrivyScwSigner } from '../_lib/privyXmtpSigner.js'
 import { ensureKeeprSchema } from '../_lib/keeprSchema.js'
 
-declare const process: { env: Record<string, string | undefined> }
+declare const process: { env: Record<string, string | undefined>; cwd(): string }
 
 const ETHEREUM_IDENTIFIER_KIND = 0
 

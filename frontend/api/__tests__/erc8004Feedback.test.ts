@@ -65,7 +65,7 @@ function groveFail(error = 'Grove upload failed (530): Origin DNS error') {
 // ---------------------------------------------------------------------------
 
 describe('v1/agents/feedback/submit', () => {
-  let handler: (req: any, res: any) => Promise<void>
+  let handler: (req: any, res: any) => Promise<unknown>
 
   beforeEach(async () => {
     vi.clearAllMocks()
@@ -230,7 +230,7 @@ describe('v1/agents/feedback (read)', () => {
 // ---------------------------------------------------------------------------
 
 describe('lens/feedback-payload', () => {
-  let handler: (req: any, res: any) => Promise<void>
+  let handler: (req: any, res: any) => Promise<unknown>
 
   beforeEach(async () => {
     vi.clearAllMocks()
@@ -329,7 +329,7 @@ describe('lens/feedback-payload', () => {
 // ---------------------------------------------------------------------------
 
 describe('lens/reputation-graph', () => {
-  let handler: (req: any, res: any) => Promise<void>
+  let handler: (req: any, res: any) => Promise<unknown>
 
   const mockGraph = {
     version: '1.0',

@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount, useSignMessage } from 'wagmi'
 import { base } from 'wagmi/chains'
+import { keccak256 } from 'viem'
 import { apiFetch } from '@/lib/apiBase'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
+import {
+  ENC_KEY_MESSAGE,
+  readStoredEncKeyHex,
+  writeStoredEncKeyHex,
+  setAutoConnectEnabled as setXmtpAutoConnect,
+  requestXmtpAutoConnect,
+} from '@/lib/xmtp/provider'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -194,6 +202,15 @@ export function useSiweAuth() {
         } catch {
           // ignore
         }
+        // Enable XMTP auto-connect so messaging activates seamlessly after
+        // Privy sign-in. The XMTP provider will handle the enc key signature
+        // if not already cached (one popup instead of a separate "Enable Chat" step).
+        if (address) {
+          try {
+            setXmtpAutoConnect(address)
+            requestXmtpAutoConnect()
+          } catch { /* non-fatal */ }
+        }
         return address
       } catch (e: unknown) {
         setError(coerceErrorMessage(e, 'Privy sign-in failed'))
@@ -354,6 +371,25 @@ export function useSiweAuth() {
       }
       const resolved = typeof signed === 'string' ? signed : null
       setAuthAddress(resolved)
+
+      // Pre-sign the XMTP encryption key so XMTP can auto-connect without
+      // a separate wallet popup. This piggybacks on the sign-in action so the
+      // user experiences one cohesive "sign in + enable messaging" flow.
+      if (resolved) {
+        try {
+          if (!readStoredEncKeyHex(resolved)) {
+            const encSig = await signMessageAsync({ message: ENC_KEY_MESSAGE })
+            writeStoredEncKeyHex(resolved, keccak256(encSig))
+          }
+          setXmtpAutoConnect(resolved)
+          // Signal the XMTP provider to connect now (the auto-connect effect
+          // may have already run before the flag was set).
+          requestXmtpAutoConnect()
+        } catch {
+          // Non-fatal: XMTP will prompt separately if this fails
+        }
+      }
+
       return resolved
     } catch (e: unknown) {
       setError(coerceErrorMessage(e, 'Sign-in failed'))

@@ -2716,35 +2716,29 @@ function DeployVaultBatcher({
                   })
                 }
 
-                // Prefer `personal_sign` via the EIP-1193 request path when available.
-                // This tends to produce a plain hex signature (vs some SDK helpers returning envelopes).
-                if (hasRequest) {
-                  try {
-                    const rawResult = await withTimeout(
-                      client.request({
-                        method: 'personal_sign',
-                        params: [msg, privySmartWalletAddress],
-                      }),
-                      20_000,
-                      'privySmartWallet.personal_sign',
-                    )
-                    const sig = ensureSignatureHex(rawResult, 'privySmartWallet.personal_sign')
-                    logNonEoaSignature(sig, 'privySmartWallet.personal_sign')
-                    debugSignatureReady('privySmartWallet.personal_sign', sig, { signer: privySmartWalletAddress })
-                    return sig
-                  } catch {
-                    // Fall through to signMessage helper if personal_sign isn't supported.
-                  }
-                }
-
                 if (hasSignMessage) {
                   const context = hasAccountSignMessage
                     ? 'privySmartWallet.account.signMessage'
                     : 'privySmartWallet.signMessage'
+                  // For UserOp signing we are typically signing a 32-byte digest (0x + 64 hex chars).
+                  // Prefer the `{ raw }` form when supported so we sign bytes, not the string "0x...".
+                  const rawMessage =
+                    typeof msg === 'string' && /^0x[0-9a-fA-F]{64}$/.test(msg)
+                      ? ({ raw: msg } as any)
+                      : msg
                   const rawResult = await withTimeout(
-                    hasAccountSignMessage
-                      ? account.signMessage({ message: msg })
-                      : client.signMessage({ account: privySmartWalletAddress, message: msg }),
+                    (async () => {
+                      try {
+                        return hasAccountSignMessage
+                          ? await account.signMessage({ message: rawMessage })
+                          : await client.signMessage({ account: privySmartWalletAddress, message: rawMessage })
+                      } catch {
+                        // Fallback for SDKs that don't support `{ raw }` in signMessage.
+                        return hasAccountSignMessage
+                          ? await account.signMessage({ message: msg })
+                          : await client.signMessage({ account: privySmartWalletAddress, message: msg })
+                      }
+                    })(),
                     20_000,
                     context,
                   )

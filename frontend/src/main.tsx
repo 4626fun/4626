@@ -71,13 +71,16 @@ if (typeof window !== 'undefined') {
     if ((debugEnabled || needsAlchemyRewrite) && !(window as any).__cvFetchPatched) {
       const originalFetch = window.fetch.bind(window)
       const alchemyBaseRpc = /(^|\/\/)base-mainnet\.g\.alchemy\.com/i
+      // CDP RPC URLs are server-side oriented and often fail in browsers (CORS/405).
+      // Always proxy them through our same-origin JSON-RPC relay.
+      const coinbaseDeveloperBaseRpc = /^https:\/\/api\.developer\.coinbase\.com\/rpc\/v1\/base\//i
       const safeBaseRpc = '/api/rpc'
       window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
         if (disablePrivyAnalytics && url.includes('https://auth.privy.io/api/v1/analytics_events')) {
           return Promise.resolve(new Response(null, { status: 204 }))
         }
-        if (alchemyBaseRpc.test(url)) {
+        if (alchemyBaseRpc.test(url) || coinbaseDeveloperBaseRpc.test(url)) {
           if (input instanceof Request) {
             const rewritten = new Request(safeBaseRpc, input)
             return originalFetch(rewritten, init)

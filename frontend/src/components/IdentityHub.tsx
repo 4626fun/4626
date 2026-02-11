@@ -45,7 +45,7 @@ export function IdentityHub() {
   const { address: wagmiAddress, isConnected } = useAccount()
   const publicClient = usePublicClient()
 
-  const { authenticated: privyAuthed, ready: privyReady } = usePrivy()
+  const { authenticated: privyAuthed } = usePrivy()
   const { wallets: privyWallets } = useWallets()
 
   const [menuOpen, setMenuOpen] = useState(false)

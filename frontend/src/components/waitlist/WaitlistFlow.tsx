@@ -576,7 +576,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     user: privyUser,
     logout: privyLogout,
     linkWallet: privyLinkWallet,
-    getAccessToken: privyGetAccessToken,
   } = useSafePrivyHook(privyHooksEnabled)
   const showPrivyReady = showPrivy && privyStatus === 'ready'
   const { connectWallet: privyConnectWallet } = useSafeConnectWalletHook({

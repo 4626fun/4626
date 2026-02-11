@@ -27,7 +27,10 @@ const IS_BROWSER = typeof window !== 'undefined'
 
 function isCorsRestrictedRpc(url: string): boolean {
   // Alchemy browser CORS is opt-in; avoid hard failures by default.
-  return /(^|\/\/)base-mainnet\.g\.alchemy\.com/i.test(url) || /\.g\.alchemy\.com\//i.test(url)
+  if ((/(^|\/\/)base-mainnet\.g\.alchemy\.com/i.test(url) || /\.g\.alchemy\.com\//i.test(url))) return true
+  // CDP RPC URLs are not meant for direct browser fetch (often CORS/405).
+  if (/^https:\/\/api\.developer\.coinbase\.com\/rpc\/v1\/base\//i.test(url)) return true
+  return false
 }
 
 const BASE_RPC_URL = IS_BROWSER && isCorsRestrictedRpc(BASE_RPC_URL_RAW) ? '' : BASE_RPC_URL_RAW

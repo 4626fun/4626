@@ -72,7 +72,13 @@ export const xmtpPlugin: Plugin = {
     fs.mkdirSync(dbDir, { recursive: true, mode: 0o700 })
     const dbPath = (inboxId: string) => path.join(dbDir, `plugin-xmtp-${env}-${inboxId}.db3`)
 
-    const rawEncKey = (runtime.getSetting('XMTP_DB_ENCRYPTION_KEY') ?? config.XMTP_DB_ENCRYPTION_KEY ?? process.env.XMTP_DB_ENCRYPTION_KEY ?? '').trim()
+    const settingEncKey = runtime.getSetting('XMTP_DB_ENCRYPTION_KEY')
+    const rawEncKey = (
+      (typeof settingEncKey === 'string' && settingEncKey.trim() ? settingEncKey : undefined) ??
+      config.XMTP_DB_ENCRYPTION_KEY ??
+      process.env.XMTP_DB_ENCRYPTION_KEY ??
+      ''
+    ).trim()
     const dbEncryptionKey = rawEncKey
       ? ((rawEncKey.startsWith('0x') ? rawEncKey : `0x${rawEncKey}`) as `0x${string}`)
       : undefined

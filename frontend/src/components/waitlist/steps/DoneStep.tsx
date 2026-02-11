@@ -156,11 +156,9 @@ function CtaLoadingSkeleton() {
 /** CTA shown when the user is waitlisted (not yet approved). */
 function WaitlistedCta({
   waitlistPosition,
-  referralLink,
   onCopyReferral,
 }: {
   waitlistPosition: WaitlistState['waitlistPosition']
-  referralLink: string
   onCopyReferral: () => void
 }) {
   const rank = waitlistPosition?.rank?.total
@@ -292,7 +290,6 @@ export const DoneStep = memo(function DoneStep({
           ) : deployAccessState === 'waitlist' ? (
             <WaitlistedCta
               waitlistPosition={waitlistPosition ?? null}
-              referralLink={referralLink}
               onCopyReferral={onCopyReferral}
             />
           ) : null}

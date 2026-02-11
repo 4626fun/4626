@@ -99,7 +99,12 @@ export function useXmtp() {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const ENC_KEY_MESSAGE =
+/**
+ * Message signed to derive the XMTP local database encryption key.
+ * Exported so the auth flow can pre-sign it during SIWE sign-in,
+ * eliminating a separate wallet popup when XMTP connects later.
+ */
+export const ENC_KEY_MESSAGE =
   'Enable encrypted messaging on CreatorVault (4626.fun)\n\nThis signature encrypts your local message database.\nNo blockchain transaction will occur.'
 
 const RAW_XMTP_ENV = String(import.meta.env.VITE_XMTP_ENV ?? '').trim().toLowerCase()
@@ -118,7 +123,7 @@ function autoConnectStorageKey(address: string): string {
   return `cv:xmtp:autoConnect:${XMTP_ENV}:${address.toLowerCase()}`
 }
 
-function readStoredEncKeyHex(address: string): string | null {
+export function readStoredEncKeyHex(address: string): string | null {
   if (typeof window === 'undefined') return null
   try {
     const raw = window.localStorage.getItem(encKeyStorageKey(address))
@@ -129,7 +134,7 @@ function readStoredEncKeyHex(address: string): string | null {
   }
 }
 
-function writeStoredEncKeyHex(address: string, encKeyHex: string): void {
+export function writeStoredEncKeyHex(address: string, encKeyHex: string): void {
   if (typeof window === 'undefined') return
   if (!ENC_KEY_HEX_RE.test(encKeyHex)) return
   try {
@@ -157,13 +162,22 @@ function isAutoConnectEnabled(address: string): boolean {
   }
 }
 
-function setAutoConnectEnabled(address: string): void {
+export function setAutoConnectEnabled(address: string): void {
   if (typeof window === 'undefined') return
   try {
     window.localStorage.setItem(autoConnectStorageKey(address), '1')
   } catch {
     // ignore storage errors
   }
+}
+
+/**
+ * Signal the XMTP provider to auto-connect after auth completes.
+ * Dispatches a custom event that the provider listens for.
+ */
+export function requestXmtpAutoConnect(): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('cv:xmtp:autoConnectRequest'))
 }
 
 function clearAutoConnect(address: string): void {
@@ -222,7 +236,7 @@ async function ensureInstallationSlot(
 ): Promise<void> {
   try {
     // Resolve the inboxId for this signer's identifier
-    const identifier = signer.getIdentifier()
+    const identifier = await signer.getIdentifier()
     const inboxId = await getInboxIdForIdentifier(identifier, env as any)
     if (!inboxId) return // new user, no installations yet
 
@@ -723,6 +737,21 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     if (autoConnectAttemptedRef.current === attemptKey) return
     autoConnectAttemptedRef.current = attemptKey
     void connect()
+  }, [isConnected, address, walletClient, status, connect])
+
+  // Listen for auth-flow auto-connect requests (e.g. after SIWE sign-in).
+  // This bridges the gap when the auto-connect flag is set *after* the
+  // initial auto-connect effect already ran.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handler = () => {
+      if (!isConnected || !address || !walletClient) return
+      if (clientRef.current || connectInFlightRef.current) return
+      if (status === 'signing' || status === 'connecting' || status === 'connected') return
+      void connect()
+    }
+    window.addEventListener('cv:xmtp:autoConnectRequest', handler)
+    return () => window.removeEventListener('cv:xmtp:autoConnectRequest', handler)
   }, [isConnected, address, walletClient, status, connect])
 
   // ------- disconnect -------

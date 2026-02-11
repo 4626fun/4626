@@ -12,6 +12,56 @@ export type KeeprCommandResult =
   | { ok: true; response: string; action?: any }
   | { ok: false; response: string }
 
+function formatKeeprHelp(): string {
+  return [
+    'Keepr commands',
+    '',
+    'Tip: you can type with or without a leading slash.',
+    '',
+    '- keepr help',
+    '- keepr status',
+    '- keepr rules',
+    '- keepr check',
+    '- keepr check 0x... (ADMIN/OWNER)',
+    '- keepr lock (OWNER)',
+    '- keepr unlock (OWNER)',
+    '- keepr sync (ADMIN/OWNER)',
+    '',
+    'Token commands:',
+    '',
+    '- /send <amount> USDC to <address> (ADMIN/OWNER)',
+    '- /send <amount> ETH to <address> (ADMIN/OWNER)',
+    '',
+    'AI commands:',
+    '',
+    '- /ai <question> — ask the vault assistant',
+    '- @keepr <question> — same as /ai',
+    '',
+    'Farcaster commands (type /fc help for more):',
+    '',
+    '- /fc profile <address|fid>',
+    '- /fc cast <message> (ADMIN/OWNER)',
+    '- /fc gallery',
+    '- /fc stats',
+    '',
+    'CRE Keeper commands (type /cre help for more):',
+    '',
+    '- /cre status — vault keeper states',
+    '- /cre auction — CCA auction states',
+    '- /cre solana — Solana price & health',
+    '- /cre health — combined health check',
+    '- /cre tend [vault] — deploy idle funds',
+    '- /cre report [vault] — harvest yields',
+    '- /cre flush-fees — flush Solana fees',
+    '',
+    'Wallet & Reputation:',
+    '',
+    '- /intel <address> — wallet intelligence report',
+    '- /reputation [agentId] — ERC-8004 reputation graph',
+    '- /feedback [agentId] — feedback summary',
+  ].join('\n')
+}
+
 function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
@@ -57,6 +107,31 @@ export async function handleKeeprCommand(params: {
   text: string
 }): Promise<KeeprCommandResult> {
   const raw = (params.text ?? '').trim()
+
+  // Global aliases: /help and "help" should always respond (even without DB/vault config).
+  const rawLower = raw.toLowerCase()
+  if (rawLower === '/help' || rawLower === 'help') {
+    return { ok: true, response: formatKeeprHelp() }
+  }
+
+  // AI commands should work even when vault config/DB is unavailable.
+  const looksLikeAi =
+    rawLower.startsWith('/ai') ||
+    rawLower.startsWith('@keepr') ||
+    rawLower.startsWith('@bot')
+  if (looksLikeAi) {
+    const aiText = raw.replace(/^\/?ai\s*/i, '').replace(/^@(keepr|bot)\s*/i, '').trim()
+    if (!aiText) {
+      return { ok: true, response: 'Ask me anything about this vault or DeFi on Base.' }
+    }
+    const v = await getKeeprVaultByGroupId(params.groupId)
+    return generateLlmResponse({
+      groupId: params.groupId,
+      senderWallet: params.senderWallet,
+      text: aiText,
+      vault: v,
+    })
+  }
   
   // Handle Farcaster commands (/fc or fc)
   const looksLikeFc = raw.toLowerCase().startsWith('/fc') || raw.toLowerCase().startsWith('fc ')
@@ -103,8 +178,22 @@ export async function handleKeeprCommand(params: {
     const looksLikeKeepr = raw0.startsWith('/keepr') || raw0.startsWith('keepr')
     const parts0 = raw0.split(/\s+/g).filter(Boolean)
     const cmd0 = looksLikeKeepr ? (parts0[1] ?? 'help') : ''
-    if (cmd0 === 'help' || cmd0 === 'status' || cmd0 === 'rules') {
+    if (cmd0 === 'help') {
+      return { ok: true, response: formatKeeprHelp() }
+    }
+    if (cmd0 === 'status') {
       return { ok: true, response: formatVaultStatus(null) }
+    }
+    if (cmd0 === 'rules') {
+      return {
+        ok: true,
+        response: [
+          'Keepr rules',
+          '',
+          '- configured: no',
+          '- next: ask the creator to connect this group in CreatorVault',
+        ].join('\n'),
+      }
     }
     return { ok: false, response: 'Keepr is not configured for this group.' }
   }
@@ -142,53 +231,7 @@ export async function handleKeeprCommand(params: {
   if (cmd === 'help') {
     return {
       ok: true,
-      response: [
-        'Keepr commands',
-        '',
-        'Tip: you can type with or without a leading slash.',
-        '',
-        '- keepr help',
-        '- keepr status',
-        '- keepr rules',
-        '- keepr check',
-        '- keepr check 0x... (ADMIN/OWNER)',
-        '- keepr lock (OWNER)',
-        '- keepr unlock (OWNER)',
-        '- keepr sync (ADMIN/OWNER)',
-        '',
-        'Token commands:',
-        '',
-        '- /send <amount> USDC to <address> (ADMIN/OWNER)',
-        '- /send <amount> ETH to <address> (ADMIN/OWNER)',
-        '',
-        'AI commands:',
-        '',
-        '- /ai <question> — ask the vault assistant',
-        '- @keepr <question> — same as /ai',
-        '',
-        'Farcaster commands (type /fc help for more):',
-        '',
-        '- /fc profile <address|fid>',
-        '- /fc cast <message> (ADMIN/OWNER)',
-        '- /fc gallery',
-        '- /fc stats',
-        '',
-        'CRE Keeper commands (type /cre help for more):',
-        '',
-        '- /cre status — vault keeper states',
-        '- /cre auction — CCA auction states',
-        '- /cre solana — Solana price & health',
-        '- /cre health — combined health check',
-        '- /cre tend [vault] — deploy idle funds',
-        '- /cre report [vault] — harvest yields',
-        '- /cre flush-fees — flush Solana fees',
-        '',
-        'Wallet & Reputation:',
-        '',
-        '- /intel <address> — wallet intelligence report',
-        '- /reputation [agentId] — ERC-8004 reputation graph',
-        '- /feedback [agentId] — feedback summary',
-      ].join('\n'),
+      response: formatKeeprHelp(),
     }
   }
 
