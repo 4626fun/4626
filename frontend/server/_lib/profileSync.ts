@@ -49,7 +49,17 @@ export async function upsertProfileByWallet(db: Db, input: ProfileWalletUpsertIn
   if (!walletSeed) return
 
   let existing: { id: number; email?: string | null } | null = null
-  if (primaryWallet) {
+  // Check privy_user_id first — it's the strongest identity signal.
+  if (!existing && privyUserId) {
+    const res = await db.sql`
+      SELECT id, email
+      FROM profiles
+      WHERE privy_user_id = ${privyUserId}
+      LIMIT 1;
+    `
+    existing = (res?.rows?.[0] as { id: number; email?: string | null } | undefined) ?? null
+  }
+  if (!existing && primaryWallet) {
     const res = await db.sql`
       SELECT id, email
       FROM profiles

@@ -248,6 +248,7 @@ function DetailPanel({
   decisionBusy,
   onApprove,
   onDeny,
+  onDelete,
 }: {
   detail: WaitlistDetail
   decisionNote: string
@@ -255,6 +256,7 @@ function DetailPanel({
   decisionBusy: boolean
   onApprove: () => void
   onDeny: () => void
+  onDelete: () => void
 }) {
   const resolvedPrimaryWallet = detail.resolvedPrimaryWallet || detail.primaryWallet
   const resolvedCswOwners = (Array.isArray(detail.resolvedCswOwners) ? detail.resolvedCswOwners : []).filter(
@@ -297,6 +299,14 @@ function DetailPanel({
               onClick={onDeny}
             >
               Deny
+            </button>
+            <button
+              type="button"
+              className="text-xs px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+              disabled={decisionBusy}
+              onClick={onDelete}
+            >
+              Delete
             </button>
           </div>
         </div>
@@ -562,8 +572,9 @@ export function AdminWaitlist() {
     setMobileShowDetail(false)
   }
 
-  const applyDecision = async (action: 'approve' | 'deny') => {
+  const applyDecision = async (action: 'approve' | 'deny' | 'delete') => {
     if (!selectedId) return
+    if (action === 'delete' && !window.confirm(`Permanently delete profile #${selectedId}? This cannot be undone.`)) return
     setDecisionBusy(true)
     setDecisionError(null)
     try {
@@ -576,7 +587,11 @@ export function AdminWaitlist() {
       if (!res.ok || !json || json.success !== true) {
         throw new Error((json && typeof json.error === 'string' && json.error) || `Update failed (HTTP ${res.status})`)
       }
-      await Promise.all([listQuery.refetch(), detailQuery.refetch()])
+      if (action === 'delete') {
+        setSelectedId(null)
+        setMobileShowDetail(false)
+      }
+      await Promise.all([listQuery.refetch(), action !== 'delete' ? detailQuery.refetch() : Promise.resolve()])
     } catch (e: any) {
       setDecisionError(e?.message ? String(e.message) : 'Update failed')
     } finally {
@@ -696,6 +711,7 @@ export function AdminWaitlist() {
                 decisionBusy={decisionBusy}
                 onApprove={() => void applyDecision('approve')}
                 onDeny={() => void applyDecision('deny')}
+                onDelete={() => void applyDecision('delete')}
               />
             )}
           </div>

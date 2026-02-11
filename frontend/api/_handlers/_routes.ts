@@ -195,6 +195,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'admin/waitlist/list': () => import('./admin/waitlist/_list.js'),
   'admin/waitlist/approve': () => import('./admin/waitlist/_approve.js'),
   'admin/waitlist/deny': () => import('./admin/waitlist/_deny.js'),
+  'admin/waitlist/delete': () => import('./admin/waitlist/_delete.js'),
 }
 
 // Match v1/token/{address}/metadata or v1/token/{address}/image patterns

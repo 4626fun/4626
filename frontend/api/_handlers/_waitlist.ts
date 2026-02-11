@@ -416,7 +416,183 @@ export default async function handler(req: any, res: any) {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Dedup guard: check if a profile already exists for this wallet/privy_user_id
+  // with a different (usually synthetic) email. If so, adopt that profile by
+  // updating its email to the real one, preventing duplicate rows.
+  // ---------------------------------------------------------------------------
+  const walletForDedup = primaryWallet.length > 0 ? primaryWallet : null
+  const privyForDedup = privyUserId || null
+  const embeddedForDedup = embeddedWallet || null
+  let adoptedExistingId: number | null = null
+
   try {
+    let existingRow: { id: number; email: string } | null = null
+
+    if (walletForDedup) {
+      const q = await db.sql`
+        SELECT id, email FROM profiles
+        WHERE LOWER(primary_wallet) = ${walletForDedup}
+           OR LOWER(embedded_wallet) = ${walletForDedup}
+        ORDER BY created_at ASC LIMIT 1;
+      `
+      existingRow = (q?.rows?.[0] as { id: number; email: string } | undefined) ?? null
+    }
+    if (!existingRow && embeddedForDedup) {
+      const q = await db.sql`
+        SELECT id, email FROM profiles
+        WHERE LOWER(embedded_wallet) = ${embeddedForDedup}
+           OR LOWER(primary_embedded_eoa) = ${embeddedForDedup}
+        ORDER BY created_at ASC LIMIT 1;
+      `
+      existingRow = (q?.rows?.[0] as { id: number; email: string } | undefined) ?? null
+    }
+    if (!existingRow && privyForDedup) {
+      const q = await db.sql`
+        SELECT id, email FROM profiles
+        WHERE privy_user_id = ${privyForDedup}
+        ORDER BY created_at ASC LIMIT 1;
+      `
+      existingRow = (q?.rows?.[0] as { id: number; email: string } | undefined) ?? null
+    }
+
+    if (existingRow?.id && existingRow.email !== email) {
+      // Existing profile found with a different email (likely synthetic).
+      // Adopt it: update the email to the real one and merge all fields.
+      console.info(
+        `waitlist: dedup — adopting profile #${existingRow.id} (${existingRow.email}) → ${email} for wallet ${walletForDedup ?? embeddedForDedup ?? 'N/A'}`,
+      )
+      const adopted = await db.sql`
+        UPDATE profiles
+        SET email = ${email},
+            primary_wallet = COALESCE(${walletForDedup}, primary_wallet),
+            solana_wallet = COALESCE(${solanaWallet.length > 0 ? solanaWallet : null}, solana_wallet),
+            privy_user_id = COALESCE(${privyUserId}, privy_user_id),
+            embedded_wallet = COALESCE(${embeddedWallet}, embedded_wallet),
+            embedded_wallet_chain = COALESCE(${embeddedWalletChain}, embedded_wallet_chain),
+            embedded_wallet_client_type = COALESCE(${embeddedWalletClientType}, embedded_wallet_client_type),
+            base_sub_account = COALESCE(${baseSubAccount.length > 0 ? baseSubAccount : null}, base_sub_account),
+            persona = COALESCE(${persona}, persona),
+            has_creator_coin = COALESCE(${hasCreatorCoinRaw}, has_creator_coin),
+            farcaster_fid = COALESCE(${farcasterFid}, farcaster_fid),
+            contact_preference = COALESCE(${contactPreference}, contact_preference),
+            verifications = COALESCE(${verifications.length > 0 ? JSON.stringify(verifications) : null}, verifications),
+            updated_at = NOW()
+        WHERE id = ${existingRow.id}
+        RETURNING id, email, referral_code;
+      `
+      if (adopted?.rows?.[0]?.id) {
+        adoptedExistingId = adopted.rows[0].id as number
+      }
+    }
+  } catch (dedupErr: any) {
+    // Non-fatal: if dedup check fails, fall through to the normal INSERT path.
+    console.warn('waitlist: dedup check error (non-fatal)', dedupErr?.message ?? dedupErr)
+  }
+
+  try {
+    // If we already adopted an existing profile, use that instead of inserting.
+    if (adoptedExistingId) {
+      const adopted = await db.sql`
+        SELECT id, email, referral_code FROM profiles WHERE id = ${adoptedExistingId};
+      `
+      const row = (adopted?.rows?.[0] ?? null) as { id?: unknown; email?: unknown; referral_code?: unknown } | null
+      if (row?.id) {
+        const signupId = typeof row.id === 'number' ? row.id : null
+
+        // Award signup points if not already awarded
+        if (signupId) {
+          try {
+            await awardWaitlistPoints({
+              db,
+              signupId,
+              source: 'waitlist_signup',
+              sourceId: `email:${email}`,
+              amount: WAITLIST_POINTS.signup,
+            })
+          } catch { /* idempotent — ignore if already awarded */ }
+        }
+
+        // Handle CSW, referral code, referral attribution (same as normal path)
+        if (signupId && cswAddress.length > 0) {
+          await db.sql`
+            UPDATE profiles
+            SET csw_address = COALESCE(csw_address, ${cswAddress}),
+                primary_wallet = COALESCE(primary_wallet, ${cswAddress})
+            WHERE id = ${signupId};
+          `
+          try {
+            await awardWaitlistPoints({
+              db,
+              signupId,
+              source: 'csw_link',
+              sourceId: `csw:${cswAddress.toLowerCase()}`,
+              amount: WAITLIST_POINTS.linkCsw,
+            })
+          } catch { /* idempotent */ }
+        }
+
+        let referralCodeOut: string | null = typeof row.referral_code === 'string' ? (row.referral_code as string) : null
+        if (signupId && !referralCodeOut) {
+          const desired =
+            claimReferralCode ||
+            (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveCreatorCoinSymbolFromWallet(primaryWallet)) : null) ||
+            `C${Number(signupId).toString(36).toUpperCase()}`
+          try {
+            const up = await db.sql`
+              UPDATE profiles
+              SET referral_code = ${desired}, referral_claimed_at = NOW()
+              WHERE id = ${signupId} AND referral_code IS NULL
+              RETURNING referral_code;
+            `
+            referralCodeOut = typeof up?.rows?.[0]?.referral_code === 'string' ? String(up.rows[0].referral_code) : referralCodeOut
+          } catch { /* ignore code collision */ }
+        }
+
+        if (signupId && referralFromBody) {
+          const ref = await db.sql`
+            SELECT id FROM profiles WHERE referral_code = ${referralFromBody} LIMIT 1;
+          `
+          const referrerId = typeof ref?.rows?.[0]?.id === 'number' ? (ref.rows[0].id as number) : null
+          if (referrerId && referrerId !== signupId) {
+            await db.sql`
+              UPDATE profiles
+              SET referred_by_code = ${referralFromBody}, referred_by_signup_id = ${referrerId}
+              WHERE id = ${signupId} AND referred_by_signup_id IS NULL;
+            `
+            const convResult = await db.sql`
+              INSERT INTO referral_conversions (
+                referral_code, referrer_signup_id, invitee_signup_id,
+                ip_hash, ua_hash, session_id, attribution, is_valid, invalid_reason, status, created_at
+              ) VALUES (
+                ${referralFromBody}, ${referrerId}, ${signupId},
+                ${ipHash}, ${uaHash}, NULL, 'last_click', TRUE, NULL, 'signed_up', NOW()
+              ) ON CONFLICT (invitee_signup_id) DO NOTHING
+              RETURNING id;
+            `
+            if (convResult?.rows?.[0]?.id) {
+              await awardWaitlistPoints({
+                db, signupId: referrerId,
+                source: 'referral_signup', sourceId: `invitee:${signupId}`,
+                amount: WAITLIST_POINTS.referralSignup,
+              })
+            }
+          }
+        }
+
+        const data: WaitlistResponse = { created: false, email: String(row.email ?? ''), referralCode: referralCodeOut }
+
+        const provisionWallet = primaryWallet.length > 0 ? primaryWallet : cswAddress.length > 0 ? cswAddress : null
+        if (signupId && provisionWallet && persona === 'creator') {
+          void preprovisionWaitlistUser(signupId, provisionWallet).catch((err) => {
+            console.warn('waitlist: preprovision error', err?.message ? String(err.message) : err)
+          })
+        }
+
+        return res.status(200).json({ success: true, data } satisfies ApiEnvelope<WaitlistResponse>)
+      }
+    }
+
     // Preferred schema (includes persona + has_creator_coin).
     const r = await db.sql`
       INSERT INTO profiles (
