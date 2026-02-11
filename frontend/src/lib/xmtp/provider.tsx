@@ -16,6 +16,7 @@ import {
 } from 'react'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { keccak256 } from 'viem'
+import { getHostMode } from '@/lib/host'
 import {
   Client,
   getInboxIdForIdentifier,
@@ -100,9 +101,8 @@ export function useXmtp() {
 // ---------------------------------------------------------------------------
 
 /**
- * Message signed to derive the XMTP local database encryption key.
- * Exported so the auth flow can pre-sign it during SIWE sign-in,
- * eliminating a separate wallet popup when XMTP connects later.
+ * @deprecated Kept for backward-compat: old installs used a signature-derived
+ * key. New installs use a random key (no wallet popup needed).
  */
 export const ENC_KEY_MESSAGE =
   'Enable encrypted messaging on CreatorVault (4626.fun)\n\nThis signature encrypts your local message database.\nNo blockchain transaction will occur.'
@@ -151,6 +151,24 @@ function clearStoredEncKeyHex(address: string): void {
   } catch {
     // ignore storage errors
   }
+}
+
+/**
+ * Get or create a random XMTP DB encryption key for this address.
+ * Stored in localStorage — no wallet popup required.
+ * Falls back to any existing signature-derived key for backward compat.
+ */
+function getOrCreateEncKeyHex(address: string): string {
+  // 1. Return existing key (works for both old sig-derived and new random keys)
+  const existing = readStoredEncKeyHex(address)
+  if (existing) return existing
+
+  // 2. Generate a random 32-byte key
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  const hex = `0x${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}` as `0x${string}`
+  writeStoredEncKeyHex(address, hex)
+  return hex
 }
 
 function isAutoConnectEnabled(address: string): boolean {
@@ -424,33 +442,96 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     if (!address || !walletClient) return
     if (clientRef.current) return // already connected
     if (connectInFlightRef.current) return
+    if (getHostMode() !== 'app') return // XMTP only on app.4626.fun to avoid multi-origin installations
 
     connectInFlightRef.current = true
     try {
       setError(null)
       setInstallationLimitInboxId(null)
 
-      const getEncKeyBytes = async (forceFresh: boolean): Promise<{ bytes: Uint8Array; fromCache: boolean }> => {
-        if (!forceFresh) {
-          const cachedHex = readStoredEncKeyHex(address)
-          if (cachedHex) {
-            return { bytes: hexToBytes(cachedHex), fromCache: true }
-          }
-        }
-        setStatus('signing')
-        const sig = await walletClient.signMessage({ message: ENC_KEY_MESSAGE })
-        const encKeyHex = keccak256(sig)
-        writeStoredEncKeyHex(address, encKeyHex)
-        return { bytes: hexToBytes(encKeyHex), fromCache: false }
+      const identifier = {
+        identifier: address as `0x${string}`,
+        identifierKind: IdentifierKind.Ethereum,
+      }
+      const baseOptions = {
+        env: XMTP_ENV as any,
+        appVersion: XMTP_APP_VERSION,
       }
 
-      let encKey = await getEncKeyBytes(false)
+      // Get or create a random encryption key — no wallet popup needed.
+      // Backward-compatible: reuses any existing signature-derived key.
+      const encKeyHex = getOrCreateEncKeyHex(address)
+      const encKeyBytes = hexToBytes(encKeyHex)
+
+      // Try restore first: Client.build uses existing local DB, no wallet popup.
+      // Reuses the same installation, avoids revoke/install churn.
+      setStatus('connecting')
+      try {
+        const restored = await Client.build(identifier, { ...baseOptions, dbEncryptionKey: encKeyBytes })
+        if (restored?.inboxId) {
+          const client = restored as any
+          clientRef.current = client
+          setInboxId(client.inboxId ?? null)
+          await client.conversations.sync()
+          const convos = await client.conversations.list()
+          const summaries = await Promise.all(convos.map(buildConvoSummary))
+          summaries.sort((a, b) => (b.lastMessageAt?.getTime() ?? 0) - (a.lastMessageAt?.getTime() ?? 0))
+          conversationsRef.current = summaries
+          if (mountedRef.current) setConversations(summaries)
+          const convoStream = await client.conversations.stream({
+            onValue: async (convo: any) => {
+              if (!mountedRef.current) return
+              const summary = await buildConvoSummary(convo)
+              setConversations((prev) => {
+                if (prev.find((c) => c.id === summary.id)) return prev
+                const next = [summary, ...prev]
+                conversationsRef.current = next
+                return next
+              })
+            },
+          })
+          convoStreamRef.current = convoStream
+          const allMsgStream = await client.conversations.streamAllMessages({
+            onValue: (msg: DecodedMessage) => {
+              if (!mountedRef.current) return
+              const convoId = msg.conversationId
+              const chatMsg = decodedToChat(msg, client.inboxId!)
+              if (!chatMsg.isSelf) {
+                const convoName = conversationsRef.current.find((c) => c.id === convoId)?.name ?? 'New message'
+                showNotification(convoName, chatMsg.content)
+              }
+              setConversations((prev) => {
+                const idx = prev.findIndex((c) => c.id === convoId)
+                if (idx === -1) return prev
+                const updated = { ...prev[idx] }
+                if (typeof msg.content === 'string') updated.lastMessageText = msg.content
+                updated.lastMessageAt = msg.sentAt
+                if (!chatMsg.isSelf) updated.unreadCount += 1
+                const next = [...prev]
+                next.splice(idx, 1)
+                const reordered = [updated, ...next]
+                conversationsRef.current = reordered
+                return reordered
+              })
+              const cbs = perConvoCbRef.current.get(convoId)
+              if (cbs) for (const cb of cbs) cb(chatMsg)
+            },
+          })
+          msgStreamRef.current = allMsgStream
+          void requestNotificationPermission()
+          if (mountedRef.current) {
+            setAutoConnectEnabled(address)
+            setStatus('connected')
+          }
+          return
+        }
+      } catch (_restoreErr) {
+        // No existing installation — fall back to Client.create (needs signer)
+      }
 
       setStatus('connecting')
 
       // Detect whether the connected wallet is a smart contract wallet (SCW).
-      // Coinbase Smart Wallets are contracts on Base (chain 8453) and must use
-      // the SCW signer type so XMTP matches the chain ID from registration.
       let isSmartWallet = false
       const chainId = walletClient.chain?.id ?? 8453
       if (publicClient) {
@@ -458,11 +539,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           const code = await publicClient.getCode({ address })
           isSmartWallet = typeof code === 'string' && code !== '0x' && code.length > 2
         } catch {
-          // If we can't determine, default to SCW on Base (safer for this app)
           isSmartWallet = chainId === 8453
         }
       } else {
-        // No public client — assume SCW on Base
         isSmartWallet = chainId === 8453
       }
 
@@ -474,43 +553,34 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       const signer: Signer = isSmartWallet
         ? {
             type: 'SCW',
-            getIdentifier: () => ({
-              identifier: address,
-              identifierKind: IdentifierKind.Ethereum,
-            }),
+            getIdentifier: () => ({ identifier: address as `0x${string}`, identifierKind: IdentifierKind.Ethereum }),
             signMessage: signMessageFn,
             getChainId: () => BigInt(chainId),
           }
         : {
             type: 'EOA',
-            getIdentifier: () => ({
-              identifier: address,
-              identifierKind: IdentifierKind.Ethereum,
-            }),
+            getIdentifier: () => ({ identifier: address as `0x${string}`, identifierKind: IdentifierKind.Ethereum }),
             signMessage: signMessageFn,
           }
 
-      // Pre-flight: ensure there's room for a new installation before creating
       await ensureInstallationSlot(signer, XMTP_ENV)
-
-      const createClient = async (dbEncryptionKey: Uint8Array) =>
-        await Client.create(signer, {
-          env: XMTP_ENV as any,
-          appVersion: XMTP_APP_VERSION,
-          dbEncryptionKey,
-        })
 
       let client: Client
       try {
-        client = await createClient(encKey.bytes)
-      } catch (cachedKeyError) {
-        if (!encKey.fromCache) throw cachedKeyError
-        // Cached key can become stale if local storage was corrupted/mutated.
-        // Retry once with a fresh signature, then replace the cached key.
+        client = await Client.create(signer, {
+          ...baseOptions,
+          dbEncryptionKey: encKeyBytes,
+        })
+      } catch (createErr) {
+        // If the stored key is stale (e.g. corrupted localStorage), regenerate
+        // and retry once.
         clearStoredEncKeyHex(address)
-        encKey = await getEncKeyBytes(true)
+        const freshHex = getOrCreateEncKeyHex(address)
         setStatus('connecting')
-        client = await createClient(encKey.bytes)
+        client = await Client.create(signer, {
+          ...baseOptions,
+          dbEncryptionKey: hexToBytes(freshHex),
+        })
       }
 
       if (!mountedRef.current) {
@@ -726,25 +796,25 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     }
   }, [address, walletClient, installationLimitInboxId, publicClient, connect])
 
-  // ------- auto-connect -------
+  // Auto-connect when user previously enabled: try Client.build first (restore, no wallet).
+  // Only triggers wallet if restore fails (new user).
   useEffect(() => {
+    if (getHostMode() !== 'app') return
     if (!isConnected || !address || !walletClient) return
     if (!isAutoConnectEnabled(address)) return
     if (clientRef.current || connectInFlightRef.current) return
     if (status === 'signing' || status === 'connecting' || status === 'connected' || status === 'error') return
-
     const attemptKey = `${address.toLowerCase()}:${walletClient.chain?.id ?? 'unknown'}`
     if (autoConnectAttemptedRef.current === attemptKey) return
     autoConnectAttemptedRef.current = attemptKey
     void connect()
   }, [isConnected, address, walletClient, status, connect])
 
-  // Listen for auth-flow auto-connect requests (e.g. after SIWE sign-in).
-  // This bridges the gap when the auto-connect flag is set *after* the
-  // initial auto-connect effect already ran.
+  // SIWE / auth-flow auto-connect request
   useEffect(() => {
     if (typeof window === 'undefined') return
     const handler = () => {
+      if (getHostMode() !== 'app') return
       if (!isConnected || !address || !walletClient) return
       if (clientRef.current || connectInFlightRef.current) return
       if (status === 'signing' || status === 'connecting' || status === 'connected') return

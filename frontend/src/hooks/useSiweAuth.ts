@@ -1,13 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount, useSignMessage } from 'wagmi'
 import { base } from 'wagmi/chains'
-import { keccak256 } from 'viem'
 import { apiFetch } from '@/lib/apiBase'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
 import {
-  ENC_KEY_MESSAGE,
-  readStoredEncKeyHex,
-  writeStoredEncKeyHex,
   setAutoConnectEnabled as setXmtpAutoConnect,
   requestXmtpAutoConnect,
 } from '@/lib/xmtp/provider'
@@ -372,18 +368,12 @@ export function useSiweAuth() {
       const resolved = typeof signed === 'string' ? signed : null
       setAuthAddress(resolved)
 
-      // Pre-sign the XMTP encryption key so XMTP can auto-connect without
-      // a separate wallet popup. This piggybacks on the sign-in action so the
-      // user experiences one cohesive "sign in + enable messaging" flow.
+      // Enable XMTP auto-connect after sign-in. The XMTP provider now uses
+      // a random encryption key (no wallet popup), so all we need to do is
+      // set the flag and signal the provider to connect.
       if (resolved) {
         try {
-          if (!readStoredEncKeyHex(resolved)) {
-            const encSig = await signMessageAsync({ message: ENC_KEY_MESSAGE })
-            writeStoredEncKeyHex(resolved, keccak256(encSig))
-          }
           setXmtpAutoConnect(resolved)
-          // Signal the XMTP provider to connect now (the auto-connect effect
-          // may have already run before the flag was set).
           requestXmtpAutoConnect()
         } catch {
           // Non-fatal: XMTP will prompt separately if this fails
