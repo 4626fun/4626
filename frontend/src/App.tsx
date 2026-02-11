@@ -9,7 +9,7 @@ import { apiFetch } from '@/lib/apiBase'
 import { AdminLayout } from './components/AdminLayout'
 import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
-// host.ts: getHostMode/getAppBaseUrl still available for other consumers
+import { getHostMode, getMarketingBaseUrl, APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/host'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type CreatorAllowlistMode = 'disabled' | 'enforced'
@@ -37,6 +37,7 @@ type AccessState = {
   allowlistEnforced: boolean
   effectiveAddress: string | null
   marketingUrl: string
+  hostMode: import('@/lib/host').HostMode
 }
 
 function isValidEvmAddress(v: string): boolean {
@@ -72,17 +73,19 @@ const ROUTE_REQUIREMENTS: Record<RouteId, { session?: boolean; accepted?: boolea
 function resolveAccess(routeId: RouteId, state: AccessState): AccessDecision {
   if (state.loading) return { allow: false, reason: 'loading' }
   const req = ROUTE_REQUIREMENTS[routeId]
+  const prefix = state.hostMode === 'app' ? MARKETING_ORIGIN : ''
   if (req.session && !state.sessionValid) {
-    return { allow: false, reason: 'needs-session', redirectTo: withReason('/', 'needs-session') }
+    return { allow: false, reason: 'needs-session', redirectTo: prefix + withReason('/', 'needs-session') }
   }
   if (req.accepted && !state.accepted) {
-    return { allow: false, reason: 'needs-acceptance', redirectTo: withReason('/waitlist', 'needs-acceptance') }
+    return { allow: false, reason: 'needs-acceptance', redirectTo: prefix + withReason('/waitlist', 'needs-acceptance') }
   }
   if (req.creator && !state.creator) {
-    return { allow: false, reason: 'needs-creator', redirectTo: withReason('/deploy', 'needs-creator') }
+    const deployPrefix = state.hostMode === 'marketing' ? APP_ORIGIN : ''
+    return { allow: false, reason: 'needs-creator', redirectTo: deployPrefix + withReason('/deploy', 'needs-creator') }
   }
   if (req.admin && !state.admin) {
-    return { allow: false, reason: 'needs-admin', redirectTo: withReason('/', 'needs-admin') }
+    return { allow: false, reason: 'needs-admin', redirectTo: prefix + withReason('/', 'needs-admin') }
   }
   return { allow: true, reason: 'ok' }
 }
@@ -99,10 +102,31 @@ function buildAdminBypassSet(): Set<string> {
 
 const ADMIN_BYPASS_ADDRESSES = buildAdminBypassSet()
 
-/** After the domain merge, marketing URL is the same origin. */
-function getMarketingBaseUrl(): string {
-  if (typeof window === 'undefined') return 'https://4626.fun'
-  return window.location.origin
+/** App-only paths (redirect from 4626.fun to app.4626.fun). */
+const APP_ONLY_PATHS = [
+  '/explore',
+  '/swap',
+  '/positions',
+  '/portfolio',
+  '/deploy',
+  '/launch',
+  '/vault',
+  '/faq',
+  '/status',
+  '/vote',
+  '/auction',
+  '/admin',
+  '/miniapp',
+  '/agents',
+  '/coin',
+  '/creator',
+  '/activate-akita',
+  '/dashboard',
+  '/complete-auction',
+]
+
+function isAppOnlyPath(pathname: string): boolean {
+  return APP_ONLY_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
 }
 
 function useResolvedAccessState(): AccessState {
@@ -161,10 +185,24 @@ function useResolvedAccessState(): AccessState {
     allowlistEnforced,
     effectiveAddress,
     marketingUrl: getMarketingBaseUrl(),
+    hostMode: getHostMode(),
   }
 }
 
 const AccessContext = createContext<AccessState | null>(null)
+
+/** Redirect from 4626.fun to app.4626.fun when user hits app-only routes. */
+function HostGuard() {
+  const location = useLocation()
+  if (typeof window === 'undefined') return null
+  const mode = getHostMode()
+  if (mode !== 'marketing') return null
+  const { pathname, search, hash } = location
+  if (!isAppOnlyPath(pathname)) return null
+  const target = `${APP_ORIGIN}${pathname}${search}${hash}`
+  window.location.replace(target)
+  return null
+}
 
 export function useAccessContext(): AccessState {
   const value = useContext(AccessContext)
@@ -197,7 +235,12 @@ function RequireRouteAccess(props: { routeId: RouteId; children?: React.ReactNod
   const decision = resolveAccess(props.routeId, access)
   if (!decision.allow) {
     if (decision.reason === 'loading') return <GuardPending />
-    return <Navigate to={decision.redirectTo ?? withReason('/', decision.reason)} replace />
+    const to = decision.redirectTo ?? withReason('/', decision.reason)
+    if (to.startsWith('http://') || to.startsWith('https://')) {
+      if (typeof window !== 'undefined') window.location.replace(to)
+      return null
+    }
+    return <Navigate to={to} replace />
   }
   return props.children ? <>{props.children}</> : <Outlet />
 }
@@ -372,14 +415,16 @@ function NotFoundPage() {
   const access = useAccessContext()
 
   const appCta = useMemo(() => {
+    const prefix = access.hostMode === 'app' ? MARKETING_ORIGIN : ''
     if (!access.sessionValid) {
-      return { href: withReason('/', 'needs-session'), label: 'Connect And Sign In', hint: 'Connect wallet and establish a session.' }
+      return { href: prefix + withReason('/', 'needs-session'), label: 'Connect And Sign In', hint: 'Connect wallet and establish a session.' }
     }
     if (!access.accepted) {
-      return { href: withReason('/waitlist', 'needs-acceptance'), label: 'Join Waitlist', hint: 'This route requires accepted app access.' }
+      return { href: prefix + withReason('/waitlist', 'needs-acceptance'), label: 'Join Waitlist', hint: 'This route requires accepted app access.' }
     }
-    return { href: withReason('/explore/creators', 'not-found'), label: 'Go To Explore', hint: 'Your session is valid. Continue to the canonical landing route.' }
-  }, [access.accepted, access.sessionValid])
+    const exploreHref = access.hostMode === 'marketing' ? APP_ORIGIN + '/explore/creators' : withReason('/explore/creators', 'not-found')
+    return { href: exploreHref, label: 'Go To Explore', hint: 'Your session is valid. Continue to the canonical landing route.' }
+  }, [access.accepted, access.sessionValid, access.hostMode])
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -391,9 +436,11 @@ function NotFoundPage() {
           <div className="space-y-3">
             <div className="text-xs text-zinc-500">{appCta.hint}</div>
             <div className="flex flex-wrap gap-3">
-              <Link className="btn-accent inline-flex" to={appCta.href}>
-                {appCta.label}
-              </Link>
+              {(appCta.href.startsWith('http://') || appCta.href.startsWith('https://')) ? (
+                <a className="btn-accent inline-flex" href={appCta.href}>{appCta.label}</a>
+              ) : (
+                <Link className="btn-accent inline-flex" to={appCta.href}>{appCta.label}</Link>
+              )}
             </div>
           </div>
         </div>
@@ -428,9 +475,17 @@ function App() {
   return (
     <AccessStateProvider>
       <Routes>
-        <Route element={<Layout />}>
-          {/* Public routes (no session required) */}
-          <Route path="/" element={<Home />} />
+        <Route
+          element={
+            <>
+              <HostGuard />
+              <Outlet />
+            </>
+          }
+        >
+          <Route element={<Layout />}>
+            {/* Public routes (no session required) */}
+            <Route path="/" element={<Home />} />
           <Route path="/404" element={<NotFoundPage />} />
           <Route path="/waitlist" element={<Waitlist />} />
           <Route path="/home" element={<Navigate to={withReason('/', 'legacy-route')} replace />} />
@@ -488,6 +543,7 @@ function App() {
             </Route>
           </Route>
           <Route path="*" element={<NotFoundPage />} />
+        </Route>
         </Route>
       </Routes>
     </AccessStateProvider>

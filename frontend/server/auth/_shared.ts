@@ -167,6 +167,7 @@ function getAllowedOrigins(): Set<string> {
     'https://www.creatorvault.fun',
     'https://4626.fun',
     'https://www.4626.fun',
+    'https://app.4626.fun',
     // Local dev
     'http://localhost:5173',
     'http://localhost:3000',

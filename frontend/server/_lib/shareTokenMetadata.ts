@@ -85,7 +85,7 @@ export async function buildShareTokenMetadata({
   }
 
   const apiHostValue = apiHost || 'api.4626.fun'
-  const appHostValue = appHost || '4626.fun'
+  const appHostValue = appHost || 'app.4626.fun'
   const protocol = apiHostValue.includes('localhost') ? 'http' : 'https'
   const apiBaseUrl = `${protocol}://${apiHostValue}`
   const appBaseUrl = `${protocol}://${appHostValue}`
@@ -112,7 +112,7 @@ export async function buildShareTokenMetadata({
       underlyingAssetName: creatorCoinName,
       underlyingAssetImage: creatorCoinImage,
       twitter: 'https://x.com/4626fun',
-      website: 'https://4626.fun',
+      website: 'https://app.4626.fun',
       isOFT: true,
       supportedChains: [8453, 1, 42161, 56, 43114],
     },

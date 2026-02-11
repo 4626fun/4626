@@ -24,7 +24,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Invalid vault address' })
   }
 
-  const baseUrl = process.env.APP_HOST || '4626.fun'
+  const baseUrl = process.env.APP_HOST || 'app.4626.fun'
   const apiUrl = process.env.API_HOST || 'api.4626.fun'
   const protocol = baseUrl.includes('localhost') ? 'http' : 'https'
 

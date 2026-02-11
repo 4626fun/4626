@@ -40,7 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const vault = typeof req.query.vault === 'string' ? req.query.vault : ''
   const format = typeof req.query.format === 'string' ? req.query.format : 'html'
 
-  const baseUrl = process.env.APP_HOST || '4626.fun'
+  const baseUrl = process.env.APP_HOST || 'app.4626.fun'
   const apiUrl = process.env.API_HOST || 'api.4626.fun'
   const protocol = baseUrl.includes('localhost') ? 'http' : 'https'
 

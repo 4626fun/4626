@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { getAppBaseUrl } from '@/lib/host'
+import { getAppBaseUrl, getMarketingBaseUrl } from '@/lib/host'
 import { useAccount, usePublicClient, useSignMessage } from 'wagmi'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { isPrivyClientEnabled } from '@/lib/flags'
@@ -955,22 +955,27 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     }
   }, [apiFetch, isBypassAdmin, step, verifiedWallet])
 
-  // Same-origin navigation: no cross-domain handoff needed.
+  const deployUrl = useMemo(() => `${getAppBaseUrl()}/deploy?fromWaitlist=waitlist`, [])
+
   const handleContinueToDeploy = useCallback(() => {
-    navigate('/deploy')
-  }, [navigate])
+    if (deployUrl.startsWith('http')) {
+      window.location.href = deployUrl
+    } else {
+      navigate('/deploy?fromWaitlist=waitlist')
+    }
+  }, [deployUrl, navigate])
 
   const primaryCta = useMemo(() => {
     if (deployAccessState !== 'ready') return null
     return {
       label: 'Continue to Deploy',
-      href: '/deploy',
+      href: deployUrl,
       onClick: handleContinueToDeploy,
       disabled: false,
       busy: false,
       busyLabel: 'Preparing Deploy…',
     }
-  }, [deployAccessState, handleContinueToDeploy])
+  }, [deployAccessState, handleContinueToDeploy, deployUrl])
 
   // Simplified flow: verify → done (2 steps)
 
@@ -1112,7 +1117,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     handleCopyReferral,
   } = useWaitlistReferral({
     locationSearch: location.search,
-    shareBaseUrl: appUrl.replace(/\/+$/, ''),
+    shareBaseUrl: getMarketingBaseUrl().replace(/\/+$/, ''),
     inviteTemplateIdx,
     miniAppIsMiniApp: miniApp.isMiniApp === true,
     referralCode,

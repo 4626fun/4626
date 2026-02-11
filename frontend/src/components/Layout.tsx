@@ -4,6 +4,7 @@ import { Home, LayoutDashboard, HelpCircle, Mail, ShieldCheck } from 'lucide-rea
 import { VaultNavBar } from './brand/VaultNavBar'
 import { ChatWidget } from './chat/ChatWidget'
 import { isPublicSiteMode } from '@/lib/flags'
+import { getHostMode } from '@/lib/host'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { OnboardingModal, hasCompletedOnboarding } from '@/components/OnboardingModal'
 import { QuickstartModal, useShowQuickstart } from '@/components/QuickstartModal'
@@ -50,9 +51,10 @@ function isActiveLink(location: { pathname: string; hash?: string }, item: Mobil
 export function Layout() {
   const location = useLocation()
   const publicMode = isPublicSiteMode()
+  const hostMode = getHostMode()
   const { isAdmin } = useAdminStatus()
-  const baseItems = publicMode ? navItemsPublic : navItems
-  const items = isAdmin ? [...baseItems, adminNavItem] : baseItems
+  const baseItems = publicMode || hostMode === 'marketing' ? navItemsPublic : navItems
+  const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, adminNavItem] : baseItems
   const [showOnboarding, setShowOnboarding] = useState(false)
   const showQuickstart = useShowQuickstart()
   const [quickstartDismissed, setQuickstartDismissed] = useState(false)

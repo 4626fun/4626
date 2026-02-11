@@ -13,7 +13,11 @@
 import { useEffect } from 'react'
 
 const SITE_NAME = 'CreatorVault'
-const ORIGIN = 'https://app.4626.fun'
+
+function getPageOrigin(): string {
+  if (typeof window === 'undefined') return 'https://app.4626.fun'
+  return window.location.origin
+}
 
 type PageMetaProps = {
   /** Page title (will be appended with site name) */
@@ -87,7 +91,7 @@ export function PageMeta({
 
     // Canonical
     if (canonicalPath) {
-      const canonical = `${ORIGIN}${canonicalPath}`
+      const canonical = `${getPageOrigin()}${canonicalPath}`
       setOrCreateLink('canonical', canonical)
       setOrCreateMeta('og:url', canonical, 'property')
     }

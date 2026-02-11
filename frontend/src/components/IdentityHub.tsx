@@ -8,7 +8,7 @@ import { getAddress, isAddress } from 'viem'
 import { useMiniAppContext } from '@/hooks/useMiniAppContext'
 import { useFarcasterAuth } from '@/hooks/useFarcasterAuth'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
-// host.ts imports removed after domain merge (no longer needed here)
+import { getAppBaseUrl, getMarketingBaseUrl } from '@/lib/host'
 import { getBasenameProfile } from '@/lib/basename-api'
 import { getOnchainReputation } from '@/lib/reputation-aggregator'
 import { useZoraProfile } from '@/lib/zora/hooks'
@@ -172,20 +172,24 @@ export function IdentityHub() {
   }, [basenameQuery.data, mini.context, zoraProfileQuery.data])
 
   const joinWaitlistHref = useMemo(() => {
-    // Prefer in-page anchor when on the Home route.
-    return location.pathname === '/' ? '/#waitlist' : '/waitlist'
+    const base = getMarketingBaseUrl()
+    const path = location.pathname === '/' ? '/#waitlist' : '/waitlist'
+    return base.startsWith('http') ? `${base}${path}` : path
   }, [location.pathname])
 
   const continueHref = useMemo(() => {
-    return '/deploy'
+    const base = getAppBaseUrl()
+    return base.startsWith('http') ? `${base}/deploy` : '/deploy'
   }, [])
 
   const enableGasFreeHref = useMemo(() => {
-    return '/deploy#gasfree'
+    const base = getAppBaseUrl()
+    return base.startsWith('http') ? `${base}/deploy#gasfree` : '/deploy#gasfree'
   }, [])
 
   const deployHref = useMemo(() => {
-    return '/deploy'
+    const base = getAppBaseUrl()
+    return base.startsWith('http') ? `${base}/deploy` : '/deploy'
   }, [])
 
   const showJoinWaitlist = state === 'guest'
@@ -304,17 +308,25 @@ export function IdentityHub() {
 
             <div className="grid gap-2">
               {showJoinWaitlist ? (
-                <Link
-                  to={joinWaitlistHref}
-                  onClick={() => setMenuOpen(false)}
-                  className="btn-accent w-full text-center"
-                >
-                  Join waitlist
-                </Link>
+                (joinWaitlistHref.startsWith('http') ? (
+                  <a href={joinWaitlistHref} onClick={() => setMenuOpen(false)} className="btn-accent w-full text-center">
+                    Join waitlist
+                  </a>
+                ) : (
+                  <Link to={joinWaitlistHref} onClick={() => setMenuOpen(false)} className="btn-accent w-full text-center">
+                    Join waitlist
+                  </Link>
+                ))
               ) : (
-                <Link to={continueHref} onClick={() => setMenuOpen(false)} className="btn-primary w-full text-center">
-                  Continue
-                </Link>
+                continueHref.startsWith('http') ? (
+                  <a href={continueHref} onClick={() => setMenuOpen(false)} className="btn-primary w-full text-center">
+                    Continue
+                  </a>
+                ) : (
+                  <Link to={continueHref} onClick={() => setMenuOpen(false)} className="btn-primary w-full text-center">
+                    Continue
+                  </Link>
+                )
               )}
 
               {showEnableGasFree ? (

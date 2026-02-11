@@ -1,10 +1,11 @@
-import { memo, useCallback, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle2, ArrowRight, Copy, Bot, Coins, User, Loader2, Share2, Trophy } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { WaitlistDoneCelebrationBackground } from '../WaitlistDoneCelebrationBackground'
 import type { WaitlistState } from '../waitlistTypes'
 import { apiFetch } from '@/lib/apiBase'
+import { getAppBaseUrl } from '@/lib/host'
 
 const baseEase = [0.4, 0, 0.2, 1] as const
 const fadeUp = {
@@ -54,6 +55,23 @@ type DoneStepProps = {
 function truncAddr(addr: string): string {
   if (addr.length < 12) return addr
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`
+}
+
+function AdminDeployLink() {
+  const navigate = useNavigate()
+  const deployUrl = useMemo(() => `${getAppBaseUrl()}/deploy?fromWaitlist=waitlist`, [])
+  const handleClick = useCallback(() => {
+    if (deployUrl.startsWith('http')) {
+      window.location.href = deployUrl
+    } else {
+      navigate('/deploy?fromWaitlist=waitlist')
+    }
+  }, [deployUrl, navigate])
+  return (
+    <button type="button" onClick={handleClick} className="text-[#0052FF] hover:text-[#3373FF] transition-colors py-1">
+      Deploy (Admin)
+    </button>
+  )
 }
 
 function PreprovisionStatus() {
@@ -321,13 +339,7 @@ export const DoneStep = memo(function DoneStep({
           {/* Admin Link */}
           {isBypassAdmin && (
             <motion.div {...fadeUp} className="flex items-center justify-center text-[13px]">
-              <button
-                type="button"
-                onClick={() => navigate('/deploy')}
-                className="text-[#0052FF] hover:text-[#3373FF] transition-colors py-1"
-              >
-                Deploy (Admin)
-              </button>
+              <AdminDeployLink />
             </motion.div>
           )}
         </motion.div>

@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { getAppBaseUrl } from '@/lib/host'
 import { motion } from 'framer-motion'
 import { ArrowRight, Clock, Share2 } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
@@ -119,12 +120,12 @@ export function Home() {
               </Link>
             ) : (
               <>
-                <Link to="/dashboard" className="btn-accent w-full sm:w-auto text-center">
+                <a href={`${getAppBaseUrl()}/explore/creators`} className="btn-accent w-full sm:w-auto text-center">
                   Start Earning <ArrowRight className="w-4 h-4 inline ml-2" />
-                </Link>
-                <Link to="/deploy" className="btn-primary w-full sm:w-auto text-center">
+                </a>
+                <a href={`${getAppBaseUrl()}/deploy`} className="btn-primary w-full sm:w-auto text-center">
                   Create Vault
-                </Link>
+                </a>
                 <Link to="/#waitlist" className="btn-primary w-full sm:w-auto text-center">
                   Join waitlist
                 </Link>
@@ -181,9 +182,9 @@ export function Home() {
                   Join waitlist <ArrowRight className="w-4 h-4 inline ml-2" />
                 </Link>
               ) : (
-                <Link to="/deploy" className="btn-accent inline-block">
+                <a href={`${getAppBaseUrl()}/deploy`} className="btn-accent inline-block">
                   Create Vault <ArrowRight className="w-4 h-4 inline ml-2" />
-                </Link>
+                </a>
               )}
             </motion.div>
 

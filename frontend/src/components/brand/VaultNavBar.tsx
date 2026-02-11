@@ -7,6 +7,7 @@ import { ConnectButton } from '@/components/ConnectButton'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { isPublicSiteMode } from '@/lib/flags'
+import { getHostMode } from '@/lib/host'
 import { useMiniAppContext } from '@/hooks/useMiniAppContext'
 import { Logo } from './Logo'
 
@@ -25,6 +26,7 @@ const NAV_ITEMS: NavItem[] = [
 
 const NAV_ITEMS_PUBLIC: NavItem[] = [
   { label: 'HOME', to: '/', activePrefixes: ['/'] },
+  { label: 'WAITLIST', to: '/#waitlist', activePrefixes: ['/#waitlist', '/waitlist'] },
 ]
 
 const ADMIN_ITEM: NavItem = { label: 'ADMIN', to: '/admin/waitlist', activePrefixes: ['/admin'] }
@@ -53,10 +55,11 @@ export function VaultNavBar() {
   const location = useLocation()
   const [isHovered, setIsHovered] = useState<number | null>(null)
   const publicMode = isPublicSiteMode()
+  const hostMode = getHostMode()
   const { isAdmin } = useAdminStatus()
   const mini = useMiniAppContext()
-  const baseItems = publicMode ? NAV_ITEMS_PUBLIC : NAV_ITEMS
-  const items = isAdmin ? [...baseItems, ADMIN_ITEM] : baseItems
+  const baseItems = publicMode || hostMode === 'marketing' ? NAV_ITEMS_PUBLIC : NAV_ITEMS
+  const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, ADMIN_ITEM] : baseItems
   const isWaitlistView = location.pathname === '/waitlist' || location.hash === '#waitlist'
   const showConnect = !publicMode && !isWaitlistView
 

@@ -16,12 +16,22 @@ type Manifest = {
   [key: string]: unknown
 }
 
+/** Account association for 4626.fun (marketing/waitlist). */
+const ACCOUNT_ASSOCIATION_4626: AccountAssociation = {
+  header: 'eyJmaWQiOjIyNzQ3MzgsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHg2MkJGM0Q5NzNlMEIyNTA4Y0U2NUI2NDcyNzRiMDFFZDQzNzU5MjNhIn0',
+  payload: 'eyJkb21haW4iOiI0NjI2LmZ1biJ9',
+  signature: 'a0dYBtBbC+TI4CYnngVRPwZ7TZpI+8Mply+Px4FkyJs/pe9H30Vva1MXTLeGEz7k+wXSDeAEkZ0Msa25dK9NIhs=',
+}
+
+/** Account association for app.4626.fun (app). */
+const ACCOUNT_ASSOCIATION_APP: AccountAssociation = {
+  header: 'eyJmaWQiOjIyNzQ3MzgsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHg2MkJGM0Q5NzNlMEIyNTA4Y0U2NUI2NDcyNzRiMDFFZDQzNzU5MjNhIn0',
+  payload: 'eyJkb21haW4iOiJhcHAuNDYyNi5mdW4ifQ',
+  signature: 'rjz1zn/lUwa6EZcgGY95i2Wmu1CGQTG2wx0YFvPc12EE6rrDhUleWt4ZyJQNLwcWG5GiGLJQ4izJPLWJQm8aTxs=',
+}
+
 const fallbackManifest: Manifest = {
-  accountAssociation: {
-    header: 'eyJmaWQiOjIyNzQ3MzgsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHg2MkJGM0Q5NzNlMEIyNTA4Y0U2NUI2NDcyNzRiMDFFZDQzNzU5MjNhIn0',
-    payload: 'eyJkb21haW4iOiI0NjI2LmZ1biJ9',
-    signature: 'a0dYBtBbC+TI4CYnngVRPwZ7TZpI+8Mply+Px4FkyJs/pe9H30Vva1MXTLeGEz7k+wXSDeAEkZ0Msa25dK9NIhs=',
-  },
+  accountAssociation: ACCOUNT_ASSOCIATION_4626,
   miniapp: {
     version: '1',
     name: 'Creator Vaults',
@@ -31,7 +41,7 @@ const fallbackManifest: Manifest = {
     iconUrl: 'https://4626.fun/miniapp-icon.png',
     splashImageUrl: 'https://4626.fun/miniapp-splash.png',
     splashBackgroundColor: '#000000',
-    homeUrl: 'https://4626.fun',
+    homeUrl: 'https://app.4626.fun',
     webhookUrl: 'https://4626.fun/api/webhook',
     canonicalDomain: '4626.fun',
     requiredChains: ['eip155:8453'],
@@ -102,6 +112,13 @@ function applyAccountAssociationOverride(manifest: Manifest): Manifest {
   return { ...manifest, accountAssociation: override }
 }
 
+function getAccountAssociationForHost(host: string): AccountAssociation | null {
+  const h = (host || '').toLowerCase().trim()
+  if (h === 'app.4626.fun') return ACCOUNT_ASSOCIATION_APP
+  if (h === '4626.fun' || h === 'www.4626.fun') return ACCOUNT_ASSOCIATION_4626
+  return null
+}
+
 function sendManifest(res: VercelResponse, manifest: Manifest) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
   res.statusCode = 200
@@ -126,8 +143,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Fallback: serve the repo-managed manifest file (useful for local dev / early deployments).
   // This preserves existing behavior when FARCASTER_HOSTED_MANIFEST_ID is unset.
-  const baseManifest = readManifestFromEnv() ?? readManifestFromDisk() ?? fallbackManifest
-  const manifest = applyAccountAssociationOverride(baseManifest)
+  let manifest = readManifestFromEnv() ?? readManifestFromDisk() ?? fallbackManifest
+  manifest = applyAccountAssociationOverride(manifest)
+
+  // Host-based association: when verifying app.4626.fun, Farcaster fetches from that origin.
+  // Serve the matching association so verification passes.
+  const hostOverride = getAccountAssociationForHost(
+    (typeof req.headers?.host === 'string' ? req.headers.host : '').split(':')[0] ?? '',
+  )
+  if (hostOverride) {
+    manifest = { ...manifest, accountAssociation: hostOverride }
+  }
+
   sendManifest(res, manifest)
 }
 
