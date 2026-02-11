@@ -184,26 +184,26 @@ export const VerifyStep = memo(function VerifyStep({
   const ownershipStatusClass = walletOwnershipValid
     ? 'border-emerald-400/35 bg-emerald-500/10 text-emerald-200'
     : 'border-amber-400/35 bg-amber-500/10 text-amber-100'
-  const panelClass = 'rounded-2xl border border-white/[0.09] bg-zinc-950/70'
-  const microPanelClass = 'rounded-xl border border-white/[0.08] bg-white/[0.02]'
+  const panelClass = 'rounded-2xl border border-white/[0.06] bg-white/[0.02]'
+  const microPanelClass = 'rounded-xl border border-white/[0.04] bg-white/[0.01]'
 
   return (
     <motion.div
       key="verify"
       {...fadeUp}
-      className="space-y-5 sm:space-y-6"
+      className="space-y-6 sm:space-y-7"
     >
       {/* Header */}
       <motion.div {...scaleIn} className="space-y-3">
-        <h1 className="font-display text-[30px] sm:text-[35px] font-medium tracking-[-0.022em] text-white leading-[1.05]">
+        <h1 className="font-doto text-[26px] sm:text-[32px] font-bold tracking-tight text-white leading-[1.08]">
           {headerTitle}
         </h1>
         {headerSubtitle ? (
-          <div className="max-w-[52ch] text-[13px] text-zinc-400 leading-relaxed">{headerSubtitle}</div>
+          <p className="max-w-[48ch] text-[14px] text-zinc-500 leading-relaxed">{headerSubtitle}</p>
         ) : null}
         {verifiedWallet ? (
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.12] bg-white/[0.03] px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-zinc-300">
-            <Sparkles className="h-3 w-3 text-[#8AB5FF]" />
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#0052FF]/20 bg-[#0052FF]/5 px-3 py-1.5 text-[11px] font-medium text-[#8AB5FF]">
+            <Sparkles className="h-3.5 w-3.5" />
             Founding Creator Access
           </div>
         ) : null}
@@ -211,10 +211,10 @@ export const VerifyStep = memo(function VerifyStep({
 
       {/* Single primary CTA + progressive disclosure */}
       {!verifiedWallet ? (
-        <motion.div {...scaleIn} className="space-y-3.5">
+        <motion.div {...scaleIn} className="space-y-4">
           <button
             type="button"
-            className="group relative w-full overflow-hidden flex items-center justify-between gap-3 min-h-[58px] rounded-2xl border border-[#5A96FF]/35 bg-gradient-to-r from-[#004CE8] via-[#005CFF] to-[#2A79FF] text-white font-medium text-[15px] px-5 py-4 shadow-[0_16px_48px_-20px_rgba(0,82,255,0.95)] transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] hover:brightness-110 hover:shadow-[0_20px_56px_-22px_rgba(26,105,255,0.98)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+            className="group relative w-full overflow-hidden flex items-center justify-between gap-3 min-h-[56px] rounded-2xl bg-[#0052FF] text-white font-semibold text-[15px] px-5 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_8px_32px_-8px_rgba(0,82,255,0.5)] transition-all duration-200 ease-out hover:bg-[#1a66ff] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.15),0_12px_40px_-8px_rgba(0,82,255,0.6)] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             disabled={!canContinue}
             onClick={() => {
               if (looksLikeWalletLoginDisabled && typeof onPrivyEmailContinue === 'function') {
@@ -224,18 +224,16 @@ export const VerifyStep = memo(function VerifyStep({
               }
             }}
           >
-            <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/70 opacity-70" />
-            <span className="pointer-events-none absolute -left-16 top-0 h-full w-16 -skew-x-12 bg-white/20 blur-md transition-transform duration-700 ease-out group-hover:translate-x-[400px]" />
             <span className="relative flex items-center gap-3">
-              <img src={BASE_SQUARE_WHITE} alt="" className="w-3.5 h-3.5" aria-hidden="true" />
+              <img src={BASE_SQUARE_WHITE} alt="" className="w-4 h-4" aria-hidden="true" />
               Sign Up
             </span>
-            <ChevronRight className="relative w-4 h-4 opacity-90" />
+            <ChevronRight className="relative w-4 h-4 opacity-80" />
           </button>
 
-          <div className="text-[12px] text-zinc-500">
-            Creates a Privy embedded EOA for your account.
-          </div>
+          <p className="text-[13px] text-zinc-500">
+            Creates a Privy embedded wallet for your account.
+          </p>
 
           <div className="flex items-center justify-between">
             <div className="text-[12px] text-zinc-500">{helperText || '\u00A0'}</div>
@@ -251,7 +249,7 @@ export const VerifyStep = memo(function VerifyStep({
           {showPrivyError ? (
             <motion.div
               {...fadeUp}
-              className="rounded-2xl border border-red-500/25 bg-red-500/[0.07] px-4 py-3 text-[12px] text-red-200/90"
+              className="rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-[13px] text-red-200/90"
             >
               {privyVerifyError}
             </motion.div>
@@ -317,10 +315,10 @@ export const VerifyStep = memo(function VerifyStep({
       {verifiedWallet && creatorCoinBusy ? (
         <motion.div
           {...fadeUp}
-          className="flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] py-4"
+          className="flex items-center justify-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] py-4"
         >
-          <div className="w-5 h-5 rounded-full border-2 border-zinc-700 border-t-[#0052FF] animate-spin" />
-          <span className="text-[13px] text-zinc-400">Reading Zora profile and creator coin owners…</span>
+          <div className="w-5 h-5 rounded-full border-2 border-zinc-600 border-t-[#0052FF] animate-spin" />
+          <span className="text-[13px] text-zinc-500">Reading Zora profile and creator coin owners…</span>
         </motion.div>
       ) : null}
 
@@ -328,7 +326,7 @@ export const VerifyStep = memo(function VerifyStep({
       {verifiedWallet && (hasCreatorCoin || creatorCoinDeclaredMissing) ? (
         <motion.div
           {...scaleIn}
-          className="relative overflow-hidden rounded-[26px] border border-white/12 bg-black p-4 sm:p-5 shadow-[0_34px_110px_-70px_rgba(0,0,0,0.96)]"
+          className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:p-5"
         >
           <motion.div
             className="relative space-y-3"
@@ -338,8 +336,8 @@ export const VerifyStep = memo(function VerifyStep({
           >
             <motion.div variants={staggerItem} className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-[11px] uppercase tracking-[0.17em] text-zinc-500">Ownership</div>
-                <div className="mt-1 text-[18px] text-white font-display">Review before join</div>
+                <div className="text-[12px] text-zinc-500">Ownership</div>
+                <div className="mt-0.5 text-[17px] font-semibold text-white">Review before join</div>
               </div>
               <div className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] ${ownershipStatusClass}`}>
                 <BadgeCheck className="h-3.5 w-3.5" />
@@ -398,37 +396,37 @@ export const VerifyStep = memo(function VerifyStep({
             <motion.div variants={staggerItem} className={`${panelClass} px-4 py-3`}>
               <div className="space-y-2.5">
                 <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
-                  <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Connected wallet</div>
-                  <div className="text-[12px] font-mono text-zinc-100">{connectedWalletShort}</div>
+                  <span className="text-[12px] text-zinc-500">Connected wallet</span>
+                  <span className="text-[12px] font-mono text-zinc-200">{connectedWalletShort}</span>
                 </div>
 
                 {ownershipGateActive ? (
                   <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
-                    <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Owner match</div>
-                    <div className={`text-[12px] ${walletOwnershipValid ? 'text-emerald-300' : 'text-amber-300'}`}>
+                    <span className="text-[12px] text-zinc-500">Owner match</span>
+                    <span className={`text-[12px] font-medium ${walletOwnershipValid ? 'text-emerald-400' : 'text-amber-400'}`}>
                       {walletOwnershipValid ? 'Matched' : 'Not matched'}
-                    </div>
+                    </span>
                   </div>
                 ) : null}
 
                 {hasCreatorCoin ? (
                   <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
-                    <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Payout recipient</div>
-                    <div className="text-[12px] font-mono text-zinc-100">{payoutRecipientShort}</div>
+                    <span className="text-[12px] text-zinc-500">Payout recipient</span>
+                    <span className="text-[12px] font-mono text-zinc-200">{payoutRecipientShort}</span>
                   </div>
                 ) : null}
 
                 {hasCreatorCoin ? (
                   <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
-                    <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Owner wallets</div>
-                    <div className="text-[12px] text-zinc-200">{ownerWalletCountLabel}</div>
+                    <span className="text-[12px] text-zinc-500">Owner wallets</span>
+                    <span className="text-[12px] text-zinc-300">{ownerWalletCountLabel}</span>
                   </div>
                 ) : null}
 
                 {canonicalSmartWallet ? (
                   <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
-                    <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Canonical smart wallet</div>
-                    <div className="text-[12px] font-mono text-zinc-100">{shortAddress(canonicalSmartWallet, 8, 6)}</div>
+                    <span className="text-[12px] text-zinc-500">Canonical smart wallet</span>
+                    <span className="text-[12px] font-mono text-zinc-200">{shortAddress(canonicalSmartWallet, 8, 6)}</span>
                   </div>
                 ) : null}
               </div>
@@ -453,15 +451,18 @@ export const VerifyStep = memo(function VerifyStep({
                     <div className="flex items-start gap-3">
                       <Fingerprint className="h-5 w-5 text-[#8AB5FF] mt-0.5 shrink-0" />
                       <div className="min-w-0 flex-1">
-                        <div className="text-[13px] text-zinc-200 font-medium">Prove smart wallet ownership</div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] text-zinc-200 font-medium">Prove smart wallet ownership</span>
+                          <span className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Optional</span>
+                        </div>
                         <div className="text-[11px] text-zinc-500 mt-0.5 leading-relaxed">
-                          Sign a message to cryptographically prove you control this Coinbase Smart Wallet. Verified on-chain via ERC-1271.
+                          Sign a message to cryptographically prove you control this Coinbase Smart Wallet. You can still join without this.
                         </div>
                       </div>
                     </div>
                     <button
                       type="button"
-                      className="w-full flex items-center justify-center gap-2 rounded-xl border border-[#5A96FF]/25 bg-[#0052FF]/10 hover:bg-[#0052FF]/20 text-[#8AB5FF] text-[13px] font-medium px-4 py-2.5 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="w-full flex items-center justify-center gap-2 rounded-xl border border-[#0052FF]/20 bg-[#0052FF]/8 hover:bg-[#0052FF]/15 text-[#8AB5FF] text-[13px] font-medium px-4 py-2.5 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
                       disabled={cswProofBusy || busy}
                       onClick={onProveCswOwnership}
                     >
@@ -478,8 +479,8 @@ export const VerifyStep = memo(function VerifyStep({
                       )}
                     </button>
                     {cswProofError ? (
-                      <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2 text-[11px] text-red-300/90">
-                        {cswProofError}
+                      <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-200/90">
+                        {cswProofError} You can still join the waitlist below.
                       </div>
                     ) : null}
                   </div>
@@ -515,12 +516,10 @@ export const VerifyStep = memo(function VerifyStep({
         <motion.div {...scaleIn} className="pt-2">
           <button
             type="button"
-            className="group relative w-full overflow-hidden flex items-center justify-center gap-2 min-h-[58px] rounded-2xl border border-[#5A96FF]/35 bg-gradient-to-r from-[#004CE8] via-[#005CFF] to-[#2A79FF] text-white font-semibold text-[15px] px-6 py-4 shadow-[0_16px_48px_-20px_rgba(0,82,255,0.95)] transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] hover:brightness-110 hover:shadow-[0_20px_56px_-22px_rgba(26,105,255,0.98)] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+            className="w-full flex items-center justify-center gap-2 min-h-[56px] rounded-2xl bg-[#0052FF] text-white font-semibold text-[15px] px-6 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_8px_32px_-8px_rgba(0,82,255,0.5)] transition-all duration-200 ease-out hover:bg-[#1a66ff] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.15),0_12px_40px_-8px_rgba(0,82,255,0.6)] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             disabled={busy || !canSubmit}
             onClick={onSubmit}
           >
-            <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/70 opacity-70" />
-            <span className="pointer-events-none absolute -left-16 top-0 h-full w-16 -skew-x-12 bg-white/20 blur-md transition-transform duration-700 ease-out group-hover:translate-x-[420px]" />
             {busy ? (
               <>
                 <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
@@ -534,7 +533,7 @@ export const VerifyStep = memo(function VerifyStep({
       ) : null}
 
       {!showPrivy ? (
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 px-4 py-3 text-center text-[13px] text-zinc-500">
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-center text-[13px] text-zinc-500">
           Wallet login unavailable
         </div>
       ) : null}

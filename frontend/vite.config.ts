@@ -26,7 +26,18 @@ function loadDotEnvFile(filePath: string) {
   }
 }
 
-function makeVercelCompatReq(req: IncomingMessage): any {
+async function readRequestBody(req: IncomingMessage): Promise<string | undefined> {
+  const method = (req.method ?? '').toUpperCase()
+  if (method !== 'POST' && method !== 'PUT' && method !== 'PATCH') return undefined
+  const chunks: Buffer[] = []
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  }
+  if (chunks.length === 0) return undefined
+  return Buffer.concat(chunks).toString('utf8')
+}
+
+function makeVercelCompatReq(req: IncomingMessage, body?: string): any {
   const host = req.headers.host ?? 'localhost'
   const url = new URL(req.url ?? '/', `http://${host}`)
   // Use a null-prototype object to avoid prototype pollution via query keys.
@@ -40,7 +51,7 @@ function makeVercelCompatReq(req: IncomingMessage): any {
   const r: any = req as any
   r.query = query
   r.cookies = {}
-  r.body = undefined
+  r.body = body
   return r
 }
 
@@ -193,11 +204,12 @@ function localApiRoutesPlugin(): Plugin {
           const loader = routes[pathname]
           if (!loader) return next()
 
+          const body = await readRequestBody(req as IncomingMessage)
           const mod = await loader()
           const handler = mod.default
           if (typeof handler !== 'function') return next()
 
-          await handler(makeVercelCompatReq(req as any), makeVercelCompatRes(res as any))
+          await handler(makeVercelCompatReq(req as any, body), makeVercelCompatRes(res as any))
         } catch (e) {
           // Structured error logging for dev server
           const err = e instanceof Error ? e : new Error(String(e))
@@ -243,6 +255,8 @@ export default defineConfig(({ command }) => {
   },
   optimizeDeps: {
     include: ['buffer'],
+    // @xmtp/browser-sdk uses Web Workers (workers/client) that Vite's dep optimizer cannot handle
+    exclude: ['@xmtp/browser-sdk'],
     esbuildOptions: {
       define: {
         global: 'globalThis',

@@ -1622,50 +1622,39 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
 
   const containerClass =
     variant === 'page'
-      ? 'waitlist-page relative min-h-[100svh] flex items-center justify-center overflow-hidden px-4 sm:px-6 py-12 sm:py-16 bg-black'
+      ? 'waitlist-page relative min-h-[100svh] flex items-center justify-center overflow-hidden px-4 sm:px-6 py-12 sm:py-16 bg-[#0a0a0b]'
       : 'cinematic-section'
 
-  const innerWrapClass = variant === 'page' ? 'relative z-10 w-full max-w-[470px]' : 'max-w-3xl mx-auto px-6 py-14'
+  const innerWrapClass = variant === 'page' ? 'relative z-10 w-full max-w-[440px]' : 'max-w-3xl mx-auto px-6 py-14'
 
   const cardWrapClass =
     variant === 'page'
-      ? 'relative overflow-hidden rounded-[32px] border border-white/10 bg-[linear-gradient(165deg,rgba(10,10,12,0.95),rgba(4,4,6,0.98))] shadow-[0_44px_140px_-72px_rgba(0,0,0,0.95)] p-5 sm:p-7'
-      : 'relative overflow-hidden rounded-[32px] border border-zinc-800/50 bg-zinc-950/95 p-5 sm:p-7'
+      ? 'relative overflow-hidden rounded-3xl border border-white/[0.06] bg-[#0d0d0f]/95 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_24px_80px_-24px_rgba(0,0,0,0.6)] p-6 sm:p-8'
+      : 'relative overflow-hidden rounded-3xl border border-white/[0.06] bg-[#0d0d0f]/95 backdrop-blur-xl p-6 sm:p-8'
 
   return (
     <section id={variant === 'embedded' ? sectionId : undefined} className={containerClass}>
       {variant === 'page' ? (
-        <>
-          <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-black" />
-          <style>{`
-            .waitlist-page .space-y-3.5 > div[class*="text-[12px]"][class*="text-zinc-500"] {
-              display: none;
-            }
-          `}</style>
-        </>
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(0,82,255,0.08),transparent)]" />
       ) : null}
       <div className={innerWrapClass}>
         {variant === 'page' ? null : (
           <div className="mb-6">
-            <div className="text-[40px] sm:text-[48px] font-light tracking-tight text-white leading-tight">
+            <div className="font-doto text-[38px] sm:text-[44px] font-bold tracking-tight text-white leading-[1.05]">
               Waitlist
             </div>
           </div>
         )}
 
-        <motion.div
-          className={cardWrapClass}
-        >
-          <div className="pointer-events-none absolute inset-0">
-            <div className="absolute left-6 right-6 top-0 h-px bg-linear-to-r from-transparent via-white/20 to-transparent" />
-          </div>
-          <div className="relative z-1">
+        <motion.div className={cardWrapClass}>
+          <div className="pointer-events-none absolute inset-0 rounded-3xl ring-1 ring-inset ring-white/[0.04]" />
+          <div className="relative z-10">
           {/* Show reset on done step */}
           {step === 'done' ? (
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center justify-between mb-4">
               <button
                 type="button"
-                className="text-[12px] text-zinc-500 hover:text-zinc-300 transition-colors duration-200"
+                className="text-[13px] text-zinc-500 hover:text-zinc-300 transition-colors duration-200"
                 onClick={resetFlow}
               >
                 Start over

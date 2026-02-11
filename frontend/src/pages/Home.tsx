@@ -17,7 +17,7 @@ function WaitlistStatusBanner() {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: 0.3 }}
-      className="max-w-2xl mx-auto px-4 sm:px-6 -mt-8 mb-8 sm:-mt-12 sm:mb-12 relative z-10"
+      className="max-w-2xl mx-auto px-4 sm:px-6 mt-6 sm:mt-8 mb-6 sm:mb-10 relative z-10"
     >
       <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 backdrop-blur-sm px-5 py-4 flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
         <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -68,7 +68,7 @@ export function Home() {
       </div>
 
       {/* Hero - Cinematic Letterbox */}
-      <section className="cinematic-section min-h-[85vh] sm:min-h-screen flex items-center justify-center">
+      <section className="cinematic-section min-h-[75vh] sm:min-h-[90vh] flex items-center justify-center">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center space-y-8 sm:space-y-16">
           {/* Status Indicator */}
           <motion.div
@@ -140,7 +140,7 @@ export function Home() {
       )}
 
       {/* For Creators - Minimal CTA */}
-      <section className="cinematic-section">
+      <section className="cinematic-section py-12 sm:py-16 lg:py-24">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="grid lg:grid-cols-2 gap-10 sm:gap-16 lg:gap-20 items-center">
             <motion.div
@@ -168,11 +168,14 @@ export function Home() {
                 />
                 <span className="text-uniswap">Uniswap</span>
               </div>
-              <p className="text-zinc-500 text-base sm:text-lg font-light leading-relaxed">
-                Minimum deposit is <span className="font-mono text-zinc-200">5,000,000 TOKEN</span>. In the default launch,
-                this mints <span className="font-mono text-brand-primary">5,000,000 {SHARE_TOKEN}</span> and runs a{' '}
-                <span className="text-uniswap">Uniswap CCA</span> auction before the vault deploys the deposit across strategies.
-              </p>
+              <div className="text-zinc-500 text-base sm:text-lg font-light leading-relaxed space-y-3">
+                <p>
+                  Minimum deposit: <span className="font-mono text-zinc-200">5,000,000 TOKEN</span>. In the default launch,
+                  this mints <span className="font-mono text-brand-primary">5,000,000 {SHARE_TOKEN}</span> and runs a{' '}
+                  <span className="text-uniswap">Uniswap CCA</span> auction.
+                </p>
+                <p>Then the vault deploys deposits across liquidity, lending, and reserve strategies.</p>
+              </div>
               {publicMode ? (
                 <Link to="/?persona=creator#waitlist" className="btn-accent inline-block">
                   Join waitlist <ArrowRight className="w-4 h-4 inline ml-2" />

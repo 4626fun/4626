@@ -302,6 +302,7 @@ const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
     inputs: [{ name: 'owner', type: 'address' }],
     outputs: [],
   },
+  { type: 'error', name: 'AlreadyOwner', inputs: [{ name: 'owner', type: 'bytes' }] },
 ] as const
 
 async function isCoinbaseSmartWalletOwner(params: {
@@ -2928,7 +2929,7 @@ function DeployVaultBatcher({
 
             // Install the temporary owner via a single user-approved transaction.
             // This MUST be an owner EOA transaction (not a smart wallet self-call).
-            const alreadyInstalled = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionOwner })
+            let alreadyInstalled = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionOwner })
             if (!alreadyInstalled) {
               const addOwnerData = encodeFunctionData({
                 abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
@@ -2942,19 +2943,39 @@ function DeployVaultBatcher({
                 const isOwner = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: connectedAddress as Address })
                 if (isOwner) {
                   await ensureBaseChain('Owner wallet')
-                  const rawTxHash = await (wagmiWalletClient as any).sendTransaction({
-                    to: owner,
-                    data: addOwnerData,
-                    value: 0n,
-                    account: connectedAddress,
-                    chain: base,
-                  })
-                  const txHash = ensureSignatureHex(rawTxHash, 'ownerWallet.sendTransaction(addOwner)') as Hex
-                  if (txHash.length !== 66) throw new Error('Invalid tx hash returned from owner wallet')
-                  setTxId(txHash)
-                  if (!publicClient) throw new Error('Missing Base public client')
-                  await publicClient.waitForTransactionReceipt({ hash: txHash })
-                  installed = true
+                  // Simulate before sending: if addOwnerAddress reverts with AlreadyOwner, agent is already installed.
+                  if (publicClient) {
+                    try {
+                      await publicClient.simulateContract({
+                        account: connectedAddress,
+                        address: owner,
+                        abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+                        functionName: 'addOwnerAddress',
+                        args: [sessionOwner],
+                      })
+                    } catch (simErr: unknown) {
+                      const msg = simErr instanceof Error ? simErr.message : String(simErr)
+                      if (/AlreadyOwner/i.test(msg)) {
+                        alreadyInstalled = true
+                        installed = true
+                      }
+                    }
+                  }
+                  if (!installed) {
+                    const rawTxHash = await (wagmiWalletClient as any).sendTransaction({
+                      to: owner,
+                      data: addOwnerData,
+                      value: 0n,
+                      account: connectedAddress,
+                      chain: base,
+                    })
+                    const txHash = ensureSignatureHex(rawTxHash, 'ownerWallet.sendTransaction(addOwner)') as Hex
+                    if (txHash.length !== 66) throw new Error('Invalid tx hash returned from owner wallet')
+                    setTxId(txHash)
+                    if (!publicClient) throw new Error('Missing Base public client')
+                    await publicClient.waitForTransactionReceipt({ hash: txHash })
+                    installed = true
+                  }
                 }
               }
               if (!installed) {

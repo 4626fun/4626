@@ -14,6 +14,7 @@ import {
   setCors,
   setNoStore,
 } from '../../../server/auth/_shared.js'
+import { isCswOwner } from '../../../server/_lib/cswOwner.js'
 import { getDb, isDbConfigured } from '../../../server/_lib/postgres.js'
 import { preprovisionWaitlistUser } from '../../../server/_lib/waitlistPreprovision.js'
 
@@ -47,22 +48,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Database connection failed' } satisfies ApiEnvelope<never>)
   }
 
-  // Find the user's waitlist profile by wallet
+  // Find the user's waitlist profile by wallet (match any linked wallet field)
   try {
     const q = await (db as any).sql`
-      SELECT id, primary_wallet, csw_address, preprovisioned_at
+      SELECT id, primary_wallet, embedded_wallet, csw_address, preprovisioned_at
       FROM profiles
       WHERE LOWER(primary_wallet) = ${sessionWallet}
+         OR LOWER(embedded_wallet) = ${sessionWallet}
          OR LOWER(csw_address) = ${sessionWallet}
       ORDER BY created_at DESC
       LIMIT 1;
     `
-    const row = q.rows?.[0]
+    let row = q.rows?.[0]
+
+    // If no direct match, check if session wallet is an owner of a profile's linked CSW
+    if (!row?.id) {
+      const cswProfiles = await (db as any).sql`
+        SELECT id, primary_wallet, embedded_wallet, csw_address, preprovisioned_at
+        FROM profiles
+        WHERE csw_address IS NOT NULL
+          AND LOWER(csw_address) != ${sessionWallet}
+        ORDER BY updated_at DESC
+        LIMIT 50
+      `
+      for (const p of cswProfiles?.rows ?? []) {
+        const csw = p?.csw_address ? String(p.csw_address).trim() : ''
+        if (!csw || !/^0x[a-fA-F0-9]{40}$/.test(csw)) continue
+        try {
+          const owned = await isCswOwner(sessionWallet, csw)
+          if (owned) {
+            row = p
+            break
+          }
+        } catch {
+          continue
+        }
+      }
+    }
+
     if (!row?.id) {
       return res.status(404).json({ success: false, error: 'No waitlist profile found for this wallet' } satisfies ApiEnvelope<never>)
     }
 
-    const walletForProvision = String(row.csw_address || row.primary_wallet || sessionWallet).toLowerCase()
+    const walletForProvision = String(
+      row.csw_address || row.primary_wallet || row.embedded_wallet || sessionWallet
+    ).toLowerCase()
     const result = await preprovisionWaitlistUser(
       typeof row.id === 'number' ? row.id : Number(row.id),
       walletForProvision,

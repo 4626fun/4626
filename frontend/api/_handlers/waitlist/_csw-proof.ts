@@ -226,9 +226,9 @@ async function verifyErc1271OnBase(params: {
 
   // Build candidate signatures to try:
   // 1. Raw signature (works if the wallet itself wraps it, e.g. Coinbase Wallet)
-  // 2. SignatureWrapper-encoded for owner indices 0–4 (works for EOA signers)
+  // 2. SignatureWrapper-encoded for owner indices 0–15 (works for EOA signers; CSW can have many owners)
   const candidates: `0x${string}`[] = [params.signature]
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 16; i++) {
     candidates.push(encodeSignatureWrapper(i, params.signature, encodeAbiParameters))
   }
 
@@ -367,7 +367,7 @@ async function handler(req: VercelRequest, res: VercelResponse) {
       if (!verified) {
         return res.status(403).json({
           success: false,
-          error: 'ERC-1271 verification failed. The signature is not valid for this smart wallet.',
+          error: 'Signature verification failed. Make sure you\'re signing with the same wallet that owns this smart wallet (e.g. Coinbase Wallet or the linked EOA). You can still join the waitlist without proving.',
         } satisfies ApiEnvelope<never>)
       }
 
