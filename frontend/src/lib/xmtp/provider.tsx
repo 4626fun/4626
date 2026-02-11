@@ -458,6 +458,61 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         appVersion: XMTP_APP_VERSION,
       }
 
+      // Shared setup: sync conversations, start streams, mark connected.
+      const setupConversations = async (client: Client) => {
+        await client.conversations.sync()
+        const convos = await client.conversations.list()
+        const summaries = await Promise.all(convos.map(buildConvoSummary))
+        summaries.sort((a, b) => (b.lastMessageAt?.getTime() ?? 0) - (a.lastMessageAt?.getTime() ?? 0))
+        conversationsRef.current = summaries
+        if (mountedRef.current) setConversations(summaries)
+        const convoStream = await client.conversations.stream({
+          onValue: async (convo: any) => {
+            if (!mountedRef.current) return
+            const summary = await buildConvoSummary(convo)
+            setConversations((prev) => {
+              if (prev.find((c) => c.id === summary.id)) return prev
+              const next = [summary, ...prev]
+              conversationsRef.current = next
+              return next
+            })
+          },
+        })
+        convoStreamRef.current = convoStream
+        const allMsgStream = await client.conversations.streamAllMessages({
+          onValue: (msg: DecodedMessage) => {
+            if (!mountedRef.current) return
+            const convoId = msg.conversationId
+            const chatMsg = decodedToChat(msg, client.inboxId!)
+            if (!chatMsg.isSelf) {
+              const convoName = conversationsRef.current.find((c) => c.id === convoId)?.name ?? 'New message'
+              showNotification(convoName, chatMsg.content)
+            }
+            setConversations((prev) => {
+              const idx = prev.findIndex((c) => c.id === convoId)
+              if (idx === -1) return prev
+              const updated = { ...prev[idx] }
+              if (typeof msg.content === 'string') updated.lastMessageText = msg.content
+              updated.lastMessageAt = msg.sentAt
+              if (!chatMsg.isSelf) updated.unreadCount += 1
+              const next = [...prev]
+              next.splice(idx, 1)
+              const reordered = [updated, ...next]
+              conversationsRef.current = reordered
+              return reordered
+            })
+            const cbs = perConvoCbRef.current.get(convoId)
+            if (cbs) for (const cb of cbs) cb(chatMsg)
+          },
+        })
+        msgStreamRef.current = allMsgStream
+        void requestNotificationPermission()
+        if (mountedRef.current) {
+          setAutoConnectEnabled(address)
+          setStatus('connected')
+        }
+      }
+
       // Get or create a random encryption key — no wallet popup needed.
       // Backward-compatible: reuses any existing signature-derived key.
       const encKeyHex = getOrCreateEncKeyHex(address)
@@ -467,66 +522,19 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       // Reuses the same installation, avoids revoke/install churn.
       setStatus('connecting')
       try {
+        console.log('[xmtp] Attempting Client.build restore (zero-popup path)…')
         const restored = await Client.build(identifier, { ...baseOptions, dbEncryptionKey: encKeyBytes })
         if (restored?.inboxId) {
+          console.log('[xmtp] Client.build succeeded — reusing existing installation, no wallet popup needed')
           const client = restored as any
           clientRef.current = client
           setInboxId(client.inboxId ?? null)
-          await client.conversations.sync()
-          const convos = await client.conversations.list()
-          const summaries = await Promise.all(convos.map(buildConvoSummary))
-          summaries.sort((a, b) => (b.lastMessageAt?.getTime() ?? 0) - (a.lastMessageAt?.getTime() ?? 0))
-          conversationsRef.current = summaries
-          if (mountedRef.current) setConversations(summaries)
-          const convoStream = await client.conversations.stream({
-            onValue: async (convo: any) => {
-              if (!mountedRef.current) return
-              const summary = await buildConvoSummary(convo)
-              setConversations((prev) => {
-                if (prev.find((c) => c.id === summary.id)) return prev
-                const next = [summary, ...prev]
-                conversationsRef.current = next
-                return next
-              })
-            },
-          })
-          convoStreamRef.current = convoStream
-          const allMsgStream = await client.conversations.streamAllMessages({
-            onValue: (msg: DecodedMessage) => {
-              if (!mountedRef.current) return
-              const convoId = msg.conversationId
-              const chatMsg = decodedToChat(msg, client.inboxId!)
-              if (!chatMsg.isSelf) {
-                const convoName = conversationsRef.current.find((c) => c.id === convoId)?.name ?? 'New message'
-                showNotification(convoName, chatMsg.content)
-              }
-              setConversations((prev) => {
-                const idx = prev.findIndex((c) => c.id === convoId)
-                if (idx === -1) return prev
-                const updated = { ...prev[idx] }
-                if (typeof msg.content === 'string') updated.lastMessageText = msg.content
-                updated.lastMessageAt = msg.sentAt
-                if (!chatMsg.isSelf) updated.unreadCount += 1
-                const next = [...prev]
-                next.splice(idx, 1)
-                const reordered = [updated, ...next]
-                conversationsRef.current = reordered
-                return reordered
-              })
-              const cbs = perConvoCbRef.current.get(convoId)
-              if (cbs) for (const cb of cbs) cb(chatMsg)
-            },
-          })
-          msgStreamRef.current = allMsgStream
-          void requestNotificationPermission()
-          if (mountedRef.current) {
-            setAutoConnectEnabled(address)
-            setStatus('connected')
-          }
+          await setupConversations(client)
           return
         }
-      } catch (_restoreErr) {
-        // No existing installation — fall back to Client.create (needs signer)
+        console.log('[xmtp] Client.build returned no inboxId — falling through to Client.create')
+      } catch (restoreErr) {
+        console.log('[xmtp] Client.build failed (expected on first use):', restoreErr)
       }
 
       setStatus('connecting')
@@ -563,7 +571,11 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
             signMessage: signMessageFn,
           }
 
-      await ensureInstallationSlot(signer, XMTP_ENV)
+      // Skip pre-flight revocation — it requires a wallet signature of its own.
+      // Instead, let Client.create handle the 10/10 case: if it fails, we catch
+      // the error and show the reset UI. This avoids an extra popup on every
+      // first-time connection.
+      console.log('[xmtp] Client.build unavailable — falling through to Client.create (will require wallet signature)')
 
       let client: Client
       try {
@@ -572,6 +584,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           dbEncryptionKey: encKeyBytes,
         })
       } catch (createErr) {
+        const errMsg = createErr instanceof Error ? createErr.message : String(createErr)
+        // If 10/10 limit, let the outer catch handle it (shows reset UI)
+        if (isInstallationLimitError(errMsg)) throw createErr
         // If the stored key is stale (e.g. corrupted localStorage), regenerate
         // and retry once.
         clearStoredEncKeyHex(address)
@@ -590,76 +605,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
       clientRef.current = client
       setInboxId(client.inboxId ?? null)
-
-      // Sync & load conversations
-      await client.conversations.sync()
-      const convos = await client.conversations.list()
-      const summaries = await Promise.all(convos.map(buildConvoSummary))
-      summaries.sort((a, b) => (b.lastMessageAt?.getTime() ?? 0) - (a.lastMessageAt?.getTime() ?? 0))
-      conversationsRef.current = summaries
-      if (mountedRef.current) setConversations(summaries)
-
-      // Stream new conversations
-      const convoStream = await client.conversations.stream({
-        onValue: async (convo) => {
-          if (!mountedRef.current) return
-          const summary = await buildConvoSummary(convo as any)
-          setConversations((prev) => {
-            if (prev.find((c) => c.id === summary.id)) return prev
-            const next = [summary, ...prev]
-            conversationsRef.current = next
-            return next
-          })
-        },
-      })
-      convoStreamRef.current = convoStream
-
-      // Stream all incoming messages (for unread counts + live updates)
-      const allMsgStream = await client.conversations.streamAllMessages({
-        onValue: (msg: DecodedMessage) => {
-          if (!mountedRef.current) return
-          const convoId = msg.conversationId
-          const chatMsg = decodedToChat(msg, client.inboxId!)
-
-          // Browser notification for background messages
-          if (!chatMsg.isSelf) {
-            const convoName = conversationsRef.current.find((c) => c.id === convoId)?.name ?? 'New message'
-            showNotification(convoName, chatMsg.content)
-          }
-
-          // Update conversation list (bump to top + last message)
-          setConversations((prev) => {
-            const idx = prev.findIndex((c) => c.id === convoId)
-            if (idx === -1) return prev
-            const updated = { ...prev[idx] }
-            if (typeof msg.content === 'string') {
-              updated.lastMessageText = msg.content
-            }
-            updated.lastMessageAt = msg.sentAt
-            if (!chatMsg.isSelf) updated.unreadCount += 1
-            const next = [...prev]
-            next.splice(idx, 1)
-            const reordered = [updated, ...next]
-            conversationsRef.current = reordered
-            return reordered
-          })
-
-          // Notify per-conversation subscribers
-          const cbs = perConvoCbRef.current.get(convoId)
-          if (cbs) {
-            for (const cb of cbs) cb(chatMsg)
-          }
-        },
-      })
-      msgStreamRef.current = allMsgStream
-
-      // Request browser notification permission (non-blocking)
-      void requestNotificationPermission()
-
-      if (mountedRef.current) {
-        setAutoConnectEnabled(address)
-        setStatus('connected')
-      }
+      await setupConversations(client)
     } catch (e) {
       console.error('[xmtp] connect error:', e)
       if (mountedRef.current) {
