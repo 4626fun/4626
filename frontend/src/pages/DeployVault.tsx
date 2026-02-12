@@ -3040,22 +3040,6 @@ function DeployVaultBatcher({
           }
 
           if (!opts?.noSplit && phaseLabel === 'phase2' && calls.length > 1) {
-            const isFinalizePostSegment =
-              typeof opts?.segment === 'string' &&
-              (opts.segment === 'finalize_post' || opts.segment.includes('finalize_post.'))
-            if (isFinalizePostSegment) {
-              logger.info('[DeployVault] Splitting phase2 finalize_post into sequential UserOps', {
-                callCount: calls.length,
-              })
-              for (let i = 0; i < calls.length; i += 1) {
-                const c = calls[i]
-                if (!c) continue
-                const step = `${opts.segment}.step${i + 1}`
-                await sendPhaseCalls([c], phaseLabel, { noSplit: true, segment: step })
-              }
-              return
-            }
-
             const approveSelector = '0x095ea7b3'
             const creatorTokenAddr = getAddress(creatorToken).toLowerCase()
             const approveCalls = calls.filter((c) => {
