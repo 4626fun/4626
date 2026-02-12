@@ -161,6 +161,9 @@ frontend/.xmtp-data/
 frontend/xmtp-dev-*.db3*
 frontend/xmtp-production-*.db3*
 .xmtp-data/
+# Catch any stray XMTP database files regardless of location
+**/xmtp-*.db3
+**/xmtp-*.db3-*
 
 # Test and development files (keep local)
 bsc-production-ready.json
