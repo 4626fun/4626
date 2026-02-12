@@ -700,6 +700,13 @@ const UNIVERSAL_CREATE2_DEPLOY_FROM_STORE_ABI = [
 const CREATOR_VAULT_ADMIN_ABI = [
   {
     type: 'function',
+    name: 'burnStream',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
     name: 'setBurnStream',
     stateMutability: 'nonpayable',
     inputs: [{ name: 'burnStream', type: 'address' }],
@@ -2435,6 +2442,28 @@ function DeployVaultBatcher({
         }),
       } as const
 
+      const currentVaultBurnStream = await (async () => {
+        try {
+          const value = await publicClient.readContract({
+            address: expected.vault,
+            abi: CREATOR_VAULT_ADMIN_ABI,
+            functionName: 'burnStream',
+          })
+          if (typeof value === 'string' && isAddress(value)) return getAddress(value as Address)
+          return ZERO_ADDRESS as Address
+        } catch {
+          return ZERO_ADDRESS as Address
+        }
+      })()
+      const burnStreamAlreadyConfigured = currentVaultBurnStream.toLowerCase() !== ZERO_ADDRESS.toLowerCase()
+      const burnStreamMatchesExpected = currentVaultBurnStream.toLowerCase() === expectedBurnStream.toLowerCase()
+      if (burnStreamAlreadyConfigured && !burnStreamMatchesExpected) {
+        throw new Error(
+          `Vault burn stream is already set to ${currentVaultBurnStream} (expected ${expectedBurnStream}). ` +
+            `Bump VITE_DEPLOYMENT_VERSION to deploy a fresh set, or reconcile the existing deployment state.`,
+        )
+      }
+
       const vaultWhitelistRouterCall = {
         target: expected.vault,
         value: 0n,
@@ -2444,6 +2473,25 @@ function DeployVaultBatcher({
           args: [expectedPayoutRouter, true],
         }),
       } as const
+
+      const payoutRecipientCallData = encodeFunctionData({
+        abi: COIN_PAYOUT_RECIPIENT_ABI,
+        functionName: 'setPayoutRecipient',
+        args: [expectedPayoutRouter],
+      })
+      const canSetPayoutRecipientFromOwner = await (async () => {
+        if (!payoutMismatch) return false
+        try {
+          await publicClient.call({
+            to: creatorToken,
+            data: payoutRecipientCallData,
+            account: owner,
+          })
+          return true
+        } catch {
+          return false
+        }
+      })()
 
       // ===========================
       // Two-step batcher (Phase 1 + Phase 2) path
@@ -2850,6 +2898,36 @@ function DeployVaultBatcher({
           })
         }
 
+        const phase2CoreState = await (async () => {
+          try {
+            const addrs = [expected.gaugeController, expected.ccaStrategy, expected.oracle] as const
+            const codes = await Promise.all(addrs.map((a) => publicClient.getBytecode({ address: a })))
+            const deployed = codes.map((c) => !!c && c !== '0x')
+            return {
+              gaugeDeployed: deployed[0] ?? false,
+              ccaDeployed: deployed[1] ?? false,
+              oracleDeployed: deployed[2] ?? false,
+            } as const
+          } catch {
+            return {
+              gaugeDeployed: false,
+              ccaDeployed: false,
+              oracleDeployed: false,
+            } as const
+          }
+        })()
+        const phase2CoreAny =
+          phase2CoreState.gaugeDeployed || phase2CoreState.ccaDeployed || phase2CoreState.oracleDeployed
+        const phase2CoreAll =
+          phase2CoreState.gaugeDeployed && phase2CoreState.ccaDeployed && phase2CoreState.oracleDeployed
+        if (phase2CoreAny && !phase2CoreAll) {
+          throw new Error(
+            `Phase 2 core is partially deployed for deployment version (${deploymentVersion}). ` +
+              `Expected gauge/CCA/oracle to be all present or all absent. ` +
+              `Bump VITE_DEPLOYMENT_VERSION to start a fresh slate, or reconcile this partial state.`,
+          )
+        }
+
         const phase2CoreCall = {
           target: batcherAddress,
           value: 0n,
@@ -2870,22 +2948,37 @@ function DeployVaultBatcher({
           }),
         } as const
 
-        phase2Calls.push(...phase2ApproveCalls, phase2CoreCall, phase2FinalizeCall)
+        const phase2CoreNeeded = !phase2CoreAll
+        if (phase2CoreNeeded) {
+          phase2Calls.push(...phase2ApproveCalls, phase2CoreCall, phase2FinalizeCall)
+        } else {
+          logger.info('[DeployVault] phase2.core already deployed; skipping deployPhase2Core call', {
+            expectedGauge: expected.gaugeController,
+            expectedCca: expected.ccaStrategy,
+            expectedOracle: expected.oracle,
+          })
+          phase2Calls.push(...phase2ApproveCalls, phase2FinalizeCall)
+        }
 
         if (!burnStreamAlreadyDeployed) phase2Calls.push(burnStreamDeployCall)
         if (!payoutRouterAlreadyDeployed) phase2Calls.push(payoutRouterDeployCall)
-        phase2Calls.push(vaultSetBurnStreamCall)
+        if (!burnStreamAlreadyConfigured) phase2Calls.push(vaultSetBurnStreamCall)
         phase2Calls.push(vaultWhitelistRouterCall)
         if (payoutMismatch) {
-          phase2Calls.push({
-            target: creatorToken,
-            value: 0n,
-            data: encodeFunctionData({
-              abi: COIN_PAYOUT_RECIPIENT_ABI,
-              functionName: 'setPayoutRecipient',
-              args: [expectedPayoutRouter],
-            }),
-          })
+          if (canSetPayoutRecipientFromOwner) {
+            phase2Calls.push({
+              target: creatorToken,
+              value: 0n,
+              data: payoutRecipientCallData,
+            })
+          } else {
+            logger.warn('[DeployVault] Skipping setPayoutRecipient in deploy batch (caller not authorized)', {
+              creatorToken,
+              owner,
+              expectedPayoutRouter,
+              currentPayoutRecipient,
+            })
+          }
         }
 
         const phase3Calls: Array<{ target: Address; value: bigint; data: Hex }> = [
@@ -2965,7 +3058,9 @@ function DeployVaultBatcher({
           creatorToken,
           ownerAddress: owner,
           phase1Calls: serializeSessionCalls(phase1Calls),
-          phase2CoreCalls: serializeSessionCalls([...phase2ApproveCalls, phase2CoreCall]),
+          phase2CoreCalls: serializeSessionCalls(
+            phase2CoreNeeded ? [...phase2ApproveCalls, phase2CoreCall] : [...phase2ApproveCalls],
+          ),
           phase2FinalizeCalls: serializeSessionCalls(phase2FinalizeAndPostCalls),
           phase3Calls: serializeSessionCalls(phase3Calls),
           phase4Calls: serializeSessionCalls(phase4Calls),
@@ -3218,6 +3313,7 @@ function DeployVaultBatcher({
                     'NotOwner()': 'The batcher requires msg.sender == owner, but the smart wallet may not be recognized as the caller. Check owner address and ERC-4337 setup.',
                     'ZeroAddress()': 'One of the required addresses is zero. Check creator token, owner, or other parameters.',
                     'InvalidCodeId()': 'Bytecode not registered in the bytecode store. Run the bytecode registration script first.',
+                    'DeployFailed()': 'CREATE2 deployment failed (address likely already used for this deployment version). If this is a retry, keep the same version only when the full phase already exists; otherwise bump VITE_DEPLOYMENT_VERSION.',
                     'Phase1Missing()': 'Phase 1 contracts must be deployed before Phase 2. Deploy Phase 1 first.',
                     'Phase1CoreMissing()': 'Phase 1 core must be deployed before finalize. Run deployPhase1Core first.',
                     'Phase1StateMismatch()': 'Phase 1 finalize inputs do not match the stored core deployment state.',
@@ -3244,6 +3340,7 @@ function DeployVaultBatcher({
                       'NotOwner()': 'The batcher requires msg.sender == owner. The smart wallet address must match the owner parameter.',
                       'ZeroAddress()': 'One of the required addresses is zero.',
                       'InvalidCodeId()': 'Bytecode not registered. Run bytecode registration first.',
+                      'DeployFailed()': 'CREATE2 deployment failed (address likely already used for this deployment version).',
                       'Phase1Missing()': 'Phase 1 contracts must be deployed first.',
                       'Phase1CoreMissing()': 'Phase 1 core must be deployed before finalize.',
                       'Phase1StateMismatch()': 'Phase 1 finalize inputs do not match the stored core deployment state.',
@@ -3811,12 +3908,20 @@ function DeployVaultBatcher({
           }
         }
 
-        await sendPhaseCalls([phase2CoreCall], 'phase2', { noSplit: true, segment: 'core' })
-        await waitForContractsDeployed({
-          publicClient: publicClient as any,
-          addresses: [expected.gaugeController, expected.ccaStrategy, expected.oracle],
-          label: 'Phase 2 core',
-        })
+        if (phase2CoreNeeded) {
+          await sendPhaseCalls([phase2CoreCall], 'phase2', { noSplit: true, segment: 'core' })
+          await waitForContractsDeployed({
+            publicClient: publicClient as any,
+            addresses: [expected.gaugeController, expected.ccaStrategy, expected.oracle],
+            label: 'Phase 2 core',
+          })
+        } else {
+          logger.info('[DeployVault] phase2.core skipped (already deployed)', {
+            expectedGauge: expected.gaugeController,
+            expectedCca: expected.ccaStrategy,
+            expectedOracle: expected.oracle,
+          })
+        }
         await sendPhaseCalls(phase2FinalizeAndPostCalls, 'phase2', {
           noSplit: phase2PostCalls.length === 0,
           segment: phase2PostCalls.length > 0 ? 'finalize_post' : 'finalize',

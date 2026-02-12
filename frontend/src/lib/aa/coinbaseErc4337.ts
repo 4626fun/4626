@@ -220,6 +220,8 @@ const KNOWN_ERROR_SELECTORS: Record<string, string> = {
   '0x56a694d2': 'AuctionShareOFTMismatch()',
   '0x8284e8bf': 'AuctionAmountMismatch()',
   '0xf79c143b': 'Phase2Missing()',
+  // UniversalCreate2DeployerFromStore
+  '0xb4f54111': 'DeployFailed()',
 }
 
 function extractRevertInfo(e: unknown): { error: string; revertData?: Hex; errorName?: string } {
