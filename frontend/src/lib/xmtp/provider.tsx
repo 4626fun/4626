@@ -447,20 +447,35 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       // Try restore first: Client.build uses existing local DB, no wallet popup.
       // Reuses the same installation, avoids revoke/install churn.
       setStatus('connecting')
+      let buildClient: Client | null = null
       try {
         console.log('[xmtp] Attempting Client.build restore (zero-popup path)…')
-        const restored = await Client.build(identifier, { ...baseOptions, dbEncryptionKey: encKeyBytes })
-        if (restored?.inboxId) {
+        buildClient = await Client.build(identifier, { ...baseOptions, dbEncryptionKey: encKeyBytes })
+        if (buildClient?.inboxId) {
           console.log('[xmtp] Client.build succeeded — reusing existing installation, no wallet popup needed')
-          const client = restored as any
-          clientRef.current = client
-          setInboxId(client.inboxId ?? null)
-          await setupConversations(client)
-          return
+          clientRef.current = buildClient
+          setInboxId(buildClient.inboxId ?? null)
+          await setupConversations(buildClient)
+          return // fully connected via restore — done
         }
         console.log('[xmtp] Client.build returned no inboxId — falling through to Client.create')
+        try { buildClient?.close() } catch {}
+        buildClient = null
       } catch (restoreErr) {
         console.log('[xmtp] Client.build failed (expected on first use):', restoreErr)
+        // IMPORTANT: close the client to release the OPFS file handle.
+        // Without this, Client.create can't open the database (lock conflict)
+        // and will create a new installation instead of reusing the existing one.
+        if (buildClient) {
+          try { buildClient.close() } catch {}
+          buildClient = null
+        }
+        if (clientRef.current) {
+          try { clientRef.current.close() } catch {}
+          clientRef.current = null
+        }
+        // Allow the OPFS file handle to be released before retrying
+        await new Promise((r) => setTimeout(r, 200))
       }
 
       setStatus('connecting')
