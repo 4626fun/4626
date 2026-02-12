@@ -324,6 +324,18 @@ async function isCoinbaseSmartWalletOwner(params: {
   }
 }
 
+function isPaymasterProxyUrl(value: string): boolean {
+  const v = String(value ?? '').trim()
+  if (!v) return false
+  try {
+    const base = typeof window !== 'undefined' ? window.location.origin : undefined
+    const u = base ? new URL(v, base) : new URL(v)
+    return u.pathname === '/api/paymaster'
+  } catch {
+    return v === '/api/paymaster' || v.endsWith('/api/paymaster')
+  }
+}
+
 const shortAddress = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`
 
 function formatEthPerTokenForUi(weiPerToken: bigint): string {
@@ -3989,6 +4001,16 @@ function DeployVaultMain() {
       setAddPrivySmartWalletOwnerError('Privy smart wallet not ready. Please wait and retry.')
       return false
     }
+    // Re-check ownership inline to avoid false negatives from stale/initial query state.
+    const appWalletAlreadyOwner = await isCoinbaseSmartWalletOwner({
+      smartWallet: canonicalIdentityAddress as Address,
+      ownerAddress: privySmartWalletAddress as Address,
+    })
+    if (appWalletAlreadyOwner) {
+      setAddPrivySmartWalletOwnerError(null)
+      await privySmartWalletIsCanonicalOwnerQuery.refetch()
+      return true
+    }
     if (privySmartWalletAddress.toLowerCase() === canonicalIdentityAddress.toLowerCase()) {
       setAddPrivySmartWalletOwnerError(null)
       return true
@@ -4015,6 +4037,11 @@ function DeployVaultMain() {
       if (!connectedWalletAddress || !walletClient || !publicClient) {
         throw new Error('Wallet not connected. Please connect a wallet that is an owner of your Zora smart wallet.')
       }
+      if (connectedWalletAddress.toLowerCase() === canonicalIdentityAddress.toLowerCase()) {
+        throw new Error(
+          'Add-owner setup requires an owner EOA signer. Connect an owner EOA wallet (for example Coinbase Wallet) and retry.',
+        )
+      }
 
       await ensureBaseChain('your wallet')
 
@@ -4032,45 +4059,53 @@ function DeployVaultMain() {
 
       const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
       const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+      const usingPaymasterProxy = isPaymasterProxyUrl(bundlerUrl)
+      if (!usingPaymasterProxy) {
+        try {
+          logger.info('[DeployVault] Trying ERC-4337 to add app smart wallet as owner (gas-free)', {
+            connector: connector?.id,
+            owner: connectedWalletAddress,
+            smartWallet: privySmartWalletAddress,
+          })
 
-      try {
-        logger.info('[DeployVault] Trying ERC-4337 to add app smart wallet as owner (gas-free)', {
+          const result = await sendCoinbaseSmartWalletUserOperation({
+            publicClient: publicClient as any,
+            walletClient: walletClient as any,
+            bundlerUrl,
+            smartWallet: canonicalIdentityAddress as Address,
+            ownerAddress: connectedWalletAddress as Address,
+            calls: [{
+              to: canonicalIdentityAddress as Address,
+              value: 0n,
+              data: addOwnerData,
+            }],
+            version: '1',
+          })
+
+          setAddPrivySmartWalletOwnerTxHash(result.transactionHash)
+          logger.info('[DeployVault] App smart wallet added as owner via ERC-4337 (gas-free)', {
+            userOpHash: result.userOpHash,
+            txHash: result.transactionHash,
+            smartWallet: privySmartWalletAddress,
+            connector: connector?.id,
+          })
+
+          await privySmartWalletIsCanonicalOwnerQuery.refetch()
+          return true
+        } catch (erc4337Error: any) {
+          // Adding owners is frequently *not* sponsorable via a self-call UserOp depending on
+          // the smart wallet's internal access rules. When it fails, fall back to a normal tx
+          // from the connected EOA (requires gas, but is the most reliable path).
+          logger.warn('[DeployVault] ERC-4337 failed, falling back to direct tx', {
+            error: erc4337Error?.message,
+            connector: connector?.id,
+          })
+        }
+      } else {
+        logger.info('[DeployVault] Skipping ERC-4337 add-owner sponsorship via paymaster proxy; using direct tx', {
           connector: connector?.id,
           owner: connectedWalletAddress,
           smartWallet: privySmartWalletAddress,
-        })
-
-        const result = await sendCoinbaseSmartWalletUserOperation({
-          publicClient: publicClient as any,
-          walletClient: walletClient as any,
-          bundlerUrl,
-          smartWallet: canonicalIdentityAddress as Address,
-          ownerAddress: connectedWalletAddress as Address,
-          calls: [{
-            to: canonicalIdentityAddress as Address,
-            value: 0n,
-            data: addOwnerData,
-          }],
-          version: '1',
-        })
-
-        setAddPrivySmartWalletOwnerTxHash(result.transactionHash)
-        logger.info('[DeployVault] App smart wallet added as owner via ERC-4337 (gas-free)', {
-          userOpHash: result.userOpHash,
-          txHash: result.transactionHash,
-          smartWallet: privySmartWalletAddress,
-          connector: connector?.id,
-        })
-
-        await privySmartWalletIsCanonicalOwnerQuery.refetch()
-        return true
-      } catch (erc4337Error: any) {
-        // Adding owners is frequently *not* sponsorable via a self-call UserOp depending on
-        // the smart wallet's internal access rules. When it fails, fall back to a normal tx
-        // from the connected EOA (requires gas, but is the most reliable path).
-        logger.warn('[DeployVault] ERC-4337 failed, falling back to direct tx', {
-          error: erc4337Error?.message,
-          connector: connector?.id,
         })
       }
 
@@ -4504,6 +4539,10 @@ function DeployVaultMain() {
     if (isCoinbaseWalletDirect) return
     if (smartWalletMatchesCanonical) return
     if (!privySmartWalletAddress || !privySmartWalletCanSign) return
+    // Wait until the owner-check query has resolved before attempting setup.
+    // `data === undefined` during initial load should not be treated as "not owner".
+    if (!privySmartWalletIsCanonicalOwnerQuery.isFetched) return
+    if (privySmartWalletIsCanonicalOwnerQuery.isFetching) return
     if (privySmartWalletIsCanonicalOwner) return
     if (!canonicalIdentityIsContract || !canonicalIdentityAddress) return
     if (!connectedWalletAddress) return
@@ -4547,6 +4586,8 @@ function DeployVaultMain() {
     privySmartWalletAddress,
     privySmartWalletCanSign,
     privySmartWalletIsCanonicalOwner,
+    privySmartWalletIsCanonicalOwnerQuery.isFetched,
+    privySmartWalletIsCanonicalOwnerQuery.isFetching,
     smartWalletMatchesCanonical,
   ])
   
