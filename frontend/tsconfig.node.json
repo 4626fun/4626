@@ -23,6 +23,7 @@
     "server/keepr/**/*.ts",
     "server/ai/**/*.ts",
     "server/agent/**/*.ts",
-    "src/config/contracts.defaults.ts"
+    "src/config/contracts.defaults.ts",
+    "src/deploy/**/*.ts"
   ]
 }
