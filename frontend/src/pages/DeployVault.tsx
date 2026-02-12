@@ -2981,7 +2981,7 @@ function DeployVaultBatcher({
           }
         }
 
-        const phase3Calls: Array<{ target: Address; value: bigint; data: Hex }> = [
+        const phase3StrategyCalls: Array<{ target: Address; value: bigint; data: Hex }> = [
           {
             target: batcherAddress,
             value: 0n,
@@ -3035,23 +3035,23 @@ function DeployVaultBatcher({
 
         assertSafe(phase1Calls)
         assertSafe(phase2Calls)
-        assertSafe(phase3Calls)
+        assertSafe(phase3StrategyCalls)
         assertSafe(phase4Calls)
 
         const phase2PostCalls = phase2Calls.filter(
           (c) => c !== phase2CoreCall && c !== phase2FinalizeCall && !phase2ApproveCalls.includes(c),
         )
-        const phase2FinalizeAndPostCalls = (() => {
-          if (phase2PostCalls.length === 0) return [phase2FinalizeCall]
-          const create2Calls = phase2PostCalls.filter(
-            (c) => String(c.target).toLowerCase() === String(expectedCreate2Deployer).toLowerCase(),
-          )
-          const vaultAdminCalls = phase2PostCalls.filter(
-            (c) => String(c.target).toLowerCase() === String(expected.vault).toLowerCase(),
-          )
-          const rest = phase2PostCalls.filter((c) => !create2Calls.includes(c) && !vaultAdminCalls.includes(c))
-          return [...create2Calls, phase2FinalizeCall, ...vaultAdminCalls, ...rest]
-        })()
+        const phase2Create2Calls = phase2PostCalls.filter(
+          (c) => String(c.target).toLowerCase() === String(expectedCreate2Deployer).toLowerCase(),
+        )
+        const phase2ConfigCalls = phase2PostCalls.filter((c) => !phase2Create2Calls.includes(c))
+        const phase2FinalizeCalls = [...phase2Create2Calls, phase2FinalizeCall]
+        // Run post-finalize config calls behind a batcher-primary phase (phase3) to keep paymaster call-shape valid
+        // and avoid failing phase2 on optional post-config.
+        const phase3Calls: Array<{ target: Address; value: bigint; data: Hex }> = [
+          ...phase3StrategyCalls,
+          ...phase2ConfigCalls,
+        ]
 
         const sessionCreatePayload: DeploySessionCreateRequest = {
           smartWallet: owner,
@@ -3061,7 +3061,7 @@ function DeployVaultBatcher({
           phase2CoreCalls: serializeSessionCalls(
             phase2CoreNeeded ? [...phase2ApproveCalls, phase2CoreCall] : [...phase2ApproveCalls],
           ),
-          phase2FinalizeCalls: serializeSessionCalls(phase2FinalizeAndPostCalls),
+          phase2FinalizeCalls: serializeSessionCalls(phase2FinalizeCalls),
           phase3Calls: serializeSessionCalls(phase3Calls),
           phase4Calls: serializeSessionCalls(phase4Calls),
           version: deploymentVersion,
@@ -3922,9 +3922,9 @@ function DeployVaultBatcher({
             expectedOracle: expected.oracle,
           })
         }
-        await sendPhaseCalls(phase2FinalizeAndPostCalls, 'phase2', {
-          noSplit: phase2PostCalls.length === 0,
-          segment: phase2PostCalls.length > 0 ? 'finalize_post' : 'finalize',
+        await sendPhaseCalls(phase2FinalizeCalls, 'phase2', {
+          noSplit: phase2Create2Calls.length === 0,
+          segment: phase2Create2Calls.length > 0 ? 'finalize_with_create2' : 'finalize',
         })
 
         // Phase 3: Strategies (optional)
