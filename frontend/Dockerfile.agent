@@ -13,9 +13,9 @@
 
 FROM node:22-bookworm-slim AS base
 
-# Install OS deps for native modules (sharp, XMTP bindings)
+# Install OS deps for native modules (sharp, XMTP bindings) + gosu for entrypoint
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ ca-certificates \
+    python3 make g++ ca-certificates gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Enable corepack for pnpm
@@ -55,7 +55,7 @@ COPY frontend/tsconfig.json frontend/tsconfig.node.json ./
 
 # Create persistent XMTP database directory
 # Mount a volume here to preserve agent installations across restarts
-RUN mkdir -p /data/.xmtp-data && chown -R node:node /data/.xmtp-data
+RUN mkdir -p /data/.xmtp-data
 
 # Health check port (tiny HTTP server in the agent)
 ENV PORT=8080
@@ -64,8 +64,6 @@ EXPOSE 8080
 # XMTP database persistence
 ENV XMTP_DB_DIRECTORY=/data/.xmtp-data
 
-# Run as non-root
-USER node
-
-# Start the agent via tsx (env vars come from Railway, not .env files)
-CMD ["npx", "tsx", "server/agent/eliza/index.ts"]
+# Entrypoint: fix volume permissions (Railway mounts as root), then drop to node
+# Runs as root → chown volume → exec as node user via gosu
+CMD ["sh", "-c", "chown -R node:node /data/.xmtp-data && exec gosu node npx tsx server/agent/eliza/index.ts"]
