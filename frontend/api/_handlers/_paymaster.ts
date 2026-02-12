@@ -1540,11 +1540,11 @@ async function validateInnerCalls(params: {
     })
   }
 
-  // In Phase 2, validate the vault address via CREATE2 inputs (salt + codeId + constructor args).
+  // In Phase 2/3, validate the vault address via CREATE2 inputs (salt + codeId + constructor args).
   // If codeIds are missing, fall back to the Phase1Deployed event for this creator/owner.
   let expectedBurnStream: Address | null = null
   let expectedPayoutRouter: Address | null = null
-  if (mode === 'deploy_phase2') {
+  if (mode === 'deploy_phase2' || mode === 'deploy_phase3') {
     if (!expectedVault) throw new Error('missing_vault')
     const client = await getBaseClient()
     const vaultCode = (await client.getBytecode({ address: expectedVault })) as Hex | undefined
@@ -1810,7 +1810,7 @@ async function validateInnerCalls(params: {
 
     // Deterministic CREATE2 deploy via UniversalCreate2DeployerFromStore (used for burn stream + payout router).
     if (c.target === create2DeployerFromStore) {
-      if (mode !== 'deploy_phase2') throw new Error('create2_deploy_not_allowed')
+      if (mode !== 'deploy_phase2' && mode !== 'deploy_phase3') throw new Error('create2_deploy_not_allowed')
       if (!expectedVault || !expectedBurnStream || !expectedPayoutRouter) throw new Error('missing_expected_addresses')
       if (selector !== SELECTOR_CREATE2_DEPLOY_FROM_STORE) throw new Error('create2_selector_not_allowed')
 
@@ -1879,8 +1879,8 @@ async function validateInnerCalls(params: {
       continue
     }
 
-    // Vault admin calls (phase2 only)
-    if (mode === 'deploy_phase2' && expectedVault && expectedBurnStream && expectedPayoutRouter && c.target === expectedVault) {
+    // Vault admin calls (phase2/phase3 deploy flow)
+    if ((mode === 'deploy_phase2' || mode === 'deploy_phase3') && expectedVault && expectedBurnStream && expectedPayoutRouter && c.target === expectedVault) {
       if (selector !== SELECTOR_VAULT_SET_BURN_STREAM && selector !== SELECTOR_VAULT_SET_WHITELIST) {
         throw new Error('vault_selector_not_allowed')
       }
@@ -1921,7 +1921,7 @@ async function validateInnerCalls(params: {
     }
 
     if (selector === SELECTOR_COIN_SET_PAYOUT_RECIPIENT) {
-      if (mode !== 'deploy_phase2' || !expectedPayoutRouter) throw new Error('payout_recipient_not_allowed')
+      if ((mode !== 'deploy_phase2' && mode !== 'deploy_phase3') || !expectedPayoutRouter) throw new Error('payout_recipient_not_allowed')
       const recipient = decodeAddressArgFromCalldata(c.data, 0)
       if (!recipient || recipient !== expectedPayoutRouter) throw new Error('payout_recipient_mismatch')
       continue

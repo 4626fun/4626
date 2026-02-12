@@ -1,0 +1,91 @@
+---
+description: Canonical Smart Wallet (CSW) to agent identity lifecycle — delegation model, XMTP, ERC-8004, deploy-session
+globs:
+  - frontend/server/agent/**
+  - frontend/server/_lib/privyXmtpSigner.ts
+  - frontend/server/_lib/privyWalletApi.ts
+  - frontend/server/_lib/walletSync.ts
+  - frontend/server/_lib/creatorAgentWallets.ts
+  - frontend/server/_lib/agentRegistration.ts
+  - frontend/api/_handlers/auth/**
+  - frontend/api/_handlers/deploy/session/**
+  - frontend/api/_handlers/wallet/**
+  - frontend/api/_handlers/v1/agents/**
+---
+
+# CSW-to-Agent Lifecycle (Delegation Model)
+
+The user's Zora-created Coinbase Smart Wallet (CSW) is the canonical account AND the agent identity.
+The CSW never "becomes" a separate agent — the agent identity is layered onto the CSW through owner delegation.
+
+## Architecture Invariant
+
+- The CSW is the canonical asset-holding account (per `ERC-4337-Wallet-Invariants.mdc`).
+- Privy server wallets are delegated signers added to the CSW's MultiOwnable owner list.
+- The XMTP agent, ERC-8004 identity, and deploy-session automation all present as the CSW address.
+- No private key extraction ever occurs; Privy signs on behalf of the CSW via its API.
+
+## Lifecycle (chronological)
+
+### 1. CSW Creation (user action)
+- User connects via Privy/Zora.
+- `POST /api/auth/verify` or `POST /api/wallet/sync` stores the CSW in `profile_wallets` with `is_canonical_smart_wallet = true`.
+- File: `frontend/api/_handlers/auth/_verify.ts`, `frontend/server/_lib/walletSync.ts`
+
+### 2. Privy Server Wallet Creation (server action)
+- `createAgentWallet()` creates a Privy-managed EOA via the Privy Wallet API.
+- This wallet is owned by `PRIVY_WALLET_OWNER_ID` (key quorum) and optionally constrained by `PRIVY_WALLET_POLICY_ID`.
+- File: `frontend/server/_lib/privyWalletApi.ts`
+- Env: `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_WALLET_AUTHORIZATION_KEY`, `PRIVY_WALLET_OWNER_ID`
+
+### 3. Owner Delegation (user approval)
+- User approves `CoinbaseSmartWallet.addOwnerAddress(privyWalletAddress)` transaction.
+- This adds the Privy wallet as an owner in the CSW's MultiOwnable contract.
+- The owner index is determined by querying `CSW.ownerAtIndex(i)`.
+- File: `frontend/api/_handlers/deploy/session/_status.ts`
+
+### 4. XMTP Agent Identity (server action)
+- `createPrivyScwSigner()` creates an XMTP signer that:
+  - Signs messages via Privy `secp256k1_sign` API.
+  - Wraps signatures in `SignatureWrapper` struct with the CSW owner index.
+  - Uses the CSW's `replaySafeHash()` for ERC-1271 validation.
+- The XMTP agent presents as the CSW address, not the Privy EOA.
+- File: `frontend/server/_lib/privyXmtpSigner.ts`, `frontend/server/agent/eliza/index.ts`
+- Env: `XMTP_AGENT_CSW_ADDRESS`, `XMTP_AGENT_PRIVY_WALLET_ID`, `XMTP_AGENT_CSW_OWNER_INDEX`
+
+### 5. ERC-8004 Agent Registration (server action)
+- Agent registration payload is built with the CSW address injected into XMTP and `agentWallet` service entries.
+- `setAgentWallet()` on the ERC-8004 Identity Registry binds the CSW as the verified agent wallet via EIP-712 typed data.
+- Registration is published to Lens Grove.
+- File: `frontend/server/_lib/agentRegistration.ts`, `frontend/api/_handlers/v1/agents/identity/_setAgentWallet.ts`
+- Env: `ERC8004_AGENT_REGISTRY`, `ERC8004_AGENT_ID`, `ERC8004_AGENT_CHAIN_ID`
+
+### 6. Deploy-Session Automation (server action, temporary)
+- Deploy session validates canonical wallet ownership.
+- `getOrCreateCreatorAgentWallet()` provides a per-creator Privy wallet as `sessionOwner`.
+- User approves `addOwnerAddress(sessionOwner)` — temporary owner installation.
+- Server signs UserOps via Privy wallet API; CSW executes as ERC-4337 sender.
+- After deployment completes, temporary owner is removed via `removeOwnerAtIndex()`.
+- File: `frontend/api/_handlers/deploy/session/_create.ts`, `frontend/api/_handlers/deploy/session/_continue.ts`
+- Env: `DEPLOY_SESSION_SECRET`, `DEPLOY_SESSION_TOKEN_HMAC_SECRET`
+
+## Key Environment Variables
+
+| Variable | Purpose | Scope |
+|---|---|---|
+| `XMTP_AGENT_CSW_ADDRESS` | CSW address the XMTP agent presents as | Server |
+| `XMTP_AGENT_PRIVY_WALLET_ID` | Privy wallet ID used as delegated signer | Server |
+| `XMTP_AGENT_CSW_OWNER_INDEX` | Owner index of Privy wallet in CSW MultiOwnable | Server |
+| `PRIVY_WALLET_AUTHORIZATION_KEY` | P-256 key for signing Privy API requests | Server |
+| `PRIVY_WALLET_OWNER_ID` | Key quorum ID for creating agent wallets | Server |
+| `ERC8004_AGENT_REGISTRY` | ERC-8004 Identity Registry address | Server |
+| `ERC8004_AGENT_ID` | Agent token ID in the registry | Server |
+
+## Rules for Code Changes
+
+- NEVER create a new CSW or switch the canonical account to a Privy wallet.
+- NEVER extract private keys from Privy; always use `secp256k1_sign` or `eth_sendTransaction` RPCs.
+- XMTP agent MUST present as the CSW address, not the Privy EOA address.
+- Deploy-session temporary owners MUST be removed after deployment completes.
+- ERC-8004 `agentWallet` MUST point to the CSW address, not any Privy wallet.
+- If adding a new server-side signing flow, follow the same delegation pattern: Privy signs → CSW executes.

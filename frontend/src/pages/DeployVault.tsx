@@ -3035,7 +3035,6 @@ function DeployVaultBatcher({
 
         assertSafe(phase1Calls)
         assertSafe(phase2Calls)
-        assertSafe(phase3StrategyCalls)
         assertSafe(phase4Calls)
 
         const phase2PostCalls = phase2Calls.filter(
@@ -3045,13 +3044,15 @@ function DeployVaultBatcher({
           (c) => String(c.target).toLowerCase() === String(expectedCreate2Deployer).toLowerCase(),
         )
         const phase2ConfigCalls = phase2PostCalls.filter((c) => !phase2Create2Calls.includes(c))
-        const phase2FinalizeCalls = [...phase2Create2Calls, phase2FinalizeCall]
-        // Run post-finalize config calls behind a batcher-primary phase (phase3) to keep paymaster call-shape valid
-        // and avoid failing phase2 on optional post-config.
+        // Keep phase2 deterministic: finalize-only (deposit + split + ownership transfer).
+        // Move CREATE2 + post-config behind a batcher-primary phase3 UserOp.
+        const phase2FinalizeCalls = [phase2FinalizeCall]
         const phase3Calls: Array<{ target: Address; value: bigint; data: Hex }> = [
           ...phase3StrategyCalls,
+          ...phase2Create2Calls,
           ...phase2ConfigCalls,
         ]
+        assertSafe(phase3Calls)
 
         const sessionCreatePayload: DeploySessionCreateRequest = {
           smartWallet: owner,
@@ -3922,10 +3923,7 @@ function DeployVaultBatcher({
             expectedOracle: expected.oracle,
           })
         }
-        await sendPhaseCalls(phase2FinalizeCalls, 'phase2', {
-          noSplit: phase2Create2Calls.length === 0,
-          segment: phase2Create2Calls.length > 0 ? 'finalize_with_create2' : 'finalize',
-        })
+        await sendPhaseCalls(phase2FinalizeCalls, 'phase2', { noSplit: true, segment: 'finalize' })
 
         // Phase 3: Strategies (optional)
         if (phase3Calls.length > 0) {
