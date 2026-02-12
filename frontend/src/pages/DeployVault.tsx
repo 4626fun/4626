@@ -1604,6 +1604,15 @@ function DeployVaultBatcher({
     if (lower.includes('cdp paymaster endpoint is not configured')) {
       return 'Paymaster proxy is missing a server-side CDP endpoint. Keep `VITE_CDP_PAYMASTER_URL=/api/paymaster`, and set `CDP_PAYMASTER_URL` (server env) to `https://api.developer.coinbase.com/rpc/v1/base/<CDP_API_KEY_ID>`.'
     }
+    if (
+      lower.includes('sponsored userop exceeds paymaster total gas cap') ||
+      (lower.includes('total gas used by the user operation') && lower.includes('allowed limit'))
+    ) {
+      return (
+        'Sponsored UserOp exceeds the paymaster total-gas cap for this phase. ' +
+        'Increase your CDP paymaster per-UserOp gas limit, or use a lower-gas deploy path.'
+      )
+    }
     if (lower.includes('server misconfigured: auth_session_secret')) {
       return 'Server misconfigured: set `AUTH_SESSION_SECRET` in production so `/api/paymaster` can validate SIWE sessions.'
     }
@@ -3321,6 +3330,9 @@ function DeployVaultBatcher({
               const failureClass =
                 isMissingPrimaryCall
                   ? 'paymaster_primary_call_mismatch'
+                  : lc.includes('sponsored userop exceeds paymaster total gas cap') ||
+                      (lc.includes('total gas used by the user operation') && lc.includes('allowed limit'))
+                    ? 'paymaster_total_gas_cap'
                   : lc.includes('total gas used by the user operation') || (lc.includes('total gas used') && lc.includes('allowed limit'))
                   ? 'paymaster_total_gas_cap'
                   : lc.includes('signature verification used more gas') || lc.includes('verificationgaslimit') || lc.includes('aa40')
@@ -3342,6 +3354,7 @@ function DeployVaultBatcher({
                   lc.includes('banned opcode') ||
                   lc.includes('stake/unstake delay') ||
                   lc.includes('unstake delay too low') ||
+                  lc.includes('sponsored userop exceeds paymaster total gas cap') ||
                   lc.includes('total gas used by the user operation') ||
                   (lc.includes('total gas used') && lc.includes('allowed limit')) ||
                   lc.includes('invalid fields'))

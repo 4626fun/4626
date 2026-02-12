@@ -1245,11 +1245,14 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   version?: '1' | '1.1'
   userOpSignMode?: UserOpSignMode
   ownerIsContract?: boolean
+  allowContractSignMessageFallback?: boolean
   allowEoaSignMessageFallback?: boolean
+  verificationGasLimits?: bigint[]
   skipPreflightSimulation?: boolean
   skipPaymaster?: boolean
   retryOnInvalidSignature?: boolean
   retryOnPrefund?: boolean
+  retryWithLowGasContractSigner?: boolean
 }): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
   const {
     publicClient,
@@ -1262,11 +1265,14 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     version = '1',
     userOpSignMode = 'auto',
     ownerIsContract: ownerIsContractOverride,
+    allowContractSignMessageFallback = true,
     allowEoaSignMessageFallback = false,
+    verificationGasLimits: verificationGasLimitsOverride,
     skipPreflightSimulation,
     skipPaymaster = false,
     retryOnInvalidSignature = true,
     retryOnPrefund = true,
+    retryWithLowGasContractSigner = true,
   } = params
   
   // Input validation
@@ -1390,7 +1396,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     walletClient, 
     address: ownerAddress, 
     userOpSignMode: effectiveUserOpSignMode,
-    allowSignMessageFallback: ownerIsContract || allowEoaSignMessageFallback,
+    allowSignMessageFallback: ownerIsContract ? allowContractSignMessageFallback : allowEoaSignMessageFallback,
   })
   
   // Create the Coinbase Smart Account
@@ -1467,9 +1473,14 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // - paymaster validation can also push EOA flows above 150k in larger batches
   // - callGasLimit: Auto-estimated, but we don't override since batcher calls vary
   // NOTE: Bundler enforces a 5,000,000 cap on verificationGasLimit.
-  const verificationGasLimits = ownerIsContract
-    ? [1_500_000n, 3_000_000n, 5_000_000n]
-    : [400_000n, 800_000n, 1_500_000n, 3_000_000n, 5_000_000n]
+  const normalizedVerificationGasLimits = Array.isArray(verificationGasLimitsOverride)
+    ? verificationGasLimitsOverride.filter((v): v is bigint => typeof v === 'bigint' && v > 0n && v <= 5_000_000n)
+    : []
+  const verificationGasLimits = normalizedVerificationGasLimits.length > 0
+    ? normalizedVerificationGasLimits
+    : ownerIsContract
+      ? [1_500_000n, 3_000_000n, 5_000_000n]
+      : [400_000n, 800_000n, 1_500_000n, 3_000_000n, 5_000_000n]
   const uniqueVerificationGasLimits = Array.from(new Set(verificationGasLimits))
   if (AA_DEBUG) {
     logger.debug('[ERC-4337] verificationGasLimit', {
@@ -1679,6 +1690,39 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         })
       }
     }
+    if (
+      retryWithLowGasContractSigner &&
+      ownerIsContract &&
+      userOpSignMode === 'auto' &&
+      lc.includes('total gas used by the user operation') &&
+      lc.includes('allowed limit')
+    ) {
+      logger.warn('[ERC-4337] Retrying with low-gas contract-owner signer path', {
+        ownerAddress,
+        smartWallet,
+        previousMode: effectiveUserOpSignMode,
+      })
+      return await sendCoinbaseSmartWalletUserOperation({
+        publicClient,
+        walletClient,
+        bundlerUrl: bundlerUrlInput,
+        paymasterUrl: paymasterUrlInput,
+        smartWallet,
+        ownerAddress,
+        calls,
+        version,
+        userOpSignMode: 'eth_sign',
+        ownerIsContract: ownerIsContractOverride,
+        allowContractSignMessageFallback: false,
+        allowEoaSignMessageFallback,
+        verificationGasLimits: [900_000n, 1_200_000n, 1_500_000n, 2_000_000n, 2_500_000n, 3_000_000n],
+        skipPreflightSimulation,
+        skipPaymaster,
+        retryOnInvalidSignature: false,
+        retryOnPrefund,
+        retryWithLowGasContractSigner: false,
+      })
+    }
 
     // Provide helpful error messages for common failures
     if (isPrefundError) {
@@ -1703,10 +1747,23 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         'Gas sponsorship limit exceeded. Increase your per-UserOp limit in the CDP Dashboard (portal.cdp.coinbase.com).'
       )
     }
+    if (lc.includes('total gas used by the user operation') && lc.includes('allowed limit')) {
+      const gasCapMatch = errMsg.match(/total gas used by the user operation\s+(\d+)\s+is greater than the allowed limit:\s*(\d+)/i)
+      if (gasCapMatch) {
+        throw new Error(
+          `Sponsored UserOp exceeds paymaster total gas cap: used ${gasCapMatch[1]}, limit ${gasCapMatch[2]}. ` +
+            'Increase the paymaster per-UserOp gas limit in CDP, or use a lower-gas deploy path.'
+        )
+      }
+      throw new Error(
+        'Sponsored UserOp exceeds paymaster total gas cap. ' +
+          'Increase the paymaster per-UserOp gas limit in CDP, or use a lower-gas deploy path.'
+      )
+    }
     if (lc.includes('invalid signature') || lc.includes('signature check failed')) {
       throw new Error(
         'UserOp signature verification failed. This usually means the signer is not a valid owner. ' +
-        'Try reconnecting your wallet or adding it as an owner of the smart wallet.'
+          'Try reconnecting your wallet or adding it as an owner of the smart wallet.'
       )
     }
     if (lc.includes('aa21') || lc.includes('didn\'t pay prefund')) {
