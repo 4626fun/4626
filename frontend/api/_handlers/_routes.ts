@@ -88,6 +88,8 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'cre/keeper/alert': () => import('./cre/keeper/_alert.js'),
 
   'auth/admin': () => import('./auth/_admin.js'),
+  'auth/agent-nonce': () => import('./auth/_agent-nonce.js'),
+  'auth/agent-verify': () => import('./auth/_agent-verify.js'),
   'auth/logout': () => import('./auth/_logout.js'),
   'auth/me': () => import('./auth/_me.js'),
   'auth/nonce': () => import('./auth/_nonce.js'),

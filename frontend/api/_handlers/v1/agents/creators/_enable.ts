@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, readJsonBody, readSessionFromRequest } from '../../../../server/auth/_shared.js'
 import { guardAgentApiRequest } from '../../../../server/_lib/agentApiGuard.js'
+import { resolveCanonicalSmartWalletAddress } from '../../../../../server/_lib/canonicalWalletResolver.js'
 import { getOrCreateCreatorXmtpAgent, enableCswAgent } from '../../../../server/_lib/creatorXmtpAgents.js'
 
 function setPublicCors(res: VercelResponse) {
@@ -46,6 +47,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (!privyWalletId) {
         return res.status(400).json({ success: false, error: 'privyWalletId required for CSW agent' })
+      }
+
+      const canonical = await resolveCanonicalSmartWalletAddress(creator)
+      if (!canonical || canonical.toLowerCase() !== cswAddress.toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          error: 'cswAddress must match your canonical smart wallet',
+        })
       }
 
       row = await enableCswAgent({

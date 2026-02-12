@@ -27,6 +27,7 @@ import { encodeFunctionData, getAddress, isAddress, type Address, type Hex } fro
 
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../../server/auth/_shared.js'
 import { guardAgentApiRequest } from '../../../../../server/_lib/agentApiGuard.js'
+import { resolveCanonicalSmartWalletAddress } from '../../../../../server/_lib/canonicalWalletResolver.js'
 import {
   getIdentityRegistryAddress,
   IDENTITY_REGISTRY_ABI,
@@ -81,6 +82,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const agentId = BigInt(agentIdRaw)
   const newWallet = getAddress(newWalletRaw)
   const ownerAddress = getAddress(ownerRaw)
+
+  const canonicalOwner = await resolveCanonicalSmartWalletAddress(ownerAddress)
+  if (!canonicalOwner || canonicalOwner.toLowerCase() !== ownerAddress.toLowerCase()) {
+    return res.status(403).json({
+      success: false,
+      error: 'ownerAddress must be a verified canonical smart wallet',
+    })
+  }
+
+  if (g.auth?.type === 'session') {
+    const sessionCanonical = await resolveCanonicalSmartWalletAddress(g.auth.address)
+    if (!sessionCanonical || sessionCanonical.toLowerCase() !== ownerAddress.toLowerCase()) {
+      return res.status(403).json({
+        success: false,
+        error: 'ownerAddress must match your canonical smart wallet',
+      })
+    }
+  } else if (g.auth?.type === 'siwa') {
+    if (BigInt(g.auth.agentId) !== agentId) {
+      return res.status(403).json({
+        success: false,
+        error: 'SIWA agent authorization does not match agentId',
+      })
+    }
+  }
 
   // Default deadline: 4 minutes from now (contract allows max 5 min)
   const deadline = body?.deadline

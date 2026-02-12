@@ -153,6 +153,8 @@ function localApiRoutesPlugin(): Plugin {
         '/api/status/protocolReport': () => import('./api/_handlers/status/_protocolReport'),
         '/api/status/vaultReport': () => import('./api/_handlers/status/_vaultReport'),
         '/api/auth/admin': () => import('./api/_handlers/auth/_admin'),
+        '/api/auth/agent-nonce': () => import('./api/_handlers/auth/_agent-nonce'),
+        '/api/auth/agent-verify': () => import('./api/_handlers/auth/_agent-verify'),
         '/api/auth/nonce': () => import('./api/_handlers/auth/_nonce'),
         '/api/auth/privy': () => import('./api/_handlers/auth/_privy'),
         '/api/auth/verify': () => import('./api/_handlers/auth/_verify'),

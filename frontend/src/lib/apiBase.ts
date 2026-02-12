@@ -1,3 +1,5 @@
+import { getStoredSiwaReceipt } from './siwaReceiptStorage'
+
 // Centralized API URL helper.
 //
 // Some privacy/adblock extensions block requests to `/api/*` by pattern.
@@ -47,6 +49,12 @@ export async function apiFetch(path: string, init: ApiFetchInit = {}, bases?: st
     } catch {
       // ignore
     }
+  }
+
+  // Attach SIWA receipt for agent API calls when available.
+  if (typeof window !== 'undefined' && path.startsWith('/api/v1/agents/') && !headers.has('X-SIWA-Receipt')) {
+    const receipt = getStoredSiwaReceipt()
+    if (receipt) headers.set('X-SIWA-Receipt', receipt)
   }
 
   const baseInit: RequestInit = {

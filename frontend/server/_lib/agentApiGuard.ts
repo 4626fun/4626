@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
+import { readSessionFromRequest } from '../auth/_shared.js'
+import { readSiwaAgentFromRequest } from '../auth/_siwa.js'
 import { getClientIp, rateLimitKey } from './rateLimit.js'
 import { checkDurableRateLimit, type DurableRateLimitResult } from './durableRateLimit.js'
 import { logAgentApiRequest } from './agentAudit.js'
@@ -10,6 +12,10 @@ export const AGENT_RATE_LIMITS = {
   build: { windowMs: 60_000, maxRequests: 60 },
   write: { windowMs: 60_000, maxRequests: 30 },
 } as const
+
+export type AgentApiAuthContext =
+  | { type: 'session'; address: string }
+  | { type: 'siwa'; address: string; agentId: number; agentRegistry: string; chainId: number }
 
 function setRateLimitHeaders(res: VercelResponse, result: DurableRateLimitResult) {
   res.setHeader('X-RateLimit-Remaining', String(result.remaining))
@@ -22,7 +28,7 @@ export async function guardAgentApiRequest(params: {
   res: VercelResponse
   endpoint: string
   kind: keyof typeof AGENT_RATE_LIMITS
-}): Promise<{ ok: true; ip: string } | { ok: false; ip: string }> {
+}): Promise<{ ok: true; ip: string; auth: AgentApiAuthContext | null } | { ok: false; ip: string }> {
   const ip = getClientIp(params.req as any)
 
   // Best-effort audit (DB-backed if configured).
@@ -43,6 +49,30 @@ export async function guardAgentApiRequest(params: {
     return { ok: false, ip }
   }
 
-  return { ok: true, ip }
+  const session = readSessionFromRequest(params.req)
+  const siwaAgent = readSiwaAgentFromRequest(params.req)
+
+  const auth: AgentApiAuthContext | null = session?.address
+    ? { type: 'session', address: String(session.address).toLowerCase() }
+    : siwaAgent
+      ? {
+          type: 'siwa',
+          address: String(siwaAgent.address).toLowerCase(),
+          agentId: Number(siwaAgent.agentId),
+          agentRegistry: String(siwaAgent.agentRegistry).toLowerCase(),
+          chainId: Number(siwaAgent.chainId),
+        }
+      : null
+
+  const requiresAuth = params.kind === 'build' || params.kind === 'write'
+  if (requiresAuth && !auth) {
+    params.res.status(401).json({
+      success: false,
+      error: 'Authentication required (session or SIWA receipt)',
+    })
+    return { ok: false, ip }
+  }
+
+  return { ok: true, ip, auth }
 }
 
