@@ -290,6 +290,78 @@ async function waitForContractsDeployed(params: {
   }
 }
 
+const CREATOR_VAULT_BATCHER_PHASE1_STATE_ABI = [
+  {
+    type: 'function',
+    name: 'phase1SplitStates',
+    stateMutability: 'view',
+    inputs: [{ name: 'salt', type: 'bytes32' }],
+    outputs: [
+      {
+        type: 'tuple',
+        components: [
+          { name: 'oftBootstrapRegistry', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'shareOftSalt', type: 'bytes32' },
+          { name: 'paramsHash', type: 'bytes32' },
+          { name: 'codeIdsHash', type: 'bytes32' },
+          { name: 'coreDone', type: 'bool' },
+          { name: 'finalized', type: 'bool' },
+        ],
+      },
+    ],
+  },
+] as const
+
+async function waitForPhase1CoreState(params: {
+  publicClient: {
+    readContract: (args: {
+      address: Address
+      abi: readonly unknown[]
+      functionName: string
+      args: readonly unknown[]
+    }) => Promise<unknown>
+  }
+  batcher: Address
+  baseSalt: Hex
+  expectedVault?: Address | null
+  expectedWrapper?: Address | null
+  timeoutMs?: number
+  intervalMs?: number
+}): Promise<void> {
+  const timeoutMs = params.timeoutMs ?? 60_000
+  const intervalMs = params.intervalMs ?? 1_000
+  const started = Date.now()
+
+  while (true) {
+    try {
+      const state = (await params.publicClient.readContract({
+        address: params.batcher,
+        abi: CREATOR_VAULT_BATCHER_PHASE1_STATE_ABI as unknown as readonly unknown[],
+        functionName: 'phase1SplitStates',
+        args: [params.baseSalt],
+      })) as any
+
+      const coreDone = Boolean(state?.coreDone ?? state?.[7])
+      const vaultRaw = (state?.vault ?? state?.[1] ?? ZERO_ADDRESS) as Address
+      const wrapperRaw = (state?.wrapper ?? state?.[2] ?? ZERO_ADDRESS) as Address
+      const vaultMatches = params.expectedVault ? getAddress(vaultRaw) === getAddress(params.expectedVault) : true
+      const wrapperMatches = params.expectedWrapper ? getAddress(wrapperRaw) === getAddress(params.expectedWrapper) : true
+
+      if (coreDone && vaultMatches && wrapperMatches) return
+    } catch {
+      // Keep polling through transient RPC lag/errors.
+    }
+
+    if (Date.now() - started > timeoutMs) {
+      throw new Error(`Phase 1 core state not visible after ${Math.round(timeoutMs / 1000)}s`)
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+}
+
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type AdminAuthResponse = { address: string; isAdmin: boolean } | null
 type ServerDeployResponse = {
@@ -3034,6 +3106,21 @@ function DeployVaultBatcher({
                 finalizeCount: phase1Finalize.length,
               })
               await sendPhaseCalls(phase1Core, phaseLabel, { noSplit: true, segment: 'core' })
+              if (phase1Finalize.length > 0) {
+                const phase1BaseSalt = deriveBaseSalt({
+                  creatorToken,
+                  owner,
+                  chainId: base.id,
+                  version: deploymentVersion,
+                })
+                await waitForPhase1CoreState({
+                  publicClient: publicClient as any,
+                  batcher: batcherAddress,
+                  baseSalt: phase1BaseSalt,
+                  expectedVault: expected?.vault ?? null,
+                  expectedWrapper: expected?.wrapper ?? null,
+                })
+              }
               await sendPhaseCalls(phase1Finalize, phaseLabel, { noSplit: false, segment: 'finalize' })
               return
             }
