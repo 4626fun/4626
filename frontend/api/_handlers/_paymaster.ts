@@ -348,7 +348,6 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
           { name: 'shareSymbol', type: 'string' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
-          { name: 'auctionPercent', type: 'uint8' },
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
@@ -426,7 +425,6 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
           { name: 'oracle', type: 'address' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
-          { name: 'auctionPercent', type: 'uint8' },
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
@@ -454,7 +452,6 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
           { name: 'shareSymbol', type: 'string' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
-          { name: 'auctionPercent', type: 'uint8' },
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
@@ -564,10 +561,10 @@ const SELECTOR_BATCHER_DEPLOY_PHASE1_CORE = '0x1331378b'
 const SELECTOR_BATCHER_DEPLOY_PHASE1_CORE_WITH_SALT = '0x4154f24e'
 const SELECTOR_BATCHER_FINALIZE_PHASE1 = '0xa98ec9d8'
 const SELECTOR_BATCHER_FINALIZE_PHASE1_WITH_SALT = '0x3bc09a8b'
-const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH = '0x669fb9e2'
-const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT = '0xd76fbd95'
+const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH = '0x9abe5eca'
+const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT = '0xe20fb0df'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_CORE = '0xf9344d88'
-const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0x036a3142'
+const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xcafc9348'
 const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0x6e3f91b0'
 // launchDeferredAuction((address,address,address,string,uint256,uint128,bytes))
 const SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'

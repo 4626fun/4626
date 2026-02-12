@@ -1,0 +1,71 @@
+# --------------------------------------------------------------------------
+# CreatorVault XMTP Agent — Production Dockerfile
+# --------------------------------------------------------------------------
+# Runs the Keepr XMTP agent as a persistent long-lived process.
+# Only includes the frontend/ workspace (no Solidity/Foundry deps).
+#
+# Build:
+#   docker build -f frontend/Dockerfile.agent -t 4626-agent .
+#
+# Run:
+#   docker run --env-file frontend/.env -v xmtp-data:/data/.xmtp-data 4626-agent
+# --------------------------------------------------------------------------
+
+FROM node:22-bookworm-slim AS base
+
+# Install OS deps for native modules (sharp, XMTP bindings)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Enable corepack for pnpm
+RUN corepack enable && corepack prepare pnpm@10.15.1 --activate
+
+WORKDIR /app
+
+# --------------------------------------------------------------------------
+# Stage 1: Install dependencies
+# --------------------------------------------------------------------------
+FROM base AS deps
+
+# Copy package manifests only (cache layer)
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+
+# Install ALL deps (tsx, @elizaos/core are in devDependencies).
+# Use --ignore-scripts first to avoid OOM from parallel native builds,
+# then rebuild native modules sequentially.
+RUN pnpm install --frozen-lockfile --ignore-scripts \
+    && pnpm rebuild
+
+# --------------------------------------------------------------------------
+# Stage 2: Production image
+# --------------------------------------------------------------------------
+FROM base AS runner
+
+WORKDIR /app
+
+# Copy installed node_modules from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/package.json ./package.json
+
+# Copy server + config source (agent code + shared _lib)
+COPY frontend/server ./server
+COPY frontend/src/config ./src/config
+COPY frontend/tsconfig.json frontend/tsconfig.node.json ./
+
+# Create persistent XMTP database directory
+# Mount a volume here to preserve agent installations across restarts
+RUN mkdir -p /data/.xmtp-data && chown -R node:node /data/.xmtp-data
+
+# Health check port (tiny HTTP server in the agent)
+ENV PORT=8080
+EXPOSE 8080
+
+# XMTP database persistence
+ENV XMTP_DB_DIRECTORY=/data/.xmtp-data
+
+# Run as non-root
+USER node
+
+# Start the agent via tsx (env vars come from Railway, not .env files)
+CMD ["npx", "tsx", "server/agent/eliza/index.ts"]

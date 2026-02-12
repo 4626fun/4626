@@ -60,6 +60,7 @@ import { tryUploadImmutableJson } from '../../_lib/lensGrove.js'
 import { logger } from '../../_lib/logger.js'
 import path from 'node:path'
 import fs from 'node:fs'
+import http from 'node:http'
 
 declare const process: {
   env: Record<string, string | undefined>
@@ -729,7 +730,34 @@ async function main() {
     process.exit(1)
   }
 
+  // Start health check HTTP server (used by Railway / Docker health probes)
+  startHealthServer()
+
   logger.info('[eliza] Runtime ready. Press Ctrl+C to stop.')
+}
+
+// ---------------------------------------------------------------------------
+// Health check HTTP server
+// ---------------------------------------------------------------------------
+// Exposes GET /healthz on $PORT (default 8080) so Railway/Docker can verify
+// the agent is alive. Returns 200 when at least one agent is running.
+function startHealthServer() {
+  const port = Number(process.env.PORT ?? '8080') || 8080
+  const server = http.createServer((_req, res) => {
+    const url = (_req.url ?? '/').split('?')[0]
+    if (url === '/healthz') {
+      const agentCount = runningAgents.size
+      const ok = agentCount > 0
+      res.writeHead(ok ? 200 : 503, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ status: ok ? 'ok' : 'no_agents', agents: agentCount }))
+    } else {
+      res.writeHead(404)
+      res.end('Not found')
+    }
+  })
+  server.listen(port, () => {
+    logger.info(`[eliza] Health check server listening on :${port}/healthz`)
+  })
 }
 
 void main().catch((err) => {

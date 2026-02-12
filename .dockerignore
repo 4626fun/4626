@@ -1,0 +1,63 @@
+# --------------------------------------------------------------------------
+# Root .dockerignore — for agent Dockerfile builds
+# --------------------------------------------------------------------------
+# Docker context runs from repo root. Exclude everything except frontend/.
+# --------------------------------------------------------------------------
+
+# Solidity / Foundry (massive)
+lib/
+out/
+cache/
+broadcast/
+forge-cache/
+artifacts/
+
+# Solana
+target/
+programs/
+
+# Other workspaces
+apps/
+cre/
+contracts/
+script/
+test/
+patches/
+
+# Node modules everywhere (rebuilt inside Docker)
+**/node_modules/
+**/.pnpm-store/
+
+# Git
+.git/
+.github/
+
+# IDE / tools
+.cursor/
+.vscode/
+.codex/
+
+# Environment files (secrets come from Railway env vars)
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Build artifacts
+frontend/dist/
+frontend/.vercel/
+frontend/.turbo/
+frontend/coverage/
+
+# Docs / non-essential
+docs/
+*.md
+!frontend/README.md
+LICENSE
+
+# XMTP local databases
+*.db3
+.xmtp-data/
+frontend/.xmtp-data/

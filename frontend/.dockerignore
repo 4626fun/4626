@@ -1,0 +1,47 @@
+# Node
+node_modules/
+.pnpm-store/
+
+# Environment files (secrets come from Railway env vars)
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+dist/
+.vercel/
+.turbo/
+.next/
+
+# XMTP local databases (use Railway volume instead)
+.xmtp-data/
+*.db3
+
+# Dev/test
+coverage/
+.vitest/
+playwright-report/
+test-results/
+
+# IDE
+.cursor/
+.vscode/
+
+# Docs
+docs/
+typedoc/
+*.md
+!README.md
+
+# Frontend-only files (not needed for agent)
+public/
+src/pages/
+src/components/
+src/hooks/
+src/lib/
+src/styles/
+src/assets/
+index.html
+vite.config.ts
+tailwind.config.*
+postcss.config.*

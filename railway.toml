@@ -1,0 +1,25 @@
+# --------------------------------------------------------------------------
+# Railway deployment config — XMTP Agent (Keepr)
+# --------------------------------------------------------------------------
+# Deploy: `railway up` from the repo root
+# Docs: https://docs.railway.com/reference/config-as-code
+# --------------------------------------------------------------------------
+
+[build]
+# Use the agent-specific Dockerfile (not the full frontend)
+dockerfilePath = "frontend/Dockerfile.agent"
+
+[deploy]
+# Number of replicas (only 1 — XMTP agent is stateful with local DB)
+numReplicas = 1
+
+# Health check: agent exposes a tiny HTTP server on $PORT
+healthcheckPath = "/healthz"
+healthcheckTimeout = 30
+
+# Restart on failure
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+
+# Start command (already set in Dockerfile CMD, but explicit here for clarity)
+startCommand = "npx tsx server/agent/eliza/index.ts"

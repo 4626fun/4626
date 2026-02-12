@@ -66,7 +66,9 @@ const BURN_STREAM_SALT_TAG = 'CreatorVault:VaultShareBurnStream' as const
 
 // Uniswap CCA uses Q96 fixed-point prices + a compact step schedule.
 const DEFAULT_REQUIRED_RAISE_WEI = 100_000_000_000_000_000n // 0.1 ETH
-const DEFAULT_AUCTION_PERCENT = 50
+// Phase-2 split is fixed in CreatorVaultDeployer (40/20/40).
+// Keep this as a boolean gate for deferred launch wiring.
+const DEFAULT_AUCTION_PERCENT = 40
 const DEFAULT_CCA_DURATION_BLOCKS = 302_400n // ~7 days on Base at ~2s blocks (must match CCALaunchStrategy defaultDuration)
 const DEFAULT_SHARE_OFT_VANITY_SUFFIX = '4626'
 const DEFAULT_SHARE_OFT_VANITY_MAX_TRIES = 1_000_000
@@ -309,6 +311,25 @@ const CREATOR_VAULT_BATCHER_PHASE1_STATE_ABI = [
           { name: 'codeIdsHash', type: 'bytes32' },
           { name: 'coreDone', type: 'bool' },
           { name: 'finalized', type: 'bool' },
+        ],
+      },
+    ],
+  },
+] as const
+
+const CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI = [
+  {
+    type: 'function',
+    name: 'pendingAuctions',
+    stateMutability: 'view',
+    inputs: [{ name: 'salt', type: 'bytes32' }],
+    outputs: [
+      {
+        type: 'tuple',
+        components: [
+          { name: 'shareOFT', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'amount', type: 'uint256' },
         ],
       },
     ],
@@ -1102,7 +1123,6 @@ const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'shareSymbol', type: 'string' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
-          { name: 'auctionPercent', type: 'uint8' },
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
@@ -1202,7 +1222,6 @@ const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'oracle', type: 'address' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
-          { name: 'auctionPercent', type: 'uint8' },
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
@@ -1241,7 +1260,6 @@ const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'shareSymbol', type: 'string' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
-          { name: 'auctionPercent', type: 'uint8' },
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
@@ -2800,7 +2818,6 @@ function DeployVaultBatcher({
           oracle: expected.oracle,
           version: deploymentVersion,
           depositAmount,
-          auctionPercent: DEFAULT_AUCTION_PERCENT,
           requiredRaise: DEFAULT_REQUIRED_RAISE_WEI,
           floorPriceQ96: floorPriceQ96Aligned,
           auctionSteps,
@@ -3368,6 +3385,38 @@ function DeployVaultBatcher({
             )
             if (create2Calls.length > 0 && otherCalls.length > 0) {
               logger.info('[DeployVault] Splitting phase2 deploys/config', {
+                deployCount: create2Calls.length,
+                configCount: otherCalls.length,
+              })
+              const deploySegment = opts?.segment ? `${opts.segment}.deploys` : 'deploys'
+              const configSegment = opts?.segment ? `${opts.segment}.config` : 'config'
+              await sendPhaseCalls(create2Calls, phaseLabel, { noSplit: true, segment: deploySegment })
+              await sendPhaseCalls(otherCalls, phaseLabel, { noSplit: true, segment: configSegment })
+              return
+            }
+          }
+
+          if (!opts?.noSplit && phaseLabel === 'phase3' && calls.length > 1 && hasBatcherCall) {
+            const firstBatcherIdx = calls.findIndex((c) => getAddress(c.target).toLowerCase() === batcherAddressLc)
+            if (firstBatcherIdx > -1 && firstBatcherIdx < calls.length - 1) {
+              const phase3Core = calls.slice(0, firstBatcherIdx + 1)
+              const phase3Post = calls.slice(firstBatcherIdx + 1)
+              logger.info('[DeployVault] Splitting phase3 strategy/core from post-config', {
+                coreCount: phase3Core.length,
+                postCount: phase3Post.length,
+              })
+              await sendPhaseCalls(phase3Core, phaseLabel, { noSplit: true, segment: 'core' })
+              await sendPhaseCalls(phase3Post, phaseLabel, { noSplit: false, segment: 'post' })
+              return
+            }
+          }
+
+          if (!opts?.noSplit && phaseLabel === 'phase3' && calls.length > 1 && !hasBatcherCall) {
+            const create2Addr = getAddress(expectedCreate2Deployer).toLowerCase()
+            const create2Calls = calls.filter((c) => getAddress(c.target).toLowerCase() === create2Addr)
+            const otherCalls = calls.filter((c) => getAddress(c.target).toLowerCase() !== create2Addr)
+            if (create2Calls.length > 0 && otherCalls.length > 0) {
+              logger.info('[DeployVault] Splitting phase3 deploys/config', {
                 deployCount: create2Calls.length,
                 configCount: otherCalls.length,
               })
@@ -4028,6 +4077,31 @@ function DeployVaultBatcher({
           await sendPhaseCalls(phase3Calls, 'phase3')
         }
         if (phase4Calls.length > 0) {
+          const phase4BaseSalt = deriveBaseSalt({
+            creatorToken,
+            owner,
+            chainId: base.id,
+            version: deploymentVersion,
+          })
+          try {
+            const pending = (await publicClient.readContract({
+              address: batcherAddress,
+              abi: CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI,
+              functionName: 'pendingAuctions',
+              args: [phase4BaseSalt],
+            })) as any
+            const pendingAmount = BigInt(pending?.amount ?? pending?.[2] ?? 0n)
+            const pendingShare = (pending?.shareOFT ?? pending?.[0] ?? ZERO_ADDRESS) as Address
+            if (pendingAmount <= 0n || getAddress(pendingShare) !== getAddress(expected.shareOFT)) {
+              throw new Error(
+                `No pending deferred auction for ${deploymentVersion} (share=${shortAddress(expected.shareOFT)}). ` +
+                  'Phase 4 launch is blocked until phase2 finalize records pending auction state.',
+              )
+            }
+          } catch (pendingErr) {
+            const msg = pendingErr instanceof Error ? pendingErr.message : String(pendingErr)
+            throw new Error(`Phase 4 precheck failed: ${msg}`)
+          }
           setPhase('phase4')
           await sendPhaseCalls(phase4Calls, 'phase4')
         }

@@ -1,0 +1,74 @@
+# --------------------------------------------------------------------------
+# Railway upload filter — only include what the agent Dockerfile needs
+# --------------------------------------------------------------------------
+
+# Solidity / Foundry (massive) — anchored to repo root
+/lib/
+/out/
+/cache/
+/broadcast/
+/forge-cache/
+/artifacts/
+
+# Solana
+/target/
+/programs/
+
+# Other workspaces
+/apps/
+/cre/
+/contracts/
+/script/
+/test/
+/patches/
+
+# Node modules (rebuilt inside Docker)
+**/node_modules/
+**/.pnpm-store/
+
+# Git
+/.git/
+/.github/
+
+# IDE / tools
+/.cursor/
+/.vscode/
+/.codex/
+
+# Environment files
+/.env
+/.env.*
+!/.env.example
+/frontend/.env
+/frontend/.env.*
+!/frontend/.env.example
+
+# Build artifacts
+/frontend/dist/
+/frontend/.vercel/
+/frontend/.turbo/
+/frontend/coverage/
+
+# Docs
+/docs/
+*.md
+
+# XMTP local databases
+*.db3
+/.xmtp-data/
+/frontend/.xmtp-data/
+
+# Frontend-only files (not needed for agent Docker build)
+/frontend/public/
+/frontend/src/pages/
+/frontend/src/components/
+/frontend/src/hooks/
+/frontend/src/lib/
+/frontend/src/styles/
+/frontend/src/assets/
+/frontend/index.html
+/frontend/vite.config.ts
+/frontend/tailwind.config.*
+/frontend/postcss.config.*
+/frontend/scripts/
+/frontend/skills/
