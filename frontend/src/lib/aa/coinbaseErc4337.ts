@@ -210,6 +210,8 @@ const KNOWN_ERROR_SELECTORS: Record<string, string> = {
   '0xb92e9c7a': 'InvalidPercent()',
   '0x1375159e': 'InvalidCodeId()',
   '0x02058db0': 'Phase1Missing()',
+  '0x7c604444': 'Phase1CoreMissing()',
+  '0x8d8721fc': 'Phase1StateMismatch()',
   '0x585b9263': 'InvalidWeight()',
   '0xe10fdfee': 'V3PoolMissing()',
   '0x24c0a9e0': 'MissingInitialSqrtPriceX96()',
@@ -240,6 +242,16 @@ function extractRevertInfo(e: unknown): { error: string; revertData?: Hex; error
   if (errAny?.shortMessage) result.error = errAny.shortMessage
   
   return result
+}
+
+function isLikelyVerificationGasLimitError(message: string): boolean {
+  const lc = message.toLowerCase()
+  return (
+    lc.includes('aa40') ||
+    lc.includes('signature verification used more gas') ||
+    lc.includes('over verificationgaslimit') ||
+    lc.includes('over verification gas limit')
+  )
 }
 
 async function logUserOpEstimate(params: {
@@ -1535,8 +1547,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
 
   const shouldRetryVerificationGas = (error: unknown): boolean => {
     const errMsg = error instanceof Error ? error.message : String(error ?? '')
-    const lc = errMsg.toLowerCase()
-    return lc.includes('aa40') || lc.includes('verificationgaslimit')
+    return isLikelyVerificationGasLimitError(errMsg)
   }
 
   const attemptSend = async (usePaymaster: boolean) => {
@@ -1812,7 +1823,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         `Paymaster unavailable. Check CDP paymaster configuration, sponsorship limits, and allowlist, then retry.${metaSuffix}`
       )
     }
-    if (lc.includes('aa40') || lc.includes('verificationgaslimit')) {
+    if (isLikelyVerificationGasLimitError(errMsg)) {
       throw new Error(
         'Signature verification used more gas than estimated. ' +
         'This can happen with smart wallet signers (EIP-1271). Please try again.'

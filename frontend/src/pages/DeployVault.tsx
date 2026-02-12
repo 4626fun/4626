@@ -3451,6 +3451,11 @@ function DeployVaultBatcher({
               const msg = e instanceof Error ? e.message : String(e ?? '')
               const lc = msg.toLowerCase()
               const isMissingPrimaryCall = lc.includes('missing_primary_call')
+              const isVerificationGasFailure =
+                lc.includes('aa40') ||
+                lc.includes('signature verification used more gas') ||
+                lc.includes('over verificationgaslimit') ||
+                lc.includes('over verification gas limit')
               const failureClass =
                 isMissingPrimaryCall
                   ? 'paymaster_primary_call_mismatch'
@@ -3459,7 +3464,7 @@ function DeployVaultBatcher({
                     ? 'paymaster_total_gas_cap'
                   : lc.includes('total gas used by the user operation') || (lc.includes('total gas used') && lc.includes('allowed limit'))
                   ? 'paymaster_total_gas_cap'
-                  : lc.includes('signature verification used more gas') || lc.includes('verificationgaslimit') || lc.includes('aa40')
+                  : isVerificationGasFailure
                     ? 'verification_gas_limit'
                     : lc.includes('invalid signature') || lc.includes('signature check failed')
                       ? 'invalid_signature'
@@ -3472,9 +3477,7 @@ function DeployVaultBatcher({
                 !isMissingPrimaryCall &&
                 (lc.includes('invalid signature') ||
                   lc.includes('signature check failed') ||
-                  lc.includes('signature verification used more gas') ||
-                  lc.includes('verificationgaslimit') ||
-                  lc.includes('aa40') ||
+                  isVerificationGasFailure ||
                   lc.includes('banned opcode') ||
                   lc.includes('stake/unstake delay') ||
                   lc.includes('unstake delay too low') ||
