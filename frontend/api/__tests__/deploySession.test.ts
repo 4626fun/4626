@@ -7,6 +7,7 @@ import { createMockReq, createMockRes } from './helpers'
 const {
   readJsonBodyMock,
   readSessionFromRequestMock,
+  readSiwaAgentFromRequestMock,
   getDeploySessionByIdMock,
   transitionDeploySessionMock,
   updateDeploySessionMock,
@@ -17,6 +18,7 @@ const {
 } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async (req: any) => req.body),
   readSessionFromRequestMock: vi.fn(() => ({ address: '0xsession' })),
+  readSiwaAgentFromRequestMock: vi.fn(() => null),
   getDeploySessionByIdMock: vi.fn(),
   transitionDeploySessionMock: vi.fn(),
   updateDeploySessionMock: vi.fn(async () => {}),
@@ -32,6 +34,10 @@ vi.mock('../../server/auth/_shared.js', () => ({
   setNoStore: vi.fn(),
   readJsonBody: readJsonBodyMock,
   readSessionFromRequest: readSessionFromRequestMock,
+}))
+
+vi.mock('../../server/auth/_siwa.js', () => ({
+  readSiwaAgentFromRequest: readSiwaAgentFromRequestMock,
 }))
 
 vi.mock('../../server/_lib/deploySessions.js', () => ({
@@ -109,6 +115,7 @@ function makeDeploySession(step: string) {
 describe('deploy session optimistic concurrency', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    readSiwaAgentFromRequestMock.mockReturnValue(null)
   })
 
   it('allows one continue transition and returns 409 on the second', async () => {
@@ -153,5 +160,28 @@ describe('deploy session optimistic concurrency', () => {
     expect(res.statusCode).toBe(400)
     expect(res.body?.error).toContain('Session already completed')
     expect(sendUserOperationMock).not.toHaveBeenCalled()
+  })
+
+  it('allows SIWA auth when cookie session is missing', async () => {
+    const rec = {
+      ...makeDeploySession('completed'),
+      sessionAddress: '0x0000000000000000000000000000000000000001',
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    readSessionFromRequestMock.mockReturnValueOnce(null as any)
+    readSiwaAgentFromRequestMock.mockReturnValueOnce({
+      address: '0x0000000000000000000000000000000000000001',
+      agentId: 34,
+      agentRegistry: 'eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432',
+      chainId: 8453,
+    } as any)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(String(res.body?.error ?? '')).toContain('completed')
   })
 })

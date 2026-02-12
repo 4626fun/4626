@@ -3,8 +3,9 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createPublicClient, encodeAbiParameters, getAddress, http, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
-import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../../server/auth/_shared.js'
+import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
+import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -63,6 +64,8 @@ function forwardAuthHeaders(req: VercelRequest): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   const auth = req.headers?.authorization
   if (typeof auth === 'string' && auth.trim()) headers.Authorization = auth
+  const siwaReceipt = req.headers?.['x-siwa-receipt']
+  if (typeof siwaReceipt === 'string' && siwaReceipt.trim()) headers['X-SIWA-Receipt'] = siwaReceipt.trim()
   const cookie = req.headers?.cookie
   if (typeof cookie === 'string' && cookie.trim()) headers.Cookie = cookie
   return headers
@@ -93,8 +96,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<null>)
   }
 
-  const session = readSessionFromRequest(req)
-  if (!session?.address) {
+  const auth = readDeployAuthFromRequest(req)
+  if (!auth?.address) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<null>)
   }
 
@@ -179,4 +182,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ success: false, error: message } satisfies ApiEnvelope<null>)
   }
 }
-

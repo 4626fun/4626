@@ -3,9 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import handler from '../_handlers/deploy/session/_start.ts'
 import { createMockReq, createMockRes } from './helpers'
 
-const { readJsonBodyMock, readSessionFromRequestMock } = vi.hoisted(() => ({
+const { readJsonBodyMock, readSessionFromRequestMock, readSiwaAgentFromRequestMock } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async (req: any) => req.body),
   readSessionFromRequestMock: vi.fn(() => ({ address: '0xsession' })),
+  readSiwaAgentFromRequestMock: vi.fn(() => null),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -14,6 +15,10 @@ vi.mock('../../server/auth/_shared.js', () => ({
   setNoStore: vi.fn(),
   readJsonBody: readJsonBodyMock,
   readSessionFromRequest: readSessionFromRequestMock,
+}))
+
+vi.mock('../../server/auth/_siwa.js', () => ({
+  readSiwaAgentFromRequest: readSiwaAgentFromRequestMock,
 }))
 
 vi.mock('../../server/_lib/origin.js', () => ({
@@ -46,6 +51,7 @@ describe('deploy session start wrapper', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     readSessionFromRequestMock.mockReturnValue({ address: '0xsession' })
+    readSiwaAgentFromRequestMock.mockReturnValue(null)
   })
 
   it('returns 401 for unauthenticated requests', async () => {
@@ -77,6 +83,36 @@ describe('deploy session start wrapper', () => {
     const res = createMockRes()
     await handler(req, res)
 
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.error).toBe('bad_create')
+  })
+
+  it('accepts SIWA auth when session cookie is missing', async () => {
+    readSessionFromRequestMock.mockReturnValueOnce(null as any)
+    readSiwaAgentFromRequestMock.mockReturnValueOnce({
+      address: '0x0000000000000000000000000000000000000001',
+      agentId: 12,
+      agentRegistry: 'eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432',
+      chainId: 8453,
+    } as any)
+
+    const fetchMock = vi.fn(async () => createResponse(400, { success: false, error: 'bad_create' }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-siwa-receipt': 'receipt-token' },
+      body: {
+        smartWallet: '0x0000000000000000000000000000000000000002',
+        creatorToken: '0x0000000000000000000000000000000000000003',
+        ownerAddress: '0x0000000000000000000000000000000000000001',
+        phase2Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x' }],
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(res.statusCode).toBe(400)
     expect(res.body?.error).toBe('bad_create')
   })

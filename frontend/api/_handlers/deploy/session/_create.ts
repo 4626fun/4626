@@ -2,13 +2,14 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { getAddress, isAddress, type Address, type Hex } from 'viem'
 
-import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../../server/auth/_shared.js'
+import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { ensureDeploySessionsSchema, hashDeployToken, insertDeploySession, randomDeployToken, randomId } from '../../../../server/_lib/deploySessions.js'
 import { isDbConfigured, getDb } from '../../../../server/_lib/postgres.js'
 import { ensureWaitlistSchema } from '../../../../server/_lib/waitlistSchema.js'
 import { checkRateLimit, RATE_LIMITS, rateLimitKey } from '../../../../server/_lib/rateLimit.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/supabaseAdmin.js'
 import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAgentWallets.js'
+import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -177,13 +178,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Deploy sessions require DB configuration' } satisfies ApiEnvelope<null>)
   }
 
-  const session = readSessionFromRequest(req)
-  if (!session?.address) {
+  const auth = readDeployAuthFromRequest(req)
+  if (!auth?.address) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<null>)
   }
 
   // Rate limiting: 3 deploy sessions per minute per address
-  const rateLimit = checkRateLimit(rateLimitKey('deploy', session.address.toLowerCase()), RATE_LIMITS.deployCreate)
+  const rateLimit = checkRateLimit(rateLimitKey('deploy', auth.address.toLowerCase()), RATE_LIMITS.deployCreate)
   if (!rateLimit.allowed) {
     res.setHeader('Retry-After', Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString())
     return res.status(429).json({ success: false, error: 'Too many deploy attempts. Please try again later.' } satisfies ApiEnvelope<null>)
@@ -193,7 +194,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!body) return res.status(400).json({ success: false, error: 'Invalid JSON body' } satisfies ApiEnvelope<null>)
 
   try {
-    const sessionAddress = getAddress(session.address as Address)
+    const sessionAddress = getAddress(auth.address as Address)
     const smartWallet = getAddress(body.smartWallet)
     const creatorToken = getAddress(body.creatorToken)
     const ownerAddress = getAddress(body.ownerAddress)
@@ -266,6 +267,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ownerAddress,
         smartWallet,
         sessionOwner,
+        authType: auth.type,
+        ...(auth.type === 'siwa'
+          ? {
+              authAgentId: auth.agentId,
+              authAgentRegistry: auth.agentRegistry,
+              authAgentChainId: auth.chainId,
+            }
+          : null),
         agentWalletId: agentWallet.walletId,
         agentWalletAddress: agentWallet.address,
         version: String(body.version ?? ''),

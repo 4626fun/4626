@@ -7,11 +7,12 @@ import { toAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
 import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
-import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../../server/auth/_shared.js'
+import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { logger } from '../../../../server/_lib/logger.js'
 import { decryptWithSecret, getDeploySessionById, signDeployToken, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
+import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -69,8 +70,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<null>)
   }
 
-  const session = readSessionFromRequest(req)
-  if (!session?.address) {
+  const auth = readDeployAuthFromRequest(req)
+  if (!auth?.address) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<null>)
   }
 
@@ -86,7 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ success: true, data: { id: rec.id, step: rec.step } } satisfies ApiEnvelope<any>)
   }
 
-  const sessionAddress = getAddress(session.address)
+  const sessionAddress = getAddress(auth.address)
   if (sessionAddress.toLowerCase() !== rec.sessionAddress.toLowerCase()) {
     return res.status(403).json({ success: false, error: 'Forbidden' } satisfies ApiEnvelope<null>)
   }
@@ -202,4 +203,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ success: false, error: msg } satisfies ApiEnvelope<null>)
   }
 }
-
