@@ -65,8 +65,8 @@ contract OperationalWiring is Script {
 
     // Factories / Batchers
     address constant CREATOR_FACTORY      = 0xcCa08f9b94dD478266D0D1D2e9B7758414280FfD;
-    address constant VAULT_BATCHER        = 0xF80a991dF64207Ff9C7A04eD3339e404Bc11d1CE;
-    address constant VAULT_ACT_BATCHER    = 0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB;
+    address constant VAULT_BATCHER        = 0x32e91185B92c6c13dd56D745aBf24F009cdD3019;
+    address constant VAULT_ACT_BATCHER    = 0x4b67e3a4284090e5191c27B8F24248eC82DF055D;
 
     // ═══════════════════════════════════════════════════════════════════
     //                    VRF CONFIG

@@ -36,8 +36,6 @@ interface ICreatorShareOFT {
     function setMinter(address minter, bool status) external;
     function setGaugeController(address _controller) external;
     function setHubConfig(bool _isHub, uint32 _hubEid, address _hubGaugeReceiver) external;
-    function setHubLotteryPeer(uint32 _hubEid, bytes32 _hubLotteryPeer) external;
-    function setPeer(uint32 _eid, bytes32 _peer) external;
     function transferOwnership(address newOwner) external;
 }
 
@@ -213,6 +211,18 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         address shareOFT;
     }
 
+    struct Phase1SplitState {
+        address oftBootstrapRegistry;
+        address vault;
+        address wrapper;
+        address shareOFT;
+        bytes32 shareOftSalt;
+        bytes32 paramsHash;
+        bytes32 codeIdsHash;
+        bool coreDone;
+        bool finalized;
+    }
+
     struct Phase2Result {
         address gaugeController;
         address ccaStrategy;
@@ -269,6 +279,8 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     error InvalidCodeId();
     error NotOwner();
     error Phase1Missing();
+    error Phase1CoreMissing();
+    error Phase1StateMismatch();
     error InvalidWeight();
     error V3PoolMissing();
     error MissingInitialSqrtPriceX96();
@@ -296,6 +308,8 @@ contract CreatorVaultDeployer is ReentrancyGuard {
 
     /// @notice Pending auction allocations keyed by creator/owner/version salt.
     mapping(bytes32 => PendingAuction) public pendingAuctions;
+    /// @notice Split phase-1 state keyed by creator/owner/version salt.
+    mapping(bytes32 => Phase1SplitState) public phase1SplitStates;
 
     /// @notice SolanaBridgeAdapter address for bridging the Solana allocation.
     address public solanaBridgeAdapter;
@@ -309,6 +323,15 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         address vault,
         address wrapper,
         address shareOFT
+    );
+
+    event Phase1CoreDeployed(
+        address indexed creatorToken,
+        address indexed owner,
+        address oftBootstrapRegistry,
+        address vault,
+        address wrapper,
+        bytes32 shareOftSalt
     );
 
     event Phase2DeployedAndLaunched(
@@ -420,22 +443,37 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     // PHASE 1
     // ================================
 
-    function deployPhase1(
+    function deployPhase1Core(
         Phase1Params calldata params,
         CodeIds calldata codeIds
     ) external nonReentrant returns (Phase1Result memory out) {
-        return _deployPhase1Internal(params, codeIds, bytes32(0));
+        return _deployPhase1CoreInternal(params, codeIds, bytes32(0));
     }
 
-    function deployPhase1WithSalt(
+    function deployPhase1CoreWithSalt(
         Phase1Params calldata params,
         CodeIds calldata codeIds,
         bytes32 shareOftSaltOverride
     ) external nonReentrant returns (Phase1Result memory out) {
-        return _deployPhase1Internal(params, codeIds, shareOftSaltOverride);
+        return _deployPhase1CoreInternal(params, codeIds, shareOftSaltOverride);
     }
 
-    function _deployPhase1Internal(
+    function finalizePhase1(
+        Phase1Params calldata params,
+        CodeIds calldata codeIds
+    ) external nonReentrant returns (Phase1Result memory out) {
+        return _finalizePhase1InternalSplit(params, codeIds, bytes32(0));
+    }
+
+    function finalizePhase1WithSalt(
+        Phase1Params calldata params,
+        CodeIds calldata codeIds,
+        bytes32 shareOftSaltOverride
+    ) external nonReentrant returns (Phase1Result memory out) {
+        return _finalizePhase1InternalSplit(params, codeIds, shareOftSaltOverride);
+    }
+
+    function _deployPhase1CoreInternal(
         Phase1Params calldata params,
         CodeIds calldata codeIds,
         bytes32 shareOftSaltOverride
@@ -444,22 +482,32 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
         _requirePhase1CodeIds(codeIds);
 
-        // Batcher owns the contracts until Phase 2 completes final wiring + ownership transfers.
-        address tempOwner = address(this);
-
-        // Keep a deterministic, case-insensitive key for CREATE2 salts and oracle wiring,
-        // but preserve the creator-facing symbol display on the token itself.
         string memory shareSymbolLower = _toLower(params.shareSymbol);
-        string memory shareSymbolUpper = _toUpper(params.shareSymbol);
-
         bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
-        bytes32 vaultSalt = _saltFor(baseSalt, "vault");
-        bytes32 wrapperSalt = _saltFor(baseSalt, "wrapper");
         bytes32 shareOftSalt = shareOftSaltOverride == bytes32(0)
             ? _deriveShareOftSalt(params.owner, shareSymbolLower, params.version)
             : shareOftSaltOverride;
+        bytes32 paramsHash = _phase1ParamsHash(params);
+        bytes32 codeIdsHash = _phase1CodeIdsHash(codeIds);
 
-        // OFT bootstrap registry is chain-global + constructor-less ⇒ initCodeHash == codeId.
+        Phase1SplitState storage state = phase1SplitStates[baseSalt];
+        if (state.coreDone) {
+            if (state.paramsHash != paramsHash || state.codeIdsHash != codeIdsHash || state.shareOftSalt != shareOftSalt) {
+                revert Phase1StateMismatch();
+            }
+            out.oftBootstrapRegistry = state.oftBootstrapRegistry;
+            out.vault = state.vault;
+            out.wrapper = state.wrapper;
+            out.shareOFT = state.shareOFT;
+            return out;
+        }
+
+        // Batcher owns the contracts until Phase 2 completes final wiring + ownership transfers.
+        address tempOwner = address(this);
+        bytes32 vaultSalt = _saltFor(baseSalt, "vault");
+        bytes32 wrapperSalt = _saltFor(baseSalt, "wrapper");
+
+        // OFT bootstrap registry is chain-global + constructor-less => initCodeHash == codeId.
         bytes32 oftBootstrapSalt = keccak256("CreatorVault:OFTBootstrapRegistry:v1");
         out.oftBootstrapRegistry = create2Deployer.computeAddress(oftBootstrapSalt, codeIds.oftBootstrap);
         if (out.oftBootstrapRegistry.code.length == 0) {
@@ -475,16 +523,71 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         bytes memory wrapperArgs = abi.encode(params.creatorToken, out.vault, tempOwner);
         out.wrapper = create2Deployer.deploy(wrapperSalt, codeIds.wrapper, wrapperArgs);
 
-        // Token metadata: always uppercase the symbol (e.g. ■AKITA) for consistency on explorers.
-        bytes memory shareOftArgs = abi.encode(params.shareName, shareSymbolUpper, out.oftBootstrapRegistry, tempOwner);
-        out.shareOFT = create2Deployer.deploy(shareOftSalt, codeIds.shareOFT, shareOftArgs);
+        out.shareOFT = address(0);
+
+        state.oftBootstrapRegistry = out.oftBootstrapRegistry;
+        state.vault = out.vault;
+        state.wrapper = out.wrapper;
+        state.shareOFT = address(0);
+        state.shareOftSalt = shareOftSalt;
+        state.paramsHash = paramsHash;
+        state.codeIdsHash = codeIdsHash;
+        state.coreDone = true;
+        state.finalized = false;
+
+        emit Phase1CoreDeployed(
+            params.creatorToken,
+            params.owner,
+            out.oftBootstrapRegistry,
+            out.vault,
+            out.wrapper,
+            shareOftSalt
+        );
+    }
+
+    function _finalizePhase1InternalSplit(
+        Phase1Params calldata params,
+        CodeIds calldata codeIds,
+        bytes32 shareOftSaltOverride
+    ) internal returns (Phase1Result memory out) {
+        _requireOwner(params.owner);
+        if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
+        _requirePhase1CodeIds(codeIds);
+
+        string memory shareSymbolLower = _toLower(params.shareSymbol);
+        string memory shareSymbolUpper = _toUpper(params.shareSymbol);
+        bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
+        bytes32 expectedShareOftSalt = shareOftSaltOverride == bytes32(0)
+            ? _deriveShareOftSalt(params.owner, shareSymbolLower, params.version)
+            : shareOftSaltOverride;
+        bytes32 paramsHash = _phase1ParamsHash(params);
+        bytes32 codeIdsHash = _phase1CodeIdsHash(codeIds);
+
+        Phase1SplitState storage state = phase1SplitStates[baseSalt];
+        if (!state.coreDone) revert Phase1CoreMissing();
+        if (state.paramsHash != paramsHash || state.codeIdsHash != codeIdsHash || state.shareOftSalt != expectedShareOftSalt) {
+            revert Phase1StateMismatch();
+        }
+
+        out.oftBootstrapRegistry = state.oftBootstrapRegistry;
+        out.vault = state.vault;
+        out.wrapper = state.wrapper;
+        if (out.vault.code.length == 0 || out.wrapper.code.length == 0) revert Phase1CoreMissing();
+
+        if (state.finalized) {
+            if (state.shareOFT == address(0) || state.shareOFT.code.length == 0) revert Phase1Missing();
+            out.shareOFT = state.shareOFT;
+            return out;
+        }
+
+        bytes memory shareOftArgs = abi.encode(params.shareName, shareSymbolUpper, out.oftBootstrapRegistry, address(this));
+        out.shareOFT = create2Deployer.deploy(state.shareOftSalt, codeIds.shareOFT, shareOftArgs);
 
         // Minimal wiring so Phase 2 can proceed without redeploying Phase 1 components.
         ICreatorOVaultWrapper(out.wrapper).setShareOFT(out.shareOFT);
         ICreatorShareOFT(out.shareOFT).setRegistry(address(registry));
         ICreatorShareOFT(out.shareOFT).setVault(out.vault);
         ICreatorShareOFT(out.shareOFT).setMinter(out.wrapper, true);
-        
         // Hub-centric: mark this as the hub chain deployment (isHub=true)
         ICreatorShareOFT(out.shareOFT).setHubConfig(true, 0, address(0));
 
@@ -493,6 +596,9 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         if (vaultActivationBatcher != address(0)) {
             ICreatorOVault(out.vault).setWhitelist(vaultActivationBatcher, true);
         }
+
+        state.shareOFT = out.shareOFT;
+        state.finalized = true;
 
         emit Phase1Deployed(params.creatorToken, params.owner, out.oftBootstrapRegistry, out.vault, out.wrapper, out.shareOFT);
     }
@@ -894,123 +1000,6 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     }
 
     // ================================
-    // REMOTE CHAIN DEPLOYMENT (Hub-Centric)
-    // ================================
-
-    struct RemoteDeployParams {
-        address creatorToken;
-        address owner;
-        string shareName;
-        string shareSymbol;
-        string version;
-        /// @notice Hub chain config
-        uint32 hubEid;               // LayerZero EID for Base
-        address hubGaugeReceiver;     // GaugeController address on Base
-        bytes32 hubLotteryPeer;       // LotteryManager address on Base (bytes32)
-        bytes32 hubOftPeer;           // Hub ShareOFT address (bytes32) for OFT peering
-    }
-
-    struct RemoteDeployResult {
-        address oftBootstrapRegistry;
-        address shareOFT;
-    }
-
-    event RemoteOFTDeployed(
-        address indexed creatorToken,
-        address indexed owner,
-        address shareOFT,
-        uint32 hubEid,
-        address hubGaugeReceiver
-    );
-
-    /**
-     * @notice Deploy a CreatorShareOFT on a remote chain (non-hub)
-     * @dev This is the ONLY deployment needed on remote chains in the hub-centric model.
-     *      No vault, wrapper, gauge, lottery, VRF, or oracle is deployed.
-     *      The OFT is configured with isHub=false and pointed at the Base hub.
-     *
-     * @param params Remote deployment parameters
-     * @param codeIds Code IDs for CREATE2 deployment
-     * @return out The deployed addresses
-     */
-    function deployRemoteOFT(
-        RemoteDeployParams calldata params,
-        CodeIds calldata codeIds
-    ) external nonReentrant returns (RemoteDeployResult memory out) {
-        return _deployRemoteOFTInternal(params, codeIds, bytes32(0));
-    }
-
-    /**
-     * @notice Deploy a CreatorShareOFT on a remote chain with a custom salt
-     */
-    function deployRemoteOFTWithSalt(
-        RemoteDeployParams calldata params,
-        CodeIds calldata codeIds,
-        bytes32 shareOftSaltOverride
-    ) external nonReentrant returns (RemoteDeployResult memory out) {
-        return _deployRemoteOFTInternal(params, codeIds, shareOftSaltOverride);
-    }
-
-    function _deployRemoteOFTInternal(
-        RemoteDeployParams calldata params,
-        CodeIds calldata codeIds,
-        bytes32 shareOftSaltOverride
-    ) internal returns (RemoteDeployResult memory out) {
-        _requireOwner(params.owner);
-        if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
-        if (codeIds.shareOFT == bytes32(0) || codeIds.oftBootstrap == bytes32(0)) revert InvalidCodeId();
-
-        // --- OFT Bootstrap Registry (shared, deploy-once-per-chain) ---
-        bytes32 oftBootstrapSalt = keccak256("CreatorVault:OFTBootstrapRegistry:v1");
-        out.oftBootstrapRegistry = create2Deployer.computeAddress(oftBootstrapSalt, codeIds.oftBootstrap);
-        if (out.oftBootstrapRegistry.code.length == 0) {
-            create2Deployer.deploy(oftBootstrapSalt, codeIds.oftBootstrap, bytes(""));
-        }
-
-        address lzEndpoint = registry.getLayerZeroEndpoint(uint16(block.chainid));
-        IOFTBootstrapRegistry(out.oftBootstrapRegistry).setLayerZeroEndpoint(uint16(block.chainid), lzEndpoint);
-
-        // --- Deploy ShareOFT ---
-        string memory shareSymbolLower = _toLower(params.shareSymbol);
-        string memory shareSymbolUpper = _toUpper(params.shareSymbol);
-
-        bytes32 shareOftSalt = shareOftSaltOverride == bytes32(0)
-            ? _deriveShareOftSalt(params.owner, shareSymbolLower, params.version)
-            : shareOftSaltOverride;
-
-        // tempOwner = this for wiring, then transfer to protocolTreasury
-        address tempOwner = address(this);
-
-        bytes memory shareOftArgs = abi.encode(params.shareName, shareSymbolUpper, out.oftBootstrapRegistry, tempOwner);
-        out.shareOFT = create2Deployer.deploy(shareOftSalt, codeIds.shareOFT, shareOftArgs);
-
-        // --- Configure as remote (non-hub) ---
-        ICreatorShareOFT(out.shareOFT).setRegistry(address(registry));
-        ICreatorShareOFT(out.shareOFT).setHubConfig(false, params.hubEid, params.hubGaugeReceiver);
-
-        // Set lottery peer (LotteryManager on Base)
-        if (params.hubLotteryPeer != bytes32(0)) {
-            ICreatorShareOFT(out.shareOFT).setHubLotteryPeer(params.hubEid, params.hubLotteryPeer);
-        }
-
-        // Set OFT peer (hub ShareOFT on Base for token bridging)
-        if (params.hubOftPeer != bytes32(0)) {
-            ICreatorShareOFT(out.shareOFT).setPeer(params.hubEid, params.hubOftPeer);
-        }
-
-        // Transfer ownership to protocol treasury
-        ICreatorShareOFT(out.shareOFT).transferOwnership(protocolTreasury);
-
-        emit RemoteOFTDeployed(
-            params.creatorToken,
-            params.owner,
-            out.shareOFT,
-            params.hubEid,
-            params.hubGaugeReceiver
-        );
-    }
-
-    // ================================
     // SOLANA CONFIG (ADMIN)
     // ================================
 
@@ -1061,6 +1050,24 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         if (codeIds.gauge == bytes32(0) || codeIds.cca == bytes32(0) || codeIds.oracle == bytes32(0)) {
             revert InvalidCodeId();
         }
+    }
+
+    function _phase1ParamsHash(Phase1Params calldata params) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                params.creatorToken,
+                params.owner,
+                params.vaultName,
+                params.vaultSymbol,
+                params.shareName,
+                params.shareSymbol,
+                params.version
+            )
+        );
+    }
+
+    function _phase1CodeIdsHash(CodeIds calldata codeIds) internal pure returns (bytes32) {
+        return keccak256(abi.encode(codeIds.vault, codeIds.wrapper, codeIds.shareOFT, codeIds.oftBootstrap));
     }
 
     function _deriveBaseSalt(address creatorToken, address owner, string memory version) internal view returns (bytes32) {

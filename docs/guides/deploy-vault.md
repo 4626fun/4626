@@ -31,9 +31,94 @@ Client:
 
 Server (Vercel):
 - `CDP_PAYMASTER_URL` (real bundler/paymaster URL used by `/api/paymaster`)
-- `DEPLOY_SESSION_SECRET` (required to store/advance deploy sessions safely)
-- `DATABASE_URL` (required for deploy session persistence)
+- `AUTH_SESSION_SECRET`
+- `CANONICAL_ORIGIN`
+- `DATABASE_URL`
+- `DEPLOY_SESSION_SECRET`
+- `DEPLOY_SESSION_TOKEN_HMAC_SECRET`
+- `PRIVY_APP_ID`
+- `PRIVY_APP_SECRET`
+- `PRIVY_WALLET_AUTHORIZATION_KEY`
+- `PRIVY_WALLET_OWNER_ID`
+- `PRIVY_WALLET_POLICY_ID`
 - `BASE_RPC_URL` (optional; defaults to `https://mainnet.base.org`)
+
+Production override safety:
+- leave `VITE_ALLOW_CONTRACT_OVERRIDES` unset (or `0`)
+- leave `ALLOW_API_CONTRACT_OVERRIDES` unset (or `0`)
+- production then uses repo defaults from `frontend/src/config/contracts.defaults.ts`
+
+### Split Phase-1 rollout (Base mainnet + Vercel)
+
+Current canonical Base defaults:
+- `CreatorVaultDeployer` (split Phase-1 batcher): `0x32e91185B92c6c13dd56D745aBf24F009cdD3019`
+- `UniversalBytecodeStoreV2`: `0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13`
+- `UniversalCreate2DeployerFromStoreV2`: `0x74183076C7D33346880A5bf0e263B761FB4d38BA`
+
+Mainnet deploy order:
+
+1. Deploy/re-verify infra + phased deployer:
+
+```bash
+export PRIVATE_KEY=...
+export BASE_RPC_URL=https://mainnet.base.org
+export ETHERSCAN_API_KEY=...
+
+forge script script/DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer \
+  --rpc-url "$BASE_RPC_URL" \
+  --broadcast \
+  --verify
+```
+
+2. Seed bytecode store:
+
+```bash
+export PRIVATE_KEY=...
+export BASE_RPC_URL=https://mainnet.base.org
+export UNIVERSAL_BYTECODE_STORE=0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13
+
+forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore \
+  --rpc-url "$BASE_RPC_URL" \
+  --broadcast
+```
+
+3. Onchain sanity checks:
+
+```bash
+export BASE_RPC_URL=https://mainnet.base.org
+export NEW_BATCHER=0x32e91185B92c6c13dd56D745aBf24F009cdD3019
+
+# infra wiring
+cast call "$NEW_BATCHER" "bytecodeStore()(address)" --rpc-url "$BASE_RPC_URL"
+cast call "$NEW_BATCHER" "create2Deployer()(address)" --rpc-url "$BASE_RPC_URL"
+
+# split Phase-1 selectors in runtime bytecode
+cast code "$NEW_BATCHER" --rpc-url "$BASE_RPC_URL" | tr 'A-F' 'a-f' | rg "1331378b|a98ec9d8|4154f24e|3bc09a8b"
+
+# v2 store surface
+cast call 0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13 \
+  "chunkCount(bytes32)(uint256)" \
+  0x0000000000000000000000000000000000000000000000000000000000000000 \
+  --rpc-url "$BASE_RPC_URL"
+```
+
+Vercel cutover order:
+
+1. Merge frontend/api split-phase code + paymaster selector support.
+2. Merge repo defaults pointing to the new mainnet infra addresses.
+3. Set production env vars listed in "Required config (1-click)".
+4. Keep override flags disabled (`VITE_ALLOW_CONTRACT_OVERRIDES`, `ALLOW_API_CONTRACT_OVERRIDES`).
+5. Keep:
+   - `VITE_DEPLOY_USE_SERVER_CONTINUE=true`
+   - `VITE_CDP_PAYMASTER_URL=/api/paymaster`
+
+Acceptance checks:
+- `pnpm -C frontend run typecheck`
+- `pnpm -C frontend exec vitest run api/__tests__/deploySession.test.ts api/__tests__/deploySessionOwnership.test.ts`
+- paymaster accepts split selectors (no `batcher_selector_not_allowed`)
+- deploy-session path advances:
+  - `created -> phase1_sent -> phase1_finalize_sent -> phase2_core_sent -> phase2_sent -> phase3_sent -> completed`
+- `/deploy` shows no bytecode infra blocker and no `CreatorVaultBatcher not configured`
 
 ### Important: Zora cross-app is read-only here
 

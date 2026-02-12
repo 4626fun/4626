@@ -111,6 +111,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'deploy/session/cancel': () => import('./deploy/session/_cancel.js'),
   'deploy/session/continue': () => import('./deploy/session/_continue.js'),
   'deploy/session/create': () => import('./deploy/session/_create.js'),
+  'deploy/session/start': () => import('./deploy/session/_start.js'),
   'deploy/session/status': () => import('./deploy/session/_status.js'),
   'deploy/smartWalletOwner': () => import('./deploy/_smartWalletOwner.js'),
 

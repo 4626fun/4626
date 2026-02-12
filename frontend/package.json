@@ -17,7 +17,9 @@
     "test:watch": "vitest",
     "agent:start": "pnpm agent:eliza",
     "agent:eliza": "tsx --env-file=.env --env-file=../cre/.env server/agent/eliza/index.ts",
-    "check:agent-registration": "node scripts/check-agent-registration.mjs"
+    "check:agent-registration": "node scripts/check-agent-registration.mjs",
+    "deploy:autopilot": "node scripts/deploy-autopilot.mjs",
+    "skills:sync:cursor": "node scripts/sync-cursor-skills.mjs --prune"
   },
   "dependencies": {
     "@buildersgarden/siwa": "^0.0.11",

@@ -200,6 +200,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const phase1Calls = normalizeCalls(Array.isArray(payload.phase1Calls) ? payload.phase1Calls : [])
+    const phase1CoreCalls = phase1Calls.length > 1 ? phase1Calls.slice(0, 1) : phase1Calls
+    const phase1FinalizeCalls = phase1Calls.length > 1 ? phase1Calls.slice(1) : []
     const phase2CoreCalls = normalizeCalls(Array.isArray(payload.phase2CoreCalls) ? payload.phase2CoreCalls : [])
     const phase2FinalizeCallsRaw = normalizeCalls(
       Array.isArray(payload.phase2FinalizeCalls) ? payload.phase2FinalizeCalls : [],
@@ -210,7 +212,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const phase4Calls = normalizeCalls(Array.isArray(payload.phase4Calls) ? payload.phase4Calls : [])
     const postPhase2Calls = [...phase3Calls, ...phase4Calls]
 
-    const isInFlight = ['phase1_sent', 'phase2_core_sent', 'phase2_sent', 'phase3_sent', 'cleanup_sent'].includes(rec.step)
+    const isInFlight = ['phase1_sent', 'phase1_finalize_sent', 'phase2_core_sent', 'phase2_sent', 'phase3_sent', 'cleanup_sent'].includes(rec.step)
 
     // Cleanup call (remove the temporary owner). Attach it to the last UserOp we send.
     const removeOwnerCall = (() => {
@@ -248,9 +250,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Note: we intentionally key off the persisted step (not call-array emptiness), because
     // the payload contains *all* calls for the full deploy.
     const runFromCreated = () => {
-      if (phase1Calls.length > 0) {
-        const attachCleanup = phase2CoreCalls.length === 0 && phase2FinalizeCalls.length === 0 && !hasPostPhase2
-        return sendStage('phase1_sent', phase1Calls, attachCleanup)
+      if (phase1CoreCalls.length > 0) {
+        const attachCleanup =
+          phase1FinalizeCalls.length === 0 &&
+          phase2CoreCalls.length === 0 &&
+          phase2FinalizeCalls.length === 0 &&
+          !hasPostPhase2
+        return sendStage('phase1_sent', phase1CoreCalls, attachCleanup)
       }
       if (phase2CoreCalls.length > 0) {
         const attachCleanup = phase2FinalizeCalls.length === 0 && !hasPostPhase2
@@ -265,6 +271,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const runFromPhase1Confirmed = () => {
+      if (phase1FinalizeCalls.length > 0) {
+        const attachCleanup = phase2CoreCalls.length === 0 && phase2FinalizeCalls.length === 0 && !hasPostPhase2
+        return sendStage('phase1_finalize_sent', phase1FinalizeCalls, attachCleanup)
+      }
+      if (phase2CoreCalls.length > 0) {
+        const attachCleanup = phase2FinalizeCalls.length === 0 && !hasPostPhase2
+        return sendStage('phase2_core_sent', phase2CoreCalls, attachCleanup)
+      }
+      if (phase2FinalizeCalls.length > 0) {
+        const attachCleanup = !hasPostPhase2
+        return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
+      }
+      if (postPhase2Calls.length > 0) return sendStage('phase3_sent', postPhase2Calls, true)
+      return null
+    }
+
+    const runFromPhase1FinalizeConfirmed = () => {
       if (phase2CoreCalls.length > 0) {
         const attachCleanup = phase2FinalizeCalls.length === 0 && !hasPostPhase2
         return sendStage('phase2_core_sent', phase2CoreCalls, attachCleanup)
@@ -292,6 +315,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (rec.step === 'phase1_confirmed') {
       const started = await runFromPhase1Confirmed()
+      if (started) return started
+    }
+    if (rec.step === 'phase1_finalize_confirmed') {
+      const started = await runFromPhase1FinalizeConfirmed()
       if (started) return started
     }
     if (rec.step === 'phase2_core_confirmed') {

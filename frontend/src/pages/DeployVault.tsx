@@ -71,6 +71,10 @@ const DEFAULT_CCA_DURATION_BLOCKS = 302_400n // ~7 days on Base at ~2s blocks (m
 const DEFAULT_SHARE_OFT_VANITY_SUFFIX = '4626'
 const DEFAULT_SHARE_OFT_VANITY_MAX_TRIES = 1_000_000
 const BATCHER_PHASE1_WITH_SALT_SELECTOR = '297cb1e6'
+const BATCHER_PHASE1_CORE_SELECTOR = '1331378b'
+const BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR = '4154f24e'
+const BATCHER_PHASE1_FINALIZE_SELECTOR = 'a98ec9d8'
+const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = '3bc09a8b'
 
 // Minimum age for a Creator Coin before allowing vault deployment.
 // Rationale: reduce launch-manipulation surface area on brand new coins with thin/no trading history.
@@ -287,6 +291,46 @@ type ServerDeployResponse = {
     ccaStrategy: Address
     oracle: Address
   }
+}
+type DeploySessionCall = { to: Address; value: string; data: Hex }
+type DeploySessionCreateRequest = {
+  smartWallet: Address
+  creatorToken: Address
+  ownerAddress: Address
+  phase1Calls: DeploySessionCall[]
+  phase2CoreCalls: DeploySessionCall[]
+  phase2FinalizeCalls: DeploySessionCall[]
+  phase3Calls: DeploySessionCall[]
+  phase4Calls: DeploySessionCall[]
+  version: string
+}
+type DeployPlanExport = {
+  generatedAt: string
+  chainId: number
+  useServerContinue: boolean
+  batcher: Address
+  create2Deployer: Address
+  creatorToken: Address
+  owner: Address
+  deploymentVersion: string
+  expectedAddresses: {
+    vault: Address
+    wrapper: Address
+    shareOFT: Address
+    gaugeController: Address
+    ccaStrategy: Address
+    oracle: Address
+    burnStream: Address
+    payoutRouter: Address
+  }
+  phaseCounts: {
+    phase1: number
+    phase2Core: number
+    phase2Finalize: number
+    phase3: number
+    phase4: number
+  }
+  sessionCreateRequest: DeploySessionCreateRequest
 }
 
 const CREATOR_COIN_OWNERS_ABI = [
@@ -690,6 +734,188 @@ const CREATOR_VAULT_BATCHER_ABI = [
   {
     type: 'function',
     name: 'deployPhase1WithSalt',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vaultName', type: 'string' },
+          { name: 'vaultSymbol', type: 'string' },
+          { name: 'shareName', type: 'string' },
+          { name: 'shareSymbol', type: 'string' },
+          { name: 'version', type: 'string' },
+        ],
+      },
+      {
+        name: 'codeIds',
+        type: 'tuple',
+        components: [
+          { name: 'vault', type: 'bytes32' },
+          { name: 'wrapper', type: 'bytes32' },
+          { name: 'shareOFT', type: 'bytes32' },
+          { name: 'gauge', type: 'bytes32' },
+          { name: 'cca', type: 'bytes32' },
+          { name: 'oracle', type: 'bytes32' },
+          { name: 'oftBootstrap', type: 'bytes32' },
+        ],
+      },
+      { name: 'shareOftSaltOverride', type: 'bytes32' },
+    ],
+    outputs: [
+      {
+        name: 'out',
+        type: 'tuple',
+        components: [
+          { name: 'oftBootstrapRegistry', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'deployPhase1Core',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vaultName', type: 'string' },
+          { name: 'vaultSymbol', type: 'string' },
+          { name: 'shareName', type: 'string' },
+          { name: 'shareSymbol', type: 'string' },
+          { name: 'version', type: 'string' },
+        ],
+      },
+      {
+        name: 'codeIds',
+        type: 'tuple',
+        components: [
+          { name: 'vault', type: 'bytes32' },
+          { name: 'wrapper', type: 'bytes32' },
+          { name: 'shareOFT', type: 'bytes32' },
+          { name: 'gauge', type: 'bytes32' },
+          { name: 'cca', type: 'bytes32' },
+          { name: 'oracle', type: 'bytes32' },
+          { name: 'oftBootstrap', type: 'bytes32' },
+        ],
+      },
+    ],
+    outputs: [
+      {
+        name: 'out',
+        type: 'tuple',
+        components: [
+          { name: 'oftBootstrapRegistry', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'deployPhase1CoreWithSalt',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vaultName', type: 'string' },
+          { name: 'vaultSymbol', type: 'string' },
+          { name: 'shareName', type: 'string' },
+          { name: 'shareSymbol', type: 'string' },
+          { name: 'version', type: 'string' },
+        ],
+      },
+      {
+        name: 'codeIds',
+        type: 'tuple',
+        components: [
+          { name: 'vault', type: 'bytes32' },
+          { name: 'wrapper', type: 'bytes32' },
+          { name: 'shareOFT', type: 'bytes32' },
+          { name: 'gauge', type: 'bytes32' },
+          { name: 'cca', type: 'bytes32' },
+          { name: 'oracle', type: 'bytes32' },
+          { name: 'oftBootstrap', type: 'bytes32' },
+        ],
+      },
+      { name: 'shareOftSaltOverride', type: 'bytes32' },
+    ],
+    outputs: [
+      {
+        name: 'out',
+        type: 'tuple',
+        components: [
+          { name: 'oftBootstrapRegistry', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'finalizePhase1',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vaultName', type: 'string' },
+          { name: 'vaultSymbol', type: 'string' },
+          { name: 'shareName', type: 'string' },
+          { name: 'shareSymbol', type: 'string' },
+          { name: 'version', type: 'string' },
+        ],
+      },
+      {
+        name: 'codeIds',
+        type: 'tuple',
+        components: [
+          { name: 'vault', type: 'bytes32' },
+          { name: 'wrapper', type: 'bytes32' },
+          { name: 'shareOFT', type: 'bytes32' },
+          { name: 'gauge', type: 'bytes32' },
+          { name: 'cca', type: 'bytes32' },
+          { name: 'oracle', type: 'bytes32' },
+          { name: 'oftBootstrap', type: 'bytes32' },
+        ],
+      },
+    ],
+    outputs: [
+      {
+        name: 'out',
+        type: 'tuple',
+        components: [
+          { name: 'oftBootstrapRegistry', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'finalizePhase1WithSalt',
     stateMutability: 'nonpayable',
     inputs: [
       {
@@ -1187,6 +1413,8 @@ function DeployVaultBatcher({
   }
 
   const [busy, setBusy] = useState(false)
+  const [exportBusy, setExportBusy] = useState(false)
+  const [exportStatus, setExportStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [txId, setTxId] = useState<string | null>(null)
   const [phase, setPhase] = useState<'idle' | 'phase1' | 'phase2' | 'phase3' | 'phase4' | 'done'>('idle')
@@ -1944,11 +2172,18 @@ function DeployVaultBatcher({
     !!currentPayoutRecipient &&
     expectedPayoutRouter.toLowerCase() !== currentPayoutRecipient.toLowerCase()
 
-  const submit = async () => {
-    if (busy) return
+  const serializeSessionCalls = useCallback(
+    (calls: Array<{ target: Address; value: bigint; data: Hex }>): DeploySessionCall[] =>
+      calls.map((c) => ({ to: c.target, value: String(c.value ?? 0n), data: c.data })),
+    [],
+  )
+
+  const submit = async (opts?: { planOnly?: boolean }): Promise<DeployPlanExport | null> => {
+    const planOnly = opts?.planOnly === true
+    if (busy || exportBusy) return null
 
     // Simple rate limit: avoid accidental double-submits after a quick reload/click.
-    if (typeof window !== 'undefined') {
+    if (!planOnly && typeof window !== 'undefined') {
       try {
         const now = Date.now()
         const last = Number(localStorage.getItem('cv:deploy:lastAttemptAt') ?? '0')
@@ -1958,7 +2193,7 @@ function DeployVaultBatcher({
           const remainingSec = Math.max(1, Math.ceil(remainingMs / 1000))
           setError(`Please wait ${remainingSec}s before retrying deploy.`)
           window.setTimeout(() => setError(null), retryWindowMs)
-          return
+          return null
         }
         localStorage.setItem('cv:deploy:lastAttemptAt', String(now))
       } catch {
@@ -1966,11 +2201,14 @@ function DeployVaultBatcher({
       }
     }
 
-    setBusy(true)
-    setError(null)
-    setTxId(null)
-    setPhase('idle')
-    setPhaseTxs({})
+    if (!planOnly) {
+      setBusy(true)
+      setError(null)
+      setExportStatus(null)
+      setTxId(null)
+      setPhase('idle')
+      setPhaseTxs({})
+    }
 
     try {
       await ensurePaymasterSession()
@@ -2065,39 +2303,53 @@ function DeployVaultBatcher({
         ).slice(2).toLowerCase()
         return batcherBytecode.toLowerCase().includes(phase1Topic)
       })()
-      const supportsPhase1WithSalt = (() => {
+      const batcherBytecodeLower = (batcherBytecode ?? '0x').toLowerCase()
+      const supportsSplitPhase1 = (() => {
+        if (!batcherBytecode || batcherBytecode === '0x') return false
+        return (
+          batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_SELECTOR) &&
+          batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_SELECTOR)
+        )
+      })()
+      const supportsLegacyPhase1WithSalt = (() => {
         if (!expectedShareOftSaltOverride) return true
         if (!batcherBytecode || batcherBytecode === '0x') return false
-        return batcherBytecode.toLowerCase().includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
+        return batcherBytecodeLower.includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
       })()
+      const supportsSplitPhase1WithSalt = (() => {
+        if (!expectedShareOftSaltOverride) return true
+        if (!batcherBytecode || batcherBytecode === '0x') return false
+        return (
+          batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR) &&
+          batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR)
+        )
+      })()
+      let phase1CallsPrepared: Array<{ target: Address; value: bigint; data: Hex }> = []
 
       if (isTwoStepBatcher) {
-        if (!supportsPhase1WithSalt) {
-          logger.warn('[DeployVault] Batcher lacks vanity salt support; continuing without override', {
-            batcher: batcherAddress,
-          })
-        }
         const phase1State = await (async () => {
           try {
             const addrs = [expected!.vault, expected!.wrapper, expected!.shareOFT] as const
             const codes = await Promise.all(addrs.map((a) => publicClient!.getBytecode({ address: a })))
             const deployed = codes.map((c) => !!c && c !== '0x')
-            return { anyDeployed: deployed.some(Boolean), allDeployed: deployed.every(Boolean) } as const
-          } catch {
             return {
-              anyDeployed: phase1ExistsQuery.data?.anyDeployed ?? false,
-              allDeployed: phase1ExistsQuery.data?.allDeployed ?? false,
+              vaultDeployed: deployed[0] ?? false,
+              wrapperDeployed: deployed[1] ?? false,
+              shareOftDeployed: deployed[2] ?? false,
+            } as const
+          } catch {
+            const anyDeployed = phase1ExistsQuery.data?.anyDeployed ?? false
+            const allDeployed = phase1ExistsQuery.data?.allDeployed ?? false
+            return {
+              vaultDeployed: anyDeployed && allDeployed,
+              wrapperDeployed: anyDeployed && allDeployed,
+              shareOftDeployed: allDeployed,
             } as const
           }
         })()
-        const phase1Any = phase1State.anyDeployed
-        const phase1All = phase1State.allDeployed
-        if (phase1Any && !phase1All) {
-          throw new Error(
-            `Phase 1 is partially deployed for this creator + deployment version (${deploymentVersion}). ` +
-              'Bump VITE_DEPLOYMENT_VERSION to start a fresh slate, or contact support to reconcile the partial deploy.',
-          )
-        }
+        const { vaultDeployed, wrapperDeployed, shareOftDeployed } = phase1State
+        const phase1Any = vaultDeployed || wrapperDeployed || shareOftDeployed
+        const phase1All = vaultDeployed && wrapperDeployed && shareOftDeployed
 
         const phase1Params = {
           creatorToken,
@@ -2108,22 +2360,98 @@ function DeployVaultBatcher({
           shareSymbol,
           version: deploymentVersion,
         } as const
-        const phase1CallData = expectedShareOftSaltOverride
-          ? encodeFunctionData({
-              abi: CREATOR_VAULT_BATCHER_ABI,
-              functionName: 'deployPhase1WithSalt',
-              args: [phase1Params, codeIds, expectedShareOftSaltOverride],
+        const asBatcherCall = (data: Hex) =>
+          ({
+            target: batcherAddress,
+            value: 0n,
+            data,
+          }) as const
+
+        if (!supportsSplitPhase1) {
+          if (expectedShareOftSaltOverride && !supportsLegacyPhase1WithSalt) {
+            logger.warn('[DeployVault] Batcher lacks legacy phase1 vanity salt support; continuing without override', {
+              batcher: batcherAddress,
             })
-          : encodeFunctionData({
-              abi: CREATOR_VAULT_BATCHER_ABI,
-              functionName: 'deployPhase1',
-              args: [phase1Params, codeIds],
+          }
+          if (phase1Any && !phase1All) {
+            throw new Error(
+              `Phase 1 is partially deployed for this creator + deployment version (${deploymentVersion}). ` +
+                'Bump VITE_DEPLOYMENT_VERSION to start a fresh slate, or contact support to reconcile the partial deploy.',
+            )
+          }
+          const phase1CallData = expectedShareOftSaltOverride && supportsLegacyPhase1WithSalt
+            ? encodeFunctionData({
+                abi: CREATOR_VAULT_BATCHER_ABI,
+                functionName: 'deployPhase1WithSalt',
+                args: [phase1Params, codeIds, expectedShareOftSaltOverride],
+              })
+            : encodeFunctionData({
+                abi: CREATOR_VAULT_BATCHER_ABI,
+                functionName: 'deployPhase1',
+                args: [phase1Params, codeIds],
+              })
+          phase1CallsPrepared = phase1All ? [] : [asBatcherCall(phase1CallData)]
+        } else {
+          if (shareOftDeployed && (!vaultDeployed || !wrapperDeployed)) {
+            throw new Error(
+              `Phase 1 split state is invalid for deployment version (${deploymentVersion}). ` +
+                'ShareOFT is deployed while vault/wrapper are missing. Bump VITE_DEPLOYMENT_VERSION or contact support.',
+            )
+          }
+          if (vaultDeployed !== wrapperDeployed) {
+            throw new Error(
+              `Phase 1 split state is invalid for deployment version (${deploymentVersion}). ` +
+                'Vault/wrapper deployment is inconsistent. Bump VITE_DEPLOYMENT_VERSION or contact support.',
+            )
+          }
+          const coreDone = vaultDeployed && wrapperDeployed
+          const saltEnabled = expectedShareOftSaltOverride ? supportsSplitPhase1WithSalt : true
+          if (expectedShareOftSaltOverride && !saltEnabled) {
+            logger.warn('[DeployVault] Batcher lacks split phase1 vanity salt support; continuing without override', {
+              batcher: batcherAddress,
             })
-        const phase1Call = {
-          target: batcherAddress,
-          value: 0n,
-          data: phase1CallData,
-        } as const
+          }
+          if (phase1All) {
+            phase1CallsPrepared = []
+          } else if (!coreDone) {
+            const coreCallData = saltEnabled && expectedShareOftSaltOverride
+              ? encodeFunctionData({
+                  abi: CREATOR_VAULT_BATCHER_ABI,
+                  functionName: 'deployPhase1CoreWithSalt',
+                  args: [phase1Params, codeIds, expectedShareOftSaltOverride],
+                })
+              : encodeFunctionData({
+                  abi: CREATOR_VAULT_BATCHER_ABI,
+                  functionName: 'deployPhase1Core',
+                  args: [phase1Params, codeIds],
+                })
+            const finalizeCallData = saltEnabled && expectedShareOftSaltOverride
+              ? encodeFunctionData({
+                  abi: CREATOR_VAULT_BATCHER_ABI,
+                  functionName: 'finalizePhase1WithSalt',
+                  args: [phase1Params, codeIds, expectedShareOftSaltOverride],
+                })
+              : encodeFunctionData({
+                  abi: CREATOR_VAULT_BATCHER_ABI,
+                  functionName: 'finalizePhase1',
+                  args: [phase1Params, codeIds],
+                })
+            phase1CallsPrepared = [asBatcherCall(coreCallData), asBatcherCall(finalizeCallData)]
+          } else {
+            const finalizeCallData = saltEnabled && expectedShareOftSaltOverride
+              ? encodeFunctionData({
+                  abi: CREATOR_VAULT_BATCHER_ABI,
+                  functionName: 'finalizePhase1WithSalt',
+                  args: [phase1Params, codeIds, expectedShareOftSaltOverride],
+                })
+              : encodeFunctionData({
+                  abi: CREATOR_VAULT_BATCHER_ABI,
+                  functionName: 'finalizePhase1',
+                  args: [phase1Params, codeIds],
+                })
+            phase1CallsPrepared = [asBatcherCall(finalizeCallData)]
+          }
+        }
 
         const phase2CoreParams = {
           creatorToken,
@@ -2291,7 +2619,7 @@ function DeployVaultBatcher({
         if (!publicClient) throw new Error('Public client not ready.')
 
         // Hard guard: require a smart wallet signer (Privy or wallet_sendCalls).
-        if (!canUsePrivySmartWallet && !canUseWalletSendCalls) {
+        if (!planOnly && !canUsePrivySmartWallet && !canUseWalletSendCalls) {
           throw new Error(
             'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account), then retry.',
           )
@@ -2304,13 +2632,13 @@ function DeployVaultBatcher({
           functionName: 'balanceOf',
           args: [owner],
         })) as bigint
-        if (smartWalletBalance < depositAmount) {
+        if (!planOnly && smartWalletBalance < depositAmount) {
           throw new Error(
             `Creator smart wallet needs ${formatDeposit(depositAmount)} ${depositSymbol} (has ${formatDeposit(smartWalletBalance)}). Transfer funds to ${shortAddress(owner)} and retry.`,
           )
         }
 
-        const phase1Calls: Array<{ target: Address; value: bigint; data: Hex }> = phase1All ? [] : [phase1Call]
+        const phase1Calls: Array<{ target: Address; value: bigint; data: Hex }> = phase1CallsPrepared
 
         const phase2Calls: Array<{ target: Address; value: bigint; data: Hex }> = []
         const phase2ApproveCalls: Array<{ target: Address; value: bigint; data: Hex }> = []
@@ -2439,6 +2767,61 @@ function DeployVaultBatcher({
         assertSafe(phase3Calls)
         assertSafe(phase4Calls)
 
+        const phase2PostCalls = phase2Calls.filter(
+          (c) => c !== phase2CoreCall && c !== phase2FinalizeCall && !phase2ApproveCalls.includes(c),
+        )
+        const phase2FinalizeAndPostCalls = (() => {
+          if (phase2PostCalls.length === 0) return [phase2FinalizeCall]
+          const create2Calls = phase2PostCalls.filter(
+            (c) => String(c.target).toLowerCase() === String(expectedCreate2Deployer).toLowerCase(),
+          )
+          const vaultAdminCalls = phase2PostCalls.filter(
+            (c) => String(c.target).toLowerCase() === String(expected.vault).toLowerCase(),
+          )
+          const rest = phase2PostCalls.filter((c) => !create2Calls.includes(c) && !vaultAdminCalls.includes(c))
+          return [...create2Calls, phase2FinalizeCall, ...vaultAdminCalls, ...rest]
+        })()
+
+        const sessionCreatePayload: DeploySessionCreateRequest = {
+          smartWallet: owner,
+          creatorToken,
+          ownerAddress: owner,
+          phase1Calls: serializeSessionCalls(phase1Calls),
+          phase2CoreCalls: serializeSessionCalls([...phase2ApproveCalls, phase2CoreCall]),
+          phase2FinalizeCalls: serializeSessionCalls(phase2FinalizeAndPostCalls),
+          phase3Calls: serializeSessionCalls(phase3Calls),
+          phase4Calls: serializeSessionCalls(phase4Calls),
+          version: deploymentVersion,
+        }
+        const deployPlanExport: DeployPlanExport = {
+          generatedAt: new Date().toISOString(),
+          chainId: base.id,
+          useServerContinue,
+          batcher: batcherAddress,
+          create2Deployer: expectedCreate2Deployer,
+          creatorToken,
+          owner,
+          deploymentVersion,
+          expectedAddresses: {
+            vault: expected.vault,
+            wrapper: expected.wrapper,
+            shareOFT: expected.shareOFT,
+            gaugeController: expected.gaugeController,
+            ccaStrategy: expected.ccaStrategy,
+            oracle: expected.oracle,
+            burnStream: expected.burnStream,
+            payoutRouter: expected.payoutRouter,
+          },
+          phaseCounts: {
+            phase1: sessionCreatePayload.phase1Calls.length,
+            phase2Core: sessionCreatePayload.phase2CoreCalls.length,
+            phase2Finalize: sessionCreatePayload.phase2FinalizeCalls.length,
+            phase3: sessionCreatePayload.phase3Calls.length,
+            phase4: sessionCreatePayload.phase4Calls.length,
+          },
+          sessionCreateRequest: sessionCreatePayload,
+        }
+
         logger.info('[DeployVault] deploy_start', {
           creatorToken,
           owner,
@@ -2446,6 +2829,7 @@ function DeployVaultBatcher({
           batcher: batcherAddress,
           phases: { phase1: phase1Calls.length, phase2: phase2Calls.length, phase3: phase3Calls.length, phase4: phase4Calls.length },
         })
+        if (planOnly) return deployPlanExport
 
         // Debug helper: expose phase1 call data on window for console testing
         if (typeof window !== 'undefined' && phase1Calls.length > 0) {
@@ -2525,6 +2909,21 @@ function DeployVaultBatcher({
             return getAddress(c.target).toLowerCase() === batcherAddressLc ? acc + 1 : acc
           }, 0)
           const hasBatcherCall = batcherCallCount > 0
+
+          if (!opts?.noSplit && phaseLabel === 'phase1' && calls.length > 1 && batcherCallCount > 1) {
+            const firstBatcherIdx = calls.findIndex((c) => getAddress(c.target).toLowerCase() === batcherAddressLc)
+            if (firstBatcherIdx > -1 && firstBatcherIdx < calls.length - 1) {
+              const phase1Core = calls.slice(0, firstBatcherIdx + 1)
+              const phase1Finalize = calls.slice(firstBatcherIdx + 1)
+              logger.info('[DeployVault] Splitting phase1 into multiple UserOps', {
+                coreCount: phase1Core.length,
+                finalizeCount: phase1Finalize.length,
+              })
+              await sendPhaseCalls(phase1Core, phaseLabel, { noSplit: true, segment: 'core' })
+              await sendPhaseCalls(phase1Finalize, phaseLabel, { noSplit: true, segment: 'finalize' })
+              return
+            }
+          }
 
           if (!opts?.noSplit && phaseLabel === 'phase2' && calls.length > 1) {
             const approveSelector = '0x095ea7b3'
@@ -2619,6 +3018,8 @@ function DeployVaultBatcher({
                     'ZeroAddress()': 'One of the required addresses is zero. Check creator token, owner, or other parameters.',
                     'InvalidCodeId()': 'Bytecode not registered in the bytecode store. Run the bytecode registration script first.',
                     'Phase1Missing()': 'Phase 1 contracts must be deployed before Phase 2. Deploy Phase 1 first.',
+                    'Phase1CoreMissing()': 'Phase 1 core must be deployed before finalize. Run deployPhase1Core first.',
+                    'Phase1StateMismatch()': 'Phase 1 finalize inputs do not match the stored core deployment state.',
                     'Phase2Missing()': 'Phase 2 contracts must be deployed before finalization.',
                     'InvalidPercent()': 'Auction percent must be 0-100.',
                     'InvalidWeight()': 'Strategy weights must be valid (0-10000 bps).',
@@ -2643,6 +3044,8 @@ function DeployVaultBatcher({
                       'ZeroAddress()': 'One of the required addresses is zero.',
                       'InvalidCodeId()': 'Bytecode not registered. Run bytecode registration first.',
                       'Phase1Missing()': 'Phase 1 contracts must be deployed first.',
+                      'Phase1CoreMissing()': 'Phase 1 core must be deployed before finalize.',
+                      'Phase1StateMismatch()': 'Phase 1 finalize inputs do not match the stored core deployment state.',
                       'Phase2Missing()': 'Phase 2 contracts must be deployed first.',
                     }
                     const helpText = errorMessages[simResult.directCallResult.errorName] ?? `Contract reverted with: ${simResult.directCallResult.errorName}`
@@ -2695,7 +3098,7 @@ function DeployVaultBatcher({
             })
             
             persistUserOpResult(phaseLabel, logPhaseLabel, result, 'Coinbase Wallet')
-            return
+            return null
           }
 
           // PATH 2: Privy app smart wallet is an owner (EIP-1271 signer)
@@ -2839,6 +3242,18 @@ function DeployVaultBatcher({
             } catch (e) {
               const msg = e instanceof Error ? e.message : String(e ?? '')
               const lc = msg.toLowerCase()
+              const failureClass =
+                lc.includes('total gas used by the user operation') || (lc.includes('total gas used') && lc.includes('allowed limit'))
+                  ? 'paymaster_total_gas_cap'
+                  : lc.includes('signature verification used more gas') || lc.includes('verificationgaslimit') || lc.includes('aa40')
+                    ? 'verification_gas_limit'
+                    : lc.includes('invalid signature') || lc.includes('signature check failed')
+                      ? 'invalid_signature'
+                      : lc.includes('invalid fields')
+                        ? 'invalid_userop_fields'
+                        : lc.includes('banned opcode') || lc.includes('stake/unstake delay') || lc.includes('unstake delay too low')
+                          ? 'paymaster_stake_policy'
+                          : 'unknown'
               const shouldFallback =
                 lc.includes('invalid signature') ||
                 lc.includes('signature check failed') ||
@@ -2855,8 +3270,73 @@ function DeployVaultBatcher({
                 logger.warn('[DeployVault] Privy smart wallet signer failed; setup still required', {
                   phaseLabel: logPhaseLabel,
                   privySmartWalletAddress,
+                  failureClass,
                   error: msg,
                 })
+                // Fallback path: retry the same canonical CSW UserOp with an owner EOA signer.
+                if (!connectedAddress || !wagmiWalletClient || !canonicalSmartWallet || !publicClient) {
+                  throw new Error(
+                    'Privy smart wallet signer failed and owner-EOA fallback is unavailable. ' +
+                      'Connect an owner EOA wallet (Coinbase Wallet recommended) and retry.',
+                  )
+                }
+                if (connectedAddress.toLowerCase() === canonicalSmartWallet.toLowerCase()) {
+                  throw new Error(
+                    'Privy smart wallet signer failed and fallback requires an owner EOA signer. ' +
+                      'Connect an owner EOA wallet (Coinbase Wallet recommended) and retry.',
+                  )
+                }
+
+                const eoaIsOwner = await isCoinbaseSmartWalletOwner({
+                  smartWallet: canonicalSmartWallet,
+                  ownerAddress: connectedAddress as Address,
+                })
+                if (!eoaIsOwner) {
+                  throw new Error(
+                    'Privy smart wallet signer failed, and the connected wallet is not an owner of the canonical smart wallet. ' +
+                      'Connect an owner EOA wallet and retry.',
+                  )
+                }
+
+                await ensureBaseChain('owner EOA wallet')
+                logger.info('[DeployVault] Retrying with owner EOA fallback for phase', {
+                  phaseLabel: logPhaseLabel,
+                  ownerAddress: connectedAddress,
+                  canonicalSmartWallet,
+                  failureClass,
+                })
+                try {
+                  const fallbackResult = await sendCoinbaseSmartWalletUserOperation({
+                    publicClient: publicClient as any,
+                    walletClient: wagmiWalletClient as any,
+                    bundlerUrl,
+                    smartWallet: canonicalSmartWallet,
+                    ownerAddress: connectedAddress as Address,
+                    calls: toCalls(calls),
+                    version: '1',
+                  })
+                  persistUserOpResult(phaseLabel, logPhaseLabel, fallbackResult, 'ERC-4337 (owner EOA fallback)')
+                  logger.info('[DeployVault] Owner EOA fallback succeeded for phase', {
+                    phaseLabel: logPhaseLabel,
+                    ownerAddress: connectedAddress,
+                    canonicalSmartWallet,
+                  })
+                  return
+                } catch (fallbackError) {
+                  const fallbackMsg = fallbackError instanceof Error ? fallbackError.message : String(fallbackError ?? '')
+                  logger.error('[DeployVault] Owner EOA fallback failed', {
+                    phaseLabel: logPhaseLabel,
+                    ownerAddress: connectedAddress,
+                    canonicalSmartWallet,
+                    failureClass,
+                    error: fallbackMsg,
+                  })
+                  const shortFallback = fallbackMsg.replace(/\s+/g, ' ').trim().slice(0, 220)
+                  throw new Error(
+                    `Privy smart wallet signer failed (${failureClass}) and owner-EOA fallback also failed. ` +
+                      `Connect Coinbase Wallet (owner EOA) and retry. Last fallback error: ${shortFallback}`,
+                  )
+                }
               } else {
                 throw e
               }
@@ -2890,29 +3370,9 @@ function DeployVaultBatcher({
           await sendPhaseCalls(phase2ApproveCalls, 'phase2', { noSplit: true, segment: 'approve' })
         }
 
-        const phase2PostCalls = phase2Calls.filter(
-          (c) => c !== phase2CoreCall && c !== phase2FinalizeCall && !phase2ApproveCalls.includes(c),
-        )
         // IMPORTANT: Keep a batcher call in the same sponsored UserOp.
         // The paymaster requires a "primary" call to `creatorVaultBatcher` / `vaultActivationBatcher`,
         // so we bundle finalize + post into one executeBatch to avoid `missing_primary_call`.
-        const phase2FinalizeAndPostCalls = (() => {
-          if (phase2PostCalls.length === 0) return [phase2FinalizeCall]
-
-          // Ordering matters for simulation:
-          // - Deploy burnStream + payoutRouter first (CREATE2 from store)
-          // - Then run `finalizePhase2`
-          // - Then apply vault admin wiring + any remaining post calls
-          const create2Calls = phase2PostCalls.filter(
-            (c) => String(c.target).toLowerCase() === String(expectedCreate2Deployer).toLowerCase(),
-          )
-          const vaultAdminCalls = phase2PostCalls.filter(
-            (c) => String(c.target).toLowerCase() === String(expected.vault).toLowerCase(),
-          )
-          const rest = phase2PostCalls.filter((c) => !create2Calls.includes(c) && !vaultAdminCalls.includes(c))
-
-          return [...create2Calls, phase2FinalizeCall, ...vaultAdminCalls, ...rest]
-        })()
 
         if (useServerContinue) {
           let sessionId: string | null = null
@@ -2935,25 +3395,7 @@ function DeployVaultBatcher({
             const createRes = await fetch('/api/deploy/session/create', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                smartWallet: owner,
-                creatorToken,
-                ownerAddress: owner,
-                phase1Calls: phase1Calls.map((c) => ({ to: c.target, value: String(c.value ?? 0n), data: c.data })),
-                phase2CoreCalls: [...phase2ApproveCalls, phase2CoreCall].map((c) => ({
-                  to: c.target,
-                  value: String(c.value ?? 0n),
-                  data: c.data,
-                })),
-                phase2FinalizeCalls: phase2FinalizeAndPostCalls.map((c) => ({
-                  to: c.target,
-                  value: String(c.value ?? 0n),
-                  data: c.data,
-                })),
-                phase3Calls: phase3Calls.map((c) => ({ to: c.target, value: String(c.value ?? 0n), data: c.data })),
-                phase4Calls: phase4Calls.map((c) => ({ to: c.target, value: String(c.value ?? 0n), data: c.data })),
-                version: deploymentVersion,
-              }),
+              body: JSON.stringify(sessionCreatePayload),
             })
             const createJson = (await createRes.json().catch(() => null)) as ApiEnvelope<any> | null
             if (!createRes.ok || !createJson?.success) {
@@ -3036,7 +3478,7 @@ function DeployVaultBatcher({
             }
 
             await pollServerDeploySession(sessionId)
-            return
+            return null
           } catch (err) {
             await cancelSession()
             throw err
@@ -3067,9 +3509,10 @@ function DeployVaultBatcher({
         setPhase('done')
         logger.info('[DeployVault] deploy_success', { creatorToken, owner, deploymentVersion })
         onSuccess(expected)
-        return
+        return null
       }
     } catch (e: any) {
+      if (planOnly) throw e
       const rawMsg = e instanceof Error ? e.message : String(e ?? '')
       
       // Check if a transaction was actually submitted despite the error
@@ -3103,7 +3546,7 @@ function DeployVaultBatcher({
             setPhase('done')
             logger.info('[DeployVault] deploy_success (recovered from estimation error)', { txHash })
             if (expected) onSuccess(expected)
-            return
+            return null
           }
         } catch (receiptError) {
           logger.warn('[DeployVault] Failed to get receipt for submitted tx', { txHash, error: receiptError })
@@ -3114,9 +3557,38 @@ function DeployVaultBatcher({
       logger.warn('[DeployVault] deploy_failed', { error: pretty })
       setError(pretty)
     } finally {
-      setBusy(false)
+      if (!planOnly) setBusy(false)
     }
+    return null
   }
+
+  const exportPlan = useCallback(async () => {
+    if (busy || exportBusy) return
+    setExportBusy(true)
+    setExportStatus(null)
+    setError(null)
+    try {
+      const plan = await submit({ planOnly: true })
+      if (!plan) throw new Error('Could not prepare deployment plan.')
+      if (typeof window === 'undefined') throw new Error('Plan export is only available in a browser session.')
+
+      const tokenSuffix = String(creatorToken).slice(2, 8).toLowerCase()
+      const ts = new Date().toISOString().replace(/[^\d]/g, '').slice(0, 14)
+      const filename = `deploy-plan-${tokenSuffix}-${ts}.json`
+      const blob = new Blob([JSON.stringify(plan, null, 2)], { type: 'application/json' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      link.click()
+      window.URL.revokeObjectURL(url)
+      setExportStatus(`Exported ${filename}`)
+    } catch (e) {
+      setError(formatDeployError(e))
+    } finally {
+      setExportBusy(false)
+    }
+  }, [busy, creatorToken, exportBusy, formatDeployError, submit])
 
   const expectedError = expectedQuery.isError
     ? ((expectedQuery.error as any)?.message || 'Failed to compute deployment addresses.')
@@ -3288,6 +3760,17 @@ function DeployVaultBatcher({
               </div>
             </div>
           </div>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={busy || exportBusy || expectedQuery.isLoading || !expected}
+              onClick={() => void exportPlan()}
+            >
+              {exportBusy ? 'Preparing plan…' : 'Export Plan JSON'}
+            </button>
+            {exportStatus ? <div className="text-[11px] text-zinc-500">{exportStatus}</div> : null}
+          </div>
         </div>
       </details>
 
@@ -3313,7 +3796,7 @@ function DeployVaultBatcher({
               isCoinbaseWalletDirect ? 'via Coinbase Wallet' : 'via app smart wallet owner'
             }
           </div>
-          <button type="button" onClick={() => void submit()} disabled={disabled} className="btn-accent w-full rounded-lg">
+          <button type="button" onClick={() => void submit()} disabled={disabled || exportBusy} className="btn-accent w-full rounded-lg">
             {busy ? 'Deploying…' : '1‑Click Deploy (Gas-Free)'}
           </button>
         </div>

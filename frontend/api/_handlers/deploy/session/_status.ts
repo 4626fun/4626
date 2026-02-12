@@ -104,7 +104,7 @@ async function getOwnerAccount(rec: any) {
 
 async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void> {
   const step = String(rec.step ?? '')
-  if (!['phase1_sent', 'phase2_core_sent', 'phase2_sent', 'phase3_sent', 'cleanup_sent'].includes(step)) return
+  if (!['phase1_sent', 'phase1_finalize_sent', 'phase2_core_sent', 'phase2_sent', 'phase3_sent', 'cleanup_sent'].includes(step)) return
   if (!rec.lastUserOpHash) return
 
   const origin = getCanonicalOrigin(req)
@@ -155,6 +155,8 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       }))
       .filter((c) => typeof c.data === 'string' && c.data.startsWith('0x'))
   }
+  const phase1Calls = normalizeCalls(Array.isArray(payload.phase1Calls) ? payload.phase1Calls : [])
+  const phase1FinalizeCalls = phase1Calls.length > 1 ? phase1Calls.slice(1) : []
   const phase2CoreCalls = normalizeCalls(Array.isArray(payload.phase2CoreCalls) ? payload.phase2CoreCalls : [])
   const phase2FinalizeCallsRaw = normalizeCalls(Array.isArray(payload.phase2FinalizeCalls) ? payload.phase2FinalizeCalls : [])
   const legacyPhase2Calls = normalizeCalls(Array.isArray(payload.phase2Calls) ? payload.phase2Calls : [])
@@ -243,6 +245,15 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     })
     if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
 
+    if (phase1FinalizeCalls.length > 0) {
+      await startStage(
+        'phase1_confirmed',
+        'phase1_finalize_sent',
+        phase1FinalizeCalls,
+        phase2CoreCalls.length === 0 && phase2FinalizeCalls.length === 0 && postPhase2Calls.length === 0,
+      )
+      return
+    }
     if (phase2CoreCalls.length > 0) {
       await startStage('phase1_confirmed', 'phase2_core_sent', phase2CoreCalls, phase2FinalizeCalls.length === 0 && postPhase2Calls.length === 0)
       return
@@ -256,6 +267,41 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       return
     }
     const completed = await transitionDeploySession({ id: rec.id, fromStep: 'phase1_confirmed', toStep: 'completed' })
+    if (!completed) throw new Error(CONCURRENT_MODIFICATION)
+    return
+  }
+
+  if (step === 'phase1_finalize_sent') {
+    const confirmed = await transitionDeploySession({
+      id: rec.id,
+      fromStep: 'phase1_finalize_sent',
+      toStep: 'phase1_finalize_confirmed',
+      lastTxHash: txHash,
+    })
+    if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
+
+    if (phase2CoreCalls.length > 0) {
+      await startStage(
+        'phase1_finalize_confirmed',
+        'phase2_core_sent',
+        phase2CoreCalls,
+        phase2FinalizeCalls.length === 0 && postPhase2Calls.length === 0,
+      )
+      return
+    }
+    if (phase2FinalizeCalls.length > 0) {
+      await startStage('phase1_finalize_confirmed', 'phase2_sent', phase2FinalizeCalls, postPhase2Calls.length === 0)
+      return
+    }
+    if (postPhase2Calls.length > 0) {
+      await startStage('phase1_finalize_confirmed', 'phase3_sent', postPhase2Calls, true)
+      return
+    }
+    const completed = await transitionDeploySession({
+      id: rec.id,
+      fromStep: 'phase1_finalize_confirmed',
+      toStep: 'completed',
+    })
     if (!completed) throw new Error(CONCURRENT_MODIFICATION)
     return
   }
