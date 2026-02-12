@@ -16,6 +16,7 @@ import {
 } from 'react'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { getHostMode } from '@/lib/host'
+import { getBasename } from '@/lib/basename-api'
 import {
   Client,
   Opfs,
@@ -433,6 +434,29 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       conversationsRef.current = []
   }
 
+  // ------- resolve address → display name (Basename / ENS / truncated) -------
+  const nameCache = useRef<Map<string, string>>(new Map())
+
+  async function resolveDisplayName(address: string): Promise<string> {
+    const lower = address.toLowerCase()
+    const cached = nameCache.current.get(lower)
+    if (cached) return cached
+
+    try {
+      const basename = await getBasename(address)
+      if (basename) {
+        nameCache.current.set(lower, basename)
+        return basename
+      }
+    } catch {
+      // Basename resolution failed — fall through to truncated address
+    }
+
+    const truncated = truncateAddress(address)
+    nameCache.current.set(lower, truncated)
+    return truncated
+  }
+
   // ------- build conversation summary -------
   async function buildConvoSummary(convo: Conversation | Dm | Group): Promise<ChatConversation> {
     const isDm = 'peerInboxId' in convo
@@ -446,7 +470,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         const states = await clientRef.current?.preferences.fetchInboxStates([peerInboxId])
         const resolved = getEthereumAddressFromInboxState(states?.[0])
         peerAddress = resolved ?? undefined
-        name = resolved ? truncateAddress(resolved) : truncateAddress(peerInboxId)
+        // Resolve to Basename / ENS name, falling back to truncated address
+        name = resolved
+          ? await resolveDisplayName(resolved)
+          : truncateAddress(peerInboxId)
       } catch {
         name = 'DM'
       }
@@ -552,8 +579,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           setStatus('connected')
         }
 
-        // Auto-start a DM with the Keepr agent so it can send a welcome message.
-        // Fire-and-forget: failures here must not break the connect flow.
+        // Auto-create a DM conversation with the Keepr agent so it appears
+        // in the user's chat list.  We do NOT send any message on behalf of
+        // the user — the agent will greet them when they send their first message.
         const agentAddr = (import.meta.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim()
         if (agentAddr && /^0x[a-fA-F0-9]{40}$/.test(agentAddr)) {
           void (async () => {
@@ -561,13 +589,12 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
               const alreadyExists = summaries.some(
                 (c) => c.peerAddress?.toLowerCase() === agentAddr.toLowerCase(),
               )
-              if (alreadyExists) return // DM already exists — agent has already welcomed
+              if (alreadyExists) return // DM already exists
               const dm = await client.conversations.createDmWithIdentifier({
                 identifier: agentAddr as `0x${string}`,
                 identifierKind: IdentifierKind.Ethereum,
               })
-              await dm.sendText('hi')
-              console.log('[xmtp] Auto-started DM with agent', agentAddr)
+              console.log('[xmtp] Created DM with agent (no message sent)', agentAddr)
               // Add to conversation list so it appears immediately
               const summary = await buildConvoSummary(dm as any)
               if (mountedRef.current) {
