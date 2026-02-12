@@ -233,7 +233,7 @@ const WELCOME_MESSAGE = [
   ``,
   `You can ask me about your vaults, check on-chain reputation, or just chat.`,
   ``,
-  `Try saying "how are my vaults?" or type /cre help to see everything I can do.`,
+  `Try saying "how are my vaults?" or type /help to see everything I can do.`,
 ].join('\n')
 
 // ---------------------------------------------------------------------------
