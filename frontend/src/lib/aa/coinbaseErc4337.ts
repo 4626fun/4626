@@ -59,12 +59,38 @@ async function verifyBundlerSupportsV06(
       return
     }
     
-    const data = await response.json()
-    const supportedEntryPoints: string[] = data?.result ?? []
-    
-    const supportsV06 = supportedEntryPoints.some(
-      (ep: string) => getAddress(ep) === ENTRYPOINT_V06
-    )
+    const data = await response.json() as {
+      result?: unknown
+      error?: { message?: unknown }
+    }
+    const rpcErrorMessage =
+      typeof data?.error?.message === 'string' ? data.error.message.trim() : ''
+    if (rpcErrorMessage) {
+      throw new Error(
+        `Bundler entrypoint probe failed: ${rpcErrorMessage}. ` +
+        'Check VITE_CDP_BUNDLER_URL / CDP_PAYMASTER_URL and ensure the endpoint exposes eth_supportedEntryPoints.'
+      )
+    }
+
+    if (!Array.isArray(data?.result)) {
+      // Some providers return non-standard responses for this probe.
+      // Skip hard-failing here and let sendUserOperation surface the canonical failure.
+      console.warn('[ERC-4337] Bundler entrypoint probe returned non-array result')
+      return
+    }
+
+    const supportedEntryPoints = data.result
+      .filter((ep): ep is string => typeof ep === 'string')
+      .map((ep) => {
+        try {
+          return getAddress(ep)
+        } catch {
+          return null
+        }
+      })
+      .filter((ep): ep is Address => ep !== null)
+
+    const supportsV06 = supportedEntryPoints.some((ep) => ep === ENTRYPOINT_V06)
     
     if (!supportsV06) {
       throw new Error(
@@ -75,7 +101,10 @@ async function verifyBundlerSupportsV06(
     }
   } catch (e: unknown) {
     // If it's our own error, rethrow
-    if (e instanceof Error && e.message.includes('EntryPoint v0.6')) {
+    if (
+      e instanceof Error &&
+      (e.message.includes('EntryPoint v0.6') || e.message.includes('Bundler entrypoint probe failed'))
+    ) {
       throw e
     }
     // Network errors - warn but don't block (let the UserOp fail with better context)

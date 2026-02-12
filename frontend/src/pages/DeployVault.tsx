@@ -1321,6 +1321,32 @@ function DeployVaultBatcher({
       return 'MetaMask failed to initialize because another wallet extension already controls window.ethereum. Disable one extension (MetaMask/Coinbase/Rabby), or use WalletConnect/Privy sign-in.'
     }
     // Paymaster/bundler errors: be specific (don’t mask real server-side errors).
+    if (lower.includes('bundler entrypoint probe failed')) {
+      if (lower.includes('cdp paymaster endpoint is not configured')) {
+        return 'Paymaster proxy is missing a server-side CDP endpoint. Keep `VITE_CDP_PAYMASTER_URL=/api/paymaster`, and set `CDP_PAYMASTER_URL` (server env) to `https://api.developer.coinbase.com/rpc/v1/base/<CDP_API_KEY_ID>`.'
+      }
+      if (
+        lower.includes('method not found') ||
+        lower.includes('method not allowed') ||
+        lower.includes('unsupported method')
+      ) {
+        return (
+          'Bundler endpoint rejected `eth_supportedEntryPoints`. ' +
+          'Set `VITE_CDP_BUNDLER_URL` to a real ERC-4337 bundler endpoint (or remove it to use `/api/paymaster`), ' +
+          'and verify server env `CDP_PAYMASTER_URL` points to the same CDP RPC.'
+        )
+      }
+      return (
+        'Bundler probe failed before deployment. Check `VITE_CDP_BUNDLER_URL` (client) and `CDP_PAYMASTER_URL` (server), ' +
+        'then retry.'
+      )
+    }
+    if (lower.includes('bundler does not support entrypoint v0.6')) {
+      return (
+        'Bundler does not advertise EntryPoint v0.6 (0x5FF1...). ' +
+        'Use a bundler that supports v0.6 (CDP Base endpoint), or route through `/api/paymaster` with a valid `CDP_PAYMASTER_URL`.'
+      )
+    }
     if (lower.includes('cdp paymaster endpoint is not configured')) {
       return 'Paymaster proxy is missing a server-side CDP endpoint. Keep `VITE_CDP_PAYMASTER_URL=/api/paymaster`, and set `CDP_PAYMASTER_URL` (server env) to `https://api.developer.coinbase.com/rpc/v1/base/<CDP_API_KEY_ID>`.'
     }
