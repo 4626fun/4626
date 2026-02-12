@@ -11,6 +11,7 @@ interface ImportMetaEnv {
   readonly VITE_APP_ORIGIN?: string
   readonly VITE_MARKETING_ORIGIN?: string
   readonly VITE_ENABLE_ZORA_CONNECT?: string
+  readonly VITE_WAITLIST_CSW_PROOF?: string
   readonly VITE_REGISTRY_ADDRESS: string
   readonly VITE_FACTORY_ADDRESS: string
   readonly VITE_LOTTERY_MANAGER_ADDRESS: string

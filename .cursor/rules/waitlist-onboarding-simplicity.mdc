@@ -1,0 +1,19 @@
+---
+description: One-tap waitlist onboarding with backend-first setup and strict UX gating
+alwaysApply: true
+---
+
+# Waitlist Onboarding Simplicity Rule (CreatorVault / 4626.fun)
+
+- Scope: waitlist onboarding flows in `frontend/src/components/waitlist/**`, auth handshakes in `frontend/src/hooks/useSiweAuth.ts` and `frontend/api/_handlers/auth/**`, and waitlist setup endpoints in `frontend/api/_handlers/waitlist/**`.
+- Onboarding MUST be one-tap by default: the user should only need one clear primary action (`Sign Up`) to join.
+- After wallet/auth verification, remaining setup SHOULD run in backend or background tasks.
+- Do not require standalone optional crypto actions during signup (for example: separate CSW proof, separate XMTP connect, manual wallet provisioning) unless explicitly product-critical.
+- Prefer automatic progression: when required checks pass, auto-submit/join; keep only one manual fallback action for recovery.
+- Keep copy non-technical and reassuring (for example: "Setting up your account"), not protocol jargon.
+- Advanced diagnostics/proof UX MUST be feature-flagged and disabled by default.
+- Hard gate: never show CSW proof UI on waitlist unless `VITE_WAITLIST_CSW_PROOF === 'true'`.
+- Default behavior: CSW proof is off for waitlist onboarding (no proof CTA/copy in default UX).
+- XMTP behavior on waitlist/auth: do not auto-connect messaging during signup; connect only on explicit chat open.
+- This rule MUST NOT violate ERC-4337 canonical wallet invariants in `ERC-4337-Wallet-Invariants.mdc`.
+- If a proposed change adds extra signatures, popups, or steps, redesign to backend-first unless there is a strict security requirement with no viable backend alternative.

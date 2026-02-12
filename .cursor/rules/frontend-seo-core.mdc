@@ -1,0 +1,62 @@
+---
+description: Canonical frontend SEO, indexing, metadata, and performance policy
+alwaysApply: true
+---
+
+# Frontend SEO Core Policy (4626.fun)
+
+Scope and stack:
+- SEO/indexing/metadata/internal-linking guidance MUST apply only to user-facing frontend routes/components under `frontend/`.
+- Solidity contracts, backend handlers, infrastructure, and scripts are NOT "pages" for SEO decisions.
+- If a request says "optimize this page" and target files are not frontend routes/components, ask for clarification before proposing SEO changes.
+- Framework detection is REQUIRED before framework-specific guidance:
+  - Current stack is Vite + React Router (SPA), deployed from `frontend/` on Vercel.
+  - Do not propose Next.js-only APIs (`app/`, RSC, `generateMetadata`) unless stack/router is confirmed as Next.js App Router.
+  - If stack is unclear, ask one clarifying question.
+
+Working style:
+- Think in scalable systems, not one-off page tweaks.
+- Prioritize long-term organic growth, Core Web Vitals, and maintainability.
+- Lead with highest-impact changes and include concrete implementation details and trade-offs.
+
+Domain model:
+- Creator is the primary entity.
+- Vault is an offering owned by a Creator.
+- Category/Tag routes are discovery hubs.
+
+Crawlability gate (blocking):
+- If meaningful HTML + metadata are not reliably crawlable (SSR/prerender unavailable), route MUST default to `noindex,follow` until fixed.
+
+Indexing and canonical:
+- Creator and Vault routes SHOULD be indexable by default when they provide unique user-visible value.
+- Sort/filter/pagination/tracking variants (`page`, `sort`, `filter`, `tag`, `utm_*`, `gclid`, etc.) MUST be `noindex,follow` and canonicalize to the hub/entity URL with params stripped.
+- Pagination routes MUST canonicalize to the main hub URL.
+- Canonical alone is not sufficient; discoverable variants still require `noindex,follow`.
+- Ambiguous, thin, or duplicate pages MUST default to `noindex,follow`.
+- Exactly one absolute canonical URL is allowed per content entity.
+- If indexability is uncertain, ask before marking a route indexable.
+
+Metadata requirements (indexable routes):
+- Metadata generation MUST be centralized (framework-appropriate):
+  - Vite/React Router: shared metadata helper (for example `react-helmet-async`) plus prerender/SSR for SEO-critical routes.
+  - Next.js App Router (if adopted): `generateMetadata` or layout metadata.
+- Titles and descriptions MUST be unique and intent-aligned.
+- Robots directives MUST be explicit and match indexability.
+- Open Graph and Twitter metadata are REQUIRED for indexable routes.
+- Missing or duplicated metadata is a blocking issue; affected routes MUST fallback to `noindex,follow` until corrected.
+
+Performance is an SEO feature:
+- Consider LCP, CLS, and TTFB in all recommendations.
+- Avoid unnecessary client-side JavaScript.
+- Optimize images and data fetching by default.
+- Explicitly call out any change likely to regress performance.
+
+Internal linking:
+- Apply link structure using `frontend-seo-internal-linking.mdc`.
+- Never recommend links to parameterized or `noindex` variants when a canonical entity/hub route exists.
+
+Content guardrails:
+- Do not add AI fluff, keyword stuffing, doorway pages, or thin list pages.
+- Do not make financial guarantees or misleading claims.
+- Use clear, factual, creator-first language.
+- If a request conflicts with this policy, call it out and propose a compliant alternative.

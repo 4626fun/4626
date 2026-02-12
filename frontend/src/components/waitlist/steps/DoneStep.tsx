@@ -225,7 +225,6 @@ export const DoneStep = memo(function DoneStep({
   onCopyReferral,
   copyToast,
 }: DoneStepProps) {
-  const navigate = useNavigate()
   const [exiting, setExiting] = useState(false)
 
   const handleDeployClick = useCallback(async () => {

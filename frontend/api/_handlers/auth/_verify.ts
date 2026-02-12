@@ -25,11 +25,34 @@ import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { upsertProfileByWallet } from '../../../server/_lib/profileSync.js'
 
 
-type VerifyBody = { message?: string; signature?: string; nonceToken?: string }
+type VerifyBody = { message?: string; signature?: string; nonceToken?: string; cswAddress?: string }
+
+const DEFAULT_BASE_RPCS = ['https://mainnet.base.org', 'https://base.llamarpc.com'] as const
+
+const COINBASE_SMART_WALLET_ABI = [
+  {
+    type: 'function',
+    name: 'isOwnerAddress',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+] as const
+
+const COINBASE_SMART_WALLET_OWNERS_ABI = [
+  { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'ownerAtIndex', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'bytes' }] },
+  { type: 'function', name: 'nextOwnerIndex', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+] as const
 
 type VerifyResponse = {
   address: string
   sessionToken: string
+  cswOwnership?: {
+    cswAddress: string
+    ownerAddress: string
+    verified: boolean
+  } | null
 }
 
 function normalizeOrigin(value: string): string {
@@ -54,6 +77,84 @@ function getRequestOrigin(req: VercelRequest): string {
   return `${proto}://${hostRaw}`
 }
 
+function isAddressLike(v: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/i.test(v)
+}
+
+function getBaseRpcUrls(): string[] {
+  const raw = (process.env.BASE_RPC_URL ?? '').trim()
+  if (!raw) return [...DEFAULT_BASE_RPCS]
+  const parts = raw.split(/[\s,]+/g).map((s) => s.trim()).filter(Boolean)
+  const urls = parts.length > 0 ? [...parts, ...DEFAULT_BASE_RPCS] : [...DEFAULT_BASE_RPCS]
+  return Array.from(new Set(urls))
+}
+
+async function verifyCswOwnerOnBase(params: { smartWallet: string; ownerAddress: string }): Promise<boolean> {
+  const { createPublicClient, encodeAbiParameters, getAddress, http } = await import('viem')
+  const { base } = await import('viem/chains')
+
+  const smartWallet = getAddress(params.smartWallet as `0x${string}`)
+  const ownerAddress = getAddress(params.ownerAddress as `0x${string}`)
+
+  for (const rpc of getBaseRpcUrls()) {
+    try {
+      const client = createPublicClient({
+        chain: base,
+        transport: http(rpc, { timeout: 10_000 }),
+      })
+
+      try {
+        const isOwner = await client.readContract({
+          address: smartWallet,
+          abi: COINBASE_SMART_WALLET_ABI,
+          functionName: 'isOwnerAddress',
+          args: [ownerAddress],
+        })
+        if (isOwner === true) return true
+      } catch {
+        // Fallback to owner scan for wallets/contracts that don't expose isOwnerAddress.
+      }
+
+      const countRaw = (await client.readContract({
+        address: smartWallet,
+        abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+        functionName: 'ownerCount',
+      })) as bigint
+      let upperBound = Number(countRaw)
+      if (!Number.isFinite(upperBound) || upperBound < 0) upperBound = 0
+      try {
+        const nextRaw = (await client.readContract({
+          address: smartWallet,
+          abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+          functionName: 'nextOwnerIndex',
+        })) as bigint
+        const next = Number(nextRaw)
+        if (Number.isFinite(next) && next > 0) upperBound = next
+      } catch {
+        // ignore; fallback to ownerCount
+      }
+      const maxScan = Math.min(upperBound, 128)
+      const expected = String(encodeAbiParameters([{ type: 'address' }], [ownerAddress])).toLowerCase()
+      for (let i = 0; i < maxScan; i += 1) {
+        const ownerBytes = (await client.readContract({
+          address: smartWallet,
+          abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+          functionName: 'ownerAtIndex',
+          args: [BigInt(i)],
+        })) as string
+        if (String(ownerBytes).toLowerCase() === expected) return true
+      }
+      // Reached a healthy RPC and found no owner match.
+      return false
+    } catch {
+      // Try next RPC
+      continue
+    }
+  }
+
+  return false
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -67,8 +168,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const message = typeof body?.message === 'string' ? body.message : ''
   const signature = typeof body?.signature === 'string' ? body.signature : ''
   const nonceTokenRaw = typeof body?.nonceToken === 'string' ? body.nonceToken : ''
+  const cswAddressRaw = typeof body?.cswAddress === 'string' ? body.cswAddress.trim() : ''
   if (!message || !signature) {
     return res.status(400).json({ success: false, error: 'Missing message or signature' } satisfies ApiEnvelope<never>)
+  }
+  if (cswAddressRaw && !isAddressLike(cswAddressRaw)) {
+    return res.status(400).json({ success: false, error: 'Invalid cswAddress' } satisfies ApiEnvelope<never>)
   }
 
   const parsed = parseSiweMessage(message)
@@ -138,6 +243,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Signature invalid' } satisfies ApiEnvelope<never>)
   }
 
+  let cswOwnership: VerifyResponse['cswOwnership'] = null
+  if (cswAddressRaw) {
+    const ownerVerified = await verifyCswOwnerOnBase({
+      smartWallet: cswAddressRaw,
+      ownerAddress: verified.address,
+    })
+    cswOwnership = {
+      cswAddress: cswAddressRaw,
+      ownerAddress: verified.address,
+      verified: ownerVerified,
+    }
+  }
+
   const token = makeSessionToken({ address: verified.address })
   setCookie(req, res, COOKIE_SESSION, token, { httpOnly: true, maxAgeSeconds: 60 * 60 * 24 * 7 })
   clearCookie(req, res, COOKIE_NONCE)
@@ -151,7 +269,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   return res.status(200).json({
     success: true,
-    data: { address: verified.address, sessionToken: token } satisfies VerifyResponse,
+    data: { address: verified.address, sessionToken: token, cswOwnership } satisfies VerifyResponse,
   } satisfies ApiEnvelope<VerifyResponse>)
 }
 

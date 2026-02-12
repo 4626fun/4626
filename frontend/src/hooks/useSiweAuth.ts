@@ -3,14 +3,15 @@ import { useAccount, useSignMessage } from 'wagmi'
 import { base } from 'wagmi/chains'
 import { apiFetch } from '@/lib/apiBase'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
-import {
-  setAutoConnectEnabled as setXmtpAutoConnect,
-  requestXmtpAutoConnect,
-} from '@/lib/xmtp/provider'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 type MeResponse = { address: string } | null
+type CswOwnershipAttestation = {
+  cswAddress: string
+  ownerAddress: string
+  verified: boolean
+}
 
 const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
 const HANDOFF_HASH_KEY = 'cv_session'
@@ -96,6 +97,7 @@ export function useSiweAuth() {
     typeof privyAny?.getAccessToken === 'function' ? privyAny.getAccessToken.bind(privyAny) : null
 
   const [authAddress, setAuthAddress] = useState<string | null>(null)
+  const [cswOwnership, setCswOwnership] = useState<CswOwnershipAttestation | null>(null)
   const [sessionHydrated, setSessionHydrated] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -193,19 +195,11 @@ export function useSiweAuth() {
 
         setStoredSessionToken(sessionToken)
         setAuthAddress(address)
+        setCswOwnership(null)
         try {
           localStorage.setItem('cv:privy:lastAuthAt', String(Date.now()))
         } catch {
           // ignore
-        }
-        // Enable XMTP auto-connect so messaging activates seamlessly after
-        // Privy sign-in. The XMTP provider will handle the enc key signature
-        // if not already cached (one popup instead of a separate "Enable Chat" step).
-        if (address) {
-          try {
-            setXmtpAutoConnect(address)
-            requestXmtpAutoConnect()
-          } catch { /* non-fatal */ }
         }
         return address
       } catch (e: unknown) {
@@ -288,9 +282,12 @@ export function useSiweAuth() {
 
   type SignInMethod = 'auto' | 'siwe' | 'privy'
 
-  const signIn = useCallback(async (opts?: { method?: SignInMethod }): Promise<string | null> => {
+  const signIn = useCallback(async (opts?: { method?: SignInMethod; attestCswAddress?: string | null }): Promise<string | null> => {
     if (!address) return null
     const method: SignInMethod = opts?.method ?? 'auto'
+    const attestCswAddressRaw = typeof opts?.attestCswAddress === 'string' ? opts.attestCswAddress.trim() : ''
+    const attestCswAddress =
+      /^0x[a-fA-F0-9]{40}$/.test(attestCswAddressRaw) ? attestCswAddressRaw : ''
     setBusy(true)
     setError(null)
     try {
@@ -352,9 +349,18 @@ export function useSiweAuth() {
       const verifyRes = await apiFetch('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ message, signature, nonceToken }),
+        body: JSON.stringify({
+          message,
+          signature,
+          nonceToken,
+          ...(attestCswAddress ? { cswAddress: attestCswAddress } : null),
+        }),
       })
-      const verifyJson = (await verifyRes.json().catch(() => null)) as ApiEnvelope<{ address: string; sessionToken: string }> | null
+      const verifyJson = (await verifyRes.json().catch(() => null)) as ApiEnvelope<{
+        address: string
+        sessionToken: string
+        cswOwnership?: CswOwnershipAttestation | null
+      }> | null
       if (!verifyRes.ok || !verifyJson?.success) {
         const apiErr = coerceErrorMessage((verifyJson as any)?.error, '')
         throw new Error(apiErr || 'Sign-in failed')
@@ -367,17 +373,21 @@ export function useSiweAuth() {
       }
       const resolved = typeof signed === 'string' ? signed : null
       setAuthAddress(resolved)
-
-      // Enable XMTP auto-connect after sign-in. The XMTP provider now uses
-      // a random encryption key (no wallet popup), so all we need to do is
-      // set the flag and signal the provider to connect.
-      if (resolved) {
-        try {
-          setXmtpAutoConnect(resolved)
-          requestXmtpAutoConnect()
-        } catch {
-          // Non-fatal: XMTP will prompt separately if this fails
-        }
+      const csw = (verifyJson?.data as any)?.cswOwnership
+      if (
+        csw &&
+        typeof csw === 'object' &&
+        typeof csw.cswAddress === 'string' &&
+        typeof csw.ownerAddress === 'string' &&
+        typeof csw.verified === 'boolean'
+      ) {
+        setCswOwnership({
+          cswAddress: csw.cswAddress,
+          ownerAddress: csw.ownerAddress,
+          verified: csw.verified,
+        })
+      } else {
+        setCswOwnership(null)
       }
 
       return resolved
@@ -396,10 +406,11 @@ export function useSiweAuth() {
       await apiFetch('/api/auth/logout', { method: 'POST', headers: { Accept: 'application/json' } })
       setStoredSessionToken(null)
       setAuthAddress(null)
+      setCswOwnership(null)
     } finally {
       setBusy(false)
     }
   }, [])
 
-  return { authAddress, isSignedIn, busy, error, signIn, signInWithPrivyToken, signOut, refresh, sessionHydrated }
+  return { authAddress, isSignedIn, cswOwnership, busy, error, signIn, signInWithPrivyToken, signOut, refresh, sessionHydrated }
 }

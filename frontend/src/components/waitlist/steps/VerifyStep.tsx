@@ -96,6 +96,7 @@ type VerifyStepProps = {
   creatorCoin: WaitlistState['creatorCoin']
   creatorCoinDeclaredMissing: boolean
   creatorCoinBusy: boolean
+  showCswProof?: boolean
   // CSW ERC-1271 ownership proof
   cswProofVerified?: boolean
   cswProofBusy?: boolean
@@ -104,9 +105,10 @@ type VerifyStepProps = {
   // Submission
   busy: boolean
   canSubmit: boolean
+  simpleVerifiedMode?: boolean
+  submitError?: string | null
   onPrivyContinue: () => void
   onPrivyEmailContinue?: () => void
-  onFallbackSignIn?: () => void | Promise<void>
   onSubmit: () => void | Promise<void>
 }
 
@@ -123,12 +125,15 @@ export const VerifyStep = memo(function VerifyStep({
   creatorCoin,
   creatorCoinDeclaredMissing,
   creatorCoinBusy,
+  showCswProof,
   cswProofVerified,
   cswProofBusy,
   cswProofError,
   onProveCswOwnership,
   busy,
   canSubmit,
+  simpleVerifiedMode,
+  submitError,
   onPrivyContinue,
   onPrivyEmailContinue,
   onSubmit,
@@ -186,6 +191,105 @@ export const VerifyStep = memo(function VerifyStep({
     : 'border-amber-400/35 bg-amber-500/10 text-amber-100'
   const panelClass = 'rounded-2xl border border-white/[0.06] bg-white/[0.02]'
   const microPanelClass = 'rounded-xl border border-white/[0.04] bg-white/[0.01]'
+
+  if (verifiedWallet && simpleVerifiedMode) {
+    const profileReady = Boolean(hasCreatorCoin || creatorCoinDeclaredMissing)
+    const ownerReady = !ownershipGateActive || walletOwnershipValid
+    const setupReady = profileReady && ownerReady
+
+    return (
+      <motion.div key="verify-simple" {...fadeUp} className="space-y-6 sm:space-y-7">
+        <motion.div {...scaleIn} className="space-y-3">
+          <h1 className="font-doto text-[26px] sm:text-[32px] font-bold tracking-tight text-white leading-[1.08]">
+            Setting up your account
+          </h1>
+          <p className="max-w-[48ch] text-[14px] text-zinc-500 leading-relaxed">
+            We handle wallet verification and backend setup for you.
+          </p>
+        </motion.div>
+
+        <motion.div {...scaleIn} className={`${panelClass} p-4 space-y-3`}>
+          <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
+            <span className="text-[12px] text-zinc-500">Wallet connected</span>
+            <span className="text-[12px] text-emerald-300 inline-flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Ready
+            </span>
+          </div>
+
+          <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
+            <span className="text-[12px] text-zinc-500">Creator profile check</span>
+            {creatorCoinBusy ? (
+              <span className="text-[12px] text-zinc-300 inline-flex items-center gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Running
+              </span>
+            ) : (
+              <span className="text-[12px] text-emerald-300 inline-flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Done
+              </span>
+            )}
+          </div>
+
+          {ownershipGateActive ? (
+            <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
+              <span className="text-[12px] text-zinc-500">Ownership check</span>
+              {walletOwnershipValid ? (
+                <span className="text-[12px] text-emerald-300 inline-flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Verified
+                </span>
+              ) : (
+                <span className="text-[12px] text-amber-300 inline-flex items-center gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Wallet mismatch
+                </span>
+              )}
+            </div>
+          ) : null}
+
+          <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
+            <span className="text-[12px] text-zinc-500">Backend setup</span>
+            {busy ? (
+              <span className="text-[12px] text-zinc-200 inline-flex items-center gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Finalizing
+              </span>
+            ) : setupReady ? (
+              <span className="text-[12px] text-emerald-300 inline-flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Ready
+              </span>
+            ) : (
+              <span className="text-[12px] text-zinc-300 inline-flex items-center gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Waiting
+              </span>
+            )}
+          </div>
+        </motion.div>
+
+        {submitError ? (
+          <motion.div {...fadeUp} className="rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-[12px] text-red-200/90">
+            {submitError}
+          </motion.div>
+        ) : null}
+
+        {!busy && canSubmit ? (
+          <motion.div {...scaleIn}>
+            <button
+              type="button"
+              className="w-full flex items-center justify-center gap-2 min-h-[56px] rounded-2xl bg-[#0052FF] text-white font-semibold text-[15px] px-6 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_8px_32px_-8px_rgba(0,82,255,0.5)] transition-all duration-200 ease-out hover:bg-[#1a66ff] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.15),0_12px_40px_-8px_rgba(0,82,255,0.6)] active:scale-[0.99]"
+              onClick={onSubmit}
+            >
+              Continue
+            </button>
+          </motion.div>
+        ) : null}
+      </motion.div>
+    )
+  }
 
   return (
     <motion.div
@@ -433,7 +537,7 @@ export const VerifyStep = memo(function VerifyStep({
             </motion.div>
 
             {/* CSW ERC-1271 Ownership Proof */}
-            {canonicalSmartWallet && walletOwnershipValid ? (
+            {showCswProof && canonicalSmartWallet && walletOwnershipValid ? (
               <motion.div variants={staggerItem} className={`${panelClass} px-4 py-3`}>
                 {cswProofVerified ? (
                   <div className="flex items-center gap-3">

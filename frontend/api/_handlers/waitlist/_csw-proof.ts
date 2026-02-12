@@ -43,6 +43,12 @@ const eip1271Abi = [
   },
 ] as const
 
+const COINBASE_SMART_WALLET_OWNERS_ABI = [
+  { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'ownerAtIndex', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'bytes' }] },
+  { type: 'function', name: 'nextOwnerIndex', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+] as const
+
 // ---------------------------------------------------------------------------
 // HMAC-signed challenge token (stateless across serverless instances)
 // ---------------------------------------------------------------------------
@@ -224,14 +230,6 @@ async function verifyErc1271OnBase(params: {
   const urls = getBaseRpcUrls()
   const digest = hashMessage(params.message)
 
-  // Build candidate signatures to try:
-  // 1. Raw signature (works if the wallet itself wraps it, e.g. Coinbase Wallet)
-  // 2. SignatureWrapper-encoded for owner indices 0–15 (works for EOA signers; CSW can have many owners)
-  const candidates: `0x${string}`[] = [params.signature]
-  for (let i = 0; i < 16; i++) {
-    candidates.push(encodeSignatureWrapper(i, params.signature, encodeAbiParameters))
-  }
-
   for (const url of urls) {
     try {
       const client = createPublicClient({
@@ -241,7 +239,43 @@ async function verifyErc1271OnBase(params: {
 
       // Must be a deployed contract
       const code = await client.getBytecode({ address: params.contract })
-      if (!code || code === '0x') return false
+      if (!code || code === '0x') continue
+
+      // Build candidate signatures to try:
+      // 1) Raw signature
+      // 2) SignatureWrapper(ownerIndex, signature) across discovered owner indices
+      //
+      // We query owner bounds dynamically so wallets with owner index > 15 still verify.
+      let scanLimit = 16
+      try {
+        const countRaw = (await (client as any).readContract({
+          address: params.contract,
+          abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+          functionName: 'ownerCount',
+          args: [],
+        })) as bigint
+        let upperBound = Number(countRaw)
+        if (!Number.isFinite(upperBound) || upperBound < 0) upperBound = 0
+        try {
+          const nextRaw = (await (client as any).readContract({
+            address: params.contract,
+            abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+            functionName: 'nextOwnerIndex',
+            args: [],
+          })) as bigint
+          const next = Number(nextRaw)
+          if (Number.isFinite(next) && next > 0) upperBound = next
+        } catch {
+          // ignore; fallback to ownerCount
+        }
+        scanLimit = Math.min(Math.max(upperBound, 1), 128)
+      } catch {
+        // ignore; fallback to 16
+      }
+      const candidates: `0x${string}`[] = [params.signature]
+      for (let i = 0; i < scanLimit; i++) {
+        candidates.push(encodeSignatureWrapper(i, params.signature, encodeAbiParameters))
+      }
 
       // Try each candidate signature
       for (const sig of candidates) {
@@ -258,9 +292,8 @@ async function verifyErc1271OnBase(params: {
           continue
         }
       }
-
-      // All candidates failed on this RPC — the signature is genuinely invalid
-      return false
+      // All candidates failed on this RPC; try the next provider before failing.
+      continue
     } catch {
       // RPC error — try next URL
       continue

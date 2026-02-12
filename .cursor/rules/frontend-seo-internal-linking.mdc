@@ -1,0 +1,29 @@
+---
+description: Canonical internal-linking structure and link safety for frontend SEO routes
+alwaysApply: true
+---
+
+# Frontend SEO Internal Linking Policy (4626.fun)
+
+Scope:
+- Apply only to user-facing frontend routes/components under `frontend/`.
+
+Link safety:
+- Link targets MUST be canonical URLs only (never parameterized sort/filter/pagination/tracking variants).
+- Do not link to `noindex` routes when a canonical indexable hub/entity route exists.
+- Prefer contextual in-content links over footer or sitewide link spam.
+
+Creator route linking:
+- MUST link to the creator's Vaults.
+- MUST link to relevant Category/Tag hubs.
+- SHOULD link to 3-5 contextually related Creators when appropriate.
+
+Vault route linking:
+- MUST link to its Creator route.
+- MUST link to relevant Category/Tag hubs.
+- SHOULD link to related Vaults when appropriate.
+
+Category/Tag hub linking:
+- SHOULD link to top Creators.
+- SHOULD link to top Vaults.
+- SHOULD link to related Category/Tag hubs.

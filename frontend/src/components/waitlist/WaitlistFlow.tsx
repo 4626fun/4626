@@ -541,7 +541,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     [],
   )
 
-  const { persona, step, contactPreference, email, emailOptOut, busy, doneEmail } = flow
+  const { persona, step, contactPreference, email, emailOptOut, busy, doneEmail, error: submitError } = flow
   const {
     verifiedWallet,
     verifiedWalletMethod,
@@ -831,6 +831,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   // If wallet sign-in is disabled (Privy dashboard config), auto-fall back to email login once
   // so users aren’t stuck staring at an error.
   const autoEmailFallbackRef = useRef(false)
+  const autoSubmitAttemptRef = useRef<string | null>(null)
   useEffect(() => {
     if (step !== 'verify') return
     if (!showPrivyReady) return
@@ -841,15 +842,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     autoEmailFallbackRef.current = true
     void openPrivyEmailLogin()
   }, [openPrivyEmailLogin, privyAuthed, privyVerifyError, showPrivyReady, step])
-
-  const fallbackSignIn = useCallback(async () => {
-    try {
-      // This will prefer Privy session-bridge when possible; otherwise it falls back to SIWE.
-      await siwe.signIn()
-    } catch {
-      // errors are handled in the auth hook UI; no-op here
-    }
-  }, [siwe])
 
   const emailTrimmed = useMemo(() => normalizeEmail(email), [email])
   const isEmailValid = useMemo(() => isValidEmail(emailTrimmed), [emailTrimmed])
@@ -914,6 +906,23 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     if (!a || !b) return false
     return a !== b
   }, [coinbaseSmartWalletAddress, cswAddress])
+  const siweCswOwnershipAttestation = useMemo(() => {
+    const claim = siwe.cswOwnership
+    if (!claim || claim.verified !== true) return null
+    const claimCsw = isValidEvmAddress(claim.cswAddress) ? claim.cswAddress.toLowerCase() : null
+    const claimOwner = isValidEvmAddress(claim.ownerAddress) ? claim.ownerAddress.toLowerCase() : null
+    if (!claimCsw || !claimOwner) return null
+
+    const effective = effectiveCswAddress && isValidEvmAddress(effectiveCswAddress)
+      ? effectiveCswAddress.toLowerCase()
+      : null
+    if (effective && claimCsw !== effective) return null
+    if (verifiedWalletNormalized && claimOwner !== verifiedWalletNormalized) return null
+    return { cswAddress: claimCsw, ownerAddress: claimOwner }
+  }, [effectiveCswAddress, siwe.cswOwnership, verifiedWalletNormalized])
+  // Optional CSW proof UI is noisy for general waitlist onboarding.
+  // Keep disabled by default and enable only when explicitly requested.
+  const cswProofUiEnabled = import.meta.env.VITE_WAITLIST_CSW_PROOF === 'true'
 
   const adminBypassSet = useMemo(() => {
     // Keep this in sync with `frontend/src/App.tsx` so admins can always escape the waitlist UI.
@@ -988,6 +997,28 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     if (creatorCoinDeclaredMissing) return
     patchWaitlist({ creatorCoinDeclaredMissing: true })
   }, [creatorCoin?.address, creatorCoinBusy, creatorCoinDeclaredMissing, patchWaitlist, step, verifiedWallet])
+
+  // One-tap UX: once wallet + ownership checks are satisfied, submit automatically.
+  // Keep a one-shot guard so transient API failures do not trigger endless retries.
+  useEffect(() => {
+    if (step !== 'verify' || !verifiedWallet) {
+      autoSubmitAttemptRef.current = null
+      return
+    }
+    if (busy) return
+    if (!canSubmit) return
+    const creatorKey = creatorCoin?.address
+      ? creatorCoin.address.toLowerCase()
+      : creatorCoinDeclaredMissing
+        ? 'missing'
+        : 'pending'
+    const attemptKey = `${verifiedWallet.toLowerCase()}:${creatorKey}`
+    if (autoSubmitAttemptRef.current === attemptKey) return
+    autoSubmitAttemptRef.current = attemptKey
+    void submitWaitlist()
+    // submitWaitlist is intentionally omitted to avoid re-firing on identity changes each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, canSubmit, creatorCoin?.address, creatorCoinDeclaredMissing, step, verifiedWallet])
 
   // Auto-fill email from Privy user when authenticated
   useEffect(() => {
@@ -1152,8 +1183,11 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     if (verifiedSolana && isValidSolanaAddress(verifiedSolana)) {
       out.push({ method: 'solana', subject: verifiedSolana, timestamp: ts })
     }
+    if (siweCswOwnershipAttestation) {
+      out.push({ method: 'siwe-csw-owner', subject: siweCswOwnershipAttestation.cswAddress, timestamp: ts })
+    }
     // Include CSW ERC-1271 ownership proof if verified
-    if (cswProofVerified && effectiveCswAddress) {
+    if (cswProofUiEnabled && cswProofVerified && effectiveCswAddress) {
       out.push({ method: 'csw-erc1271', subject: effectiveCswAddress, timestamp: ts })
     }
     return out
@@ -1222,6 +1256,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   }
 
   async function proveCswOwnership() {
+    if (!cswProofUiEnabled) return
     const csw = effectiveCswAddress
     if (!csw || cswProofBusy || cswProofVerified) return
     patchWaitlist({ cswProofBusy: true, cswProofError: null })
@@ -1237,10 +1272,26 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       }
 
       const { message, challengeToken } = challengeJson.data as { message: string; challengeToken: string }
+      const signingAccount = verifiedWalletNormalized ?? connectedAddress
+      if (!signingAccount || !isValidEvmAddress(signingAccount)) {
+        throw new Error('Connect the owner wallet you want to sign with, then retry ownership proof.')
+      }
+      if (
+        verifiedWalletNormalized &&
+        connectedAddress &&
+        connectedAddress !== verifiedWalletNormalized
+      ) {
+        throw new Error(
+          'Connected signer does not match your verified wallet. Connect the same owner wallet and retry.'
+        )
+      }
 
       // Step 2: Sign the challenge message with the connected wallet.
       // The CSW contract's isValidSignature will verify this signer is an owner.
-      const signature = await signMessageAsync({ message })
+      const signature = await signMessageAsync({
+        message,
+        account: signingAccount as `0x${string}`,
+      })
 
       // Step 3: Submit the signature for on-chain ERC-1271 verification
       const verifyRes = await apiFetch('/api/waitlist/csw-proof', {
@@ -1697,15 +1748,17 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     creatorCoin={creatorCoin}
                     creatorCoinDeclaredMissing={creatorCoinDeclaredMissing}
                     creatorCoinBusy={creatorCoinBusy}
+                    showCswProof={cswProofUiEnabled}
                     cswProofVerified={cswProofVerified}
                     cswProofBusy={cswProofBusy}
                     cswProofError={cswProofError}
                     onProveCswOwnership={proveCswOwnership}
                     busy={busy}
                     canSubmit={canSubmit}
+                    simpleVerifiedMode
+                    submitError={submitError}
                     onPrivyContinue={openPrivyLogin}
                     onPrivyEmailContinue={openPrivyEmailLogin}
-                    onFallbackSignIn={fallbackSignIn}
                     onSubmit={submitWaitlist}
                   />
                 </motion.div>

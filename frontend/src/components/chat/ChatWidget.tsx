@@ -36,7 +36,7 @@ type OpenWindow = {
 
 function ChatWidgetInner() {
   const { isConnected } = useAccount()
-  const { startDm } = useXmtp()
+  const { startDm, connect, status } = useXmtp()
 
   const [barExpanded, setBarExpanded] = useState(false)
   const [openWindows, setOpenWindows] = useState<OpenWindow[]>([])
@@ -45,6 +45,12 @@ function ChatWidgetInner() {
   const [newDmError, setNewDmError] = useState('')
   const [newDmLoading, setNewDmLoading] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+
+  const maybeConnectMessaging = useCallback(() => {
+    if (status === 'idle' || status === 'error') {
+      void connect()
+    }
+  }, [connect, status])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -171,7 +177,10 @@ function ChatWidgetInner() {
             <ChatBar
               expanded={false}
               variant="mobile"
-              onToggle={() => setBarExpanded(true)}
+              onToggle={() => {
+                setBarExpanded(true)
+                maybeConnectMessaging()
+              }}
               onOpenChat={handleOpenChat}
               onNewDm={handleNewDm}
             />
@@ -201,7 +210,13 @@ function ChatWidgetInner() {
         <div className="pointer-events-auto">
           <ChatBar
             expanded={barExpanded}
-            onToggle={() => setBarExpanded((v) => !v)}
+            onToggle={() =>
+              setBarExpanded((v) => {
+                const next = !v
+                if (next) maybeConnectMessaging()
+                return next
+              })
+            }
             onOpenChat={handleOpenChat}
             onNewDm={handleNewDm}
           />

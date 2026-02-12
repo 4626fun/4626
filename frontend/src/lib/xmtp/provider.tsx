@@ -15,11 +15,9 @@ import {
   type ReactNode,
 } from 'react'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
-import { keccak256 } from 'viem'
 import { getHostMode } from '@/lib/host'
 import {
   Client,
-  getInboxIdForIdentifier,
   type Signer,
   type Conversation,
   type Dm,
@@ -171,15 +169,6 @@ function getOrCreateEncKeyHex(address: string): string {
   return hex
 }
 
-function isAutoConnectEnabled(address: string): boolean {
-  if (typeof window === 'undefined') return false
-  try {
-    return window.localStorage.getItem(autoConnectStorageKey(address)) === '1'
-  } catch {
-    return false
-  }
-}
-
 export function setAutoConnectEnabled(address: string): void {
   if (typeof window === 'undefined') return
   try {
@@ -232,63 +221,6 @@ function extractInstallationLimitInboxId(message: string): string | null {
 function isInstallationLimitError(message: string): boolean {
   const m = String(message || '').toLowerCase()
   return m.includes('registered 10/10 installations') || m.includes('10/10 installations')
-}
-
-/**
- * Maximum installations XMTP allows per inbox.
- * We preemptively revoke when at (MAX - 1) to leave room for Client.create().
- */
-const XMTP_MAX_INSTALLATIONS = 10
-const XMTP_SAFE_THRESHOLD = XMTP_MAX_INSTALLATIONS - 1 // 9
-
-/**
- * Pre-flight check: query the inbox's installation count *before* calling
- * Client.create().  If we're at or above the safe threshold, revoke the
- * oldest installation(s) so the upcoming create won't hit 10/10.
- *
- * This uses the static Client methods so no client instance is needed.
- */
-async function ensureInstallationSlot(
-  signer: Signer,
-  env: string,
-): Promise<void> {
-  try {
-    // Resolve the inboxId for this signer's identifier
-    const identifier = await signer.getIdentifier()
-    const inboxId = await getInboxIdForIdentifier(identifier, env as any)
-    if (!inboxId) return // new user, no installations yet
-
-    const states = await Client.fetchInboxStates([inboxId], env as any)
-    const state = states?.[0]
-    if (!state) return // no state found, likely new inbox
-
-    const installs = Array.isArray(state.installations) ? state.installations : []
-    if (installs.length < XMTP_SAFE_THRESHOLD) return // plenty of room
-
-    console.warn(
-      `[xmtp] Pre-flight: inbox ${inboxId} has ${installs.length}/${XMTP_MAX_INSTALLATIONS} installations. ` +
-        `Auto-revoking oldest to free a slot.`,
-    )
-
-    // Sort by createdAt ascending (oldest first), revoke enough to get to threshold - 1
-    const revokeCount = Math.max(1, installs.length - (XMTP_SAFE_THRESHOLD - 1))
-    const sorted = [...installs].sort((a: any, b: any) => {
-      const aTime = typeof a.createdAt === 'number' ? a.createdAt : (Date.parse(a.createdAt) || 0)
-      const bTime = typeof b.createdAt === 'number' ? b.createdAt : (Date.parse(b.createdAt) || 0)
-      return aTime - bTime
-    })
-    const toRevoke = sorted.slice(0, revokeCount).map((i: any) => i.bytes ?? i.id)
-    const validRevoke = toRevoke.filter(Boolean)
-
-    if (validRevoke.length > 0) {
-      await Client.revokeInstallations(signer, inboxId, validRevoke, env as any)
-      console.log(`[xmtp] Pre-flight: revoked ${validRevoke.length} stale installation(s)`)
-    }
-  } catch (err) {
-    // Non-fatal: if the pre-flight fails, Client.create() will either succeed
-    // or throw the 10/10 error which is already handled.
-    console.warn('[xmtp] Pre-flight installation check failed (non-fatal):', err)
-  }
 }
 
 function getEthereumAddressFromInboxState(state: any): string | null {
@@ -350,7 +282,6 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const conversationsRef = useRef<ChatConversation[]>([])
   const mountedRef = useRef(true)
   const connectInFlightRef = useRef(false)
-  const autoConnectAttemptedRef = useRef<string | null>(null)
 
   // Cleanup on unmount
   useEffect(() => {
@@ -371,13 +302,8 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       conversationsRef.current = []
       setInboxId(null)
       setInstallationLimitInboxId(null)
-      autoConnectAttemptedRef.current = null
     }
   }, [isConnected, address])
-
-  useEffect(() => {
-    autoConnectAttemptedRef.current = null
-  }, [address])
 
   // ------- cleanup -------
   async function cleanup() {
@@ -741,34 +667,6 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       throw err
     }
   }, [address, walletClient, installationLimitInboxId, publicClient, connect])
-
-  // Auto-connect when user previously enabled: try Client.build first (restore, no wallet).
-  // Only triggers wallet if restore fails (new user).
-  useEffect(() => {
-    if (getHostMode() !== 'app') return
-    if (!isConnected || !address || !walletClient) return
-    if (!isAutoConnectEnabled(address)) return
-    if (clientRef.current || connectInFlightRef.current) return
-    if (status === 'signing' || status === 'connecting' || status === 'connected' || status === 'error') return
-    const attemptKey = `${address.toLowerCase()}:${walletClient.chain?.id ?? 'unknown'}`
-    if (autoConnectAttemptedRef.current === attemptKey) return
-    autoConnectAttemptedRef.current = attemptKey
-    void connect()
-  }, [isConnected, address, walletClient, status, connect])
-
-  // SIWE / auth-flow auto-connect request
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const handler = () => {
-      if (getHostMode() !== 'app') return
-      if (!isConnected || !address || !walletClient) return
-      if (clientRef.current || connectInFlightRef.current) return
-      if (status === 'signing' || status === 'connecting' || status === 'connected') return
-      void connect()
-    }
-    window.addEventListener('cv:xmtp:autoConnectRequest', handler)
-    return () => window.removeEventListener('cv:xmtp:autoConnectRequest', handler)
-  }, [isConnected, address, walletClient, status, connect])
 
   // ------- disconnect -------
   const disconnect = useCallback(() => {
