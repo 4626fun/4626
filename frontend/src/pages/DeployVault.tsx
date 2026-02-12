@@ -75,6 +75,17 @@ const BATCHER_PHASE1_CORE_SELECTOR = '1331378b'
 const BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR = '4154f24e'
 const BATCHER_PHASE1_FINALIZE_SELECTOR = 'a98ec9d8'
 const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = '3bc09a8b'
+const NO_EOA_STRICT_BLOCKER = 'No-EOA deploy is only available for preconfigured Privy-owner wallets.'
+
+type DeployMode = 'default' | 'no_eoa_strict'
+
+function resolveDeployMode(): DeployMode {
+  const raw = String((import.meta as any)?.env?.VITE_DEPLOY_MODE ?? '')
+    .trim()
+    .toLowerCase()
+  if (raw === 'no_eoa_strict') return 'no_eoa_strict'
+  return 'default'
+}
 
 // Minimum age for a Creator Coin before allowing vault deployment.
 // Rationale: reduce launch-manipulation surface area on brand new coins with thin/no trading history.
@@ -1307,6 +1318,7 @@ function DeployVaultBatcher({
   privySmartWalletAddress,
   privySmartWalletIsCanonicalOwner,
   privySmartWalletCanSign,
+  strictNoEoaMode,
   connectorId,
   wagmiWalletClient,
 }: {
@@ -1334,6 +1346,7 @@ function DeployVaultBatcher({
   privySmartWalletAddress: Address | null
   privySmartWalletIsCanonicalOwner: boolean
   privySmartWalletCanSign: boolean
+  strictNoEoaMode: boolean
   // For direct Coinbase Wallet connection (supports eth_sign)
   connectorId: string | undefined
   wagmiWalletClient: any
@@ -1430,9 +1443,10 @@ function DeployVaultBatcher({
   }>({})
   const expectedRef = useRef<ServerDeployResponse['addresses'] | null>(null)
   const useServerContinue = useMemo(() => {
+    if (strictNoEoaMode) return false
     const v = String((import.meta as any)?.env?.VITE_DEPLOY_USE_SERVER_CONTINUE ?? '').trim().toLowerCase()
     return v === '1' || v === 'true' || v === 'yes'
-  }, [])
+  }, [strictNoEoaMode])
   const deploySessionStorageKey = useMemo(() => {
     const ct = String(creatorToken ?? '').toLowerCase()
     const ow = String(owner ?? '').toLowerCase()
@@ -2219,6 +2233,25 @@ function DeployVaultBatcher({
       if (!floorPriceQ96Aligned || floorPriceQ96Aligned <= 0n) {
         throw new Error('Market floor price not available. Wait for pricing to load.')
       }
+      if (strictNoEoaMode) {
+        logger.info('[DeployVault] deploy_mode=no_eoa_strict', {
+          deploy_mode: 'no_eoa_strict',
+          useServerContinue,
+          batcher: batcherAddress,
+        })
+        if (useServerContinue) {
+          throw new Error('No-EOA strict mode requires client-side phase execution (server continue disabled).')
+        }
+        if (!canonicalSmartWallet || !privySmartWalletIsCanonicalOwner || !privySmartWalletCanSign) {
+          logger.warn('[DeployVault] eligibility_blocked', {
+            deploy_mode: 'no_eoa_strict',
+            canonicalSmartWallet,
+            privySmartWalletIsCanonicalOwner,
+            privySmartWalletCanSign,
+          })
+          throw new Error(NO_EOA_STRICT_BLOCKER)
+        }
+      }
 
       const depositAmount = minFirstDeposit
       const auctionSteps = encodeUniswapCcaLinearSteps(DEFAULT_CCA_DURATION_BLOCKS)
@@ -2324,6 +2357,28 @@ function DeployVaultBatcher({
           batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR)
         )
       })()
+      if (strictNoEoaMode) {
+        const hasAllSplitSelectors =
+          batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_SELECTOR) &&
+          batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR) &&
+          batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_SELECTOR) &&
+          batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR)
+        if (!hasAllSplitSelectors) {
+          logger.warn('[DeployVault] legacy_batcher_blocked', {
+            deploy_mode: 'no_eoa_strict',
+            batcher: batcherAddress,
+            selectors: {
+              core: batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_SELECTOR),
+              coreWithSalt: batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR),
+              finalize: batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_SELECTOR),
+              finalizeWithSalt: batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR),
+            },
+          })
+          throw new Error(
+            `Legacy batcher active on this deployment (${batcherAddress}). Update to split Phase-1 CreatorVaultDeployer.`,
+          )
+        }
+      }
       let phase1CallsPrepared: Array<{ target: Address; value: bigint; data: Hex }> = []
 
       if (isTwoStepBatcher) {
@@ -2823,6 +2878,7 @@ function DeployVaultBatcher({
         }
 
         logger.info('[DeployVault] deploy_start', {
+          deploy_mode: strictNoEoaMode ? 'no_eoa_strict' : 'default',
           creatorToken,
           owner,
           deploymentVersion,
@@ -3077,6 +3133,7 @@ function DeployVaultBatcher({
           // PATH 1: Direct Coinbase Wallet connection
           // Only use this when embedded signer path is not available.
           if (
+            !strictNoEoaMode &&
             isCoinbaseWalletDirect &&
             connectedAddress &&
             wagmiWalletClient &&
@@ -3273,6 +3330,16 @@ function DeployVaultBatcher({
                   failureClass,
                   error: msg,
                 })
+                if (strictNoEoaMode) {
+                  logger.warn('[DeployVault] fallback_blocked', {
+                    deploy_mode: 'no_eoa_strict',
+                    phaseLabel: logPhaseLabel,
+                    failureClass,
+                  })
+                  throw new Error(
+                    `ERC-4337 signing failed (${failureClass}). Owner-EOA fallback is disabled in no-EOA mode.`,
+                  )
+                }
                 // Fallback path: retry the same canonical CSW UserOp with an owner EOA signer.
                 if (!connectedAddress || !wagmiWalletClient || !canonicalSmartWallet || !publicClient) {
                   throw new Error(
@@ -3345,6 +3412,9 @@ function DeployVaultBatcher({
           
           // No additional signer fallback branches: keep deploy deterministic.
           // No valid ERC-4337 path available
+          if (strictNoEoaMode) {
+            throw new Error(NO_EOA_STRICT_BLOCKER)
+          }
           throw new Error(
             'ERC-4337 deployment requires one of:\n' +
             '1. Connect with Coinbase Wallet (recommended)\n' +
@@ -3604,6 +3674,9 @@ function DeployVaultBatcher({
           : null
 
   const disabled = Boolean(disabledReason)
+  const hasDeploySignerPath = strictNoEoaMode
+    ? privySmartWalletIsCanonicalOwner && privySmartWalletCanSign
+    : isCoinbaseWalletDirect || privySmartWalletIsCanonicalOwner
 
   return (
     <div className="space-y-3">
@@ -3720,6 +3793,13 @@ function DeployVaultBatcher({
           <div className="text-[11px] text-zinc-600 mb-3">
             Addresses are deterministic on Base. Click to view on BaseScan.
           </div>
+          <div className="rounded-md border border-white/5 bg-black/30 px-3 py-2 mb-3 space-y-1">
+            <AddressRow label="Active batcher" address={batcherAddress} />
+            <div className="flex items-center justify-between gap-4 text-[11px]">
+              <div className="text-zinc-500">Deploy mode</div>
+              <div className="font-mono text-zinc-200/90">{strictNoEoaMode ? 'no_eoa_strict' : 'default'}</div>
+            </div>
+          </div>
 
           <div className="rounded-md border border-white/5 bg-black/30 divide-y divide-white/5">
             <div className="py-3">
@@ -3789,12 +3869,13 @@ function DeployVaultBatcher({
       </div>
 
       {/* Show deploy button only if we have a valid ERC-4337 path */}
-      {isCoinbaseWalletDirect || privySmartWalletIsCanonicalOwner ? (
+      {hasDeploySignerPath ? (
         <div className="space-y-2">
           <div className="text-[10px] text-green-400/80 flex items-center gap-1">
-            <span>✓</span> Gas-free ERC-4337 {
-              isCoinbaseWalletDirect ? 'via Coinbase Wallet' : 'via app smart wallet owner'
-            }
+            <span>✓</span>{' '}
+            {strictNoEoaMode
+              ? 'Gas-free ERC-4337 via preconfigured app smart wallet owner'
+              : `Gas-free ERC-4337 ${isCoinbaseWalletDirect ? 'via Coinbase Wallet' : 'via app smart wallet owner'}`}
           </div>
           <button type="button" onClick={() => void submit()} disabled={disabled || exportBusy} className="btn-accent w-full rounded-lg">
             {busy ? 'Deploying…' : '1‑Click Deploy (Gas-Free)'}
@@ -3802,14 +3883,22 @@ function DeployVaultBatcher({
         </div>
       ) : (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
-          <div className="text-sm font-medium text-amber-200">ERC-4337 Setup Required</div>
-          <div className="text-[11px] text-amber-200/70 leading-relaxed">
-            All deployments use gas-sponsored ERC-4337 UserOperations.
+          <div className="text-sm font-medium text-amber-200">
+            {strictNoEoaMode ? 'No-EOA deploy requirements' : 'ERC-4337 Setup Required'}
           </div>
-          <div className="text-[11px] text-zinc-400 space-y-1">
-            <div>Option 1: Connect with <strong className="text-amber-200">Coinbase Wallet</strong> (instant)</div>
-            <div>Option 2: Add your app smart wallet as owner (EIP-1271 setup below)</div>
-          </div>
+          {strictNoEoaMode ? (
+            <div className="text-[11px] text-amber-200/70 leading-relaxed">{NO_EOA_STRICT_BLOCKER}</div>
+          ) : (
+            <>
+              <div className="text-[11px] text-amber-200/70 leading-relaxed">
+                All deployments use gas-sponsored ERC-4337 UserOperations.
+              </div>
+              <div className="text-[11px] text-zinc-400 space-y-1">
+                <div>Option 1: Connect with <strong className="text-amber-200">Coinbase Wallet</strong> (instant)</div>
+                <div>Option 2: Add your app smart wallet as owner (EIP-1271 setup below)</div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -3963,6 +4052,8 @@ function DeployVaultMain() {
     const v = String(raw).trim()
     return v.length > 0 ? v : 'v1.1.10'
   }, [])
+  const deployMode = useMemo(() => resolveDeployMode(), [])
+  const strictNoEoaMode = deployMode === 'no_eoa_strict'
   const shareOftSaltOverride = useMemo(() => {
     const env = normalizeBytes32(import.meta.env.VITE_SHARE_OFT_SALT_OVERRIDE as string | undefined)
     if (typeof window === 'undefined') return env
@@ -5019,6 +5110,7 @@ function DeployVaultMain() {
   const isCoinbaseWalletDirect = connector?.id === 'coinbaseWalletSDK' || connector?.id === 'com.coinbase.wallet'
 
   useEffect(() => {
+    if (strictNoEoaMode) return
     if (isCoinbaseWalletDirect) return
     if (smartWalletMatchesCanonical) return
     if (!privySmartWalletAddress || !privySmartWalletCanSign) return
@@ -5066,6 +5158,7 @@ function DeployVaultMain() {
     connectedWalletAddress,
     handleAddPrivyAppSmartWalletOwner,
     isCoinbaseWalletDirect,
+    strictNoEoaMode,
     privySmartWalletAddress,
     privySmartWalletCanSign,
     privySmartWalletIsCanonicalOwner,
@@ -5074,11 +5167,19 @@ function DeployVaultMain() {
     smartWalletMatchesCanonical,
   ])
   
-  // Smart wallet is ready only if it matches canonical OR an authorized owner signer is available
-  const smartWalletCapabilityReady =
-    isCoinbaseWalletDirect ||
-    (privySmartWalletReady &&
-      (smartWalletMatchesCanonical || (privySmartWalletIsCanonicalOwner && privySmartWalletCanSign)))
+  const strictNoEoaEligibility = Boolean(
+    canonicalIdentityIsContract &&
+      canonicalIdentityAddress &&
+      privySmartWalletIsCanonicalOwner &&
+      privySmartWalletCanSign,
+  )
+  // Smart wallet is ready only if it matches canonical OR an authorized owner signer is available.
+  // In strict no-EOA mode we only allow preconfigured Privy owner flow.
+  const smartWalletCapabilityReady = strictNoEoaMode
+    ? strictNoEoaEligibility
+    : isCoinbaseWalletDirect ||
+      (privySmartWalletReady &&
+        (smartWalletMatchesCanonical || (privySmartWalletIsCanonicalOwner && privySmartWalletCanSign)))
 
   const canDeploy =
     tokenIsValid &&
@@ -5221,6 +5322,8 @@ function DeployVaultMain() {
                     ? 'Connect the creator or payout recipient wallet.'
                     : !fundingGateOk
                       ? `Needs 5,000,000 ${underlyingSymbolUpper || 'TOKENS'} to deploy.`
+                      : strictNoEoaMode && !strictNoEoaEligibility
+                        ? NO_EOA_STRICT_BLOCKER
                       : identityBlockingReason
                         ? identityBlockingReason
                       : !smartWalletCapabilityReady
@@ -5694,7 +5797,7 @@ function DeployVaultMain() {
                   ) : null}
 
                   {/* App smart wallet signer (automatic) */}
-                  {!isCoinbaseWalletDirect && privySmartWalletAddress && !privySmartWalletIsCanonicalOwner ? (
+                  {!strictNoEoaMode && !isCoinbaseWalletDirect && privySmartWalletAddress && !privySmartWalletIsCanonicalOwner ? (
                     <div className="p-4 rounded-lg border border-purple-500/20 bg-purple-500/10 space-y-3">
                       <div className="text-sm font-medium text-purple-200">Smart wallet signer setup</div>
                       <div className="text-[11px] text-purple-200/70">
@@ -5756,6 +5859,7 @@ function DeployVaultMain() {
                     privySmartWalletAddress={privySmartWalletAddress}
                     privySmartWalletIsCanonicalOwner={privySmartWalletIsCanonicalOwner}
                     privySmartWalletCanSign={privySmartWalletCanSign}
+                    strictNoEoaMode={strictNoEoaMode}
                     connectorId={connector?.id}
                     wagmiWalletClient={walletClient}
                   />
