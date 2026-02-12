@@ -15,8 +15,8 @@ const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as ContractAddress
 
 export const BASE_DEFAULTS = {
   // Shared infrastructure
-  registry: addr('02c8031c39E10832A831b954Df7a2c1bf9Df052D'),
-  lotteryManager: addr('c0329794016478e133F3D933b3D53273AB8325FC'),
+  registry: addr('888482d648D1fCa1A735268A9e579b44Bf644626'),
+  lotteryManager: addr('77740C44A3E1d8262e8bfAB6204A29B2cbeE4626'),
   vrfConsumer: addr('0265236984DE964CB0422BaeFbDb2de7C9d590F5'),
   payoutRouterFactory: addr('9C53cEaA15AdDB436c89A1F929fF12ED2BD26ea9'),
 
