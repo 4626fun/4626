@@ -3229,6 +3229,27 @@ function DeployVaultBatcher({
               await ensureProviderOnBase(embeddedProvider, 'Privy embedded EOA')
               const embeddedWalletClientAdapter = {
                 request: async (args: { method: string; params?: any[] }) => {
+                  // Privy embedded providers may block eth_sign, but often support
+                  // secp256k1_sign for raw 32-byte digests (ideal for UserOp hashes).
+                  if (args?.method === 'eth_sign') {
+                    const p = Array.isArray(args.params) ? args.params : []
+                    const hashCandidate = typeof p[1] === 'string' ? p[1] : ''
+                    const isHash = /^0x[0-9a-fA-F]{64}$/.test(hashCandidate)
+                    if (isHash) {
+                      try {
+                        const rawSig = await embeddedProvider.request({
+                          method: 'secp256k1_sign',
+                          params: [hashCandidate],
+                        })
+                        return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.secp256k1_sign')
+                      } catch (signErr) {
+                        logger.warn('[DeployVault] Privy embedded secp256k1_sign failed; falling back to eth_sign', {
+                          phaseLabel: logPhaseLabel,
+                          error: signErr instanceof Error ? signErr.message : String(signErr ?? ''),
+                        })
+                      }
+                    }
+                  }
                   return await embeddedProvider.request(args as any)
                 },
                 signMessage: async (args: { account: Address; message: any }) => {
@@ -3400,7 +3421,7 @@ function DeployVaultBatcher({
               const isStrictPhase1CoreSegment =
                 strictNoEoaMode && phaseLabel === 'phase1' && (!opts?.segment || opts.segment === 'core')
               const contractOwnerVerificationGasProfile = isStrictPhase1CoreSegment
-                ? [1_200_000n, 1_600_000n, 2_000_000n, 2_400_000n, 2_800_000n, 3_000_000n, 3_200_000n]
+                ? [1_000_000n, 1_300_000n, 1_600_000n, 1_900_000n, 2_200_000n, 2_500_000n]
                 : undefined
               if (contractOwnerVerificationGasProfile) {
                 logger.info('[DeployVault] Applying low-total-gas verification profile', {
