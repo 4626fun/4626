@@ -34,6 +34,8 @@ function formatHelp(): string {
     '- /fc help - Show this help',
     '- /fc profile <address|fid|username> - Look up a profile',
     '- /fc cast <message> - Post a cast (ADMIN/OWNER)',
+    '- /fc cast #channel <message> - Post to a channel (ADMIN/OWNER)',
+    '- /fc channels <query> - Search Farcaster channels',
     '- /fc gallery - Generate video gallery for vault',
     '- /fc frame <url> - Validate a Farcaster Frame',
     '- /fc stats - Show Farcaster stats for vault creator',
@@ -121,6 +123,9 @@ async function postCast(params: {
   text: string
   senderWallet: Address
   groupId: string
+  replyTo?: string
+  embeds?: Array<{ url: string }>
+  channelId?: string
 }): Promise<FarcasterCommandResult> {
   const apiKey = readNeynarApiKey({ context: 'farcaster/postCast' })
   const signerUuid = process.env.NEYNAR_SIGNER_UUID
@@ -143,16 +148,22 @@ async function postCast(params: {
   }
 
   try {
+    const body: Record<string, unknown> = {
+      signer_uuid: signerUuid,
+      text: castText,
+    }
+
+    if (params.replyTo) body.parent = params.replyTo
+    if (params.embeds && params.embeds.length > 0) body.embeds = params.embeds
+    if (params.channelId) body.channel_id = params.channelId
+
     const response = await fetch(`${NEYNAR_API_BASE}/cast`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         api_key: apiKey,
       },
-      body: JSON.stringify({
-        signer_uuid: signerUuid,
-        text: castText,
-      }),
+      body: JSON.stringify(body),
     })
 
     if (!response.ok) {
@@ -165,13 +176,18 @@ async function postCast(params: {
     const hash = data?.cast?.hash ?? data?.hash ?? 'unknown'
     recordCastPost(params.groupId)
 
+    const channelInfo = params.channelId ? `\n- Channel: #${params.channelId}` : ''
+    const replyInfo = params.replyTo ? `\n- Reply to: ${params.replyTo}` : ''
+
     return {
       ok: true,
-      response: `Cast posted!\n- Hash: ${hash}\n- View: https://warpcast.com/~/conversations/${hash}`,
+      response: `Cast posted!\n- Hash: ${hash}${channelInfo}${replyInfo}\n- View: https://warpcast.com/~/conversations/${hash}`,
       action: {
         action: 'farcaster.cast.posted',
         hash,
         text: castText,
+        channelId: params.channelId,
+        replyTo: params.replyTo,
         actor: params.senderWallet,
       },
     }
@@ -325,6 +341,55 @@ async function getCreatorStats(senderWallet: Address): Promise<FarcasterCommandR
   }
 }
 
+// ---------------------------------------------------------------------------
+// /fc channels — search Farcaster channels
+// ---------------------------------------------------------------------------
+
+async function searchChannels(query: string): Promise<FarcasterCommandResult> {
+  const apiKey = readNeynarApiKey({ context: 'farcaster/searchChannels' })
+  if (!apiKey) {
+    return { ok: false, response: 'Farcaster API not configured.' }
+  }
+
+  if (!query?.trim()) {
+    return { ok: false, response: 'Usage: /fc channels <search query>' }
+  }
+
+  try {
+    const response = await fetch(
+      `${NEYNAR_API_BASE}/channel/search?q=${encodeURIComponent(query.trim())}&limit=10`,
+      { headers: { api_key: apiKey } },
+    )
+
+    if (!response.ok) {
+      return { ok: false, response: `Channel search failed: ${response.status}` }
+    }
+
+    const data = (await response.json()) as any
+    const channels = data?.channels ?? []
+
+    if (channels.length === 0) {
+      return { ok: true, response: `No channels found for "${query}".` }
+    }
+
+    const lines = [
+      `Farcaster Channels matching "${query}"`,
+      '',
+      ...channels.slice(0, 10).map((ch: any) => {
+        const followers = ch.follower_count ?? 0
+        return `- #${ch.id} — ${ch.name ?? ch.id} (${followers} followers)`
+      }),
+      '',
+      'Use: /fc cast #channel-id <message>',
+    ]
+
+    return { ok: true, response: lines.join('\n') }
+  } catch (error) {
+    logger.error('[fc/channels] Search error:', error)
+    return { ok: false, response: 'Channel search failed.' }
+  }
+}
+
 /**
  * Handle Farcaster commands from XMTP/Keepr groups
  */
@@ -356,15 +421,30 @@ export async function handleFarcasterCommand(params: {
     case 'profile':
       return await lookupProfile(args[0] ?? '')
 
-    case 'cast':
+    case 'cast': {
       if (params.role === 'MEMBER') {
         return { ok: false, response: 'Denied: ADMIN or OWNER only.' }
       }
+
+      // Check for #channel prefix: /fc cast #channel-name <message>
+      let channelId: string | undefined
+      let castArgs = args
+
+      if (args[0]?.startsWith('#')) {
+        channelId = args[0].slice(1) // remove #
+        castArgs = args.slice(1)
+      }
+
       return await postCast({
-        text: args.join(' '),
+        text: castArgs.join(' '),
         senderWallet: params.senderWallet,
         groupId: params.groupId,
+        channelId,
       })
+    }
+
+    case 'channels':
+      return await searchChannels(args.join(' '))
 
     case 'gallery':
       return await generateGallery(params.groupId)

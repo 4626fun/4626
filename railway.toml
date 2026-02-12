@@ -23,3 +23,11 @@ restartPolicyMaxRetries = 5
 
 # Start command (already set in Dockerfile CMD, but explicit here for clarity)
 startCommand = "npx tsx server/agent/eliza/index.ts"
+
+# Persistent volume for XMTP local database.
+# CRITICAL: Without this, every deploy creates a new XMTP installation
+# and burns through the 10-installation / 256-update inbox limits.
+# See: https://docs.xmtp.org/agents/build-agents/local-database
+[[deploy.volumes]]
+mountPath = "/data/.xmtp-data"
+name = "xmtp-data"

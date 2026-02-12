@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle2, ArrowRight, Copy, Bot, Coins, User, Loader2, Share2, Trophy } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { WaitlistDoneCelebrationBackground } from '../WaitlistDoneCelebrationBackground'
+import { LaunchCoinCard } from '../LaunchCoinCard'
 import type { WaitlistState } from '../waitlistTypes'
 import { apiFetch } from '@/lib/apiBase'
 import { getAppBaseUrl } from '@/lib/host'
@@ -50,6 +51,14 @@ type DoneStepProps = {
   deployAccessState?: 'checking' | 'ready' | 'waitlist'
   onCopyReferral: () => void
   copyToast?: string | null
+  /** Whether the user has no Creator Coin and should see the coin creation card */
+  creatorCoinMissing?: boolean
+  /** The user's CSW address for coin creation */
+  smartWalletAddress?: string | null
+  /** The EOA owner address for signing the UserOp */
+  ownerAddress?: string | null
+  /** Callback when a coin is successfully created */
+  onCoinCreated?: (coinAddress: string, symbol: string) => void
 }
 
 function truncAddr(addr: string): string {
@@ -224,6 +233,10 @@ export const DoneStep = memo(function DoneStep({
   deployAccessState,
   onCopyReferral,
   copyToast,
+  creatorCoinMissing,
+  smartWalletAddress,
+  ownerAddress,
+  onCoinCreated,
 }: DoneStepProps) {
   const [exiting, setExiting] = useState(false)
 
@@ -282,6 +295,15 @@ export const DoneStep = memo(function DoneStep({
 
           {/* Pre-provisioning status */}
           <PreprovisionStatus />
+
+          {/* Launch Creator Coin — shown when the user has no existing Creator Coin */}
+          {creatorCoinMissing && smartWalletAddress && ownerAddress && (
+            <LaunchCoinCard
+              smartWalletAddress={smartWalletAddress}
+              ownerAddress={ownerAddress}
+              onCoinCreated={onCoinCreated}
+            />
+          )}
 
           {/* CTA area: loading skeleton, deploy button, or waitlisted state */}
           {deployAccessState === 'checking' && !primaryCta ? (

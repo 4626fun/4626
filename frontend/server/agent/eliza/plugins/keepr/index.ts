@@ -42,6 +42,8 @@ function isKeeprCommand(text: string): boolean {
     t.startsWith('send ') ||
     t.startsWith('/fc') ||
     t.startsWith('fc ') ||
+    t.startsWith('/coin') ||
+    t.startsWith('coin ') ||
     t.startsWith('/ai') ||
     t.startsWith('@keepr') ||
     t.startsWith('@bot') ||

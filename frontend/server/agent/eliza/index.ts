@@ -49,6 +49,7 @@ import { lensPlugin } from './plugins/lens/index.js'
 import { walletIntelPlugin } from './plugins/walletIntel/index.js'
 import { reputationPlugin } from './plugins/reputation/index.js'
 import { crePlugin } from './plugins/cre/index.js'
+import { zoraPlugin } from './plugins/zora/index.js'
 import { creatorVaultCharacter } from './character.js'
 import { XmtpService } from './plugins/xmtp/service.js'
 
@@ -83,8 +84,15 @@ const MAX_AGENTS = Number(process.env.MAX_AGENTS ?? '50')
  */
 const XMTP_DB_DIR = (process.env.XMTP_DB_DIRECTORY ?? '').trim() || path.join(process.cwd(), '.xmtp-data')
 
-/** Whether to revoke all other installations on startup (recovers from 10/10 limit). */
-const XMTP_REVOKE_OTHER = (process.env.XMTP_REVOKE_OTHER_INSTALLATIONS ?? 'true').trim().toLowerCase() === 'true'
+/**
+ * Whether to revoke all other installations on startup.
+ * Defaults to FALSE — only set to 'true' when recovering from the 10/10 limit.
+ *
+ * WARNING: Revoking burns inbox updates (256 lifetime max). If the DB is also
+ * ephemeral (no volume), every restart creates + revokes, quickly exhausting
+ * the update budget.  See: https://docs.xmtp.org/agents/build-agents/local-database
+ */
+const XMTP_REVOKE_OTHER = (process.env.XMTP_REVOKE_OTHER_INSTALLATIONS ?? 'false').trim().toLowerCase() === 'true'
 
 /**
  * Encryption key for the XMTP local database (0x-prefixed hex, 32 bytes).
@@ -112,6 +120,40 @@ function makeDbPath(): (inboxId: string) => string {
   }
 }
 
+/**
+ * Pre-flight check: log whether we're reusing an existing XMTP installation
+ * or creating a fresh one.  If the DB directory is empty (no .db3 files),
+ * this is almost certainly an ephemeral filesystem → warn loudly.
+ */
+function checkDbPersistence(): void {
+  try {
+    const files = fs.readdirSync(XMTP_DB_DIR).filter((f: string) => f.endsWith('.db3'))
+    if (files.length > 0) {
+      logger.info(`[xmtp] ✅ Found ${files.length} existing DB file(s) in ${XMTP_DB_DIR} — will reuse installation`)
+      for (const f of files) {
+        const stat = fs.statSync(path.join(XMTP_DB_DIR, f))
+        logger.info(`[xmtp]   ${f} (${(stat.size / 1024).toFixed(1)} KB, modified ${stat.mtime.toISOString()})`)
+      }
+    } else {
+      logger.warn(
+        `[xmtp] ⚠️  No .db3 files found in ${XMTP_DB_DIR} — a NEW installation will be created.\n` +
+        `    If this keeps happening on every restart, your volume is not persisting.\n` +
+        `    → Railway: add a volume at /data/.xmtp-data in the dashboard or railway.toml\n` +
+        `    → Docker: use -v xmtp-data:/data/.xmtp-data\n` +
+        `    → Docs: https://docs.xmtp.org/agents/build-agents/local-database`,
+      )
+    }
+    if (!XMTP_DB_ENCRYPTION_KEY) {
+      logger.warn(
+        '[xmtp] ⚠️  XMTP_DB_ENCRYPTION_KEY is not set — DB cannot be reopened across restarts!\n' +
+        '    Generate one: openssl rand -hex 32  (then prefix with 0x)',
+      )
+    }
+  } catch {
+    // Directory doesn't exist yet — will be created by makeDbPath
+  }
+}
+
 // ERC-8004 identity (loaded from env vars in a separate module to avoid circular imports)
 import { erc8004Identity } from './identity.js'
 export { erc8004Identity }
@@ -121,10 +163,10 @@ export type { Erc8004Identity } from './identity.js'
 // Plugins & Actions
 // ---------------------------------------------------------------------------
 
-const plugins = [keeprPlugin, lensPlugin, walletIntelPlugin, reputationPlugin, crePlugin]
+const plugins = [keeprPlugin, zoraPlugin, lensPlugin, walletIntelPlugin, reputationPlugin, crePlugin]
 const allActions = plugins.flatMap((p) => p.actions ?? [])
 
-export { keeprPlugin, lensPlugin, walletIntelPlugin, reputationPlugin, crePlugin }
+export { keeprPlugin, zoraPlugin, lensPlugin, walletIntelPlugin, reputationPlugin, crePlugin }
 
 // ---------------------------------------------------------------------------
 // LLM providers (for /ai fallback)
@@ -637,6 +679,9 @@ async function main() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   console.log('  CreatorVault ElizaOS Agent (Unified)')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+
+  // Check DB persistence before creating any agent
+  checkDbPersistence()
 
   const hasDb = isDbConfigured()
   const hasEncKey = !!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()

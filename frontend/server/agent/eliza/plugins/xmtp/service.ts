@@ -131,6 +131,19 @@ export class XmtpService {
 
     this.agent = await Agent.create(signer, createOpts as any)
 
+    // Log installation info for persistence debugging
+    try {
+      const info = await getInstallationInfo(this.agent.client)
+      console.log(
+        `[xmtp-service] Connected: ${this.agent.address} | ` +
+        `installations: ${info.totalInstallations}/10 | ` +
+        `dbPath: ${typeof createOpts.dbPath === 'function' ? '(function)' : createOpts.dbPath ?? 'default'} | ` +
+        `dbEncrypted: ${!!createOpts.dbEncryptionKey}`,
+      )
+    } catch {
+      // Non-fatal — some SDK versions may not expose getInstallationInfo
+    }
+
     // Revoke stale installations if requested (recovers from 10/10 limit)
     if (this.config.revokeOtherInstallations) {
       try {

@@ -1159,6 +1159,23 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   })
   const displayEmail = doneEmail && !isSyntheticEmail(doneEmail) ? doneEmail : null
 
+  // When the user creates a Creator Coin from the DoneStep, update local state
+  // and re-trigger pre-provisioning so the backend records it.
+  const handleCoinCreated = useCallback(
+    (coinAddress: string, coinSymbol: string) => {
+      patchWaitlist({
+        creatorCoin: {
+          address: coinAddress,
+          symbol: coinSymbol,
+          ownerWallets: [],
+          canonicalSmartWallet: effectiveCswAddress || null,
+        },
+        creatorCoinDeclaredMissing: false,
+      })
+    },
+    [effectiveCswAddress, patchWaitlist],
+  )
+
   function primaryWalletForSubmit(): string | null {
     const pw = typeof verifiedWallet === 'string' && isValidEvmAddress(verifiedWallet) ? verifiedWallet : null
     return pw
@@ -1783,6 +1800,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     deployAccessState={deployAccessState}
                     onCopyReferral={handleCopyReferral}
                     copyToast={inviteToast}
+                    creatorCoinMissing={creatorCoinDeclaredMissing && !creatorCoin?.address}
+                    smartWalletAddress={effectiveCswAddress}
+                    ownerAddress={connectedAddress}
+                    onCoinCreated={handleCoinCreated}
                   />
                 </motion.div>
               ) : null}

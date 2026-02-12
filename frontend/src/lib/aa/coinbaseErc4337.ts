@@ -360,6 +360,30 @@ function isPaymasterStakeError(error: unknown): boolean {
   )
 }
 
+function ensureUserOperationSucceeded(receipt: unknown, context: string): void {
+  const r = receipt as any
+  const success = r?.success
+  const txStatus = r?.receipt?.status
+  const reason =
+    (typeof r?.reason === 'string' && r.reason) ||
+    (typeof r?.revertReason === 'string' && r.revertReason) ||
+    (typeof r?.error === 'string' && r.error) ||
+    null
+
+  const txReverted =
+    txStatus === 'reverted' ||
+    txStatus === 0 ||
+    txStatus === '0x0' ||
+    txStatus === false
+
+  // Bundlers can return a transaction hash even when the specific UserOp reverted.
+  // Guard phase progression on UserOp-level success, not just tx inclusion.
+  if (success === false || txReverted) {
+    const reasonSuffix = reason ? ` Reason: ${reason}` : ''
+    throw new Error(`UserOperation reverted during ${context}.${reasonSuffix}`)
+  }
+}
+
 function isPaymasterUnavailableError(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error ?? '')
   const lc = msg.toLowerCase()
@@ -1100,6 +1124,7 @@ export async function sendCrossAppUserOperation(params: {
     hash: userOpHash, 
     timeout: 120_000 
   })
+  ensureUserOperationSucceeded(receipt, 'cross-app submission')
   if (AA_DEBUG) {
     logger.debug('[ERC-4337] UserOp receipt', {
       actualGasUsed: formatGasValue((receipt as any)?.actualGasUsed),
@@ -1853,6 +1878,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     hash: userOpHash, 
     timeout: 180_000 // 3 minutes for complex operations
   })
+  ensureUserOperationSucceeded(receipt, 'ERC-4337 submission')
   if (AA_DEBUG) {
     logger.debug('[ERC-4337] UserOp receipt', {
       actualGasUsed: formatGasValue((receipt as any)?.actualGasUsed),

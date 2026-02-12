@@ -3,6 +3,7 @@ import type { Address } from 'viem'
 import { checkSharesEligibility } from '../_lib/keeprGating.js'
 import { getKeeprVaultByGroupId, setKeeprJoinLocked } from '../_lib/keeprRegistry.js'
 import { handleFarcasterCommand } from '../farcaster/commands.js'
+import { handleCoinCommand } from '../zora/commands.js'
 import { handleSendCommand } from './sendCommand.js'
 import { generateLlmResponse } from '../ai/chat.js'
 
@@ -31,6 +32,14 @@ function formatKeeprHelp(): string {
     '',
     '- /send <amount> USDC to <address> (ADMIN/OWNER)',
     '- /send <amount> ETH to <address> (ADMIN/OWNER)',
+    '',
+    'Zora Coin commands (type /coin help for more):',
+    '',
+    '- /coin create <name> <symbol> <uri> — create Content Coin',
+    '- /coin buy <address> <eth-amount> — buy coin with ETH',
+    '- /coin sell <address> <amount> — sell coin for ETH',
+    '- /coin balance — agent wallet balance',
+    '- /coin info <address> — coin details',
     '',
     'AI commands:',
     '',
@@ -168,6 +177,24 @@ export async function handleKeeprCommand(params: {
       text: raw,
       role: sRole,
       vault: sv,
+    })
+  }
+
+  // Handle /coin command (Zora Coins)
+  const looksLikeCoin = raw.toLowerCase().startsWith('/coin') || raw.toLowerCase().startsWith('coin ')
+  if (looksLikeCoin) {
+    const cv = await getKeeprVaultByGroupId(params.groupId)
+    if (!cv) return { ok: false, response: 'Vault not configured. /coin requires a connected vault.' }
+    const cOwner = cv.canonicalOwnerAddress
+    const cAdmins = Array.isArray(cv.config?.roles?.admins) ? cv.config.roles.admins : []
+    const cAdminsLc = cAdmins.filter(isAddressLike).map((a) => a.toLowerCase() as Address)
+    const cRole = roleForWallet({ wallet: params.senderWallet, owner: cOwner, admins: cAdminsLc })
+    return handleCoinCommand({
+      groupId: params.groupId,
+      senderWallet: params.senderWallet,
+      text: raw,
+      role: cRole,
+      vault: cv,
     })
   }
 
