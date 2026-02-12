@@ -165,6 +165,8 @@ describe('deploy registerShareOft handler', () => {
               return '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80'
             case 'solanaMintToToken':
               return '0x0000000000000000000000000000000000000000'
+            case 'scalars':
+              return 1n
             default:
               throw new Error(`Unexpected read ${String(args.functionName)}`)
           }
@@ -190,6 +192,56 @@ describe('deploy registerShareOft handler', () => {
       expect(res.body?.success).toBe(true)
       expect(res.body?.data?.txHash).toBe('0x5fcb2a505cad6c7c8bb750b95db3a846df8f181f85759750f84d91b736283557')
       expect(writeContractMock).toHaveBeenCalledTimes(1)
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('returns 409 when base bridge route is missing for shareOft/mint pair', async () => {
+    const restoreEnv = applyEnv({
+      SOLANA_ADAPTER_OWNER_PRIVATE_KEY:
+        '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      SOLANA_DEFAULT_MINT_BYTES32:
+        '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      SOLANA_DEFAULT_MINT_DECIMALS: '9',
+    })
+    try {
+      const mockPublicClient = {
+        readContract: vi.fn(async (args: any) => {
+          switch (args.functionName) {
+            case 'solanaBridgeAdapter':
+              return '0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return false
+            case 'owner':
+              return '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80'
+            case 'solanaMintToToken':
+              return '0x0000000000000000000000000000000000000000'
+            case 'scalars':
+              return 0n
+            default:
+              throw new Error(`Unexpected read ${String(args.functionName)}`)
+          }
+        }),
+        getBytecode: vi.fn(async () => '0x1234'),
+      }
+      createPublicClientMock.mockReturnValue(mockPublicClient as any)
+      privateKeyToAccountMock.mockReturnValue({
+        address: '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80',
+      })
+
+      const req = createMockReq({
+        method: 'POST',
+        body: { shareOft: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+      })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(409)
+      expect(String(res.body?.error ?? '')).toContain('WrappedSplRouteNotRegistered')
+      expect(createWalletClientMock).not.toHaveBeenCalled()
     } finally {
       restoreEnv()
     }

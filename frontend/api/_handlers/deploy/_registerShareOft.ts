@@ -37,6 +37,7 @@ type RegisterShareOftResponse = {
 
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
+const BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as Address
 
 const CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI = [
   {
@@ -87,6 +88,19 @@ const SOLANA_BRIDGE_ADAPTER_ABI = [
       { name: 'solanaDecimals', type: 'uint8' },
     ],
     outputs: [],
+  },
+] as const
+
+const BASE_SOLANA_BRIDGE_ABI = [
+  {
+    type: 'function',
+    name: 'scalars',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'localToken', type: 'address' },
+      { name: 'remoteToken', type: 'bytes32' },
+    ],
+    outputs: [{ type: 'uint256' }],
   },
 ] as const
 
@@ -318,6 +332,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const solanaDecimals = parseDecimals(body?.solanaDecimals) ?? readSolanaDecimalsFromEnv()
+
+    const routeScalar = await publicClient
+      .readContract({
+        address: BASE_SOLANA_BRIDGE,
+        abi: BASE_SOLANA_BRIDGE_ABI,
+        functionName: 'scalars',
+        args: [shareOft, solanaMint],
+      })
+      .then((v) => BigInt(v as bigint))
+      .catch(() => null)
+    if (routeScalar === 0n) {
+      return res.status(409).json({
+        success: false,
+        error:
+          `Base Solana bridge route is not registered for ShareOFT ${shareOft} and mint ${solanaMint} ` +
+          '(WrappedSplRouteNotRegistered). Use a bridge-supported Solana mint for this ShareOFT, ' +
+          'or disable Solana bridging on the batcher before deploy.',
+      } satisfies ApiEnvelope<never>)
+    }
+
     const walletClient = createWalletClient({
       account,
       chain: base,

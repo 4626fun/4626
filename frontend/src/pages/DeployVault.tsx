@@ -2483,7 +2483,7 @@ function DeployVaultBatcher({
           .then((v) => Boolean(v))
           .catch(() => null)
 
-        if (shareRegistered !== false) return
+        if (shareRegistered === true) return
 
         logger.info('[DeployVault] ShareOFT not registered on Solana adapter, attempting auto-registration', {
           shareOFT: expected.shareOFT,
@@ -3526,6 +3526,13 @@ function DeployVaultBatcher({
                   const helpText = errorMessages[simResult.errorName] ?? `Contract reverted with: ${simResult.errorName}`
                   throw new Error(`${logPhaseLabel} would revert: ${helpText}`)
                 }
+                if (simResult.revertData?.toLowerCase().startsWith('0xe092ade8')) {
+                  throw new Error(
+                    `${logPhaseLabel} would revert: Solana bridge route is not registered ` +
+                      '(WrappedSplRouteNotRegistered). Register a supported ShareOFT↔SPL route first, ' +
+                      'or disable Solana bridging for this deploy.',
+                  )
+                }
                 // If we have directCallResult with an error, show that too
                 if (simResult.directCallResult && !simResult.directCallResult.success) {
                   logger.error(`[DeployVault] ${logPhaseLabel} direct call simulation also failed`, {
@@ -3546,6 +3553,13 @@ function DeployVaultBatcher({
                     }
                     const helpText = errorMessages[simResult.directCallResult.errorName] ?? `Contract reverted with: ${simResult.directCallResult.errorName}`
                     throw new Error(`${logPhaseLabel} would revert: ${helpText}`)
+                  }
+                  if (simResult.directCallResult.revertData?.toLowerCase().startsWith('0xe092ade8')) {
+                    throw new Error(
+                      `${logPhaseLabel} would revert: Solana bridge route is not registered ` +
+                        '(WrappedSplRouteNotRegistered). Register a supported ShareOFT↔SPL route first, ' +
+                        'or disable Solana bridging for this deploy.',
+                    )
                   }
                 }
                 // Don't throw for unknown errors - let the UserOp attempt proceed to get more context
