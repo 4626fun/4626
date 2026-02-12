@@ -229,7 +229,7 @@ async function generateLlmResponse(
 const welcomedConversations = new Set<string>()
 
 const WELCOME_MESSAGE = [
-  `Hey! I'm **Keepr** — your CreatorVault assistant.\n`,
+  `o henlo! I'm **Keepr** — your CreatorVault assistant.\n`,
   `Here's what I can do:\n`,
   `**Vault & Keeper Ops**`,
   `  \`/cre status\` — check vault states`,
