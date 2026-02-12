@@ -273,9 +273,11 @@ const welcomedConversations = new Set<string>()
 const WELCOME_MESSAGE = [
   `o henlo! I'm Keepr, your CreatorVault assistant.`,
   ``,
-  `You can ask me about your vaults, check on-chain reputation, or just chat.`,
+  `Start with one of these:`,
   ``,
-  `Try saying "how are my vaults?" or type /help to see everything I can do.`,
+  `• /help — see all commands`,
+  `• /keepr status — check this vault`,
+  `• /ai <question> — ask anything in plain English`,
 ].join('\n')
 
 // ---------------------------------------------------------------------------
