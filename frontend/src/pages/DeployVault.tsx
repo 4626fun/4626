@@ -1823,7 +1823,9 @@ function DeployVaultBatcher({
 
   const strategyCodeIds = useMemo(() => {
     return {
-      charmAlphaVaultDeploy: keccak256(DEPLOY_BYTECODE.CharmAlphaVaultDeploy as Hex),
+      // Phase 3 now deploys Charm alpha vault through Charm's factory (not via bytecode store).
+      // Contract ABI still requires this field and only checks for non-zero.
+      charmAlphaVaultDeploy: keccak256(toBytes('charm-factory-sentinel-v1')),
       creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CreatorCharmStrategy as Hex),
       ajnaStrategy: keccak256(DEPLOY_BYTECODE.AjnaStrategy as Hex),
     } as const

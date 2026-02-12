@@ -46,7 +46,6 @@ printf "  CCALaunchStrategy: '0x' + '%s',\n" "$(bytecode CCALaunchStrategy)" >>"
 printf "  CreatorOracle: '0x' + '%s',\n" "$(bytecode CreatorOracle)" >>"$OUT_FILE"
 printf "  PayoutRouter: '0x' + '%s',\n" "$(bytecode PayoutRouter)" >>"$OUT_FILE"
 printf "  VaultShareBurnStream: '0x' + '%s',\n" "$(bytecode VaultShareBurnStream)" >>"$OUT_FILE"
-printf "  CharmAlphaVaultDeploy: '0x' + '%s',\n" "$(bytecode CharmAlphaVaultDeploy)" >>"$OUT_FILE"
 printf "  CreatorCharmStrategy: '0x' + '%s',\n" "$(bytecode CreatorCharmStrategy)" >>"$OUT_FILE"
 printf "  AjnaStrategy: '0x' + '%s',\n" "$(bytecode AjnaStrategy)" >>"$OUT_FILE"
 
@@ -55,4 +54,3 @@ cat >>"$OUT_FILE" <<'EOF'
 EOF
 
 echo "Done."
-
