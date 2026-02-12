@@ -77,8 +77,8 @@ export function getApiContracts(): ApiContracts {
     payoutRouterFactory: pickAddress('PAYOUT_ROUTER_FACTORY', BASE_DEFAULTS.payoutRouterFactory)!,
     create2Factory: pickAddress('CREATE2_FACTORY', BASE_DEFAULTS.create2Factory)!,
     create2Deployer: pickAddress('CREATE2_DEPLOYER', BASE_DEFAULTS.create2Deployer)!,
-    universalBytecodeStore: pickAddress('UNIVERSAL_BYTECODE_STORE', BASE_DEFAULTS.universalBytecodeStore),
-    universalCreate2DeployerFromStore: pickAddress(
+    universalBytecodeStore: pickAddressProdSafe('UNIVERSAL_BYTECODE_STORE', BASE_DEFAULTS.universalBytecodeStore),
+    universalCreate2DeployerFromStore: pickAddressProdSafe(
       'UNIVERSAL_CREATE2_FROM_STORE',
       BASE_DEFAULTS.universalCreate2DeployerFromStore,
     ),
@@ -109,4 +109,3 @@ export function getApiContracts(): ApiContracts {
     strategyDeploymentBatcher: pickAddress('STRATEGY_DEPLOYMENT_BATCHER'),
   }
 }
-
