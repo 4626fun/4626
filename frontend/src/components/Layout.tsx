@@ -91,8 +91,8 @@ export function Layout() {
         </Suspense>
       </main>
 
-      {/* Chat widget — appears on every page, bottom-right */}
-      <ChatWidget />
+      {/* Chat widget — app domain only (XMTP installations are per-origin; avoid 4626.fun) */}
+      {hostMode === 'app' && <ChatWidget />}
 
       {/* Mobile Nav - Minimal */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 border-t border-vault-border/60 bg-vault-bg/80 backdrop-blur-xl">

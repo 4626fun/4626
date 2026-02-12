@@ -30,6 +30,8 @@ const ACCOUNT_ASSOCIATION_APP: AccountAssociation = {
   signature: 'rjz1zn/lUwa6EZcgGY95i2Wmu1CGQTG2wx0YFvPc12EE6rrDhUleWt4ZyJQNLwcWG5GiGLJQ4izJPLWJQm8aTxs=',
 }
 
+const APP_ORIGIN = 'https://app.4626.fun'
+
 const fallbackManifest: Manifest = {
   accountAssociation: ACCOUNT_ASSOCIATION_4626,
   miniapp: {
@@ -37,22 +39,22 @@ const fallbackManifest: Manifest = {
     name: 'Creator Vaults',
     subtitle: 'Creator coin vaults on Base',
     description: 'Deposit creator coins into vaults, track markets, and manage creator vault launches on Base.',
-    screenshotUrls: ['https://4626.fun/screenshot-portrait.png'],
-    iconUrl: 'https://4626.fun/miniapp-icon.png',
-    splashImageUrl: 'https://4626.fun/miniapp-splash.png',
+    screenshotUrls: [`${APP_ORIGIN}/screenshot-1.png`, `${APP_ORIGIN}/screenshot-2.png`, `${APP_ORIGIN}/screenshot-3.png`],
+    iconUrl: `${APP_ORIGIN}/miniapp-icon.png`,
+    splashImageUrl: `${APP_ORIGIN}/miniapp-splash.png`,
     splashBackgroundColor: '#000000',
-    homeUrl: 'https://app.4626.fun',
-    webhookUrl: 'https://4626.fun/api/webhook',
-    canonicalDomain: '4626.fun',
+    homeUrl: APP_ORIGIN,
+    webhookUrl: `${APP_ORIGIN}/api/webhook`,
+    canonicalDomain: 'app.4626.fun',
     requiredChains: ['eip155:8453'],
     requiredCapabilities: ['actions.ready', 'actions.signIn', 'wallet.getEthereumProvider'],
     primaryCategory: 'finance',
     tags: ['creator-coins', 'vaults', 'base', 'zora'],
-    heroImageUrl: 'https://4626.fun/miniapp-hero.png',
+    heroImageUrl: `${APP_ORIGIN}/miniapp-hero.png`,
     tagline: 'Vaults for creator coins.',
     ogTitle: 'Creator Vaults',
     ogDescription: 'Deposit creator coins into vaults. Earn from trading fees. Everyone earns together.',
-    ogImageUrl: 'https://4626.fun/miniapp-hero.png',
+    ogImageUrl: `${APP_ORIGIN}/miniapp-hero.png`,
     noindex: false,
   },
 }
