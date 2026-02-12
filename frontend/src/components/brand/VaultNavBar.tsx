@@ -4,7 +4,6 @@ import { Menu } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 import { ConnectButton } from '@/components/ConnectButton'
-import { ThemeToggle } from '@/components/ThemeToggle'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { isPublicSiteMode } from '@/lib/flags'
 import { getHostMode } from '@/lib/host'
@@ -61,7 +60,7 @@ export function VaultNavBar() {
   const baseItems = publicMode || hostMode === 'marketing' ? NAV_ITEMS_PUBLIC : NAV_ITEMS
   const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, ADMIN_ITEM] : baseItems
   const isWaitlistView = location.pathname === '/waitlist' || location.hash === '#waitlist'
-  const showConnect = !publicMode && !isWaitlistView
+  const showConnect = !publicMode && hostMode !== 'marketing' && !isWaitlistView
 
   return (
     <header className="hidden md:block sticky top-0 left-0 right-0 z-50 transition-all duration-500">
@@ -144,7 +143,6 @@ export function VaultNavBar() {
               <span className="text-sm font-medium text-vault-text">@{mini.username}</span>
             </div>
           ) : null}
-          <ThemeToggle />
           {showConnect ? <ConnectButton /> : null}
         </div>
 

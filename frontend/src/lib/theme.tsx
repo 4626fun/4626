@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo } from 'react'
 
 export type ThemePreference = 'light' | 'dark' | 'system'
 
@@ -11,80 +11,26 @@ type ThemeState = {
 
 const ThemeContext = createContext<ThemeState | null>(null)
 
-const STORAGE_KEY = 'cv:theme'
-
-function getSystemDark(): boolean {
-  try {
-    return window.matchMedia?.('(prefers-color-scheme: dark)')?.matches ?? true
-  } catch {
-    return true
-  }
-}
-
-function computeIsDark(pref: ThemePreference): boolean {
-  if (pref === 'dark') return true
-  if (pref === 'light') return false
-  return getSystemDark()
-}
-
-function applyTheme(pref: ThemePreference) {
+function applyDarkTheme() {
   if (typeof document === 'undefined') return
-  const isDark = computeIsDark(pref)
-  document.documentElement.classList.toggle('dark', isDark)
-  document.documentElement.style.colorScheme = isDark ? 'dark' : 'light'
-}
-
-function readStoredPreference(): ThemePreference {
-  try {
-    const raw = String(window.localStorage.getItem(STORAGE_KEY) || '').trim()
-    if (raw === 'light' || raw === 'dark' || raw === 'system') return raw
-    return 'system'
-  } catch {
-    return 'system'
-  }
-}
-
-function writeStoredPreference(pref: ThemePreference) {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, pref)
-  } catch {
-    // ignore
-  }
+  document.documentElement.classList.add('dark')
+  document.documentElement.style.colorScheme = 'dark'
 }
 
 export function ThemeProvider(props: { children: React.ReactNode }) {
-  const [preference, setPreferenceState] = useState<ThemePreference>(() => {
-    if (typeof window === 'undefined') return 'system'
-    return readStoredPreference()
-  })
-
-  const isDark = useMemo(() => computeIsDark(preference), [preference])
+  const preference: ThemePreference = 'dark'
+  const isDark = true
 
   useEffect(() => {
-    applyTheme(preference)
-    writeStoredPreference(preference)
-  }, [preference])
+    applyDarkTheme()
+  }, [])
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (preference !== 'system') return
-
-    const mql = window.matchMedia?.('(prefers-color-scheme: dark)')
-    if (!mql) return
-
-    const onChange = () => applyTheme('system')
-    try {
-      mql.addEventListener('change', onChange)
-      return () => mql.removeEventListener('change', onChange)
-    } catch {
-      // Safari fallback
-      mql.addListener(onChange)
-      return () => mql.removeListener(onChange)
-    }
-  }, [preference])
-
-  const setPreference = (p: ThemePreference) => setPreferenceState(p)
-  const toggle = () => setPreferenceState((prev) => (computeIsDark(prev) ? 'light' : 'dark'))
+  const setPreference = (_p: ThemePreference) => {
+    // Dark mode is enforced globally.
+  }
+  const toggle = () => {
+    // Dark mode is enforced globally.
+  }
 
   const value: ThemeState = useMemo(
     () => ({
@@ -104,4 +50,3 @@ export function useTheme(): ThemeState {
   if (!ctx) throw new Error('useTheme must be used within ThemeProvider')
   return ctx
 }
-
