@@ -15,7 +15,7 @@ numReplicas = 1
 
 # Health check: agent exposes a tiny HTTP server on $PORT
 healthcheckPath = "/healthz"
-healthcheckTimeout = 30
+healthcheckTimeout = 120
 
 # Restart on failure
 restartPolicyType = "ON_FAILURE"

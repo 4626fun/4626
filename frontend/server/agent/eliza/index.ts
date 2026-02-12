@@ -608,7 +608,12 @@ async function uploadRegistrationToGrove(): Promise<void> {
   }
 }
 
+let agentBooted = false
+
 async function main() {
+  // Start health check server FIRST so Railway healthcheck passes during boot
+  startHealthServer()
+
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   console.log('  CreatorVault ElizaOS Agent (Unified)')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
@@ -730,9 +735,7 @@ async function main() {
     process.exit(1)
   }
 
-  // Start health check HTTP server (used by Railway / Docker health probes)
-  startHealthServer()
-
+  agentBooted = true
   logger.info('[eliza] Runtime ready. Press Ctrl+C to stop.')
 }
 
@@ -740,16 +743,25 @@ async function main() {
 // Health check HTTP server
 // ---------------------------------------------------------------------------
 // Exposes GET /healthz on $PORT (default 8080) so Railway/Docker can verify
-// the agent is alive. Returns 200 when at least one agent is running.
+// the agent is alive. Returns 200 during boot ("booting") and after agents
+// start ("ok"). Only returns 503 if the process is up but agents crashed.
 function startHealthServer() {
   const port = Number(process.env.PORT ?? '8080') || 8080
   const server = http.createServer((_req, res) => {
     const url = (_req.url ?? '/').split('?')[0]
     if (url === '/healthz') {
       const agentCount = runningAgents.size
-      const ok = agentCount > 0
-      res.writeHead(ok ? 200 : 503, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ status: ok ? 'ok' : 'no_agents', agents: agentCount }))
+      if (!agentBooted) {
+        // Still booting — tell Railway we're alive so it doesn't kill us
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ status: 'booting', agents: 0 }))
+      } else if (agentCount > 0) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ status: 'ok', agents: agentCount }))
+      } else {
+        res.writeHead(503, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ status: 'no_agents', agents: 0 }))
+      }
     } else {
       res.writeHead(404)
       res.end('Not found')
