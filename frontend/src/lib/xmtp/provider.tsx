@@ -18,6 +18,7 @@ import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { getHostMode } from '@/lib/host'
 import {
   Client,
+  Opfs,
   type Signer,
   type Conversation,
   type Dm,
@@ -221,6 +222,119 @@ function extractInstallationLimitInboxId(message: string): string | null {
 function isInstallationLimitError(message: string): boolean {
   const m = String(message || '').toLowerCase()
   return m.includes('registered 10/10 installations') || m.includes('10/10 installations')
+}
+
+/**
+ * Auto-revoke the single oldest XMTP installation to free exactly 1 slot.
+ *
+ * IMPORTANT: each revocation consumes 1 of the inbox's 256 lifetime updates.
+ * We revoke only the minimum needed (1) to stay as frugal as possible.
+ * Uses the static `Client.revokeInstallations` — no live client required.
+ */
+async function autoRevokeOldestInstallation(
+  signer: Signer,
+  inboxId: string,
+): Promise<void> {
+  console.log('[xmtp] Fetching installations for inbox', inboxId)
+  const states = await (Client as any).fetchInboxStates(
+    [inboxId],
+    XMTP_ENV as any,
+  ) as any[]
+  const state = Array.isArray(states) ? states[0] : null
+  const installsRaw = Array.isArray(state?.installations)
+    ? state.installations
+    : []
+  const installs = installsRaw
+    .map((i: any) => {
+      const bytes = i?.bytes ?? i
+      const createdAt =
+        typeof i?.createdAt === 'string' && i.createdAt
+          ? Date.parse(i.createdAt)
+          : Number.NaN
+      return {
+        bytes,
+        createdAt: Number.isFinite(createdAt) ? createdAt : null,
+      }
+    })
+    .filter((i: any) => Boolean(i.bytes))
+
+  if (installs.length === 0) return
+
+  // Pick just the single oldest installation to revoke — 1 update spent.
+  const sorted = [...installs].sort((a, b) => {
+    const aa = a.createdAt ?? 0
+    const bb = b.createdAt ?? 0
+    return aa - bb // oldest first
+  })
+  const toRevoke = [sorted[0].bytes]
+
+  console.log(
+    `[xmtp] Revoking 1 oldest of ${installs.length} installation(s) (256-update budget)…`,
+  )
+  await (Client as any).revokeInstallations(
+    signer,
+    inboxId,
+    toRevoke,
+    XMTP_ENV as any,
+  )
+  console.log('[xmtp] Auto-revocation complete — freed 1 slot')
+}
+
+// ---------------------------------------------------------------------------
+// OPFS / Storage persistence
+// ---------------------------------------------------------------------------
+
+/**
+ * Request persistent storage so the browser doesn't evict the OPFS database
+ * that holds the XMTP installation.  Without this, browsers may silently
+ * garbage-collect OPFS data under storage pressure, forcing Client.build to
+ * fail and Client.create to burn a new installation slot.
+ *
+ * See: https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist
+ */
+async function requestPersistentStorage(): Promise<void> {
+  if (typeof navigator === 'undefined' || !navigator.storage?.persist) return
+  try {
+    const alreadyPersisted = await navigator.storage.persisted()
+    if (alreadyPersisted) {
+      console.log('[xmtp] Storage is already persistent')
+      return
+    }
+    const granted = await navigator.storage.persist()
+    console.log(`[xmtp] Persistent storage ${granted ? 'granted' : 'denied'}`)
+  } catch (err) {
+    console.warn('[xmtp] navigator.storage.persist() failed (non-fatal):', err)
+  }
+}
+
+/**
+ * Check whether an XMTP database file exists in OPFS for the given env.
+ * Returns true if at least one `xmtp-{env}-*.db3` file is present.
+ * When no database exists, Client.build cannot possibly succeed so callers
+ * should skip directly to Client.create.
+ */
+async function hasOpfsDatabase(): Promise<boolean> {
+  try {
+    const opfs = await Opfs.create()
+    try {
+      const files = await opfs.listFiles()
+      const prefix = `xmtp-${XMTP_ENV}-`
+      const found = files.some(
+        (f) => f.startsWith(prefix) && f.endsWith('.db3'),
+      )
+      console.log(
+        `[xmtp] OPFS files: ${files.length} total, DB present: ${found}`,
+        files.filter((f) => f.endsWith('.db3')),
+      )
+      return found
+    } finally {
+      opfs.close()
+    }
+  } catch (err) {
+    // OPFS not supported or other error — assume DB might exist
+    console.warn('[xmtp] OPFS check failed (assuming DB might exist):', err)
+    return true
+  }
 }
 
 function getEthereumAddressFromInboxState(state: any): string | null {
@@ -471,43 +585,129 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Get or create a random encryption key — no wallet popup needed.
-      // Backward-compatible: reuses any existing signature-derived key.
+      // ── Phase 0: Request persistent storage ──
+      // Prevents the browser from silently evicting our OPFS database under
+      // storage pressure.  Without this, Client.build can fail between sessions
+      // even though the database was written successfully last time.
+      await requestPersistentStorage()
+
+      // Encryption key: the Browser SDK does NOT use it for encryption (per XMTP
+      // docs), but the API still accepts it.  We keep the stored key for backward
+      // compat with databases created by older versions of this code.
       const encKeyHex = getOrCreateEncKeyHex(address)
       const encKeyBytes = hexToBytes(encKeyHex)
 
-      // Try restore first: Client.build uses existing local DB, no wallet popup.
-      // Reuses the same installation, avoids revoke/install churn.
+      // ── Phase 1: Try Client.build (restore from local OPFS DB, zero popups) ──
+      // This is the canonical reconnect path per XMTP docs.  It reuses the
+      // existing installation (no new installation, no signature, zero updates
+      // consumed).  The only requirement is that the OPFS database persists.
       setStatus('connecting')
       let buildClient: Client | null = null
-      try {
-        console.log('[xmtp] Attempting Client.build restore (zero-popup path)…')
-        buildClient = await Client.build(identifier, { ...baseOptions, dbEncryptionKey: encKeyBytes })
-        if (buildClient?.inboxId) {
-          console.log('[xmtp] Client.build succeeded — reusing existing installation, no wallet popup needed')
+      let buildSucceeded = false
+
+      // Pre-check: does an OPFS database even exist?
+      // If not, Client.build will always fail.  Skip straight to Client.create
+      // to avoid confusing error logs and wasted time.
+      const dbExists = await hasOpfsDatabase()
+
+      if (dbExists) {
+        // Attempt 1: try with the stored encryption key
+        try {
+          console.log('[xmtp] OPFS database found — attempting Client.build restore…')
+          buildClient = await Client.build(identifier, {
+            ...baseOptions,
+            dbEncryptionKey: encKeyBytes,
+          })
+          if (buildClient?.inboxId) {
+            buildSucceeded = true
+            console.log(
+              '[xmtp] Client.build succeeded — reusing installation',
+              buildClient.installationId,
+            )
+          } else {
+            console.log('[xmtp] Client.build returned no inboxId')
+            try { buildClient?.close() } catch {}
+            buildClient = null
+          }
+        } catch (buildErr) {
+          const buildMsg = buildErr instanceof Error ? buildErr.message : String(buildErr)
+          console.warn('[xmtp] Client.build failed with stored key:', buildMsg)
+          if (buildClient) { try { buildClient.close() } catch {} }
+          buildClient = null
+          if (clientRef.current) { try { clientRef.current.close() } catch {} }
+          clientRef.current = null
+          await new Promise((r) => setTimeout(r, 200))
+        }
+
+        // Attempt 2: try without encryption key — the Browser SDK doesn't use
+        // it for encryption, so the DB may be openable without one (or with a
+        // different one) if the key in localStorage drifted.
+        if (!buildSucceeded) {
+          try {
+            console.log('[xmtp] Retrying Client.build without dbEncryptionKey…')
+            buildClient = await Client.build(identifier, { ...baseOptions })
+            if (buildClient?.inboxId) {
+              buildSucceeded = true
+              console.log(
+                '[xmtp] Client.build succeeded (no key) — reusing installation',
+                buildClient.installationId,
+              )
+            } else {
+              try { buildClient?.close() } catch {}
+              buildClient = null
+            }
+          } catch (buildErr2) {
+            console.warn('[xmtp] Client.build without key also failed:', buildErr2)
+            if (buildClient) { try { buildClient.close() } catch {} }
+            buildClient = null
+            if (clientRef.current) { try { clientRef.current.close() } catch {} }
+            clientRef.current = null
+            await new Promise((r) => setTimeout(r, 200))
+          }
+        }
+      } else {
+        console.log('[xmtp] No OPFS database found — first use, will create new installation')
+      }
+
+      // ── Phase 1b: Client.build succeeded — set up conversations ──
+      // If setupConversations fails here it's likely a transient network issue
+      // or an "Uninitialized identity" error.  Do NOT fall through to
+      // Client.create for transient failures — that would burn an installation.
+      if (buildSucceeded && buildClient) {
+        try {
           clientRef.current = buildClient
           setInboxId(buildClient.inboxId ?? null)
           await setupConversations(buildClient)
-          return // fully connected via restore — done
+          return // fully connected via restore — done, zero updates consumed
+        } catch (syncErr) {
+          const syncMsg = syncErr instanceof Error ? syncErr.message : String(syncErr)
+          const isUninitialized = syncMsg.toLowerCase().includes('uninitialized')
+          console.warn('[xmtp] Client.build restored but setupConversations failed:', syncMsg)
+
+          if (isUninitialized) {
+            // Identity exists locally but wasn't fully registered on the network
+            // (e.g., user closed the tab mid-registration).  Must fall through
+            // to Client.create to complete registration.
+            console.log('[xmtp] Uninitialized identity — will re-create')
+            try { buildClient.close() } catch {}
+            clientRef.current = null
+            buildClient = null
+            await new Promise((r) => setTimeout(r, 200))
+          } else {
+            // Transient error (network timeout, server error, etc.).
+            // Retry once — do NOT fall through to Client.create.
+            console.log('[xmtp] Retrying setupConversations once…')
+            try {
+              await setupConversations(buildClient)
+              return // retry succeeded
+            } catch (retryErr) {
+              console.error('[xmtp] setupConversations retry also failed:', retryErr)
+              try { buildClient.close() } catch {}
+              clientRef.current = null
+              throw retryErr
+            }
+          }
         }
-        console.log('[xmtp] Client.build returned no inboxId — falling through to Client.create')
-        try { buildClient?.close() } catch {}
-        buildClient = null
-      } catch (restoreErr) {
-        console.log('[xmtp] Client.build failed (expected on first use):', restoreErr)
-        // IMPORTANT: close the client to release the OPFS file handle.
-        // Without this, Client.create can't open the database (lock conflict)
-        // and will create a new installation instead of reusing the existing one.
-        if (buildClient) {
-          try { buildClient.close() } catch {}
-          buildClient = null
-        }
-        if (clientRef.current) {
-          try { clientRef.current.close() } catch {}
-          clientRef.current = null
-        }
-        // Allow the OPFS file handle to be released before retrying
-        await new Promise((r) => setTimeout(r, 200))
       }
 
       setStatus('connecting')
@@ -544,32 +744,32 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
             signMessage: signMessageFn,
           }
 
-      // Skip pre-flight revocation — it requires a wallet signature of its own.
-      // Instead, let Client.create handle the 10/10 case: if it fails, we catch
-      // the error and show the reset UI. This avoids an extra popup on every
-      // first-time connection.
       console.log('[xmtp] Client.build unavailable — falling through to Client.create (will require wallet signature)')
 
-      let client: Client
-      try {
-        client = await Client.create(signer, {
-          ...baseOptions,
-          dbEncryptionKey: encKeyBytes,
-        })
-      } catch (createErr) {
-        const errMsg = createErr instanceof Error ? createErr.message : String(createErr)
-        // If 10/10 limit, let the outer catch handle it (shows reset UI)
-        if (isInstallationLimitError(errMsg)) throw createErr
-        // If the stored key is stale (e.g. corrupted localStorage), regenerate
-        // and retry once.
-        clearStoredEncKeyHex(address)
-        const freshHex = getOrCreateEncKeyHex(address)
-        setStatus('connecting')
-        client = await Client.create(signer, {
-          ...baseOptions,
-          dbEncryptionKey: hexToBytes(freshHex),
-        })
+      // Helper: attempt Client.create, auto-revoking stale installations on 10/10.
+      const tryCreate = async (dbKey: Uint8Array): Promise<Client> => {
+        try {
+          return await Client.create(signer, { ...baseOptions, dbEncryptionKey: dbKey })
+        } catch (createErr) {
+          const errMsg = createErr instanceof Error ? createErr.message : String(createErr)
+          if (!isInstallationLimitError(errMsg)) throw createErr
+
+          // 10/10 hit — auto-revoke stale installations and retry once.
+          const limitInboxId = extractInstallationLimitInboxId(errMsg)
+          if (!limitInboxId) throw createErr
+
+          console.log('[xmtp] 10/10 installation limit hit — revoking oldest installation to free 1 slot…')
+          setStatus('connecting')
+          await autoRevokeOldestInstallation(signer, limitInboxId)
+          return await Client.create(signer, { ...baseOptions, dbEncryptionKey: dbKey })
+        }
       }
+
+      // NOTE: the Browser SDK does NOT use dbEncryptionKey for encryption
+      // (per XMTP docs), so generating a fresh key on failure would not help
+      // and would only risk burning another installation slot.  We try once
+      // with the stored key and let tryCreate handle 10/10 auto-revocation.
+      const client = await tryCreate(encKeyBytes)
 
       if (!mountedRef.current) {
         client.close()
@@ -579,6 +779,12 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       clientRef.current = client
       setInboxId(client.inboxId ?? null)
       await setupConversations(client)
+
+      // NOTE: we intentionally do NOT call revokeAllOtherInstallations() here.
+      // Each revocation consumes 1 of the inbox's 256 lifetime updates.
+      // Proactive bulk revocation would burn updates far too fast. Instead we
+      // revoke only on-demand: when the 10/10 limit is actually hit (inside
+      // tryCreate above) or via the manual resetInstallations() escape hatch.
     } catch (e) {
       console.error('[xmtp] connect error:', e)
       if (mountedRef.current) {
