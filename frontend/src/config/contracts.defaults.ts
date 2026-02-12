@@ -15,14 +15,13 @@ const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as ContractAddress
 
 export const BASE_DEFAULTS = {
   // Shared infrastructure
-  registry: addr('888482d648D1fCa1A735268A9e579b44Bf644626'),
-  factory: addr('cCa08f9b94dD478266D0D1D2e9B7758414280FfD'),
-  lotteryManager: addr('77740C44A3E1d8262e8bfAB6204A29B2cbeE4626'),
+  registry: addr('02c8031c39E10832A831b954Df7a2c1bf9Df052D'),
+  lotteryManager: addr('c0329794016478e133F3D933b3D53273AB8325FC'),
   vrfConsumer: addr('0265236984DE964CB0422BaeFbDb2de7C9d590F5'),
   payoutRouterFactory: addr('9C53cEaA15AdDB436c89A1F929fF12ED2BD26ea9'),
 
   // Base↔Solana bridge integration
-  solanaBridgeAdapter: addr('648A01f6e125A46c4695CA70D0EB455f053d36A2'),
+  solanaBridgeAdapter: addr('5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92'),
 
   // CREATE2 infra
   create2Factory: addr('4e59b44847b379578588920cA78FbF26c0B4956C'),
@@ -33,7 +32,7 @@ export const BASE_DEFAULTS = {
   universalCreate2DeployerFromStore: addr('74183076C7D33346880A5bf0e263B761FB4d38BA'),
 
   // AA helpers
-  vaultActivationBatcher: addr('4b67e3a4284090e5191c27B8F24248eC82DF055D'),
+  vaultActivationBatcher: addr('d17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB'),
   // v2-infra CreatorVaultBatcher (deterministic, deployed via CREATE2 factory)
   // NOTE: This is the phased `CreatorVaultDeployer` (Phases 1–3).
   creatorVaultBatcher: addr('32e91185B92c6c13dd56D745aBf24F009cdD3019'),

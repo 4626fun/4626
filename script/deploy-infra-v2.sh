@@ -66,4 +66,13 @@ forge script script/DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer \
   --broadcast \
   --verify
 
+if [ -n "${SOLANA_BRIDGE_ADAPTER:-}" ] && [ -n "${SOLANA_DESTINATION:-}" ]; then
+  echo "Configuring CreatorVaultDeployer Solana routing..."
+  forge script script/ConfigureCreatorVaultDeployerSolana.s.sol:ConfigureCreatorVaultDeployerSolana \
+    --rpc-url "$BASE_RPC_URL" \
+    --broadcast
+else
+  echo "Skipping Solana config (set SOLANA_BRIDGE_ADAPTER and SOLANA_DESTINATION to enable)."
+fi
+
 echo "Done."

@@ -22,7 +22,7 @@ import {SolanaBridgeAdapter} from "../contracts/services/bridge/SolanaBridgeAdap
  */
 contract DeploySolanaBridgeAdapter is Script {
     // Base mainnet CreatorRegistry (see deployments/base/contracts/core/CreatorRegistry.json)
-    address constant DEFAULT_CREATOR_REGISTRY = 0x888482d648D1fCa1A735268A9e579b44Bf644626;
+    address constant DEFAULT_CREATOR_REGISTRY = 0x02c8031c39E10832A831b954Df7a2c1bf9Df052D;
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
@@ -49,4 +49,3 @@ contract DeploySolanaBridgeAdapter is Script {
         vm.stopBroadcast();
     }
 }
-

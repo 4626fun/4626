@@ -23,7 +23,6 @@ function envAddress(name: string, fallback?: `0x${string}` | undefined): `0x${st
 export const CONTRACTS = {
   // Shared Infrastructure
   registry: envAddress('VITE_REGISTRY', BASE_DEFAULTS.registry)!,
-  factory: envAddress('VITE_FACTORY', BASE_DEFAULTS.factory)!,
   lotteryManager: envAddress('VITE_LOTTERY_MANAGER', BASE_DEFAULTS.lotteryManager)!,
   vrfConsumer: envAddress('VITE_VRF_CONSUMER', BASE_DEFAULTS.vrfConsumer)!,
   payoutRouterFactory: envAddress('VITE_PAYOUT_ROUTER_FACTORY', BASE_DEFAULTS.payoutRouterFactory)!,

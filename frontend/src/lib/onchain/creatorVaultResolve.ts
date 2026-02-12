@@ -72,27 +72,6 @@ const CREATOR_VAULT_PHASE2_CORE_DEPLOYED_EVENT = parseAbiItem(
   'event Phase2CoreDeployed(address indexed creatorToken, address indexed owner, address gaugeController, address ccaStrategy, address oracle)',
 )
 
-const CREATOR_FACTORY_VIEW_ABI = [
-  {
-    type: 'function',
-    name: 'deployments',
-    stateMutability: 'view',
-    inputs: [{ name: '_creatorCoin', type: 'address' }],
-    outputs: [
-      { name: 'creatorCoin', type: 'address' },
-      { name: 'vault', type: 'address' },
-      { name: 'wrapper', type: 'address' },
-      { name: 'shareOFT', type: 'address' },
-      { name: 'gaugeController', type: 'address' },
-      { name: 'ccaStrategy', type: 'address' },
-      { name: 'oracle', type: 'address' },
-      { name: 'creator', type: 'address' },
-      { name: 'deployedAt', type: 'uint256' },
-      { name: 'exists', type: 'bool' },
-    ],
-  },
-] as const
-
 export type CreatorCoinInfo = {
   token: Address
   name: string
@@ -191,22 +170,6 @@ export async function fetchCreatorCoinInfo<
   }
 
   return out
-}
-
-export async function fetchCcaStrategyForToken<
-  TTransport extends Transport = Transport,
-  TChain extends Chain | undefined = Chain | undefined,
->(publicClient: PublicClient<TTransport, TChain>, token: Address): Promise<Address | null> {
-  const factory = CONTRACTS.factory as Address
-  const deploymentRaw = await publicClient.readContract({
-    address: factory,
-    abi: CREATOR_FACTORY_VIEW_ABI,
-    functionName: 'deployments',
-    args: [token],
-  })
-  const deployment = deploymentRaw as any
-  if (!deployment || deployment?.exists === false) return null
-  return asAddress(deployment?.ccaStrategy)
 }
 
 async function readTokenMetadataForFallback<
@@ -358,22 +321,19 @@ export async function resolveCreatorVaultByAnyAddress<
 
   const token = await resolveCreatorTokenFromAnyAddress(publicClient, addr)
   if (token) {
-    const [info, ccaStrategy] = await Promise.all([fetchCreatorCoinInfo(publicClient, token), fetchCcaStrategyForToken(publicClient, token)])
-    if (info) return { token, info, ccaStrategy }
-
     const batcherResolved = await resolveCreatorVaultFromBatcherEvents(publicClient, addr)
+    const info = await fetchCreatorCoinInfo(publicClient, token)
+    if (info) return { token, info, ccaStrategy: batcherResolved?.ccaStrategy ?? null }
+
     if (batcherResolved) {
-      return {
-        ...batcherResolved,
-        ccaStrategy: batcherResolved.ccaStrategy ?? ccaStrategy,
-      }
+      return batcherResolved
     }
   }
 
   const directTokenInfo = await fetchCreatorCoinInfo(publicClient, addr).catch(() => null)
   if (directTokenInfo) {
-    const ccaStrategy = await fetchCcaStrategyForToken(publicClient, addr).catch(() => null)
-    return { token: addr, info: directTokenInfo, ccaStrategy }
+    const batcherResolved = await resolveCreatorVaultFromBatcherEvents(publicClient, addr).catch(() => null)
+    return { token: addr, info: directTokenInfo, ccaStrategy: batcherResolved?.ccaStrategy ?? null }
   }
 
   return await resolveCreatorVaultFromBatcherEvents(publicClient, addr)

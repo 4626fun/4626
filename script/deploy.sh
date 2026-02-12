@@ -116,6 +116,17 @@ deploy_infra_v2() {
         --broadcast \
         --verify
 
+    if [ -n "${SOLANA_BRIDGE_ADAPTER:-}" ] && [ -n "${SOLANA_DESTINATION:-}" ]; then
+        echo ""
+        echo -e "${GREEN}Configuring Solana routing on CreatorVaultDeployer...${NC}"
+        forge script script/ConfigureCreatorVaultDeployerSolana.s.sol:ConfigureCreatorVaultDeployerSolana \
+            --rpc-url "$BASE_RPC_URL" \
+            --broadcast
+    else
+        echo ""
+        echo -e "${YELLOW}Skipping Solana config (set SOLANA_BRIDGE_ADAPTER + SOLANA_DESTINATION to enable).${NC}"
+    fi
+
     echo ""
     echo -e "${GREEN}✓ v2 infra deployed successfully!${NC}"
     echo ""
@@ -125,6 +136,7 @@ deploy_infra_v2() {
     echo "   - universalBytecodeStore"
     echo "   - universalCreate2DeployerFromStore"
     echo "   - creatorVaultBatcher"
+    echo "2. If Solana is enabled, ensure adapter is authorized on LotteryManager"
 }
 
 # Deploy vault for creator coin
@@ -221,4 +233,3 @@ main() {
 }
 
 main "$@"
-

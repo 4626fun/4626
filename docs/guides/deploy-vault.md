@@ -102,6 +102,24 @@ cast call 0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13 \
   --rpc-url "$BASE_RPC_URL"
 ```
 
+4. Optional Solana routing (required if you want the 20% Solana split to bridge instead of vesting fallback):
+
+```bash
+export PRIVATE_KEY=... # must be protocolTreasury for setSolanaConfig
+export BASE_RPC_URL=https://mainnet.base.org
+export CREATOR_VAULT_BATCHER=0x32e91185B92c6c13dd56D745aBf24F009cdD3019
+export SOLANA_BRIDGE_ADAPTER=0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92
+export SOLANA_DESTINATION=0x<32-byte-solana-pubkey>
+export SET_BATCHER_SOLANA_CONFIG=1
+
+forge script script/AuthorizeSolanaAdapter.s.sol:AuthorizeSolanaAdapter \
+  --rpc-url "$BASE_RPC_URL" \
+  --broadcast
+```
+
+Optional keeper setup (same script):
+- set `SOLANA_KEEPER_PUBKEY=0x<32-byte-solana-pubkey>` before running.
+
 Vercel cutover order:
 
 1. Merge frontend/api split-phase code + paymaster selector support.

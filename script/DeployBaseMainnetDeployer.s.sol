@@ -31,6 +31,10 @@ import "../contracts/factories/UniversalCreate2DeployerFromStore.sol";
 ///   UNISWAP_V3_FACTORY=...
 ///   UNISWAP_ROUTER=...
 ///   AJNA_FACTORY=...
+/// Optional Solana wiring (requires broadcaster == protocolTreasury):
+///   CONFIGURE_SOLANA=1
+///   SOLANA_BRIDGE_ADAPTER=...
+///   SOLANA_DESTINATION=0x<32-byte-solana-pubkey>
 contract DeployBaseMainnetDeployer is Script {
     // EIP-2470 universal CREATE2 factory.
     address constant CREATE2_FACTORY_ADDR = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
@@ -48,8 +52,8 @@ contract DeployBaseMainnetDeployer is Script {
     address constant DEFAULT_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     address constant DEFAULT_TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
     address constant DEFAULT_CHAINLINK_ETH_USD = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
-    address constant DEFAULT_VAULT_ACTIVATION_BATCHER = 0x4b67e3a4284090e5191c27B8F24248eC82DF055D;
-    address constant DEFAULT_LOTTERY_MANAGER = 0x77740C44A3E1d8262e8bfAB6204A29B2cbeE4626;
+    address constant DEFAULT_VAULT_ACTIVATION_BATCHER = 0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB;
+    address constant DEFAULT_LOTTERY_MANAGER = 0xc0329794016478e133F3D933b3D53273AB8325FC;
     address constant DEFAULT_PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
     address constant DEFAULT_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address constant DEFAULT_UNISWAP_V3_FACTORY = 0x33128a8fC17869897dcE68Ed026d694621f6FDfD;
@@ -69,6 +73,8 @@ contract DeployBaseMainnetDeployer is Script {
         address uniswapV3Factory;
         address uniswapRouter;
         address ajnaFactory;
+        address solanaBridgeAdapter;
+        bytes32 solanaDestination;
     }
 
     function _create2(address deployer, bytes32 salt, bytes32 initCodeHash) internal pure returns (address) {
@@ -92,6 +98,9 @@ contract DeployBaseMainnetDeployer is Script {
         cfg.uniswapV3Factory = vm.envOr("UNISWAP_V3_FACTORY", DEFAULT_UNISWAP_V3_FACTORY);
         cfg.uniswapRouter = vm.envOr("UNISWAP_ROUTER", DEFAULT_UNISWAP_ROUTER);
         cfg.ajnaFactory = vm.envOr("AJNA_FACTORY", DEFAULT_AJNA_FACTORY);
+        cfg.solanaBridgeAdapter = vm.envOr("SOLANA_BRIDGE_ADAPTER", address(0));
+        cfg.solanaDestination = vm.envOr("SOLANA_DESTINATION", bytes32(0));
+        bool configureSolana = vm.envOr("CONFIGURE_SOLANA", uint256(0)) == 1;
 
         console2.log("Broadcaster:", broadcaster);
         console2.log("Broadcaster balance (ETH):", broadcaster.balance);
@@ -162,6 +171,28 @@ contract DeployBaseMainnetDeployer is Script {
         require(address(deployer.uniswapRouter()) == cfg.uniswapRouter, "Deployer router mismatch");
         require(address(deployer.ajnaFactory()) == cfg.ajnaFactory, "Deployer Ajna factory mismatch");
         console2.log("CreatorVaultDeployer:", address(deployer));
+
+        // Optional: configure the 20% Solana allocation path on the batcher.
+        if (configureSolana) {
+            require(cfg.solanaBridgeAdapter != address(0), "SOLANA_BRIDGE_ADAPTER required");
+            require(cfg.solanaDestination != bytes32(0), "SOLANA_DESTINATION required");
+            require(broadcaster == cfg.protocolTreasury, "broadcaster must equal protocolTreasury");
+
+            address currentAdapter = deployer.solanaBridgeAdapter();
+            bytes32 currentDestination = deployer.solanaDestination();
+
+            if (currentAdapter != cfg.solanaBridgeAdapter || currentDestination != cfg.solanaDestination) {
+                vm.startBroadcast(pk);
+                deployer.setSolanaConfig(cfg.solanaBridgeAdapter, cfg.solanaDestination);
+                vm.stopBroadcast();
+            }
+
+            require(deployer.solanaBridgeAdapter() == cfg.solanaBridgeAdapter, "Solana adapter mismatch");
+            require(deployer.solanaDestination() == cfg.solanaDestination, "Solana destination mismatch");
+            console2.log("Solana adapter configured:", cfg.solanaBridgeAdapter);
+            console2.logBytes32(cfg.solanaDestination);
+        } else {
+            console2.log("CONFIGURE_SOLANA=0 (skipped setSolanaConfig)");
+        }
     }
 }
-

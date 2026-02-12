@@ -3003,6 +3003,13 @@ function DeployVaultBatcher({
             userOpHash: result.userOpHash,
             txHash: result.transactionHash,
           })
+          // In production, logger.info is hidden unless debug is enabled.
+          // Keep a plain console line so operators can still see phase progress.
+          console.log(`[DeployVault] ${logPhaseLabel}_confirmed`, {
+            via: context,
+            userOpHash: result.userOpHash,
+            txHash: result.transactionHash,
+          })
         }
 
         const sendPhaseCalls = async (
@@ -3033,6 +3040,22 @@ function DeployVaultBatcher({
           }
 
           if (!opts?.noSplit && phaseLabel === 'phase2' && calls.length > 1) {
+            const isFinalizePostSegment =
+              typeof opts?.segment === 'string' &&
+              (opts.segment === 'finalize_post' || opts.segment.includes('finalize_post.'))
+            if (isFinalizePostSegment) {
+              logger.info('[DeployVault] Splitting phase2 finalize_post into sequential UserOps', {
+                callCount: calls.length,
+              })
+              for (let i = 0; i < calls.length; i += 1) {
+                const c = calls[i]
+                if (!c) continue
+                const step = `${opts.segment}.step${i + 1}`
+                await sendPhaseCalls([c], phaseLabel, { noSplit: true, segment: step })
+              }
+              return
+            }
+
             const approveSelector = '0x095ea7b3'
             const creatorTokenAddr = getAddress(creatorToken).toLowerCase()
             const approveCalls = calls.filter((c) => {
@@ -3724,7 +3747,7 @@ function DeployVaultBatcher({
           label: 'Phase 2 core',
         })
         await sendPhaseCalls(phase2FinalizeAndPostCalls, 'phase2', {
-          noSplit: true,
+          noSplit: phase2PostCalls.length === 0,
           segment: phase2PostCalls.length > 0 ? 'finalize_post' : 'finalize',
         })
 

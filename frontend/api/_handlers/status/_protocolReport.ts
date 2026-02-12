@@ -98,7 +98,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // We inline them here to avoid any cross-bundling issues in Vercel serverless functions.
   const infra = [
     { id: 'registry', label: 'Registry', value: pickAddress('CREATOR_REGISTRY', `0x${'02c8031c39E10832A831b954Df7a2c1bf9Df052D'}`) },
-    { id: 'factory', label: 'Factory', value: pickAddress('CREATOR_FACTORY', `0x${'cCa08f9b94dD478266D0D1D2e9B7758414280FfD'}`) },
     { id: 'vaultActivationBatcher', label: 'VaultActivationBatcher', value: pickAddress('VAULT_ACTIVATION_BATCHER', `0x${'4b67e3a4284090e5191c27B8F24248eC82DF055D'}`) },
     { id: 'create2Deployer', label: 'CREATE2Deployer', value: pickAddress('CREATE2_DEPLOYER', `0x${'aBf645362104F34D9C3FE48440bE7c99aaDE58E7'}`) },
     { id: 'taxHook', label: 'TaxHook', value: pickAddress('TAX_HOOK', `0x${'ca975B9dAF772C71161f3648437c3616E5Be0088'}`) },
@@ -136,4 +135,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCache(res, 60)
   return res.status(200).json({ success: true, data: { chainId, generatedAt, sections } })
 }
-

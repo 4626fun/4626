@@ -14,7 +14,6 @@ import { BASE_DEFAULTS, type ContractAddress } from '../../src/config/contracts.
 
 export type ApiContracts = {
   registry: ContractAddress
-  factory: ContractAddress
   lotteryManager: ContractAddress
   payoutRouterFactory: ContractAddress
   create2Factory: ContractAddress
@@ -72,7 +71,6 @@ function pickAddressProdSafe(envKey: string, fallback?: string): ContractAddress
 export function getApiContracts(): ApiContracts {
   return {
     registry: pickAddress('CREATOR_REGISTRY', BASE_DEFAULTS.registry)!,
-    factory: pickAddress('CREATOR_FACTORY', BASE_DEFAULTS.factory)!,
     lotteryManager: pickAddress('LOTTERY_MANAGER', BASE_DEFAULTS.lotteryManager)!,
     payoutRouterFactory: pickAddress('PAYOUT_ROUTER_FACTORY', BASE_DEFAULTS.payoutRouterFactory)!,
     create2Factory: pickAddress('CREATE2_FACTORY', BASE_DEFAULTS.create2Factory)!,
