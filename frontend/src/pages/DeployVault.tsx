@@ -697,6 +697,40 @@ const UNIVERSAL_CREATE2_DEPLOY_FROM_STORE_ABI = [
   },
 ] as const
 
+const CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'solanaBridgeAdapter',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'solanaDestination',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }],
+  },
+] as const
+
+const SOLANA_BRIDGE_ADAPTER_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'isRegistered',
+    stateMutability: 'view',
+    inputs: [{ name: 'token', type: 'address' }],
+    outputs: [{ type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
 const CREATOR_VAULT_ADMIN_ABI = [
   {
     type: 'function',
@@ -2360,6 +2394,69 @@ function DeployVaultBatcher({
       if (!publicClient) throw new Error('Network client not ready')
       if (!expected || !expectedGauge || !expectedBurnStream || !expectedPayoutRouter || !expectedCreate2Deployer)
         throw new Error('Failed to compute expected deployment addresses')
+      {
+        // If batcher-level Solana bridging is enabled, ensure the expected ShareOFT is registered on the adapter.
+        // Otherwise Phase2 finalize will revert inside bridgeToSolana() with TokenNotRegistered().
+        const [solanaBridgeAdapterRaw, solanaDestinationRaw] = await Promise.all([
+          publicClient
+            .readContract({
+              address: batcherAddress,
+              abi: CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI,
+              functionName: 'solanaBridgeAdapter',
+            })
+            .catch(() => ZERO_ADDRESS as Address),
+          publicClient
+            .readContract({
+              address: batcherAddress,
+              abi: CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI,
+              functionName: 'solanaDestination',
+            })
+            .catch(() => ZERO_BYTES32 as Hex),
+        ])
+
+        const solanaBridgeAdapter = getAddress((solanaBridgeAdapterRaw as Address) || ZERO_ADDRESS)
+        const solanaDestination = (solanaDestinationRaw as Hex) || (ZERO_BYTES32 as Hex)
+        const solanaBridgeEnabled =
+          solanaBridgeAdapter.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
+          String(solanaDestination).toLowerCase() !== ZERO_BYTES32.toLowerCase()
+
+        if (solanaBridgeEnabled) {
+          const adapterCode = await publicClient.getBytecode({ address: solanaBridgeAdapter })
+          if (!adapterCode || adapterCode === '0x') {
+            throw new Error(
+              `Batcher Solana adapter is configured to ${solanaBridgeAdapter}, but no contract code exists there. ` +
+                'Ask protocol treasury to fix setSolanaConfig(adapter,destination) or disable it for now.',
+            )
+          }
+
+          const shareRegistered = await publicClient
+            .readContract({
+              address: solanaBridgeAdapter,
+              abi: SOLANA_BRIDGE_ADAPTER_VIEW_ABI,
+              functionName: 'isRegistered',
+              args: [expected.shareOFT],
+            })
+            .then((v) => Boolean(v))
+            .catch(() => null)
+
+          if (shareRegistered === false) {
+            const adapterOwner = await publicClient
+              .readContract({
+                address: solanaBridgeAdapter,
+                abi: SOLANA_BRIDGE_ADAPTER_VIEW_ABI,
+                functionName: 'owner',
+              })
+              .then((v) => (typeof v === 'string' && isAddress(v) ? getAddress(v as Address) : null))
+              .catch(() => null)
+            const ownerHint = adapterOwner ? ` Adapter owner: ${adapterOwner}.` : ''
+            throw new Error(
+              `Solana bridge is enabled, but ShareOFT ${shortAddress(expected.shareOFT)} is not registered on adapter ` +
+                `${shortAddress(solanaBridgeAdapter)}.${ownerHint} ` +
+                'Register this ShareOFT on the adapter first (registerToken), or disable batcher Solana config and retry.',
+            )
+          }
+        }
+      }
       if (!floorPriceQ96Aligned || floorPriceQ96Aligned <= 0n) {
         throw new Error('Market floor price not available. Wait for pricing to load.')
       }
