@@ -445,8 +445,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     try {
       const basename = await getBasename(address)
       if (basename) {
-        nameCache.current.set(lower, basename)
-        return basename
+        // Strip .base.eth / .eth suffix for a cleaner display name
+        const short = basename.replace(/\.base\.eth$|\.eth$/, '')
+        nameCache.current.set(lower, short)
+        return short
       }
     } catch {
       // Basename resolution failed — fall through to truncated address
