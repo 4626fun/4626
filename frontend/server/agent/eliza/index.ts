@@ -223,6 +223,30 @@ async function generateLlmResponse(
 }
 
 // ---------------------------------------------------------------------------
+// Welcome message for first-time conversations
+// ---------------------------------------------------------------------------
+
+const welcomedConversations = new Set<string>()
+
+const WELCOME_MESSAGE = [
+  `Hey! I'm **Keepr** — your CreatorVault assistant.\n`,
+  `Here's what I can do:\n`,
+  `**Vault & Keeper Ops**`,
+  `  \`/cre status\` — check vault states`,
+  `  \`/cre health\` — full system health`,
+  `  \`/cre auction\` — CCA auction status`,
+  `  \`/cre tend\` — deploy idle funds`,
+  `  \`/cre report\` — harvest yields\n`,
+  `**Intel**`,
+  `  \`/reputation 0x…\` — onchain reputation score`,
+  `  \`/wallet 0x…\` — wallet analysis`,
+  `  \`/lens @handle\` — Lens profile lookup\n`,
+  `**Chat**`,
+  `  \`@keepr <question>\` — ask me anything about DeFi on Base\n`,
+  `Type \`/cre help\` for the full command list. What can I help with?`,
+].join('\n')
+
+// ---------------------------------------------------------------------------
 // Message router (ElizaOS plugin pipeline)
 // ---------------------------------------------------------------------------
 
@@ -233,6 +257,12 @@ async function handleMessage(msg: {
   content: string
 }): Promise<string | null> {
   const text = msg.content.trim()
+
+  // Welcome message on first interaction in a conversation
+  if (!welcomedConversations.has(msg.conversationId)) {
+    welcomedConversations.add(msg.conversationId)
+    return WELCOME_MESSAGE
+  }
 
   // Route through all plugin actions
   for (const action of allActions) {

@@ -437,6 +437,38 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           setAutoConnectEnabled(address)
           setStatus('connected')
         }
+
+        // Auto-start a DM with the Keepr agent so it can send a welcome message.
+        // Fire-and-forget: failures here must not break the connect flow.
+        const agentAddr = (import.meta.env.VITE_AGENT_XMTP_ADDRESS ?? '').trim()
+        if (agentAddr && /^0x[a-fA-F0-9]{40}$/.test(agentAddr)) {
+          void (async () => {
+            try {
+              const alreadyExists = summaries.some(
+                (c) => c.peerAddress?.toLowerCase() === agentAddr.toLowerCase(),
+              )
+              if (alreadyExists) return // DM already exists — agent has already welcomed
+              const dm = await client.conversations.createDmWithIdentifier({
+                identifier: agentAddr as `0x${string}`,
+                identifierKind: IdentifierKind.Ethereum,
+              })
+              await dm.sendText('hi')
+              console.log('[xmtp] Auto-started DM with agent', agentAddr)
+              // Add to conversation list so it appears immediately
+              const summary = await buildConvoSummary(dm as any)
+              if (mountedRef.current) {
+                setConversations((prev) => {
+                  if (prev.find((c) => c.id === summary.id)) return prev
+                  const next = [summary, ...prev]
+                  conversationsRef.current = next
+                  return next
+                })
+              }
+            } catch (err) {
+              console.warn('[xmtp] Auto-DM with agent failed (non-fatal):', err)
+            }
+          })()
+        }
       }
 
       // Get or create a random encryption key — no wallet popup needed.
