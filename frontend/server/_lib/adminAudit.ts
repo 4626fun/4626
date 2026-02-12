@@ -33,6 +33,7 @@ export async function ensureAdminAuditSchema(db: Db): Promise<void> {
 export type AdminAction = 
   | 'waitlist_approve'
   | 'waitlist_deny'
+  | 'waitlist_delete'
   | 'creator_approve'
   | 'creator_deny'
   | 'creator_revoke'
