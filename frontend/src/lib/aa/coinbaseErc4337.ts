@@ -1279,9 +1279,21 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
 
   const normalizedBundlerUrl = normalizeUrl(bundlerUrlInput)
   const paymasterUrl = normalizeUrl(paymasterUrlInput ?? bundlerUrlInput)
-  const bundlerUrlForBundler = resolveBundlerUrlForNonPaymaster(normalizedBundlerUrl)
-  const shouldSendSessionToBundler = isPaymasterProxyUrl(bundlerUrlForBundler)
+  let bundlerUrlForBundler = resolveBundlerUrlForNonPaymaster(normalizedBundlerUrl)
+  let shouldSendSessionToBundler = isPaymasterProxyUrl(bundlerUrlForBundler)
   const shouldSendSessionToPaymaster = isSameOriginUrl(paymasterUrl)
+  const canFallbackBundlerProbeToProxy =
+    bundlerUrlForBundler !== normalizedBundlerUrl && isPaymasterProxyUrl(normalizedBundlerUrl)
+  if (AA_DEBUG) {
+    logger.debug('[ERC-4337] Resolved endpoints', {
+      bundlerUrlInput,
+      bundlerUrlForBundler,
+      paymasterUrl,
+      canFallbackBundlerProbeToProxy,
+      shouldSendSessionToBundler,
+      shouldSendSessionToPaymaster,
+    })
+  }
 
   // Pre-flight simulation: check if the underlying call would succeed
   // This helps diagnose contract-level reverts vs ERC-4337 issues
@@ -1412,15 +1424,40 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     })
   }
   const paymasterTransport = buildTransport(paymasterUrl, { includeSession: shouldSendSessionToPaymaster, includeDebug: true })
-  const bundlerTransport = buildTransport(bundlerUrlForBundler, { includeSession: shouldSendSessionToBundler })
   const paymasterClient = createPaymasterClient({ transport: paymasterTransport })
-  const bundlerClient = createBundlerClient({
+  let bundlerClient = createBundlerClient({
     client: publicClient as any,
-    transport: bundlerTransport,
+    transport: buildTransport(bundlerUrlForBundler, { includeSession: shouldSendSessionToBundler }),
   })
 
-  // ENFORCE: Verify bundler supports EntryPoint v0.6 before sending
-  await verifyBundlerSupportsV06(bundlerUrlForBundler, { includeCredentials: shouldSendSessionToBundler })
+  // ENFORCE: Verify bundler supports EntryPoint v0.6 before sending.
+  // If a client-side override is configured and fails the probe, retry via the
+  // same-origin paymaster proxy so one-click deploy does not hard-fail on env drift.
+  try {
+    await verifyBundlerSupportsV06(bundlerUrlForBundler, { includeCredentials: shouldSendSessionToBundler })
+  } catch (probeError: unknown) {
+    const probeMsg = probeError instanceof Error ? probeError.message : String(probeError ?? '')
+    const probeLc = probeMsg.toLowerCase()
+    const isUnsupportedMethodProbe =
+      probeLc.includes('bundler entrypoint probe failed') &&
+      (probeLc.includes('method not found') ||
+        probeLc.includes('method not allowed') ||
+        probeLc.includes('unsupported method'))
+    const isMissingV06Probe = probeLc.includes('bundler does not support entrypoint v0.6')
+    if (!canFallbackBundlerProbeToProxy || (!isUnsupportedMethodProbe && !isMissingV06Probe)) {
+      throw probeError
+    }
+    logger.warn('[ERC-4337] Bundler override probe failed; retrying via paymaster proxy', {
+      error: probeMsg,
+    })
+    bundlerUrlForBundler = normalizedBundlerUrl
+    shouldSendSessionToBundler = isPaymasterProxyUrl(bundlerUrlForBundler)
+    bundlerClient = createBundlerClient({
+      client: publicClient as any,
+      transport: buildTransport(bundlerUrlForBundler, { includeSession: shouldSendSessionToBundler }),
+    })
+    await verifyBundlerSupportsV06(bundlerUrlForBundler, { includeCredentials: shouldSendSessionToBundler })
+  }
 
   // Send the UserOperation via EntryPoint v0.6 with CDP paymaster
   // toCoinbaseSmartAccount uses entryPoint06Address by default
@@ -1577,6 +1614,8 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
           data: typeof call.data === 'string' ? call.data.slice(0, 18) : null,
         })),
         bundlerUrl: bundlerUrlInput,
+        bundlerUsesProxy: isPaymasterProxyUrl(bundlerUrlForBundler),
+        bundlerOverrideActive: bundlerUrlForBundler !== normalizedBundlerUrl,
         paymasterUrl: paymasterUrlInput ?? bundlerUrlInput,
         skipPaymaster,
         attemptedWithoutPaymaster,
