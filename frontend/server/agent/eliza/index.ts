@@ -229,12 +229,11 @@ async function generateLlmResponse(
 const welcomedConversations = new Set<string>()
 
 const WELCOME_MESSAGE = [
-  `o henlo! I'm Keepr, your CreatorVault assistant.\n`,
-  `Try one of these to get started:\n`,
-  `  /cre status — see how your vaults are doing`,
-  `  /cre health — full system health check`,
-  `  @keepr what is CreatorVault? — ask me anything\n`,
-  `Or just say "help" for the full command list.`,
+  `o henlo! I'm Keepr, your CreatorVault assistant.`,
+  ``,
+  `You can ask me about your vaults, check on-chain reputation, or just chat.`,
+  ``,
+  `Try saying "how are my vaults?" or type /cre help to see everything I can do.`,
 ].join('\n')
 
 // ---------------------------------------------------------------------------
