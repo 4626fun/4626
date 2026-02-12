@@ -4912,7 +4912,6 @@ function DeployVaultMain() {
       // Newly required per-vault contracts (deployed via UniversalCreate2DeployerFromStore)
       payoutRouter: keccak256(DEPLOY_BYTECODE.PayoutRouter as Hex),
       vaultShareBurnStream: keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex),
-      charmAlphaVaultDeploy: keccak256(DEPLOY_BYTECODE.CharmAlphaVaultDeploy as Hex),
       creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CreatorCharmStrategy as Hex),
       ajnaStrategy: keccak256(DEPLOY_BYTECODE.AjnaStrategy as Hex),
     } as const
@@ -4932,7 +4931,6 @@ function DeployVaultMain() {
       deployCodeIds.oftBootstrap,
       deployCodeIds.payoutRouter,
       deployCodeIds.vaultShareBurnStream,
-      deployCodeIds.charmAlphaVaultDeploy,
       deployCodeIds.creatorCharmStrategy,
       deployCodeIds.ajnaStrategy,
     ],
@@ -4991,7 +4989,7 @@ function DeployVaultMain() {
         { key: 'oracle', label: 'CreatorOracle', codeId: deployCodeIds.oracle },
         { key: 'vaultShareBurnStream', label: 'VaultShareBurnStream', codeId: deployCodeIds.vaultShareBurnStream },
         { key: 'payoutRouter', label: 'PayoutRouter', codeId: deployCodeIds.payoutRouter },
-        { key: 'charmAlphaVaultDeploy', label: 'CharmAlphaVaultDeploy', codeId: deployCodeIds.charmAlphaVaultDeploy },
+        // Charm alpha vault is created via Charm's official factory in phase 3 (not from bytecode store).
         { key: 'creatorCharmStrategy', label: 'CreatorCharmStrategy', codeId: deployCodeIds.creatorCharmStrategy },
         { key: 'ajnaStrategy', label: 'AjnaStrategy', codeId: deployCodeIds.ajnaStrategy },
       ] as const
