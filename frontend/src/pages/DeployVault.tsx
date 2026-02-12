@@ -1633,6 +1633,22 @@ function DeployVaultBatcher({
         'If needed, disable server-continue (`VITE_DEPLOY_USE_SERVER_CONTINUE=false`) and run phases client-side.'
       )
     }
+    if (lower.includes('missing_primary_call')) {
+      const expectedMatch = msg.match(/expectedBatcher=(0x[a-fA-F0-9]{40})/i)
+      const seenMatch = msg.match(/seen=(0x[a-fA-F0-9]{40}):(0x[a-fA-F0-9]{8})/i)
+      const expectedBatcher = expectedMatch?.[1] ?? null
+      const seenBatcher = seenMatch?.[1] ?? null
+      const seenSelector = seenMatch?.[2] ?? null
+      const mismatchDetail =
+        expectedBatcher && seenBatcher
+          ? ` server expects ${expectedBatcher}, but request used ${seenBatcher}${seenSelector ? ` (${seenSelector})` : ''}.`
+          : ''
+      return (
+        'Paymaster rejected the deploy call shape (`missing_primary_call`).' +
+        mismatchDetail +
+        ' This is usually a frontend/backend batcher mismatch. On Vercel, keep `ALLOW_API_CONTRACT_OVERRIDES` unset/0, remove stale `CREATOR_VAULT_BATCHER`, and redeploy latest commit.'
+      )
+    }
     if (lower.includes('signature check failed') || lower.includes('invalid userop signature')) {
       return (
         "UserOp signature failed. This usually means the signer isn’t an onchain owner or didn’t sign the raw UserOp hash with `eth_sign`. " +
@@ -3301,8 +3317,11 @@ function DeployVaultBatcher({
             } catch (e) {
               const msg = e instanceof Error ? e.message : String(e ?? '')
               const lc = msg.toLowerCase()
+              const isMissingPrimaryCall = lc.includes('missing_primary_call')
               const failureClass =
-                lc.includes('total gas used by the user operation') || (lc.includes('total gas used') && lc.includes('allowed limit'))
+                isMissingPrimaryCall
+                  ? 'paymaster_primary_call_mismatch'
+                  : lc.includes('total gas used by the user operation') || (lc.includes('total gas used') && lc.includes('allowed limit'))
                   ? 'paymaster_total_gas_cap'
                   : lc.includes('signature verification used more gas') || lc.includes('verificationgaslimit') || lc.includes('aa40')
                     ? 'verification_gas_limit'
@@ -3314,17 +3333,18 @@ function DeployVaultBatcher({
                           ? 'paymaster_stake_policy'
                           : 'unknown'
               const shouldFallback =
-                lc.includes('invalid signature') ||
-                lc.includes('signature check failed') ||
-                lc.includes('signature verification used more gas') ||
-                lc.includes('verificationgaslimit') ||
-                lc.includes('aa40') ||
-                lc.includes('banned opcode') ||
-                lc.includes('stake/unstake delay') ||
-                lc.includes('unstake delay too low') ||
-                lc.includes('total gas used by the user operation') ||
-                (lc.includes('total gas used') && lc.includes('allowed limit')) ||
-                lc.includes('invalid fields')
+                !isMissingPrimaryCall &&
+                (lc.includes('invalid signature') ||
+                  lc.includes('signature check failed') ||
+                  lc.includes('signature verification used more gas') ||
+                  lc.includes('verificationgaslimit') ||
+                  lc.includes('aa40') ||
+                  lc.includes('banned opcode') ||
+                  lc.includes('stake/unstake delay') ||
+                  lc.includes('unstake delay too low') ||
+                  lc.includes('total gas used by the user operation') ||
+                  (lc.includes('total gas used') && lc.includes('allowed limit')) ||
+                  lc.includes('invalid fields'))
               if (shouldFallback) {
                 logger.warn('[DeployVault] Privy smart wallet signer failed; setup still required', {
                   phaseLabel: logPhaseLabel,
