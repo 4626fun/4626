@@ -130,6 +130,19 @@ function normalizeBytes32(value: unknown): Hex | null {
   return value as Hex
 }
 
+function parseUint8(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 255) {
+    return Math.floor(value)
+  }
+  if (typeof value === 'string') {
+    const v = value.trim()
+    if (!v) return null
+    const n = Number(v)
+    if (Number.isFinite(n) && n >= 0 && n <= 255) return Math.floor(n)
+  }
+  return null
+}
+
 function normalizeHexSuffix(value: unknown): string | null {
   const raw = typeof value === 'string' ? value.trim() : ''
   if (!raw) return null
@@ -1454,6 +1467,8 @@ function DeployVaultBatcher({
   privyEmbeddedEoaIsCanonicalOwner,
   privyEmbeddedEoaCanSign,
   strictNoEoaMode,
+  solanaMintOverride,
+  solanaDecimalsOverride,
   connectorId,
   wagmiWalletClient,
 }: {
@@ -1486,6 +1501,8 @@ function DeployVaultBatcher({
   privyEmbeddedEoaIsCanonicalOwner: boolean
   privyEmbeddedEoaCanSign: boolean
   strictNoEoaMode: boolean
+  solanaMintOverride: Hex | null
+  solanaDecimalsOverride: number | null
   // For direct Coinbase Wallet connection (supports eth_sign)
   connectorId: string | undefined
   wagmiWalletClient: any
@@ -2412,9 +2429,9 @@ function DeployVaultBatcher({
       if (!publicClient) throw new Error('Network client not ready')
       if (!expected || !expectedGauge || !expectedBurnStream || !expectedPayoutRouter || !expectedCreate2Deployer)
         throw new Error('Failed to compute expected deployment addresses')
-      {
-        // If batcher-level Solana bridging is enabled, ensure the expected ShareOFT is registered on the adapter.
-        // Otherwise Phase2 finalize will revert inside bridgeToSolana() with TokenNotRegistered().
+      const ensureShareOftRegisteredForSolanaBridge = async () => {
+        // If batcher-level Solana bridging is enabled, ensure the ShareOFT is registered on the adapter.
+        // This must run after Phase 1 finalize, because registerToken() reads ShareOFT decimals().
         const [solanaBridgeAdapterRaw, solanaDestinationRaw] = await Promise.all([
           publicClient
             .readContract({
@@ -2438,42 +2455,76 @@ function DeployVaultBatcher({
           solanaBridgeAdapter.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
           String(solanaDestination).toLowerCase() !== ZERO_BYTES32.toLowerCase()
 
-        if (solanaBridgeEnabled) {
-          const adapterCode = await publicClient.getBytecode({ address: solanaBridgeAdapter })
-          if (!adapterCode || adapterCode === '0x') {
-            throw new Error(
-              `Batcher Solana adapter is configured to ${solanaBridgeAdapter}, but no contract code exists there. ` +
-                'Ask protocol treasury to fix setSolanaConfig(adapter,destination) or disable it for now.',
-            )
-          }
+        if (!solanaBridgeEnabled) return
 
-          const shareRegistered = await publicClient
+        const adapterCode = await publicClient.getBytecode({ address: solanaBridgeAdapter })
+        if (!adapterCode || adapterCode === '0x') {
+          throw new Error(
+            `Batcher Solana adapter is configured to ${solanaBridgeAdapter}, but no contract code exists there. ` +
+              'Ask protocol treasury to fix setSolanaConfig(adapter,destination) or disable it for now.',
+          )
+        }
+
+        const shareOftCode = await publicClient.getBytecode({ address: expected.shareOFT })
+        if (!shareOftCode || shareOftCode === '0x') {
+          throw new Error(
+            `Solana bridge is enabled, but ShareOFT ${shortAddress(expected.shareOFT)} is not deployed yet. ` +
+              'Phase 1 finalize must complete before Solana registration.',
+          )
+        }
+
+        const shareRegistered = await publicClient
+          .readContract({
+            address: solanaBridgeAdapter,
+            abi: SOLANA_BRIDGE_ADAPTER_VIEW_ABI,
+            functionName: 'isRegistered',
+            args: [expected.shareOFT],
+          })
+          .then((v) => Boolean(v))
+          .catch(() => null)
+
+        if (shareRegistered !== false) return
+
+        logger.info('[DeployVault] ShareOFT not registered on Solana adapter, attempting auto-registration', {
+          shareOFT: expected.shareOFT,
+          adapter: solanaBridgeAdapter,
+        })
+        const registerBody: Record<string, unknown> = {
+          shareOft: expected.shareOFT,
+          batcherAddress: batcherAddress,
+        }
+        if (solanaMintOverride) registerBody.solanaMint = solanaMintOverride
+        if (solanaDecimalsOverride !== null) registerBody.solanaDecimals = solanaDecimalsOverride
+        const registerRes = await fetch('/api/deploy/registerShareOft', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(registerBody),
+        })
+        const registerJson = (await registerRes.json().catch(() => null)) as ApiEnvelope<any> | null
+        if (!registerRes.ok || !registerJson?.success) {
+          const adapterOwner = await publicClient
             .readContract({
               address: solanaBridgeAdapter,
               abi: SOLANA_BRIDGE_ADAPTER_VIEW_ABI,
-              functionName: 'isRegistered',
-              args: [expected.shareOFT],
+              functionName: 'owner',
             })
-            .then((v) => Boolean(v))
+            .then((v) => (typeof v === 'string' && isAddress(v) ? getAddress(v as Address) : null))
             .catch(() => null)
-
-          if (shareRegistered === false) {
-            const adapterOwner = await publicClient
-              .readContract({
-                address: solanaBridgeAdapter,
-                abi: SOLANA_BRIDGE_ADAPTER_VIEW_ABI,
-                functionName: 'owner',
-              })
-              .then((v) => (typeof v === 'string' && isAddress(v) ? getAddress(v as Address) : null))
-              .catch(() => null)
-            const ownerHint = adapterOwner ? ` Adapter owner: ${adapterOwner}.` : ''
-            throw new Error(
-              `Solana bridge is enabled, but ShareOFT ${shortAddress(expected.shareOFT)} is not registered on adapter ` +
-                `${shortAddress(solanaBridgeAdapter)}.${ownerHint} ` +
-                'Register this ShareOFT on the adapter first (registerToken), or disable batcher Solana config and retry.',
-            )
-          }
+          const ownerHint = adapterOwner ? ` Adapter owner: ${adapterOwner}.` : ''
+          const detail = registerJson?.error
+            ? ` Auto-registration failed: ${registerJson.error}`
+            : ` Auto-registration failed (HTTP ${registerRes.status}).`
+          throw new Error(
+            `Solana bridge is enabled, but ShareOFT ${shortAddress(expected.shareOFT)} is not registered on adapter ` +
+              `${shortAddress(solanaBridgeAdapter)}.${ownerHint}` +
+              detail,
+          )
         }
+        logger.info('[DeployVault] ShareOFT auto-registration complete', {
+          shareOFT: expected.shareOFT,
+          adapter: solanaBridgeAdapter,
+          txHash: (registerJson?.data as any)?.txHash ?? null,
+        })
       }
       if (!floorPriceQ96Aligned || floorPriceQ96Aligned <= 0n) {
         throw new Error('Market floor price not available. Wait for pricing to load.')
@@ -4069,6 +4120,7 @@ function DeployVaultBatcher({
             expectedOracle: expected.oracle,
           })
         }
+        await ensureShareOftRegisteredForSolanaBridge()
         await sendPhaseCalls(phase2FinalizeCalls, 'phase2', { noSplit: true, segment: 'finalize' })
 
         // Phase 3: Strategies (optional)
@@ -4626,6 +4678,72 @@ function DeployVaultMain() {
     const query = normalizeBytes32(params.get('shareOftSaltOverride'))
     return query ?? env
   }, [])
+  const [solanaMintOverrideInput, setSolanaMintOverrideInput] = useState<string>(() => {
+    const env = normalizeBytes32(import.meta.env.VITE_SOLANA_DEFAULT_MINT_BYTES32 as string | undefined)
+    if (typeof window === 'undefined') return String(env ?? '')
+    try {
+      const stored = normalizeBytes32(window.localStorage.getItem('cv:deploy:solanaMintOverride'))
+      if (stored) return String(stored)
+    } catch {
+      // ignore
+    }
+    const params = new URLSearchParams(window.location.search)
+    const query = normalizeBytes32(params.get('solanaMint'))
+    return String(query ?? env ?? '')
+  })
+  const [solanaDecimalsOverrideInput, setSolanaDecimalsOverrideInput] = useState<string>(() => {
+    const env = parseUint8(import.meta.env.VITE_SOLANA_DEFAULT_MINT_DECIMALS as string | undefined)
+    if (typeof window === 'undefined') return env !== null ? String(env) : ''
+    try {
+      const stored = parseUint8(window.localStorage.getItem('cv:deploy:solanaDecimalsOverride'))
+      if (stored !== null) return String(stored)
+    } catch {
+      // ignore
+    }
+    const params = new URLSearchParams(window.location.search)
+    const query = parseUint8(params.get('solanaDecimals'))
+    const v = query ?? env
+    return v !== null ? String(v) : ''
+  })
+  const solanaMintOverride = useMemo(
+    () => normalizeBytes32(solanaMintOverrideInput),
+    [solanaMintOverrideInput],
+  )
+  const solanaDecimalsOverride = useMemo(
+    () => parseUint8(solanaDecimalsOverrideInput),
+    [solanaDecimalsOverrideInput],
+  )
+  const solanaMintOverrideInvalid = solanaMintOverrideInput.trim().length > 0 && !solanaMintOverride
+  const solanaDecimalsOverrideInvalid =
+    solanaDecimalsOverrideInput.trim().length > 0 && solanaDecimalsOverride === null
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const v = solanaMintOverrideInput.trim()
+      if (v.length > 0) {
+        window.localStorage.setItem('cv:deploy:solanaMintOverride', v)
+      } else {
+        window.localStorage.removeItem('cv:deploy:solanaMintOverride')
+      }
+    } catch {
+      // ignore
+    }
+  }, [solanaMintOverrideInput])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const v = solanaDecimalsOverrideInput.trim()
+      if (v.length > 0) {
+        window.localStorage.setItem('cv:deploy:solanaDecimalsOverride', v)
+      } else {
+        window.localStorage.removeItem('cv:deploy:solanaDecimalsOverride')
+      }
+    } catch {
+      // ignore
+    }
+  }, [solanaDecimalsOverrideInput])
 
   const switchAuthCta = useMemo(() => {
     if (!privyReady) return undefined
@@ -5776,6 +5894,8 @@ function DeployVaultMain() {
     fundingGateOk &&
     creatorVaultBatcherConfigured &&
     bytecodeInfraOk &&
+    !solanaMintOverrideInvalid &&
+    !solanaDecimalsOverrideInvalid &&
     !identityBlockingReason &&
     smartWalletCapabilityReady
 
@@ -5904,6 +6024,10 @@ function DeployVaultMain() {
                         ? NO_EOA_STRICT_BLOCKER
                       : identityBlockingReason
                         ? identityBlockingReason
+                      : solanaMintOverrideInvalid
+                        ? 'Solana mint override must be bytes32 hex (`0x` + 64 chars).'
+                      : solanaDecimalsOverrideInvalid
+                        ? 'Solana decimals override must be 0-255.'
                       : !smartWalletCapabilityReady
                         ? 'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account).'
                     : bytecodeInfraQuery.isFetching
@@ -6184,7 +6308,7 @@ function DeployVaultMain() {
               </div>
 
               {/* Creator Coin */}
-              <div className="space-y-2">
+            <div className="space-y-2">
                 <label className="label">Creator Coin</label>
 
                 {miniApp.isMiniApp && farcasterAuth.status !== 'verified' && farcasterAuth.canSiwf !== false ? (
@@ -6263,6 +6387,40 @@ function DeployVaultMain() {
                   </>
                 )}
             </div>
+
+              <div className="space-y-2">
+                <label className="label">Solana Mint (Optional)</label>
+                <input
+                  value={solanaMintOverrideInput}
+                  onChange={(e) => setSolanaMintOverrideInput(e.target.value)}
+                  placeholder="0x<32-byte solana mint pubkey>"
+                  className={`w-full bg-black border rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none transition-colors font-mono ${
+                    solanaMintOverrideInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
+                  }`}
+                />
+                <input
+                  value={solanaDecimalsOverrideInput}
+                  onChange={(e) => setSolanaDecimalsOverrideInput(e.target.value)}
+                  placeholder="Decimals (default 9)"
+                  inputMode="numeric"
+                  className={`w-full bg-black border rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none transition-colors font-mono ${
+                    solanaDecimalsOverrideInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
+                  }`}
+                />
+                <div className="text-xs text-zinc-600">
+                  Used for automatic ShareOFT registration on the Solana adapter when bridging is enabled. If empty, server defaults are used.
+                </div>
+                {solanaMintOverrideInvalid ? (
+                  <div className="text-[11px] text-red-400/90">
+                    Mint must be a bytes32 hex value (`0x` + 64 hex chars).
+                  </div>
+                ) : null}
+                {solanaDecimalsOverrideInvalid ? (
+                  <div className="text-[11px] text-red-400/90">
+                    Decimals must be an integer between 0 and 255.
+                  </div>
+                ) : null}
+              </div>
           </div>
 
             {/* Deploy */}
@@ -6442,6 +6600,8 @@ function DeployVaultMain() {
                     privyEmbeddedEoaIsCanonicalOwner={privyEmbeddedEoaIsCanonicalOwner}
                     privyEmbeddedEoaCanSign={privyEmbeddedEoaCanSign}
                     strictNoEoaMode={strictNoEoaMode}
+                    solanaMintOverride={solanaMintOverride}
+                    solanaDecimalsOverride={solanaDecimalsOverride}
                     connectorId={connector?.id}
                     wagmiWalletClient={walletClient}
                   />

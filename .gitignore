@@ -108,6 +108,11 @@ scripts/
 !frontend/scripts/**
 !scripts/solana/
 !scripts/solana/**
+scripts/solana/vanity-pool/available/*.json
+scripts/solana/vanity-pool/reserved/*.json
+scripts/solana/vanity-pool/used/*.json
+scripts/solana/vanity-pool/failed/*.json
+scripts/solana/vanity-pool/*.lock
 # script/ - Keep deployment scripts
 !script/DeployBase.s.sol
 !script/DeployInfrastructure.s.sol
