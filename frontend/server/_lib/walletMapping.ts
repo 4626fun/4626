@@ -90,6 +90,14 @@ function toWalletRecord(raw: any): MappedWallet | null {
   }
 }
 
+function isCanonicalSmartWalletCandidate(wallet: MappedWallet): boolean {
+  if (wallet.walletType !== 'smart_wallet') return false
+  const clientType = normalizeLower(wallet.clientType)
+  if (wallet.provider === 'privy') return false
+  if (clientType.includes('privy') || clientType.includes('embedded')) return false
+  return true
+}
+
 export function classifyLinkedAccounts(user: PrivyUserLike): ClassifiedLinkedAccounts {
   const linkedAccounts = Array.isArray(user?.linkedAccounts) ? user.linkedAccounts : []
   const linkedAccountsSnake = Array.isArray(user?.linked_accounts) ? user.linked_accounts : []
@@ -129,12 +137,14 @@ export function classifyLinkedAccounts(user: PrivyUserLike): ClassifiedLinkedAcc
     clientType: w.clientType,
   }))
 
+  const canonicalCandidates = mappedRaw.filter((w) => isCanonicalSmartWalletCandidate(w))
+
   let canonicalSmartWallet: { address: string; provider: WalletProvider } | null = null
-  const typedSmartWallet = mappedRaw.find((w) => w.rawType === 'smart_wallet')
+  const typedSmartWallet = canonicalCandidates.find((w) => w.rawType === 'smart_wallet')
   if (typedSmartWallet) {
     canonicalSmartWallet = { address: typedSmartWallet.address, provider: typedSmartWallet.provider }
   } else {
-    const clientSmartWallet = mappedRaw.find(
+    const clientSmartWallet = canonicalCandidates.find(
       (w) => (w.clientType || '').includes('base_account') || (w.clientType || '').includes('coinbase_smart_wallet'),
     )
     if (clientSmartWallet) canonicalSmartWallet = { address: clientSmartWallet.address, provider: clientSmartWallet.provider }

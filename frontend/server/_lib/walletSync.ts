@@ -120,12 +120,28 @@ function withWalletIfMissing(
   return [...wallets, wallet]
 }
 
+function isCanonicalSmartWalletCandidateAddress(classification: ClassifiedLinkedAccounts, address: string): boolean {
+  const target = normalizeLower(address)
+  if (!target) return false
+  return classification.allWallets.some((wallet) => {
+    if (normalizeLower(wallet.address) !== target) return false
+    if (wallet.walletType !== 'smart_wallet') return false
+    if (wallet.provider === 'privy') return false
+    return true
+  })
+}
+
 function applyPersistedIdentity(params: {
   classification: ClassifiedLinkedAccounts
   persisted: PersistedIdentity | null
 }): ClassifiedLinkedAccounts {
   const { classification, persisted } = params
   if (!persisted) return classification
+
+  const persistedCanonical =
+    persisted?.canonicalSmartWallet && isCanonicalSmartWalletCandidateAddress(classification, persisted.canonicalSmartWallet)
+      ? persisted.canonicalSmartWallet
+      : null
 
   let allWallets = [...classification.allWallets]
   allWallets = withWalletIfMissing(
@@ -142,9 +158,9 @@ function applyPersistedIdentity(params: {
   )
   allWallets = withWalletIfMissing(
     allWallets,
-    persisted.canonicalSmartWallet
+    persistedCanonical
       ? {
-          address: persisted.canonicalSmartWallet,
+          address: persistedCanonical,
           walletType: 'smart_wallet',
           provider: 'unknown',
           chain: 'evm',
@@ -166,8 +182,8 @@ function applyPersistedIdentity(params: {
   )
 
   const canonicalSmartWallet =
-    persisted.canonicalSmartWallet
-      ? { address: persisted.canonicalSmartWallet, provider: classification.canonicalSmartWallet?.provider ?? 'unknown' }
+    persistedCanonical
+      ? { address: persistedCanonical, provider: classification.canonicalSmartWallet?.provider ?? 'unknown' }
       : classification.canonicalSmartWallet
   const embeddedEoa =
     persisted.embeddedEoa

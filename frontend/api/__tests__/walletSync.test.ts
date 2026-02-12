@@ -54,6 +54,19 @@ describe('wallet mapping + sync', () => {
     expect(classified.embeddedEoa?.address).toBe('0x00000000000000000000000000000000000000c1')
   })
 
+  it('does not treat Privy-linked smart wallets as canonical', () => {
+    const user = {
+      id: 'did:privy:2b',
+      linkedAccounts: [
+        { type: 'smart_wallet', address: '0x00000000000000000000000000000000000000e1', walletClientType: 'embedded_privy_wallet' },
+        { type: 'wallet', address: '0x00000000000000000000000000000000000000e2', walletClientType: 'embedded_privy_wallet' },
+      ],
+    }
+    const classified = classifyLinkedAccounts(user as any)
+    expect(classified.canonicalSmartWallet).toBeNull()
+    expect(classified.primaryWalletAddress).toBe('0x00000000000000000000000000000000000000e2')
+  })
+
   it('syncUserWallets writes profile + wallet graph rows', async () => {
     const db = createLooseDb()
     const user = {

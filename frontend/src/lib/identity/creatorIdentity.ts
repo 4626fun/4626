@@ -44,11 +44,11 @@ function normalizeAddress(value: unknown): Address | null {
 /**
  * Resolve canonical creator identity in a way that prevents fragmentation.
  *
- * Rules (Privy-first approach):
- * - If Privy smart wallet is available and matches the creator coin's creator address, use it (no blocking).
- * - If a creator coin exists and Privy smart wallet doesn't match, block (wrong account).
- * - If no creator coin exists, use Privy smart wallet as the canonical identity for new deployments.
- * - Fallback to connected wallet only if Privy is unavailable.
+ * Rules (canonical-CSW-first approach):
+ * - Existing creator coin creator address is the canonical identity.
+ * - Privy smart wallet can execute only when it matches creator/payout for an existing coin.
+ * - If no creator coin exists, never auto-promote Privy/EOA as canonical identity.
+ * - Require an explicit canonical Zora Coinbase Smart Wallet before irreversible deploy actions.
  */
 export function resolveCreatorIdentity(params: {
   connectedWallet: Address | null
@@ -121,66 +121,18 @@ export function resolveCreatorIdentity(params: {
     }
   }
 
-  // 2) No existing coin - Privy smart wallet becomes the canonical identity for new deployments
-  if (privyWallet) {
-    return {
-      canonicalIdentity: { address: privyWallet, source: 'privySmartWallet' },
-      execution: { address: privyWallet },
-      hasExistingCreatorCoinIdentity: false,
-      blockingReason: null,
-      warnings,
-    }
-  }
-
-  // 3) Farcaster custody (fallback when Privy unavailable)
-  if (farcasterCustody) {
-    const canonical = farcasterCustody
-
-    let blockingReason: string | null = null
-    if (connectedWallet && connectedWallet.toLowerCase() !== canonical.toLowerCase()) {
-      warnings.push('CONNECTED_WALLET_MISMATCH')
-      blockingReason = `Your custody wallet is ${canonical}. Sign in with that account to continue.`
-    } else if (!connectedWallet) {
-      blockingReason = `Sign in to continue.`
-    }
-
-    return {
-      canonicalIdentity: { address: canonical, source: 'farcasterCustody' },
-      execution: { address: connectedWallet },
-      hasExistingCreatorCoinIdentity: false,
-      blockingReason,
-      warnings,
-    }
-  }
-
-  // 4) No coin + no Privy + no custody: require sign-in
-  warnings.push('CUSTODY_UNAVAILABLE')
-
-  if (farcasterPublicWallet) {
-    return {
-      canonicalIdentity: { address: farcasterPublicWallet, source: 'zoraProfilePublicWallet' },
-      execution: { address: connectedWallet },
-      hasExistingCreatorCoinIdentity: false,
-      blockingReason: 'Sign in with Privy to continue.',
-      warnings,
-    }
-  }
-
-  if (connectedWallet) {
-    return {
-      canonicalIdentity: { address: connectedWallet, source: 'connectedWallet' },
-      execution: { address: connectedWallet },
-      hasExistingCreatorCoinIdentity: false,
-      blockingReason: 'Sign in with Privy to continue.',
-      warnings,
-    }
-  }
+  // 2) No existing coin: never infer canonical identity from Privy/EOA/custody fallbacks.
+  //    These can be execution/session wallets, but canonical deploy identity must be explicit.
+  const executionFallback = privyWallet ?? connectedWallet ?? farcasterCustody ?? farcasterPublicWallet ?? null
+  if (!executionFallback) warnings.push('CUSTODY_UNAVAILABLE')
 
   return {
     canonicalIdentity: { address: null, source: 'unknown' },
-    execution: { address: null },
+    execution: { address: executionFallback },
     hasExistingCreatorCoinIdentity: false,
-    blockingReason: 'Sign in to continue.',
+    blockingReason: executionFallback
+      ? 'No canonical Zora Coinbase Smart Wallet found yet. Privy wallets are sign-in only. Connect or create your canonical Coinbase Smart Wallet on Zora before deploying.'
+      : 'Sign in to continue.',
     warnings,
   }
 }

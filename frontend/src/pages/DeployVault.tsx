@@ -3904,8 +3904,8 @@ function DeployVaultMain() {
   }, [onchainPayoutRecipient, zoraCoin?.payoutRecipientAddress])
 
   // Canonical identity enforcement (prevents irreversible fragmentation).
-  // Privy smart wallet is the primary identity source.
-  // For existing creator coins, we verify Privy wallet matches the coin's creator/payout recipient.
+  // Existing creator coin identity is authoritative.
+  // Privy wallets are execution/session wallets and never auto-promoted as canonical.
   const identity = useMemo(() => {
     return resolveCreatorIdentity({
       connectedWallet: connectedWalletAddress,
