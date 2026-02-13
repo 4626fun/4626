@@ -1,6 +1,7 @@
 import type { Address, Hex } from 'viem'
 import { decodeAbiParameters, encodeAbiParameters, getAddress, http, isAddress } from 'viem'
 import { toAccount } from 'viem/accounts'
+import { Attribution } from 'ox/erc8021'
 import {
   createBundlerClient,
   createPaymasterClient,
@@ -22,6 +23,51 @@ import { logger } from '@/lib/logger'
 
 const ENTRYPOINT_V06 = getAddress(entryPoint06Address)
 const ENTRYPOINT_V06_EXPECTED = getAddress('0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789')
+
+function parseBuilderCodes(raw: string | undefined): string[] {
+  return String(raw ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+function resolveBuilderDataSuffix(): Hex | undefined {
+  const codes = parseBuilderCodes(import.meta.env.VITE_BASE_BUILDER_CODES as string | undefined)
+  if (codes.length > 0) {
+    try {
+      return Attribution.toDataSuffix({ codes }) as Hex
+    } catch (e) {
+      logger.warn('[ERC-4337] Failed to derive dataSuffix from builder codes', {
+        codes,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  const rawSuffix = (import.meta.env.VITE_BASE_DATA_SUFFIX as string | undefined)?.trim()
+  if (!rawSuffix) return undefined
+  return (rawSuffix.startsWith('0x') ? rawSuffix : `0x${rawSuffix}`) as Hex
+}
+
+const BUILDER_DATA_SUFFIX = resolveBuilderDataSuffix()
+
+function appendDataSuffix(data: Hex | undefined, dataSuffix: Hex): Hex {
+  const base = (data && data !== '0x' ? data : '0x') as Hex
+  const baseLc = base.toLowerCase()
+  const suffixBodyLc = dataSuffix.slice(2).toLowerCase()
+  if (suffixBodyLc.length > 0 && baseLc.endsWith(suffixBodyLc)) return base
+  return `${base}${dataSuffix.slice(2)}` as Hex
+}
+
+function withBuilderDataSuffix(
+  calls: Array<{ to: Address; value?: bigint; data?: Hex }>,
+): Array<{ to: Address; value?: bigint; data?: Hex }> {
+  if (!BUILDER_DATA_SUFFIX) return calls
+  return calls.map((c) => ({
+    ...c,
+    data: appendDataSuffix(c.data, BUILDER_DATA_SUFFIX),
+  }))
+}
 
 // Sanity check at module load time
 if (ENTRYPOINT_V06 !== ENTRYPOINT_V06_EXPECTED) {
@@ -945,201 +991,6 @@ function createWalletBackedLocalAccount(params: {
 }
 
 /**
- * Cross-app signing function type from Privy's useCrossAppAccounts
- */
-export type CrossAppSignMessage = (
-  message: string,
-  options: { address: string }
-) => Promise<string>
-
-/**
- * Create a local account that uses Privy cross-app signing.
- * This allows signing UserOperations via Zora's popup flow without needing gas.
- */
-function createCrossAppSigningAccount(params: {
-  crossAppSignMessage: CrossAppSignMessage
-  ownerAddress: Address
-}) {
-  const { crossAppSignMessage, ownerAddress } = params
-
-  return toAccount({
-    address: ownerAddress,
-    // Sign the UserOp hash via cross-app popup (no gas required!)
-    sign: async ({ hash }) => {
-      // Cross-app signMessage uses personal_sign which adds EIP-191 prefix.
-      // Coinbase Smart Wallet supports this via SignatureCheckerLib.
-      // We pass the raw hash as a hex string - Privy will handle the signing.
-      const signature = await crossAppSignMessage(hash, { address: ownerAddress })
-      const sig = ensureSignatureHex(signature, 'crossAppSignMessage')
-      debugSignatureReady('crossAppSignMessage', sig, { address: ownerAddress })
-      return sig
-    },
-    signMessage: async ({ message }) => {
-      const msgStr = typeof message === 'string' 
-        ? message 
-        : typeof message === 'object' && 'raw' in message
-          ? (message.raw as Hex)
-          : String(message)
-      const signature = await crossAppSignMessage(msgStr, { address: ownerAddress })
-      return ensureSignatureHex(signature, 'crossAppSignMessage')
-    },
-    signTypedData: async () => {
-      throw new Error('signTypedData not supported for cross-app accounts')
-    },
-    signTransaction: async () => {
-      throw new Error('signTransaction not supported for cross-app accounts')
-    },
-  })
-}
-
-/**
- * Send a UserOperation via ERC-4337 using cross-app signing.
- * 
- * This flow:
- * 1. Builds the UserOperation for the smart wallet
- * 2. Computes the UserOp hash
- * 3. Opens a popup to Zora for the user to sign (no gas needed!)
- * 4. Submits to bundler with paymaster (paymaster pays gas)
- * 5. Waits for on-chain confirmation
- * 
- * @param params.crossAppSignMessage - signMessage from useCrossAppAccounts
- * @param params.zoraEmbeddedWalletAddress - The Zora EOA that will sign
- * @param params.smartWallet - The Coinbase Smart Wallet address
- */
-export async function sendCrossAppUserOperation(params: {
-  publicClient: PublicClientLike
-  crossAppSignMessage: CrossAppSignMessage
-  bundlerUrl: string
-  smartWallet: Address
-  zoraEmbeddedWalletAddress: Address
-  calls: Array<{ to: Address; value?: bigint; data?: Hex }>
-  version?: '1' | '1.1'
-}): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
-  const { 
-    publicClient, 
-    crossAppSignMessage, 
-    bundlerUrl, 
-    smartWallet, 
-    zoraEmbeddedWalletAddress, 
-    calls, 
-    version = '1' 
-  } = params
-  
-  if (!bundlerUrl) throw new Error('Missing bundler URL')
-
-  // Verify the Zora EOA is an owner of the smart wallet
-  const { ownerIndex } = await findCoinbaseSmartWalletOwnerIndex({
-    publicClient,
-    smartWallet,
-    ownerAddress: zoraEmbeddedWalletAddress,
-  })
-  
-  if (ownerIndex === null) {
-    throw new Error(
-      `Zora embedded wallet (${zoraEmbeddedWalletAddress}) is not an owner of the smart wallet (${smartWallet}). ` +
-      'The user may need to add this wallet as an owner first.'
-    )
-  }
-
-  // Create an account that uses cross-app signing
-  const owner = createCrossAppSigningAccount({
-    crossAppSignMessage,
-    ownerAddress: zoraEmbeddedWalletAddress,
-  })
-
-  // Create the Coinbase Smart Account
-  const account = await toCoinbaseSmartAccount({
-    client: publicClient as any,
-    address: smartWallet,
-    owners: [owner],
-    ownerIndex,
-    version,
-  })
-
-  // Set up bundler + paymaster (uses CDP for gas sponsorship)
-  const sessionToken = typeof window !== 'undefined' ? getStoredSessionToken() : null
-  const transportHeaders = {
-    ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
-    ...(AA_DEBUG ? { 'X-CV-Paymaster-Debug': '1' } : {}),
-  } as Record<string, string>
-  const transport = http(bundlerUrl, {
-    fetchOptions: {
-      credentials: 'include',
-      headers: Object.keys(transportHeaders).length > 0 ? transportHeaders : undefined,
-    },
-  })
-  const paymasterClient = createPaymasterClient({ transport })
-  const bundlerClient = createBundlerClient({
-    client: publicClient as any,
-    transport,
-  })
-
-  // ENFORCE: Verify bundler supports EntryPoint v0.6 before sending
-  await verifyBundlerSupportsV06(bundlerUrl)
-
-  // Send the UserOperation - this will:
-  // 1. Build the UserOp
-  // 2. Call owner.sign() which opens the Zora popup
-  // 3. Submit to bundler with paymaster (EntryPoint v0.6)
-  //
-  // Cross-app signing uses an EOA (Zora embedded wallet) so verification gas is lower,
-  // but we use a safe buffer for EIP-1271 in case the account structure changes.
-  await logUserOpEstimate({
-    bundlerClient,
-    account,
-    calls,
-    verificationGasLimit: 200_000n,
-    paymasterClient,
-  })
-
-  let userOpHash: Hex
-  try {
-    userOpHash = await sendUserOperation(bundlerClient, {
-      account,
-      calls,
-      verificationGasLimit: 200_000n,
-      paymaster: {
-        getPaymasterData: paymasterClient.getPaymasterData,
-        getPaymasterStubData: paymasterClient.getPaymasterStubData,
-      },
-    })
-  } catch (e: unknown) {
-    if (!isPaymasterStakeError(e)) throw e
-    logger.warn('[ERC-4337] Paymaster stake too low; retrying without sponsorship')
-    await logUserOpEstimate({
-      bundlerClient,
-      account,
-      calls,
-      verificationGasLimit: 200_000n,
-    })
-    userOpHash = await sendUserOperation(bundlerClient, {
-      account,
-      calls,
-      verificationGasLimit: 200_000n,
-    })
-  }
-
-  // Wait for on-chain confirmation
-  const receipt = await waitForUserOperationReceipt(bundlerClient, { 
-    hash: userOpHash, 
-    timeout: 120_000 
-  })
-  ensureUserOperationSucceeded(receipt, 'cross-app submission')
-  if (AA_DEBUG) {
-    logger.debug('[ERC-4337] UserOp receipt', {
-      actualGasUsed: formatGasValue((receipt as any)?.actualGasUsed),
-      actualGasCost: formatGasValue((receipt as any)?.actualGasCost),
-      txHash: (receipt as any)?.receipt?.transactionHash,
-    })
-  }
-  
-  return { 
-    userOpHash, 
-    transactionHash: receipt.receipt.transactionHash as Hex 
-  }
-}
-
-/**
  * Pre-flight simulation: test if the calls would succeed when executed from the smart wallet.
  * This helps diagnose whether a UserOp failure is due to:
  * 1. ERC-4337 / signature issues (simulation passes but UserOp fails)
@@ -1321,6 +1172,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   if (!publicClient) throw new Error('Missing public client')
   if (!walletClient) throw new Error('Missing wallet client')
   if (!calls || calls.length === 0) throw new Error('No calls provided')
+  const attributedCalls = withBuilderDataSuffix(calls)
 
   const normalizedBundlerUrl = normalizeUrl(bundlerUrlInput)
   const paymasterUrl = normalizeUrl(paymasterUrlInput ?? bundlerUrlInput)
@@ -1343,7 +1195,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // Pre-flight simulation: check if the underlying call would succeed
   // This helps diagnose contract-level reverts vs ERC-4337 issues
   if (!skipPreflightSimulation && AA_DEBUG) {
-    const simResult = await simulateSmartWalletCalls({ publicClient, smartWallet, calls })
+    const simResult = await simulateSmartWalletCalls({ publicClient, smartWallet, calls: attributedCalls })
     if (!simResult.success) {
       logger.warn('[ERC-4337] Pre-flight simulation FAILED - underlying call would revert', {
         smartWallet,
@@ -1351,15 +1203,15 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         error: simResult.error,
         revertData: simResult.revertData,
         errorName: simResult.errorName,
-        firstCallTo: calls[0]?.to,
-        firstCallData: calls[0]?.data?.slice(0, 10), // Just selector
+        firstCallTo: attributedCalls[0]?.to,
+        firstCallData: attributedCalls[0]?.data?.slice(0, 10), // Just selector
       })
       // Don't throw here - let the actual UserOp attempt fail with full context
       // This is just diagnostic logging
     } else {
       logger.debug('[ERC-4337] Pre-flight simulation passed', {
         smartWallet,
-        callCount: calls.length,
+        callCount: attributedCalls.length,
       })
     }
   }
@@ -1553,13 +1405,13 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     await logUserOpEstimate({
       bundlerClient,
       account,
-      calls,
+      calls: attributedCalls,
       verificationGasLimit,
       paymasterClient: usePaymaster ? paymasterClient : undefined,
     })
     return await sendUserOperation(bundlerClient, {
       account,
-      calls,
+      calls: attributedCalls,
       verificationGasLimit,
       ...(usePaymaster
         ? {
@@ -1657,7 +1509,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         ownerAddress,
         ownerIsContract,
         userOpSignMode,
-        calls: calls.map((call) => ({
+        calls: attributedCalls.map((call) => ({
           to: call.to,
           value: typeof call.value === 'bigint' ? call.value.toString() : call.value,
           data: typeof call.data === 'string' ? call.data.slice(0, 18) : null,

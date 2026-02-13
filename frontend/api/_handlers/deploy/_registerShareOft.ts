@@ -476,19 +476,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         })
         .then((v) => (typeof v === 'string' && isAddress(v) ? getAddress(v as Address) : ZERO_ADDRESS))
         .catch(() => ZERO_ADDRESS)
-    let existingTokenForMint = await readExistingTokenForMint(solanaMint)
-    if (
-      existingTokenForMint.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
-      existingTokenForMint.toLowerCase() !== shareOft.toLowerCase()
-    ) {
-      return res.status(409).json({
-        success: false,
-        error:
-          `Solana mint ${solanaMint} is already mapped to ${existingTokenForMint}. ` +
-          'Use a unique mint per ShareOFT.',
-      } satisfies ApiEnvelope<never>)
-    }
-
     const solanaDecimals = parseDecimals(body?.solanaDecimals) ?? readSolanaDecimalsFromEnv()
 
     const readRouteScalar = async (mint: Hex): Promise<bigint | null> =>
@@ -501,30 +488,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         })
         .then((v) => BigInt(v as bigint))
         .catch(() => null)
+    const trySwitchToDynamicMint = async (): Promise<boolean> => {
+      const dynamicMint = await tryProvisionDynamicRoute({
+        shareOft,
+        solanaDecimals,
+        publicClient,
+      })
+      if (!dynamicMint) return false
+      solanaMint = dynamicMint
+      return true
+    }
+
+    let existingTokenForMint = await readExistingTokenForMint(solanaMint)
+    if (
+      existingTokenForMint.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
+      existingTokenForMint.toLowerCase() !== shareOft.toLowerCase()
+    ) {
+      const switched = await trySwitchToDynamicMint()
+      if (!switched) {
+        return res.status(409).json({
+          success: false,
+          error:
+            `Solana mint ${solanaMint} is already mapped to ${existingTokenForMint}. ` +
+            'Use a unique mint per ShareOFT.',
+        } satisfies ApiEnvelope<never>)
+      }
+      existingTokenForMint = await readExistingTokenForMint(solanaMint)
+      if (
+        existingTokenForMint.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
+        existingTokenForMint.toLowerCase() !== shareOft.toLowerCase()
+      ) {
+        return res.status(409).json({
+          success: false,
+          error:
+            `Dynamically-created Solana mint ${solanaMint} is already mapped to ${existingTokenForMint}. ` +
+            'Retry deploy to create a fresh route, or provide a unique mint.',
+        } satisfies ApiEnvelope<never>)
+      }
+    }
+
     let routeScalar = await readRouteScalar(solanaMint)
     if (routeScalar === 0n) {
-      if (!requestMintExplicit) {
-        const dynamicMint = await tryProvisionDynamicRoute({
-          shareOft,
-          solanaDecimals,
-          publicClient,
-        })
-        if (dynamicMint) {
-          solanaMint = dynamicMint
-          existingTokenForMint = await readExistingTokenForMint(solanaMint)
-          if (
-            existingTokenForMint.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
-            existingTokenForMint.toLowerCase() !== shareOft.toLowerCase()
-          ) {
-            return res.status(409).json({
-              success: false,
-              error:
-                `Dynamically-created Solana mint ${solanaMint} is already mapped to ${existingTokenForMint}. ` +
-                'Retry deploy to create a fresh route, or provide a unique mint.',
-            } satisfies ApiEnvelope<never>)
-          }
-          routeScalar = await readRouteScalar(solanaMint)
+      const switched = await trySwitchToDynamicMint()
+      if (switched) {
+        existingTokenForMint = await readExistingTokenForMint(solanaMint)
+        if (
+          existingTokenForMint.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
+          existingTokenForMint.toLowerCase() !== shareOft.toLowerCase()
+        ) {
+          return res.status(409).json({
+            success: false,
+            error:
+              `Dynamically-created Solana mint ${solanaMint} is already mapped to ${existingTokenForMint}. ` +
+              'Retry deploy to create a fresh route, or provide a unique mint.',
+          } satisfies ApiEnvelope<never>)
         }
+        routeScalar = await readRouteScalar(solanaMint)
       }
       if (routeScalar === 0n) {
         return res.status(409).json({
