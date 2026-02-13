@@ -330,13 +330,13 @@ export const VerifyStep = memo(function VerifyStep({
           >
             <span className="relative flex items-center gap-3">
               <img src={BASE_SQUARE_WHITE} alt="" className="w-4 h-4" aria-hidden="true" />
-              Sign Up
+              Continue with Zora login
             </span>
             <ChevronRight className="relative w-4 h-4 opacity-80" />
           </button>
 
           <p className="text-[13px] text-zinc-500">
-            Creates a Privy embedded wallet for your account.
+            Sign in the same way you use Zora (email, social, or wallet). We'll detect your linked wallet and continue automatically.
           </p>
 
           <div className="flex items-center justify-between">
@@ -358,6 +358,13 @@ export const VerifyStep = memo(function VerifyStep({
               {privyVerifyError}
             </motion.div>
           ) : null}
+
+          <motion.div
+            {...fadeUp}
+            className="rounded-2xl border border-[#0052FF]/20 bg-[#0052FF]/6 px-4 py-3 text-[12px] leading-relaxed text-zinc-300"
+          >
+            <span className="text-[#8AB5FF] font-medium">Zora sync:</span> We only read your Zora-linked wallet and creator asset data here (read-only) to prefill checks. No transactions are sent from this step.
+          </motion.div>
         </motion.div>
       ) : null}
 
@@ -438,6 +445,10 @@ export const VerifyStep = memo(function VerifyStep({
             initial="initial"
             animate="animate"
           >
+            <motion.div variants={staggerItem} className="rounded-2xl border border-[#0052FF]/20 bg-[#0052FF]/6 px-3.5 py-2.5 text-[11px] leading-relaxed text-zinc-300">
+              <span className="text-[#8AB5FF] font-medium">Using Zora-linked data (read-only):</span> ownership + creator coin context are auto-filled so you can verify before joining.
+            </motion.div>
+
             <motion.div variants={staggerItem} className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-[12px] text-zinc-500">Ownership</div>
