@@ -2,7 +2,7 @@ import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../s
 import { getDb } from '../../../server/_lib/postgres.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
-type PointsType = 'total' | 'invite'
+type PointsType = 'total' | 'invite' | 'agent'
 
 type LeaderboardRow = {
   rank: number
@@ -11,6 +11,7 @@ type LeaderboardRow = {
   referralCode: string | null
   pointsTotal: number
   pointsInvite: number
+  pointsAgent: number
 }
 
 type LeaderboardResponse = {
@@ -49,7 +50,7 @@ export default async function handler(req: any, res: any) {
   const limit = Number.isFinite(rawLimit) ? Math.min(100, Math.max(1, Math.floor(rawLimit))) : 10
 
   const pointsTypeParam = typeof (req.query as any)?.pointsType === 'string' ? String((req.query as any).pointsType).toLowerCase() : ''
-  const pointsType: PointsType = pointsTypeParam === 'total' ? 'total' : 'invite'
+  const pointsType: PointsType = pointsTypeParam === 'total' ? 'total' : pointsTypeParam === 'agent' ? 'agent' : 'invite'
 
   const offset = (page - 1) * limit
 
@@ -94,7 +95,8 @@ export default async function handler(req: any, res: any) {
               NULL::text AS embedded_wallet,
               w.referral_code,
               COALESCE(SUM(l.amount), 0)::int AS total_points,
-              COALESCE(SUM(CASE WHEN l.source = 'referral_qualified' THEN l.amount ELSE 0 END), 0)::int AS invite_points
+              COALESCE(SUM(CASE WHEN l.source = 'referral_qualified' THEN l.amount ELSE 0 END), 0)::int AS invite_points,
+              COALESCE(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount ELSE 0 END), 0)::int AS agent_points
             FROM wallet_rollup w
             LEFT JOIN eligible_with_key e ON e.wallet_key = w.wallet_key
             LEFT JOIN points l ON l.signup_id = e.id
@@ -108,10 +110,68 @@ export default async function handler(req: any, res: any) {
               referral_code,
               total_points,
               invite_points,
-              ROW_NUMBER() OVER (ORDER BY total_points DESC, invite_points DESC, signup_id ASC)::int AS rank
+              agent_points,
+              ROW_NUMBER() OVER (ORDER BY total_points DESC, invite_points DESC, agent_points DESC, signup_id ASC)::int AS rank
             FROM scored
           )
-          SELECT rank, signup_id, primary_wallet, embedded_wallet, referral_code, total_points, invite_points
+          SELECT rank, signup_id, primary_wallet, embedded_wallet, referral_code, total_points, invite_points, agent_points
+          FROM ranked
+          ORDER BY rank ASC
+          OFFSET ${offset}
+          LIMIT ${limit};
+        `
+      : pointsType === 'agent'
+      ? await db.sql`
+          WITH eligible AS (
+            SELECT id, primary_wallet, embedded_wallet, referral_code
+            FROM profiles
+            WHERE profile_completed_at IS NOT NULL
+            ORDER BY id ASC
+            LIMIT ${maxUsers}
+          ),
+          eligible_with_key AS (
+            SELECT
+              id,
+              COALESCE(NULLIF(primary_wallet, ''), NULLIF(embedded_wallet, '')) AS wallet_key,
+              referral_code
+            FROM eligible
+          ),
+          wallet_rollup AS (
+            SELECT
+              wallet_key,
+              MIN(id)::bigint AS canonical_signup_id,
+              MAX(referral_code) FILTER (WHERE referral_code IS NOT NULL) AS referral_code
+            FROM eligible_with_key
+            WHERE wallet_key IS NOT NULL
+            GROUP BY wallet_key
+          ),
+          scored AS (
+            SELECT
+              w.canonical_signup_id::bigint AS signup_id,
+              w.wallet_key AS primary_wallet,
+              NULL::text AS embedded_wallet,
+              w.referral_code,
+              COALESCE(SUM(l.amount), 0)::int AS total_points,
+              COALESCE(SUM(CASE WHEN l.source = 'referral_qualified' THEN l.amount ELSE 0 END), 0)::int AS invite_points,
+              COALESCE(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount ELSE 0 END), 0)::int AS agent_points
+            FROM wallet_rollup w
+            LEFT JOIN eligible_with_key e ON e.wallet_key = w.wallet_key
+            LEFT JOIN points l ON l.signup_id = e.id
+            GROUP BY w.canonical_signup_id, w.wallet_key, w.referral_code
+          ),
+          ranked AS (
+            SELECT
+              signup_id,
+              primary_wallet,
+              embedded_wallet,
+              referral_code,
+              total_points,
+              invite_points,
+              agent_points,
+              ROW_NUMBER() OVER (ORDER BY agent_points DESC, total_points DESC, invite_points DESC, signup_id ASC)::int AS rank
+            FROM scored
+          )
+          SELECT rank, signup_id, primary_wallet, embedded_wallet, referral_code, total_points, invite_points, agent_points
           FROM ranked
           ORDER BY rank ASC
           OFFSET ${offset}
@@ -148,7 +208,8 @@ export default async function handler(req: any, res: any) {
               NULL::text AS embedded_wallet,
               w.referral_code,
               COALESCE(SUM(l.amount), 0)::int AS total_points,
-              COALESCE(SUM(CASE WHEN l.source = 'referral_qualified' THEN l.amount ELSE 0 END), 0)::int AS invite_points
+              COALESCE(SUM(CASE WHEN l.source = 'referral_qualified' THEN l.amount ELSE 0 END), 0)::int AS invite_points,
+              COALESCE(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount ELSE 0 END), 0)::int AS agent_points
             FROM wallet_rollup w
             LEFT JOIN eligible_with_key e ON e.wallet_key = w.wallet_key
             LEFT JOIN points l ON l.signup_id = e.id
@@ -162,10 +223,11 @@ export default async function handler(req: any, res: any) {
               referral_code,
               total_points,
               invite_points,
-              ROW_NUMBER() OVER (ORDER BY invite_points DESC, total_points DESC, signup_id ASC)::int AS rank
+              agent_points,
+              ROW_NUMBER() OVER (ORDER BY invite_points DESC, total_points DESC, agent_points DESC, signup_id ASC)::int AS rank
             FROM scored
           )
-          SELECT rank, signup_id, primary_wallet, embedded_wallet, referral_code, total_points, invite_points
+          SELECT rank, signup_id, primary_wallet, embedded_wallet, referral_code, total_points, invite_points, agent_points
           FROM ranked
           ORDER BY rank ASC
           OFFSET ${offset}
@@ -185,6 +247,7 @@ export default async function handler(req: any, res: any) {
           referralCode,
           pointsTotal: safeInt(r.total_points),
           pointsInvite: safeInt(r.invite_points),
+          pointsAgent: safeInt(r.agent_points),
         }
       })
     : []

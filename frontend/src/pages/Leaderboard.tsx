@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiFetch } from '@/lib/apiBase'
 
-type PointsType = 'invite' | 'total'
+type PointsType = 'invite' | 'total' | 'agent'
 
 type LeaderboardRow = {
   rank: number
@@ -10,6 +10,7 @@ type LeaderboardRow = {
   referralCode: string | null
   pointsTotal: number
   pointsInvite: number
+  pointsAgent: number
 }
 
 type LeaderboardResponse = {
@@ -24,13 +25,13 @@ type LeaderboardResponse = {
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 export function Leaderboard() {
-  const [pointsType, setPointsType] = useState<PointsType>('invite')
+  const [pointsType, setPointsType] = useState<PointsType>('total')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<LeaderboardResponse | null>(null)
   const inFlightRef = useRef(false)
 
-  const title = pointsType === 'invite' ? 'Invite points' : 'Total points'
+  const title = pointsType === 'invite' ? 'Invite points' : pointsType === 'agent' ? 'Agent points' : 'Total points'
 
   const fetchLeaderboard = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -103,7 +104,7 @@ export function Leaderboard() {
             <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-600 mb-2">CreatorVaults</div>
             <div className="headline text-3xl sm:text-4xl leading-tight">Leaderboard</div>
             <div className="text-sm text-zinc-600 font-light mt-2">
-              Points-based. Earn points by joining, inviting, and completing actions.
+              Points-based. Earn points by joining, inviting, social actions, Lens/Grove identity sync, and ERC-8004 agent reputation/feedback.
             </div>
             {subtitle ? <div className="text-[11px] text-zinc-700 mt-2">{subtitle}</div> : null}
           </div>
@@ -133,6 +134,16 @@ export function Leaderboard() {
           >
             Total points
           </button>
+          <button
+            type="button"
+            className={`rounded-full px-3 py-1 text-[12px] border ${
+              pointsType === 'agent' ? 'border-brand-primary/30 bg-brand-primary/10 text-zinc-200' : 'border-white/10 bg-black/30 text-zinc-600'
+            }`}
+            onClick={() => setPointsType('agent')}
+            disabled={busy}
+          >
+            Agent points
+          </button>
           <div className="text-[11px] text-zinc-700 ml-2">{busy ? 'Loading…' : title}</div>
         </div>
 
@@ -158,7 +169,7 @@ export function Leaderboard() {
                     {r.referralCode ? <div className="text-[11px] text-zinc-700">code: {r.referralCode}</div> : null}
                   </div>
                   <div className="col-span-4 text-right text-sm text-zinc-200 tabular-nums">
-                    {pointsType === 'invite' ? r.pointsInvite : r.pointsTotal}
+                    {pointsType === 'invite' ? r.pointsInvite : pointsType === 'agent' ? r.pointsAgent : r.pointsTotal}
                   </div>
                 </div>
               ))}

@@ -75,6 +75,12 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_farcaster_username TEXT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_farcaster_pfp TEXT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_zora_handle TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS erc8004_agent_id BIGINT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS erc8128_agent_id TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS lens_handle TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS lens_account_address TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS lens_owner_address TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS lens_grove_uri TEXT NULL;`
     } catch {
       // ignore (older Postgres or restricted perms)
     }

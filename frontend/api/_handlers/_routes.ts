@@ -148,6 +148,8 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'waitlist/csw-proof': () => import('./waitlist/_csw-proof.js'),
   'waitlist/ledger': () => import('./waitlist/_ledger.js'),
   'waitlist/leaderboard': () => import('./waitlist/_leaderboard.js'),
+  'waitlist/agent-points-sync': () => import('./waitlist/_agent-points-sync.js'),
+  'waitlist/lens-points-sync': () => import('./waitlist/_lens-points-sync.js'),
   'waitlist/me': () => import('./waitlist/_me.js'),
   'waitlist/position': () => import('./waitlist/_position.js'),
   'waitlist/preprovision': () => import('./waitlist/_preprovision.js'),

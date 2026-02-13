@@ -119,6 +119,9 @@ importers:
       lucide-react:
         specifier: ^0.563.0
         version: 0.563.0(react@19.2.4)
+      ox:
+        specifier: ^0.11.3
+        version: 0.11.3(typescript@5.9.3)(zod@4.3.6)
       permissionless:
         specifier: ^0.3.4
         version: 0.3.4(ox@0.11.3(typescript@5.9.3)(zod@4.3.6))(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
@@ -9127,7 +9130,7 @@ snapshots:
 
   '@scure/bip32@1.7.0':
     dependencies:
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
       '@scure/base': 1.2.6
 

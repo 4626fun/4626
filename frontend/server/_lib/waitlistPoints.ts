@@ -25,6 +25,14 @@ export const WAITLIST_POINTS = {
   tiktok: 10,
   instagram: 10,
   reddit: 10,
+
+  // Agent gamification
+  agentFeedback: 20,
+  agentReputation: 200,
+
+  // Lens + Grove identity/proof
+  lensIdentity: 80,
+  groveProof: 40,
 } as const
 
 export type WaitlistPointSource = 
@@ -42,6 +50,10 @@ export type WaitlistPointSource =
   | 'bonus_tiktok'
   | 'bonus_instagram'
   | 'bonus_reddit'
+  | 'agent_feedback'
+  | 'agent_reputation'
+  | 'lens_identity'
+  | 'grove_proof'
   | 'task'  // Legacy
 
 export async function ensureWaitlistPointsSchema(db: Db): Promise<void> {

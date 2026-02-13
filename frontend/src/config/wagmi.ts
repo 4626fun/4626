@@ -1,4 +1,6 @@
 import { http, createConfig, fallback } from 'wagmi'
+import { Attribution } from 'ox/erc8021'
+import type { Hex } from 'viem'
 import { base } from 'wagmi/chains'
 import { coinbaseWallet, walletConnect, injected } from 'wagmi/connectors'
 
@@ -24,6 +26,28 @@ const BASE_RPC_URL_RAW =
   ''
 
 const IS_BROWSER = typeof window !== 'undefined'
+
+
+function parseBuilderCodes(raw: string | undefined): string[] {
+  return String(raw ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+function resolveDataSuffix(): Hex | undefined {
+  // Preferred: provide your builder code(s), e.g. "bc_xxx,bc_yyy"
+  const codes = parseBuilderCodes(import.meta.env.VITE_BASE_BUILDER_CODES as string | undefined)
+  if (codes.length > 0) {
+    return Attribution.toDataSuffix({ codes }) as Hex
+  }
+
+  // Fallback: provide a precomputed suffix directly.
+  const rawSuffix = (import.meta.env.VITE_BASE_DATA_SUFFIX as string | undefined)?.trim()
+  if (!rawSuffix) return undefined
+  return (rawSuffix.startsWith('0x') ? rawSuffix : `0x${rawSuffix}`) as Hex
+}
+
 
 function isCorsRestrictedRpc(url: string): boolean {
   // Alchemy browser CORS is opt-in; avoid hard failures by default.
@@ -113,9 +137,12 @@ function buildConnectors() {
   ] as any
 }
 
+const DATA_SUFFIX = resolveDataSuffix()
+
 export const wagmiConfig = createConfig({
   chains: [base],
   connectors: buildConnectors(),
+  ...(DATA_SUFFIX ? { dataSuffix: DATA_SUFFIX } : {}),
   transports: {
     [base.id]: BASE_READ_RPC_URLS.length > 0 ? fallback(BASE_READ_RPC_URLS.map((url) => http(url))) : http(),
   },
