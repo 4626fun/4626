@@ -96,12 +96,50 @@ function getDbEncryptionKey(): `0x${string}` | undefined {
  * every time (which burns through the 10-installation limit).
  */
 const KEEPR_XMTP_DB_DIR = (process.env.XMTP_DB_DIRECTORY ?? '').trim() || path.join(process.cwd(), '.xmtp-data')
+const SQLITE_HEADER = Buffer.from('SQLite format 3\u0000', 'utf8')
+
+function fileLooksLikePlainSqlite(filePath: string): boolean {
+  try {
+    if (!fs.existsSync(filePath)) return false
+    const fd = fs.openSync(filePath, 'r')
+    try {
+      const header = Buffer.alloc(SQLITE_HEADER.length)
+      const bytesRead = fs.readSync(fd, header, 0, header.length, 0)
+      if (bytesRead !== SQLITE_HEADER.length) return false
+      return header.equals(SQLITE_HEADER)
+    } finally {
+      fs.closeSync(fd)
+    }
+  } catch {
+    return false
+  }
+}
+
+function rotateLegacyPlaintextDbIfNeeded(filePath: string): void {
+  const encKey = getDbEncryptionKey()
+  if (!encKey) return
+  if (!fileLooksLikePlainSqlite(filePath)) return
+  const backupPath = `${filePath}.legacy-unencrypted.${Date.now()}`
+  try {
+    fs.renameSync(filePath, backupPath)
+    logger.warn(
+      '[keepr/xmtp-queue] Legacy unencrypted DB detected; moved aside to recreate encrypted DB',
+      { filePath, backupPath },
+    )
+  } catch (err) {
+    logger.warn('[keepr/xmtp-queue] Failed rotating legacy unencrypted DB (continuing)', {
+      filePath,
+      error: String(err),
+    })
+  }
+}
 
 function makeKeeprDbPath(vaultAddress: string): string {
   fs.mkdirSync(KEEPR_XMTP_DB_DIR, { recursive: true, mode: 0o700 })
   const env = parseXmtpEnv()
   const safe = vaultAddress.toLowerCase().replace(/[^a-z0-9]/g, '')
   const p = path.join(KEEPR_XMTP_DB_DIR, `keepr-${env}-${safe}.db3`)
+  rotateLegacyPlaintextDbIfNeeded(p)
   logger.info(`[keepr/xmtp-queue] Using local database: ${p}`)
   return p
 }

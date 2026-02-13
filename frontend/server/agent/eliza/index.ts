@@ -106,6 +106,44 @@ const XMTP_DB_ENCRYPTION_KEY = (() => {
   return hex as `0x${string}`
 })()
 
+const SQLITE_HEADER = Buffer.from('SQLite format 3\u0000', 'utf8')
+
+function fileLooksLikePlainSqlite(filePath: string): boolean {
+  try {
+    if (!fs.existsSync(filePath)) return false
+    const fd = fs.openSync(filePath, 'r')
+    try {
+      const header = Buffer.alloc(SQLITE_HEADER.length)
+      const bytesRead = fs.readSync(fd, header, 0, header.length, 0)
+      if (bytesRead !== SQLITE_HEADER.length) return false
+      return header.equals(SQLITE_HEADER)
+    } finally {
+      fs.closeSync(fd)
+    }
+  } catch {
+    return false
+  }
+}
+
+/**
+ * If an old plaintext SQLite DB is present while encryption is enabled,
+ * rotate it aside so XMTP can create a fresh encrypted DB.
+ */
+function rotateLegacyPlaintextDbIfNeeded(filePath: string): void {
+  if (!XMTP_DB_ENCRYPTION_KEY) return
+  if (!fileLooksLikePlainSqlite(filePath)) return
+  const backupPath = `${filePath}.legacy-unencrypted.${Date.now()}`
+  try {
+    fs.renameSync(filePath, backupPath)
+    logger.warn(
+      `[xmtp] Legacy unencrypted DB detected at ${filePath}; moved to ${backupPath}. ` +
+      'A fresh encrypted XMTP DB will be created for this installation.',
+    )
+  } catch (err) {
+    logger.warn('[xmtp] Failed rotating legacy unencrypted DB (continuing):', err)
+  }
+}
+
 /**
  * Build a stable `dbPath` function for the XMTP SDK.
  * Ensures the directory exists and returns a deterministic path
@@ -115,6 +153,7 @@ function makeDbPath(): (inboxId: string) => string {
   fs.mkdirSync(XMTP_DB_DIR, { recursive: true, mode: 0o700 })
   return (inboxId: string) => {
     const p = path.join(XMTP_DB_DIR, `xmtp-${XMTP_ENV}-${inboxId}.db3`)
+    rotateLegacyPlaintextDbIfNeeded(p)
     logger.info(`[xmtp] Using local database: ${p}`)
     return p
   }
