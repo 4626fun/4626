@@ -114,6 +114,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'deploy/session/start': () => import('./deploy/session/_start.js'),
   'deploy/session/status': () => import('./deploy/session/_status.js'),
   'deploy/config': () => import('./deploy/_config.js'),
+  'deploy/provisionSolanaRoute': () => import('./deploy/_provisionSolanaRoute.js'),
   'deploy/registerShareOft': () => import('./deploy/_registerShareOft.js'),
   'deploy/smartWalletOwner': () => import('./deploy/_smartWalletOwner.js'),
 

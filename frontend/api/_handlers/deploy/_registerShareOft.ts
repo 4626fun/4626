@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { promisify } from 'node:util'
 
 import { createPublicClient, createWalletClient, getAddress, http, isAddress, type Address, type Hex } from 'viem'
@@ -176,6 +177,22 @@ function readDynamicSolanaRouteEnabled(): boolean {
   return v === '1' || v === 'true' || v === 'yes'
 }
 
+function readDynamicProvisionerUrl(): string {
+  return String(
+    process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL ??
+      process.env.SOLANA_BRIDGE_PROVISIONER_URL ??
+      '',
+  ).trim()
+}
+
+function readDynamicProvisionerSecret(): string {
+  return String(
+    process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET ??
+      process.env.SOLANA_BRIDGE_PROVISIONER_SECRET ??
+      '',
+  ).trim()
+}
+
 function decodeBase58(value: string): Uint8Array {
   if (!value || typeof value !== 'string') throw new Error('Invalid base58 input')
   let num = 0n
@@ -221,12 +238,6 @@ async function tryProvisionDynamicRoute(params: {
   if (!readDynamicSolanaRouteEnabled()) return null
 
   const cliDir = String(process.env.SOLANA_BRIDGE_CLI_DIR ?? '').trim()
-  if (!cliDir) {
-    throw new Error(
-      'Dynamic Solana route is enabled, but SOLANA_BRIDGE_CLI_DIR is not set.',
-    )
-  }
-
   const cliBin = String(process.env.SOLANA_BRIDGE_CLI_BIN ?? 'bun').trim() || 'bun'
   const deployEnv = String(process.env.SOLANA_BRIDGE_DEPLOY_ENV ?? 'mainnet').trim() || 'mainnet'
   const payerKp = String(process.env.SOLANA_BRIDGE_PAYER_KP ?? 'config').trim() || 'config'
@@ -242,50 +253,104 @@ async function tryProvisionDynamicRoute(params: {
     ? `${symbolPrefix}${symbolSuffix}`
     : `${symbolPrefix}${suffix.slice(0, 4).toUpperCase()}`
   const payForRelay = String(process.env.SOLANA_BRIDGE_PAY_FOR_RELAY ?? '1').trim() !== '0'
+  const provisionerUrl = readDynamicProvisionerUrl()
 
-  const args = [
-    'cli',
-    'sol',
-    'bridge',
-    'wrap-token',
-    '--deploy-env',
-    deployEnv,
-    '--remote-token',
-    params.shareOft,
-    '--decimals',
-    String(params.solanaDecimals),
-    '--name',
-    tokenName,
-    '--symbol',
-    tokenSymbol,
-    '--scaler-exponent',
-    String(scalerExponent),
-    '--payer-kp',
-    payerKp,
-  ]
-  if (payForRelay) args.push('--pay-for-relay')
+  let mintBytes32: Hex
+  if (cliDir && existsSync(cliDir)) {
+    const args = [
+      'cli',
+      'sol',
+      'bridge',
+      'wrap-token',
+      '--deploy-env',
+      deployEnv,
+      '--remote-token',
+      params.shareOft,
+      '--decimals',
+      String(params.solanaDecimals),
+      '--name',
+      tokenName,
+      '--symbol',
+      tokenSymbol,
+      '--scaler-exponent',
+      String(scalerExponent),
+      '--payer-kp',
+      payerKp,
+    ]
+    if (payForRelay) args.push('--pay-for-relay')
 
-  logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start', {
-    shareOft: params.shareOft,
-    cliDir,
-    deployEnv,
-    payerKp,
-    tokenName,
-    tokenSymbol,
-    payForRelay,
-  })
+    logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (local CLI)', {
+      shareOft: params.shareOft,
+      cliDir,
+      deployEnv,
+      payerKp,
+      tokenName,
+      tokenSymbol,
+      payForRelay,
+    })
 
-  const { stdout, stderr } = await execFileAsync(cliBin, args, {
-    cwd: cliDir,
-    timeout: 20 * 60_000,
-    maxBuffer: 4 * 1024 * 1024,
-  })
-  const combined = `${stdout ?? ''}\n${stderr ?? ''}`
-  const mintPubkey = parseMintPubkeyFromWrapOutput(combined)
-  if (!mintPubkey) {
-    throw new Error(`Dynamic route created unknown mint (could not parse output). Output: ${combined.slice(-1200)}`)
+    const { stdout, stderr } = await execFileAsync(cliBin, args, {
+      cwd: cliDir,
+      timeout: 20 * 60_000,
+      maxBuffer: 4 * 1024 * 1024,
+    })
+    const combined = `${stdout ?? ''}\n${stderr ?? ''}`
+    const mintPubkey = parseMintPubkeyFromWrapOutput(combined)
+    if (!mintPubkey) {
+      throw new Error(`Dynamic route created unknown mint (could not parse output). Output: ${combined.slice(-1200)}`)
+    }
+    mintBytes32 = solanaPubkeyToBytes32Hex(mintPubkey)
+  } else if (provisionerUrl) {
+    logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (remote provisioner)', {
+      shareOft: params.shareOft,
+      provisionerUrl,
+      deployEnv,
+      payerKp,
+      tokenName,
+      tokenSymbol,
+      payForRelay,
+    })
+    const provisionerSecret = readDynamicProvisionerSecret()
+    const response = await fetch(provisionerUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(provisionerSecret ? { Authorization: `Bearer ${provisionerSecret}` } : {}),
+      },
+      body: JSON.stringify({
+        shareOft: params.shareOft,
+        deployEnv,
+        solanaDecimals: params.solanaDecimals,
+        tokenName,
+        tokenSymbol,
+        scalerExponent,
+        payerKp,
+        payForRelay,
+      }),
+    })
+    const json = await response.json().catch(() => null)
+    if (!response.ok || !json) {
+      throw new Error(
+        `Remote provisioner failed (${response.status}). ` +
+          `${json && typeof json === 'object' && 'error' in json ? String((json as any).error) : 'No error body.'}`,
+      )
+    }
+    const mintBytes32Raw =
+      typeof (json as any).mintBytes32 === 'string'
+        ? (json as any).mintBytes32
+        : typeof (json as any)?.data?.mintBytes32 === 'string'
+          ? (json as any).data.mintBytes32
+          : ''
+    if (!isBytes32Hex(mintBytes32Raw)) {
+      throw new Error('Remote provisioner did not return a valid mintBytes32.')
+    }
+    mintBytes32 = mintBytes32Raw as Hex
+  } else {
+    throw new Error(
+      'Dynamic Solana route is enabled, but neither a valid local SOLANA_BRIDGE_CLI_DIR exists ' +
+        'nor SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL is set.',
+    )
   }
-  const mintBytes32 = solanaPubkeyToBytes32Hex(mintPubkey)
 
   for (let i = 0; i < 24; i += 1) {
     const scalar = await params.publicClient
@@ -458,14 +523,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const reqMint = typeof body?.solanaMint === 'string' ? body.solanaMint.trim() : ''
     const requestMintExplicit = isBytes32Hex(reqMint)
-    let solanaMint = requestMintExplicit ? (reqMint as Hex) : readSolanaMintFromEnv()
-    if (!solanaMint || solanaMint.toLowerCase() === ZERO_BYTES32.toLowerCase()) {
-      return res.status(409).json({
-        success: false,
-        error:
-          'Missing Solana mint bytes32. Provide `solanaMint` in the request body or set SOLANA_DEFAULT_MINT_BYTES32.',
-      } satisfies ApiEnvelope<never>)
-    }
+    let solanaMint: Hex | null = requestMintExplicit ? (reqMint as Hex) : readSolanaMintFromEnv()
     const readExistingTokenForMint = async (mint: Hex): Promise<Address> =>
       publicClient
         .readContract({
@@ -497,6 +555,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!dynamicMint) return false
       solanaMint = dynamicMint
       return true
+    }
+
+    if (!solanaMint || solanaMint.toLowerCase() === ZERO_BYTES32.toLowerCase()) {
+      const switched = await trySwitchToDynamicMint()
+      if (!switched || !solanaMint || solanaMint.toLowerCase() === ZERO_BYTES32.toLowerCase()) {
+        return res.status(409).json({
+          success: false,
+          error:
+            'Missing Solana mint bytes32. Provide `solanaMint` in the request body or set SOLANA_DEFAULT_MINT_BYTES32. ' +
+            'For automatic dynamic route creation, enable SOLANA_DYNAMIC_ROUTE_ENABLED=1 and set SOLANA_BRIDGE_CLI_DIR.',
+        } satisfies ApiEnvelope<never>)
+      }
     }
 
     let existingTokenForMint = await readExistingTokenForMint(solanaMint)
