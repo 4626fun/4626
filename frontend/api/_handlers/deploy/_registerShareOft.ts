@@ -233,7 +233,7 @@ function parseMintPubkeyFromWrapOutput(text: string): string | null {
 async function tryProvisionDynamicRoute(params: {
   shareOft: Address
   solanaDecimals: number
-  publicClient: ReturnType<typeof createPublicClient>
+  publicClient: any
 }): Promise<Hex | null> {
   if (!readDynamicSolanaRouteEnabled()) return null
 
@@ -256,6 +256,7 @@ async function tryProvisionDynamicRoute(params: {
   const provisionerUrl = readDynamicProvisionerUrl()
 
   let mintBytes32: Hex
+  let mintedPubkey: string | null = null
   if (cliDir && existsSync(cliDir)) {
     const args = [
       'cli',
@@ -299,6 +300,7 @@ async function tryProvisionDynamicRoute(params: {
     if (!mintPubkey) {
       throw new Error(`Dynamic route created unknown mint (could not parse output). Output: ${combined.slice(-1200)}`)
     }
+    mintedPubkey = mintPubkey
     mintBytes32 = solanaPubkeyToBytes32Hex(mintPubkey)
   } else if (provisionerUrl) {
     logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (remote provisioner)', {
@@ -360,12 +362,12 @@ async function tryProvisionDynamicRoute(params: {
         functionName: 'scalars',
         args: [params.shareOft, mintBytes32],
       })
-      .then((v) => BigInt(v as bigint))
+      .then((v: unknown) => BigInt(v as bigint))
       .catch(() => 0n)
     if (scalar > 0n) {
       logger.info('[deploy/registerShareOft] Dynamic Solana route ready', {
         shareOft: params.shareOft,
-        mintPubkey,
+        mintPubkey: mintedPubkey,
         mintBytes32,
         scalar: scalar.toString(),
       })
