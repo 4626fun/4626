@@ -97,6 +97,7 @@ function getDbEncryptionKey(): `0x${string}` | undefined {
  */
 const KEEPR_XMTP_DB_DIR = (process.env.XMTP_DB_DIRECTORY ?? '').trim() || path.join(process.cwd(), '.xmtp-data')
 const SQLITE_HEADER = Buffer.from('SQLite format 3\u0000', 'utf8')
+const XMTP_DB_FORCE_ENCRYPTED_MIGRATION = (process.env.XMTP_DB_FORCE_ENCRYPTED_MIGRATION ?? '0').trim() === '1'
 
 function fileLooksLikePlainSqlite(filePath: string): boolean {
   try {
@@ -118,6 +119,7 @@ function fileLooksLikePlainSqlite(filePath: string): boolean {
 function rotateLegacyPlaintextDbIfNeeded(filePath: string): void {
   const encKey = getDbEncryptionKey()
   if (!encKey) return
+  if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION) return
   if (!fileLooksLikePlainSqlite(filePath)) return
   const backupPath = `${filePath}.legacy-unencrypted.${Date.now()}`
   try {
@@ -132,6 +134,20 @@ function rotateLegacyPlaintextDbIfNeeded(filePath: string): void {
       error: String(err),
     })
   }
+}
+
+function getEffectiveDbEncryptionKeyForPath(filePath: string): `0x${string}` | undefined {
+  const encKey = getDbEncryptionKey()
+  if (!encKey) return undefined
+  if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION && fileLooksLikePlainSqlite(filePath)) {
+    logger.warn(
+      '[keepr/xmtp-queue] Legacy plaintext DB detected; using compatibility mode for this run. ' +
+      'Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION=1 to force encrypted migration.',
+      { filePath },
+    )
+    return undefined
+  }
+  return encKey
 }
 
 function makeKeeprDbPath(vaultAddress: string): string {
@@ -365,8 +381,8 @@ export async function executeKeeprAction(input: ExecuteKeeprActionInput): Promis
       signer = createSigner(createUser(privKey))
     }
 
-    const encKey = getDbEncryptionKey()
     const dbPath = makeKeeprDbPath(normalizedVaultAddress)
+    const encKey = getEffectiveDbEncryptionKeyForPath(dbPath)
     agent = await Agent.create(signer, {
       env: parseXmtpEnv(),
       dbPath,

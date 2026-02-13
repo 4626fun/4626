@@ -105,6 +105,7 @@ const XMTP_DB_ENCRYPTION_KEY = (() => {
   const hex = raw.startsWith('0x') ? raw : `0x${raw}`
   return hex as `0x${string}`
 })()
+const XMTP_DB_FORCE_ENCRYPTED_MIGRATION = (process.env.XMTP_DB_FORCE_ENCRYPTED_MIGRATION ?? '0').trim() === '1'
 
 const SQLITE_HEADER = Buffer.from('SQLite format 3\u0000', 'utf8')
 
@@ -125,12 +126,38 @@ function fileLooksLikePlainSqlite(filePath: string): boolean {
   }
 }
 
+function hasLegacyPlaintextDbInDir(): boolean {
+  try {
+    const files = fs.readdirSync(XMTP_DB_DIR).filter((f: string) => f.endsWith('.db3'))
+    for (const f of files) {
+      const p = path.join(XMTP_DB_DIR, f)
+      if (fileLooksLikePlainSqlite(p)) return true
+    }
+    return false
+  } catch {
+    return false
+  }
+}
+
+function getEffectiveDbEncryptionKey(): `0x${string}` | undefined {
+  if (!XMTP_DB_ENCRYPTION_KEY) return undefined
+  if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION && hasLegacyPlaintextDbInDir()) {
+    logger.warn(
+      '[xmtp] Legacy plaintext DB detected; using plaintext compatibility mode to reuse installation ' +
+      'and avoid churn. Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION=1 to force encrypted migration.',
+    )
+    return undefined
+  }
+  return XMTP_DB_ENCRYPTION_KEY
+}
+
 /**
  * If an old plaintext SQLite DB is present while encryption is enabled,
  * rotate it aside so XMTP can create a fresh encrypted DB.
  */
 function rotateLegacyPlaintextDbIfNeeded(filePath: string): void {
   if (!XMTP_DB_ENCRYPTION_KEY) return
+  if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION) return
   if (!fileLooksLikePlainSqlite(filePath)) return
   const backupPath = `${filePath}.legacy-unencrypted.${Date.now()}`
   try {
@@ -186,6 +213,11 @@ function checkDbPersistence(): void {
       logger.warn(
         '[xmtp] ⚠️  XMTP_DB_ENCRYPTION_KEY is not set — DB cannot be reopened across restarts!\n' +
         '    Generate one: openssl rand -hex 32  (then prefix with 0x)',
+      )
+    } else if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION && hasLegacyPlaintextDbInDir()) {
+      logger.warn(
+        '[xmtp] Legacy plaintext DB(s) present: encryption key is configured but compatibility mode is active.\n' +
+        '    Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION=1 to rotate legacy DB and create an encrypted installation.',
       )
     }
   } catch {
@@ -471,6 +503,7 @@ async function loadAgentRows(): Promise<AgentRow[]> {
 // ---------------------------------------------------------------------------
 
 async function startAgent(row: AgentRow): Promise<RunningAgent> {
+  const dbEncryptionKey = getEffectiveDbEncryptionKey()
   let signer: any
 
   if (row.agentType === 'csw' && row.privyWalletId && row.cswAddress) {
@@ -497,8 +530,8 @@ async function startAgent(row: AgentRow): Promise<RunningAgent> {
   // Create XmtpService with the appropriate config
   const xmtp = new XmtpService(
     signer.type === 'eoa'
-      ? { privateKey: signer.privateKey, env: XMTP_ENV, dbPath: makeDbPath(), dbEncryptionKey: XMTP_DB_ENCRYPTION_KEY, revokeOtherInstallations: XMTP_REVOKE_OTHER }
-      : { signer, env: XMTP_ENV, dbPath: makeDbPath(), dbEncryptionKey: XMTP_DB_ENCRYPTION_KEY, revokeOtherInstallations: XMTP_REVOKE_OTHER },
+      ? { privateKey: signer.privateKey, env: XMTP_ENV, dbPath: makeDbPath(), dbEncryptionKey, revokeOtherInstallations: XMTP_REVOKE_OTHER }
+      : { signer, env: XMTP_ENV, dbPath: makeDbPath(), dbEncryptionKey, revokeOtherInstallations: XMTP_REVOKE_OTHER },
   )
 
   // Wire message handler through the ElizaOS plugin pipeline
@@ -598,11 +631,12 @@ async function shutdown() {
  * (i.e. no multi-agent DB is configured).
  */
 async function startSingleAgentEoa(privateKey: `0x${string}`): Promise<RunningAgent> {
+  const dbEncryptionKey = getEffectiveDbEncryptionKey()
   const xmtp = new XmtpService({
     privateKey,
     env: XMTP_ENV,
     dbPath: makeDbPath(),
-    dbEncryptionKey: XMTP_DB_ENCRYPTION_KEY,
+    dbEncryptionKey,
     revokeOtherInstallations: XMTP_REVOKE_OTHER,
   })
 
@@ -645,6 +679,7 @@ async function startSingleAgentCsw(params: {
   ownerIndex?: number
   chainId?: number
 }): Promise<RunningAgent> {
+  const dbEncryptionKey = getEffectiveDbEncryptionKey()
   const signer = createPrivyScwSigner({
     walletId: params.privyWalletId,
     cswAddress: params.cswAddress,
@@ -656,7 +691,7 @@ async function startSingleAgentCsw(params: {
     signer,
     env: XMTP_ENV,
     dbPath: makeDbPath(),
-    dbEncryptionKey: XMTP_DB_ENCRYPTION_KEY,
+    dbEncryptionKey,
     revokeOtherInstallations: XMTP_REVOKE_OTHER,
   })
 
