@@ -368,7 +368,7 @@ export default async function handler(req: any, res: any) {
   if (!db) {
     return res.status(500).json({
       success: false,
-      error: 'Waitlist requires DB configuration (DATABASE_URL).',
+      error: 'Waitlist requires DB configuration (DATABASE_URL, POSTGRES_URL, or POSTGRES_URL_NON_POOLING).',
     } satisfies ApiEnvelope<never>)
   }
 
