@@ -1830,8 +1830,13 @@ function DeployVaultBatcher({
       )
     }
     if (lower.includes('deploy ownership mismatch')) {
+      const reasonMatch = msg.match(/deploy ownership mismatch:\s*([a-z0-9_]+)/i)
+      const reasonCode = reasonMatch?.[1] ? String(reasonMatch[1]) : null
+      const reasonSuffix = reasonCode ? ` (reason: ${reasonCode})` : ''
       return (
-        'Deploy session ownership validation failed. Re-auth to refresh wallet linkage, then retry. ' +
+        'Deploy session ownership validation failed' +
+        reasonSuffix +
+        '. Re-auth to refresh wallet linkage, then retry. ' +
         'If needed, disable server-continue (`VITE_DEPLOY_USE_SERVER_CONTINUE=false`) and run phases client-side.'
       )
     }

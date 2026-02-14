@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { getAddress, isAddress, type Address, type Hex } from 'viem'
+import { createPublicClient, getAddress, http, isAddress, type Address, type Hex } from 'viem'
+import { base } from 'viem/chains'
 
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { ensureDeploySessionsSchema, hashDeployToken, insertDeploySession, randomDeployToken, randomId } from '../../../../server/_lib/deploySessions.js'
@@ -45,6 +46,36 @@ type CreateDeploySessionResponse = {
 type OwnershipCheck = {
   ok: boolean
   reason?: string
+}
+
+const COINBASE_SMART_WALLET_OWNER_LINK_ABI = [
+  {
+    type: 'function',
+    name: 'isOwnerAddress',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+] as const
+
+async function isOnchainSmartWalletOwner(params: { smartWallet: Address; ownerAddress: Address }): Promise<boolean> {
+  try {
+    const rpcRaw = (process.env.BASE_RPC_URL ?? '').trim()
+    const rpc = rpcRaw || 'https://mainnet.base.org'
+    const publicClient = createPublicClient({
+      chain: base,
+      transport: http(rpc, { timeout: 12_000 }),
+    })
+    const result = (await publicClient.readContract({
+      address: params.smartWallet,
+      abi: COINBASE_SMART_WALLET_OWNER_LINK_ABI,
+      functionName: 'isOwnerAddress',
+      args: [params.ownerAddress],
+    })) as boolean
+    return result === true
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -115,8 +146,25 @@ async function checkCanonicalWalletOwnership(params: {
   ownerAddress: Address
   sessionAddress: Address
 }): Promise<OwnershipCheck> {
+  const onchainOwnerCheck = async (): Promise<OwnershipCheck> => {
+    const ownerIsOnchain = await isOnchainSmartWalletOwner({
+      smartWallet: params.smartWallet,
+      ownerAddress: params.ownerAddress,
+    })
+    if (!ownerIsOnchain) return { ok: false, reason: 'owner_not_onchain_owner' }
+
+    // Session signer can be the same owner wallet, or another linked owner.
+    if (params.sessionAddress.toLowerCase() === params.ownerAddress.toLowerCase()) return { ok: true }
+    const sessionIsOnchain = await isOnchainSmartWalletOwner({
+      smartWallet: params.smartWallet,
+      ownerAddress: params.sessionAddress,
+    })
+    if (!sessionIsOnchain) return { ok: false, reason: 'session_not_onchain_owner' }
+    return { ok: true }
+  }
+
   const db = await getDb()
-  if (!db) return { ok: false, reason: 'ownership_db_unavailable' }
+  if (!db) return await onchainOwnerCheck()
   await ensureWaitlistSchema(db as any)
 
   const smartWalletLc = params.smartWallet.toLowerCase()
@@ -145,7 +193,10 @@ async function checkCanonicalWalletOwnership(params: {
     `
     profileId = legacyCanonicalRow.rows?.[0]?.id ?? null
   }
-  if (!profileId) return { ok: false, reason: 'canonical_wallet_not_verified' }
+  if (!profileId) {
+    const onchain = await onchainOwnerCheck()
+    return onchain.ok ? onchain : { ok: false, reason: 'canonical_wallet_not_verified' }
+  }
 
   const linked = new Set<string>([smartWalletLc])
   const linkedRows = await db.sql`
@@ -184,10 +235,16 @@ async function checkCanonicalWalletOwnership(params: {
   }
 
   const ownerBelongs = await belongs(ownerLc)
-  if (!ownerBelongs) return { ok: false, reason: 'owner_not_linked' }
+  if (!ownerBelongs) {
+    const onchain = await onchainOwnerCheck()
+    return onchain.ok ? onchain : { ok: false, reason: 'owner_not_linked' }
+  }
 
   const sessionBelongs = await belongs(sessionLc)
-  if (!sessionBelongs) return { ok: false, reason: 'session_not_linked' }
+  if (!sessionBelongs) {
+    const onchain = await onchainOwnerCheck()
+    return onchain.ok ? onchain : { ok: false, reason: 'session_not_linked' }
+  }
 
   return { ok: true }
 }
