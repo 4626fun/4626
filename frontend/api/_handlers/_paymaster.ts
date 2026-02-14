@@ -21,7 +21,8 @@ import { ensureCreatorWalletsSchema } from '../../server/_lib/creatorWallets.js'
 import { resolveCoinParties } from '../../server/_lib/coinParties.js'
 import { getActiveDeploySessionForSender, getDeploySessionByTokenHash, hashDeployToken, signDeployToken } from '../../server/_lib/deploySessions.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
-import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../server/auth/_shared.js'
+import { handleOptions, readJsonBody, setCors, setNoStore } from '../../server/auth/_shared.js'
+import { readRequestPrincipalAddress } from '../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -2003,10 +2004,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // Require an active session for any sponsorship-related method.
-  // - Primary: SIWE session (cookie or Authorization bearer token).
+  // Require an authenticated principal for any sponsorship-related method.
+  // - Primary: session (cookie or Authorization bearer token) or SIWA receipt.
   // - Secondary: deploy-session token (server-driven completion after one user signature).
-  const session = readSessionFromRequest(req)
+  const principalAddress = readRequestPrincipalAddress(req, { lowercase: false })
 
   try {
     // Validate sponsorship requests (UserOperations only).
@@ -2041,8 +2042,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let deploySessionOwner: Address | null = null
       let allowCleanupOnlyForInactiveDeploySession = false
 
-      if (session?.address) {
-        sessionAddress = getAddress(session.address)
+      if (principalAddress) {
+        sessionAddress = getAddress(principalAddress)
       } else {
         const hdr = readDeploySessionHeaders(req)
         if (!hdr) throw new Error('no_session')

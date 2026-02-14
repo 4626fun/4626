@@ -246,4 +246,52 @@ describe('deploy registerShareOft handler', () => {
       restoreEnv()
     }
   })
+
+  it('returns 409 (not 500) when dynamic route provisioning is unavailable', async () => {
+    const restoreEnv = applyEnv({
+      SOLANA_ADAPTER_OWNER_PRIVATE_KEY:
+        '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      SOLANA_DEFAULT_MINT_BYTES32: undefined,
+      SOLANA_DEFAULT_MINT_DECIMALS: '9',
+      SOLANA_DYNAMIC_ROUTE_ENABLED: '1',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL: undefined,
+      SOLANA_BRIDGE_CLI_DIR: '/tmp/does-not-exist',
+    })
+    try {
+      const mockPublicClient = {
+        readContract: vi.fn(async (args: any) => {
+          switch (args.functionName) {
+            case 'solanaBridgeAdapter':
+              return '0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return false
+            case 'owner':
+              return '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80'
+            default:
+              throw new Error(`Unexpected read ${String(args.functionName)}`)
+          }
+        }),
+        getBytecode: vi.fn(async () => '0x1234'),
+      }
+      createPublicClientMock.mockReturnValue(mockPublicClient as any)
+      privateKeyToAccountMock.mockReturnValue({
+        address: '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80',
+      })
+
+      const req = createMockReq({
+        method: 'POST',
+        body: { shareOft: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+      })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(409)
+      expect(String(res.body?.error ?? '')).toContain('Dynamic route provisioning error')
+      expect(String(res.body?.error ?? '')).toContain('neither a valid local SOLANA_BRIDGE_CLI_DIR exists')
+    } finally {
+      restoreEnv()
+    }
+  })
 })

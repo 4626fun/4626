@@ -4,11 +4,11 @@ import {
   type ApiEnvelope,
   handleOptions,
   readJsonBody,
-  readSessionFromRequest,
   setCors,
   setNoStore,
 } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 type WalletItem = {
@@ -283,12 +283,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ success: true, data } satisfies ApiEnvelope<PortfolioMeResponse>)
     }
 
-    const session = readSessionFromRequest(req)
-    const sessionAddress = normalizeLower(session?.address)
-    if (!sessionAddress) {
+    const principalAddress = readRequestPrincipalAddress(req)
+    if (!principalAddress) {
       return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<never>)
     }
-    const row = await resolveProfileRow(db as any, 'self', sessionAddress)
+    const row = await resolveProfileRow(db as any, 'self', principalAddress)
     if (!row) {
       return res.status(200).json({ success: true, data: null } satisfies ApiEnvelope<PortfolioMeResponse | null>)
     }
@@ -296,13 +295,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<PortfolioMeResponse>)
   }
 
-  const session = readSessionFromRequest(req)
-  const sessionAddress = normalizeLower(session?.address)
-  if (!sessionAddress) {
+  const principalAddress = readRequestPrincipalAddress(req)
+  if (!principalAddress) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<never>)
   }
 
-  const profileRow = await resolveProfileRow(db as any, 'self', sessionAddress)
+  const profileRow = await resolveProfileRow(db as any, 'self', principalAddress)
   if (!profileRow) {
     return res.status(404).json({ success: false, error: 'Profile not found' } satisfies ApiEnvelope<never>)
   }

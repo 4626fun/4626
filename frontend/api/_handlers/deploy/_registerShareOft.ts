@@ -526,6 +526,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const reqMint = typeof body?.solanaMint === 'string' ? body.solanaMint.trim() : ''
     const requestMintExplicit = isBytes32Hex(reqMint)
     let solanaMint: Hex | null = requestMintExplicit ? (reqMint as Hex) : readSolanaMintFromEnv()
+    let dynamicProvisionError: string | null = null
+    const appendDynamicProvisionDetail = (message: string): string =>
+      dynamicProvisionError ? `${message} Dynamic route provisioning error: ${dynamicProvisionError}` : message
     const readExistingTokenForMint = async (mint: Hex): Promise<Address> =>
       publicClient
         .readContract({
@@ -549,14 +552,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .then((v) => BigInt(v as bigint))
         .catch(() => null)
     const trySwitchToDynamicMint = async (): Promise<boolean> => {
-      const dynamicMint = await tryProvisionDynamicRoute({
-        shareOft,
-        solanaDecimals,
-        publicClient,
-      })
-      if (!dynamicMint) return false
-      solanaMint = dynamicMint
-      return true
+      try {
+        const dynamicMint = await tryProvisionDynamicRoute({
+          shareOft,
+          solanaDecimals,
+          publicClient,
+        })
+        if (!dynamicMint) return false
+        solanaMint = dynamicMint
+        dynamicProvisionError = null
+        return true
+      } catch (error) {
+        dynamicProvisionError = error instanceof Error ? error.message : String(error)
+        logger.warn('[deploy/registerShareOft] Dynamic Solana route provisioning failed', {
+          caller: auth.address,
+          shareOft,
+          error: dynamicProvisionError,
+        })
+        return false
+      }
     }
 
     if (!solanaMint || solanaMint.toLowerCase() === ZERO_BYTES32.toLowerCase()) {
@@ -564,9 +578,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!switched || !solanaMint || solanaMint.toLowerCase() === ZERO_BYTES32.toLowerCase()) {
         return res.status(409).json({
           success: false,
-          error:
+          error: appendDynamicProvisionDetail(
             'Missing Solana mint bytes32. Provide `solanaMint` in the request body or set SOLANA_DEFAULT_MINT_BYTES32. ' +
-            'For automatic dynamic route creation, enable SOLANA_DYNAMIC_ROUTE_ENABLED=1 and set SOLANA_BRIDGE_CLI_DIR.',
+              'For automatic dynamic route creation, enable SOLANA_DYNAMIC_ROUTE_ENABLED=1 and set SOLANA_BRIDGE_CLI_DIR.',
+          ),
         } satisfies ApiEnvelope<never>)
       }
     }
@@ -620,11 +635,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (routeScalar === 0n) {
         return res.status(409).json({
           success: false,
-          error:
+          error: appendDynamicProvisionDetail(
             `Base Solana bridge route is not registered for ShareOFT ${shareOft} and mint ${solanaMint} ` +
-            '(WrappedSplRouteNotRegistered). Use a bridge-supported Solana mint for this ShareOFT, ' +
-            'or disable Solana bridging on the batcher before deploy. ' +
-            'For automatic dynamic route creation, enable SOLANA_DYNAMIC_ROUTE_ENABLED=1 and set SOLANA_BRIDGE_CLI_DIR.',
+              '(WrappedSplRouteNotRegistered). Use a bridge-supported Solana mint for this ShareOFT, ' +
+              'or disable Solana bridging on the batcher before deploy. ' +
+              'For automatic dynamic route creation, enable SOLANA_DYNAMIC_ROUTE_ENABLED=1 and set SOLANA_BRIDGE_CLI_DIR.',
+          ),
         } satisfies ApiEnvelope<never>)
       }
     }

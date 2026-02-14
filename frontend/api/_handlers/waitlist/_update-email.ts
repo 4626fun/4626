@@ -1,5 +1,6 @@
-import { type ApiEnvelope, handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { checkRateLimit, RATE_LIMITS, rateLimitKey, getClientIp } from '../../../server/_lib/rateLimit.js'
 
@@ -39,11 +40,10 @@ export default async function handler(req: any, res: any) {
   }
 
   // Authentication required - verify caller owns the profile
-  const session = readSessionFromRequest(req)
-  if (!session?.address) {
+  const principalAddress = readRequestPrincipalAddress(req)
+  if (!principalAddress) {
     return res.status(401).json({ success: false, error: 'Authentication required' } satisfies ApiEnvelope<never>)
   }
-  const sessionAddress = session.address.toLowerCase()
 
   const body = await readJsonBody<Body>(req)
   const currentEmail = normalizeEmail(typeof body?.currentEmail === 'string' ? body.currentEmail : '')
@@ -66,13 +66,13 @@ export default async function handler(req: any, res: any) {
   if (!db) return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
   await ensureWaitlistSchema(db as any)
 
-  // Verify the session address owns this profile (check primary_wallet, embedded_wallet, or csw_address)
+  // Verify the authenticated principal owns this profile (check primary_wallet, embedded_wallet, or csw_address)
   const ownershipCheck = await db.sql`
     SELECT id FROM profiles
     WHERE email = ${currentEmail}
-      AND (LOWER(primary_wallet) = ${sessionAddress} 
-           OR LOWER(embedded_wallet) = ${sessionAddress}
-           OR LOWER(csw_address) = ${sessionAddress})
+      AND (LOWER(primary_wallet) = ${principalAddress} 
+           OR LOWER(embedded_wallet) = ${principalAddress}
+           OR LOWER(csw_address) = ${principalAddress})
     LIMIT 1;
   `
   if (!ownershipCheck?.rows?.[0]) {

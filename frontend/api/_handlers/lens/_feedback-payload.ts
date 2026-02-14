@@ -23,6 +23,7 @@ import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../serve
 import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
 import { getIdentityRegistryAddress } from '../../../server/_lib/erc8004.js'
 import type { FeedbackPayload } from '../../../server/_lib/erc8004.js'
+import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -87,6 +88,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const shouldStore = body.store !== false
+    const hasAuthPrincipal = Boolean(readRequestPrincipal(req))
+    if (shouldStore && !hasAuthPrincipal) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required to store on Grove. Use session or SIWA receipt, or set store=false.',
+      } satisfies ApiEnvelope<never>)
+    }
 
     // Compute the hash of the canonical JSON representation
     const canonicalJson = JSON.stringify(cleanPayload, null, 2)

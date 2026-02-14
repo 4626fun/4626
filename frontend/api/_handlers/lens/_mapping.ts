@@ -1,9 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { resolveCanonicalSmartWalletAddress } from '../../../server/_lib/canonicalWalletResolver.js'
 import { resolveLensUserByOwner } from '../../../server/_lib/lensAccounts.js'
 import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
+import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -72,9 +73,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const body = req.method === 'POST' ? (await readJsonBody<LensMappingRequest>(req)) ?? {} : {}
   const addressRaw = body.address?.trim() || getAddressFromRequest(req) || ''
 
-  const session = readSessionFromRequest(req)
-  const sessionAddress = session?.address ? String(session.address).trim() : ''
-  const wallet = normalizeAddress(addressRaw || sessionAddress)
+  const principalAddress = readRequestPrincipalAddress(req, { lowercase: false }).trim()
+  const wallet = normalizeAddress(addressRaw || principalAddress)
 
   if (!wallet || !isAddressLike(wallet)) {
     return res.status(400).json({ success: false, error: 'address is required' } satisfies ApiEnvelope<never>)

@@ -15,6 +15,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { buildReputationGraph } from '../../../server/_lib/reputationGraph.js'
 import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
+import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -54,6 +55,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const tag2 = String(body.tag2 ?? req.query.tag2 ?? '').trim()
   const includeRevoked = body.includeRevoked !== false && String(req.query.includeRevoked ?? '').trim() !== 'false'
   const shouldStore = body.store !== false && String(req.query.store ?? '').trim() !== 'false'
+
+  const hasAuthPrincipal = Boolean(readRequestPrincipal(req))
+  if (shouldStore && !hasAuthPrincipal) {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required to store on Grove. Use session or SIWA receipt, or set store=false.',
+    } satisfies ApiEnvelope<never>)
+  }
 
   try {
     const graph = await buildReputationGraph({

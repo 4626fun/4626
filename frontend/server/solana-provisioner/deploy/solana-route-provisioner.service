@@ -1,0 +1,23 @@
+[Unit]
+Description=CreatorVault Solana route provisioner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=creatorvault
+Group=creatorvault
+WorkingDirectory=/opt/creatorvault/frontend
+EnvironmentFile=/etc/creatorvault/solana-provisioner.env
+ExecStart=/usr/bin/env pnpm --dir /opt/creatorvault/frontend solana-provisioner:start
+Restart=always
+RestartSec=2
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=false
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

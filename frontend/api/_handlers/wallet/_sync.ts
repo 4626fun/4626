@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { syncUserWallets } from '../../../server/_lib/walletSync.js'
 
@@ -63,9 +64,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const session = readSessionFromRequest(req)
-  const sessionAddress = typeof session?.address === 'string' ? session.address.trim().toLowerCase() : ''
-  if (!sessionAddress) {
+  const principalAddress = readRequestPrincipalAddress(req)
+  if (!principalAddress) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<never>)
   }
 
@@ -81,11 +81,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     await ensureWaitlistSchema(db as any)
-    const privyUserId = await resolvePrivyUserIdForSession(db as any, sessionAddress)
+    const privyUserId = await resolvePrivyUserIdForSession(db as any, principalAddress)
     if (!privyUserId) {
       return res.status(409).json({
         success: false,
-        error: 'No Privy user mapping found for this session',
+        error: 'No Privy user mapping found for this wallet',
       } satisfies ApiEnvelope<never>)
     }
 

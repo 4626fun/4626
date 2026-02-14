@@ -5,6 +5,7 @@
 - `POST /api/agents/subdomains/upsert`
   - Authenticated write endpoint (session/SIWA) or indexer write (`Bearer SUBDOMAIN_INDEXER_SECRET`)
   - Stores Grove metadata pointers + Lens identity hints
+  - Also stores `solanaAddress` in metadata when provided (or inferred from `profiles.solana_wallet` by owner wallet)
 - `GET /api/agents/subdomains/resolve`
   - Resolves by `label`, `host`, or current request host
 - `scripts/subdomain-indexer.ts`
@@ -42,6 +43,13 @@ From `frontend/`:
 ```bash
 pnpm subdomains:indexer
 ```
+
+## Upsert payload notes
+
+- Optional fields accepted by `POST /api/agents/subdomains/upsert`:
+  - `solanaAddress` (preferred)
+  - `solanaWallet` (alias)
+- If neither is provided, the handler attempts to infer Solana address from the matched profile row by `ownerAddress`.
 
 ## DNS + Vercel
 

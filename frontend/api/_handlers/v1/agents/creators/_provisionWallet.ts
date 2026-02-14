@@ -35,17 +35,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/agents/creators/provision-wallet', kind: 'build' })
   if (!g.ok) return
 
-  const sessionAddress = g.auth?.address ? String(g.auth.address).toLowerCase() : ''
-  if (!sessionAddress) {
+  const principalAddress = g.auth?.address ? String(g.auth.address).toLowerCase() : ''
+  if (!principalAddress) {
     return res.status(401).json({ success: false, error: 'Authentication required (session or SIWA receipt)' })
   }
 
   const body = (await readJsonBody<RequestBody>(req)) ?? {}
   // The creator address defaults to the signed-in address
-  const creatorAddress = body.creatorAddress?.trim().toLowerCase() || sessionAddress
+  const creatorAddress = body.creatorAddress?.trim().toLowerCase() || principalAddress
 
   // Only allow provisioning for the signed-in user (no wallet for other users)
-  if (creatorAddress !== sessionAddress) {
+  if (creatorAddress !== principalAddress) {
     return res.status(403).json({ success: false, error: 'Can only provision wallet for your own address' })
   }
 

@@ -6,13 +6,13 @@ import path from 'node:path'
 import {
   handleOptions,
   readJsonBody,
-  readSessionFromRequest,
   setCors,
   setNoStore,
   type ApiEnvelope,
 } from '../../../server/auth/_shared.js'
 import { isAdminAddress } from '../../../server/_lib/session.js'
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
+import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import {
   getRepoRootPath,
   resolveSkill,
@@ -150,8 +150,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Admin-only: this endpoint can leak repo contents and (optionally) execute scripts.
-  const session = readSessionFromRequest(req)
-  const actor = session?.address ? String(session.address).toLowerCase() : ''
+  const actor = readRequestPrincipalAddress(req)
   if (!actor) {
     return res.status(401).json({ success: false, error: 'Sign in required.' } satisfies ApiEnvelope<never>)
   }

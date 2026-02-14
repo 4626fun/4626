@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { ensureReferralsSchema } from '../../../server/_lib/referrals.js'
 
 type ReferralsMeResponse = {
@@ -44,9 +45,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!db) return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
   await ensureReferralsSchema(db)
 
-  // Primary: look up by SIWE session (cookie or bearer).
-  const session = readSessionFromRequest(req)
-  const address = session?.address ? String(session.address).toLowerCase() : ''
+  // Primary: look up by authenticated principal (session or SIWA).
+  const address = readRequestPrincipalAddress(req)
 
   // Fallback: allow clients without a SIWE session (e.g. SIWF-only) to query by referral code.
   const codeParam = typeof req.query?.referralCode === 'string' ? req.query.referralCode : ''
@@ -56,7 +56,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? await db.sql`
           SELECT id, referral_code
           FROM profiles
-          WHERE (primary_wallet = ${address} OR embedded_wallet = ${address})
+          WHERE (
+            LOWER(primary_wallet) = ${address}
+            OR LOWER(embedded_wallet) = ${address}
+            OR LOWER(csw_address) = ${address}
+            OR LOWER(base_sub_account) = ${address}
+          )
           LIMIT 1;
         `
       : codeParam.trim().length > 0
@@ -185,4 +190,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   return res.status(200).json({ success: true, data } satisfies ApiEnvelope<ReferralsMeResponse>)
 }
-

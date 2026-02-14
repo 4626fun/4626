@@ -70,5 +70,6 @@
 /frontend/vite.config.ts
 /frontend/tailwind.config.*
 /frontend/postcss.config.*
-/frontend/scripts/
+/frontend/scripts/*
+!/frontend/scripts/subdomain-indexer.ts
 /frontend/skills/

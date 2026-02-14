@@ -11,6 +11,7 @@ import {
 } from '../../../server/zora/_shared.js'
 import { buildShareTokenMetadata } from '../../../server/_lib/shareTokenMetadata.js'
 import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
+import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -44,6 +45,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const chainId = getNumberQuery(req, 'chain') ?? DEFAULT_CHAIN_ID
   const storeRaw = getStringQuery(req, 'store')
   const shouldStore = storeRaw ? storeRaw.toLowerCase() !== 'false' : true
+  const hasAuthPrincipal = Boolean(readRequestPrincipal(req))
+
+  if (shouldStore && !hasAuthPrincipal) {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required to store on Grove. Use session or SIWA receipt, or set store=false.',
+    } satisfies ApiEnvelope<never>)
+  }
 
   try {
     const metadata = await buildShareTokenMetadata({

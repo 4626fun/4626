@@ -4,13 +4,13 @@ import {
   type ApiEnvelope,
   handleOptions,
   readJsonBody,
-  readSessionFromRequest,
   setCors,
   setNoStore,
 } from '../../server/auth/_shared.js'
 import { getDb } from '../../server/_lib/postgres.js'
 import { ensureCreatorWalletsSchema } from '../../server/_lib/creatorWallets.js'
 import { isAddressLike, resolveCoinPartiesAndOwner } from '../../server/_lib/coinParties.js'
+import { readRequestPrincipalAddress } from '../../server/_lib/requestPrincipal.js'
 
 type ClaimBody = { coinAddress?: string }
 type WalletRole = 'creator' | 'payout'
@@ -82,8 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const session = readSessionFromRequest(req)
-  const wallet = session?.address ? String(session.address).toLowerCase() : ''
+  const wallet = readRequestPrincipalAddress(req)
   if (!wallet || !isAddressLike(wallet)) {
     return res.status(401).json({ success: false, error: 'Wallet not verified' } satisfies ApiEnvelope<never>)
   }

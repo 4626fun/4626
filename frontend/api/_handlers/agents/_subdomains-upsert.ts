@@ -24,6 +24,8 @@ type UpsertBody = {
   subdomainId?: string | number | null
   chainId?: number | string
   ownerAddress?: string
+  solanaAddress?: string | null
+  solanaWallet?: string | null
   controllerAddress?: string | null
   metadata?: Record<string, unknown> | null
   storeOnGrove?: boolean
@@ -39,6 +41,8 @@ type SubdomainUpsertResponse = {
   groveStatus: 'stored' | 'unavailable' | 'skipped'
   groveError?: string
 }
+
+type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
 function readBearerToken(req: VercelRequest): string {
   const header = String(req.headers.authorization ?? '').trim()
@@ -57,6 +61,42 @@ function parseChainId(value: unknown): number {
 function parseObject(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   return value as Record<string, unknown>
+}
+
+function isValidSolanaAddress(value: string): boolean {
+  const s = String(value || '').trim()
+  if (!s) return false
+  if (s.length < 32 || s.length > 44) return false
+  return /^[1-9A-HJ-NP-Za-km-z]+$/.test(s)
+}
+
+async function resolveProfileSolanaAddress(db: Db, ownerAddress: string): Promise<string | null> {
+  try {
+    const result = await db.sql`
+      SELECT p.solana_wallet
+      FROM profiles p
+      WHERE p.solana_wallet IS NOT NULL
+        AND LENGTH(TRIM(p.solana_wallet)) > 0
+        AND (
+          LOWER(p.primary_wallet) = ${ownerAddress}
+          OR LOWER(p.csw_address) = ${ownerAddress}
+          OR LOWER(p.primary_smart_wallet) = ${ownerAddress}
+          OR LOWER(p.primary_embedded_eoa) = ${ownerAddress}
+          OR LOWER(p.embedded_wallet) = ${ownerAddress}
+          OR p.id IN (
+            SELECT pw.profile_id
+            FROM profile_wallets pw
+            WHERE LOWER(pw.address) = ${ownerAddress}
+          )
+        )
+      ORDER BY p.updated_at DESC NULLS LAST
+      LIMIT 1;
+    `
+    const raw = String(result.rows?.[0]?.solana_wallet ?? '').trim()
+    return isValidSolanaAddress(raw) ? raw : null
+  } catch {
+    return null
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -101,6 +141,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const chainId = parseChainId(body.chainId)
 
   const metadataBase = parseObject(body.metadata) ?? {}
+
+  const submittedSolanaAddressRaw =
+    typeof body.solanaAddress === 'string'
+      ? body.solanaAddress.trim()
+      : typeof body.solanaWallet === 'string'
+        ? body.solanaWallet.trim()
+        : ''
+  if (submittedSolanaAddressRaw && !isValidSolanaAddress(submittedSolanaAddressRaw)) {
+    return res.status(400).json({ success: false, error: 'Invalid solanaAddress' } satisfies ApiEnvelope<never>)
+  }
+
+  const shouldStoreOnGrove = body.storeOnGrove !== false
+  const shouldResolveLens = body.resolveLens !== false
+
+  const db = await getDb()
+  if (!db) {
+    return res.status(503).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
+  }
+  await ensureAgentSubdomainsSchema(db as any)
+
+  const resolvedSolanaAddress =
+    submittedSolanaAddressRaw || (await resolveProfileSolanaAddress(db as any, ownerAddressRaw)) || null
+
   const metadataPayload: Record<string, unknown> = {
     ...metadataBase,
     label,
@@ -109,11 +172,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     parentId,
     ownerAddress: ownerAddressRaw,
     chainId,
+    ...(resolvedSolanaAddress ? { solanaAddress: resolvedSolanaAddress } : {}),
     updatedAt: new Date().toISOString(),
   }
-
-  const shouldStoreOnGrove = body.storeOnGrove !== false
-  const shouldResolveLens = body.resolveLens !== false
 
   let metadataLensUri: string | null = null
   let metadataGatewayUrl: string | null = null
@@ -128,7 +189,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       metadataGatewayUrl = attempt.result.gatewayUrl
       metadataStorageKey = attempt.result.storageKey
       groveStatus = 'stored'
-    } else {
+    } else if ('error' in attempt) {
       groveStatus = 'unavailable'
       groveError = attempt.error
     }
@@ -143,12 +204,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     lensAccountAddress = lensUser?.accountAddress?.toLowerCase() ?? null
     lensOwnerAddress = lensUser?.ownerAddress?.toLowerCase() ?? null
   }
-
-  const db = await getDb()
-  if (!db) {
-    return res.status(503).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
-  }
-  await ensureAgentSubdomainsSchema(db as any)
 
   try {
     const record = await upsertAgentSubdomain(db as any, {

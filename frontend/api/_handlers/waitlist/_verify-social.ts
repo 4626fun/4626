@@ -1,6 +1,7 @@
-import { type ApiEnvelope, handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { readNeynarApiKey } from '../../../server/_lib/neynarConfig.js'
+import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
 import { checkRateLimit, rateLimitKey, getClientIp } from '../../../server/_lib/rateLimit.js'
@@ -128,11 +129,10 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ success: false, error: 'Invalid email' } satisfies ApiEnvelope<never>)
   }
 
-  const session = readSessionFromRequest(req)
-  if (!session?.address) {
+  const principalAddress = readRequestPrincipalAddress(req)
+  if (!principalAddress) {
     return res.status(401).json({ success: false, error: 'Authentication required' } satisfies ApiEnvelope<never>)
   }
-  const sessionAddress = session.address.toLowerCase()
 
   const platform = body?.platform as SocialPlatform
   if (!platform || !['farcaster', 'discord', 'telegram'].includes(platform)) {
@@ -161,9 +161,9 @@ export default async function handler(req: any, res: any) {
   }
 
   const ownsProfile =
-    (typeof row?.primary_wallet === 'string' && row.primary_wallet.toLowerCase() === sessionAddress) ||
-    (typeof row?.embedded_wallet === 'string' && row.embedded_wallet.toLowerCase() === sessionAddress) ||
-    (typeof row?.csw_address === 'string' && row.csw_address.toLowerCase() === sessionAddress)
+    (typeof row?.primary_wallet === 'string' && row.primary_wallet.toLowerCase() === principalAddress) ||
+    (typeof row?.embedded_wallet === 'string' && row.embedded_wallet.toLowerCase() === principalAddress) ||
+    (typeof row?.csw_address === 'string' && row.csw_address.toLowerCase() === principalAddress)
   if (!ownsProfile) {
     return res.status(403).json({ success: false, error: 'Not authorized to update this profile' } satisfies ApiEnvelope<never>)
   }

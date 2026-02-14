@@ -4,6 +4,7 @@ import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../serve
 import { buildAgentRegistration } from '../../../server/_lib/agentRegistration.js'
 import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
 import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
+import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; missing?: string[] }
 
@@ -32,7 +33,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = req.method === 'POST' ? (await readJsonBody<LensAgentRegistrationRequest>(req)) ?? {} : {}
-  const shouldStore = body.store !== false
+  const storeQueryRaw = typeof req.query.store === 'string' ? req.query.store.trim().toLowerCase() : ''
+  const shouldStore = req.method === 'POST'
+    ? body.store !== false
+    : storeQueryRaw
+      ? storeQueryRaw !== 'false'
+      : true
+
+  const hasAuthPrincipal = Boolean(readRequestPrincipal(req))
+  if (shouldStore && !hasAuthPrincipal) {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required to store on Grove. Use session or SIWA receipt, or set store=false.',
+    } satisfies ApiEnvelope<never>)
+  }
 
   const origin = (() => {
     try {

@@ -19,12 +19,11 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readSessionFromRequest,
   setCors,
   setNoStore,
 } from '../../../../server/auth/_shared.js'
-import { readSiwaAgentFromRequest } from '../../../../server/auth/_siwa.js'
 import { getDb, isDbConfigured } from '../../../../server/_lib/postgres.js'
+import { readRequestPrincipalAddress } from '../../../../server/_lib/requestPrincipal.js'
 import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAgentWallets.js'
 import { enableCswAgent, getOrCreateCreatorXmtpAgent } from '../../../../server/_lib/creatorXmtpAgents.js'
 import { resolveCoinParties, isAddressLike } from '../../../../server/_lib/coinParties.js'
@@ -213,14 +212,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  // Accept either cookie session auth or SIWA receipt auth.
-  const session = readSessionFromRequest(req)
-  const siwa = readSiwaAgentFromRequest(req)
-  const creatorAddress = session?.address
-    ? String(session.address).toLowerCase()
-    : siwa?.address
-      ? String(siwa.address).toLowerCase()
-      : ''
+  // Require authenticated session or SIWA
+  const creatorAddress = readRequestPrincipalAddress(req)
   if (!creatorAddress || !isAddressLike(creatorAddress)) {
     return res.status(401).json({
       success: false,

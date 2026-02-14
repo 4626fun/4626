@@ -1,10 +1,11 @@
-import { type ApiEnvelope, handleOptions, readSessionFromRequest, setCors, setNoStore } from '../../server/auth/_shared.js'
+import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../server/auth/_shared.js'
 import { getDb } from '../../server/_lib/postgres.js'
 import { normalizeReferralCode, getClientIp, getUserAgent, hashForAttribution } from '../../server/_lib/referrals.js'
 import { checkRateLimit, RATE_LIMITS, rateLimitKey, getClientIp as getRateLimitIp } from '../../server/_lib/rateLimit.js'
 import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../server/_lib/waitlistPoints.js'
 import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
 import { buildDeterministicSyntheticEmail } from '../../server/_lib/profileSync.js'
+import { readRequestPrincipalAddress } from '../../server/_lib/requestPrincipal.js'
 import { preprovisionWaitlistUser } from '../../server/_lib/waitlistPreprovision.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -287,18 +288,17 @@ export default async function handler(req: any, res: any) {
 
   const walletRaw = typeof body.primaryWallet === 'string' ? body.primaryWallet : ''
   const primaryWalletInput = normalizeAddress(walletRaw)
-  const session = readSessionFromRequest(req)
-  const sessionWalletRaw = typeof session?.address === 'string' ? session.address : ''
-  const sessionWallet = normalizeAddress(sessionWalletRaw)
+  const principalWalletRaw = readRequestPrincipalAddress(req, { lowercase: false })
+  const principalWallet = normalizeAddress(principalWalletRaw)
 
   let primaryWallet = primaryWalletInput
-  if (sessionWallet && isValidEvmAddress(sessionWallet)) {
+  if (principalWallet && isValidEvmAddress(principalWallet)) {
     // If the caller did not provide a wallet, bind the signup to the signed-in wallet.
     // If they DID provide one and it doesn't match, do not hard-fail:
     // - This endpoint is used by the marketing waitlist flow which can be used without SIWE.
-    // - Users may also have a stale SIWE token in sessionStorage from a different wallet/app host.
+    // - Users may also have a stale auth token in sessionStorage from a different wallet/app host.
     if (!primaryWallet) {
-      primaryWallet = sessionWallet
+      primaryWallet = principalWallet
     }
   }
 

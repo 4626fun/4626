@@ -1,6 +1,7 @@
-import { type ApiEnvelope, handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { isCswOwner } from '../../../server/_lib/cswOwner.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
 import { checkRateLimit, rateLimitKey, getClientIp } from '../../../server/_lib/rateLimit.js'
@@ -45,11 +46,10 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ success: false, error: 'Invalid email' } satisfies ApiEnvelope<never>)
   }
 
-  const session = readSessionFromRequest(req)
-  if (!session?.address) {
+  const principalAddress = readRequestPrincipalAddress(req)
+  if (!principalAddress) {
     return res.status(401).json({ success: false, error: 'Authentication required' } satisfies ApiEnvelope<never>)
   }
-  const sessionAddress = session.address.toLowerCase()
 
   const db = await getDb()
   if (!db) return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
@@ -63,9 +63,9 @@ export default async function handler(req: any, res: any) {
     SET profile_completed_at = COALESCE(profile_completed_at, NOW()), updated_at = NOW()
     WHERE email = ${email}
       AND (
-        LOWER(primary_wallet) = ${sessionAddress}
-        OR LOWER(embedded_wallet) = ${sessionAddress}
-        OR LOWER(csw_address) = ${sessionAddress}
+        LOWER(primary_wallet) = ${principalAddress}
+        OR LOWER(embedded_wallet) = ${principalAddress}
+        OR LOWER(csw_address) = ${principalAddress}
       )
     RETURNING id, profile_completed_at;
   `
@@ -81,13 +81,13 @@ export default async function handler(req: any, res: any) {
     `
     const existingRow = exists?.rows?.[0]
     if (existingRow?.id) {
-      // Session wallet didn't match primary/embedded/csw. Check if it's an owner of the profile's CSW.
+      // Principal wallet didn't match primary/embedded/csw. Check if it's an owner of the profile's CSW.
       const cswAddr = typeof existingRow.csw_address === 'string' ? existingRow.csw_address.trim() : ''
       if (cswAddr && /^0x[a-fA-F0-9]{40}$/.test(cswAddr)) {
         try {
-          const owned = await isCswOwner(sessionAddress, cswAddr)
+          const owned = await isCswOwner(principalAddress, cswAddr)
           if (owned) {
-            // Session wallet is an owner of the CSW; allow the update.
+            // Principal wallet is an owner of the CSW; allow the update.
             await db.sql`
               UPDATE profiles
               SET profile_completed_at = COALESCE(profile_completed_at, NOW()), updated_at = NOW()
@@ -174,4 +174,3 @@ export default async function handler(req: any, res: any) {
   const data: ProfileCompleteResponse = { email, profileCompleted, qualifiedReferral }
   return res.status(200).json({ success: true, data } satisfies ApiEnvelope<ProfileCompleteResponse>)
 }
-

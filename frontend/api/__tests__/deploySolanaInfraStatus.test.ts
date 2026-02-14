@@ -1,0 +1,105 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import handler from '../_handlers/deploy/_solanaInfraStatus.ts'
+import { applyEnv, createMockReq, createMockRes } from './helpers'
+
+const {
+  getSessionAddressMock,
+  isAdminAddressMock,
+  getApiContractsMock,
+  createPublicClientMock,
+} = vi.hoisted(() => ({
+  getSessionAddressMock: vi.fn(),
+  isAdminAddressMock: vi.fn(),
+  getApiContractsMock: vi.fn(),
+  createPublicClientMock: vi.fn(),
+}))
+
+vi.mock('../../server/auth/_shared.js', () => ({
+  handleOptions: vi.fn(() => false),
+  setCors: vi.fn(),
+  setNoStore: vi.fn(),
+}))
+
+vi.mock('../../server/_lib/session.js', () => ({
+  getSessionAddress: getSessionAddressMock,
+  isAdminAddress: isAdminAddressMock,
+}))
+
+vi.mock('../../server/_lib/contracts.js', () => ({
+  getApiContracts: getApiContractsMock,
+}))
+
+vi.mock('viem', async () => {
+  const actual = await vi.importActual<any>('viem')
+  return {
+    ...actual,
+    createPublicClient: createPublicClientMock,
+    http: vi.fn(() => ({})),
+  }
+})
+
+describe('deploy solana infra status handler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getSessionAddressMock.mockReturnValue('0x1111111111111111111111111111111111111111')
+    isAdminAddressMock.mockReturnValue(true)
+    getApiContractsMock.mockReturnValue({
+      creatorVaultBatcher: '0x32e91185B92c6c13dd56D745aBf24F009cdD3019',
+    })
+  })
+
+  it('returns 401 when session is missing', async () => {
+    getSessionAddressMock.mockReturnValueOnce(null)
+    const req = createMockReq({ method: 'GET' })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(401)
+    expect(String(res.body?.error ?? '')).toContain('Sign in required')
+  })
+
+  it('reports dynamic runner misconfiguration and invalid signer key', async () => {
+    const restoreEnv = applyEnv({
+      SOLANA_DYNAMIC_ROUTE_ENABLED: '1',
+      SOLANA_BRIDGE_CLI_DIR: '/definitely/missing/path',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL: undefined,
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET: undefined,
+      SOLANA_ADAPTER_OWNER_PRIVATE_KEY: 'not-a-hex-private-key',
+      SOLANA_DEFAULT_MINT_BYTES32: undefined,
+    })
+    try {
+      const mockPublicClient = {
+        readContract: vi.fn(async (args: any) => {
+          switch (args.functionName) {
+            case 'solanaBridgeAdapter':
+              return '0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'owner':
+              return '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80'
+            default:
+              throw new Error(`Unexpected read ${String(args.functionName)}`)
+          }
+        }),
+        getBytecode: vi.fn(async () => '0x1234'),
+      }
+      createPublicClientMock.mockReturnValue(mockPublicClient as any)
+
+      const req = createMockReq({ method: 'GET' })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.success).toBe(true)
+      expect(res.body?.data?.dynamicProvisioningMode).toBe('misconfigured')
+      expect(res.body?.data?.signerConfigured).toBe(false)
+      expect(res.body?.data?.readyForAutoRegistration).toBe(false)
+      expect(String((res.body?.data?.blockers ?? []).join(' '))).toContain('No usable dynamic route runner')
+      expect(String((res.body?.data?.blockers ?? []).join(' '))).toContain('missing or invalid')
+    } finally {
+      restoreEnv()
+    }
+  })
+})

@@ -2,7 +2,7 @@
  * POST /api/waitlist/preprovision
  *
  * Manually trigger (or re-trigger) pre-provisioning for a waitlist user.
- * Requires an authenticated session — uses the caller's wallet address.
+ * Requires authenticated session or SIWA — uses the caller's wallet address.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
@@ -10,12 +10,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readSessionFromRequest,
   setCors,
   setNoStore,
 } from '../../../server/auth/_shared.js'
 import { isCswOwner } from '../../../server/_lib/cswOwner.js'
 import { getDb, isDbConfigured } from '../../../server/_lib/postgres.js'
+import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { preprovisionWaitlistUser } from '../../../server/_lib/waitlistPreprovision.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -33,10 +33,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  // Require authenticated session
-  const session = readSessionFromRequest(req)
-  const sessionWallet = session?.address ? String(session.address).trim().toLowerCase() : ''
-  if (!sessionWallet || !isValidEvmAddress(sessionWallet)) {
+  // Require authenticated session or SIWA
+  const principalWallet = readRequestPrincipalAddress(req)
+  if (!principalWallet || !isValidEvmAddress(principalWallet)) {
     return res.status(401).json({ success: false, error: 'Sign in required' } satisfies ApiEnvelope<never>)
   }
 
@@ -53,21 +52,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const q = await (db as any).sql`
       SELECT id, primary_wallet, embedded_wallet, csw_address, preprovisioned_at
       FROM profiles
-      WHERE LOWER(primary_wallet) = ${sessionWallet}
-         OR LOWER(embedded_wallet) = ${sessionWallet}
-         OR LOWER(csw_address) = ${sessionWallet}
+      WHERE LOWER(primary_wallet) = ${principalWallet}
+         OR LOWER(embedded_wallet) = ${principalWallet}
+         OR LOWER(csw_address) = ${principalWallet}
       ORDER BY created_at DESC
       LIMIT 1;
     `
     let row = q.rows?.[0]
 
-    // If no direct match, check if session wallet is an owner of a profile's linked CSW
+    // If no direct match, check if principal wallet is an owner of a profile's linked CSW
     if (!row?.id) {
       const cswProfiles = await (db as any).sql`
         SELECT id, primary_wallet, embedded_wallet, csw_address, preprovisioned_at
         FROM profiles
         WHERE csw_address IS NOT NULL
-          AND LOWER(csw_address) != ${sessionWallet}
+          AND LOWER(csw_address) != ${principalWallet}
         ORDER BY updated_at DESC
         LIMIT 50
       `
@@ -75,7 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const csw = p?.csw_address ? String(p.csw_address).trim() : ''
         if (!csw || !/^0x[a-fA-F0-9]{40}$/.test(csw)) continue
         try {
-          const owned = await isCswOwner(sessionWallet, csw)
+          const owned = await isCswOwner(principalWallet, csw)
           if (owned) {
             row = p
             break
@@ -91,7 +90,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const walletForProvision = String(
-      row.csw_address || row.primary_wallet || row.embedded_wallet || sessionWallet
+      row.csw_address || row.primary_wallet || row.embedded_wallet || principalWallet
     ).toLowerCase()
     const result = await preprovisionWaitlistUser(
       typeof row.id === 'number' ? row.id : Number(row.id),

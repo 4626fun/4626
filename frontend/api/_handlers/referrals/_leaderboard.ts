@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { ensureReferralsSchema } from '../../../server/_lib/referrals.js'
 
 type Period = 'weekly' | 'all_time'
@@ -147,14 +148,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }))
     : []
 
-  const session = readSessionFromRequest(req)
-  const addr = session?.address ? String(session.address).toLowerCase() : ''
+  const addr = readRequestPrincipalAddress(req)
   let me: LeaderboardResponse['me'] = null
   if (addr) {
     const mine = await db.sql`
       SELECT id
       FROM profiles
-      WHERE (primary_wallet = ${addr} OR embedded_wallet = ${addr})
+      WHERE (
+        LOWER(primary_wallet) = ${addr}
+        OR LOWER(embedded_wallet) = ${addr}
+        OR LOWER(csw_address) = ${addr}
+        OR LOWER(base_sub_account) = ${addr}
+      )
       LIMIT 1;
     `
     const myId = typeof mine?.rows?.[0]?.id === 'number' ? (mine.rows[0].id as number) : null
@@ -220,4 +225,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   return res.status(200).json({ success: true, data } satisfies ApiEnvelope<LeaderboardResponse>)
 }
-

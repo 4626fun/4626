@@ -4,11 +4,12 @@ import { createSIWANonce } from '@buildersgarden/siwa'
 import { createPublicClient, http } from 'viem'
 import { base } from 'viem/chains'
 
-import { type ApiEnvelope, handleOptions, readJsonBody, readSessionFromRequest, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { ensureSiwaNonceSchema, isAddressLike, parseAgentRegistryRef, storeSiwaNonce } from '../../../server/auth/_siwa.js'
 import { resolveCanonicalSmartWalletAddress } from '../../../server/_lib/canonicalWalletResolver.js'
 import { getIdentityRegistryAddress } from '../../../server/_lib/erc8004.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -97,15 +98,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   let ownerAddress = ownerInput
-  const session = readSessionFromRequest(req)
-  if (!ownerAddress && session?.address) {
-    const canonicalForSession = await resolveCanonicalSmartWalletAddress(session.address)
-    ownerAddress = canonicalForSession ?? ''
+  const principal = readRequestPrincipal(req, { lowercase: false })
+  const principalAddress = principal?.address ?? ''
+  if (!ownerAddress && principalAddress) {
+    const canonicalForPrincipal = await resolveCanonicalSmartWalletAddress(principalAddress)
+    ownerAddress = canonicalForPrincipal ?? ''
   }
   if (!ownerAddress) {
     return res.status(400).json({
       success: false,
-      error: 'ownerAddress is required (or sign in with a canonical wallet session first)',
+      error: 'ownerAddress is required (or authenticate with a canonical wallet principal first)',
     } satisfies ApiEnvelope<never>)
   }
 
@@ -148,7 +150,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       agentRegistry: registryRaw,
       ownerAddress: canonicalOwner,
       expiresAt: new Date(nonceResult.expirationTime),
-      createdByAddress: session?.address ?? null,
+      createdByAddress: principal?.address ?? null,
     })
   } catch {
     return res.status(503).json({ success: false, error: 'SIWA nonce service unavailable' } satisfies ApiEnvelope<never>)

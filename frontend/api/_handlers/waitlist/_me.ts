@@ -3,11 +3,11 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readSessionFromRequest,
   setCors,
   setNoStore,
 } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 type WaitlistMeResponse = {
@@ -30,8 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const session = readSessionFromRequest(req)
-  const address = session?.address ? String(session.address).trim().toLowerCase() : ''
+  const address = readRequestPrincipalAddress(req)
   if (!address) {
     return res.status(200).json({ success: true, data: null } satisfies ApiEnvelope<WaitlistMeResponse | null>)
   }
