@@ -1636,12 +1636,9 @@ function DeployVaultBatcher({
   const expectedRef = useRef<ServerDeployResponse['addresses'] | null>(null)
   const useServerContinue = useMemo(() => {
     if (strictNoEoaMode) return false
-    const v = String((import.meta as any)?.env?.VITE_DEPLOY_USE_SERVER_CONTINUE ?? '').trim().toLowerCase()
-    // Default to server-continue so deploy uses a single user-approved setup tx
-    // and keeps remaining phases fully server-driven.
-    if (!v) return true
-    if (v === '0' || v === 'false' || v === 'no') return false
-    return v === '1' || v === 'true' || v === 'yes'
+    // Enforce server-continue for default deploy mode:
+    // one owner-EOA setup tx, then all phases run server-side.
+    return true
   }, [strictNoEoaMode])
   const deploySessionStorageKey = useMemo(() => {
     const ct = String(creatorToken ?? '').toLowerCase()
@@ -4847,9 +4844,9 @@ function DeployVaultMain() {
     return privySmartWalletAddress ?? connectedWalletAddress ?? privyLinkedEoaAddress
   }, [connectedWalletAddress, privyLinkedEoaAddress, privySmartWalletAddress])
   const deploymentVersion = useMemo(() => {
-    const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.2.34'
+    const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.2.35'
     const v = String(raw).trim()
-    return v.length > 0 ? v : 'v1.2.34'
+    return v.length > 0 ? v : 'v1.2.35'
   }, [])
   const deployMode = useMemo(() => resolveDeployMode(), [])
   const strictNoEoaMode = deployMode === 'no_eoa_strict'
