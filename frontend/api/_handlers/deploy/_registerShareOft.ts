@@ -345,6 +345,59 @@ async function tryProvisionDynamicRoute(params: {
   const payForRelay = String(process.env.SOLANA_BRIDGE_PAY_FOR_RELAY ?? '1').trim() !== '0'
   const provisionerUrl = readDynamicProvisionerUrl()
 
+  const provisionViaRemote = async (): Promise<{ mintBytes32: Hex; runner: string }> => {
+    logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (remote provisioner)', {
+      shareOft: params.shareOft,
+      provisionerUrl,
+      deployEnv,
+      payerKp,
+      tokenName,
+      tokenSymbol,
+      payForRelay,
+    })
+    const provisionerSecret = readDynamicProvisionerSecret()
+    const response = await fetch(String(provisionerUrl), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(provisionerSecret ? { Authorization: `Bearer ${provisionerSecret}` } : {}),
+      },
+      body: JSON.stringify({
+        shareOft: params.shareOft,
+        deployEnv,
+        solanaDecimals: params.solanaDecimals,
+        tokenName,
+        tokenSymbol,
+        scalerExponent,
+        payerKp,
+        payForRelay,
+      }),
+    })
+    const json = await response.json().catch(() => null)
+    if (!response.ok || !json) {
+      throw new Error(
+        `Remote provisioner failed (${response.status}). ` +
+          `${json && typeof json === 'object' && 'error' in json ? String((json as any).error) : 'No error body.'}`,
+      )
+    }
+    const mintBytes32Raw =
+      typeof (json as any).mintBytes32 === 'string'
+        ? (json as any).mintBytes32
+        : typeof (json as any)?.data?.mintBytes32 === 'string'
+          ? (json as any).data.mintBytes32
+          : ''
+    if (!isBytes32Hex(mintBytes32Raw)) {
+      throw new Error('Remote provisioner did not return a valid mintBytes32.')
+    }
+    const runner =
+      typeof (json as any).runner === 'string'
+        ? String((json as any).runner)
+        : typeof (json as any)?.data?.runner === 'string'
+          ? String((json as any).data.runner)
+          : 'remote-provisioner'
+    return { mintBytes32: mintBytes32Raw as Hex, runner }
+  }
+
   let mintBytes32: Hex
   let mintedPubkey: string | null = null
   let provisionRunner: string | null = null
@@ -380,65 +433,35 @@ async function tryProvisionDynamicRoute(params: {
       payForRelay,
     })
 
-    const { output: combined, runner } = await runWrapToken(cliDir, cliBin, wrapArgs)
-    provisionRunner = runner
-    const mintPubkey = parseMintPubkeyFromWrapOutput(combined)
-    if (!mintPubkey) {
-      throw new Error(`Dynamic route created unknown mint (could not parse output). Output: ${combined.slice(-1200)}`)
-    }
-    mintedPubkey = mintPubkey
-    mintBytes32 = solanaPubkeyToBytes32Hex(mintPubkey)
-  } else if (provisionerUrl) {
-    logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (remote provisioner)', {
-      shareOft: params.shareOft,
-      provisionerUrl,
-      deployEnv,
-      payerKp,
-      tokenName,
-      tokenSymbol,
-      payForRelay,
-    })
-    const provisionerSecret = readDynamicProvisionerSecret()
-    const response = await fetch(provisionerUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(provisionerSecret ? { Authorization: `Bearer ${provisionerSecret}` } : {}),
-      },
-      body: JSON.stringify({
+    try {
+      const { output: combined, runner } = await runWrapToken(cliDir, cliBin, wrapArgs)
+      provisionRunner = runner
+      const mintPubkey = parseMintPubkeyFromWrapOutput(combined)
+      if (!mintPubkey) {
+        throw new Error(`Dynamic route created unknown mint (could not parse output). Output: ${combined.slice(-1200)}`)
+      }
+      mintedPubkey = mintPubkey
+      mintBytes32 = solanaPubkeyToBytes32Hex(mintPubkey)
+    } catch (error) {
+      const localError = error instanceof Error ? error.message : String(error)
+      const canFallbackToRemote =
+        !!provisionerUrl && (isRunnerUnavailable(error) || localError.includes('No usable bridge CLI runner found'))
+      if (!canFallbackToRemote) throw error
+      logger.warn('[deploy/registerShareOft] Local dynamic route provisioning failed; falling back to remote provisioner', {
         shareOft: params.shareOft,
-        deployEnv,
-        solanaDecimals: params.solanaDecimals,
-        tokenName,
-        tokenSymbol,
-        scalerExponent,
-        payerKp,
-        payForRelay,
-      }),
-    })
-    const json = await response.json().catch(() => null)
-    if (!response.ok || !json) {
-      throw new Error(
-        `Remote provisioner failed (${response.status}). ` +
-          `${json && typeof json === 'object' && 'error' in json ? String((json as any).error) : 'No error body.'}`,
-      )
+        cliDir,
+        cliBin,
+        localError,
+        provisionerUrl,
+      })
+      const remote = await provisionViaRemote()
+      mintBytes32 = remote.mintBytes32
+      provisionRunner = remote.runner
     }
-    const mintBytes32Raw =
-      typeof (json as any).mintBytes32 === 'string'
-        ? (json as any).mintBytes32
-        : typeof (json as any)?.data?.mintBytes32 === 'string'
-          ? (json as any).data.mintBytes32
-          : ''
-    if (!isBytes32Hex(mintBytes32Raw)) {
-      throw new Error('Remote provisioner did not return a valid mintBytes32.')
-    }
-    mintBytes32 = mintBytes32Raw as Hex
-    provisionRunner =
-      typeof (json as any).runner === 'string'
-        ? String((json as any).runner)
-        : typeof (json as any)?.data?.runner === 'string'
-          ? String((json as any).data.runner)
-          : 'remote-provisioner'
+  } else if (provisionerUrl) {
+    const remote = await provisionViaRemote()
+    mintBytes32 = remote.mintBytes32
+    provisionRunner = remote.runner
   } else {
     throw new Error(
       'Dynamic Solana route is enabled, but neither a valid local SOLANA_BRIDGE_CLI_DIR exists ' +
