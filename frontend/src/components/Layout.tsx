@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { Home, LayoutDashboard, HelpCircle, Mail, ShieldCheck } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { VaultNavBar } from './brand/VaultNavBar'
 import { ChatWidget } from './chat/ChatWidget'
 import { isPublicSiteMode } from '@/lib/flags'
@@ -8,12 +9,23 @@ import { getHostMode } from '@/lib/host'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { OnboardingModal, hasCompletedOnboarding } from '@/components/OnboardingModal'
 import { QuickstartModal, useShowQuickstart } from '@/components/QuickstartModal'
+import { apiFetch } from '@/lib/apiBase'
 
 type MobileNavItem = {
   label: string
   path: string
   icon: any
   activePrefixes?: string[]
+}
+
+type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+type ResolvedAgentSubdomain = {
+  label: string
+  record: {
+    ownerAddress: string
+    fullName: string
+    metadataLensUri: string | null
+  } | null
 }
 
 const navItems: MobileNavItem[] = [
@@ -58,6 +70,17 @@ export function Layout() {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const showQuickstart = useShowQuickstart()
   const [quickstartDismissed, setQuickstartDismissed] = useState(false)
+  const resolvedSubdomain = useQuery({
+    queryKey: ['agents', 'subdomain-resolve', hostMode],
+    enabled: hostMode === 'app',
+    staleTime: 60_000,
+    queryFn: async (): Promise<ResolvedAgentSubdomain | null> => {
+      const res = await apiFetch('/api/agents/subdomains/resolve', { method: 'GET' })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<ResolvedAgentSubdomain> | null
+      if (!res.ok || !json?.success) return null
+      return json.data ?? null
+    },
+  })
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -72,6 +95,18 @@ export function Layout() {
   return (
     <div className="min-h-screen flex flex-col bg-vault-bg">
       <VaultNavBar />
+      {resolvedSubdomain.data?.record ? (
+        <div className="border-b border-vault-border/60 bg-black/50">
+          <div className="max-w-7xl mx-auto px-6 py-2 text-[11px] uppercase tracking-[0.14em] text-vault-subtext flex items-center justify-between gap-2">
+            <span>
+              Agent subdomain: <span className="text-vault-text">{resolvedSubdomain.data.record.fullName}</span>
+            </span>
+            <Link className="text-brand-primary hover:text-brand-primary/80" to={`/portfolio?address=${resolvedSubdomain.data.record.ownerAddress}`}>
+              View owner profile
+            </Link>
+          </div>
+        </div>
+      ) : null}
       {showOnboarding ? <OnboardingModal onClose={() => setShowOnboarding(false)} /> : null}
       {shouldShowQuickstart ? <QuickstartModal onClose={() => setQuickstartDismissed(true)} /> : null}
 

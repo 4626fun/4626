@@ -161,6 +161,8 @@ function localApiRoutesPlugin(): Plugin {
         '/api/auth/me': () => import('./api/_handlers/auth/_me'),
         '/api/auth/logout': () => import('./api/_handlers/auth/_logout'),
         '/api/creator-wallets/claim': () => import('./api/_handlers/_creator-wallets-claim'),
+        '/api/agents/subdomains/resolve': () => import('./api/_handlers/agents/_subdomains-resolve'),
+        '/api/agents/subdomains/upsert': () => import('./api/_handlers/agents/_subdomains-upsert'),
         '/api/deploy/smartWalletOwner': () => import('./api/_handlers/deploy/_smartWalletOwner'),
         '/api/rpc': () => import('./api/_handlers/rpc/_proxy'),
 

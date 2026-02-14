@@ -14,6 +14,8 @@ type ApiHandlerModule = { default?: ApiHandler }
 export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'analytics': () => import('./_analytics.js'),
   'agents': () => import('./_agents.js'),
+  'agents/subdomains/resolve': () => import('./agents/_subdomains-resolve.js'),
+  'agents/subdomains/upsert': () => import('./agents/_subdomains-upsert.js'),
   'agent/invokeSkill': () => import('./agent/_invokeSkill.js'),
   // agent/process is deployed as a standalone function (api/agent/process.ts)
   // to isolate the heavy @xmtp/node-bindings (~214 MB) from the catch-all bundle.
@@ -114,6 +116,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'deploy/session/start': () => import('./deploy/session/_start.js'),
   'deploy/session/status': () => import('./deploy/session/_status.js'),
   'deploy/config': () => import('./deploy/_config.js'),
+  'deploy/solanaInfraStatus': () => import('./deploy/_solanaInfraStatus.js'),
   'deploy/provisionSolanaRoute': () => import('./deploy/_provisionSolanaRoute.js'),
   'deploy/registerShareOft': () => import('./deploy/_registerShareOft.js'),
   'deploy/smartWalletOwner': () => import('./deploy/_smartWalletOwner.js'),
