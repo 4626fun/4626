@@ -4847,9 +4847,9 @@ function DeployVaultMain() {
     return privySmartWalletAddress ?? connectedWalletAddress ?? privyLinkedEoaAddress
   }, [connectedWalletAddress, privyLinkedEoaAddress, privySmartWalletAddress])
   const deploymentVersion = useMemo(() => {
-    const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.2.33'
+    const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.2.34'
     const v = String(raw).trim()
-    return v.length > 0 ? v : 'v1.2.33'
+    return v.length > 0 ? v : 'v1.2.34'
   }, [])
   const deployMode = useMemo(() => resolveDeployMode(), [])
   const strictNoEoaMode = deployMode === 'no_eoa_strict'
