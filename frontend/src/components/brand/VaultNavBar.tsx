@@ -24,8 +24,7 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 const NAV_ITEMS_PUBLIC: NavItem[] = [
-  { label: 'HOME', to: '/', activePrefixes: ['/'] },
-  { label: 'WAITLIST', to: '/#waitlist', activePrefixes: ['/#waitlist', '/waitlist'] },
+  { label: 'WAITLIST', to: '/waitlist', activePrefixes: ['/#waitlist', '/waitlist'] },
 ]
 
 const ADMIN_ITEM: NavItem = { label: 'ADMIN', to: '/admin/waitlist', activePrefixes: ['/admin'] }
@@ -59,6 +58,7 @@ export function VaultNavBar() {
   const mini = useMiniAppContext()
   const baseItems = publicMode || hostMode === 'marketing' ? NAV_ITEMS_PUBLIC : NAV_ITEMS
   const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, ADMIN_ITEM] : baseItems
+  const brandHref = publicMode || hostMode === 'marketing' ? '/waitlist' : '/'
   const isWaitlistView = location.pathname === '/waitlist' || location.hash === '#waitlist'
   const showConnect = !publicMode && hostMode !== 'marketing' && !isWaitlistView
 
@@ -69,7 +69,7 @@ export function VaultNavBar() {
       <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-brand-primary/25 to-transparent opacity-60" />
 
       <div className="relative max-w-[1400px] mx-auto px-6 md:px-12 h-24 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-4 group cursor-pointer">
+        <Link to={brandHref} className="flex items-center gap-4 group cursor-pointer">
           <Logo showText={false} width={40} height={40} />
           <div className="flex flex-col justify-center">
             <span className="text-sm tracking-[0.1em] text-white font-medium transition-colors duration-300 leading-none">

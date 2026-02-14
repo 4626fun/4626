@@ -68,14 +68,15 @@ function truncAddr(addr: string): string {
 
 function AdminDeployLink() {
   const navigate = useNavigate()
-  const deployUrl = useMemo(() => `${getAppBaseUrl()}/deploy?fromWaitlist=waitlist`, [])
+  const deployPath = '/deploy?from=waitlist&autologin=1&auth=wallet'
+  const deployUrl = useMemo(() => `${getAppBaseUrl()}${deployPath}`, [])
   const handleClick = useCallback(() => {
     if (deployUrl.startsWith('http')) {
       window.location.href = deployUrl
     } else {
-      navigate('/deploy?fromWaitlist=waitlist')
+      navigate(deployPath)
     }
-  }, [deployUrl, navigate])
+  }, [deployPath, deployUrl, navigate])
   return (
     <button type="button" onClick={handleClick} className="text-[#0052FF] hover:text-[#3373FF] transition-colors py-1">
       Deploy (Admin)
@@ -245,7 +246,12 @@ export const DoneStep = memo(function DoneStep({
     setExiting(true)
     // Let the exit animation play, then navigate
     await new Promise((r) => setTimeout(r, 280))
-    primaryCta.onClick()
+    try {
+      await primaryCta.onClick()
+    } catch {
+      // If handoff fails, restore the Done state so the user can retry.
+      setExiting(false)
+    }
   }, [primaryCta])
 
   return (

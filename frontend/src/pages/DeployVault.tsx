@@ -414,6 +414,7 @@ type DeploySessionCreateRequest = {
   smartWallet: Address
   creatorToken: Address
   ownerAddress: Address
+  preflightOnly?: boolean
   phase1Calls: DeploySessionCall[]
   phase2CoreCalls: DeploySessionCall[]
   phase2FinalizeCalls: DeploySessionCall[]
@@ -1833,10 +1834,18 @@ function DeployVaultBatcher({
       const reasonMatch = msg.match(/deploy ownership mismatch:\s*([a-z0-9_]+)/i)
       const reasonCode = reasonMatch?.[1] ? String(reasonMatch[1]) : null
       const reasonSuffix = reasonCode ? ` (reason: ${reasonCode})` : ''
+      const ownerSetupHint =
+        reasonCode === 'canonical_wallet_not_verified' ||
+        reasonCode === 'session_not_onchain_owner' ||
+        reasonCode === 'session_not_linked'
+          ? ' Complete the one-time owner approval to add your app Privy wallet as an owner of your canonical Zora smart wallet, then retry.'
+          : ''
       return (
         'Deploy session ownership validation failed' +
         reasonSuffix +
-        '. Re-auth to refresh wallet linkage, then retry. ' +
+        '. Re-auth to refresh wallet linkage, then retry.' +
+        ownerSetupHint +
+        ' ' +
         'If needed, disable server-continue (`VITE_DEPLOY_USE_SERVER_CONTINUE=false`) and run phases client-side.'
       )
     }
@@ -4193,19 +4202,45 @@ function DeployVaultBatcher({
               // ignore cleanup failures
             }
           }
+          const shouldRetrySessionAuth = (message: string): boolean => {
+            const lower = String(message || '').toLowerCase()
+            return (
+              lower.includes('not authenticated') ||
+              lower.includes('no_session') ||
+              lower.includes('deploy ownership mismatch')
+            )
+          }
+          const postDeploySessionCreate = async (preflightOnly: boolean): Promise<ApiEnvelope<any>> => {
+            let attemptedReauth = false
+            while (true) {
+              const body: DeploySessionCreateRequest = preflightOnly
+                ? { ...sessionCreatePayload, preflightOnly: true }
+                : sessionCreatePayload
+              const createRes = await fetch('/api/deploy/session/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+              })
+              const createJson = (await createRes.json().catch(() => null)) as ApiEnvelope<any> | null
+              if (createRes.ok && createJson?.success) return createJson
+              const errMsg = String(createJson?.error || 'Failed to create deploy session')
+              if (!attemptedReauth && shouldRetrySessionAuth(errMsg)) {
+                attemptedReauth = true
+                await ensurePaymasterSession()
+                continue
+              }
+              throw new Error(errMsg)
+            }
+          }
 
           try {
+            // Preflight before creating a real session so ownership/auth mismatches
+            // are caught early and we can retry once after re-bridging auth.
+            await postDeploySessionCreate(true)
+
             // Create a deploy session for the canonical CSW sender.
             // After installation of the temporary owner, the server will submit all phases and then clean up.
-            const createRes = await fetch('/api/deploy/session/create', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(sessionCreatePayload),
-            })
-            const createJson = (await createRes.json().catch(() => null)) as ApiEnvelope<any> | null
-            if (!createRes.ok || !createJson?.success) {
-              throw new Error(createJson?.error || 'Failed to create deploy session')
-            }
+            const createJson = await postDeploySessionCreate(false)
             sessionId = String(createJson.data?.sessionId ?? '').trim()
             const sessionOwnerRaw = String(createJson.data?.sessionOwner ?? '').trim()
             if (!sessionId || !isAddress(sessionOwnerRaw)) throw new Error('Invalid deploy session response')
@@ -4932,6 +4967,10 @@ function DeployVaultMain() {
   const switchAuthCta = useMemo(() => {
     if (!privyReady) return undefined
     const run = async () => {
+      setHandoffError(null)
+      setHandoffState('signingIn')
+      autoLoginAttemptRef.current = false
+      autoBridgeAttemptRef.current = false
       // If we're already authenticated, `login()` can no-op in some Privy configurations.
       // Force a re-auth flow so the user can switch to a wallet session if needed.
       try {
@@ -4941,7 +4980,12 @@ function DeployVaultMain() {
       } catch {
         // ignore
       }
-      await login({ loginMethods: ['wallet'] })
+      try {
+        await login({ loginMethods: ['wallet'] })
+      } catch {
+        setHandoffState('error')
+        setHandoffError('Sign-in cancelled. Click “Sign in with wallet” to retry.')
+      }
     }
     return {
       label: privyAuthenticated ? 'Switch to wallet sign-in' : 'Sign in with wallet',
@@ -4977,19 +5021,16 @@ function DeployVaultMain() {
   const initialQueryRef = useRef<{
     prefillToken: string
     autoLogin: boolean
-    authHint: 'email' | 'wallet' | null
     fromWaitlist: boolean
     debugEnabledFromQuery: boolean
   } | null>(null)
 
   if (!initialQueryRef.current) {
     const autoLoginRaw = (searchParams.get('autologin') ?? '').trim().toLowerCase()
-    const authRaw = (searchParams.get('auth') ?? '').trim().toLowerCase()
     const fromRaw = (searchParams.get('from') ?? '').trim().toLowerCase()
     initialQueryRef.current = {
       prefillToken: searchParams.get('token') ?? '',
       autoLogin: autoLoginRaw === '1' || autoLoginRaw === 'true' || autoLoginRaw === 'yes',
-      authHint: authRaw === 'email' || authRaw === 'wallet' ? (authRaw as 'email' | 'wallet') : null,
       fromWaitlist: fromRaw === 'waitlist',
       debugEnabledFromQuery: (searchParams.get('debug') ?? '').trim() === '1',
     }
@@ -4997,7 +5038,6 @@ function DeployVaultMain() {
 
   const prefillToken = initialQueryRef.current.prefillToken
   const autoLogin = initialQueryRef.current.autoLogin
-  const authHint = initialQueryRef.current.authHint
   const fromWaitlist = initialQueryRef.current.fromWaitlist
   const debugEnabledFromQuery = initialQueryRef.current.debugEnabledFromQuery
 
@@ -5029,11 +5069,19 @@ function DeployVaultMain() {
   }, [cdpPaymasterUrl])
 
   // Smooth waitlist → deploy:
-  // If we arrived with `autologin=1`, prompt Privy login on the app host and bridge into a CreatorVault session.
+  // If we arrived with `autologin=1&from=waitlist`, prompt wallet login on app host
+  // and bridge into a CreatorVault session.
   useEffect(() => {
-    if (!autoLogin) return
+    if (!autoLogin || !fromWaitlist) return
     if (!privyReady) return
+    if (handoffState === 'ready' || handoffState === 'error') return
     if (handoffState === 'idle') setHandoffState('signingIn')
+
+    const failHandoff = (message: string) => {
+      autoBridgeAttemptRef.current = false
+      setHandoffState('error')
+      setHandoffError(message)
+    }
 
     if (!privyAuthenticated) {
       if (autoLoginAttemptRef.current) return
@@ -5042,11 +5090,11 @@ function DeployVaultMain() {
         try {
           setHandoffError(null)
           setHandoffState('signingIn')
-          const loginMethods = authHint ? [authHint] : (['wallet', 'email'] as const)
+          const loginMethods = ['wallet'] as const
           await login({ loginMethods: loginMethods as any })
         } catch {
-          setHandoffState('error')
-          setHandoffError('Sign-in cancelled. Click “Sign in with Privy” to continue.')
+          autoLoginAttemptRef.current = false
+          failHandoff('Sign-in cancelled. Click “Sign in with wallet” to continue.')
         }
       })()
       return
@@ -5055,25 +5103,33 @@ function DeployVaultMain() {
     if (autoBridgeAttemptRef.current) return
     autoBridgeAttemptRef.current = true
 
-    if (typeof getAccessToken !== 'function') return
+    if (typeof getAccessToken !== 'function') {
+      failHandoff('Privy token bridge is unavailable. Click “Sign in with wallet” to retry.')
+      return
+    }
     void (async () => {
       try {
         setHandoffError(null)
         setHandoffState('bridging')
         const token = await getAccessToken()
+        if (!token) {
+          failHandoff('Could not read Privy access token. Click “Sign in with wallet” to retry.')
+          return
+        }
         if (token) {
           const addr = await siwe.signInWithPrivyToken(token)
           if (!addr) {
-            setHandoffState('error')
-            setHandoffError('Could not establish a session. Click “Sign in with Privy” and retry.')
+            failHandoff('Could not establish a session. Click “Sign in with wallet” and retry.')
+            return
           }
+          setHandoffState('ready')
+          setHandoffError(null)
         }
       } catch {
-        setHandoffState('error')
-        setHandoffError('Could not establish a session. Click “Sign in with Privy” and retry.')
+        failHandoff('Could not establish a session. Click “Sign in with wallet” and retry.')
       }
     })()
-  }, [authHint, autoLogin, getAccessToken, handoffState, login, privyAuthenticated, privyReady, siwe])
+  }, [autoLogin, fromWaitlist, getAccessToken, handoffState, login, privyAuthenticated, privyReady, siwe])
 
   // Mark handoff ready once we have an app session.
   useEffect(() => {
@@ -5091,7 +5147,7 @@ function DeployVaultMain() {
     if (handoffState !== 'signingIn' && handoffState !== 'bridging') return
     const t = window.setTimeout(() => {
       setHandoffState('error')
-      setHandoffError('This is taking longer than expected. Click “Sign in with Privy” to continue.')
+      setHandoffError('This is taking longer than expected. Click “Sign in with wallet” to continue.')
     }, 25_000)
     return () => window.clearTimeout(t)
   }, [autoLogin, fromWaitlist, handoffState])
@@ -6060,6 +6116,15 @@ function DeployVaultMain() {
     : isCoinbaseWalletDirect ||
       (privySmartWalletReady &&
         (smartWalletMatchesCanonical || privySmartWalletOwnerReady || privyEmbeddedOwnerReady))
+  const oneTimePrivyOwnerApprovalNeeded = Boolean(
+    !strictNoEoaMode &&
+      canonicalIdentityIsContract &&
+      canonicalIdentityAddress &&
+      privySmartWalletAddress &&
+      !isCoinbaseWalletDirect &&
+      !smartWalletMatchesCanonical &&
+      !privySmartWalletIsCanonicalOwner,
+  )
 
   const canDeploy =
     tokenIsValid &&
@@ -6212,6 +6277,10 @@ function DeployVaultMain() {
                         ? 'Solana mint override must be bytes32 hex (`0x` + 64 chars).'
                       : solanaDecimalsOverrideInvalid
                         ? 'Solana decimals override must be 0-255.'
+                      : oneTimePrivyOwnerApprovalNeeded
+                        ? connectedWalletAddress
+                          ? 'One-time owner approval required before deploy. Approve your app Privy wallet as an owner of your canonical Zora smart wallet.'
+                          : 'One-time owner approval required. Connect an owner wallet, approve once, then deploy.'
                       : !smartWalletCapabilityReady
                         ? 'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account).'
                     : bytecodeInfraQuery.isFetching
@@ -6282,25 +6351,9 @@ function DeployVaultMain() {
                     <div className="font-medium text-amber-200">Account mismatch?</div>
                     <div className="mt-1 text-amber-200/80">
                       You’re signed into Privy, but we can’t see your Zora global wallet / Coinbase Smart Wallet on this session.
-                      Sign in using the same method you used on Zora (email or wallet).
+                      Re-auth with wallet sign-in to sync the expected wallet linkage.
                     </div>
                     <div className="mt-3 flex flex-col sm:flex-row gap-2">
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={() => {
-                          void (async () => {
-                            try {
-                              if (typeof logout === 'function') await logout()
-                            } catch {
-                              // ignore
-                            }
-                            await login({ loginMethods: ['email'] })
-                          })()
-                        }}
-                      >
-                        Try email sign-in
-                      </button>
                       <button
                         type="button"
                         className="btn-secondary"
@@ -6315,7 +6368,7 @@ function DeployVaultMain() {
                           })()
                         }}
                       >
-                        Try wallet sign-in
+                        Re-auth with wallet
                       </button>
                     </div>
                   </motion.div>
@@ -6326,6 +6379,59 @@ function DeployVaultMain() {
                 Base
               </div>
             </div>
+
+          {oneTimePrivyOwnerApprovalNeeded ? (
+              <div id="owner-approval-setup" className="rounded-lg border border-purple-500/20 bg-purple-500/10 p-4 space-y-3">
+                <div className="text-sm font-medium text-purple-200">One-time wallet approval (recommended first step)</div>
+                <div className="text-[11px] text-purple-200/75 leading-relaxed">
+                  Before deploy, approve your app Privy wallet once as an owner of your canonical Zora smart wallet (EIP-1271).
+                  This is a one-time setup per canonical wallet.
+                </div>
+                <div className="text-[11px] text-zinc-300/90">
+                  Canonical wallet: <span className="font-mono">{shortAddress(canonicalIdentityAddress as Address)}</span>
+                  {' · '}
+                  App Privy wallet: <span className="font-mono">{shortAddress(privySmartWalletAddress as Address)}</span>
+                </div>
+                {!connectedWalletAddress ? (
+                  <div className="space-y-2">
+                    <div className="text-[11px] text-amber-200/85">
+                      Connect an owner wallet (Rabby/Coinbase/etc) to submit this one-time approval.
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-secondary w-full sm:w-auto"
+                      onClick={() => void login({ loginMethods: ['wallet'] })}
+                    >
+                      Connect Owner Wallet
+                    </button>
+                  </div>
+                ) : null}
+                {addPrivySmartWalletOwnerTxHash ? (
+                  <div className="text-[11px] text-green-400">
+                    Approval submitted:{' '}
+                    <a
+                      href={`https://basescan.org/tx/${addPrivySmartWalletOwnerTxHash}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono underline"
+                    >
+                      {shortAddress(addPrivySmartWalletOwnerTxHash)}
+                    </a>
+                  </div>
+                ) : null}
+                {addPrivySmartWalletOwnerError ? (
+                  <div className="text-[11px] text-red-400">{addPrivySmartWalletOwnerError}</div>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => void handleAddPrivyAppSmartWalletOwner()}
+                  disabled={addPrivySmartWalletOwnerBusy || !connectedWalletAddress}
+                  className="btn-primary w-full sm:w-auto"
+                >
+                  {addPrivySmartWalletOwnerBusy ? 'Waiting for wallet confirmation…' : 'Approve Once'}
+                </button>
+              </div>
+            ) : null}
 
           {/* Deployment Status */}
           {justCompletedDeployment ? (
@@ -6617,7 +6723,7 @@ function DeployVaultMain() {
                 <button
                   type="button"
                   className="btn-accent w-full"
-                  onClick={() => void login({ loginMethods: ['wallet', 'email'] })}
+                  onClick={() => void login({ loginMethods: ['wallet'] })}
                 >
                   Sign in to Deploy
                 </button>
@@ -6702,6 +6808,17 @@ function DeployVaultMain() {
                 >
                   {`Creator smart wallet needs 5,000,000 ${underlyingSymbolUpper || 'TOKENS'} to deploy & launch`}
                 </button>
+              ) : oneTimePrivyOwnerApprovalNeeded ? (
+                <button
+                  type="button"
+                  className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-500 text-sm"
+                  onClick={() => {
+                    if (typeof document === 'undefined') return
+                    document.getElementById('owner-approval-setup')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                  }}
+                >
+                  Complete one-time wallet approval above to continue.
+                </button>
               ) : canDeploy ? (
                 <>
                   {tokenIsValid && zoraCoin && identity.warnings.includes('CUSTODY_MISMATCH') && farcasterCustodyAddress ? (
@@ -6716,38 +6833,7 @@ function DeployVaultMain() {
                     </div>
                   ) : null}
 
-                  {/* App smart wallet signer (automatic) */}
-                  {!strictNoEoaMode && !isCoinbaseWalletDirect && privySmartWalletAddress && !privySmartWalletIsCanonicalOwner ? (
-                    <div className="p-4 rounded-lg border border-purple-500/20 bg-purple-500/10 space-y-3">
-                      <div className="text-sm font-medium text-purple-200">Smart wallet signer setup</div>
-                      <div className="text-[11px] text-purple-200/70">
-                        We’re automatically adding your app smart wallet as an owner of the canonical Zora smart wallet (EIP-1271).
-                        The canonical wallet remains the sender.
-                      </div>
-                      {!privySmartWalletCanSign ? (
-                        <div className="text-[11px] text-amber-200/80">
-                          Smart wallet signing is not supported in this environment. Use Coinbase Wallet or an owner EOA.
-                        </div>
-                      ) : addPrivySmartWalletOwnerBusy ? (
-                        <div className="text-[11px] text-purple-200/80">Setting up smart wallet signer…</div>
-                      ) : null}
-                      {addPrivySmartWalletOwnerTxHash && (
-                        <div className="text-[11px] text-green-400">
-                          ✓ Success!{' '}
-                          <button
-                            type="button"
-                            className="underline"
-                            onClick={() => void privySmartWalletIsCanonicalOwnerQuery.refetch()}
-                          >
-                            Refresh
-                          </button>
-                        </div>
-                      )}
-                      {addPrivySmartWalletOwnerError && (
-                        <div className="text-[11px] text-red-400">{addPrivySmartWalletOwnerError}</div>
-                      )}
-                    </div>
-                  ) : privySmartWalletIsCanonicalOwner ? (
+                  {privySmartWalletIsCanonicalOwner ? (
                     <div className="flex items-center gap-2 text-[11px] text-green-400 mb-2">
                       <span>✓</span>
                       <span>Smart wallet signer ready</span>

@@ -108,7 +108,6 @@ type VerifyStepProps = {
   simpleVerifiedMode?: boolean
   submitError?: string | null
   onPrivyContinue: () => void
-  onPrivyEmailContinue?: () => void
   onSubmit: () => void | Promise<void>
 }
 
@@ -135,7 +134,6 @@ export const VerifyStep = memo(function VerifyStep({
   simpleVerifiedMode,
   submitError,
   onPrivyContinue,
-  onPrivyEmailContinue,
   onSubmit,
 }: VerifyStepProps) {
   const hasCreatorCoin = !!creatorCoin?.address
@@ -144,7 +142,7 @@ export const VerifyStep = memo(function VerifyStep({
   const payoutRecipient = useMemo(() => creatorCoin?.payoutRecipient ?? null, [creatorCoin?.payoutRecipient])
   const canonicalSmartWallet = useMemo(() => creatorCoin?.canonicalSmartWallet ?? null, [creatorCoin?.canonicalSmartWallet])
   const ownershipGateActive = Boolean(hasCreatorCoin && ownershipEvidenceAvailable)
-  const headerTitle = !verifiedWallet ? 'Your email' : showSubmitButton ? 'Join the waitlist' : 'Checking ownership'
+  const headerTitle = !verifiedWallet ? 'Verify wallet' : showSubmitButton ? 'Join the waitlist' : 'Checking ownership'
   const headerSubtitle = !verifiedWallet
     ? ''
     : showSubmitButton
@@ -152,11 +150,9 @@ export const VerifyStep = memo(function VerifyStep({
         ? 'Connect a payout recipient or owner wallet to continue.'
         : 'Ownership verified. Join the waitlist for early access updates.'
       : 'One moment…'
-  const looksLikeWalletLoginDisabled =
-    typeof privyVerifyError === 'string' && /wallet (login|sign-in) is not enabled|wallet sign-in isn’t available/i.test(privyVerifyError)
   const [showTrouble, setShowTrouble] = useState(false)
   const canContinue = showPrivyReady && privyReady && !privyVerifyBusy && !busy
-  const showPrivyError = Boolean(privyVerifyError) && !looksLikeWalletLoginDisabled
+  const showPrivyError = Boolean(privyVerifyError)
 
   const helperText = useMemo(() => {
     if (privyVerifyBusy) return 'Opening…'
@@ -320,13 +316,7 @@ export const VerifyStep = memo(function VerifyStep({
             type="button"
             className="group relative w-full overflow-hidden flex items-center justify-between gap-3 min-h-[56px] rounded-2xl bg-[#0052FF] text-white font-semibold text-[15px] px-5 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_8px_32px_-8px_rgba(0,82,255,0.5)] transition-all duration-200 ease-out hover:bg-[#1a66ff] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.15),0_12px_40px_-8px_rgba(0,82,255,0.6)] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             disabled={!canContinue}
-            onClick={() => {
-              if (looksLikeWalletLoginDisabled && typeof onPrivyEmailContinue === 'function') {
-                onPrivyEmailContinue()
-              } else {
-                onPrivyContinue()
-              }
-            }}
+            onClick={onPrivyContinue}
           >
             <span className="relative flex items-center gap-3">
               <img src={BASE_SQUARE_WHITE} alt="" className="w-4 h-4" aria-hidden="true" />
@@ -336,7 +326,7 @@ export const VerifyStep = memo(function VerifyStep({
           </button>
 
           <p className="text-[13px] text-zinc-500">
-            Sign in the same way you use Zora (email, social, or wallet). We'll detect your linked wallet and continue automatically.
+            Sign in with wallet. We'll detect your linked wallet and continue automatically.
           </p>
 
           <div className="flex items-center justify-between">

@@ -784,7 +784,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
             // ignore
           }
         }
-        await privyLogin({ loginMethods: ['wallet', 'email'] })
+        await privyLogin({ loginMethods: ['wallet'] })
       } catch (e: any) {
         const msg = formatPrivyConnectError(e?.message ? String(e.message) : String(e ?? ''))
         setPrivyVerifyError(msg)
@@ -806,42 +806,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     startPrivyVerify,
   ])
 
-  // Email-only fallback: lets users at least authenticate with Privy even if wallet login is disabled.
-  // (They will still need wallet sign-in enabled to link Base Account for deploy/verification.)
-  const openPrivyEmailLogin = useCallback(async () => {
-    if (!privyReady || privyVerifyBusy) return
-    if (typeof window !== 'undefined') window.setTimeout(() => finishPrivyVerify(), 12_000)
-    startPrivyVerify()
-    try {
-      if (privyAuthed && typeof privyLogout === 'function') {
-        try {
-          await privyLogout()
-        } catch {
-          // ignore
-        }
-      }
-      await privyLogin({ loginMethods: ['email'] })
-    } catch (e: any) {
-      const msg = formatPrivyConnectError(e?.message ? String(e.message) : String(e ?? ''))
-      setPrivyVerifyError(msg)
-      finishPrivyVerify()
-    }
-  }, [finishPrivyVerify, privyAuthed, privyLogin, privyLogout, privyReady, privyVerifyBusy, setPrivyVerifyError, startPrivyVerify])
-
-  // If wallet sign-in is disabled (Privy dashboard config), auto-fall back to email login once
-  // so users aren’t stuck staring at an error.
-  const autoEmailFallbackRef = useRef(false)
   const autoSubmitAttemptRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (step !== 'verify') return
-    if (!showPrivyReady) return
-    if (privyAuthed) return
-    if (autoEmailFallbackRef.current) return
-    const msg = typeof privyVerifyError === 'string' ? privyVerifyError : ''
-    if (!/wallet sign-in isn’t available|wallet login is not enabled|disallowed_login_method/i.test(msg)) return
-    autoEmailFallbackRef.current = true
-    void openPrivyEmailLogin()
-  }, [openPrivyEmailLogin, privyAuthed, privyVerifyError, showPrivyReady, step])
 
   const emailTrimmed = useMemo(() => normalizeEmail(email), [email])
   const isEmailValid = useMemo(() => isValidEmail(emailTrimmed), [emailTrimmed])
@@ -964,15 +929,29 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     }
   }, [apiFetch, isBypassAdmin, step, verifiedWallet])
 
-  const deployUrl = useMemo(() => `${getAppBaseUrl()}/deploy?fromWaitlist=waitlist`, [])
+  const deployPath = '/deploy?from=waitlist&autologin=1&auth=wallet'
+  const deployUrl = useMemo(() => `${getAppBaseUrl()}${deployPath}`, [])
+  const [deployHandoffBusy, setDeployHandoffBusy] = useState(false)
 
-  const handleContinueToDeploy = useCallback(() => {
-    if (deployUrl.startsWith('http')) {
-      window.location.href = deployUrl
-    } else {
-      navigate('/deploy?fromWaitlist=waitlist')
+  const handleContinueToDeploy = useCallback(async () => {
+    setDeployHandoffBusy(true)
+    try {
+      // Best effort: establish an app session on the current origin before redirect.
+      if (!siwe.isSignedIn && privyAuthed && typeof getAccessToken === 'function') {
+        const token = await getAccessToken().catch(() => null)
+        if (token) {
+          await siwe.signInWithPrivyToken(token).catch(() => null)
+        }
+      }
+      if (deployUrl.startsWith('http')) {
+        window.location.href = deployUrl
+      } else {
+        navigate(deployPath)
+      }
+    } finally {
+      setDeployHandoffBusy(false)
     }
-  }, [deployUrl, navigate])
+  }, [deployPath, deployUrl, navigate, privyAuthed, siwe])
 
   const primaryCta = useMemo(() => {
     if (deployAccessState !== 'ready') return null
@@ -980,11 +959,11 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       label: 'Continue to Deploy',
       href: deployUrl,
       onClick: handleContinueToDeploy,
-      disabled: false,
-      busy: false,
+      disabled: deployHandoffBusy,
+      busy: deployHandoffBusy,
       busyLabel: 'Preparing Deploy…',
     }
-  }, [deployAccessState, handleContinueToDeploy, deployUrl])
+  }, [deployAccessState, deployHandoffBusy, handleContinueToDeploy, deployUrl])
 
   // Simplified flow: verify → done (2 steps)
 
@@ -1775,7 +1754,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     simpleVerifiedMode
                     submitError={submitError}
                     onPrivyContinue={openPrivyLogin}
-                    onPrivyEmailContinue={openPrivyEmailLogin}
                     onSubmit={submitWaitlist}
                   />
                 </motion.div>

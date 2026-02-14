@@ -37,8 +37,7 @@ const navItems: MobileNavItem[] = [
 ]
 
 const navItemsPublic: MobileNavItem[] = [
-  { path: '/', icon: Home, label: 'Home', activePrefixes: ['/'] },
-  { path: '/#waitlist', icon: Mail, label: 'Waitlist', activePrefixes: ['/#waitlist', '/waitlist'] },
+  { path: '/waitlist', icon: Mail, label: 'Waitlist', activePrefixes: ['/#waitlist', '/waitlist'] },
 ]
 
 const adminNavItem: MobileNavItem = { path: '/admin/waitlist', icon: ShieldCheck, label: 'Admin', activePrefixes: ['/admin'] }

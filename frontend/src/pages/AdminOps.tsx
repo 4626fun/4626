@@ -737,6 +737,10 @@ function AgentRegistration() {
     if (!privySmartWalletAddress) return false
     return privySmartWalletAddress.toLowerCase() === canonicalCswAddress.toLowerCase()
   }, [canonicalCswAddress, privySmartWalletAddress])
+  const agentWalletAlreadyCanonical = useMemo(() => {
+    if (!onChainAgentWallet) return false
+    return onChainAgentWallet.toLowerCase() === canonicalCswAddress.toLowerCase()
+  }, [canonicalCswAddress, onChainAgentWallet])
 
   const canonicalOwnerQuery = useReadContract({
     address: CANONICAL_SMART_WALLET as Address,
@@ -1192,6 +1196,10 @@ function AgentRegistration() {
       if (!/^\d+$/.test(rawId)) throw new Error('Agent ID must be a non-negative integer.')
       const agentId = BigInt(rawId)
       const newWallet = getAddress(CANONICAL_SMART_WALLET)
+      if (agentWalletAlreadyCanonical) {
+        setWalletBindTxState({ status: 'success', error: undefined, hash: undefined })
+        return
+      }
 
       // 1. Build EIP-712 typed data
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 240) // 4 min
@@ -1498,25 +1506,33 @@ function AgentRegistration() {
               {onChainAgentWallet ? (
                 <div className="text-xs text-emerald-300/90">
                   On-chain agentWallet: <span className="font-mono">{onChainAgentWallet}</span>
-                  {onChainAgentWallet.toLowerCase() === CANONICAL_SMART_WALLET.toLowerCase() && (
+                  {agentWalletAlreadyCanonical && (
                     <span className="ml-2 text-emerald-400">(matches canonical CSW)</span>
                   )}
                 </div>
               ) : agentWalletQuery.isFetched ? (
                 <div className="text-xs text-amber-400/80">No agentWallet set on-chain for this agent.</div>
               ) : null}
+              {agentWalletAlreadyCanonical ? (
+                <div className="text-xs text-emerald-400/90">Already bound on-chain. No additional signature required.</div>
+              ) : null}
               <button
                 type="button"
                 onClick={() => void bindAgentWallet()}
                 disabled={
                   walletBindTxState.status === 'pending' ||
+                  agentWalletAlreadyCanonical ||
                   !isConnected ||
                   (!isCanonical && !canSubmitViaOwner) ||
                   !/^\d+$/.test(agentIdInput.trim())
                 }
                 className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {walletBindTxState.status === 'pending' ? 'Binding wallet…' : 'Bind CSW as agentWallet'}
+                {walletBindTxState.status === 'pending'
+                  ? 'Binding wallet…'
+                  : agentWalletAlreadyCanonical
+                    ? 'Already bound'
+                    : 'Bind CSW as agentWallet'}
               </button>
               <TxMeta state={walletBindTxState} />
             </div>

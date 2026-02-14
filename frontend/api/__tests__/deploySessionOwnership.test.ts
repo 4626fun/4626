@@ -106,8 +106,28 @@ describe('deploy session ownership guardrails', () => {
       sql: vi.fn(async (strings: TemplateStringsArray) => {
         const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
         if (text.includes('is_canonical_smart_wallet = true')) return { rows: [{ profile_id: 99 }] }
-        if (text.includes('is_embedded_eoa = true')) return { rows: [{ address: '0x0000000000000000000000000000000000000001' }] }
-        if (text.includes('select 1') && text.includes('from profile_wallets')) return { rows: [{ '?column?': 1 }] }
+        if (text.includes('select lower(address) as address') && text.includes('from profile_wallets')) {
+          return {
+            rows: [
+              { address: '0x0000000000000000000000000000000000000001' },
+              { address: '0x0000000000000000000000000000000000000002' },
+            ],
+          }
+        }
+        if (text.includes('from profiles') && text.includes('where id =')) {
+          return {
+            rows: [
+              {
+                primary_wallet: '0x0000000000000000000000000000000000000001',
+                embedded_wallet: null,
+                primary_embedded_eoa: null,
+                primary_smart_wallet: '0x0000000000000000000000000000000000000002',
+                csw_address: '0x0000000000000000000000000000000000000002',
+                base_sub_account: null,
+              },
+            ],
+          }
+        }
         return { rows: [] }
       }),
     })

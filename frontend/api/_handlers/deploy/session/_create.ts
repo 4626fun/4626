@@ -21,6 +21,9 @@ type CreateDeploySessionRequest = {
   smartWallet: Address
   creatorToken: Address
   ownerAddress: Address
+  // Optional preflight mode:
+  // validate auth + ownership + allowlist without creating a deploy session.
+  preflightOnly?: boolean
   // Calls that the server will submit after the user approves a one-time setup
   // transaction that installs `sessionOwner` as a temporary onchain CSW owner.
   // These calls are executed by the Coinbase Smart Wallet via ERC-4337.
@@ -281,15 +284,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<null>)
   }
 
-  // Rate limiting: 3 deploy sessions per minute per address
-  const rateLimit = checkRateLimit(rateLimitKey('deploy', auth.address.toLowerCase()), RATE_LIMITS.deployCreate)
-  if (!rateLimit.allowed) {
-    res.setHeader('Retry-After', Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString())
-    return res.status(429).json({ success: false, error: 'Too many deploy attempts. Please try again later.' } satisfies ApiEnvelope<null>)
-  }
-
   const body = await readJsonBody<CreateDeploySessionRequest>(req)
   if (!body) return res.status(400).json({ success: false, error: 'Invalid JSON body' } satisfies ApiEnvelope<null>)
+  const preflightOnly = body.preflightOnly === true
+
+  // Rate limiting: 3 deploy sessions per minute per address
+  // Preflight checks are read-only and should not consume create quota.
+  if (!preflightOnly) {
+    const rateLimit = checkRateLimit(rateLimitKey('deploy', auth.address.toLowerCase()), RATE_LIMITS.deployCreate)
+    if (!rateLimit.allowed) {
+      res.setHeader('Retry-After', Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString())
+      return res.status(429).json({ success: false, error: 'Too many deploy attempts. Please try again later.' } satisfies ApiEnvelope<null>)
+    }
+  }
 
   try {
     const sessionAddress = getAddress(auth.address as Address)
@@ -320,6 +327,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const isAllowlisted = await checkCreatorAllowlist(sessionAddress, smartWallet)
     if (!isAllowlisted) {
       return res.status(403).json({ success: false, error: 'Creator access required. Please apply for access first.' } satisfies ApiEnvelope<null>)
+    }
+
+    if (preflightOnly) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          ready: true,
+          authAddress: sessionAddress,
+          smartWallet,
+          ownerAddress,
+          authType: auth.type,
+        },
+      } satisfies ApiEnvelope<{
+        ready: boolean
+        authAddress: Address
+        smartWallet: Address
+        ownerAddress: Address
+        authType: 'session' | 'siwa'
+      }>)
     }
 
     const phase1Calls = Array.isArray(body.phase1Calls) ? body.phase1Calls : []
