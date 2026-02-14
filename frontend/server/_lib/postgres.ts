@@ -129,6 +129,28 @@ type DbPool = {
 let cachedDb: DbPool | null = null
 let initError: string | null = null
 let initPromise: Promise<DbPool | null> | null = null
+let initErrorAtMs = 0
+
+function parsePositiveInt(value: string | undefined): number | null {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return Math.floor(n)
+}
+
+function isSessionModeMaxClientsError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? '')
+  const lc = msg.toLowerCase()
+  return (
+    lc.includes('maxclientsinsessionmode') ||
+    (lc.includes('max clients reached') && lc.includes('session mode') && lc.includes('pool_size'))
+  )
+}
+
+function getInitRetryWindowMs(): number {
+  return parsePositiveInt(process.env.POSTGRES_INIT_RETRY_MS) ?? 10_000
+}
 
 /**
  * Returns true if a Postgres connection string appears to be configured in env.
@@ -144,7 +166,14 @@ export function getDbInitError(): string | null {
 
 export async function getDb(): Promise<DbPool | null> {
   if (cachedDb) return cachedDb
-  if (initError) return null
+  if (initError) {
+    const retryAfterMs = getInitRetryWindowMs()
+    const elapsed = Date.now() - initErrorAtMs
+    if (elapsed < retryAfterMs) return null
+    // Treat init failures as transient in serverless; allow periodic re-init.
+    initError = null
+    initPromise = null
+  }
   const cfg = getDbConfig()
   if (!cfg?.connectionString) return null
 
@@ -227,7 +256,22 @@ export async function getDb(): Promise<DbPool | null> {
         // We strip sslmode from the URL and rely on the explicit `ssl` option instead, which is
         // consistent and controlled via POSTGRES_SSL_REJECT_UNAUTHORIZED.
         const poolConnectionString = stripQueryParams(cs, ['sslmode', 'ssl', 'sslrootcert'])
-        const pool = new Pool({ connectionString: poolConnectionString, ssl })
+        const isVercelRuntime = Boolean(process.env.VERCEL) || Boolean(process.env.VERCEL_ENV)
+        // In serverless, keep client count very small per instance to avoid
+        // Supabase Session mode `MaxClientsInSessionMode` saturation.
+        const max = parsePositiveInt(process.env.POSTGRES_POOL_MAX) ?? (isVercelRuntime ? 1 : 10)
+        const idleTimeoutMillis = parsePositiveInt(process.env.POSTGRES_POOL_IDLE_TIMEOUT_MS) ?? 5_000
+        const connectionTimeoutMillis = parsePositiveInt(process.env.POSTGRES_POOL_CONNECT_TIMEOUT_MS) ?? 5_000
+        const maxUses = parsePositiveInt(process.env.POSTGRES_POOL_MAX_USES) ?? 7_500
+        const pool = new Pool({
+          connectionString: poolConnectionString,
+          ssl,
+          max,
+          idleTimeoutMillis,
+          connectionTimeoutMillis,
+          maxUses,
+          allowExitOnIdle: true,
+        })
         // Provide a minimal `sql` tagged template wrapper compatible with callsites.
         const db: DbPool = {
           sql: async (strings: TemplateStringsArray, ...values: any[]) => {
@@ -250,8 +294,14 @@ export async function getDb(): Promise<DbPool | null> {
         cachedDb = db
         return cachedDb
       } catch (err) {
+        if (isSessionModeMaxClientsError(err)) {
+          console.error('Postgres pool saturated (session mode max clients reached); will retry init', err)
+        } else {
+          console.error('Failed to initialize Postgres pool', err)
+        }
         initError = err instanceof Error ? err.message : 'Failed to initialize Postgres pool'
-        console.error('Failed to initialize Postgres pool', err)
+        initErrorAtMs = Date.now()
+        initPromise = null
         return null
       }
     })()
@@ -326,5 +376,4 @@ export async function ensureCreatorAccessSchema(): Promise<void> {
       WHERE status = 'pending';
   `
 }
-
 
