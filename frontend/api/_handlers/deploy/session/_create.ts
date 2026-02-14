@@ -150,12 +150,15 @@ async function checkCanonicalWalletOwnership(params: {
     // In deploy payloads, ownerAddress/sessionAddress can legitimately be the
     // canonical smart wallet itself. Treat that as valid ownership context.
     if (params.ownerAddress.toLowerCase() === params.smartWallet.toLowerCase()) {
-      if (
-        params.sessionAddress.toLowerCase() === params.smartWallet.toLowerCase() ||
-        params.sessionAddress.toLowerCase() === params.ownerAddress.toLowerCase()
-      ) {
-        return { ok: true }
-      }
+      // If session is the CSW itself, it's valid immediately.
+      if (params.sessionAddress.toLowerCase() === params.smartWallet.toLowerCase()) return { ok: true }
+      // Otherwise the active session wallet must be an onchain owner of the CSW.
+      const sessionIsOnchain = await isOnchainSmartWalletOwner({
+        smartWallet: params.smartWallet,
+        ownerAddress: params.sessionAddress,
+      })
+      if (sessionIsOnchain) return { ok: true }
+      return { ok: false, reason: 'session_not_onchain_owner' }
     }
 
     const ownerIsOnchain = await isOnchainSmartWalletOwner({
@@ -206,7 +209,7 @@ async function checkCanonicalWalletOwnership(params: {
   }
   if (!profileId) {
     const onchain = await onchainOwnerCheck()
-    return onchain.ok ? onchain : { ok: false, reason: 'canonical_wallet_not_verified' }
+    return onchain.ok ? onchain : { ok: false, reason: onchain.reason ?? 'canonical_wallet_not_verified' }
   }
 
   const linked = new Set<string>([smartWalletLc])
@@ -248,13 +251,13 @@ async function checkCanonicalWalletOwnership(params: {
   const ownerBelongs = await belongs(ownerLc)
   if (!ownerBelongs) {
     const onchain = await onchainOwnerCheck()
-    return onchain.ok ? onchain : { ok: false, reason: 'owner_not_linked' }
+    return onchain.ok ? onchain : { ok: false, reason: onchain.reason ?? 'owner_not_linked' }
   }
 
   const sessionBelongs = await belongs(sessionLc)
   if (!sessionBelongs) {
     const onchain = await onchainOwnerCheck()
-    return onchain.ok ? onchain : { ok: false, reason: 'session_not_linked' }
+    return onchain.ok ? onchain : { ok: false, reason: onchain.reason ?? 'session_not_linked' }
   }
 
   return { ok: true }
