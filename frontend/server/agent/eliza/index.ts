@@ -116,6 +116,7 @@ const XMTP_DB_FORCE_ENCRYPTED_MIGRATION =
   XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM === 'rotate-db'
 
 const SQLITE_HEADER = Buffer.from('SQLite format 3\u0000', 'utf8')
+let legacyPlaintextCompatibilityLogged = false
 
 function fileLooksLikePlainSqlite(filePath: string): boolean {
   try {
@@ -167,6 +168,14 @@ function hasLegacyMigrationBackupForFile(filePath: string): boolean {
   }
 }
 
+function logLegacyPlaintextCompatibility(): void {
+  if (legacyPlaintextCompatibilityLogged) return
+  legacyPlaintextCompatibilityLogged = true
+  logger.info(
+    '[xmtp] Legacy plaintext DB detected; compatibility mode is active and existing installation will be reused.',
+  )
+}
+
 function getEffectiveDbEncryptionKey(): `0x${string}` | undefined {
   if (!XMTP_DB_ENCRYPTION_KEY) return undefined
   if (
@@ -182,11 +191,7 @@ function getEffectiveDbEncryptionKey(): `0x${string}` | undefined {
     throw new Error(message)
   }
   if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION && hasLegacyPlaintextDbInDir()) {
-    logger.warn(
-      '[xmtp] Legacy plaintext DB detected; using plaintext compatibility mode to reuse installation ' +
-      'and avoid churn. Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION=1 and ' +
-      'XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM=rotate-db to force encrypted migration.',
-    )
+    logLegacyPlaintextCompatibility()
     return undefined
   }
   return XMTP_DB_ENCRYPTION_KEY
@@ -269,11 +274,7 @@ function checkDbPersistence(): void {
         '    Running in compatibility mode to avoid accidental installation churn.',
       )
     } else if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION && hasLegacyPlaintextDbInDir()) {
-      logger.warn(
-        '[xmtp] Legacy plaintext DB(s) present: encryption key is configured but compatibility mode is active.\n' +
-        '    Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION=1 and XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM=rotate-db\n' +
-        '    to rotate legacy DB and create an encrypted installation.',
-      )
+      logLegacyPlaintextCompatibility()
     }
   } catch {
     // Directory doesn't exist yet — will be created by makeDbPath
