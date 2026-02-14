@@ -75,7 +75,7 @@ type LegacyVaultResolved = {
   resolvedFrom: 'static' | 'registry' | 'unknown'
 }
 
-const LEGACY_VAULT_HINTS: LegacyVaultHint[] = [
+const LEGACY_STATIC_VAULT_HINTS: LegacyVaultHint[] = [
   {
     id: 'legacy-1',
     label: 'Legacy ShareOFT (0x5f65…)',
@@ -119,6 +119,17 @@ const LEGACY_VAULT_HINTS: LegacyVaultHint[] = [
     vaultHint: '0xc8A5093d...d4Ff0EBD4',
   },
 ]
+
+const LEGACY_DYNAMIC_SLOT_COUNT = 8
+
+const LEGACY_DYNAMIC_VAULT_HINTS: LegacyVaultHint[] = Array.from({ length: LEGACY_DYNAMIC_SLOT_COUNT }, (_, index) => ({
+  id: `legacy-auto-${index + 1}`,
+  label: `Recovered deployment slot #${index + 1}`,
+}))
+
+const LEGACY_DYNAMIC_HINT_IDS = LEGACY_DYNAMIC_VAULT_HINTS.map((hint) => hint.id)
+
+const LEGACY_VAULT_HINTS: LegacyVaultHint[] = [...LEGACY_STATIC_VAULT_HINTS, ...LEGACY_DYNAMIC_VAULT_HINTS]
 
 function parseVaultHint(hint?: string): { prefix: string; suffix: string } | null {
   if (!hint) return null
@@ -211,13 +222,18 @@ async function fetchLegacyVesting(
   }
 }
 
-async function fetchLegacyPhase1Map(publicClient: any): Promise<Map<string, { vault: Address; wrapper: Address; shareOft: Address }>> {
+async function fetchLegacyPhase1Map(
+  publicClient: any,
+  owner?: Address,
+): Promise<Map<string, { vault: Address; wrapper: Address; shareOft: Address }>> {
   const batcher = CONTRACTS.creatorVaultBatcher
   if (!batcher || !isAddress(batcher)) return new Map()
   try {
+    const filterArgs = owner && isAddress(owner) ? { owner } : undefined
     const logs = await publicClient.getLogs({
       address: batcher as Address,
       event: PHASE1_DEPLOYED_EVENT,
+      args: filterArgs as any,
       fromBlock: getLegacyVestingStartBlock(),
       toBlock: 'latest',
     })
@@ -2353,7 +2369,7 @@ function LegacyWithdrawals() {
       const override = legacyOverrides[hint.id] ?? {}
       return {
         id: hint.id,
-        label: hint.label,
+        label: override.label ?? hint.label,
         vaultHint: hint.vaultHint,
         vault: override.vault ?? hint.vault ?? ZERO_ADDRESS,
         wrapper: override.wrapper ?? hint.wrapper ?? ZERO_ADDRESS,
@@ -2365,7 +2381,7 @@ function LegacyWithdrawals() {
   }, [legacyOverrides])
 
   const unresolvedHintIds = useMemo(() => {
-    return LEGACY_VAULT_HINTS.filter((hint) => hint.vaultHint && !legacyOverrides[hint.id]?.vault)
+    return LEGACY_STATIC_VAULT_HINTS.filter((hint) => hint.vaultHint && !legacyOverrides[hint.id]?.vault)
       .map((hint) => hint.id)
       .join(',')
   }, [legacyOverrides])
@@ -2434,7 +2450,7 @@ function LegacyWithdrawals() {
 
   useEffect(() => {
     let cancelled = false
-    if (!publicClient || !unresolvedHintIds) return () => {}
+    if (!publicClient) return () => {}
 
     const registryAddress = CONTRACTS.registry
     if (!registryAddress || !isAddress(registryAddress)) return () => {}
@@ -2450,43 +2466,40 @@ function LegacyWithdrawals() {
           functionName: 'getAllCreatorCoins',
         })) as Address[]
 
-        if (!tokens || tokens.length === 0) {
-          if (!cancelled) setLegacyResolveStatus('done')
-          return
-        }
-
-        const calls = tokens.map((token) => ({
-          address: registryAddress as Address,
-          abi: CREATOR_REGISTRY_ABI,
-          functionName: 'getCreatorCoin',
-          args: [token],
-        }))
-
-        const results: any[] = []
-        const chunkSize = 120
-        for (let i = 0; i < calls.length; i += chunkSize) {
-          const chunk = calls.slice(i, i + chunkSize)
-          const chunkResults = await publicClient.multicall({ contracts: chunk, allowFailure: true })
-          results.push(...chunkResults)
-        }
-
         const vaultMap = new Map<string, { vault: Address; wrapper: Address; shareOft: Address }>()
-        results.forEach((res) => {
-          if (res.status !== 'success') return
-          const info = res.result as any
-          const vault = info?.vault as Address | undefined
-          const wrapper = info?.wrapper as Address | undefined
-          const shareOft = (info?.shareOFT ?? info?.shareOft) as Address | undefined
-          if (!vault || !wrapper || !shareOft) return
-          if (!isAddress(vault) || !isAddress(wrapper) || !isAddress(shareOft)) return
-          vaultMap.set(String(vault).toLowerCase(), {
-            vault: getAddress(vault),
-            wrapper: getAddress(wrapper),
-            shareOft: getAddress(shareOft),
-          })
-        })
+        if (Array.isArray(tokens) && tokens.length > 0) {
+          const calls = tokens.map((token) => ({
+            address: registryAddress as Address,
+            abi: CREATOR_REGISTRY_ABI,
+            functionName: 'getCreatorCoin',
+            args: [token],
+          }))
 
-        const phase1Map = await fetchLegacyPhase1Map(publicClient)
+          const results: any[] = []
+          const chunkSize = 120
+          for (let i = 0; i < calls.length; i += chunkSize) {
+            const chunk = calls.slice(i, i + chunkSize)
+            const chunkResults = await publicClient.multicall({ contracts: chunk, allowFailure: true })
+            results.push(...chunkResults)
+          }
+
+          results.forEach((res) => {
+            if (res.status !== 'success') return
+            const info = res.result as any
+            const vault = info?.vault as Address | undefined
+            const wrapper = info?.wrapper as Address | undefined
+            const shareOft = (info?.shareOFT ?? info?.shareOft) as Address | undefined
+            if (!vault || !wrapper || !shareOft) return
+            if (!isAddress(vault) || !isAddress(wrapper) || !isAddress(shareOft)) return
+            vaultMap.set(String(vault).toLowerCase(), {
+              vault: getAddress(vault),
+              wrapper: getAddress(wrapper),
+              shareOft: getAddress(shareOft),
+            })
+          })
+        }
+
+        const phase1Map = await fetchLegacyPhase1Map(publicClient, canonicalCswAddress as Address)
         for (const [vaultKey, record] of phase1Map.entries()) {
           if (!vaultMap.has(vaultKey)) vaultMap.set(vaultKey, record)
         }
@@ -2494,7 +2507,7 @@ function LegacyWithdrawals() {
         const vaultKeys = Array.from(vaultMap.keys())
         const updates: Record<string, Partial<LegacyVaultResolved>> = {}
 
-        for (const hint of LEGACY_VAULT_HINTS) {
+        for (const hint of LEGACY_STATIC_VAULT_HINTS) {
           const hintVault = hint.vault && isAddress(hint.vault) ? getAddress(hint.vault) : null
           const hintVaultKey = hintVault ? hintVault.toLowerCase() : null
           const match =
@@ -2513,6 +2526,43 @@ function LegacyWithdrawals() {
             resolvedFrom: 'registry',
           }
         }
+
+        const assignedVaultKeys = new Set(
+          Object.values(updates)
+            .map((update) => (update.vault && isAddress(update.vault) ? update.vault.toLowerCase() : null))
+            .filter((v): v is string => Boolean(v)),
+        )
+        LEGACY_STATIC_VAULT_HINTS.forEach((hint) => {
+          if (hint.vault && isAddress(hint.vault)) assignedVaultKeys.add(hint.vault.toLowerCase())
+        })
+
+        const discoveredRecords = Array.from(phase1Map.entries())
+          .filter(([vaultKey]) => !assignedVaultKeys.has(vaultKey))
+          .map(([, record]) => record)
+          .sort((a, b) => a.vault.localeCompare(b.vault))
+
+        LEGACY_DYNAMIC_HINT_IDS.forEach((id, index) => {
+          const record = discoveredRecords[index]
+          if (!record) {
+            updates[id] = {
+              label: `Recovered deployment slot #${index + 1}`,
+              vault: ZERO_ADDRESS,
+              wrapper: ZERO_ADDRESS,
+              shareOft: ZERO_ADDRESS,
+              vesting: ZERO_ADDRESS,
+              resolvedFrom: 'unknown',
+            }
+            return
+          }
+          updates[id] = {
+            label: `Recovered deployment (${shortAddress(record.shareOft)})`,
+            vault: record.vault,
+            wrapper: record.wrapper,
+            shareOft: record.shareOft,
+            vesting: ZERO_ADDRESS,
+            resolvedFrom: 'registry',
+          }
+        })
 
         for (const [id, update] of Object.entries(updates)) {
           if (!update.shareOft || !isAddress(update.shareOft)) continue
@@ -2837,6 +2887,7 @@ function LegacyWithdrawals() {
                 const hasWrapper = isAddress(legacy.wrapper)
                 const hasVault = isAddress(legacy.vault)
                 const hasVesting = isAddress(legacy.vesting)
+                const isEmptyAutoSlot = legacy.id.startsWith('legacy-auto-') && !hasShareOft && !hasWrapper && !hasVault && !hasVesting
                 const hasResolvedContracts = hasShareOft && hasWrapper && hasVault
                 const balanceAccount = canUseSmartWallet ? canonicalCswAddress : connectedAddress ?? ZERO_ADDRESS
                 const balanceLabel = canUseSmartWallet ? 'CSW balance' : 'Connected balance'
@@ -3058,6 +3109,7 @@ function LegacyWithdrawals() {
                     }
                   }
                 }
+                if (isEmptyAutoSlot) return null
 
                 return (
                   <div key={legacy.id} className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-4">
