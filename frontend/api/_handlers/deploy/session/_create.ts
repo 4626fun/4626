@@ -130,30 +130,57 @@ async function checkCanonicalWalletOwnership(params: {
       AND is_canonical_smart_wallet = true
     LIMIT 1;
   `
-  const profileId = canonicalRow.rows?.[0]?.profile_id
-  if (!profileId) return { ok: false, reason: 'canonical_wallet_not_verified' }
-
-  const embeddedRow = await db.sql`
-    SELECT address
-    FROM profile_wallets
-    WHERE profile_id = ${profileId}
-      AND is_embedded_eoa = true
-      AND verified_at IS NOT NULL
-    LIMIT 1;
-  `
-  const embeddedAddress = typeof embeddedRow.rows?.[0]?.address === 'string' ? String(embeddedRow.rows[0].address).toLowerCase() : ''
-  if (!embeddedAddress) return { ok: false, reason: 'embedded_wallet_not_verified' }
-
-  const belongs = async (addr: string): Promise<boolean> => {
-    if (addr === smartWalletLc || addr === embeddedAddress) return true
-    const row = await db.sql`
-      SELECT 1
-      FROM profile_wallets
-      WHERE profile_id = ${profileId}
-        AND LOWER(address) = ${addr}
+  let profileId = canonicalRow.rows?.[0]?.profile_id ?? null
+  if (!profileId) {
+    // Fallback for legacy rows that have canonical wallet fields populated
+    // but have not yet been fully synced into `profile_wallets`.
+    const legacyCanonicalRow = await db.sql`
+      SELECT id
+      FROM profiles
+      WHERE LOWER(primary_smart_wallet) = ${smartWalletLc}
+         OR LOWER(csw_address) = ${smartWalletLc}
+         OR LOWER(base_sub_account) = ${smartWalletLc}
+      ORDER BY updated_at DESC NULLS LAST, created_at DESC
       LIMIT 1;
     `
-    return Array.isArray(row.rows) && row.rows.length > 0
+    profileId = legacyCanonicalRow.rows?.[0]?.id ?? null
+  }
+  if (!profileId) return { ok: false, reason: 'canonical_wallet_not_verified' }
+
+  const linked = new Set<string>([smartWalletLc])
+  const linkedRows = await db.sql`
+    SELECT LOWER(address) AS address
+    FROM profile_wallets
+    WHERE profile_id = ${profileId}
+      AND address IS NOT NULL;
+  `
+  for (const row of linkedRows.rows ?? []) {
+    const addr = typeof row?.address === 'string' ? String(row.address).trim().toLowerCase() : ''
+    if (addr) linked.add(addr)
+  }
+
+  const legacyProfileRow = await db.sql`
+    SELECT
+      LOWER(primary_wallet) AS primary_wallet,
+      LOWER(embedded_wallet) AS embedded_wallet,
+      LOWER(primary_embedded_eoa) AS primary_embedded_eoa,
+      LOWER(primary_smart_wallet) AS primary_smart_wallet,
+      LOWER(csw_address) AS csw_address,
+      LOWER(base_sub_account) AS base_sub_account
+    FROM profiles
+    WHERE id = ${profileId}
+    LIMIT 1;
+  `
+  const legacyProfile = (legacyProfileRow.rows?.[0] ?? null) as Record<string, unknown> | null
+  if (legacyProfile) {
+    for (const value of Object.values(legacyProfile)) {
+      const addr = typeof value === 'string' ? value.trim().toLowerCase() : ''
+      if (addr) linked.add(addr)
+    }
+  }
+
+  const belongs = async (addr: string): Promise<boolean> => {
+    return linked.has(addr)
   }
 
   const ownerBelongs = await belongs(ownerLc)
