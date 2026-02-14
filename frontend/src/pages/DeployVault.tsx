@@ -466,6 +466,26 @@ const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
   { type: 'error', name: 'AlreadyOwner', inputs: [{ name: 'owner', type: 'bytes' }] },
 ] as const
 
+const COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI = [
+  {
+    type: 'function',
+    name: 'executeBatch',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'calls',
+        type: 'tuple[]',
+        components: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
 async function isCoinbaseSmartWalletOwner(params: {
   smartWallet: Address
   ownerAddress: Address
@@ -1617,6 +1637,10 @@ function DeployVaultBatcher({
   const useServerContinue = useMemo(() => {
     if (strictNoEoaMode) return false
     const v = String((import.meta as any)?.env?.VITE_DEPLOY_USE_SERVER_CONTINUE ?? '').trim().toLowerCase()
+    // Default to server-continue so deploy uses a single user-approved setup tx
+    // and keeps remaining phases fully server-driven.
+    if (!v) return true
+    if (v === '0' || v === 'false' || v === 'no') return false
     return v === '1' || v === 'true' || v === 'yes'
   }, [strictNoEoaMode])
   const deploySessionStorageKey = useMemo(() => {
@@ -3345,6 +3369,113 @@ function DeployVaultBatcher({
           })
         }
 
+        const isUserRejectedError = (error: unknown): boolean => {
+          const msg = error instanceof Error ? error.message : String(error ?? '')
+          const lc = msg.toLowerCase()
+          return (
+            lc.includes('user rejected') ||
+            lc.includes('user denied') ||
+            lc.includes('user cancelled') ||
+            lc.includes('action_rejected')
+          )
+        }
+
+        const isLikelyPaymasterOrSponsorshipFailure = (error: unknown): boolean => {
+          const msg = error instanceof Error ? error.message : String(error ?? '')
+          const lc = msg.toLowerCase()
+          return (
+            lc.includes('request denied -') ||
+            lc.includes('paymaster rejected this request') ||
+            lc.includes('requested resource not available') ||
+            lc.includes('resource not available') ||
+            lc.includes('paymaster unavailable') ||
+            lc.includes('sponsorship') ||
+            lc.includes('stake/unstake delay') ||
+            lc.includes('banned opcode') ||
+            lc.includes('sponsored userop exceeds paymaster total gas cap') ||
+            (lc.includes('total gas used by the user operation') && lc.includes('allowed limit'))
+          )
+        }
+
+        const tryOwnerDirectExecuteBatchFallback = async (
+          calls: Array<{ target: Address; value: bigint; data: Hex }>,
+          phaseLabel: 'phase1' | 'phase2' | 'phase3' | 'phase4',
+          logPhaseLabel: string,
+          reason: unknown,
+        ): Promise<boolean> => {
+          if (strictNoEoaMode) return false
+          if (isUserRejectedError(reason)) return false
+          if (!isLikelyPaymasterOrSponsorshipFailure(reason)) return false
+          if (!canonicalSmartWallet || !connectedAddress || !wagmiWalletClient || !publicClient) return false
+          if (connectedAddress.toLowerCase() === canonicalSmartWallet.toLowerCase()) return false
+
+          const eoaIsOwner = await isCoinbaseSmartWalletOwner({
+            smartWallet: canonicalSmartWallet,
+            ownerAddress: connectedAddress as Address,
+          })
+          if (!eoaIsOwner) return false
+
+          await ensureBaseChain('owner EOA wallet')
+
+          const executeBatchData = encodeFunctionData({
+            abi: COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI as any,
+            functionName: 'executeBatch',
+            args: [
+              calls.map((c) => ({
+                target: c.target,
+                value: c.value ?? 0n,
+                data: c.data ?? '0x',
+              })),
+            ],
+          })
+
+          const walletAny: any = wagmiWalletClient as any
+          let txHashRaw: unknown = null
+          if (typeof walletAny?.sendTransaction === 'function') {
+            txHashRaw = await walletAny.sendTransaction({
+              account: connectedAddress as Address,
+              chain: base as any,
+              to: canonicalSmartWallet,
+              value: 0n,
+              data: executeBatchData,
+            })
+          } else if (typeof walletAny?.request === 'function') {
+            txHashRaw = await walletAny.request({
+              method: 'eth_sendTransaction',
+              params: [
+                {
+                  from: connectedAddress,
+                  to: canonicalSmartWallet,
+                  data: executeBatchData,
+                  value: '0x0',
+                },
+              ],
+            })
+          } else {
+            throw new Error('Connected owner wallet cannot send transactions for direct fallback.')
+          }
+
+          if (typeof txHashRaw !== 'string' || !/^0x[a-fA-F0-9]{64}$/.test(txHashRaw)) {
+            throw new Error('Owner direct fallback returned an invalid transaction hash.')
+          }
+
+          const txHash = txHashRaw as Hex
+          await (publicClient as any).waitForTransactionReceipt({ hash: txHash })
+          persistUserOpResult(
+            phaseLabel,
+            logPhaseLabel,
+            { userOpHash: txHash, transactionHash: txHash },
+            'Direct owner executeBatch fallback',
+          )
+          logger.warn('[DeployVault] Direct owner executeBatch fallback succeeded', {
+            phaseLabel: logPhaseLabel,
+            canonicalSmartWallet,
+            ownerAddress: connectedAddress,
+            txHash,
+          })
+          return true
+        }
+
         const sendPhaseCalls = async (
           calls: Array<{ target: Address; value: bigint; data: Hex }>,
           phaseLabel: 'phase1' | 'phase2' | 'phase3' | 'phase4',
@@ -3597,19 +3728,30 @@ function DeployVaultBatcher({
             logger.info(`[DeployVault] Using Coinbase Wallet direct for ${logPhaseLabel}`)
 
             await ensureBaseChain('Coinbase Wallet')
-            
-            const result = await sendCoinbaseSmartWalletUserOperation({
-              publicClient: publicClient as any,
-              walletClient: wagmiWalletClient as any,
-              bundlerUrl,
-              smartWallet: canonicalSmartWallet,
-              ownerAddress: connectedAddress as Address,
-              calls: toCalls(calls),
-              version: '1',
-            })
-            
-            persistUserOpResult(phaseLabel, logPhaseLabel, result, 'Coinbase Wallet')
-            return null
+
+            try {
+              const result = await sendCoinbaseSmartWalletUserOperation({
+                publicClient: publicClient as any,
+                walletClient: wagmiWalletClient as any,
+                bundlerUrl,
+                smartWallet: canonicalSmartWallet,
+                ownerAddress: connectedAddress as Address,
+                calls: toCalls(calls),
+                version: '1',
+              })
+
+              persistUserOpResult(phaseLabel, logPhaseLabel, result, 'Coinbase Wallet')
+              return null
+            } catch (coinbaseDirectErr) {
+              const usedDirectFallback = await tryOwnerDirectExecuteBatchFallback(
+                calls,
+                phaseLabel,
+                logPhaseLabel,
+                coinbaseDirectErr,
+              )
+              if (usedDirectFallback) return null
+              throw coinbaseDirectErr
+            }
           }
 
           // PATH 1.5: Privy embedded EOA is already an owner (lower verification gas than EIP-1271 owner path)
@@ -3854,6 +3996,11 @@ function DeployVaultBatcher({
               const msg = e instanceof Error ? e.message : String(e ?? '')
               const lc = msg.toLowerCase()
               const isMissingPrimaryCall = lc.includes('missing_primary_call')
+              const isPaymasterPolicyFailure =
+                lc.includes('request denied -') ||
+                lc.includes('paymaster rejected this request') ||
+                lc.includes('requested resource not available') ||
+                lc.includes('resource not available')
               const isVerificationGasFailure =
                 lc.includes('aa40') ||
                 lc.includes('signature verification used more gas') ||
@@ -3873,6 +4020,8 @@ function DeployVaultBatcher({
                       ? 'invalid_signature'
                       : lc.includes('invalid fields')
                         ? 'invalid_userop_fields'
+                        : isPaymasterPolicyFailure
+                          ? 'paymaster_policy_rejected'
                         : lc.includes('banned opcode') || lc.includes('stake/unstake delay') || lc.includes('unstake delay too low')
                           ? 'paymaster_stake_policy'
                           : 'unknown'
@@ -3887,7 +4036,8 @@ function DeployVaultBatcher({
                   lc.includes('sponsored userop exceeds paymaster total gas cap') ||
                   lc.includes('total gas used by the user operation') ||
                   (lc.includes('total gas used') && lc.includes('allowed limit')) ||
-                  lc.includes('invalid fields'))
+                  lc.includes('invalid fields') ||
+                  isPaymasterPolicyFailure)
               if (shouldFallback) {
                 logger.warn('[DeployVault] Privy smart wallet signer failed; setup still required', {
                   phaseLabel: logPhaseLabel,
@@ -3904,6 +4054,15 @@ function DeployVaultBatcher({
                   throw new Error(
                     `ERC-4337 signing failed (${failureClass}). Owner-EOA fallback is disabled in no-EOA mode.`,
                   )
+                }
+                if (isPaymasterPolicyFailure) {
+                  const usedDirectFallback = await tryOwnerDirectExecuteBatchFallback(
+                    calls,
+                    phaseLabel,
+                    logPhaseLabel,
+                    e,
+                  )
+                  if (usedDirectFallback) return
                 }
                 // Fallback path: retry the same canonical CSW UserOp with an owner EOA signer.
                 if (!connectedAddress || !wagmiWalletClient || !canonicalSmartWallet || !publicClient) {
@@ -3955,6 +4114,13 @@ function DeployVaultBatcher({
                   })
                   return
                 } catch (fallbackError) {
+                  const usedDirectFallback = await tryOwnerDirectExecuteBatchFallback(
+                    calls,
+                    phaseLabel,
+                    logPhaseLabel,
+                    fallbackError,
+                  )
+                  if (usedDirectFallback) return
                   const fallbackMsg = fallbackError instanceof Error ? fallbackError.message : String(fallbackError ?? '')
                   logger.error('[DeployVault] Owner EOA fallback failed', {
                     phaseLabel: logPhaseLabel,
@@ -3987,22 +4153,24 @@ function DeployVaultBatcher({
           )
         }
 
-        // Phase 1: Deploy core contracts (skip if already deployed)
-        if (phase1Calls.length > 0) {
-          setPhase('phase1')
-          await sendPhaseCalls(phase1Calls, 'phase1')
-          // Ensure Phase 1 is mined before Phase 2 preflight.
-          await waitForContractsDeployed({
-            publicClient: publicClient as any,
-            addresses: [expected.vault, expected.wrapper, expected.shareOFT],
-            label: 'Phase 1',
-          })
-        }
+        if (!useServerContinue) {
+          // Phase 1: Deploy core contracts (skip if already deployed)
+          if (phase1Calls.length > 0) {
+            setPhase('phase1')
+            await sendPhaseCalls(phase1Calls, 'phase1')
+            // Ensure Phase 1 is mined before Phase 2 preflight.
+            await waitForContractsDeployed({
+              publicClient: publicClient as any,
+              addresses: [expected.vault, expected.wrapper, expected.shareOFT],
+              label: 'Phase 1',
+            })
+          }
 
-        // Phase 2: Launch + configure
-        setPhase('phase2')
-        if (phase2ApproveCalls.length > 0) {
-          await sendPhaseCalls(phase2ApproveCalls, 'phase2', { noSplit: true, segment: 'approve' })
+          // Phase 2: Launch + configure
+          setPhase('phase2')
+          if (phase2ApproveCalls.length > 0) {
+            await sendPhaseCalls(phase2ApproveCalls, 'phase2', { noSplit: true, segment: 'approve' })
+          }
         }
 
         // IMPORTANT: Keep a batcher call in the same sponsored UserOp.
