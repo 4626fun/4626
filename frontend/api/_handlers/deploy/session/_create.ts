@@ -147,6 +147,17 @@ async function checkCanonicalWalletOwnership(params: {
   sessionAddress: Address
 }): Promise<OwnershipCheck> {
   const onchainOwnerCheck = async (): Promise<OwnershipCheck> => {
+    // In deploy payloads, ownerAddress/sessionAddress can legitimately be the
+    // canonical smart wallet itself. Treat that as valid ownership context.
+    if (params.ownerAddress.toLowerCase() === params.smartWallet.toLowerCase()) {
+      if (
+        params.sessionAddress.toLowerCase() === params.smartWallet.toLowerCase() ||
+        params.sessionAddress.toLowerCase() === params.ownerAddress.toLowerCase()
+      ) {
+        return { ok: true }
+      }
+    }
+
     const ownerIsOnchain = await isOnchainSmartWalletOwner({
       smartWallet: params.smartWallet,
       ownerAddress: params.ownerAddress,
