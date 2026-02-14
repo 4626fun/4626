@@ -6104,6 +6104,12 @@ function DeployVaultMain() {
   
   const privyEmbeddedOwnerReady = privyEmbeddedEoaIsCanonicalOwner && privyEmbeddedEoaCanSign
   const privySmartWalletOwnerReady = privySmartWalletIsCanonicalOwner && privySmartWalletCanSign
+  const connectedEoaOwnerReady = Boolean(
+    canonicalIdentityIsContract &&
+      connectedWalletAddress &&
+      walletClient &&
+      executionCanOperateCanonical,
+  )
   const strictNoEoaEligibility = Boolean(
     canonicalIdentityIsContract &&
       canonicalIdentityAddress &&
@@ -6114,6 +6120,7 @@ function DeployVaultMain() {
   const smartWalletCapabilityReady = strictNoEoaMode
     ? strictNoEoaEligibility
     : isCoinbaseWalletDirect ||
+      connectedEoaOwnerReady ||
       (privySmartWalletReady &&
         (smartWalletMatchesCanonical || privySmartWalletOwnerReady || privyEmbeddedOwnerReady))
   const oneTimePrivyOwnerApprovalNeeded = Boolean(
@@ -6282,7 +6289,7 @@ function DeployVaultMain() {
                           ? 'One-time owner approval required before deploy. Approve your app Privy wallet as an owner of your canonical Zora smart wallet.'
                           : 'One-time owner approval required. Connect an owner wallet, approve once, then deploy.'
                       : !smartWalletCapabilityReady
-                        ? 'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account).'
+                        ? 'Smart wallet required. Sign in with wallet to access your Zora smart wallet, connect an owner EOA, or use Coinbase Wallet (Base Account).'
                     : bytecodeInfraQuery.isFetching
                       ? 'Checking deployment bytecode store…'
                       : bytecodeInfraQuery.isError
