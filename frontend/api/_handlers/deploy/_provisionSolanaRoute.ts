@@ -123,7 +123,7 @@ function parseMintPubkeyFromWrapOutput(text: string): string | null {
   return match?.[1] ?? null
 }
 
-function buildWrapRunnerList(cliBinRaw: string, wrapArgs: string[]): WrapRunner[] {
+function buildWrapRunnerList(cliBinRaw: string, wrapArgs: string[], cliDir: string): WrapRunner[] {
   const normalized = cliBinRaw.trim().toLowerCase()
   const runners: WrapRunner[] = []
   const pushUnique = (runner: WrapRunner): void => {
@@ -133,6 +133,19 @@ function buildWrapRunnerList(cliBinRaw: string, wrapArgs: string[]): WrapRunner[
   }
 
   const pushDefaultFallbacks = (): void => {
+    const bunEntrypoint = `${cliDir}/src/bin.ts`
+    const hasBunEntrypoint = existsSync(bunEntrypoint)
+    const home = String(process.env.HOME ?? '').trim()
+    const homeBun = home ? `${home}/.bun/bin/bun` : ''
+    if (hasBunEntrypoint) {
+      if (homeBun && existsSync(homeBun)) {
+        pushUnique({ bin: homeBun, args: ['run', 'src/bin.ts', ...wrapArgs], label: `${homeBun} run src/bin.ts` })
+      }
+      pushUnique({ bin: 'bun', args: ['run', 'src/bin.ts', ...wrapArgs], label: 'bun run src/bin.ts' })
+    }
+    if (homeBun && existsSync(homeBun)) {
+      pushUnique({ bin: homeBun, args: ['cli', ...wrapArgs], label: `${homeBun} cli` })
+    }
     pushUnique({ bin: 'bun', args: ['cli', ...wrapArgs], label: 'bun cli' })
     pushUnique({ bin: 'pnpm', args: ['run', 'cli', '--', ...wrapArgs], label: 'pnpm run cli --' })
     pushUnique({ bin: 'npm', args: ['run', 'cli', '--', ...wrapArgs], label: 'npm run cli --' })
@@ -143,7 +156,11 @@ function buildWrapRunnerList(cliBinRaw: string, wrapArgs: string[]): WrapRunner[
     pushDefaultFallbacks()
     return runners
   }
-  if (normalized === 'bun') {
+  if (normalized === 'bun' || normalized.endsWith('/bun')) {
+    const hasBunEntrypoint = existsSync(`${cliDir}/src/bin.ts`)
+    if (hasBunEntrypoint) {
+      pushUnique({ bin: cliBinRaw, args: ['run', 'src/bin.ts', ...wrapArgs], label: `${cliBinRaw} run src/bin.ts` })
+    }
     pushUnique({ bin: 'bun', args: ['cli', ...wrapArgs], label: 'bun cli' })
     pushDefaultFallbacks()
     return runners
@@ -178,6 +195,7 @@ function isRunnerUnavailable(error: unknown): boolean {
   return (
     text.includes('enoent') ||
     text.includes('command not found') ||
+    text.includes('bun: not found') ||
     text.includes('not recognized as an internal or external command') ||
     text.includes('missing script: cli') ||
     text.includes('none of the selected packages has a "cli" script')
@@ -185,7 +203,7 @@ function isRunnerUnavailable(error: unknown): boolean {
 }
 
 async function runWrapToken(cliDir: string, cliBinRaw: string, wrapArgs: string[]): Promise<{ output: string; runner: string }> {
-  const runners = buildWrapRunnerList(cliBinRaw, wrapArgs)
+  const runners = buildWrapRunnerList(cliBinRaw, wrapArgs, cliDir)
   const failures: string[] = []
 
   for (const runner of runners) {

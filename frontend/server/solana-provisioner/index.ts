@@ -66,6 +66,11 @@ function parseMintPubkeyFromWrapOutput(text: string): string | null {
   return match?.[1] ?? null
 }
 
+function parseMintPubkeyFromAlreadyExistsError(text: string): string | null {
+  const match = text.match(/Address\s*\{\s*address:\s*([1-9A-HJ-NP-Za-km-z]{32,44})/i)
+  return match?.[1] ?? null
+}
+
 function decodeBase58(value: string): Uint8Array {
   if (!value || typeof value !== 'string') throw new Error('Invalid base58 input')
   let num = 0n
@@ -123,7 +128,7 @@ function authOk(req: IncomingMessage, secret: string): boolean {
   return timingSafeEqual(a, b)
 }
 
-function buildWrapRunnerList(cliBinRaw: string, wrapArgs: string[]): WrapRunner[] {
+function buildWrapRunnerList(cliBinRaw: string, wrapArgs: string[], cliDir: string): WrapRunner[] {
   const normalized = cliBinRaw.trim().toLowerCase()
   const runners: WrapRunner[] = []
   const pushUnique = (runner: WrapRunner): void => {
@@ -133,6 +138,19 @@ function buildWrapRunnerList(cliBinRaw: string, wrapArgs: string[]): WrapRunner[
   }
 
   const pushDefaultFallbacks = (): void => {
+    const bunEntrypoint = `${cliDir}/src/bin.ts`
+    const hasBunEntrypoint = existsSync(bunEntrypoint)
+    const home = String(process.env.HOME ?? '').trim()
+    const homeBun = home ? `${home}/.bun/bin/bun` : ''
+    if (hasBunEntrypoint) {
+      if (homeBun && existsSync(homeBun)) {
+        pushUnique({ bin: homeBun, args: ['run', 'src/bin.ts', ...wrapArgs], label: `${homeBun} run src/bin.ts` })
+      }
+      pushUnique({ bin: 'bun', args: ['run', 'src/bin.ts', ...wrapArgs], label: 'bun run src/bin.ts' })
+    }
+    if (homeBun && existsSync(homeBun)) {
+      pushUnique({ bin: homeBun, args: ['cli', ...wrapArgs], label: `${homeBun} cli` })
+    }
     pushUnique({ bin: 'bun', args: ['cli', ...wrapArgs], label: 'bun cli' })
     pushUnique({ bin: 'pnpm', args: ['run', 'cli', '--', ...wrapArgs], label: 'pnpm run cli --' })
     pushUnique({ bin: 'npm', args: ['run', 'cli', '--', ...wrapArgs], label: 'npm run cli --' })
@@ -144,7 +162,11 @@ function buildWrapRunnerList(cliBinRaw: string, wrapArgs: string[]): WrapRunner[
     return runners
   }
 
-  if (normalized === 'bun') {
+  if (normalized === 'bun' || normalized.endsWith('/bun')) {
+    const hasBunEntrypoint = existsSync(`${cliDir}/src/bin.ts`)
+    if (hasBunEntrypoint) {
+      pushUnique({ bin: cliBinRaw, args: ['run', 'src/bin.ts', ...wrapArgs], label: `${cliBinRaw} run src/bin.ts` })
+    }
     pushUnique({ bin: 'bun', args: ['cli', ...wrapArgs], label: 'bun cli' })
     pushDefaultFallbacks()
     return runners
@@ -179,6 +201,7 @@ function isRunnerUnavailable(error: unknown): boolean {
   return (
     text.includes('enoent') ||
     text.includes('command not found') ||
+    text.includes('bun: not found') ||
     text.includes('not recognized as an internal or external command') ||
     text.includes('missing script: cli') ||
     text.includes('none of the selected packages has a "cli" script')
@@ -186,7 +209,7 @@ function isRunnerUnavailable(error: unknown): boolean {
 }
 
 async function runWrapToken(cliDir: string, cliBinRaw: string, wrapArgs: string[]): Promise<{ output: string; runner: string }> {
-  const runners = buildWrapRunnerList(cliBinRaw, wrapArgs)
+  const runners = buildWrapRunnerList(cliBinRaw, wrapArgs, cliDir)
   const failures: string[] = []
 
   for (const runner of runners) {
@@ -342,6 +365,50 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+
+    // Idempotency: if wrap-token fails because mint account already exists,
+    // recover by extracting the mint pubkey and verifying route scalar.
+    const existingMintPubkey = parseMintPubkeyFromAlreadyExistsError(message)
+    if (existingMintPubkey) {
+      try {
+        const mintBytes32 = solanaPubkeyToBytes32Hex(existingMintPubkey)
+        const rpcUrl = (process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()
+        const publicClient = createPublicClient({
+          chain: base,
+          transport: http(rpcUrl, { timeout: 20_000 }),
+        })
+        let scalar = 0n
+        for (let i = 0; i < 24; i += 1) {
+          scalar = await publicClient
+            .readContract({
+              address: BASE_SOLANA_BRIDGE,
+              abi: BASE_SOLANA_BRIDGE_ABI,
+              functionName: 'scalars',
+              args: [shareOft, mintBytes32],
+            })
+            .then((v) => BigInt(v as bigint))
+            .catch(() => 0n)
+          if (scalar > 0n) break
+          await new Promise((resolve) => setTimeout(resolve, 5_000))
+        }
+        if (scalar > 0n) {
+          return json(res, 200, {
+            success: true,
+            mintBytes32,
+            data: {
+              shareOft,
+              mintPubkey: existingMintPubkey,
+              mintBytes32,
+              runner: 'existing-mint-reuse',
+              routeScalar: scalar.toString(),
+            },
+          })
+        }
+      } catch {
+        // Fall through to standard error response below.
+      }
+    }
+
     return json(res, 500, {
       success: false,
       error: `Failed to provision dynamic Solana route: ${message}`,
