@@ -521,6 +521,9 @@ function summarizeErrorReason(error: unknown): string {
 function toFriendlyTxError(error: unknown): string {
   const msg = summarizeErrorReason(error)
   const lower = msg.toLowerCase()
+  if (lower.includes('invalid wallet sig')) {
+    return 'Invalid wallet signature. setAgentWallet must be signed by the canonical CSW (ERC-1271), not only the owner EOA.'
+  }
   if (lower.includes('requested resource not available') || lower.includes('resource not available')) {
     return 'Bundler endpoint does not support ERC-4337 methods. Set `VITE_CDP_BUNDLER_URL` and retry.'
   }
@@ -669,6 +672,7 @@ function AgentRegistration() {
   const chainId = useChainId()
   const { switchChainAsync, isPending: switchPending } = useSwitchChain()
   const { data: walletClient } = useWalletClient({ chainId: base.id })
+  const { client: smartWalletClient } = useSmartWallets()
   const publicClient = usePublicClient({ chainId: base.id })
   const { wallets: privyWallets } = useWallets()
   const { ensurePaymasterSession } = usePaymasterSessionGuard()
@@ -714,6 +718,18 @@ function AgentRegistration() {
 
   const canonicalCswAddress = useMemo(() => getAddress(CANONICAL_SMART_WALLET), [])
   const isCanonical = connectedAddress?.toLowerCase() === CANONICAL_SMART_WALLET.toLowerCase()
+  const privySmartWalletAddress = useMemo(() => {
+    try {
+      const addr = smartWalletClient?.account?.address
+      return addr && isAddress(addr) ? getAddress(addr) : null
+    } catch {
+      return null
+    }
+  }, [smartWalletClient])
+  const privySmartWalletIsCanonical = useMemo(() => {
+    if (!privySmartWalletAddress) return false
+    return privySmartWalletAddress.toLowerCase() === canonicalCswAddress.toLowerCase()
+  }, [canonicalCswAddress, privySmartWalletAddress])
 
   const canonicalOwnerQuery = useReadContract({
     address: CANONICAL_SMART_WALLET as Address,
@@ -1194,13 +1210,33 @@ function AgentRegistration() {
       }
 
       // 2. Sign with the CSW (ERC-1271) — the CSW IS the newWallet
-      const signature = await (walletClient as any).signTypedData({
-        account: (walletClient as any).account,
-        domain,
-        types,
-        primaryType: 'AgentWalletSet',
-        message,
-      })
+      let signature: Hex
+      if (isCanonical) {
+        signature = await (walletClient as any).signTypedData({
+          account: (walletClient as any).account,
+          domain,
+          types,
+          primaryType: 'AgentWalletSet',
+          message,
+        })
+      } else if (privySmartWalletIsCanonical && smartWalletClient) {
+        const swc: any = smartWalletClient as any
+        if (typeof swc.account?.signTypedData === 'function') {
+          signature = await swc.account.signTypedData({ domain, types, primaryType: 'AgentWalletSet', message })
+        } else if (typeof swc.signTypedData === 'function') {
+          signature = await swc.signTypedData({
+            account: canonicalCswAddress as Address,
+            domain,
+            types,
+            primaryType: 'AgentWalletSet',
+            message,
+          })
+        } else {
+          throw new Error('Privy smart wallet signer is not ready. Re-auth and retry.')
+        }
+      } else {
+        throw new Error('Bind requires a canonical CSW signature. Connect canonical CSW or sign in with Privy smart wallet.')
+      }
 
       // 3. Encode and submit the setAgentWallet tx
       const registryAddress = ERC8004_IDENTITY_REGISTRY as Address
