@@ -460,12 +460,11 @@ function shouldFallbackToOwnerDirectExecute(error: unknown): boolean {
     msg.includes('user cancelled') ||
     msg.includes('action_rejected')
   if (userRejected) return false
+  // Direct executeBatch cannot recover owner-link/signature-authority failures.
+  if (msg.includes('invalid wallet sig') || msg.includes('not an onchain owner')) return false
   return (
     (msg.includes('method not supported') && msg.includes('eth_sign')) ||
     msg.includes('eth_sign is required for this wallet owner') ||
-    msg.includes('invalid signature') ||
-    msg.includes('signature check failed') ||
-    msg.includes('userop signature verification failed') ||
     msg.includes('verificationgaslimit') ||
     msg.includes('aa40') ||
     msg.includes('didn\'t pay prefund') ||
@@ -550,9 +549,9 @@ async function sendEmbeddedOwnerSmartWalletCall(params: {
       ownerAddress,
       calls,
       version: '1',
-      // EOA UserOps should use raw eth_sign; signMessage can cause AA40 loops.
-      userOpSignMode: 'eth_sign',
-      allowEoaSignMessageFallback: false,
+      // Embedded providers commonly block eth_sign; prefer auto with fallback.
+      userOpSignMode: 'auto',
+      allowEoaSignMessageFallback: true,
       skipPaymaster: false,
       // Avoid recursive signature-mode retries for deterministic embedded behavior.
       retryOnInvalidSignature: false,
