@@ -41,7 +41,7 @@ function getBearerToken(req: VercelRequest): string | null {
 }
 
 function isLegacyFallbackEnabled(): boolean {
-  const raw = String(process.env.WALLET_SYNC_LEGACY_FALLBACK ?? 'true').trim().toLowerCase()
+  const raw = String(process.env.WALLET_SYNC_LEGACY_FALLBACK ?? 'false').trim().toLowerCase()
   return raw !== '0' && raw !== 'false' && raw !== 'off'
 }
 

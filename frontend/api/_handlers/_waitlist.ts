@@ -45,8 +45,34 @@ function isSyntheticEmail(v: string): boolean {
   return v.endsWith('@noemail.4626.fun')
 }
 
+function isLegacySyntheticEmail(v: string): boolean {
+  const s = String(v || '').trim().toLowerCase()
+  if (!s.endsWith('@example.com')) return false
+  const local = s.split('@')[0] ?? ''
+  return (
+    local.startsWith('solinfer-') ||
+    local.startsWith('wallet-') ||
+    local.startsWith('anon-') ||
+    local.startsWith('0x')
+  )
+}
+
+function isAnySyntheticEmail(v: string): boolean {
+  return isSyntheticEmail(v) || isLegacySyntheticEmail(v)
+}
+
+function shouldAdoptIncomingEmail(existingEmail: string, incomingEmail: string): boolean {
+  const existing = normalizeEmail(existingEmail)
+  const incoming = normalizeEmail(incomingEmail)
+  if (!existing || !incoming || existing === incoming) return false
+  const incomingSynthetic = isAnySyntheticEmail(incoming)
+  if (!incomingSynthetic) return true
+  // Never overwrite a real email with a synthetic fallback email.
+  return isAnySyntheticEmail(existing)
+}
+
 function normalizeAddress(v: string): string {
-  return v.trim()
+  return v.trim().toLowerCase()
 }
 
 function isValidEvmAddress(v: string): boolean {
@@ -304,7 +330,7 @@ export default async function handler(req: any, res: any) {
 
   // If the client sent a synthetic email, normalize it deterministically from the wallet identity.
   // This ensures repeat submissions update the same row (email is UNIQUE) instead of creating duplicates.
-  if (isSyntheticEmail(email)) {
+  if (isAnySyntheticEmail(email)) {
     const seed = (primaryWallet && isValidEvmAddress(primaryWallet) ? primaryWallet : null) || null
     if (seed) {
       email = buildDeterministicSyntheticEmail(seed)
@@ -389,7 +415,7 @@ export default async function handler(req: any, res: any) {
   let embeddedWallet: string | null = null
   let embeddedWalletChain: string | null = null
   let embeddedWalletClientType: string | null = null
-  if (!isSyntheticEmail(email)) {
+  if (!isAnySyntheticEmail(email)) {
     try {
       const privy = await privyCreateOrGetWaitlistUser(email)
       privyUserId = privy.privyUserId
@@ -429,24 +455,46 @@ export default async function handler(req: any, res: any) {
   try {
     let existingRow: { id: number; email: string } | null = null
 
-    if (walletForDedup) {
+    const findByAddress = async (address: string): Promise<{ id: number; email: string } | null> => {
       const q = await db.sql`
-        SELECT id, email FROM profiles
-        WHERE LOWER(primary_wallet) = ${walletForDedup}
-           OR LOWER(embedded_wallet) = ${walletForDedup}
-        ORDER BY created_at ASC LIMIT 1;
+        SELECT p.id, p.email
+        FROM profiles p
+        WHERE LOWER(p.primary_wallet) = ${address}
+           OR LOWER(p.embedded_wallet) = ${address}
+           OR LOWER(p.primary_embedded_eoa) = ${address}
+           OR LOWER(p.csw_address) = ${address}
+           OR LOWER(p.primary_smart_wallet) = ${address}
+           OR LOWER(p.base_sub_account) = ${address}
+           OR EXISTS (
+             SELECT 1
+             FROM profile_wallets pw
+             WHERE pw.profile_id = p.id
+               AND LOWER(pw.address) = ${address}
+           )
+        ORDER BY
+          CASE
+            WHEN LOWER(p.email) LIKE '%@noemail.4626.fun' THEN 0
+            WHEN LOWER(p.email) LIKE '%@example.com' THEN 1
+            ELSE 2
+          END,
+          p.created_at ASC
+        LIMIT 1;
       `
-      existingRow = (q?.rows?.[0] as { id: number; email: string } | undefined) ?? null
+      return (q?.rows?.[0] as { id: number; email: string } | undefined) ?? null
     }
-    if (!existingRow && embeddedForDedup) {
-      const q = await db.sql`
-        SELECT id, email FROM profiles
-        WHERE LOWER(embedded_wallet) = ${embeddedForDedup}
-           OR LOWER(primary_embedded_eoa) = ${embeddedForDedup}
-        ORDER BY created_at ASC LIMIT 1;
-      `
-      existingRow = (q?.rows?.[0] as { id: number; email: string } | undefined) ?? null
+
+    const dedupAddressSignals = Array.from(
+      new Set(
+        [walletForDedup, embeddedForDedup, cswAddress.length > 0 ? cswAddress : null, baseSubAccount.length > 0 ? baseSubAccount : null]
+          .filter((v): v is string => Boolean(v)),
+      ),
+    )
+
+    for (const signal of dedupAddressSignals) {
+      existingRow = await findByAddress(signal)
+      if (existingRow) break
     }
+
     if (!existingRow && privyForDedup) {
       const q = await db.sql`
         SELECT id, email FROM profiles
@@ -456,15 +504,16 @@ export default async function handler(req: any, res: any) {
       existingRow = (q?.rows?.[0] as { id: number; email: string } | undefined) ?? null
     }
 
-    if (existingRow?.id && existingRow.email !== email) {
+    if (existingRow?.id) {
+      const nextEmail = shouldAdoptIncomingEmail(existingRow.email, email) ? email : existingRow.email
       // Existing profile found with a different email (likely synthetic).
       // Adopt it: update the email to the real one and merge all fields.
       console.info(
-        `waitlist: dedup — adopting profile #${existingRow.id} (${existingRow.email}) → ${email} for wallet ${walletForDedup ?? embeddedForDedup ?? 'N/A'}`,
+        `waitlist: dedup — adopting profile #${existingRow.id} (${existingRow.email}) → ${nextEmail} for wallet ${walletForDedup ?? embeddedForDedup ?? 'N/A'}`,
       )
       const adopted = await db.sql`
         UPDATE profiles
-        SET email = ${email},
+        SET email = ${nextEmail},
             primary_wallet = COALESCE(${walletForDedup}, primary_wallet),
             solana_wallet = COALESCE(${solanaWallet.length > 0 ? solanaWallet : null}, solana_wallet),
             privy_user_id = COALESCE(${privyUserId}, privy_user_id),
