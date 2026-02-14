@@ -999,6 +999,68 @@ function getSelector(data: Hex): string {
   return data.length >= 10 ? data.slice(0, 10).toLowerCase() : ''
 }
 
+function summarizeSmartWalletCallData(callData: Hex): {
+  innerCallCount: number
+  innerSelectors: string[]
+  innerTargets: Address[]
+} | null {
+  try {
+    const decoded = decodeFunctionData({ abi: COINBASE_SMART_WALLET_ABI, data: callData })
+    const innerCalls: InnerCall[] =
+      decoded.functionName === 'execute'
+        ? [
+            {
+              target: getAddress(decoded.args[0] as Address),
+              value: decoded.args[1] as bigint,
+              data: decoded.args[2] as Hex,
+            },
+          ]
+        : decoded.functionName === 'executeBatch'
+          ? (decoded.args[0] as any[]).map((c: any) => ({
+              target: getAddress(c.target as Address),
+              value: BigInt(c.value),
+              data: c.data as Hex,
+            }))
+          : []
+
+    const selectors = innerCalls.map((c) => getSelector(c.data)).filter(Boolean)
+    const targets = innerCalls.map((c) => c.target)
+    return {
+      innerCallCount: innerCalls.length,
+      innerSelectors: selectors,
+      innerTargets: targets,
+    }
+  } catch {
+    return null
+  }
+}
+
+function formatValidationContexts(
+  contexts: Array<{
+    method: string
+    sender?: Address | null
+    mode?: string | null
+    expectedCreatorToken?: Address | null
+    innerSelectors?: string[]
+    innerTargets?: Address[]
+  }>,
+): string {
+  const compact = contexts.slice(0, 3).map((ctx, idx) => {
+    const selectors = (ctx.innerSelectors ?? []).slice(0, 3).join(',') || 'none'
+    const targets = (ctx.innerTargets ?? []).slice(0, 2).join(',') || 'none'
+    return [
+      `#${idx + 1}`,
+      `method=${ctx.method}`,
+      `mode=${ctx.mode ?? 'unknown'}`,
+      `sender=${ctx.sender ?? 'unknown'}`,
+      `creatorToken=${ctx.expectedCreatorToken ?? 'none'}`,
+      `selectors=${selectors}`,
+      `targets=${targets}`,
+    ].join(';')
+  })
+  return compact.join(' | ')
+}
+
 function decodeAddressArgFromCalldata(data: Hex, argIndex: number): Address | null {
   // abi.encodeWithSelector packs selector (4) + each arg in 32 byte slots
   const start = 10 + argIndex * 64
@@ -1936,6 +1998,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const debugRequested = String(req.headers?.['x-cv-paymaster-debug'] ?? '').trim() === '1'
   const debugEnabled = debugRequested || String(process.env.PAYMASTER_DEBUG ?? '').trim() === '1'
+  const validationDebugContexts: Array<{
+    method: string
+    sender?: Address | null
+    mode?: string | null
+    expectedCreatorToken?: Address | null
+    innerSelectors?: string[]
+    innerTargets?: Address[]
+  }> = []
   let debugStoreInfo:
     | {
         deployer: Address
@@ -2037,6 +2107,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const sender = getAddress(senderRaw)
+      const callSummary = summarizeSmartWalletCallData(callDataRaw as Hex)
+      const requestContext: {
+        method: string
+        sender?: Address | null
+        mode?: string | null
+        expectedCreatorToken?: Address | null
+        innerSelectors?: string[]
+        innerTargets?: Address[]
+      } = {
+        method,
+        sender,
+        innerSelectors: callSummary?.innerSelectors ?? [],
+        innerTargets: callSummary?.innerTargets ?? [],
+      }
+      validationDebugContexts.push(requestContext)
 
       let sessionAddress: Address | null = null
       let deploySessionOwner: Address | null = null
@@ -2087,6 +2172,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Validate inner calls match CreatorVault patterns.
       let expectedCreatorToken: Address | null = null
       if (allowCleanupOnlyForInactiveDeploySession && deploySessionOwner) {
+        requestContext.mode = 'cleanup_only'
         // Special-case: allow only `removeOwnerAtIndex` self-call for the recorded deploy session owner.
         const decoded = decodeFunctionData({ abi: COINBASE_SMART_WALLET_ABI, data: callDataRaw })
         const innerCalls: InnerCall[] =
@@ -2129,6 +2215,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             : undefined,
         })
         expectedCreatorToken = validated.expectedCreatorToken
+        requestContext.mode = String(validated.mode ?? 'unknown')
+        requestContext.expectedCreatorToken = validated.expectedCreatorToken ?? null
         const isLegacyWithdraw = String(validated.mode) === 'legacy_withdraw'
         if (!isLegacyWithdraw) {
           // Only sponsor approved creators (Supabase/Postgres allowlist).
@@ -2149,15 +2237,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const msg = err instanceof Error ? err.message : 'request denied'
     if (debugEnabled) {
-      logger.warn('[paymaster-proxy] validation denied (debug)', { msg, debugStoreInfo })
+      logger.warn('[paymaster-proxy] validation denied (debug)', {
+        msg,
+        debugStoreInfo,
+        validationContexts: validationDebugContexts,
+      })
     } else {
       logger.warn('[paymaster-proxy] validation denied', { msg })
     }
+    const contextSummary = validationDebugContexts.length > 0 ? formatValidationContexts(validationDebugContexts) : ''
     if (debugRequested && debugStoreInfo) {
       res.setHeader('X-CV-Paymaster-Debug', formatDebugStoreInfo(debugStoreInfo))
       return res
         .status(200)
-        .json(jsonRpcError(null, -32002, `request denied - ${msg} (debug ${formatDebugStoreInfo(debugStoreInfo)})`))
+        .json(
+          jsonRpcError(
+            null,
+            -32002,
+            `request denied - ${msg} (debug ${formatDebugStoreInfo(debugStoreInfo)}${
+              contextSummary ? `,context ${contextSummary}` : ''
+            })`,
+          ),
+        )
+    }
+    if (debugRequested && contextSummary) {
+      return res.status(200).json(jsonRpcError(null, -32002, `request denied - ${msg} (context ${contextSummary})`))
     }
     return res.status(200).json(jsonRpcError(null, -32002, `request denied - ${msg}`))
   }
@@ -2177,6 +2281,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const parsed = JSON.parse(text)
       if (parsed && typeof parsed === 'object') {
+        if (debugEnabled && !Array.isArray(parsed) && (parsed as any)?.error) {
+          logger.warn('[paymaster-proxy] upstream denied userop (debug)', {
+            upstreamError: (parsed as any).error,
+            validationContexts: validationDebugContexts,
+          })
+        }
+        if (debugRequested && !Array.isArray(parsed) && (parsed as any)?.error) {
+          const contextSummary = validationDebugContexts.length > 0 ? formatValidationContexts(validationDebugContexts) : ''
+          const errObj = (parsed as any).error
+          const msg = typeof errObj?.message === 'string' ? errObj.message : String(errObj?.message ?? '')
+          if (contextSummary && msg) {
+            ;(parsed as any).error = { ...errObj, message: `${msg} (context ${contextSummary})` }
+          }
+        }
         return res.status(200).send(JSON.stringify(parsed))
       }
     } catch {

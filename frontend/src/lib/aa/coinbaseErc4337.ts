@@ -185,6 +185,14 @@ function isDebugEnabled(): boolean {
 }
 
 const AA_DEBUG = isDebugEnabled()
+const PAYMASTER_DEBUG_HEADER_ENABLED =
+  String((import.meta.env as Record<string, string | undefined>).VITE_PAYMASTER_DEBUG ?? '')
+    .trim()
+    .toLowerCase() === '1' ||
+  String((import.meta.env as Record<string, string | undefined>).VITE_PAYMASTER_DEBUG ?? '')
+    .trim()
+    .toLowerCase() === 'true' ||
+  AA_DEBUG
 
 function normalizeUrl(value: string): string {
   const v = value.trim()
@@ -1311,7 +1319,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     const sendSession = options.includeSession && sameOrigin
     const headers: Record<string, string> = {
       ...(sendSession && sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
-      ...(sendSession && options.includeDebug && AA_DEBUG ? { 'X-CV-Paymaster-Debug': '1' } : {}),
+      ...(sendSession && options.includeDebug && PAYMASTER_DEBUG_HEADER_ENABLED ? { 'X-CV-Paymaster-Debug': '1' } : {}),
     }
     return http(url, {
       fetchOptions: {
