@@ -521,6 +521,13 @@ function summarizeErrorReason(error: unknown): string {
 function toFriendlyTxError(error: unknown): string {
   const msg = summarizeErrorReason(error)
   const lower = msg.toLowerCase()
+  if (lower.includes('bind requires a canonical csw signature')) {
+    return (
+      'Bind requires a canonical CSW signature, but no canonical CSW signer is available in this session. ' +
+      'Connect the canonical CSW directly, or sign in with Privy smart wallet (4626.fun). ' +
+      'If Privy wallet init is failing, clear site storage (FILE_ERROR_NO_SPACE) and re-auth.'
+    )
+  }
   if (lower.includes('invalid wallet sig')) {
     return 'Invalid wallet signature. setAgentWallet must be signed by the canonical CSW (ERC-1271), not only the owner EOA.'
   }
@@ -1235,7 +1242,14 @@ function AgentRegistration() {
           throw new Error('Privy smart wallet signer is not ready. Re-auth and retry.')
         }
       } else {
-        throw new Error('Bind requires a canonical CSW signature. Connect canonical CSW or sign in with Privy smart wallet.')
+        throw new Error(
+          `Bind requires a canonical CSW signature. ` +
+            `connected=${connectedAddress ?? 'none'}; ` +
+            `canonical=${canonicalCswAddress}; ` +
+            `privySmartWallet=${privySmartWalletAddress ?? 'none'}; ` +
+            `privySmartWalletIsCanonical=${String(privySmartWalletIsCanonical)}. ` +
+            `Connect canonical CSW or sign in with Privy smart wallet (4626.fun).`,
+        )
       }
 
       // 3. Encode and submit the setAgentWallet tx
