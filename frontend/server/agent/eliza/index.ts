@@ -106,7 +106,14 @@ const XMTP_DB_ENCRYPTION_KEY = (() => {
   const hex = raw.startsWith('0x') ? raw : `0x${raw}`
   return hex as `0x${string}`
 })()
-const XMTP_DB_FORCE_ENCRYPTED_MIGRATION = (process.env.XMTP_DB_FORCE_ENCRYPTED_MIGRATION ?? '0').trim() === '1'
+const XMTP_DB_FORCE_ENCRYPTED_MIGRATION_REQUESTED = (() => {
+  const raw = (process.env.XMTP_DB_FORCE_ENCRYPTED_MIGRATION ?? '0').trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes'
+})()
+const XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM = (process.env.XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM ?? '').trim().toLowerCase()
+const XMTP_DB_FORCE_ENCRYPTED_MIGRATION =
+  XMTP_DB_FORCE_ENCRYPTED_MIGRATION_REQUESTED &&
+  XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM === 'rotate-db'
 
 const SQLITE_HEADER = Buffer.from('SQLite format 3\u0000', 'utf8')
 
@@ -140,12 +147,45 @@ function hasLegacyPlaintextDbInDir(): boolean {
   }
 }
 
+function hasLegacyMigrationBackupsInDir(): boolean {
+  try {
+    const files = fs.readdirSync(XMTP_DB_DIR)
+    return files.some((f: string) => f.includes('.legacy-unencrypted.'))
+  } catch {
+    return false
+  }
+}
+
+function hasLegacyMigrationBackupForFile(filePath: string): boolean {
+  try {
+    const dir = path.dirname(filePath)
+    const base = path.basename(filePath)
+    const prefix = `${base}.legacy-unencrypted.`
+    return fs.readdirSync(dir).some((f: string) => f.startsWith(prefix))
+  } catch {
+    return false
+  }
+}
+
 function getEffectiveDbEncryptionKey(): `0x${string}` | undefined {
   if (!XMTP_DB_ENCRYPTION_KEY) return undefined
+  if (
+    XMTP_DB_FORCE_ENCRYPTED_MIGRATION &&
+    hasLegacyPlaintextDbInDir() &&
+    hasLegacyMigrationBackupsInDir()
+  ) {
+    const message =
+      '[xmtp] Refusing startup: forced encrypted migration was already attempted but plaintext DB(s) still remain. ' +
+      'This usually means SQLCipher encryption is unavailable in this runtime, and retrying would churn installations. ' +
+      'Disable forced migration (XMTP_DB_FORCE_ENCRYPTED_MIGRATION=0) to reuse the existing DB.'
+    logger.error(message)
+    throw new Error(message)
+  }
   if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION && hasLegacyPlaintextDbInDir()) {
     logger.warn(
       '[xmtp] Legacy plaintext DB detected; using plaintext compatibility mode to reuse installation ' +
-      'and avoid churn. Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION=1 to force encrypted migration.',
+      'and avoid churn. Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION=1 and ' +
+      'XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM=rotate-db to force encrypted migration.',
     )
     return undefined
   }
@@ -160,6 +200,13 @@ function rotateLegacyPlaintextDbIfNeeded(filePath: string): void {
   if (!XMTP_DB_ENCRYPTION_KEY) return
   if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION) return
   if (!fileLooksLikePlainSqlite(filePath)) return
+  if (hasLegacyMigrationBackupForFile(filePath)) {
+    const message =
+      `[xmtp] Refusing startup: forced migration was already attempted for ${filePath} but a plaintext DB still exists. ` +
+      'This indicates encryption attach likely failed previously, and retrying would create another installation.'
+    logger.error(message)
+    throw new Error(message)
+  }
   const backupPath = `${filePath}.legacy-unencrypted.${Date.now()}`
   try {
     fs.renameSync(filePath, backupPath)
@@ -215,10 +262,17 @@ function checkDbPersistence(): void {
         '[xmtp] ⚠️  XMTP_DB_ENCRYPTION_KEY is not set — DB cannot be reopened across restarts!\n' +
         '    Generate one: openssl rand -hex 32  (then prefix with 0x)',
       )
+    } else if (XMTP_DB_FORCE_ENCRYPTED_MIGRATION_REQUESTED && !XMTP_DB_FORCE_ENCRYPTED_MIGRATION) {
+      logger.warn(
+        '[xmtp] Forced encrypted migration requested but NOT confirmed.\n' +
+        '    To run migration intentionally, set XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM=rotate-db.\n' +
+        '    Running in compatibility mode to avoid accidental installation churn.',
+      )
     } else if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION && hasLegacyPlaintextDbInDir()) {
       logger.warn(
         '[xmtp] Legacy plaintext DB(s) present: encryption key is configured but compatibility mode is active.\n' +
-        '    Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION=1 to rotate legacy DB and create an encrypted installation.',
+        '    Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION=1 and XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM=rotate-db\n' +
+        '    to rotate legacy DB and create an encrypted installation.',
       )
     }
   } catch {

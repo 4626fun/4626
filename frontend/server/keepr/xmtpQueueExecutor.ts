@@ -98,7 +98,14 @@ function getDbEncryptionKey(): `0x${string}` | undefined {
  */
 const KEEPR_XMTP_DB_DIR = resolveXmtpDbDirectory()
 const SQLITE_HEADER = Buffer.from('SQLite format 3\u0000', 'utf8')
-const XMTP_DB_FORCE_ENCRYPTED_MIGRATION = (process.env.XMTP_DB_FORCE_ENCRYPTED_MIGRATION ?? '0').trim() === '1'
+const XMTP_DB_FORCE_ENCRYPTED_MIGRATION_REQUESTED = (() => {
+  const raw = (process.env.XMTP_DB_FORCE_ENCRYPTED_MIGRATION ?? '0').trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes'
+})()
+const XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM = (process.env.XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM ?? '').trim().toLowerCase()
+const XMTP_DB_FORCE_ENCRYPTED_MIGRATION =
+  XMTP_DB_FORCE_ENCRYPTED_MIGRATION_REQUESTED &&
+  XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM === 'rotate-db'
 
 function fileLooksLikePlainSqlite(filePath: string): boolean {
   try {
@@ -122,6 +129,12 @@ function rotateLegacyPlaintextDbIfNeeded(filePath: string): void {
   if (!encKey) return
   if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION) return
   if (!fileLooksLikePlainSqlite(filePath)) return
+  if (hasLegacyMigrationBackupForFile(filePath)) {
+    throw new KeeprQueueError(
+      'forced_migration_failed_previously_plaintext_db_still_present',
+      false,
+    )
+  }
   const backupPath = `${filePath}.legacy-unencrypted.${Date.now()}`
   try {
     fs.renameSync(filePath, backupPath)
@@ -137,13 +150,44 @@ function rotateLegacyPlaintextDbIfNeeded(filePath: string): void {
   }
 }
 
+function hasLegacyMigrationBackupForFile(filePath: string): boolean {
+  try {
+    const dir = path.dirname(filePath)
+    const base = path.basename(filePath)
+    const prefix = `${base}.legacy-unencrypted.`
+    return fs.readdirSync(dir).some((f) => f.startsWith(prefix))
+  } catch {
+    return false
+  }
+}
+
 function getEffectiveDbEncryptionKeyForPath(filePath: string): `0x${string}` | undefined {
   const encKey = getDbEncryptionKey()
   if (!encKey) return undefined
+  if (XMTP_DB_FORCE_ENCRYPTED_MIGRATION_REQUESTED && !XMTP_DB_FORCE_ENCRYPTED_MIGRATION && fileLooksLikePlainSqlite(filePath)) {
+    logger.warn(
+      '[keepr/xmtp-queue] Forced migration requested but NOT confirmed; ' +
+      'running in compatibility mode to avoid accidental installation churn. ' +
+      'Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM=rotate-db to enable.',
+      { filePath },
+    )
+    return undefined
+  }
+  if (
+    XMTP_DB_FORCE_ENCRYPTED_MIGRATION &&
+    fileLooksLikePlainSqlite(filePath) &&
+    hasLegacyMigrationBackupForFile(filePath)
+  ) {
+    throw new KeeprQueueError(
+      'forced_migration_failed_previously_plaintext_db_still_present',
+      false,
+    )
+  }
   if (!XMTP_DB_FORCE_ENCRYPTED_MIGRATION && fileLooksLikePlainSqlite(filePath)) {
     logger.warn(
       '[keepr/xmtp-queue] Legacy plaintext DB detected; using compatibility mode for this run. ' +
-      'Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION=1 to force encrypted migration.',
+      'Set XMTP_DB_FORCE_ENCRYPTED_MIGRATION=1 and ' +
+      'XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM=rotate-db to force encrypted migration.',
       { filePath },
     )
     return undefined

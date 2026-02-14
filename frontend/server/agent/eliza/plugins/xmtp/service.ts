@@ -23,6 +23,12 @@ function getEthereumAddressFromInboxState(state: any): string | null {
   return null
 }
 
+function readEnvDbEncryptionKey(): `0x${string}` | undefined {
+  const raw = (process.env.XMTP_DB_ENCRYPTION_KEY ?? '').trim()
+  if (!raw) return undefined
+  return (raw.startsWith('0x') ? raw : `0x${raw}`) as `0x${string}`
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -129,7 +135,27 @@ export class XmtpService {
       createOpts.dbEncryptionKey = this.config.dbEncryptionKey
     }
 
-    this.agent = await Agent.create(signer, createOpts as any)
+    let effectiveDbEncryptionKey = this.config.dbEncryptionKey
+    try {
+      this.agent = await Agent.create(signer, createOpts as any)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      const retryKey = !effectiveDbEncryptionKey ? readEnvDbEncryptionKey() : undefined
+      const isUnsupportedFormat = message.toLowerCase().includes('unsupported file format')
+      if (!retryKey || !isUnsupportedFormat) throw err
+
+      console.warn(
+        '[xmtp-service] Initial DB open failed with unsupported file format; retrying once with XMTP_DB_ENCRYPTION_KEY',
+      )
+      effectiveDbEncryptionKey = retryKey
+      this.agent = await Agent.create(
+        signer,
+        {
+          ...createOpts,
+          dbEncryptionKey: retryKey,
+        } as any,
+      )
+    }
 
     // Log installation info for persistence debugging
     try {
@@ -138,7 +164,7 @@ export class XmtpService {
         `[xmtp-service] Connected: ${this.agent.address} | ` +
         `installations: ${info.totalInstallations}/10 | ` +
         `dbPath: ${typeof createOpts.dbPath === 'function' ? '(function)' : createOpts.dbPath ?? 'default'} | ` +
-        `dbEncrypted: ${!!createOpts.dbEncryptionKey}`,
+        `dbEncrypted: ${!!effectiveDbEncryptionKey}`,
       )
     } catch {
       // Non-fatal — some SDK versions may not expose getInstallationInfo

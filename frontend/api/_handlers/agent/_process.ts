@@ -15,6 +15,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { Agent, createUser, createSigner } from '@xmtp/agent-sdk'
 import type { Address } from 'viem'
+import fs from 'node:fs'
+import path from 'node:path'
 
 import { isDbConfigured, getDb } from '../../../server/_lib/postgres.js'
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../../server/_lib/creatorXmtpAgents.js'
@@ -32,6 +34,7 @@ const XMTP_DB_ENCRYPTION_KEY = (() => {
   if (!raw) return undefined
   return (raw.startsWith('0x') ? raw : `0x${raw}`) as `0x${string}`
 })()
+const XMTP_DB_DIR = (process.env.XMTP_DB_DIRECTORY ?? '').trim() || path.join('/tmp', '.xmtp-data')
 const MAX_AGENTS = Number(process.env.MAX_AGENTS ?? '10') // Lower limit for serverless
 const MAX_MESSAGES_PER_AGENT = 20 // Process at most N messages per invocation
 export const MAX_MESSAGES_PER_CONVERSATION = 50
@@ -100,6 +103,11 @@ function isCommandLike(text: string): boolean {
     t.startsWith('@keepr') ||
     t.startsWith('@bot')
   )
+}
+
+function makeDbPath(): (inboxId: string) => string {
+  fs.mkdirSync(XMTP_DB_DIR, { recursive: true, mode: 0o700 })
+  return (inboxId: string) => path.join(XMTP_DB_DIR, `xmtp-${XMTP_ENV}-${inboxId}.db3`)
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -194,6 +202,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         agent = await Agent.create(signer, {
           env: XMTP_ENV,
+          dbPath: makeDbPath(),
           ...(XMTP_DB_ENCRYPTION_KEY ? { dbEncryptionKey: XMTP_DB_ENCRYPTION_KEY } : {}),
         } as any)
 
