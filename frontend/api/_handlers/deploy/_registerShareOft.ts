@@ -39,6 +39,12 @@ type RegisterShareOftResponse = {
   solanaDecimals: number | null
 }
 
+type WrapRunner = {
+  bin: string
+  args: string[]
+  label: string
+}
+
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
 const BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as Address
@@ -230,6 +236,90 @@ function parseMintPubkeyFromWrapOutput(text: string): string | null {
   return match?.[1] ?? null
 }
 
+function buildWrapRunnerList(cliBinRaw: string, wrapArgs: string[]): WrapRunner[] {
+  const normalized = cliBinRaw.trim().toLowerCase()
+  const runners: WrapRunner[] = []
+  const pushUnique = (runner: WrapRunner): void => {
+    if (!runners.some((r) => r.bin === runner.bin && r.args.join('\u0000') === runner.args.join('\u0000'))) {
+      runners.push(runner)
+    }
+  }
+
+  const pushDefaultFallbacks = (): void => {
+    pushUnique({ bin: 'bun', args: ['cli', ...wrapArgs], label: 'bun cli' })
+    pushUnique({ bin: 'pnpm', args: ['run', 'cli', '--', ...wrapArgs], label: 'pnpm run cli --' })
+    pushUnique({ bin: 'npm', args: ['run', 'cli', '--', ...wrapArgs], label: 'npm run cli --' })
+    pushUnique({ bin: 'cli', args: wrapArgs, label: 'cli' })
+  }
+
+  if (!normalized || normalized === 'auto') {
+    pushDefaultFallbacks()
+    return runners
+  }
+  if (normalized === 'bun') {
+    pushUnique({ bin: 'bun', args: ['cli', ...wrapArgs], label: 'bun cli' })
+    pushDefaultFallbacks()
+    return runners
+  }
+  if (normalized === 'pnpm') {
+    pushUnique({ bin: 'pnpm', args: ['run', 'cli', '--', ...wrapArgs], label: 'pnpm run cli --' })
+    return runners
+  }
+  if (normalized === 'npm') {
+    pushUnique({ bin: 'npm', args: ['run', 'cli', '--', ...wrapArgs], label: 'npm run cli --' })
+    return runners
+  }
+  if (normalized === 'cli') {
+    pushUnique({ bin: 'cli', args: wrapArgs, label: 'cli' })
+    return runners
+  }
+
+  pushUnique({ bin: cliBinRaw, args: ['cli', ...wrapArgs], label: `${cliBinRaw} cli` })
+  return runners
+}
+
+function toErrorText(error: unknown): string {
+  if (!error || typeof error !== 'object') return String(error)
+  const err = error as { message?: string; stderr?: string; stdout?: string }
+  return [err.message, err.stderr, err.stdout].filter(Boolean).join('\n')
+}
+
+function isRunnerUnavailable(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code
+  if (code === 'ENOENT') return true
+  const text = toErrorText(error).toLowerCase()
+  return (
+    text.includes('enoent') ||
+    text.includes('command not found') ||
+    text.includes('not recognized as an internal or external command') ||
+    text.includes('missing script: cli') ||
+    text.includes('none of the selected packages has a "cli" script')
+  )
+}
+
+async function runWrapToken(cliDir: string, cliBinRaw: string, wrapArgs: string[]): Promise<{ output: string; runner: string }> {
+  const runners = buildWrapRunnerList(cliBinRaw, wrapArgs)
+  const failures: string[] = []
+
+  for (const runner of runners) {
+    try {
+      const { stdout, stderr } = await execFileAsync(runner.bin, runner.args, {
+        cwd: cliDir,
+        timeout: 20 * 60_000,
+        maxBuffer: 4 * 1024 * 1024,
+      })
+      return { output: `${stdout ?? ''}\n${stderr ?? ''}`, runner: runner.label }
+    } catch (error) {
+      failures.push(`${runner.label}: ${toErrorText(error)}`)
+      if (!isRunnerUnavailable(error)) throw error
+    }
+  }
+
+  throw new Error(
+    `No usable bridge CLI runner found. Configure SOLANA_BRIDGE_CLI_BIN or install one of: bun, pnpm, npm, cli. Details: ${failures.join(' | ')}`,
+  )
+}
+
 async function tryProvisionDynamicRoute(params: {
   shareOft: Address
   solanaDecimals: number
@@ -238,7 +328,7 @@ async function tryProvisionDynamicRoute(params: {
   if (!readDynamicSolanaRouteEnabled()) return null
 
   const cliDir = String(process.env.SOLANA_BRIDGE_CLI_DIR ?? '').trim()
-  const cliBin = String(process.env.SOLANA_BRIDGE_CLI_BIN ?? 'bun').trim() || 'bun'
+  const cliBin = String(process.env.SOLANA_BRIDGE_CLI_BIN ?? 'auto').trim() || 'auto'
   const deployEnv = String(process.env.SOLANA_BRIDGE_DEPLOY_ENV ?? 'mainnet').trim() || 'mainnet'
   const payerKp = String(process.env.SOLANA_BRIDGE_PAYER_KP ?? 'config').trim() || 'config'
   const scalerExponent = parseDecimals(process.env.SOLANA_BRIDGE_SCALER_EXPONENT) ?? params.solanaDecimals
@@ -257,9 +347,9 @@ async function tryProvisionDynamicRoute(params: {
 
   let mintBytes32: Hex
   let mintedPubkey: string | null = null
+  let provisionRunner: string | null = null
   if (cliDir && existsSync(cliDir)) {
-    const args = [
-      'cli',
+    const wrapArgs = [
       'sol',
       'bridge',
       'wrap-token',
@@ -278,7 +368,7 @@ async function tryProvisionDynamicRoute(params: {
       '--payer-kp',
       payerKp,
     ]
-    if (payForRelay) args.push('--pay-for-relay')
+    if (payForRelay) wrapArgs.push('--pay-for-relay')
 
     logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (local CLI)', {
       shareOft: params.shareOft,
@@ -290,12 +380,8 @@ async function tryProvisionDynamicRoute(params: {
       payForRelay,
     })
 
-    const { stdout, stderr } = await execFileAsync(cliBin, args, {
-      cwd: cliDir,
-      timeout: 20 * 60_000,
-      maxBuffer: 4 * 1024 * 1024,
-    })
-    const combined = `${stdout ?? ''}\n${stderr ?? ''}`
+    const { output: combined, runner } = await runWrapToken(cliDir, cliBin, wrapArgs)
+    provisionRunner = runner
     const mintPubkey = parseMintPubkeyFromWrapOutput(combined)
     if (!mintPubkey) {
       throw new Error(`Dynamic route created unknown mint (could not parse output). Output: ${combined.slice(-1200)}`)
@@ -347,6 +433,12 @@ async function tryProvisionDynamicRoute(params: {
       throw new Error('Remote provisioner did not return a valid mintBytes32.')
     }
     mintBytes32 = mintBytes32Raw as Hex
+    provisionRunner =
+      typeof (json as any).runner === 'string'
+        ? String((json as any).runner)
+        : typeof (json as any)?.data?.runner === 'string'
+          ? String((json as any).data.runner)
+          : 'remote-provisioner'
   } else {
     throw new Error(
       'Dynamic Solana route is enabled, but neither a valid local SOLANA_BRIDGE_CLI_DIR exists ' +
@@ -369,6 +461,7 @@ async function tryProvisionDynamicRoute(params: {
         shareOft: params.shareOft,
         mintPubkey: mintedPubkey,
         mintBytes32,
+        runner: provisionRunner,
         scalar: scalar.toString(),
       })
       return mintBytes32
@@ -580,7 +673,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           success: false,
           error: appendDynamicProvisionDetail(
             'Missing Solana mint bytes32. Provide `solanaMint` in the request body or set SOLANA_DEFAULT_MINT_BYTES32. ' +
-              'For automatic dynamic route creation, enable SOLANA_DYNAMIC_ROUTE_ENABLED=1 and set SOLANA_BRIDGE_CLI_DIR.',
+              'For automatic dynamic route creation, enable SOLANA_DYNAMIC_ROUTE_ENABLED=1 and set SOLANA_BRIDGE_CLI_DIR, or configure SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL.',
           ),
         } satisfies ApiEnvelope<never>)
       }
@@ -639,7 +732,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             `Base Solana bridge route is not registered for ShareOFT ${shareOft} and mint ${solanaMint} ` +
               '(WrappedSplRouteNotRegistered). Use a bridge-supported Solana mint for this ShareOFT, ' +
               'or disable Solana bridging on the batcher before deploy. ' +
-              'For automatic dynamic route creation, enable SOLANA_DYNAMIC_ROUTE_ENABLED=1 and set SOLANA_BRIDGE_CLI_DIR.',
+              'For automatic dynamic route creation, enable SOLANA_DYNAMIC_ROUTE_ENABLED=1 and set SOLANA_BRIDGE_CLI_DIR, or configure SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL.',
           ),
         } satisfies ApiEnvelope<never>)
       }

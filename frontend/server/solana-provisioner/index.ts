@@ -36,6 +36,12 @@ type ProvisionBody = {
   payForRelay?: boolean
 }
 
+type WrapRunner = {
+  bin: string
+  args: string[]
+  label: string
+}
+
 function json(res: ServerResponse, statusCode: number, payload: unknown): void {
   const body = JSON.stringify(payload)
   res.statusCode = statusCode
@@ -117,6 +123,91 @@ function authOk(req: IncomingMessage, secret: string): boolean {
   return timingSafeEqual(a, b)
 }
 
+function buildWrapRunnerList(cliBinRaw: string, wrapArgs: string[]): WrapRunner[] {
+  const normalized = cliBinRaw.trim().toLowerCase()
+  const runners: WrapRunner[] = []
+  const pushUnique = (runner: WrapRunner): void => {
+    if (!runners.some((r) => r.bin === runner.bin && r.args.join('\u0000') === runner.args.join('\u0000'))) {
+      runners.push(runner)
+    }
+  }
+
+  const pushDefaultFallbacks = (): void => {
+    pushUnique({ bin: 'bun', args: ['cli', ...wrapArgs], label: 'bun cli' })
+    pushUnique({ bin: 'pnpm', args: ['run', 'cli', '--', ...wrapArgs], label: 'pnpm run cli --' })
+    pushUnique({ bin: 'npm', args: ['run', 'cli', '--', ...wrapArgs], label: 'npm run cli --' })
+    pushUnique({ bin: 'cli', args: wrapArgs, label: 'cli' })
+  }
+
+  if (!normalized || normalized === 'auto') {
+    pushDefaultFallbacks()
+    return runners
+  }
+
+  if (normalized === 'bun') {
+    pushUnique({ bin: 'bun', args: ['cli', ...wrapArgs], label: 'bun cli' })
+    pushDefaultFallbacks()
+    return runners
+  }
+  if (normalized === 'pnpm') {
+    pushUnique({ bin: 'pnpm', args: ['run', 'cli', '--', ...wrapArgs], label: 'pnpm run cli --' })
+    return runners
+  }
+  if (normalized === 'npm') {
+    pushUnique({ bin: 'npm', args: ['run', 'cli', '--', ...wrapArgs], label: 'npm run cli --' })
+    return runners
+  }
+  if (normalized === 'cli') {
+    pushUnique({ bin: 'cli', args: wrapArgs, label: 'cli' })
+    return runners
+  }
+
+  pushUnique({ bin: cliBinRaw, args: ['cli', ...wrapArgs], label: `${cliBinRaw} cli` })
+  return runners
+}
+
+function toErrorText(error: unknown): string {
+  if (!error || typeof error !== 'object') return String(error)
+  const err = error as { message?: string; stderr?: string; stdout?: string }
+  return [err.message, err.stderr, err.stdout].filter(Boolean).join('\n')
+}
+
+function isRunnerUnavailable(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code
+  if (code === 'ENOENT') return true
+  const text = toErrorText(error).toLowerCase()
+  return (
+    text.includes('enoent') ||
+    text.includes('command not found') ||
+    text.includes('not recognized as an internal or external command') ||
+    text.includes('missing script: cli') ||
+    text.includes('none of the selected packages has a "cli" script')
+  )
+}
+
+async function runWrapToken(cliDir: string, cliBinRaw: string, wrapArgs: string[]): Promise<{ output: string; runner: string }> {
+  const runners = buildWrapRunnerList(cliBinRaw, wrapArgs)
+  const failures: string[] = []
+
+  for (const runner of runners) {
+    try {
+      const { stdout, stderr } = await execFileAsync(runner.bin, runner.args, {
+        cwd: cliDir,
+        timeout: 20 * 60_000,
+        maxBuffer: 4 * 1024 * 1024,
+      })
+      return { output: `${stdout ?? ''}\n${stderr ?? ''}`, runner: runner.label }
+    } catch (error) {
+      failures.push(`${runner.label}: ${toErrorText(error)}`)
+      if (!isRunnerUnavailable(error)) throw error
+    }
+  }
+
+  throw new Error(
+    `No usable bridge CLI runner found. Configure SOLANA_BRIDGE_CLI_BIN or install one of: bun, pnpm, npm, cli. Details: ${failures.join(' | ')}`,
+  )
+}
+
 async function handleHealth(res: ServerResponse): Promise<void> {
   const cliDir = String(process.env.SOLANA_BRIDGE_CLI_DIR ?? '').trim()
   const cliExists = !!cliDir && existsSync(cliDir)
@@ -171,7 +262,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
     parseDecimals(process.env.SOLANA_BRIDGE_SCALER_EXPONENT) ??
     solanaDecimals
   const payerKp = String(body?.payerKp ?? process.env.SOLANA_BRIDGE_PAYER_KP ?? 'config').trim() || 'config'
-  const cliBin = String(process.env.SOLANA_BRIDGE_CLI_BIN ?? 'bun').trim() || 'bun'
+  const cliBin = String(process.env.SOLANA_BRIDGE_CLI_BIN ?? 'auto').trim() || 'auto'
   const payForRelay =
     typeof body?.payForRelay === 'boolean' ? body.payForRelay : envBool('SOLANA_BRIDGE_PAY_FOR_RELAY', true)
   const tokenName = String(body?.tokenName ?? `CreatorShare-${shareOft.slice(2, 8)}`).trim() || `CreatorShare-${shareOft.slice(2, 8)}`
@@ -180,8 +271,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
   const defaultTokenSymbol = `${defaultSymbolPrefix}${shareOft.slice(2, 6).toUpperCase()}`
   const tokenSymbol = String(body?.tokenSymbol ?? defaultTokenSymbol).trim() || defaultTokenSymbol
 
-  const args = [
-    'cli',
+  const wrapArgs = [
     'sol',
     'bridge',
     'wrap-token',
@@ -200,15 +290,10 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
     '--payer-kp',
     payerKp,
   ]
-  if (payForRelay) args.push('--pay-for-relay')
+  if (payForRelay) wrapArgs.push('--pay-for-relay')
 
   try {
-    const { stdout, stderr } = await execFileAsync(cliBin, args, {
-      cwd: cliDir,
-      timeout: 20 * 60_000,
-      maxBuffer: 4 * 1024 * 1024,
-    })
-    const combined = `${stdout ?? ''}\n${stderr ?? ''}`
+    const { output: combined, runner } = await runWrapToken(cliDir, cliBin, wrapArgs)
     const mintPubkey = parseMintPubkeyFromWrapOutput(combined)
     if (!mintPubkey) {
       return json(res, 500, {
@@ -251,6 +336,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
         shareOft,
         mintPubkey,
         mintBytes32,
+        runner,
         routeScalar: scalar.toString(),
       },
     })
