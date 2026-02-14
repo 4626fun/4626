@@ -4,6 +4,7 @@ import * as path from 'node:path'
 
 import { getDb } from '../_lib/postgres.js'
 import { logger } from '../_lib/logger.js'
+import { resolveXmtpDbDirectory } from '../_lib/xmtpDbDirectory.js'
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../_lib/creatorXmtpAgents.js'
 import { createPrivyScwSigner } from '../_lib/privyXmtpSigner.js'
 import { ensureKeeprSchema } from '../_lib/keeprSchema.js'
@@ -95,7 +96,7 @@ function getDbEncryptionKey(): `0x${string}` | undefined {
  * the same installation across invocations instead of registering a new one
  * every time (which burns through the 10-installation limit).
  */
-const KEEPR_XMTP_DB_DIR = (process.env.XMTP_DB_DIRECTORY ?? '').trim() || path.join(process.cwd(), '.xmtp-data')
+const KEEPR_XMTP_DB_DIR = resolveXmtpDbDirectory()
 const SQLITE_HEADER = Buffer.from('SQLite format 3\u0000', 'utf8')
 const XMTP_DB_FORCE_ENCRYPTED_MIGRATION = (process.env.XMTP_DB_FORCE_ENCRYPTED_MIGRATION ?? '0').trim() === '1'
 

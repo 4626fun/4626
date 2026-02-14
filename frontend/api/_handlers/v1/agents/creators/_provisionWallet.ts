@@ -10,14 +10,14 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { handleOptions, readJsonBody, readSessionFromRequest } from '../../../../../server/auth/_shared.js'
+import { handleOptions, readJsonBody } from '../../../../../server/auth/_shared.js'
 import { guardAgentApiRequest } from '../../../../../server/_lib/agentApiGuard.js'
 import { getOrCreateCreatorAgentWallet } from '../../../../../server/_lib/creatorAgentWallets.js'
 
 function setPublicCors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-SIWA-Receipt')
 }
 
 type RequestBody = {
@@ -35,10 +35,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/agents/creators/provision-wallet', kind: 'build' })
   if (!g.ok) return
 
-  const session = readSessionFromRequest(req)
-  const sessionAddress = session?.address ? String(session.address).toLowerCase() : ''
+  const sessionAddress = g.auth?.address ? String(g.auth.address).toLowerCase() : ''
   if (!sessionAddress) {
-    return res.status(401).json({ success: false, error: 'Sign in required' })
+    return res.status(401).json({ success: false, error: 'Authentication required (session or SIWA receipt)' })
   }
 
   const body = (await readJsonBody<RequestBody>(req)) ?? {}

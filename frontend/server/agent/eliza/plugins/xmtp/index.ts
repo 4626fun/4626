@@ -10,8 +10,8 @@
 import type { Plugin, IAgentRuntime, Memory, Content, UUID } from '@elizaos/core'
 import { createHash, randomUUID } from 'node:crypto'
 import * as fs from 'node:fs'
-import * as path from 'node:path'
 import { XmtpService } from './service.js'
+import { resolveXmtpDbDirectory } from '../../../../_lib/xmtpDbDirectory.js'
 import type { XmtpConfig, XmtpMessage } from './service.js'
 
 export { XmtpService } from './service.js'
@@ -68,9 +68,9 @@ export const xmtpPlugin: Plugin = {
 
     // Persist the local database so the SDK reuses the same installation
     // across restarts instead of registering a new one each time.
-    const dbDir = (process.env.XMTP_DB_DIRECTORY ?? '').trim() || path.join(process.cwd(), '.xmtp-data')
+    const dbDir = resolveXmtpDbDirectory()
     fs.mkdirSync(dbDir, { recursive: true, mode: 0o700 })
-    const dbPath = (inboxId: string) => path.join(dbDir, `plugin-xmtp-${env}-${inboxId}.db3`)
+    const dbPath = (inboxId: string) => `${dbDir}/plugin-xmtp-${env}-${inboxId}.db3`
 
     const settingEncKey = runtime.getSetting('XMTP_DB_ENCRYPTION_KEY')
     const rawEncKey = (

@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { handleOptions, readJsonBody, readSessionFromRequest } from '../../../../server/auth/_shared.js'
+import { handleOptions, readJsonBody } from '../../../../server/auth/_shared.js'
 import { guardAgentApiRequest } from '../../../../server/_lib/agentApiGuard.js'
 import { resolveCanonicalSmartWalletAddress } from '../../../../../server/_lib/canonicalWalletResolver.js'
 import { getOrCreateCreatorXmtpAgent, enableCswAgent } from '../../../../server/_lib/creatorXmtpAgents.js'
@@ -8,7 +8,7 @@ import { getOrCreateCreatorXmtpAgent, enableCswAgent } from '../../../../server/
 function setPublicCors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-SIWA-Receipt')
 }
 
 type EnableBody = {
@@ -27,9 +27,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/agents/creators/enable', kind: 'build' })
   if (!g.ok) return
 
-  const session = readSessionFromRequest(req)
-  const creator = session?.address ? String(session.address).toLowerCase() : ''
-  if (!creator) return res.status(401).json({ success: false, error: 'Sign in required' })
+  const creator = g.auth?.address ? String(g.auth.address).toLowerCase() : ''
+  if (!creator) {
+    return res.status(401).json({ success: false, error: 'Authentication required (session or SIWA receipt)' })
+  }
 
   const body = (await readJsonBody<EnableBody>(req)) ?? {}
   const listedPublicly = typeof body.listedPublicly === 'boolean' ? body.listedPublicly : true

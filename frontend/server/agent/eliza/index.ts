@@ -62,6 +62,7 @@ import { logger } from '../../_lib/logger.js'
 import path from 'node:path'
 import fs from 'node:fs'
 import http from 'node:http'
+import { resolveXmtpDbDirectory } from '../../_lib/xmtpDbDirectory.js'
 
 declare const process: {
   env: Record<string, string | undefined>
@@ -82,7 +83,7 @@ const MAX_AGENTS = Number(process.env.MAX_AGENTS ?? '50')
  * Directory where XMTP local databases are persisted.
  * Defaults to `<cwd>/.xmtp-data/` — override with XMTP_DB_DIRECTORY.
  */
-const XMTP_DB_DIR = (process.env.XMTP_DB_DIRECTORY ?? '').trim() || path.join(process.cwd(), '.xmtp-data')
+const XMTP_DB_DIR = resolveXmtpDbDirectory()
 
 /**
  * Whether to revoke all other installations on startup.
