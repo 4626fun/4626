@@ -196,7 +196,7 @@ describe('wallet-intelligence API handler', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body.success).toBe(true)
 
-    const { graph, summary, groveStatus } = res.body.data
+    const { graph, summary, groveStatus, provenance } = res.body.data
     expect(graph.target).toBe(TEST_ADDRESS)
     expect(graph.nodes.length).toBeGreaterThan(0)
     expect(graph.edges.length).toBeGreaterThan(0)
@@ -206,6 +206,9 @@ describe('wallet-intelligence API handler', () => {
     expect(summary.ensName).toBe('test.eth')
     expect(summary.lensHandle).toBe('testuser')
     expect(groveStatus).toBe('stored')
+    expect(provenance.farcasterProviderMode).toBe('hybrid')
+    expect(provenance.cacheStatus).toBe('miss')
+    expect(provenance.graphSource).toBe('wallet-intelligence.v1')
   })
 
   it('includes funder nodes in graph', async () => {

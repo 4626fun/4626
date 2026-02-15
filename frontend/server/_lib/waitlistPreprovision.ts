@@ -11,6 +11,7 @@
 import { getDb, isDbConfigured } from './postgres.js'
 import { getOrCreateCreatorAgentWallet } from './creatorAgentWallets.js'
 import { logger } from './logger.js'
+import { resolveFarcasterProfile } from './farcasterProvider.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -66,23 +67,14 @@ async function resolveFarcaster(address: string): Promise<{
   pfpUrl: string | null
 } | null> {
   try {
-    const neynarKey = (process.env.NEYNAR_API_KEY ?? process.env.VITE_NEYNAR_API_KEY ?? '').trim()
-    if (!neynarKey) return null
-
-    const res = await fetch(
-      `https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${encodeURIComponent(address)}`,
-      { headers: { accept: 'application/json', api_key: neynarKey } },
-    )
-    if (!res.ok) return null
-
-    const json = (await res.json()) as any
-    const users = json?.[address.toLowerCase()] ?? json?.[address] ?? []
-    const user = Array.isArray(users) ? users[0] : null
-    if (!user) return null
-
+    const { profile, source } = await resolveFarcasterProfile({ address })
+    if (source !== 'none') {
+      logger.info('[preprovision] Farcaster profile source', { source, address: address.slice(0, 10) })
+    }
+    if (!profile) return null
     return {
-      username: user.username ?? null,
-      pfpUrl: user.pfp_url ?? null,
+      username: profile.username,
+      pfpUrl: profile.avatar,
     }
   } catch {
     return null

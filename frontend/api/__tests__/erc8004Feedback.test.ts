@@ -6,10 +6,11 @@ import { createMockReq, createMockRes } from './helpers'
 // Hoisted mocks
 // ---------------------------------------------------------------------------
 
-const { guardMock, tryUploadMock, buildReputationGraphMock } = vi.hoisted(() => ({
+const { guardMock, tryUploadMock, buildReputationGraphMock, readRequestPrincipalMock } = vi.hoisted(() => ({
   guardMock: vi.fn(),
   tryUploadMock: vi.fn(),
   buildReputationGraphMock: vi.fn(),
+  readRequestPrincipalMock: vi.fn(),
 }))
 
 // Mock the rate-limit guard so tests don't need a real DB / IP lookup.
@@ -34,6 +35,10 @@ vi.mock('../../server/_lib/reputationGraph.js', () => ({
   buildReputationGraph: buildReputationGraphMock,
 }))
 
+
+vi.mock('../../server/_lib/requestPrincipal.js', () => ({
+  readRequestPrincipal: readRequestPrincipalMock,
+}))
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -234,6 +239,7 @@ describe('lens/feedback-payload', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
+    readRequestPrincipalMock.mockReturnValue({ address: '0xabc' })
     tryUploadMock.mockResolvedValue(groveOk())
     const mod = await import('../_handlers/lens/_feedback-payload.ts')
     handler = mod.default
@@ -338,11 +344,13 @@ describe('lens/reputation-graph', () => {
     edges: [],
     groups: [],
     summary: { totalFeedback: 0, totalReviewers: 0, averageRating: '0', label: 'No feedback' },
-    metadata: { generatedAt: '2026-01-01T00:00:00Z', source: 'erc8004.reputation.graph' },
+    generatedAt: '2026-01-01T00:00:00Z',
+    source: 'erc8004.reputation.graph',
   }
 
   beforeEach(async () => {
     vi.clearAllMocks()
+    readRequestPrincipalMock.mockReturnValue({ address: '0xabc' })
     buildReputationGraphMock.mockResolvedValue(mockGraph)
     tryUploadMock.mockResolvedValue(groveOk())
     const mod = await import('../_handlers/lens/_reputation-graph.ts')
@@ -375,6 +383,12 @@ describe('lens/reputation-graph', () => {
     expect(res.body.data.grove).toBeDefined()
     expect(res.body.data.grove.lensUri).toBe('lens://test-key')
     expect(res.body.data.groveStatus).toBe('stored')
+    expect(res.body.data.provenance).toEqual({
+      graphSource: 'erc8004.reputation.graph',
+      generatedAt: '2026-01-01T00:00:00Z',
+      farcasterProviderMode: 'hybrid',
+      storeRequested: true,
+    })
     expect(buildReputationGraphMock).toHaveBeenCalledWith({
       agentId: 1,
       tag1Filter: '',
