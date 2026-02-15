@@ -1,11 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { buildAgentRegistration } from '../../../server/_lib/agentRegistration.js'
-import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
-import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
-import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
-import { trackFarcasterRolloutEvent } from '../../../server/_lib/farcasterRolloutTelemetry.js'
+import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
+import { buildAgentRegistration } from '../../../../server/_lib/agentRegistration.js'
+import { tryUploadImmutableJson } from '../../../../server/_lib/lensGrove.js'
+import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
+import { readRequestPrincipal } from '../../../../server/_lib/requestPrincipal.js'
+import { trackFarcasterRolloutEvent } from '../../../../server/_lib/farcasterRolloutTelemetry.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; missing?: string[] }
 
