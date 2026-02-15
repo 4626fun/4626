@@ -815,6 +815,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       typeof connectedAddressRaw === 'string' && connectedAddressRaw.startsWith('0x') ? connectedAddressRaw.toLowerCase() : null,
     [connectedAddressRaw],
   )
+  const effectiveAdminAddress = useMemo(() => connectedAddress ?? (siweAuthAddress ? siweAuthAddress.toLowerCase() : null), [connectedAddress, siweAuthAddress])
 
   // Best-effort: infer Coinbase Smart Wallet from Zora profile (payout recipient / linked wallets).
   // This is used for:
@@ -899,7 +900,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       .filter((s) => isValidEvmAddress(s))
     return new Set<string>([...seed, ...fromEnv].map((a) => a.toLowerCase()))
   }, [])
-  const isBypassAdmin = !!connectedAddress && adminBypassSet.has(connectedAddress)
+  const isBypassAdmin = !!effectiveAdminAddress && adminBypassSet.has(effectiveAdminAddress)
 
   // Check allowlist so we can show the right CTA on the DoneStep.
   const [deployAccessState, setDeployAccessState] = useState<'checking' | 'ready' | 'waitlist'>('checking')
@@ -1772,7 +1773,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     copyToast={inviteToast}
                     creatorCoinMissing={creatorCoinDeclaredMissing && !creatorCoin?.address}
                     smartWalletAddress={effectiveCswAddress}
-                    ownerAddress={connectedAddress}
+                    ownerAddress={connectedAddress || (siweAuthAddress ? siweAuthAddress.toLowerCase() : null)}
                     onCoinCreated={handleCoinCreated}
                   />
                 </motion.div>
