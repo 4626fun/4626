@@ -327,6 +327,36 @@ export function AdminAgentSetup() {
         )}
       </div>
 
+      <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 px-4 py-3">
+        <div className="text-xs font-medium text-indigo-200">How this stack is actually used right now</div>
+        <div className="mt-2 grid gap-2 text-[11px] text-zinc-300 sm:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <span className="text-indigo-300">Coinbase Smart Wallet:</span> canonical creator identity and ownership checks.
+          </div>
+          <div>
+            <span className="text-indigo-300">ERC-4337 + batching + paymaster:</span> gas-sponsored, multi-call admin/deploy actions.
+          </div>
+          <div>
+            <span className="text-indigo-300">SIWA:</span> signed session auth for privileged agent API calls.
+          </div>
+          <div>
+            <span className="text-indigo-300">ERC-8004:</span> onchain agent identity registration and reputation anchor.
+          </div>
+          <div>
+            <span className="text-indigo-300">XMTP:</span> creator/agent messaging and notifications.
+          </div>
+          <div>
+            <span className="text-indigo-300">Lens + Grove:</span> discovery plus portable, content-addressed agent metadata.
+          </div>
+        </div>
+        <div className="mt-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-[11px] text-zinc-400">
+          <span className="text-zinc-200">Also in stack:</span> ElizaOS + skills are the orchestration layer for agent behaviors and tool workflows. They are optional runtime logic on top of this identity/auth/messaging foundation.
+        </div>
+        <div className="mt-2 text-[11px] text-zinc-400">
+          In short: <span className="text-zinc-200">CSW is identity</span>, <span className="text-zinc-200">ERC-4337/paymaster is execution</span>, <span className="text-zinc-200">SIWA is auth</span>, <span className="text-zinc-200">ERC-8004 + Lens/Grove are discoverability/reputation</span>, <span className="text-zinc-200">XMTP is communication</span>, and <span className="text-zinc-200">ElizaOS/skills are automation</span>.
+        </div>
+      </div>
+
       {/* Step 1: Enable Agent */}
       <div className="rounded-xl border border-white/10 bg-black/30 overflow-hidden">
         <div className="px-5 py-4 border-b border-white/5 flex items-center gap-3">

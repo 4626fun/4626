@@ -65,11 +65,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  const registration = {
-    ...result.payload,
-    generatedAt: new Date().toISOString(),
-    source: 'erc8004.registration',
-  }
+  // Keep uploaded payload deterministic/content-addressed.
+  // Adding timestamps here changes the hash and therefore the resulting lens:// URI on every call.
+  const registration = result.payload
 
   let grove: LensAgentRegistrationResponse['grove']
   let groveStatus: 'stored' | 'unavailable' | 'skipped' = 'skipped'
