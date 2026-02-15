@@ -157,7 +157,7 @@ export const VerifyStep = memo(function VerifyStep({
   }, [privyReady, privyVerifyBusy, showPrivyReady])
   const ownershipError =
     ownershipGateActive && !walletOwnershipValid
-      ? 'Connected wallet is not in the creator coin owner set. Switch to an owner or payout recipient wallet.'
+      ? 'Switch to a payout or owner wallet to continue.'
       : null
   const connectedWalletShort = useMemo(() => shortAddress(verifiedWallet, 8, 6), [verifiedWallet])
   const creatorCoinAddressShort = useMemo(() => shortAddress(creatorCoin?.address, 8, 6), [creatorCoin?.address])

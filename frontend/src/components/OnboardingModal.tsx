@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight, Compass, Rocket, TrendingUp, X } from 'lucide-react'
 
 import { useMiniAppContext } from '@/hooks/useMiniAppContext'
+import { trackEvent } from '@/lib/analytics'
 
 const STORAGE_KEY = 'cv:onboarding:v2'
 
@@ -72,8 +73,13 @@ export function OnboardingModal(props: { onClose: () => void }) {
     return username ? `Signed in as ${username}` : 'Quick tour'
   }, [mini.isMiniApp, username])
 
+  useEffect(() => {
+    trackEvent('modal_shown', { modal: 'onboarding_intent' })
+  }, [])
+
   function close() {
     setDone()
+    trackEvent('modal_dismissed', { modal: 'onboarding_intent', intent })
     props.onClose()
   }
 
@@ -137,6 +143,7 @@ export function OnboardingModal(props: { onClose: () => void }) {
               type="button"
               onClick={() => {
                 close()
+                trackEvent('onboarding_intent_selected', { intent: selected.key, destination: selected.to })
                 navigate(selected.to)
               }}
               className="h-11 px-4 rounded-xl bg-brand-primary text-white font-medium inline-flex items-center gap-2"

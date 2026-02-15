@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { getAppBaseUrl, getMarketingBaseUrl } from '@/lib/host'
+import { trackEvent } from '@/lib/analytics'
 import { useAccount, usePublicClient, useSignMessage } from 'wagmi'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { isPrivyClientEnabled } from '@/lib/flags'
@@ -808,6 +809,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   ])
 
   const autoSubmitAttemptRef = useRef<string | null>(null)
+  const ownershipTelemetryRef = useRef<string | null>(null)
 
   const emailTrimmed = useMemo(() => normalizeEmail(email), [email])
   const isEmailValid = useMemo(() => isValidEmail(emailTrimmed), [emailTrimmed])
@@ -867,6 +869,22 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     (isEmailValid || emailOptOut) &&
     (Boolean(creatorCoin?.address) || creatorCoinDeclaredMissing) &&
     connectedWalletAuthorized
+
+  useEffect(() => {
+    if (!verifiedWalletNormalized) return
+    trackEvent('wallet_connected', { wallet: verifiedWalletNormalized })
+  }, [verifiedWalletNormalized])
+
+  useEffect(() => {
+    if (!verifiedWalletNormalized || !creatorCoin?.address || !ownershipEvidenceAvailable) return
+    const key = `${verifiedWalletNormalized}:${creatorCoin.address.toLowerCase()}:${connectedWalletAuthorized ? 'pass' : 'fail'}`
+    if (ownershipTelemetryRef.current === key) return
+    ownershipTelemetryRef.current = key
+    trackEvent(connectedWalletAuthorized ? 'ownership_check_pass' : 'ownership_check_fail', {
+      wallet: verifiedWalletNormalized,
+      coin: creatorCoin.address.toLowerCase(),
+    })
+  }, [connectedWalletAuthorized, creatorCoin?.address, ownershipEvidenceAvailable, verifiedWalletNormalized])
   const cswMismatch = useMemo(() => {
     const a = String(coinbaseSmartWalletAddress || '').trim().toLowerCase()
     const b = String(cswAddress || '').trim().toLowerCase()
@@ -938,6 +956,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   const handleContinueToDeploy = useCallback(async () => {
     setDeployHandoffBusy(true)
     try {
+      trackEvent('deploy_cta_clicked', { source: 'waitlist_done' })
       // Best effort: establish an app session on the current origin before redirect.
       if (!siwe.isSignedIn && privyAuthed && typeof getAccessToken === 'function') {
         const token = await getAccessToken().catch(() => null)
@@ -1139,6 +1158,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     apiFetch,
   })
   const displayEmail = doneEmail && !isSyntheticEmail(doneEmail) ? doneEmail : null
+  const handleCopyReferralTracked = useCallback(() => {
+    trackEvent('referral_link_copied', { source: 'waitlist_done' })
+    handleCopyReferral()
+  }, [handleCopyReferral])
 
   // When the user creates a Creator Coin from the DoneStep, update local state
   // and re-trigger pre-provisioning so the backend records it.
@@ -1386,6 +1409,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         throw new Error(msg)
       }
       const doneEmailValue = String(json?.data?.email || emailForSubmit)
+      trackEvent('waitlist_submitted', { persona, hasCreatorCoin: Boolean(creatorCoin?.address) })
       submitSuccess(doneEmailValue)
       patchWaitlist({ referralCode: typeof json?.data?.referralCode === 'string' ? String(json.data.referralCode) : null })
 
@@ -1777,7 +1801,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     referralLink={referralLink}
                     primaryCta={primaryCta}
                     deployAccessState={deployAccessState}
-                    onCopyReferral={handleCopyReferral}
+                    onCopyReferral={handleCopyReferralTracked}
                     copyToast={inviteToast}
                     creatorCoinMissing={creatorCoinDeclaredMissing && !creatorCoin?.address}
                     smartWalletAddress={effectiveCswAddress}

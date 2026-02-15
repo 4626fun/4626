@@ -190,6 +190,21 @@ function WaitlistedCta({
 }) {
   const rank = waitlistPosition?.rank?.total
   const navigate = useNavigate()
+  const nextBand = useMemo(() => {
+    if (typeof rank !== 'number' || !Number.isFinite(rank) || rank <= 1) return null
+    const bands = [500, 250, 100, 50, 25, 10, 5, 1]
+    const target = bands.find((b) => rank > b)
+    if (!target) return null
+    return { target, remaining: Math.max(0, rank - target) }
+  }, [rank])
+
+  const xShareHref = useMemo(() => {
+    return `https://x.com/intent/tweet?text=${encodeURIComponent('I just joined the 4626 waitlist. Move up with me:')}`
+  }, [])
+
+  const farcasterShareHref = useMemo(() => {
+    return `https://warpcast.com/~/compose?text=${encodeURIComponent('I just joined the 4626 waitlist. Move up with me:')}`
+  }, [])
 
   return (
     <motion.div {...fadeUp} className="space-y-4">
@@ -200,6 +215,9 @@ function WaitlistedCta({
         <div className="text-[12px] text-zinc-500">
           Share your link to move up. We approve in batches.
         </div>
+        {nextBand ? (
+          <div className="text-[11px] text-amber-200/80">Only {nextBand.remaining} invites to reach top {nextBand.target}.</div>
+        ) : null}
       </div>
 
       <button
@@ -210,6 +228,25 @@ function WaitlistedCta({
         <Share2 className="w-4 h-4" />
         Copy Referral Link
       </button>
+
+      <div className="grid grid-cols-2 gap-2">
+        <a
+          href={xShareHref}
+          target="_blank"
+          rel="noreferrer"
+          className="w-full text-center px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.02] text-zinc-300 text-[12px] hover:bg-white/[0.05]"
+        >
+          Share on X
+        </a>
+        <a
+          href={farcasterShareHref}
+          target="_blank"
+          rel="noreferrer"
+          className="w-full text-center px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.02] text-zinc-300 text-[12px] hover:bg-white/[0.05]"
+        >
+          Share on Farcaster
+        </a>
+      </div>
 
       <button
         type="button"
