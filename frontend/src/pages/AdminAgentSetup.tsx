@@ -26,6 +26,27 @@ type VaultUpsertResponse = {
   configHash: string
 }
 
+
+type ProviderDashboardData = {
+  windowHours: number
+  total: number
+  bySource: Array<{ source: string; count: number }>
+  byMode: Array<{ mode: string; count: number }>
+  protocolShare: number
+  recommendation: string
+}
+
+type PublishData = {
+  registration: Record<string, unknown>
+  groveStatus: 'stored' | 'unavailable' | 'skipped'
+  grove?: {
+    lensUri: string
+    gatewayUrl: string
+    storageKey: string
+    statusUrl: string | null
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -310,6 +331,35 @@ export function AdminAgentSetup() {
     },
   })
 
+
+
+  const providerDashboardQuery = useQuery({
+    queryKey: ['admin', 'farcaster', 'provider-dashboard'],
+    queryFn: async (): Promise<ProviderDashboardData | null> => {
+      const res = await apiFetch('/api/admin/farcaster/provider-dashboard?hours=168')
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<ProviderDashboardData> | null
+      if (!res.ok || !json?.success || !json.data) return null
+      return json.data
+    },
+    staleTime: 60_000,
+  })
+
+  const publishMutation = useMutation({
+    mutationFn: async (): Promise<PublishData> => {
+      const res = await apiFetch('/api/v1/agents/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeOnGrove: true }),
+      })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<PublishData> | null
+      if (!res.ok || !json?.success || !json.data) throw new Error(json?.error ?? 'Failed to publish agent profile')
+      return json.data
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'farcaster', 'provider-dashboard'] })
+    },
+  })
+
   // -----------------------------------------------------------------------
   // Render
   // -----------------------------------------------------------------------
@@ -354,6 +404,41 @@ export function AdminAgentSetup() {
         </div>
         <div className="mt-2 text-[11px] text-zinc-400">
           In short: <span className="text-zinc-200">CSW is identity</span>, <span className="text-zinc-200">ERC-4337/paymaster is execution</span>, <span className="text-zinc-200">SIWA is auth</span>, <span className="text-zinc-200">ERC-8004 + Lens/Grove are discoverability/reputation</span>, <span className="text-zinc-200">XMTP is communication</span>, and <span className="text-zinc-200">ElizaOS/skills are automation</span>.
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-medium text-emerald-200">Unified Agent Publish (Week 4)</div>
+            <div className="text-[11px] text-zinc-400">One click publishes ERC-8004 registration and stores deterministic Lens/Grove metadata.</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => publishMutation.mutate()}
+            disabled={publishMutation.isPending}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5 text-[11px] text-emerald-200 hover:bg-emerald-400/15 disabled:opacity-60"
+          >
+            {publishMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+            Publish Agent
+          </button>
+        </div>
+        {publishMutation.data?.grove?.lensUri ? (
+          <a href={publishMutation.data.grove.gatewayUrl} target="_blank" rel="noreferrer" className="text-[11px] text-emerald-300 underline">
+            Published URI: {publishMutation.data.grove.lensUri}
+          </a>
+        ) : null}
+        {publishMutation.error ? (
+          <div className="text-[11px] text-red-300">{(publishMutation.error as Error).message}</div>
+        ) : null}
+
+        <div className="pt-2 border-t border-white/10">
+          <div className="text-[11px] text-zinc-300">Provider cutover dashboard (Week 3)</div>
+          <div className="mt-1 text-[11px] text-zinc-400">
+            {providerDashboardQuery.data
+              ? `7d protocol share: ${(providerDashboardQuery.data.protocolShare * 100).toFixed(1)}% · recommendation: ${providerDashboardQuery.data.recommendation}`
+              : 'No dashboard data yet.'}
+          </div>
         </div>
       </div>
 

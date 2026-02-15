@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { readNeynarApiKey } from '../../../server/_lib/neynarConfig.js'
 import { logger } from '../../../server/_lib/logger.js'
+import { trackFarcasterRolloutEvent } from '../../../server/_lib/farcasterRolloutTelemetry.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -10,8 +11,11 @@ const NEYNAR_API_BASE = 'https://api.neynar.com/v2/farcaster'
 type ValidationMode = 'best-effort' | 'strict'
 
 function readValidationMode(): ValidationMode {
-  const raw = String(process.env.FRAMES_VALIDATION_MODE ?? 'best-effort').trim().toLowerCase()
-  return raw === 'strict' ? 'strict' : 'best-effort'
+  const configured = String(process.env.FRAMES_VALIDATION_MODE ?? '').trim().toLowerCase()
+  if (configured === 'strict' || configured === 'best-effort') return configured
+  const envName = String(process.env.APP_ENV ?? process.env.VERCEL_ENV ?? '').trim().toLowerCase()
+  if (envName === 'staging' || envName === 'preview') return 'strict'
+  return 'best-effort'
 }
 
 function normalizeEmail(value: unknown): string | null {
@@ -19,6 +23,57 @@ function normalizeEmail(value: unknown): string | null {
   if (!v) return null
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return null
   return v
+}
+
+async function submitWaitlistSignup(params: {
+  appUrl: string
+  email: string
+  fid: number | null
+}): Promise<{ ok: boolean; error?: string }> {
+  const { appUrl, email, fid } = params
+  try {
+    const res = await fetch(new URL('/api/waitlist', appUrl).toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        email,
+        intent: {
+          persona: 'creator',
+          ...(typeof fid === 'number' && Number.isFinite(fid) && fid > 0 ? { fid } : null),
+        },
+        verifications: [
+          {
+            method: 'farcaster.frame',
+            subject: typeof fid === 'number' && Number.isFinite(fid) && fid > 0 ? `fid:${fid}` : 'fid:unknown',
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      }),
+    })
+
+    if (!res.ok) {
+      return { ok: false, error: `waitlist_${res.status}` }
+    }
+    return { ok: true }
+  } catch {
+    return { ok: false, error: 'waitlist_unreachable' }
+  }
+}
+
+
+const frameJoinIdempotency = new Map<string, number>()
+const IDEMPOTENCY_TTL_MS = 10 * 60_000
+
+function cleanupIdempotency(now: number) {
+  for (const [k, ts] of frameJoinIdempotency.entries()) {
+    if (now - ts > IDEMPOTENCY_TTL_MS) frameJoinIdempotency.delete(k)
+  }
+}
+
+function getJoinIdempotencyKey(params: { fid: number | null; email: string; frameUrl?: string }): string {
+  const fidPart = typeof params.fid === 'number' && Number.isFinite(params.fid) && params.fid > 0 ? String(params.fid) : 'unknown'
+  const framePart = typeof params.frameUrl === 'string' && params.frameUrl.trim() ? params.frameUrl.trim().toLowerCase() : '-'
+  return `${fidPart}|${params.email.toLowerCase()}|${framePart}`
 }
 
 /**
@@ -126,13 +181,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return u.toString()
   })()
 
+  const inputEmail = normalizeEmail(inputText)
+  const isJoinWaitlistTap = Number(buttonIndex) === 1
+  let waitlistJoined = false
+  let waitlistJoinError: string | null = null
+  if (isJoinWaitlistTap && inputEmail) {
+    const normalizedFid = typeof fid === 'number' && Number.isFinite(fid) ? fid : null
+    const now = Date.now()
+    cleanupIdempotency(now)
+    const idempotencyKey = getJoinIdempotencyKey({ fid: normalizedFid, email: inputEmail, frameUrl })
+    const previous = frameJoinIdempotency.get(idempotencyKey)
+    if (previous && now - previous <= IDEMPOTENCY_TTL_MS) {
+      waitlistJoined = true
+    } else {
+      const signupResult = await submitWaitlistSignup({
+        appUrl,
+        email: inputEmail,
+        fid: normalizedFid,
+      })
+      waitlistJoined = signupResult.ok
+      waitlistJoinError = signupResult.ok ? null : signupResult.error ?? 'waitlist_failed'
+      if (signupResult.ok) frameJoinIdempotency.set(idempotencyKey, now)
+    }
+  }
+
+  const bodyMessage = waitlistJoined
+    ? 'You are on the waitlist. We will notify you when access opens.'
+    : inputEmail && isJoinWaitlistTap
+      ? 'Could not auto-submit waitlist from frame. Open waitlist to finish.'
+      : 'CreatorVault — manage vaults and trade coins on Base'
+
   const responseHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta property="fc:frame" content="vNext" />
   <meta property="fc:frame:image" content="${appUrl}/og-image.png" />
-  <meta property="fc:frame:button:1" content="Join Waitlist" />
+  <meta property="fc:frame:button:1" content="${waitlistJoined ? '✅ Waitlist Joined' : 'Join Waitlist'}" />
   <meta property="fc:frame:button:1:action" content="link" />
   <meta property="fc:frame:button:1:target" content="${waitlistUrl}" />
   <meta property="fc:frame:button:2" content="Open CreatorVault" />
@@ -145,12 +230,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <meta property="og:image" content="${appUrl}/og-image.png" />
 </head>
 <body>
-  <p>CreatorVault — manage vaults and trade coins on Base</p>
+  <p>${bodyMessage}</p>
 </body>
 </html>`
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8')
   res.setHeader('X-Frames-Validation-Mode', validationMode)
   res.setHeader('X-Frames-Validation-Source', validationSource)
+  if (waitlistJoinError) {
+    res.setHeader('X-Frames-Waitlist-Join-Error', waitlistJoinError)
+  }
+
+  void trackFarcasterRolloutEvent({
+    category: 'frame_validation',
+    endpoint: '/api/frames/action',
+    mode: validationMode,
+    source: validationSource,
+    statusCode: 200,
+    metadata: {
+      waitlistJoined,
+      waitlistJoinError,
+      buttonIndex: Number(buttonIndex),
+    },
+  })
+
   return res.status(200).send(responseHtml)
 }

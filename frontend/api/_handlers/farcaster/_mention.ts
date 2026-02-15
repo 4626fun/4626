@@ -17,6 +17,7 @@ import { createHmac } from 'node:crypto'
 
 import { readNeynarApiKey } from '../../../server/_lib/neynarConfig.js'
 import { logger } from '../../../server/_lib/logger.js'
+import { resolveMentionThroughElizaToolchain } from '../../../server/agent/eliza/mentionToolchain.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -169,6 +170,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const authorUsername = cast.author?.username ?? 'anon'
+  const authorFidRaw = Number(cast.author?.fid)
+  const authorFid = Number.isFinite(authorFidRaw) && authorFidRaw > 0 ? Math.floor(authorFidRaw) : null
   const castHash = String(cast.hash)
   const castText = String(cast.text)
 
@@ -187,8 +190,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ ok: true, skipped: true, reason: 'neynar not configured' })
   }
 
-  // Generate response
-  const responseText = generateMentionResponse(castText, authorUsername)
+  // Route through Eliza toolchain first for high-confidence workflows (e.g., waitlist status).
+  const toolchainResponse = await resolveMentionThroughElizaToolchain({
+    castText,
+    authorUsername,
+    authorFid,
+  })
+
+  // Fallback to simple keyword responder when no tool workflow matches.
+  const responseText = toolchainResponse ?? generateMentionResponse(castText, authorUsername)
 
   // Post reply
   const result = await postReply({

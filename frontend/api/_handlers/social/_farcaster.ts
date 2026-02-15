@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, setCors } from '../../../server/auth/_shared.js'
 import { resolveFarcasterProfile } from '../../../server/_lib/farcasterProvider.js'
+import { trackFarcasterRolloutEvent } from '../../../server/_lib/farcasterRolloutTelemetry.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -38,8 +39,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('X-Farcaster-Provider-Source', source)
 
     if (!profile) {
+      void trackFarcasterRolloutEvent({
+        category: 'provider_resolution',
+        endpoint: '/api/social/farcaster',
+        mode,
+        source,
+        statusCode: 200,
+        metadata: { hasProfile: false },
+      })
       return res.status(200).json({ success: true, data: null, source, mode })
     }
+
+    void trackFarcasterRolloutEvent({
+      category: 'provider_resolution',
+      endpoint: '/api/social/farcaster',
+      mode,
+      source,
+      statusCode: 200,
+      metadata: { hasProfile: true },
+    })
 
     return res.status(200).json({ success: true, data: profile, source, mode })
   } catch {

@@ -40,3 +40,16 @@ Recommended production migration path:
 2. monitor `source` distribution
 3. move to `protocol` where acceptable
 4. enable `FRAMES_VALIDATION_MODE=strict` on sensitive routes
+
+
+## Operational dashboard + cutover policy
+- New dashboard endpoint: `GET /api/admin/farcaster/provider-dashboard?hours=168`
+- Data source: `farcaster_rollout_events` telemetry table (`provider_resolution`, `frame_validation`, `agent_publish`).
+
+Recommended cutover policy for selected read endpoints:
+1. Stay on `hybrid` until sample size is at least 200 profile resolutions in the window.
+2. Move endpoint to `protocol` when protocol source share is >= 95% for 7 consecutive days and error-rate is stable.
+3. Roll back to `hybrid` automatically if protocol share drops below 90% or if endpoint error budget is exceeded.
+
+Staging defaults:
+- `FRAMES_VALIDATION_MODE` now defaults to `strict` when `APP_ENV`/`VERCEL_ENV` is `staging|preview` unless explicitly overridden.

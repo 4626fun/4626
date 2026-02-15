@@ -43,6 +43,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'v1/agents/feedback/submit': () => import('./v1/agents/feedback/_submit.js'),
   'v1/agents/identity/set-agent-wallet': () => import('./v1/agents/identity/_setAgentWallet.js'),
   'v1/agents/wallet-intelligence': () => import('./v1/agents/_wallet-intelligence.js'),
+  'v1/agents/publish': () => import('./v1/agents/_publish.js'),
   // v1 build endpoints (return unsigned tx calldata)
   // TODO: Implement these handlers
   // 'v1/build/auction/submitBid': () => import('./v1/build/auction/_submitBid.js'),
@@ -201,6 +202,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'admin/creator-access/note': () => import('./admin/creator-access/_note.js'),
   'admin/creator-access/restore': () => import('./admin/creator-access/_restore.js'),
   'admin/creator-access/revoke': () => import('./admin/creator-access/_revoke.js'),
+  'admin/farcaster/provider-dashboard': () => import('./admin/farcaster/_provider-dashboard.js'),
   'admin/miniapp/sendNotification': () => import('./admin/miniapp/_sendNotification.js'),
   'admin/waitlist/detail': () => import('./admin/waitlist/_detail.js'),
   'admin/waitlist/list': () => import('./admin/waitlist/_list.js'),
