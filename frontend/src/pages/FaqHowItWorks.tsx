@@ -1,13 +1,21 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
+import { useEffect } from 'react'
 import { TokenImage } from '@/components/TokenImage'
 import { AKITA } from '@/config/contracts'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
+import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
 
 export function FaqHowItWorks() {
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (getHostMode() !== 'app') return
+    window.location.replace(`${getMarketingBaseUrl()}/faq/how-it-works`)
+  }, [])
+
   const surface =
     'glass-card ring-1 ring-white/5 shadow-[0_30px_80px_rgba(0,0,0,0.6)]'
 
@@ -139,5 +147,4 @@ export function FaqHowItWorks() {
     </div>
   )
 }
-
 
