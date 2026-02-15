@@ -84,11 +84,6 @@ type VerifyStepProps = {
   privyReady: boolean
   privyVerifyBusy: boolean
   privyVerifyError: string | null
-  // CSW detection (simplified - just show detection, no owner linking at signup)
-  showDeployOwnerLink?: boolean
-  cswAddress?: string | null
-  isBaseApp?: boolean
-  coinbaseSmartWalletAddress?: string | null
   walletOwnershipValid: boolean
   ownershipEvidenceAvailable: boolean
   cswMismatch?: boolean

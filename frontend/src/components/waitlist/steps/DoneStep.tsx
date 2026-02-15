@@ -33,7 +33,6 @@ type PreprovData = {
 type DoneStepProps = {
   displayEmail: string | null
   isBypassAdmin: boolean
-  appUrl: string
   waitlistPosition: WaitlistState['waitlistPosition']
   referralCode: string | null
   referralLink: string
@@ -240,6 +239,25 @@ export const DoneStep = memo(function DoneStep({
   onCoinCreated,
 }: DoneStepProps) {
   const [exiting, setExiting] = useState(false)
+  const [rankDelta, setRankDelta] = useState<number>(0)
+
+  useEffect(() => {
+    const currentRank = waitlistPosition?.rank?.total
+    if (typeof currentRank !== 'number' || !Number.isFinite(currentRank) || currentRank <= 0) return
+    const key = `cv:waitlist:last-rank:${referralCode || 'anon'}`
+    try {
+      const prevRaw = window.localStorage.getItem(key)
+      const prev = prevRaw ? Number(prevRaw) : null
+      if (typeof prev === 'number' && Number.isFinite(prev) && prev > currentRank) {
+        setRankDelta(prev - currentRank)
+      } else {
+        setRankDelta(0)
+      }
+      window.localStorage.setItem(key, String(currentRank))
+    } catch {
+      setRankDelta(0)
+    }
+  }, [referralCode, waitlistPosition?.rank?.total])
 
   const handleDeployClick = useCallback(async () => {
     if (!primaryCta?.onClick) return
@@ -290,6 +308,11 @@ export const DoneStep = memo(function DoneStep({
               <h1 className="font-doto text-[26px] sm:text-[30px] font-bold text-white tracking-tight">
                 You're on the waitlist!
               </h1>
+              {rankDelta > 0 ? (
+                <div className="mt-2 inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-emerald-200">
+                  Moved up {rankDelta} spots
+                </div>
+              ) : null}
               {displayEmail && (
                 <p className="text-[13px] sm:text-[14px] text-zinc-500 mt-1.5 truncate px-2">{displayEmail}</p>
               )}

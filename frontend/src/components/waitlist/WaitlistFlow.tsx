@@ -1401,14 +1401,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     }
   }
 
-  function resetFlow() {
-    dispatchFlow({ type: 'reset' })
-    dispatchVerification({ type: 'reset' })
-    dispatchWaitlist({ type: 'reset' })
-    creatorCoinForWalletRef.current = null
-    claimCoinForWalletRef.current = null
-  }
-
   useEffect(() => {
     if (step !== 'done') return
     if (!doneEmail) return
@@ -1669,9 +1661,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     markAction('saveApp')
   }, [markAction, miniApp.added])
 
-  // Simplified flow: no auto-advance - user clicks "Join Waitlist" to submit
-
-
   const containerClass =
     variant === 'page'
       ? 'waitlist-page relative min-h-[100svh] flex items-center justify-center overflow-hidden px-4 sm:px-6 py-12 sm:py-16 bg-[#0a0a0b]'
@@ -1683,6 +1672,17 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     variant === 'page'
       ? 'relative overflow-hidden rounded-3xl border border-white/[0.06] bg-[#0d0d0f]/95 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_24px_80px_-24px_rgba(0,0,0,0.6)] p-6 sm:p-8'
       : 'relative overflow-hidden rounded-3xl border border-white/[0.06] bg-[#0d0d0f]/95 backdrop-blur-xl p-6 sm:p-8'
+
+  const progressSteps = [
+    { key: 'connect', label: 'Connect', done: step === 'done' || Boolean(verifiedWallet) },
+    {
+      key: 'reserve',
+      label: 'Reserve Spot',
+      done: step === 'done' || (step === 'verify' && canSubmit),
+    },
+    { key: 'boost', label: 'Boost Rank', done: step === 'done' },
+    { key: 'deploy', label: 'Deploy', done: deployAccessState === 'ready' },
+  ]
 
   return (
     <section id={variant === 'embedded' ? sectionId : undefined} className={containerClass}>
@@ -1701,21 +1701,18 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         <motion.div className={cardWrapClass}>
           <div className="pointer-events-none absolute inset-0 rounded-3xl ring-1 ring-inset ring-white/[0.04]" />
           <div className="relative z-10">
-          {/* Show reset on done step */}
-          {step === 'done' ? (
-            <div className="flex items-center justify-between mb-4">
-              <button
-                type="button"
-                className="text-[13px] text-zinc-500 hover:text-zinc-300 transition-colors duration-200"
-                onClick={resetFlow}
-              >
-                Start over
-              </button>
-              <div className="w-8" />
+          <div className="mb-5">
+            <div className="grid grid-cols-4 gap-2">
+              {progressSteps.map((item) => (
+                <div key={item.key} className="space-y-1">
+                  <div className={`h-1.5 rounded-full ${item.done ? 'bg-[#0052FF]' : 'bg-white/[0.10]'}`} />
+                  <div className={`text-[10px] uppercase tracking-[0.14em] ${item.done ? 'text-zinc-300' : 'text-zinc-600'}`}>
+                    {item.label}
+                  </div>
+                </div>
+              ))}
             </div>
-          ) : null}
-          {/* Step indicator removed for simpler layout */}
-
+          </div>
           {/* Step transition: smooth layout */}
           <div className="relative">
             <AnimatePresence mode="wait">
@@ -1734,10 +1731,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     privyReady={privyReady}
                     privyVerifyBusy={privyVerifyBusy}
                     privyVerifyError={privyVerifyError}
-                    showDeployOwnerLink={Boolean(cswAddress || coinbaseSmartWalletAddress)}
-                    cswAddress={cswAddress || coinbaseSmartWalletAddress}
-                    isBaseApp={miniApp.isBaseApp === true}
-                    coinbaseSmartWalletAddress={coinbaseSmartWalletAddress}
                     walletOwnershipValid={connectedWalletAuthorized}
                     ownershipEvidenceAvailable={ownershipEvidenceAvailable}
                     cswMismatch={cswMismatch}
@@ -1770,7 +1763,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                   <DoneStep
                     displayEmail={displayEmail}
                     isBypassAdmin={isBypassAdmin}
-                    appUrl={appUrl}
                     waitlistPosition={waitlistPosition}
                     referralCode={referralCode}
                     referralLink={referralLink}

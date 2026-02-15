@@ -69,6 +69,7 @@ export function Layout() {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const showQuickstart = useShowQuickstart()
   const [quickstartDismissed, setQuickstartDismissed] = useState(false)
+  const onboardingSuppressed = location.pathname === '/waitlist' || location.pathname.startsWith('/deploy')
   const resolvedSubdomain = useQuery({
     queryKey: ['agents', 'subdomain-resolve', hostMode],
     enabled: hostMode === 'app',
@@ -83,10 +84,11 @@ export function Layout() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
+    if (onboardingSuppressed) return
     // Only show once per device/browser.
     if (hasCompletedOnboarding()) return
     setShowOnboarding(true)
-  }, [])
+  }, [onboardingSuppressed])
 
   // Show quickstart after onboarding is done, for authenticated creators
   const shouldShowQuickstart = !showOnboarding && showQuickstart && !quickstartDismissed
