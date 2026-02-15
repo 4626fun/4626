@@ -95,7 +95,7 @@ export function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-vault-bg">
-      <VaultNavBar />
+      {hostMode !== 'marketing' ? <VaultNavBar /> : null}
       {resolvedSubdomain.data?.record ? (
         <div className="border-b border-vault-border/60 bg-black/50">
           <div className="max-w-7xl mx-auto px-6 py-2 text-[11px] uppercase tracking-[0.14em] text-vault-subtext flex items-center justify-between gap-2">
@@ -131,30 +131,32 @@ export function Layout() {
       {hostMode === 'app' && <ChatWidget />}
 
       {/* Mobile Nav - Minimal */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 border-t border-vault-border/60 bg-vault-bg/80 backdrop-blur-xl">
-        <div className="flex items-center justify-around py-4 px-6">
-          {items.map((item) => {
-            const { path, icon: Icon, label } = item
-            const isActive = isActiveLink(location, item)
-            return (
-              <Link
-                key={path}
-                to={path}
-                className="flex flex-col items-center justify-center gap-2 group min-h-11 min-w-[56px] px-2"
-              >
-                <Icon
-                  className={`w-5 h-5 transition-colors ${
-                    isActive ? 'text-vault-text' : 'text-vault-subtext group-hover:text-vault-text'
-                  }`}
-                />
-                <span className={`label ${isActive ? 'text-vault-text' : 'text-vault-subtext'}`}>
-                  {label}
-                </span>
-              </Link>
-            )
-          })}
-        </div>
-      </nav>
+      {hostMode !== 'marketing' ? (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 border-t border-vault-border/60 bg-vault-bg/80 backdrop-blur-xl">
+          <div className="flex items-center justify-around py-4 px-6">
+            {items.map((item) => {
+              const { path, icon: Icon, label } = item
+              const isActive = isActiveLink(location, item)
+              return (
+                <Link
+                  key={path}
+                  to={path}
+                  className="flex flex-col items-center justify-center gap-2 group min-h-11 min-w-[56px] px-2"
+                >
+                  <Icon
+                    className={`w-5 h-5 transition-colors ${
+                      isActive ? 'text-vault-text' : 'text-vault-subtext group-hover:text-vault-text'
+                    }`}
+                  />
+                  <span className={`label ${isActive ? 'text-vault-text' : 'text-vault-subtext'}`}>
+                    {label}
+                  </span>
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
+      ) : null}
     </div>
   )
 }

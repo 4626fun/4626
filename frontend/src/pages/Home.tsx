@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { getAppBaseUrl } from '@/lib/host'
+import { getAppBaseUrl, getHostMode } from '@/lib/host'
 import { motion } from 'framer-motion'
 import { ArrowRight, Clock, Share2 } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
@@ -45,6 +45,8 @@ function WaitlistStatusBanner() {
 
 export function Home() {
   const publicMode = isPublicSiteMode()
+  const hostMode = getHostMode()
+  const marketingFocused = publicMode || hostMode === 'marketing'
   const location = useLocation()
   const access = useAccessContext()
 
@@ -58,6 +60,59 @@ export function Home() {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
   }, [location.hash])
+
+  if (marketingFocused) {
+    return (
+      <div className="relative">
+        {/* Hero - marketing focus */}
+        <section className="cinematic-section min-h-[70vh] sm:min-h-[82vh] flex items-center justify-center">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center space-y-7 sm:space-y-10">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.8 }}
+              className="inline-flex items-center gap-3"
+            >
+              <div className="status-active">
+                <span className="label">Creator waitlist</span>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+              className="space-y-5"
+            >
+              <h1 className="headline text-4xl sm:text-6xl md:text-7xl leading-[1.08]">
+                Turn Creator Coins
+                <br />
+                <span className="glow-brand">Into Earnings</span>
+              </h1>
+              <p className="text-base sm:text-xl text-zinc-500 font-light tracking-wide max-w-2xl mx-auto">
+                Join the waitlist now. We approve in batches.
+              </p>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.8, delay: 0.4 }}
+              className="pt-2"
+            >
+              <Link to="/#waitlist" className="btn-accent inline-block">
+                Join waitlist <ArrowRight className="w-4 h-4 inline ml-2" />
+              </Link>
+            </motion.div>
+          </div>
+        </section>
+
+        {access.sessionValid && !access.accepted && !access.loading ? <WaitlistStatusBanner /> : null}
+
+        <WaitlistFlow variant="embedded" sectionId="waitlist" />
+      </div>
+    )
+  }
 
   return (
     <div className="relative">
