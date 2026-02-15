@@ -69,7 +69,7 @@ export function Layout() {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const showQuickstart = useShowQuickstart()
   const [quickstartDismissed, setQuickstartDismissed] = useState(false)
-  const onboardingSuppressed = location.pathname === '/waitlist' || location.pathname.startsWith('/deploy')
+  const onboardingSuppressed = hostMode !== 'app' || location.pathname === '/waitlist' || location.pathname.startsWith('/deploy')
   const resolvedSubdomain = useQuery({
     queryKey: ['agents', 'subdomain-resolve', hostMode],
     enabled: hostMode === 'app',
@@ -91,7 +91,7 @@ export function Layout() {
   }, [onboardingSuppressed])
 
   // Show quickstart after onboarding is done, for authenticated creators
-  const shouldShowQuickstart = !showOnboarding && showQuickstart && !quickstartDismissed
+  const shouldShowQuickstart = hostMode === 'app' && !showOnboarding && showQuickstart && !quickstartDismissed
 
   return (
     <div className="min-h-screen flex flex-col bg-vault-bg">

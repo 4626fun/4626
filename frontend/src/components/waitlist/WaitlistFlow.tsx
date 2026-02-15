@@ -576,6 +576,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     user: privyUser,
     logout: privyLogout,
     linkWallet: privyLinkWallet,
+    getAccessToken,
   } = useSafePrivyHook(privyHooksEnabled)
   const showPrivyReady = showPrivy && privyStatus === 'ready'
   const { connectWallet: privyConnectWallet } = useSafeConnectWalletHook({
@@ -1147,6 +1148,13 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         creatorCoin: {
           address: coinAddress,
           symbol: coinSymbol,
+          coinType: null,
+          imageUrl: null,
+          marketCapUsd: null,
+          volume24hUsd: null,
+          holders: null,
+          priceUsd: null,
+          payoutRecipient: null,
           ownerWallets: [],
           canonicalSmartWallet: effectiveCswAddress || null,
         },
