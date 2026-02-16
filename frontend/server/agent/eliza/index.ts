@@ -50,15 +50,21 @@ import { walletIntelPlugin } from './plugins/walletIntel/index.js'
 import { reputationPlugin } from './plugins/reputation/index.js'
 import { crePlugin } from './plugins/cre/index.js'
 import { zoraPlugin } from './plugins/zora/index.js'
+import { knowledgePlugin } from './plugins/knowledge/index.js'
 import { creatorVaultCharacter } from './character.js'
 import { XmtpService } from './plugins/xmtp/service.js'
+import { createRuntimeBridge } from './runtimeBridge.js'
+import { getElizaLlmService } from './llm.js'
+import { AgentError, toAgentError } from './_errors.js'
+import { SlidingWindowRateLimiter, parsePositiveNumber } from './_rateLimit.js'
+import { enqueueAgentBackgroundTask, startAgentBackgroundTaskWorker } from './_taskQueue.js'
 
-import { getDb, isDbConfigured } from '../../_lib/postgres.js'
+import { getDb, getDbInitError, isDbConfigured } from '../../_lib/postgres.js'
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../_lib/creatorXmtpAgents.js'
 import { createPrivyScwSigner } from '../../_lib/privyXmtpSigner.js'
 import { buildAgentRegistration } from '../../_lib/agentRegistration.js'
 import { tryUploadImmutableJson } from '../../_lib/lensGrove.js'
-import { logger } from '../../_lib/logger.js'
+import { createCorrelationId, logger } from '../../_lib/logger.js'
 import path from 'node:path'
 import fs from 'node:fs'
 import http from 'node:http'
@@ -78,6 +84,14 @@ declare const process: {
 const XMTP_ENV = ((process.env.XMTP_ENV ?? 'production').trim()) as 'production' | 'dev' | 'local'
 const POLL_INTERVAL_MS = 60_000
 const MAX_AGENTS = Number(process.env.MAX_AGENTS ?? '50')
+const ACTION_TIMEOUT_MS = Math.floor(parsePositiveNumber(process.env.ELIZA_ACTION_TIMEOUT_MS, 30_000))
+const ACTION_MAX_CANDIDATES = Math.floor(parsePositiveNumber(process.env.ELIZA_ACTION_MAX_CANDIDATES, 2))
+const INBOUND_RATE_WINDOW_MS = Math.floor(parsePositiveNumber(process.env.ELIZA_RATE_LIMIT_WINDOW_MS, 60_000))
+const INBOUND_RATE_MAX_MESSAGES = Math.floor(parsePositiveNumber(process.env.ELIZA_RATE_LIMIT_MAX_MESSAGES, 12))
+
+const llmService = getElizaLlmService()
+const inboundRateLimiter = new SlidingWindowRateLimiter(INBOUND_RATE_WINDOW_MS, INBOUND_RATE_MAX_MESSAGES)
+const runtimeStartedAtMs = Date.now()
 
 /**
  * Directory where XMTP local databases are persisted.
@@ -290,105 +304,28 @@ export type { Erc8004Identity } from './identity.js'
 // Plugins & Actions
 // ---------------------------------------------------------------------------
 
-const plugins = [keeprPlugin, zoraPlugin, lensPlugin, walletIntelPlugin, reputationPlugin, crePlugin]
+const plugins = [keeprPlugin, zoraPlugin, lensPlugin, walletIntelPlugin, reputationPlugin, crePlugin, knowledgePlugin]
 const allActions = plugins.flatMap((p) => p.actions ?? [])
 
-export { keeprPlugin, zoraPlugin, lensPlugin, walletIntelPlugin, reputationPlugin, crePlugin }
+export { keeprPlugin, zoraPlugin, lensPlugin, walletIntelPlugin, reputationPlugin, crePlugin, knowledgePlugin }
 
 // ---------------------------------------------------------------------------
 // LLM providers (for /ai fallback)
 // ---------------------------------------------------------------------------
 
-type LlmProvider = {
-  name: string
-  envKey: string
-  apiUrl: string
-  model: string
-  transformBody?: (messages: any[]) => any
-  extractContent?: (json: any) => string | null
-}
-
-const PROVIDERS: LlmProvider[] = [
-  {
-    name: 'Groq',
-    envKey: 'GROQ_API_KEY',
-    apiUrl: 'https://api.groq.com/openai/v1/chat/completions',
-    model: 'llama-3.3-70b-versatile',
-  },
-  {
-    name: 'OpenAI',
-    envKey: 'OPENAI_API_KEY',
-    apiUrl: 'https://api.openai.com/v1/chat/completions',
-    model: 'gpt-4o-mini',
-  },
-  {
-    name: 'Anthropic',
-    envKey: 'ANTHROPIC_API_KEY',
-    apiUrl: 'https://api.anthropic.com/v1/messages',
-    model: 'claude-3-5-haiku-20241022',
-    transformBody: (messages) => ({
-      model: 'claude-3-5-haiku-20241022',
-      max_tokens: 512,
-      system: messages.find((m: any) => m.role === 'system')?.content ?? '',
-      messages: messages.filter((m: any) => m.role !== 'system'),
-    }),
-    extractContent: (json) => json?.content?.[0]?.text ?? null,
-  },
-  {
-    name: 'OpenRouter',
-    envKey: 'OPENROUTER_API_KEY',
-    apiUrl: 'https://openrouter.ai/api/v1/chat/completions',
-    model: 'meta-llama/llama-3.3-70b-instruct',
-  },
-]
-
-function resolveProvider(): LlmProvider | null {
-  for (const p of PROVIDERS) {
-    if ((process.env[p.envKey] ?? '').trim()) return p
-  }
-  return null
-}
-
-async function generateLlmResponse(
-  userMessage: string,
-  systemPrompt: string,
-  vaultContext: string,
-): Promise<string | null> {
-  const provider = resolveProvider()
+function resolveProvider(): { name: string; model: string } | null {
+  const [provider] = llmService.getAvailableProviders()
   if (!provider) return null
+  return { name: provider.name, model: provider.model }
+}
 
-  const apiKey = (process.env[provider.envKey] ?? '').trim()
-  const messages = [
-    { role: 'system', content: `${systemPrompt}\n\n${vaultContext}` },
-    { role: 'user', content: userMessage },
-  ]
-
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (provider.name === 'Anthropic') {
-    headers['x-api-key'] = apiKey
-    headers['anthropic-version'] = '2023-06-01'
-  } else {
-    headers['Authorization'] = `Bearer ${apiKey}`
-  }
-
-  const body = provider.transformBody
-    ? provider.transformBody(messages)
-    : { model: provider.model, messages, max_tokens: 512, temperature: 0.7 }
-
-  try {
-    const res = await fetch(provider.apiUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) return null
-    const json = (await res.json()) as any
-    return provider.extractContent
-      ? provider.extractContent(json)
-      : json?.choices?.[0]?.message?.content ?? null
-  } catch {
-    return null
-  }
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new AgentError('UPSTREAM_TIMEOUT', timeoutMessage, { retryable: true })), timeoutMs)
+    }),
+  ])
 }
 
 // ---------------------------------------------------------------------------
@@ -407,61 +344,199 @@ const WELCOME_MESSAGE = [
   `• /ai <question> — ask anything in plain English`,
 ].join('\n')
 
+type EnvValidationResult = {
+  errors: string[]
+  warnings: string[]
+}
+
+let latestEnvValidation: EnvValidationResult = { errors: [], warnings: [] }
+let backgroundWorker: { stop: () => void } | null = null
+
+function validateStartupEnv(): EnvValidationResult {
+  const errors: string[] = []
+  const warnings: string[] = []
+
+  const hasDb = isDbConfigured()
+  const hasEncKey = !!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()
+  const hasPrivateKey = !!(process.env.XMTP_AGENT_PRIVATE_KEY ?? '').trim()
+  const hasCswAddress = !!(process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim()
+  const hasCswPrivyWallet = !!(process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
+
+  if (!hasDb && !hasPrivateKey && !(hasCswAddress && hasCswPrivyWallet)) {
+    errors.push(
+      'No startup mode is fully configured. Set multi-agent, CSW, or EOA credentials before boot.',
+    )
+  }
+
+  if ((process.env.XMTP_DB_ENCRYPTION_KEY ?? '').trim()) {
+    const raw = (process.env.XMTP_DB_ENCRYPTION_KEY ?? '').trim()
+    const normalized = raw.startsWith('0x') ? raw.slice(2) : raw
+    if (!/^[a-fA-F0-9]{64}$/.test(normalized)) {
+      errors.push('XMTP_DB_ENCRYPTION_KEY must be a 32-byte hex string (64 hex chars, optional 0x prefix).')
+    }
+  } else {
+    warnings.push('XMTP_DB_ENCRYPTION_KEY is not set. XMTP installation reuse may degrade across restarts.')
+  }
+
+  if (hasCswAddress && !hasCswPrivyWallet) {
+    errors.push('XMTP_AGENT_PRIVY_WALLET_ID is required when XMTP_AGENT_CSW_ADDRESS is set.')
+  }
+  if (!hasCswAddress && hasCswPrivyWallet) {
+    errors.push('XMTP_AGENT_CSW_ADDRESS is required when XMTP_AGENT_PRIVY_WALLET_ID is set.')
+  }
+
+  if (!llmService.getAvailableProviders().length) {
+    warnings.push('No LLM provider API key configured; /ai fallback will be disabled.')
+  }
+
+  if (ACTION_MAX_CANDIDATES < 1) {
+    errors.push('ELIZA_ACTION_MAX_CANDIDATES must be >= 1.')
+  }
+  if (ACTION_TIMEOUT_MS < 5_000) {
+    warnings.push('ELIZA_ACTION_TIMEOUT_MS is very low; long-running actions may fail prematurely.')
+  }
+
+  return { errors, warnings }
+}
+
+function ensureBackgroundWorker(): void {
+  if (backgroundWorker) return
+  backgroundWorker = startAgentBackgroundTaskWorker({
+    workerName: 'eliza',
+    pollMs: Math.floor(parsePositiveNumber(process.env.ELIZA_TASK_WORKER_POLL_MS, 3_000)),
+    maxTasksPerTick: Math.floor(parsePositiveNumber(process.env.ELIZA_TASK_WORKER_MAX_TASKS, 5)),
+    handleTask: async (task) => {
+      if (task.taskType === 'message_audit') {
+        logger.debug('[eliza/queue] message_audit processed', {
+          conversationId: String(task.payload.conversationId ?? ''),
+          agentKey: String(task.payload.agentKey ?? ''),
+        })
+        return
+      }
+      if (task.taskType === 'knowledge_refresh') {
+        logger.debug('[eliza/queue] knowledge_refresh processed', task.payload)
+        return
+      }
+      logger.debug('[eliza/queue] unknown task type', {
+        id: task.id,
+        taskType: task.taskType,
+      })
+    },
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Message router (ElizaOS plugin pipeline)
 // ---------------------------------------------------------------------------
 
-async function handleMessage(msg: {
-  conversationId: string
-  conversationType: string
-  senderAddress: string | null
-  content: string
-}): Promise<string | null> {
+async function handleMessage(
+  msg: {
+    conversationId: string
+    conversationType: string
+    senderAddress: string | null
+    content: string
+  },
+  ctx: {
+    agentKey: string
+    runtimeBridge: ReturnType<typeof createRuntimeBridge>
+  },
+): Promise<string | null> {
   const text = msg.content.trim()
+  if (!text) return null
+
+  const correlationId = createCorrelationId('msg')
+  const rateKey = `${msg.conversationId}:${(msg.senderAddress ?? 'unknown').toLowerCase()}`
+  const rate = inboundRateLimiter.allow(rateKey)
+  if (!rate.allowed) {
+    logger.warn('[eliza] inbound rate limited', {
+      correlationId,
+      agentKey: ctx.agentKey,
+      conversationId: msg.conversationId,
+      retryAfterMs: rate.retryAfterMs,
+    })
+    return `Rate limit reached. Try again in ${Math.ceil(rate.retryAfterMs / 1000)}s.`
+  }
+
+  const memory = ctx.runtimeBridge.createInboundMemory(msg)
+  await ctx.runtimeBridge.runtime.createMemory(memory as any, 'messages' as any)
+  const state = await ctx.runtimeBridge.composeState(memory)
+
+  void enqueueAgentBackgroundTask({
+    taskType: 'message_audit',
+    payload: {
+      correlationId,
+      agentKey: ctx.agentKey,
+      conversationId: msg.conversationId,
+      conversationType: msg.conversationType,
+      senderAddress: msg.senderAddress,
+    },
+  })
 
   // Welcome message on first interaction in a conversation
   if (!welcomedConversations.has(msg.conversationId)) {
     welcomedConversations.add(msg.conversationId)
+    const welcomeMemory = ctx.runtimeBridge.createOutboundMemory(
+      msg.conversationId,
+      msg.conversationType,
+      WELCOME_MESSAGE,
+    )
+    await ctx.runtimeBridge.runtime.createMemory(welcomeMemory as any, 'messages' as any)
     return WELCOME_MESSAGE
   }
 
-  // Route through all plugin actions
-  for (const action of allActions) {
-    const fakeMemory = {
-      content: {
-        text,
-        metadata: {
-          conversationId: msg.conversationId,
-          conversationType: msg.conversationType,
-          senderAddress: msg.senderAddress,
-        },
-      },
-    } as any
-
-    const matches = await action.validate({} as any, fakeMemory)
-    if (matches) {
-      const parts: string[] = []
-      await action.handler(
-        {} as any,
-        fakeMemory,
-        undefined,
-        undefined,
-        async (content: any) => {
-          if (content?.text) parts.push(content.text)
-          return []
-        },
+  const rankedActions = await ctx.runtimeBridge.rankActions(text, memory)
+  const maxCandidates = Math.max(1, ACTION_MAX_CANDIDATES)
+  const candidates = rankedActions.slice(0, maxCandidates)
+  for (const candidate of candidates) {
+    const parts: string[] = []
+    try {
+      await withTimeout(
+        candidate.action.handler(
+          ctx.runtimeBridge.runtime as any,
+          memory as any,
+          state as any,
+          undefined,
+          async (content: any) => {
+            if (content?.text) parts.push(String(content.text))
+            return []
+          },
+        ),
+        ACTION_TIMEOUT_MS,
+        `action_timeout_${String(candidate.action?.name ?? 'unknown').toLowerCase()}`,
       )
-      return parts.join('\n\n') || null
+      const actionReply = parts.join('\n\n').trim()
+      if (actionReply) {
+        const actionMemory = ctx.runtimeBridge.createOutboundMemory(
+          msg.conversationId,
+          msg.conversationType,
+          actionReply,
+        )
+        await ctx.runtimeBridge.runtime.createMemory(actionMemory as any, 'messages' as any)
+        logger.info('[eliza] action executed', {
+          correlationId,
+          agentKey: ctx.agentKey,
+          action: String(candidate.action?.name ?? 'unknown'),
+          score: candidate.score,
+          reason: candidate.reason,
+        })
+        return actionReply
+      }
+    } catch (error) {
+      const agentError = toAgentError(error, 'ACTION_FAILED', 'Action execution failed')
+      logger.warn('[eliza] action candidate failed', {
+        correlationId,
+        agentKey: ctx.agentKey,
+        action: String(candidate.action?.name ?? 'unknown'),
+        score: candidate.score,
+        reason: candidate.reason,
+        error: agentError.message,
+      })
     }
   }
 
   // LLM fallback for /ai, @keepr, @bot
   const lower = text.toLowerCase()
-  const isAi =
-    lower.startsWith('/ai') ||
-    lower.startsWith('@keepr') ||
-    lower.startsWith('@bot')
-
+  const isAi = lower.startsWith('/ai') || lower.startsWith('@keepr') || lower.startsWith('@bot')
   if (!isAi) return null
 
   const cleanText = text
@@ -469,35 +544,57 @@ async function handleMessage(msg: {
     .replace(/^@keepr\s*/i, '')
     .replace(/^@bot\s*/i, '')
     .trim()
-
   if (!cleanText) return 'Ask me anything about this vault or DeFi on Base.'
 
-  // Get vault context from providers
   let vaultContext = ''
-  for (const provider of keeprPlugin.providers ?? []) {
-    const result = await provider.get(
-      {} as any,
-      {
-        content: {
-          text: cleanText,
-          metadata: {
-            conversationId: msg.conversationId,
-            conversationType: msg.conversationType,
-          },
-        },
-      } as any,
-      {} as any,
-    )
-    if (result?.text) vaultContext += result.text + '\n'
+  const contextProviders = [...(keeprPlugin.providers ?? []), ...(knowledgePlugin.providers ?? [])]
+  for (const provider of contextProviders) {
+    try {
+      const result = await withTimeout(
+        provider.get(ctx.runtimeBridge.runtime as any, memory as any, state as any),
+        5_000,
+        `context_provider_timeout_${String(provider.name ?? 'unknown').toLowerCase()}`,
+      )
+      if (result?.text) vaultContext += `${String(result.text).trim()}\n`
+    } catch (error) {
+      logger.warn('[eliza] context provider failed', {
+        correlationId,
+        provider: String(provider.name ?? 'unknown'),
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
-  const reply = await generateLlmResponse(
-    cleanText,
-    creatorVaultCharacter.system,
-    vaultContext,
-  )
-
-  return reply ?? "I couldn't generate a response right now. Try again later."
+  try {
+    const llm = await llmService.generateResponse({
+      agentKey: ctx.agentKey,
+      userMessage: cleanText,
+      systemPrompt: creatorVaultCharacter.system,
+      vaultContext,
+      correlationId,
+      preferredModel: String(creatorVaultCharacter.settings?.model ?? '').trim() || undefined,
+    })
+    const reply = llm.text ?? "I couldn't generate a response right now. Try again later."
+    const outbound = ctx.runtimeBridge.createOutboundMemory(
+      msg.conversationId,
+      msg.conversationType,
+      reply,
+    )
+    await ctx.runtimeBridge.runtime.createMemory(outbound as any, 'messages' as any)
+    return reply
+  } catch (error) {
+    const agentError = toAgentError(error, 'UPSTREAM_ERROR', 'LLM fallback failed')
+    logger.error('[eliza] llm fallback failed', {
+      correlationId,
+      agentKey: ctx.agentKey,
+      error: agentError.message,
+      code: agentError.code,
+    })
+    if (agentError.code === 'BUDGET_EXCEEDED') {
+      return 'Daily AI budget limit reached for this agent. Please try again tomorrow.'
+    }
+    return "I couldn't generate a response right now. Try again later."
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -518,6 +615,7 @@ type AgentRow = {
 type RunningAgent = {
   creatorAddress: string
   xmtp: XmtpService
+  runtimeBridge: ReturnType<typeof createRuntimeBridge>
 }
 
 async function loadAgentRows(): Promise<AgentRow[]> {
@@ -560,6 +658,10 @@ async function loadAgentRows(): Promise<AgentRow[]> {
 
 async function startAgent(row: AgentRow): Promise<RunningAgent> {
   const dbEncryptionKey = getEffectiveDbEncryptionKey()
+  const runtimeBridge = createRuntimeBridge({
+    agentKey: row.creatorAddress,
+    plugins,
+  })
   let signer: any
 
   if (row.agentType === 'csw' && row.privyWalletId && row.cswAddress) {
@@ -596,12 +698,18 @@ async function startAgent(row: AgentRow): Promise<RunningAgent> {
       `[eliza:${row.creatorAddress.slice(0, 10)}] ${msg.senderAddress?.slice(0, 10) ?? msg.senderInboxId.slice(0, 10)}: ${msg.content.slice(0, 80)}`,
     )
 
-    return handleMessage({
-      conversationId: msg.conversationId,
-      conversationType: msg.conversationType,
-      senderAddress: msg.senderAddress,
-      content: msg.content,
-    })
+    return handleMessage(
+      {
+        conversationId: msg.conversationId,
+        conversationType: msg.conversationType,
+        senderAddress: msg.senderAddress,
+        content: msg.content,
+      },
+      {
+        agentKey: row.creatorAddress,
+        runtimeBridge,
+      },
+    )
   })
 
   await xmtp.start()
@@ -611,7 +719,7 @@ async function startAgent(row: AgentRow): Promise<RunningAgent> {
     agentType: row.agentType,
   })
 
-  return { creatorAddress: row.creatorAddress, xmtp }
+  return { creatorAddress: row.creatorAddress, xmtp, runtimeBridge }
 }
 
 // ---------------------------------------------------------------------------
@@ -672,6 +780,13 @@ async function shutdown() {
   })
   await Promise.allSettled(stops)
 
+  if (backgroundWorker) {
+    try {
+      backgroundWorker.stop()
+    } catch {}
+    backgroundWorker = null
+  }
+
   logger.info(`[eliza] All ${runningAgents.size} agents stopped`)
   runningAgents.clear()
   process.exit(0)
@@ -688,6 +803,10 @@ async function shutdown() {
  */
 async function startSingleAgentEoa(privateKey: `0x${string}`): Promise<RunningAgent> {
   const dbEncryptionKey = getEffectiveDbEncryptionKey()
+  const runtimeBridge = createRuntimeBridge({
+    agentKey: 'single-agent',
+    plugins,
+  })
   const xmtp = new XmtpService({
     privateKey,
     env: XMTP_ENV,
@@ -701,19 +820,25 @@ async function startSingleAgentEoa(privateKey: `0x${string}`): Promise<RunningAg
       `[eliza:single] ${msg.senderAddress?.slice(0, 10) ?? msg.senderInboxId.slice(0, 10)}: ${msg.content.slice(0, 80)}`,
     )
 
-    return handleMessage({
-      conversationId: msg.conversationId,
-      conversationType: msg.conversationType,
-      senderAddress: msg.senderAddress,
-      content: msg.content,
-    })
+    return handleMessage(
+      {
+        conversationId: msg.conversationId,
+        conversationType: msg.conversationType,
+        senderAddress: msg.senderAddress,
+        content: msg.content,
+      },
+      {
+        agentKey: 'single-agent',
+        runtimeBridge,
+      },
+    )
   })
 
   await xmtp.start()
 
   logger.info(`[eliza] Single EOA agent started`, { agentAddress: xmtp.address })
 
-  return { creatorAddress: 'single-agent', xmtp }
+  return { creatorAddress: 'single-agent', xmtp, runtimeBridge }
 }
 
 /**
@@ -736,6 +861,10 @@ async function startSingleAgentCsw(params: {
   chainId?: number
 }): Promise<RunningAgent> {
   const dbEncryptionKey = getEffectiveDbEncryptionKey()
+  const runtimeBridge = createRuntimeBridge({
+    agentKey: 'single-agent-csw',
+    plugins,
+  })
   const signer = createPrivyScwSigner({
     walletId: params.privyWalletId,
     cswAddress: params.cswAddress,
@@ -756,12 +885,18 @@ async function startSingleAgentCsw(params: {
       `[eliza:csw] ${msg.senderAddress?.slice(0, 10) ?? msg.senderInboxId.slice(0, 10)}: ${msg.content.slice(0, 80)}`,
     )
 
-    return handleMessage({
-      conversationId: msg.conversationId,
-      conversationType: msg.conversationType,
-      senderAddress: msg.senderAddress,
-      content: msg.content,
-    })
+    return handleMessage(
+      {
+        conversationId: msg.conversationId,
+        conversationType: msg.conversationType,
+        senderAddress: msg.senderAddress,
+        content: msg.content,
+      },
+      {
+        agentKey: 'single-agent-csw',
+        runtimeBridge,
+      },
+    )
   })
 
   await xmtp.start()
@@ -772,7 +907,7 @@ async function startSingleAgentCsw(params: {
     privyWalletId: params.privyWalletId.slice(0, 12) + '...',
   })
 
-  return { creatorAddress: 'single-agent-csw', xmtp }
+  return { creatorAddress: 'single-agent-csw', xmtp, runtimeBridge }
 }
 
 // ---------------------------------------------------------------------------
@@ -808,6 +943,27 @@ async function main() {
   // Start health check server FIRST so Railway healthcheck passes during boot
   startHealthServer()
 
+  latestEnvValidation = validateStartupEnv()
+  if (latestEnvValidation.warnings.length > 0) {
+    for (const warning of latestEnvValidation.warnings) {
+      logger.warn('[eliza] startup warning', { warning })
+    }
+  }
+  if (latestEnvValidation.errors.length > 0) {
+    for (const error of latestEnvValidation.errors) {
+      logger.error('[eliza] startup validation error', { error })
+    }
+    process.exit(1)
+    return
+  }
+
+  ensureBackgroundWorker()
+  void enqueueAgentBackgroundTask({
+    taskType: 'knowledge_refresh',
+    payload: { reason: 'startup' },
+    priority: 1,
+  })
+
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   console.log('  CreatorVault ElizaOS Agent (Unified)')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
@@ -834,7 +990,11 @@ async function main() {
   const llmProvider = resolveProvider()
   const actionCount = allActions.length
   console.log(`  Mode: ${modeLabel}`)
-  console.log(`  LLM provider: ${llmProvider?.name ?? 'none (conversational AI disabled)'}`)
+  console.log(
+    `  LLM provider: ${llmProvider?.name ?? 'none (conversational AI disabled)'}${
+      llmProvider?.model ? ` (${llmProvider.model})` : ''
+    }`,
+  )
   console.log(`  XMTP env: ${XMTP_ENV}`)
   console.log(`  Character: ${creatorVaultCharacter.name}`)
   console.log(`  Plugins: ${plugins.map((p) => p.name).join(', ')}`)
@@ -944,25 +1104,56 @@ async function main() {
 // start ("ok"). Only returns 503 if the process is up but agents crashed.
 function startHealthServer() {
   const port = Number(process.env.PORT ?? '8080') || 8080
-  const server = http.createServer((_req, res) => {
+  const server = http.createServer(async (_req, res) => {
     const url = (_req.url ?? '/').split('?')[0]
-    if (url === '/healthz') {
-      const agentCount = runningAgents.size
-      if (!agentBooted) {
-        // Still booting — tell Railway we're alive so it doesn't kill us
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ status: 'booting', agents: 0 }))
-      } else if (agentCount > 0) {
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ status: 'ok', agents: agentCount }))
-      } else {
-        res.writeHead(503, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ status: 'no_agents', agents: 0 }))
-      }
-    } else {
+    if (url !== '/healthz' && url !== '/readyz') {
       res.writeHead(404)
       res.end('Not found')
+      return
     }
+
+    const agentCount = runningAgents.size
+    const dbConfigured = isDbConfigured()
+    const dbInitError = getDbInitError()
+    const db = dbConfigured ? await getDb() : null
+    const llmHealth = llmService.getHealth()
+    const ready = Boolean(
+      agentBooted &&
+      agentCount > 0 &&
+      latestEnvValidation.errors.length === 0 &&
+      (dbConfigured ? db !== null : true),
+    )
+    const status =
+      !agentBooted
+        ? 'booting'
+        : ready
+          ? 'ok'
+          : agentCount === 0
+            ? 'no_agents'
+            : 'degraded'
+    const payload = {
+      status,
+      uptimeMs: Date.now() - runtimeStartedAtMs,
+      agents: agentCount,
+      dependencies: {
+        db: {
+          configured: dbConfigured,
+          connected: dbConfigured ? db !== null : false,
+          initError: dbInitError,
+        },
+        llm: llmHealth,
+        queueWorker: {
+          running: Boolean(backgroundWorker),
+        },
+      },
+      validation: latestEnvValidation,
+    }
+
+    const statusCode = url === '/readyz'
+      ? (ready ? 200 : 503)
+      : (!agentBooted || ready ? 200 : 503)
+    res.writeHead(statusCode, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(payload))
   })
   server.listen(port, () => {
     logger.info(`[eliza] Health check server listening on :${port}/healthz`)
@@ -970,7 +1161,9 @@ function startHealthServer() {
 }
 
 void main().catch((err) => {
-  console.error('[eliza] Fatal error:', err instanceof Error ? err.message : err)
-  if (err instanceof Error && err.stack) console.error(err.stack)
+  logger.error('[eliza] Fatal error', {
+    error: err instanceof Error ? err.message : String(err),
+    stack: err instanceof Error ? err.stack : undefined,
+  })
   process.exit(1)
 })
