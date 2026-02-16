@@ -317,14 +317,12 @@ export const VerifyStep = memo(function VerifyStep({
           >
             <span className="relative flex items-center gap-3">
               <img src={BASE_SQUARE_WHITE} alt="" className="w-4 h-4" aria-hidden="true" />
-              Continue with Zora login
+              Sign in with wallet
             </span>
             <ChevronRight className="relative w-4 h-4 opacity-80" />
           </button>
 
-          <p className="text-[13px] text-zinc-500">
-            Sign in with wallet. We'll detect your linked wallet and continue automatically.
-          </p>
+          <p className="text-[13px] text-zinc-500">We'll continue automatically.</p>
 
           <div className="flex items-center justify-between">
             <div className="text-[12px] text-zinc-500">{helperText || '\u00A0'}</div>
@@ -335,7 +333,7 @@ export const VerifyStep = memo(function VerifyStep({
                   className="text-[12px] text-zinc-400 hover:text-zinc-200 transition-colors"
                   onClick={onPrivyFallback}
                 >
-                  Use in-app login instead
+                  Try another way
                 </button>
               ) : null}
               <button
@@ -343,7 +341,7 @@ export const VerifyStep = memo(function VerifyStep({
                 className="text-[12px] text-zinc-400 hover:text-zinc-200 transition-colors"
                 onClick={() => setShowTrouble(true)}
               >
-                Having trouble?
+                Need help?
               </button>
             </div>
           </div>
@@ -361,7 +359,7 @@ export const VerifyStep = memo(function VerifyStep({
             {...fadeUp}
             className="rounded-2xl border border-[#0052FF]/20 bg-[#0052FF]/6 px-4 py-3 text-[12px] leading-relaxed text-zinc-300"
           >
-            <span className="text-[#8AB5FF] font-medium">Zora sync:</span> We only read your Zora-linked wallet and creator asset data here (read-only) to prefill checks. No transactions are sent from this step.
+            <span className="text-[#8AB5FF] font-medium">Zora sync:</span> We only check your Zora profile to prefill this step. No transaction is sent.
           </motion.div>
         </motion.div>
       ) : null}
@@ -444,7 +442,7 @@ export const VerifyStep = memo(function VerifyStep({
             animate="animate"
           >
             <motion.div variants={staggerItem} className="rounded-2xl border border-[#0052FF]/20 bg-[#0052FF]/6 px-3.5 py-2.5 text-[11px] leading-relaxed text-zinc-300">
-              <span className="text-[#8AB5FF] font-medium">Using Zora-linked data (read-only):</span> ownership + creator coin context are auto-filled so you can verify before joining.
+              <span className="text-[#8AB5FF] font-medium">Using Zora data:</span> ownership and creator coin info are auto-filled so you can review before joining.
             </motion.div>
 
             <motion.div variants={staggerItem} className="flex items-center justify-between gap-3">

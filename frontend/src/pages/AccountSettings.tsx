@@ -68,7 +68,9 @@ function formatRole(
   const primarySmartWalletLc = opts?.primarySmartWalletAddress?.toLowerCase() ?? null
   const addressLc = account.address.toLowerCase()
   const walletType = (account.walletType ?? '').toLowerCase()
-  const isCanonicalSmartWallet = Boolean(canonicalLc && canonicalLc === addressLc) || account.isCanonicalSmartWallet
+  // When a canonical address is resolved, treat it as the single source of truth
+  // to prevent stale synced flags from labeling multiple wallets as canonical.
+  const isCanonicalSmartWallet = canonicalLc ? canonicalLc === addressLc : account.isCanonicalSmartWallet
 
   if (account.isPrimary) labels.push('Primary')
   if (isCanonicalSmartWallet) labels.push('Canonical Smart Wallet')
@@ -340,12 +342,13 @@ export function AccountSettings() {
 
   const canonicalSmartWalletAddress = useMemo(() => {
     if (!profile) return null
-    if (isEvmAddress(privyCrossAppSmartWalletAddress)) return privyCrossAppSmartWalletAddress
     if (isEvmAddress(profile.cswAddress)) return profile.cswAddress
+    const canonicalFromAccounts = (profile.connectedAccounts ?? []).find((a) => a.isCanonicalSmartWallet && isEvmAddress(a.address))
+    if (canonicalFromAccounts?.address) return canonicalFromAccounts.address
     if (isEvmAddress(profile.primarySmartWallet)) return profile.primarySmartWallet
     if (isEvmAddress(profile.baseSubAccount)) return profile.baseSubAccount
-    const canonicalFromAccounts = (profile.connectedAccounts ?? []).find((a) => a.isCanonicalSmartWallet && isEvmAddress(a.address))
-    return canonicalFromAccounts?.address ?? null
+    if (isEvmAddress(privyCrossAppSmartWalletAddress)) return privyCrossAppSmartWalletAddress
+    return null
   }, [privyCrossAppSmartWalletAddress, profile])
 
   const primarySmartWalletAddress = useMemo(() => {

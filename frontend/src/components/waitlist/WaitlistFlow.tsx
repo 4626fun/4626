@@ -265,7 +265,7 @@ function formatPrivyConnectError(code: string): string {
   if (c.includes('user_exited') || c.includes('user_rejected')) return 'Connection cancelled.'
   if (c.includes('client_request_timeout') || c.includes('timeout')) return 'Wallet connection timed out. Try again.'
   if (c.includes('disallowed_login_method')) {
-    return 'Wallet sign-in isn’t available for this app. If you control this Privy app, enable Wallet login in the Privy dashboard.'
+    return "Wallet sign-in is unavailable. Try another way."
   }
   if (c.includes('unsupported_chain_id')) return 'Unsupported network. Switch to Base and try again.'
   if (c.includes('generic_connect_wallet_error') || c.includes('unknown_connect_wallet_error')) {
@@ -352,9 +352,9 @@ function getPrivyWalletMissingMessage(user: any, walletsOverride?: any[]): strin
   })
   if (hasWallet) return 'Connect Base Account to verify.'
   if (hasNonWalletAccount) {
-    return 'Wallet sign-in isn’t available right now (or no Base Account is linked). If you control this Privy app, enable Wallet login in the Privy dashboard. Otherwise, use the Coinbase Wallet fallback below.'
+    return "Wallet sign-in is unavailable. Try another way."
   }
-  return 'Wallet sign-in isn’t available for this app. If you control this Privy app, enable Wallet login in the Privy dashboard. Otherwise, use the Coinbase Wallet fallback below.'
+  return "Wallet sign-in is unavailable. Try another way."
 }
 
 type FlowAction =
@@ -840,9 +840,9 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         finishPrivyVerify()
         return
       }
-      setPrivyVerifyError('Zora sign-in cancelled. Use in-app login instead.')
+      setPrivyVerifyError('Sign-in was cancelled. Try again or choose another way.')
     } catch {
-      setPrivyVerifyError('Zora sign-in failed. Use in-app login instead.')
+      setPrivyVerifyError("Couldn't sign in with wallet. Try another way.")
     } finally {
       finishPrivyVerify()
     }

@@ -3046,8 +3046,11 @@ function DeployVaultBatcher({
         // ============================================================
         if (!publicClient) throw new Error('Public client not ready.')
 
-        // Hard guard: require a smart wallet signer (Privy or wallet_sendCalls).
-        if (!planOnly && !canUsePrivySmartWallet && !canUseWalletSendCalls) {
+        // Hard guard: require at least one executable signer path.
+        // For server-continue mode, a verified owner EOA is also valid because it can install
+        // the temporary session owner on the canonical CSW in one user-approved tx.
+        const hasOwnerEoaServerContinuePath = useServerContinue && !strictNoEoaMode && connectedEoaOwnerReady
+        if (!planOnly && !canUsePrivySmartWallet && !canUseWalletSendCalls && !hasOwnerEoaServerContinuePath) {
           throw new Error(
             'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account), then retry.',
           )

@@ -193,8 +193,8 @@ export function ConnectButtonWeb3() {
                   void auth.signIn({ method: 'privy' })
                 }}
               >
-                <span className="label block">Use in-app login instead</span>
-                <span className="text-[11px] text-zinc-500 block mt-1">Fallback if Zora flow is blocked</span>
+                <span className="label block">Try another way</span>
+                <span className="text-[11px] text-zinc-500 block mt-1">Try this if wallet login does not open</span>
               </button>
             ) : null}
             {filteredConnectors.map((connector) => (

@@ -293,7 +293,7 @@ export function WaitlistProfile() {
               className="w-full text-center text-[13px] text-zinc-400 hover:text-zinc-200 transition-colors"
               onClick={() => privyLogin({ loginMethods: ['wallet'] })}
             >
-              Use in-app login instead
+              Try another way
             </button>
 
             <Link
