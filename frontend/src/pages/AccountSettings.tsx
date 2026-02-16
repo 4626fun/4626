@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, Copy, ExternalLink, Mail, RefreshCw, ShieldCheck, Wallet } from 'lucide-react'
 import type { Address } from 'viem'
-import { useExportWallet } from '@privy-io/react-auth'
+import { useExportWallet, usePrivy } from '@privy-io/react-auth'
 
 import { apiFetch } from '@/lib/apiBase'
 import { getMarketingBaseUrl } from '@/lib/host'
@@ -59,12 +59,22 @@ function isEvmAddress(value: string | null | undefined): value is string {
   return /^0x[a-fA-F0-9]{40}$/.test(input)
 }
 
-function formatRole(account: ConnectedAccount): string[] {
+function formatRole(
+  account: ConnectedAccount,
+  opts?: { canonicalSmartWalletAddress?: string | null; primarySmartWalletAddress?: string | null },
+): string[] {
   const labels: string[] = []
+  const canonicalLc = opts?.canonicalSmartWalletAddress?.toLowerCase() ?? null
+  const primarySmartWalletLc = opts?.primarySmartWalletAddress?.toLowerCase() ?? null
+  const addressLc = account.address.toLowerCase()
+  const walletType = (account.walletType ?? '').toLowerCase()
+  const isCanonicalSmartWallet = Boolean(canonicalLc && canonicalLc === addressLc) || account.isCanonicalSmartWallet
+
   if (account.isPrimary) labels.push('Primary')
-  if (account.isCanonicalSmartWallet) labels.push('Canonical Smart Wallet')
+  if (isCanonicalSmartWallet) labels.push('Canonical Smart Wallet')
+  if (walletType === 'smart_wallet' && primarySmartWalletLc && primarySmartWalletLc === addressLc) labels.push('Primary Smart Wallet')
   if (account.isEmbeddedEoa) labels.push('Embedded EOA')
-  if (!account.isCanonicalSmartWallet && (account.walletType ?? '').toLowerCase() === 'smart_wallet') labels.push('App Smart Wallet')
+  if (!isCanonicalSmartWallet && walletType === 'smart_wallet') labels.push('App Smart Wallet')
   if (labels.length === 0) labels.push('Connected')
   return labels
 }
@@ -116,6 +126,23 @@ function inferProviderLabel(account: ConnectedAccount): string {
   return humanizeToken(providerRaw) ?? 'Unknown'
 }
 
+function formatAccountSummary(account: ConnectedAccount): string {
+  const provider = inferProviderLabel(account)
+  const walletType = formatWalletTypeLabel(account.walletType)
+  const chain = formatChainLabel(account.chain)
+  const parts: string[] = []
+
+  if (provider === 'Coinbase Smart Wallet') {
+    parts.push('Coinbase Smart Wallet')
+  } else {
+    if (walletType && walletType !== 'Wallet') parts.push(walletType)
+    if (provider && provider !== 'Unknown' && provider !== walletType) parts.push(provider)
+  }
+  if (chain && chain !== 'EVM') parts.push(chain)
+
+  return parts.join(' · ') || provider || walletType || 'Wallet'
+}
+
 function formatDateTime(value: string | null | undefined): string | null {
   const raw = typeof value === 'string' ? value.trim() : ''
   if (!raw) return null
@@ -159,6 +186,7 @@ type KnownAddress = {
   badges: string[]
   subtitle: string | null
   rank: number
+  verifiedAt: string | null
 }
 
 type AssociatedAccount = {
@@ -188,10 +216,21 @@ function useSafeExportWalletHook(enabled: boolean) {
   }
 }
 
+function useSafePrivyUserHook(enabled: boolean): { user: any | null } {
+  try {
+    const value = usePrivy() as any
+    if (!enabled) return { user: null }
+    return { user: value?.user ?? null }
+  } catch {
+    return { user: null }
+  }
+}
+
 export function AccountSettings() {
   const auth = useSiweAuth()
   const privyEnabled = isPrivyClientEnabled()
   const { exportWallet } = useSafeExportWalletHook(privyEnabled)
+  const { user: privyUser } = useSafePrivyUserHook(privyEnabled)
   const [profile, setProfile] = useState<WaitlistMeResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -278,11 +317,54 @@ export function AccountSettings() {
     })
   }, [])
 
+  const privyCrossAppSmartWalletAddress = useMemo(() => {
+    const linked = Array.isArray(privyUser?.linkedAccounts)
+      ? (privyUser.linkedAccounts as any[])
+      : Array.isArray(privyUser?.linked_accounts)
+        ? (privyUser.linked_accounts as any[])
+        : []
+    const crossAppAccounts = linked.filter((a: any) => String(a?.type ?? '').trim().toLowerCase() === 'cross_app')
+    for (const account of crossAppAccounts) {
+      const wallets = Array.isArray(account?.smart_wallets)
+        ? (account.smart_wallets as any[])
+        : Array.isArray(account?.smartWallets)
+          ? (account.smartWallets as any[])
+          : []
+      for (const wallet of wallets) {
+        const raw = typeof wallet?.address === 'string' ? wallet.address.trim() : ''
+        if (isEvmAddress(raw)) return raw
+      }
+    }
+    return null
+  }, [privyUser])
+
+  const canonicalSmartWalletAddress = useMemo(() => {
+    if (!profile) return null
+    if (isEvmAddress(privyCrossAppSmartWalletAddress)) return privyCrossAppSmartWalletAddress
+    if (isEvmAddress(profile.cswAddress)) return profile.cswAddress
+    if (isEvmAddress(profile.primarySmartWallet)) return profile.primarySmartWallet
+    if (isEvmAddress(profile.baseSubAccount)) return profile.baseSubAccount
+    const canonicalFromAccounts = (profile.connectedAccounts ?? []).find((a) => a.isCanonicalSmartWallet && isEvmAddress(a.address))
+    return canonicalFromAccounts?.address ?? null
+  }, [privyCrossAppSmartWalletAddress, profile])
+
+  const primarySmartWalletAddress = useMemo(() => {
+    if (canonicalSmartWalletAddress) return canonicalSmartWalletAddress
+    if (isEvmAddress(profile?.primarySmartWallet)) return profile.primarySmartWallet
+    return null
+  }, [canonicalSmartWalletAddress, profile?.primarySmartWallet])
+
   const knownAddresses = useMemo<KnownAddress[]>(() => {
     if (!profile) return []
-    type Draft = { address: string; badges: Set<string>; subtitle: string | null; rank: number }
+    type Draft = { address: string; badges: Set<string>; subtitle: string | null; rank: number; verifiedAt: string | null }
     const map = new Map<string, Draft>()
-    const upsert = (address: string | null | undefined, badge: string, rank: number, subtitle?: string | null) => {
+    const upsert = (
+      address: string | null | undefined,
+      badge: string,
+      rank: number,
+      subtitle?: string | null,
+      verifiedAt?: string | null,
+    ) => {
       if (!isEvmAddress(address)) return
       const normalized = address.toLowerCase()
       const existing = map.get(normalized)
@@ -292,6 +374,7 @@ export function AccountSettings() {
           badges: new Set([badge]),
           subtitle: subtitle ?? null,
           rank,
+          verifiedAt: verifiedAt ?? null,
         })
         return
       }
@@ -302,25 +385,46 @@ export function AccountSettings() {
       } else if (!existing.subtitle && subtitle) {
         existing.subtitle = subtitle
       }
+      if (!existing.verifiedAt && verifiedAt) {
+        existing.verifiedAt = verifiedAt
+      } else if (existing.verifiedAt && verifiedAt) {
+        const prevMs = Date.parse(existing.verifiedAt)
+        const nextMs = Date.parse(verifiedAt)
+        if (Number.isFinite(prevMs) && Number.isFinite(nextMs) && nextMs > prevMs) {
+          existing.verifiedAt = verifiedAt
+        }
+      }
     }
 
-    upsert(profile.cswAddress, 'Canonical Smart Wallet', 100, 'Coinbase Smart Wallet')
-    upsert(profile.primarySmartWallet, 'Primary Smart Wallet', 95, 'Coinbase Smart Wallet')
-    upsert(profile.baseSubAccount, 'Base Sub-account', 90, 'Coinbase Smart Wallet')
+    upsert(canonicalSmartWalletAddress, 'Canonical Smart Wallet', 100, 'Coinbase Smart Wallet')
+    upsert(primarySmartWalletAddress, 'Primary Smart Wallet', 98, 'Coinbase Smart Wallet')
     upsert(profile.primaryWallet, 'Primary Wallet', 80, 'External Wallet')
     upsert(profile.primaryEmbeddedEoa, 'Primary Embedded EOA', 70, 'Privy Embedded')
-    upsert(profile.embeddedWallet, 'Embedded Wallet', 65, 'Privy Embedded')
+    upsert(profile.embeddedWallet, 'Embedded EOA', 68, 'Privy Embedded')
+    if (
+      isEvmAddress(profile.baseSubAccount) &&
+      (!canonicalSmartWalletAddress || profile.baseSubAccount.toLowerCase() !== canonicalSmartWalletAddress.toLowerCase())
+    ) {
+      upsert(profile.baseSubAccount, 'Linked Smart Wallet', 74, 'Coinbase Smart Wallet')
+    }
 
     for (const account of profile.connectedAccounts ?? []) {
-      const roles = formatRole(account)
-      const subtitle = [formatWalletTypeLabel(account.walletType), inferProviderLabel(account), formatChainLabel(account.chain)]
-        .filter(Boolean)
-        .join(' · ')
-      const baseRank = account.isCanonicalSmartWallet ? 100 : account.isPrimary ? 80 : account.isEmbeddedEoa ? 70 : 50
+      const roles = formatRole(account, {
+        canonicalSmartWalletAddress,
+        primarySmartWalletAddress,
+      })
+      const subtitle = formatAccountSummary(account)
+      const isCanonical = Boolean(
+        canonicalSmartWalletAddress && account.address.toLowerCase() === canonicalSmartWalletAddress.toLowerCase(),
+      )
+      const isPrimarySmartWallet = Boolean(
+        primarySmartWalletAddress && account.address.toLowerCase() === primarySmartWalletAddress.toLowerCase(),
+      )
+      const baseRank = isCanonical ? 100 : isPrimarySmartWallet ? 98 : account.isPrimary ? 80 : account.isEmbeddedEoa ? 70 : 50
       if (roles.length === 0) {
-        upsert(account.address, 'Connected', baseRank, subtitle)
+        upsert(account.address, 'Connected', baseRank, subtitle, account.verifiedAt)
       } else {
-        for (const role of roles) upsert(account.address, role, baseRank, subtitle)
+        for (const role of roles) upsert(account.address, role, baseRank, subtitle, account.verifiedAt)
       }
     }
 
@@ -330,17 +434,10 @@ export function AccountSettings() {
         badges: Array.from(item.badges.values()),
         subtitle: item.subtitle,
         rank: item.rank,
+        verifiedAt: item.verifiedAt,
       }))
       .sort((a, b) => b.rank - a.rank || a.address.localeCompare(b.address))
-  }, [profile])
-
-  const canonicalSmartWalletAddress = useMemo(() => {
-    if (!profile) return null
-    if (isEvmAddress(profile.cswAddress)) return profile.cswAddress
-    if (isEvmAddress(profile.primarySmartWallet)) return profile.primarySmartWallet
-    if (isEvmAddress(profile.baseSubAccount)) return profile.baseSubAccount
-    return null
-  }, [profile])
+  }, [canonicalSmartWalletAddress, primarySmartWalletAddress, profile])
 
   const zoraProfileIdentifier = useMemo(() => {
     const fromHandle = normalizeHandle(profile?.preprovZoraHandle)
@@ -659,6 +756,9 @@ export function AccountSettings() {
                     ))}
                   </div>
                   {item.subtitle ? <div className="mt-2 text-[11px] text-zinc-500">{item.subtitle}</div> : null}
+                  {formatDateTime(item.verifiedAt) ? (
+                    <div className="mt-1 text-[11px] text-zinc-500">Verified {formatDateTime(item.verifiedAt)}</div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -666,29 +766,11 @@ export function AccountSettings() {
         ) : null}
 
         {profile?.connectedAccounts?.length ? (
-          <div className="space-y-3">
-            {profile.connectedAccounts.map((account) => {
-              const verifiedLabel = formatDateTime(account.verifiedAt)
-              return (
-                <div key={account.address.toLowerCase()} className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-4 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="font-mono text-xs sm:text-sm text-zinc-100 break-all">{account.address}</div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {formatRole(account).map((label) => (
-                        <span key={label} className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-zinc-300">
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="mt-2 text-xs text-zinc-500">
-                    {[formatWalletTypeLabel(account.walletType), inferProviderLabel(account), formatChainLabel(account.chain)].filter(Boolean).join(' · ') ||
-                      'Wallet'}
-                    {verifiedLabel ? ` · Verified ${verifiedLabel}` : ''}
-                  </div>
-                </div>
-              )
-            })}
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 space-y-2">
+            <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Sync Summary</div>
+            <div className="text-sm text-zinc-300">
+              {knownAddresses.length} unique addresses from {profile.connectedAccounts.length} synced records.
+            </div>
           </div>
         ) : (
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-4 py-3 text-sm text-zinc-400">

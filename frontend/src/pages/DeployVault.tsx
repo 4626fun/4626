@@ -5554,6 +5554,11 @@ function DeployVaultMain() {
     const b = canonicalIdentityBytecodeQuery.data
     return typeof b === 'string' && b !== '0x'
   }, [canonicalIdentityBytecodeQuery.data])
+  const canonicalIdentityType = useMemo<'contract' | 'eoa' | 'unknown'>(() => {
+    if (canonicalIdentityIsContract) return 'contract'
+    if (canonicalIdentityBytecodeQuery.isSuccess) return 'eoa'
+    return 'unknown'
+  }, [canonicalIdentityBytecodeQuery.isSuccess, canonicalIdentityIsContract])
 
   const privySmartWalletIsCanonicalOwnerQuery = useQuery({
     queryKey: ['coinbaseSmartWalletOwner', 'privySmartWallet', canonicalIdentityAddress, privySmartWalletAddress],
@@ -5761,9 +5766,17 @@ function DeployVaultMain() {
   // when the EOA is an onchain owner of that smart wallet.
   // Uses server-side API to avoid client-side RPC rate limits.
   const executionCanOperateCanonicalQuery = useQuery({
-    queryKey: ['coinbaseSmartWalletOwner', canonicalIdentityAddress, ownerCandidateAddresses.map((a) => a.toLowerCase()).join(',')],
+    queryKey: [
+      'coinbaseSmartWalletOwner',
+      canonicalIdentityAddress,
+      canonicalIdentityType,
+      ownerCandidateAddresses.map((a) => a.toLowerCase()).join(','),
+    ],
     // Run when: identity blocking reason OR canonical is a contract (for ERC-4337 PATH 3)
-    enabled: !!canonicalIdentityAddress && ownerCandidateAddresses.length > 0 && (!!identity.blockingReason || canonicalIdentityIsContract),
+    enabled:
+      !!canonicalIdentityAddress &&
+      ownerCandidateAddresses.length > 0 &&
+      (!!identity.blockingReason || canonicalIdentityIsContract || canonicalIdentityType === 'unknown'),
     staleTime: 0, // Always refetch - ownership can change externally
     refetchOnWindowFocus: true,
     refetchOnMount: true,
@@ -5773,8 +5786,8 @@ function DeployVaultMain() {
       for (const execution of ownerCandidateAddresses) {
         if (canonical.toLowerCase() === execution.toLowerCase()) return true
       }
-      // For non-contract canonical identities, exact match is already checked above.
-      if (!canonicalIdentityIsContract) return false
+      // For canonical EOAs, exact match above is sufficient.
+      if (canonicalIdentityType === 'eoa') return false
 
       // Use server-side API to check ownership (avoids client RPC rate limits)
       for (const execution of ownerCandidateAddresses) {
@@ -5789,7 +5802,9 @@ function DeployVaultMain() {
   })
 
   const executionCanOperateCanonical = executionCanOperateCanonicalQuery.data === true
-  const executionCanOperateCanonicalPending = (!!identity.blockingReason || canonicalIdentityIsContract) && executionCanOperateCanonicalQuery.isFetching
+  const executionCanOperateCanonicalPending =
+    (!!identity.blockingReason || canonicalIdentityIsContract) &&
+    (canonicalIdentityType === 'unknown' || executionCanOperateCanonicalQuery.isFetching)
 
   // Check if connected EOA is an owner of the Creator Coin itself (via ownerAt)
   const creatorCoinOwnersQuery = useQuery({
@@ -6399,6 +6414,11 @@ function DeployVaultMain() {
                               ? 'Market floor price is required to deploy.'
                               : null
 
+  const hasPrimaryDeployAuthAction = Boolean(
+    privyReady &&
+      (!privyAuthenticated || (!privySmartWalletAddress && !privyLinkedEoaAddress && !isConnected)),
+  )
+
   return (
     <div className="relative">
       <section className="cinematic-section">
@@ -6992,7 +7012,7 @@ function DeployVaultMain() {
               {!canDeploy && deployBlocker ? (
                 <div className="space-y-2">
                   <div className="text-xs text-amber-300/80">{deployBlocker}</div>
-                  {!privySmartWalletReady && switchAuthCta ? (
+                  {!hasPrimaryDeployAuthAction && !privySmartWalletReady && switchAuthCta ? (
                     <button type="button" className="btn-primary w-full" onClick={switchAuthCta.onClick}>
                       {switchAuthCta.label}
                     </button>
