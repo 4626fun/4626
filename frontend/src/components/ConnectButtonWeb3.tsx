@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { Wallet, ChevronDown } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { usePrivyClientStatus } from '@/lib/privy/client'
 
 /**
  * Simple Connect Button
@@ -14,6 +15,8 @@ export function ConnectButtonWeb3() {
   const { connect, connectors, isPending } = useConnect()
   const { disconnect } = useDisconnect()
   const auth = useSiweAuth()
+  const privyStatus = usePrivyClientStatus()
+  const prefersPrivyWalletLogin = privyStatus === 'ready'
   const [showMenu, setShowMenu] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
 
@@ -133,12 +136,21 @@ export function ConnectButtonWeb3() {
     <div className="relative">
       <button
         type="button"
-        disabled={isPending}
-        onClick={() => setShowOptions(!showOptions)}
+        disabled={isPending || auth.busy}
+        onClick={() => {
+          if (!prefersPrivyWalletLogin) {
+            setShowOptions(!showOptions)
+            return
+          }
+          void (async () => {
+            const signed = await auth.signIn({ method: 'zora' })
+            if (!signed) setShowOptions(true)
+          })()
+        }}
         className="btn-accent disabled:opacity-50 flex items-center gap-2"
       >
         <Wallet className="w-4 h-4" />
-        <span className="label">{isPending ? 'Connecting…' : 'Connect'}</span>
+        <span className="label">{isPending || auth.busy ? 'Connecting…' : 'Connect'}</span>
       </button>
 
       {showOptions && (
@@ -157,11 +169,39 @@ export function ConnectButtonWeb3() {
                 Wallet extension collision detected (`window.ethereum` is locked). Use Coinbase Wallet.
               </div>
             ) : null}
+            {prefersPrivyWalletLogin ? (
+              <button
+                type="button"
+                disabled={auth.busy}
+                className="w-full text-left py-3 px-4 hover:bg-zinc-950 transition-colors disabled:opacity-50"
+                onClick={() => {
+                  setShowOptions(false)
+                  void auth.signIn({ method: 'zora' })
+                }}
+              >
+                <span className="label block">Continue with Zora</span>
+                <span className="text-[11px] text-zinc-500 block mt-1">Sign in on Zora first</span>
+              </button>
+            ) : null}
+            {prefersPrivyWalletLogin ? (
+              <button
+                type="button"
+                disabled={auth.busy}
+                className="w-full text-left py-3 px-4 hover:bg-zinc-950 transition-colors disabled:opacity-50"
+                onClick={() => {
+                  setShowOptions(false)
+                  void auth.signIn({ method: 'privy' })
+                }}
+              >
+                <span className="label block">Use in-app login instead</span>
+                <span className="text-[11px] text-zinc-500 block mt-1">Fallback if Zora flow is blocked</span>
+              </button>
+            ) : null}
             {filteredConnectors.map((connector) => (
               <button
                 key={connector.uid}
                 type="button"
-                disabled={isPending}
+                disabled={isPending || auth.busy}
                 className="w-full text-left py-3 px-4 hover:bg-zinc-950 transition-colors disabled:opacity-50"
                 onClick={() => {
                   connect({ connector })

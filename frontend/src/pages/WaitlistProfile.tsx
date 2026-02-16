@@ -15,6 +15,7 @@ import { usePrivy, useWallets, useLinkAccount } from '@privy-io/react-auth'
 import { getAppBaseUrl } from '@/lib/host'
 import { Logo } from '@/components/brand/Logo'
 import { useWaitlistApi } from '@/components/waitlist/useWaitlistApi'
+import { useSiweAuth } from '@/hooks/useSiweAuth'
 import {
   SIGNUP_POINTS,
   LINK_CSW_POINTS,
@@ -65,6 +66,7 @@ function isValidEvmAddress(v: string): boolean {
 export function WaitlistProfile() {
   const appUrl = useMemo(() => getAppBaseUrl(), [])
   const { apiFetch } = useWaitlistApi(appUrl)
+  const siwe = useSiweAuth()
   const { ready: privyReady, authenticated: privyAuthed, user: privyUser, login: privyLogin } = usePrivy()
   const { wallets: privyWallets } = useWallets()
   
@@ -279,10 +281,19 @@ export function WaitlistProfile() {
 
             <button
               type="button"
+              disabled={siwe.busy}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#0052FF] text-white text-[14px] font-medium hover:bg-[#0047E1] transition-all duration-200"
-              onClick={() => privyLogin()}
+              onClick={() => void siwe.signIn({ method: 'zora' })}
             >
-              Sign In
+              {siwe.busy ? 'Opening Zora…' : 'Continue with Zora'}
+            </button>
+            <button
+              type="button"
+              disabled={siwe.busy}
+              className="w-full text-center text-[13px] text-zinc-400 hover:text-zinc-200 transition-colors"
+              onClick={() => privyLogin({ loginMethods: ['wallet'] })}
+            >
+              Use in-app login instead
             </button>
 
             <Link

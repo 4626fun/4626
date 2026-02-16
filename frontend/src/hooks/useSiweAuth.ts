@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount, useSignMessage } from 'wagmi'
 import { base } from 'wagmi/chains'
 import { apiFetch } from '@/lib/apiBase'
-import { useLogin, usePrivy } from '@privy-io/react-auth'
+import { useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
+import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -99,6 +100,16 @@ function useSafeLoginHook() {
   }
 }
 
+function useSafeCrossAppAccountsHook() {
+  try {
+    return useCrossAppAccounts() as any
+  } catch {
+    return {
+      loginWithCrossAppAccount: null as null | ((args: { appId: string }) => Promise<unknown>),
+    } as any
+  }
+}
+
 export function useSiweAuth() {
   // IMPORTANT:
   // This hook implements an app-local SIWE session ("Sign in with Ethereum") used for:
@@ -111,6 +122,7 @@ export function useSiweAuth() {
   const { signMessageAsync } = useSignMessage()
   const privyAny = useSafePrivyHook()
   const { login } = useSafeLoginHook()
+  const { loginWithCrossAppAccount } = useSafeCrossAppAccountsHook()
   const privyReady = Boolean(privyAny?.ready)
   const privyAuthenticated = Boolean(privyAny?.authenticated)
   const getPrivyAccessToken: (() => Promise<string | null>) | null =
@@ -300,10 +312,9 @@ export function useSiweAuth() {
     })()
   }, [address, autoPrivyAttemptKeyRef, busy, getPrivyAccessToken, isConnected, isSignedIn, privyAuthenticated, privyReady, signInWithPrivyToken])
 
-  type SignInMethod = 'auto' | 'siwe' | 'privy'
+  type SignInMethod = 'auto' | 'siwe' | 'privy' | 'zora'
 
   const signIn = useCallback(async (opts?: { method?: SignInMethod; attestCswAddress?: string | null }): Promise<string | null> => {
-    if (!address) return null
     const method: SignInMethod = opts?.method ?? 'auto'
     const attestCswAddressRaw = typeof opts?.attestCswAddress === 'string' ? opts.attestCswAddress.trim() : ''
     const attestCswAddress =
@@ -311,12 +322,23 @@ export function useSiweAuth() {
     setBusy(true)
     setError(null)
     try {
-      const allowPrivy = method === 'auto' || method === 'privy'
+      const allowPrivy = method === 'auto' || method === 'privy' || method === 'zora'
 
       if (allowPrivy) {
+        // Zora-first path: redirect through the provider app's cross-app auth flow.
+        // This gives users an explicit "signed in via Zora" trust signal.
+        if (method === 'zora' && privyReady && !privyAuthenticated && typeof loginWithCrossAppAccount === 'function') {
+          try {
+            await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+          } catch (e: unknown) {
+            setError(coerceErrorMessage(e, 'Zora sign-in was cancelled.'))
+            return null
+          }
+        }
+
         // Prefer Privy-backed session bridging when available (avoids wallet message signing prompts).
         // If Privy is enabled but the user isn't authenticated yet, trigger Privy auth first.
-        if (privyReady && !privyAuthenticated && typeof login === 'function') {
+        if (method !== 'zora' && privyReady && !privyAuthenticated && typeof login === 'function') {
           try {
             // Featured guidelines: avoid email/phone verification inside the app.
             await login({ loginMethods: ['wallet'] })
@@ -338,10 +360,12 @@ export function useSiweAuth() {
         }
 
         // If caller explicitly requested Privy, do not attempt SIWE.
-        if (method === 'privy') {
+        if (method === 'privy' || method === 'zora') {
           return null
         }
       }
+
+      if (!address) return null
 
       const nonceRes = await apiFetch('/api/auth/nonce', { headers: { Accept: 'application/json' } })
       if (!nonceRes.ok) {
@@ -417,7 +441,7 @@ export function useSiweAuth() {
     } finally {
       setBusy(false)
     }
-  }, [address, getPrivyAccessToken, login, privyAuthenticated, privyReady, signInWithPrivyToken, signMessageAsync])
+  }, [address, getPrivyAccessToken, login, loginWithCrossAppAccount, privyAuthenticated, privyReady, signInWithPrivyToken, signMessageAsync])
 
   const signOut = useCallback(async () => {
     setBusy(true)

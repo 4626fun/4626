@@ -103,6 +103,7 @@ type VerifyStepProps = {
   simpleVerifiedMode?: boolean
   submitError?: string | null
   onPrivyContinue: () => void
+  onPrivyFallback?: () => void
   onSubmit: () => void | Promise<void>
 }
 
@@ -129,6 +130,7 @@ export const VerifyStep = memo(function VerifyStep({
   simpleVerifiedMode,
   submitError,
   onPrivyContinue,
+  onPrivyFallback,
   onSubmit,
 }: VerifyStepProps) {
   const hasCreatorCoin = !!creatorCoin?.address
@@ -326,13 +328,24 @@ export const VerifyStep = memo(function VerifyStep({
 
           <div className="flex items-center justify-between">
             <div className="text-[12px] text-zinc-500">{helperText || '\u00A0'}</div>
-            <button
-              type="button"
-              className="text-[12px] text-zinc-400 hover:text-zinc-200 transition-colors"
-              onClick={() => setShowTrouble(true)}
-            >
-              Having trouble?
-            </button>
+            <div className="flex items-center gap-3">
+              {onPrivyFallback ? (
+                <button
+                  type="button"
+                  className="text-[12px] text-zinc-400 hover:text-zinc-200 transition-colors"
+                  onClick={onPrivyFallback}
+                >
+                  Use in-app login instead
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="text-[12px] text-zinc-400 hover:text-zinc-200 transition-colors"
+                onClick={() => setShowTrouble(true)}
+              >
+                Having trouble?
+              </button>
+            </div>
           </div>
 
           {showPrivyError ? (

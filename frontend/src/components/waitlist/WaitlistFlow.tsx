@@ -251,6 +251,14 @@ function isSyntheticEmail(v: string): boolean {
   return v.endsWith('@noemail.4626.fun')
 }
 
+function buildSyntheticEmail(primaryWallet: string | null): string {
+  const wallet = typeof primaryWallet === 'string' ? primaryWallet.trim().toLowerCase() : ''
+  if (isValidEvmAddress(wallet)) {
+    return `${wallet.replace(/^0x/, '')}@noemail.4626.fun`
+  }
+  return `wallet-${Date.now().toString(36)}@noemail.4626.fun`
+}
+
 function formatPrivyConnectError(code: string): string {
   const c = code.trim().toLowerCase()
   if (!c) return 'Wallet connect failed.'
@@ -751,7 +759,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     ensureBaseSubAccount,
   })
 
-  const openPrivyLogin = useCallback(async () => {
+  const openInAppPrivyLogin = useCallback(async () => {
     if (privyVerifyBusy) return
 
     // Fallback: avoid trapping users on loading states when Privy is unavailable.
@@ -808,6 +816,45 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     showPrivyReady,
     siwe,
     setPrivyVerifyError,
+    startPrivyVerify,
+    verifyWallet,
+  ])
+
+  const openPrivyLogin = useCallback(async () => {
+    if (privyVerifyBusy) return
+    if (!showPrivy || !showPrivyReady || !privyReady) {
+      await openInAppPrivyLogin()
+      return
+    }
+
+    startPrivyVerify()
+    // Guardrail: never leave the UI stuck in a busy state.
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => finishPrivyVerify(), 12_000)
+    }
+    try {
+      const signed = await siwe.signIn({ method: 'zora' }).catch(() => null)
+      if (signed && isValidEvmAddress(signed)) {
+        verifyWallet(getAddress(signed), 'privy')
+        setPrivyVerifyError(null)
+        finishPrivyVerify()
+        return
+      }
+      setPrivyVerifyError('Zora sign-in cancelled. Use in-app login instead.')
+    } catch {
+      setPrivyVerifyError('Zora sign-in failed. Use in-app login instead.')
+    } finally {
+      finishPrivyVerify()
+    }
+  }, [
+    finishPrivyVerify,
+    openInAppPrivyLogin,
+    privyReady,
+    privyVerifyBusy,
+    setPrivyVerifyError,
+    showPrivy,
+    showPrivyReady,
+    siwe,
     startPrivyVerify,
     verifyWallet,
   ])
@@ -1828,6 +1875,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     simpleVerifiedMode
                     submitError={submitError}
                     onPrivyContinue={openPrivyLogin}
+                    onPrivyFallback={openInAppPrivyLogin}
                     onSubmit={submitWaitlist}
                   />
                 </motion.div>

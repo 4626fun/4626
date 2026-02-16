@@ -5,6 +5,7 @@ import { PrivyProvider } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
 
 type PrivyClientStatus = 'disabled' | 'loading' | 'ready'
+export const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
 
 const PrivyClientContext = createContext<PrivyClientStatus>('disabled')
 
@@ -66,7 +67,6 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
   const ctx = useMemo(() => status, [status])
 
   // Keep hooks unconditional; the objects are only consumed when Privy is enabled.
-  const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
   const solanaConnectors = useMemo(
     () => ({
       onMount: () => {},
