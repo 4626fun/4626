@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { CheckCircle2, Mail, RefreshCw, ShieldCheck, Wallet } from 'lucide-react'
 
 import { apiFetch } from '@/lib/apiBase'
+import { getMarketingBaseUrl } from '@/lib/host'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
@@ -151,9 +151,9 @@ export function AccountSettings() {
             {auth.busy ? 'Signing in…' : 'Sign in'}
           </button>
           <div>
-            <Link to="/waitlist" className="text-sm text-zinc-400 hover:text-zinc-200">
+            <a href={`${getMarketingBaseUrl()}/#waitlist`} className="text-sm text-zinc-400 hover:text-zinc-200">
               Back to waitlist
-            </Link>
+            </a>
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Home, LayoutDashboard, HelpCircle, Mail, ShieldCheck } from 'lucide-react'
+import { Home, LayoutDashboard, Mail, ShieldCheck } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { VaultNavBar } from './brand/VaultNavBar'
 import { ChatWidget } from './chat/ChatWidget'
@@ -32,8 +32,6 @@ const navItems: MobileNavItem[] = [
   { path: '/', icon: Home, label: 'Home', activePrefixes: ['/'] },
   { path: '/explore/creators', icon: LayoutDashboard, label: 'Explore', activePrefixes: ['/explore', '/dashboard'] },
   { path: '/deploy', icon: LayoutDashboard, label: 'Deploy', activePrefixes: ['/deploy', '/launch', '/status'] },
-  { path: '/#waitlist', icon: Mail, label: 'Waitlist', activePrefixes: ['/#waitlist', '/waitlist'] },
-  { path: '/faq', icon: HelpCircle, label: 'FAQ', activePrefixes: ['/faq'] },
 ]
 
 const navItemsPublic: MobileNavItem[] = [

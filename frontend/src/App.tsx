@@ -63,6 +63,11 @@ function withReason(to: string, reason: AccessReason | 'legacy-route' | 'host-re
   }
 }
 
+function waitlistEntryHref(reason: 'needs-session' | 'needs-acceptance', hostMode: import('@/lib/host').HostMode): string {
+  const local = `${withReason('/', reason)}#waitlist`
+  return hostMode === 'app' ? `${MARKETING_ORIGIN}${local}` : local
+}
+
 const ROUTE_REQUIREMENTS: Record<RouteId, { session?: boolean; accepted?: boolean; creator?: boolean; admin?: boolean }> = {
   public: {},
   session: { session: true },
@@ -74,17 +79,15 @@ const ROUTE_REQUIREMENTS: Record<RouteId, { session?: boolean; accepted?: boolea
 function resolveAccess(routeId: RouteId, state: AccessState): AccessDecision {
   if (state.loading) return { allow: false, reason: 'loading' }
   const req = ROUTE_REQUIREMENTS[routeId]
-  const prefix = state.hostMode === 'app' ? MARKETING_ORIGIN : ''
   // Owner/admin bypass wallets can access admin routes without a SIWE session.
   if (routeId === 'admin' && state.admin) {
     return { allow: true, reason: 'ok' }
   }
   if (req.session && !state.sessionValid) {
-    // Route users to /waitlist (provider-enabled) so they can establish session/auth.
-    return { allow: false, reason: 'needs-session', redirectTo: withReason('/waitlist', 'needs-session') }
+    return { allow: false, reason: 'needs-session', redirectTo: waitlistEntryHref('needs-session', state.hostMode) }
   }
   if (req.accepted && !state.accepted) {
-    return { allow: false, reason: 'needs-acceptance', redirectTo: withReason('/waitlist', 'needs-acceptance') }
+    return { allow: false, reason: 'needs-acceptance', redirectTo: waitlistEntryHref('needs-acceptance', state.hostMode) }
   }
   if (req.creator && !state.creator) {
     const deployPrefix = state.hostMode === 'marketing' ? APP_ORIGIN : ''
@@ -183,6 +186,32 @@ function HostGuard() {
   return null
 }
 
+/** Keep waitlist entry canonical on marketing domain as /#waitlist. */
+function WaitlistEntryRoute() {
+  const location = useLocation()
+  const mode = getHostMode()
+  const search = location.search || ''
+
+  if (mode === 'marketing') {
+    return <Navigate to={`/${search}#waitlist`} replace />
+  }
+
+  const target = `${MARKETING_ORIGIN}/${search}#waitlist`
+  if (typeof window !== 'undefined') window.location.replace(target)
+  return null
+}
+
+/** Restrict route content to marketing domain; app host redirects cross-origin. */
+function MarketingOnlyRoute(props: { children: ReactNode }) {
+  const location = useLocation()
+  const mode = getHostMode()
+  if (mode === 'marketing') return <>{props.children}</>
+
+  const target = `${MARKETING_ORIGIN}${location.pathname}${location.search}${location.hash}`
+  if (typeof window !== 'undefined') window.location.replace(target)
+  return null
+}
+
 export function useAccessContext(): AccessState {
   const value = useContext(AccessContext)
   if (!value) {
@@ -254,11 +283,6 @@ const AuctionBid = lazy(async () => {
 const DeployVault = lazy(async () => {
   const m = await import('./pages/DeployVault')
   return { default: m.DeployVault }
-})
-
-const Waitlist = lazy(async () => {
-  const m = await import('./pages/Waitlist')
-  return { default: m.Waitlist }
 })
 
 const SmartWalletsRouteProvider = lazy(async () => {
@@ -413,7 +437,11 @@ function NotFoundPage() {
       return { href: prefix + withReason('/', 'needs-session'), label: 'Connect And Sign In', hint: 'Connect wallet and establish a session.' }
     }
     if (!access.accepted) {
-      return { href: prefix + withReason('/waitlist', 'needs-acceptance'), label: 'Join Waitlist', hint: 'This route requires accepted app access.' }
+      return {
+        href: waitlistEntryHref('needs-acceptance', access.hostMode),
+        label: 'Join Waitlist',
+        hint: 'This route requires accepted app access.',
+      }
     }
     const exploreHref = access.hostMode === 'marketing' ? APP_ORIGIN + '/explore/creators' : withReason('/explore/creators', 'not-found')
     return { href: exploreHref, label: 'Go To Explore', hint: 'Your session is valid. Continue to the canonical landing route.' }
@@ -457,87 +485,101 @@ function App() {
           <Route element={<Layout />}>
             {/* Public routes (no session required) */}
             <Route path="/" element={<Home />} />
-          <Route path="/404" element={<NotFoundPage />} />
-          <Route path="/waitlist" element={<Waitlist />} />
-          <Route path="/home" element={<Navigate to={withReason('/', 'legacy-route')} replace />} />
-          <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/404" element={<NotFoundPage />} />
+            <Route path="/waitlist" element={<WaitlistEntryRoute />} />
+            <Route
+              path="/faq"
+              element={
+                <MarketingOnlyRoute>
+                  <Faq />
+                </MarketingOnlyRoute>
+              }
+            />
+            <Route
+              path="/faq/how-it-works"
+              element={
+                <MarketingOnlyRoute>
+                  <FaqHowItWorks />
+                </MarketingOnlyRoute>
+              }
+            />
+            <Route path="/home" element={<Navigate to={withReason('/', 'legacy-route')} replace />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
 
-          {/* Session-gated routes */}
-          <Route element={<RequireSession />}>
-            <Route path="/account" element={<AccountSettings />} />
-            <Route path="/settings" element={<Navigate to={withReason('/account', 'legacy-route')} replace />} />
-            <Route element={<RequireAccepted />}>
-              <Route path="/explore" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
-              <Route path="/explore/creators" element={<ExploreCreators />} />
-              <Route path="/explore/content" element={<ExploreContent />} />
-              <Route path="/explore/transactions" element={<ExploreTransactions />} />
-              <Route path="/explore/creators/:chain/:tokenAddress" element={<ExploreCreatorDetail />} />
-              <Route path="/explore/creators/:chain/:tokenAddress/transactions" element={<ExploreCreatorTransactions />} />
-              <Route path="/explore/content/:chain/:contentCoinAddress" element={<ExploreContentDetail />} />
-              <Route path="/explore/content/:chain/:contentCoinAddress/transactions" element={<ExploreContentTransactions />} />
-              <Route path="/explore/content/:chain/pool/:poolIdOrPoolKeyHash" element={<ExploreContentPoolAlias />} />
-              <Route path="/explore/tokens" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
-              <Route path="/explore/pools" element={<Navigate to={withReason('/explore/content', 'legacy-route')} replace />} />
-              <Route path="/swap" element={<Swap />} />
-              <Route path="/positions" element={<Positions />} />
-              <Route path="/portfolio" element={<Portfolio />} />
-              <Route path="/portfolio/:address" element={<Portfolio />} />
-              <Route path="/launch" element={<Navigate to={withReason('/deploy', 'legacy-route')} replace />} />
-              <Route
-                path="/deploy"
-                element={
-                  <WithSmartWallets>
-                    <DeployVault />
-                  </WithSmartWallets>
-                }
-              />
-              <Route path="/coin/:address/manage" element={<CoinManage />} />
-              <Route path="/creator/earnings" element={<CreatorEarnings />} />
-              <Route path="/creator/:identifier/earnings" element={<CreatorEarnings />} />
-              <Route path="/faq" element={<Faq />} />
-              <Route path="/faq/how-it-works" element={<FaqHowItWorks />} />
-              <Route path="/status" element={<Status />} />
-              <Route path="/vote" element={<GaugeVoting />} />
-              <Route path="/activate-akita" element={<Navigate to={withReason('/deploy', 'legacy-route')} replace />} />
-              <Route path="/auction/bid/:address" element={<AuctionBid />} />
-              <Route path="/complete-auction" element={<CompleteAuction />} />
-              <Route path="/complete-auction/:strategy" element={<CompleteAuction />} />
-              <Route path="/dashboard" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
-              <Route path="/vault/:address" element={<Vault />} />
-              <Route path="/agents" element={<AgentDirectory />} />
-              <Route path="/agents/uri-service" element={<AgentUriService />} />
-              <Route path="/auction-demo" element={<AuctionDemo />} />
-            </Route>
-
-            <Route element={<RequireAdmin />}>
-              <Route path="/admin" element={<AdminLayout />}>
-                <Route index element={<Navigate to={withReason('/admin/waitlist', 'legacy-route')} replace />} />
-                <Route path="creator-access" element={<AdminCreatorAccess />} />
-                <Route path="waitlist" element={<AdminWaitlist />} />
-                <Route path="agent-setup" element={<AdminAgentSetup />} />
+            {/* Session-gated routes */}
+            <Route element={<RequireSession />}>
+              <Route path="/account" element={<AccountSettings />} />
+              <Route path="/settings" element={<Navigate to={withReason('/account', 'legacy-route')} replace />} />
+              <Route element={<RequireAccepted />}>
+                <Route path="/explore" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
+                <Route path="/explore/creators" element={<ExploreCreators />} />
+                <Route path="/explore/content" element={<ExploreContent />} />
+                <Route path="/explore/transactions" element={<ExploreTransactions />} />
+                <Route path="/explore/creators/:chain/:tokenAddress" element={<ExploreCreatorDetail />} />
+                <Route path="/explore/creators/:chain/:tokenAddress/transactions" element={<ExploreCreatorTransactions />} />
+                <Route path="/explore/content/:chain/:contentCoinAddress" element={<ExploreContentDetail />} />
+                <Route path="/explore/content/:chain/:contentCoinAddress/transactions" element={<ExploreContentTransactions />} />
+                <Route path="/explore/content/:chain/pool/:poolIdOrPoolKeyHash" element={<ExploreContentPoolAlias />} />
+                <Route path="/explore/tokens" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
+                <Route path="/explore/pools" element={<Navigate to={withReason('/explore/content', 'legacy-route')} replace />} />
+                <Route path="/swap" element={<Swap />} />
+                <Route path="/positions" element={<Positions />} />
+                <Route path="/portfolio" element={<Portfolio />} />
+                <Route path="/portfolio/:address" element={<Portfolio />} />
+                <Route path="/launch" element={<Navigate to={withReason('/deploy', 'legacy-route')} replace />} />
                 <Route
-                  path="ops"
+                  path="/deploy"
                   element={
                     <WithSmartWallets>
-                      <AdminOps />
+                      <DeployVault />
                     </WithSmartWallets>
                   }
                 />
-                <Route path="miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
-                <Route
-                  path="deploy-strategies"
-                  element={
-                    <WithSmartWallets>
-                      <AdminDeployStrategies />
-                    </WithSmartWallets>
-                  }
-                />
+                <Route path="/coin/:address/manage" element={<CoinManage />} />
+                <Route path="/creator/earnings" element={<CreatorEarnings />} />
+                <Route path="/creator/:identifier/earnings" element={<CreatorEarnings />} />
+                <Route path="/status" element={<Status />} />
+                <Route path="/vote" element={<GaugeVoting />} />
+                <Route path="/activate-akita" element={<Navigate to={withReason('/deploy', 'legacy-route')} replace />} />
+                <Route path="/auction/bid/:address" element={<AuctionBid />} />
+                <Route path="/complete-auction" element={<CompleteAuction />} />
+                <Route path="/complete-auction/:strategy" element={<CompleteAuction />} />
+                <Route path="/dashboard" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
+                <Route path="/vault/:address" element={<Vault />} />
+                <Route path="/agents" element={<AgentDirectory />} />
+                <Route path="/agents/uri-service" element={<AgentUriService />} />
+                <Route path="/auction-demo" element={<AuctionDemo />} />
               </Route>
-              <Route path="/miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
+
+              <Route element={<RequireAdmin />}>
+                <Route path="/admin" element={<AdminLayout />}>
+                  <Route index element={<Navigate to={withReason('/admin/waitlist', 'legacy-route')} replace />} />
+                  <Route path="creator-access" element={<AdminCreatorAccess />} />
+                  <Route path="waitlist" element={<AdminWaitlist />} />
+                  <Route path="agent-setup" element={<AdminAgentSetup />} />
+                  <Route
+                    path="ops"
+                    element={
+                      <WithSmartWallets>
+                        <AdminOps />
+                      </WithSmartWallets>
+                    }
+                  />
+                  <Route path="miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
+                  <Route
+                    path="deploy-strategies"
+                    element={
+                      <WithSmartWallets>
+                        <AdminDeployStrategies />
+                      </WithSmartWallets>
+                    }
+                  />
+                </Route>
+                <Route path="/miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
+              </Route>
             </Route>
           </Route>
           <Route path="*" element={<NotFoundPage />} />
-        </Route>
         </Route>
       </Routes>
     </AccessStateProvider>

@@ -20,7 +20,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'HOME', to: '/', activePrefixes: ['/'] },
   { label: 'EXPLORE', to: '/explore/creators', activePrefixes: ['/explore', '/dashboard'] },
   { label: 'DEPLOY', to: '/deploy', activePrefixes: ['/deploy', '/launch', '/status'] },
-  { label: 'FAQ', to: '/faq', activePrefixes: ['/faq'] },
 ]
 
 const NAV_ITEMS_PUBLIC: NavItem[] = [
@@ -58,7 +57,7 @@ export function VaultNavBar() {
   const mini = useMiniAppContext()
   const baseItems = publicMode || hostMode === 'marketing' ? NAV_ITEMS_PUBLIC : NAV_ITEMS
   const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, ADMIN_ITEM] : baseItems
-  const brandHref = publicMode || hostMode === 'marketing' ? '/waitlist' : '/'
+  const brandHref = '/'
   const showConnect = !publicMode && hostMode !== 'marketing'
 
   return (
