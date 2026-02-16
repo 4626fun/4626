@@ -4,6 +4,16 @@ import { readSessionFromRequest } from '../auth/_shared.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
+const SEEDED_ADMIN_ADDRESSES = ['0xb05cf01231cf2ff99499682e64d3780d57c80fdd']
+
+function collectAdminAddressSources(): string {
+  // Support both server/admin env and client bypass env for parity across
+  // app-router and API authorization checks.
+  const canonical = String(process.env.CREATOR_ACCESS_ADMIN_ADDRESSES || '')
+  const bypass = String(process.env.VITE_ADMIN_BYPASS_ADDRESSES || '')
+  return [canonical, bypass].filter(Boolean).join(',')
+}
+
 function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
@@ -16,21 +26,24 @@ export function getSessionAddress(req: VercelRequest): `0x${string}` | null {
 }
 
 export function isAdminAddress(address: `0x${string}`): boolean {
-  const raw = process.env.CREATOR_ACCESS_ADMIN_ADDRESSES
-  if (!raw) return false
+  const raw = collectAdminAddressSources()
 
   const g: any = globalThis as any
   const cached: { key: string; set: Set<string> } | undefined = g.__creatorvault_admin_addresses_cache
-  const cacheKey = raw
+  const cacheKey = raw || '__seeded__'
   const set =
     cached && cached.key === cacheKey
       ? cached.set
       : (() => {
-          const parts = raw
+          const parts = String(raw || '')
             .split(/[\s,]+/g)
             .map((s) => s.trim())
             .filter(Boolean)
           const out = new Set<string>()
+          for (const seeded of SEEDED_ADMIN_ADDRESSES) {
+            if (!isAddressLike(seeded)) continue
+            out.add(seeded.toLowerCase())
+          }
           for (const p of parts) {
             if (!isAddressLike(p)) continue
             out.add(p.toLowerCase())
@@ -79,5 +92,3 @@ export function isAdminEmail(email: string | null | undefined): boolean {
   const emailLc = normalizeEmail(email)
   return set.has(emailLc)
 }
-
-

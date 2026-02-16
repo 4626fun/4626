@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query'
-import { useAccount } from 'wagmi'
 import { useSiweAuth } from './useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
 
@@ -19,12 +18,12 @@ async function fetchAdminStatus(): Promise<AdminResponse> {
 }
 
 export function useAdminStatus() {
-  const { isConnected } = useAccount()
   const { isSignedIn } = useSiweAuth()
 
   const query = useQuery({
     queryKey: ['auth', 'admin'],
-    enabled: isConnected && isSignedIn,
+    // Allow session-backed admin checks even when an injected wallet is not actively connected.
+    enabled: isSignedIn,
     queryFn: fetchAdminStatus,
     staleTime: 30_000,
     retry: 0,

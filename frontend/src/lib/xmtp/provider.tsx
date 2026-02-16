@@ -144,12 +144,12 @@ export function writeStoredEncKeyHex(address: string, encKeyHex: string): void {
   }
 }
 
-function clearStoredEncKeyHex(address: string): void {
-  if (typeof window === 'undefined') return
+function closeClientSafe(client: Client | null | undefined): void {
+  if (!client) return
   try {
-    window.localStorage.removeItem(encKeyStorageKey(address))
+    client.close()
   } catch {
-    // ignore storage errors
+    // ignore close errors
   }
 }
 
@@ -661,9 +661,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         } catch (buildErr) {
           const buildMsg = buildErr instanceof Error ? buildErr.message : String(buildErr)
           console.warn('[xmtp] Client.build failed with stored key:', buildMsg)
-          if (buildClient) { try { buildClient.close() } catch {} }
+          closeClientSafe(buildClient)
           buildClient = null
-          if (clientRef.current) { try { clientRef.current.close() } catch {} }
+          closeClientSafe(clientRef.current)
           clientRef.current = null
           await new Promise((r) => setTimeout(r, 200))
         }
@@ -687,9 +687,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
             }
           } catch (buildErr2) {
             console.warn('[xmtp] Client.build without key also failed:', buildErr2)
-            if (buildClient) { try { buildClient.close() } catch {} }
+            closeClientSafe(buildClient)
             buildClient = null
-            if (clientRef.current) { try { clientRef.current.close() } catch {} }
+            closeClientSafe(clientRef.current)
             clientRef.current = null
             await new Promise((r) => setTimeout(r, 200))
           }

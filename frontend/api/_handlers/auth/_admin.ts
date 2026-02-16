@@ -15,6 +15,9 @@ async function lookupEmailByWallet(address: string): Promise<string | null> {
       SELECT email FROM profiles
       WHERE LOWER(primary_wallet) = LOWER(${address})
          OR LOWER(embedded_wallet) = LOWER(${address})
+         OR LOWER(csw_address) = LOWER(${address})
+         OR LOWER(primary_smart_wallet) = LOWER(${address})
+         OR LOWER(primary_embedded_eoa) = LOWER(${address})
       LIMIT 1;
     `
     const email1 = r1?.rows?.[0]?.email
@@ -71,5 +74,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     data: { address, isAdmin: false } satisfies NonNullable<AdminResponse>,
   } satisfies ApiEnvelope<AdminResponse>)
 }
-
 

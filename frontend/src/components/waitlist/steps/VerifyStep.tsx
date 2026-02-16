@@ -84,11 +84,6 @@ type VerifyStepProps = {
   privyReady: boolean
   privyVerifyBusy: boolean
   privyVerifyError: string | null
-  // CSW detection (simplified - just show detection, no owner linking at signup)
-  showDeployOwnerLink?: boolean
-  cswAddress?: string | null
-  isBaseApp?: boolean
-  coinbaseSmartWalletAddress?: string | null
   walletOwnershipValid: boolean
   ownershipEvidenceAvailable: boolean
   cswMismatch?: boolean
@@ -151,18 +146,18 @@ export const VerifyStep = memo(function VerifyStep({
         : 'Ownership verified. Join the waitlist for early access updates.'
       : 'One moment…'
   const [showTrouble, setShowTrouble] = useState(false)
-  const canContinue = showPrivyReady && privyReady && !privyVerifyBusy && !busy
+  const canContinue = !privyVerifyBusy && !busy
   const showPrivyError = Boolean(privyVerifyError)
 
   const helperText = useMemo(() => {
     if (privyVerifyBusy) return 'Opening…'
-    if (!showPrivyReady) return 'Privy is not ready.'
-    if (!privyReady) return 'Loading…'
+    if (!showPrivyReady) return 'Wallet login is initializing…'
+    if (!privyReady) return 'Loading wallet login…'
     return ''
   }, [privyReady, privyVerifyBusy, showPrivyReady])
   const ownershipError =
     ownershipGateActive && !walletOwnershipValid
-      ? 'Connected wallet is not in the creator coin owner set. Switch to an owner or payout recipient wallet.'
+      ? 'Switch to a payout or owner wallet to continue.'
       : null
   const connectedWalletShort = useMemo(() => shortAddress(verifiedWallet, 8, 6), [verifiedWallet])
   const creatorCoinAddressShort = useMemo(() => shortAddress(creatorCoin?.address, 8, 6), [creatorCoin?.address])

@@ -48,6 +48,7 @@ export function AdminLayout() {
   const { isConnected, address } = useAccount()
   const { isSignedIn, busy: authBusy, error: authError, signIn, signOut, authAddress } = useSiweAuth()
   const location = useLocation()
+  const hasSessionAddress = Boolean(authAddress)
 
   const hasAddressMismatch = address && authAddress && address.toLowerCase() !== authAddress.toLowerCase()
   const handleSignIn = async () => {
@@ -65,8 +66,8 @@ export function AdminLayout() {
     return ADMIN_TABS.find((tab) => path === tab.to || path.startsWith(tab.to + '/')) ?? null
   }, [location.pathname])
 
-  // --- Gate: not connected ---
-  if (!isConnected) {
+  // --- Gate: neither wallet-connected nor session-authenticated ---
+  if (!isConnected && !hasSessionAddress) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center px-4">
         <div className="max-w-md w-full">
@@ -75,11 +76,19 @@ export function AdminLayout() {
               <ShieldCheck className="w-7 h-7 text-zinc-300" />
             </div>
             <div className="font-display text-xl text-white">Admin</div>
-            <div className="text-xs text-zinc-600">Connect your wallet to access admin tools.</div>
-            <div className="flex justify-center">
+            <div className="text-xs text-zinc-600">Connect or sign in to access admin tools.</div>
+            <div className="flex flex-col items-center gap-2">
               <ConnectButton variant="default" />
+              <button
+                type="button"
+                onClick={() => void handleSignIn()}
+                disabled={authBusy}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/5 border border-white/10 px-5 py-3 text-sm text-zinc-200 hover:text-white hover:border-white/20 transition-colors disabled:opacity-60"
+              >
+                {authBusy ? 'Signing in...' : 'Sign in with session'}
+              </button>
             </div>
-            <div className="text-[10px] text-zinc-700 mt-2">Status: Not connected</div>
+            <div className="text-[10px] text-zinc-700 mt-2">Status: Not connected / not signed in</div>
           </div>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, ChevronDown, Search, ShieldCheck, X } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
+import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
 
 type FaqItem = {
   id: string
@@ -603,6 +604,12 @@ const FAQ_SECTIONS: FaqSection[] = [
 ]
 
 export function Faq() {
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (getHostMode() !== 'app') return
+    window.location.replace(`${getMarketingBaseUrl()}/faq`)
+  }, [])
+
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState<Record<string, boolean>>({})
   const [activeSection, setActiveSection] = useState<string>('basics')
