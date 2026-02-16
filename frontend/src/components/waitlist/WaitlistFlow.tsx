@@ -34,6 +34,8 @@ const EVM_RE = /^0x[a-fA-F0-9]{40}$/
 const SOL_RE = /^[1-9A-HJ-NP-Za-km-z]+$/
 const BASE_EASE = [0.4, 0, 0.2, 1] as const
 const BASE_MOTION_MS = 0.2
+const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
+const HANDOFF_HASH_KEY = 'cv_session'
 
 const CREATOR_COIN_READ_ABI = [
   {
@@ -976,7 +978,23 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         }
       }
       if (deployUrl.startsWith('http')) {
-        window.location.href = deployUrl
+        let target = deployUrl
+        try {
+          const parsed = new URL(deployUrl)
+          // Cross-origin handoff: copy SIWE bearer token via hash so app origin can restore session.
+          if (typeof window !== 'undefined' && parsed.origin !== window.location.origin) {
+            const token = sessionStorage.getItem(SESSION_TOKEN_KEY)?.trim()
+            if (token) {
+              const hashParams = new URLSearchParams(parsed.hash.startsWith('#') ? parsed.hash.slice(1) : parsed.hash)
+              hashParams.set(HANDOFF_HASH_KEY, token)
+              parsed.hash = hashParams.toString()
+              target = parsed.toString()
+            }
+          }
+        } catch {
+          // Keep original URL if parsing fails.
+        }
+        window.location.href = target
       } else {
         navigate(deployPath)
       }
