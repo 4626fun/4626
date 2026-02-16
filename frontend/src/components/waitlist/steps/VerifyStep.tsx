@@ -146,13 +146,13 @@ export const VerifyStep = memo(function VerifyStep({
         : 'Ownership verified. Join the waitlist for early access updates.'
       : 'One moment…'
   const [showTrouble, setShowTrouble] = useState(false)
-  const canContinue = showPrivyReady && privyReady && !privyVerifyBusy && !busy
+  const canContinue = !privyVerifyBusy && !busy
   const showPrivyError = Boolean(privyVerifyError)
 
   const helperText = useMemo(() => {
     if (privyVerifyBusy) return 'Opening…'
-    if (!showPrivyReady) return 'Privy is not ready.'
-    if (!privyReady) return 'Loading…'
+    if (!showPrivyReady) return 'Wallet login is initializing…'
+    if (!privyReady) return 'Loading wallet login…'
     return ''
   }, [privyReady, privyVerifyBusy, showPrivyReady])
   const ownershipError =

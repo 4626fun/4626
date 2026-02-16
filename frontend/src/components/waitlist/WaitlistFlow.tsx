@@ -771,7 +771,25 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   })
 
   const openPrivyLogin = useCallback(async () => {
-    if (!privyReady || privyVerifyBusy) return
+    if (privyVerifyBusy) return
+
+    // Fallback: avoid trapping users on loading states when Privy is unavailable.
+    if (!showPrivy || !showPrivyReady || !privyReady) {
+      const signed = await siwe.signIn({ method: 'auto' }).catch(() => null)
+      const candidate =
+        (typeof signed === 'string' && signed) ||
+        (typeof connectedAddressRaw === 'string' && connectedAddressRaw) ||
+        (typeof siwe.authAddress === 'string' && siwe.authAddress) ||
+        null
+      if (candidate && isValidEvmAddress(candidate)) {
+        verifyWallet(getAddress(candidate), 'siwe')
+        setPrivyVerifyError(null)
+        return
+      }
+      setPrivyVerifyError('Wallet login unavailable. Connect wallet and retry.')
+      return
+    }
+
     // Guardrail: never leave the UI stuck in a busy state (Privy can no-op in some edge cases).
     if (typeof window !== 'undefined') {
       window.setTimeout(() => finishPrivyVerify(), 12_000)
@@ -796,6 +814,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     }
     handlePrivyContinue()
   }, [
+    connectedAddressRaw,
     embeddedWalletAddress,
     finishPrivyVerify,
     handlePrivyContinue,
@@ -804,8 +823,12 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     privyLogout,
     privyReady,
     privyVerifyBusy,
+    showPrivy,
+    showPrivyReady,
+    siwe,
     setPrivyVerifyError,
     startPrivyVerify,
+    verifyWallet,
   ])
 
   const autoSubmitAttemptRef = useRef<string | null>(null)
