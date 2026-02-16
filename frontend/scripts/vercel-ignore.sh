@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Only build production branch for this project.
+# Non-main branches should not produce app preview builds.
+case "${VERCEL_GIT_COMMIT_REF:-}" in
+  main|refs/heads/main|"")
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+
 if [ -n "${VERCEL_GIT_PREVIOUS_SHA:-}" ] && [ -n "${VERCEL_GIT_COMMIT_SHA:-}" ] \
   && git cat-file -e "${VERCEL_GIT_PREVIOUS_SHA}^{commit}" 2>/dev/null \
   && git cat-file -e "${VERCEL_GIT_COMMIT_SHA}^{commit}" 2>/dev/null; then
