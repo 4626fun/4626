@@ -34,13 +34,20 @@ const CANONICAL_SMART_WALLET = '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5'
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 const ERC8004_IDENTITY_REGISTRY = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432'
 // NOTE:
-// On-chain `agentURI` should be content-addressed (WA040). Do not default to http(s).
+// On-chain `agentURI` should be validator-compatible. Some validators do not
+// support lens:// directly, so prefer gateway https URLs, ipfs://, ar://, or data:.
 const ERC8004_AGENT_URI_DEFAULT = ''
-const ERC8004_AGENT_URI_PLACEHOLDER = 'lens://... (recommended) or data:application/json;base64,...'
+const ERC8004_AGENT_URI_PLACEHOLDER = 'https://... (gateway), ipfs://..., ar://..., or data:application/json;base64,...'
 
 function isContentAddressedAgentUri(uri: string): boolean {
   const u = uri.trim().toLowerCase()
-  return u.startsWith('lens://') || u.startsWith('ipfs://') || u.startsWith('data:') || u.startsWith('ar://')
+  return (
+    u.startsWith('https://') ||
+    u.startsWith('http://') ||
+    u.startsWith('ipfs://') ||
+    u.startsWith('data:') ||
+    u.startsWith('ar://')
+  )
 }
 
 function toRegistrationDataUri(payload: unknown): string {
@@ -852,7 +859,9 @@ function AgentRegistration() {
       const grove = payload?.data?.grove
       const lensUri = grove?.lensUri ? String(grove.lensUri) : undefined
       const gatewayUrl = grove?.gatewayUrl ? String(grove.gatewayUrl) : undefined
-      if (lensUri) setAgentUri(lensUri)
+      // Prefer HTTPS gateway URL for broad validator compatibility.
+      if (gatewayUrl) setAgentUri(gatewayUrl)
+      else if (lensUri) setAgentUri(lensUri)
       setLensPublishResult({ lensUri, gatewayUrl })
       setLensPublishState({ status: 'success' })
     } catch (e: any) {
@@ -871,8 +880,8 @@ function AgentRegistration() {
       return
     }
     autoPublishedAgentUri.current = true
-    // Immediately generate a data: URI (fast, no external deps) so the default is content-addressed.
-    // Then attempt Lens Grove for a shorter lens:// URI.
+    // Immediately generate a data: URI (fast, no external deps), then try Lens Grove.
+    // We prefer the Grove HTTPS gateway URL for validator compatibility.
     void buildContentAddressedUri()
     void publishAgentRegistrationToLens()
   }, [agentUri, publishAgentRegistrationToLens])
@@ -925,8 +934,8 @@ function AgentRegistration() {
       if (!trimmedUri) throw new Error('Agent URI is required.')
       if (!isContentAddressedAgentUri(trimmedUri)) {
         throw new Error(
-          'Agent URI must be content-addressed (lens://, ipfs://, data:) to clear WA040. ' +
-            'Use "Publish to Lens Grove" or "Use data URI (fallback)".',
+          'Agent URI must use a supported scheme (https://, http://, ipfs://, ar://, or data:). ' +
+            'If using Lens, paste gatewayUrl instead of lens://.',
         )
       }
 
@@ -1029,8 +1038,8 @@ function AgentRegistration() {
       if (!trimmedUri) throw new Error('Agent URI is required.')
       if (!isContentAddressedAgentUri(trimmedUri)) {
         throw new Error(
-          'Agent URI must be content-addressed (lens://, ipfs://, data:) to clear WA040. ' +
-            'Use "Publish to Lens Grove" or "Use data URI (fallback)".',
+          'Agent URI must use a supported scheme (https://, http://, ipfs://, ar://, or data:). ' +
+            'If using Lens, paste gatewayUrl instead of lens://.',
         )
       }
       const rawId = agentIdInput.trim()
@@ -1393,7 +1402,7 @@ function AgentRegistration() {
                 className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
               />
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-600">
-                <span>Default publishes to Lens Grove for a lens:// URI. Fallbacks: data:, ipfs://.</span>
+                <span>Default publishes to Lens Grove and uses HTTPS gateway URL. Fallbacks: data:, ipfs://, ar://.</span>
                 <button
                   type="button"
                   onClick={() => void buildContentAddressedUri()}

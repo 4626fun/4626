@@ -2,9 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 
-import App from './App'
-import { Web3Providers } from './web3/Web3Providers'
-import { PrivyClientProvider } from '@/lib/privy/client'
+import { RootRouter } from './RootRouter'
 import { ThemeProvider } from '@/lib/theme'
 import './index.css'
 
@@ -96,24 +94,22 @@ if (typeof window !== 'undefined') {
   }
 }
 
-/**
- * Minimal provider stack:
- * 
- * PrivyClientProvider (social auth only)
- *   └── BrowserRouter
- *         └── Web3Providers (wagmi + react-query)
- *               └── App
- */
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <ThemeProvider>
-      <PrivyClientProvider>
+function redirectWwwToCanonicalApex(): boolean {
+  if (typeof window === 'undefined') return false
+  if (window.location.hostname !== 'www.4626.fun') return false
+  const target = `https://4626.fun${window.location.pathname}${window.location.search}${window.location.hash}`
+  window.location.replace(target)
+  return true
+}
+
+if (!redirectWwwToCanonicalApex()) {
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <ThemeProvider>
         <BrowserRouter>
-          <Web3Providers>
-            <App />
-          </Web3Providers>
+          <RootRouter />
         </BrowserRouter>
-      </PrivyClientProvider>
-    </ThemeProvider>
-  </React.StrictMode>,
-)
+      </ThemeProvider>
+    </React.StrictMode>,
+  )
+}

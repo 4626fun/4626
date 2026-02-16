@@ -2,23 +2,19 @@ import { http, createConfig, fallback } from 'wagmi'
 import { Attribution } from 'ox/erc8021'
 import type { Hex } from 'viem'
 import { base } from 'wagmi/chains'
-import { coinbaseWallet, walletConnect, injected } from 'wagmi/connectors'
+import { coinbaseWallet, injected } from 'wagmi/connectors'
 
 /**
  * Minimal Wagmi Config
  * 
- * Three connection paths:
+ * Two connection paths:
  * 1. Coinbase Wallet (includes Smart Wallet)
- * 2. WalletConnect (MetaMask, Rainbow, etc.)
- * 3. Injected (browser extension fallback)
+ * 2. Injected (browser extension fallback)
  * 
  * Note: Zora wallet integration uses Privy SDK's useCrossAppAccounts
  * hook directly, not a wagmi connector, because cross-app transactions
  * must go through Privy's popup flow on Zora's domain.
  */
-
-const WALLETCONNECT_PROJECT_ID =
-  (import.meta.env.VITE_WALLETCONNECT_PROJECT_ID as string) || 'bc3dfd319b4a0ecaa25cdee7e36bd0c4'
 
 const BASE_RPC_URL_RAW =
   (import.meta.env.VITE_BASE_READ_RPC_URL as string | undefined)?.trim() ||
@@ -92,11 +88,6 @@ const BASE_READ_RPC_URLS = uniqueNonEmptyStrings(
   }),
 )
 
-const WALLETCONNECT_APP_URL =
-  (import.meta.env.VITE_APP_URL as string | undefined)?.trim() ||
-  (typeof window !== 'undefined' ? window.location.origin : 'https://4626.fun')
-const WALLETCONNECT_ICON_URL = `${WALLETCONNECT_APP_URL.replace(/\/$/, '')}/miniapp-icon.png`
-
 function isLockedEthereumProviderGlobal(): boolean {
   if (!IS_BROWSER) return false
   const descriptor = Object.getOwnPropertyDescriptor(window, 'ethereum')
@@ -112,21 +103,11 @@ function buildConnectors() {
       appName: 'Creator Vaults',
       preference: 'smartWalletOnly',
     }),
-    walletConnect({
-      projectId: WALLETCONNECT_PROJECT_ID,
-      metadata: {
-        name: 'Creator Vaults',
-        description: 'Creator coin vaults on Base',
-        url: WALLETCONNECT_APP_URL,
-        icons: [WALLETCONNECT_ICON_URL],
-      },
-      showQrModal: true,
-    }),
   ] as const
 
   // Some wallet extensions install a getter-only `window.ethereum`, which causes
   // other extensions to throw during provider injection. Avoid injected connector
-  // in that state; users can still connect via Coinbase Wallet or WalletConnect.
+  // in that state; users can still connect via Coinbase Wallet.
   const shouldUseInjected = ENABLE_INJECTED_CONNECTOR && !isLockedEthereumProviderGlobal()
   if (!shouldUseInjected) return baseConnectors as any
   return [

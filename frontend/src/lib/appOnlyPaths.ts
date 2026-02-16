@@ -1,0 +1,27 @@
+/** App-only paths that should always run on app.4626.fun. */
+export const APP_ONLY_PATHS = [
+  '/waitlist',
+  '/explore',
+  '/swap',
+  '/positions',
+  '/portfolio',
+  '/deploy',
+  '/launch',
+  '/vault',
+  '/faq',
+  '/status',
+  '/vote',
+  '/auction',
+  '/admin',
+  '/miniapp',
+  '/agents',
+  '/coin',
+  '/creator',
+  '/activate-akita',
+  '/dashboard',
+  '/complete-auction',
+]
+
+export function isAppOnlyPath(pathname: string): boolean {
+  return APP_ONLY_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+}

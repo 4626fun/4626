@@ -219,12 +219,12 @@ export function PoolRow({
       </span>
 
       {/* Content Name */}
-      <div className={`${stickyCellClass} relative z-30 px-3 py-2`} style={{ left: stickyLeft.name }}>
+      <div className={`${stickyCellClass} explore-sticky-name-cell relative z-30 px-3 py-2`} style={{ left: stickyLeft.name }}>
         <div
           className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-r from-transparent to-zinc-950 opacity-80"
           aria-hidden="true"
         />
-        <div className="flex items-center gap-2 min-w-0 justify-center sm:justify-start">
+        <div className="flex items-center gap-2 min-w-0 justify-start">
           {avatarUrl ? (
             <img src={avatarUrl} alt={name} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
           ) : (
@@ -355,7 +355,7 @@ export function PoolTableHeader({ timeframe = '1d', currentSort, onSortChange }:
               key={g.id}
               className={`px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 border-b border-zinc-800/60 ${alignClass} ${
                 hasSticky ? stickyGroupClass : ''
-              }`}
+              } ${g.id === 'identity' ? 'explore-sticky-identity-group-header' : ''}`}
               style={{
                 gridColumn: `${g.start + 1} / ${g.end + 2}`,
                 ...(hasSticky ? { left } : null),
@@ -409,7 +409,9 @@ export function PoolTableHeader({ timeframe = '1d', currentSort, onSortChange }:
           return (
             <div
               key={c.id}
-              className={`${base} ${align} ${isSticky ? stickyHeaderCellClass : ''} ${c.id === 'name' ? 'relative' : ''}`}
+              className={`${base} ${align} ${isSticky ? stickyHeaderCellClass : ''} ${
+                c.id === 'name' ? 'relative explore-sticky-name-header-cell' : ''
+              }`}
               style={isSticky ? { left } : undefined}
             >
               {c.id === 'name' ? (
@@ -439,8 +441,8 @@ export function PoolRowSkeleton() {
       <div className={`${stickyCellClass} px-3 py-2`} style={{ left: stickyLeft.rank }}>
         <div className="h-3 w-6 bg-zinc-800 rounded animate-pulse ml-auto" />
       </div>
-      <div className={`${stickyCellClass} px-3 py-2 shadow-[6px_0_16px_-12px_rgba(0,0,0,0.9)]`} style={{ left: stickyLeft.name }}>
-        <div className="flex items-center gap-2 justify-center sm:justify-start">
+      <div className={`${stickyCellClass} explore-sticky-name-cell px-3 py-2 shadow-[6px_0_16px_-12px_rgba(0,0,0,0.9)]`} style={{ left: stickyLeft.name }}>
+        <div className="flex items-center gap-2 justify-start">
           <div className="w-7 h-7 rounded-lg bg-zinc-800 animate-pulse" />
           <div className="space-y-1 explore-token-name">
             <div className="h-3 w-24 bg-zinc-800 rounded animate-pulse" />

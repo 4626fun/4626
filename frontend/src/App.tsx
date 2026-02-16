@@ -1,4 +1,4 @@
-import { createContext, lazy, useContext, useEffect, useMemo, type ReactNode } from 'react'
+import { createContext, lazy, useContext, useMemo, type ReactNode } from 'react'
 import { Routes, Route, Navigate, Outlet, useLocation, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAccount } from 'wagmi'
@@ -6,6 +6,7 @@ import { useCreatorAllowlist } from '@/hooks'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { apiFetch } from '@/lib/apiBase'
+import { isAppOnlyPath } from '@/lib/appOnlyPaths'
 import { AdminLayout } from './components/AdminLayout'
 import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
@@ -74,18 +75,23 @@ function resolveAccess(routeId: RouteId, state: AccessState): AccessDecision {
   if (state.loading) return { allow: false, reason: 'loading' }
   const req = ROUTE_REQUIREMENTS[routeId]
   const prefix = state.hostMode === 'app' ? MARKETING_ORIGIN : ''
+  // Owner/admin bypass wallets can access admin routes without a SIWE session.
+  if (routeId === 'admin' && state.admin) {
+    return { allow: true, reason: 'ok' }
+  }
   if (req.session && !state.sessionValid) {
-    return { allow: false, reason: 'needs-session', redirectTo: prefix + withReason('/', 'needs-session') }
+    // Route users to /waitlist (provider-enabled) so they can establish session/auth.
+    return { allow: false, reason: 'needs-session', redirectTo: withReason('/waitlist', 'needs-session') }
   }
   if (req.accepted && !state.accepted) {
-    return { allow: false, reason: 'needs-acceptance', redirectTo: prefix + withReason('/waitlist', 'needs-acceptance') }
+    return { allow: false, reason: 'needs-acceptance', redirectTo: withReason('/waitlist', 'needs-acceptance') }
   }
   if (req.creator && !state.creator) {
     const deployPrefix = state.hostMode === 'marketing' ? APP_ORIGIN : ''
     return { allow: false, reason: 'needs-creator', redirectTo: deployPrefix + withReason('/deploy', 'needs-creator') }
   }
   if (req.admin && !state.admin) {
-    return { allow: false, reason: 'needs-admin', redirectTo: prefix + withReason('/', 'needs-admin') }
+    return { allow: false, reason: 'needs-admin', redirectTo: withReason('/', 'needs-admin') }
   }
   return { allow: true, reason: 'ok' }
 }
@@ -101,32 +107,6 @@ function buildAdminBypassSet(): Set<string> {
 }
 
 const ADMIN_BYPASS_ADDRESSES = buildAdminBypassSet()
-
-/** App-only paths (redirect from 4626.fun to app.4626.fun). */
-const APP_ONLY_PATHS = [
-  '/explore',
-  '/swap',
-  '/positions',
-  '/portfolio',
-  '/deploy',
-  '/launch',
-  '/vault',
-  '/status',
-  '/vote',
-  '/auction',
-  '/admin',
-  '/miniapp',
-  '/agents',
-  '/coin',
-  '/creator',
-  '/activate-akita',
-  '/dashboard',
-  '/complete-auction',
-]
-
-function isAppOnlyPath(pathname: string): boolean {
-  return APP_ONLY_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
-}
 
 function useResolvedAccessState(): AccessState {
   const { address: connectedAddressRaw, isConnected } = useAccount()
@@ -280,6 +260,15 @@ const Waitlist = lazy(async () => {
   const m = await import('./pages/Waitlist')
   return { default: m.Waitlist }
 })
+
+const SmartWalletsRouteProvider = lazy(async () => {
+  const m = await import('@/lib/privy/SmartWalletsRouteProvider')
+  return { default: m.SmartWalletsRouteProvider }
+})
+
+function WithSmartWallets(props: { children: ReactNode }) {
+  return <SmartWalletsRouteProvider>{props.children}</SmartWalletsRouteProvider>
+}
 
 const Leaderboard = lazy(async () => {
   const m = await import('./pages/Leaderboard')
@@ -449,28 +438,6 @@ function NotFoundPage() {
 }
 
 function App() {
-  // Prefetch the most common routes after first paint to reduce perceived load time.
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    let cancelled = false
-    const run = () => {
-      if (cancelled) return
-      void import('./pages/ExploreCreators')
-      void import('./pages/ExploreContent')
-      void import('./pages/DeployVault')
-      void import('./pages/Swap')
-    }
-    // Prefer idle time, fall back to a short delay.
-    const ric = (window as any).requestIdleCallback as ((cb: () => void) => number) | undefined
-    const cancelRic = (window as any).cancelIdleCallback as ((id: number) => void) | undefined
-    const id = ric ? ric(run) : window.setTimeout(run, 1200)
-    return () => {
-      cancelled = true
-      if (ric && cancelRic) cancelRic(id as any)
-      else window.clearTimeout(id as any)
-    }
-  }, [])
-
   return (
     <AccessStateProvider>
       <Routes>
@@ -509,7 +476,14 @@ function App() {
               <Route path="/portfolio" element={<Portfolio />} />
               <Route path="/portfolio/:address" element={<Portfolio />} />
               <Route path="/launch" element={<Navigate to={withReason('/deploy', 'legacy-route')} replace />} />
-              <Route path="/deploy" element={<DeployVault />} />
+              <Route
+                path="/deploy"
+                element={
+                  <WithSmartWallets>
+                    <DeployVault />
+                  </WithSmartWallets>
+                }
+              />
               <Route path="/coin/:address/manage" element={<CoinManage />} />
               <Route path="/creator/earnings" element={<CreatorEarnings />} />
               <Route path="/creator/:identifier/earnings" element={<CreatorEarnings />} />
@@ -534,9 +508,23 @@ function App() {
                 <Route path="creator-access" element={<AdminCreatorAccess />} />
                 <Route path="waitlist" element={<AdminWaitlist />} />
                 <Route path="agent-setup" element={<AdminAgentSetup />} />
-                <Route path="ops" element={<AdminOps />} />
+                <Route
+                  path="ops"
+                  element={
+                    <WithSmartWallets>
+                      <AdminOps />
+                    </WithSmartWallets>
+                  }
+                />
                 <Route path="miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
-                <Route path="deploy-strategies" element={<AdminDeployStrategies />} />
+                <Route
+                  path="deploy-strategies"
+                  element={
+                    <WithSmartWallets>
+                      <AdminDeployStrategies />
+                    </WithSmartWallets>
+                  }
+                />
               </Route>
               <Route path="/miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
             </Route>

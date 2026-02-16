@@ -1,59 +1,17 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { getAppBaseUrl, getHostMode } from '@/lib/host'
+import { Link, useLocation } from 'react-router-dom'
+import { getAppBaseUrl } from '@/lib/host'
 import { motion } from 'framer-motion'
-import { ArrowRight, Clock, Share2, X } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { isPublicSiteMode } from '@/lib/flags'
-import { WaitlistFlow } from '@/components/waitlist/WaitlistFlow'
-import { useEffect, useState } from 'react'
-import { useAccessContext } from '@/App'
+import { useEffect } from 'react'
+import { DeferredWaitlistFlow } from '@/components/waitlist/DeferredWaitlistFlow'
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
-const WAITLIST_MODAL_STORAGE_KEY = 'cv:marketing:waitlist-modal:v1'
-
-/** Compact banner shown on the Home page when the user has a session but is not yet accepted. */
-function WaitlistStatusBanner(props: { showButton?: boolean }) {
-  const navigate = useNavigate()
-  const showButton = props.showButton !== false
-  return (
-    <motion.section
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.3 }}
-      className="max-w-2xl mx-auto px-4 sm:px-6 mt-6 sm:mt-8 mb-6 sm:mb-10 relative z-10"
-    >
-      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 backdrop-blur-sm px-5 py-4 flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <Clock className="w-5 h-5 text-amber-400 shrink-0" />
-          <div className="min-w-0">
-            <div className="text-[14px] text-white font-medium">You're on the waitlist</div>
-            <div className="text-[12px] text-zinc-400">We approve in batches. Share your link to move up.</div>
-          </div>
-        </div>
-        {showButton ? (
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => navigate('/waitlist')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-200 text-[12px] font-medium hover:bg-amber-500/20 transition-colors"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-              View Status
-            </button>
-          </div>
-        ) : null}
-      </div>
-    </motion.section>
-  )
-}
 
 export function Home() {
   const publicMode = isPublicSiteMode()
-  const hostMode = getHostMode()
-  const marketingFocused = publicMode || hostMode === 'marketing'
   const location = useLocation()
-  const access = useAccessContext()
-  const [showWaitlistModal, setShowWaitlistModal] = useState(false)
 
   useEffect(() => {
     if (!location.hash) return
@@ -65,29 +23,6 @@ export function Home() {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
   }, [location.hash])
-
-  useEffect(() => {
-    if (!marketingFocused) {
-      setShowWaitlistModal(false)
-      return
-    }
-    try {
-      const seen = window.localStorage.getItem(WAITLIST_MODAL_STORAGE_KEY) === '1'
-      setShowWaitlistModal(!seen)
-    } catch {
-      setShowWaitlistModal(true)
-    }
-  }, [marketingFocused])
-
-  const openWaitlistModal = () => setShowWaitlistModal(true)
-  const closeWaitlistModal = () => {
-    setShowWaitlistModal(false)
-    try {
-      window.localStorage.setItem(WAITLIST_MODAL_STORAGE_KEY, '1')
-    } catch {
-      // ignore storage errors
-    }
-  }
 
   return (
     <div className="relative">
@@ -144,10 +79,10 @@ export function Home() {
             transition={{ duration: 0.8, delay: 1.284 }}
             className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 pt-4 sm:pt-8"
           >
-            {marketingFocused ? (
-              <button type="button" onClick={openWaitlistModal} className="btn-accent w-full sm:w-auto text-center">
+            {publicMode ? (
+              <Link to="/#waitlist" className="btn-accent w-full sm:w-auto text-center">
                 Join waitlist <ArrowRight className="w-4 h-4 inline ml-2" />
-              </button>
+              </Link>
             ) : (
               <>
                 <a href={`${getAppBaseUrl()}/explore/creators`} className="btn-accent w-full sm:w-auto text-center">
@@ -164,11 +99,6 @@ export function Home() {
           </motion.div>
         </div>
       </section>
-
-      {/* Waitlist status banner for users with a session but not yet accepted */}
-      {access.sessionValid && !access.accepted && !access.loading && (
-        <WaitlistStatusBanner showButton={!marketingFocused} />
-      )}
 
       {/* For Creators - Minimal CTA */}
       <section className="cinematic-section py-12 sm:py-16 lg:py-24">
@@ -207,10 +137,10 @@ export function Home() {
                 </p>
                 <p>Then the vault deploys deposits across liquidity, lending, and reserve strategies.</p>
               </div>
-              {marketingFocused ? (
-                <button type="button" onClick={openWaitlistModal} className="btn-accent inline-block">
+              {publicMode ? (
+                <Link to="/?persona=creator#waitlist" className="btn-accent inline-block">
                   Join waitlist <ArrowRight className="w-4 h-4 inline ml-2" />
-                </button>
+                </Link>
               ) : (
                 <a href={`${getAppBaseUrl()}/deploy`} className="btn-accent inline-block">
                   Create Vault <ArrowRight className="w-4 h-4 inline ml-2" />
@@ -333,34 +263,16 @@ export function Home() {
             <p className="text-zinc-600 text-[13px] sm:text-sm font-light max-w-xl">
               Minimum deposit → Uniswap CCA → vault strategies.
             </p>
-            {!marketingFocused ? (
-              <div>
-                <Link to="/faq/how-it-works" className="btn-primary inline-block">
-                  How it works <ArrowRight className="w-4 h-4 inline ml-2" />
-                </Link>
-              </div>
-            ) : null}
+            <div>
+              <Link to="/faq/how-it-works" className="btn-primary inline-block">
+                How it works <ArrowRight className="w-4 h-4 inline ml-2" />
+              </Link>
+            </div>
           </motion.div>
         </div>
       </section>
 
-      {marketingFocused && showWaitlistModal ? (
-        <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm p-4 sm:p-6 overflow-y-auto">
-          <div className="max-w-xl mx-auto relative pt-12 sm:pt-14">
-            <button
-              type="button"
-              onClick={closeWaitlistModal}
-              className="absolute right-0 top-0 h-11 w-11 inline-flex items-center justify-center rounded-xl border border-white/15 bg-black/50 text-zinc-300 hover:text-white"
-              aria-label="Close waitlist"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            <WaitlistFlow variant="embedded" />
-          </div>
-        </div>
-      ) : null}
-
-      {!marketingFocused ? <WaitlistFlow variant="embedded" sectionId="waitlist" /> : null}
+      <DeferredWaitlistFlow />
     </div>
   )
 }

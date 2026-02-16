@@ -23,6 +23,7 @@ export type RegistrationFile = {
 }
 
 const REGISTRATION_TYPE = 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1'
+const SUPPORTED_ENDPOINT_PREFIXES = ['https://', 'http://', 'ipfs://', 'ar://', 'data:'] as const
 
 const fallbackRegistration: RegistrationFile = {
   type: REGISTRATION_TYPE,
@@ -31,8 +32,18 @@ const fallbackRegistration: RegistrationFile = {
   image: 'https://4626.fun/miniapp-icon.png',
   services: [
     { name: 'web', endpoint: 'https://4626.fun' },
-    { name: 'XMTP', endpoint: 'xmtp://0xAb6d5C10b03300326CD7fAb7267Ae192842967b5', version: 'production', description: 'XMTP messaging endpoint — DM or group chat with the agent. Identity is a Coinbase Smart Wallet on Base (chain 8453).' },
-    { name: 'agentWallet', endpoint: 'eip155:8453:0xAb6d5C10b03300326CD7fAb7267Ae192842967b5' },
+    {
+      name: 'XMTP',
+      endpoint: 'https://xmtp.chat/dm/0xAb6d5C10b03300326CD7fAb7267Ae192842967b5',
+      version: 'production',
+      address: '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5',
+      description: 'XMTP messaging endpoint — DM or group chat with the agent. Identity is a Coinbase Smart Wallet on Base (chain 8453).',
+    },
+    {
+      name: 'agentWallet',
+      endpoint: 'https://basescan.org/address/0xAb6d5C10b03300326CD7fAb7267Ae192842967b5',
+      account: 'eip155:8453:0xAb6d5C10b03300326CD7fAb7267Ae192842967b5',
+    },
     { name: 'api', endpoint: 'https://4626.fun/api/v1/spec.json', version: '1.0.0' },
     { name: 'feedback', endpoint: 'https://4626.fun/api/v1/agents/feedback', version: '2.0' },
     { name: 'reputation-graph', endpoint: 'https://4626.fun/api/lens/reputation-graph', version: '1.0' },
@@ -89,9 +100,13 @@ function readRegistrationFromDisk(): RegistrationFile | null {
 function normalizeUrl(value: string, origin: string): string {
   const v = value.trim()
   if (!v) return origin
-  if (v.startsWith('http://') || v.startsWith('https://') || v.startsWith('ipfs://') || v.startsWith('data:')) return v
+  if (SUPPORTED_ENDPOINT_PREFIXES.some((prefix) => v.startsWith(prefix))) return v
   if (v.startsWith('/')) return `${origin}${v}`
   return v
+}
+
+function isSupportedEndpointUri(value: string): boolean {
+  return SUPPORTED_ENDPOINT_PREFIXES.some((prefix) => value.startsWith(prefix))
 }
 
 function parseServicesFromEnv(raw: string): RegistrationService[] | null {
@@ -125,6 +140,54 @@ function parseAgentRegistryRef(value: string): { chainId: number; registryAddres
   const chainId = Number(match[1])
   if (!Number.isFinite(chainId) || chainId <= 0) return null
   return { chainId, registryAddress: match[2].toLowerCase() }
+}
+
+function parseCaip10Account(value: string): { chainId: number; address: string } | null {
+  const raw = value.trim()
+  if (!raw) return null
+  const match = raw.match(/^eip155:(\d+):(0x[a-fA-F0-9]{40})$/)
+  if (!match) return null
+  const chainId = Number(match[1])
+  if (!Number.isFinite(chainId) || chainId <= 0) return null
+  return { chainId, address: match[2] }
+}
+
+function addressExplorerUrl(chainId: number, address: string): string {
+  const normalizedAddress = address.toLowerCase()
+  if (chainId === 8453) return `https://basescan.org/address/${normalizedAddress}`
+  if (chainId === 1) return `https://etherscan.io/address/${normalizedAddress}`
+  return `https://etherscan.io/address/${normalizedAddress}`
+}
+
+function normalizeService(service: RegistrationService, origin: string): RegistrationService {
+  const name = String(service.name ?? '').trim()
+  const endpointRaw = String(service.endpoint ?? '').trim()
+  const endpointNormalized = normalizeUrl(endpointRaw, origin)
+  const normalized: RegistrationService = { ...service, name }
+
+  if (isSupportedEndpointUri(endpointNormalized)) {
+    normalized.endpoint = endpointNormalized
+    return normalized
+  }
+
+  const xmtpMatch = endpointRaw.match(/^xmtp:\/\/(0x[a-fA-F0-9]{40})$/)
+  if (xmtpMatch) {
+    const address = xmtpMatch[1]
+    normalized.endpoint = `https://xmtp.chat/dm/${address}`
+    normalized.address = address
+    return normalized
+  }
+
+  const accountRef = parseCaip10Account(endpointRaw)
+  if (accountRef) {
+    normalized.endpoint = addressExplorerUrl(accountRef.chainId, accountRef.address)
+    normalized.account = `eip155:${accountRef.chainId}:${accountRef.address.toLowerCase()}`
+    return normalized
+  }
+
+  // Keep the registration parser-safe when a custom URI scheme is provided.
+  normalized.endpoint = `${origin}/`
+  return normalized
 }
 
 function readRegistryConfig(base: RegistrationFile): {
@@ -203,11 +266,7 @@ export function buildAgentRegistration(origin: string): {
     { name: 'api', endpoint: `${origin}/api/v1/spec.json`, version: '1.0.0' },
   ])
     .filter((service) => service && typeof service === 'object')
-    .map((service) => ({
-      ...service,
-      name: String(service.name ?? '').trim(),
-      endpoint: normalizeUrl(String(service.endpoint ?? ''), origin),
-    }))
+    .map((service) => normalizeService(service, origin))
     .filter((service) => service.name && service.endpoint)
 
   const supportedTrustRaw = process.env.ERC8004_AGENT_SUPPORTED_TRUST
@@ -234,14 +293,16 @@ export function buildAgentRegistration(origin: string): {
   const xmtpEnv = (process.env.XMTP_ENV ?? 'production').trim()
 
   if (cswAddress && isAddressLike(cswAddress)) {
-    const xmtpEndpoint = `xmtp://${cswAddress}`
-    const walletEndpoint = `eip155:${registryConfig.chainId}:${cswAddress}`
+    const xmtpEndpoint = `https://xmtp.chat/dm/${cswAddress}`
+    const walletEndpoint = addressExplorerUrl(registryConfig.chainId, cswAddress)
+    const walletAccount = `eip155:${registryConfig.chainId}:${cswAddress.toLowerCase()}`
 
     // Upsert XMTP service
     const xmtpIdx = services.findIndex((s) => s.name === 'XMTP')
     const xmtpService: RegistrationService = {
       name: 'XMTP',
       endpoint: xmtpEndpoint,
+      address: cswAddress,
       version: xmtpEnv,
       description: `XMTP messaging endpoint — DM or group chat with the agent. Identity is a Coinbase Smart Wallet on chain ${registryConfig.chainId}.`,
     }
@@ -250,7 +311,7 @@ export function buildAgentRegistration(origin: string): {
 
     // Upsert agentWallet service
     const walletIdx = services.findIndex((s) => s.name === 'agentWallet')
-    const walletService: RegistrationService = { name: 'agentWallet', endpoint: walletEndpoint }
+    const walletService: RegistrationService = { name: 'agentWallet', endpoint: walletEndpoint, account: walletAccount }
     if (walletIdx >= 0) services[walletIdx] = walletService
     else services.splice(services.findIndex((s) => s.name === 'XMTP') + 1, 0, walletService)
   }

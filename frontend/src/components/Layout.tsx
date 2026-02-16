@@ -64,12 +64,12 @@ export function Layout() {
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
   const { isAdmin } = useAdminStatus()
+  const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
   const baseItems = publicMode || hostMode === 'marketing' ? navItemsPublic : navItems
   const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, adminNavItem] : baseItems
   const [showOnboarding, setShowOnboarding] = useState(false)
   const showQuickstart = useShowQuickstart()
   const [quickstartDismissed, setQuickstartDismissed] = useState(false)
-  const onboardingSuppressed = hostMode !== 'app' || location.pathname === '/waitlist' || location.pathname.startsWith('/deploy')
   const resolvedSubdomain = useQuery({
     queryKey: ['agents', 'subdomain-resolve', hostMode],
     enabled: hostMode === 'app',
@@ -84,18 +84,17 @@ export function Layout() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (onboardingSuppressed) return
     // Only show once per device/browser.
     if (hasCompletedOnboarding()) return
     setShowOnboarding(true)
-  }, [onboardingSuppressed])
+  }, [])
 
   // Show quickstart after onboarding is done, for authenticated creators
-  const shouldShowQuickstart = hostMode === 'app' && !showOnboarding && showQuickstart && !quickstartDismissed
+  const shouldShowQuickstart = !showOnboarding && showQuickstart && !quickstartDismissed
 
   return (
     <div className="min-h-screen flex flex-col bg-vault-bg">
-      {hostMode !== 'marketing' ? <VaultNavBar /> : null}
+      <VaultNavBar />
       {resolvedSubdomain.data?.record ? (
         <div className="border-b border-vault-border/60 bg-black/50">
           <div className="max-w-7xl mx-auto px-6 py-2 text-[11px] uppercase tracking-[0.14em] text-vault-subtext flex items-center justify-between gap-2">
@@ -112,7 +111,7 @@ export function Layout() {
       {shouldShowQuickstart ? <QuickstartModal onClose={() => setQuickstartDismissed(true)} /> : null}
 
       {/* Main */}
-      <main className="flex-1 pb-24 md:pb-0">
+      <main className={`flex-1 ${shouldOverlayMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
         <Suspense
           fallback={
             <div className="max-w-7xl mx-auto px-6 py-12">
@@ -131,32 +130,30 @@ export function Layout() {
       {hostMode === 'app' && <ChatWidget />}
 
       {/* Mobile Nav - Minimal */}
-      {hostMode !== 'marketing' ? (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 border-t border-vault-border/60 bg-vault-bg/80 backdrop-blur-xl">
-          <div className="flex items-center justify-around py-4 px-6">
-            {items.map((item) => {
-              const { path, icon: Icon, label } = item
-              const isActive = isActiveLink(location, item)
-              return (
-                <Link
-                  key={path}
-                  to={path}
-                  className="flex flex-col items-center justify-center gap-2 group min-h-11 min-w-[56px] px-2"
-                >
-                  <Icon
-                    className={`w-5 h-5 transition-colors ${
-                      isActive ? 'text-vault-text' : 'text-vault-subtext group-hover:text-vault-text'
-                    }`}
-                  />
-                  <span className={`label ${isActive ? 'text-vault-text' : 'text-vault-subtext'}`}>
-                    {label}
-                  </span>
-                </Link>
-              )
-            })}
-          </div>
-        </nav>
-      ) : null}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[70] border-t border-vault-border/60 bg-vault-bg/80 backdrop-blur-xl">
+        <div className="flex items-center justify-around py-4 px-6">
+          {items.map((item) => {
+            const { path, icon: Icon, label } = item
+            const isActive = isActiveLink(location, item)
+            return (
+              <Link
+                key={path}
+                to={path}
+                className="flex flex-col items-center justify-center gap-2 group min-h-11 min-w-[56px] px-2"
+              >
+                <Icon
+                  className={`w-5 h-5 transition-colors ${
+                    isActive ? 'text-vault-text' : 'text-vault-subtext group-hover:text-vault-text'
+                  }`}
+                />
+                <span className={`label ${isActive ? 'text-vault-text' : 'text-vault-subtext'}`}>
+                  {label}
+                </span>
+              </Link>
+            )
+          })}
+        </div>
+      </nav>
     </div>
   )
 }

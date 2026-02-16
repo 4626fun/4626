@@ -13,6 +13,7 @@ type TokenRowProps = {
   coin: ZoraCoin
   linkPrefix?: string
   timeframe?: string
+  collapseIdentity?: boolean
   /** Set of migrated coin addresses (lowercase) for accurate fee detection */
   migratedCoins?: Set<string>
   isExpanded?: boolean
@@ -21,6 +22,7 @@ type TokenRowProps = {
 
 type TokenTableHeaderProps = {
   timeframe?: string
+  collapseIdentity?: boolean
   currentSort?: string
   onSortChange?: (sort: string) => void
 }
@@ -170,6 +172,7 @@ export function TokenRow({
   coin,
   linkPrefix = '/explore/creators',
   timeframe = '1d',
+  collapseIdentity = false,
   migratedCoins,
   isExpanded,
   onToggleFees,
@@ -213,7 +216,7 @@ export function TokenRow({
     `Doppler ${feeRates.doppler > 0 ? formatFeeAmount(volume, feeRates.total, feeRates.doppler) : '-'}`,
   ].join(' • ')
 
-  const columns = getExploreColumns({ variant: 'creators', timeframe })
+  const columns = getExploreColumns({ variant: 'creators', timeframe, collapseIdentity })
   const gridTemplateColumns = getGridTemplateColumns(columns)
   const stickyLeft = getStickyLeftMap(columns)
   const feeGroupSpan = useMemo(() => buildGroupSpans(columns).find((g) => g.id === 'fees') ?? null, [columns])
@@ -307,14 +310,14 @@ export function TokenRow({
 
         {/* Token Name */}
         <div
-          className={`${stickyCellClass} relative z-30 px-3 py-2`}
+          className={`${stickyCellClass} explore-sticky-name-cell relative z-30 px-3 py-2`}
           style={{ left: stickyLeft.name }}
         >
           <div
             className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-r from-transparent to-zinc-950 opacity-80"
             aria-hidden="true"
           />
-          <div className="flex items-center gap-2.5 min-w-0 justify-center sm:justify-start">
+          <div className="flex items-center gap-2.5 min-w-0 justify-start">
             {avatarUrl ? (
               <img src={avatarUrl} alt={name} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover flex-shrink-0" />
             ) : (
@@ -338,16 +341,16 @@ export function TokenRow({
         </div>
 
         {/* Holders */}
-        <span className="text-white tabular-nums px-3 py-2 text-right">{coin.uniqueHolders?.toLocaleString() || '-'}</span>
+        <span className="text-white tabular-nums px-3 py-2 text-center">{coin.uniqueHolders?.toLocaleString() || '-'}</span>
 
         {/* Market cap */}
-        <span className="text-white tabular-nums px-3 py-2 text-right">{formatCompactNumber(marketCap)}</span>
+        <span className="text-white tabular-nums px-3 py-2 text-center">{formatCompactNumber(marketCap)}</span>
 
         {/* Volume */}
-        <span className="text-white tabular-nums px-3 py-2 text-right">{formatCompactNumber(volume)}</span>
+        <span className="text-white tabular-nums px-3 py-2 text-center">{formatCompactNumber(volume)}</span>
 
         {/* Δ 24H */}
-        <span className={`tabular-nums px-3 py-2 text-right ${change.positive ? 'text-emerald-300' : 'text-rose-300'}`}>
+        <span className={`tabular-nums px-3 py-2 text-center ${change.positive ? 'text-emerald-300' : 'text-rose-300'}`}>
           {change.text}
         </span>
 
@@ -454,8 +457,8 @@ export function TokenRow({
 }
 
 // Table Header Component
-export function TokenTableHeader({ timeframe = '1d', currentSort, onSortChange }: TokenTableHeaderProps) {
-  const columns = getExploreColumns({ variant: 'creators', timeframe })
+export function TokenTableHeader({ timeframe = '1d', collapseIdentity = false, currentSort, onSortChange }: TokenTableHeaderProps) {
+  const columns = getExploreColumns({ variant: 'creators', timeframe, collapseIdentity })
   const gridTemplateColumns = getGridTemplateColumns(columns)
   const stickyLeft = getStickyLeftMap(columns)
   const groupSpans = buildGroupSpans(columns)
@@ -477,7 +480,7 @@ export function TokenTableHeader({ timeframe = '1d', currentSort, onSortChange }
               key={g.id}
               className={`px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 border-b border-zinc-800/60 ${alignClass} ${
                 hasSticky ? stickyGroupClass : ''
-              }`}
+              } ${g.id === 'identity' ? 'explore-sticky-identity-group-header' : ''}`}
               style={{
                 gridColumn: `${g.start + 1} / ${g.end + 2}`,
                 ...(hasSticky ? { left } : null),
@@ -531,16 +534,21 @@ export function TokenTableHeader({ timeframe = '1d', currentSort, onSortChange }
           return (
             <div
               key={c.id}
-              className={`${base} ${align} ${isSticky ? stickyHeaderCellClass : ''} ${c.id === 'name' ? 'relative' : ''}`}
+              className={`${base} ${align} ${isSticky ? stickyHeaderCellClass : ''} ${
+                c.id === 'name' ? 'relative explore-sticky-name-header-cell' : ''
+              }`}
               style={isSticky ? { left } : undefined}
             >
               {c.id === 'name' ? (
-                <div
-                  className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-r from-transparent to-zinc-950 opacity-80"
-                  aria-hidden="true"
-                />
+                <>
+                  <div
+                    className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-r from-transparent to-zinc-950 opacity-80"
+                    aria-hidden="true"
+                  />
+                  <span className="explore-token-header-label">{label}</span>
+                </>
               ) : null}
-              {label}
+              {c.id !== 'name' ? label : null}
             </div>
           )
         })}
@@ -550,8 +558,8 @@ export function TokenTableHeader({ timeframe = '1d', currentSort, onSortChange }
 }
 
 // Loading skeleton row
-export function TokenRowSkeleton() {
-  const columns = getExploreColumns({ variant: 'creators', timeframe: '1d' })
+export function TokenRowSkeleton({ collapseIdentity = false }: { collapseIdentity?: boolean }) {
+  const columns = getExploreColumns({ variant: 'creators', timeframe: '1d', collapseIdentity })
   const gridTemplateColumns = getGridTemplateColumns(columns)
   const stickyLeft = getStickyLeftMap(columns)
   const stickyCellClass = 'sticky z-10 bg-zinc-900/70 backdrop-blur-sm'
@@ -561,8 +569,8 @@ export function TokenRowSkeleton() {
       <div className={`${stickyCellClass} px-3 py-2`} style={{ left: stickyLeft.rank }}>
         <div className="h-3 w-6 bg-zinc-800 rounded animate-pulse ml-auto" />
       </div>
-      <div className={`${stickyCellClass} px-3 py-2 shadow-[6px_0_16px_-12px_rgba(0,0,0,0.9)]`} style={{ left: stickyLeft.name }}>
-        <div className="flex items-center gap-2 justify-center sm:justify-start">
+      <div className={`${stickyCellClass} explore-sticky-name-cell px-3 py-2 shadow-[6px_0_16px_-12px_rgba(0,0,0,0.9)]`} style={{ left: stickyLeft.name }}>
+        <div className="flex items-center gap-2 justify-start">
           <div className="w-7 h-7 rounded-full bg-zinc-800 animate-pulse" />
           <div className="space-y-1 explore-token-name">
             <div className="h-3 w-24 bg-zinc-800 rounded animate-pulse" />

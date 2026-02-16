@@ -53,19 +53,25 @@ function getVolumeLabel(timeframe: string): string {
   return labels[timeframe] || 'Vol 24H'
 }
 
-export function getExploreColumns(opts: { variant: ExploreTableVariant; timeframe?: string }): ExploreTableColumn[] {
+export function getExploreColumns(opts: { variant: ExploreTableVariant; timeframe?: string; collapseIdentity?: boolean }): ExploreTableColumn[] {
   const timeframe = opts.timeframe ?? '1d'
   const nameLabel = opts.variant === 'content' ? 'Content' : 'Token'
+  const collapseIdentity = Boolean(opts.collapseIdentity)
+  const centerMarket = opts.variant === 'creators'
+  const holdersWidth = opts.variant === 'creators' ? 88 : 96
+  const marketCapWidth = opts.variant === 'creators' ? 112 : 120
+  const volumeWidth = opts.variant === 'creators' ? 112 : 120
+  const deltaWidth = opts.variant === 'creators' ? 102 : 110
 
   // A DeFiLlama-like table is intentionally dense and fixed-width, with horizontal scroll.
   return [
     { id: 'rank', label: '#', group: 'identity', widthPx: 48, align: 'right', sticky: true },
-    { id: 'name', label: nameLabel, group: 'identity', widthPx: 260, align: 'left', sticky: true },
+    { id: 'name', label: nameLabel, group: 'identity', widthPx: collapseIdentity ? 56 : 208, align: 'left', sticky: true },
 
-    { id: 'holders', label: 'Holders', group: 'market', widthPx: 96, align: 'right' },
-    { id: 'marketCap', label: 'MCap', group: 'market', widthPx: 120, align: 'right', sortKey: 'marketCap' },
-    { id: 'volume', label: getVolumeLabel(timeframe), group: 'market', widthPx: 120, align: 'right', sortKey: 'volume' },
-    { id: 'priceChange', label: 'MCap Δ 24H', group: 'market', widthPx: 110, align: 'right', sortKey: 'priceChange' },
+    { id: 'holders', label: 'Holders', group: 'market', widthPx: holdersWidth, align: centerMarket ? 'center' : 'right' },
+    { id: 'marketCap', label: 'MCap', group: 'market', widthPx: marketCapWidth, align: centerMarket ? 'center' : 'right', sortKey: 'marketCap' },
+    { id: 'volume', label: getVolumeLabel(timeframe), group: 'market', widthPx: volumeWidth, align: centerMarket ? 'center' : 'right', sortKey: 'volume' },
+    { id: 'priceChange', label: 'MCap Δ 24H', group: 'market', widthPx: deltaWidth, align: centerMarket ? 'center' : 'right', sortKey: 'priceChange' },
 
     { id: 'feeBadge', label: 'Fee %', group: 'fees', widthPx: 72, align: 'center' },
     { id: 'totalFees', label: 'Fees', group: 'fees', widthPx: 110, align: 'right' },
