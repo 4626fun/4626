@@ -398,6 +398,11 @@ const Portfolio = lazy(async () => {
   return { default: m.Portfolio }
 })
 
+const AccountSettings = lazy(async () => {
+  const m = await import('./pages/AccountSettings')
+  return { default: m.AccountSettings }
+})
+
 function NotFoundPage() {
   const location = useLocation()
   const access = useAccessContext()
@@ -459,6 +464,8 @@ function App() {
 
           {/* Session-gated routes */}
           <Route element={<RequireSession />}>
+            <Route path="/account" element={<AccountSettings />} />
+            <Route path="/settings" element={<Navigate to={withReason('/account', 'legacy-route')} replace />} />
             <Route element={<RequireAccepted />}>
               <Route path="/explore" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
               <Route path="/explore/creators" element={<ExploreCreators />} />

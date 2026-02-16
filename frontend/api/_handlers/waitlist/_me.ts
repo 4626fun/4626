@@ -147,7 +147,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       CASE
         WHEN email IS NULL THEN 2
         WHEN LOWER(email) LIKE '%@noemail.4626.fun' THEN 1
-        WHEN LOWER(email) LIKE '%@example.com' THEN 1
+        WHEN LOWER(email) ~ '^(solinfer-|wallet-|anon-|0x[0-9a-f]+).*@example\\.com$' THEN 1
         ELSE 0
       END ASC,
       updated_at DESC,

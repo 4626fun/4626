@@ -1,6 +1,7 @@
 import { useAccount, useConnect, useDisconnect } from 'wagmi'
 import { useMemo, useState } from 'react'
 import { Wallet, ChevronDown } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 
 /**
@@ -87,6 +88,15 @@ export function ConnectButtonWeb3() {
                   <div className="text-[11px] text-zinc-600 mt-1">Session matches connected wallet.</div>
                 </div>
               )}
+              {auth.isSignedIn ? (
+                <Link
+                  to="/account"
+                  onClick={() => setShowMenu(false)}
+                  className="block w-full py-3 px-4 hover:bg-zinc-950 transition-colors"
+                >
+                  <span className="label block text-zinc-300">Account settings</span>
+                </Link>
+              ) : null}
               {auth.isSignedIn ? (
                 <button
                   type="button"

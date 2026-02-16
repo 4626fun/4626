@@ -5,6 +5,8 @@ export const APP_ONLY_PATHS = [
   '/swap',
   '/positions',
   '/portfolio',
+  '/account',
+  '/settings',
   '/deploy',
   '/launch',
   '/vault',
