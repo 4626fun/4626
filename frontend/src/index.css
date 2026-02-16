@@ -263,8 +263,8 @@ body {
   display: none;
 }
 
-/* Mobile: keep Explore tables scrollable (show all columns) */
-@media (max-width: 640px) {
+/* Tablet/mobile: keep Explore tables scrollable (show all columns) */
+@media (max-width: 1024px) {
   #explore-creators-header,
   #explore-content-header {
     display: block;
@@ -284,5 +284,35 @@ body {
   #explore-creators-body[data-scrolled="1"] .explore-token-name,
   #explore-content-body[data-scrolled="1"] .explore-token-name {
     display: none;
+  }
+
+  /* Collapse sticky identity cell width while scrolling right on mobile. */
+  #explore-creators-body[data-scrolled="1"] .explore-sticky-name-cell,
+  #explore-content-body[data-scrolled="1"] .explore-sticky-name-cell {
+    width: 56px;
+    max-width: 56px;
+    min-width: 56px;
+    overflow: hidden;
+  }
+
+  #explore-creators-header[data-scrolled="1"] .explore-sticky-name-header-cell,
+  #explore-content-header[data-scrolled="1"] .explore-sticky-name-header-cell {
+    width: 56px;
+    max-width: 56px;
+    min-width: 56px;
+    overflow: hidden;
+  }
+
+  #explore-creators-header[data-scrolled="1"] .explore-token-header-label,
+  #explore-content-header[data-scrolled="1"] .explore-token-header-label {
+    display: none;
+  }
+
+  #explore-creators-header[data-scrolled="1"] .explore-sticky-identity-group-header,
+  #explore-content-header[data-scrolled="1"] .explore-sticky-identity-group-header {
+    width: 104px;
+    max-width: 104px;
+    min-width: 104px;
+    overflow: hidden;
   }
 }

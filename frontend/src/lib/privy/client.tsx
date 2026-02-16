@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import { Component, createContext, useContext, useMemo } from 'react'
 import { getPrivyAppId, isPrivyClientEnabled } from '@/lib/flags'
 import { PrivyProvider } from '@privy-io/react-auth'
-import { SmartWalletsProvider } from '@privy-io/react-auth/smart-wallets'
 import { base } from 'viem/chains'
 
 type PrivyClientStatus = 'disabled' | 'loading' | 'ready'
@@ -53,7 +52,6 @@ class PrivyProviderSafetyBoundary extends Component<
  * Privy handles:
  * - Authentication (email, Farcaster, etc.)
  * - Global Wallet access (shared with Zora via Privy's global wallet feature)
- * - Smart wallet operations via useSmartWallets hook
  *
  * With Zora Global Wallet enabled:
  * - Users who created their coin on Zora can access the SAME Coinbase Smart Wallet
@@ -128,9 +126,7 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
   return (
     <PrivyClientContext.Provider value="ready">
       <PrivyProviderSafetyBoundary appId={appId} baseConfig={baseConfig} safeConfig={safeConfig}>
-        <SmartWalletsProvider>
-          {children}
-        </SmartWalletsProvider>
+        {children}
       </PrivyProviderSafetyBoundary>
     </PrivyClientContext.Provider>
   )

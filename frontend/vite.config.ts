@@ -271,10 +271,19 @@ export default defineConfig(({ command }) => {
     sourcemap: enableSourcemap,
     rollupOptions: {
       output: {
-        // Keep chunking conservative to avoid circular init order bugs across wallet SDKs.
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          charts: ['d3', 'recharts'],
+        // Keep chunking conservative and let route-level dynamic imports own
+        // most SDK splitting so heavy auth/web3 code stays off the initial path.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          const isPkg = (name: string) => id.includes(`/node_modules/${name}/`)
+
+          if (isPkg('react') || isPkg('react-dom') || isPkg('react-router-dom')) return 'vendor'
+          if (isPkg('d3') || isPkg('recharts')) return 'charts'
+
+          if (isPkg('@farcaster/auth-kit') || isPkg('@farcaster/miniapp-sdk')) return 'farcaster'
+          if (isPkg('@xmtp/browser-sdk') || isPkg('@xmtp/content-type-primitives')) return 'xmtp'
+
+          return undefined
         },
       },
     },

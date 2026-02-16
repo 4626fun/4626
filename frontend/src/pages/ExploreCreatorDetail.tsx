@@ -15,17 +15,6 @@ function isSupportedChain(chain: string): boolean {
   return chain.toLowerCase() === 'base'
 }
 
-function formatPrice(price: string | number | undefined): string {
-  if (!price) return '$0.00'
-  const num = typeof price === 'string' ? parseFloat(price) : price
-  if (isNaN(num)) return '$0.00'
-  if (num < 0.0001) return `$${num.toExponential(2)}`
-  if (num < 0.01) return `$${num.toFixed(6)}`
-  if (num < 1) return `$${num.toFixed(4)}`
-  if (num < 1000) return `$${num.toFixed(2)}`
-  return `$${num.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-}
-
 function formatNumber(value: string | number | undefined): string {
   if (!value) return '-'
   const num = typeof value === 'string' ? parseFloat(value) : value
@@ -34,15 +23,6 @@ function formatNumber(value: string | number | undefined): string {
   if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(2)}M`
   if (num >= 1_000) return `$${(num / 1_000).toFixed(2)}K`
   return `$${num.toFixed(2)}`
-}
-
-function formatChange(delta: string | undefined): { value: string; positive: boolean } {
-  if (!delta) return { value: '0.00%', positive: true }
-  const num = parseFloat(delta)
-  if (isNaN(num)) return { value: '0.00%', positive: true }
-  const positive = num >= 0
-  const absNum = Math.abs(num)
-  return { value: `${absNum.toFixed(2)}%`, positive }
 }
 
 function formatDate(dateString: string | undefined): string {
@@ -260,10 +240,10 @@ function SocialLinks({ profile }: { profile: ZoraProfile | null }) {
           className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors group"
         >
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-zinc-300">
-              {link.icon}
+            <div className="w-9 h-9 rounded-xl bg-zinc-800/90 border border-zinc-700/70 flex items-center justify-center text-zinc-200">
+              <span className="scale-95">{link.icon}</span>
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-sm text-white">{link.handle}</span>
               {link.followers && (
                 <div className="text-xs text-zinc-500">
@@ -271,6 +251,48 @@ function SocialLinks({ profile }: { profile: ZoraProfile | null }) {
                 </div>
               )}
             </div>
+          </div>
+          <ExternalLink className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
+        </a>
+      ))}
+    </div>
+  )
+}
+
+function ResourceLinks({ tokenAddress }: { tokenAddress: string }) {
+  const links = [
+    {
+      name: 'Zora',
+      href: `https://zora.co/coin/base:${tokenAddress}`,
+      iconUrl: 'https://green-decisive-crane-434.mypinata.cloud/ipfs/bafkreiby3cnzgdxvaadcgl2z2wos34hfqqoynyzgh3uxm2qxl2qka6cllq',
+    },
+    {
+      name: 'Dexscreener',
+      href: `https://dexscreener.com/base/${tokenAddress}`,
+      iconUrl: 'https://green-decisive-crane-434.mypinata.cloud/ipfs/bafkreia3wpaw347dpdn5sewij3nsdpgzoa7i4n5toohojedrdvyvhx52le',
+    },
+    {
+      name: 'Basescan',
+      href: `https://basescan.org/token/${tokenAddress}`,
+      iconUrl: 'https://green-decisive-crane-434.mypinata.cloud/ipfs/bafkreidse2dmc2h5myecpddbm53xwbn62yq4l4af7fnpi362prhk6f2hoi',
+    },
+  ]
+
+  return (
+    <div className="space-y-2">
+      {links.map((link) => (
+        <a
+          key={link.name}
+          href={link.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors group"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-zinc-800/90 border border-zinc-700/70 flex items-center justify-center p-1.5 overflow-hidden">
+              <img src={link.iconUrl} alt={link.name} className="w-full h-full object-contain" />
+            </div>
+            <span className="text-sm text-white truncate">{link.name}</span>
           </div>
           <ExternalLink className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
         </a>
@@ -369,8 +391,6 @@ export function ExploreCreatorDetail() {
   const bio = profile?.bio
   const website = profile?.website
   const symbol = coin?.symbol || '...'
-  const price = formatPrice(coin?.tokenPrice?.priceInUsdc)
-  const change = formatChange(coin?.marketCapDelta24h)
   const marketCap = formatNumber(coin?.marketCap)
   const volume24h = formatNumber(coin?.volume24h)
   const totalVolume = formatNumber(coin?.totalVolume)
@@ -438,11 +458,8 @@ export function ExploreCreatorDetail() {
             {/* Quick Stats — 2x2 grid on mobile, inline on desktop */}
             <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 sm:gap-6 sm:ml-auto">
               <div className="text-center sm:text-center">
-                <div className="text-lg sm:text-2xl font-semibold text-white">{price}</div>
-                <div className="text-[11px] sm:text-xs text-zinc-500">Coin Price</div>
-                <div className={`text-[11px] sm:text-xs ${change.positive ? 'text-green-500' : 'text-red-500'}`}>
-                  {change.positive ? '+' : '-'}{change.value}
-                </div>
+                <div className="text-lg sm:text-2xl font-semibold text-white">{volume24h}</div>
+                <div className="text-[11px] sm:text-xs text-zinc-500">24H Volume</div>
               </div>
               <div className="text-center sm:text-center">
                 <div className="text-lg sm:text-2xl font-semibold text-white">{marketCap}</div>
@@ -457,6 +474,35 @@ export function ExploreCreatorDetail() {
                 <div className="text-[11px] sm:text-xs text-zinc-500">Coins Created</div>
               </div>
             </div>
+          </div>
+
+          <div className="mt-4 sm:mt-5 pt-4 border-t border-zinc-800/80 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="rounded-lg sm:rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Creator Coin</div>
+                  <div className="text-xs sm:text-sm text-zinc-300 font-mono truncate">{shortAddress(tokenAddress)}</div>
+                </div>
+                <CopyButton text={tokenAddress} className="p-2 rounded-lg hover:bg-zinc-800 shrink-0" />
+              </div>
+            </div>
+
+            {creatorAddress ? (
+              <div className="rounded-lg sm:rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Creator Wallet</div>
+                    <div className="text-xs sm:text-sm text-zinc-300 font-mono truncate">{shortAddress(creatorAddress)}</div>
+                  </div>
+                  <CopyButton text={creatorAddress} className="p-2 rounded-lg hover:bg-zinc-800 shrink-0" />
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg sm:rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
+                <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Creator Wallet</div>
+                <div className="text-xs sm:text-sm text-zinc-500">Unavailable</div>
+              </div>
+            )}
           </div>
         </motion.div>
 
@@ -663,16 +709,23 @@ export function ExploreCreatorDetail() {
               </Link>
             </div>
 
-            {/* Social Links Card */}
-            {profile && (
-              <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-5">
-                <h3 className="text-sm font-medium text-zinc-400 mb-3">Social</h3>
-                <SocialLinks profile={profile} />
-                {!profile.socialAccounts && (
-                  <div className="text-sm text-zinc-600">No social accounts linked.</div>
-                )}
+            {/* Social + Links Card */}
+            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-5">
+              <h3 className="text-sm font-medium text-zinc-400 mb-3">Social &amp; Links</h3>
+              <div className="space-y-4">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500 mb-2">Social</div>
+                  <SocialLinks profile={profile} />
+                  {!profile?.socialAccounts && (
+                    <div className="text-sm text-zinc-600">No social accounts linked.</div>
+                  )}
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500 mb-2">Links</div>
+                  <ResourceLinks tokenAddress={tokenAddress} />
+                </div>
               </div>
-            )}
+            </div>
 
             {/* Stats Card */}
             <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-5">
@@ -685,97 +738,6 @@ export function ExploreCreatorDetail() {
               <StatRow label="Content coins" value={String(contentCoins.length)} icon={<Coins className="w-3 h-3" />} />
             </div>
 
-            {/* Links Card - Custom IPFS icons */}
-            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-5">
-              <h3 className="text-sm font-medium text-zinc-400 mb-3">Links</h3>
-              <div className="space-y-2">
-                <a
-                  href={`https://zora.co/coin/base:${tokenAddress}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center overflow-hidden">
-                      <img 
-                        src="https://green-decisive-crane-434.mypinata.cloud/ipfs/bafkreiby3cnzgdxvaadcgl2z2wos34hfqqoynyzgh3uxm2qxl2qka6cllq" 
-                        alt="Zora" 
-                        className="w-5 h-5" 
-                      />
-                    </div>
-                    <span className="text-sm text-white">Zora</span>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
-                </a>
-                
-                <a
-                  href={`https://dexscreener.com/base/${tokenAddress}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center overflow-hidden">
-                      <img 
-                        src="https://green-decisive-crane-434.mypinata.cloud/ipfs/bafkreia3wpaw347dpdn5sewij3nsdpgzoa7i4n5toohojedrdvyvhx52le" 
-                        alt="Dexscreener" 
-                        className="w-5 h-5" 
-                      />
-                    </div>
-                    <span className="text-sm text-white">Dexscreener</span>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
-                </a>
-                
-                <a
-                  href={`https://basescan.org/token/${tokenAddress}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center overflow-hidden">
-                      <img 
-                        src="https://green-decisive-crane-434.mypinata.cloud/ipfs/bafkreidse2dmc2h5myecpddbm53xwbn62yq4l4af7fnpi362prhk6f2hoi" 
-                        alt="Basescan" 
-                        className="w-5 h-5" 
-                      />
-                    </div>
-                    <span className="text-sm text-white">Basescan</span>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
-                </a>
-
-                {/* Intentionally avoid client-specific deep links (featured guidelines). */}
-              </div>
-            </div>
-
-            {/* Contract Info */}
-            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-5">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-medium text-zinc-400 mb-1">Creator Coin</h3>
-                    <span className="text-xs text-zinc-500 font-mono">
-                      {shortAddress(tokenAddress)}
-                    </span>
-                  </div>
-                  <CopyButton text={tokenAddress} className="p-2 rounded-lg hover:bg-zinc-800" />
-                </div>
-                
-                {creatorAddress && (
-                  <div className="flex items-center justify-between pt-3 border-t border-zinc-800">
-                    <div>
-                      <h3 className="text-sm font-medium text-zinc-400 mb-1">Creator Wallet</h3>
-                      <span className="text-xs text-zinc-500 font-mono">
-                        {shortAddress(creatorAddress)}
-                      </span>
-                    </div>
-                    <CopyButton text={creatorAddress} className="p-2 rounded-lg hover:bg-zinc-800" />
-                  </div>
-                )}
-              </div>
-            </div>
           </motion.div>
         </div>
       </div>

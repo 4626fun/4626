@@ -473,10 +473,12 @@ export default async function handler(req: any, res: any) {
            )
         ORDER BY
           CASE
-            WHEN LOWER(p.email) LIKE '%@noemail.4626.fun' THEN 0
-            WHEN LOWER(p.email) LIKE '%@example.com' THEN 1
-            ELSE 2
+            WHEN p.privy_user_id IS NOT NULL THEN 0
+            WHEN LOWER(p.email) LIKE '%@noemail.4626.fun' THEN 3
+            WHEN LOWER(p.email) LIKE '%@example.com' THEN 2
+            ELSE 1
           END,
+          p.updated_at DESC,
           p.created_at ASC
         LIMIT 1;
       `
@@ -506,11 +508,15 @@ export default async function handler(req: any, res: any) {
 
     if (existingRow?.id) {
       const nextEmail = shouldAdoptIncomingEmail(existingRow.email, email) ? email : existingRow.email
+      const existingEmailNorm = normalizeEmail(existingRow.email)
+      const nextEmailNorm = normalizeEmail(nextEmail)
       // Existing profile found with a different email (likely synthetic).
       // Adopt it: update the email to the real one and merge all fields.
-      console.info(
-        `waitlist: dedup — adopting profile #${existingRow.id} (${existingRow.email}) → ${nextEmail} for wallet ${walletForDedup ?? embeddedForDedup ?? 'N/A'}`,
-      )
+      if (existingEmailNorm !== nextEmailNorm) {
+        console.info(
+          `waitlist: dedup — adopting profile #${existingRow.id} (${existingRow.email}) → ${nextEmail} for wallet ${walletForDedup ?? embeddedForDedup ?? 'N/A'}`,
+        )
+      }
       const adopted = await db.sql`
         UPDATE profiles
         SET email = ${nextEmail},

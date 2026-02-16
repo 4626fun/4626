@@ -1766,7 +1766,7 @@ function DeployVaultBatcher({
         lower.includes('cannot set property ethereum') ||
         lower.includes('only a getter'))
     ) {
-      return 'MetaMask failed to initialize because another wallet extension already controls window.ethereum. Disable one extension (MetaMask/Coinbase/Rabby), or use WalletConnect/Privy sign-in.'
+      return 'MetaMask failed to initialize because another wallet extension already controls window.ethereum. Disable one extension (MetaMask/Coinbase/Rabby), or use Coinbase Wallet/Privy sign-in.'
     }
     // Paymaster/bundler errors: be specific (don’t mask real server-side errors).
     if (lower.includes('bundler entrypoint probe failed')) {

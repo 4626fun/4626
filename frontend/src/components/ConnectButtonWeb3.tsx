@@ -140,11 +140,11 @@ export function ConnectButtonWeb3() {
           <div className="absolute right-0 top-full mt-3 w-64 card p-3 z-50 space-y-1">
             {hasMultipleInjectedProviders ? (
               <div className="px-4 py-2 text-[11px] text-zinc-500">
-                Multiple wallet extensions detected. Use Coinbase Wallet or WalletConnect.
+                Multiple wallet extensions detected. Use Coinbase Wallet.
               </div>
             ) : lockedEthereumProviderGlobal ? (
               <div className="px-4 py-2 text-[11px] text-zinc-500">
-                Wallet extension collision detected (`window.ethereum` is locked). Use Coinbase Wallet or WalletConnect.
+                Wallet extension collision detected (`window.ethereum` is locked). Use Coinbase Wallet.
               </div>
             ) : null}
             {filteredConnectors.map((connector) => (

@@ -64,6 +64,7 @@ export function Layout() {
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
   const { isAdmin } = useAdminStatus()
+  const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
   const baseItems = publicMode || hostMode === 'marketing' ? navItemsPublic : navItems
   const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, adminNavItem] : baseItems
   const [showOnboarding, setShowOnboarding] = useState(false)
@@ -110,7 +111,7 @@ export function Layout() {
       {shouldShowQuickstart ? <QuickstartModal onClose={() => setQuickstartDismissed(true)} /> : null}
 
       {/* Main */}
-      <main className="flex-1 pb-24 md:pb-0">
+      <main className={`flex-1 ${shouldOverlayMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
         <Suspense
           fallback={
             <div className="max-w-7xl mx-auto px-6 py-12">
@@ -129,7 +130,7 @@ export function Layout() {
       {hostMode === 'app' && <ChatWidget />}
 
       {/* Mobile Nav - Minimal */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 border-t border-vault-border/60 bg-vault-bg/80 backdrop-blur-xl">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[70] border-t border-vault-border/60 bg-vault-bg/80 backdrop-blur-xl">
         <div className="flex items-center justify-around py-4 px-6">
           {items.map((item) => {
             const { path, icon: Icon, label } = item

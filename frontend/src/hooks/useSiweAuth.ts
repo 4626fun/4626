@@ -79,6 +79,26 @@ function setStoredSessionToken(token: string | null) {
   }
 }
 
+function useSafePrivyHook() {
+  try {
+    return usePrivy() as any
+  } catch {
+    return {
+      ready: false,
+      authenticated: false,
+      getAccessToken: null as null | (() => Promise<string | null>),
+    } as any
+  }
+}
+
+function useSafeLoginHook() {
+  try {
+    return useLogin() as any
+  } catch {
+    return { login: async () => {} } as any
+  }
+}
+
 export function useSiweAuth() {
   // IMPORTANT:
   // This hook implements an app-local SIWE session ("Sign in with Ethereum") used for:
@@ -89,8 +109,8 @@ export function useSiweAuth() {
   // Farcaster identity verification lives in `useFarcasterAuth()` (/api/farcaster/*).
   const { address, isConnected } = useAccount()
   const { signMessageAsync } = useSignMessage()
-  const privyAny = usePrivy() as any
-  const { login } = useLogin()
+  const privyAny = useSafePrivyHook()
+  const { login } = useSafeLoginHook()
   const privyReady = Boolean(privyAny?.ready)
   const privyAuthenticated = Boolean(privyAny?.authenticated)
   const getPrivyAccessToken: (() => Promise<string | null>) | null =

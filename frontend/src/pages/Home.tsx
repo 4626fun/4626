@@ -1,52 +1,17 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { getAppBaseUrl } from '@/lib/host'
 import { motion } from 'framer-motion'
-import { ArrowRight, Clock, Share2 } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { isPublicSiteMode } from '@/lib/flags'
-import { WaitlistFlow } from '@/components/waitlist/WaitlistFlow'
 import { useEffect } from 'react'
-import { useAccessContext } from '@/App'
+import { DeferredWaitlistFlow } from '@/components/waitlist/DeferredWaitlistFlow'
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
-
-/** Compact banner shown on the Home page when the user has a session but is not yet accepted. */
-function WaitlistStatusBanner() {
-  const navigate = useNavigate()
-  return (
-    <motion.section
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.3 }}
-      className="max-w-2xl mx-auto px-4 sm:px-6 mt-6 sm:mt-8 mb-6 sm:mb-10 relative z-10"
-    >
-      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 backdrop-blur-sm px-5 py-4 flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <Clock className="w-5 h-5 text-amber-400 shrink-0" />
-          <div className="min-w-0">
-            <div className="text-[14px] text-white font-medium">You're on the waitlist</div>
-            <div className="text-[12px] text-zinc-400">We approve in batches. Share your link to move up.</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => navigate('/waitlist')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-200 text-[12px] font-medium hover:bg-amber-500/20 transition-colors"
-          >
-            <Share2 className="w-3.5 h-3.5" />
-            View Status
-          </button>
-        </div>
-      </div>
-    </motion.section>
-  )
-}
 
 export function Home() {
   const publicMode = isPublicSiteMode()
   const location = useLocation()
-  const access = useAccessContext()
 
   useEffect(() => {
     if (!location.hash) return
@@ -134,11 +99,6 @@ export function Home() {
           </motion.div>
         </div>
       </section>
-
-      {/* Waitlist status banner for users with a session but not yet accepted */}
-      {access.sessionValid && !access.accepted && !access.loading && (
-        <WaitlistStatusBanner />
-      )}
 
       {/* For Creators - Minimal CTA */}
       <section className="cinematic-section py-12 sm:py-16 lg:py-24">
@@ -312,7 +272,7 @@ export function Home() {
         </div>
       </section>
 
-      <WaitlistFlow variant="embedded" sectionId="waitlist" />
+      <DeferredWaitlistFlow />
     </div>
   )
 }

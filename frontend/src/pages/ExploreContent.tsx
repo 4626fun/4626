@@ -119,7 +119,7 @@ export function ExploreContent() {
   }
 
   return (
-    <div className="relative pb-24 md:pb-0 min-h-screen">
+    <div className="relative pb-0 min-h-screen">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
         {/* Header */}
         <motion.div
@@ -165,9 +165,11 @@ export function ExploreContent() {
             <div 
               className="overflow-x-auto scrollbar-hide" 
               id="explore-content-header"
+              data-scrolled="0"
               onScroll={(e) => {
                 const body = document.getElementById('explore-content-body')
                 const scrolled = e.currentTarget.scrollLeft > 0
+                e.currentTarget.dataset.scrolled = scrolled ? '1' : '0'
                 if (body) {
                   body.scrollLeft = e.currentTarget.scrollLeft
                   body.dataset.scrolled = scrolled ? '1' : '0'
@@ -188,7 +190,10 @@ export function ExploreContent() {
             onScroll={(e) => {
               const header = document.getElementById('explore-content-header')
               const scrolled = e.currentTarget.scrollLeft > 0
-              if (header) header.scrollLeft = e.currentTarget.scrollLeft
+              if (header) {
+                header.scrollLeft = e.currentTarget.scrollLeft
+                header.dataset.scrolled = scrolled ? '1' : '0'
+              }
               e.currentTarget.dataset.scrolled = scrolled ? '1' : '0'
             }}
           >

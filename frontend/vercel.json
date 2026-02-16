@@ -11,16 +11,38 @@
     "api/agent-registration.ts": {
       "includeFiles": "public/.well-known/agent-registration.json"
     },
+    "api/sync-creator-metrics.ts": {
+      "maxDuration": 60
+    },
     "api/keepr/actions/execute.ts": {
       "maxDuration": 60,
       "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node}"
     }
   },
+  "crons": [
+    {
+      "path": "/api/sync-creator-metrics",
+      "schedule": "*/5 * * * *"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.4626.fun"
+        }
+      ],
+      "destination": "https://4626.fun/:path*",
+      "permanent": true
+    }
+  ],
   "routes": [
     {
       "src": "/(.*)",
       "headers": {
-        "content-security-policy-report-only": "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.choicecdn.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self' https://farcaster.xyz https://*.farcaster.xyz https://warpcast.com https://*.warpcast.com; child-src https://auth.privy.io https://privy.app.4626.fun https://privy.4626.fun https://verify.walletconnect.com https://verify.walletconnect.org https://vercel.live; frame-src https://auth.privy.io https://privy.app.4626.fun https://privy.4626.fun https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com https://vercel.live; connect-src 'self' https://auth.privy.io https://api.developer.coinbase.com https://base-mainnet.g.alchemy.com https://*.g.alchemy.com https://api.web3modal.org https://pulse.walletconnect.org wss://relay.walletconnect.com wss://relay.walletconnect.org wss://www.walletlink.org https://*.rpc.privy.systems https://explorer-api.walletconnect.com https://rpc.zora.energy https://mainnet.base.org; worker-src 'self' blob:; manifest-src 'self'",
+        "content-security-policy-report-only": "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.choicecdn.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self' https://farcaster.xyz https://*.farcaster.xyz https://warpcast.com https://*.warpcast.com; child-src https://auth.privy.io https://privy.app.4626.fun https://privy.4626.fun https://vercel.live; frame-src https://auth.privy.io https://privy.app.4626.fun https://privy.4626.fun https://challenges.cloudflare.com https://vercel.live; connect-src 'self' https://auth.privy.io https://api.developer.coinbase.com https://base-mainnet.g.alchemy.com https://*.g.alchemy.com wss://www.walletlink.org https://*.rpc.privy.systems https://rpc.zora.energy https://mainnet.base.org; worker-src 'self' blob:; manifest-src 'self'",
         "referrer-policy": "strict-origin-when-cross-origin",
         "x-content-type-options": "nosniff"
       },
@@ -87,6 +109,7 @@
       "continue": true
     },
     { "src": "/__api/(.*)", "dest": "/api/$1", "continue": true },
+    { "src": "/api/sync-creator-metrics", "dest": "/api/sync-creator-metrics" },
     { "src": "/api/keepr/actions/execute", "dest": "/api/keepr/actions/execute" },
     { "src": "/api/(.*)", "dest": "/api/[...path]" },
     { "handle": "filesystem" },

@@ -114,7 +114,7 @@ export function ExploreSubnav({
           </div>
 
           {/* Time filter pills */}
-          <div className="flex items-center gap-0.5 sm:gap-1 h-9 sm:h-10 bg-zinc-900 border border-zinc-800 rounded-full p-0.5 sm:p-1">
+          <div className="w-fit self-start sm:self-auto flex items-center gap-0.5 sm:gap-1 h-8 sm:h-9 bg-zinc-900 border border-zinc-800 rounded-full p-0.5">
             {TIME_FILTERS.map((filter) => {
               const active = currentTimeFilter === filter.value
               const isAvailable = filter.value === '1d' || uniswapAvailable
@@ -126,7 +126,7 @@ export function ExploreSubnav({
                   onClick={() => !disabled && handleTimeFilterClick(filter.value)}
                   disabled={disabled}
                   title={disabled ? 'Requires THEGRAPH_API_KEY - Uniswap V4 historical data' : `View ${filter.label} data`}
-                  className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-full text-[11px] sm:text-xs font-medium leading-none transition-colors ${
+                  className={`h-6 sm:h-7 px-2 sm:px-2.5 rounded-full text-[10px] sm:text-[11px] font-medium leading-none transition-colors ${
                     active
                       ? 'bg-zinc-700 text-white'
                       : disabled
