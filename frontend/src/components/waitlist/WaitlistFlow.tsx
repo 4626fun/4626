@@ -169,7 +169,7 @@ const initialFlowState: FlowState = {
   step: 'verify', // Start with wallet connection + Privy auth
   contactPreference: 'email',
   email: '',
-  emailOptOut: true,
+  emailOptOut: false,
   busy: false,
   error: null,
   doneEmail: null,
@@ -247,27 +247,6 @@ function isValidSolanaAddress(v: string): boolean {
 
 function isSyntheticEmail(v: string): boolean {
   return v.endsWith('@noemail.4626.fun')
-}
-
-function buildSyntheticEmail(seed?: string | null): string {
-  const domain = 'noemail.4626.fun'
-  const safeSeed = typeof seed === 'string' ? seed.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) : ''
-
-  // Deterministic token so repeat signups (wallet-only) upsert by email.
-  // This prevents duplicate leaderboard rows for the same wallet.
-  const fnv1a32 = (input: string): number => {
-    let h = 0x811c9dc5
-    for (let i = 0; i < input.length; i++) {
-      h ^= input.charCodeAt(i)
-      h = Math.imul(h, 0x01000193)
-    }
-    return h >>> 0
-  }
-  const seedNorm = typeof seed === 'string' ? seed.trim().toLowerCase() : ''
-  const token = fnv1a32(seedNorm || 'anon').toString(36).padStart(7, '0').slice(0, 12)
-
-  const prefix = safeSeed.length > 0 ? safeSeed.toLowerCase() : 'anon'
-  return `${prefix}+${token}@${domain}`
 }
 
 function formatPrivyConnectError(code: string): string {
@@ -542,7 +521,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     [],
   )
 
-  const { persona, step, contactPreference, email, emailOptOut, busy, doneEmail, error: submitError } = flow
+  const { persona, step, contactPreference, email, busy, doneEmail, error: submitError } = flow
   const {
     verifiedWallet,
     verifiedWalletMethod,
@@ -888,10 +867,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     payoutRecipientNormalized,
     verifiedWalletNormalized,
   ])
-  const canSubmit =
-    (isEmailValid || emailOptOut) &&
-    (Boolean(creatorCoin?.address) || creatorCoinDeclaredMissing) &&
-    connectedWalletAuthorized
+  const canSubmit = isEmailValid && (Boolean(creatorCoin?.address) || creatorCoinDeclaredMissing) && connectedWalletAuthorized
 
   useEffect(() => {
     if (!verifiedWalletNormalized) return
@@ -1056,8 +1032,8 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       setContactPreference('email')
     } else {
       setEmail('')
-      setEmailOptOut(true)
-      setContactPreference('wallet')
+      setEmailOptOut(false)
+      setContactPreference('email')
     }
 
   }, [privyAuthed, privyUser, step, setEmail, setEmailOptOut, setContactPreference])
@@ -1376,14 +1352,14 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       if (persona !== 'creator' && persona !== 'user') {
         throw new Error('Select Creator or User first.')
       }
-      if (emailTrimmed.length > 0 && !isEmailValid && !emailOptOut) {
+      if (emailTrimmed.length > 0 && !isEmailValid) {
         throw new Error('Enter a valid email address.')
       }
-      if (emailTrimmed.length === 0 && !emailOptOut) {
-        throw new Error('Add an email or skip for now.')
+      if (emailTrimmed.length === 0) {
+        throw new Error('Email is required.')
       }
 
-      const emailForSubmit = isEmailValid ? emailTrimmed : buildSyntheticEmail(primaryWalletForSubmit())
+      const emailForSubmit = emailTrimmed
       const storedRef = getStoredReferralCode()
       const claim =
         persona === 'creator'
@@ -1405,7 +1381,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
           cswAddress: effectiveCswAddress || null, // CSW linked before signup
           referralCode: storedRef,
           claimReferralCode: claim.length > 0 ? claim : null,
-          contactPreference: isEmailValid ? contactPreference : 'wallet',
+          contactPreference: contactPreference,
           verifications,
           intent: {
             persona,

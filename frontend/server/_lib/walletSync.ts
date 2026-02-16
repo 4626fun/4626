@@ -1,4 +1,3 @@
-import { buildDeterministicSyntheticEmail } from './profileSync.js'
 import { type ClassifiedLinkedAccounts, classifyLinkedAccounts, type MappedWallet, type PrivyUserLike } from './walletMapping.js'
 import { ensureCanonicalWalletsSchema } from './canonicalWalletsSchema.js'
 
@@ -27,6 +26,33 @@ function normalizeAddress(value: unknown): string | null {
 function getPrivyUserId(user: PrivyUserLike): string | null {
   const id = typeof user?.id === 'string' ? user.id.trim() : ''
   return id.length > 0 ? id : null
+}
+
+function normalizeEmail(value: unknown): string | null {
+  const raw = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (!raw) return null
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return null
+  return raw
+}
+
+function extractPrivyEmail(user: PrivyUserLike): string | null {
+  const direct = normalizeEmail((user as any)?.email?.address)
+  if (direct) return direct
+  const linked = [
+    ...(Array.isArray((user as any)?.linkedAccounts) ? (user as any).linkedAccounts : []),
+    ...(Array.isArray((user as any)?.linked_accounts) ? (user as any).linked_accounts : []),
+  ]
+  for (const account of linked) {
+    const type = normalizeLower((account as any)?.type)
+    if (!type.includes('email')) continue
+    const value =
+      normalizeEmail((account as any)?.address) ??
+      normalizeEmail((account as any)?.emailAddress) ??
+      normalizeEmail((account as any)?.email_address) ??
+      normalizeEmail((account as any)?.email)
+    if (value) return value
+  }
+  return null
 }
 
 async function findProfileByLegacyWallet(db: Db, address: string): Promise<ExistingProfile | null> {
@@ -274,9 +300,10 @@ async function insertOrUpdateProfile(params: {
   db: Db
   existing: ExistingProfile | null
   privyUserId: string | null
+  email: string | null
   classification: ClassifiedLinkedAccounts
 }): Promise<number> {
-  const { db, existing, privyUserId, classification } = params
+  const { db, existing, privyUserId, email, classification } = params
   const canonical = classification.canonicalSmartWallet?.address ?? null
   const embedded = classification.embeddedEoa?.address ?? null
   const primary = classification.primaryWalletAddress ?? embedded ?? canonical ?? null
@@ -285,6 +312,7 @@ async function insertOrUpdateProfile(params: {
     await db.sql`
       UPDATE profiles
       SET
+        email = COALESCE(profiles.email, ${email}),
         privy_user_id = COALESCE(${privyUserId}, privy_user_id),
         primary_smart_wallet = COALESCE(${canonical}, primary_smart_wallet),
         primary_embedded_eoa = COALESCE(${embedded}, primary_embedded_eoa),
@@ -300,8 +328,6 @@ async function insertOrUpdateProfile(params: {
     return existing.id
   }
 
-  const seed = primary ?? canonical ?? embedded ?? privyUserId ?? 'anon'
-  const syntheticEmail = buildDeterministicSyntheticEmail(seed)
   const inserted = await db.sql`
     INSERT INTO profiles (
       email,
@@ -317,7 +343,7 @@ async function insertOrUpdateProfile(params: {
       updated_at
     )
     VALUES (
-      ${syntheticEmail},
+      ${email},
       ${privyUserId},
       ${canonical},
       ${embedded},
@@ -331,6 +357,7 @@ async function insertOrUpdateProfile(params: {
     )
     ON CONFLICT (email) DO UPDATE
     SET
+      email = COALESCE(profiles.email, EXCLUDED.email),
       privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
       primary_smart_wallet = COALESCE(EXCLUDED.primary_smart_wallet, profiles.primary_smart_wallet),
       primary_embedded_eoa = COALESCE(EXCLUDED.primary_embedded_eoa, profiles.primary_embedded_eoa),
@@ -346,10 +373,19 @@ async function insertOrUpdateProfile(params: {
   const insertedId = inserted.rows?.[0]?.id
   if (insertedId) return Number(insertedId)
 
-  const selected = await db.sql`
-    SELECT id FROM profiles WHERE email = ${syntheticEmail} LIMIT 1;
-  `
-  const selectedId = selected.rows?.[0]?.id
+  let selectedId: unknown = null
+  if (email) {
+    const selectedByEmail = await db.sql`
+      SELECT id FROM profiles WHERE email = ${email} LIMIT 1;
+    `
+    selectedId = selectedByEmail.rows?.[0]?.id ?? null
+  }
+  if (!selectedId && privyUserId) {
+    const selectedByPrivy = await db.sql`
+      SELECT id FROM profiles WHERE privy_user_id = ${privyUserId} LIMIT 1;
+    `
+    selectedId = selectedByPrivy.rows?.[0]?.id ?? null
+  }
   if (!selectedId) throw new Error('wallet_sync_profile_upsert_failed')
   return Number(selectedId)
 }
@@ -359,10 +395,11 @@ export async function syncUserWallets(db: Db, privyUser: PrivyUserLike): Promise
 
   const classification = classifyLinkedAccounts(privyUser)
   const privyUserId = getPrivyUserId(privyUser)
+  const email = extractPrivyEmail(privyUser)
   const existing = await findExistingProfile(db, privyUserId, classification.allWallets)
   const persisted = existing?.id ? await readPersistedIdentity(db, existing.id) : null
   const effectiveClassification = applyPersistedIdentity({ classification, persisted })
-  const profileId = await insertOrUpdateProfile({ db, existing, privyUserId, classification: effectiveClassification })
+  const profileId = await insertOrUpdateProfile({ db, existing, privyUserId, email, classification: effectiveClassification })
 
   await clearRoleFlags(db, profileId, effectiveClassification)
 

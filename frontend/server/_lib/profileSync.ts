@@ -1,7 +1,5 @@
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
-const SYNTHETIC_EMAIL_DOMAIN = 'noemail.4626.fun'
-
 function isValidEvmAddress(v: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(v)
 }
@@ -12,24 +10,15 @@ function normalizeWallet(value: string | null | undefined): string | null {
   return raw.toLowerCase()
 }
 
-function fnv1a32(input: string): number {
-  let h = 0x811c9dc5
-  for (let i = 0; i < input.length; i++) {
-    h ^= input.charCodeAt(i)
-    h = Math.imul(h, 0x01000193)
-  }
-  return h >>> 0
-}
-
-export function buildDeterministicSyntheticEmail(seed?: string | null): string {
-  const safeSeed = typeof seed === 'string' ? seed.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) : ''
-  const seedNorm = typeof seed === 'string' ? seed.trim().toLowerCase() : ''
-  const token = fnv1a32(seedNorm || 'anon').toString(36).padStart(7, '0').slice(0, 12)
-  const prefix = safeSeed.length > 0 ? safeSeed.toLowerCase() : 'anon'
-  return `${prefix}+${token}@${SYNTHETIC_EMAIL_DOMAIN}`
+function normalizeEmail(value: string | null | undefined): string | null {
+  const raw = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (!raw) return null
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return null
+  return raw
 }
 
 export type ProfileWalletUpsertInput = {
+  email?: string | null
   primaryWallet?: string | null
   embeddedWallet?: string | null
   embeddedWalletChain?: string | null
@@ -40,6 +29,7 @@ export type ProfileWalletUpsertInput = {
 }
 
 export async function upsertProfileByWallet(db: Db, input: ProfileWalletUpsertInput): Promise<void> {
+  const email = normalizeEmail(input.email ?? null)
   const primaryWallet = normalizeWallet(input.primaryWallet ?? null)
   const embeddedWallet = normalizeWallet(input.embeddedWallet ?? null)
   const cswAddress = normalizeWallet(input.cswAddress ?? null)
@@ -114,6 +104,7 @@ export async function upsertProfileByWallet(db: Db, input: ProfileWalletUpsertIn
     await db.sql`
       UPDATE profiles
       SET
+        email = COALESCE(profiles.email, ${email}),
         primary_wallet = COALESCE(${primaryWallet}, primary_wallet),
         embedded_wallet = COALESCE(${embeddedWallet}, embedded_wallet),
         embedded_wallet_chain = COALESCE(${embeddedWalletChain}, embedded_wallet_chain),
@@ -129,7 +120,6 @@ export async function upsertProfileByWallet(db: Db, input: ProfileWalletUpsertIn
     return
   }
 
-  const email = buildDeterministicSyntheticEmail(walletSeed)
   await db.sql`
     INSERT INTO profiles (
       email,
@@ -159,6 +149,7 @@ export async function upsertProfileByWallet(db: Db, input: ProfileWalletUpsertIn
     )
     ON CONFLICT (email) DO UPDATE
     SET
+      email = COALESCE(profiles.email, EXCLUDED.email),
       primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),
       embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, profiles.embedded_wallet),
       embedded_wallet_chain = COALESCE(EXCLUDED.embedded_wallet_chain, profiles.embedded_wallet_chain),

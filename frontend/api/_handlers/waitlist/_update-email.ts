@@ -28,6 +28,22 @@ function isSyntheticEmail(v: string): boolean {
   return v.endsWith('@noemail.4626.fun')
 }
 
+function isLegacySyntheticEmail(v: string): boolean {
+  const s = String(v || '').trim().toLowerCase()
+  if (!s.endsWith('@example.com')) return false
+  const local = s.split('@')[0] ?? ''
+  return (
+    local.startsWith('solinfer-') ||
+    local.startsWith('wallet-') ||
+    local.startsWith('anon-') ||
+    local.startsWith('0x')
+  )
+}
+
+function isAnySyntheticEmail(v: string): boolean {
+  return isSyntheticEmail(v) || isLegacySyntheticEmail(v)
+}
+
 async function findOwnedProfileByEmail(params: {
   db: any
   email: string
@@ -59,6 +75,41 @@ async function findOwnedProfileByEmail(params: {
   const id = typeof row.id === 'number' ? row.id : Number(row.id)
   if (!Number.isFinite(id) || id <= 0) return null
   return { id, email: typeof row.email === 'string' ? row.email : email }
+}
+
+async function findOwnedProfileByPrincipal(params: {
+  db: any
+  principalAddress: string
+}): Promise<OwnedProfile | null> {
+  const { db, principalAddress } = params
+  const q = await db.sql`
+    SELECT p.id, p.email
+    FROM profiles p
+    WHERE (
+      LOWER(p.primary_wallet) = ${principalAddress}
+      OR LOWER(p.embedded_wallet) = ${principalAddress}
+      OR LOWER(p.csw_address) = ${principalAddress}
+      OR LOWER(p.base_sub_account) = ${principalAddress}
+      OR LOWER(p.primary_smart_wallet) = ${principalAddress}
+      OR LOWER(p.primary_embedded_eoa) = ${principalAddress}
+      OR EXISTS (
+        SELECT 1
+        FROM profile_wallets pw
+        WHERE pw.profile_id = p.id
+          AND LOWER(pw.address) = ${principalAddress}
+      )
+    )
+    ORDER BY
+      CASE WHEN p.email IS NULL THEN 2 WHEN LOWER(p.email) LIKE '%@noemail.4626.fun' THEN 1 ELSE 0 END ASC,
+      p.updated_at DESC,
+      p.created_at ASC
+    LIMIT 1;
+  `
+  const row = q?.rows?.[0] as { id?: unknown; email?: unknown } | undefined
+  if (!row?.id) return null
+  const id = typeof row.id === 'number' ? row.id : Number(row.id)
+  if (!Number.isFinite(id) || id <= 0) return null
+  return { id, email: typeof row.email === 'string' ? row.email : '' }
 }
 
 async function mergeOwnedProfiles(params: {
@@ -286,18 +337,19 @@ export default async function handler(req: any, res: any) {
   }
 
   const body = await readJsonBody<Body>(req)
-  const currentEmail = normalizeEmail(typeof body?.currentEmail === 'string' ? body.currentEmail : '')
+  const currentEmailInput = typeof body?.currentEmail === 'string' ? body.currentEmail : ''
+  const currentEmail = normalizeEmail(currentEmailInput)
+  const hasCurrentEmail = currentEmail.length > 0
   const newEmail = normalizeEmail(typeof body?.newEmail === 'string' ? body.newEmail : '')
 
-  if (!isValidEmail(currentEmail) || !isValidEmail(newEmail)) {
+  if ((hasCurrentEmail && !isValidEmail(currentEmail)) || !isValidEmail(newEmail)) {
     return res.status(400).json({ success: false, error: 'Invalid email' } satisfies ApiEnvelope<never>)
   }
-
-  if (!isSyntheticEmail(currentEmail)) {
-    return res.status(400).json({ success: false, error: 'Email update is not available.' } satisfies ApiEnvelope<never>)
+  if (isAnySyntheticEmail(newEmail)) {
+    return res.status(400).json({ success: false, error: 'A real email address is required.' } satisfies ApiEnvelope<never>)
   }
 
-  if (currentEmail === newEmail) {
+  if (hasCurrentEmail && currentEmail === newEmail) {
     const data: UpdateEmailResponse = { email: newEmail }
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<UpdateEmailResponse>)
   }
@@ -306,23 +358,40 @@ export default async function handler(req: any, res: any) {
   if (!db) return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
   await ensureWaitlistSchema(db as any)
 
-  const currentOwnedProfile = await findOwnedProfileByEmail({
-    db,
-    email: currentEmail,
-    principalAddress,
-  })
+  const currentOwnedProfile = hasCurrentEmail
+    ? await findOwnedProfileByEmail({
+        db,
+        email: currentEmail,
+        principalAddress,
+      })
+    : await findOwnedProfileByPrincipal({
+        db,
+        principalAddress,
+      })
   if (!currentOwnedProfile) {
-    return res.status(403).json({ success: false, error: 'Not authorized to update this profile' } satisfies ApiEnvelope<never>)
+    return res.status(hasCurrentEmail ? 403 : 404).json({
+      success: false,
+      error: hasCurrentEmail ? 'Not authorized to update this profile' : 'Signup not found.',
+    } satisfies ApiEnvelope<never>)
   }
 
-  // Atomic update with NOT EXISTS to prevent TOCTOU race
-  const updated = await db.sql`
-    UPDATE profiles
-    SET email = ${newEmail}, contact_preference = 'email', updated_at = NOW()
-    WHERE email = ${currentEmail}
-      AND NOT EXISTS (SELECT 1 FROM profiles WHERE email = ${newEmail})
-    RETURNING id, email;
-  `
+  // Atomic update with NOT EXISTS to prevent TOCTOU race.
+  // Keep the legacy "update by currentEmail" branch for compatibility with existing clients/tests.
+  const updated = hasCurrentEmail
+    ? await db.sql`
+        UPDATE profiles
+        SET email = ${newEmail}, contact_preference = 'email', updated_at = NOW()
+        WHERE email = ${currentEmail}
+          AND NOT EXISTS (SELECT 1 FROM profiles WHERE email = ${newEmail})
+        RETURNING id, email;
+      `
+    : await db.sql`
+        UPDATE profiles
+        SET email = ${newEmail}, contact_preference = 'email', updated_at = NOW()
+        WHERE id = ${currentOwnedProfile.id}
+          AND NOT EXISTS (SELECT 1 FROM profiles WHERE email = ${newEmail} AND id <> ${currentOwnedProfile.id})
+        RETURNING id, email;
+      `
   const row = updated?.rows?.[0] ?? null
   if (!row?.id) {
     // Could be: profile not found, or email already taken (race condition)

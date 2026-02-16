@@ -130,6 +130,9 @@ let cachedDb: DbPool | null = null
 let initError: string | null = null
 let initPromise: Promise<DbPool | null> | null = null
 let initErrorAtMs = 0
+let initRetryWindowMs = 0
+let lastInitErrorSignature = ''
+let lastInitErrorLoggedAtMs = 0
 
 function parsePositiveInt(value: string | undefined): number | null {
   const raw = String(value ?? '').trim()
@@ -152,6 +155,38 @@ function getInitRetryWindowMs(): number {
   return parsePositiveInt(process.env.POSTGRES_INIT_RETRY_MS) ?? 10_000
 }
 
+function getAuthInitRetryWindowMs(): number {
+  return parsePositiveInt(process.env.POSTGRES_INIT_RETRY_MS_AUTH) ?? 300_000
+}
+
+function isDbAuthConfigError(err: unknown): boolean {
+  const code = String((err as any)?.code ?? '').trim().toUpperCase()
+  if (code === '28P01' || code === '28000') return true
+  const msg = String((err as any)?.message ?? err ?? '').toLowerCase()
+  return (
+    msg.includes('tenant or user not found') ||
+    msg.includes('password authentication failed') ||
+    msg.includes('authentication failed') ||
+    msg.includes('role') && msg.includes('does not exist') ||
+    msg.includes('no pg_hba.conf entry')
+  )
+}
+
+function shouldLogInitError(signature: string, throttleMs: number): boolean {
+  const now = Date.now()
+  if (!signature) return true
+  if (signature !== lastInitErrorSignature) {
+    lastInitErrorSignature = signature
+    lastInitErrorLoggedAtMs = now
+    return true
+  }
+  if (now - lastInitErrorLoggedAtMs >= throttleMs) {
+    lastInitErrorLoggedAtMs = now
+    return true
+  }
+  return false
+}
+
 /**
  * Returns true if a Postgres connection string appears to be configured in env.
  * Note: this doesn't guarantee connectivity.
@@ -167,11 +202,12 @@ export function getDbInitError(): string | null {
 export async function getDb(): Promise<DbPool | null> {
   if (cachedDb) return cachedDb
   if (initError) {
-    const retryAfterMs = getInitRetryWindowMs()
+    const retryAfterMs = initRetryWindowMs > 0 ? initRetryWindowMs : getInitRetryWindowMs()
     const elapsed = Date.now() - initErrorAtMs
     if (elapsed < retryAfterMs) return null
     // Treat init failures as transient in serverless; allow periodic re-init.
     initError = null
+    initRetryWindowMs = 0
     initPromise = null
   }
   const cfg = getDbConfig()
@@ -294,12 +330,33 @@ export async function getDb(): Promise<DbPool | null> {
         cachedDb = db
         return cachedDb
       } catch (err) {
+        const authLike = isDbAuthConfigError(err)
+        const retryWindow = authLike ? getAuthInitRetryWindowMs() : getInitRetryWindowMs()
+        initRetryWindowMs = retryWindow
+        const message = err instanceof Error ? err.message : String(err)
+        const code = String((err as any)?.code ?? '').trim().toUpperCase()
+        const signature = `${code}:${message}`
+
         if (isSessionModeMaxClientsError(err)) {
-          console.error('Postgres pool saturated (session mode max clients reached); will retry init', err)
+          if (shouldLogInitError(signature, retryWindow)) {
+            console.error('Postgres pool saturated (session mode max clients reached); will retry init', err)
+          }
+        } else if (authLike) {
+          if (shouldLogInitError(signature, retryWindow)) {
+            console.error(
+              `Postgres auth/config error; backing off retries for ${Math.round(retryWindow / 1000)}s`,
+              {
+                code: code || undefined,
+                message,
+              },
+            )
+          }
         } else {
-          console.error('Failed to initialize Postgres pool', err)
+          if (shouldLogInitError(signature, retryWindow)) {
+            console.error('Failed to initialize Postgres pool', err)
+          }
         }
-        initError = err instanceof Error ? err.message : 'Failed to initialize Postgres pool'
+        initError = message || 'Failed to initialize Postgres pool'
         initErrorAtMs = Date.now()
         initPromise = null
         return null

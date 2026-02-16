@@ -4,7 +4,6 @@ import { normalizeReferralCode, getClientIp, getUserAgent, hashForAttribution } 
 import { checkRateLimit, RATE_LIMITS, rateLimitKey, getClientIp as getRateLimitIp } from '../../server/_lib/rateLimit.js'
 import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../server/_lib/waitlistPoints.js'
 import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
-import { buildDeterministicSyntheticEmail } from '../../server/_lib/profileSync.js'
 import { readRequestPrincipalAddress } from '../../server/_lib/requestPrincipal.js'
 import { preprovisionWaitlistUser } from '../../server/_lib/waitlistPreprovision.js'
 
@@ -311,6 +310,9 @@ export default async function handler(req: any, res: any) {
   if (!isValidEmail(email)) {
     return res.status(400).json({ success: false, error: 'Invalid email' } satisfies ApiEnvelope<never>)
   }
+  if (isAnySyntheticEmail(email)) {
+    return res.status(400).json({ success: false, error: 'A real email address is required.' } satisfies ApiEnvelope<never>)
+  }
 
   const walletRaw = typeof body.primaryWallet === 'string' ? body.primaryWallet : ''
   const primaryWalletInput = normalizeAddress(walletRaw)
@@ -325,15 +327,6 @@ export default async function handler(req: any, res: any) {
     // - Users may also have a stale auth token in sessionStorage from a different wallet/app host.
     if (!primaryWallet) {
       primaryWallet = principalWallet
-    }
-  }
-
-  // If the client sent a synthetic email, normalize it deterministically from the wallet identity.
-  // This ensures repeat submissions update the same row (email is UNIQUE) instead of creating duplicates.
-  if (isAnySyntheticEmail(email)) {
-    const seed = (primaryWallet && isValidEvmAddress(primaryWallet) ? primaryWallet : null) || null
-    if (seed) {
-      email = buildDeterministicSyntheticEmail(seed)
     }
   }
 

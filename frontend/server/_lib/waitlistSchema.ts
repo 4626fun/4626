@@ -13,7 +13,7 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
     await db.sql`
       CREATE TABLE IF NOT EXISTS profiles (
         id BIGSERIAL PRIMARY KEY,
-        email TEXT NOT NULL UNIQUE,
+        email TEXT UNIQUE,
         primary_wallet TEXT NULL,
         solana_wallet TEXT NULL,
         privy_user_id TEXT NULL,
@@ -81,6 +81,7 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS lens_account_address TEXT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS lens_owner_address TEXT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS lens_grove_uri TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ALTER COLUMN email DROP NOT NULL;`
     } catch {
       // ignore (older Postgres or restricted perms)
     }

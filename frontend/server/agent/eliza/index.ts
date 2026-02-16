@@ -351,6 +351,8 @@ type EnvValidationResult = {
 
 let latestEnvValidation: EnvValidationResult = { errors: [], warnings: [] }
 let backgroundWorker: { stop: () => void } | null = null
+let queueEnabled = false
+let dbRequiredForRuntime = false
 
 function validateStartupEnv(): EnvValidationResult {
   const errors: string[] = []
@@ -423,6 +425,7 @@ function ensureBackgroundWorker(): void {
       })
     },
   })
+  queueEnabled = true
 }
 
 // ---------------------------------------------------------------------------
@@ -461,16 +464,18 @@ async function handleMessage(
   await ctx.runtimeBridge.runtime.createMemory(memory as any, 'messages' as any)
   const state = await ctx.runtimeBridge.composeState(memory)
 
-  void enqueueAgentBackgroundTask({
-    taskType: 'message_audit',
-    payload: {
-      correlationId,
-      agentKey: ctx.agentKey,
-      conversationId: msg.conversationId,
-      conversationType: msg.conversationType,
-      senderAddress: msg.senderAddress,
-    },
-  })
+  if (queueEnabled) {
+    void enqueueAgentBackgroundTask({
+      taskType: 'message_audit',
+      payload: {
+        correlationId,
+        agentKey: ctx.agentKey,
+        conversationId: msg.conversationId,
+        conversationType: msg.conversationType,
+        senderAddress: msg.senderAddress,
+      },
+    })
+  }
 
   // Welcome message on first interaction in a conversation
   if (!welcomedConversations.has(msg.conversationId)) {
@@ -957,12 +962,29 @@ async function main() {
     return
   }
 
-  ensureBackgroundWorker()
-  void enqueueAgentBackgroundTask({
-    taskType: 'knowledge_refresh',
-    payload: { reason: 'startup' },
-    priority: 1,
-  })
+  const hasDb = isDbConfigured()
+  const hasEncKey = !!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()
+  const hasPrivateKey = !!(process.env.XMTP_AGENT_PRIVATE_KEY ?? '').trim()
+  const hasCswConfig = !!(process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim() &&
+    !!(process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
+  const multiAgentMode = hasDb && hasEncKey
+  dbRequiredForRuntime = multiAgentMode
+
+  if (multiAgentMode) {
+    ensureBackgroundWorker()
+    void enqueueAgentBackgroundTask({
+      taskType: 'knowledge_refresh',
+      payload: { reason: 'startup' },
+      priority: 1,
+    })
+  } else {
+    queueEnabled = false
+    if (hasDb) {
+      logger.warn(
+        '[eliza] DB is configured but runtime is in single-agent mode; background DB queue is disabled.',
+      )
+    }
+  }
 
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   console.log('  CreatorVault ElizaOS Agent (Unified)')
@@ -970,13 +992,6 @@ async function main() {
 
   // Check DB persistence before creating any agent
   checkDbPersistence()
-
-  const hasDb = isDbConfigured()
-  const hasEncKey = !!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()
-  const hasPrivateKey = !!(process.env.XMTP_AGENT_PRIVATE_KEY ?? '').trim()
-  const hasCswConfig = !!(process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim() &&
-    !!(process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
-  const multiAgentMode = hasDb && hasEncKey
 
   // Determine mode label
   const modeLabel = multiAgentMode
@@ -1114,14 +1129,15 @@ function startHealthServer() {
 
     const agentCount = runningAgents.size
     const dbConfigured = isDbConfigured()
-    const dbInitError = getDbInitError()
-    const db = dbConfigured ? await getDb() : null
+    const shouldCheckDb = dbRequiredForRuntime && dbConfigured
+    const dbInitError = shouldCheckDb ? getDbInitError() : null
+    const db = shouldCheckDb ? await getDb() : null
     const llmHealth = llmService.getHealth()
     const ready = Boolean(
       agentBooted &&
       agentCount > 0 &&
       latestEnvValidation.errors.length === 0 &&
-      (dbConfigured ? db !== null : true),
+      (shouldCheckDb ? db !== null : true),
     )
     const status =
       !agentBooted
@@ -1138,7 +1154,8 @@ function startHealthServer() {
       dependencies: {
         db: {
           configured: dbConfigured,
-          connected: dbConfigured ? db !== null : false,
+          required: shouldCheckDb,
+          connected: shouldCheckDb ? db !== null : null,
           initError: dbInitError,
         },
         llm: llmHealth,

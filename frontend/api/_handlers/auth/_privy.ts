@@ -89,10 +89,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (db) {
         await ensureWaitlistSchema(db as any)
         const syncResult = await syncUserWallets(db as any, user as any)
+        const rawEmail = typeof (user as any)?.email?.address === 'string' ? String((user as any).email.address).trim() : ''
+        const privyEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail) ? rawEmail.toLowerCase() : null
 
         if (isLegacyFallbackEnabled()) {
           try {
             await upsertProfileByWallet(db as any, {
+              email: privyEmail,
               primaryWallet: syncResult.primaryWalletAddress ?? sessionAddress,
               embeddedWallet: syncResult.embeddedEoa?.address ?? null,
               embeddedWalletChain: syncResult.embeddedEoa?.chainType ?? null,
