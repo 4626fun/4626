@@ -32,7 +32,7 @@ export function AgentUriService() {
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-8">
       <PageMeta
         title="Agent URI Service"
-        description="Publish the CreatorVault ERC-8004 registration to Lens Grove and get a content-addressed lens:// URI."
+        description="Publish the CreatorVault ERC-8004 registration to Lens Grove and get validator-compatible agentURI outputs."
         canonicalPath="/agents/uri-service"
       />
 
@@ -41,8 +41,8 @@ export function AgentUriService() {
         <h1 className="text-2xl sm:text-3xl text-zinc-100 font-semibold tracking-tight">Agent URI service</h1>
         <p className="text-sm text-zinc-500 max-w-prose">
           This service builds the CreatorVault ERC-8004 registration from the deployed config and publishes it to Lens
-          Grove. Use the returned <span className="font-mono text-zinc-300">lens://</span> URI as your{" "}
-          <span className="font-mono text-zinc-300">agentURI</span> when registering or updating on-chain.
+          Grove. Use the returned <span className="font-mono text-zinc-300">gatewayUrl</span> as your{" "}
+          <span className="font-mono text-zinc-300">agentURI</span> for broad validator compatibility.
         </p>
       </header>
 
@@ -86,9 +86,9 @@ export function AgentUriService() {
 {responseExample}
         </pre>
         <div className="text-xs text-zinc-600">
-          The <span className="font-mono text-zinc-300">lensUri</span> is content-addressed and resolves via the Grove
-          gateway. Use it directly as your on-chain <span className="font-mono text-zinc-300">agentURI</span> to clear
-          WA040.
+          Use <span className="font-mono text-zinc-300">gatewayUrl</span> for on-chain{" "}
+          <span className="font-mono text-zinc-300">agentURI</span>. Some validators reject{" "}
+          <span className="font-mono text-zinc-300">lens://</span> directly.
         </div>
       </section>
 
