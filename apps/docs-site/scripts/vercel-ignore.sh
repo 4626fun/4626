@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Production-only deployments: skip all preview environment builds.
+if [ "${VERCEL_ENV:-}" = "preview" ]; then
+  exit 0
+fi
+
 prefix="$(git rev-parse --show-prefix 2>/dev/null || true)"
 target_prefix="apps/docs-site/"
 if [ -n "$prefix" ]; then
