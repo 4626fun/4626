@@ -310,9 +310,6 @@ export default async function handler(req: any, res: any) {
   if (!isValidEmail(email)) {
     return res.status(400).json({ success: false, error: 'Invalid email' } satisfies ApiEnvelope<never>)
   }
-  if (isAnySyntheticEmail(email)) {
-    return res.status(400).json({ success: false, error: 'A real email address is required.' } satisfies ApiEnvelope<never>)
-  }
 
   const walletRaw = typeof body.primaryWallet === 'string' ? body.primaryWallet : ''
   const primaryWalletInput = normalizeAddress(walletRaw)
@@ -369,6 +366,13 @@ export default async function handler(req: any, res: any) {
       : null
   const farcasterFid = farcasterFidRaw && Number.isFinite(farcasterFidRaw) && farcasterFidRaw > 0 ? farcasterFidRaw : null
   const contactPreference = normalizeContactPreference(body.contactPreference)
+  const syntheticEmail = isAnySyntheticEmail(email)
+
+  // Wallet-only onboarding can submit a synthetic fallback email so long as the
+  // user has a non-email verification/contact signal.
+  if (syntheticEmail && contactPreference === 'email') {
+    return res.status(400).json({ success: false, error: 'A real email address is required.' } satisfies ApiEnvelope<never>)
+  }
   const verifications = sanitizeVerifications(body.verifications)
 
   const hasVerificationSignal =
@@ -376,6 +380,10 @@ export default async function handler(req: any, res: any) {
     (primaryWallet.length > 0 && isValidEvmAddress(primaryWallet)) ||
     (solanaWallet.length > 0 && isValidSolanaAddress(solanaWallet)) ||
     (typeof farcasterFid === 'number' && farcasterFid > 0)
+
+  if (syntheticEmail && !hasVerificationSignal) {
+    return res.status(400).json({ success: false, error: 'A real email address is required.' } satisfies ApiEnvelope<never>)
+  }
   if (persona === 'creator' && !hasVerificationSignal) {
     return res.status(400).json({ success: false, error: 'Creator verification is required.' } satisfies ApiEnvelope<never>)
   }
