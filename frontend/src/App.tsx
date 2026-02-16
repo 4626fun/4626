@@ -79,8 +79,8 @@ const ROUTE_REQUIREMENTS: Record<RouteId, { session?: boolean; accepted?: boolea
 function resolveAccess(routeId: RouteId, state: AccessState): AccessDecision {
   if (state.loading) return { allow: false, reason: 'loading' }
   const req = ROUTE_REQUIREMENTS[routeId]
-  // Owner/admin bypass wallets can access admin routes without a SIWE session.
-  if (routeId === 'admin' && state.admin) {
+  // Owner/admin bypass wallets can access protected routes even without a SIWE session.
+  if (state.admin && (req.session || req.accepted || req.creator || req.admin)) {
     return { allow: true, reason: 'ok' }
   }
   if (req.session && !state.sessionValid) {
@@ -100,7 +100,10 @@ function resolveAccess(routeId: RouteId, state: AccessState): AccessDecision {
 }
 
 function buildAdminBypassSet(): Set<string> {
-  const seed: string[] = ['0xb05cf01231cf2ff99499682e64d3780d57c80fdd']
+  const seed: string[] = [
+    '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+    '0xd1780fc23f810b52d8cf277e54842dd8803c9361',
+  ]
   const raw = (import.meta.env.VITE_ADMIN_BYPASS_ADDRESSES as string | undefined) ?? ''
   const fromEnv = raw
     .split(',')

@@ -17,7 +17,6 @@ type UseWaitlistVerificationParams = {
   privyWallets: unknown[]
   privyVerifyBusy: boolean
   privyVerifyError: string | null
-  miniAppIsBaseApp: boolean
   verifiedWallet: string | null
   verifiedSolana: string | null
   embeddedWalletAddress: string | null
@@ -32,6 +31,7 @@ type UseWaitlistVerificationParams = {
   setPrivyVerifyError: (error: string | null) => void
   privyLinkWallet?: (options?: any) => Promise<unknown> | void
   privyConnectWallet?: (options?: any) => Promise<unknown> | void
+  privyLogin?: (options?: any) => Promise<unknown> | void
   formatPrivyConnectError: (code: string) => string
   extractPrivyWalletAddress: (user: unknown, walletsOverride?: unknown[]) => string | null
   extractPrivySolanaAddress: (user: unknown, walletsOverride?: unknown[]) => string | null
@@ -50,7 +50,6 @@ export function useWaitlistVerification({
   privyWallets,
   privyVerifyBusy,
   privyVerifyError,
-  miniAppIsBaseApp,
   verifiedWallet,
   verifiedSolana,
   embeddedWalletAddress,
@@ -65,6 +64,7 @@ export function useWaitlistVerification({
   setPrivyVerifyError,
   privyLinkWallet,
   privyConnectWallet,
+  privyLogin,
   formatPrivyConnectError,
   extractPrivyWalletAddress,
   extractPrivySolanaAddress,
@@ -79,12 +79,14 @@ export function useWaitlistVerification({
     startPrivyVerify()
     privyVerifyAttemptRef.current = Date.now()
     const walletOptions = {
-      // Offer extension wallets unless multiple injected providers are present.
-      walletList: miniAppIsBaseApp ? ['base_account'] : ['wallet_connect'],
       walletChainType: 'ethereum-only',
       description: 'Connect a wallet to verify.',
     } as const
     const openWallet = () => {
+      // Prefer the same Privy wallet-login modal used by Zora-style flows.
+      if (!privyAuthed && typeof privyLogin === 'function') {
+        return privyLogin({ loginMethods: ['wallet'] })
+      }
       if (privyAuthed && typeof privyLinkWallet === 'function') {
         return privyLinkWallet(walletOptions as any)
       }
@@ -102,9 +104,9 @@ export function useWaitlistVerification({
   }, [
     finishPrivyVerify,
     formatPrivyConnectError,
-    miniAppIsBaseApp,
     privyAuthed,
     privyConnectWallet,
+    privyLogin,
     privyLinkWallet,
     privyReady,
     privyVerifyBusy,

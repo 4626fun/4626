@@ -911,8 +911,8 @@ export function Faq() {
             <h2 className="headline text-4xl sm:text-5xl lg:text-6xl mb-8">
               Ready to start earning?
             </h2>
-            <Link to="/dashboard" className="btn-accent inline-block">
-              Browse Vaults <ArrowRight className="w-4 h-4 inline ml-2" />
+            <Link to="/#waitlist" className="btn-accent inline-block">
+              Join waitlist <ArrowRight className="w-4 h-4 inline ml-2" />
             </Link>
           </motion.div>
         </div>

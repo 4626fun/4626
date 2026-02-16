@@ -18,6 +18,7 @@ interface TokenImageProps {
   className?: string
   fallbackColor?: string
   isWrapped?: boolean
+  wrappedShape?: 'round' | 'rect'
 }
 
 const sizeClasses = {
@@ -64,6 +65,7 @@ function TokenImageInner({
   sizeClass,
   fallbackColor,
   isWrapped,
+  wrappedShape,
   className,
 }: {
   tokenAddress: `0x${string}`
@@ -72,6 +74,7 @@ function TokenImageInner({
   sizeClass: string
   fallbackColor: string
   isWrapped: boolean
+  wrappedShape: NonNullable<TokenImageProps['wrappedShape']>
   className: string
 }) {
   const { imageUrl, isLoading } = useTokenMetadata(tokenAddress)
@@ -103,14 +106,15 @@ function TokenImageInner({
 
   // Wrapped version: show creator coin icon inside an elegant Liquid Gold bezel (vault form)
   const padClass = innerPadBySize[size]
+  const shapeClass = wrappedShape === 'rect' ? 'rounded-xl' : 'rounded-full'
   return (
     <div className={`relative ${className}`}>
       <div className={`${sizeClass} relative`}>
-        <OrbBorder intensity="low">
-          <div className={`w-full h-full ${padClass} bg-obsidian rounded-full`}>
-            <div className="w-full h-full rounded-full overflow-hidden relative shadow-[inset_0_0_20px_black]">
+        <OrbBorder intensity="low" shape={wrappedShape}>
+          <div className={`w-full h-full ${padClass} bg-obsidian ${shapeClass}`}>
+            <div className={`w-full h-full ${shapeClass} overflow-hidden relative shadow-[inset_0_0_20px_black]`}>
               {/* Token body */}
-              <div className="absolute inset-0 rounded-full overflow-hidden bg-black">
+              <div className={`absolute inset-0 ${shapeClass} overflow-hidden bg-black`}>
                 {showFallback ? (
                   <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-brand-primary/25 via-brand-accent/10 to-black">
                     <span className="text-white/80 font-serif text-base leading-none select-none">
@@ -132,10 +136,10 @@ function TokenImageInner({
               </div>
 
               {/* Static glass reflection (high-end “lens” feel) */}
-              <div className="absolute inset-0 rounded-full pointer-events-none opacity-40 mix-blend-overlay bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.75)_0%,transparent_60%)]" />
+              <div className={`absolute inset-0 ${shapeClass} pointer-events-none opacity-40 mix-blend-overlay bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.75)_0%,transparent_60%)]`} />
 
               {/* Heavy glass lens rim */}
-              <div className="absolute inset-0 rounded-full border border-white/10 pointer-events-none shadow-[inset_0_4px_20px_rgba(255,255,255,0.1)]" />
+              <div className={`absolute inset-0 ${shapeClass} border border-white/10 pointer-events-none shadow-[inset_0_4px_20px_rgba(255,255,255,0.1)]`} />
             </div>
           </div>
         </OrbBorder>
@@ -155,6 +159,7 @@ export const TokenImage = memo(function TokenImage({
   className = '',
   fallbackColor = 'from-orange-500 to-red-600',
   isWrapped = false,
+  wrappedShape = 'round',
 }: TokenImageProps) {
   const sizeClass = sizeClasses[size]
   return (
@@ -165,6 +170,7 @@ export const TokenImage = memo(function TokenImage({
       sizeClass={sizeClass}
       fallbackColor={fallbackColor}
       isWrapped={isWrapped}
+      wrappedShape={wrappedShape}
       className={className}
     />
   )

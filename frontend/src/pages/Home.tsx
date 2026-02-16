@@ -1,7 +1,8 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
+import { getHostMode } from '@/lib/host'
 import { useEffect } from 'react'
 import { WaitlistModal } from '@/components/waitlist/WaitlistModal'
 
@@ -9,7 +10,9 @@ const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
 
 export function Home() {
   const location = useLocation()
+  const navigate = useNavigate()
   const waitlistOpen = location.hash === '#waitlist'
+  const showJoinWaitlistCta = getHostMode() === 'marketing'
 
   useEffect(() => {
     if (location.hash === '#waitlist') return
@@ -25,10 +28,8 @@ export function Home() {
   }, [location.hash])
 
   const closeWaitlistModal = () => {
-    if (typeof window === 'undefined') return
     if (location.hash !== '#waitlist') return
-    const next = `${location.pathname}${location.search}`
-    window.history.replaceState(null, '', next)
+    navigate(`${location.pathname}${location.search}`, { replace: true })
   }
 
   return (
@@ -78,6 +79,19 @@ export function Home() {
           >
             Deposit tokens · Earn from trades · Grow together
           </motion.p>
+
+          {showJoinWaitlistCta ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.8, delay: 1.12 }}
+              className="pt-4 sm:pt-6"
+            >
+              <Link to="/#waitlist" className="btn-accent inline-block">
+                Join waitlist <ArrowRight className="w-4 h-4 inline ml-2" />
+              </Link>
+            </motion.div>
+          ) : null}
 
         </div>
       </section>

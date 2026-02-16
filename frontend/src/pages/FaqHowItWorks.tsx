@@ -90,7 +90,7 @@ export function FaqHowItWorks() {
                 <div className="flex items-center justify-center gap-5 py-2">
                   <TokenImage tokenAddress={AKITA.token as `0x${string}`} symbol="AKITA" size="md" isWrapped={false} />
                   <ArrowRight className="w-5 h-5 text-zinc-700" />
-                  <TokenImage tokenAddress={AKITA.token as `0x${string}`} symbol="AKITA" size="md" isWrapped />
+                  <TokenImage tokenAddress={AKITA.token as `0x${string}`} symbol="AKITA" size="md" isWrapped wrappedShape="rect" />
                 </div>
                 <p className="text-zinc-600 text-sm font-light leading-relaxed">
                   You deposit the creator coin and receive <span className="mono text-brand-accent">{SHARE_TOKEN}</span>. Your ownership is represented by shares, not a fixed “1:1.”
@@ -116,11 +116,8 @@ export function FaqHowItWorks() {
                   New vaults can use a Uniswap Continuous Clearing Auction (CCA) to bootstrap fair price discovery and initial liquidity.
                 </p>
                 <div className="flex flex-col gap-2">
-                  <Link to="/dashboard" className="text-brand-accent hover:text-brand-400 underline underline-offset-4 text-sm">
-                    Explore vaults
-                  </Link>
-                  <Link to="/faq" className="text-brand-accent hover:text-brand-400 underline underline-offset-4 text-sm">
-                    Read the full FAQ
+                  <Link to="/#waitlist" className="text-brand-accent hover:text-brand-400 underline underline-offset-4 text-sm">
+                    Join waitlist
                   </Link>
                 </div>
               </div>

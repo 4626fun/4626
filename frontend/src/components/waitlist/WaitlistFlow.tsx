@@ -727,7 +727,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     privyWallets,
     privyVerifyBusy,
     privyVerifyError,
-    miniAppIsBaseApp: miniApp.isBaseApp,
     verifiedWallet,
     verifiedSolana,
     embeddedWalletAddress,
@@ -742,6 +741,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     setPrivyVerifyError,
     privyLinkWallet,
     privyConnectWallet,
+    privyLogin,
     formatPrivyConnectError,
     extractPrivyWalletAddress,
     extractPrivySolanaAddress,
@@ -911,7 +911,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
 
   const adminBypassSet = useMemo(() => {
     // Keep this in sync with `frontend/src/App.tsx` so admins can always escape the waitlist UI.
-    const seed: string[] = ['0xb05cf01231cf2ff99499682e64d3780d57c80fdd']
+    const seed: string[] = [
+      '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+      '0xd1780fc23f810b52d8cf277e54842dd8803c9361',
+    ]
     const raw = String((import.meta.env.VITE_ADMIN_BYPASS_ADDRESSES as string | undefined) ?? '')
     const fromEnv = raw
       .split(',')
@@ -964,6 +967,14 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
           await siwe.signInWithPrivyToken(token).catch(() => null)
         }
       }
+      // Wallet-first fallback: if Privy handoff did not establish session, run SIWE directly.
+      if (!siwe.isSignedIn) {
+        const signed = await siwe.signIn({ method: 'auto' }).catch(() => null)
+        if (!signed) {
+          patchWaitlist({ inviteToast: 'Sign in with your wallet first, then continue to Deploy.' })
+          return
+        }
+      }
       if (deployUrl.startsWith('http')) {
         window.location.href = deployUrl
       } else {
@@ -972,7 +983,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     } finally {
       setDeployHandoffBusy(false)
     }
-  }, [deployPath, deployUrl, navigate, privyAuthed, siwe])
+  }, [deployPath, deployUrl, getAccessToken, navigate, patchWaitlist, privyAuthed, siwe])
 
   const primaryCta = useMemo(() => {
     if (deployAccessState !== 'ready') return null
