@@ -60,6 +60,50 @@ function truncAddr(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
+async function provisionServerWallet(creatorAddress: string): Promise<{ walletId: string; address: string }> {
+  const res = await apiFetch('/api/v1/agents/creators/provision-wallet', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ creatorAddress }),
+  })
+  const json = (await res.json().catch(() => null)) as ApiEnvelope<{ walletId: string; address: string }> | null
+  if (!res.ok || !json?.success || !json.data) {
+    throw new Error(json?.error ?? 'Failed to provision server signer')
+  }
+  return json.data
+}
+
+async function enableCswAgent(params: {
+  cswAddress: string
+  privyWalletId: string
+  listed?: boolean
+}): Promise<AgentData> {
+  const res = await apiFetch('/api/v1/agents/creators/enable', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      listedPublicly: params.listed ?? true,
+      agentType: 'csw',
+      cswAddress: params.cswAddress,
+      privyWalletId: params.privyWalletId,
+    }),
+  })
+  const json = (await res.json().catch(() => null)) as ApiEnvelope<AgentData> | null
+  if (!res.ok || !json?.success || !json.data) throw new Error(json?.error ?? 'Failed to enable CSW agent')
+  return json.data
+}
+
+async function publishAgentProfile(): Promise<PublishData> {
+  const res = await apiFetch('/api/v1/agents/publish', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ storeOnGrove: true }),
+  })
+  const json = (await res.json().catch(() => null)) as ApiEnvelope<PublishData> | null
+  if (!res.ok || !json?.success || !json.data) throw new Error(json?.error ?? 'Failed to publish agent profile')
+  return json.data
+}
+
 function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
@@ -151,14 +195,11 @@ export function AdminAgentSetup() {
     queryKey: ['admin', 'serverWallet', creatorAddress],
     queryFn: async (): Promise<{ walletId: string; address: string } | null> => {
       if (!creatorAddress) return null
-      const res = await apiFetch('/api/v1/agents/creators/provision-wallet', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ creatorAddress }),
-      })
-      const json = (await res.json().catch(() => null)) as ApiEnvelope<{ walletId: string; address: string }> | null
-      if (!res.ok || !json?.success || !json.data) return null
-      return json.data
+      try {
+        return await provisionServerWallet(creatorAddress)
+      } catch {
+        return null
+      }
     },
     enabled: Boolean(creatorAddress) && agentMode === 'csw',
     staleTime: 60_000,
@@ -345,17 +386,69 @@ export function AdminAgentSetup() {
   })
 
   const publishMutation = useMutation({
-    mutationFn: async (): Promise<PublishData> => {
-      const res = await apiFetch('/api/v1/agents/publish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeOnGrove: true }),
+    mutationFn: async (): Promise<PublishData> => publishAgentProfile(),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'farcaster', 'provider-dashboard'] })
+    },
+  })
+
+  const oneClickMutation = useMutation({
+    mutationFn: async (): Promise<{
+      wallet: { walletId: string; address: string }
+      ownerTxHash: `0x${string}` | null
+      agent: AgentData
+      publish: PublishData
+    }> => {
+      if (!creatorAddress) throw new Error('Connect your wallet first')
+
+      const wallet = serverWallet ?? (await provisionServerWallet(creatorAddress))
+      let ownerTxHash: `0x${string}` | null = null
+
+      let ownerReady = isServerWalletOwner
+      if (!ownerReady) {
+        if (!walletClient) throw new Error('Connect an owner wallet to approve one onchain transaction')
+        const data = encodeFunctionData({
+          abi: CSW_ABI,
+          functionName: 'addOwnerAddress',
+          args: [getAddress(wallet.address) as `0x${string}`],
+        })
+        const hash = await walletClient.sendTransaction({
+          to: getAddress(creatorAddress) as `0x${string}`,
+          data,
+          chain: walletClient.chain,
+        })
+        ownerTxHash = hash
+        if (publicClient) {
+          await publicClient.waitForTransactionReceipt({ hash })
+          try {
+            const result = await publicClient.readContract({
+              address: getAddress(creatorAddress) as `0x${string}`,
+              abi: CSW_ABI,
+              functionName: 'isOwnerAddress',
+              args: [getAddress(wallet.address) as `0x${string}`],
+            })
+            ownerReady = Boolean(result)
+          } catch {
+            ownerReady = false
+          }
+        }
+        if (!ownerReady) {
+          throw new Error('Owner link was not confirmed yet. Retry in a few seconds.')
+        }
+      }
+
+      const agent = await enableCswAgent({
+        cswAddress: creatorAddress,
+        privyWalletId: wallet.walletId,
+        listed: true,
       })
-      const json = (await res.json().catch(() => null)) as ApiEnvelope<PublishData> | null
-      if (!res.ok || !json?.success || !json.data) throw new Error(json?.error ?? 'Failed to publish agent profile')
-      return json.data
+      const publish = await publishAgentProfile()
+      return { wallet, ownerTxHash, agent, publish }
     },
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'serverWallet'] })
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'isOwner'] })
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'agent'] })
       void queryClient.invalidateQueries({ queryKey: ['admin', 'farcaster', 'provider-dashboard'] })
     },
   })
@@ -579,6 +672,39 @@ export function AdminAgentSetup() {
               {/* CSW flow */}
               {agentMode === 'csw' && (
                 <div className="space-y-3 rounded-lg border border-emerald-500/10 bg-emerald-500/[0.02] p-4">
+                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-[11px] text-emerald-200 font-medium">One-click setup</div>
+                        <div className="text-[10px] text-zinc-400">
+                          Provisions signer, links owner (if needed), enables CSW agent, and publishes profile.
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void oneClickMutation.mutateAsync()}
+                        disabled={oneClickMutation.isPending || !creatorAddress}
+                        className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[11px] text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-60"
+                      >
+                        {oneClickMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                        {oneClickMutation.isPending ? 'Running…' : 'Run one-click'}
+                      </button>
+                    </div>
+                    {oneClickMutation.data?.ownerTxHash ? (
+                      <div className="mt-2 text-[10px] text-zinc-400">
+                        Owner tx: <span className="font-mono text-zinc-300">{truncAddr(oneClickMutation.data.ownerTxHash)}</span>
+                      </div>
+                    ) : null}
+                    {oneClickMutation.data?.publish?.grove?.lensUri ? (
+                      <div className="mt-1 text-[10px] text-zinc-400">
+                        Published: <span className="font-mono text-zinc-300">{oneClickMutation.data.publish.grove.lensUri}</span>
+                      </div>
+                    ) : null}
+                    {oneClickMutation.error ? (
+                      <div className="mt-2 text-[10px] text-red-300">{(oneClickMutation.error as Error).message}</div>
+                    ) : null}
+                  </div>
+
                   {creatorAddress && (
                     <div>
                       <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Your Smart Wallet</div>
