@@ -1,0 +1,3 @@
+trigger: force vercel production rebuild
+scope: frontend
+reason: manual redeploy requested by user
