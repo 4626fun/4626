@@ -12,7 +12,10 @@ export function Home() {
   const location = useLocation()
   const navigate = useNavigate()
   const waitlistOpen = location.hash === '#waitlist'
-  const showJoinWaitlistCta = getHostMode() === 'marketing'
+  const hostMode = getHostMode()
+  const showJoinWaitlistCta = hostMode === 'marketing'
+  const showExploreCreatorsCta = hostMode === 'app'
+  const showDeployVaultCta = hostMode === 'app'
 
   useEffect(() => {
     if (location.hash === '#waitlist') return
@@ -92,6 +95,18 @@ export function Home() {
               </Link>
             </motion.div>
           ) : null}
+          {showExploreCreatorsCta ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.8, delay: 1.12 }}
+              className="pt-4 sm:pt-6"
+            >
+              <Link to="/explore/creators" className="btn-accent inline-block">
+                Explore Creators <ArrowRight className="w-4 h-4 inline ml-2" />
+              </Link>
+            </motion.div>
+          ) : null}
 
         </div>
       </section>
@@ -133,6 +148,13 @@ export function Home() {
                 </p>
                 <p>Then the vault deploys deposits across liquidity, lending, and reserve strategies.</p>
               </div>
+              {showDeployVaultCta ? (
+                <div>
+                  <Link to="/deploy" className="btn-accent inline-block">
+                    Deploy Vault <ArrowRight className="w-4 h-4 inline ml-2" />
+                  </Link>
+                </div>
+              ) : null}
             </motion.div>
 
             <motion.div

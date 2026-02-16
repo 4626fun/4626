@@ -4767,7 +4767,7 @@ function DeployVaultMain() {
   const chainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
   const { data: walletClient } = useWalletClient({ chainId: base.id })
-  const { ready: privyReady, authenticated: privyAuthenticated, logout, getAccessToken } = usePrivy() as any
+  const { ready: privyReady, authenticated: privyAuthenticated, user: privyUser, logout, getAccessToken } = usePrivy() as any
   const { login } = useLogin()
   const { wallets } = useWallets()
   const { client: smartWalletClient } = useSmartWallets()
@@ -4785,17 +4785,58 @@ function DeployVaultMain() {
   const [handoffState, setHandoffState] = useState<'idle' | 'signingIn' | 'bridging' | 'ready' | 'error'>('idle')
   const [handoffError, setHandoffError] = useState<string | null>(null)
   
-  // Get smart wallet address - simplified approach
-  // The connected wallet (from wagmi) is the EOA, the canonical identity might be a smart wallet
-  // We'll check ownership separately
+  const privyCrossAppLinkedAccounts = useMemo(() => {
+    const linked = Array.isArray(privyUser?.linkedAccounts)
+      ? (privyUser.linkedAccounts as any[])
+      : Array.isArray((privyUser as any)?.linked_accounts)
+        ? ((privyUser as any).linked_accounts as any[])
+        : []
+    return linked.filter((a: any) => String(a?.type ?? '').trim().toLowerCase() === 'cross_app')
+  }, [privyUser])
+
+  const privyCrossAppSmartWalletAddress = useMemo(() => {
+    for (const account of privyCrossAppLinkedAccounts) {
+      const wallets = Array.isArray((account as any)?.smart_wallets)
+        ? ((account as any).smart_wallets as any[])
+        : Array.isArray((account as any)?.smartWallets)
+          ? ((account as any).smartWallets as any[])
+          : []
+      for (const wallet of wallets) {
+        const raw = typeof wallet?.address === 'string' ? String(wallet.address) : ''
+        if (!raw || !isAddress(raw)) continue
+        return getAddress(raw) as Address
+      }
+    }
+    return null
+  }, [privyCrossAppLinkedAccounts])
+
+  const privyCrossAppEmbeddedEoaAddress = useMemo(() => {
+    for (const account of privyCrossAppLinkedAccounts) {
+      const wallets = Array.isArray((account as any)?.embedded_wallets)
+        ? ((account as any).embedded_wallets as any[])
+        : Array.isArray((account as any)?.embeddedWallets)
+          ? ((account as any).embeddedWallets as any[])
+          : []
+      for (const wallet of wallets) {
+        const raw = typeof wallet?.address === 'string' ? String(wallet.address) : ''
+        if (!raw || !isAddress(raw)) continue
+        return getAddress(raw) as Address
+      }
+    }
+    return null
+  }, [privyCrossAppLinkedAccounts])
+
+  // Get smart wallet address (local signer first, cross-app fallback for detection/ownership checks).
+  // The connected wallet (from wagmi) is the EOA, the canonical identity might be a smart wallet.
   const privySmartWalletAddress = useMemo(() => {
     try {
       const addr = smartWalletClient?.account?.address
-      return addr && isAddress(addr) ? getAddress(addr) as Address : null
+      if (addr && isAddress(addr)) return getAddress(addr) as Address
     } catch {
-      return null
+      // ignore
     }
-  }, [smartWalletClient])
+    return privyCrossAppSmartWalletAddress
+  }, [privyCrossAppSmartWalletAddress, smartWalletClient])
 
   const walletClientTypeOf = useCallback((w: any): string => {
     return String(
@@ -4828,11 +4869,12 @@ function DeployVaultMain() {
   const privyEmbeddedEoaAddress = useMemo(() => {
     try {
       const raw = typeof (privyEmbeddedEoaWallet as any)?.address === 'string' ? String((privyEmbeddedEoaWallet as any).address) : ''
-      return raw && isAddress(raw) ? (getAddress(raw) as Address) : null
+      if (raw && isAddress(raw)) return getAddress(raw) as Address
     } catch {
-      return null
+      // ignore
     }
-  }, [privyEmbeddedEoaWallet])
+    return privyCrossAppEmbeddedEoaAddress
+  }, [privyCrossAppEmbeddedEoaAddress, privyEmbeddedEoaWallet])
   const privyEmbeddedEoaCanSign = useMemo(() => {
     const walletAny: any = privyEmbeddedEoaWallet as any
     if (!walletAny) return false
@@ -4886,13 +4928,47 @@ function DeployVaultMain() {
   // Unified wallet state - considers wagmi connection, Privy smart wallet, and Privy-linked EOAs.
   // This allows users who authenticated via Privy (waitlist) to proceed without re-connecting wagmi.
   const hasWallet = useMemo(() => {
-    return isConnected || !!privySmartWalletAddress || !!privyLinkedEoaAddress
-  }, [isConnected, privyLinkedEoaAddress, privySmartWalletAddress])
+    return (
+      isConnected ||
+      !!privySmartWalletAddress ||
+      !!privyLinkedEoaAddress ||
+      !!privyCrossAppEmbeddedEoaAddress ||
+      !!privyCrossAppSmartWalletAddress
+    )
+  }, [isConnected, privyCrossAppEmbeddedEoaAddress, privyCrossAppSmartWalletAddress, privyLinkedEoaAddress, privySmartWalletAddress])
   
   // Effective wallet address for display - prefer Privy smart wallet (set during waitlist), fallback to wagmi
   const effectiveWalletAddress = useMemo(() => {
-    return privySmartWalletAddress ?? connectedWalletAddress ?? privyLinkedEoaAddress
-  }, [connectedWalletAddress, privyLinkedEoaAddress, privySmartWalletAddress])
+    return privySmartWalletAddress ?? connectedWalletAddress ?? privyLinkedEoaAddress ?? privyCrossAppEmbeddedEoaAddress
+  }, [connectedWalletAddress, privyCrossAppEmbeddedEoaAddress, privyLinkedEoaAddress, privySmartWalletAddress])
+  const ownerCandidateAddresses = useMemo(() => {
+    const raw = [
+      connectedWalletAddress,
+      privyLinkedEoaAddress,
+      privyEmbeddedEoaAddress,
+      privyCrossAppEmbeddedEoaAddress,
+      privyCrossAppSmartWalletAddress,
+      privySmartWalletAddress,
+    ]
+    const seen = new Set<string>()
+    const out: Address[] = []
+    for (const value of raw) {
+      if (!value || !isAddress(value)) continue
+      const normalized = getAddress(value) as Address
+      const key = normalized.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(normalized)
+    }
+    return out
+  }, [
+    connectedWalletAddress,
+    privyCrossAppEmbeddedEoaAddress,
+    privyCrossAppSmartWalletAddress,
+    privyEmbeddedEoaAddress,
+    privyLinkedEoaAddress,
+    privySmartWalletAddress,
+  ])
   const deploymentVersion = useMemo(() => {
     const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.2.36'
     const v = String(raw).trim()
@@ -5685,23 +5761,30 @@ function DeployVaultMain() {
   // when the EOA is an onchain owner of that smart wallet.
   // Uses server-side API to avoid client-side RPC rate limits.
   const executionCanOperateCanonicalQuery = useQuery({
-    queryKey: ['coinbaseSmartWalletOwner', canonicalIdentityAddress, connectedWalletAddress],
+    queryKey: ['coinbaseSmartWalletOwner', canonicalIdentityAddress, ownerCandidateAddresses.map((a) => a.toLowerCase()).join(',')],
     // Run when: identity blocking reason OR canonical is a contract (for ERC-4337 PATH 3)
-    enabled: !!canonicalIdentityAddress && !!connectedWalletAddress && (!!identity.blockingReason || canonicalIdentityIsContract),
+    enabled: !!canonicalIdentityAddress && ownerCandidateAddresses.length > 0 && (!!identity.blockingReason || canonicalIdentityIsContract),
     staleTime: 0, // Always refetch - ownership can change externally
     refetchOnWindowFocus: true,
     refetchOnMount: true,
     retry: 1,
     queryFn: async () => {
       const canonical = canonicalIdentityAddress as Address
-      const execution = connectedWalletAddress as Address
-      if (canonical.toLowerCase() === execution.toLowerCase()) return true
+      for (const execution of ownerCandidateAddresses) {
+        if (canonical.toLowerCase() === execution.toLowerCase()) return true
+      }
+      // For non-contract canonical identities, exact match is already checked above.
+      if (!canonicalIdentityIsContract) return false
 
       // Use server-side API to check ownership (avoids client RPC rate limits)
-      return await isCoinbaseSmartWalletOwner({
-        smartWallet: canonical,
-        ownerAddress: execution,
-      })
+      for (const execution of ownerCandidateAddresses) {
+        const isOwner = await isCoinbaseSmartWalletOwner({
+          smartWallet: canonical,
+          ownerAddress: execution,
+        })
+        if (isOwner) return true
+      }
+      return false
     },
   })
 
@@ -5711,7 +5794,7 @@ function DeployVaultMain() {
   // Check if connected EOA is an owner of the Creator Coin itself (via ownerAt)
   const creatorCoinOwnersQuery = useQuery({
     queryKey: ['creatorCoinOwners', creatorToken],
-    enabled: !!publicClient && tokenIsValid && !!connectedWalletAddress && !!identity.blockingReason,
+    enabled: !!publicClient && tokenIsValid && ownerCandidateAddresses.length > 0 && !!identity.blockingReason,
     staleTime: 60_000,
     retry: 0,
     queryFn: async () => {
@@ -5735,11 +5818,10 @@ function DeployVaultMain() {
   })
 
   const isCreatorCoinOwner = useMemo(() => {
-    if (!connectedWalletAddress || !creatorCoinOwnersQuery.data) return false
-    return creatorCoinOwnersQuery.data.some(
-      (owner) => owner.toLowerCase() === connectedWalletAddress.toLowerCase()
-    )
-  }, [connectedWalletAddress, creatorCoinOwnersQuery.data])
+    if (!creatorCoinOwnersQuery.data || ownerCandidateAddresses.length === 0) return false
+    const candidateSet = new Set(ownerCandidateAddresses.map((a) => a.toLowerCase()))
+    return creatorCoinOwnersQuery.data.some((owner) => candidateSet.has(owner.toLowerCase()))
+  }, [creatorCoinOwnersQuery.data, ownerCandidateAddresses])
 
   const creatorCoinOwnershipPending = !!identity.blockingReason && creatorCoinOwnersQuery.isFetching
 
@@ -6142,6 +6224,7 @@ function DeployVaultMain() {
       !smartWalletMatchesCanonical &&
       !privySmartWalletIsCanonicalOwner,
   )
+  const hasDetectedZoraCrossAppWallet = Boolean(privyCrossAppSmartWalletAddress || privyCrossAppEmbeddedEoaAddress)
 
   const canDeploy =
     tokenIsValid &&
@@ -6299,7 +6382,9 @@ function DeployVaultMain() {
                           ? 'One-time owner approval required before deploy. Approve your app Privy wallet as an owner of your canonical Zora smart wallet.'
                           : 'One-time owner approval required. Connect an owner wallet, approve once, then deploy.'
                       : !smartWalletCapabilityReady
-                        ? 'Smart wallet required. Sign in with wallet to access your Zora smart wallet, connect an owner EOA, or use Coinbase Wallet (Base Account).'
+                        ? hasDetectedZoraCrossAppWallet
+                          ? 'Detected your Zora wallet, but this session is read-only for deploy signing. Connect Coinbase Wallet (owner EOA) to sign ERC-4337 UserOps, then retry.'
+                          : 'Smart wallet required. Sign in with wallet to access your Zora smart wallet, connect an owner EOA, or use Coinbase Wallet (Base Account).'
                     : bytecodeInfraQuery.isFetching
                       ? 'Checking deployment bytecode store…'
                       : bytecodeInfraQuery.isError
