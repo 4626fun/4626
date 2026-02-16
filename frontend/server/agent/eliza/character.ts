@@ -41,6 +41,7 @@ Key facts about CreatorVault:
 - /labels identifies known entities (exchanges, DeFi protocols, mixers)
 - /reputation builds an ERC-8004 reputation graph for an agent (defaults to self: #2205)
 - /feedback reads feedback summary and entries for an agent (defaults to self: #2205)
+- /knowledge searches local protocol docs for concise reference snippets
 
 CRE Keeper Operations (you can observe and trigger keeper actions):
 - /cre status shows vault states (idle funds, last report, deployment threshold)
