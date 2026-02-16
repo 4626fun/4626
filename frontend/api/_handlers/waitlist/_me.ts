@@ -27,10 +27,22 @@ type WaitlistMeResponse = {
   email: string | null
   contactPreference: string | null
   primaryWallet: string | null
+  primarySmartWallet: string | null
+  primaryEmbeddedEoa: string | null
+  baseSubAccount: string | null
   embeddedWallet: string | null
   embeddedWalletChain: string | null
   embeddedWalletClientType: string | null
   cswAddress: string | null
+  solanaWallet: string | null
+  farcasterFid: number | null
+  preprovCoinAddress: string | null
+  preprovCoinSymbol: string | null
+  preprovFarcasterUsername: string | null
+  preprovZoraHandle: string | null
+  lensHandle: string | null
+  lensAccountAddress: string | null
+  lensOwnerAddress: string | null
   privyUserId: string | null
   appAccessStatus: string | null
   updatedAt: string | null
@@ -126,6 +138,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       primary_smart_wallet,
       primary_embedded_eoa,
       base_sub_account,
+      solana_wallet,
+      farcaster_fid,
+      preprov_coin_address,
+      preprov_coin_symbol,
+      preprov_farcaster_username,
+      preprov_zora_handle,
+      lens_handle,
+      lens_account_address,
+      lens_owner_address,
       privy_user_id,
       app_access_status,
       updated_at,
@@ -251,10 +272,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     email: typeof row.email === 'string' ? row.email : null,
     contactPreference: typeof row.contact_preference === 'string' ? row.contact_preference : null,
     primaryWallet: typeof row.primary_wallet === 'string' ? row.primary_wallet : null,
+    primarySmartWallet: typeof row.primary_smart_wallet === 'string' ? row.primary_smart_wallet : null,
+    primaryEmbeddedEoa: typeof row.primary_embedded_eoa === 'string' ? row.primary_embedded_eoa : null,
+    baseSubAccount: typeof row.base_sub_account === 'string' ? row.base_sub_account : null,
     embeddedWallet: typeof row.embedded_wallet === 'string' ? row.embedded_wallet : null,
     embeddedWalletChain: typeof row.embedded_wallet_chain === 'string' ? row.embedded_wallet_chain : null,
     embeddedWalletClientType: typeof row.embedded_wallet_client_type === 'string' ? row.embedded_wallet_client_type : null,
     cswAddress: typeof row.csw_address === 'string' ? row.csw_address : null,
+    solanaWallet: typeof row.solana_wallet === 'string' ? row.solana_wallet : null,
+    farcasterFid: typeof row.farcaster_fid === 'number' ? row.farcaster_fid : row.farcaster_fid ? Number(row.farcaster_fid) : null,
+    preprovCoinAddress: typeof row.preprov_coin_address === 'string' ? row.preprov_coin_address : null,
+    preprovCoinSymbol: typeof row.preprov_coin_symbol === 'string' ? row.preprov_coin_symbol : null,
+    preprovFarcasterUsername: typeof row.preprov_farcaster_username === 'string' ? row.preprov_farcaster_username : null,
+    preprovZoraHandle: typeof row.preprov_zora_handle === 'string' ? row.preprov_zora_handle : null,
+    lensHandle: typeof row.lens_handle === 'string' ? row.lens_handle : null,
+    lensAccountAddress: typeof row.lens_account_address === 'string' ? row.lens_account_address : null,
+    lensOwnerAddress: typeof row.lens_owner_address === 'string' ? row.lens_owner_address : null,
     privyUserId: typeof row.privy_user_id === 'string' ? row.privy_user_id : null,
     appAccessStatus: typeof row.app_access_status === 'string' ? row.app_access_status : null,
     updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
