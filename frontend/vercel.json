@@ -26,20 +26,18 @@
       "schedule": "*/5 * * * *"
     }
   ],
-  "redirects": [
+  "routes": [
     {
-      "source": "/:path*",
+      "src": "/(.*)",
       "has": [
         {
           "type": "host",
           "value": "www.4626.fun"
         }
       ],
-      "destination": "https://4626.fun/:path*",
-      "permanent": true
-    }
-  ],
-  "routes": [
+      "status": 308,
+      "dest": "https://4626.fun/$1"
+    },
     {
       "src": "/(.*)",
       "headers": {
