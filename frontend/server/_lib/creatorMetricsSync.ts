@@ -638,10 +638,13 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
         LIMIT ${enrichBatchSize};
       `
       const enrichCandidates: EnrichCandidate[] = (enrichCandidatesResult.rows ?? [])
-        .map((row) => ({
-          coinAddress: normalizeAddress(row.coin_address) ?? '',
-          feeModel: row.fee_model === 'legacy' ? 'legacy' : 'v4',
-        }))
+        .map((row) => {
+          const feeModel: EnrichCandidate['feeModel'] = row.fee_model === 'legacy' ? 'legacy' : 'v4'
+          return {
+            coinAddress: normalizeAddress(row.coin_address) ?? '',
+            feeModel,
+          }
+        })
         .filter((row) => row.coinAddress.length > 0)
 
       for (const candidate of enrichCandidates) {
