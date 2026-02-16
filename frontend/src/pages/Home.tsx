@@ -1,19 +1,19 @@
 import { Link, useLocation } from 'react-router-dom'
-import { getAppBaseUrl } from '@/lib/host'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
-import { isPublicSiteMode } from '@/lib/flags'
 import { useEffect } from 'react'
-import { DeferredWaitlistFlow } from '@/components/waitlist/DeferredWaitlistFlow'
+import { WaitlistModal } from '@/components/waitlist/WaitlistModal'
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
 
 export function Home() {
-  const publicMode = isPublicSiteMode()
   const location = useLocation()
+  const waitlistOpen = location.hash === '#waitlist'
 
   useEffect(() => {
+    if (location.hash === '#waitlist') return
+
     if (!location.hash) return
     const id = location.hash.replace('#', '').trim()
     if (!id) return
@@ -23,6 +23,13 @@ export function Home() {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
   }, [location.hash])
+
+  const closeWaitlistModal = () => {
+    if (typeof window === 'undefined') return
+    if (location.hash !== '#waitlist') return
+    const next = `${location.pathname}${location.search}`
+    window.history.replaceState(null, '', next)
+  }
 
   return (
     <div className="relative">
@@ -72,31 +79,6 @@ export function Home() {
             Deposit tokens · Earn from trades · Grow together
           </motion.p>
 
-          {/* CTA */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 1.284 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 pt-4 sm:pt-8"
-          >
-            {publicMode ? (
-              <Link to="/#waitlist" className="btn-accent w-full sm:w-auto text-center">
-                Join waitlist <ArrowRight className="w-4 h-4 inline ml-2" />
-              </Link>
-            ) : (
-              <>
-                <a href={`${getAppBaseUrl()}/explore/creators`} className="btn-accent w-full sm:w-auto text-center">
-                  Start Earning <ArrowRight className="w-4 h-4 inline ml-2" />
-                </a>
-                <a href={`${getAppBaseUrl()}/deploy`} className="btn-primary w-full sm:w-auto text-center">
-                  Create Vault
-                </a>
-                <Link to="/#waitlist" className="btn-primary w-full sm:w-auto text-center">
-                  Join waitlist
-                </Link>
-              </>
-            )}
-          </motion.div>
         </div>
       </section>
 
@@ -137,15 +119,6 @@ export function Home() {
                 </p>
                 <p>Then the vault deploys deposits across liquidity, lending, and reserve strategies.</p>
               </div>
-              {publicMode ? (
-                <Link to="/?persona=creator#waitlist" className="btn-accent inline-block">
-                  Join waitlist <ArrowRight className="w-4 h-4 inline ml-2" />
-                </Link>
-              ) : (
-                <a href={`${getAppBaseUrl()}/deploy`} className="btn-accent inline-block">
-                  Create Vault <ArrowRight className="w-4 h-4 inline ml-2" />
-                </a>
-              )}
             </motion.div>
 
             <motion.div
@@ -272,7 +245,7 @@ export function Home() {
         </div>
       </section>
 
-      <DeferredWaitlistFlow />
+      <WaitlistModal open={waitlistOpen} onClose={closeWaitlistModal} />
     </div>
   )
 }

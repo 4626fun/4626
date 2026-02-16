@@ -1,5 +1,5 @@
 export type Persona = 'creator' | 'user'
-export type Variant = 'page' | 'embedded'
+export type Variant = 'page' | 'embedded' | 'modal'
 
 // Legacy actions
 export type LegacyActionKey = 'shareX' | 'copyLink' | 'share' | 'follow' | 'saveApp'

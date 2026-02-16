@@ -24,7 +24,7 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 const NAV_ITEMS_PUBLIC: NavItem[] = [
-  { label: 'WAITLIST', to: '/waitlist', activePrefixes: ['/#waitlist', '/waitlist'] },
+  { label: 'WAITLIST', to: '/#waitlist', activePrefixes: ['/#waitlist', '/waitlist'] },
 ]
 
 const ADMIN_ITEM: NavItem = { label: 'ADMIN', to: '/admin/waitlist', activePrefixes: ['/admin'] }
@@ -59,8 +59,7 @@ export function VaultNavBar() {
   const baseItems = publicMode || hostMode === 'marketing' ? NAV_ITEMS_PUBLIC : NAV_ITEMS
   const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, ADMIN_ITEM] : baseItems
   const brandHref = publicMode || hostMode === 'marketing' ? '/waitlist' : '/'
-  const isWaitlistView = location.pathname === '/waitlist' || location.hash === '#waitlist'
-  const showConnect = !publicMode && hostMode !== 'marketing' && !isWaitlistView
+  const showConnect = !publicMode && hostMode !== 'marketing'
 
   return (
     <header className="hidden md:block sticky top-0 left-0 right-0 z-50 transition-all duration-500">
@@ -85,7 +84,7 @@ export function VaultNavBar() {
           </div>
         </Link>
 
-        <nav className="hidden md:flex items-center gap-10">
+        <nav className="hidden md:flex items-center gap-10 absolute left-1/2 -translate-x-1/2">
           {items.map((item, i) => {
             const active = isActiveLink(location, item)
             return (

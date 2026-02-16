@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { ExternalLink, ChevronDown, ShieldCheck, Sparkles } from 'lucide-react'
 import { useAccount, usePublicClient } from 'wagmi'
 import { useQuery } from '@tanstack/react-query'
@@ -37,8 +37,6 @@ function safeHttpUrl(url: string | null | undefined): string | null {
 }
 
 export function IdentityHub() {
-  const location = useLocation()
-
   const mini = useMiniAppContext()
   const farcasterAuth = useFarcasterAuth()
   const siwe = useSiweAuth()
@@ -173,9 +171,9 @@ export function IdentityHub() {
 
   const joinWaitlistHref = useMemo(() => {
     const base = getMarketingBaseUrl()
-    const path = location.pathname === '/' ? '/#waitlist' : '/waitlist'
+    const path = '/#waitlist'
     return base.startsWith('http') ? `${base}${path}` : path
-  }, [location.pathname])
+  }, [])
 
   const continueHref = useMemo(() => {
     const base = getAppBaseUrl()

@@ -169,7 +169,7 @@ const initialFlowState: FlowState = {
   step: 'verify', // Start with wallet connection + Privy auth
   contactPreference: 'email',
   email: '',
-  emailOptOut: false,
+  emailOptOut: true,
   busy: false,
   error: null,
   doneEmail: null,
@@ -521,7 +521,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     [],
   )
 
-  const { persona, step, contactPreference, email, busy, doneEmail, error: submitError } = flow
+  const { persona, step, contactPreference, email, emailOptOut, busy, doneEmail, error: submitError } = flow
   const {
     verifiedWallet,
     verifiedWalletMethod,
@@ -867,7 +867,8 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     payoutRecipientNormalized,
     verifiedWalletNormalized,
   ])
-  const canSubmit = isEmailValid && (Boolean(creatorCoin?.address) || creatorCoinDeclaredMissing) && connectedWalletAuthorized
+  const canSubmit =
+    (isEmailValid || emailOptOut) && (Boolean(creatorCoin?.address) || creatorCoinDeclaredMissing) && connectedWalletAuthorized
 
   useEffect(() => {
     if (!verifiedWalletNormalized) return
@@ -1032,11 +1033,21 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       setContactPreference('email')
     } else {
       setEmail('')
-      setEmailOptOut(false)
-      setContactPreference('email')
+      setEmailOptOut(true)
+      setContactPreference('wallet')
     }
 
   }, [privyAuthed, privyUser, step, setEmail, setEmailOptOut, setContactPreference])
+
+  // Self-heal legacy persisted state where email was required but no input is shown in simplified mode.
+  useEffect(() => {
+    if (step !== 'verify') return
+    if (emailOptOut) return
+    if (isEmailValid) return
+    if (emailTrimmed.length > 0) return
+    setEmailOptOut(true)
+    setContactPreference('wallet')
+  }, [emailOptOut, emailTrimmed, isEmailValid, setContactPreference, setEmailOptOut, step])
 
   const refreshPosition = useCallback(
     async (emailForSync: string) => {
@@ -1352,14 +1363,14 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       if (persona !== 'creator' && persona !== 'user') {
         throw new Error('Select Creator or User first.')
       }
-      if (emailTrimmed.length > 0 && !isEmailValid) {
+      if (emailTrimmed.length > 0 && !isEmailValid && !emailOptOut) {
         throw new Error('Enter a valid email address.')
       }
-      if (emailTrimmed.length === 0) {
-        throw new Error('Email is required.')
+      if (emailTrimmed.length === 0 && !emailOptOut) {
+        throw new Error('Add an email or continue with wallet only.')
       }
 
-      const emailForSubmit = emailTrimmed
+      const emailForSubmit = isEmailValid ? emailTrimmed : buildSyntheticEmail(primaryWalletForSubmit())
       const storedRef = getStoredReferralCode()
       const claim =
         persona === 'creator'
@@ -1381,7 +1392,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
           cswAddress: effectiveCswAddress || null, // CSW linked before signup
           referralCode: storedRef,
           claimReferralCode: claim.length > 0 ? claim : null,
-          contactPreference: contactPreference,
+          contactPreference: isEmailValid ? contactPreference : 'wallet',
           verifications,
           intent: {
             persona,
@@ -1696,14 +1707,23 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   const containerClass =
     variant === 'page'
       ? 'waitlist-page relative min-h-[100svh] flex items-center justify-center overflow-hidden px-4 sm:px-6 py-12 sm:py-16 bg-[#0a0a0b]'
-      : 'cinematic-section'
+      : variant === 'modal'
+        ? 'waitlist-page relative min-h-0 flex items-start justify-center overflow-visible px-0 py-0 bg-transparent'
+        : 'cinematic-section'
 
-  const innerWrapClass = variant === 'page' ? 'relative z-10 w-full max-w-[440px]' : 'max-w-3xl mx-auto px-6 py-14'
+  const innerWrapClass =
+    variant === 'page'
+      ? 'relative z-10 w-full max-w-[440px]'
+      : variant === 'modal'
+        ? 'relative z-10 w-full max-w-[560px]'
+        : 'max-w-3xl mx-auto px-6 py-14'
 
   const cardWrapClass =
     variant === 'page'
       ? 'relative overflow-hidden rounded-3xl border border-white/[0.06] bg-[#0d0d0f]/95 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_24px_80px_-24px_rgba(0,0,0,0.6)] p-6 sm:p-8'
-      : 'relative overflow-hidden rounded-3xl border border-white/[0.06] bg-[#0d0d0f]/95 backdrop-blur-xl p-6 sm:p-8'
+      : variant === 'modal'
+        ? 'relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0d0d0f]/95 backdrop-blur-xl shadow-[0_20px_80px_-30px_rgba(0,0,0,0.75)] p-5 sm:p-6'
+        : 'relative overflow-hidden rounded-3xl border border-white/[0.06] bg-[#0d0d0f]/95 backdrop-blur-xl p-6 sm:p-8'
 
   const progressSteps = [
     { key: 'connect', label: 'Connect', done: step === 'done' || Boolean(verifiedWallet) },
