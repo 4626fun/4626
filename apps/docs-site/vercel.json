@@ -3,6 +3,6 @@
   "buildCommand": "pnpm build",
   "outputDirectory": "build",
   "installCommand": "pnpm install --frozen-lockfile",
-  "ignoreCommand": "bash -lc 'set -e; PREFIX=\"$(git rev-parse --show-prefix 2>/dev/null || true)\"; if [ -n \"$PREFIX\" ]; then TARGET_PREFIX=\"$PREFIX\"; else TARGET_PREFIX=\"apps/docs-site/\"; fi; if [ -n \"$VERCEL_GIT_PREVIOUS_SHA\" ] && [ -n \"$VERCEL_GIT_COMMIT_SHA\" ] && git cat-file -e \"$VERCEL_GIT_PREVIOUS_SHA\"^{commit} 2>/dev/null && git cat-file -e \"$VERCEL_GIT_COMMIT_SHA\"^{commit} 2>/dev/null; then RANGE=\"$VERCEL_GIT_PREVIOUS_SHA $VERCEL_GIT_COMMIT_SHA\"; elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then RANGE=\"HEAD^ HEAD\"; else exit 1; fi; if git diff --name-only $RANGE | grep -Eq \"^${TARGET_PREFIX}\"; then exit 1; fi; exit 0'",
+  "ignoreCommand": "bash scripts/vercel-ignore.sh",
   "framework": null
 }
