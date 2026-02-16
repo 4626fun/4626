@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { Home, LayoutDashboard, Mail, ShieldCheck } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
@@ -7,8 +7,6 @@ import { ChatWidget } from './chat/ChatWidget'
 import { isPublicSiteMode } from '@/lib/flags'
 import { getHostMode } from '@/lib/host'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
-import { OnboardingModal, hasCompletedOnboarding } from '@/components/OnboardingModal'
-import { QuickstartModal, useShowQuickstart } from '@/components/QuickstartModal'
 import { apiFetch } from '@/lib/apiBase'
 
 type MobileNavItem = {
@@ -65,9 +63,6 @@ export function Layout() {
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
   const baseItems = publicMode || hostMode === 'marketing' ? navItemsPublic : navItems
   const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, adminNavItem] : baseItems
-  const [showOnboarding, setShowOnboarding] = useState(false)
-  const showQuickstart = useShowQuickstart()
-  const [quickstartDismissed, setQuickstartDismissed] = useState(false)
   const resolvedSubdomain = useQuery({
     queryKey: ['agents', 'subdomain-resolve', hostMode],
     enabled: hostMode === 'app',
@@ -79,16 +74,6 @@ export function Layout() {
       return json.data ?? null
     },
   })
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    // Only show once per device/browser.
-    if (hasCompletedOnboarding()) return
-    setShowOnboarding(true)
-  }, [])
-
-  // Show quickstart after onboarding is done, for authenticated creators
-  const shouldShowQuickstart = !showOnboarding && showQuickstart && !quickstartDismissed
 
   return (
     <div className="min-h-screen flex flex-col bg-vault-bg">
@@ -105,8 +90,6 @@ export function Layout() {
           </div>
         </div>
       ) : null}
-      {showOnboarding ? <OnboardingModal onClose={() => setShowOnboarding(false)} /> : null}
-      {shouldShowQuickstart ? <QuickstartModal onClose={() => setQuickstartDismissed(true)} /> : null}
 
       {/* Main */}
       <main className={`flex-1 ${shouldOverlayMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>

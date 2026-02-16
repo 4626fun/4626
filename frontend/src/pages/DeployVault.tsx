@@ -1487,6 +1487,7 @@ function DeployVaultBatcher({
   privyEmbeddedEoaAddress,
   privyEmbeddedEoaIsCanonicalOwner,
   privyEmbeddedEoaCanSign,
+  connectedEoaOwnerReady,
   strictNoEoaMode,
   solanaMintOverride,
   solanaDecimalsOverride,
@@ -1521,6 +1522,7 @@ function DeployVaultBatcher({
   privyEmbeddedEoaAddress: Address | null
   privyEmbeddedEoaIsCanonicalOwner: boolean
   privyEmbeddedEoaCanSign: boolean
+  connectedEoaOwnerReady: boolean
   strictNoEoaMode: boolean
   solanaMintOverride: Hex | null
   solanaDecimalsOverride: number | null
@@ -4479,7 +4481,7 @@ function DeployVaultBatcher({
   const hasPrivySmartWalletOwnerSigner = privySmartWalletIsCanonicalOwner && privySmartWalletCanSign
   const hasDeploySignerPath = strictNoEoaMode
     ? hasPrivyEmbeddedOwnerSigner || hasPrivySmartWalletOwnerSigner
-    : isCoinbaseWalletDirect || hasPrivyEmbeddedOwnerSigner || hasPrivySmartWalletOwnerSigner
+    : isCoinbaseWalletDirect || connectedEoaOwnerReady || hasPrivyEmbeddedOwnerSigner || hasPrivySmartWalletOwnerSigner
 
   return (
     <div className="space-y-3">
@@ -4680,7 +4682,15 @@ function DeployVaultBatcher({
               ? hasPrivyEmbeddedOwnerSigner
                 ? 'Gas-free ERC-4337 via preconfigured Privy embedded owner'
                 : 'Gas-free ERC-4337 via preconfigured app smart wallet owner'
-              : `Gas-free ERC-4337 ${isCoinbaseWalletDirect ? 'via Coinbase Wallet' : hasPrivyEmbeddedOwnerSigner ? 'via Privy embedded owner' : 'via app smart wallet owner'}`}
+              : `Gas-free ERC-4337 ${
+                  isCoinbaseWalletDirect
+                    ? 'via Coinbase Wallet'
+                    : connectedEoaOwnerReady
+                      ? 'via connected owner wallet'
+                      : hasPrivyEmbeddedOwnerSigner
+                        ? 'via Privy embedded owner'
+                        : 'via app smart wallet owner'
+                }`}
           </div>
           <button type="button" onClick={() => void submit()} disabled={disabled || exportBusy} className="btn-accent w-full rounded-lg">
             {busy ? 'Deploying…' : '1‑Click Deploy (Gas-Free)'}
@@ -6876,6 +6886,7 @@ function DeployVaultMain() {
                     privyEmbeddedEoaAddress={privyEmbeddedEoaAddress}
                     privyEmbeddedEoaIsCanonicalOwner={privyEmbeddedEoaIsCanonicalOwner}
                     privyEmbeddedEoaCanSign={privyEmbeddedEoaCanSign}
+                    connectedEoaOwnerReady={connectedEoaOwnerReady}
                     strictNoEoaMode={strictNoEoaMode}
                     solanaMintOverride={solanaMintOverride}
                     solanaDecimalsOverride={solanaDecimalsOverride}
