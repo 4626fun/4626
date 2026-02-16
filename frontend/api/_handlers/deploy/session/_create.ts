@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { createPublicClient, getAddress, http, isAddress, type Address, type Hex } from 'viem'
+import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts'
 import { base } from 'viem/chains'
 
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
@@ -370,10 +371,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const tokenHash = hashDeployToken(deployToken)
     const id = randomId()
 
-    // Use a per-creator Privy-managed agent wallet (Keepr can reuse it for ops).
-    // We still install it as a temporary CSW owner only during deploy/ops windows.
-    const agentWallet = await getOrCreateCreatorAgentWallet({ creatorToken: creatorToken.toLowerCase() as `0x${string}` })
-    const sessionOwner = getAddress(agentWallet.address)
+    // Preferred: per-creator Privy-managed agent wallet (Keepr can reuse it for ops).
+    // Fallback: ephemeral local session owner key when Privy wallet provisioning is unavailable.
+    let sessionOwnerPrivateKey: Hex | null = null
+    let agentWalletId: string | null = null
+    let agentWalletAddress: Address | null = null
+    let sessionOwner: Address
+    try {
+      const agentWallet = await getOrCreateCreatorAgentWallet({ creatorToken: creatorToken.toLowerCase() as `0x${string}` })
+      sessionOwner = getAddress(agentWallet.address)
+      agentWalletId = String(agentWallet.walletId || '').trim() || null
+      agentWalletAddress = getAddress(agentWallet.address)
+    } catch (e: any) {
+      const fallback = privateKeyToAccount(generatePrivateKey())
+      sessionOwnerPrivateKey = fallback.privateKey
+      sessionOwner = getAddress(fallback.address)
+      console.warn('deploy/session/create: falling back to ephemeral session owner key', {
+        reason: e?.message ? String(e.message) : 'agent_wallet_create_failed',
+      })
+    }
 
     const now = Date.now()
     const expiresAt = new Date(now + 10 * 60 * 1000) // 10 minutes
@@ -386,6 +402,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       smartWallet,
       sessionOwner,
       deployToken,
+      sessionOwnerPrivateKey,
       payload: {
         creatorToken,
         ownerAddress,
@@ -399,8 +416,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               authAgentChainId: auth.chainId,
             }
           : null),
-        agentWalletId: agentWallet.walletId,
-        agentWalletAddress: agentWallet.address,
+        ...(agentWalletId ? { agentWalletId } : null),
+        ...(agentWalletAddress ? { agentWalletAddress } : null),
         version: String(body.version ?? ''),
         phase1Calls,
         phase2CoreCalls,
@@ -415,6 +432,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const out: CreateDeploySessionResponse = { sessionId: id, sessionOwner, expiresAt: expiresAt.toISOString() }
     return res.status(200).json({ success: true, data: out } satisfies ApiEnvelope<CreateDeploySessionResponse>)
   } catch (e: any) {
+    console.error('deploy/session/create error', e?.message ? String(e.message) : e)
     return res.status(500).json({ success: false, error: 'create_failed' } satisfies ApiEnvelope<null>)
   }
 }
