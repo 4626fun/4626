@@ -43,7 +43,6 @@ function isLegacySyntheticEmail(v: string): boolean {
 function isAnySyntheticEmail(v: string): boolean {
   return isSyntheticEmail(v) || isLegacySyntheticEmail(v)
 }
-
 async function findOwnedProfileByEmail(params: {
   db: any
   email: string
@@ -111,7 +110,6 @@ async function findOwnedProfileByPrincipal(params: {
   if (!Number.isFinite(id) || id <= 0) return null
   return { id, email: typeof row.email === 'string' ? row.email : '' }
 }
-
 async function mergeOwnedProfiles(params: {
   db: any
   sourceProfileId: number
