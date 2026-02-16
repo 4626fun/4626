@@ -18,20 +18,21 @@ async function fetchAdminStatus(): Promise<AdminResponse> {
 }
 
 export function useAdminStatus() {
-  const { isSignedIn } = useSiweAuth()
+  const { authAddress, sessionHydrated } = useSiweAuth()
+  const hasSessionAddress = Boolean(authAddress)
 
   const query = useQuery({
-    queryKey: ['auth', 'admin'],
-    // Allow session-backed admin checks even when an injected wallet is not actively connected.
-    enabled: isSignedIn,
+    queryKey: ['auth', 'admin', authAddress ?? 'none'],
+    // Admin identity is session-scoped; do not require a currently connected wallet.
+    enabled: sessionHydrated && hasSessionAddress,
     queryFn: fetchAdminStatus,
     staleTime: 30_000,
     retry: 0,
   })
 
   return {
-    isAdmin: isSignedIn && query.data?.isAdmin === true,
-    isLoading: query.isLoading,
+    isAdmin: hasSessionAddress && query.data?.isAdmin === true,
+    isLoading: !sessionHydrated || (hasSessionAddress && query.isLoading),
     error: query.error,
     refetch: query.refetch,
   }

@@ -46,7 +46,7 @@ const ADMIN_TABS = [
  */
 export function AdminLayout() {
   const { isConnected, address } = useAccount()
-  const { isSignedIn, busy: authBusy, error: authError, signIn, signOut, authAddress } = useSiweAuth()
+  const { busy: authBusy, error: authError, signIn, signOut, authAddress } = useSiweAuth()
   const location = useLocation()
   const hasSessionAddress = Boolean(authAddress)
 
@@ -95,8 +95,8 @@ export function AdminLayout() {
     )
   }
 
-  // --- Gate: not signed in ---
-  if (!isSignedIn) {
+  // --- Gate: no active session ---
+  if (!hasSessionAddress) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center px-4">
         <div className="max-w-md w-full">
@@ -142,7 +142,7 @@ export function AdminLayout() {
                   disabled={authBusy}
                   className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/5 border border-white/10 px-5 py-3 text-sm text-zinc-200 hover:text-white hover:border-white/20 transition-colors disabled:opacity-60"
                 >
-                  {authBusy ? 'Signing in...' : 'Sign in with wallet (EOA)'}
+                  {authBusy ? 'Signing in...' : 'Sign in with wallet'}
                 </button>
               </>
             )}
@@ -161,6 +161,11 @@ export function AdminLayout() {
   // --- Authenticated: show tabs + child route ---
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 space-y-6">
+      {hasAddressMismatch ? (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-amber-200">
+          Connected wallet and session wallet differ. Admin access uses your active session; refresh sign-in if you need to switch.
+        </div>
+      ) : null}
       {/* Tab navigation */}
       <div className="rounded-xl border border-white/10 bg-black/30 p-2">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">

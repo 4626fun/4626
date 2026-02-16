@@ -23,6 +23,17 @@ async function lookupEmailByWallet(address: string): Promise<string | null> {
     const email1 = r1?.rows?.[0]?.email
     if (typeof email1 === 'string' && email1.length > 0) return email1
 
+    // Canonical wallet mapping table (profile_wallets -> profiles)
+    const rPw = await db.sql`
+      SELECT p.email
+      FROM profile_wallets pw
+      JOIN profiles p ON p.id = pw.profile_id
+      WHERE LOWER(pw.address) = LOWER(${address})
+      LIMIT 1;
+    `
+    const emailPw = rPw?.rows?.[0]?.email
+    if (typeof emailPw === 'string' && emailPw.length > 0) return emailPw
+
     // Check creator_wallets
     const r2 = await db.sql`
       SELECT email FROM creator_wallets
