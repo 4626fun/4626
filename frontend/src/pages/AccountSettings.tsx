@@ -385,9 +385,18 @@ export function AccountSettings() {
 
   const canonicalSmartWalletAddress = useMemo(() => {
     if (!profile) return null
-    if (isEvmAddress(profile.cswAddress)) return profile.cswAddress
-    const canonicalFromAccounts = (profile.connectedAccounts ?? []).find((a) => a.isCanonicalSmartWallet && isEvmAddress(a.address))
+    const canonicalFromAccounts = (profile.connectedAccounts ?? [])
+      .filter((a) => a.isCanonicalSmartWallet && isEvmAddress(a.address))
+      .sort((a, b) => {
+        const aMs = Date.parse(a.verifiedAt ?? '')
+        const bMs = Date.parse(b.verifiedAt ?? '')
+        if (Number.isFinite(aMs) && Number.isFinite(bMs)) return bMs - aMs
+        if (Number.isFinite(aMs)) return -1
+        if (Number.isFinite(bMs)) return 1
+        return a.address.localeCompare(b.address)
+      })[0]
     if (canonicalFromAccounts?.address) return canonicalFromAccounts.address
+    if (isEvmAddress(profile.cswAddress)) return profile.cswAddress
     if (isEvmAddress(profile.primarySmartWallet)) return profile.primarySmartWallet
     if (isEvmAddress(profile.baseSubAccount)) return profile.baseSubAccount
     if (isEvmAddress(privyCrossAppSmartWalletAddress)) return privyCrossAppSmartWalletAddress
