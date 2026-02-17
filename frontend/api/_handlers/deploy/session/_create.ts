@@ -379,8 +379,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let sessionOwner: Address
     try {
       const agentWallet = await getOrCreateCreatorAgentWallet({ creatorToken: creatorToken.toLowerCase() as `0x${string}` })
+      const walletId = String(agentWallet.walletId || '').trim()
+      if (!walletId) throw new Error('agent_wallet_id_missing')
       sessionOwner = getAddress(agentWallet.address)
-      agentWalletId = String(agentWallet.walletId || '').trim() || null
+      agentWalletId = walletId
       agentWalletAddress = getAddress(agentWallet.address)
     } catch (e: any) {
       const fallback = privateKeyToAccount(generatePrivateKey())
