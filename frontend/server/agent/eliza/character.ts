@@ -156,4 +156,51 @@ Style:
   },
 }
 
+declare const process: { env: Record<string, string | undefined> }
+
+export type CharacterRuntimeConfig = {
+  systemPrompt: string
+  preferredModel?: string
+  settings: Record<string, string>
+}
+
+function readOptionalSetting(key: string): string | undefined {
+  const value = String(process.env[key] ?? '').trim()
+  return value || undefined
+}
+
+/**
+ * Runtime-facing character projection used by the Eliza runtime bridge.
+ * This keeps prompt/model policy as first-class runtime input and allows
+ * env-level overrides without mutating the static character definition.
+ */
+export function resolveCharacterRuntimeConfig(): CharacterRuntimeConfig {
+  const systemPrompt =
+    readOptionalSetting('ELIZA_CHARACTER_SYSTEM_PROMPT') ??
+    creatorVaultCharacter.system
+
+  const defaultModel = String(creatorVaultCharacter.settings?.model ?? '').trim()
+  const preferredModel =
+    readOptionalSetting('ELIZA_CHARACTER_MODEL') ??
+    (defaultModel || undefined)
+
+  const settings: Record<string, string> = {
+    CHARACTER_NAME: creatorVaultCharacter.name,
+    CHARACTER_MODEL: preferredModel ?? '',
+    CHARACTER_DESCRIPTION: creatorVaultCharacter.description,
+  }
+
+  const maybeTemperature = readOptionalSetting('ELIZA_CHARACTER_TEMPERATURE')
+  if (maybeTemperature) settings.CHARACTER_TEMPERATURE = maybeTemperature
+
+  const maybeMaxOutputTokens = readOptionalSetting('ELIZA_CHARACTER_MAX_OUTPUT_TOKENS')
+  if (maybeMaxOutputTokens) settings.CHARACTER_MAX_OUTPUT_TOKENS = maybeMaxOutputTokens
+
+  return {
+    systemPrompt,
+    preferredModel,
+    settings,
+  }
+}
+
 export default creatorVaultCharacter

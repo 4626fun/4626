@@ -10,6 +10,7 @@ type Logger = {
   warn: (msg: string, data?: unknown) => void
   error: (msg: string, data?: unknown) => void
   child: (context: LogContext) => Logger
+  withCorrelationId: (correlationId: string) => Logger
 }
 
 const LOG_LEVELS: Record<LogLevel, number> = {
@@ -56,6 +57,8 @@ function createLogger(baseContext: LogContext = {}): Logger {
     warn: (msg, data) => log('warn', msg, data),
     error: (msg, data) => log('error', msg, data),
     child: (context: LogContext) => createLogger({ ...baseContext, ...context }),
+    withCorrelationId: (correlationId: string) =>
+      createLogger({ ...baseContext, correlationId }),
   }
 }
 
@@ -63,5 +66,16 @@ export const logger = createLogger()
 
 export function createCorrelationId(prefix = 'corr'): string {
   return `${prefix}-${randomUUID()}`
+}
+
+export function createCorrelationLogger(prefix = 'corr', baseContext: LogContext = {}): {
+  correlationId: string
+  logger: Logger
+} {
+  const correlationId = createCorrelationId(prefix)
+  return {
+    correlationId,
+    logger: createLogger({ ...baseContext, correlationId }),
+  }
 }
 
