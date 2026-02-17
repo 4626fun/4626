@@ -13,7 +13,6 @@ import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/
 import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAgentWallets.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 import { buildDeployPermissionGrant } from '../../../../server/_lib/erc7712Permissions.js'
-import { resolveCoinParties } from '../../../../server/_lib/coinParties.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -278,23 +277,6 @@ async function checkCanonicalWalletOwnership(params: {
   return { ok: true }
 }
 
-async function validateCreatorCoinState(params: {
-  creatorToken: Address
-  smartWallet: Address
-}): Promise<{ ok: boolean; reason?: string }> {
-  const parties = await resolveCoinParties(params.creatorToken.toLowerCase() as `0x${string}`)
-  if (!parties.creator && !parties.payoutRecipient) {
-    return { ok: false, reason: 'creator_coin_not_found' }
-  }
-  const smartWalletLc = params.smartWallet.toLowerCase()
-  const creatorLc = parties.creator?.toLowerCase() ?? null
-  const payoutLc = parties.payoutRecipient?.toLowerCase() ?? null
-  if (smartWalletLc !== creatorLc && smartWalletLc !== payoutLc) {
-    return { ok: false, reason: 'creator_coin_wallet_mismatch' }
-  }
-  return { ok: true }
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setNoStore(res)
   if (handleOptions(req, res)) return
@@ -335,16 +317,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!isAddress(smartWallet) || !isAddress(creatorToken) || !isAddress(ownerAddress)) {
       return res.status(400).json({ success: false, error: 'Invalid addresses' } satisfies ApiEnvelope<null>)
-    }
-
-    const creatorCoinState = await validateCreatorCoinState({ creatorToken, smartWallet })
-    if (!creatorCoinState.ok) {
-      return res.status(403).json({
-        success: false,
-        error: creatorCoinState.reason
-          ? `Creator coin requirement failed: ${creatorCoinState.reason}`
-          : 'Creator coin requirement failed',
-      } satisfies ApiEnvelope<null>)
     }
 
     // Ownership is validated below against canonical profile linkage.
@@ -424,7 +396,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       agentWalletAddress = getAddress(agentWallet.address)
     } catch (e: any) {
       const fallback = privateKeyToAccount(generatePrivateKey())
-      sessionOwnerPrivateKey = fallback.privateKey
+      sessionOwnerPrivateKey = (fallback as any).privateKey as Hex
       sessionOwner = getAddress(fallback.address)
       console.warn('deploy/session/create: falling back to ephemeral session owner key', {
         reason: e?.message ? String(e.message) : 'agent_wallet_create_failed',

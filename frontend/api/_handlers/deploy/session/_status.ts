@@ -11,6 +11,7 @@ import { decryptWithSecret, getDeploySessionById, signDeployToken, transitionDep
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
+import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -64,7 +65,6 @@ async function findOwnerIndex(params: {
 
 async function getOwnerAccount(rec: any) {
   const payload: any = rec.payload ?? {}
-  const erc7712Grant = parseGrant(payload?.erc7712Grant)
   const agentWalletId = typeof payload?.agentWalletId === 'string' ? payload.agentWalletId.trim() : ''
   const sessionOwner = getAddress(rec.sessionOwner)
   const ownerAccount = agentWalletId
@@ -136,6 +136,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   }
 
   const payload: any = rec.payload ?? {}
+  const erc7712Grant = parseGrant(payload?.erc7712Grant)
   const toBigInt = (v: any): bigint => {
     if (typeof v === 'bigint') return v
     if (typeof v === 'number' && Number.isFinite(v)) return BigInt(Math.trunc(v))

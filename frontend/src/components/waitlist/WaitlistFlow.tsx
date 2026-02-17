@@ -252,6 +252,14 @@ function isSyntheticEmail(v: string): boolean {
   return v.endsWith('@noemail.4626.fun') || v.endsWith('@wallet.4626.fun')
 }
 
+function buildSyntheticEmail(primaryWallet: string | null): string {
+  const wallet = typeof primaryWallet === 'string' ? primaryWallet.trim().toLowerCase() : ''
+  if (isValidEvmAddress(wallet)) {
+    return `${wallet.replace(/^0x/, '')}@wallet.4626.fun`
+  }
+  return `wallet-${Date.now().toString(36)}@wallet.4626.fun`
+}
+
 function formatPrivyConnectError(code: string): string {
   const c = code.trim().toLowerCase()
   if (!c) return 'Wallet connect failed.'
@@ -525,7 +533,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     [],
   )
 
-  const { persona, step, email, busy, doneEmail, error: submitError } = flow
+  const { persona, step, email, busy, doneEmail, error: submitError, emailOptOut, contactPreference } = flow
   const {
     verifiedWallet,
     verifiedWalletMethod,
@@ -1460,14 +1468,14 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       if (persona !== 'creator' && persona !== 'user') {
         throw new Error('Select Creator or User first.')
       }
-      if (emailTrimmed.length > 0 && !isEmailValid) {
+      if (emailTrimmed.length > 0 && !isEmailValid && !emailOptOut) {
         throw new Error('Enter a valid email address.')
       }
-      if (emailTrimmed.length === 0) {
-        throw new Error('Add your email to continue.')
+      if (emailTrimmed.length === 0 && !emailOptOut) {
+        throw new Error('Add an email or continue with wallet only.')
       }
 
-      const emailForSubmit = emailTrimmed
+      const emailForSubmit = isEmailValid ? emailTrimmed : buildSyntheticEmail(primaryWalletForSubmit())
       const storedRef = getStoredReferralCode()
       const claim =
         persona === 'creator'
@@ -1489,7 +1497,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
           cswAddress: effectiveCswAddress || null, // CSW linked before signup
           referralCode: storedRef,
           claimReferralCode: claim.length > 0 ? claim : null,
-          contactPreference: 'email',
+          contactPreference: isEmailValid ? contactPreference : 'wallet',
           verifications,
           intent: {
             persona,

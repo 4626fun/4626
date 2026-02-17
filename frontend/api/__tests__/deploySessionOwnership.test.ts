@@ -148,7 +148,7 @@ describe('deploy session ownership guardrails', () => {
 
     expect(res.statusCode).toBe(200)
     expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
-    const insertArgs = insertDeploySessionMock.mock.calls[0]?.[0] as any
+    const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
     expect(insertArgs.payload?.erc7712Grant?.version).toBe('erc7712-v1')
     expect((insertArgs.payload?.erc7712Grant?.allowedTargets ?? []).map((v: string) => v.toLowerCase())).toContain('0x0000000000000000000000000000000000000002')
   })
@@ -168,7 +168,7 @@ describe('deploy session ownership guardrails', () => {
     expect(res.statusCode).toBe(200)
     expect(generatePrivateKeyMock).toHaveBeenCalledTimes(1)
     expect(privateKeyToAccountMock).toHaveBeenCalledTimes(1)
-    const insertArgs = insertDeploySessionMock.mock.calls[0]?.[0] as any
+    const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
     expect(insertArgs.sessionOwnerPrivateKey).toBe('0x' + '11'.repeat(32))
     expect(insertArgs.payload?.agentWalletId).toBeUndefined()
   })
@@ -184,7 +184,7 @@ describe('deploy session ownership guardrails', () => {
     expect(generatePrivateKeyMock).toHaveBeenCalledTimes(1)
     expect(privateKeyToAccountMock).toHaveBeenCalledTimes(1)
     expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
-    const insertArgs = insertDeploySessionMock.mock.calls[0]?.[0] as any
+    const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
     expect(insertArgs.sessionOwnerPrivateKey).toBe('0x' + '11'.repeat(32))
     expect(insertArgs.payload?.agentWalletId).toBeUndefined()
   })
