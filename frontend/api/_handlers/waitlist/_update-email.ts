@@ -25,7 +25,7 @@ function isValidEmail(v: string): boolean {
 }
 
 function isSyntheticEmail(v: string): boolean {
-  return v.endsWith('@noemail.4626.fun')
+  return v.endsWith('@noemail.4626.fun') || v.endsWith('@wallet.4626.fun')
 }
 
 function isLegacySyntheticEmail(v: string): boolean {
@@ -99,7 +99,7 @@ async function findOwnedProfileByPrincipal(params: {
       )
     )
     ORDER BY
-      CASE WHEN p.email IS NULL THEN 2 WHEN LOWER(p.email) LIKE '%@noemail.4626.fun' THEN 1 ELSE 0 END ASC,
+      CASE WHEN p.email IS NULL THEN 2 WHEN LOWER(p.email) LIKE '%@noemail.4626.fun' OR LOWER(p.email) LIKE '%@wallet.4626.fun' THEN 1 ELSE 0 END ASC,
       p.updated_at DESC,
       p.created_at ASC
     LIMIT 1;
