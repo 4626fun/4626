@@ -96,7 +96,7 @@ async function getOwnerAccount(rec: any) {
         },
       })
     : (() => {
-        if (!rec.sessionOwnerKeyEnc) throw new Error('session_owner_key_missing')
+        if (!rec.sessionOwnerKeyEnc) throw new Error('session_owner_unavailable')
         const pk = decryptWithSecret(rec.sessionOwnerKeyEnc) as Hex
         return privateKeyToAccount(pk)
       })()
@@ -397,6 +397,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err) {
     if (err instanceof Error && err.message === CONCURRENT_MODIFICATION) {
       return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
+    }
+    if (err instanceof Error && (err.message === 'session_owner_unavailable' || err.message === 'session_owner_key_missing')) {
+      // Legacy/broken session: keep status readable without failing the endpoint.
+      rec = {
+        ...rec,
+        lastError: rec.lastError || 'session_owner_unavailable',
+      }
     }
     // Best-effort: if background advancement fails, still return current state.
   }

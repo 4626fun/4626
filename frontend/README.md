@@ -128,6 +128,8 @@ npm run build
 
 ## Waitlist (DB)
 
+See also: `docs/waitlist-entry-scenarios.md` for entry-path and email-rule behavior (including CSW-first flows).
+
 The waitlist API stores signups in Postgres. Create the table once:
 
 ```sql

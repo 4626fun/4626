@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import cancelHandler from '../_handlers/deploy/session/_cancel.ts'
 import continueHandler from '../_handlers/deploy/session/_continue.ts'
 import statusHandler from '../_handlers/deploy/session/_status.ts'
 import { createMockReq, createMockRes } from './helpers'
@@ -183,5 +184,58 @@ describe('deploy session optimistic concurrency', () => {
 
     expect(res.statusCode).toBe(400)
     expect(String(res.body?.error ?? '')).toContain('completed')
+  })
+
+  it('returns actionable 409 when continue session owner credentials are unavailable', async () => {
+    const rec = {
+      ...makeDeploySession('created'),
+      sessionOwnerKeyEnc: null,
+      payload: { phase2Calls: [{ to: '0xcalltarget', value: '0', data: '0x' }], phase3Calls: [] },
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(String(res.body?.error ?? '')).toContain('credentials unavailable')
+    expect(updateDeploySessionMock).not.toHaveBeenCalled()
+  })
+
+  it('cancel marks session cancelled when owner credentials are unavailable', async () => {
+    const rec = {
+      ...makeDeploySession('created'),
+      sessionOwnerKeyEnc: null,
+      payload: { phase2Calls: [{ to: '0xcalltarget', value: '0', data: '0x' }], phase3Calls: [] },
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await cancelHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.cleanupSkipped).toBe(true)
+    expect(res.body?.data?.step).toBe('cancelled')
+    expect(updateDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', step: 'cancelled', lastError: 'cleanup_skipped_owner_unavailable' }),
+    )
+  })
+
+  it('status remains readable when owner credentials are unavailable', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_confirmed'),
+      sessionOwnerKeyEnc: null,
+      payload: { phase2Calls: [{ to: '0xcalltarget', value: '0', data: '0x' }], phase3Calls: [] },
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.id).toBe('sess_1')
   })
 })
