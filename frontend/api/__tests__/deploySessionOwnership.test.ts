@@ -11,7 +11,8 @@ const {
   ensureDeploySessionsSchemaMock,
   insertDeploySessionMock,
   getOrCreateCreatorAgentWalletMock,
-  ensureWaitlistSchemaMock,
+  generatePrivateKeyMock,
+  privateKeyToAccountMock,
 } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async (req: any) => req.body),
   readSessionFromRequestMock: vi.fn(() => ({ address: '0x0000000000000000000000000000000000000001' })),
@@ -23,7 +24,11 @@ const {
     walletId: 'agent_1',
     address: '0x00000000000000000000000000000000000000f1',
   })),
-  ensureWaitlistSchemaMock: vi.fn(async () => {}),
+  generatePrivateKeyMock: vi.fn(() => ('0x' + '11'.repeat(32)) as `0x${string}`),
+  privateKeyToAccountMock: vi.fn(() => ({
+    address: '0x00000000000000000000000000000000000000aa',
+    privateKey: ('0x' + '11'.repeat(32)) as `0x${string}`,
+  })),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -62,8 +67,9 @@ vi.mock('../../server/_lib/creatorAgentWallets.js', () => ({
   getOrCreateCreatorAgentWallet: getOrCreateCreatorAgentWalletMock,
 }))
 
-vi.mock('../../server/_lib/waitlistSchema.js', () => ({
-  ensureWaitlistSchema: ensureWaitlistSchemaMock,
+vi.mock('viem/accounts', () => ({
+  generatePrivateKey: generatePrivateKeyMock,
+  privateKeyToAccount: privateKeyToAccountMock,
 }))
 
 function makeRequestBody() {
@@ -76,6 +82,39 @@ function makeRequestBody() {
   }
 }
 
+function makeCanonicalDb() {
+  return {
+    query: vi.fn(async () => ({ rows: [{}] })), // allowlist pass
+    sql: vi.fn(async (strings: TemplateStringsArray) => {
+      const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      if (text.includes('is_canonical_smart_wallet = true')) return { rows: [{ profile_id: 99 }] }
+      if (text.includes('select lower(address) as address') && text.includes('from profile_wallets')) {
+        return {
+          rows: [
+            { address: '0x0000000000000000000000000000000000000001' },
+            { address: '0x0000000000000000000000000000000000000002' },
+          ],
+        }
+      }
+      if (text.includes('from profiles') && text.includes('where id =')) {
+        return {
+          rows: [
+            {
+              primary_wallet: '0x0000000000000000000000000000000000000001',
+              embedded_wallet: null,
+              primary_embedded_eoa: null,
+              primary_smart_wallet: '0x0000000000000000000000000000000000000002',
+              csw_address: '0x0000000000000000000000000000000000000002',
+              base_sub_account: null,
+            },
+          ],
+        }
+      }
+      return { rows: [] }
+    }),
+  }
+}
+
 describe('deploy session ownership guardrails', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -83,7 +122,7 @@ describe('deploy session ownership guardrails', () => {
 
   it('returns 403 when canonical smart wallet mapping is missing', async () => {
     getDbMock.mockResolvedValue({
-      query: vi.fn(async () => ({ rows: [{}] })), // allowlist pass
+      query: vi.fn(async () => ({ rows: [{}] })),
       sql: vi.fn(async (strings: TemplateStringsArray) => {
         const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
         if (text.includes('is_canonical_smart_wallet = true')) return { rows: [] }
@@ -101,36 +140,7 @@ describe('deploy session ownership guardrails', () => {
   })
 
   it('creates session when canonical + embedded mappings are consistent', async () => {
-    getDbMock.mockResolvedValue({
-      query: vi.fn(async () => ({ rows: [{}] })), // allowlist pass
-      sql: vi.fn(async (strings: TemplateStringsArray) => {
-        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
-        if (text.includes('is_canonical_smart_wallet = true')) return { rows: [{ profile_id: 99 }] }
-        if (text.includes('select lower(address) as address') && text.includes('from profile_wallets')) {
-          return {
-            rows: [
-              { address: '0x0000000000000000000000000000000000000001' },
-              { address: '0x0000000000000000000000000000000000000002' },
-            ],
-          }
-        }
-        if (text.includes('from profiles') && text.includes('where id =')) {
-          return {
-            rows: [
-              {
-                primary_wallet: '0x0000000000000000000000000000000000000001',
-                embedded_wallet: null,
-                primary_embedded_eoa: null,
-                primary_smart_wallet: '0x0000000000000000000000000000000000000002',
-                csw_address: '0x0000000000000000000000000000000000000002',
-                base_sub_account: null,
-              },
-            ],
-          }
-        }
-        return { rows: [] }
-      }),
-    })
+    getDbMock.mockResolvedValue(makeCanonicalDb())
 
     const req = createMockReq({ method: 'POST', body: makeRequestBody() })
     const res = createMockRes()
@@ -138,5 +148,44 @@ describe('deploy session ownership guardrails', () => {
 
     expect(res.statusCode).toBe(200)
     expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
+    const insertArgs = insertDeploySessionMock.mock.calls[0]?.[0] as any
+    expect(insertArgs.payload?.erc7712Grant?.version).toBe('erc7712-v1')
+    expect((insertArgs.payload?.erc7712Grant?.allowedTargets ?? []).map((v: string) => v.toLowerCase())).toContain('0x0000000000000000000000000000000000000002')
+  })
+
+
+  it('falls back to local session owner key when agent wallet id is missing', async () => {
+    getOrCreateCreatorAgentWalletMock.mockResolvedValueOnce({
+      walletId: '',
+      address: '0x00000000000000000000000000000000000000f1',
+    })
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+
+    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(generatePrivateKeyMock).toHaveBeenCalledTimes(1)
+    expect(privateKeyToAccountMock).toHaveBeenCalledTimes(1)
+    const insertArgs = insertDeploySessionMock.mock.calls[0]?.[0] as any
+    expect(insertArgs.sessionOwnerPrivateKey).toBe('0x' + '11'.repeat(32))
+    expect(insertArgs.payload?.agentWalletId).toBeUndefined()
+  })
+  it('falls back to local session owner key when agent wallet provisioning fails', async () => {
+    getOrCreateCreatorAgentWalletMock.mockRejectedValueOnce(new Error('PRIVY_APP_ID missing'))
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+
+    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(generatePrivateKeyMock).toHaveBeenCalledTimes(1)
+    expect(privateKeyToAccountMock).toHaveBeenCalledTimes(1)
+    expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
+    const insertArgs = insertDeploySessionMock.mock.calls[0]?.[0] as any
+    expect(insertArgs.sessionOwnerPrivateKey).toBe('0x' + '11'.repeat(32))
+    expect(insertArgs.payload?.agentWalletId).toBeUndefined()
   })
 })

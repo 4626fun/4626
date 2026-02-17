@@ -40,6 +40,16 @@ function getBearerToken(req: VercelRequest): string | null {
   return token.length > 0 ? token : null
 }
 
+
+let lastPrivyAuthDbSyncAtMs = 0
+
+function getPrivyAuthDbSyncMinIntervalMs(): number {
+  const raw = String(process.env.PRIVY_AUTH_DB_SYNC_MIN_INTERVAL_MS ?? '').trim()
+  const n = Number(raw)
+  if (Number.isFinite(n) && n >= 0) return Math.floor(n)
+  return 15_000
+}
+
 function isLegacyFallbackEnabled(): boolean {
   const raw = String(process.env.WALLET_SYNC_LEGACY_FALLBACK ?? 'false').trim().toLowerCase()
   return raw !== '0' && raw !== 'false' && raw !== 'off'
@@ -85,28 +95,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCookie(req, res, COOKIE_SESSION, sessionToken, { httpOnly: true, maxAgeSeconds: 60 * 60 * 24 * 7 })
 
     try {
-      const db = await getDb()
-      if (db) {
-        await ensureWaitlistSchema(db as any)
-        const syncResult = await syncUserWallets(db as any, user as any)
-        const rawEmail = typeof (user as any)?.email?.address === 'string' ? String((user as any).email.address).trim() : ''
-        const privyEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail) ? rawEmail.toLowerCase() : null
+      const now = Date.now()
+      const minInterval = getPrivyAuthDbSyncMinIntervalMs()
+      if (now - lastPrivyAuthDbSyncAtMs >= minInterval) {
+        const db = await getDb()
+        if (db) {
+          await ensureWaitlistSchema(db as any)
+          const syncResult = await syncUserWallets(db as any, user as any)
+          const rawEmail = typeof (user as any)?.email?.address === 'string' ? String((user as any).email.address).trim() : ''
+          const privyEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail) ? rawEmail.toLowerCase() : null
 
-        if (isLegacyFallbackEnabled()) {
-          try {
-            await upsertProfileByWallet(db as any, {
-              email: privyEmail,
-              primaryWallet: syncResult.primaryWalletAddress ?? sessionAddress,
-              embeddedWallet: syncResult.embeddedEoa?.address ?? null,
-              embeddedWalletChain: syncResult.embeddedEoa?.chainType ?? null,
-              embeddedWalletClientType: syncResult.embeddedEoa?.clientType ?? null,
-              privyUserId: claims.userId,
-              cswAddress: syncResult.canonicalSmartWallet?.address ?? null,
-              baseSubAccount: syncResult.canonicalSmartWallet?.address ?? null,
-            })
-          } catch {
-            // Compatibility write should not block auth.
+          if (isLegacyFallbackEnabled()) {
+            try {
+              await upsertProfileByWallet(db as any, {
+                email: privyEmail,
+                primaryWallet: syncResult.primaryWalletAddress ?? sessionAddress,
+                embeddedWallet: syncResult.embeddedEoa?.address ?? null,
+                embeddedWalletChain: syncResult.embeddedEoa?.chainType ?? null,
+                embeddedWalletClientType: syncResult.embeddedEoa?.clientType ?? null,
+                privyUserId: claims.userId,
+                cswAddress: syncResult.canonicalSmartWallet?.address ?? null,
+                baseSubAccount: syncResult.canonicalSmartWallet?.address ?? null,
+              })
+            } catch {
+              // Compatibility write should not block auth.
+            }
           }
+          lastPrivyAuthDbSyncAtMs = now
         }
       }
     } catch {
