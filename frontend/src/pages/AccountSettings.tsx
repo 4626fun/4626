@@ -193,6 +193,10 @@ type KnownAddress = {
   verifiedAt: string | null
 }
 
+type KnownAddressWithOwners = KnownAddress & {
+  ownerSlots: SmartWalletOwner[]
+}
+
 type AssociatedAccount = {
   label: string
   value: string
@@ -612,6 +616,46 @@ export function AccountSettings() {
       .sort((a, b) => b.rank - a.rank || a.address.localeCompare(b.address))
   }, [canonicalSmartWalletAddress, primarySmartWalletAddress, profile])
 
+  const ownerSlotsByAddress = useMemo(() => {
+    const map = new Map<string, SmartWalletOwner[]>()
+    for (const owner of smartWalletOwners) {
+      if (!owner.ownerAddress || !isEvmAddress(owner.ownerAddress)) continue
+      const key = owner.ownerAddress.toLowerCase()
+      const existing = map.get(key) ?? []
+      existing.push(owner)
+      map.set(key, existing)
+    }
+    for (const entry of map.values()) {
+      entry.sort((a, b) => a.index - b.index)
+    }
+    return map
+  }, [smartWalletOwners])
+
+  const knownAddressesWithOwners = useMemo<KnownAddressWithOwners[]>(() => {
+    const map = new Map<string, KnownAddressWithOwners>()
+    for (const item of knownAddresses) {
+      const key = item.address.toLowerCase()
+      map.set(key, {
+        ...item,
+        ownerSlots: ownerSlotsByAddress.get(key) ?? [],
+      })
+    }
+
+    for (const [address, ownerSlots] of ownerSlotsByAddress.entries()) {
+      if (map.has(address)) continue
+      map.set(address, {
+        address: getAddress(address),
+        badges: ['Smart Wallet Owner'],
+        subtitle: 'Canonical Smart Wallet owner',
+        rank: 76,
+        verifiedAt: null,
+        ownerSlots,
+      })
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.rank - a.rank || a.address.localeCompare(b.address))
+  }, [knownAddresses, ownerSlotsByAddress])
+
   const zoraProfileIdentifier = useMemo(() => {
     const fromHandle = normalizeHandle(profile?.preprovZoraHandle)
     if (fromHandle) return fromHandle
@@ -893,11 +937,42 @@ export function AccountSettings() {
         </div>
         <p className="text-sm text-zinc-400">Wallets and linked accounts associated with your profile.</p>
 
-        {knownAddresses.length > 0 ? (
+        {canonicalSmartWalletAddress ? (
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 space-y-2">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+              <span>Canonical: <span className="font-mono text-zinc-300">{canonicalSmartWalletAddress}</span></span>
+              {connectedAddress ? (
+                <span>Connected owner wallet: <span className="font-mono text-zinc-300">{connectedAddress}</span></span>
+              ) : (
+                <span>Connect an owner EOA to revoke owner slots.</span>
+              )}
+            </div>
+            {ownersActionMessage ? (
+              <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+                {ownersActionMessage}
+              </div>
+            ) : null}
+            {ownersActionError ? (
+              <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+                {ownersActionError}
+              </div>
+            ) : null}
+            {smartWalletOwnersQuery.isLoading ? <div className="text-xs text-zinc-500">Loading owner slots…</div> : null}
+            {smartWalletOwnersQuery.isError ? (
+              <div className="text-xs text-red-300">
+                {smartWalletOwnersQuery.error instanceof Error
+                  ? smartWalletOwnersQuery.error.message
+                  : 'Failed to load owner slots.'}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {knownAddressesWithOwners.length > 0 ? (
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
-            <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Known Addresses</div>
+            <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Known Addresses & Owner Slots</div>
             <div className="space-y-2">
-              {knownAddresses.map((item) => (
+              {knownAddressesWithOwners.map((item) => (
                 <div key={`known:${item.address.toLowerCase()}`} className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2.5">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="font-mono text-xs sm:text-sm text-zinc-100 break-all">{item.address}</div>
@@ -932,6 +1007,48 @@ export function AccountSettings() {
                   {formatDateTime(item.verifiedAt) ? (
                     <div className="mt-1 text-[11px] text-zinc-500">Verified {formatDateTime(item.verifiedAt)}</div>
                   ) : null}
+                  {item.ownerSlots.length > 0 ? (
+                    <div className="mt-2 space-y-2 rounded-md border border-zinc-800 bg-black/20 p-2">
+                      <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
+                        Owner Slots: {item.ownerSlots.map((slot) => `#${slot.index}`).join(', ')}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {item.ownerSlots.map((slot) => {
+                          const slotOwnerAddress = slot.ownerAddress && isEvmAddress(slot.ownerAddress) ? getAddress(slot.ownerAddress) : null
+                          const isConnectedOwner = Boolean(
+                            slotOwnerAddress && connectedAddress && slotOwnerAddress.toLowerCase() === connectedAddress.toLowerCase(),
+                          )
+                          const disableRevoke =
+                            revokeBusyIndex !== null ||
+                            !connectedAddressIsOwner ||
+                            !slotOwnerAddress ||
+                            isConnectedOwner ||
+                            addressOwnerCount <= 1
+                          return (
+                            <button
+                              key={`revoke:${item.address.toLowerCase()}:${slot.index}`}
+                              type="button"
+                              onClick={() => void onRevokeOwner(slot)}
+                              disabled={disableRevoke}
+                              className="inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] text-red-200 disabled:opacity-40"
+                              title={
+                                !connectedAddressIsOwner
+                                  ? 'Connected wallet is not an owner'
+                                  : isConnectedOwner
+                                    ? 'Cannot revoke connected owner from this page'
+                                    : addressOwnerCount <= 1
+                                      ? 'Cannot revoke the last address owner'
+                                      : undefined
+                              }
+                            >
+                              {revokeBusyIndex === slot.index ? `Revoking #${slot.index}…` : `Revoke #${slot.index}`}
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -942,7 +1059,7 @@ export function AccountSettings() {
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 space-y-2">
             <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Sync Summary</div>
             <div className="text-sm text-zinc-300">
-              {knownAddresses.length} unique addresses from {profile.connectedAccounts.length} synced records.
+              {knownAddressesWithOwners.length} unique addresses from {profile.connectedAccounts.length} synced records.
             </div>
           </div>
         ) : (
@@ -950,118 +1067,6 @@ export function AccountSettings() {
             No connected accounts found for this profile yet.
           </div>
         )}
-
-        {canonicalSmartWalletAddress ? (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
-            <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Canonical Smart Wallet Owners</div>
-            <div className="text-xs text-zinc-500">
-              Owners are read directly from onchain CSW owner slots. Revoke requires a connected owner EOA on Base.
-            </div>
-
-            {ownersActionMessage ? (
-              <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
-                {ownersActionMessage}
-              </div>
-            ) : null}
-            {ownersActionError ? (
-              <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-                {ownersActionError}
-              </div>
-            ) : null}
-
-            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-              <span>Canonical: <span className="font-mono text-zinc-300">{canonicalSmartWalletAddress}</span></span>
-              {connectedAddress ? (
-                <span>Connected owner wallet: <span className="font-mono text-zinc-300">{connectedAddress}</span></span>
-              ) : (
-                <span>Connect an owner EOA to revoke.</span>
-              )}
-            </div>
-
-            {smartWalletOwnersQuery.isLoading ? (
-              <div className="text-sm text-zinc-400">Loading owners…</div>
-            ) : smartWalletOwnersQuery.isError ? (
-              <div className="text-sm text-red-300">
-                {smartWalletOwnersQuery.error instanceof Error
-                  ? smartWalletOwnersQuery.error.message
-                  : 'Failed to load owner list.'}
-              </div>
-            ) : smartWalletOwners.length > 0 ? (
-              <div className="space-y-2">
-                {smartWalletOwners.map((owner) => {
-                  const ownerAddress = owner.ownerAddress && isEvmAddress(owner.ownerAddress) ? getAddress(owner.ownerAddress) : null
-                  const isConnectedOwner = Boolean(
-                    ownerAddress && connectedAddress && ownerAddress.toLowerCase() === connectedAddress.toLowerCase(),
-                  )
-                  const disableRevoke =
-                    revokeBusyIndex !== null ||
-                    !connectedAddressIsOwner ||
-                    !ownerAddress ||
-                    isConnectedOwner ||
-                    addressOwnerCount <= 1
-                  return (
-                    <div
-                      key={`${owner.index}:${owner.ownerBytes.toLowerCase()}`}
-                      className="rounded-md border border-zinc-800 bg-zinc-950/60 px-3 py-2.5"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className="space-y-1">
-                          <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Index {owner.index}</div>
-                          {ownerAddress ? (
-                            <div className="font-mono text-xs text-zinc-100 break-all">{ownerAddress}</div>
-                          ) : (
-                            <div className="font-mono text-xs text-zinc-300 break-all">{owner.ownerBytes}</div>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {ownerAddress ? (
-                            <button
-                              type="button"
-                              onClick={() => onCopyAddress(ownerAddress)}
-                              className="inline-flex items-center gap-1 rounded-md border border-zinc-700 px-2 py-1 text-[10px] text-zinc-300 hover:text-zinc-100"
-                            >
-                              {copiedAddress === ownerAddress.toLowerCase() ? 'Copied' : 'Copy'}
-                              <Copy className="w-3 h-3" />
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={() => void onRevokeOwner(owner)}
-                            disabled={disableRevoke}
-                            className="inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] text-red-200 disabled:opacity-40"
-                            title={
-                              !connectedAddressIsOwner
-                                ? 'Connected wallet is not an owner'
-                                : isConnectedOwner
-                                  ? 'Cannot revoke connected owner from this page'
-                                  : addressOwnerCount <= 1
-                                    ? 'Cannot revoke the last address owner'
-                                    : undefined
-                            }
-                          >
-                            {revokeBusyIndex === owner.index ? 'Revoking…' : 'Revoke'}
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="mt-2 text-[11px] text-zinc-500">
-                        {ownerAddress ? 'Address owner' : 'Non-address owner bytes'}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="text-sm text-zinc-400">No owners found.</div>
-            )}
-
-            <div className="text-[11px] text-zinc-500">
-              {connectedAddressIsOwner
-                ? 'Your connected wallet is an owner and can submit revoke transactions.'
-                : 'Connect an owner EOA to revoke owners.'}
-            </div>
-          </div>
-        ) : null}
       </section>
 
       <section className="card rounded-xl p-6 space-y-4">
