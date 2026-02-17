@@ -21,6 +21,19 @@ type StatusRequest = { sessionId: string }
 
 const CONCURRENT_MODIFICATION = 'concurrent_modification'
 
+function isTruthyEnv(value: string | undefined, fallback: boolean): boolean {
+  if (value == null) return fallback
+  const normalized = String(value).trim().toLowerCase()
+  if (!normalized) return fallback
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false
+  return fallback
+}
+
+function shouldPersistManagedSessionOwner(): boolean {
+  return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, true)
+}
+
 const COINBASE_SMART_WALLET_OWNERS_ABI = [
   { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'ownerAtIndex', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'bytes' }] },
@@ -136,6 +149,10 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   }
 
   const payload: any = rec.payload ?? {}
+  const agentWalletId = typeof payload?.agentWalletId === 'string' ? payload.agentWalletId.trim() : ''
+  const persistSessionOwner =
+    payload?.persistSessionOwner === true ||
+    (payload?.persistSessionOwner == null && Boolean(agentWalletId) && shouldPersistManagedSessionOwner())
   const erc7712Grant = parseGrant(payload?.erc7712Grant)
   const toBigInt = (v: any): bigint => {
     if (typeof v === 'bigint') return v
@@ -227,7 +244,8 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     attachCleanup: boolean,
   ) => {
     const fullCalls = [...calls]
-    if (attachCleanup) fullCalls.push((await getCtx()).removeOwnerCall)
+    const shouldAttachCleanup = attachCleanup && !persistSessionOwner
+    if (shouldAttachCleanup) fullCalls.push((await getCtx()).removeOwnerCall)
 
     const permissionCheck = validateCallsAgainstGrant({
       grant: erc7712Grant,

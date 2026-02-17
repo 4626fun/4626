@@ -19,6 +19,19 @@ declare const process: { env: Record<string, string | undefined> }
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type CancelRequest = { sessionId: string }
 
+function isTruthyEnv(value: string | undefined, fallback: boolean): boolean {
+  if (value == null) return fallback
+  const normalized = String(value).trim().toLowerCase()
+  if (!normalized) return fallback
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false
+  return fallback
+}
+
+function shouldPersistManagedSessionOwner(): boolean {
+  return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, true)
+}
+
 const COINBASE_SMART_WALLET_OWNERS_ABI = [
   { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'ownerAtIndex', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'bytes' }] },
@@ -95,6 +108,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const payload: any = rec.payload ?? {}
     const agentWalletId = typeof payload?.agentWalletId === 'string' ? payload.agentWalletId.trim() : ''
+    const persistSessionOwner =
+      payload?.persistSessionOwner === true ||
+      (payload?.persistSessionOwner == null && Boolean(agentWalletId) && shouldPersistManagedSessionOwner())
+    if (persistSessionOwner) {
+      await updateDeploySession({ id: rec.id, step: 'cancelled', lastError: null })
+      return res.status(200).json({
+        success: true,
+        data: { id: rec.id, step: 'cancelled', cleanupSkipped: true, reason: 'persistent_session_owner' },
+      } satisfies ApiEnvelope<any>)
+    }
     const sessionOwner = getAddress(rec.sessionOwner)
     const ownerAccount = agentWalletId
       ? toAccount({

@@ -258,6 +258,31 @@ describe('deploy session optimistic concurrency', () => {
     expect(updateDeploySessionMock).not.toHaveBeenCalled()
   })
 
+  it('does not append cleanup owner removal when persistent session owner is enabled', async () => {
+    const rec = {
+      ...makeDeploySession('created'),
+      payload: {
+        phase2Calls: [{ to: '0xcalltarget', value: '0', data: '0x12345678' }],
+        phase3Calls: [],
+        agentWalletId: 'agent_123',
+        persistSessionOwner: true,
+      },
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
+    const args = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
+    expect(Array.isArray(args?.calls)).toBe(true)
+    expect(args.calls).toHaveLength(1)
+    expect(String(args.calls[0]?.to)).toBe('0xcalltarget')
+  })
+
   it('cancel marks session cancelled when owner credentials are unavailable', async () => {
     const rec = {
       ...makeDeploySession('created'),
@@ -275,6 +300,31 @@ describe('deploy session optimistic concurrency', () => {
     expect(res.body?.data?.step).toBe('cancelled')
     expect(updateDeploySessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sess_1', step: 'cancelled', lastError: 'cleanup_skipped_owner_unavailable' }),
+    )
+  })
+
+  it('cancel skips cleanup for persistent managed session owners', async () => {
+    const rec = {
+      ...makeDeploySession('created'),
+      payload: {
+        phase2Calls: [{ to: '0xcalltarget', value: '0', data: '0x' }],
+        phase3Calls: [],
+        agentWalletId: 'agent_123',
+        persistSessionOwner: true,
+      },
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await cancelHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.cleanupSkipped).toBe(true)
+    expect(res.body?.data?.reason).toBe('persistent_session_owner')
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
+    expect(updateDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', step: 'cancelled', lastError: null }),
     )
   })
 

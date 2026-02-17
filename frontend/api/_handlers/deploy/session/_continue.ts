@@ -20,6 +20,19 @@ declare const process: { env: Record<string, string | undefined> }
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type ContinueRequest = { sessionId: string }
 
+function isTruthyEnv(value: string | undefined, fallback: boolean): boolean {
+  if (value == null) return fallback
+  const normalized = String(value).trim().toLowerCase()
+  if (!normalized) return fallback
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false
+  return fallback
+}
+
+function shouldPersistManagedSessionOwner(): boolean {
+  return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, true)
+}
+
 const COINBASE_SMART_WALLET_OWNERS_ABI = [
   { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'ownerAtIndex', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'bytes' }] },
@@ -100,11 +113,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Server signs userops using the temporary owner.
+    // Server signs userops using the deploy-session owner.
     // New sessions use a Privy-managed agent wallet; legacy sessions use an encrypted raw private key.
     const payload: any = rec.payload ?? {}
     const erc7712Grant = parseGrant(payload?.erc7712Grant)
     const agentWalletId = typeof payload?.agentWalletId === 'string' ? payload.agentWalletId.trim() : ''
+    const persistSessionOwner =
+      payload?.persistSessionOwner === true ||
+      (payload?.persistSessionOwner == null && Boolean(agentWalletId) && shouldPersistManagedSessionOwner())
     const sessionOwner = getAddress(rec.sessionOwner)
     const ownerAccount = agentWalletId
       ? toAccount({
@@ -217,7 +233,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const isInFlight = ['phase1_sent', 'phase1_finalize_sent', 'phase2_core_sent', 'phase2_sent', 'phase3_sent', 'cleanup_sent'].includes(rec.step)
 
-    // Cleanup call (remove the temporary owner). Attach it to the last UserOp we send.
+    // Cleanup call (remove session owner). For managed owners, this can be skipped to reduce repeated prompts.
     const removeOwnerCall = (() => {
       const ownerBytes = asOwnerBytes(sessionOwner)
       const data = encodeFunctionData({
@@ -231,7 +247,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const hasPostPhase2 = postPhase2Calls.length > 0
     const sendStage = async (toStep: string, stageCalls: Array<{ to: Address; value: bigint; data: Hex }>, attachCleanup: boolean) => {
       const calls = [...stageCalls]
-      if (attachCleanup) calls.push(removeOwnerCall)
+      const shouldAttachCleanup = attachCleanup && !persistSessionOwner
+      if (shouldAttachCleanup) calls.push(removeOwnerCall)
 
       const permissionCheck = validateCallsAgainstGrant({
         grant: erc7712Grant,

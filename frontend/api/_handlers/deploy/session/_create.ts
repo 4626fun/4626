@@ -53,6 +53,20 @@ type OwnershipCheck = {
   reason?: string
 }
 
+function isTruthyEnv(value: string | undefined, fallback: boolean): boolean {
+  if (value == null) return fallback
+  const normalized = String(value).trim().toLowerCase()
+  if (!normalized) return fallback
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false
+  return fallback
+}
+
+function shouldPersistManagedSessionOwner(): boolean {
+  // Keep Privy-managed session owners installed by default to reduce repeated add-owner prompts.
+  return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, true)
+}
+
 
 const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
   { type: 'function', name: 'removeOwnerAtIndex', stateMutability: 'nonpayable', inputs: [{ name: 'index', type: 'uint256' }, { name: 'owner', type: 'bytes' }], outputs: [] },
@@ -405,6 +419,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const now = Date.now()
     const expiresAt = new Date(now + 10 * 60 * 1000) // 10 minutes
+    const persistSessionOwner = Boolean(agentWalletId) && shouldPersistManagedSessionOwner()
 
     const cleanupGrantCall = {
       to: smartWallet,
@@ -423,7 +438,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ...phase2Calls,
       ...phase3Calls,
       ...phase4Calls,
-      cleanupGrantCall,
+      ...(persistSessionOwner ? [] : [cleanupGrantCall]),
     ]
       .map((c) => ({ to: getAddress(c.to), value: typeof c.value === 'bigint' ? c.value : BigInt(c.value ?? 0), data: c.data as Hex }))
       .filter((c) => typeof c.data === 'string' && c.data.startsWith('0x'))
@@ -460,6 +475,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           : null),
         ...(agentWalletId ? { agentWalletId } : null),
         ...(agentWalletAddress ? { agentWalletAddress } : null),
+        persistSessionOwner,
         version: String(body.version ?? ''),
         phase1Calls,
         phase2CoreCalls,

@@ -4254,7 +4254,7 @@ function DeployVaultBatcher({
             const sessionOwner = getAddress(sessionOwnerRaw) as Address
             persistDeploySession(sessionId)
 
-            // Install the temporary owner via a single user-approved transaction.
+            // Install the deploy-session owner via a single user-approved transaction.
             // This MUST be an owner EOA transaction (not a smart wallet self-call).
             let alreadyInstalled = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionOwner })
             if (!alreadyInstalled) {
@@ -4307,7 +4307,7 @@ function DeployVaultBatcher({
               }
               if (!installed) {
                 throw new Error(
-                  'Server continuation requires an owner EOA to install a temporary deploy-session owner. ' +
+                  'Server continuation requires an owner EOA to install a deploy-session owner. ' +
                     'Connect an owner EOA wallet (e.g. Coinbase Wallet) and retry.',
                 )
               }
