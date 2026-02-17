@@ -447,6 +447,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       lastUserOpHash: rec.lastUserOpHash,
       lastTxHash: rec.lastTxHash,
       smartWallet: rec.smartWallet,
+      sessionSignerAddress: rec.sessionOwner,
       sessionOwner: rec.sessionOwner,
     },
   } satisfies ApiEnvelope<any>)

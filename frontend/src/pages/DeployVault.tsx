@@ -4249,7 +4249,7 @@ function DeployVaultBatcher({
             // After installation of the temporary owner, the server will submit all phases and then clean up.
             const createJson = await postDeploySessionCreate(false)
             sessionId = String(createJson.data?.sessionId ?? '').trim()
-            const sessionOwnerRaw = String(createJson.data?.sessionOwner ?? '').trim()
+            const sessionOwnerRaw = String(createJson.data?.sessionSignerAddress ?? createJson.data?.sessionOwner ?? '').trim()
             if (!sessionId || !isAddress(sessionOwnerRaw)) throw new Error('Invalid deploy session response')
             const sessionOwner = getAddress(sessionOwnerRaw) as Address
             persistDeploySession(sessionId)

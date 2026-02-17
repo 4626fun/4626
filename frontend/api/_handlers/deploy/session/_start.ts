@@ -110,7 +110,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const origin = getCanonicalOrigin(req)
     const headers = forwardAuthHeaders(req)
 
-    const created = await proxyPost<{ sessionId: string; sessionOwner: Address; expiresAt: string }>({
+    const created = await proxyPost<{
+      sessionId: string
+      sessionSignerAddress?: Address
+      sessionOwner: Address
+      expiresAt: string
+    }>({
       origin,
       path: 'deploy/session/create',
       body,
@@ -123,7 +128,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const sessionId = String(created.payload.data.sessionId)
-    const sessionOwner = getAddress(created.payload.data.sessionOwner)
+    const sessionSignerAddressRaw = String(
+      created.payload.data.sessionSignerAddress ?? created.payload.data.sessionOwner ?? '',
+    ).trim()
+    const sessionOwner = getAddress(sessionSignerAddressRaw)
     const smartWallet = getAddress(body.smartWallet)
 
     const autoContinue = body.autoContinue !== false

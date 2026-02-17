@@ -44,6 +44,9 @@ type CreateDeploySessionRequest = {
 
 type CreateDeploySessionResponse = {
   sessionId: string
+  // Canonical field name for the signer identity used by server-side continuation.
+  // `sessionOwner` is kept for backward compatibility with existing clients.
+  sessionSignerAddress: Address
   sessionOwner: Address
   expiresAt: string
 }
@@ -488,7 +491,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       expiresAt,
     })
 
-    const out: CreateDeploySessionResponse = { sessionId: id, sessionOwner, expiresAt: expiresAt.toISOString() }
+    const out: CreateDeploySessionResponse = {
+      sessionId: id,
+      sessionSignerAddress: sessionOwner,
+      sessionOwner,
+      expiresAt: expiresAt.toISOString(),
+    }
     return res.status(200).json({ success: true, data: out } satisfies ApiEnvelope<CreateDeploySessionResponse>)
   } catch (e: any) {
     console.error('deploy/session/create error', e?.message ? String(e.message) : e)
