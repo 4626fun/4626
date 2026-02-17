@@ -1853,6 +1853,17 @@ function DeployVaultBatcher({
         'If needed, disable server-continue (`VITE_DEPLOY_USE_SERVER_CONTINUE=false`) and run phases client-side.'
       )
     }
+    if (
+      lower.includes('user rejected') ||
+      lower.includes('rejected the request') ||
+      lower.includes('action_rejected') ||
+      lower.includes('user denied') ||
+      lower.includes('user cancelled')
+    ) {
+      return (
+        'Wallet request was cancelled. Approve the wallet prompt to continue deploy, or reconnect your owner EOA/WalletConnect session and retry.'
+      )
+    }
     if (lower.includes('missing_primary_call')) {
       const expectedMatch = msg.match(/expectedBatcher=(0x[a-fA-F0-9]{40})/i)
       const seenMatch = msg.match(/seen=(0x[a-fA-F0-9]{40}):(0x[a-fA-F0-9]{8})/i)
@@ -4432,7 +4443,14 @@ function DeployVaultBatcher({
       }
       
       let pretty = formatDeployError(e)
-      logger.warn('[DeployVault] deploy_failed', { error: pretty })
+      const isUserRejected =
+        rawMsg.toLowerCase().includes('user rejected') ||
+        rawMsg.toLowerCase().includes('rejected the request') ||
+        rawMsg.toLowerCase().includes('action_rejected') ||
+        rawMsg.toLowerCase().includes('user denied') ||
+        rawMsg.toLowerCase().includes('user cancelled')
+      if (isUserRejected) logger.info('[DeployVault] deploy_cancelled_by_user', { error: pretty })
+      else logger.warn('[DeployVault] deploy_failed', { error: pretty })
       setError(pretty)
     } finally {
       if (!planOnly) setBusy(false)
