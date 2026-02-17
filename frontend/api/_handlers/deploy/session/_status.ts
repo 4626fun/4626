@@ -78,13 +78,18 @@ async function findOwnerIndex(params: {
 
 async function getOwnerAccount(rec: any) {
   const payload: any = rec.payload ?? {}
-  const agentWalletId = typeof payload?.agentWalletId === 'string' ? payload.agentWalletId.trim() : ''
+  const deploySignerWalletId =
+    typeof payload?.deploySignerWalletId === 'string'
+      ? payload.deploySignerWalletId.trim()
+      : typeof payload?.agentWalletId === 'string'
+        ? payload.agentWalletId.trim()
+        : ''
   const sessionOwner = getAddress(rec.sessionOwner)
-  const ownerAccount = agentWalletId
+  const ownerAccount = deploySignerWalletId
     ? toAccount({
         address: sessionOwner,
         sign: async ({ hash }: { hash: Hex }) => {
-          return (await secp256k1SignHash({ walletId: agentWalletId, hash })) as Hex
+          return (await secp256k1SignHash({ walletId: deploySignerWalletId, hash })) as Hex
         },
         signTransaction: async () => {
           throw new Error('privy_sign_transaction_unsupported')
@@ -97,7 +102,7 @@ async function getOwnerAccount(rec: any) {
                 ? message.raw
                 : `0x${Buffer.from(message.raw).toString('hex')}`
           const out = await walletRpc<any>({
-            walletId: agentWalletId,
+            walletId: deploySignerWalletId,
             method: 'personal_sign',
             rpcParams: { message: msg, encoding: 'hex' },
           })
@@ -149,10 +154,15 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   }
 
   const payload: any = rec.payload ?? {}
-  const agentWalletId = typeof payload?.agentWalletId === 'string' ? payload.agentWalletId.trim() : ''
+  const deploySignerWalletId =
+    typeof payload?.deploySignerWalletId === 'string'
+      ? payload.deploySignerWalletId.trim()
+      : typeof payload?.agentWalletId === 'string'
+        ? payload.agentWalletId.trim()
+        : ''
   const persistSessionOwner =
     payload?.persistSessionOwner === true ||
-    (payload?.persistSessionOwner == null && Boolean(agentWalletId) && shouldPersistManagedSessionOwner())
+    (payload?.persistSessionOwner == null && Boolean(deploySignerWalletId) && shouldPersistManagedSessionOwner())
   const erc7712Grant = parseGrant(payload?.erc7712Grant)
   const toBigInt = (v: any): bigint => {
     if (typeof v === 'bigint') return v
@@ -448,6 +458,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       lastTxHash: rec.lastTxHash,
       smartWallet: rec.smartWallet,
       sessionSignerAddress: rec.sessionOwner,
+      sessionSignerWalletId:
+        (typeof rec?.payload?.deploySignerWalletId === 'string' && rec.payload.deploySignerWalletId.trim()) ||
+        (typeof rec?.payload?.agentWalletId === 'string' && rec.payload.agentWalletId.trim()) ||
+        null,
       sessionOwner: rec.sessionOwner,
     },
   } satisfies ApiEnvelope<any>)

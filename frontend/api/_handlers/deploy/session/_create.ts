@@ -47,6 +47,7 @@ type CreateDeploySessionResponse = {
   // Canonical field name for the signer identity used by server-side continuation.
   // `sessionOwner` is kept for backward compatibility with existing clients.
   sessionSignerAddress: Address
+  sessionSignerWalletId?: string
   sessionOwner: Address
   expiresAt: string
 }
@@ -398,19 +399,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const tokenHash = hashDeployToken(deployToken)
     const id = randomId()
 
-    // Preferred: per-creator Privy-managed agent wallet (Keepr can reuse it for ops).
+    // Preferred: per-creator Privy-managed deploy signer wallet (Keepr can reuse it for ops).
     // Fallback: ephemeral local session owner key when Privy wallet provisioning is unavailable.
     let sessionOwnerPrivateKey: Hex | null = null
-    let agentWalletId: string | null = null
-    let agentWalletAddress: Address | null = null
+    let deploySignerWalletId: string | null = null
+    let deploySignerAddress: Address | null = null
     let sessionOwner: Address
     try {
       const agentWallet = await getOrCreateCreatorAgentWallet({ creatorToken: creatorToken.toLowerCase() as `0x${string}` })
       const walletId = String(agentWallet.walletId || '').trim()
       if (!walletId) throw new Error('agent_wallet_id_missing')
       sessionOwner = getAddress(agentWallet.address)
-      agentWalletId = walletId
-      agentWalletAddress = getAddress(agentWallet.address)
+      deploySignerWalletId = walletId
+      deploySignerAddress = getAddress(agentWallet.address)
     } catch (e: any) {
       const fallback = privateKeyToAccount(generatePrivateKey())
       sessionOwnerPrivateKey = (fallback as any).privateKey as Hex
@@ -422,7 +423,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const now = Date.now()
     const expiresAt = new Date(now + 10 * 60 * 1000) // 10 minutes
-    const persistSessionOwner = Boolean(agentWalletId) && shouldPersistManagedSessionOwner()
+    const persistSessionOwner = Boolean(deploySignerWalletId) && shouldPersistManagedSessionOwner()
 
     const cleanupGrantCall = {
       to: smartWallet,
@@ -476,8 +477,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               authAgentChainId: auth.chainId,
             }
           : null),
-        ...(agentWalletId ? { agentWalletId } : null),
-        ...(agentWalletAddress ? { agentWalletAddress } : null),
+        // New names
+        ...(deploySignerWalletId ? { deploySignerWalletId } : null),
+        ...(deploySignerAddress ? { deploySignerAddress } : null),
+        // Legacy aliases (kept for backward compatibility)
+        ...(deploySignerWalletId ? { agentWalletId: deploySignerWalletId } : null),
+        ...(deploySignerAddress ? { agentWalletAddress: deploySignerAddress } : null),
         persistSessionOwner,
         version: String(body.version ?? ''),
         phase1Calls,
@@ -494,6 +499,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const out: CreateDeploySessionResponse = {
       sessionId: id,
       sessionSignerAddress: sessionOwner,
+      ...(deploySignerWalletId ? { sessionSignerWalletId: deploySignerWalletId } : null),
       sessionOwner,
       expiresAt: expiresAt.toISOString(),
     }
