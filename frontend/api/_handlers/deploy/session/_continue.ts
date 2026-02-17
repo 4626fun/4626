@@ -13,6 +13,7 @@ import { decryptWithSecret, getDeploySessionById, signDeployToken, transitionDep
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
+import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -102,6 +103,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Server signs userops using the temporary owner.
     // New sessions use a Privy-managed agent wallet; legacy sessions use an encrypted raw private key.
     const payload: any = rec.payload ?? {}
+    const erc7712Grant = parseGrant(payload?.erc7712Grant)
     const agentWalletId = typeof payload?.agentWalletId === 'string' ? payload.agentWalletId.trim() : ''
     const sessionOwner = getAddress(rec.sessionOwner)
     const ownerAccount = agentWalletId
@@ -134,7 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         })
       : (() => {
-          if (!rec.sessionOwnerKeyEnc) throw new Error('session_owner_key_missing')
+          if (!rec.sessionOwnerKeyEnc) throw new Error('session_owner_unavailable')
           const pk = decryptWithSecret(rec.sessionOwnerKeyEnc) as Hex
           return privateKeyToAccount(pk)
         })()
@@ -228,6 +230,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const hasPostPhase2 = postPhase2Calls.length > 0
     const sendStage = async (toStep: string, stageCalls: Array<{ to: Address; value: bigint; data: Hex }>, attachCleanup: boolean) => {
+      const permissionCheck = validateCallsAgainstGrant({ grant: erc7712Grant, calls: stageCalls })
+      if (!permissionCheck.ok) {
+        return res.status(403).json({
+          success: false,
+          error: permissionCheck.reason ?? 'erc7712_permission_denied',
+        } satisfies ApiEnvelope<null>)
+      }
+
       const transitioned = await transitionDeploySession({
         id: rec.id,
         fromStep: rec.step,
@@ -352,6 +362,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<any>)
   } catch (err: any) {
     const msg = err?.message ? String(err.message) : 'continue_failed'
+    if (msg === 'session_owner_unavailable' || msg === 'session_owner_key_missing') {
+      return res.status(409).json({
+        success: false,
+        error: 'Session owner credentials unavailable. Please restart deploy session.',
+      } satisfies ApiEnvelope<null>)
+    }
     logger.error('deploy session continue failed', msg)
     try {
       await updateDeploySession({ id: rec.id, step: 'failed', lastError: msg })

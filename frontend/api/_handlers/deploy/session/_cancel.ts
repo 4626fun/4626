@@ -126,10 +126,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         })
       : (() => {
-          if (!rec.sessionOwnerKeyEnc) throw new Error('session_owner_key_missing')
+          if (!rec.sessionOwnerKeyEnc) return null
           const pk = decryptWithSecret(rec.sessionOwnerKeyEnc) as Hex
           return privateKeyToAccount(pk)
         })()
+    if (!ownerAccount) {
+      await updateDeploySession({ id: rec.id, step: 'cancelled', lastError: 'cleanup_skipped_owner_unavailable' })
+      return res.status(200).json({
+        success: true,
+        data: { id: rec.id, step: 'cancelled', cleanupSkipped: true, reason: 'session_owner_unavailable' },
+      } satisfies ApiEnvelope<any>)
+    }
     const smartWallet = getAddress(rec.smartWallet)
 
     const publicClient = createPublicClient({

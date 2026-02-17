@@ -64,6 +64,7 @@ async function findOwnerIndex(params: {
 
 async function getOwnerAccount(rec: any) {
   const payload: any = rec.payload ?? {}
+  const erc7712Grant = parseGrant(payload?.erc7712Grant)
   const agentWalletId = typeof payload?.agentWalletId === 'string' ? payload.agentWalletId.trim() : ''
   const sessionOwner = getAddress(rec.sessionOwner)
   const ownerAccount = agentWalletId
@@ -96,7 +97,7 @@ async function getOwnerAccount(rec: any) {
         },
       })
     : (() => {
-        if (!rec.sessionOwnerKeyEnc) throw new Error('session_owner_key_missing')
+        if (!rec.sessionOwnerKeyEnc) throw new Error('session_owner_unavailable')
         const pk = decryptWithSecret(rec.sessionOwnerKeyEnc) as Hex
         return privateKeyToAccount(pk)
       })()
@@ -224,6 +225,9 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     calls: Array<{ to: Address; value: bigint; data: Hex }>,
     attachCleanup: boolean,
   ) => {
+    const permissionCheck = validateCallsAgainstGrant({ grant: erc7712Grant, calls })
+    if (!permissionCheck.ok) throw new Error(permissionCheck.reason ?? 'erc7712_permission_denied')
+
     const transitioned = await transitionDeploySession({ id: rec.id, fromStep: fromStep as any, toStep: toStep as any })
     if (!transitioned) throw new Error(CONCURRENT_MODIFICATION)
     const { bundler, paymasterClient, account, removeOwnerCall } = await getCtx()
@@ -397,6 +401,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err) {
     if (err instanceof Error && err.message === CONCURRENT_MODIFICATION) {
       return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
+    }
+    if (err instanceof Error && (err.message === 'session_owner_unavailable' || err.message === 'session_owner_key_missing')) {
+      // Legacy/broken session: keep status readable without failing the endpoint.
+      rec = {
+        ...rec,
+        lastError: rec.lastError || 'session_owner_unavailable',
+      }
     }
     // Best-effort: if background advancement fails, still return current state.
   }
