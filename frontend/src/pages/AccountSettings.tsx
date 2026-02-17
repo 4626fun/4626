@@ -70,6 +70,7 @@ function formatRole(
   const primarySmartWalletLc = opts?.primarySmartWalletAddress?.toLowerCase() ?? null
   const addressLc = account.address.toLowerCase()
   const walletType = (account.walletType ?? '').toLowerCase()
+  const provider = (account.provider ?? '').toLowerCase()
   // When a canonical address is resolved, treat it as the single source of truth
   // to prevent stale synced flags from labeling multiple wallets as canonical.
   const isCanonicalSmartWallet = canonicalLc ? canonicalLc === addressLc : account.isCanonicalSmartWallet
@@ -78,7 +79,9 @@ function formatRole(
   if (isCanonicalSmartWallet) labels.push('Canonical Smart Wallet')
   if (walletType === 'smart_wallet' && primarySmartWalletLc && primarySmartWalletLc === addressLc) labels.push('Primary Smart Wallet')
   if (account.isEmbeddedEoa) labels.push('Embedded EOA')
-  if (!isCanonicalSmartWallet && walletType === 'smart_wallet') labels.push('App Smart Wallet')
+  if (!isCanonicalSmartWallet && walletType === 'smart_wallet') {
+    labels.push(provider.includes('privy') ? 'Deploy Session Signer (Privy)' : 'App Smart Wallet')
+  }
   if (labels.length === 0) labels.push('Connected')
   return labels
 }
@@ -132,6 +135,11 @@ function inferProviderLabel(account: ConnectedAccount): string {
 
 function formatAccountSummary(account: ConnectedAccount): string {
   const provider = inferProviderLabel(account)
+  const providerRaw = typeof account.provider === 'string' ? account.provider.trim().toLowerCase() : ''
+  const walletTypeRaw = typeof account.walletType === 'string' ? account.walletType.trim().toLowerCase() : ''
+  if (walletTypeRaw === 'smart_wallet' && providerRaw.includes('privy')) {
+    return 'Privy Smart Wallet signer'
+  }
   const walletType = formatWalletTypeLabel(account.walletType)
   const chain = formatChainLabel(account.chain)
   const parts: string[] = []
@@ -942,10 +950,13 @@ export function AccountSettings() {
             <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
               <span>Canonical: <span className="font-mono text-zinc-300">{canonicalSmartWalletAddress}</span></span>
               {connectedAddress ? (
-                <span>Connected owner wallet: <span className="font-mono text-zinc-300">{connectedAddress}</span></span>
+                <span>Connected owner EOA: <span className="font-mono text-zinc-300">{connectedAddress}</span></span>
               ) : (
                 <span>Connect an owner EOA to revoke owner slots.</span>
               )}
+            </div>
+            <div className="text-[11px] text-zinc-500">
+              Non-canonical Privy smart wallets are shown as deploy-session signers, not as the canonical smart wallet.
             </div>
             {ownersActionMessage ? (
               <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
