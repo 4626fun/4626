@@ -41,7 +41,7 @@ function isValidEmail(v: string): boolean {
 }
 
 function isSyntheticEmail(v: string): boolean {
-  return v.endsWith('@noemail.4626.fun')
+  return v.endsWith('@noemail.4626.fun') || v.endsWith('@wallet.4626.fun')
 }
 
 function isLegacySyntheticEmail(v: string): boolean {
@@ -475,7 +475,7 @@ export default async function handler(req: any, res: any) {
         ORDER BY
           CASE
             WHEN p.privy_user_id IS NOT NULL THEN 0
-            WHEN LOWER(p.email) LIKE '%@noemail.4626.fun' THEN 3
+            WHEN LOWER(p.email) LIKE '%@noemail.4626.fun' OR LOWER(p.email) LIKE '%@wallet.4626.fun' THEN 3
             WHEN LOWER(p.email) LIKE '%@example.com' THEN 2
             ELSE 1
           END,

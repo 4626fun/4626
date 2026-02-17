@@ -248,15 +248,15 @@ function isValidSolanaAddress(v: string): boolean {
 }
 
 function isSyntheticEmail(v: string): boolean {
-  return v.endsWith('@noemail.4626.fun')
+  return v.endsWith('@noemail.4626.fun') || v.endsWith('@wallet.4626.fun')
 }
 
 function buildSyntheticEmail(primaryWallet: string | null): string {
   const wallet = typeof primaryWallet === 'string' ? primaryWallet.trim().toLowerCase() : ''
   if (isValidEvmAddress(wallet)) {
-    return `${wallet.replace(/^0x/, '')}@noemail.4626.fun`
+    return `${wallet.replace(/^0x/, '')}@wallet.4626.fun`
   }
-  return `wallet-${Date.now().toString(36)}@noemail.4626.fun`
+  return `wallet-${Date.now().toString(36)}@wallet.4626.fun`
 }
 
 function formatPrivyConnectError(code: string): string {

@@ -60,7 +60,7 @@ function normalizeLowerAddress(value: unknown): string {
 function isSyntheticEmail(v: unknown): boolean {
   const value = typeof v === 'string' ? v.trim().toLowerCase() : ''
   if (!value) return false
-  if (value.endsWith('@noemail.4626.fun')) return true
+  if (value.endsWith('@noemail.4626.fun') || value.endsWith('@wallet.4626.fun')) return true
   return (
     /^solinfer-.*@example\.com$/.test(value) ||
     /^wallet-.*@example\.com$/.test(value) ||
@@ -167,7 +167,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ORDER BY
       CASE
         WHEN email IS NULL THEN 2
-        WHEN LOWER(email) LIKE '%@noemail.4626.fun' THEN 1
+        WHEN LOWER(email) LIKE '%@noemail.4626.fun' OR LOWER(email) LIKE '%@wallet.4626.fun' THEN 1
         WHEN LOWER(email) ~ '^(solinfer-|wallet-|anon-|0x[0-9a-f]+).*@example\\.com$' THEN 1
         ELSE 0
       END ASC,
