@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { createPublicClient, getAddress, http, isAddress, type Address, type Hex } from 'viem'
+import { createPublicClient, encodeAbiParameters, encodeFunctionData, getAddress, http, isAddress, type Address, type Hex } from 'viem'
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts'
 import { base } from 'viem/chains'
 
@@ -51,6 +51,15 @@ type CreateDeploySessionResponse = {
 type OwnershipCheck = {
   ok: boolean
   reason?: string
+}
+
+
+const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+  { type: 'function', name: 'removeOwnerAtIndex', stateMutability: 'nonpayable', inputs: [{ name: 'index', type: 'uint256' }, { name: 'owner', type: 'bytes' }], outputs: [] },
+] as const
+
+function asOwnerBytes(owner: Address): Hex {
+  return encodeAbiParameters([{ type: 'address' }], [owner]) as Hex
 }
 
 const COINBASE_SMART_WALLET_OWNER_LINK_ABI = [
@@ -397,6 +406,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const now = Date.now()
     const expiresAt = new Date(now + 10 * 60 * 1000) // 10 minutes
 
+    const cleanupGrantCall = {
+      to: smartWallet,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+        functionName: 'removeOwnerAtIndex',
+        args: [0n, asOwnerBytes(sessionOwner)],
+      }),
+    }
+
     const allCallsForGrant = [
       ...phase1Calls,
       ...phase2CoreCalls,
@@ -404,6 +423,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ...phase2Calls,
       ...phase3Calls,
       ...phase4Calls,
+      cleanupGrantCall,
     ]
       .map((c) => ({ to: getAddress(c.to), value: typeof c.value === 'bigint' ? c.value : BigInt(c.value ?? 0), data: c.data as Hex }))
       .filter((c) => typeof c.data === 'string' && c.data.startsWith('0x'))

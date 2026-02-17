@@ -29,6 +29,7 @@ Suggested constraints:
   - any protocol deploy helper addresses required by current phase calls
 - `function selectors` (allowlist):
   - phase execution selectors currently emitted into `phase1*`, `phase2*`, `phase3*`, `phase4*` call arrays
+  - owner-cleanup selector used by cancel/attach-cleanup path (so cleanup is also permission-scoped)
 - `value limit`: 0 or bounded max (if nonzero value calls are expected)
 - `call count`: bounded (e.g., <= number of planned stage calls)
 - `chainId`: 8453 only
@@ -107,3 +108,16 @@ Each stage execution should verify that every call is within the grant’s targe
 - Reduces dependence on temporary owner credential state during deploy session lifecycle.
 - Minimizes blast radius of compromised server/agent signing context.
 - Aligns with CSW + Privy signing model already used for agent identity.
+
+
+## Standards references (authoritative)
+
+- ERC-4337 / Account Abstraction: https://eips.ethereum.org/EIPS/eip-4337
+- EIP-712 Typed Structured Data: https://eips.ethereum.org/EIPS/eip-712
+- ERC-1271 Contract Signatures: https://eips.ethereum.org/EIPS/eip-1271
+- EIP-6492 Signature Validation for Predeploy Contracts: https://eips.ethereum.org/EIPS/eip-6492
+- EIP-2612 ERC-20 Permit: https://eips.ethereum.org/EIPS/eip-2612
+- ERC-20 Token Standard: https://eips.ethereum.org/EIPS/eip-20
+- ERC-4626 Tokenized Vaults: https://eips.ethereum.org/EIPS/eip-4626
+
+> Note: if ERC-7712 semantics evolve, update this plan only against canonical EIP text and final status at eips.ethereum.org.

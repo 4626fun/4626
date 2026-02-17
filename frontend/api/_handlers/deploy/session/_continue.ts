@@ -230,7 +230,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const hasPostPhase2 = postPhase2Calls.length > 0
     const sendStage = async (toStep: string, stageCalls: Array<{ to: Address; value: bigint; data: Hex }>, attachCleanup: boolean) => {
-      const permissionCheck = validateCallsAgainstGrant({ grant: erc7712Grant, calls: stageCalls })
+      const calls = [...stageCalls]
+      if (attachCleanup) calls.push(removeOwnerCall)
+
+      const permissionCheck = validateCallsAgainstGrant({
+        grant: erc7712Grant,
+        calls,
+        expectedChainId: 8453,
+        expectedSessionId: rec.id,
+      })
       if (!permissionCheck.ok) {
         return res.status(403).json({
           success: false,
@@ -246,8 +254,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!transitioned) {
         return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
       }
-      const calls = [...stageCalls]
-      if (attachCleanup) calls.push(removeOwnerCall)
       const lastUserOpHash = await sendUserOperation(bundlerClient, {
         account,
         calls,

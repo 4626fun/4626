@@ -225,14 +225,20 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     calls: Array<{ to: Address; value: bigint; data: Hex }>,
     attachCleanup: boolean,
   ) => {
-    const permissionCheck = validateCallsAgainstGrant({ grant: erc7712Grant, calls })
+    const fullCalls = [...calls]
+    if (attachCleanup) fullCalls.push((await getCtx()).removeOwnerCall)
+
+    const permissionCheck = validateCallsAgainstGrant({
+      grant: erc7712Grant,
+      calls: fullCalls,
+      expectedChainId: 8453,
+      expectedSessionId: rec.id,
+    })
     if (!permissionCheck.ok) throw new Error(permissionCheck.reason ?? 'erc7712_permission_denied')
 
     const transitioned = await transitionDeploySession({ id: rec.id, fromStep: fromStep as any, toStep: toStep as any })
     if (!transitioned) throw new Error(CONCURRENT_MODIFICATION)
-    const { bundler, paymasterClient, account, removeOwnerCall } = await getCtx()
-    const fullCalls = [...calls]
-    if (attachCleanup) fullCalls.push(removeOwnerCall)
+    const { bundler, paymasterClient, account } = await getCtx()
     const nextHash = await sendUserOperation(bundler, {
       account,
       calls: fullCalls,
