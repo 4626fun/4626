@@ -148,6 +148,44 @@ describe('deploy session ownership guardrails', () => {
 
     expect(res.statusCode).toBe(200)
     expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
+    const insertArgs = insertDeploySessionMock.mock.calls[0]?.[0] as any
+    expect(insertArgs.payload?.erc7712Grant?.version).toBe('erc7712-v1')
+  })
+
+
+  it('falls back to local session owner key when agent wallet id is missing', async () => {
+    getOrCreateCreatorAgentWalletMock.mockResolvedValueOnce({
+      walletId: '',
+      address: '0x00000000000000000000000000000000000000f1',
+    })
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+
+    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(generatePrivateKeyMock).toHaveBeenCalledTimes(1)
+    expect(privateKeyToAccountMock).toHaveBeenCalledTimes(1)
+    const insertArgs = insertDeploySessionMock.mock.calls[0]?.[0] as any
+    expect(insertArgs.sessionOwnerPrivateKey).toBe('0x' + '11'.repeat(32))
+    expect(insertArgs.payload?.agentWalletId).toBeUndefined()
+  })
+  it('falls back to local session owner key when agent wallet provisioning fails', async () => {
+    getOrCreateCreatorAgentWalletMock.mockRejectedValueOnce(new Error('PRIVY_APP_ID missing'))
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+
+    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(generatePrivateKeyMock).toHaveBeenCalledTimes(1)
+    expect(privateKeyToAccountMock).toHaveBeenCalledTimes(1)
+    expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
+    const insertArgs = insertDeploySessionMock.mock.calls[0]?.[0] as any
+    expect(insertArgs.sessionOwnerPrivateKey).toBe('0x' + '11'.repeat(32))
+    expect(insertArgs.payload?.agentWalletId).toBeUndefined()
   })
 
 

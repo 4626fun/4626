@@ -64,6 +64,7 @@ async function findOwnerIndex(params: {
 
 async function getOwnerAccount(rec: any) {
   const payload: any = rec.payload ?? {}
+  const erc7712Grant = parseGrant(payload?.erc7712Grant)
   const agentWalletId = typeof payload?.agentWalletId === 'string' ? payload.agentWalletId.trim() : ''
   const sessionOwner = getAddress(rec.sessionOwner)
   const ownerAccount = agentWalletId
@@ -224,6 +225,9 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     calls: Array<{ to: Address; value: bigint; data: Hex }>,
     attachCleanup: boolean,
   ) => {
+    const permissionCheck = validateCallsAgainstGrant({ grant: erc7712Grant, calls })
+    if (!permissionCheck.ok) throw new Error(permissionCheck.reason ?? 'erc7712_permission_denied')
+
     const transitioned = await transitionDeploySession({ id: rec.id, fromStep: fromStep as any, toStep: toStep as any })
     if (!transitioned) throw new Error(CONCURRENT_MODIFICATION)
     const { bundler, paymasterClient, account, removeOwnerCall } = await getCtx()

@@ -12,6 +12,7 @@ import { checkRateLimit, RATE_LIMITS, rateLimitKey } from '../../../../server/_l
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/supabaseAdmin.js'
 import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAgentWallets.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
+import { buildDeployPermissionGrant } from '../../../../server/_lib/erc7712Permissions.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -396,6 +397,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const now = Date.now()
     const expiresAt = new Date(now + 10 * 60 * 1000) // 10 minutes
 
+    const allCallsForGrant = [
+      ...phase1Calls,
+      ...phase2CoreCalls,
+      ...phase2FinalizeCalls,
+      ...phase2Calls,
+      ...phase3Calls,
+      ...phase4Calls,
+    ]
+      .map((c) => ({ to: getAddress(c.to), value: typeof c.value === 'bigint' ? c.value : BigInt(c.value ?? 0), data: c.data as Hex }))
+      .filter((c) => typeof c.data === 'string' && c.data.startsWith('0x'))
+
+    const erc7712Grant = buildDeployPermissionGrant({
+      sessionId: id,
+      chainId: 8453,
+      validAfter: new Date(now),
+      validUntil: expiresAt,
+      calls: allCallsForGrant,
+    })
+
     await ensureDeploySessionsSchema()
     await insertDeploySession({
       id,
@@ -427,6 +447,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         phase2Calls,
         phase3Calls,
         phase4Calls,
+        erc7712Grant,
       },
       expiresAt,
     })
