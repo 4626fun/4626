@@ -199,6 +199,25 @@ function extractEmbeddedWalletMeta(user: any): EmbeddedWalletMeta {
   return { address: null, chainType: null, walletClientType: null }
 }
 
+function extractPrivySolanaWallet(user: any): string | null {
+  const wallets = Array.isArray(user?.wallets) ? user.wallets : []
+  const primaryWallet = user?.wallet && typeof user.wallet === 'object' ? [user.wallet] : []
+  const linked = Array.isArray(user?.linked_accounts) ? user.linked_accounts : Array.isArray(user?.linkedAccounts) ? user.linkedAccounts : []
+  const all = [...primaryWallet, ...wallets, ...linked]
+
+  for (const wallet of all) {
+    const chainType = String(wallet?.chain_type ?? wallet?.chainType ?? wallet?.chain ?? '').trim().toLowerCase()
+    const rawAddress = typeof wallet?.address === 'string' ? wallet.address : ''
+    const address = rawAddress.trim()
+    const type = String(wallet?.type ?? '').trim().toLowerCase()
+    if (!address) continue
+    if (chainType.includes('solana') || type.includes('solana')) {
+      if (isValidSolanaAddress(address)) return address
+    }
+  }
+  return null
+}
+
 async function privyGetUserByEmail(params: { appId: string; appSecret: string; email: string }): Promise<any | null> {
   const { appId, appSecret, email } = params
   const url = `https://auth.privy.io/api/v1/apps/${encodeURIComponent(appId)}/profiles/email/${encodeURIComponent(email)}`
@@ -218,7 +237,7 @@ async function privyGetUserByEmail(params: { appId: string; appSecret: string; e
   return await res.json()
 }
 
-async function privyCreateUserWithEthereumWallet(params: {
+async function privyCreateUserWithWallets(params: {
   appId: string
   appSecret: string
   email: string
@@ -234,7 +253,7 @@ async function privyCreateUserWithEthereumWallet(params: {
     },
     body: JSON.stringify({
       linked_accounts: [{ type: 'email', address: email }],
-      wallets: [{ chain_type: 'ethereum' }],
+      wallets: [{ chain_type: 'ethereum' }, { chain_type: 'solana' }],
     }),
   })
   if (!res.ok) {
@@ -249,17 +268,32 @@ async function privyCreateOrGetWaitlistUser(email: string): Promise<{
   embeddedWallet: string | null
   embeddedWalletChain: string | null
   embeddedWalletClientType: string | null
+  solanaWallet: string | null
   created: boolean
 }> {
   const auth = getPrivyAuth()
   if (!auth)
-    return { privyUserId: null, embeddedWallet: null, embeddedWalletChain: null, embeddedWalletClientType: null, created: false }
+    return {
+      privyUserId: null,
+      embeddedWallet: null,
+      embeddedWalletChain: null,
+      embeddedWalletClientType: null,
+      solanaWallet: null,
+      created: false,
+    }
   if (!isPrivyWaitlistEnabled())
-    return { privyUserId: null, embeddedWallet: null, embeddedWalletChain: null, embeddedWalletClientType: null, created: false }
+    return {
+      privyUserId: null,
+      embeddedWallet: null,
+      embeddedWalletChain: null,
+      embeddedWalletClientType: null,
+      solanaWallet: null,
+      created: false,
+    }
 
   const existing = await privyGetUserByEmail({ ...auth, email })
   const created = !existing
-  const user = existing ?? (await privyCreateUserWithEthereumWallet({ ...auth, email }))
+  const user = existing ?? (await privyCreateUserWithWallets({ ...auth, email }))
 
   const privyUserId =
     typeof user?.id === 'string'
@@ -269,11 +303,13 @@ async function privyCreateOrGetWaitlistUser(email: string): Promise<{
         : null
 
   const embeddedMeta = extractEmbeddedWalletMeta(user?.user ?? user)
+  const solanaWallet = extractPrivySolanaWallet(user?.user ?? user)
   return {
     privyUserId,
     embeddedWallet: embeddedMeta.address,
     embeddedWalletChain: embeddedMeta.chainType,
     embeddedWalletClientType: embeddedMeta.walletClientType,
+    solanaWallet,
     created,
   }
 }
@@ -332,7 +368,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const solRaw = typeof body.solanaWallet === 'string' ? body.solanaWallet : ''
-  const solanaWallet = String(solRaw || '').trim()
+  let solanaWallet = String(solRaw || '').trim()
   if (solanaWallet.length > 0 && !isValidSolanaAddress(solanaWallet)) {
     return res.status(400).json({ success: false, error: 'Invalid Solana wallet address' } satisfies ApiEnvelope<never>)
   }
@@ -423,6 +459,9 @@ export default async function handler(req: any, res: any) {
       embeddedWallet = privy.embeddedWallet
       embeddedWalletChain = privy.embeddedWalletChain
       embeddedWalletClientType = privy.embeddedWalletClientType
+      if (!solanaWallet && privy.solanaWallet) {
+        solanaWallet = privy.solanaWallet
+      }
       if (privyUserId || embeddedWallet) {
         console.info(
           'waitlist: privy user',
@@ -432,6 +471,7 @@ export default async function handler(req: any, res: any) {
             embeddedWallet,
             embeddedWalletChain,
             embeddedWalletClientType,
+            solanaWallet: privy.solanaWallet,
             created: privy.created,
           }),
         )

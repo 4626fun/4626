@@ -5,6 +5,7 @@ import { getAppBaseUrl, getMarketingBaseUrl } from '@/lib/host'
 import { trackEvent } from '@/lib/analytics'
 import { useAccount, usePublicClient, useSignMessage } from 'wagmi'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { useFarcasterAuth } from '@/hooks/useFarcasterAuth'
 import { isPrivyClientEnabled } from '@/lib/flags'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { toViemAccount, useBaseAccountSdk, useConnectWallet, useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
@@ -171,7 +172,7 @@ const initialFlowState: FlowState = {
   step: 'verify', // Start with wallet connection + Privy auth
   contactPreference: 'email',
   email: '',
-  emailOptOut: true,
+  emailOptOut: false,
   busy: false,
   error: null,
   doneEmail: null,
@@ -249,14 +250,6 @@ function isValidSolanaAddress(v: string): boolean {
 
 function isSyntheticEmail(v: string): boolean {
   return v.endsWith('@noemail.4626.fun') || v.endsWith('@wallet.4626.fun')
-}
-
-function buildSyntheticEmail(primaryWallet: string | null): string {
-  const wallet = typeof primaryWallet === 'string' ? primaryWallet.trim().toLowerCase() : ''
-  if (isValidEvmAddress(wallet)) {
-    return `${wallet.replace(/^0x/, '')}@wallet.4626.fun`
-  }
-  return `wallet-${Date.now().toString(36)}@wallet.4626.fun`
 }
 
 function formatPrivyConnectError(code: string): string {
@@ -486,6 +479,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   const publicClient = usePublicClient({ chainId: base.id })
   const { signMessageAsync } = useSignMessage()
   const siwe = useSiweAuth()
+  const farcasterAuth = useFarcasterAuth()
   const miniApp = useMiniAppContext()
 
   const patchWaitlist = useCallback((patch: Partial<WaitlistState>) => {
@@ -531,7 +525,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     [],
   )
 
-  const { persona, step, contactPreference, email, emailOptOut, busy, doneEmail, error: submitError } = flow
+  const { persona, step, email, busy, doneEmail, error: submitError } = flow
   const {
     verifiedWallet,
     verifiedWalletMethod,
@@ -556,6 +550,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     cswProofBusy,
     cswProofError,
   } = waitlist
+  const siwfFid = useMemo(() => {
+    const fid = typeof farcasterAuth.fid === 'number' ? farcasterAuth.fid : null
+    return fid && Number.isFinite(fid) && fid > 0 ? fid : null
+  }, [farcasterAuth.fid])
 
   const privyStatus = usePrivyClientStatus()
   const showPrivy = isPrivyClientEnabled()
@@ -759,6 +757,30 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     ensureBaseSubAccount,
   })
 
+  useEffect(() => {
+    if (step !== 'verify') return
+    if (verifiedWallet) return
+    const candidate = typeof farcasterAuth.session?.primaryAddress === 'string' ? farcasterAuth.session.primaryAddress : ''
+    if (!isValidEvmAddress(candidate)) return
+    verifyWallet(getAddress(candidate), 'siwf')
+  }, [farcasterAuth.session?.primaryAddress, step, verifiedWallet, verifyWallet])
+
+  const handleSiwfContinue = useCallback(async () => {
+    const session = await farcasterAuth.signIn()
+    const candidate = typeof session?.primaryAddress === 'string' ? session.primaryAddress : ''
+    if (isValidEvmAddress(candidate)) {
+      verifyWallet(getAddress(candidate), 'siwf')
+      setPrivyVerifyError(null)
+      return
+    }
+    const fid = typeof session?.fid === 'number' ? session.fid : null
+    if (fid && fid > 0) {
+      setPrivyVerifyError('Farcaster verified. Connect a wallet owner address to continue.')
+      return
+    }
+    setPrivyVerifyError('Farcaster verification failed. Try again.')
+  }, [farcasterAuth, setPrivyVerifyError, verifyWallet])
+
   const openInAppPrivyLogin = useCallback(async () => {
     if (privyVerifyBusy) return
 
@@ -904,20 +926,24 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     return isValidEvmAddress(raw) ? raw.toLowerCase() : null
   }, [verifiedWallet])
   const connectedWalletAuthorized = useMemo(() => {
-    if (!verifiedWalletNormalized) return false
+    if (!verifiedWalletNormalized) {
+      return Boolean(siwfFid) && (!creatorCoin?.address || creatorCoinDeclaredMissing || !ownershipEvidenceAvailable)
+    }
     if (!creatorCoin?.address) return true
     if (!ownershipEvidenceAvailable) return true
     if (payoutRecipientNormalized && verifiedWalletNormalized === payoutRecipientNormalized) return true
     return ownerWalletsNormalized.includes(verifiedWalletNormalized)
   }, [
+    siwfFid,
     creatorCoin?.address,
+    creatorCoinDeclaredMissing,
     ownerWalletsNormalized,
     ownershipEvidenceAvailable,
     payoutRecipientNormalized,
     verifiedWalletNormalized,
   ])
   const canSubmit =
-    (isEmailValid || emailOptOut) && (Boolean(creatorCoin?.address) || creatorCoinDeclaredMissing) && connectedWalletAuthorized
+    isEmailValid && (Boolean(creatorCoin?.address) || creatorCoinDeclaredMissing) && connectedWalletAuthorized
 
   useEffect(() => {
     if (!verifiedWalletNormalized) return
@@ -1077,7 +1103,13 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   // One-tap UX: once wallet + ownership checks are satisfied, submit automatically.
   // Keep a one-shot guard so transient API failures do not trigger endless retries.
   useEffect(() => {
-    if (step !== 'verify' || !verifiedWallet) {
+    const verificationSubject =
+      verifiedWallet && isValidEvmAddress(verifiedWallet)
+        ? verifiedWallet.toLowerCase()
+        : siwfFid
+          ? `fid:${siwfFid}`
+          : null
+    if (step !== 'verify' || !verificationSubject) {
       autoSubmitAttemptRef.current = null
       return
     }
@@ -1088,13 +1120,13 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       : creatorCoinDeclaredMissing
         ? 'missing'
         : 'pending'
-    const attemptKey = `${verifiedWallet.toLowerCase()}:${creatorKey}`
+    const attemptKey = `${verificationSubject}:${creatorKey}`
     if (autoSubmitAttemptRef.current === attemptKey) return
     autoSubmitAttemptRef.current = attemptKey
     void submitWaitlist()
     // submitWaitlist is intentionally omitted to avoid re-firing on identity changes each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busy, canSubmit, creatorCoin?.address, creatorCoinDeclaredMissing, step, verifiedWallet])
+  }, [busy, canSubmit, creatorCoin?.address, creatorCoinDeclaredMissing, siwfFid, step, verifiedWallet])
 
   // Auto-fill email from Privy user when authenticated
   useEffect(() => {
@@ -1107,23 +1139,9 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       setEmail(privyEmail)
       setEmailOptOut(false)
       setContactPreference('email')
-    } else {
-      setEmail('')
-      setEmailOptOut(true)
-      setContactPreference('wallet')
     }
 
   }, [privyAuthed, privyUser, step, setEmail, setEmailOptOut, setContactPreference])
-
-  // Self-heal legacy persisted state where email was required but no input is shown in simplified mode.
-  useEffect(() => {
-    if (step !== 'verify') return
-    if (emailOptOut) return
-    if (isEmailValid) return
-    if (emailTrimmed.length > 0) return
-    setEmailOptOut(true)
-    setContactPreference('wallet')
-  }, [emailOptOut, emailTrimmed, isEmailValid, setContactPreference, setEmailOptOut, step])
 
   const refreshPosition = useCallback(
     async (emailForSync: string) => {
@@ -1294,6 +1312,9 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     if (verifiedWallet && isValidEvmAddress(verifiedWallet)) {
       out.push({ method: verifiedWalletMethod ?? 'siwe', subject: verifiedWallet, timestamp: ts })
     }
+    if (siwfFid) {
+      out.push({ method: 'siwf', subject: `fid:${siwfFid}`, timestamp: ts })
+    }
     if (verifiedSolana && isValidSolanaAddress(verifiedSolana)) {
       out.push({ method: 'solana', subject: verifiedSolana, timestamp: ts })
     }
@@ -1439,14 +1460,14 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       if (persona !== 'creator' && persona !== 'user') {
         throw new Error('Select Creator or User first.')
       }
-      if (emailTrimmed.length > 0 && !isEmailValid && !emailOptOut) {
+      if (emailTrimmed.length > 0 && !isEmailValid) {
         throw new Error('Enter a valid email address.')
       }
-      if (emailTrimmed.length === 0 && !emailOptOut) {
-        throw new Error('Add an email or continue with wallet only.')
+      if (emailTrimmed.length === 0) {
+        throw new Error('Add your email to continue.')
       }
 
-      const emailForSubmit = isEmailValid ? emailTrimmed : buildSyntheticEmail(primaryWalletForSubmit())
+      const emailForSubmit = emailTrimmed
       const storedRef = getStoredReferralCode()
       const claim =
         persona === 'creator'
@@ -1468,11 +1489,12 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
           cswAddress: effectiveCswAddress || null, // CSW linked before signup
           referralCode: storedRef,
           claimReferralCode: claim.length > 0 ? claim : null,
-          contactPreference: isEmailValid ? contactPreference : 'wallet',
+          contactPreference: 'email',
           verifications,
           intent: {
             persona,
             hasCreatorCoin: creatorCoinBusy ? null : creatorCoinDeclaredMissing ? false : Boolean(creatorCoin?.address),
+            fid: siwfFid,
           },
         }),
       })
@@ -1802,7 +1824,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         : 'relative overflow-hidden rounded-3xl border border-white/[0.06] bg-[#0d0d0f]/95 backdrop-blur-xl p-6 sm:p-8'
 
   const progressSteps = [
-    { key: 'connect', label: 'Connect', done: step === 'done' || Boolean(verifiedWallet) },
+    { key: 'connect', label: 'Connect', done: step === 'done' || Boolean(verifiedWallet) || Boolean(siwfFid) },
     {
       key: 'reserve',
       label: 'Reserve Spot',
@@ -1827,13 +1849,13 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         )}
 
         <motion.div className={cardWrapClass}>
-          <div className="pointer-events-none absolute inset-0 rounded-3xl ring-1 ring-inset ring-white/[0.04]" />
+          <div className="pointer-events-none absolute inset-0 rounded-3xl ring-1 ring-inset ring-white/4" />
           <div className="relative z-10">
           <div className="mb-5">
             <div className="grid grid-cols-4 gap-2">
               {progressSteps.map((item) => (
                 <div key={item.key} className="space-y-1">
-                  <div className={`h-1.5 rounded-full ${item.done ? 'bg-[#0052FF]' : 'bg-white/[0.10]'}`} />
+                  <div className={`h-1.5 rounded-full ${item.done ? 'bg-[#0052FF]' : 'bg-white/10'}`} />
                   <div className={`text-[10px] uppercase tracking-[0.14em] ${item.done ? 'text-zinc-300' : 'text-zinc-600'}`}>
                     {item.label}
                   </div>
@@ -1854,11 +1876,19 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                 >
                   <VerifyStep
                     verifiedWallet={verifiedWallet}
+                    emailValue={email}
+                    isEmailValid={isEmailValid}
+                    onEmailChange={setEmail}
                     showPrivy={showPrivy}
                     showPrivyReady={showPrivyReady}
                     privyReady={privyReady}
                     privyVerifyBusy={privyVerifyBusy}
                     privyVerifyError={privyVerifyError}
+                    showSiwf={miniApp.isMiniApp === true && farcasterAuth.canSiwf === true}
+                    siwfFid={siwfFid}
+                    siwfBusy={farcasterAuth.status === 'loading'}
+                    siwfError={farcasterAuth.status === 'error' ? farcasterAuth.error : null}
+                    onSiwfContinue={handleSiwfContinue}
                     walletOwnershipValid={connectedWalletAuthorized}
                     ownershipEvidenceAvailable={ownershipEvidenceAvailable}
                     cswMismatch={cswMismatch}

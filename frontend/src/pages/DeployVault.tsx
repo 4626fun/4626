@@ -26,6 +26,7 @@ import { useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { RequestCreatorAccess } from '@/components/RequestCreatorAccess'
+import { LaunchCoinCard } from '@/components/waitlist/LaunchCoinCard'
 import { CONTRACTS } from '@/config/contracts'
 import { useCreatorAllowlist, useFarcasterAuth, useMiniAppContext, useDeploymentTracker } from '@/hooks'
 import { DeploymentSuccess, AlreadyDeployedBanner } from '@/components/DeploymentSuccess'
@@ -33,6 +34,7 @@ import type { DeploymentRecord } from '@/hooks/useDeploymentTracker'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { logger } from '@/lib/logger'
 import { useZoraCoin, useZoraProfile } from '@/lib/zora/hooks'
+import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
 import { getFarcasterUserByFid } from '@/lib/neynar-api'
 import { resolveCreatorIdentity } from '@/lib/identity/creatorIdentity'
 import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
@@ -6270,6 +6272,14 @@ function DeployVaultMain() {
   const vrfConsumerConfigured = isAddress(String(vrfConsumerAddress ?? ''))
   const allowlistReady = allowlistMode === 'disabled' ? true : isAllowlistedCreator
   const creatorCoinReady = tokenIsValid && !!zoraCoin && isCreatorCoin
+  const canCreateCoinInApp = Boolean(canonicalIdentityAddress && connectedWalletAddress)
+  const zoraCoinHandoffHref = useMemo(() => {
+    const params = new URLSearchParams()
+    params.set('from', 'zora')
+    params.set('gate', 'vault')
+    if (tokenIsValid && creatorToken) params.set('token', creatorToken)
+    return buildZoraHandoffUrl({ returnPath: `/deploy?${params.toString()}`, context: 'vault' })
+  }, [creatorToken, tokenIsValid])
   const coinAgeReady = creatorCoinReady && coinAgeOk
   const fundingReady = fundingGateOk
   const authReady = isAuthorizedDeployerOrOperator
@@ -7019,6 +7029,28 @@ function DeployVaultMain() {
                     <button type="button" className="btn-primary w-full" onClick={switchAuthCta.onClick}>
                       {switchAuthCta.label}
                     </button>
+                  ) : null}
+                  {!creatorCoinReady ? (
+                    <div className="space-y-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                      <div className="text-[11px] text-amber-200 font-medium">Creator Coin required before vault deploy</div>
+                      <div className="text-[11px] text-amber-100/80">
+                        Create your Zora Creator Coin first, then this page will resume vault deployment with the detected coin.
+                      </div>
+                      {canCreateCoinInApp && canonicalIdentityIsContract ? (
+                        <LaunchCoinCard
+                          smartWalletAddress={canonicalIdentityAddress}
+                          ownerAddress={connectedWalletAddress}
+                          onCoinCreated={(coinAddress) => setCreatorToken(coinAddress)}
+                        />
+                      ) : (
+                        <a
+                          href={zoraCoinHandoffHref}
+                          className="inline-flex items-center gap-1 rounded-md border border-amber-300/30 bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-100 hover:bg-amber-400/20"
+                        >
+                          Create or claim on Zora <ChevronDown className="h-3 w-3 -rotate-90" />
+                        </a>
+                      )}
+                    </div>
                   ) : null}
                 </div>
               ) : null}

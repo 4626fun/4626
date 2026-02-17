@@ -10,14 +10,13 @@ import { uploadImmutableBlob, uploadImmutableJson } from '@/lib/lens/grove'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { logger } from '@/lib/logger'
+import { getZoraPlatformReferrerAddress } from '@/lib/zora/referrals'
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const PLATFORM_REFERRER =
-  (import.meta.env.VITE_ZORA_PLATFORM_REFERRER_ADDRESS as string | undefined)?.trim() ||
-  '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF'
+const PLATFORM_REFERRER = getZoraPlatformReferrerAddress()
 
 const GROVE_BASE_CHAIN_ID = 8453 // Base mainnet for immutable uploads
 
