@@ -134,7 +134,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         })
       : (() => {
-          if (!rec.sessionOwnerKeyEnc) throw new Error('session_owner_key_missing')
+          if (!rec.sessionOwnerKeyEnc) throw new Error('session_owner_unavailable')
           const pk = decryptWithSecret(rec.sessionOwnerKeyEnc) as Hex
           return privateKeyToAccount(pk)
         })()
@@ -352,6 +352,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<any>)
   } catch (err: any) {
     const msg = err?.message ? String(err.message) : 'continue_failed'
+    if (msg === 'session_owner_unavailable' || msg === 'session_owner_key_missing') {
+      return res.status(409).json({
+        success: false,
+        error: 'Session owner credentials unavailable. Please restart deploy session.',
+      } satisfies ApiEnvelope<null>)
+    }
     logger.error('deploy session continue failed', msg)
     try {
       await updateDeploySession({ id: rec.id, step: 'failed', lastError: msg })
