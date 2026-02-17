@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CheckCircle2, Copy, ExternalLink, Mail, RefreshCw, ShieldCheck, Wallet } from 'lucide-react'
-import type { Address } from 'viem'
+import { CheckCircle2, Copy, ExternalLink, Mail, RefreshCw, ShieldCheck, Trash2, Wallet } from 'lucide-react'
+import { encodeFunctionData, getAddress, type Address, type Hex } from 'viem'
+import { base } from 'viem/chains'
+import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 import { useExportWallet, usePrivy } from '@privy-io/react-auth'
 
 import { apiFetch } from '@/lib/apiBase'
@@ -198,6 +200,40 @@ type AssociatedAccount = {
   mono?: boolean
 }
 
+type SmartWalletOwner = {
+  index: number
+  ownerBytes: string
+  ownerAddress: string | null
+  isAddressOwner: boolean
+}
+
+type SmartWalletOwnersResponse = {
+  smartWallet: string
+  ownerCount: number
+  nextOwnerIndex: number | null
+  owners: SmartWalletOwner[]
+}
+
+const COINBASE_SMART_WALLET_OWNER_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'isOwnerAddress',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+] as const
+
+const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+  {
+    type: 'function',
+    name: 'removeOwnerAtIndex',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'index', type: 'uint256' }, { name: 'owner', type: 'bytes' }],
+    outputs: [],
+  },
+] as const
+
 function useSafeExportWalletHook(enabled: boolean) {
   try {
     const value = useExportWallet() as any
@@ -230,6 +266,10 @@ function useSafePrivyUserHook(enabled: boolean): { user: any | null } {
 
 export function AccountSettings() {
   const auth = useSiweAuth()
+  const { address: connectedAddressRaw, chainId } = useAccount()
+  const { data: walletClient } = useWalletClient({ chainId: base.id })
+  const publicClient = usePublicClient({ chainId: base.id })
+  const { switchChainAsync } = useSwitchChain()
   const privyEnabled = isPrivyClientEnabled()
   const { exportWallet } = useSafeExportWalletHook(privyEnabled)
   const { user: privyUser } = useSafePrivyUserHook(privyEnabled)
@@ -242,6 +282,9 @@ export function AccountSettings() {
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
   const [exportBusy, setExportBusy] = useState(false)
   const [exportMessage, setExportMessage] = useState<string | null>(null)
+  const [ownersActionMessage, setOwnersActionMessage] = useState<string | null>(null)
+  const [ownersActionError, setOwnersActionError] = useState<string | null>(null)
+  const [revokeBusyIndex, setRevokeBusyIndex] = useState<number | null>(null)
 
   const loadProfile = useCallback(async () => {
     setLoading(true)
@@ -356,6 +399,124 @@ export function AccountSettings() {
     if (isEvmAddress(profile?.primarySmartWallet)) return profile.primarySmartWallet
     return null
   }, [canonicalSmartWalletAddress, profile?.primarySmartWallet])
+
+  const connectedAddress = useMemo(() => {
+    if (!isEvmAddress(connectedAddressRaw)) return null
+    return getAddress(connectedAddressRaw)
+  }, [connectedAddressRaw])
+
+  const smartWalletOwnersQuery = useQuery({
+    queryKey: ['smartWalletOwners', canonicalSmartWalletAddress ?? 'none'],
+    enabled: Boolean(canonicalSmartWalletAddress),
+    staleTime: 20_000,
+    retry: 0,
+    queryFn: async () => {
+      if (!canonicalSmartWalletAddress) return null
+      const params = new URLSearchParams({ smartWallet: canonicalSmartWalletAddress })
+      const res = await apiFetch(`/api/deploy/smartWalletOwners?${params.toString()}`, { method: 'GET' })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<SmartWalletOwnersResponse> | null
+      if (!res.ok || !json?.success || !json.data) {
+        throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to load smart wallet owners.')
+      }
+      return json.data
+    },
+  })
+
+  const smartWalletOwners = useMemo(
+    () => smartWalletOwnersQuery.data?.owners ?? [],
+    [smartWalletOwnersQuery.data?.owners],
+  )
+  const addressOwnerCount = useMemo(
+    () => smartWalletOwners.filter((owner) => owner.isAddressOwner && isEvmAddress(owner.ownerAddress)).length,
+    [smartWalletOwners],
+  )
+  const connectedAddressIsOwner = useMemo(() => {
+    if (!connectedAddress) return false
+    const connectedLc = connectedAddress.toLowerCase()
+    return smartWalletOwners.some((owner) => owner.ownerAddress?.toLowerCase() === connectedLc)
+  }, [connectedAddress, smartWalletOwners])
+
+  const ensureBaseChain = useCallback(async () => {
+    if (chainId === base.id) return
+    if (!switchChainAsync) {
+      throw new Error('Switch to Base in your wallet to manage smart wallet owners.')
+    }
+    await switchChainAsync({ chainId: base.id })
+  }, [chainId, switchChainAsync])
+
+  const onRevokeOwner = useCallback(async (owner: SmartWalletOwner) => {
+    if (!canonicalSmartWalletAddress || !isEvmAddress(canonicalSmartWalletAddress)) {
+      setOwnersActionError('Missing canonical smart wallet address.')
+      return
+    }
+    if (!connectedAddress) {
+      setOwnersActionError('Connect an owner EOA wallet to revoke an owner.')
+      return
+    }
+    if (!walletClient || !publicClient) {
+      setOwnersActionError('Wallet client unavailable. Reconnect and try again.')
+      return
+    }
+    if (!owner.ownerBytes || !/^0x[0-9a-fA-F]+$/.test(owner.ownerBytes)) {
+      setOwnersActionError('Invalid owner entry.')
+      return
+    }
+    if (owner.ownerAddress && owner.ownerAddress.toLowerCase() === connectedAddress.toLowerCase()) {
+      setOwnersActionError('For safety, you cannot revoke your currently connected owner from this page.')
+      return
+    }
+    if (owner.isAddressOwner && addressOwnerCount <= 1) {
+      setOwnersActionError('Cannot revoke the last address owner.')
+      return
+    }
+
+    setOwnersActionError(null)
+    setOwnersActionMessage(null)
+    setRevokeBusyIndex(owner.index)
+    try {
+      await ensureBaseChain()
+
+      const callerIsOwner = (await publicClient.readContract({
+        address: getAddress(canonicalSmartWalletAddress) as Address,
+        abi: COINBASE_SMART_WALLET_OWNER_VIEW_ABI,
+        functionName: 'isOwnerAddress',
+        args: [connectedAddress as Address],
+      })) as boolean
+      if (!callerIsOwner) {
+        throw new Error('Connected wallet is not an owner of this smart wallet.')
+      }
+
+      const data = encodeFunctionData({
+        abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+        functionName: 'removeOwnerAtIndex',
+        args: [BigInt(owner.index), owner.ownerBytes as Hex],
+      })
+      const hash = await walletClient.sendTransaction({
+        to: getAddress(canonicalSmartWalletAddress) as Address,
+        data,
+        value: 0n,
+        account: connectedAddress as Address,
+        chain: base,
+      })
+      await publicClient.waitForTransactionReceipt({ hash })
+      await smartWalletOwnersQuery.refetch()
+      void loadProfile()
+      setOwnersActionMessage(`Owner revoked at index ${owner.index}.`)
+    } catch (e: any) {
+      setOwnersActionError(typeof e?.message === 'string' ? e.message : 'Failed to revoke owner.')
+    } finally {
+      setRevokeBusyIndex(null)
+    }
+  }, [
+    addressOwnerCount,
+    canonicalSmartWalletAddress,
+    connectedAddress,
+    ensureBaseChain,
+    loadProfile,
+    publicClient,
+    smartWalletOwnersQuery,
+    walletClient,
+  ])
 
   const knownAddresses = useMemo<KnownAddress[]>(() => {
     if (!profile) return []
@@ -780,6 +941,118 @@ export function AccountSettings() {
             No connected accounts found for this profile yet.
           </div>
         )}
+
+        {canonicalSmartWalletAddress ? (
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
+            <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Canonical Smart Wallet Owners</div>
+            <div className="text-xs text-zinc-500">
+              Owners are read directly from onchain CSW owner slots. Revoke requires a connected owner EOA on Base.
+            </div>
+
+            {ownersActionMessage ? (
+              <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+                {ownersActionMessage}
+              </div>
+            ) : null}
+            {ownersActionError ? (
+              <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+                {ownersActionError}
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+              <span>Canonical: <span className="font-mono text-zinc-300">{canonicalSmartWalletAddress}</span></span>
+              {connectedAddress ? (
+                <span>Connected owner wallet: <span className="font-mono text-zinc-300">{connectedAddress}</span></span>
+              ) : (
+                <span>Connect an owner EOA to revoke.</span>
+              )}
+            </div>
+
+            {smartWalletOwnersQuery.isLoading ? (
+              <div className="text-sm text-zinc-400">Loading owners…</div>
+            ) : smartWalletOwnersQuery.isError ? (
+              <div className="text-sm text-red-300">
+                {smartWalletOwnersQuery.error instanceof Error
+                  ? smartWalletOwnersQuery.error.message
+                  : 'Failed to load owner list.'}
+              </div>
+            ) : smartWalletOwners.length > 0 ? (
+              <div className="space-y-2">
+                {smartWalletOwners.map((owner) => {
+                  const ownerAddress = owner.ownerAddress && isEvmAddress(owner.ownerAddress) ? getAddress(owner.ownerAddress) : null
+                  const isConnectedOwner = Boolean(
+                    ownerAddress && connectedAddress && ownerAddress.toLowerCase() === connectedAddress.toLowerCase(),
+                  )
+                  const disableRevoke =
+                    revokeBusyIndex !== null ||
+                    !connectedAddressIsOwner ||
+                    !ownerAddress ||
+                    isConnectedOwner ||
+                    addressOwnerCount <= 1
+                  return (
+                    <div
+                      key={`${owner.index}:${owner.ownerBytes.toLowerCase()}`}
+                      className="rounded-md border border-zinc-800 bg-zinc-950/60 px-3 py-2.5"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Index {owner.index}</div>
+                          {ownerAddress ? (
+                            <div className="font-mono text-xs text-zinc-100 break-all">{ownerAddress}</div>
+                          ) : (
+                            <div className="font-mono text-xs text-zinc-300 break-all">{owner.ownerBytes}</div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {ownerAddress ? (
+                            <button
+                              type="button"
+                              onClick={() => onCopyAddress(ownerAddress)}
+                              className="inline-flex items-center gap-1 rounded-md border border-zinc-700 px-2 py-1 text-[10px] text-zinc-300 hover:text-zinc-100"
+                            >
+                              {copiedAddress === ownerAddress.toLowerCase() ? 'Copied' : 'Copy'}
+                              <Copy className="w-3 h-3" />
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => void onRevokeOwner(owner)}
+                            disabled={disableRevoke}
+                            className="inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] text-red-200 disabled:opacity-40"
+                            title={
+                              !connectedAddressIsOwner
+                                ? 'Connected wallet is not an owner'
+                                : isConnectedOwner
+                                  ? 'Cannot revoke connected owner from this page'
+                                  : addressOwnerCount <= 1
+                                    ? 'Cannot revoke the last address owner'
+                                    : undefined
+                            }
+                          >
+                            {revokeBusyIndex === owner.index ? 'Revoking…' : 'Revoke'}
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-2 text-[11px] text-zinc-500">
+                        {ownerAddress ? 'Address owner' : 'Non-address owner bytes'}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="text-sm text-zinc-400">No owners found.</div>
+            )}
+
+            <div className="text-[11px] text-zinc-500">
+              {connectedAddressIsOwner
+                ? 'Your connected wallet is an owner and can submit revoke transactions.'
+                : 'Connect an owner EOA to revoke owners.'}
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="card rounded-xl p-6 space-y-4">

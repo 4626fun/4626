@@ -122,6 +122,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'deploy/provisionSolanaRoute': () => import('./deploy/_provisionSolanaRoute.js'),
   'deploy/registerShareOft': () => import('./deploy/_registerShareOft.js'),
   'deploy/smartWalletOwner': () => import('./deploy/_smartWalletOwner.js'),
+  'deploy/smartWalletOwners': () => import('./deploy/_smartWalletOwners.js'),
 
   'farcaster/me': () => import('./farcaster/_me.js'),
   'farcaster/nonce': () => import('./farcaster/_nonce.js'),
