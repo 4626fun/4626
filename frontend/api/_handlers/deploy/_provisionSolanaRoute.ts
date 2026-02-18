@@ -20,8 +20,6 @@ type ProvisionRouteRequest = {
   shareOft?: string
   solanaDecimals?: number | string
   deployEnv?: string
-  tokenName?: string
-  tokenSymbol?: string
   scalerExponent?: number | string
   payerKp?: string
   payForRelay?: boolean
@@ -58,6 +56,49 @@ const BASE_SOLANA_BRIDGE_ABI = [
     outputs: [{ type: 'uint256' }],
   },
 ] as const
+
+const ERC20_METADATA_ABI = [
+  {
+    type: 'function',
+    name: 'name',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'string' }],
+  },
+  {
+    type: 'function',
+    name: 'symbol',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'string' }],
+  },
+] as const
+
+async function readShareOftMetadata(params: {
+  publicClient: any
+  shareOft: Address
+}): Promise<{ name: string; symbol: string } | null> {
+  try {
+    const [nameRaw, symbolRaw] = await Promise.all([
+      params.publicClient.readContract({
+        address: params.shareOft,
+        abi: ERC20_METADATA_ABI,
+        functionName: 'name',
+      }),
+      params.publicClient.readContract({
+        address: params.shareOft,
+        abi: ERC20_METADATA_ABI,
+        functionName: 'symbol',
+      }),
+    ])
+    const name = typeof nameRaw === 'string' ? nameRaw.trim() : ''
+    const symbol = typeof symbolRaw === 'string' ? symbolRaw.trim() : ''
+    if (!name || !symbol) return null
+    return { name, symbol }
+  } catch {
+    return null
+  }
+}
 
 function readProvisionerSecret(): string {
   return String(
@@ -261,8 +302,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const payForRelay = typeof body?.payForRelay === 'boolean'
     ? body.payForRelay
     : String(process.env.SOLANA_BRIDGE_PAY_FOR_RELAY ?? '1').trim() !== '0'
-  const tokenName = String(body?.tokenName ?? `CreatorShare-${shareOft.slice(2, 8)}`).trim() || `CreatorShare-${shareOft.slice(2, 8)}`
-  const tokenSymbol = String(body?.tokenSymbol ?? process.env.SOLANA_BRIDGE_WRAP_SYMBOL_SUFFIX ?? '4626').trim() || '4626'
+  const rpcUrl = (process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http(rpcUrl, { timeout: 20_000 }),
+  })
+  const shareOftMetadata = await readShareOftMetadata({ publicClient, shareOft })
+  const tokenName = shareOftMetadata?.name?.trim() ?? ''
+  const tokenSymbol = shareOftMetadata?.symbol?.trim() ?? ''
+  if (!tokenName || !tokenSymbol) {
+    return res.status(409).json({
+      success: false,
+      error: 'ShareOFT metadata unavailable. CreatorShareOFT name/symbol are required for Solana route provisioning.',
+    } satisfies ApiEnvelope<never>)
+  }
 
   try {
     const wrapArgs = [
@@ -304,12 +357,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<never>)
     }
     const mintBytes32 = solanaPubkeyToBytes32Hex(mintPubkey)
-
-    const rpcUrl = (process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()
-    const publicClient = createPublicClient({
-      chain: base,
-      transport: http(rpcUrl, { timeout: 20_000 }),
-    })
 
     let scalar = 0n
     for (let i = 0; i < 24; i += 1) {

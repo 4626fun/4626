@@ -117,6 +117,23 @@ const BASE_SOLANA_BRIDGE_ABI = [
   },
 ] as const
 
+const ERC20_METADATA_ABI = [
+  {
+    type: 'function',
+    name: 'name',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'string' }],
+  },
+  {
+    type: 'function',
+    name: 'symbol',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'string' }],
+  },
+] as const
+
 function isBytes32Hex(value: unknown): value is Hex {
   return typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)
 }
@@ -247,6 +264,32 @@ function readDynamicProvisionerHealthUrls(provisionerUrls: string[]): string[] {
   const explicit = splitUrlList(listEnv)
   if (explicit.length > 0) return explicit
   return provisionerUrls.map((url) => readDynamicProvisionerHealthUrl(url))
+}
+
+async function readShareOftMetadata(params: {
+  publicClient: any
+  shareOft: Address
+}): Promise<{ name: string; symbol: string } | null> {
+  try {
+    const [nameRaw, symbolRaw] = await Promise.all([
+      params.publicClient.readContract({
+        address: params.shareOft,
+        abi: ERC20_METADATA_ABI,
+        functionName: 'name',
+      }),
+      params.publicClient.readContract({
+        address: params.shareOft,
+        abi: ERC20_METADATA_ABI,
+        functionName: 'symbol',
+      }),
+    ])
+    const name = typeof nameRaw === 'string' ? nameRaw.trim() : ''
+    const symbol = typeof symbolRaw === 'string' ? symbolRaw.trim() : ''
+    if (!name || !symbol) return null
+    return { name, symbol }
+  } catch {
+    return null
+  }
 }
 
 function describeFetchFailure(error: unknown): string {
@@ -475,16 +518,20 @@ async function tryProvisionDynamicRoute(params: {
   const deployEnv = String(process.env.SOLANA_BRIDGE_DEPLOY_ENV ?? 'mainnet').trim() || 'mainnet'
   const payerKp = String(process.env.SOLANA_BRIDGE_PAYER_KP ?? 'config').trim() || 'config'
   const scalerExponent = parseDecimals(process.env.SOLANA_BRIDGE_SCALER_EXPONENT) ?? params.solanaDecimals
-  const namePrefixRaw = process.env.SOLANA_BRIDGE_WRAP_NAME_PREFIX
-  const namePrefix = namePrefixRaw === undefined ? 'CreatorShare' : String(namePrefixRaw).trim()
-  const symbolPrefixRaw = process.env.SOLANA_BRIDGE_WRAP_SYMBOL_PREFIX
-  const symbolPrefix = symbolPrefixRaw === undefined ? 'CS' : String(symbolPrefixRaw).trim()
-  const symbolSuffix = String(process.env.SOLANA_BRIDGE_WRAP_SYMBOL_SUFFIX ?? '').trim()
-  const suffix = params.shareOft.slice(2, 8)
-  const tokenName = `${namePrefix || 'CreatorShare'}-${suffix}`
-  const tokenSymbol = symbolSuffix
-    ? `${symbolPrefix}${symbolSuffix}`
-    : `${symbolPrefix}${suffix.slice(0, 4).toUpperCase()}`
+  const shareOftMetadata = await readShareOftMetadata({
+    publicClient: params.publicClient,
+    shareOft: params.shareOft,
+  })
+  // Always mirror CreatorShareOFT metadata on Solana.
+  const tokenName = shareOftMetadata?.name || ''
+  const tokenSymbol = shareOftMetadata?.symbol || ''
+  if (!tokenName || !tokenSymbol) {
+    throw new Error(
+      'ShareOFT metadata unavailable for Solana wrap. CreatorShareOFT name/symbol are required before provisioning.',
+    )
+  }
+  const tokenNameSource = 'base_shareoft'
+  const tokenSymbolSource = 'base_shareoft'
   const payForRelay = String(process.env.SOLANA_BRIDGE_PAY_FOR_RELAY ?? '1').trim() !== '0'
   const provisionerUrls = readDynamicProvisionerUrls()
   const provisionerHealthUrls = readDynamicProvisionerHealthUrls(provisionerUrls)
@@ -514,6 +561,8 @@ async function tryProvisionDynamicRoute(params: {
           payerKp,
           tokenName,
           tokenSymbol,
+          tokenNameSource,
+          tokenSymbolSource,
           payForRelay,
         })
         try {
@@ -650,6 +699,8 @@ async function tryProvisionDynamicRoute(params: {
       payerKp,
       tokenName,
       tokenSymbol,
+      tokenNameSource,
+      tokenSymbolSource,
       payForRelay,
     })
 

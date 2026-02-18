@@ -3527,41 +3527,67 @@ function DeployVaultBatcher({
 
         // Debug helper: expose phase1 call data on window for console testing
         if (typeof window !== 'undefined' && phase1Calls.length > 0) {
+          const phaseCallMap = {
+            phase1: phase1Calls,
+            phase2: phase2FinalizeCalls,
+            phase3: phase3Calls,
+            phase4: phase4Calls,
+          } as const
+          const testPhaseCall = async (
+            phase: 'phase1' | 'phase2' | 'phase3' | 'phase4' = 'phase1',
+            index = 0,
+          ) => {
+            if (!publicClient) throw new Error('No publicClient')
+            const calls = phaseCallMap[phase]
+            const call = calls[index]
+            if (!call) throw new Error(`No call at ${phase}[${index}]`)
+            console.log('[DEBUG] Testing direct eth_call', {
+              phase,
+              index,
+              to: call.target,
+              data: call.data.slice(0, 10),
+              from: owner,
+            })
+            try {
+              const result = await (publicClient as any).call({
+                to: call.target,
+                data: call.data,
+                account: owner,
+              })
+              console.log('[DEBUG] Direct call SUCCESS', { phase, index, result })
+              return { success: true, result }
+            } catch (e: any) {
+              console.error('[DEBUG] Direct call FAILED', {
+                phase,
+                index,
+                error: e?.message,
+                shortMessage: e?.shortMessage,
+                cause: e?.cause,
+                data: e?.cause?.data ?? e?.data,
+              })
+              return { success: false, error: e }
+            }
+          }
           const debugInfo = {
             phase1Call: phase1Calls[0],
+            phaseCallCounts: {
+              phase1: phase1Calls.length,
+              phase2: phase2FinalizeCalls.length,
+              phase3: phase3Calls.length,
+              phase4: phase4Calls.length,
+            },
             owner,
             batcherAddress,
             creatorToken,
             deploymentVersion,
-            testDirectCall: async () => {
-              if (!publicClient) throw new Error('No publicClient')
-              const call = phase1Calls[0]
-              console.log('[DEBUG] Testing direct eth_call to batcher...', {
-                to: call.target,
-                data: call.data.slice(0, 10),
-                from: owner,
-              })
-              try {
-                const result = await (publicClient as any).call({
-                  to: call.target,
-                  data: call.data,
-                  account: owner,
-                })
-                console.log('[DEBUG] Direct call SUCCESS', result)
-                return { success: true, result }
-              } catch (e: any) {
-                console.error('[DEBUG] Direct call FAILED', {
-                  error: e?.message,
-                  shortMessage: e?.shortMessage,
-                  cause: e?.cause,
-                  data: e?.cause?.data ?? e?.data,
-                })
-                return { success: false, error: e }
-              }
-            },
+            testPhaseCall,
+            // Backward compatibility with existing console hint.
+            testDirectCall: () => testPhaseCall('phase1', 0),
           }
           ;(window as any).__cvDeployDebug = debugInfo
-          console.log('[DeployVault] Debug helper available: window.__cvDeployDebug.testDirectCall()')
+          console.log(
+            '[DeployVault] Debug helper available: window.__cvDeployDebug.testDirectCall(), window.__cvDeployDebug.testPhaseCall("phase3", 0)',
+          )
         }
 
         // Helper to convert calls format
@@ -4421,6 +4447,24 @@ function DeployVaultBatcher({
               // ignore cleanup failures
             }
           }
+          const shouldCancelSessionAfterError = async (): Promise<boolean> => {
+            if (!sessionId) return false
+            try {
+              const statusRes = await fetch('/api/deploy/session/status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId }),
+              })
+              const statusJson = (await statusRes.json().catch(() => null)) as ApiEnvelope<any> | null
+              if (!statusRes.ok || !statusJson?.success) return false
+              const step = String(statusJson.data?.step ?? '')
+              // Preserve progressed sessions (phase*_sent / confirmed) so retries can resume.
+              // Cancel only brand-new sessions that never sent a stage.
+              return step === 'created'
+            } catch {
+              return false
+            }
+          }
           const shouldRetrySessionAuth = (message: string): boolean => {
             const lower = String(message || '').toLowerCase()
             return (
@@ -4483,7 +4527,9 @@ function DeployVaultBatcher({
             await pollServerDeploySession(sessionId)
             return null
           } catch (err) {
-            await cancelSession()
+            if (await shouldCancelSessionAfterError()) {
+              await cancelSession()
+            }
             throw err
           }
         }
