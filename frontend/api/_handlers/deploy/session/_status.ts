@@ -21,6 +21,19 @@ type StatusRequest = { sessionId: string }
 
 const CONCURRENT_MODIFICATION = 'concurrent_modification'
 
+function asPayloadObject(value: unknown): Record<string, any> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, any>
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, any>
+    } catch {
+      // ignore malformed payload strings
+    }
+  }
+  return {}
+}
+
 function isTruthyEnv(value: string | undefined, fallback: boolean): boolean {
   if (value == null) return fallback
   const normalized = String(value).trim().toLowerCase()
@@ -122,7 +135,7 @@ async function findOwnerIndex(params: {
 }
 
 async function getOwnerAccount(rec: any) {
-  const payload: any = rec.payload ?? {}
+  const payload = asPayloadObject(rec.payload)
   const deploySignerWalletId =
     typeof payload?.deploySignerWalletId === 'string'
       ? payload.deploySignerWalletId.trim()
@@ -243,26 +256,44 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     }
     return 0n
   }
-  const normalizeCalls = (raw: any[]): Array<{ to: Address; value: bigint; data: Hex }> => {
+  const normalizeCalls = (raw: unknown): Array<{ to: Address; value: bigint; data: Hex }> => {
     if (!Array.isArray(raw)) return []
-    return raw
-      .map((c) => ({
-        to: getAddress(c.to),
-        value: toBigInt(c.value ?? 0),
-        data: c.data as Hex,
-      }))
-      .filter((c) => typeof c.data === 'string' && c.data.startsWith('0x'))
+    const out: Array<{ to: Address; value: bigint; data: Hex }> = []
+    for (const entry of raw) {
+      const c = entry as any
+      if (!c || typeof c !== 'object') continue
+      const data = typeof c.data === 'string' ? c.data : ''
+      if (!data.startsWith('0x')) continue
+      try {
+        out.push({
+          to: getAddress(c.to),
+          value: toBigInt(c.value ?? 0),
+          data: data as Hex,
+        })
+      } catch {
+        // Skip malformed calls; required-stage checks below prevent false completion.
+      }
+    }
+    return out
   }
-  const phase1Calls = normalizeCalls(Array.isArray(payload.phase1Calls) ? payload.phase1Calls : [])
+  const rawPhase1Calls = Array.isArray(payload.phase1Calls) ? payload.phase1Calls : []
+  const phase1Calls = normalizeCalls(rawPhase1Calls)
   const phase1FinalizeCalls = phase1Calls.length > 1 ? phase1Calls.slice(1) : []
   const phase2CoreCalls = normalizeCalls(Array.isArray(payload.phase2CoreCalls) ? payload.phase2CoreCalls : [])
-  const phase2FinalizeCallsRaw = normalizeCalls(Array.isArray(payload.phase2FinalizeCalls) ? payload.phase2FinalizeCalls : [])
-  const legacyPhase2Calls = normalizeCalls(Array.isArray(payload.phase2Calls) ? payload.phase2Calls : [])
-  const phase2FinalizeCalls = phase2FinalizeCallsRaw.length > 0 ? phase2FinalizeCallsRaw : legacyPhase2Calls
-  const phase3Calls = normalizeCalls(Array.isArray(payload.phase3Calls) ? payload.phase3Calls : [])
-  const phase4Calls = normalizeCalls(Array.isArray(payload.phase4Calls) ? payload.phase4Calls : [])
-  const hasPhase3 = phase3Calls.length > 0
-  const hasPhase4 = phase4Calls.length > 0
+  const rawPhase2FinalizeCalls = Array.isArray(payload.phase2FinalizeCalls) ? payload.phase2FinalizeCalls : []
+  const rawLegacyPhase2Calls = Array.isArray(payload.phase2Calls) ? payload.phase2Calls : []
+  const rawSelectedPhase2FinalizeCalls = rawPhase2FinalizeCalls.length > 0 ? rawPhase2FinalizeCalls : rawLegacyPhase2Calls
+  const hasPhase2Finalize = rawSelectedPhase2FinalizeCalls.length > 0
+  const phase2FinalizeCalls = normalizeCalls(rawSelectedPhase2FinalizeCalls)
+  const rawPhase3Calls = Array.isArray(payload.phase3Calls) ? payload.phase3Calls : []
+  const rawPhase4Calls = Array.isArray(payload.phase4Calls) ? payload.phase4Calls : []
+  const hasPhase3 = rawPhase3Calls.length > 0
+  const hasPhase4 = rawPhase4Calls.length > 0
+  const phase3Calls = normalizeCalls(rawPhase3Calls)
+  const phase4Calls = normalizeCalls(rawPhase4Calls)
+  if (hasPhase2Finalize && phase2FinalizeCalls.length === 0) throw new Error('phase2_finalize_calls_invalid')
+  if (hasPhase3 && phase3Calls.length === 0) throw new Error('phase3_calls_invalid')
+  if (hasPhase4 && phase4Calls.length === 0) throw new Error('phase4_calls_invalid')
   const hasPostPhase2 = hasPhase3 || hasPhase4
 
   type AuthedCtx = {
@@ -374,15 +405,15 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
         'phase1_confirmed',
         'phase1_finalize_sent',
         phase1FinalizeCalls,
-        phase2CoreCalls.length === 0 && phase2FinalizeCalls.length === 0 && !hasPostPhase2,
+        phase2CoreCalls.length === 0 && !hasPhase2Finalize && !hasPostPhase2,
       )
       return
     }
     if (phase2CoreCalls.length > 0) {
-      await startStage('phase1_confirmed', 'phase2_core_sent', phase2CoreCalls, phase2FinalizeCalls.length === 0 && !hasPostPhase2)
+      await startStage('phase1_confirmed', 'phase2_core_sent', phase2CoreCalls, !hasPhase2Finalize && !hasPostPhase2)
       return
     }
-    if (phase2FinalizeCalls.length > 0) {
+    if (hasPhase2Finalize) {
       await startStage('phase1_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
       return
     }
@@ -409,11 +440,11 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
         'phase1_finalize_confirmed',
         'phase2_core_sent',
         phase2CoreCalls,
-        phase2FinalizeCalls.length === 0 && !hasPostPhase2,
+        !hasPhase2Finalize && !hasPostPhase2,
       )
       return
     }
-    if (phase2FinalizeCalls.length > 0) {
+    if (hasPhase2Finalize) {
       await startStage('phase1_finalize_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
       return
     }
@@ -439,7 +470,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     })
     if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
 
-    if (phase2FinalizeCalls.length > 0) {
+    if (hasPhase2Finalize) {
       await startStage('phase2_core_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
       return
     }
@@ -556,7 +587,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   }
 
   if (step === 'phase2_core_confirmed') {
-    if (phase2FinalizeCalls.length > 0) {
+    if (hasPhase2Finalize) {
       await startStage('phase2_core_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
       return
     }
@@ -627,6 +658,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await advanceDeploySession(rec, req)
     rec = (await getDeploySessionById(sessionId)) ?? rec
   } catch (err) {
+    if (err instanceof Error && err.message.endsWith('_calls_invalid')) {
+      return res.status(409).json({
+        success: false,
+        error: 'Deploy session payload is missing required stage calls. Please restart deploy session.',
+      } satisfies ApiEnvelope<null>)
+    }
     if (err instanceof Error && err.message === CONCURRENT_MODIFICATION) {
       return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
     }

@@ -98,7 +98,7 @@ const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
 const BASE_CHAIN_ID_HEX = `0x${base.id.toString(16)}`
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}`
 const MAX_UINT256 = (1n << 256n) - 1n
-const DEFAULT_DEPLOYMENT_VERSION = 'v1.2.37'
+const DEFAULT_DEPLOYMENT_VERSION = 'v1.2.38'
 const DEPLOYMENT_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
 function isDebugEnabled(): boolean {
@@ -5593,6 +5593,14 @@ function DeployVaultMain() {
   const handleDeploymentSuccess = useCallback((addresses: ServerDeployResponse['addresses']) => {
     if (!deploySender || !creatorToken || !isAddress(creatorToken)) return
 
+    const txHashes: DeploymentRecord['txHashes'] = {}
+    if (phaseTxs.tx1) txHashes.phase1 = phaseTxs.tx1
+    if (phaseTxs.tx2) txHashes.phase2 = phaseTxs.tx2
+    if (phaseTxs.tx3) txHashes.phase3 = phaseTxs.tx3
+    if (phaseTxs.tx4) txHashes.phase4 = phaseTxs.tx4
+    // Server-continued deploys currently expose only the latest tx hash in `txId`.
+    if (!txHashes.phase4 && txId) txHashes.phase4 = txId
+
     const record = deploymentTracker.recordDeployment({
       creatorToken: creatorToken as Address,
       contracts: {
@@ -5603,12 +5611,13 @@ function DeployVaultMain() {
         ccaStrategy: addresses.ccaStrategy,
         oracle: addresses.oracle,
       },
+      txHashes: Object.keys(txHashes).length > 0 ? txHashes : undefined,
     })
 
     if (record) {
       setJustCompletedDeployment(record)
     }
-  }, [creatorToken, deploySender, deploymentTracker])
+  }, [creatorToken, deploySender, deploymentTracker, phaseTxs.tx1, phaseTxs.tx2, phaseTxs.tx3, phaseTxs.tx4, txId])
 
   const canonicalIdentityBytecodeQuery = useQuery({
     queryKey: ['bytecode', 'canonicalIdentity', canonicalIdentityAddress],
