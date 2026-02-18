@@ -177,6 +177,18 @@ function isRecoverableUserOpError(error: unknown): boolean {
   )
 }
 
+function isUserRejectedError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error ?? '')
+  const lower = msg.toLowerCase()
+  return (
+    lower.includes('user rejected') ||
+    lower.includes('user denied') ||
+    lower.includes('user cancelled') ||
+    lower.includes('rejected by user') ||
+    lower.includes('action_rejected')
+  )
+}
+
 export function AgentRegister() {
   const [agentUri, setAgentUri] = useState('')
   const [busy, setBusy] = useState(false)
@@ -649,8 +661,17 @@ export function AgentRegister() {
               ownerAddress: account,
             })
           } catch (aaError) {
-            if (!isRecoverableUserOpError(aaError)) throw aaError
-            sentTx = await sendDirectOwnerFallback()
+            if (isUserRejectedError(aaError)) throw aaError
+            try {
+              sentTx = await sendDirectOwnerFallback()
+            } catch (fallbackError) {
+              if (!isRecoverableUserOpError(aaError)) throw aaError
+              const aaMessage = getReadableError(aaError)
+              const fallbackMessage = getReadableError(fallbackError)
+              throw new Error(
+                `UserOperation failed (${aaMessage}) and owner fallback failed (${fallbackMessage}).`,
+              )
+            }
           }
         }
         tx = sentTx
