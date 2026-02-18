@@ -120,6 +120,10 @@ export const META = {
     title: 'Creator Agents',
     description: 'Browse and message creator XMTP agents.',
   },
+  agentRegister: {
+    title: 'Register Agent',
+    description: 'Register your ERC-8004 agent identity on Base.',
+  },
   faq: {
     title: 'FAQ',
     description: 'Frequently asked questions about CreatorVault.',
