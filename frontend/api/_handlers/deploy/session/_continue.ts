@@ -281,9 +281,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const phase2FinalizeCalls = phase2FinalizeCallsRaw.length > 0 ? phase2FinalizeCallsRaw : legacyPhase2Calls
     const phase3Calls = normalizeCalls(Array.isArray(payload.phase3Calls) ? payload.phase3Calls : [])
     const phase4Calls = normalizeCalls(Array.isArray(payload.phase4Calls) ? payload.phase4Calls : [])
-    const postPhase2Calls = [...phase3Calls, ...phase4Calls]
+    const hasPhase3 = phase3Calls.length > 0
+    const hasPhase4 = phase4Calls.length > 0
 
-    const isInFlight = ['phase1_sent', 'phase1_finalize_sent', 'phase2_core_sent', 'phase2_sent', 'phase3_sent', 'cleanup_sent'].includes(rec.step)
+    const isInFlight = [
+      'phase1_sent',
+      'phase1_finalize_sent',
+      'phase2_core_sent',
+      'phase2_sent',
+      'phase3_sent',
+      'phase4_sent',
+      'cleanup_sent',
+    ].includes(rec.step)
 
     // Cleanup call (remove session owner). For managed owners, this can be skipped to reduce repeated prompts.
     const removeOwnerCall = (() => {
@@ -296,7 +305,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return { to: smartWallet, value: 0n, data } as const
     })()
 
-    const hasPostPhase2 = postPhase2Calls.length > 0
+    const hasPostPhase2 = hasPhase3 || hasPhase4
+    const sendNextAfterPhase2 = () => {
+      if (hasPhase3) return sendStage('phase3_sent', phase3Calls, !hasPhase4)
+      if (hasPhase4) return sendStage('phase4_sent', phase4Calls, true)
+      return null
+    }
     const sendStage = async (toStep: string, stageCalls: Array<{ to: Address; value: bigint; data: Hex }>, attachCleanup: boolean) => {
       const calls = [...stageCalls]
       const shouldAttachCleanup = attachCleanup && !persistSessionOwner
@@ -352,7 +366,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const attachCleanup = !hasPostPhase2
         return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
       }
-      if (postPhase2Calls.length > 0) return sendStage('phase3_sent', postPhase2Calls, true)
+      if (hasPostPhase2) return sendNextAfterPhase2()
       return null
     }
 
@@ -369,7 +383,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const attachCleanup = !hasPostPhase2
         return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
       }
-      if (postPhase2Calls.length > 0) return sendStage('phase3_sent', postPhase2Calls, true)
+      if (hasPostPhase2) return sendNextAfterPhase2()
       return null
     }
 
@@ -382,7 +396,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const attachCleanup = !hasPostPhase2
         return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
       }
-      if (postPhase2Calls.length > 0) return sendStage('phase3_sent', postPhase2Calls, true)
+      if (hasPostPhase2) return sendNextAfterPhase2()
       return null
     }
 
@@ -391,7 +405,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const attachCleanup = !hasPostPhase2
         return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
       }
-      if (postPhase2Calls.length > 0) return sendStage('phase3_sent', postPhase2Calls, true)
+      if (hasPostPhase2) return sendNextAfterPhase2()
       return null
     }
 
@@ -411,8 +425,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const started = await runFromPhase2CoreConfirmed()
       if (started) return started
     }
-    if (rec.step === 'phase2_confirmed' && postPhase2Calls.length > 0) {
-      return await sendStage('phase3_sent', postPhase2Calls, true)
+    if (rec.step === 'phase2_confirmed' && hasPostPhase2) {
+      const started = await sendNextAfterPhase2()
+      if (started) return started
+    }
+    if (rec.step === 'phase3_confirmed' && hasPhase4) {
+      return await sendStage('phase4_sent', phase4Calls, true)
+    }
+    if (rec.step === 'phase4_confirmed') {
+      const transitioned = await transitionDeploySession({
+        id: rec.id,
+        fromStep: rec.step,
+        toStep: 'completed',
+      })
+      if (!transitioned) {
+        return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
+      }
+      return res.status(200).json({
+        success: true,
+        data: {
+          id: rec.id,
+          step: 'completed',
+        },
+      } satisfies ApiEnvelope<any>)
     }
 
     if (isInFlight) {

@@ -36,6 +36,12 @@ const COINBASE_SMART_WALLET_OWNER_ABI = [
   },
 ] as const
 
+const COINBASE_SMART_WALLET_OWNERS_ABI = [
+  { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'ownerAtIndex', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'bytes' }] },
+  { type: 'function', name: 'nextOwnerIndex', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+] as const
+
 const DEFAULT_BASE_RPCS = ['https://mainnet.base.org', 'https://base.llamarpc.com'] as const
 
 function getBaseRpcUrls(): string[] {
@@ -50,21 +56,63 @@ function getBaseRpcUrls(): string[] {
 }
 
 async function isCswOwner(ownerAddress: `0x${string}`, smartWalletAddress: `0x${string}`): Promise<boolean> {
-  const { createPublicClient, http } = await import('viem')
+  const { createPublicClient, encodeAbiParameters, http } = await import('viem')
   const { base } = await import('viem/chains')
+  const expected = String(encodeAbiParameters([{ type: 'address' }], [ownerAddress])).toLowerCase()
   for (const rpc of getBaseRpcUrls()) {
     try {
       const client = createPublicClient({
         chain: base,
         transport: http(rpc, { timeout: 10_000 }),
       })
-      const ok = await client.readContract({
+
+      // Fast path for CSW versions exposing isOwnerAddress.
+      try {
+        const ok = await client.readContract({
+          address: smartWalletAddress,
+          abi: COINBASE_SMART_WALLET_OWNER_ABI,
+          functionName: 'isOwnerAddress',
+          args: [ownerAddress],
+        })
+        if (ok === true) return true
+      } catch {
+        // Fall through to index scan fallback.
+      }
+
+      // Fallback path: owner slot scan for CSW versions where isOwnerAddress is unavailable/inconsistent.
+      const ownerCountRaw = (await client.readContract({
         address: smartWalletAddress,
-        abi: COINBASE_SMART_WALLET_OWNER_ABI,
-        functionName: 'isOwnerAddress',
-        args: [ownerAddress],
-      })
-      if (ok === true) return true
+        abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+        functionName: 'ownerCount',
+      })) as bigint
+      const ownerCount = Number(ownerCountRaw)
+      let upperBound = Number.isFinite(ownerCount) ? ownerCount : 0
+      try {
+        const nextRaw = (await client.readContract({
+          address: smartWalletAddress,
+          abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+          functionName: 'nextOwnerIndex',
+        })) as bigint
+        const next = Number(nextRaw)
+        if (Number.isFinite(next) && next > 0) upperBound = Math.max(upperBound, next)
+      } catch {
+        // ignore: not all CSW versions expose nextOwnerIndex
+      }
+      const limit = Math.min(512, Math.max(0, upperBound))
+      for (let i = 0; i < limit; i++) {
+        let ownerBytes: string
+        try {
+          ownerBytes = (await client.readContract({
+            address: smartWalletAddress,
+            abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+            functionName: 'ownerAtIndex',
+            args: [BigInt(i)],
+          })) as string
+        } catch {
+          continue
+        }
+        if (String(ownerBytes).toLowerCase() === expected) return true
+      }
     } catch {
       // Try next RPC/provider
       continue

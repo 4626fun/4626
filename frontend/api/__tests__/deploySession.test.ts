@@ -113,6 +113,10 @@ function makeDeploySession(step: string) {
   }
 }
 
+function makeCall(to: string, data = '0x12345678') {
+  return { to, value: '0', data }
+}
+
 describe('deploy session optimistic concurrency', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -335,6 +339,7 @@ describe('deploy session optimistic concurrency', () => {
       payload: { phase2Calls: [{ to: '0xcalltarget', value: '0', data: '0x' }], phase3Calls: [] },
     }
     getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
 
     const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
     const res = createMockRes()
@@ -342,5 +347,103 @@ describe('deploy session optimistic concurrency', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body?.data?.id).toBe('sess_1')
+  })
+
+  it('continue sequences phase3 before phase4 when both are present', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_confirmed'),
+      payload: {
+        phase2Calls: [],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xphase4target')],
+      },
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
+    const args = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
+    expect(String(args.calls[0]?.to)).toBe('0xphase3target')
+    expect(updateDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', step: 'phase3_sent' }),
+    )
+  })
+
+  it('continue transitions phase3_confirmed to phase4_sent', async () => {
+    const rec = {
+      ...makeDeploySession('phase3_confirmed'),
+      payload: {
+        phase2Calls: [],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xphase4target')],
+      },
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
+    const args = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
+    expect(String(args.calls[0]?.to)).toBe('0xphase4target')
+    expect(updateDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', step: 'phase4_sent' }),
+    )
+  })
+
+  it('status advances phase3_sent to phase4_sent when phase4 calls exist', async () => {
+    const rec = {
+      ...makeDeploySession('phase3_sent'),
+      payload: {
+        phase2Calls: [],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xphase4target')],
+      },
+    }
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({ ...rec, step: 'phase4_sent', lastUserOpHash: '0xuserop' })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('phase4_sent')
+    expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
+    const args = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
+    expect(String(args.calls[0]?.to)).toBe('0xphase4target')
+  })
+
+  it('status advances phase4_sent to completed', async () => {
+    const rec = {
+      ...makeDeploySession('phase4_sent'),
+      payload: {
+        phase2Calls: [],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xphase4target')],
+      },
+    }
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({ ...rec, step: 'completed', lastTxHash: '0xtxhash' })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('completed')
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
   })
 })

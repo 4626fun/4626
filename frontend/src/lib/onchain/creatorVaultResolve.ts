@@ -60,6 +60,11 @@ const TOKEN_HINT_ABI = [
   { type: 'function', name: 'baseToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
 
+const CCA_STRATEGY_LINK_ABI = [
+  { type: 'function', name: 'auctionToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'fundsRecipient', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+] as const
+
 const CREATOR_VAULT_PHASE1_DEPLOYED_EVENT = parseAbiItem(
   'event Phase1Deployed(address indexed creatorToken, address indexed owner, address oftBootstrapRegistry, address vault, address wrapper, address shareOFT)',
 )
@@ -218,6 +223,56 @@ async function readTokenHintsFromAddress<
   return Array.from(hints).map((x) => getAddress(x as Address))
 }
 
+function sortLogsNewestFirst<T extends { blockNumber?: bigint; logIndex?: number }>(logs: T[]): T[] {
+  return [...logs].sort((a, b) => {
+    const blockA = typeof a.blockNumber === 'bigint' ? a.blockNumber : 0n
+    const blockB = typeof b.blockNumber === 'bigint' ? b.blockNumber : 0n
+    if (blockA !== blockB) return blockA > blockB ? -1 : 1
+    const indexA = typeof a.logIndex === 'number' ? a.logIndex : 0
+    const indexB = typeof b.logIndex === 'number' ? b.logIndex : 0
+    return indexB - indexA
+  })
+}
+
+async function selectMatchingPhase2Log<
+  TTransport extends Transport = Transport,
+  TChain extends Chain | undefined = Chain | undefined,
+>(
+  publicClient: PublicClient<TTransport, TChain>,
+  logs: any[],
+  expected: { shareOFT: Address | null; vault: Address | null },
+): Promise<any | null> {
+  const ordered = sortLogsNewestFirst(logs)
+  if (ordered.length === 0) return null
+  if (!expected.shareOFT && !expected.vault) return ordered[0] ?? null
+
+  for (const log of ordered) {
+    const ccaStrategy = asAddress(log?.args?.ccaStrategy)
+    if (!ccaStrategy) continue
+    let auctionToken: Address | null = null
+    let fundsRecipient: Address | null = null
+    try {
+      const reads = await publicClient.multicall({
+        contracts: [
+          { address: ccaStrategy, abi: CCA_STRATEGY_LINK_ABI, functionName: 'auctionToken' },
+          { address: ccaStrategy, abi: CCA_STRATEGY_LINK_ABI, functionName: 'fundsRecipient' },
+        ],
+        allowFailure: true,
+      })
+      auctionToken = reads[0]?.status === 'success' ? asAddress(reads[0].result) : null
+      fundsRecipient = reads[1]?.status === 'success' ? asAddress(reads[1].result) : null
+    } catch {
+      continue
+    }
+
+    const shareMatches = expected.shareOFT ? eqAddress(auctionToken, expected.shareOFT) : true
+    const vaultMatches = expected.vault ? eqAddress(fundsRecipient, expected.vault) : true
+    if (shareMatches && vaultMatches) return log
+  }
+
+  return null
+}
+
 async function resolveCreatorVaultFromBatcherEvents<
   TTransport extends Transport = Transport,
   TChain extends Chain | undefined = Chain | undefined,
@@ -280,11 +335,13 @@ async function resolveCreatorVaultFromBatcherEvents<
         .catch(() => [] as any[]),
     ])
 
-    const phase2Core = phase2CoreLogs[phase2CoreLogs.length - 1]
-    const phase2Launch = phase2LaunchLogs[phase2LaunchLogs.length - 1]
-    const gaugeController = asAddress(phase2Launch?.args?.gaugeController ?? phase2Core?.args?.gaugeController)
-    const oracle = asAddress(phase2Launch?.args?.oracle ?? phase2Core?.args?.oracle)
-    const ccaStrategy = asAddress(phase2Launch?.args?.ccaStrategy ?? phase2Core?.args?.ccaStrategy)
+    const phase2Match = await selectMatchingPhase2Log(publicClient, [...phase2LaunchLogs, ...phase2CoreLogs], {
+      shareOFT,
+      vault,
+    })
+    const gaugeController = asAddress(phase2Match?.args?.gaugeController)
+    const oracle = asAddress(phase2Match?.args?.oracle)
+    const ccaStrategy = asAddress(phase2Match?.args?.ccaStrategy)
     const metadata = await readTokenMetadataForFallback(publicClient, token)
 
     return {

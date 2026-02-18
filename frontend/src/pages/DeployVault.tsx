@@ -98,6 +98,8 @@ const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
 const BASE_CHAIN_ID_HEX = `0x${base.id.toString(16)}`
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}`
 const MAX_UINT256 = (1n << 256n) - 1n
+const DEFAULT_DEPLOYMENT_VERSION = 'v1.2.37'
+const DEPLOYMENT_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
 function isDebugEnabled(): boolean {
   if (import.meta.env.VITE_DEBUG_LOGS === 'true') return true
@@ -143,6 +145,22 @@ function parseUint8(value: unknown): number | null {
     if (Number.isFinite(n) && n >= 0 && n <= 255) return Math.floor(n)
   }
   return null
+}
+
+function normalizeDeploymentVersion(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const v = value.trim()
+  if (!v) return null
+  if (!DEPLOYMENT_VERSION_RE.test(v)) return null
+  return v
+}
+
+function resolveDeploymentVersionFromRuntime(): string {
+  const envVersion = normalizeDeploymentVersion(import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined)
+  if (typeof window === 'undefined') return envVersion ?? DEFAULT_DEPLOYMENT_VERSION
+  const params = new URLSearchParams(window.location.search)
+  const queryVersion = normalizeDeploymentVersion(params.get('deploymentVersion'))
+  return queryVersion ?? envVersion ?? DEFAULT_DEPLOYMENT_VERSION
 }
 
 function normalizeHexSuffix(value: unknown): string | null {
@@ -1988,6 +2006,7 @@ function DeployVaultBatcher({
       if (step === 'created' || step.startsWith('phase1')) setPhase('phase1')
       else if (step.startsWith('phase2')) setPhase('phase2')
       else if (step.startsWith('phase3')) setPhase('phase3')
+      else if (step.startsWith('phase4')) setPhase('phase4')
       if (step === 'completed') {
         const lastTxHash = (sjson.data?.lastTxHash ?? null) as Hex | null
         if (lastTxHash) setTxId(lastTxHash)
@@ -2252,7 +2271,12 @@ function DeployVaultBatcher({
           .catch(() => null)) ?? null
       const supportsPhase1WithSalt = (() => {
         if (!batcherBytecode || batcherBytecode === '0x') return false
-        return batcherBytecode.toLowerCase().includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
+        const bytecodeLower = batcherBytecode.toLowerCase()
+        const supportsLegacySalt = bytecodeLower.includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
+        const supportsSplitSalt =
+          bytecodeLower.includes(BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR) &&
+          bytecodeLower.includes(BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR)
+        return supportsLegacySalt || supportsSplitSalt
       })()
 
       const baseSalt = deriveBaseSalt({ creatorToken, owner, chainId: base.id, version: deploymentVersion })
@@ -5019,11 +5043,7 @@ function DeployVaultMain() {
     privyLinkedEoaAddress,
     privySmartWalletAddress,
   ])
-  const deploymentVersion = useMemo(() => {
-    const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.2.36'
-    const v = String(raw).trim()
-    return v.length > 0 ? v : 'v1.2.36'
-  }, [])
+  const deploymentVersion = useMemo(() => resolveDeploymentVersionFromRuntime(), [])
   const deployMode = useMemo(() => resolveDeployMode(), [])
   const strictNoEoaMode = deployMode === 'no_eoa_strict'
   const shareOftSaltOverride = useMemo(() => {
@@ -6295,6 +6315,7 @@ function DeployVaultMain() {
     tokenIsValid &&
     !!zoraCoin &&
     isCreatorCoin &&
+    canonicalIdentityType === 'contract' &&
     coinAgeOk &&
     marketFloorOk &&
     isAuthorizedDeployerOrOperator &&
@@ -6428,6 +6449,8 @@ function DeployVaultMain() {
         ? 'Token is not a Zora Creator Coin.'
         : tokenIsValid && zoraCoin && !isCreatorCoin
           ? 'Only Creator Coins can deploy a vault.'
+          : tokenIsValid && zoraCoin && canonicalIdentityType === 'eoa'
+            ? 'Deploy requires your canonical Zora Coinbase Smart Wallet as sender. Connect with the canonical smart wallet identity.'
           : tokenIsValid && zoraCoin && isCreatorCoin && !coinAgeOk
             ? `Creator Coin must be at least ${minCoinAgeDays} days old to deploy.`
           : creatorAllowlistQuery.isLoading

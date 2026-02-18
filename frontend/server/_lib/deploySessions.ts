@@ -16,6 +16,8 @@ export type DeploySessionStep =
   | 'phase2_confirmed'
   | 'phase3_sent'
   | 'phase3_confirmed'
+  | 'phase4_sent'
+  | 'phase4_confirmed'
   | 'cleanup_sent'
   | 'cancelled'
   | 'completed'

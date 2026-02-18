@@ -259,6 +259,8 @@ async function main() {
     'phase1_finalize_confirmed',
     'phase2_core_confirmed',
     'phase2_confirmed',
+    'phase3_confirmed',
+    'phase4_confirmed',
   ])
   const inFlight = new Set([
     'phase1_sent',
@@ -266,6 +268,7 @@ async function main() {
     'phase2_core_sent',
     'phase2_sent',
     'phase3_sent',
+    'phase4_sent',
     'cleanup_sent',
   ])
   const terminal = new Set(['completed', 'failed', 'cancelled'])
