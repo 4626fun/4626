@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
-import { buildAgentRegistration } from '../../../../server/_lib/agentRegistration.js'
+import { buildAgentRegistration, enrichAgentRegistrationWithFarcaster } from '../../../../server/_lib/agentRegistration.js'
 import { tryUploadImmutableJson } from '../../../../server/_lib/lensGrove.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { readRequestPrincipal } from '../../../../server/_lib/requestPrincipal.js'
@@ -31,7 +31,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  if (!readRequestPrincipal(req)) {
+  const principal = readRequestPrincipal(req)
+  if (!principal) {
     return res.status(401).json({ success: false, error: 'Authentication required' } satisfies ApiEnvelope<never>)
   }
 
@@ -55,10 +56,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
+  const registration = await enrichAgentRegistrationWithFarcaster({
+    payload: result.payload,
+    ownerAddress: principal.address,
+  })
+
   let groveStatus: PublishResult['groveStatus'] = 'skipped'
   let grove: PublishResult['grove'] | undefined
   if (storeOnGrove) {
-    const upload = await tryUploadImmutableJson(result.payload)
+    const upload = await tryUploadImmutableJson(registration)
     if (upload.ok) {
       groveStatus = 'stored'
       grove = {
@@ -84,7 +90,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   return res.status(200).json({
     success: true,
     data: {
-      registration: result.payload,
+      registration,
       groveStatus,
       grove,
     } satisfies PublishResult,

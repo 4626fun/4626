@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
-import { buildAgentRegistration } from '../../../server/_lib/agentRegistration.js'
+import { buildAgentRegistration, enrichAgentRegistrationWithFarcaster } from '../../../server/_lib/agentRegistration.js'
 import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
 import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
 import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
@@ -40,7 +40,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? storeQueryRaw !== 'false'
       : true
 
-  const hasAuthPrincipal = Boolean(readRequestPrincipal(req))
+  const principal = readRequestPrincipal(req)
+  const hasAuthPrincipal = Boolean(principal)
   if (shouldStore && !hasAuthPrincipal) {
     return res.status(401).json({
       success: false,
@@ -65,10 +66,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
+  const registration = principal
+    ? await enrichAgentRegistrationWithFarcaster({
+        payload: result.payload,
+        ownerAddress: principal.address,
+      })
+    : result.payload
+
   // Keep uploaded payload deterministic/content-addressed.
   // Adding timestamps here changes the hash and therefore the resulting lens:// URI on every call.
-  const registration = result.payload
-
   let grove: LensAgentRegistrationResponse['grove']
   let groveStatus: 'stored' | 'unavailable' | 'skipped' = 'skipped'
   if (shouldStore) {

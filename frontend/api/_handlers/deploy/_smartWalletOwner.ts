@@ -21,16 +21,6 @@ function getBaseRpcUrls(): string[] {
   return [...new Set(urls)]
 }
 
-const COINBASE_SMART_WALLET_ABI = [
-  {
-    type: 'function',
-    name: 'isOwnerAddress',
-    stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-] as const
-
 const COINBASE_SMART_WALLET_OWNERS_ABI = [
   { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'ownerAtIndex', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'bytes' }] },
@@ -83,25 +73,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         chain: base,
         transport: http(rpc, { timeout: 10_000 }),
       })
-
-      // First try the standard method (fast path).
-      try {
-        const isOwner = await client.readContract({
-          address: smartWallet as `0x${string}`,
-          abi: COINBASE_SMART_WALLET_ABI,
-          functionName: 'isOwnerAddress',
-          args: [ownerAddress as `0x${string}`],
-        })
-
-        const data: ResponseData = {
-          smartWallet,
-          ownerAddress,
-          isOwner: isOwner === true,
-        }
-        return res.status(200).json({ success: true, data } satisfies ApiEnvelope<ResponseData>)
-      } catch {
-        // Fall back to iterating owners if isOwnerAddress is not available.
-      }
 
       const countRaw = (await client.readContract({
         address: smartWallet as `0x${string}`,

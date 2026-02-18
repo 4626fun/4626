@@ -76,7 +76,7 @@ function formatRole(
   const isCanonicalSmartWallet = canonicalLc ? canonicalLc === addressLc : account.isCanonicalSmartWallet
 
   if (account.isPrimary) labels.push('Primary')
-  if (isCanonicalSmartWallet) labels.push('Canonical Smart Wallet')
+  if (isCanonicalSmartWallet) labels.push('Canonical Smart Wallet from Zora')
   if (walletType === 'smart_wallet' && primarySmartWalletLc && primarySmartWalletLc === addressLc) labels.push('Primary Smart Wallet')
   if (account.isEmbeddedEoa) labels.push('Embedded EOA')
   if (!isCanonicalSmartWallet && walletType === 'smart_wallet') {
@@ -395,11 +395,40 @@ export function AccountSettings() {
     return null
   }, [privyUser])
 
+  // Resolve Zora-linked wallets (prefer handle when available) so canonical CSW
+  // can be anchored to the creator's Zora identity instead of stale local flags.
+  const zoraCanonicalSeedIdentifier = useMemo(() => {
+    const fromHandle = normalizeHandle(profile?.preprovZoraHandle)
+    if (fromHandle) return fromHandle
+    if (isEvmAddress(profile?.primaryWallet)) return profile.primaryWallet
+    return undefined
+  }, [profile?.preprovZoraHandle, profile?.primaryWallet])
+  const zoraCanonicalSeedQuery = useZoraProfile(zoraCanonicalSeedIdentifier)
+  const zoraCanonicalSeedProfile = zoraCanonicalSeedQuery.data ?? null
+
   const canonicalSmartWalletAddress = useMemo(() => {
     if (!profile) return null
+    const connectedSmartWallets = (profile.connectedAccounts ?? [])
+      .filter((a) => isEvmAddress(a.address) && String(a.walletType ?? '').toLowerCase() === 'smart_wallet')
+      .map((a) => a.address.toLowerCase())
+    const connectedSmartWalletSet = new Set(connectedSmartWallets)
+    const zoraCandidates = [
+      zoraCanonicalSeedProfile?.publicWallet?.walletAddress,
+      ...((zoraCanonicalSeedProfile?.linkedWallets?.edges ?? []).map((edge) => edge?.node?.walletAddress ?? null)),
+    ]
+    for (const candidate of zoraCandidates) {
+      if (!isEvmAddress(candidate)) continue
+      if (connectedSmartWalletSet.has(candidate.toLowerCase())) return getAddress(candidate)
+    }
     const canonicalFromAccounts = (profile.connectedAccounts ?? [])
       .filter((a) => a.isCanonicalSmartWallet && isEvmAddress(a.address))
       .sort((a, b) => {
+        const aProvider = String(a.provider ?? '').toLowerCase()
+        const bProvider = String(b.provider ?? '').toLowerCase()
+        // Prefer non-Privy CSWs when both are marked canonical.
+        if (aProvider.includes('privy') !== bProvider.includes('privy')) {
+          return aProvider.includes('privy') ? 1 : -1
+        }
         const aMs = Date.parse(a.verifiedAt ?? '')
         const bMs = Date.parse(b.verifiedAt ?? '')
         if (Number.isFinite(aMs) && Number.isFinite(bMs)) return bMs - aMs
@@ -413,7 +442,7 @@ export function AccountSettings() {
     if (isEvmAddress(profile.baseSubAccount)) return profile.baseSubAccount
     if (isEvmAddress(privyCrossAppSmartWalletAddress)) return privyCrossAppSmartWalletAddress
     return null
-  }, [privyCrossAppSmartWalletAddress, profile])
+  }, [privyCrossAppSmartWalletAddress, profile, zoraCanonicalSeedProfile])
 
   const primarySmartWalletAddress = useMemo(() => {
     if (canonicalSmartWalletAddress) return canonicalSmartWalletAddress
@@ -581,7 +610,7 @@ export function AccountSettings() {
       }
     }
 
-    upsert(canonicalSmartWalletAddress, 'Canonical Smart Wallet', 100, 'Coinbase Smart Wallet')
+    upsert(canonicalSmartWalletAddress, 'Canonical Smart Wallet from Zora', 100, 'Coinbase Smart Wallet')
     upsert(primarySmartWalletAddress, 'Primary Smart Wallet', 98, 'Coinbase Smart Wallet')
     upsert(profile.primaryWallet, 'Primary Wallet', 80, 'External Wallet')
     upsert(profile.primaryEmbeddedEoa, 'Primary Embedded EOA', 70, 'Privy Embedded')
@@ -948,7 +977,7 @@ export function AccountSettings() {
         {canonicalSmartWalletAddress ? (
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 space-y-2">
             <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-              <span>Canonical: <span className="font-mono text-zinc-300">{canonicalSmartWalletAddress}</span></span>
+              <span>Canonical Smart Wallet from Zora: <span className="font-mono text-zinc-300">{canonicalSmartWalletAddress}</span></span>
               {connectedAddress ? (
                 <span>Connected owner EOA: <span className="font-mono text-zinc-300">{connectedAddress}</span></span>
               ) : (

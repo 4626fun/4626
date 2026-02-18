@@ -122,7 +122,7 @@ export const META = {
   },
   agentRegister: {
     title: 'Register Agent',
-    description: 'Register your ERC-8004 agent identity on Base.',
+    description: 'Register and activate your CreatorVault agent stack (ERC-8004, XMTP, SIWA, Lens/Grove).',
   },
   faq: {
     title: 'FAQ',

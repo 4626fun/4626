@@ -63,6 +63,7 @@ function getBundlerEndpoint(origin: string): { url: string; viaProxy: boolean } 
 const COINBASE_SMART_WALLET_OWNERS_ABI = [
   { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'ownerAtIndex', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'bytes' }] },
+  { type: 'function', name: 'nextOwnerIndex', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 ] as const
 
 const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
@@ -80,24 +81,41 @@ async function findOwnerIndex(params: {
   ownerAddress: Address
   maxScan?: number
 }): Promise<number | null> {
-  const { publicClient, smartWallet, ownerAddress, maxScan = 64 } = params
+  const { publicClient, smartWallet, ownerAddress, maxScan = 512 } = params
   const countRaw = (await publicClient.readContract({
     address: smartWallet,
     abi: COINBASE_SMART_WALLET_OWNERS_ABI,
     functionName: 'ownerCount',
   })) as bigint
   const count = Number(countRaw)
-  if (!Number.isFinite(count) || count <= 0) return null
-
-  const expected = asOwnerBytes(ownerAddress).toLowerCase()
-  const limit = Math.min(count, Math.max(1, maxScan))
-  for (let i = 0; i < limit; i++) {
-    const b = (await publicClient.readContract({
+  let upperBound = Number.isFinite(count) ? count : 0
+  try {
+    const nextRaw = (await publicClient.readContract({
       address: smartWallet,
       abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-      functionName: 'ownerAtIndex',
-      args: [BigInt(i)],
-    })) as Hex
+      functionName: 'nextOwnerIndex',
+    })) as bigint
+    const next = Number(nextRaw)
+    if (Number.isFinite(next) && next > 0) upperBound = Math.max(upperBound, next)
+  } catch {
+    // ignore: not all contract versions expose nextOwnerIndex
+  }
+  if (!Number.isFinite(upperBound) || upperBound <= 0) return null
+
+  const expected = asOwnerBytes(ownerAddress).toLowerCase()
+  const limit = Math.min(upperBound, Math.max(1, maxScan))
+  for (let i = 0; i < limit; i++) {
+    let b: Hex
+    try {
+      b = (await publicClient.readContract({
+        address: smartWallet,
+        abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+        functionName: 'ownerAtIndex',
+        args: [BigInt(i)],
+      })) as Hex
+    } catch {
+      continue
+    }
     if (String(b).toLowerCase() === expected) return i
   }
   return null
@@ -193,7 +211,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       publicClient: createPublicClient({ chain: base, transport: http((process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()) }),
       smartWallet,
       ownerAddress: sessionOwner,
-      maxScan: 128,
+      maxScan: 512,
     })
     if (ownerIndex === null) throw new Error('session_owner_not_installed')
 
