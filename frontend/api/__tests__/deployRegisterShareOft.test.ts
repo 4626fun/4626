@@ -204,6 +204,9 @@ describe('deploy registerShareOft handler', () => {
       SOLANA_DEFAULT_MINT_BYTES32:
         '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       SOLANA_DEFAULT_MINT_DECIMALS: '9',
+      SOLANA_DYNAMIC_ROUTE_ENABLED: '0',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL: undefined,
+      SOLANA_BRIDGE_CLI_DIR: undefined,
     })
     try {
       const mockPublicClient = {

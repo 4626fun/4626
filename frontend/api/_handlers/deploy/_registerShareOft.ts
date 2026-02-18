@@ -183,12 +183,33 @@ function readDynamicSolanaRouteEnabled(): boolean {
   return v === '1' || v === 'true' || v === 'yes'
 }
 
-function readDynamicProvisionerUrl(): string {
-  return String(
+function splitUrlList(raw: string): string[] {
+  return raw
+    .split(/[,\n\r\t ]+/)
+    .map((v) => v.trim())
+    .filter(Boolean)
+}
+
+function readDynamicProvisionerUrls(): string[] {
+  const listEnv = String(
+    process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_URLS ??
+      process.env.SOLANA_BRIDGE_PROVISIONER_URLS ??
+      '',
+  ).trim()
+  const singleEnv = String(
     process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL ??
       process.env.SOLANA_BRIDGE_PROVISIONER_URL ??
       '',
   ).trim()
+  const combined = [...splitUrlList(listEnv), ...splitUrlList(singleEnv)]
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const url of combined) {
+    if (seen.has(url)) continue
+    seen.add(url)
+    out.push(url)
+  }
+  return out
 }
 
 function readDynamicProvisionerSecret(): string {
@@ -197,6 +218,67 @@ function readDynamicProvisionerSecret(): string {
       process.env.SOLANA_BRIDGE_PROVISIONER_SECRET ??
       '',
   ).trim()
+}
+
+function readDynamicProvisionerHealthUrl(provisionerUrl: string): string {
+  const env = String(
+    process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL ??
+      process.env.SOLANA_BRIDGE_PROVISIONER_HEALTH_URL ??
+      '',
+  ).trim()
+  if (env) return env
+  try {
+    const url = new URL(provisionerUrl)
+    url.pathname = '/healthz'
+    url.search = ''
+    url.hash = ''
+    return url.toString()
+  } catch {
+    return ''
+  }
+}
+
+function readDynamicProvisionerHealthUrls(provisionerUrls: string[]): string[] {
+  const listEnv = String(
+    process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URLS ??
+      process.env.SOLANA_BRIDGE_PROVISIONER_HEALTH_URLS ??
+      '',
+  ).trim()
+  const explicit = splitUrlList(listEnv)
+  if (explicit.length > 0) return explicit
+  return provisionerUrls.map((url) => readDynamicProvisionerHealthUrl(url))
+}
+
+function describeFetchFailure(error: unknown): string {
+  if (error instanceof Error) {
+    const parts: string[] = []
+    if (error.name) parts.push(error.name)
+    if (error.message) parts.push(error.message)
+    const cause = (error as any).cause
+    const causeCode = cause && typeof cause === 'object' ? (cause as any).code : undefined
+    const causeMessage =
+      cause && typeof cause === 'object' && typeof (cause as any).message === 'string'
+        ? String((cause as any).message)
+        : ''
+    if (causeCode) parts.push(`cause.code=${String(causeCode)}`)
+    if (causeMessage) parts.push(`cause.message=${causeMessage}`)
+    return parts.join(' | ') || 'Unknown fetch error'
+  }
+  return String(error ?? 'Unknown fetch error')
+}
+
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+  timeoutMs = 20_000,
+): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 function decodeBase58(value: string): Uint8Array {
@@ -361,59 +443,108 @@ async function tryProvisionDynamicRoute(params: {
     ? `${symbolPrefix}${symbolSuffix}`
     : `${symbolPrefix}${suffix.slice(0, 4).toUpperCase()}`
   const payForRelay = String(process.env.SOLANA_BRIDGE_PAY_FOR_RELAY ?? '1').trim() !== '0'
-  const provisionerUrl = readDynamicProvisionerUrl()
+  const provisionerUrls = readDynamicProvisionerUrls()
+  const provisionerHealthUrls = readDynamicProvisionerHealthUrls(provisionerUrls)
 
   const provisionViaRemote = async (): Promise<{ mintBytes32: Hex; runner: string }> => {
-    logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (remote provisioner)', {
-      shareOft: params.shareOft,
-      provisionerUrl,
-      deployEnv,
-      payerKp,
-      tokenName,
-      tokenSymbol,
-      payForRelay,
-    })
     const provisionerSecret = readDynamicProvisionerSecret()
-    const response = await fetch(String(provisionerUrl), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(provisionerSecret ? { Authorization: `Bearer ${provisionerSecret}` } : {}),
-      },
-      body: JSON.stringify({
+    const failures: string[] = []
+    for (let i = 0; i < provisionerUrls.length; i += 1) {
+      const provisionerUrl = provisionerUrls[i]
+      const provisionerHealthUrl =
+        provisionerHealthUrls[i] || readDynamicProvisionerHealthUrl(provisionerUrl)
+      logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (remote provisioner)', {
         shareOft: params.shareOft,
+        provisionerUrl,
+        provisionerHealthUrl: provisionerHealthUrl || null,
+        candidateIndex: i + 1,
+        candidateCount: provisionerUrls.length,
         deployEnv,
-        solanaDecimals: params.solanaDecimals,
+        payerKp,
         tokenName,
         tokenSymbol,
-        scalerExponent,
-        payerKp,
         payForRelay,
-      }),
-    })
-    const json = await response.json().catch(() => null)
-    if (!response.ok || !json) {
-      throw new Error(
-        `Remote provisioner failed (${response.status}). ` +
-          `${json && typeof json === 'object' && 'error' in json ? String((json as any).error) : 'No error body.'}`,
-      )
+      })
+      try {
+        const response = await fetchWithTimeout(
+          String(provisionerUrl),
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(provisionerSecret ? { Authorization: `Bearer ${provisionerSecret}` } : {}),
+            },
+            body: JSON.stringify({
+              shareOft: params.shareOft,
+              deployEnv,
+              solanaDecimals: params.solanaDecimals,
+              tokenName,
+              tokenSymbol,
+              scalerExponent,
+              payerKp,
+              payForRelay,
+            }),
+          },
+          20_000,
+        ).catch((error) => {
+          const details = describeFetchFailure(error)
+          const healthHint = provisionerHealthUrl
+            ? ` Check health endpoint: ${provisionerHealthUrl}`
+            : ''
+          throw new Error(`Remote provisioner request failed (${details}).${healthHint}`)
+        })
+        const rawBody = await response.text().catch(() => '')
+        let json: Record<string, unknown> | null = null
+        try {
+          json = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : null
+        } catch {
+          json = null
+        }
+        if (!response.ok || !json) {
+          const detail =
+            json && typeof json.error === 'string'
+              ? json.error
+              : rawBody
+                ? rawBody.slice(0, 300)
+                : 'No error body.'
+          const healthHint = provisionerHealthUrl
+            ? ` Check health endpoint: ${provisionerHealthUrl}`
+            : ''
+          throw new Error(
+            `Remote provisioner failed (${response.status}). ${detail}.${healthHint}`,
+          )
+        }
+        const mintBytes32Raw =
+          typeof (json as any).mintBytes32 === 'string'
+            ? (json as any).mintBytes32
+            : typeof (json as any)?.data?.mintBytes32 === 'string'
+              ? (json as any).data.mintBytes32
+              : ''
+        if (!isBytes32Hex(mintBytes32Raw)) {
+          throw new Error('Remote provisioner did not return a valid mintBytes32.')
+        }
+        const runner =
+          typeof (json as any).runner === 'string'
+            ? String((json as any).runner)
+            : typeof (json as any)?.data?.runner === 'string'
+              ? String((json as any).data.runner)
+              : 'remote-provisioner'
+        return { mintBytes32: mintBytes32Raw as Hex, runner }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        failures.push(`${provisionerUrl}: ${message}`)
+        logger.warn('[deploy/registerShareOft] Remote provisioner candidate failed', {
+          shareOft: params.shareOft,
+          provisionerUrl,
+          candidateIndex: i + 1,
+          candidateCount: provisionerUrls.length,
+          error: message,
+        })
+      }
     }
-    const mintBytes32Raw =
-      typeof (json as any).mintBytes32 === 'string'
-        ? (json as any).mintBytes32
-        : typeof (json as any)?.data?.mintBytes32 === 'string'
-          ? (json as any).data.mintBytes32
-          : ''
-    if (!isBytes32Hex(mintBytes32Raw)) {
-      throw new Error('Remote provisioner did not return a valid mintBytes32.')
-    }
-    const runner =
-      typeof (json as any).runner === 'string'
-        ? String((json as any).runner)
-        : typeof (json as any)?.data?.runner === 'string'
-          ? String((json as any).data.runner)
-          : 'remote-provisioner'
-    return { mintBytes32: mintBytes32Raw as Hex, runner }
+    throw new Error(
+      `Remote provisioner failed for all configured endpoints. ${failures.join(' | ')}`,
+    )
   }
 
   let mintBytes32: Hex
@@ -463,27 +594,27 @@ async function tryProvisionDynamicRoute(params: {
     } catch (error) {
       const localError = error instanceof Error ? error.message : String(error)
       const canFallbackToRemote =
-        !!provisionerUrl && (isRunnerUnavailable(error) || localError.includes('No usable bridge CLI runner found'))
+        provisionerUrls.length > 0 && (isRunnerUnavailable(error) || localError.includes('No usable bridge CLI runner found'))
       if (!canFallbackToRemote) throw error
       logger.warn('[deploy/registerShareOft] Local dynamic route provisioning failed; falling back to remote provisioner', {
         shareOft: params.shareOft,
         cliDir,
         cliBin,
         localError,
-        provisionerUrl,
+        provisionerUrls,
       })
       const remote = await provisionViaRemote()
       mintBytes32 = remote.mintBytes32
       provisionRunner = remote.runner
     }
-  } else if (provisionerUrl) {
+  } else if (provisionerUrls.length > 0) {
     const remote = await provisionViaRemote()
     mintBytes32 = remote.mintBytes32
     provisionRunner = remote.runner
   } else {
     throw new Error(
       'Dynamic Solana route is enabled, but neither a valid local SOLANA_BRIDGE_CLI_DIR exists ' +
-        'nor SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL is set.',
+        'nor SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL / SOLANA_DYNAMIC_ROUTE_PROVISIONER_URLS is set.',
     )
   }
 
