@@ -5593,14 +5593,6 @@ function DeployVaultMain() {
   const handleDeploymentSuccess = useCallback((addresses: ServerDeployResponse['addresses']) => {
     if (!deploySender || !creatorToken || !isAddress(creatorToken)) return
 
-    const txHashes: DeploymentRecord['txHashes'] = {}
-    if (phaseTxs.tx1) txHashes.phase1 = phaseTxs.tx1
-    if (phaseTxs.tx2) txHashes.phase2 = phaseTxs.tx2
-    if (phaseTxs.tx3) txHashes.phase3 = phaseTxs.tx3
-    if (phaseTxs.tx4) txHashes.phase4 = phaseTxs.tx4
-    // Server-continued deploys currently expose only the latest tx hash in `txId`.
-    if (!txHashes.phase4 && txId) txHashes.phase4 = txId
-
     const record = deploymentTracker.recordDeployment({
       creatorToken: creatorToken as Address,
       contracts: {
@@ -5611,13 +5603,12 @@ function DeployVaultMain() {
         ccaStrategy: addresses.ccaStrategy,
         oracle: addresses.oracle,
       },
-      txHashes: Object.keys(txHashes).length > 0 ? txHashes : undefined,
     })
 
     if (record) {
       setJustCompletedDeployment(record)
     }
-  }, [creatorToken, deploySender, deploymentTracker, phaseTxs.tx1, phaseTxs.tx2, phaseTxs.tx3, phaseTxs.tx4, txId])
+  }, [creatorToken, deploySender, deploymentTracker])
 
   const canonicalIdentityBytecodeQuery = useQuery({
     queryKey: ['bytecode', 'canonicalIdentity', canonicalIdentityAddress],
