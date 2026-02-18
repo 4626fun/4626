@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { getAddress, type Address, type Hex, type SignableMessage } from 'viem'
+import { decodeFunctionData, getAddress, isAddress, type Address, type Hex, type SignableMessage } from 'viem'
 import { createPublicClient, encodeAbiParameters, encodeFunctionData, http } from 'viem'
 import { privateKeyToAccount, toAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
@@ -21,6 +21,8 @@ type StatusRequest = { sessionId: string }
 
 const CONCURRENT_MODIFICATION = 'concurrent_modification'
 const STAGE_USEROP_HASH_PREFIX = 'stageUserOpHash_'
+const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
+const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
 
 function stageUserOpHashKey(step: string): string {
   return `${STAGE_USEROP_HASH_PREFIX}${step}`
@@ -100,6 +102,63 @@ const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
   { type: 'function', name: 'removeOwnerAtIndex', stateMutability: 'nonpayable', inputs: [{ name: 'index', type: 'uint256' }, { name: 'owner', type: 'bytes' }], outputs: [] },
 ] as const
 
+const CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'solanaBridgeAdapter',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'solanaDestination',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }],
+  },
+] as const
+
+const SOLANA_BRIDGE_ADAPTER_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'isRegistered',
+    stateMutability: 'view',
+    inputs: [{ name: 'token', type: 'address' }],
+    outputs: [{ type: 'bool' }],
+  },
+] as const
+
+const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
+  {
+    type: 'function',
+    name: 'finalizePhase2',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
 function asOwnerBytes(owner: Address): Hex {
   return encodeAbiParameters([{ type: 'address' }], [owner]) as Hex
 }
@@ -148,6 +207,98 @@ async function findOwnerIndex(params: {
     if (String(b).toLowerCase() === expected) return i
   }
   return null
+}
+
+function headerValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] ?? ''
+  return typeof value === 'string' ? value : ''
+}
+
+function extractShareOftFromFinalizeCall(data: Hex): Address | null {
+  try {
+    const decoded = decodeFunctionData({
+      abi: CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI,
+      data,
+    })
+    const params = (decoded.args?.[0] ?? null) as { shareOFT?: string } | null
+    if (!params?.shareOFT || !isAddress(params.shareOFT)) return null
+    return getAddress(params.shareOFT as Address)
+  } catch {
+    return null
+  }
+}
+
+async function ensureSolanaRouteReadyForPhase2(params: {
+  req: VercelRequest
+  publicClient: any
+  phase2FinalizeCalls: Array<{ to: Address; value: bigint; data: Hex }>
+}): Promise<void> {
+  const finalizeCall = params.phase2FinalizeCalls[0]
+  if (!finalizeCall) return
+
+  const batcherAddress = getAddress(finalizeCall.to)
+  const shareOft = extractShareOftFromFinalizeCall(finalizeCall.data)
+  if (!shareOft) {
+    throw new Error('phase2_finalize_shareoft_decode_failed')
+  }
+
+  const [adapterRaw, destinationRaw] = await Promise.all([
+    params.publicClient
+      .readContract({
+        address: batcherAddress,
+        abi: CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI,
+        functionName: 'solanaBridgeAdapter',
+      })
+      .catch(() => ZERO_ADDRESS as Address),
+    params.publicClient
+      .readContract({
+        address: batcherAddress,
+        abi: CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI,
+        functionName: 'solanaDestination',
+      })
+      .catch(() => ZERO_BYTES32 as Hex),
+  ])
+  const adapter = getAddress((adapterRaw as Address) || ZERO_ADDRESS)
+  const destination = ((destinationRaw as Hex) || ZERO_BYTES32).toLowerCase()
+  const solanaEnabled =
+    adapter.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
+    destination !== ZERO_BYTES32.toLowerCase()
+  if (!solanaEnabled) return
+
+  const registered = await params.publicClient
+    .readContract({
+      address: adapter,
+      abi: SOLANA_BRIDGE_ADAPTER_VIEW_ABI,
+      functionName: 'isRegistered',
+      args: [shareOft],
+    })
+    .then((v: unknown) => Boolean(v))
+    .catch(() => null)
+  if (registered === true) return
+
+  const origin = getCanonicalOrigin(params.req)
+  const registerUrl = `${origin}/api/deploy/registerShareOft`
+  const cookie = headerValue(params.req.headers.cookie as string | string[] | undefined)
+  const authz = headerValue(params.req.headers.authorization as string | string[] | undefined)
+  const registerRes = await fetch(registerUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(cookie ? { Cookie: cookie } : {}),
+      ...(authz ? { Authorization: authz } : {}),
+    },
+    body: JSON.stringify({
+      shareOft,
+      batcherAddress,
+    }),
+  })
+  const registerJson = (await registerRes.json().catch(() => null)) as ApiEnvelope<any> | null
+  if (!registerRes.ok || !registerJson?.success) {
+    const detail = registerJson?.error ? `: ${String(registerJson.error)}` : ''
+    throw new Error(
+      `phase2_solana_route_unregistered${detail}`,
+    )
+  }
 }
 
 async function getOwnerAccount(rec: any) {
@@ -564,6 +715,11 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       return
     }
     if (hasPhase2Finalize) {
+      await ensureSolanaRouteReadyForPhase2({
+        req,
+        publicClient,
+        phase2FinalizeCalls,
+      })
       await startStage('phase1_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
       return
     }
@@ -595,6 +751,11 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       return
     }
     if (hasPhase2Finalize) {
+      await ensureSolanaRouteReadyForPhase2({
+        req,
+        publicClient,
+        phase2FinalizeCalls,
+      })
       await startStage('phase1_finalize_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
       return
     }
@@ -621,6 +782,11 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
 
     if (hasPhase2Finalize) {
+      await ensureSolanaRouteReadyForPhase2({
+        req,
+        publicClient,
+        phase2FinalizeCalls,
+      })
       await startStage('phase2_core_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
       return
     }
@@ -697,6 +863,11 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       return
     }
     if (phase2FinalizeCalls.length > 0) {
+      await ensureSolanaRouteReadyForPhase2({
+        req,
+        publicClient,
+        phase2FinalizeCalls,
+      })
       await startStage('phase1_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
       return
     }
@@ -720,6 +891,11 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       return
     }
     if (phase2FinalizeCalls.length > 0) {
+      await ensureSolanaRouteReadyForPhase2({
+        req,
+        publicClient,
+        phase2FinalizeCalls,
+      })
       await startStage('phase1_finalize_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
       return
     }
@@ -738,6 +914,11 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
 
   if (step === 'phase2_core_confirmed') {
     if (hasPhase2Finalize) {
+      await ensureSolanaRouteReadyForPhase2({
+        req,
+        publicClient,
+        phase2FinalizeCalls,
+      })
       await startStage('phase2_core_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
       return
     }
