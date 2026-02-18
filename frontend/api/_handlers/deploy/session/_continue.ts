@@ -425,6 +425,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         error: 'Session owner credentials unavailable. Please restart deploy session.',
       } satisfies ApiEnvelope<null>)
     }
+    if (msg === 'session_owner_not_installed') {
+      return res.status(409).json({
+        success: false,
+        error:
+          'Deploy-session signer is not installed on the canonical smart wallet. Approve the one-time add-owner transaction, then retry.',
+      } satisfies ApiEnvelope<null>)
+    }
     if (msg === 'cdp_endpoint_missing_on_vercel') {
       return res.status(503).json({
         success: false,

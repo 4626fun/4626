@@ -1853,6 +1853,12 @@ function DeployVaultBatcher({
         'If needed, disable server-continue (`VITE_DEPLOY_USE_SERVER_CONTINUE=false`) and run phases client-side.'
       )
     }
+    if (lower.includes('session_owner_not_installed') || lower.includes('deploy-session signer is not installed')) {
+      return (
+        'Deploy-session signer is not installed on your canonical smart wallet yet. ' +
+        'Approve the one-time add-owner transaction from an owner EOA (for example Coinbase Wallet), then retry deploy.'
+      )
+    }
     if (
       lower.includes('user rejected') ||
       lower.includes('rejected the request') ||
@@ -1903,6 +1909,68 @@ function DeployVaultBatcher({
     }
     return msg
   }, [switchAuthLabel])
+
+  const ensureDeploySessionSignerInstalled = useCallback(async (sessionSigner: Address): Promise<void> => {
+    let installed = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionSigner })
+    if (installed) return
+
+    if (!connectedAddress || !wagmiWalletClient || connectedAddress.toLowerCase() === owner.toLowerCase()) {
+      throw new Error(
+        'Deploy session signer is not installed. Connect an owner EOA wallet (for example Coinbase Wallet) and retry.',
+      )
+    }
+
+    const callerIsOwner = await isCoinbaseSmartWalletOwner({
+      smartWallet: owner,
+      ownerAddress: connectedAddress as Address,
+    })
+    if (!callerIsOwner) {
+      throw new Error('Connected wallet is not an owner of your canonical smart wallet.')
+    }
+
+    await ensureBaseChain('Owner wallet')
+
+    const addOwnerData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+      functionName: 'addOwnerAddress',
+      args: [sessionSigner],
+    })
+
+    if (publicClient) {
+      try {
+        await publicClient.simulateContract({
+          account: connectedAddress as Address,
+          address: owner,
+          abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+          functionName: 'addOwnerAddress',
+          args: [sessionSigner],
+        })
+      } catch (simErr: unknown) {
+        const simMessage = simErr instanceof Error ? simErr.message : String(simErr)
+        if (/AlreadyOwner/i.test(simMessage)) {
+          installed = true
+        }
+      }
+    }
+
+    if (!installed) {
+      const rawTxHash = await (wagmiWalletClient as any).sendTransaction({
+        to: owner,
+        data: addOwnerData,
+        value: 0n,
+        account: connectedAddress as Address,
+        chain: base,
+      })
+      const txHash = ensureSignatureHex(rawTxHash, 'ownerWallet.sendTransaction(addOwner)') as Hex
+      if (txHash.length !== 66) throw new Error('Invalid tx hash returned from owner wallet')
+      setTxId(txHash)
+      if (!publicClient) throw new Error('Missing Base public client')
+      await publicClient.waitForTransactionReceipt({ hash: txHash })
+    }
+
+    installed = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionSigner })
+    if (!installed) throw new Error('session_owner_not_installed')
+  }, [connectedAddress, ensureBaseChain, owner, publicClient, wagmiWalletClient])
 
   const pollServerDeploySession = useCallback(async (sessionId: string) => {
     let delayMs = 2000
@@ -1968,6 +2036,13 @@ function DeployVaultBatcher({
         if (!statusRes.ok || !statusJson?.success) throw new Error(statusJson?.error || 'Failed to fetch deploy status')
         const step = String(statusJson.data?.step ?? '')
         if (step === 'created') {
+          const sessionSignerRaw = String(
+            statusJson.data?.sessionSignerAddress ?? statusJson.data?.sessionOwner ?? '',
+          ).trim()
+          if (!isAddress(sessionSignerRaw)) {
+            throw new Error('Invalid deploy session status response')
+          }
+          await ensureDeploySessionSignerInstalled(getAddress(sessionSignerRaw) as Address)
           const continueRes = await fetch('/api/deploy/session/continue', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1989,7 +2064,15 @@ function DeployVaultBatcher({
     return () => {
       cancelled = true
     }
-  }, [busy, ensurePaymasterSession, formatDeployError, loadDeploySession, pollServerDeploySession, useServerContinue])
+  }, [
+    busy,
+    ensureDeploySessionSignerInstalled,
+    ensurePaymasterSession,
+    formatDeployError,
+    loadDeploySession,
+    pollServerDeploySession,
+    useServerContinue,
+  ])
 
   const isTxHash = (h?: string | null) => typeof h === 'string' && /^0x[a-fA-F0-9]{64}$/.test(h)
   const hrefForTx = (h?: string | null) => (isTxHash(h) ? `https://basescan.org/tx/${h}` : null)
@@ -4265,64 +4348,8 @@ function DeployVaultBatcher({
             const sessionOwner = getAddress(sessionOwnerRaw) as Address
             persistDeploySession(sessionId)
 
-            // Install the deploy-session owner via a single user-approved transaction.
-            // This MUST be an owner EOA transaction (not a smart wallet self-call).
-            let alreadyInstalled = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionOwner })
-            if (!alreadyInstalled) {
-              const addOwnerData = encodeFunctionData({
-                abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
-                functionName: 'addOwnerAddress',
-                args: [sessionOwner],
-              })
-
-              let installed = false
-              // Setup tx must be sent by an EOA owner (not the smart wallet itself).
-              if (connectedAddress && wagmiWalletClient && connectedAddress.toLowerCase() !== owner.toLowerCase()) {
-                const isOwner = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: connectedAddress as Address })
-                if (isOwner) {
-                  await ensureBaseChain('Owner wallet')
-                  // Simulate before sending: if addOwnerAddress reverts with AlreadyOwner, agent is already installed.
-                  if (publicClient) {
-                    try {
-                      await publicClient.simulateContract({
-                        account: connectedAddress,
-                        address: owner,
-                        abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
-                        functionName: 'addOwnerAddress',
-                        args: [sessionOwner],
-                      })
-                    } catch (simErr: unknown) {
-                      const msg = simErr instanceof Error ? simErr.message : String(simErr)
-                      if (/AlreadyOwner/i.test(msg)) {
-                        alreadyInstalled = true
-                        installed = true
-                      }
-                    }
-                  }
-                  if (!installed) {
-                    const rawTxHash = await (wagmiWalletClient as any).sendTransaction({
-                      to: owner,
-                      data: addOwnerData,
-                      value: 0n,
-                      account: connectedAddress,
-                      chain: base,
-                    })
-                    const txHash = ensureSignatureHex(rawTxHash, 'ownerWallet.sendTransaction(addOwner)') as Hex
-                    if (txHash.length !== 66) throw new Error('Invalid tx hash returned from owner wallet')
-                    setTxId(txHash)
-                    if (!publicClient) throw new Error('Missing Base public client')
-                    await publicClient.waitForTransactionReceipt({ hash: txHash })
-                    installed = true
-                  }
-                }
-              }
-              if (!installed) {
-                throw new Error(
-                  'Server continuation requires an owner EOA to install a deploy-session owner. ' +
-                    'Connect an owner EOA wallet (e.g. Coinbase Wallet) and retry.',
-                )
-              }
-            }
+            // Install the deploy-session signer via a one-time owner EOA transaction if needed.
+            await ensureDeploySessionSignerInstalled(sessionOwner)
 
             // Kick off server continuation; status polling will advance remaining phases.
             const continueRes = await fetch('/api/deploy/session/continue', {
