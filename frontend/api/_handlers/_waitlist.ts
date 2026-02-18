@@ -1,11 +1,12 @@
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../server/auth/_shared.js'
-import { getDb } from '../../server/_lib/postgres.js'
+import { getDb, getDbInitError, isDbConfigured } from '../../server/_lib/postgres.js'
 import { normalizeReferralCode, getClientIp, getUserAgent, hashForAttribution } from '../../server/_lib/referrals.js'
 import { checkRateLimit, RATE_LIMITS, rateLimitKey, getClientIp as getRateLimitIp } from '../../server/_lib/rateLimit.js'
 import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../server/_lib/waitlistPoints.js'
 import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
 import { readRequestPrincipalAddress } from '../../server/_lib/requestPrincipal.js'
 import { preprovisionWaitlistUser } from '../../server/_lib/waitlistPreprovision.js'
+import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -426,32 +427,13 @@ export default async function handler(req: any, res: any) {
 
   const referralFromBody = normalizeReferralCodeOrNull(body.referralCode)
   const claimReferralCode = normalizeReferralCodeOrNull(body.claimReferralCode)
-
-  const db = await getDb()
-  if (!db) {
-    return res.status(500).json({
-      success: false,
-      error: 'Waitlist requires DB configuration (DATABASE_URL, POSTGRES_URL, or POSTGRES_URL_NON_POOLING).',
-    } satisfies ApiEnvelope<never>)
-  }
-
-  try {
-    await ensureWaitlistSchema(db as any)
-  } catch (e: any) {
-    // If the DB is reachable but schema creation is blocked, fail with a clear operator error.
-    const msg = e?.message ? String(e.message) : 'Failed to initialize waitlist schema'
-    return res.status(500).json({ success: false, error: msg } satisfies ApiEnvelope<never>)
-  }
-  // Keep points schema ensured even if this handler is hot-reloaded separately.
-  await ensureWaitlistPointsSchema(db as any)
-
-  const ipHash = hashForAttribution(getClientIp(req))
-  const uaHash = hashForAttribution(getUserAgent(req))
-
   let privyUserId: string | null = null
   let embeddedWallet: string | null = null
   let embeddedWalletChain: string | null = null
   let embeddedWalletClientType: string | null = null
+  const ipHash = hashForAttribution(getClientIp(req))
+  const uaHash = hashForAttribution(getUserAgent(req))
+
   if (!isAnySyntheticEmail(email)) {
     try {
       const privy = await privyCreateOrGetWaitlistUser(email)
@@ -482,6 +464,162 @@ export default async function handler(req: any, res: any) {
       console.warn('waitlist: privy error', e?.message ? String(e.message) : e)
     }
   }
+
+  const dbConfigured = isDbConfigured()
+  const supabaseOnly = isSupabaseAdminConfigured()
+  const db = supabaseOnly ? null : await getDb()
+  let supabaseFallbackError: string | null = null
+  if (!db) {
+    if (isSupabaseAdminConfigured()) {
+      try {
+        const supabase = getSupabaseAdmin()
+        const nowIso = new Date().toISOString()
+        const toProfileRow = (value: any): { id: number; email: string; referral_code: string | null; primary_wallet: string | null } | null => {
+          if (!value || typeof value !== 'object') return null
+          const id = Number((value as any).id)
+          if (!Number.isFinite(id) || id <= 0) return null
+          const rowEmail = String((value as any).email ?? '').trim()
+          return {
+            id,
+            email: rowEmail || email,
+            referral_code: typeof (value as any).referral_code === 'string' ? String((value as any).referral_code) : null,
+            primary_wallet: typeof (value as any).primary_wallet === 'string' ? String((value as any).primary_wallet) : null,
+          }
+        }
+
+        const { data: existingRaw, error: existingErr } = await supabase
+          .from('profiles')
+          .select('id,email,referral_code,primary_wallet')
+          .eq('email', email)
+          .maybeSingle()
+        if (existingErr) throw new Error(existingErr.message)
+
+        let created = false
+        let row = toProfileRow(existingRaw)
+
+        if (row) {
+          const patch: Record<string, unknown> = { updated_at: nowIso }
+          if (primaryWallet.length > 0) patch.primary_wallet = primaryWallet
+          if (solanaWallet.length > 0) patch.solana_wallet = solanaWallet
+          if (privyUserId) patch.privy_user_id = privyUserId
+          if (embeddedWallet) patch.embedded_wallet = embeddedWallet
+          if (embeddedWalletChain) patch.embedded_wallet_chain = embeddedWalletChain
+          if (embeddedWalletClientType) patch.embedded_wallet_client_type = embeddedWalletClientType
+          if (baseSubAccount.length > 0) patch.base_sub_account = baseSubAccount
+          if (persona) patch.persona = persona
+          if (typeof hasCreatorCoinRaw === 'boolean') patch.has_creator_coin = hasCreatorCoinRaw
+          if (typeof farcasterFid === 'number' && farcasterFid > 0) patch.farcaster_fid = farcasterFid
+          if (contactPreference) patch.contact_preference = contactPreference
+          if (verifications.length > 0) patch.verifications = verifications
+          if (cswAddress.length > 0) {
+            patch.csw_address = cswAddress
+            if (!row.primary_wallet) patch.primary_wallet = cswAddress
+          }
+
+          const { data: updatedRaw, error: updateErr } = await supabase
+            .from('profiles')
+            .update(patch)
+            .eq('id', row.id)
+            .select('id,email,referral_code,primary_wallet')
+            .single()
+          if (updateErr) throw new Error(updateErr.message)
+          row = toProfileRow(updatedRaw) ?? row
+        } else {
+          const insertPayload: Record<string, unknown> = {
+            email,
+            primary_wallet: primaryWallet.length > 0 ? primaryWallet : cswAddress.length > 0 ? cswAddress : null,
+            solana_wallet: solanaWallet.length > 0 ? solanaWallet : null,
+            privy_user_id: privyUserId,
+            embedded_wallet: embeddedWallet,
+            embedded_wallet_chain: embeddedWalletChain,
+            embedded_wallet_client_type: embeddedWalletClientType,
+            base_sub_account: baseSubAccount.length > 0 ? baseSubAccount : null,
+            csw_address: cswAddress.length > 0 ? cswAddress : null,
+            persona,
+            has_creator_coin: hasCreatorCoinRaw,
+            farcaster_fid: farcasterFid,
+            contact_preference: contactPreference,
+            verifications: verifications.length > 0 ? verifications : null,
+            created_at: nowIso,
+            updated_at: nowIso,
+          }
+          const { data: insertedRaw, error: insertErr } = await supabase
+            .from('profiles')
+            .insert(insertPayload)
+            .select('id,email,referral_code,primary_wallet')
+            .single()
+          if (insertErr) throw new Error(insertErr.message)
+          row = toProfileRow(insertedRaw)
+          created = true
+        }
+
+        if (!row?.id) throw new Error('waitlist_supabase_write_failed')
+
+        let referralCodeOut = row.referral_code
+        if (!referralCodeOut) {
+          const desired =
+            claimReferralCode ||
+            (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveCreatorCoinSymbolFromWallet(primaryWallet)) : null) ||
+            `C${Number(row.id).toString(36).toUpperCase()}`
+          const { data: referralRaw, error: referralErr } = await supabase
+            .from('profiles')
+            .update({ referral_code: desired, referral_claimed_at: nowIso, updated_at: nowIso })
+            .eq('id', row.id)
+            .is('referral_code', null)
+            .select('referral_code')
+            .maybeSingle()
+          if (!referralErr && typeof referralRaw?.referral_code === 'string') {
+            referralCodeOut = String(referralRaw.referral_code)
+          } else {
+            referralCodeOut = desired
+          }
+        }
+
+        const provisionWallet = cswAddress.length > 0 ? cswAddress : primaryWallet.length > 0 ? primaryWallet : null
+        if (row.id && provisionWallet && persona === 'creator') {
+          void preprovisionWaitlistUser(row.id, provisionWallet).catch((err) => {
+            console.warn('waitlist: preprovision error', err?.message ? String(err.message) : err)
+          })
+        }
+
+        const data: WaitlistResponse = {
+          created,
+          email: String(row.email || email),
+          referralCode: referralCodeOut,
+        }
+        return res.status(200).json({ success: true, data } satisfies ApiEnvelope<WaitlistResponse>)
+      } catch (fallbackErr: any) {
+        const fallbackMessage = fallbackErr?.message ? String(fallbackErr.message) : 'waitlist_supabase_write_failed'
+        supabaseFallbackError = fallbackMessage
+        console.error('waitlist: supabase fallback failed', fallbackMessage)
+      }
+    }
+
+    const dbInitError = getDbInitError()
+    const errorMessage = supabaseOnly
+      ? supabaseFallbackError
+        ? `Waitlist Supabase write failed: ${supabaseFallbackError}`
+        : 'Waitlist Supabase write failed.'
+      : dbConfigured
+      ? dbInitError
+        ? `Waitlist database unavailable: ${dbInitError}`
+        : 'Waitlist database is unavailable. Please retry shortly.'
+      : 'Waitlist requires DB configuration (DATABASE_URL, POSTGRES_URL, or POSTGRES_URL_NON_POOLING).'
+    return res.status(500).json({
+      success: false,
+      error: errorMessage,
+    } satisfies ApiEnvelope<never>)
+  }
+
+  try {
+    await ensureWaitlistSchema(db as any)
+  } catch (e: any) {
+    // If the DB is reachable but schema creation is blocked, fail with a clear operator error.
+    const msg = e?.message ? String(e.message) : 'Failed to initialize waitlist schema'
+    return res.status(500).json({ success: false, error: msg } satisfies ApiEnvelope<never>)
+  }
+  // Keep points schema ensured even if this handler is hot-reloaded separately.
+  await ensureWaitlistPointsSchema(db as any)
 
   // ---------------------------------------------------------------------------
   // Dedup guard: check if a profile already exists for this wallet/privy_user_id
