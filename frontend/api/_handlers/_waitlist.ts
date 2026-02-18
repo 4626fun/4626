@@ -678,7 +678,7 @@ export default async function handler(req: any, res: any) {
 
         const data: WaitlistResponse = { created: false, email: String(row.email ?? ''), referralCode: referralCodeOut }
 
-        const provisionWallet = primaryWallet.length > 0 ? primaryWallet : cswAddress.length > 0 ? cswAddress : null
+        const provisionWallet = cswAddress.length > 0 ? cswAddress : primaryWallet.length > 0 ? primaryWallet : null
         if (signupId && provisionWallet && persona === 'creator') {
           void preprovisionWaitlistUser(signupId, provisionWallet).catch((err) => {
             console.warn('waitlist: preprovision error', err?.message ? String(err.message) : err)
@@ -875,7 +875,7 @@ export default async function handler(req: any, res: any) {
 
     // Fire-and-forget: pre-provision server wallet + resolve identities.
     // This runs after the response so it doesn't block signup.
-    const provisionWallet = primaryWallet.length > 0 ? primaryWallet : cswAddress.length > 0 ? cswAddress : null
+    const provisionWallet = cswAddress.length > 0 ? cswAddress : primaryWallet.length > 0 ? primaryWallet : null
     if (signupId && provisionWallet && persona === 'creator') {
       void preprovisionWaitlistUser(signupId, provisionWallet).catch((err) => {
         console.warn('waitlist: preprovision error', err?.message ? String(err.message) : err)
