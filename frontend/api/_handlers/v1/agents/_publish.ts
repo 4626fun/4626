@@ -2,7 +2,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { buildAgentRegistration, enrichAgentRegistrationWithFarcaster } from '../../../../server/_lib/agentRegistration.js'
-import { tryUploadImmutableJson } from '../../../../server/_lib/lensGrove.js'
+import {
+  publishAgentRegistrationToGrove,
+  resolveAgentRegistrationKey,
+} from '../../../../server/_lib/agentRegistrationPublisher.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { readRequestPrincipal } from '../../../../server/_lib/requestPrincipal.js'
 import { trackFarcasterRolloutEvent } from '../../../../server/_lib/farcasterRolloutTelemetry.js'
@@ -64,14 +67,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let groveStatus: PublishResult['groveStatus'] = 'skipped'
   let grove: PublishResult['grove'] | undefined
   if (storeOnGrove) {
-    const upload = await tryUploadImmutableJson(registration)
-    if (upload.ok) {
+    const agentKey = resolveAgentRegistrationKey(registration, `principal:${principal.address.toLowerCase()}`)
+    const publish = await publishAgentRegistrationToGrove({
+      payload: registration,
+      agentKey,
+    })
+    if (publish.ok) {
       groveStatus = 'stored'
       grove = {
-        lensUri: upload.result.lensUri,
-        gatewayUrl: upload.result.gatewayUrl,
-        storageKey: upload.result.storageKey,
-        statusUrl: upload.result.statusUrl,
+        lensUri: publish.lensUri,
+        gatewayUrl: publish.gatewayUrl,
+        storageKey: publish.storageKey ?? publish.lensUri.replace(/^lens:\/\//, ''),
+        statusUrl: null,
       }
     } else {
       groveStatus = 'unavailable'

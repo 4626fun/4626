@@ -2,7 +2,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { buildAgentRegistration, enrichAgentRegistrationWithFarcaster } from '../../../server/_lib/agentRegistration.js'
-import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
+import {
+  publishAgentRegistrationToGrove,
+  resolveAgentRegistrationKey,
+} from '../../../server/_lib/agentRegistrationPublisher.js'
 import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
 import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
 
@@ -78,13 +81,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let grove: LensAgentRegistrationResponse['grove']
   let groveStatus: 'stored' | 'unavailable' | 'skipped' = 'skipped'
   if (shouldStore) {
-    const attempt = await tryUploadImmutableJson(registration)
-    if (attempt.ok) {
+    const fallbackKey = principal ? `principal:${principal.address.toLowerCase()}` : 'single-agent'
+    const publish = await publishAgentRegistrationToGrove({
+      payload: registration,
+      agentKey: resolveAgentRegistrationKey(registration, fallbackKey),
+    })
+    if (publish.ok) {
       grove = {
-        lensUri: attempt.result.lensUri,
-        gatewayUrl: attempt.result.gatewayUrl,
-        storageKey: attempt.result.storageKey,
-        statusUrl: attempt.result.statusUrl,
+        lensUri: publish.lensUri,
+        gatewayUrl: publish.gatewayUrl,
+        storageKey: publish.storageKey ?? publish.lensUri.replace(/^lens:\/\//, ''),
+        statusUrl: null,
       }
       groveStatus = 'stored'
     } else {

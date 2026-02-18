@@ -63,13 +63,8 @@ import { getDb, getDbInitError, isDbConfigured } from '../../_lib/postgres.js'
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../_lib/creatorXmtpAgents.js'
 import { createPrivyScwSigner } from '../../_lib/privyXmtpSigner.js'
 import { buildAgentRegistration } from '../../_lib/agentRegistration.js'
-import {
-  getAgentRegistrationState,
-  upsertAgentRegistrationState,
-} from '../../_lib/agentRegistrationState.js'
-import { tryUploadImmutableJson } from '../../_lib/lensGrove.js'
+import { publishAgentRegistrationToGrove } from '../../_lib/agentRegistrationPublisher.js'
 import { createCorrelationLogger, logger } from '../../_lib/logger.js'
-import { createHash } from 'node:crypto'
 import path from 'node:path'
 import fs from 'node:fs'
 import http from 'node:http'
@@ -1129,56 +1124,49 @@ async function uploadRegistrationToGrove(): Promise<void> {
       return
     }
 
-    const payloadCanonical = JSON.stringify(payload)
-    const payloadHash = createHash('sha256').update(payloadCanonical).digest('hex')
     const cswAddress = String(process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim().toLowerCase()
     const isCswAddress = /^0x[a-f0-9]{40}$/.test(cswAddress)
     const agentKey = isCswAddress ? `single-csw:${cswAddress}` : 'single-agent'
-
-    if (ELIZA_GROVE_UPLOAD_MODE === 'on-change') {
-      const existing = await getAgentRegistrationState(agentKey).catch(() => null)
-      if (existing?.payloadHash === payloadHash) {
-        regLogger.info('[eliza] Agent registration unchanged; reusing previous Grove URI', {
-          lensUri: existing.lensUri,
-          gatewayUrl: existing.gatewayUrl,
-          payloadHash,
-          mode: ELIZA_GROVE_UPLOAD_MODE,
-          correlationId,
-        })
-        return
-      }
-    }
-
-    const attempt = await withRetry({
+    const publish = await withRetry({
       operation: 'grove_registration_upload',
       maxRetries: EXTERNAL_MAX_RETRIES,
       correlationId,
-      run: async () => tryUploadImmutableJson(payload),
-    })
-    if (attempt.ok) {
-      try {
-        await upsertAgentRegistrationState({
+      run: async () =>
+        publishAgentRegistrationToGrove({
+          payload,
           agentKey,
-          payloadHash,
-          lensUri: attempt.result.lensUri,
-          gatewayUrl: attempt.result.gatewayUrl ?? null,
-        })
-      } catch (stateErr) {
-        regLogger.warn('[eliza] Failed to persist Grove registration state (non-blocking)', {
-          error: toErrorDetails(stateErr),
-          correlationId,
-        })
-      }
+          mode: ELIZA_GROVE_UPLOAD_MODE,
+        }),
+    })
+
+    if (publish.ok && publish.status === 'reused') {
+      regLogger.info('[eliza] Agent registration unchanged; reusing previous Grove URI', {
+        lensUri: publish.lensUri,
+        gatewayUrl: publish.gatewayUrl,
+        payloadHash: publish.payloadHash,
+        mode: publish.mode,
+        pipeline: publish.pipeline,
+        correlationId,
+      })
+      return
+    }
+
+    if (publish.ok) {
       regLogger.info('[eliza] Agent registration uploaded to Grove', {
-        lensUri: attempt.result.lensUri,
-        gatewayUrl: attempt.result.gatewayUrl,
-        payloadHash,
-        mode: ELIZA_GROVE_UPLOAD_MODE,
+        lensUri: publish.lensUri,
+        gatewayUrl: publish.gatewayUrl,
+        storageKey: publish.storageKey,
+        payloadHash: publish.payloadHash,
+        mode: publish.mode,
+        pipeline: publish.pipeline,
         correlationId,
       })
     } else {
       regLogger.warn('[eliza] Grove registration upload failed (non-blocking)', {
-        error: attempt.error,
+        error: publish.error ?? 'upload_unavailable',
+        payloadHash: publish.payloadHash,
+        mode: publish.mode,
+        pipeline: publish.pipeline,
         correlationId,
       })
     }

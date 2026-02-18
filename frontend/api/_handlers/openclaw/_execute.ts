@@ -3,6 +3,10 @@ import type { Address } from 'viem'
 
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { buildAgentRegistration } from '../../../server/_lib/agentRegistration.js'
+import {
+  publishAgentRegistrationToGrove,
+  resolveAgentRegistrationKey,
+} from '../../../server/_lib/agentRegistrationPublisher.js'
 import { DEFAULT_CHAIN_ID } from '../../../server/zora/_shared.js'
 import { resolveCanonicalSmartWalletAddress } from '../../../server/_lib/canonicalWalletResolver.js'
 import { resolveLensUserByOwner } from '../../../server/_lib/lensAccounts.js'
@@ -373,16 +377,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           missing: result.missing ?? [],
         })
       }
-      const registration = {
-        ...result.payload,
-        generatedAt: new Date().toISOString(),
-        source: 'erc8004.registration',
-      }
+      const registration = result.payload
       const shouldStore = input.store !== false
       let grove = null
       if (shouldStore) {
-        const attempt = await tryUploadImmutableJson(registration)
-        if (attempt.ok) grove = attempt.result
+        const publish = await publishAgentRegistrationToGrove({
+          payload: registration,
+          agentKey: resolveAgentRegistrationKey(registration),
+        })
+        if (publish.ok) {
+          grove = {
+            lensUri: publish.lensUri,
+            gatewayUrl: publish.gatewayUrl,
+            storageKey: publish.storageKey ?? publish.lensUri.replace(/^lens:\/\//, ''),
+            statusUrl: null,
+          }
+        }
       }
       return res.status(200).json({ success: true, data: { registration, grove } })
     }

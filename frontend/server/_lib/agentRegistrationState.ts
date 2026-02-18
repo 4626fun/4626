@@ -10,6 +10,7 @@ export type AgentRegistrationStateRow = {
   payloadHash: string
   lensUri: string
   gatewayUrl: string | null
+  storageKey: string | null
   updatedAt: string
 }
 
@@ -27,9 +28,15 @@ export async function ensureAgentRegistrationStateSchema(): Promise<void> {
         payload_hash TEXT NOT NULL,
         lens_uri TEXT NOT NULL,
         gateway_url TEXT,
+        storage_key TEXT,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `
+    try {
+      await db.sql`ALTER TABLE agent_registration_state ADD COLUMN IF NOT EXISTS storage_key TEXT;`
+    } catch {
+      // Ignore if migration already applied or DDL is unavailable.
+    }
     await db.sql`CREATE INDEX IF NOT EXISTS agent_registration_state_updated_idx ON agent_registration_state (updated_at DESC);`
     schemaEnsured = true
   } catch {
@@ -45,8 +52,10 @@ function normalizeRow(row: any): AgentRegistrationStateRow | null {
   if (!agentKey || !payloadHash || !lensUri) return null
   const gatewayUrlRaw = String(row?.gateway_url ?? '').trim()
   const gatewayUrl = gatewayUrlRaw || null
+  const storageKeyRaw = String(row?.storage_key ?? '').trim()
+  const storageKey = storageKeyRaw || null
   const updatedAt = row?.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString()
-  return { agentKey, payloadHash, lensUri, gatewayUrl, updatedAt }
+  return { agentKey, payloadHash, lensUri, gatewayUrl, storageKey, updatedAt }
 }
 
 export async function getAgentRegistrationState(agentKey: string): Promise<AgentRegistrationStateRow | null> {
@@ -57,7 +66,7 @@ export async function getAgentRegistrationState(agentKey: string): Promise<Agent
     const supabase = getSupabaseAdmin()
     const { data, error } = await supabase
       .from('agent_registration_state')
-      .select('agent_key,payload_hash,lens_uri,gateway_url,updated_at')
+      .select('agent_key,payload_hash,lens_uri,gateway_url,storage_key,updated_at')
       .eq('agent_key', key)
       .maybeSingle()
     if (error) throw new Error(`agent_registration_state_read_failed:${error.message}`)
@@ -69,7 +78,7 @@ export async function getAgentRegistrationState(agentKey: string): Promise<Agent
   if (!db) return null
   await ensureAgentRegistrationStateSchema()
   const res = await db.sql`
-    SELECT agent_key, payload_hash, lens_uri, gateway_url, updated_at
+    SELECT agent_key, payload_hash, lens_uri, gateway_url, storage_key, updated_at
     FROM agent_registration_state
     WHERE agent_key = ${key}
     LIMIT 1;
@@ -82,11 +91,13 @@ export async function upsertAgentRegistrationState(params: {
   payloadHash: string
   lensUri: string
   gatewayUrl?: string | null
+  storageKey?: string | null
 }): Promise<void> {
   const key = String(params.agentKey ?? '').trim()
   const payloadHash = String(params.payloadHash ?? '').trim().toLowerCase()
   const lensUri = String(params.lensUri ?? '').trim()
   const gatewayUrl = params.gatewayUrl ? String(params.gatewayUrl).trim() : null
+  const storageKey = params.storageKey ? String(params.storageKey).trim() : null
   if (!key || !payloadHash || !lensUri) return
 
   if (isSupabaseAdminConfigured()) {
@@ -97,6 +108,7 @@ export async function upsertAgentRegistrationState(params: {
         payload_hash: payloadHash,
         lens_uri: lensUri,
         gateway_url: gatewayUrl,
+        storage_key: storageKey,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'agent_key' },
@@ -115,12 +127,14 @@ export async function upsertAgentRegistrationState(params: {
       payload_hash,
       lens_uri,
       gateway_url,
+      storage_key,
       updated_at
     ) VALUES (
       ${key},
       ${payloadHash},
       ${lensUri},
       ${gatewayUrl},
+      ${storageKey},
       NOW()
     )
     ON CONFLICT (agent_key)
@@ -128,6 +142,7 @@ export async function upsertAgentRegistrationState(params: {
       payload_hash = EXCLUDED.payload_hash,
       lens_uri = EXCLUDED.lens_uri,
       gateway_url = EXCLUDED.gateway_url,
+      storage_key = EXCLUDED.storage_key,
       updated_at = NOW();
   `
 }
