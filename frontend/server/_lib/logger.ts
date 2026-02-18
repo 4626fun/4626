@@ -26,11 +26,42 @@ const envLevel =
 
 const MIN_LEVEL: LogLevel = envLevel && LOG_LEVELS[envLevel] !== undefined ? envLevel : 'debug'
 
+function serializeError(error: Error, depth = 0): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    name: error.name,
+    message: error.message,
+  }
+  if (error.stack) out.stack = error.stack
+
+  const anyErr = error as any
+  for (const [key, value] of Object.entries(anyErr)) {
+    if (key === 'name' || key === 'message' || key === 'stack' || key === 'cause') continue
+    out[key] = value
+  }
+
+  const cause = anyErr?.cause
+  if (cause !== undefined) {
+    if (cause instanceof Error) {
+      out.cause = depth >= 2 ? { name: cause.name, message: cause.message } : serializeError(cause, depth + 1)
+    } else {
+      out.cause = cause
+    }
+  }
+
+  return out
+}
+
 function safeData(data: unknown): unknown {
   if (data === undefined) return undefined
+  if (data instanceof Error) return serializeError(data)
   if (typeof data === 'string') return data
   try {
-    return JSON.parse(JSON.stringify(data))
+    return JSON.parse(
+      JSON.stringify(data, (_key, value) => {
+        if (value instanceof Error) return serializeError(value)
+        return value
+      }),
+    )
   } catch {
     return String(data)
   }
