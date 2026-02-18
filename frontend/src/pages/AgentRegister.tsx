@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { Bot, CheckCircle2, ExternalLink, Loader2, Shield, Sparkles, Zap } from 'lucide-react'
-import { getAddress, parseAbiItem, parseEventLogs, type Address, type Hex } from 'viem'
+import { encodeFunctionData, getAddress, parseAbiItem, parseEventLogs, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 
 import { META, PageMeta } from '@/components/seo/PageMeta'
+import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
+import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { apiFetch } from '@/lib/apiBase'
 import { signInWithSiwaAgent } from '@/lib/siwaAgentAuth'
 import { useZoraProfile } from '@/lib/zora/hooks'
@@ -26,6 +28,15 @@ const ERC8004_IDENTITY_REGISTRY_ABI = [
 const ERC8004_REGISTERED_EVENT = parseAbiItem(
   'event Registered(uint256 indexed agentId, string agentURI, address indexed owner)',
 )
+const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
+  {
+    type: 'function',
+    name: 'isOwnerAddress',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+] as const
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -214,7 +225,28 @@ export function AgentRegister() {
     return null
   }, [waitlistMeQuery.data, zoraCanonicalSeedProfile])
   const isConnectedCanonicalCsw = Boolean(canonicalSmartWalletAddress && connectedAddressLc === canonicalSmartWalletAddress)
-  const canSubmit = Boolean(canUseConnectedWallet && isConnectedCanonicalCsw && agentUri.trim())
+  const connectedWalletCanOperateCanonicalQuery = useQuery({
+    queryKey: ['agent-register', 'can-operate-canonical', canonicalSmartWalletAddress, connectedAddressLc],
+    enabled: Boolean(canonicalSmartWalletAddress && connectedAddressLc && publicClient),
+    staleTime: 10_000,
+    queryFn: async () => {
+      if (!canonicalSmartWalletAddress || !connectedAddressLc || !publicClient) return false
+      if (connectedAddressLc === canonicalSmartWalletAddress) return true
+      try {
+        const isOwner = (await publicClient.readContract({
+          address: canonicalSmartWalletAddress as Address,
+          abi: COINBASE_SMART_WALLET_OWNER_CHECK_ABI,
+          functionName: 'isOwnerAddress',
+          args: [connectedAddressLc as Address],
+        })) as boolean
+        return isOwner === true
+      } catch {
+        return false
+      }
+    },
+  })
+  const canOperateCanonicalCsw = isConnectedCanonicalCsw || connectedWalletCanOperateCanonicalQuery.data === true
+  const canSubmit = Boolean(canUseConnectedWallet && canOperateCanonicalCsw && agentUri.trim())
 
   const creatorAddressForAgentLookup = canonicalSmartWalletAddress ?? connectedAddressLc
 
@@ -309,9 +341,9 @@ export function AgentRegister() {
       setError('No canonical Zora Coinbase Smart Wallet found. Connect/sync your canonical CSW first.')
       return
     }
-    if (connectedAddressLc !== canonicalSmartWalletAddress) {
+    if (!canOperateCanonicalCsw) {
       setError(
-        `Connect your canonical Zora CSW (${canonicalSmartWalletAddress}) before registering. This ensures the CSW itself becomes the onchain agent owner.`,
+        `Connect your canonical Zora CSW (${canonicalSmartWalletAddress}) or an owner wallet of that CSW before registering.`,
       )
       return
     }
@@ -326,16 +358,39 @@ export function AgentRegister() {
     try {
       await ensureBaseChain()
       const account = getAddress(connectedAddress as Address)
+      const canonicalCsw = getAddress(canonicalSmartWalletAddress as Address)
 
-      const sim = await publicClient.simulateContract({
-        account,
-        address: registryAddress,
-        abi: ERC8004_IDENTITY_REGISTRY_ABI,
-        functionName: 'register',
-        args: [uri],
-      })
-      const hashRaw = await walletClient.writeContract(sim.request)
-      const tx = String(hashRaw ?? '').trim() as Hex
+      let tx: Hex
+      if (account.toLowerCase() === canonicalCsw.toLowerCase()) {
+        const sim = await publicClient.simulateContract({
+          account,
+          address: registryAddress,
+          abi: ERC8004_IDENTITY_REGISTRY_ABI,
+          functionName: 'register',
+          args: [uri],
+        })
+        const hashRaw = await walletClient.writeContract(sim.request)
+        tx = String(hashRaw ?? '').trim() as Hex
+      } else {
+        const registerCallData = encodeFunctionData({
+          abi: ERC8004_IDENTITY_REGISTRY_ABI,
+          functionName: 'register',
+          args: [uri],
+        })
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const result = await sendCoinbaseSmartWalletUserOperation({
+          publicClient: publicClient as any,
+          walletClient: walletClient as any,
+          bundlerUrl,
+          smartWallet: canonicalCsw,
+          ownerAddress: account,
+          calls: [{ to: registryAddress, value: 0n, data: registerCallData }],
+          version: '1',
+        })
+        tx = result.transactionHash
+      }
+
       if (!/^0x[a-fA-F0-9]{64}$/.test(tx)) throw new Error('Invalid tx hash returned from wallet.')
 
       setTxHash(tx)
@@ -364,6 +419,7 @@ export function AgentRegister() {
     agentUri,
     canSubmit,
     canonicalSmartWalletAddress,
+    canOperateCanonicalCsw,
     connectedAddress,
     connectedAddressLc,
     ensureBaseChain,
@@ -444,7 +500,7 @@ export function AgentRegister() {
         <div className="rounded-lg border border-white/5 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
           Registry: <span className="font-mono text-zinc-300">{registryAddress}</span> (Base)
         </div>
-        {!isConnectedCanonicalCsw ? (
+        {!canOperateCanonicalCsw ? (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
             Registration is locked to your canonical Zora CSW so the agent owner is your existing smart wallet.
             {canonicalSmartWalletAddress ? (
@@ -482,8 +538,11 @@ export function AgentRegister() {
             {busy ? 'Registering…' : 'Register Agent'}
           </button>
           {!isConnected ? <span className="text-xs text-zinc-500">Connect wallet to continue.</span> : null}
-          {isConnected && !isConnectedCanonicalCsw ? (
-            <span className="text-xs text-amber-300">Switch to your canonical Zora CSW to register.</span>
+          {isConnected && !canOperateCanonicalCsw ? (
+            <span className="text-xs text-amber-300">Connect your canonical CSW or one of its owner wallets to register.</span>
+          ) : null}
+          {isConnected && canOperateCanonicalCsw && !isConnectedCanonicalCsw ? (
+            <span className="text-xs text-emerald-300">Owner wallet detected. Registration will execute via your canonical CSW.</span>
           ) : null}
         </div>
 
