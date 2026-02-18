@@ -113,7 +113,7 @@ const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
 const BASE_CHAIN_ID_HEX = `0x${base.id.toString(16)}`
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}`
 const MAX_UINT256 = (1n << 256n) - 1n
-const DEFAULT_DEPLOYMENT_VERSION = 'v1.2.45'
+const DEFAULT_DEPLOYMENT_VERSION = 'v1.2.46'
 const DEPLOYMENT_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
 function isDebugEnabled(): boolean {
