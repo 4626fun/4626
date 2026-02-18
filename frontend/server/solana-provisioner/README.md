@@ -112,6 +112,14 @@ Optional but recommended:
 
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL=https://<host>/healthz` (for your external monitoring)
 - `SOLANA_DEFAULT_SHARE_OFT=0x...` (enables scalar(route) validation in `/api/deploy/solanaInfraStatus`)
+- `SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_ATTEMPTS=3`
+- `SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_DELAY_MS=1200`
+- `SOLANA_DYNAMIC_ROUTE_PROVISIONER_TIMEOUT_MS=90000`
+
+In the provisioner runtime (`server/solana-provisioner/.env`), enable retry for transient Solana RPC simulation failures:
+
+- `PROVISIONER_WRAP_RETRY_ATTEMPTS=3`
+- `PROVISIONER_WRAP_RETRY_DELAY_MS=1200`
 
 ## Security notes
 

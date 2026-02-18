@@ -281,6 +281,49 @@ async function fetchWithTimeout(
   }
 }
 
+function parseEnvInt(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback
+  const parsed = Number.parseInt(String(value).trim(), 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return parsed
+}
+
+function readProvisionerRetryAttempts(): number {
+  const attempts = parseEnvInt(process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_ATTEMPTS, 3)
+  return Math.min(Math.max(attempts, 1), 8)
+}
+
+function readProvisionerRetryDelayMs(): number {
+  const delayMs = parseEnvInt(process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_DELAY_MS, 1_200)
+  return Math.max(delayMs, 0)
+}
+
+function readProvisionerRequestTimeoutMs(): number {
+  const timeoutMs = parseEnvInt(process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_TIMEOUT_MS, 90_000)
+  return Math.min(Math.max(timeoutMs, 10_000), 300_000)
+}
+
+function isRetryableRemoteProvisionError(message: string): boolean {
+  const lower = message.toLowerCase()
+  const statusMatch = lower.match(/status=(\d{3})/)
+  const status = statusMatch ? Number.parseInt(statusMatch[1], 10) : null
+  if (status !== null && (status === 408 || status === 425 || status === 429 || status >= 500)) {
+    return true
+  }
+  return (
+    lower.includes('blockhash not found') ||
+    lower.includes('transaction simulation failed') ||
+    lower.includes('fetch failed') ||
+    lower.includes('aborterror') ||
+    lower.includes('operation was aborted') ||
+    lower.includes('timeout') ||
+    lower.includes('timed out') ||
+    lower.includes('temporarily unavailable') ||
+    lower.includes('econnreset') ||
+    lower.includes('enotfound')
+  )
+}
+
 function decodeBase58(value: string): Uint8Array {
   if (!value || typeof value !== 'string') throw new Error('Invalid base58 input')
   let num = 0n
@@ -447,100 +490,128 @@ async function tryProvisionDynamicRoute(params: {
   const provisionerHealthUrls = readDynamicProvisionerHealthUrls(provisionerUrls)
 
   const provisionViaRemote = async (): Promise<{ mintBytes32: Hex; runner: string }> => {
+    const retryAttempts = readProvisionerRetryAttempts()
+    const retryDelayMs = readProvisionerRetryDelayMs()
+    const requestTimeoutMs = readProvisionerRequestTimeoutMs()
     const provisionerSecret = readDynamicProvisionerSecret()
     const failures: string[] = []
     for (let i = 0; i < provisionerUrls.length; i += 1) {
       const provisionerUrl = provisionerUrls[i]
       const provisionerHealthUrl =
         provisionerHealthUrls[i] || readDynamicProvisionerHealthUrl(provisionerUrl)
-      logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (remote provisioner)', {
-        shareOft: params.shareOft,
-        provisionerUrl,
-        provisionerHealthUrl: provisionerHealthUrl || null,
-        candidateIndex: i + 1,
-        candidateCount: provisionerUrls.length,
-        deployEnv,
-        payerKp,
-        tokenName,
-        tokenSymbol,
-        payForRelay,
-      })
-      try {
-        const response = await fetchWithTimeout(
-          String(provisionerUrl),
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(provisionerSecret ? { Authorization: `Bearer ${provisionerSecret}` } : {}),
-            },
-            body: JSON.stringify({
-              shareOft: params.shareOft,
-              deployEnv,
-              solanaDecimals: params.solanaDecimals,
-              tokenName,
-              tokenSymbol,
-              scalerExponent,
-              payerKp,
-              payForRelay,
-            }),
-          },
-          20_000,
-        ).catch((error) => {
-          const details = describeFetchFailure(error)
-          const healthHint = provisionerHealthUrl
-            ? ` Check health endpoint: ${provisionerHealthUrl}`
-            : ''
-          throw new Error(`Remote provisioner request failed (${details}).${healthHint}`)
-        })
-        const rawBody = await response.text().catch(() => '')
-        let json: Record<string, unknown> | null = null
-        try {
-          json = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : null
-        } catch {
-          json = null
-        }
-        if (!response.ok || !json) {
-          const detail =
-            json && typeof json.error === 'string'
-              ? json.error
-              : rawBody
-                ? rawBody.slice(0, 300)
-                : 'No error body.'
-          const healthHint = provisionerHealthUrl
-            ? ` Check health endpoint: ${provisionerHealthUrl}`
-            : ''
-          throw new Error(
-            `Remote provisioner failed (${response.status}). ${detail}.${healthHint}`,
-          )
-        }
-        const mintBytes32Raw =
-          typeof (json as any).mintBytes32 === 'string'
-            ? (json as any).mintBytes32
-            : typeof (json as any)?.data?.mintBytes32 === 'string'
-              ? (json as any).data.mintBytes32
-              : ''
-        if (!isBytes32Hex(mintBytes32Raw)) {
-          throw new Error('Remote provisioner did not return a valid mintBytes32.')
-        }
-        const runner =
-          typeof (json as any).runner === 'string'
-            ? String((json as any).runner)
-            : typeof (json as any)?.data?.runner === 'string'
-              ? String((json as any).data.runner)
-              : 'remote-provisioner'
-        return { mintBytes32: mintBytes32Raw as Hex, runner }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        failures.push(`${provisionerUrl}: ${message}`)
-        logger.warn('[deploy/registerShareOft] Remote provisioner candidate failed', {
+      let candidateError = 'Unknown remote provisioner error'
+      for (let attempt = 1; attempt <= retryAttempts; attempt += 1) {
+        logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (remote provisioner)', {
           shareOft: params.shareOft,
           provisionerUrl,
+          provisionerHealthUrl: provisionerHealthUrl || null,
           candidateIndex: i + 1,
           candidateCount: provisionerUrls.length,
-          error: message,
+          attemptIndex: attempt,
+          attemptCount: retryAttempts,
+          requestTimeoutMs,
+          deployEnv,
+          payerKp,
+          tokenName,
+          tokenSymbol,
+          payForRelay,
         })
+        try {
+          const response = await fetchWithTimeout(
+            String(provisionerUrl),
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(provisionerSecret ? { Authorization: `Bearer ${provisionerSecret}` } : {}),
+              },
+              body: JSON.stringify({
+                shareOft: params.shareOft,
+                deployEnv,
+                solanaDecimals: params.solanaDecimals,
+                tokenName,
+                tokenSymbol,
+                scalerExponent,
+                payerKp,
+                payForRelay,
+              }),
+            },
+            requestTimeoutMs,
+          ).catch((error) => {
+            const details = describeFetchFailure(error)
+            const healthHint = provisionerHealthUrl
+              ? ` Check health endpoint: ${provisionerHealthUrl}`
+              : ''
+            throw new Error(`Remote provisioner request failed (${details}).${healthHint}`)
+          })
+          const rawBody = await response.text().catch(() => '')
+          let json: Record<string, unknown> | null = null
+          try {
+            json = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : null
+          } catch {
+            json = null
+          }
+          if (!response.ok || !json) {
+            const detail =
+              json && typeof json.error === 'string'
+                ? json.error
+                : rawBody
+                  ? rawBody.slice(0, 300)
+                  : 'No error body.'
+            const healthHint = provisionerHealthUrl
+              ? ` Check health endpoint: ${provisionerHealthUrl}`
+              : ''
+            throw new Error(
+              `Remote provisioner failed (status=${response.status}). ${detail}.${healthHint}`,
+            )
+          }
+          const mintBytes32Raw =
+            typeof (json as any).mintBytes32 === 'string'
+              ? (json as any).mintBytes32
+              : typeof (json as any)?.data?.mintBytes32 === 'string'
+                ? (json as any).data.mintBytes32
+                : ''
+          if (!isBytes32Hex(mintBytes32Raw)) {
+            throw new Error('Remote provisioner did not return a valid mintBytes32.')
+          }
+          const runner =
+            typeof (json as any).runner === 'string'
+              ? String((json as any).runner)
+              : typeof (json as any)?.data?.runner === 'string'
+                ? String((json as any).data.runner)
+                : 'remote-provisioner'
+          return { mintBytes32: mintBytes32Raw as Hex, runner }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          const retryable = isRetryableRemoteProvisionError(message)
+          const willRetry = retryable && attempt < retryAttempts
+          candidateError = message
+          logger.warn('[deploy/registerShareOft] Remote provisioner candidate attempt failed', {
+            shareOft: params.shareOft,
+            provisionerUrl,
+            candidateIndex: i + 1,
+            candidateCount: provisionerUrls.length,
+            attemptIndex: attempt,
+            attemptCount: retryAttempts,
+            retryable,
+            willRetry,
+            error: message,
+          })
+          if (!willRetry) break
+          const backoffMs = retryDelayMs * attempt
+          if (backoffMs > 0) {
+            await new Promise((resolve) => setTimeout(resolve, backoffMs))
+          }
+        }
       }
+      failures.push(`${provisionerUrl}: ${candidateError}`)
+      logger.warn('[deploy/registerShareOft] Remote provisioner candidate failed', {
+        shareOft: params.shareOft,
+        provisionerUrl,
+        candidateIndex: i + 1,
+        candidateCount: provisionerUrls.length,
+        error: candidateError,
+      })
     }
     throw new Error(
       `Remote provisioner failed for all configured endpoints. ${failures.join(' | ')}`,

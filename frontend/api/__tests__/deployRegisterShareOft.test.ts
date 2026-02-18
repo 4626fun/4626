@@ -297,4 +297,86 @@ describe('deploy registerShareOft handler', () => {
       restoreEnv()
     }
   })
+
+  it('retries transient remote provisioner blockhash errors and succeeds', async () => {
+    const restoreEnv = applyEnv({
+      SOLANA_ADAPTER_OWNER_PRIVATE_KEY:
+        '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      SOLANA_DEFAULT_MINT_BYTES32: undefined,
+      SOLANA_DEFAULT_MINT_DECIMALS: '9',
+      SOLANA_DYNAMIC_ROUTE_ENABLED: '1',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL: 'https://provisioner.4626.fun/provision',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET: 'test-secret',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_ATTEMPTS: '2',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_DELAY_MS: '0',
+      SOLANA_BRIDGE_CLI_DIR: undefined,
+    })
+    const originalFetch = globalThis.fetch
+    try {
+      const mockPublicClient = {
+        readContract: vi.fn(async (args: any) => {
+          switch (args.functionName) {
+            case 'solanaBridgeAdapter':
+              return '0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return false
+            case 'owner':
+              return '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80'
+            case 'solanaMintToToken':
+              return '0x0000000000000000000000000000000000000000'
+            case 'scalars':
+              return 1n
+            default:
+              throw new Error(`Unexpected read ${String(args.functionName)}`)
+          }
+        }),
+        getBytecode: vi.fn(async () => '0x1234'),
+        waitForTransactionReceipt: vi.fn(async () => ({ status: 'success' })),
+      }
+      const writeContractMock = vi.fn(async () => '0x5fcb2a505cad6c7c8bb750b95db3a846df8f181f85759750f84d91b736283557')
+      createPublicClientMock.mockReturnValue(mockPublicClient as any)
+      createWalletClientMock.mockReturnValue({ writeContract: writeContractMock } as any)
+      privateKeyToAccountMock.mockReturnValue({
+        address: '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80',
+      })
+
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: async () => JSON.stringify({ error: 'Blockhash not found' }),
+        } as any)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({
+              mintBytes32:
+                '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+              runner: 'remote-provisioner',
+            }),
+        } as any)
+      ;(globalThis as any).fetch = fetchMock
+
+      const req = createMockReq({
+        method: 'POST',
+        body: { shareOft: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+      })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.success).toBe(true)
+      expect(res.body?.data?.solanaMint).toBe(
+        '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      )
+    } finally {
+      ;(globalThis as any).fetch = originalFetch
+      restoreEnv()
+    }
+  })
 })

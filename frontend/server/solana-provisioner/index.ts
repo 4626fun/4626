@@ -61,6 +61,36 @@ function parseDecimals(value: unknown): number | null {
   return null
 }
 
+function parseEnvInt(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback
+  const parsed = Number.parseInt(String(value).trim(), 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return parsed
+}
+
+function readProvisionerWrapRetryAttempts(): number {
+  const attempts = parseEnvInt(process.env.PROVISIONER_WRAP_RETRY_ATTEMPTS, 3)
+  return Math.min(Math.max(attempts, 1), 8)
+}
+
+function readProvisionerWrapRetryDelayMs(): number {
+  const delayMs = parseEnvInt(process.env.PROVISIONER_WRAP_RETRY_DELAY_MS, 1_200)
+  return Math.max(delayMs, 0)
+}
+
+function isRetryableWrapTokenError(message: string): boolean {
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('blockhash not found') ||
+    lower.includes('transaction simulation failed') ||
+    lower.includes('temporarily unavailable') ||
+    lower.includes('timed out') ||
+    lower.includes('timeout') ||
+    lower.includes('econnreset') ||
+    lower.includes('socket hang up')
+  )
+}
+
 function parseMintPubkeyFromWrapOutput(text: string): string | null {
   const match = text.match(/Mint:\s*([1-9A-HJ-NP-Za-km-z]{32,44})/i)
   return match?.[1] ?? null
@@ -231,6 +261,35 @@ async function runWrapToken(cliDir: string, cliBinRaw: string, wrapArgs: string[
   )
 }
 
+async function runWrapTokenWithRetry(
+  cliDir: string,
+  cliBinRaw: string,
+  wrapArgs: string[],
+): Promise<{ output: string; runner: string }> {
+  const retryAttempts = readProvisionerWrapRetryAttempts()
+  const retryDelayMs = readProvisionerWrapRetryDelayMs()
+
+  for (let attempt = 1; attempt <= retryAttempts; attempt += 1) {
+    try {
+      return await runWrapToken(cliDir, cliBinRaw, wrapArgs)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const retryable = isRetryableWrapTokenError(message)
+      const willRetry = retryable && attempt < retryAttempts
+      process.stderr.write(
+        `[solana-provisioner] wrap-token attempt failed attempt=${attempt}/${retryAttempts} retryable=${retryable} willRetry=${willRetry}: ${message}\n`,
+      )
+      if (!willRetry) throw error
+      const backoffMs = retryDelayMs * attempt
+      if (backoffMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, backoffMs))
+      }
+    }
+  }
+
+  throw new Error('wrap-token failed after retries')
+}
+
 async function handleHealth(res: ServerResponse): Promise<void> {
   const cliDir = String(process.env.SOLANA_BRIDGE_CLI_DIR ?? '').trim()
   const cliExists = !!cliDir && existsSync(cliDir)
@@ -316,7 +375,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
   if (payForRelay) wrapArgs.push('--pay-for-relay')
 
   try {
-    const { output: combined, runner } = await runWrapToken(cliDir, cliBin, wrapArgs)
+    const { output: combined, runner } = await runWrapTokenWithRetry(cliDir, cliBin, wrapArgs)
     const mintPubkey = parseMintPubkeyFromWrapOutput(combined)
     if (!mintPubkey) {
       return json(res, 500, {
