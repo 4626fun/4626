@@ -32,6 +32,33 @@ function shouldPersistManagedSessionOwner(): boolean {
   return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, true)
 }
 
+function isVercelDeploymentOrigin(origin: string): boolean {
+  try {
+    return new URL(origin).hostname.toLowerCase().endsWith('.vercel.app')
+  } catch {
+    return true
+  }
+}
+
+function getBundlerEndpoint(origin: string): { url: string; viaProxy: boolean } {
+  const direct =
+    (process.env.CDP_PAYMASTER_URL ?? '').trim() ||
+    (process.env.CDP_PAYMASTER_AND_BUNDLER_URL ?? '').trim() ||
+    (process.env.CDP_PAYMASTER_AND_BUNDLER_ENDPOINT ?? '').trim() ||
+    (process.env.PAYMASTER_URL ?? '').trim() ||
+    (process.env.BUNDLER_URL ?? '').trim()
+  if (direct) return { url: direct, viaProxy: false }
+
+  // On Vercel previews/production, same-origin /api/paymaster can be protected and fail
+  // with HTML auth responses for server-to-server calls. Require direct CDP config instead.
+  const isVercelEnv = Boolean(process.env.VERCEL) || Boolean(process.env.VERCEL_ENV)
+  if (isVercelEnv && isVercelDeploymentOrigin(origin)) {
+    throw new Error('cdp_endpoint_missing_on_vercel')
+  }
+
+  return { url: `${origin}/api/paymaster`, viaProxy: true }
+}
+
 const COINBASE_SMART_WALLET_OWNERS_ABI = [
   { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'ownerAtIndex', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'bytes' }] },
@@ -184,18 +211,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const origin = getCanonicalOrigin(req)
-    const bundlerUrl = `${origin}/api/paymaster`
+    const bundlerEndpoint = getBundlerEndpoint(origin)
 
     const deployToken = rec.deployToken
     const deploySig = signDeployToken(deployToken)
-    const transport = http(bundlerUrl, {
-      fetchOptions: {
-        headers: {
-          'X-CV-Deploy-Session': deployToken,
-          'X-CV-Deploy-Session-Signature': deploySig,
-        },
-      },
-    })
+    const transport = http(bundlerEndpoint.url, bundlerEndpoint.viaProxy
+      ? {
+          fetchOptions: {
+            headers: {
+              'X-CV-Deploy-Session': deployToken,
+              'X-CV-Deploy-Session-Signature': deploySig,
+            },
+          },
+        }
+      : undefined)
 
     const paymasterClient = createPaymasterClient({ transport })
     const bundlerClient = createBundlerClient({ client: publicClient as any, transport })
@@ -229,6 +258,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<any>)
   } catch (err: any) {
     const msg = err?.message ? String(err.message) : 'cancel_failed'
+    if (msg === 'cdp_endpoint_missing_on_vercel') {
+      return res.status(503).json({
+        success: false,
+        error:
+          'Deploy bundler/paymaster is not configured for this Vercel deployment. Set CDP_PAYMASTER_URL (or CDP_PAYMASTER_AND_BUNDLER_URL) to the Coinbase RPC endpoint; do not rely on same-origin /api/paymaster for server-side deploy-session calls.',
+      } satisfies ApiEnvelope<null>)
+    }
     logger.error('deploy session cancel failed', msg)
     try {
       await updateDeploySession({ id: rec.id, step: 'failed', lastError: msg })

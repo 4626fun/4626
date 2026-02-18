@@ -13,6 +13,7 @@ import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/
 import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAgentWallets.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 import { buildDeployPermissionGrant } from '../../../../server/_lib/erc7712Permissions.js'
+import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -71,6 +72,85 @@ function shouldPersistManagedSessionOwner(): boolean {
   return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, true)
 }
 
+
+function isVercelDeploymentOrigin(origin: string): boolean {
+  try {
+    return new URL(origin).hostname.toLowerCase().endsWith('.vercel.app')
+  } catch {
+    return true
+  }
+}
+
+function getDirectCdpEndpoint(): string {
+  return (
+    (process.env.CDP_PAYMASTER_URL ?? '').trim() ||
+    (process.env.CDP_PAYMASTER_AND_BUNDLER_URL ?? '').trim() ||
+    (process.env.CDP_PAYMASTER_AND_BUNDLER_ENDPOINT ?? '').trim() ||
+    (process.env.PAYMASTER_URL ?? '').trim() ||
+    (process.env.BUNDLER_URL ?? '').trim()
+  )
+}
+
+async function checkDeployInfraReady(origin: string): Promise<{ ok: boolean; error?: string }> {
+  const endpoint = getDirectCdpEndpoint()
+  const isVercelEnv = Boolean(process.env.VERCEL) || Boolean(process.env.VERCEL_ENV)
+
+  if (!endpoint) {
+    if (isVercelEnv && isVercelDeploymentOrigin(origin)) {
+      return {
+        ok: false,
+        error:
+          'Deploy bundler/paymaster is not configured for this Vercel deployment. Set CDP_PAYMASTER_URL (or CDP_PAYMASTER_AND_BUNDLER_URL) to the Coinbase RPC endpoint.',
+      }
+    }
+    return { ok: true }
+  }
+
+  try {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 8_000)
+    const upstream = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_supportedEntryPoints', params: [] }),
+      signal: ctrl.signal,
+    })
+    clearTimeout(t)
+
+    const text = await upstream.text()
+    const textLower = text.toLowerCase()
+    if (textLower.includes('vercel authentication') || textLower.includes('x-vercel-protection-bypass') || textLower.includes('authentication required')) {
+      return {
+        ok: false,
+        error:
+          'Configured CDP_PAYMASTER_URL is Vercel-protected. Use the Coinbase RPC endpoint directly (https://api.developer.coinbase.com/rpc/v1/base/<CDP_API_KEY_ID>).',
+      }
+    }
+
+    let rpcErr: string | null = null
+    try {
+      const j = JSON.parse(text)
+      if (j && typeof j === 'object' && !Array.isArray(j) && (j as any)?.error?.message) {
+        rpcErr = String((j as any).error.message)
+      }
+    } catch {
+      // ignore parse errors
+    }
+
+    if (!upstream.ok) {
+      return { ok: false, error: rpcErr || `CDP endpoint probe failed (HTTP ${upstream.status})` }
+    }
+
+    if (rpcErr) {
+      return { ok: false, error: `CDP endpoint probe failed: ${rpcErr}` }
+    }
+
+    return { ok: true }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'CDP endpoint probe failed'
+    return { ok: false, error: `CDP endpoint probe failed: ${msg}` }
+  }
+}
 
 const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
   { type: 'function', name: 'removeOwnerAtIndex', stateMutability: 'nonpayable', inputs: [{ name: 'index', type: 'uint256' }, { name: 'owner', type: 'bytes' }], outputs: [] },
@@ -335,6 +415,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!isAddress(smartWallet) || !isAddress(creatorToken) || !isAddress(ownerAddress)) {
       return res.status(400).json({ success: false, error: 'Invalid addresses' } satisfies ApiEnvelope<null>)
+    }
+
+    const origin = getCanonicalOrigin(req)
+    const infra = await checkDeployInfraReady(origin)
+    if (!infra.ok) {
+      return res.status(503).json({ success: false, error: infra.error || 'Deploy infrastructure unavailable' } satisfies ApiEnvelope<null>)
     }
 
     // Ownership is validated below against canonical profile linkage.
