@@ -108,7 +108,7 @@ function makeDeploySession(step: string) {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     lastError: null,
-    lastUserOpHash: '0xhash',
+    lastUserOpHash: `0x${'1'.repeat(64)}`,
     lastTxHash: null,
   }
 }

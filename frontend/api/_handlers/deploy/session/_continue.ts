@@ -19,6 +19,11 @@ declare const process: { env: Record<string, string | undefined> }
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type ContinueRequest = { sessionId: string }
+const STAGE_USEROP_HASH_PREFIX = 'stageUserOpHash_'
+
+function stageUserOpHashKey(step: string): string {
+  return `${STAGE_USEROP_HASH_PREFIX}${step}`
+}
 
 function isPlainObject(value: unknown): value is Record<string, any> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
@@ -370,6 +375,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         id: rec.id,
         fromStep: rec.step,
         toStep: toStep as any,
+        lastUserOpHash: null,
+        lastTxHash: null,
+        lastError: null,
+        payloadPatch: { [stageUserOpHashKey(toStep)]: null },
       })
       if (!transitioned) {
         return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
@@ -379,7 +388,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         calls,
         paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
       })
-      await updateDeploySession({ id: rec.id, step: toStep as any, lastUserOpHash, lastTxHash: null })
+      await updateDeploySession({
+        id: rec.id,
+        step: toStep as any,
+        lastUserOpHash,
+        lastTxHash: null,
+        lastError: null,
+        payloadPatch: { [stageUserOpHashKey(toStep)]: lastUserOpHash },
+      })
       return res.status(200).json({ success: true, data: { id: rec.id, step: toStep, lastUserOpHash } } satisfies ApiEnvelope<any>)
     }
     const completeFrom = async (fromStep: string) => {

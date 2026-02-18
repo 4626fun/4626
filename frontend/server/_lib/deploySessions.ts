@@ -287,6 +287,10 @@ export async function updateDeploySession(params: {
   const db = await getDb()
   if (!db) throw new Error('db_not_configured')
   await ensureDeploySessionsSchema()
+  const hasStep = Object.prototype.hasOwnProperty.call(params, 'step')
+  const hasLastError = Object.prototype.hasOwnProperty.call(params, 'lastError')
+  const hasLastUserOpHash = Object.prototype.hasOwnProperty.call(params, 'lastUserOpHash')
+  const hasLastTxHash = Object.prototype.hasOwnProperty.call(params, 'lastTxHash')
 
   const patch = params.payloadPatch
   if (patch && typeof patch === 'object') {
@@ -295,10 +299,10 @@ export async function updateDeploySession(params: {
       UPDATE deploys
       SET
         payload = COALESCE(payload, '{}'::jsonb) || ${patch},
-        step = COALESCE(${params.step ?? null}, step),
-        last_error = COALESCE(${params.lastError ?? null}, last_error),
-        last_userop_hash = COALESCE(${params.lastUserOpHash ?? null}, last_userop_hash),
-        last_tx_hash = COALESCE(${params.lastTxHash ?? null}, last_tx_hash),
+        step = CASE WHEN ${hasStep} THEN ${params.step ?? null} ELSE step END,
+        last_error = CASE WHEN ${hasLastError} THEN ${params.lastError ?? null} ELSE last_error END,
+        last_userop_hash = CASE WHEN ${hasLastUserOpHash} THEN ${params.lastUserOpHash ?? null} ELSE last_userop_hash END,
+        last_tx_hash = CASE WHEN ${hasLastTxHash} THEN ${params.lastTxHash ?? null} ELSE last_tx_hash END,
         updated_at = NOW()
       WHERE id = ${params.id};
     `
@@ -308,10 +312,10 @@ export async function updateDeploySession(params: {
   await db.sql`
     UPDATE deploys
     SET
-      step = COALESCE(${params.step ?? null}, step),
-      last_error = COALESCE(${params.lastError ?? null}, last_error),
-      last_userop_hash = COALESCE(${params.lastUserOpHash ?? null}, last_userop_hash),
-      last_tx_hash = COALESCE(${params.lastTxHash ?? null}, last_tx_hash),
+      step = CASE WHEN ${hasStep} THEN ${params.step ?? null} ELSE step END,
+      last_error = CASE WHEN ${hasLastError} THEN ${params.lastError ?? null} ELSE last_error END,
+      last_userop_hash = CASE WHEN ${hasLastUserOpHash} THEN ${params.lastUserOpHash ?? null} ELSE last_userop_hash END,
+      last_tx_hash = CASE WHEN ${hasLastTxHash} THEN ${params.lastTxHash ?? null} ELSE last_tx_hash END,
       updated_at = NOW()
     WHERE id = ${params.id};
   `
@@ -329,6 +333,9 @@ export async function transitionDeploySession(params: {
   const db = await getDb()
   if (!db) throw new Error('db_not_configured')
   await ensureDeploySessionsSchema()
+  const hasLastError = Object.prototype.hasOwnProperty.call(params, 'lastError')
+  const hasLastUserOpHash = Object.prototype.hasOwnProperty.call(params, 'lastUserOpHash')
+  const hasLastTxHash = Object.prototype.hasOwnProperty.call(params, 'lastTxHash')
 
   const patch = params.payloadPatch
   const result =
@@ -338,9 +345,9 @@ export async function transitionDeploySession(params: {
           SET
             payload = COALESCE(payload, '{}'::jsonb) || ${patch},
             step = ${params.toStep},
-            last_error = COALESCE(${params.lastError ?? null}, last_error),
-            last_userop_hash = COALESCE(${params.lastUserOpHash ?? null}, last_userop_hash),
-            last_tx_hash = COALESCE(${params.lastTxHash ?? null}, last_tx_hash),
+            last_error = CASE WHEN ${hasLastError} THEN ${params.lastError ?? null} ELSE last_error END,
+            last_userop_hash = CASE WHEN ${hasLastUserOpHash} THEN ${params.lastUserOpHash ?? null} ELSE last_userop_hash END,
+            last_tx_hash = CASE WHEN ${hasLastTxHash} THEN ${params.lastTxHash ?? null} ELSE last_tx_hash END,
             updated_at = NOW()
           WHERE id = ${params.id}
             AND step = ${params.fromStep}
@@ -350,9 +357,9 @@ export async function transitionDeploySession(params: {
           UPDATE deploys
           SET
             step = ${params.toStep},
-            last_error = COALESCE(${params.lastError ?? null}, last_error),
-            last_userop_hash = COALESCE(${params.lastUserOpHash ?? null}, last_userop_hash),
-            last_tx_hash = COALESCE(${params.lastTxHash ?? null}, last_tx_hash),
+            last_error = CASE WHEN ${hasLastError} THEN ${params.lastError ?? null} ELSE last_error END,
+            last_userop_hash = CASE WHEN ${hasLastUserOpHash} THEN ${params.lastUserOpHash ?? null} ELSE last_userop_hash END,
+            last_tx_hash = CASE WHEN ${hasLastTxHash} THEN ${params.lastTxHash ?? null} ELSE last_tx_hash END,
             updated_at = NOW()
           WHERE id = ${params.id}
             AND step = ${params.fromStep}

@@ -20,6 +20,16 @@ type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type StatusRequest = { sessionId: string }
 
 const CONCURRENT_MODIFICATION = 'concurrent_modification'
+const STAGE_USEROP_HASH_PREFIX = 'stageUserOpHash_'
+
+function stageUserOpHashKey(step: string): string {
+  return `${STAGE_USEROP_HASH_PREFIX}${step}`
+}
+
+function asHexHash(value: unknown): Hex | null {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  return /^0x[a-fA-F0-9]{64}$/.test(raw) ? (raw as Hex) : null
+}
 
 function isPlainObject(value: unknown): value is Record<string, any> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
@@ -221,12 +231,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   const bundlerClient = createBundlerClient({ client: publicClient as any, transport })
 
   let txHash: Hex | undefined
-  if (needsReceipt) {
-    if (!rec.lastUserOpHash) return
-    const receipt = await bundlerClient.getUserOperationReceipt({ hash: rec.lastUserOpHash as Hex }).catch(() => null)
-    txHash = receipt?.receipt?.transactionHash as Hex | undefined
-    if (!txHash) return
-  }
+  const payload = asPayloadObject(rec.payload)
 
   if (step === 'cleanup_sent') {
     const transitioned = await transitionDeploySession({
@@ -240,7 +245,6 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     return
   }
 
-  const payload: any = rec.payload ?? {}
   const deploySignerWalletId =
     typeof payload?.deploySignerWalletId === 'string'
       ? payload.deploySignerWalletId.trim()
@@ -376,7 +380,16 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     })
     if (!permissionCheck.ok) throw new Error(permissionCheck.reason ?? 'erc7712_permission_denied')
 
-    const transitioned = await transitionDeploySession({ id: rec.id, fromStep: fromStep as any, toStep: toStep as any })
+    const stageKey = stageUserOpHashKey(toStep)
+    const transitioned = await transitionDeploySession({
+      id: rec.id,
+      fromStep: fromStep as any,
+      toStep: toStep as any,
+      lastUserOpHash: null,
+      lastTxHash: null,
+      lastError: null,
+      payloadPatch: { [stageKey]: null },
+    })
     if (!transitioned) throw new Error(CONCURRENT_MODIFICATION)
     const { bundler, paymasterClient, account } = await getCtx()
     const nextHash = await sendUserOperation(bundler, {
@@ -384,7 +397,14 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       calls: fullCalls,
       paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
     })
-    await updateDeploySession({ id: rec.id, step: toStep as any, lastUserOpHash: nextHash, lastTxHash: null })
+    await updateDeploySession({
+      id: rec.id,
+      step: toStep as any,
+      lastUserOpHash: nextHash,
+      lastTxHash: null,
+      lastError: null,
+      payloadPatch: { [stageKey]: nextHash },
+    })
   }
 
   const startNextAfterPhase2 = async (fromStep: string) => {
@@ -397,6 +417,105 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       return true
     }
     return false
+  }
+
+  const getSentStagePlan = (
+    sentStep: string,
+  ): { calls: Array<{ to: Address; value: bigint; data: Hex }>; attachCleanup: boolean } | null => {
+    if (sentStep === 'phase1_sent') {
+      const phase1CoreCalls = phase1Calls.length > 1 ? phase1Calls.slice(0, 1) : phase1Calls
+      return {
+        calls: phase1CoreCalls,
+        attachCleanup: phase1FinalizeCalls.length === 0 && phase2CoreCalls.length === 0 && !hasPhase2Finalize && !hasPostPhase2,
+      }
+    }
+    if (sentStep === 'phase1_finalize_sent') {
+      return {
+        calls: phase1FinalizeCalls,
+        attachCleanup: phase2CoreCalls.length === 0 && !hasPhase2Finalize && !hasPostPhase2,
+      }
+    }
+    if (sentStep === 'phase2_core_sent') {
+      return {
+        calls: phase2CoreCalls,
+        attachCleanup: !hasPhase2Finalize && !hasPostPhase2,
+      }
+    }
+    if (sentStep === 'phase2_sent') {
+      return {
+        calls: phase2FinalizeCalls,
+        attachCleanup: !hasPostPhase2,
+      }
+    }
+    if (sentStep === 'phase3_sent') {
+      return {
+        calls: phase3Calls,
+        attachCleanup: !hasPhase4,
+      }
+    }
+    if (sentStep === 'phase4_sent') {
+      return {
+        calls: phase4Calls,
+        attachCleanup: true,
+      }
+    }
+    return null
+  }
+
+  const dispatchSentStage = async (sentStep: string): Promise<void> => {
+    const plan = getSentStagePlan(sentStep)
+    if (!plan) return
+    const fullCalls = [...plan.calls]
+    if (plan.attachCleanup && !persistSessionOwner) {
+      fullCalls.push((await getCtx()).removeOwnerCall)
+    }
+    const permissionCheck = validateCallsAgainstGrant({
+      grant: erc7712Grant,
+      calls: fullCalls,
+      expectedChainId: 8453,
+      expectedSessionId: rec.id,
+    })
+    if (!permissionCheck.ok) throw new Error(permissionCheck.reason ?? 'erc7712_permission_denied')
+    const { bundler, paymasterClient, account } = await getCtx()
+    const nextHash = await sendUserOperation(bundler, {
+      account,
+      calls: fullCalls,
+      paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
+    })
+    await updateDeploySession({
+      id: rec.id,
+      lastUserOpHash: nextHash,
+      lastTxHash: null,
+      lastError: null,
+      payloadPatch: { [stageUserOpHashKey(sentStep)]: nextHash },
+    })
+  }
+
+  const resolveReceiptTxHash = async (): Promise<Hex | undefined> => {
+    if (!needsReceipt) return undefined
+    const stageKey = stageUserOpHashKey(step)
+    let stageHash = asHexHash(payload?.[stageKey])
+    if (!stageHash) {
+      const fallback = asHexHash(rec.lastUserOpHash)
+      // Adopt legacy fallback only when tx hash is empty (means it wasn't reused from a prior stage).
+      if (fallback && !asHexHash(rec.lastTxHash)) {
+        stageHash = fallback
+        await updateDeploySession({ id: rec.id, payloadPatch: { [stageKey]: stageHash } })
+      }
+    }
+    if (!stageHash) {
+      if (step !== 'cleanup_sent') {
+        await dispatchSentStage(step)
+      }
+      return undefined
+    }
+    const receipt = await bundlerClient.getUserOperationReceipt({ hash: stageHash }).catch(() => null)
+    return receipt?.receipt?.transactionHash as Hex | undefined
+  }
+
+  if (needsReceipt) {
+    txHash = await resolveReceiptTxHash()
+    if (!txHash) return
   }
 
   if (step === 'phase1_sent') {
