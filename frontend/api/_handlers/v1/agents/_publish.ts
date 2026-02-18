@@ -25,6 +25,11 @@ type PublishResult = {
   }
 }
 
+function ownerFromAgentKey(agentKey: string): string | null {
+  const match = String(agentKey).match(/^single-csw:(0x[a-fA-F0-9]{40})$/)
+  return match ? match[1].toLowerCase() : null
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -59,15 +64,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
+  // Keep registration payload deterministic across linked signer sessions by
+  // anchoring enrichment + state keying to canonical CSW identity.
+  const baseAgentKey = resolveAgentRegistrationKey(result.payload, 'single-agent')
+  const canonicalOwner = ownerFromAgentKey(baseAgentKey)
   const registration = await enrichAgentRegistrationWithFarcaster({
     payload: result.payload,
-    ownerAddress: principal.address,
+    ownerAddress: canonicalOwner ?? principal.address,
   })
 
   let groveStatus: PublishResult['groveStatus'] = 'skipped'
   let grove: PublishResult['grove'] | undefined
   if (storeOnGrove) {
-    const agentKey = resolveAgentRegistrationKey(registration, `principal:${principal.address.toLowerCase()}`)
+    const agentKey = resolveAgentRegistrationKey(registration, baseAgentKey)
     const publish = await publishAgentRegistrationToGrove({
       payload: registration,
       agentKey,

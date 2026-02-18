@@ -26,6 +26,11 @@ type LensAgentRegistrationRequest = {
   store?: boolean
 }
 
+function ownerFromAgentKey(agentKey: string): string | null {
+  const match = String(agentKey).match(/^single-csw:(0x[a-fA-F0-9]{40})$/)
+  return match ? match[1].toLowerCase() : null
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -69,22 +74,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  const registration = principal
-    ? await enrichAgentRegistrationWithFarcaster({
-        payload: result.payload,
-        ownerAddress: principal.address,
-      })
-    : result.payload
+  const baseAgentKey = resolveAgentRegistrationKey(result.payload, 'single-agent')
+  const canonicalOwner = ownerFromAgentKey(baseAgentKey)
+  const enrichmentOwner = canonicalOwner ?? principal?.address ?? null
+  const registration = await enrichAgentRegistrationWithFarcaster({
+    payload: result.payload,
+    ownerAddress: enrichmentOwner,
+  })
 
   // Keep uploaded payload deterministic/content-addressed.
   // Adding timestamps here changes the hash and therefore the resulting lens:// URI on every call.
   let grove: LensAgentRegistrationResponse['grove']
   let groveStatus: 'stored' | 'unavailable' | 'skipped' = 'skipped'
   if (shouldStore) {
-    const fallbackKey = principal ? `principal:${principal.address.toLowerCase()}` : 'single-agent'
     const publish = await publishAgentRegistrationToGrove({
       payload: registration,
-      agentKey: resolveAgentRegistrationKey(registration, fallbackKey),
+      agentKey: resolveAgentRegistrationKey(registration, baseAgentKey),
     })
     if (publish.ok) {
       grove = {

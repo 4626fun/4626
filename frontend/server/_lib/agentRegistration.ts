@@ -437,12 +437,6 @@ export async function enrichAgentRegistrationWithFarcaster(params: {
   if (idx >= 0) nextServices[idx] = farcasterService
   else nextServices.push(farcasterService)
 
-  const source = providerResolved?.profile
-    ? providerResolved.source
-    : profileHint
-      ? 'profiles'
-      : undefined
-
   return {
     ...params.payload,
     services: nextServices,
@@ -450,7 +444,6 @@ export async function enrichAgentRegistrationWithFarcaster(params: {
       ...(username ? { username } : null),
       ...(fid ? { fid } : null),
       profileUrl,
-      ...(source ? { source } : null),
     },
   }
 }
