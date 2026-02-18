@@ -100,6 +100,24 @@ function saveDeployment(record: DeploymentRecord): void {
   }
 }
 
+function removeDeployment(owner: Address, version: string): void {
+  if (typeof window === 'undefined') return
+  try {
+    const key = getStorageKey(owner, version)
+    localStorage.removeItem(key)
+
+    const allDeploymentsRaw = localStorage.getItem(getAllDeploymentsKey())
+    if (!allDeploymentsRaw) return
+    const allDeployments = JSON.parse(allDeploymentsRaw) as DeploymentRecord[]
+    const filtered = allDeployments.filter(
+      (d) => !(d.owner.toLowerCase() === owner.toLowerCase() && d.version === version)
+    )
+    localStorage.setItem(getAllDeploymentsKey(), JSON.stringify(filtered))
+  } catch (e) {
+    console.warn('[useDeploymentTracker] Failed to clear deployment record:', e)
+  }
+}
+
 /**
  * Hook to track deployments per owner address per version.
  * Enforces 1 deployment per owner per VITE_DEPLOYMENT_VERSION.
@@ -142,6 +160,11 @@ export function useDeploymentTracker(owner: Address | null, version: string) {
     [owner, version]
   )
 
+  const clearCurrentDeployment = useCallback(() => {
+    if (!owner) return
+    removeDeployment(owner, version)
+  }, [owner, version])
+
   return {
     /** Whether the owner has already deployed in this version */
     hasDeployed,
@@ -151,6 +174,8 @@ export function useDeploymentTracker(owner: Address | null, version: string) {
     allDeployments,
     /** Record a new deployment */
     recordDeployment,
+    /** Clear deployment record for current owner+version */
+    clearCurrentDeployment,
   }
 }
 

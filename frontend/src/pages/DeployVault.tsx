@@ -80,6 +80,21 @@ const BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR = '4154f24e'
 const BATCHER_PHASE1_FINALIZE_SELECTOR = 'a98ec9d8'
 const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = '3bc09a8b'
 const NO_EOA_STRICT_BLOCKER = 'No-EOA deploy is only available for preconfigured Privy-owner wallets.'
+const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
+  {
+    name: 'getAuctionStatus',
+    type: 'function',
+    inputs: [],
+    outputs: [
+      { name: 'auction', type: 'address' },
+      { name: 'isActive', type: 'bool' },
+      { name: 'isGraduated', type: 'bool' },
+      { name: 'clearingPrice', type: 'uint256' },
+      { name: 'currencyRaised', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+] as const
 
 type DeployMode = 'default' | 'no_eoa_strict'
 
@@ -427,6 +442,8 @@ type ServerDeployResponse = {
     gaugeController: Address
     ccaStrategy: Address
     oracle: Address
+    burnStream?: Address
+    payoutRouter?: Address
   }
 }
 type DeploySessionCall = { to: Address; value: string; data: Hex }
@@ -1657,6 +1674,7 @@ function DeployVaultBatcher({
     tx4?: Hex
   }>({})
   const expectedRef = useRef<ServerDeployResponse['addresses'] | null>(null)
+  const lastPolledStepRef = useRef<string>('')
   const useServerContinue = useMemo(() => {
     if (strictNoEoaMode) return false
     // Enforce server-continue for default deploy mode:
@@ -2003,13 +2021,36 @@ function DeployVaultBatcher({
       const sjson = (await sres.json().catch(() => null)) as ApiEnvelope<any> | null
       if (!sres.ok || !sjson?.success) throw new Error(sjson?.error || 'Failed to fetch deploy status')
       const step = String(sjson.data?.step ?? '')
+      const lastTxHash = typeof sjson.data?.lastTxHash === 'string' ? sjson.data.lastTxHash : null
+      if (lastPolledStepRef.current !== step) {
+        lastPolledStepRef.current = step
+        // Keep plain console logs visible even when debug logger is disabled.
+        console.log('[DeployVault] session_step', {
+          sessionId,
+          step,
+          lastTxHash,
+          lastError: sjson.data?.lastError ?? null,
+        })
+      }
       if (step === 'created' || step.startsWith('phase1')) setPhase('phase1')
       else if (step.startsWith('phase2')) setPhase('phase2')
       else if (step.startsWith('phase3')) setPhase('phase3')
       else if (step.startsWith('phase4')) setPhase('phase4')
+      if (lastTxHash && /^0x[a-fA-F0-9]{64}$/.test(lastTxHash)) {
+        setPhaseTxs((s) => {
+          if (step.startsWith('phase1')) return { ...s, tx1: lastTxHash as Hex }
+          if (step.startsWith('phase2')) return { ...s, tx2: lastTxHash as Hex }
+          if (step.startsWith('phase3')) return { ...s, tx3: lastTxHash as Hex }
+          if (step.startsWith('phase4')) return { ...s, tx4: lastTxHash as Hex }
+          return s
+        })
+      }
       if (step === 'completed') {
-        const lastTxHash = (sjson.data?.lastTxHash ?? null) as Hex | null
-        if (lastTxHash) setTxId(lastTxHash)
+        const completedTxHash = (sjson.data?.lastTxHash ?? null) as Hex | null
+        if (completedTxHash) {
+          setTxId(completedTxHash)
+          setPhaseTxs((s) => (s.tx4 ? s : { ...s, tx4: completedTxHash }))
+        }
         setPhase('done')
         clearDeploySession()
         if (expectedRef.current) {
@@ -2044,6 +2085,7 @@ function DeployVaultBatcher({
       setBusy(true)
       setError(null)
       setPhase('phase1')
+      lastPolledStepRef.current = ''
       try {
         await ensurePaymasterSession()
         const statusRes = await fetch('/api/deploy/session/status', {
@@ -2578,6 +2620,7 @@ function DeployVaultBatcher({
       setTxId(null)
       setPhase('idle')
       setPhaseTxs({})
+      lastPolledStepRef.current = ''
     }
 
     try {
@@ -4482,11 +4525,22 @@ function DeployVaultBatcher({
                       : 'tx4'
               ]: txHash,
             }))
-            // Show success message - user should refresh to see vault
-            setPhase('done')
-            logger.info('[DeployVault] deploy_success (recovered from estimation error)', { txHash })
-            if (expected) onSuccess(expected)
-            return null
+            logger.info('[DeployVault] tx_confirmed_after_error; continuing deploy flow', {
+              txHash,
+              phase,
+              useServerContinue,
+            })
+            if (useServerContinue) {
+              const activeSessionId = loadDeploySession()
+              if (activeSessionId) {
+                await pollServerDeploySession(activeSessionId)
+                return null
+              }
+            }
+            throw new Error(
+              `A ${phase.toUpperCase()} transaction was submitted and confirmed, but deploy completion could not be verified. ` +
+                'Click Deploy again to continue from the latest confirmed phase.',
+            )
           }
         } catch (receiptError) {
           logger.warn('[DeployVault] Failed to get receipt for submitted tx', { txHash, error: receiptError })
@@ -5587,7 +5641,56 @@ function DeployVaultMain() {
   // Deployment tracking: 1 deployment per owner per version
   const deploymentTracker = useDeploymentTracker(deploySender, deploymentVersion)
   const [justCompletedDeployment, setJustCompletedDeployment] = useState<DeploymentRecord | null>(null)
-  const alreadyDeployed = !!(justCompletedDeployment || deploymentTracker.hasDeployed)
+  const trackerDeployment = deploymentTracker.existingDeployment
+  const justCompletedCcaStrategy = justCompletedDeployment?.contracts.ccaStrategy
+  const trackerCcaStrategy = trackerDeployment?.contracts.ccaStrategy
+  const hasRequiredContracts = useCallback((record: DeploymentRecord | null | undefined): boolean => {
+    if (!record) return false
+    return (
+      isAddress(record.contracts.vault) &&
+      isAddress(record.contracts.wrapper) &&
+      isAddress(record.contracts.shareOFT) &&
+      isAddress(record.contracts.gaugeController ?? '') &&
+      isAddress(record.contracts.ccaStrategy ?? '') &&
+      isAddress(record.contracts.oracle ?? '')
+    )
+  }, [])
+  const isAuctionReadyForStrategy = useCallback(
+    async (ccaStrategy: Address | null | undefined): Promise<boolean> => {
+      if (!ccaStrategy || !publicClient) return false
+      const status = (await publicClient.readContract({
+        address: ccaStrategy,
+        abi: CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI,
+        functionName: 'getAuctionStatus',
+      })) as readonly [Address, boolean, boolean, bigint, bigint]
+      const auction = String(status?.[0] ?? '').toLowerCase()
+      return /^0x[a-f0-9]{40}$/.test(auction) && auction !== ZERO_ADDRESS
+    },
+    [publicClient],
+  )
+  const trackerAuctionReadyQuery = useQuery({
+    queryKey: ['deployVault', 'trackerDeployment', 'auctionReady', trackerCcaStrategy],
+    enabled: !!trackerCcaStrategy && !!publicClient,
+    staleTime: 20_000,
+    queryFn: async () => isAuctionReadyForStrategy(trackerCcaStrategy as Address),
+  })
+  const justCompletedAuctionReadyQuery = useQuery({
+    queryKey: ['deployVault', 'justCompletedDeployment', 'auctionReady', justCompletedCcaStrategy],
+    enabled: !!justCompletedCcaStrategy && !!publicClient,
+    staleTime: 20_000,
+    queryFn: async () => isAuctionReadyForStrategy(justCompletedCcaStrategy as Address),
+  })
+  const trackerDeploymentIsComplete = useMemo(() => {
+    if (!hasRequiredContracts(trackerDeployment)) return false
+    return trackerAuctionReadyQuery.data === true
+  }, [hasRequiredContracts, trackerAuctionReadyQuery.data, trackerDeployment])
+  const justCompletedDeploymentIsComplete = useMemo(() => {
+    if (!hasRequiredContracts(justCompletedDeployment)) return false
+    return justCompletedAuctionReadyQuery.data === true
+  }, [hasRequiredContracts, justCompletedAuctionReadyQuery.data, justCompletedDeployment])
+  const staleIncompleteDeploymentRecord = Boolean(trackerDeployment && !trackerDeploymentIsComplete)
+  const pendingJustCompletedDeployment = Boolean(justCompletedDeployment && !justCompletedDeploymentIsComplete)
+  const alreadyDeployed = Boolean(justCompletedDeploymentIsComplete || trackerDeploymentIsComplete)
 
   // Handler for when deployment completes successfully
   const handleDeploymentSuccess = useCallback((addresses: ServerDeployResponse['addresses']) => {
@@ -5601,6 +5704,8 @@ function DeployVaultMain() {
         shareOFT: addresses.shareOFT,
         gaugeController: addresses.gaugeController,
         ccaStrategy: addresses.ccaStrategy,
+        burnStream: addresses.burnStream,
+        payoutRouter: addresses.payoutRouter,
         oracle: addresses.oracle,
       },
     })
@@ -6637,17 +6742,41 @@ function DeployVaultMain() {
             ) : null}
 
           {/* Deployment Status */}
-          {justCompletedDeployment ? (
+          {justCompletedDeployment && justCompletedDeploymentIsComplete ? (
             <DeploymentSuccess
               deployment={justCompletedDeployment}
               tokenSymbol={underlyingSymbolUpper || undefined}
               shareSymbol={derivedShareSymbol || undefined}
             />
-          ) : deploymentTracker.hasDeployed && deploymentTracker.existingDeployment ? (
+          ) : trackerDeploymentIsComplete && trackerDeployment ? (
             <AlreadyDeployedBanner
-              deployment={deploymentTracker.existingDeployment}
+              deployment={trackerDeployment}
               tokenSymbol={underlyingSymbolUpper || undefined}
             />
+          ) : null}
+          {pendingJustCompletedDeployment ? (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 text-[12px] text-amber-200/90">
+              Deployment is still finalizing on-chain. We now wait for the deferred auction (Phase 4) to be confirmed before
+              marking this version complete.
+            </div>
+          ) : null}
+          {staleIncompleteDeploymentRecord ? (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
+              <div className="text-[12px] text-amber-200">
+                Found an older local deployment record for this version, but final on-chain completion is missing. You can resume
+                deployment now.
+              </div>
+              <button
+                type="button"
+                className="btn-secondary text-[12px]"
+                onClick={() => {
+                  deploymentTracker.clearCurrentDeployment()
+                  setJustCompletedDeployment(null)
+                }}
+              >
+                Clear stale local record
+              </button>
+            </div>
           ) : null}
 
           {!alreadyDeployed && isAdmin ? (
