@@ -214,6 +214,19 @@ function headerValue(value: string | string[] | undefined): string {
   return typeof value === 'string' ? value : ''
 }
 
+function inferRequestOrigin(req: VercelRequest): string | null {
+  const host = headerValue(req.headers['x-forwarded-host'] as string | string[] | undefined) ||
+    headerValue(req.headers.host as string | string[] | undefined)
+  if (!host) return null
+  const protoRaw = headerValue(req.headers['x-forwarded-proto'] as string | string[] | undefined).toLowerCase()
+  const proto = protoRaw.startsWith('https') ? 'https' : 'http'
+  try {
+    return new URL(`${proto}://${host}`).origin
+  } catch {
+    return null
+  }
+}
+
 function extractShareOftFromFinalizeCall(data: Hex): Address | null {
   try {
     const decoded = decodeFunctionData({
@@ -276,29 +289,47 @@ async function ensureSolanaRouteReadyForPhase2(params: {
     .catch(() => null)
   if (registered === true) return
 
-  const origin = getCanonicalOrigin(params.req)
-  const registerUrl = `${origin}/api/deploy/registerShareOft`
+  // Prefer the incoming request host so auth cookies/session match.
+  const requestOrigin = inferRequestOrigin(params.req)
+  const canonicalOrigin = getCanonicalOrigin(params.req)
+  const candidateOrigins = [requestOrigin, canonicalOrigin].filter((o): o is string => Boolean(o))
   const cookie = headerValue(params.req.headers.cookie as string | string[] | undefined)
   const authz = headerValue(params.req.headers.authorization as string | string[] | undefined)
-  const registerRes = await fetch(registerUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(cookie ? { Cookie: cookie } : {}),
-      ...(authz ? { Authorization: authz } : {}),
-    },
-    body: JSON.stringify({
-      shareOft,
-      batcherAddress,
-    }),
-  })
-  const registerJson = (await registerRes.json().catch(() => null)) as ApiEnvelope<any> | null
-  if (!registerRes.ok || !registerJson?.success) {
-    const detail = registerJson?.error ? `: ${String(registerJson.error)}` : ''
-    throw new Error(
-      `phase2_solana_route_unregistered${detail}`,
-    )
+  let lastFailure: string | null = null
+  for (const origin of candidateOrigins) {
+    const registerUrl = `${origin}/api/deploy/registerShareOft`
+    const registerRes = await fetch(registerUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(cookie ? { Cookie: cookie } : {}),
+        ...(authz ? { Authorization: authz } : {}),
+      },
+      body: JSON.stringify({
+        shareOft,
+        batcherAddress,
+      }),
+    })
+    const rawBody = await registerRes.text().catch(() => '')
+    let registerJson: ApiEnvelope<any> | null = null
+    try {
+      registerJson = rawBody ? (JSON.parse(rawBody) as ApiEnvelope<any>) : null
+    } catch {
+      registerJson = null
+    }
+    if (registerRes.ok && registerJson?.success) return
+    const detail =
+      registerJson?.error
+        ? String(registerJson.error)
+        : rawBody
+          ? rawBody.slice(0, 240)
+          : `http_${registerRes.status}`
+    lastFailure = `${origin} (${registerRes.status}): ${detail}`
   }
+  if (lastFailure) {
+    throw new Error(`phase2_solana_route_unregistered:${lastFailure}`)
+  }
+  throw new Error('phase2_solana_route_unregistered')
 }
 
 async function getOwnerAccount(rec: any) {
