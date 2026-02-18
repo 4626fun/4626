@@ -67,6 +67,10 @@ vi.mock('../../server/_lib/creatorAgentWallets.js', () => ({
   getOrCreateCreatorAgentWallet: getOrCreateCreatorAgentWalletMock,
 }))
 
+
+vi.mock('../../server/_lib/origin.js', () => ({
+  getCanonicalOrigin: vi.fn(() => 'https://4626-test-akita-llc.vercel.app'),
+}))
 vi.mock('viem/accounts', () => ({
   generatePrivateKey: generatePrivateKeyMock,
   privateKeyToAccount: privateKeyToAccountMock,
@@ -191,4 +195,27 @@ describe('deploy session ownership guardrails', () => {
     expect(insertArgs.payload?.agentWalletId).toBeUndefined()
     expect(insertArgs.payload?.persistSessionOwner).toBe(false)
   })
+
+  it('returns 503 on Vercel when direct CDP endpoint env is missing', async () => {
+    const prevVercel = process.env.VERCEL
+    const prevCdp = process.env.CDP_PAYMASTER_URL
+    process.env.VERCEL = '1'
+    delete process.env.CDP_PAYMASTER_URL
+
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+
+    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(503)
+    expect(String(res.body?.error || '')).toContain('CDP_PAYMASTER_URL')
+    expect(insertDeploySessionMock).not.toHaveBeenCalled()
+
+    if (prevVercel == null) delete process.env.VERCEL
+    else process.env.VERCEL = prevVercel
+    if (prevCdp == null) delete process.env.CDP_PAYMASTER_URL
+    else process.env.CDP_PAYMASTER_URL = prevCdp
+  })
+
 })

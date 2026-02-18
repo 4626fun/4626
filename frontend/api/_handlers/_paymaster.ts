@@ -2298,10 +2298,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).send(JSON.stringify(parsed))
       }
     } catch {
-      // Non-JSON response; fall back to upstream status.
+      // Non-JSON response from upstream.
     }
-    res.status(upstream.status)
-    return res.send(text)
+
+    const textLower = text.toLowerCase()
+    const isVercelProtection =
+      textLower.includes('vercel authentication') ||
+      textLower.includes('x-vercel-protection-bypass') ||
+      textLower.includes('authentication required')
+
+    if (isVercelProtection) {
+      return res.status(200).json(
+        jsonRpcError(
+          null,
+          -32000,
+          'CDP paymaster upstream is protected by Vercel authentication. Set CDP_PAYMASTER_URL to the Coinbase RPC endpoint (not a Vercel deployment URL), or configure a Vercel bypass token for server-to-server calls.',
+        ),
+      )
+    }
+
+    if (upstream.status < 200 || upstream.status >= 300) {
+      return res.status(200).json(jsonRpcError(null, -32000, `Upstream paymaster request failed (HTTP ${upstream.status})`))
+    }
+
+    return res.status(502).json(jsonRpcError(null, -32000, 'Upstream paymaster returned a non-JSON response'))
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Upstream request failed'
     logger.error('[paymaster-proxy] upstream error', { msg })
