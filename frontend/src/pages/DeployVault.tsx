@@ -113,7 +113,7 @@ const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
 const BASE_CHAIN_ID_HEX = `0x${base.id.toString(16)}`
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}`
 const MAX_UINT256 = (1n << 256n) - 1n
-const DEFAULT_DEPLOYMENT_VERSION = 'v1.2.41'
+const DEFAULT_DEPLOYMENT_VERSION = 'v1.2.42'
 const DEPLOYMENT_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
 function isDebugEnabled(): boolean {
@@ -2012,6 +2012,9 @@ function DeployVaultBatcher({
     let delayMs = 2000
     let backoff = false
     const started = Date.now()
+    let sentStepWithoutHash = ''
+    let sentStepWithoutHashSinceMs: number | null = null
+    const isHexHash = (value: unknown): value is Hex => typeof value === 'string' && /^0x[a-fA-F0-9]{64}$/.test(value)
     while (true) {
       const sres = await fetch('/api/deploy/session/status', {
         method: 'POST',
@@ -2022,6 +2025,8 @@ function DeployVaultBatcher({
       if (!sres.ok || !sjson?.success) throw new Error(sjson?.error || 'Failed to fetch deploy status')
       const step = String(sjson.data?.step ?? '')
       const lastTxHash = typeof sjson.data?.lastTxHash === 'string' ? sjson.data.lastTxHash : null
+      const lastUserOpHash = typeof sjson.data?.lastUserOpHash === 'string' ? sjson.data.lastUserOpHash : null
+      const lastError = sjson.data?.lastError ? String(sjson.data.lastError) : null
       if (lastPolledStepRef.current !== step) {
         lastPolledStepRef.current = step
         // Keep plain console logs visible even when debug logger is disabled.
@@ -2029,14 +2034,15 @@ function DeployVaultBatcher({
           sessionId,
           step,
           lastTxHash,
-          lastError: sjson.data?.lastError ?? null,
+          lastUserOpHash,
+          lastError,
         })
       }
       if (step === 'created' || step.startsWith('phase1')) setPhase('phase1')
       else if (step.startsWith('phase2')) setPhase('phase2')
       else if (step.startsWith('phase3')) setPhase('phase3')
       else if (step.startsWith('phase4')) setPhase('phase4')
-      if (lastTxHash && /^0x[a-fA-F0-9]{64}$/.test(lastTxHash)) {
+      if (lastTxHash && isHexHash(lastTxHash)) {
         setPhaseTxs((s) => {
           if (step.startsWith('phase1')) return { ...s, tx1: lastTxHash as Hex }
           if (step.startsWith('phase2')) return { ...s, tx2: lastTxHash as Hex }
@@ -2062,6 +2068,31 @@ function DeployVaultBatcher({
       if (step === 'failed' || step === 'cancelled') {
         clearDeploySession()
         throw new Error(String(sjson.data?.lastError ?? 'Server deploy failed'))
+      }
+      if (step.endsWith('_sent') || step === 'cleanup_sent') {
+        const hasUserOpHash = isHexHash(lastUserOpHash)
+        if (!hasUserOpHash) {
+          if (sentStepWithoutHash !== step) {
+            sentStepWithoutHash = step
+            sentStepWithoutHashSinceMs = Date.now()
+          }
+          const stalledMs = sentStepWithoutHashSinceMs ? Date.now() - sentStepWithoutHashSinceMs : 0
+          if (lastError) {
+            throw new Error(`Deploy stalled at ${step}: ${lastError}`)
+          }
+          if (stalledMs > 90_000) {
+            throw new Error(
+              `Deploy stalled at ${step}. No UserOp hash was recorded for over 90 seconds. ` +
+                'Retry deploy to create a fresh session.',
+            )
+          }
+        } else {
+          sentStepWithoutHash = ''
+          sentStepWithoutHashSinceMs = null
+        }
+      } else {
+        sentStepWithoutHash = ''
+        sentStepWithoutHashSinceMs = null
       }
       if (Date.now() - started > 10 * 60 * 1000) {
         throw new Error('Server deploy did not complete in time. Check status and retry continue.')

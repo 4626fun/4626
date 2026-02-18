@@ -392,19 +392,31 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     })
     if (!transitioned) throw new Error(CONCURRENT_MODIFICATION)
     const { bundler, paymasterClient, account } = await getCtx()
-    const nextHash = await sendUserOperation(bundler, {
-      account,
-      calls: fullCalls,
-      paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
-    })
-    await updateDeploySession({
-      id: rec.id,
-      step: toStep as any,
-      lastUserOpHash: nextHash,
-      lastTxHash: null,
-      lastError: null,
-      payloadPatch: { [stageKey]: nextHash },
-    })
+    try {
+      const nextHash = await sendUserOperation(bundler, {
+        account,
+        calls: fullCalls,
+        paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
+      })
+      await updateDeploySession({
+        id: rec.id,
+        step: toStep as any,
+        lastUserOpHash: nextHash,
+        lastTxHash: null,
+        lastError: null,
+        payloadPatch: { [stageKey]: nextHash },
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err ?? 'send_userop_failed')
+      await updateDeploySession({
+        id: rec.id,
+        step: toStep as any,
+        lastUserOpHash: null,
+        lastTxHash: null,
+        lastError: `${toStep}_send_failed:${msg}`,
+      })
+      throw err
+    }
   }
 
   const startNextAfterPhase2 = async (fromStep: string) => {
@@ -477,18 +489,29 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     })
     if (!permissionCheck.ok) throw new Error(permissionCheck.reason ?? 'erc7712_permission_denied')
     const { bundler, paymasterClient, account } = await getCtx()
-    const nextHash = await sendUserOperation(bundler, {
-      account,
-      calls: fullCalls,
-      paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
-    })
-    await updateDeploySession({
-      id: rec.id,
-      lastUserOpHash: nextHash,
-      lastTxHash: null,
-      lastError: null,
-      payloadPatch: { [stageUserOpHashKey(sentStep)]: nextHash },
-    })
+    try {
+      const nextHash = await sendUserOperation(bundler, {
+        account,
+        calls: fullCalls,
+        paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
+      })
+      await updateDeploySession({
+        id: rec.id,
+        lastUserOpHash: nextHash,
+        lastTxHash: null,
+        lastError: null,
+        payloadPatch: { [stageUserOpHashKey(sentStep)]: nextHash },
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err ?? 'send_userop_failed')
+      await updateDeploySession({
+        id: rec.id,
+        lastUserOpHash: null,
+        lastTxHash: null,
+        lastError: `${sentStep}_send_failed:${msg}`,
+      })
+      throw err
+    }
   }
 
   const resolveReceiptTxHash = async (): Promise<Hex | undefined> => {
@@ -785,6 +808,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await advanceDeploySession(rec, req)
     rec = (await getDeploySessionById(sessionId)) ?? rec
   } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err ?? 'deploy_session_advance_failed')
     if (err instanceof Error && (err.message === 'deploy_payload_invalid' || err.message.endsWith('_calls_invalid'))) {
       return res.status(409).json({
         success: false,
@@ -800,6 +824,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         error:
           'Deploy bundler/paymaster is not configured for this Vercel deployment. Set CDP_PAYMASTER_URL (or CDP_PAYMASTER_AND_BUNDLER_URL) to the Coinbase RPC endpoint; do not rely on same-origin /api/paymaster for server-side deploy-session calls.',
       } satisfies ApiEnvelope<null>)
+    }
+    try {
+      await updateDeploySession({
+        id: rec.id,
+        lastError: errMsg,
+      })
+      rec = (await getDeploySessionById(sessionId)) ?? rec
+    } catch {
+      rec = {
+        ...rec,
+        lastError: errMsg,
+      }
     }
     if (err instanceof Error && (err.message === 'session_owner_unavailable' || err.message === 'session_owner_key_missing')) {
       // Legacy/broken session: keep status readable without failing the endpoint.
