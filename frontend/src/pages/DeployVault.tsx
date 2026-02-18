@@ -99,10 +99,9 @@ const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
 type DeployMode = 'default' | 'no_eoa_strict'
 
 function resolveDeployMode(): DeployMode {
-  const raw = String((import.meta as any)?.env?.VITE_DEPLOY_MODE ?? '')
-    .trim()
-    .toLowerCase()
-  if (raw === 'no_eoa_strict') return 'no_eoa_strict'
+  // Keep deploy on the single proven path:
+  // canonical CSW + connected owner/signer flow.
+  // Ignore strict no-EOA runtime toggles to avoid accidental lockouts.
   return 'default'
 }
 
@@ -1574,6 +1573,8 @@ function DeployVaultBatcher({
   
   // Detect Coinbase Wallet direct connection (not via Privy)
   const isCoinbaseWalletDirect = connectorId === 'coinbaseWalletSDK' || connectorId === 'com.coinbase.wallet'
+  // In strict no-EOA mode we still permit a verified connected owner EOA to unblock deploys.
+  const strictNoEoaEnforced = strictNoEoaMode && !connectedEoaOwnerReady
 
   // NOTE: Zora cross-app integration is read-only in this app, so we do not use it for signing/transactions.
 
@@ -1676,16 +1677,22 @@ function DeployVaultBatcher({
   const expectedRef = useRef<ServerDeployResponse['addresses'] | null>(null)
   const lastPolledStepRef = useRef<string>('')
   const useServerContinue = useMemo(() => {
-    if (strictNoEoaMode) return false
+    if (strictNoEoaEnforced) return false
     // Enforce server-continue for default deploy mode:
     // one owner-EOA setup tx, then all phases run server-side.
     return true
-  }, [strictNoEoaMode])
-  const deploySessionStorageKey = useMemo(() => {
+  }, [strictNoEoaEnforced])
+  const legacyDeploySessionStorageKey = useMemo(() => {
     const ct = String(creatorToken ?? '').toLowerCase()
     const ow = String(owner ?? '').toLowerCase()
     return `cv:deploy:session:${ct}:${ow}`
   }, [creatorToken, owner])
+  const deploySessionStorageKey = useMemo(() => {
+    const ct = String(creatorToken ?? '').toLowerCase()
+    const ow = String(owner ?? '').toLowerCase()
+    const vv = String(deploymentVersion ?? '').trim().toLowerCase()
+    return `cv:deploy:session:${ct}:${ow}:${vv}`
+  }, [creatorToken, deploymentVersion, owner])
   const persistDeploySession = useCallback(
     (sessionId: string) => {
       if (typeof window === 'undefined') return
@@ -1696,6 +1703,7 @@ function DeployVaultBatcher({
             sessionId,
             creatorToken: String(creatorToken).toLowerCase(),
             owner: String(owner).toLowerCase(),
+            version: String(deploymentVersion),
             createdAt: new Date().toISOString(),
           }),
         )
@@ -1703,28 +1711,40 @@ function DeployVaultBatcher({
         // ignore storage errors
       }
     },
-    [creatorToken, deploySessionStorageKey, owner],
+    [creatorToken, deploySessionStorageKey, deploymentVersion, owner],
   )
   const clearDeploySession = useCallback(() => {
     if (typeof window === 'undefined') return
     try {
       localStorage.removeItem(deploySessionStorageKey)
+      localStorage.removeItem(legacyDeploySessionStorageKey)
     } catch {
       // ignore
     }
-  }, [deploySessionStorageKey])
+  }, [deploySessionStorageKey, legacyDeploySessionStorageKey])
   const loadDeploySession = useCallback((): string | null => {
     if (typeof window === 'undefined') return null
     try {
       const raw = localStorage.getItem(deploySessionStorageKey)
       if (!raw) return null
       const parsed = JSON.parse(raw)
+      const rawVersion = typeof parsed?.version === 'string' ? parsed.version.trim() : ''
+      if (rawVersion && rawVersion !== deploymentVersion) return null
       const sessionId = typeof parsed?.sessionId === 'string' ? parsed.sessionId.trim() : ''
       return sessionId.length > 0 ? sessionId : null
     } catch {
       return null
     }
-  }, [deploySessionStorageKey])
+  }, [deploySessionStorageKey, deploymentVersion])
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      // One-time cleanup so old unscoped sessions cannot be resumed after version bumps.
+      localStorage.removeItem(legacyDeploySessionStorageKey)
+    } catch {
+      // ignore
+    }
+  }, [legacyDeploySessionStorageKey])
   const shareOftVanityCacheRef = useRef<{ key: string; salt: Hex } | null>(null)
   const ensurePaymasterSession = useCallback(async () => {
     if (!getAccessToken || typeof signInWithPrivyToken !== 'function') return
@@ -2760,7 +2780,7 @@ function DeployVaultBatcher({
       if (!floorPriceQ96Aligned || floorPriceQ96Aligned <= 0n) {
         throw new Error('Market floor price not available. Wait for pricing to load.')
       }
-      if (strictNoEoaMode) {
+      if (strictNoEoaEnforced) {
         logger.info('[DeployVault] deploy_mode=no_eoa_strict', {
           deploy_mode: 'no_eoa_strict',
           useServerContinue,
@@ -2925,7 +2945,7 @@ function DeployVaultBatcher({
           batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR)
         )
       })()
-      if (strictNoEoaMode) {
+      if (strictNoEoaEnforced) {
         const hasAllSplitSelectors =
           batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_SELECTOR) &&
           batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR) &&
@@ -3243,7 +3263,7 @@ function DeployVaultBatcher({
         // Hard guard: require at least one executable signer path.
         // For server-continue mode, a verified owner EOA is also valid because it can install
         // the temporary session owner on the canonical CSW in one user-approved tx.
-        const hasOwnerEoaServerContinuePath = useServerContinue && !strictNoEoaMode && connectedEoaOwnerReady
+        const hasOwnerEoaServerContinuePath = useServerContinue && !strictNoEoaEnforced && connectedEoaOwnerReady
         if (!planOnly && !canUsePrivySmartWallet && !canUseWalletSendCalls && !hasOwnerEoaServerContinuePath) {
           throw new Error(
             'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account), then retry.',
@@ -3496,7 +3516,7 @@ function DeployVaultBatcher({
         }
 
         logger.info('[DeployVault] deploy_start', {
-          deploy_mode: strictNoEoaMode ? 'no_eoa_strict' : 'default',
+          deploy_mode: strictNoEoaEnforced ? 'no_eoa_strict' : 'default',
           creatorToken,
           owner,
           deploymentVersion,
@@ -3613,7 +3633,7 @@ function DeployVaultBatcher({
           logPhaseLabel: string,
           reason: unknown,
         ): Promise<boolean> => {
-          if (strictNoEoaMode) return false
+          if (strictNoEoaEnforced) return false
           if (isUserRejectedError(reason)) return false
           if (!isLikelyPaymasterOrSponsorshipFailure(reason)) return false
           if (!canonicalSmartWallet || !connectedAddress || !wagmiWalletClient || !publicClient) return false
@@ -3928,7 +3948,7 @@ function DeployVaultBatcher({
           // PATH 1: Direct Coinbase Wallet connection
           // Only use this when embedded signer path is not available.
           if (
-            !strictNoEoaMode &&
+            !strictNoEoaEnforced &&
             isCoinbaseWalletDirect &&
             connectedAddress &&
             wagmiWalletClient &&
@@ -4174,7 +4194,7 @@ function DeployVaultBatcher({
 
             try {
               const isStrictPhase1CoreSegment =
-                strictNoEoaMode && phaseLabel === 'phase1' && (!opts?.segment || opts.segment === 'core')
+                strictNoEoaEnforced && phaseLabel === 'phase1' && (!opts?.segment || opts.segment === 'core')
               const contractOwnerVerificationGasProfile = isStrictPhase1CoreSegment
                 ? [1_000_000n, 1_300_000n, 1_600_000n, 1_900_000n, 2_200_000n, 2_500_000n]
                 : undefined
@@ -4255,7 +4275,7 @@ function DeployVaultBatcher({
                   failureClass,
                   error: msg,
                 })
-                if (strictNoEoaMode) {
+                if (strictNoEoaEnforced) {
                   logger.warn('[DeployVault] fallback_blocked', {
                     deploy_mode: 'no_eoa_strict',
                     phaseLabel: logPhaseLabel,
@@ -4353,7 +4373,7 @@ function DeployVaultBatcher({
           
           // No additional signer fallback branches: keep deploy deterministic.
           // No valid ERC-4337 path available
-          if (strictNoEoaMode) {
+          if (strictNoEoaEnforced) {
             throw new Error(NO_EOA_STRICT_BLOCKER)
           }
           throw new Error(
@@ -4638,7 +4658,7 @@ function DeployVaultBatcher({
   const disabled = Boolean(disabledReason)
   const hasPrivyEmbeddedOwnerSigner = privyEmbeddedEoaIsCanonicalOwner && privyEmbeddedEoaCanSign
   const hasPrivySmartWalletOwnerSigner = privySmartWalletIsCanonicalOwner && privySmartWalletCanSign
-  const hasDeploySignerPath = strictNoEoaMode
+  const hasDeploySignerPath = strictNoEoaEnforced
     ? hasPrivyEmbeddedOwnerSigner || hasPrivySmartWalletOwnerSigner
     : isCoinbaseWalletDirect || connectedEoaOwnerReady || hasPrivyEmbeddedOwnerSigner || hasPrivySmartWalletOwnerSigner
 
@@ -4761,7 +4781,7 @@ function DeployVaultBatcher({
             <AddressRow label="Active batcher" address={batcherAddress} />
             <div className="flex items-center justify-between gap-4 text-[11px]">
               <div className="text-zinc-500">Deploy mode</div>
-              <div className="font-mono text-zinc-200/90">{strictNoEoaMode ? 'no_eoa_strict' : 'default'}</div>
+              <div className="font-mono text-zinc-200/90">{strictNoEoaEnforced ? 'no_eoa_strict' : 'default'}</div>
             </div>
           </div>
 
@@ -4837,7 +4857,7 @@ function DeployVaultBatcher({
         <div className="space-y-2">
           <div className="text-[10px] text-green-400/80 flex items-center gap-1">
             <span>✓</span>{' '}
-            {strictNoEoaMode
+            {strictNoEoaEnforced
               ? hasPrivyEmbeddedOwnerSigner
                 ? 'Gas-free ERC-4337 via preconfigured Privy embedded owner'
                 : 'Gas-free ERC-4337 via preconfigured app smart wallet owner'
@@ -4858,9 +4878,9 @@ function DeployVaultBatcher({
       ) : (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
           <div className="text-sm font-medium text-amber-200">
-            {strictNoEoaMode ? 'No-EOA deploy requirements' : 'ERC-4337 Setup Required'}
+            {strictNoEoaEnforced ? 'No-EOA deploy requirements' : 'ERC-4337 Setup Required'}
           </div>
-          {strictNoEoaMode ? (
+          {strictNoEoaEnforced ? (
             <div className="text-[11px] text-amber-200/70 leading-relaxed">{NO_EOA_STRICT_BLOCKER}</div>
           ) : (
             <>
@@ -6423,21 +6443,23 @@ function DeployVaultMain() {
       walletClient &&
       executionCanOperateCanonical,
   )
+  const strictNoEoaEnforced = strictNoEoaMode && !connectedEoaOwnerReady
   const strictNoEoaEligibility = Boolean(
     canonicalIdentityIsContract &&
       canonicalIdentityAddress &&
       (privyEmbeddedOwnerReady || privySmartWalletOwnerReady),
   )
   // Smart wallet is ready only if it matches canonical OR an authorized owner signer is available.
-  // In strict no-EOA mode we only allow preconfigured Privy owner flow.
-  const smartWalletCapabilityReady = strictNoEoaMode
+  // In strict no-EOA mode we only allow preconfigured Privy owner flow unless a verified
+  // connected owner EOA path is already available in-session.
+  const smartWalletCapabilityReady = strictNoEoaEnforced
     ? strictNoEoaEligibility
     : isCoinbaseWalletDirect ||
       connectedEoaOwnerReady ||
       (privySmartWalletReady &&
         (smartWalletMatchesCanonical || privySmartWalletOwnerReady || privyEmbeddedOwnerReady))
   const oneTimePrivyOwnerApprovalNeeded = Boolean(
-    !strictNoEoaMode &&
+    !strictNoEoaEnforced &&
       canonicalIdentityIsContract &&
       canonicalIdentityAddress &&
       privySmartWalletAddress &&
@@ -6601,7 +6623,7 @@ function DeployVaultMain() {
                     ? 'Connect the creator or payout recipient wallet.'
                     : !fundingGateOk
                       ? `Needs 5,000,000 ${underlyingSymbolUpper || 'TOKENS'} to deploy.`
-                      : strictNoEoaMode && !strictNoEoaEligibility
+                      : strictNoEoaEnforced && !strictNoEoaEligibility
                         ? NO_EOA_STRICT_BLOCKER
                       : identityBlockingReason
                         ? identityBlockingReason
