@@ -268,6 +268,7 @@ export async function listCreatorXmtpAgents(params: {
   listedOnly?: boolean
   limit: number
   cursor?: { createdAt: string; creatorAddress: `0x${string}` }
+  creatorAddress?: `0x${string}`
 }): Promise<{ rows: CreatorXmtpAgentRow[]; nextCursor: { createdAt: string; creatorAddress: `0x${string}` } | null }> {
   if (!isDbConfigured()) throw new Error('db_not_configured')
   const db = (await getDb()) as unknown as Db | null
@@ -276,6 +277,7 @@ export async function listCreatorXmtpAgents(params: {
 
   const limit = Math.max(1, Math.min(200, Math.floor(params.limit)))
   const listedOnly = params.listedOnly ?? true
+  const creatorFilter = params.creatorAddress ? getAddress(params.creatorAddress).toLowerCase() : null
 
   // Keyset pagination on (created_at DESC, creator_address DESC) for stability.
   // Cursor represents the last item from previous page.
@@ -283,7 +285,17 @@ export async function listCreatorXmtpAgents(params: {
   const cursorCreator = params.cursor?.creatorAddress ? getAddress(params.cursor.creatorAddress).toLowerCase() : null
 
   const q =
-    cursorCreatedAt && cursorCreator
+    creatorFilter
+      ? await db.sql`
+          SELECT creator_address, xmtp_agent_address, agent_type, privy_wallet_id, csw_address,
+                 listed_publicly, created_at, updated_at
+          FROM creator_xmtp_agents
+          WHERE (${listedOnly} = FALSE OR listed_publicly = TRUE)
+            AND LOWER(creator_address) = ${creatorFilter}
+          ORDER BY created_at DESC, creator_address DESC
+          LIMIT ${limit};
+        `
+      : cursorCreatedAt && cursorCreator
       ? await db.sql`
           SELECT creator_address, xmtp_agent_address, agent_type, privy_wallet_id, csw_address,
                  listed_publicly, created_at, updated_at

@@ -20,17 +20,23 @@ declare const process: { env: Record<string, string | undefined> }
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type ContinueRequest = { sessionId: string }
 
+function isPlainObject(value: unknown): value is Record<string, any> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const proto = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
+}
+
 function asPayloadObject(value: unknown): Record<string, any> {
-  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, any>
+  if (isPlainObject(value)) return value
   if (typeof value === 'string') {
     try {
       const parsed = JSON.parse(value)
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, any>
+      if (isPlainObject(parsed)) return parsed
     } catch {
       // ignore malformed payload strings
     }
   }
-  return {}
+  throw new Error('deploy_payload_invalid')
 }
 
 function isTruthyEnv(value: string | undefined, fallback: boolean): boolean {
@@ -298,15 +304,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const phase1CoreCalls = phase1Calls.length > 1 ? phase1Calls.slice(0, 1) : phase1Calls
     const phase1FinalizeCalls = phase1Calls.length > 1 ? phase1Calls.slice(1) : []
     const phase2CoreCalls = normalizeCalls(Array.isArray(payload.phase2CoreCalls) ? payload.phase2CoreCalls : [])
+    const expectedStages = isPlainObject(payload.expectedStages) ? payload.expectedStages : {}
     const rawPhase2FinalizeCalls = Array.isArray(payload.phase2FinalizeCalls) ? payload.phase2FinalizeCalls : []
     const rawLegacyPhase2Calls = Array.isArray(payload.phase2Calls) ? payload.phase2Calls : []
     const rawSelectedPhase2FinalizeCalls = rawPhase2FinalizeCalls.length > 0 ? rawPhase2FinalizeCalls : rawLegacyPhase2Calls
-    const hasPhase2Finalize = rawSelectedPhase2FinalizeCalls.length > 0
+    const hasPhase2Finalize =
+      expectedStages.hasPhase2Finalize === true || rawSelectedPhase2FinalizeCalls.length > 0
     const phase2FinalizeCalls = normalizeCalls(rawSelectedPhase2FinalizeCalls)
     const rawPhase3Calls = Array.isArray(payload.phase3Calls) ? payload.phase3Calls : []
     const rawPhase4Calls = Array.isArray(payload.phase4Calls) ? payload.phase4Calls : []
-    const hasPhase3 = rawPhase3Calls.length > 0
-    const hasPhase4 = rawPhase4Calls.length > 0
+    const hasPhase3 = expectedStages.hasPhase3 === true || rawPhase3Calls.length > 0
+    const hasPhase4 = expectedStages.hasPhase4 === true || rawPhase4Calls.length > 0
     const phase3Calls = normalizeCalls(rawPhase3Calls)
     const phase4Calls = normalizeCalls(rawPhase4Calls)
     if (hasPhase2Finalize && phase2FinalizeCalls.length === 0) throw new Error('phase2_finalize_calls_invalid')
@@ -511,10 +519,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           'Deploy-session signer is not installed on the canonical smart wallet. Approve the one-time add-owner transaction, then retry.',
       } satisfies ApiEnvelope<null>)
     }
-    if (msg.endsWith('_calls_invalid')) {
+    if (msg === 'deploy_payload_invalid' || msg.endsWith('_calls_invalid')) {
       return res.status(409).json({
         success: false,
-        error: 'Deploy session payload is missing required stage calls. Please restart deploy session.',
+        error: 'Deploy session payload is invalid or missing required stage calls. Please restart deploy session.',
       } satisfies ApiEnvelope<null>)
     }
     if (msg === 'cdp_endpoint_missing_on_vercel') {

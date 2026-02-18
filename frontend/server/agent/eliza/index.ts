@@ -28,7 +28,7 @@
  *      XMTP_AGENT_CSW_ADDRESS          — Coinbase Smart Wallet address (XMTP identity)
  *      XMTP_AGENT_PRIVY_WALLET_ID      — Privy server wallet ID (delegated signer)
  *      XMTP_AGENT_CSW_CHAIN_ID         — Chain ID (default: 8453 for Base)
- *      XMTP_AGENT_CSW_OWNER_INDEX      — Owner index in CSW's MultiOwnable list (required for ERC-1271)
+ *      XMTP_AGENT_CSW_OWNER_INDEX      — Optional owner index hint in CSW's MultiOwnable list
  *      Requires PRIVY_APP_ID, PRIVY_APP_SECRET, PRIVY_WALLET_AUTHORIZATION_KEY,
  *      PRIVY_WALLET_OWNER_ID to be set for Privy wallet API access.
  *
@@ -63,8 +63,13 @@ import { getDb, getDbInitError, isDbConfigured } from '../../_lib/postgres.js'
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../_lib/creatorXmtpAgents.js'
 import { createPrivyScwSigner } from '../../_lib/privyXmtpSigner.js'
 import { buildAgentRegistration } from '../../_lib/agentRegistration.js'
+import {
+  getAgentRegistrationState,
+  upsertAgentRegistrationState,
+} from '../../_lib/agentRegistrationState.js'
 import { tryUploadImmutableJson } from '../../_lib/lensGrove.js'
 import { createCorrelationLogger, logger } from '../../_lib/logger.js'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import fs from 'node:fs'
 import http from 'node:http'
@@ -75,6 +80,12 @@ declare const process: {
   on: (event: string, cb: (...args: any[]) => void) => void
   exit: (code?: number) => void
   cwd: () => string
+  stdout: {
+    write: (chunk: any, encoding?: any, cb?: any) => boolean
+  }
+  stderr: {
+    write: (chunk: any, encoding?: any, cb?: any) => boolean
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -131,10 +142,20 @@ const XMTP_DB_FORCE_ENCRYPTED_MIGRATION_REQUESTED = (() => {
   const raw = (process.env.XMTP_DB_FORCE_ENCRYPTED_MIGRATION ?? '0').trim().toLowerCase()
   return raw === '1' || raw === 'true' || raw === 'yes'
 })()
+const XMTP_DB_PLAINTEXT_ONLY = (() => {
+  const raw = (process.env.XMTP_DB_PLAINTEXT_ONLY ?? '0').trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+})()
 const XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM = (process.env.XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM ?? '').trim().toLowerCase()
 const XMTP_DB_FORCE_ENCRYPTED_MIGRATION =
   XMTP_DB_FORCE_ENCRYPTED_MIGRATION_REQUESTED &&
   XMTP_DB_FORCE_ENCRYPTED_MIGRATION_CONFIRM === 'rotate-db'
+const ELIZA_GROVE_UPLOAD_MODE = (() => {
+  const raw = (process.env.ELIZA_GROVE_UPLOAD_MODE ?? 'on-change').trim().toLowerCase()
+  if (raw === 'off' || raw === 'disabled' || raw === 'false' || raw === '0') return 'off' as const
+  if (raw === 'always' || raw === 'force') return 'always' as const
+  return 'on-change' as const
+})()
 
 const SQLITE_HEADER = Buffer.from('SQLite format 3\u0000', 'utf8')
 let legacyPlaintextCompatibilityLogged = false
@@ -198,6 +219,7 @@ function logLegacyPlaintextCompatibility(): void {
 }
 
 function getEffectiveDbEncryptionKey(): `0x${string}` | undefined {
+  if (XMTP_DB_PLAINTEXT_ONLY) return undefined
   if (!XMTP_DB_ENCRYPTION_KEY) return undefined
   if (
     XMTP_DB_FORCE_ENCRYPTED_MIGRATION &&
@@ -403,6 +425,37 @@ let latestEnvValidation: EnvValidationResult = { errors: [], warnings: [] }
 let backgroundWorker: { stop: () => void } | null = null
 let queueEnabled = false
 let dbRequiredForRuntime = false
+let stderrNoiseFilterInstalled = false
+
+function wrapWriteWithNoiseFilter(write: (chunk: any, encoding?: any, cb?: any) => boolean) {
+  const ignoredPatterns = [
+    /sqlcipherCodecAttach:\s*no codec attached to db/i,
+    /^\[WARNING\]\s+You have "\d+"\s+installations\./i,
+  ]
+  return ((chunk: any, encoding?: any, cb?: any) => {
+    const text =
+      typeof chunk === 'string'
+        ? chunk
+        : Buffer.isBuffer(chunk)
+          ? chunk.toString('utf8')
+          : String(chunk ?? '')
+    if (ignoredPatterns.some((pattern) => pattern.test(text.trim()))) {
+      if (typeof cb === 'function') cb()
+      return true
+    }
+    return write(chunk, encoding, cb)
+  }) as typeof write
+}
+
+function installStderrNoiseFilter(): void {
+  if (stderrNoiseFilterInstalled) return
+  const raw = String(process.env.XMTP_SUPPRESS_LOG_NOISE ?? '1').trim().toLowerCase()
+  const enabled = !(raw === '0' || raw === 'false' || raw === 'no' || raw === 'off')
+  if (!enabled) return
+  stderrNoiseFilterInstalled = true
+  process.stderr.write = wrapWriteWithNoiseFilter(process.stderr.write.bind(process.stderr))
+  process.stdout.write = wrapWriteWithNoiseFilter(process.stdout.write.bind(process.stdout))
+}
 
 function validateStartupEnv(): EnvValidationResult {
   const errors: string[] = []
@@ -424,7 +477,7 @@ function validateStartupEnv(): EnvValidationResult {
 
   if (hasDb && !hasEncKey && !hasPrivateKey && !hasCswConfig) {
     errors.push('XMTP_AGENT_KEY_ENCRYPTION_KEY is required for multi-agent DB mode.')
-  } else if (hasDb && !hasEncKey) {
+  } else if (hasDb && !hasEncKey && !hasCswConfig) {
     warnings.push('DATABASE_URL/POSTGRES_URL is set but XMTP_AGENT_KEY_ENCRYPTION_KEY is missing; multi-agent mode is disabled.')
   }
 
@@ -1061,11 +1114,39 @@ async function startSingleAgentCsw(params: {
 async function uploadRegistrationToGrove(): Promise<void> {
   const { correlationId, logger: regLogger } = createCorrelationLogger('grove')
   try {
+    if (ELIZA_GROVE_UPLOAD_MODE === 'off') {
+      regLogger.info('[eliza] Skipping Grove registration upload (disabled by mode)', {
+        mode: ELIZA_GROVE_UPLOAD_MODE,
+        correlationId,
+      })
+      return
+    }
+
     const origin = (process.env.VITE_APP_URL ?? 'https://4626.fun').trim()
     const { payload, error } = buildAgentRegistration(origin)
     if (error || !payload) {
       regLogger.warn('[eliza] Skipping Grove registration upload', { error, correlationId })
       return
+    }
+
+    const payloadCanonical = JSON.stringify(payload)
+    const payloadHash = createHash('sha256').update(payloadCanonical).digest('hex')
+    const cswAddress = String(process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim().toLowerCase()
+    const isCswAddress = /^0x[a-f0-9]{40}$/.test(cswAddress)
+    const agentKey = isCswAddress ? `single-csw:${cswAddress}` : 'single-agent'
+
+    if (ELIZA_GROVE_UPLOAD_MODE === 'on-change') {
+      const existing = await getAgentRegistrationState(agentKey).catch(() => null)
+      if (existing?.payloadHash === payloadHash) {
+        regLogger.info('[eliza] Agent registration unchanged; reusing previous Grove URI', {
+          lensUri: existing.lensUri,
+          gatewayUrl: existing.gatewayUrl,
+          payloadHash,
+          mode: ELIZA_GROVE_UPLOAD_MODE,
+          correlationId,
+        })
+        return
+      }
     }
 
     const attempt = await withRetry({
@@ -1075,9 +1156,24 @@ async function uploadRegistrationToGrove(): Promise<void> {
       run: async () => tryUploadImmutableJson(payload),
     })
     if (attempt.ok) {
+      try {
+        await upsertAgentRegistrationState({
+          agentKey,
+          payloadHash,
+          lensUri: attempt.result.lensUri,
+          gatewayUrl: attempt.result.gatewayUrl ?? null,
+        })
+      } catch (stateErr) {
+        regLogger.warn('[eliza] Failed to persist Grove registration state (non-blocking)', {
+          error: toErrorDetails(stateErr),
+          correlationId,
+        })
+      }
       regLogger.info('[eliza] Agent registration uploaded to Grove', {
         lensUri: attempt.result.lensUri,
         gatewayUrl: attempt.result.gatewayUrl,
+        payloadHash,
+        mode: ELIZA_GROVE_UPLOAD_MODE,
         correlationId,
       })
     } else {
@@ -1097,6 +1193,9 @@ async function uploadRegistrationToGrove(): Promise<void> {
 let agentBooted = false
 
 async function main() {
+  // Suppress known non-fatal native/runtime noise that causes alert fatigue.
+  installStderrNoiseFilter()
+
   // Start health check server FIRST so Railway healthcheck passes during boot
   startHealthServer()
 
@@ -1158,9 +1257,15 @@ async function main() {
   } else {
     queueEnabled = false
     if (hasDb) {
-      logger.warn(
-        '[eliza] DB is configured but runtime is in single-agent mode; background DB queue is disabled.',
-      )
+      if (hasCswConfig || hasPrivateKey) {
+        logger.info(
+          '[eliza] DB is configured; single-agent mode is active and background DB queue is intentionally disabled.',
+        )
+      } else {
+        logger.warn(
+          '[eliza] DB is configured but runtime is in single-agent mode; background DB queue is disabled.',
+        )
+      }
     }
   }
 
@@ -1243,7 +1348,13 @@ async function main() {
     console.log(`\n  CSW address: ${cswAddress}`)
     console.log(`  Privy wallet: ${privyWalletId.slice(0, 12)}...`)
     console.log(`  Chain ID: ${chainId}`)
-    console.log(`  Owner index: ${ownerIndex !== undefined ? ownerIndex : '(auto-detect at runtime)'}`)
+    console.log(
+      `  Owner index: ${
+        ownerIndex !== undefined
+          ? `${ownerIndex} (configured hint; validated/corrected at runtime)`
+          : '(auto-detect at runtime)'
+      }`,
+    )
 
     const running = await startSingleAgentCsw({ cswAddress, privyWalletId, ownerIndex, chainId })
     runningAgents.set('single-agent-csw', running)

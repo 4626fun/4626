@@ -516,6 +516,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const phase2Calls = Array.isArray(body.phase2Calls) ? body.phase2Calls : []
     const phase3Calls = Array.isArray(body.phase3Calls) ? body.phase3Calls : []
     const phase4Calls = Array.isArray(body.phase4Calls) ? body.phase4Calls : []
+    const hasPhase2Finalize = phase2FinalizeCalls.length > 0 || phase2Calls.length > 0
 
     const hasAnyWork =
       phase1Calls.length > 0 ||
@@ -526,6 +527,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       phase4Calls.length > 0
     if (!hasAnyWork) {
       return res.status(400).json({ success: false, error: 'Missing deploy calls' } satisfies ApiEnvelope<null>)
+    }
+    if (phase2CoreCalls.length > 0 && !hasPhase2Finalize) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing phase2 finalize calls',
+      } satisfies ApiEnvelope<null>)
     }
 
     // Phase-4 safety: when launching deferred auction without a same-session phase2 finalize,
@@ -658,6 +665,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ...(deploySignerWalletId ? { agentWalletId: deploySignerWalletId } : null),
         ...(deploySignerAddress ? { agentWalletAddress: deploySignerAddress } : null),
         persistSessionOwner,
+        expectedStages: {
+          hasPhase1Core: phase1Calls.length > 0,
+          hasPhase1Finalize: phase1Calls.length > 1,
+          hasPhase2Core: phase2CoreCalls.length > 0,
+          hasPhase2Finalize,
+          hasPhase3: phase3Calls.length > 0,
+          hasPhase4: phase4Calls.length > 0,
+        },
         version: String(body.version ?? ''),
         phase1Calls,
         phase2CoreCalls,

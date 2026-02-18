@@ -151,6 +151,27 @@ async function privyFetchJson<T>(params: {
   }
 }
 
+async function privyGetJson<T>(path: string): Promise<T> {
+  const { appId, appSecret } = getPrivyAuth()
+  const url = `${PRIVY_API_ORIGIN}${path}`
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'privy-app-id': appId,
+      Authorization: basicAuthHeader(appId, appSecret),
+    },
+  })
+  const text = await res.text()
+  if (!res.ok) {
+    throw new Error(`privy_http_${res.status}: ${text.slice(0, 500)}`)
+  }
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    throw new Error(`privy_non_json_response: ${text.slice(0, 500)}`)
+  }
+}
+
 export async function createAgentWallet(params?: { idempotencyKey?: string }): Promise<{ walletId: string; address: `0x${string}` }> {
   const ownerId = getPrivyOwnerId()
   const policyId = requirePrivyPolicyId()
@@ -170,6 +191,15 @@ export async function createAgentWallet(params?: { idempotencyKey?: string }): P
 
   const addr = String(wallet?.address ?? '').trim()
   if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) throw new Error('privy_create_wallet_invalid_address')
+  return { walletId: String(wallet.id), address: addr.toLowerCase() as `0x${string}` }
+}
+
+export async function getWalletById(walletId: string): Promise<{ walletId: string; address: `0x${string}` }> {
+  const normalizedWalletId = String(walletId ?? '').trim()
+  if (!normalizedWalletId) throw new Error('privy_wallet_id_missing')
+  const wallet = await privyGetJson<PrivyWallet>(`/v1/wallets/${encodeURIComponent(normalizedWalletId)}`)
+  const addr = String(wallet?.address ?? '').trim()
+  if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) throw new Error('privy_wallet_invalid_address')
   return { walletId: String(wallet.id), address: addr.toLowerCase() as `0x${string}` }
 }
 

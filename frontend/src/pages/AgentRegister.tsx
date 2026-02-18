@@ -9,6 +9,7 @@ import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wa
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { apiFetch } from '@/lib/apiBase'
 import { signInWithSiwaAgent } from '@/lib/siwaAgentAuth'
+import { useZoraProfile } from '@/lib/zora/hooks'
 
 const DEFAULT_ERC8004_IDENTITY_REGISTRY = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432'
 
@@ -30,15 +31,23 @@ type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 type WaitlistMeData = {
   profileId: number
+  primaryWallet?: string | null
   cswAddress?: string | null
   primarySmartWallet?: string | null
   baseSubAccount?: string | null
+  preprovZoraHandle?: string | null
   farcasterFid?: number | null
   preprovFarcasterUsername?: string | null
   lensHandle?: string | null
   lensAccountAddress?: string | null
   erc8128AgentId?: string | null
-  connectedAccounts?: Array<{ address?: string | null; isCanonicalSmartWallet?: boolean }>
+  connectedAccounts?: Array<{
+    address?: string | null
+    walletType?: string | null
+    provider?: string | null
+    verifiedAt?: string | null
+    isCanonicalSmartWallet?: boolean
+  }>
 }
 
 type AgentData = {
@@ -69,6 +78,12 @@ function shortAddress(address: string): string {
   if (!value) return '—'
   if (value.length < 12) return value
   return `${value.slice(0, 6)}…${value.slice(-4)}`
+}
+
+function normalizeHandle(value: string | null | undefined): string | null {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (!raw) return null
+  return raw.startsWith('@') ? raw.slice(1) : raw
 }
 
 function readErrorMessage(value: unknown, fallback: string): string {
@@ -145,14 +160,49 @@ export function AgentRegister() {
     staleTime: 15_000,
   })
 
+  const zoraCanonicalSeedIdentifier = useMemo(() => {
+    const row = waitlistMeQuery.data
+    const fromHandle = normalizeHandle(row?.preprovZoraHandle)
+    if (fromHandle) return fromHandle
+    if (isAddressLike(row?.primaryWallet)) return row.primaryWallet
+    return undefined
+  }, [waitlistMeQuery.data])
+  const zoraCanonicalSeedQuery = useZoraProfile(zoraCanonicalSeedIdentifier)
+  const zoraCanonicalSeedProfile = zoraCanonicalSeedQuery.data ?? null
+
   const canonicalSmartWalletAddress = useMemo(() => {
     const row = waitlistMeQuery.data
+    if (!row) return null
+    const connectedSmartWallets = (row.connectedAccounts ?? [])
+      .filter((item) => isAddressLike(item?.address) && String(item?.walletType ?? '').toLowerCase() === 'smart_wallet')
+      .map((item) => String(item.address).toLowerCase())
+    const connectedSmartWalletSet = new Set(connectedSmartWallets)
+    const zoraCandidates = [
+      zoraCanonicalSeedProfile?.publicWallet?.walletAddress,
+      ...((zoraCanonicalSeedProfile?.linkedWallets?.edges ?? []).map((edge) => edge?.node?.walletAddress ?? null)),
+    ]
+    for (const candidate of zoraCandidates) {
+      if (!isAddressLike(candidate)) continue
+      if (connectedSmartWalletSet.has(candidate.toLowerCase())) return candidate.toLowerCase()
+    }
+    const canonicalFromAccounts = (row.connectedAccounts ?? [])
+      .filter((item) => item?.isCanonicalSmartWallet && isAddressLike(item?.address))
+      .sort((a, b) => {
+        const aProvider = String(a.provider ?? '').toLowerCase()
+        const bProvider = String(b.provider ?? '').toLowerCase()
+        // Prefer non-Privy canonical CSWs when multiple records are marked canonical.
+        if (aProvider.includes('privy') !== bProvider.includes('privy')) {
+          return aProvider.includes('privy') ? 1 : -1
+        }
+        const aMs = Date.parse(String(a.verifiedAt ?? ''))
+        const bMs = Date.parse(String(b.verifiedAt ?? ''))
+        if (Number.isFinite(aMs) && Number.isFinite(bMs)) return bMs - aMs
+        if (Number.isFinite(aMs)) return -1
+        if (Number.isFinite(bMs)) return 1
+        return String(a.address ?? '').localeCompare(String(b.address ?? ''))
+      })[0]
     const candidates: Array<string | null | undefined> = [
-      ...(Array.isArray(row?.connectedAccounts)
-        ? row.connectedAccounts
-            .filter((item) => item?.isCanonicalSmartWallet)
-            .map((item) => (typeof item?.address === 'string' ? item.address : null))
-        : []),
+      canonicalFromAccounts?.address,
       row?.cswAddress,
       row?.primarySmartWallet,
       row?.baseSubAccount,
@@ -162,24 +212,33 @@ export function AgentRegister() {
       return value.toLowerCase()
     }
     return null
-  }, [waitlistMeQuery.data])
+  }, [waitlistMeQuery.data, zoraCanonicalSeedProfile])
   const isConnectedCanonicalCsw = Boolean(canonicalSmartWalletAddress && connectedAddressLc === canonicalSmartWalletAddress)
   const canSubmit = Boolean(canUseConnectedWallet && isConnectedCanonicalCsw && agentUri.trim())
 
+  const creatorAddressForAgentLookup = canonicalSmartWalletAddress ?? connectedAddressLc
+
   const agentQuery = useQuery({
-    queryKey: ['agent-register', 'xmtp-agent', canonicalSmartWalletAddress, connectedAddressLc],
+    queryKey: ['agent-register', 'xmtp-agent', creatorAddressForAgentLookup],
     queryFn: async (): Promise<AgentData | null> => {
-      const res = await apiFetch('/api/v1/agents/creators?listed=false&limit=200')
+      if (!creatorAddressForAgentLookup) return null
+      const params = new URLSearchParams({
+        listed: 'false',
+        limit: '1',
+        creatorAddress: creatorAddressForAgentLookup,
+      })
+      const res = await apiFetch(`/api/v1/agents/creators?${params.toString()}`)
       const json = (await res.json().catch(() => null)) as ApiEnvelope<{ agents: AgentData[] }> | null
       if (!res.ok || !json?.success || !json.data) return null
-      const needles = new Set([canonicalSmartWalletAddress, connectedAddressLc].filter(Boolean))
+      const target = creatorAddressForAgentLookup.toLowerCase()
       const match = json.data.agents.find((item) => {
         const creator = String(item.creatorAddress ?? '').toLowerCase()
         const csw = String(item.cswAddress ?? '').toLowerCase()
-        return needles.has(creator) || (csw && needles.has(csw))
+        return creator === target || (csw && csw === target)
       })
       return match ?? null
     },
+    enabled: Boolean(creatorAddressForAgentLookup),
     staleTime: 15_000,
   })
 
@@ -318,7 +377,15 @@ export function AgentRegister() {
     setSiwaAgentIdInput((prev) => (prev.trim() ? prev : registeredAgentId))
   }, [registeredAgentId])
 
-  const hasXmtpAgent = Boolean(agentQuery.data?.xmtpAgentAddress)
+  const xmtpAgentAddress = useMemo(() => {
+    const row = agentQuery.data
+    if (!row) return null
+    // In CSW mode, XMTP should resolve to the canonical CSW identity.
+    if (row.agentType === 'csw' && canonicalSmartWalletAddress) return canonicalSmartWalletAddress
+    if (isAddressLike(row.xmtpAgentAddress)) return row.xmtpAgentAddress.toLowerCase()
+    return null
+  }, [agentQuery.data, canonicalSmartWalletAddress])
+  const hasXmtpAgent = Boolean(xmtpAgentAddress)
   const hasLensProfile = Boolean(waitlistMeQuery.data?.lensHandle || waitlistMeQuery.data?.lensAccountAddress)
   const farcasterFid =
     typeof waitlistMeQuery.data?.farcasterFid === 'number' && waitlistMeQuery.data.farcasterFid > 0
@@ -459,7 +526,7 @@ export function AgentRegister() {
           </div>
           <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
             <div className="text-zinc-400">XMTP Agent</div>
-            <div className="font-mono text-zinc-200">{agentQuery.data?.xmtpAgentAddress ? shortAddress(agentQuery.data.xmtpAgentAddress) : 'Not enabled yet'}</div>
+            <div className="font-mono text-zinc-200">{xmtpAgentAddress ? shortAddress(xmtpAgentAddress) : 'Not enabled yet'}</div>
           </div>
         </div>
 
