@@ -160,15 +160,6 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       },
       outputSchema: { type: 'object' },
     },
-    {
-      name: 'web4_conway_status',
-      description: 'Return current Web4/Conway integration config and useful links for this agent stack.',
-      inputSchema: {
-        type: 'object',
-        properties: {},
-      },
-      outputSchema: { type: 'object' },
-    },
 
     // ── Wallet Intelligence tools ──────────────────────────────────────
     {

@@ -403,50 +403,11 @@ export function buildAgentRegistration(origin: string): {
     else services.splice(services.findIndex((s) => s.name === 'XMTP') + 1, 0, walletService)
   }
 
-  // Optional Web4/Conway service discovery metadata (feature-flagged).
-  const web4ConwayEnabled = parseBooleanFlag(process.env.WEB4_CONWAY_ENABLED) === true
-  if (web4ConwayEnabled) {
-    const web4Url = normalizeUrl((process.env.WEB4_URL ?? '').trim() || 'https://web4.ai/', origin)
-    const conwayDocs = normalizeUrl((process.env.WEB4_CONWAY_DOCS_URL ?? '').trim() || 'https://docs.conway.tech/', origin)
-    const conwayCloud = normalizeUrl((process.env.WEB4_CONWAY_CLOUD_URL ?? '').trim() || 'https://app.conway.tech/', origin)
-    const openx402 = normalizeUrl((process.env.WEB4_OPENX402_URL ?? '').trim() || 'https://openx402.ai/', origin)
-    const conwayNpm = normalizeUrl(
-      (process.env.WEB4_CONWAY_NPM_URL ?? '').trim() || 'https://www.npmjs.com/package/conway-terminal',
-      origin,
-    )
-
-    upsertServiceByName(services, {
-      name: 'web4',
-      endpoint: web4Url,
-      description: 'Web4 resources for autonomous agent operations.',
-    })
-    upsertServiceByName(services, {
-      name: 'conway-docs',
-      endpoint: conwayDocs,
-      description: 'Conway documentation for MCP + infrastructure integration.',
-    })
-    upsertServiceByName(services, {
-      name: 'conway-cloud',
-      endpoint: conwayCloud,
-      description: 'Conway Cloud for permissionless agent compute and services.',
-    })
-    upsertServiceByName(services, {
-      name: 'openx402',
-      endpoint: openx402,
-      description: 'openx402 payment facilitator for machine-to-machine HTTP 402 flows.',
-    })
-    upsertServiceByName(services, {
-      name: 'conway-terminal',
-      endpoint: conwayNpm,
-      description: 'Conway Terminal package for MCP-compatible agents.',
-      installCommand: String(process.env.WEB4_CONWAY_MCP_INSTALL_CMD ?? 'npx conway-terminal').trim(),
-    })
-  }
 
   const envX402Support = parseBooleanFlag(process.env.ERC8004_X402_SUPPORT)
   const x402Support =
     envX402Support ??
-    (web4ConwayEnabled || (typeof base.x402Support === 'boolean' ? base.x402Support : false))
+    (typeof base.x402Support === 'boolean' ? base.x402Support : false)
 
   const payload: RegistrationFile = {
     ...base,

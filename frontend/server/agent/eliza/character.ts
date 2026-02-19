@@ -42,7 +42,6 @@ Key facts about CreatorVault:
 - /reputation builds an ERC-8004 reputation graph for an agent (defaults to self: #2205)
 - /feedback reads feedback summary and entries for an agent (defaults to self: #2205)
 - /knowledge searches local protocol docs for concise reference snippets
-- /web4 reports Web4/Conway integration status, docs, and install command
 
 CRE Keeper Operations (you can observe and trigger keeper actions):
 - /cre status shows vault states (idle funds, last report, deployment threshold)
