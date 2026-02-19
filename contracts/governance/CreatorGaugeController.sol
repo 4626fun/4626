@@ -246,6 +246,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     error OnlyLotteryManager();
     error SwapFailed();
     error InvalidSlippage();
+    error MinOutputUnavailable();
     
     // ================================
     // CONSTRUCTOR
@@ -365,7 +366,11 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         // Auto-process if we have enough and enough time has passed
         if (pendingWETHFees >= distributionThreshold / 10 && // Lower threshold for WETH
             block.timestamp >= lastDistribution + distributionInterval) {
-            _processWETHFees();
+            // Keep fee intake permissionless even during oracle outages.
+            // If oracle-derived protection is unavailable, leave fees pending.
+            if (_calculateMinOutput(pendingWETHFees) > 0) {
+                _processWETHFees();
+            }
         }
     }
     
@@ -400,6 +405,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         
         // Step 1: Calculate minimum output using oracle (if enabled)
         uint256 minAmountOut = _calculateMinOutput(wethAmount);
+        if (minAmountOut == 0) revert MinOutputUnavailable();
         
         // Step 2: Swap WETH → CreatorCoin
         IERC20(WETH).forceApprove(SWAP_ROUTER, wethAmount);

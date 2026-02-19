@@ -2784,6 +2784,15 @@ function DeployVaultBatcher({
         })
         const registerJson = (await registerRes.json().catch(() => null)) as ApiEnvelope<any> | null
         if (!registerRes.ok || !registerJson?.success) {
+          const backendError = registerJson?.error
+            ? String(registerJson.error)
+            : `HTTP ${registerRes.status}`
+          if (buildOnly) {
+            const mappingHint = backendError.includes('Missing Meteora Alpha Vault mapping')
+              ? ' Add creator mapping in `creator_meteora_alpha_vaults` or `METEORA_CREATOR_ALPHA_VAULT_MAP_JSON`.'
+              : ''
+            throw new Error(`Solana auto-deposit payload build failed: ${backendError}.${mappingHint}`)
+          }
           const adapterOwner = await publicClient
             .readContract({
               address: solanaBridgeAdapter,

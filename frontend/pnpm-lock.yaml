@@ -65,6 +65,9 @@ importers:
       '@privy-io/wagmi':
         specifier: ^4.0.1
         version: 4.0.1(f67f2caae5b476cacc5e41dad2b31cca)
+      '@solana/web3.js':
+        specifier: ^1.98.4
+        version: 1.98.4(bufferutil@4.1.0)(encoding@0.1.13)(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@supabase/supabase-js':
         specifier: ^2.95.0
         version: 2.95.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)

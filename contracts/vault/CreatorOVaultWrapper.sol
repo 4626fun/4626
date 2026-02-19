@@ -87,6 +87,8 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     /// @notice Tracking for wrap/unwrap accounting
     uint256 public totalLocked;      // Vault shares locked
     uint256 public totalMinted;      // ShareOFT minted
+    uint256 public totalUserDustShares; // Sum of user-attributed remainder shares
+    mapping(address => uint256) public userDustShares;
     
     /// @notice Fees (basis points) - 0 by default for simplicity
     uint256 public wrapFee;
@@ -132,7 +134,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     error InsufficientLocked();
     error FeeExceedsLimit();
     error SlippageExceeded();
-    error AmountTooSmallToNormalize(); // Less than NORMALIZATION_FACTOR
+    error AmountTooSmallToNormalize(); // < 1 normalized share after fees + user dust
     
     // ================================
     // CONSTRUCTOR
@@ -356,9 +358,6 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
      *      This makes: 1 AKITA ≈ 1 ■AKITA (clean UX!)
      */
     function _wrapInternal(uint256 vaultSharesIn, address user) internal returns (uint256 shareOFTOut) {
-        // Must have at least NORMALIZATION_FACTOR shares to wrap
-        if (vaultSharesIn < NORMALIZATION_FACTOR) revert AmountTooSmallToNormalize();
-        
         uint256 fee = 0;
         uint256 vaultSharesAfterFee = vaultSharesIn;
         
@@ -373,12 +372,21 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
             }
         }
         
-        // Track locked shares (minus fee)
-        totalLocked += vaultSharesAfterFee;
-        
+        // Include user dust so normalization never destroys value.
+        uint256 priorDust = userDustShares[user];
+        uint256 normalizedInput = vaultSharesAfterFee + priorDust;
+
         // NORMALIZE: Divide by 1000 to get share token amount
         // 1000 ▢AKITA → 1 ■AKITA
-        shareOFTOut = vaultSharesAfterFee / NORMALIZATION_FACTOR;
+        shareOFTOut = normalizedInput / NORMALIZATION_FACTOR;
+        if (shareOFTOut == 0) revert AmountTooSmallToNormalize();
+
+        uint256 newDust = normalizedInput - (shareOFTOut * NORMALIZATION_FACTOR);
+        userDustShares[user] = newDust;
+        totalUserDustShares = totalUserDustShares - priorDust + newDust;
+
+        // Track locked shares (minus fee)
+        totalLocked += vaultSharesAfterFee;
         
         // Mint normalized share token to user
         shareOFT.mint(user, shareOFTOut);
@@ -398,9 +406,10 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
      *      This makes: 1 ■AKITA ≈ 1 AKITA (clean UX!)
      */
     function _unwrapInternal(uint256 shareOFTIn, address user) internal returns (uint256 vaultSharesOut) {
-        // DENORMALIZE: Multiply by 1000 to get vault shares
-        // 1 ■AKITA → 1000 ▢AKITA
-        uint256 vaultSharesBeforeFee = shareOFTIn * NORMALIZATION_FACTOR;
+        // DENORMALIZE: Multiply by 1000 and include user's accumulated dust.
+        // 1 ■AKITA → 1000 ▢AKITA (+ user dust remainder)
+        uint256 userDust = userDustShares[user];
+        uint256 vaultSharesBeforeFee = shareOFTIn * NORMALIZATION_FACTOR + userDust;
         
         uint256 fee = 0;
         vaultSharesOut = vaultSharesBeforeFee;
@@ -416,6 +425,11 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         // Burn normalized share token from user
         shareOFT.burn(user, shareOFTIn);
         totalMinted -= shareOFTIn;
+
+        if (userDust > 0) {
+            userDustShares[user] = 0;
+            totalUserDustShares -= userDust;
+        }
         
         // Release vault shares (denormalized)
         totalLocked -= vaultSharesBeforeFee;
@@ -470,16 +484,17 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (!isWhitelisted[user] && wrapFee > 0) {
             afterFee = vaultShares - (vaultShares * wrapFee) / BASIS_POINTS;
         }
+        uint256 normalizedInput = afterFee + userDustShares[user];
         // NORMALIZE: ÷1000
-        shareOFTAmount = afterFee / NORMALIZATION_FACTOR;
+        shareOFTAmount = normalizedInput / NORMALIZATION_FACTOR;
     }
     
     /**
      * @dev Preview unwrap with denormalization: share token (■AKITA) → vaultShares
      */
     function _previewUnwrap(uint256 shareOFTAmount, address user) internal view returns (uint256 vaultShares) {
-        // DENORMALIZE: ×1000
-        uint256 vaultSharesBeforeFee = shareOFTAmount * NORMALIZATION_FACTOR;
+        // DENORMALIZE: ×1000 (+ user dust)
+        uint256 vaultSharesBeforeFee = shareOFTAmount * NORMALIZATION_FACTOR + userDustShares[user];
         
         if (isWhitelisted[user] || unwrapFee == 0) return vaultSharesBeforeFee;
         return vaultSharesBeforeFee - (vaultSharesBeforeFee * unwrapFee) / BASIS_POINTS;
@@ -503,21 +518,28 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @notice Check if wrapper is balanced (locked vault shares == minted share tokens * 1000)
-     * @dev Due to normalization: totalLocked (▢AKITA) == totalMinted (■AKITA) * 1000
+     * @notice Check if wrapper is balanced against required share backing
+     * @dev required backing = minted * 1000 + user-attributed dust
      */
     function isBalanced() external view returns (bool) {
-        return totalLocked == totalMinted * NORMALIZATION_FACTOR;
+        return totalLocked == _requiredLockedBacking();
     }
     
     /**
      * @notice Get wrapper reserves
      * @return locked Vault shares locked (▢AKITA, NOT normalized)
      * @return minted ShareOFT minted (■AKITA, normalized)
-     * @dev Note: locked = minted * 1000 when balanced
+     * @dev Note: locked = minted * 1000 + dust when balanced
      */
     function getReserves() external view returns (uint256 locked, uint256 minted) {
         return (totalLocked, totalMinted);
+    }
+
+    /**
+     * @notice Get the total vault-share backing required by minted supply and user dust
+     */
+    function requiredLockedBacking() external view returns (uint256) {
+        return _requiredLockedBacking();
     }
     
     /**
@@ -571,11 +593,11 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     
     /**
      * @notice Emergency verify - check balances match accounting
-     * @dev With normalization: actualLocked == totalLocked == totalMinted * 1000
+     * @dev With normalization + dust: actualLocked == totalLocked == (totalMinted * 1000 + dust)
      */
     function verify() external view returns (bool) {
         uint256 actualLocked = IERC20(address(vault)).balanceOf(address(this));
-        return actualLocked == totalLocked && totalLocked == totalMinted * NORMALIZATION_FACTOR;
+        return actualLocked == totalLocked && totalLocked == _requiredLockedBacking();
     }
     
     // ================================
@@ -591,6 +613,15 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         uint256 amount
     ) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
+
+        // Prevent draining user-backed vault shares. Only excess (if any) is sweepable.
+        if (token == address(vault)) {
+            uint256 actualLocked = IERC20(address(vault)).balanceOf(address(this));
+            uint256 requiredLocked = _requiredLockedBacking();
+            if (actualLocked <= requiredLocked) revert InsufficientLocked();
+            if (amount > actualLocked - requiredLocked) revert InsufficientLocked();
+        }
+
         IERC20(token).safeTransfer(to, amount);
     }
     
@@ -599,5 +630,9 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
      */
     function refreshApproval() external onlyOwner {
         creatorCoin.approve(address(vault), type(uint256).max);
+    }
+
+    function _requiredLockedBacking() internal view returns (uint256) {
+        return totalMinted * NORMALIZATION_FACTOR + totalUserDustShares;
     }
 }

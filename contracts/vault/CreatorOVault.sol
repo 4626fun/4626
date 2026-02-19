@@ -157,6 +157,12 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     /// @notice Shares locked from last report
     uint256 public totalLockedShares;
 
+    /// @notice Shares currently held by queued withdrawals
+    uint256 public totalQueuedWithdrawalShares;
+
+    /// @notice Last timestamp that profit unlock processing was applied
+    uint96 public lastProfitUnlockUpdate;
+
     // =================================
     // REPORTING
     // =================================
@@ -516,6 +522,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         whitelist[_owner] = true;
         lastDeployment = block.timestamp;
         lastReport = uint96(block.timestamp);
+        lastProfitUnlockUpdate = uint96(block.timestamp);
     }
 
     // =================================
@@ -523,18 +530,27 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     
     /**
-     * @notice Calculate unlocked shares since last report
-     * @dev Prevents PPS manipulation by gradual unlock
+     * @notice Calculate unlocked shares pending burn
+     * @dev Shows matured shares since last unlock processing checkpoint
      */
     function unlockedShares() public view returns (uint256) {
-        if (fullProfitUnlockDate <= block.timestamp || fullProfitUnlockDate == 0) {
-            return totalLockedShares;
+        uint256 locked = totalLockedShares;
+        if (locked == 0) return 0;
+
+        uint256 unlockDate = fullProfitUnlockDate;
+        if (unlockDate == 0) return 0;
+
+        uint256 checkpoint = lastProfitUnlockUpdate;
+        uint256 currentTime = block.timestamp;
+        if (currentTime <= checkpoint) return 0;
+
+        if (currentTime >= unlockDate) {
+            return locked;
         }
-        
-        uint256 timeSinceLastReport = block.timestamp - lastReport;
-        uint256 unlockedAmount = (profitUnlockingRate * timeSinceLastReport) / MAX_BPS_EXTENDED;
-        
-        return unlockedAmount > totalLockedShares ? totalLockedShares : unlockedAmount;
+
+        uint256 elapsed = currentTime - checkpoint;
+        uint256 unlockedAmount = (profitUnlockingRate * elapsed) / MAX_BPS_EXTENDED;
+        return unlockedAmount > locked ? locked : unlockedAmount;
     }
     
     /**
@@ -542,6 +558,65 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      */
     function lockedShares() public view returns (uint256) {
         return totalLockedShares - unlockedShares();
+    }
+
+    /**
+     * @notice Profit shares available on vault balance (excludes queued withdrawals)
+     */
+    function _availableProfitShares() internal view returns (uint256) {
+        uint256 vaultBalance = balanceOf(address(this));
+        uint256 queued = totalQueuedWithdrawalShares;
+        if (vaultBalance <= queued) return 0;
+        return vaultBalance - queued;
+    }
+
+    /**
+     * @notice Burn matured profit-lock shares to realize unlock progression
+     */
+    function _processProfitUnlock() internal {
+        uint256 locked = totalLockedShares;
+        if (locked == 0) {
+            if (profitUnlockingRate != 0) profitUnlockingRate = 0;
+            if (fullProfitUnlockDate != 0) fullProfitUnlockDate = 0;
+            lastProfitUnlockUpdate = uint96(block.timestamp);
+            return;
+        }
+
+        uint256 unlockDate = fullProfitUnlockDate;
+        if (unlockDate == 0) return;
+
+        uint256 checkpoint = lastProfitUnlockUpdate;
+        uint256 currentTime = block.timestamp;
+        if (currentTime <= checkpoint) return;
+
+        uint256 targetTime = currentTime < unlockDate ? currentTime : unlockDate;
+        uint256 elapsed = targetTime - checkpoint;
+        if (elapsed == 0) return;
+
+        uint256 matured = (profitUnlockingRate * elapsed) / MAX_BPS_EXTENDED;
+        if (targetTime == unlockDate || matured > locked) {
+            matured = locked;
+        }
+        if (matured == 0) return;
+
+        uint256 availableProfit = _availableProfitShares();
+        uint256 sharesToBurn = matured > availableProfit ? availableProfit : matured;
+        if (sharesToBurn == 0) return;
+
+        _burn(address(this), sharesToBurn);
+        totalLockedShares = locked - sharesToBurn;
+
+        uint256 consumedElapsed = sharesToBurn == matured
+            ? elapsed
+            : (sharesToBurn * MAX_BPS_EXTENDED) / profitUnlockingRate;
+        if (consumedElapsed == 0) consumedElapsed = 1;
+        if (consumedElapsed > elapsed) consumedElapsed = elapsed;
+        lastProfitUnlockUpdate = uint96(checkpoint + consumedElapsed);
+
+        if (totalLockedShares == 0) {
+            profitUnlockingRate = 0;
+            fullProfitUnlockDate = 0;
+        }
     }
 
     // =================================
@@ -585,6 +660,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     {
         if (assets == 0) revert ZeroAmount();
         if (receiver == address(0)) revert ZeroAddress();
+        _processProfitUnlock();
         
         // SECURITY: First deposit must meet minimum to prevent dust manipulation
         if (totalSupply() == 0 && assets < MINIMUM_FIRST_DEPOSIT) {
@@ -644,6 +720,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     {
         if (shares == 0) revert ZeroShares();
         if (receiver == address(0)) revert ZeroAddress();
+        _processProfitUnlock();
         
         // Store price before for sanity check (only if not first deposit)
         bool isFirstDeposit = totalSupply() == 0;
@@ -696,6 +773,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     {
         if (shares == 0) revert ZeroShares();
         if (receiver == address(0)) revert ZeroAddress();
+        _processProfitUnlock();
         
         // SECURITY: Flash loan protection - must wait at least 1 block after deposit
         uint256 requiredBlock = lastDepositBlock[owner_] + withdrawDelayBlocks;
@@ -740,6 +818,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     {
         if (assets == 0) revert ZeroAmount();
         if (receiver == address(0)) revert ZeroAddress();
+        _processProfitUnlock();
         
         // SECURITY: Flash loan protection - must wait at least 1 block after deposit
         uint256 requiredBlock = lastDepositBlock[owner_] + withdrawDelayBlocks;
@@ -784,6 +863,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     function queueWithdrawal(uint256 shares, address receiver) external nonReentrant {
         if (shares == 0) revert ZeroShares();
         if (receiver == address(0)) revert ZeroAddress();
+        _processProfitUnlock();
         
         // SECURITY: Flash loan protection
         uint256 requiredBlock = lastDepositBlock[msg.sender] + withdrawDelayBlocks;
@@ -799,6 +879,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         
         // Transfer shares to vault (lock them)
         _transfer(msg.sender, address(this), shares);
+        totalQueuedWithdrawalShares += shares;
         
         // Set unlock block
         uint256 unlockBlock = block.number + largeWithdrawalDelayBlocks;
@@ -817,6 +898,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @dev Can only be called after unlockBlock has passed
      */
     function claimQueuedWithdrawal() external nonReentrant returns (uint256 assets) {
+        _processProfitUnlock();
         QueuedWithdrawal storage queued = queuedWithdrawals[msg.sender];
         
         if (queued.shares == 0) revert NoQueuedWithdrawal();
@@ -834,6 +916,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         assets = previewRedeem(shares);
         
         // Burn the locked shares
+        totalQueuedWithdrawalShares -= shares;
         _burn(address(this), shares);
         
         // Ensure we have enough Creator Coin
@@ -850,6 +933,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @notice Cancel a queued withdrawal and get shares back
      */
     function cancelQueuedWithdrawal() external nonReentrant returns (uint256 shares) {
+        _processProfitUnlock();
         QueuedWithdrawal storage queued = queuedWithdrawals[msg.sender];
         
         if (queued.shares == 0) revert NoQueuedWithdrawal();
@@ -860,6 +944,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         delete queuedWithdrawals[msg.sender];
         
         // Return shares to user
+        totalQueuedWithdrawalShares -= shares;
         _transfer(address(this), msg.sender, shares);
         
         emit WithdrawalCancelled(msg.sender, shares);
@@ -1240,6 +1325,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @dev Called periodically by keeper
      */
     function report() external nonReentrant onlyKeepers returns (uint256 profit, uint256 loss) {
+        _processProfitUnlock();
         uint256 currentTotalAssets = totalAssets();
         uint256 previousTotalAssets = totalAssetsAtLastReport;
         
@@ -1269,10 +1355,12 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
                     : profitAfterFees;
                 
                 _mint(address(this), profitShares);
-                totalLockedShares += profitShares;
+                uint256 updatedLockedShares = totalLockedShares + profitShares;
+                totalLockedShares = updatedLockedShares;
                 
                 fullProfitUnlockDate = uint96(block.timestamp + profitMaxUnlockTime);
-                profitUnlockingRate = (profitShares * MAX_BPS_EXTENDED) / profitMaxUnlockTime;
+                profitUnlockingRate = (updatedLockedShares * MAX_BPS_EXTENDED) / profitMaxUnlockTime;
+                lastProfitUnlockUpdate = uint96(block.timestamp);
             }
             
             emit Reported(profit, 0, performanceFees, currentTotalAssets);
@@ -1288,10 +1376,18 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
                 uint256 sharesToBurn = lossShares > totalLockedShares 
                     ? totalLockedShares 
                     : lossShares;
+                uint256 availableProfit = _availableProfitShares();
+                if (sharesToBurn > availableProfit) {
+                    sharesToBurn = availableProfit;
+                }
                 
                 if (sharesToBurn > 0) {
                     _burn(address(this), sharesToBurn);
                     totalLockedShares -= sharesToBurn;
+                    if (totalLockedShares == 0) {
+                        profitUnlockingRate = 0;
+                        fullProfitUnlockDate = 0;
+                    }
                 }
             }
             

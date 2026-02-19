@@ -105,7 +105,7 @@ contract DeployRewardsEcosystem is Script {
         }
 
         console2.log("\nDeploy VoterRewardsDistributor...");
-        VoterRewardsDistributor rewards = new VoterRewardsDistributor(address(voting), owner);
+        VoterRewardsDistributor rewards = new VoterRewardsDistributor(address(voting), registry, owner);
         rewards.setProtocolTreasury(protocolTreasury);
         console2.log("VoterRewardsDistributor:", address(rewards));
 

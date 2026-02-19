@@ -31,6 +31,11 @@ interface IVaultGaugeVotingForRewards {
     function getUserVoteWeightAtEpoch(uint256 epoch, address user, address vault) external view returns (uint256);
 }
 
+interface ICreatorRegistryForVoterRewards {
+    function getTokenForVault(address _vault) external view returns (address);
+    function getGaugeControllerForToken(address _token) external view returns (address);
+}
+
 contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -45,6 +50,7 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
     // ================================
 
     IVaultGaugeVotingForRewards public immutable gaugeVoting;
+    ICreatorRegistryForVoterRewards public immutable registry;
 
     // ================================
     // STATE
@@ -73,6 +79,7 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
 
     event RewardsNotified(uint256 indexed epoch, address indexed vault, address indexed token, uint256 amount);
     event RewardTokenSet(address indexed vault, address indexed token);
+    event RewardTokenRecovered(address indexed vault, address indexed oldToken, address indexed newToken);
     event Claimed(uint256 indexed epoch, address indexed vault, address indexed user, address token, uint256 amount);
     event ProtocolTreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
     event ZeroVoteEpochSwept(
@@ -89,6 +96,8 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
 
     error ZeroAddress();
     error ZeroAmount();
+    error UnauthorizedNotifier();
+    error InvalidVaultRegistration();
     error RewardTokenMismatch();
     error ProtocolTreasuryNotSet();
     error SweepNotAllowedYet();
@@ -99,9 +108,10 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
     // CONSTRUCTOR
     // ================================
 
-    constructor(address _gaugeVoting, address _owner) Ownable(_owner) {
-        if (_gaugeVoting == address(0)) revert ZeroAddress();
+    constructor(address _gaugeVoting, address _registry, address _owner) Ownable(_owner) {
+        if (_gaugeVoting == address(0) || _registry == address(0)) revert ZeroAddress();
         gaugeVoting = IVaultGaugeVotingForRewards(_gaugeVoting);
+        registry = ICreatorRegistryForVoterRewards(_registry);
     }
 
     // ================================
@@ -115,6 +125,17 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
         emit ProtocolTreasuryUpdated(old, _protocolTreasury);
     }
 
+    /**
+     * @notice Owner recovery path for fixing an incorrect reward token mapping.
+     * @dev Intended for emergency repair if a vault was initialized with the wrong token.
+     */
+    function recoverVaultRewardToken(address vault, address token) external onlyOwner {
+        if (vault == address(0) || token == address(0)) revert ZeroAddress();
+        address oldToken = vaultRewardToken[vault];
+        vaultRewardToken[vault] = token;
+        emit RewardTokenRecovered(vault, oldToken, token);
+    }
+
     // ================================
     // NOTIFY (CALLED BY GAUGE CONTROLLERS)
     // ================================
@@ -126,6 +147,12 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
     function notifyRewards(address vault, address token, uint256 amount) external nonReentrant {
         if (vault == address(0) || token == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
+
+        address creatorToken = registry.getTokenForVault(vault);
+        if (creatorToken == address(0)) revert InvalidVaultRegistration();
+
+        address expectedGauge = registry.getGaugeControllerForToken(creatorToken);
+        if (expectedGauge == address(0) || msg.sender != expectedGauge) revert UnauthorizedNotifier();
 
         address existing = vaultRewardToken[vault];
         if (existing == address(0)) {

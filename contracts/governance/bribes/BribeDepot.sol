@@ -52,6 +52,7 @@ contract BribeDepot is Ownable, ReentrancyGuard {
     error ZeroAmount();
     error AlreadyClaimed();
     error NoUserVotes();
+    error EpochNotEnded();
 
     constructor(address _vault, address _gaugeVoting) Ownable(msg.sender) {
         if (_vault == address(0) || _gaugeVoting == address(0)) revert ZeroAddress();
@@ -81,6 +82,7 @@ contract BribeDepot is Ownable, ReentrancyGuard {
      * @param token Token to claim
      */
     function claim(uint256 epoch, address token) external nonReentrant returns (uint256 amount) {
+        if (epoch >= gaugeVoting.currentEpoch()) revert EpochNotEnded();
         if (claimed[epoch][token][msg.sender]) revert AlreadyClaimed();
 
         uint256 totalWeight = gaugeVoting.getVaultWeightAtEpoch(epoch, vault);

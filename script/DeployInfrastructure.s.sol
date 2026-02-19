@@ -420,25 +420,6 @@ contract DeployCreatorVault is Script {
         shareOFT.setMinter(address(wrapper), true);
         console.log("       ShareOFT: setMinter(wrapper)");
         
-        // ============ CONFIGURE CCA STRATEGY ============
-        
-        console.log("\n=== Configuring CCA Strategy ===");
-        
-        // V4 PoolManager on Base
-        address V4_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
-        // Tax Hook (6.9% sell fees)
-        address TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
-        
-        // Configure oracle settings for automatic V4 pool setup on CCA graduation
-        // Also sets up the 6.9% tax hook to send fees to GaugeController
-        ccaStrategy.setOracleConfig(
-            address(oracle),
-            V4_POOL_MANAGER,
-            TAX_HOOK,
-            address(gaugeController)  // GaugeController receives 6.9% trade fees
-        );
-        console.log("       CCA: setOracleConfig (oracle, poolManager, taxHook, feeRecipient)");
-        
         // ============ CONFIGURE ORACLE ============
         
         console.log("\n=== Configuring Oracle ===");
@@ -471,6 +452,26 @@ contract DeployCreatorVault is Script {
         } else {
             console.log("       GaugeController: SKIPPED setLotteryManager (not in env)");
         }
+        
+        // ============ CONFIGURE CCA STRATEGY ============
+        
+        console.log("\n=== Configuring CCA Strategy ===");
+        
+        // V4 PoolManager on Base
+        address V4_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
+        // Tax Hook (6.9% sell fees)
+        address TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
+        
+        // Configure oracle settings for automatic V4 pool setup on CCA graduation
+        // Also sets up the 6.9% tax hook to send fees to GaugeController
+        // after the GaugeController has an oracle configured.
+        ccaStrategy.setOracleConfig(
+            address(oracle),
+            V4_POOL_MANAGER,
+            TAX_HOOK,
+            address(gaugeController)  // GaugeController receives 6.9% trade fees
+        );
+        console.log("       CCA: setOracleConfig (oracle, poolManager, taxHook, feeRecipient)");
         
         // ============ REGISTER WITH MAIN REGISTRY ============
         
