@@ -51,6 +51,7 @@ import { reputationPlugin } from './plugins/reputation/index.js'
 import { crePlugin } from './plugins/cre/index.js'
 import { zoraPlugin } from './plugins/zora/index.js'
 import { knowledgePlugin } from './plugins/knowledge/index.js'
+import { web4Plugin } from './plugins/web4/index.js'
 import { creatorVaultCharacter, resolveCharacterRuntimeConfig } from './character.js'
 import { XmtpService } from './plugins/xmtp/service.js'
 import { createRuntimeBridge } from './runtimeBridge.js'
@@ -328,10 +329,10 @@ export type { Erc8004Identity } from './identity.js'
 // Plugins & Actions
 // ---------------------------------------------------------------------------
 
-const plugins = [keeprPlugin, zoraPlugin, lensPlugin, walletIntelPlugin, reputationPlugin, crePlugin, knowledgePlugin]
+const plugins = [keeprPlugin, zoraPlugin, lensPlugin, walletIntelPlugin, reputationPlugin, crePlugin, knowledgePlugin, web4Plugin]
 const allActions = plugins.flatMap((p) => p.actions ?? [])
 
-export { keeprPlugin, zoraPlugin, lensPlugin, walletIntelPlugin, reputationPlugin, crePlugin, knowledgePlugin }
+export { keeprPlugin, zoraPlugin, lensPlugin, walletIntelPlugin, reputationPlugin, crePlugin, knowledgePlugin, web4Plugin }
 
 // ---------------------------------------------------------------------------
 // LLM providers (for /ai fallback)
@@ -623,7 +624,9 @@ async function handleMessage(
     })
   }
 
-  // Welcome message on first interaction in a conversation
+  // Welcome message on first interaction in a conversation.
+  // If the user sends a substantive first question, continue to normal
+  // routing so they get an actual answer immediately.
   if (!welcomedConversations.has(msg.conversationId)) {
     welcomedConversations.add(msg.conversationId)
     const welcomeMemory = ctx.runtimeBridge.createOutboundMemory(
@@ -632,7 +635,10 @@ async function handleMessage(
       WELCOME_MESSAGE,
     )
     await ctx.runtimeBridge.runtime.createMemory(welcomeMemory as any, 'messages' as any)
-    return WELCOME_MESSAGE
+    const isGreetingOnly = /^(hi|hello|hey|gm|good morning|help|\/help)$/i.test(text)
+    if (isGreetingOnly) {
+      return WELCOME_MESSAGE
+    }
   }
 
   const rankedActions = await ctx.runtimeBridge.rankActions(text, memory)
@@ -688,9 +694,15 @@ async function handleMessage(
     }
   }
 
-  // LLM fallback for /ai, @keepr, @bot
+  // LLM fallback for /ai, @keepr, @bot, and plain text.
+  // Keep slash-prefixed commands command-only to avoid accidental
+  // hallucinated command handling by the LLM.
   const lower = text.toLowerCase()
-  const isAi = lower.startsWith('/ai') || lower.startsWith('@keepr') || lower.startsWith('@bot')
+  const isAi =
+    lower.startsWith('/ai') ||
+    lower.startsWith('@keepr') ||
+    lower.startsWith('@bot') ||
+    !text.startsWith('/')
   if (!isAi) return null
 
   const cleanText = text

@@ -22,12 +22,36 @@ type ExecuteRequest = {
   input?: Record<string, unknown>
 }
 
+type ConwayStatus = {
+  enabled: boolean
+  web4Url: string
+  docsUrl: string
+  cloudUrl: string
+  openx402Url: string
+  npmPackageUrl: string
+  mcpInstallCommand: string
+}
+
 function normalizeAddress(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
 }
 
 function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
+}
+
+function getConwayStatus(): ConwayStatus {
+  const enabledRaw = String(process.env.WEB4_CONWAY_ENABLED ?? '').trim().toLowerCase()
+  const enabled = enabledRaw === '1' || enabledRaw === 'true' || enabledRaw === 'yes' || enabledRaw === 'on'
+  return {
+    enabled,
+    web4Url: String(process.env.WEB4_URL ?? 'https://web4.ai/').trim(),
+    docsUrl: String(process.env.WEB4_CONWAY_DOCS_URL ?? 'https://docs.conway.tech/').trim(),
+    cloudUrl: String(process.env.WEB4_CONWAY_CLOUD_URL ?? 'https://app.conway.tech/').trim(),
+    openx402Url: String(process.env.WEB4_OPENX402_URL ?? 'https://openx402.ai/').trim(),
+    npmPackageUrl: String(process.env.WEB4_CONWAY_NPM_URL ?? 'https://www.npmjs.com/package/conway-terminal').trim(),
+    mcpInstallCommand: String(process.env.WEB4_CONWAY_MCP_INSTALL_CMD ?? 'npx conway-terminal').trim(),
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -506,6 +530,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({
         success: true,
         data: { payload: cleanPayload, feedbackHash, feedbackURI: null, gatewayUrl: null, groveStatus: 'unavailable' },
+      })
+    }
+
+    if (tool === 'web4_conway_status') {
+      const status = getConwayStatus()
+      return res.status(200).json({
+        success: true,
+        data: {
+          integration: status,
+          links: {
+            web4: status.web4Url,
+            docs: status.docsUrl,
+            cloud: status.cloudUrl,
+            openx402: status.openx402Url,
+            npm: status.npmPackageUrl,
+          },
+        },
       })
     }
 

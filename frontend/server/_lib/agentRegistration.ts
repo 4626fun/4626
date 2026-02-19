@@ -135,6 +135,23 @@ function parseSupportedTrust(raw: string | undefined): string[] {
     .filter(Boolean)
 }
 
+function parseBooleanFlag(raw: string | undefined): boolean | null {
+  if (typeof raw !== 'string') return null
+  const normalized = raw.trim().toLowerCase()
+  if (!normalized) return null
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false
+  return null
+}
+
+function upsertServiceByName(services: RegistrationService[], next: RegistrationService): void {
+  const key = String(next.name ?? '').trim().toLowerCase()
+  if (!key) return
+  const idx = services.findIndex((entry) => String(entry?.name ?? '').trim().toLowerCase() === key)
+  if (idx >= 0) services[idx] = next
+  else services.push(next)
+}
+
 function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
@@ -386,6 +403,51 @@ export function buildAgentRegistration(origin: string): {
     else services.splice(services.findIndex((s) => s.name === 'XMTP') + 1, 0, walletService)
   }
 
+  // Optional Web4/Conway service discovery metadata (feature-flagged).
+  const web4ConwayEnabled = parseBooleanFlag(process.env.WEB4_CONWAY_ENABLED) === true
+  if (web4ConwayEnabled) {
+    const web4Url = normalizeUrl((process.env.WEB4_URL ?? '').trim() || 'https://web4.ai/', origin)
+    const conwayDocs = normalizeUrl((process.env.WEB4_CONWAY_DOCS_URL ?? '').trim() || 'https://docs.conway.tech/', origin)
+    const conwayCloud = normalizeUrl((process.env.WEB4_CONWAY_CLOUD_URL ?? '').trim() || 'https://app.conway.tech/', origin)
+    const openx402 = normalizeUrl((process.env.WEB4_OPENX402_URL ?? '').trim() || 'https://openx402.ai/', origin)
+    const conwayNpm = normalizeUrl(
+      (process.env.WEB4_CONWAY_NPM_URL ?? '').trim() || 'https://www.npmjs.com/package/conway-terminal',
+      origin,
+    )
+
+    upsertServiceByName(services, {
+      name: 'web4',
+      endpoint: web4Url,
+      description: 'Web4 resources for autonomous agent operations.',
+    })
+    upsertServiceByName(services, {
+      name: 'conway-docs',
+      endpoint: conwayDocs,
+      description: 'Conway documentation for MCP + infrastructure integration.',
+    })
+    upsertServiceByName(services, {
+      name: 'conway-cloud',
+      endpoint: conwayCloud,
+      description: 'Conway Cloud for permissionless agent compute and services.',
+    })
+    upsertServiceByName(services, {
+      name: 'openx402',
+      endpoint: openx402,
+      description: 'openx402 payment facilitator for machine-to-machine HTTP 402 flows.',
+    })
+    upsertServiceByName(services, {
+      name: 'conway-terminal',
+      endpoint: conwayNpm,
+      description: 'Conway Terminal package for MCP-compatible agents.',
+      installCommand: String(process.env.WEB4_CONWAY_MCP_INSTALL_CMD ?? 'npx conway-terminal').trim(),
+    })
+  }
+
+  const envX402Support = parseBooleanFlag(process.env.ERC8004_X402_SUPPORT)
+  const x402Support =
+    envX402Support ??
+    (web4ConwayEnabled || (typeof base.x402Support === 'boolean' ? base.x402Support : false))
+
   const payload: RegistrationFile = {
     ...base,
     type: REGISTRATION_TYPE,
@@ -393,7 +455,7 @@ export function buildAgentRegistration(origin: string): {
     description,
     image: normalizeUrl(imageRaw, origin),
     services,
-    x402Support: typeof base.x402Support === 'boolean' ? base.x402Support : false,
+    x402Support,
     active: typeof base.active === 'boolean' ? base.active : true,
     registrations: [
       {
