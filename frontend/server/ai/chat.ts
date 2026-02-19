@@ -107,32 +107,6 @@ function recordLlmCall(groupId: string) {
   groupCooldowns.set(groupId, Date.now())
 }
 
-function parseBooleanFlag(raw: string | undefined): boolean {
-  const normalized = String(raw ?? '').trim().toLowerCase()
-  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
-}
-
-function getWeb4ContextLines(): string[] {
-  const enabled = parseBooleanFlag(process.env.WEB4_CONWAY_ENABLED)
-  const web4Url = String(process.env.WEB4_URL ?? 'https://web4.ai/').trim()
-  const docsUrl = String(process.env.WEB4_CONWAY_DOCS_URL ?? 'https://docs.conway.tech/').trim()
-  const cloudUrl = String(process.env.WEB4_CONWAY_CLOUD_URL ?? 'https://app.conway.tech/').trim()
-  const openx402Url = String(process.env.WEB4_OPENX402_URL ?? 'https://openx402.ai/').trim()
-  const x402Support = parseBooleanFlag(process.env.ERC8004_X402_SUPPORT)
-
-  return [
-    '',
-    'Web4 / Conway integration:',
-    `- Enabled: ${enabled ? 'yes' : 'no'}`,
-    `- x402 support flag: ${x402Support ? 'yes' : 'no'}`,
-    `- Web4: ${web4Url}`,
-    `- Conway docs: ${docsUrl}`,
-    `- Conway Cloud: ${cloudUrl}`,
-    `- openx402: ${openx402Url}`,
-    '- Use `/web4 status` for exact runtime integration status in chat.',
-  ]
-}
-
 // ---------------------------------------------------------------------------
 // System prompt builder
 // ---------------------------------------------------------------------------
@@ -163,11 +137,9 @@ function buildSystemPrompt(vault: KeeprVaultRow | null): string {
       '- /fc profile <user> — Farcaster lookup',
       '- /fc stats — Farcaster stats',
       '- /send <amount> USDC to <address> — token transfer (ADMIN/OWNER)',
-      '- /web4 status — Web4/Conway integration status',
     )
   }
 
-  base.push(...getWeb4ContextLines())
 
   return base.join('\n')
 }

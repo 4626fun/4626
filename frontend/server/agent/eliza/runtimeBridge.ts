@@ -128,12 +128,6 @@ function actionScoreFromMessage(actionName: string, text: string): { score: numb
   ) {
     return { score: 0.86, reason: 'knowledge_prefix' }
   }
-  if (
-    (normalizedText.startsWith('/web4') || normalizedText.startsWith('/conway')) &&
-    (normalizedName.includes('web4') || normalizedName.includes('conway'))
-  ) {
-    return { score: 0.86, reason: 'web4_prefix' }
-  }
   return { score: 0.65, reason: 'validated_action' }
 }
 

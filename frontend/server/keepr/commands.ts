@@ -53,7 +53,6 @@ function formatKeeprHelp(): string {
     '',
     '- /ai <question> — ask the vault assistant',
     '- @keepr <question> — same as /ai',
-    '- /web4 status — show Web4/Conway integration status',
     '',
     'Farcaster commands (type /fc help for more):',
     '',
