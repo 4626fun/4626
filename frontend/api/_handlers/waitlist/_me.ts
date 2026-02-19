@@ -18,6 +18,8 @@ type ConnectedAccount = {
   source: string
   isPrimary: boolean
   isCanonicalSmartWallet: boolean
+  isCanonicalSolanaWallet: boolean
+  isOperationalSolanaWallet: boolean
   isEmbeddedEoa: boolean
   verifiedAt: string | null
 }
@@ -35,6 +37,8 @@ type WaitlistMeResponse = {
   embeddedWalletClientType: string | null
   cswAddress: string | null
   solanaWallet: string | null
+  canonicalSolanaWallet: string | null
+  operationalSolanaWallet: string | null
   farcasterFid: number | null
   preprovCoinAddress: string | null
   preprovCoinSymbol: string | null
@@ -54,8 +58,11 @@ function normalizeAddress(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-function normalizeLowerAddress(value: unknown): string {
-  return normalizeAddress(value).toLowerCase()
+function toAccountKey(value: unknown): string {
+  const normalized = normalizeAddress(value)
+  if (!normalized) return ''
+  if (/^0x[a-fA-F0-9]{40}$/.test(normalized)) return normalized.toLowerCase()
+  return normalized
 }
 
 function isSyntheticEmail(v: unknown): boolean {
@@ -76,7 +83,7 @@ function upsertAccount(
 ): void {
   const normalized = normalizeAddress(input.address)
   if (!normalized) return
-  const key = normalized.toLowerCase()
+  const key = toAccountKey(normalized)
   const prev = map.get(key)
   if (!prev) {
     map.set(key, {
@@ -87,6 +94,8 @@ function upsertAccount(
       source: input.source ?? 'profile',
       isPrimary: Boolean(input.isPrimary),
       isCanonicalSmartWallet: Boolean(input.isCanonicalSmartWallet),
+      isCanonicalSolanaWallet: Boolean(input.isCanonicalSolanaWallet),
+      isOperationalSolanaWallet: Boolean(input.isOperationalSolanaWallet),
       isEmbeddedEoa: Boolean(input.isEmbeddedEoa),
       verifiedAt: input.verifiedAt ?? null,
     })
@@ -100,6 +109,8 @@ function upsertAccount(
     source: prev.source === 'profile_wallets' ? prev.source : (input.source ?? prev.source),
     isPrimary: prev.isPrimary || Boolean(input.isPrimary),
     isCanonicalSmartWallet: prev.isCanonicalSmartWallet || Boolean(input.isCanonicalSmartWallet),
+    isCanonicalSolanaWallet: prev.isCanonicalSolanaWallet || Boolean(input.isCanonicalSolanaWallet),
+    isOperationalSolanaWallet: prev.isOperationalSolanaWallet || Boolean(input.isOperationalSolanaWallet),
     isEmbeddedEoa: prev.isEmbeddedEoa || Boolean(input.isEmbeddedEoa),
     verifiedAt: prev.verifiedAt ?? input.verifiedAt ?? null,
   })
@@ -140,6 +151,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       primary_embedded_eoa,
       base_sub_account,
       solana_wallet,
+      canonical_solana_wallet,
+      operational_solana_wallet,
       farcaster_fid,
       preprov_coin_address,
       preprov_coin_symbol,
@@ -231,12 +244,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     source: 'base_sub_account_column',
     isCanonicalSmartWallet: true,
   })
+  upsertAccount(accountMap, {
+    address: normalizeAddress(row.canonical_solana_wallet ?? row.solana_wallet),
+    chain: 'solana',
+    walletType: 'external_eoa',
+    source: 'canonical_solana_wallet_column',
+    isCanonicalSolanaWallet: true,
+  })
+  upsertAccount(accountMap, {
+    address: normalizeAddress(row.operational_solana_wallet),
+    chain: 'solana',
+    walletType: 'embedded_eoa',
+    source: 'operational_solana_wallet_column',
+    isOperationalSolanaWallet: true,
+  })
 
   const wallets = await db.sql`
     SELECT
       pw.address,
       pw.is_primary,
       pw.is_canonical_smart_wallet,
+      pw.is_canonical_solana_wallet,
+      pw.is_operational_solana_wallet,
       pw.is_embedded_eoa,
       pw.verified_at,
       w.chain,
@@ -258,6 +287,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       source: 'profile_wallets',
       isPrimary: walletRow.is_primary === true,
       isCanonicalSmartWallet: walletRow.is_canonical_smart_wallet === true,
+      isCanonicalSolanaWallet: walletRow.is_canonical_solana_wallet === true,
+      isOperationalSolanaWallet: walletRow.is_operational_solana_wallet === true,
       isEmbeddedEoa: walletRow.is_embedded_eoa === true,
       verifiedAt: walletRow.verified_at ? new Date(walletRow.verified_at).toISOString() : null,
     })
@@ -265,7 +296,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const connectedAccounts = Array.from(accountMap.values()).sort((a, b) => {
     const rank = (v: ConnectedAccount): number =>
-      (v.isPrimary ? 100 : 0) + (v.isCanonicalSmartWallet ? 10 : 0) + (v.isEmbeddedEoa ? 5 : 0)
+      (v.isPrimary ? 100 : 0) +
+      (v.isCanonicalSmartWallet ? 10 : 0) +
+      (v.isCanonicalSolanaWallet ? 8 : 0) +
+      (v.isOperationalSolanaWallet ? 4 : 0) +
+      (v.isEmbeddedEoa ? 5 : 0)
     return rank(b) - rank(a) || a.address.localeCompare(b.address)
   })
 
@@ -281,7 +316,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     embeddedWalletChain: typeof row.embedded_wallet_chain === 'string' ? row.embedded_wallet_chain : null,
     embeddedWalletClientType: typeof row.embedded_wallet_client_type === 'string' ? row.embedded_wallet_client_type : null,
     cswAddress: typeof row.csw_address === 'string' ? row.csw_address : null,
-    solanaWallet: typeof row.solana_wallet === 'string' ? row.solana_wallet : null,
+    canonicalSolanaWallet:
+      typeof row.canonical_solana_wallet === 'string'
+        ? row.canonical_solana_wallet
+        : typeof row.solana_wallet === 'string'
+          ? row.solana_wallet
+          : null,
+    operationalSolanaWallet: typeof row.operational_solana_wallet === 'string' ? row.operational_solana_wallet : null,
+    solanaWallet:
+      typeof row.canonical_solana_wallet === 'string'
+        ? row.canonical_solana_wallet
+        : typeof row.solana_wallet === 'string'
+          ? row.solana_wallet
+          : null,
     farcasterFid: typeof row.farcaster_fid === 'number' ? row.farcaster_fid : row.farcaster_fid ? Number(row.farcaster_fid) : null,
     preprovCoinAddress: typeof row.preprov_coin_address === 'string' ? row.preprov_coin_address : null,
     preprovCoinSymbol: typeof row.preprov_coin_symbol === 'string' ? row.preprov_coin_symbol : null,

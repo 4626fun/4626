@@ -100,6 +100,9 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'auth/privy': () => import('./auth/_privy.js'),
   'auth/verify': () => import('./auth/_verify.js'),
   'wallet/sync': () => import('./wallet/_sync.js'),
+  'wallet/solana/setCanonical': () => import('./wallet/solana/_setCanonical.js'),
+  'wallet/solana/sweep/enqueue': () => import('./wallet/solana/sweep/_enqueue.js'),
+  'wallet/solana/sweep/process': () => import('./wallet/solana/sweep/_process.js'),
   'portfolio/me': () => import('./portfolio/_me.js'),
 
   'creator-allowlist': () => import('./_creator-allowlist.js'),

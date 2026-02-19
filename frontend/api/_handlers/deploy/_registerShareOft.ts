@@ -18,12 +18,23 @@ import {
 import { logger } from '../../../server/_lib/logger.js'
 import { getApiContracts } from '../../../server/_lib/contracts.js'
 import { readDeployAuthFromRequest } from '../../../server/_lib/deployAuth.js'
+import { resolveMeteoraAlphaVaultConfig } from '../../../server/_lib/meteoraAlphaVaultConfig.js'
 
 type RegisterShareOftRequest = {
   shareOft?: string
   batcherAddress?: string
   solanaMint?: string
   solanaDecimals?: number | string
+  creatorToken?: string
+  expectedSolanaAmount?: string | number
+  shareDecimals?: number | string
+  buildOnly?: boolean
+}
+
+type SolanaBridgeIxPayload = {
+  programId: Hex
+  serializedAccounts: Hex[]
+  data: Hex
 }
 
 type RegisterShareOftResponse = {
@@ -37,6 +48,8 @@ type RegisterShareOftResponse = {
   txHash: Hex | null
   solanaMint: Hex | null
   solanaDecimals: number | null
+  meteoraAlphaVault: Hex | null
+  solanaIxs: SolanaBridgeIxPayload[]
 }
 
 type WrapRunner = {
@@ -132,6 +145,13 @@ const ERC20_METADATA_ABI = [
     inputs: [],
     outputs: [{ type: 'string' }],
   },
+  {
+    type: 'function',
+    name: 'decimals',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint8' }],
+  },
 ] as const
 
 function isBytes32Hex(value: unknown): value is Hex {
@@ -162,6 +182,36 @@ function parseDecimals(value: unknown): number | null {
     if (Number.isFinite(n) && n >= 0 && n <= 255) return Math.floor(n)
   }
   return null
+}
+
+function parseBigIntLike(value: unknown): bigint | null {
+  if (typeof value === 'bigint') return value >= 0n ? value : null
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return BigInt(Math.floor(value))
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = BigInt(value.trim())
+      return parsed >= 0n ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function toRemoteAmountExact(baseAmount: bigint, baseDecimals: number, solanaDecimals: number): bigint {
+  if (baseAmount <= 0n) throw new Error('invalid_base_amount')
+  if (baseDecimals === solanaDecimals) return baseAmount
+  if (solanaDecimals > baseDecimals) {
+    const diff = BigInt(solanaDecimals - baseDecimals)
+    const factor = 10n ** diff
+    return baseAmount * factor
+  }
+  const diff = BigInt(baseDecimals - solanaDecimals)
+  const factor = 10n ** diff
+  if (baseAmount % factor !== 0n) {
+    throw new Error('base_amount_not_exactly_convertible_to_remote_units')
+  }
+  return baseAmount / factor
 }
 
 function readSolanaDecimalsFromEnv(): number {
@@ -264,6 +314,37 @@ function readDynamicProvisionerHealthUrls(provisionerUrls: string[]): string[] {
   const explicit = splitUrlList(listEnv)
   if (explicit.length > 0) return explicit
   return provisionerUrls.map((url) => readDynamicProvisionerHealthUrl(url))
+}
+
+function toMeteoraIxsEndpoint(urlRaw: string): string {
+  try {
+    const url = new URL(urlRaw)
+    url.pathname = '/meteora-ixs'
+    url.search = ''
+    url.hash = ''
+    return url.toString()
+  } catch {
+    return ''
+  }
+}
+
+function readMeteoraProvisionerUrls(dynamicProvisionerUrls: string[]): string[] {
+  const listEnv = String(process.env.METEORA_IX_PROVISIONER_URLS ?? '').trim()
+  const singleEnv = String(process.env.METEORA_IX_PROVISIONER_URL ?? '').trim()
+  const explicit = [...splitUrlList(listEnv), ...splitUrlList(singleEnv)]
+  const source = explicit.length > 0 ? explicit : dynamicProvisionerUrls.map((url) => toMeteoraIxsEndpoint(url)).filter(Boolean)
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const url of source) {
+    if (!url || seen.has(url)) continue
+    seen.add(url)
+    out.push(url)
+  }
+  return out
+}
+
+function readMeteoraProvisionerSecret(): string {
+  return String(process.env.METEORA_IX_PROVISIONER_SECRET ?? readDynamicProvisionerSecret()).trim()
 }
 
 async function readShareOftMetadata(params: {
@@ -768,6 +849,87 @@ async function tryProvisionDynamicRoute(params: {
   )
 }
 
+async function buildMeteoraIxsViaProvisioner(params: {
+  creatorToken: Address
+  shareOft: Address
+  expectedRemoteAmount: bigint
+  meteoraAlphaVault: string
+  alphaVaultProgramId: string
+  depositAccounts: Array<{ pubkey: string; isSigner: boolean; isWritable: boolean }>
+  provisionerUrls: string[]
+  provisionerSecret: string
+  requestTimeoutMs: number
+}): Promise<{ meteoraAlphaVault: Hex; solanaIxs: SolanaBridgeIxPayload[]; runner: string | null }> {
+  if (params.provisionerUrls.length === 0) {
+    throw new Error('Meteora ix provisioner is not configured (METEORA_IX_PROVISIONER_URL[S]).')
+  }
+  const failures: string[] = []
+  for (const url of params.provisionerUrls) {
+    try {
+      const response = await fetchWithTimeout(
+        url,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(params.provisionerSecret ? { Authorization: `Bearer ${params.provisionerSecret}` } : {}),
+          },
+          body: JSON.stringify({
+            creatorToken: params.creatorToken,
+            shareOft: params.shareOft,
+            meteoraAlphaVault: params.meteoraAlphaVault,
+            alphaVaultProgramId: params.alphaVaultProgramId,
+            expectedRemoteAmount: params.expectedRemoteAmount.toString(),
+            depositAccounts: params.depositAccounts,
+          }),
+        },
+        params.requestTimeoutMs,
+      )
+      const rawBody = await response.text().catch(() => '')
+      const json = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : null
+      if (!response.ok || !json || json.success !== true) {
+        const detail = typeof json?.error === 'string' ? json.error : rawBody.slice(0, 240)
+        throw new Error(`status=${response.status} ${detail}`)
+      }
+      const data = (json.data ?? json) as Record<string, unknown>
+      const meteoraAlphaVault = String(data.meteoraAlphaVault ?? '').trim()
+      const solanaIxsRaw = Array.isArray(data.solanaIxs) ? data.solanaIxs : []
+      if (!isBytes32Hex(meteoraAlphaVault)) {
+        throw new Error('provisioner returned invalid meteoraAlphaVault')
+      }
+      const solanaIxs: SolanaBridgeIxPayload[] = []
+      for (const item of solanaIxsRaw) {
+        if (!item || typeof item !== 'object') throw new Error('provisioner returned invalid solanaIxs item')
+        const row = item as Record<string, unknown>
+        const programId = String(row.programId ?? '').trim()
+        const dataHex = String(row.data ?? '').trim()
+        const serializedAccountsRaw = Array.isArray(row.serializedAccounts) ? row.serializedAccounts : []
+        if (!isBytes32Hex(programId) || !/^0x[0-9a-fA-F]*$/.test(dataHex)) {
+          throw new Error('provisioner returned invalid ix fields')
+        }
+        const serializedAccounts = serializedAccountsRaw
+          .map((v) => String(v ?? '').trim())
+          .filter((v) => /^0x[0-9a-fA-F]*$/.test(v)) as Hex[]
+        if (serializedAccounts.length === 0) throw new Error('provisioner returned ix with empty serializedAccounts')
+        solanaIxs.push({
+          programId: programId as Hex,
+          serializedAccounts,
+          data: dataHex as Hex,
+        })
+      }
+      if (solanaIxs.length === 0) throw new Error('provisioner returned empty solanaIxs')
+      return {
+        meteoraAlphaVault: meteoraAlphaVault as Hex,
+        solanaIxs,
+        runner: typeof (data as any).runner === 'string' ? String((data as any).runner) : null,
+      }
+    } catch (error) {
+      failures.push(`${url}: ${describeFetchFailure(error)}`)
+    }
+  }
+  throw new Error(`All Meteora ix provisioner endpoints failed. ${failures.join(' | ')}`)
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setNoStore(res)
   if (handleOptions(req, res)) return
@@ -788,6 +950,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid shareOft address' } satisfies ApiEnvelope<never>)
   }
   const shareOft = getAddress(shareOftRaw)
+  const buildOnly = body?.buildOnly === true
+  const creatorTokenRaw = typeof body?.creatorToken === 'string' ? body.creatorToken.trim() : ''
+  const creatorToken = isAddress(creatorTokenRaw) ? getAddress(creatorTokenRaw) : null
+  const expectedSolanaAmountBase = parseBigIntLike(body?.expectedSolanaAmount)
+  const requestedShareDecimals = parseDecimals(body?.shareDecimals)
 
   const contracts = getApiContracts()
   const batcherRaw = typeof body?.batcherAddress === 'string' && isAddress(body.batcherAddress)
@@ -862,6 +1029,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ])
     const alreadyRegistered = Boolean(alreadyRegisteredRaw)
     const adapterOwner = getAddress(String(adapterOwnerRaw) as Address)
+    const solanaDecimals = parseDecimals(body?.solanaDecimals) ?? readSolanaDecimalsFromEnv()
+
+    let meteoraAlphaVault: Hex | null = null
+    let solanaIxs: SolanaBridgeIxPayload[] = []
+    if (creatorToken) {
+      if (!expectedSolanaAmountBase || expectedSolanaAmountBase <= 0n) {
+        return res.status(400).json({
+          success: false,
+          error: 'expectedSolanaAmount is required when creatorToken is provided.',
+        } satisfies ApiEnvelope<never>)
+      }
+      const meteoraConfig = await resolveMeteoraAlphaVaultConfig({ creatorToken })
+      if (!meteoraConfig) {
+        return res.status(409).json({
+          success: false,
+          error: `Missing Meteora Alpha Vault mapping for creator token ${creatorToken}.`,
+        } satisfies ApiEnvelope<never>)
+      }
+      const shareDecimals =
+        requestedShareDecimals ??
+        (await publicClient
+          .readContract({
+            address: shareOft,
+            abi: ERC20_METADATA_ABI,
+            functionName: 'decimals',
+          })
+          .then((v) => Number(v as number))
+          .catch(() => null)) ??
+        18
+      let expectedRemoteAmount: bigint
+      try {
+        expectedRemoteAmount = toRemoteAmountExact(expectedSolanaAmountBase, shareDecimals, solanaDecimals)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return res.status(409).json({
+          success: false,
+          error: `Invalid Solana allocation amount for Meteora ix generation: ${message}`,
+        } satisfies ApiEnvelope<never>)
+      }
+      const dynamicProvisionerUrls = readDynamicProvisionerUrls()
+      const meteoraProvisionerUrls = readMeteoraProvisionerUrls(dynamicProvisionerUrls)
+      const meteoraProvisionerSecret = readMeteoraProvisionerSecret()
+      const meteoraPayload = await buildMeteoraIxsViaProvisioner({
+        creatorToken,
+        shareOft,
+        expectedRemoteAmount,
+        meteoraAlphaVault: meteoraConfig.meteoraAlphaVault,
+        alphaVaultProgramId: meteoraConfig.alphaVaultProgramId,
+        depositAccounts: meteoraConfig.depositAccounts,
+        provisionerUrls: meteoraProvisionerUrls,
+        provisionerSecret: meteoraProvisionerSecret,
+        requestTimeoutMs: readProvisionerRequestTimeoutMs(),
+      })
+      meteoraAlphaVault = meteoraPayload.meteoraAlphaVault
+      solanaIxs = meteoraPayload.solanaIxs
+      logger.info('[deploy/registerShareOft] Built Meteora ix payload', {
+        creatorToken,
+        shareOft,
+        configSource: meteoraConfig.source,
+        expectedSolanaAmountBase: expectedSolanaAmountBase.toString(),
+        expectedRemoteAmount: expectedRemoteAmount.toString(),
+        meteoraAlphaVault,
+        ixCount: solanaIxs.length,
+      })
+    }
 
     if (alreadyRegistered) {
       return res.status(200).json({
@@ -877,6 +1109,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           txHash: null,
           solanaMint: null,
           solanaDecimals: null,
+          meteoraAlphaVault,
+          solanaIxs,
+        },
+      } satisfies ApiEnvelope<RegisterShareOftResponse>)
+    }
+
+    if (buildOnly) {
+      const hintedMint = typeof body?.solanaMint === 'string' && isBytes32Hex(body.solanaMint.trim())
+        ? (body.solanaMint.trim() as Hex)
+        : readSolanaMintFromEnv()
+      return res.status(200).json({
+        success: true,
+        data: {
+          shareOft,
+          batcher,
+          adapter,
+          destination,
+          adapterOwner,
+          signer: null,
+          registered: false,
+          txHash: null,
+          solanaMint: hintedMint,
+          solanaDecimals,
+          meteoraAlphaVault,
+          solanaIxs,
         },
       } satisfies ApiEnvelope<RegisterShareOftResponse>)
     }
@@ -926,7 +1183,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         })
         .then((v) => (typeof v === 'string' && isAddress(v) ? getAddress(v as Address) : ZERO_ADDRESS))
         .catch(() => ZERO_ADDRESS)
-    const solanaDecimals = parseDecimals(body?.solanaDecimals) ?? readSolanaDecimalsFromEnv()
 
     const readRouteScalar = async (mint: Hex): Promise<bigint | null> =>
       publicClient
@@ -1072,6 +1328,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         txHash,
         solanaMint,
         solanaDecimals,
+        meteoraAlphaVault,
+        solanaIxs,
       },
     } satisfies ApiEnvelope<RegisterShareOftResponse>)
   } catch (err) {

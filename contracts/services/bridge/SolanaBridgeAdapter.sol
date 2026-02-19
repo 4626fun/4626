@@ -183,6 +183,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     error CcaAuctionNotAllowed(address auction);
     error InvalidAmount();
     error InvalidAddress();
+    error InvalidIxPayload();
     error UnauthorizedTwin(address caller, address expectedTwin);
     error BridgeFailed();
     error UnauthorizedFeeKeeper(bytes32 keeperPubkey);
@@ -292,37 +293,28 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         uint256 amount,
         bytes32 solanaDestination
     ) external payable nonReentrant {
-        if (!isRegistered[token]) revert TokenNotRegistered();
-        if (amount == 0) revert InvalidAmount();
-        if (solanaDestination == bytes32(0)) revert InvalidAddress();
-        
-        bytes32 solanaMint = tokenToSolanaMint[token];
-        if (solanaMint == bytes32(0)) revert InvalidAddress();
-
-        uint8 baseDecimals = tokenToBaseDecimals[token];
-        uint8 solanaDecimals = tokenToSolanaDecimals[token];
-        
-        // Pull tokens from user
-        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-        
-        // Approve bridge
-        IERC20(token).forceApprove(BRIDGE, amount);
-        
-        // Build transfer struct
-        // NOTE: The Base↔Solana bridge expects `remoteAmount` in *remote* token units (uint64).
-        // We convert Base token units → Solana token units *exactly* (reverting if rounding would be required).
-        IBaseSolanaBridge.Transfer memory transfer = IBaseSolanaBridge.Transfer({
-            localToken: token,
-            remoteToken: solanaMint,
-            to: solanaDestination,
-            remoteAmount: _toRemoteAmountExact(amount, baseDecimals, solanaDecimals)
-        });
-        
-        // Bridge with no additional calls
         IBaseSolanaBridge.Ix[] memory ixs = new IBaseSolanaBridge.Ix[](0);
-        IBaseSolanaBridge(BRIDGE).bridgeToken{value: msg.value}(transfer, ixs);
-        
-        emit BridgeToSolana(msg.sender, solanaDestination, token, amount);
+        _bridgeToSolana(token, amount, solanaDestination, ixs);
+    }
+
+    /**
+     * @notice Bridge ■TOKENs (ShareOFT) from Base to Solana with explicit Solana instructions.
+     * @dev This is used by deploy-time Meteora auto-deposit to execute post-bridge ixs on Solana.
+     */
+    function bridgeToSolanaWithIxs(
+        address token,
+        uint256 amount,
+        bytes32 solanaDestination,
+        IBaseSolanaBridge.Ix[] calldata ixs
+    ) external payable nonReentrant {
+        if (ixs.length == 0) revert InvalidIxPayload();
+        for (uint256 i = 0; i < ixs.length; i++) {
+            if (ixs[i].programId == bytes32(0)) revert InvalidIxPayload();
+            if (ixs[i].serializedAccounts.length == 0) revert InvalidIxPayload();
+            if (ixs[i].data.length == 0) revert InvalidIxPayload();
+        }
+        IBaseSolanaBridge.Ix[] memory copiedIxs = ixs;
+        _bridgeToSolana(token, amount, solanaDestination, copiedIxs);
     }
 
     /**
@@ -838,6 +830,41 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     function _toUint64(uint256 v) internal pure returns (uint64) {
         if (v > type(uint64).max) revert InvalidAmount();
         return uint64(v);
+    }
+
+    function _bridgeToSolana(
+        address token,
+        uint256 amount,
+        bytes32 solanaDestination,
+        IBaseSolanaBridge.Ix[] memory ixs
+    ) internal {
+        if (!isRegistered[token]) revert TokenNotRegistered();
+        if (amount == 0) revert InvalidAmount();
+        if (solanaDestination == bytes32(0)) revert InvalidAddress();
+
+        bytes32 solanaMint = tokenToSolanaMint[token];
+        if (solanaMint == bytes32(0)) revert InvalidAddress();
+
+        uint8 baseDecimals = tokenToBaseDecimals[token];
+        uint8 solanaDecimals = tokenToSolanaDecimals[token];
+
+        // Pull tokens from user
+        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+
+        // Approve bridge
+        IERC20(token).forceApprove(BRIDGE, amount);
+
+        // NOTE: The Base↔Solana bridge expects `remoteAmount` in *remote* token units (uint64).
+        // We convert Base token units → Solana token units *exactly* (reverting if rounding would be required).
+        IBaseSolanaBridge.Transfer memory transfer = IBaseSolanaBridge.Transfer({
+            localToken: token,
+            remoteToken: solanaMint,
+            to: solanaDestination,
+            remoteAmount: _toRemoteAmountExact(amount, baseDecimals, solanaDecimals)
+        });
+
+        IBaseSolanaBridge(BRIDGE).bridgeToken{value: msg.value}(transfer, ixs);
+        emit BridgeToSolana(msg.sender, solanaDestination, token, amount);
     }
 
     // ================================

@@ -9,6 +9,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {ICreatorRegistry} from "../../interfaces/core/ICreatorRegistry.sol";
 import {ICreatorGaugeController} from "../../interfaces/core/ICreatorGaugeController.sol";
 import {ICreatorOVault} from "../../interfaces/core/ICreatorOVault.sol";
+import {IBaseSolanaBridge} from "../../services/bridge/interfaces/IBaseSolanaBridge.sol";
 import {CreatorLinearVesting} from "../vesting/CreatorLinearVesting.sol";
 
 interface IUniversalCreate2DeployerFromStore {
@@ -58,6 +59,12 @@ interface IOwnableTransfer {
 
 interface ISolanaBridgeAdapter {
     function bridgeToSolana(address token, uint256 amount, bytes32 solanaDestination) external payable;
+    function bridgeToSolanaWithIxs(
+        address token,
+        uint256 amount,
+        bytes32 solanaDestination,
+        IBaseSolanaBridge.Ix[] calldata ixs
+    ) external payable;
 }
 
 interface IOFTBootstrapRegistry {
@@ -195,6 +202,8 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         uint128 requiredRaise;
         uint256 floorPriceQ96;
         bytes auctionSteps;
+        bytes32 meteoraAlphaVault;
+        IBaseSolanaBridge.Ix[] solanaIxs;
     }
 
     struct PermitData {
@@ -289,6 +298,9 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     error AuctionShareOFTMismatch();
     error AuctionAmountMismatch();
     error Phase2Missing();
+    error MissingMeteoraAlphaVault();
+    error MissingSolanaBridgeIxs();
+    error InvalidSolanaBridgeIx(uint256 index);
 
     ICreatorRegistry public immutable registry;
     IUniversalBytecodeStore public immutable bytecodeStore;
@@ -392,7 +404,10 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     event SolanaAllocationBridged(
         address indexed shareOFT,
         uint256 amount,
-        bytes32 solanaDestination
+        bytes32 indexed solanaDestination,
+        bytes32 indexed meteoraAlphaVault,
+        uint256 expectedBridgedAmount,
+        uint256 solanaIxCount
     );
 
     event SolanaConfigSet(
@@ -642,7 +657,9 @@ contract CreatorVaultDeployer is ReentrancyGuard {
                 depositAmount: params.depositAmount,
                 requiredRaise: params.requiredRaise,
                 floorPriceQ96: params.floorPriceQ96,
-                auctionSteps: params.auctionSteps
+                auctionSteps: params.auctionSteps,
+                meteoraAlphaVault: bytes32(0),
+                solanaIxs: new IBaseSolanaBridge.Ix[](0)
             })
         );
     }
@@ -683,7 +700,9 @@ contract CreatorVaultDeployer is ReentrancyGuard {
                 depositAmount: params.depositAmount,
                 requiredRaise: params.requiredRaise,
                 floorPriceQ96: params.floorPriceQ96,
-                auctionSteps: params.auctionSteps
+                auctionSteps: params.auctionSteps,
+                meteoraAlphaVault: bytes32(0),
+                solanaIxs: new IBaseSolanaBridge.Ix[](0)
             })
         );
     }
@@ -842,13 +861,24 @@ contract CreatorVaultDeployer is ReentrancyGuard {
 
         // 2. Solana allocation — bridge 20% to Solana via SolanaBridgeAdapter
         if (solanaAmount > 0 && solanaBridgeAdapter != address(0) && solanaDestination != bytes32(0)) {
+            if (params.meteoraAlphaVault == bytes32(0)) revert MissingMeteoraAlphaVault();
+            if (params.solanaIxs.length == 0) revert MissingSolanaBridgeIxs();
+            _validateSolanaIxs(params.solanaIxs);
             IERC20(params.shareOFT).forceApprove(solanaBridgeAdapter, solanaAmount);
-            ISolanaBridgeAdapter(solanaBridgeAdapter).bridgeToSolana(
+            ISolanaBridgeAdapter(solanaBridgeAdapter).bridgeToSolanaWithIxs(
                 params.shareOFT,
                 solanaAmount,
-                solanaDestination
+                solanaDestination,
+                params.solanaIxs
             );
-            emit SolanaAllocationBridged(params.shareOFT, solanaAmount, solanaDestination);
+            emit SolanaAllocationBridged(
+                params.shareOFT,
+                solanaAmount,
+                solanaDestination,
+                params.meteoraAlphaVault,
+                solanaAmount,
+                params.solanaIxs.length
+            );
         } else if (solanaAmount > 0) {
             // If Solana adapter not configured, add Solana portion to vesting.
             vestingAmount += solanaAmount;
@@ -1086,6 +1116,14 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     function _defaultTickSpacingQ96(uint256 floorPriceQ96) internal pure returns (uint256) {
         uint256 spacing = floorPriceQ96 / 100;
         return spacing > 1 ? spacing : 2;
+    }
+
+    function _validateSolanaIxs(IBaseSolanaBridge.Ix[] memory ixs) internal pure {
+        for (uint256 i = 0; i < ixs.length; i++) {
+            if (ixs[i].programId == bytes32(0)) revert InvalidSolanaBridgeIx(i);
+            if (ixs[i].serializedAccounts.length == 0) revert InvalidSolanaBridgeIx(i);
+            if (ixs[i].data.length == 0) revert InvalidSolanaBridgeIx(i);
+        }
     }
 
     function _toLower(string memory input) internal pure returns (string memory) {

@@ -14,6 +14,7 @@ import {
 import { resolveLensUserByOwner } from '../../../server/_lib/lensAccounts.js'
 import { getGroveChainId, tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { resolveCanonicalSolanaWalletByPrincipalAddress } from '../../../server/_lib/canonicalSolanaResolver.js'
 import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
 import { isAdminAddress } from '../../../server/_lib/session.js'
 
@@ -76,6 +77,8 @@ function isValidSolanaAddress(value: string): boolean {
 }
 
 async function resolveProfileSolanaAddress(db: Db, ownerAddress: string): Promise<string | null> {
+  const canonical = await resolveCanonicalSolanaWalletByPrincipalAddress(ownerAddress)
+  if (canonical) return canonical
   try {
     const result = await db.sql`
       SELECT p.solana_wallet

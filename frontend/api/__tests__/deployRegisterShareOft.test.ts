@@ -9,12 +9,14 @@ const {
   createPublicClientMock,
   createWalletClientMock,
   privateKeyToAccountMock,
+  resolveMeteoraConfigMock,
 } = vi.hoisted(() => ({
   readDeployAuthMock: vi.fn(),
   getApiContractsMock: vi.fn(),
   createPublicClientMock: vi.fn(),
   createWalletClientMock: vi.fn(),
   privateKeyToAccountMock: vi.fn(),
+  resolveMeteoraConfigMock: vi.fn(),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -30,6 +32,10 @@ vi.mock('../../server/_lib/deployAuth.js', () => ({
 
 vi.mock('../../server/_lib/contracts.js', () => ({
   getApiContracts: getApiContractsMock,
+}))
+
+vi.mock('../../server/_lib/meteoraAlphaVaultConfig.js', () => ({
+  resolveMeteoraAlphaVaultConfig: resolveMeteoraConfigMock,
 }))
 
 vi.mock('viem', async () => {
@@ -57,6 +63,7 @@ describe('deploy registerShareOft handler', () => {
     getApiContractsMock.mockReturnValue({
       creatorVaultBatcher: '0x32e91185B92c6c13dd56D745aBf24F009cdD3019',
     })
+    resolveMeteoraConfigMock.mockResolvedValue(null)
   })
 
   it('returns 401 when unauthenticated', async () => {
@@ -107,6 +114,86 @@ describe('deploy registerShareOft handler', () => {
     expect(res.body?.data?.registered).toBe(true)
     expect(res.body?.data?.txHash).toBe(null)
     expect(createWalletClientMock).not.toHaveBeenCalled()
+  })
+
+  it('returns Meteora bridge ixs payload for creator-scoped build requests', async () => {
+    const restoreEnv = applyEnv({
+      METEORA_IX_PROVISIONER_URL: 'https://provisioner.4626.fun/meteora-ixs',
+      METEORA_IX_PROVISIONER_SECRET: 'secret',
+    })
+    const originalFetch = globalThis.fetch
+    try {
+      resolveMeteoraConfigMock.mockResolvedValue({
+        creatorToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+        meteoraAlphaVault: '11111111111111111111111111111111',
+        alphaVaultProgramId: '11111111111111111111111111111111',
+        depositAccounts: [{ pubkey: '11111111111111111111111111111111', isSigner: false, isWritable: true }],
+        source: 'env',
+      })
+
+      const mockPublicClient = {
+        readContract: vi.fn(async (args: any) => {
+          switch (args.functionName) {
+            case 'solanaBridgeAdapter':
+              return '0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return true
+            case 'owner':
+              return '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80'
+            case 'decimals':
+              return 18
+            default:
+              throw new Error(`Unexpected read ${String(args.functionName)}`)
+          }
+        }),
+        getBytecode: vi.fn(async () => '0x1234'),
+      }
+      createPublicClientMock.mockReturnValue(mockPublicClient as any)
+      ;(globalThis as any).fetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            success: true,
+            data: {
+              meteoraAlphaVault:
+                '0x1111111111111111111111111111111111111111111111111111111111111111',
+              solanaIxs: [
+                {
+                  programId: '0x2222222222222222222222222222222222222222222222222222222222222222',
+                  serializedAccounts: ['0xabcdef'],
+                  data: '0xdeadbeef',
+                },
+              ],
+            },
+          }),
+      })) as any
+
+      const req = createMockReq({
+        method: 'POST',
+        body: {
+          shareOft: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+          creatorToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+          expectedSolanaAmount: '1000000000000000000',
+          buildOnly: true,
+        },
+      })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.success).toBe(true)
+      expect(res.body?.data?.meteoraAlphaVault).toBe(
+        '0x1111111111111111111111111111111111111111111111111111111111111111',
+      )
+      expect(Array.isArray(res.body?.data?.solanaIxs)).toBe(true)
+      expect(res.body?.data?.solanaIxs?.length).toBe(1)
+    } finally {
+      ;(globalThis as any).fetch = originalFetch
+      restoreEnv()
+    }
   })
 
   it('returns 409 when shareOft has no deployed bytecode yet', async () => {
@@ -272,6 +359,10 @@ describe('deploy registerShareOft handler', () => {
               return false
             case 'owner':
               return '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80'
+            case 'name':
+              return 'Creator Share'
+            case 'symbol':
+              return 'CSHARE'
             default:
               throw new Error(`Unexpected read ${String(args.functionName)}`)
           }
@@ -328,6 +419,10 @@ describe('deploy registerShareOft handler', () => {
               return '0x0000000000000000000000000000000000000000'
             case 'scalars':
               return 1n
+            case 'name':
+              return 'Creator Share'
+            case 'symbol':
+              return 'CSHARE'
             default:
               throw new Error(`Unexpected read ${String(args.functionName)}`)
           }

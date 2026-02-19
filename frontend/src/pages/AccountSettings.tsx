@@ -23,6 +23,8 @@ type ConnectedAccount = {
   source: string
   isPrimary: boolean
   isCanonicalSmartWallet: boolean
+  isCanonicalSolanaWallet: boolean
+  isOperationalSolanaWallet: boolean
   isEmbeddedEoa: boolean
   verifiedAt: string | null
 }
@@ -40,6 +42,8 @@ type WaitlistMeResponse = {
   embeddedWalletClientType: string | null
   cswAddress: string | null
   solanaWallet: string | null
+  canonicalSolanaWallet: string | null
+  operationalSolanaWallet: string | null
   farcasterFid: number | null
   preprovCoinAddress: string | null
   preprovCoinSymbol: string | null
@@ -54,11 +58,23 @@ type WaitlistMeResponse = {
   connectedAccounts: ConnectedAccount[]
 }
 
+type SetCanonicalSolanaResponse = {
+  canonicalSolanaWallet: string
+  operationalSolanaWallet: string | null
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function isEvmAddress(value: string | null | undefined): value is string {
   const input = typeof value === 'string' ? value.trim() : ''
   return /^0x[a-fA-F0-9]{40}$/.test(input)
+}
+
+function isSolanaAddress(value: string | null | undefined): value is string {
+  const input = typeof value === 'string' ? value.trim() : ''
+  if (!input) return false
+  if (input.length < 32 || input.length > 44) return false
+  return /^[1-9A-HJ-NP-Za-km-z]+$/.test(input)
 }
 
 function formatRole(
@@ -77,6 +93,8 @@ function formatRole(
 
   if (account.isPrimary) labels.push('Primary')
   if (isCanonicalSmartWallet) labels.push('Canonical Smart Wallet from Zora')
+  if (account.isCanonicalSolanaWallet) labels.push('Canonical Solana Wallet')
+  if (account.isOperationalSolanaWallet) labels.push('Operational Solana Wallet')
   if (walletType === 'smart_wallet' && primarySmartWalletLc && primarySmartWalletLc === addressLc) labels.push('Primary Smart Wallet')
   if (account.isEmbeddedEoa) labels.push('Embedded EOA')
   if (!isCanonicalSmartWallet && walletType === 'smart_wallet') {
@@ -297,6 +315,8 @@ export function AccountSettings() {
   const [ownersActionMessage, setOwnersActionMessage] = useState<string | null>(null)
   const [ownersActionError, setOwnersActionError] = useState<string | null>(null)
   const [revokeBusyIndex, setRevokeBusyIndex] = useState<number | null>(null)
+  const [selectedCanonicalSolanaWallet, setSelectedCanonicalSolanaWallet] = useState('')
+  const [solanaWalletActionBusy, setSolanaWalletActionBusy] = useState(false)
 
   const loadProfile = useCallback(async () => {
     setLoading(true)
@@ -334,6 +354,51 @@ export function AccountSettings() {
     return trimmed !== (profile?.email ?? '').trim().toLowerCase()
   }, [emailDraft, profile?.email])
 
+  const canonicalSolanaWalletAddress = useMemo(() => {
+    const canonical = profile?.canonicalSolanaWallet
+    const legacy = profile?.solanaWallet
+    if (isSolanaAddress(canonical)) return canonical
+    if (isSolanaAddress(legacy)) return legacy
+    return null
+  }, [profile?.canonicalSolanaWallet, profile?.solanaWallet])
+
+  const operationalSolanaWalletAddress = useMemo(() => {
+    const operational = profile?.operationalSolanaWallet
+    if (isSolanaAddress(operational)) return operational
+    return null
+  }, [profile?.operationalSolanaWallet])
+
+  const linkedSolanaWallets = useMemo(() => {
+    const map = new Map<string, { address: string; summary: string }>()
+    for (const account of profile?.connectedAccounts ?? []) {
+      if (!isSolanaAddress(account.address)) continue
+      const chain = typeof account.chain === 'string' ? account.chain.trim().toLowerCase() : ''
+      if (chain && !chain.includes('solana')) continue
+      map.set(account.address, {
+        address: account.address,
+        summary: formatAccountSummary(account),
+      })
+    }
+    if (canonicalSolanaWalletAddress && !map.has(canonicalSolanaWalletAddress)) {
+      map.set(canonicalSolanaWalletAddress, {
+        address: canonicalSolanaWalletAddress,
+        summary: 'Canonical Solana Wallet',
+      })
+    }
+    if (operationalSolanaWalletAddress && !map.has(operationalSolanaWalletAddress)) {
+      map.set(operationalSolanaWalletAddress, {
+        address: operationalSolanaWalletAddress,
+        summary: 'Operational Solana Wallet',
+      })
+    }
+    return Array.from(map.values())
+  }, [canonicalSolanaWalletAddress, operationalSolanaWalletAddress, profile?.connectedAccounts])
+
+  useEffect(() => {
+    const fallback = canonicalSolanaWalletAddress ?? linkedSolanaWallets[0]?.address ?? ''
+    setSelectedCanonicalSolanaWallet((prev) => (prev && linkedSolanaWallets.some((w) => w.address === prev) ? prev : fallback))
+  }, [canonicalSolanaWalletAddress, linkedSolanaWallets])
+
   const onSaveEmail = useCallback(async () => {
     if (!canSaveEmail || saving) return
     setSaving(true)
@@ -364,6 +429,50 @@ export function AccountSettings() {
       setSaving(false)
     }
   }, [canSaveEmail, emailDraft, loadProfile, profile?.email, saving])
+
+  const canSetCanonicalSolanaWallet = useMemo(() => {
+    if (!isSolanaAddress(selectedCanonicalSolanaWallet)) return false
+    if (!linkedSolanaWallets.some((wallet) => wallet.address === selectedCanonicalSolanaWallet)) return false
+    if (solanaWalletActionBusy) return false
+    if (!canonicalSolanaWalletAddress) return true
+    return selectedCanonicalSolanaWallet !== canonicalSolanaWalletAddress
+  }, [canonicalSolanaWalletAddress, linkedSolanaWallets, selectedCanonicalSolanaWallet, solanaWalletActionBusy])
+
+  const onSetCanonicalSolanaWallet = useCallback(async () => {
+    if (!canSetCanonicalSolanaWallet || !isSolanaAddress(selectedCanonicalSolanaWallet)) return
+    setSolanaWalletActionBusy(true)
+    setSuccess(null)
+    setError(null)
+    try {
+      const res = await apiFetch('/api/wallet/solana/setCanonical', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ wallet: selectedCanonicalSolanaWallet }),
+      })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<SetCanonicalSolanaResponse> | null
+      if (!res.ok || !json?.success || !json?.data?.canonicalSolanaWallet) {
+        throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to set canonical Solana wallet.')
+      }
+      const nextCanonical = json.data.canonicalSolanaWallet
+      const nextOperational = json.data.operationalSolanaWallet ?? null
+      setProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              canonicalSolanaWallet: nextCanonical,
+              operationalSolanaWallet: nextOperational,
+              solanaWallet: nextCanonical,
+            }
+          : prev,
+      )
+      setSuccess('Canonical Solana wallet updated.')
+      void loadProfile()
+    } catch (e: any) {
+      setError(typeof e?.message === 'string' ? e.message : 'Failed to set canonical Solana wallet.')
+    } finally {
+      setSolanaWalletActionBusy(false)
+    }
+  }, [canSetCanonicalSolanaWallet, loadProfile, selectedCanonicalSolanaWallet])
 
   const onCopyAddress = useCallback((address: string) => {
     void navigator.clipboard.writeText(address).then(() => {
@@ -400,7 +509,8 @@ export function AccountSettings() {
   const zoraCanonicalSeedIdentifier = useMemo(() => {
     const fromHandle = normalizeHandle(profile?.preprovZoraHandle)
     if (fromHandle) return fromHandle
-    if (isEvmAddress(profile?.primaryWallet)) return profile.primaryWallet
+    const primaryWallet = profile?.primaryWallet
+    if (isEvmAddress(primaryWallet)) return primaryWallet
     return undefined
   }, [profile?.preprovZoraHandle, profile?.primaryWallet])
   const zoraCanonicalSeedQuery = useZoraProfile(zoraCanonicalSeedIdentifier)
@@ -446,7 +556,8 @@ export function AccountSettings() {
 
   const primarySmartWalletAddress = useMemo(() => {
     if (canonicalSmartWalletAddress) return canonicalSmartWalletAddress
-    if (isEvmAddress(profile?.primarySmartWallet)) return profile.primarySmartWallet
+    const primarySmartWallet = profile?.primarySmartWallet
+    if (isEvmAddress(primarySmartWallet)) return primarySmartWallet
     return null
   }, [canonicalSmartWalletAddress, profile?.primarySmartWallet])
 
@@ -697,7 +808,8 @@ export function AccountSettings() {
     const fromHandle = normalizeHandle(profile?.preprovZoraHandle)
     if (fromHandle) return fromHandle
     if (canonicalSmartWalletAddress) return canonicalSmartWalletAddress
-    if (isEvmAddress(profile?.primaryWallet)) return profile.primaryWallet
+    const primaryWallet = profile?.primaryWallet
+    if (isEvmAddress(primaryWallet)) return primaryWallet
     return undefined
   }, [canonicalSmartWalletAddress, profile?.preprovZoraHandle, profile?.primaryWallet])
 
@@ -706,9 +818,11 @@ export function AccountSettings() {
   const zoraHandle = normalizeHandle(typeof zoraProfile?.handle === 'string' ? zoraProfile.handle : null)
 
   const creatorCoinAddress = useMemo(() => {
-    const fromProfile = isEvmAddress(zoraProfile?.creatorCoin?.address) ? zoraProfile.creatorCoin.address : null
+    const zoraCoinAddress = zoraProfile?.creatorCoin?.address
+    const fromProfile = isEvmAddress(zoraCoinAddress) ? zoraCoinAddress : null
     if (fromProfile) return fromProfile.toLowerCase() as Address
-    if (isEvmAddress(profile?.preprovCoinAddress)) return profile.preprovCoinAddress.toLowerCase() as Address
+    const preprovCoinAddress = profile?.preprovCoinAddress
+    if (isEvmAddress(preprovCoinAddress)) return preprovCoinAddress.toLowerCase() as Address
     return undefined
   }, [profile?.preprovCoinAddress, zoraProfile?.creatorCoin?.address])
 
@@ -723,7 +837,8 @@ export function AccountSettings() {
     queryFn: async () => {
       const fid = typeof profile?.farcasterFid === 'number' && profile.farcasterFid > 0 ? profile.farcasterFid : null
       if (fid) return await getFarcasterUserByFid(fid)
-      const fallbackAddress = canonicalSmartWalletAddress ?? (isEvmAddress(profile?.primaryWallet) ? profile.primaryWallet : null)
+      const primaryWallet = profile?.primaryWallet
+      const fallbackAddress = canonicalSmartWalletAddress ?? (isEvmAddress(primaryWallet) ? primaryWallet : null)
       if (!fallbackAddress) return null
       return await getFarcasterUserByAddress(fallbackAddress)
     },
@@ -756,8 +871,10 @@ export function AccountSettings() {
   }, [creatorCoin?.marketCap, creatorCoin?.volume24h, creatorCoin?.uniqueHolders, zoraProfile?.creatorCoin?.marketCap])
 
   const embeddedExportAddress = useMemo(() => {
-    if (isEvmAddress(profile?.primaryEmbeddedEoa)) return profile.primaryEmbeddedEoa
-    if (isEvmAddress(profile?.embeddedWallet)) return profile.embeddedWallet
+    const primaryEmbeddedEoa = profile?.primaryEmbeddedEoa
+    if (isEvmAddress(primaryEmbeddedEoa)) return primaryEmbeddedEoa
+    const embeddedWallet = profile?.embeddedWallet
+    if (isEvmAddress(embeddedWallet)) return embeddedWallet
     const embedded = (profile?.connectedAccounts ?? []).find((a) => a.isEmbeddedEoa && isEvmAddress(a.address))
     if (embedded) return embedded.address
     return null
@@ -829,24 +946,34 @@ export function AccountSettings() {
       })
     }
 
-    if (profile?.solanaWallet) {
+    if (canonicalSolanaWalletAddress) {
+      add({ label: 'Canonical Solana Wallet', value: canonicalSolanaWalletAddress, mono: true })
+    } else if (profile?.solanaWallet) {
       add({ label: 'Solana Wallet', value: profile.solanaWallet, mono: true })
     }
-    if (isEvmAddress(profile?.lensAccountAddress)) {
-      add({ label: 'Lens Account Address', value: profile.lensAccountAddress, mono: true })
+    if (operationalSolanaWalletAddress) {
+      add({ label: 'Operational Solana Wallet', value: operationalSolanaWalletAddress, mono: true })
     }
-    if (isEvmAddress(profile?.lensOwnerAddress)) {
-      add({ label: 'Lens Owner Address', value: profile.lensOwnerAddress, mono: true })
+    const lensAccountAddress = profile?.lensAccountAddress
+    if (isEvmAddress(lensAccountAddress)) {
+      add({ label: 'Lens Account Address', value: lensAccountAddress, mono: true })
     }
-    if (isEvmAddress(farcasterIdentity?.custodyAddress)) {
-      add({ label: 'Farcaster Custody Wallet', value: farcasterIdentity.custodyAddress, mono: true })
+    const lensOwnerAddress = profile?.lensOwnerAddress
+    if (isEvmAddress(lensOwnerAddress)) {
+      add({ label: 'Lens Owner Address', value: lensOwnerAddress, mono: true })
+    }
+    const farcasterCustodyAddress = farcasterIdentity?.custodyAddress
+    if (isEvmAddress(farcasterCustodyAddress)) {
+      add({ label: 'Farcaster Custody Wallet', value: farcasterCustodyAddress, mono: true })
     }
     for (const wallet of farcasterIdentity?.verifiedEthAddresses ?? []) {
       if (!isEvmAddress(wallet)) continue
       add({ label: 'Farcaster Verified Wallet', value: wallet, mono: true })
     }
 
-    const zoraLinkedWallets = Array.isArray(zoraProfile?.linkedWallets?.edges) ? zoraProfile.linkedWallets.edges : []
+    const zoraLinkedWallets = Array.isArray(zoraProfile?.linkedWallets?.edges)
+      ? zoraProfile?.linkedWallets?.edges ?? []
+      : []
     for (const edge of zoraLinkedWallets) {
       const walletAddress = edge?.node?.walletAddress
       if (!isEvmAddress(walletAddress)) continue
@@ -870,6 +997,8 @@ export function AccountSettings() {
     profile?.lensAccountAddress,
     profile?.lensHandle,
     profile?.lensOwnerAddress,
+    canonicalSolanaWalletAddress,
+    operationalSolanaWalletAddress,
     profile?.solanaWallet,
     zoraHandle,
     zoraProfile?.linkedWallets?.edges,
@@ -1007,6 +1136,60 @@ export function AccountSettings() {
             ) : null}
           </div>
         ) : null}
+
+        <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 space-y-3">
+          <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Solana Wallet Roles</div>
+          <div className="space-y-2 text-sm text-zinc-300">
+            <div>
+              Canonical Solana Wallet:{' '}
+              <span className="font-mono text-zinc-100 break-all">
+                {canonicalSolanaWalletAddress ?? 'Not set'}
+              </span>
+            </div>
+            <div>
+              Operational Solana Wallet:{' '}
+              <span className="font-mono text-zinc-100 break-all">
+                {operationalSolanaWalletAddress ?? 'None'}
+              </span>
+            </div>
+          </div>
+          <div className="text-[11px] text-zinc-500">
+            Canonical is the default custody destination. Operational is automation-only and should not be your primary funds destination.
+          </div>
+          {linkedSolanaWallets.length > 0 ? (
+            <div className="space-y-2">
+              <label htmlFor="canonical-solana-wallet" className="text-xs uppercase tracking-[0.12em] text-zinc-500">
+                Set Canonical Solana Wallet
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <select
+                  id="canonical-solana-wallet"
+                  value={selectedCanonicalSolanaWallet}
+                  onChange={(e) => setSelectedCanonicalSolanaWallet(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none focus:border-brand-primary"
+                >
+                  {linkedSolanaWallets.map((wallet) => (
+                    <option key={`solana-option:${wallet.address}`} value={wallet.address}>
+                      {wallet.address} ({wallet.summary})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void onSetCanonicalSolanaWallet()}
+                  disabled={!canSetCanonicalSolanaWallet}
+                  className="btn-secondary disabled:opacity-50"
+                >
+                  {solanaWalletActionBusy ? 'Updating…' : 'Set Canonical'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-zinc-500">
+              No linked Solana wallets found yet. Link one first to set a canonical destination.
+            </div>
+          )}
+        </div>
 
         {knownAddressesWithOwners.length > 0 ? (
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">

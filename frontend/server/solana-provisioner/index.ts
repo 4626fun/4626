@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { existsSync } from 'node:fs'
 import { promisify } from 'node:util'
-import { timingSafeEqual } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'node:crypto'
 
 import { createPublicClient, http, isAddress, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
@@ -34,6 +34,21 @@ type ProvisionBody = {
   scalerExponent?: number | string
   payerKp?: string
   payForRelay?: boolean
+}
+
+type MeteoraAccountMetaBody = {
+  pubkey?: string
+  isSigner?: boolean
+  isWritable?: boolean
+}
+
+type MeteoraIxsBody = {
+  creatorToken?: string
+  shareOft?: string
+  meteoraAlphaVault?: string
+  alphaVaultProgramId?: string
+  expectedRemoteAmount?: number | string
+  depositAccounts?: MeteoraAccountMetaBody[]
 }
 
 type WrapRunner = {
@@ -131,6 +146,43 @@ function solanaPubkeyToBytes32Hex(pubkey: string): Hex {
     throw new Error(`Expected 32-byte Solana pubkey, got ${decoded.length} bytes`)
   }
   return `0x${Buffer.from(decoded).toString('hex')}` as Hex
+}
+
+function parseUint64(value: unknown): bigint | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return BigInt(Math.floor(value))
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = BigInt(value.trim())
+      return parsed >= 0n ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function encodeU64LE(value: bigint): Buffer {
+  if (value < 0n || value > 0xffff_ffff_ffff_ffffn) {
+    throw new Error('u64_out_of_range')
+  }
+  const out = Buffer.alloc(8)
+  let v = value
+  for (let i = 0; i < 8; i += 1) {
+    out[i] = Number(v & 0xffn)
+    v >>= 8n
+  }
+  return out
+}
+
+function encodeAnchorDiscriminator(signature: string): Buffer {
+  return createHash('sha256').update(signature).digest().subarray(0, 8)
+}
+
+function serializeAccountMeta(meta: { pubkey: string; isSigner: boolean; isWritable: boolean }): Hex {
+  const pubkey = solanaPubkeyToBytes32Hex(meta.pubkey).slice(2)
+  const signer = meta.isSigner ? '01' : '00'
+  const writable = meta.isWritable ? '01' : '00'
+  return `0x${pubkey}${signer}${writable}` as Hex
 }
 
 function envBool(key: string, fallback = false): boolean {
@@ -475,6 +527,91 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
   }
 }
 
+async function handleBuildMeteoraIxs(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const secret = String(process.env.PROVISIONER_BEARER_TOKEN ?? '').trim()
+  if (!secret) {
+    return json(res, 503, { success: false, error: 'PROVISIONER_BEARER_TOKEN is not configured.' })
+  }
+  if (!authOk(req, secret)) {
+    return json(res, 401, { success: false, error: 'Unauthorized' })
+  }
+
+  let body: MeteoraIxsBody
+  try {
+    const raw = await readBody(req)
+    body = (raw ? JSON.parse(raw) : {}) as MeteoraIxsBody
+  } catch {
+    return json(res, 400, { success: false, error: 'Invalid JSON body.' })
+  }
+
+  const meteoraAlphaVault = String(body?.meteoraAlphaVault ?? '').trim()
+  const alphaVaultProgramId = String(body?.alphaVaultProgramId ?? '').trim()
+  const remoteAmount = parseUint64(body?.expectedRemoteAmount)
+  const depositAccountsRaw = Array.isArray(body?.depositAccounts) ? body.depositAccounts : []
+  if (!meteoraAlphaVault || !alphaVaultProgramId) {
+    return json(res, 400, { success: false, error: 'Missing Meteora vault or program id.' })
+  }
+  if (remoteAmount === null || remoteAmount <= 0n) {
+    return json(res, 400, { success: false, error: 'Invalid expectedRemoteAmount (must be uint64 > 0).' })
+  }
+  if (depositAccountsRaw.length === 0) {
+    return json(res, 400, { success: false, error: 'Missing depositAccounts.' })
+  }
+
+  const parsedAccounts = depositAccountsRaw.map((entry) => ({
+    pubkey: String(entry?.pubkey ?? '').trim(),
+    isSigner: entry?.isSigner === true,
+    isWritable: entry?.isWritable === true,
+  }))
+  for (const account of parsedAccounts) {
+    if (!account.pubkey) return json(res, 400, { success: false, error: 'depositAccounts includes empty pubkey.' })
+    try {
+      solanaPubkeyToBytes32Hex(account.pubkey)
+    } catch {
+      return json(res, 400, { success: false, error: `Invalid deposit account pubkey: ${account.pubkey}` })
+    }
+  }
+
+  let meteoraAlphaVaultBytes32: Hex
+  let programIdBytes32: Hex
+  try {
+    meteoraAlphaVaultBytes32 = solanaPubkeyToBytes32Hex(meteoraAlphaVault)
+    programIdBytes32 = solanaPubkeyToBytes32Hex(alphaVaultProgramId)
+  } catch (error) {
+    return json(res, 400, {
+      success: false,
+      error: `Invalid Meteora vault/program pubkey: ${error instanceof Error ? error.message : String(error)}`,
+    })
+  }
+
+  try {
+    // Anchor `deposit(max_amount: u64)` instruction discriminator.
+    const discriminator = encodeAnchorDiscriminator('global:deposit')
+    const amount = encodeU64LE(remoteAmount)
+    const data = `0x${Buffer.concat([discriminator, amount]).toString('hex')}` as Hex
+    const solanaIxs = [
+      {
+        programId: programIdBytes32,
+        serializedAccounts: parsedAccounts.map((account) => serializeAccountMeta(account)),
+        data,
+      },
+    ]
+    return json(res, 200, {
+      success: true,
+      data: {
+        creatorToken: typeof body.creatorToken === 'string' ? body.creatorToken : null,
+        shareOft: typeof body.shareOft === 'string' ? body.shareOft : null,
+        meteoraAlphaVault: meteoraAlphaVaultBytes32,
+        expectedRemoteAmount: remoteAmount.toString(),
+        solanaIxs,
+      },
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return json(res, 500, { success: false, error: `Failed to build Meteora ixs: ${message}` })
+  }
+}
+
 async function main(): Promise<void> {
   const host = String(process.env.PROVISIONER_HOST ?? '0.0.0.0').trim() || '0.0.0.0'
   const port = Number(process.env.PROVISIONER_PORT ?? 8788)
@@ -483,6 +620,7 @@ async function main(): Promise<void> {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
     if (method === 'GET' && url.pathname === '/healthz') return handleHealth(res)
     if (method === 'POST' && url.pathname === '/provision') return handleProvision(req, res)
+    if (method === 'POST' && url.pathname === '/meteora-ixs') return handleBuildMeteoraIxs(req, res)
     return json(res, 404, { success: false, error: 'Not found' })
   })
 

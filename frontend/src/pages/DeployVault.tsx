@@ -431,6 +431,15 @@ async function waitForPhase1CoreState(params: {
 }
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+type SolanaBridgeIxPayload = {
+  programId: Hex
+  serializedAccounts: Hex[]
+  data: Hex
+}
+type RegisterShareOftPayload = {
+  meteoraAlphaVault: Hex | null
+  solanaIxs: SolanaBridgeIxPayload[]
+}
 type AdminAuthResponse = { address: string; isAdmin: boolean } | null
 type ServerDeployResponse = {
   userOpHash: string
@@ -1196,6 +1205,16 @@ const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
+          { name: 'meteoraAlphaVault', type: 'bytes32' },
+          {
+            name: 'solanaIxs',
+            type: 'tuple[]',
+            components: [
+              { name: 'programId', type: 'bytes32' },
+              { name: 'serializedAccounts', type: 'bytes[]' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
         ],
       },
       {
@@ -2680,7 +2699,10 @@ function DeployVaultBatcher({
       if (!publicClient) throw new Error('Network client not ready')
       if (!expected || !expectedGauge || !expectedBurnStream || !expectedPayoutRouter || !expectedCreate2Deployer)
         throw new Error('Failed to compute expected deployment addresses')
-      const ensureShareOftRegisteredForSolanaBridge = async () => {
+      const ensureShareOftRegisteredForSolanaBridge = async (opts?: {
+        buildOnly?: boolean
+        expectedSolanaAmountBase?: bigint
+      }): Promise<RegisterShareOftPayload | null> => {
         // If batcher-level Solana bridging is enabled, ensure the ShareOFT is registered on the adapter.
         // This must run after Phase 1 finalize, because registerToken() reads ShareOFT decimals().
         const [solanaBridgeAdapterRaw, solanaDestinationRaw] = await Promise.all([
@@ -2706,21 +2728,13 @@ function DeployVaultBatcher({
           solanaBridgeAdapter.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
           String(solanaDestination).toLowerCase() !== ZERO_BYTES32.toLowerCase()
 
-        if (!solanaBridgeEnabled) return
+        if (!solanaBridgeEnabled) return null
 
         const adapterCode = await publicClient.getBytecode({ address: solanaBridgeAdapter })
         if (!adapterCode || adapterCode === '0x') {
           throw new Error(
             `Batcher Solana adapter is configured to ${solanaBridgeAdapter}, but no contract code exists there. ` +
               'Ask protocol treasury to fix setSolanaConfig(adapter,destination) or disable it for now.',
-          )
-        }
-
-        const shareOftCode = await publicClient.getBytecode({ address: expected.shareOFT })
-        if (!shareOftCode || shareOftCode === '0x') {
-          throw new Error(
-            `Solana bridge is enabled, but ShareOFT ${shortAddress(expected.shareOFT)} is not deployed yet. ` +
-              'Phase 1 finalize must complete before Solana registration.',
           )
         }
 
@@ -2733,16 +2747,33 @@ function DeployVaultBatcher({
           })
           .then((v) => Boolean(v))
           .catch(() => null)
+        const buildOnly = opts?.buildOnly === true
+        if (!buildOnly && shareRegistered === true) return null
 
-        if (shareRegistered === true) return
+        if (!buildOnly) {
+          const shareOftCode = await publicClient.getBytecode({ address: expected.shareOFT })
+          if (!shareOftCode || shareOftCode === '0x') {
+            throw new Error(
+              `Solana bridge is enabled, but ShareOFT ${shortAddress(expected.shareOFT)} is not deployed yet. ` +
+                'Phase 1 finalize must complete before Solana registration.',
+            )
+          }
+        }
 
-        logger.info('[DeployVault] ShareOFT not registered on Solana adapter, attempting auto-registration', {
+        logger.info('[DeployVault] Ensuring ShareOFT Solana route + Meteora ix payload', {
           shareOFT: expected.shareOFT,
           adapter: solanaBridgeAdapter,
+          buildOnly,
         })
         const registerBody: Record<string, unknown> = {
           shareOft: expected.shareOFT,
           batcherAddress: batcherAddress,
+          buildOnly,
+        }
+        if (typeof opts?.expectedSolanaAmountBase === 'bigint' && opts.expectedSolanaAmountBase > 0n) {
+          registerBody.creatorToken = creatorToken
+          registerBody.expectedSolanaAmount = opts.expectedSolanaAmountBase.toString()
+          registerBody.shareDecimals = 18
         }
         if (solanaMintOverride) registerBody.solanaMint = solanaMintOverride
         if (solanaDecimalsOverride !== null) registerBody.solanaDecimals = solanaDecimalsOverride
@@ -2771,11 +2802,21 @@ function DeployVaultBatcher({
               detail,
           )
         }
-        logger.info('[DeployVault] ShareOFT auto-registration complete', {
+        const responseData = (registerJson?.data ?? {}) as any
+        const payload: RegisterShareOftPayload | null =
+          typeof responseData?.meteoraAlphaVault === 'string' && Array.isArray(responseData?.solanaIxs)
+            ? {
+                meteoraAlphaVault: responseData.meteoraAlphaVault as Hex,
+                solanaIxs: responseData.solanaIxs as SolanaBridgeIxPayload[],
+              }
+            : null
+        logger.info('[DeployVault] ShareOFT Solana route prepared', {
           shareOFT: expected.shareOFT,
           adapter: solanaBridgeAdapter,
-          txHash: (registerJson?.data as any)?.txHash ?? null,
+          txHash: responseData?.txHash ?? null,
+          ixCount: payload?.solanaIxs.length ?? 0,
         })
+        return payload
       }
       if (!floorPriceQ96Aligned || floorPriceQ96Aligned <= 0n) {
         throw new Error('Market floor price not available. Wait for pricing to load.')
@@ -2801,6 +2842,7 @@ function DeployVaultBatcher({
       }
 
       const depositAmount = minFirstDeposit
+      const expectedSolanaAmountBase = (depositAmount * 20n) / 100n
       const auctionSteps = encodeUniswapCcaLinearSteps(DEFAULT_CCA_DURATION_BLOCKS)
       // Safety: `CreatorVaultBatcher` tries to call `CreatorCoin.setPayoutRecipient(payoutRecipient)` when non-zero.
       // Zora Creator Coins restrict `setPayoutRecipient` to the coin owner, so that internal call reverts (msg.sender=batcher).
@@ -3109,6 +3151,17 @@ function DeployVaultBatcher({
           floorPriceQ96: floorPriceQ96Aligned,
         } as const
 
+        const meteoraPayload = await ensureShareOftRegisteredForSolanaBridge({
+          buildOnly: true,
+          expectedSolanaAmountBase,
+        })
+        if (meteoraPayload && (!meteoraPayload.meteoraAlphaVault || meteoraPayload.solanaIxs.length === 0)) {
+          throw new Error(
+            'Solana auto-deposit is enabled, but Meteora payload is missing. ' +
+              'Check per-creator Meteora mapping and provisioner configuration.',
+          )
+        }
+
         const phase2FinalizeParams = {
           creatorToken,
           owner,
@@ -3123,6 +3176,8 @@ function DeployVaultBatcher({
           requiredRaise: DEFAULT_REQUIRED_RAISE_WEI,
           floorPriceQ96: floorPriceQ96Aligned,
           auctionSteps,
+          meteoraAlphaVault: meteoraPayload?.meteoraAlphaVault ?? ZERO_BYTES32,
+          solanaIxs: meteoraPayload?.solanaIxs ?? [],
         } as const
 
         // Phase 3 (strategies): Charm CREATOR/USDC + Ajna lending

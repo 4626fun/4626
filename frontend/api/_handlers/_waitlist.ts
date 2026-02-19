@@ -500,7 +500,10 @@ export default async function handler(req: any, res: any) {
         if (row) {
           const patch: Record<string, unknown> = { updated_at: nowIso }
           if (primaryWallet.length > 0) patch.primary_wallet = primaryWallet
-          if (solanaWallet.length > 0) patch.solana_wallet = solanaWallet
+          if (solanaWallet.length > 0) {
+            patch.solana_wallet = solanaWallet
+            patch.canonical_solana_wallet = solanaWallet
+          }
           if (privyUserId) patch.privy_user_id = privyUserId
           if (embeddedWallet) patch.embedded_wallet = embeddedWallet
           if (embeddedWalletChain) patch.embedded_wallet_chain = embeddedWalletChain
@@ -701,6 +704,7 @@ export default async function handler(req: any, res: any) {
         SET email = ${nextEmail},
             primary_wallet = COALESCE(${walletForDedup}, primary_wallet),
             solana_wallet = COALESCE(${solanaWallet.length > 0 ? solanaWallet : null}, solana_wallet),
+            canonical_solana_wallet = COALESCE(${solanaWallet.length > 0 ? solanaWallet : null}, canonical_solana_wallet),
             privy_user_id = COALESCE(${privyUserId}, privy_user_id),
             embedded_wallet = COALESCE(${embeddedWallet}, embedded_wallet),
             embedded_wallet_chain = COALESCE(${embeddedWalletChain}, embedded_wallet_chain),
@@ -833,6 +837,7 @@ export default async function handler(req: any, res: any) {
         email,
         primary_wallet,
         solana_wallet,
+        canonical_solana_wallet,
         privy_user_id,
         embedded_wallet,
         embedded_wallet_chain,
@@ -850,6 +855,7 @@ export default async function handler(req: any, res: any) {
         ${email},
         ${primaryWallet.length > 0 ? primaryWallet : null},
         ${solanaWallet.length > 0 ? solanaWallet : null},
+        ${solanaWallet.length > 0 ? solanaWallet : null},
         ${privyUserId},
         ${embeddedWallet},
         ${embeddedWalletChain},
@@ -866,6 +872,7 @@ export default async function handler(req: any, res: any) {
       ON CONFLICT (email) DO UPDATE
         SET primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),
             solana_wallet = COALESCE(EXCLUDED.solana_wallet, profiles.solana_wallet),
+            canonical_solana_wallet = COALESCE(EXCLUDED.canonical_solana_wallet, profiles.canonical_solana_wallet),
             privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
             embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, profiles.embedded_wallet),
             embedded_wallet_chain = COALESCE(EXCLUDED.embedded_wallet_chain, profiles.embedded_wallet_chain),
@@ -1034,6 +1041,7 @@ export default async function handler(req: any, res: any) {
             email,
             primary_wallet,
             solana_wallet,
+            canonical_solana_wallet,
             privy_user_id,
             embedded_wallet,
             embedded_wallet_chain,
@@ -1051,6 +1059,7 @@ export default async function handler(req: any, res: any) {
             ${email},
             ${primaryWallet.length > 0 ? primaryWallet : null},
             ${solanaWallet.length > 0 ? solanaWallet : null},
+            ${solanaWallet.length > 0 ? solanaWallet : null},
             ${privyUserId},
             ${embeddedWallet},
             ${embeddedWalletChain},
@@ -1067,6 +1076,7 @@ export default async function handler(req: any, res: any) {
           ON CONFLICT (email) DO UPDATE
             SET primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),
                 solana_wallet = COALESCE(EXCLUDED.solana_wallet, profiles.solana_wallet),
+                canonical_solana_wallet = COALESCE(EXCLUDED.canonical_solana_wallet, profiles.canonical_solana_wallet),
                 privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
                 embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, profiles.embedded_wallet),
                 embedded_wallet_chain = COALESCE(EXCLUDED.embedded_wallet_chain, profiles.embedded_wallet_chain),
