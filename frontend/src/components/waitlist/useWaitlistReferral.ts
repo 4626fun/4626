@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { INVITE_COPY, REFERRAL_TWEET_TEMPLATES, fillTweetTemplate } from '@/components/waitlist/referralsCopy'
 
 type ApiFetch = (path: string, init?: RequestInit & { withCredentials?: boolean }) => Promise<Response>
+const WAITLIST_REFERRAL_LINK_OVERRIDE =
+  (import.meta.env.VITE_WAITLIST_REFERRAL_LINK as string | undefined)?.trim() || ''
 
 type Params = {
   locationSearch: string
@@ -117,6 +119,7 @@ export function useWaitlistReferral({
   }, [inviteTemplateIdx, setInviteTemplateIdx])
 
   const referralLink = useMemo(() => {
+    if (WAITLIST_REFERRAL_LINK_OVERRIDE) return WAITLIST_REFERRAL_LINK_OVERRIDE
     if (referralCode) {
       return `${shareBaseUrl}/?ref=${encodeURIComponent(referralCode)}#waitlist`
     }

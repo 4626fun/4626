@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { getAppBaseUrl, getMarketingBaseUrl } from '@/lib/host'
+import { getAppBaseUrl, getWaitlistReferralBaseUrl } from '@/lib/host'
 import { trackEvent } from '@/lib/analytics'
 import { useAccount, usePublicClient, useSignMessage } from 'wagmi'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
@@ -1260,7 +1260,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     handleCopyReferral,
   } = useWaitlistReferral({
     locationSearch: location.search,
-    shareBaseUrl: getMarketingBaseUrl().replace(/\/+$/, ''),
+    shareBaseUrl: getWaitlistReferralBaseUrl().replace(/\/+$/, ''),
     inviteTemplateIdx,
     miniAppIsMiniApp: miniApp.isMiniApp === true,
     referralCode,

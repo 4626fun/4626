@@ -8,6 +8,13 @@ export const MARKETING_ORIGIN =
 export const APP_ORIGIN =
   (import.meta.env.VITE_APP_ORIGIN as string)?.trim() || 'https://app.4626.fun'
 
+/**
+ * Optional explicit base URL for waitlist referral links.
+ * When set, waitlist share links are built from this origin instead of MARKETING_ORIGIN.
+ */
+export const WAITLIST_REFERRAL_BASE_URL =
+  (import.meta.env.VITE_WAITLIST_REFERRAL_BASE_URL as string)?.trim() || ''
+
 const MARKETING_HOSTNAMES = ['4626.fun', 'www.4626.fun']
 
 function isMarketingHost(hostname: string): boolean {
@@ -49,4 +56,13 @@ export function getMarketingBaseUrl(): string {
   if (typeof window === 'undefined') return MARKETING_ORIGIN
   const mode = getHostMode()
   return mode === 'marketing' ? window.location.origin : MARKETING_ORIGIN
+}
+
+/**
+ * Base URL used for user-facing waitlist referral links.
+ */
+export function getWaitlistReferralBaseUrl(): string {
+  const override = WAITLIST_REFERRAL_BASE_URL.replace(/\/+$/, '')
+  if (!override) return getMarketingBaseUrl()
+  return override
 }

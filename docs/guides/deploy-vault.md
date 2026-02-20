@@ -82,6 +82,8 @@ forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore 
   --broadcast
 ```
 
+If you use `./script/deploy.sh infra-v2` or `./script/deploy-infra-v2.sh`, this seed step now runs automatically.
+
 3. Onchain sanity checks:
 
 ```bash
