@@ -100,6 +100,30 @@ async function readShareOftMetadata(params: {
   }
 }
 
+const WRAP_TOKEN_NAME_MAX_LENGTH = 32
+const WRAP_TOKEN_SYMBOL_MAX_LENGTH = 12
+
+function sanitizeWrapTokenName(raw: string, shareOft: Address): string {
+  const fallback = `CreatorShare-${shareOft.slice(2, 8)}`
+  const ascii = String(raw ?? '')
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const resolved = ascii || fallback
+  return resolved.slice(0, WRAP_TOKEN_NAME_MAX_LENGTH)
+}
+
+function sanitizeWrapTokenSymbol(raw: string, shareOft: Address): string {
+  const fallback = `CS${shareOft.slice(2, 6).toUpperCase()}`
+  const cleaned = String(raw ?? '')
+    .normalize('NFKD')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  const resolved = cleaned || fallback
+  return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
+}
+
 function readProvisionerSecret(): string {
   return String(
     process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET ??
@@ -308,14 +332,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     transport: http(rpcUrl, { timeout: 20_000 }),
   })
   const shareOftMetadata = await readShareOftMetadata({ publicClient, shareOft })
-  const tokenName = shareOftMetadata?.name?.trim() ?? ''
-  const tokenSymbol = shareOftMetadata?.symbol?.trim() ?? ''
-  if (!tokenName || !tokenSymbol) {
+  if (!shareOftMetadata) {
     return res.status(409).json({
       success: false,
       error: 'ShareOFT metadata unavailable. CreatorShareOFT name/symbol are required for Solana route provisioning.',
     } satisfies ApiEnvelope<never>)
   }
+  const tokenName = sanitizeWrapTokenName(shareOftMetadata.name, shareOft)
+  const tokenSymbol = sanitizeWrapTokenSymbol(shareOftMetadata.symbol, shareOft)
 
   try {
     const wrapArgs = [

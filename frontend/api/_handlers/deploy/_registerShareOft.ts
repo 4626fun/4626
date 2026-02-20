@@ -373,6 +373,45 @@ async function readShareOftMetadata(params: {
   }
 }
 
+const WRAP_TOKEN_NAME_MAX_LENGTH = 32
+const WRAP_TOKEN_SYMBOL_MAX_LENGTH = 12
+
+function sanitizeWrapTokenName(raw: string, shareOft: Address): string {
+  const fallback = `CreatorShare-${shareOft.slice(2, 8)}`
+  const ascii = String(raw ?? '')
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const resolved = ascii || fallback
+  return resolved.slice(0, WRAP_TOKEN_NAME_MAX_LENGTH)
+}
+
+function sanitizeWrapTokenSymbol(raw: string, shareOft: Address): string {
+  const fallback = `CS${shareOft.slice(2, 6).toUpperCase()}`
+  const cleaned = String(raw ?? '')
+    .normalize('NFKD')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  const resolved = cleaned || fallback
+  return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
+}
+
+function buildWrapTokenMetadata(metadata: { name: string; symbol: string }, shareOft: Address): {
+  tokenName: string
+  tokenSymbol: string
+  tokenNameSource: string
+  tokenSymbolSource: string
+} {
+  const originalName = String(metadata.name ?? '').trim()
+  const originalSymbol = String(metadata.symbol ?? '').trim()
+  const tokenName = sanitizeWrapTokenName(originalName, shareOft)
+  const tokenSymbol = sanitizeWrapTokenSymbol(originalSymbol, shareOft)
+  const tokenNameSource = tokenName === originalName ? 'base_shareoft' : 'base_shareoft_sanitized'
+  const tokenSymbolSource = tokenSymbol === originalSymbol ? 'base_shareoft' : 'base_shareoft_sanitized'
+  return { tokenName, tokenSymbol, tokenNameSource, tokenSymbolSource }
+}
+
 function describeFetchFailure(error: unknown): string {
   if (error instanceof Error) {
     const parts: string[] = []
@@ -603,16 +642,16 @@ async function tryProvisionDynamicRoute(params: {
     publicClient: params.publicClient,
     shareOft: params.shareOft,
   })
-  // Always mirror CreatorShareOFT metadata on Solana.
-  const tokenName = shareOftMetadata?.name || ''
-  const tokenSymbol = shareOftMetadata?.symbol || ''
-  if (!tokenName || !tokenSymbol) {
+  if (!shareOftMetadata) {
     throw new Error(
       'ShareOFT metadata unavailable for Solana wrap. CreatorShareOFT name/symbol are required before provisioning.',
     )
   }
-  const tokenNameSource = 'base_shareoft'
-  const tokenSymbolSource = 'base_shareoft'
+  // Solana bridge tooling expects ASCII-safe metadata; sanitize when needed.
+  const { tokenName, tokenSymbol, tokenNameSource, tokenSymbolSource } = buildWrapTokenMetadata(
+    shareOftMetadata,
+    params.shareOft,
+  )
   const payForRelay = String(process.env.SOLANA_BRIDGE_PAY_FOR_RELAY ?? '1').trim() !== '0'
   const provisionerUrls = readDynamicProvisionerUrls()
   const provisionerHealthUrls = readDynamicProvisionerHealthUrls(provisionerUrls)

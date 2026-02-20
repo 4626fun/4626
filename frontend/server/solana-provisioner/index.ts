@@ -57,6 +57,9 @@ type WrapRunner = {
   label: string
 }
 
+const WRAP_TOKEN_NAME_MAX_LENGTH = 32
+const WRAP_TOKEN_SYMBOL_MAX_LENGTH = 12
+
 function json(res: ServerResponse, statusCode: number, payload: unknown): void {
   const body = JSON.stringify(payload)
   res.statusCode = statusCode
@@ -189,6 +192,29 @@ function envBool(key: string, fallback = false): boolean {
   const raw = String(process.env[key] ?? '').trim().toLowerCase()
   if (!raw) return fallback
   return raw === '1' || raw === 'true' || raw === 'yes'
+}
+
+function sanitizeWrapTokenName(raw: string, shareOft: Address): string {
+  const fallback = `CreatorShare-${shareOft.slice(2, 8)}`
+  const ascii = String(raw ?? '')
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const resolved = ascii || fallback
+  return resolved.slice(0, WRAP_TOKEN_NAME_MAX_LENGTH)
+}
+
+function sanitizeWrapTokenSymbol(raw: string, shareOft: Address): string {
+  const fallbackPrefixRaw = process.env.SOLANA_BRIDGE_WRAP_SYMBOL_PREFIX
+  const fallbackPrefix = fallbackPrefixRaw === undefined ? 'CS' : String(fallbackPrefixRaw).trim().toUpperCase()
+  const fallback = `${fallbackPrefix}${shareOft.slice(2, 6).toUpperCase()}`
+  const cleaned = String(raw ?? '')
+    .normalize('NFKD')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  const resolved = cleaned || fallback
+  return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
 }
 
 function readBody(req: IncomingMessage): Promise<string> {
@@ -399,11 +425,8 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
   const cliBin = String(process.env.SOLANA_BRIDGE_CLI_BIN ?? 'auto').trim() || 'auto'
   const payForRelay =
     typeof body?.payForRelay === 'boolean' ? body.payForRelay : envBool('SOLANA_BRIDGE_PAY_FOR_RELAY', true)
-  const tokenName = String(body?.tokenName ?? `CreatorShare-${shareOft.slice(2, 8)}`).trim() || `CreatorShare-${shareOft.slice(2, 8)}`
-  const symbolPrefixRaw = process.env.SOLANA_BRIDGE_WRAP_SYMBOL_PREFIX
-  const defaultSymbolPrefix = symbolPrefixRaw === undefined ? 'CS' : String(symbolPrefixRaw).trim()
-  const defaultTokenSymbol = `${defaultSymbolPrefix}${shareOft.slice(2, 6).toUpperCase()}`
-  const tokenSymbol = String(body?.tokenSymbol ?? defaultTokenSymbol).trim() || defaultTokenSymbol
+  const tokenName = sanitizeWrapTokenName(String(body?.tokenName ?? ''), shareOft)
+  const tokenSymbol = sanitizeWrapTokenSymbol(String(body?.tokenSymbol ?? ''), shareOft)
 
   const wrapArgs = [
     'sol',

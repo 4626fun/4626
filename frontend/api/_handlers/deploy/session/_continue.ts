@@ -563,6 +563,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err: any) {
     const msg = normalizeErrorMessage(err)
     const pretty = truncateMessage(msg)
+    let serializedErr = ''
+    try {
+      serializedErr = JSON.stringify(err)
+    } catch {
+      serializedErr = ''
+    }
     const persistFailure = async () => {
       try {
         await updateDeploySession({ id: rec.id, step: 'failed', lastError: pretty })
@@ -596,7 +602,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           'Deploy bundler/paymaster is not configured for this Vercel deployment. Set CDP_PAYMASTER_URL (or CDP_PAYMASTER_AND_BUNDLER_URL) to the Coinbase RPC endpoint; do not rely on same-origin /api/paymaster for server-side deploy-session calls.',
       } satisfies ApiEnvelope<null>)
     }
-    if (isOnchainRevertLike(msg)) {
+    if (isOnchainRevertLike(msg) || isOnchainRevertLike(serializedErr)) {
       logger.warn('deploy session continue reverted', pretty)
       await persistFailure()
       return res.status(409).json({
