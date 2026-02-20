@@ -31,6 +31,46 @@ function isPlainObject(value: unknown): value is Record<string, any> {
   return proto === Object.prototype || proto === null
 }
 
+function normalizeErrorMessage(error: unknown): string {
+  if (typeof error === 'string' && error.trim()) return error.trim()
+  if (error instanceof Error && error.message.trim()) return error.message.trim()
+  const anyErr = error as any
+  const candidates = [
+    anyErr?.shortMessage,
+    anyErr?.details,
+    anyErr?.cause?.shortMessage,
+    anyErr?.cause?.details,
+    anyErr?.cause?.message,
+    anyErr?.data?.message,
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
+  }
+  try {
+    const raw = JSON.stringify(error)
+    if (raw && raw !== '{}' && raw !== 'null') return raw
+  } catch {
+    // ignore
+  }
+  return 'continue_failed'
+}
+
+function truncateMessage(input: string, max = 420): string {
+  const msg = String(input ?? '')
+  return msg.length > max ? `${msg.slice(0, max)}...` : msg
+}
+
+function isOnchainRevertLike(message: string): boolean {
+  const m = String(message || '').toLowerCase()
+  return (
+    m.includes('execution reverted') ||
+    m.includes('user operation execution failed') ||
+    m.includes('useroperationexecutionerror') ||
+    m.includes('aa23 reverted') ||
+    m.includes('aa33 reverted')
+  )
+}
+
 function asPayloadObject(value: unknown): Record<string, any> {
   if (isPlainObject(value)) return value
   if (typeof value === 'string') {
@@ -521,7 +561,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: 'No deploy stage available from current step',
     } satisfies ApiEnvelope<null>)
   } catch (err: any) {
-    const msg = err?.message ? String(err.message) : 'continue_failed'
+    const msg = normalizeErrorMessage(err)
+    const pretty = truncateMessage(msg)
+    const persistFailure = async () => {
+      try {
+        await updateDeploySession({ id: rec.id, step: 'failed', lastError: pretty })
+      } catch {
+        // ignore
+      }
+    }
     if (msg === 'session_owner_unavailable' || msg === 'session_owner_key_missing') {
       return res.status(409).json({
         success: false,
@@ -548,12 +596,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           'Deploy bundler/paymaster is not configured for this Vercel deployment. Set CDP_PAYMASTER_URL (or CDP_PAYMASTER_AND_BUNDLER_URL) to the Coinbase RPC endpoint; do not rely on same-origin /api/paymaster for server-side deploy-session calls.',
       } satisfies ApiEnvelope<null>)
     }
-    logger.error('deploy session continue failed', msg)
-    try {
-      await updateDeploySession({ id: rec.id, step: 'failed', lastError: msg })
-    } catch {
-      // ignore
+    if (isOnchainRevertLike(msg)) {
+      logger.warn('deploy session continue reverted', pretty)
+      await persistFailure()
+      return res.status(409).json({
+        success: false,
+        error: `Deploy execution reverted: ${pretty}`,
+      } satisfies ApiEnvelope<null>)
     }
+    logger.error('deploy session continue failed', pretty)
+    await persistFailure()
     return res.status(500).json({ success: false, error: 'Internal server error' } satisfies ApiEnvelope<null>)
   }
 }

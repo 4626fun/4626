@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { erc20Abi, getAddress, isAddress, parseUnits } from 'viem'
+import { ArrowDown, Settings } from 'lucide-react'
+import { erc20Abi, formatUnits, getAddress, isAddress, parseUnits } from 'viem'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 
 import { ConnectButtonWeb3 } from '@/components/ConnectButtonWeb3'
@@ -45,6 +46,8 @@ type WaitlistMeData = {
   }>
 }
 
+type TokenOption = { symbol: string; address: string }
+
 function isAddressLike(value: unknown): value is `0x${string}` {
   return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value.trim())
 }
@@ -56,16 +59,44 @@ function asBigInt(v: unknown): bigint {
   return 0n
 }
 
+function shortAddress(value: string): string {
+  if (!isAddress(value)) return value
+  return `${value.slice(0, 6)}...${value.slice(-4)}`
+}
+
+function getNestedAmountOut(input: unknown): string | null {
+  const obj = input as any
+  const candidates = [
+    obj?.quote?.output?.amount,
+    obj?.output?.amount,
+    obj?.amountOut,
+    obj?.outAmount,
+    obj?.currencyAmountOut,
+  ]
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim()) return value
+    if (typeof value === 'number' && Number.isFinite(value)) return String(Math.floor(value))
+  }
+  return null
+}
+
+function formatDisplayAmount(value: string): string {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return value
+  return n.toFixed(6)
+}
+
 export function Swap() {
   const [searchParams] = useSearchParams()
   const { address, isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
 
-  const [tokenIn, setTokenIn] = useState<string>(CONTRACTS.usdc)
-  const [tokenOut, setTokenOut] = useState<string>('')
+  const [tokenIn, setTokenIn] = useState<string>(CONTRACTS.weth)
+  const [tokenOut, setTokenOut] = useState<string>(CONTRACTS.usdc)
   const [amountInUnits, setAmountInUnits] = useState<string>('1')
   const [slippagePct, setSlippagePct] = useState<string>('0.5')
+  const [estimatedOut, setEstimatedOut] = useState<string>('')
   const [quote, setQuote] = useState<TradeQuoteResponse | null>(null)
   const [approvalData, setApprovalData] = useState<Record<string, unknown> | null>(null)
   const [swapTx, setSwapTx] = useState<TransactionRequest | null>(null)
@@ -73,6 +104,7 @@ export function Swap() {
   const [status, setStatus] = useState<string>('')
   const [error, setError] = useState<string>('')
   const [confirmIntent, setConfirmIntent] = useState<'approval' | 'swap' | null>(null)
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   useEffect(() => {
     const qToken = (searchParams.get('token') ?? '').trim()
@@ -157,11 +189,39 @@ export function Swap() {
     return Math.min(5, n)
   }, [slippagePct])
 
+  const tokenOptions = useMemo<TokenOption[]>(() => {
+    const base: TokenOption[] = [
+      { symbol: 'ETH', address: CONTRACTS.weth },
+      { symbol: 'USDC', address: CONTRACTS.usdc },
+    ]
+    const seen = new Set(base.map((t) => t.address.toLowerCase()))
+    for (const candidate of [tokenIn, tokenOut]) {
+      if (!isAddress(candidate)) continue
+      const lc = candidate.toLowerCase()
+      if (seen.has(lc)) continue
+      seen.add(lc)
+      base.push({ symbol: shortAddress(candidate), address: candidate })
+    }
+    return base
+  }, [tokenIn, tokenOut])
+
+  const tokenInSymbol = useMemo(() => {
+    const match = tokenOptions.find((opt) => opt.address.toLowerCase() === tokenIn.toLowerCase())
+    return match?.symbol ?? shortAddress(tokenIn)
+  }, [tokenIn, tokenOptions])
+
+  const tokenOutSymbol = useMemo(() => {
+    const match = tokenOptions.find((opt) => opt.address.toLowerCase() === tokenOut.toLowerCase())
+    return match?.symbol ?? shortAddress(tokenOut)
+  }, [tokenOut, tokenOptions])
+
   const signerAddress = connectedAddressLc ? (connectedAddressLc as `0x${string}`) : null
   const canonicalAddress = canonicalSmartWalletAddress ? (canonicalSmartWalletAddress as `0x${string}`) : null
   const canOperateCanonical = connectedOwnerQuery.data === true
   const identityReady = Boolean(canonicalAddress && signerAddress && walletClient && publicClient && canOperateCanonical)
   const isReady = isAddress(tokenIn) && isAddress(tokenOut) && Number(amountInUnits) > 0 && Boolean(canonicalAddress)
+  const approvalTx = approvalData?.approval as Record<string, unknown> | undefined
+  const approvalRequired = Boolean(approvalTx?.to && approvalTx?.data)
 
   async function getTokenDecimals(token: string): Promise<number> {
     if (!publicClient || !isAddress(token)) return 18
@@ -198,8 +258,16 @@ export function Swap() {
       setQuote(data)
       setApprovalData(null)
       setSwapTx(null)
+      const outRaw = getNestedAmountOut(pickSwapQuote(data) ?? data)
+      if (outRaw) {
+        const tokenOutDecimals = await getTokenDecimals(tokenOut)
+        setEstimatedOut(formatUnits(BigInt(outRaw), tokenOutDecimals))
+      } else {
+        setEstimatedOut('')
+      }
       setStatus(`Quote ready for canonical CSW (routing=${String(data.routing ?? 'unknown')})`)
     } catch (e: any) {
+      setEstimatedOut('')
       setError(e?.message || 'Quote failed')
     } finally {
       setBusy(null)
@@ -255,6 +323,72 @@ export function Swap() {
     }
   }
 
+  function handleSwitchTokens() {
+    setTokenIn(tokenOut)
+    setTokenOut(tokenIn)
+    setQuote(null)
+    setApprovalData(null)
+    setSwapTx(null)
+    setEstimatedOut('')
+    setStatus('')
+    setError('')
+  }
+
+  async function handleReviewTrade() {
+    if (!canonicalAddress || !identityReady || !isReady) return
+    setBusy('review')
+    setError('')
+    setStatus('')
+    try {
+      const tokenInDecimals = await getTokenDecimals(tokenIn)
+      const tokenOutDecimals = await getTokenDecimals(tokenOut)
+      const amount = parseUnits(amountInUnits, tokenInDecimals).toString()
+
+      const nextQuote = await fetchTradeQuote({
+        tokenIn,
+        tokenOut,
+        tokenInChainId: BASE_CHAIN_ID,
+        tokenOutChainId: BASE_CHAIN_ID,
+        type: 'EXACT_INPUT',
+        amount,
+        swapper: canonicalAddress,
+        slippageTolerance: parsedSlippage,
+      })
+      setQuote(nextQuote)
+
+      const outRaw = getNestedAmountOut(pickSwapQuote(nextQuote) ?? nextQuote)
+      if (outRaw) setEstimatedOut(formatUnits(BigInt(outRaw), tokenOutDecimals))
+      else setEstimatedOut('')
+
+      const nextApproval = await checkTradeApproval({
+        walletAddress: canonicalAddress,
+        token: tokenIn,
+        amount,
+        chainId: BASE_CHAIN_ID,
+        tokenOut,
+        tokenOutChainId: BASE_CHAIN_ID,
+        includeGasInfo: true,
+      })
+      setApprovalData(nextApproval)
+
+      const selectedQuote = pickSwapQuote(nextQuote)
+      if (!selectedQuote) throw new Error('Quote does not contain executable swap payload')
+      const built = await buildSwap({
+        quote: selectedQuote,
+        refreshGasPrice: true,
+        simulateTransaction: true,
+      })
+      assertValidSwapTransaction(built.swap)
+      setSwapTx(built.swap)
+      setStatus('Review ready')
+      setConfirmIntent('swap')
+    } catch (e: any) {
+      setError(e?.message || 'Unable to prepare trade')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function executeViaCanonical4337(params: {
     calls: Array<{ to: `0x${string}`; data?: `0x${string}`; value?: bigint }>
     successLabel: string
@@ -297,7 +431,9 @@ export function Swap() {
         successLabel: 'Approval submitted via ERC-4337',
       })
     } catch (e: any) {
-      setError(e?.message || 'Approval transaction failed')
+      const message = e?.message || 'Approval transaction failed'
+      setError(message)
+      throw new Error(message)
     } finally {
       setBusy(null)
     }
@@ -320,7 +456,9 @@ export function Swap() {
         successLabel: 'Swap submitted via canonical ERC-4337',
       })
     } catch (e: any) {
-      setError(e?.message || 'Swap transaction failed')
+      const message = e?.message || 'Swap transaction failed'
+      setError(message)
+      throw new Error(message)
     } finally {
       setBusy(null)
     }
@@ -339,165 +477,188 @@ export function Swap() {
     if (!confirmIntent || busy) return
     const action = confirmIntent
     setConfirmIntent(null)
-    if (action === 'approval') await executeApprovalNow()
-    if (action === 'swap') await executeSwapNow()
+    try {
+      if (action === 'approval') await executeApprovalNow()
+      if (action === 'swap') {
+        if (approvalRequired) await executeApprovalNow()
+        await executeSwapNow()
+      }
+    } catch {
+      // Errors are already surfaced via `setError`.
+    }
   }
 
   return (
     <div className="relative pb-24 md:pb-0">
       <section className="cinematic-section">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="mb-8">
-            <span className="label">Swap</span>
-            <h1 className="headline text-4xl sm:text-6xl mt-4">Uniswap Trading API</h1>
-            <p className="text-zinc-500 text-sm font-light mt-3 max-w-3xl">
-              Creator coin and vault swaps execute through the canonical Coinbase Smart Wallet via ERC-4337 UserOps.
-            </p>
-          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35 }}
+            className="mx-auto w-full max-w-[560px]"
+          >
+            <div className="rounded-[28px] border border-white/10 bg-black/55 p-3 sm:p-4 shadow-[0_20px_80px_-30px_rgba(0,0,0,0.9)]">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  <button className="rounded-full bg-white/10 px-3 py-1 font-semibold text-white">Swap</button>
+                  <button className="rounded-full px-3 py-1 text-zinc-500" disabled>Limit</button>
+                  <button className="rounded-full px-3 py-1 text-zinc-500" disabled>Buy</button>
+                  <button className="rounded-full px-3 py-1 text-zinc-500" disabled>Sell</button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced((v) => !v)}
+                  className="rounded-full p-2 text-zinc-400 hover:text-zinc-200 hover:bg-white/10"
+                  title="Trade settings"
+                >
+                  <Settings className="h-4 w-4" />
+                </button>
+              </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-white/3 p-5 space-y-4">
-              <div>
-                <label className="label">Token In (Base)</label>
-                <input
-                  className="mt-1 w-full bg-black/30 border border-zinc-700 rounded-xl px-3 py-2 text-sm"
-                  value={tokenIn}
-                  onChange={(e) => setTokenIn(e.target.value.trim())}
-                  placeholder="0x..."
-                />
-              </div>
-              <div>
-                <label className="label">Token Out (Base)</label>
-                <input
-                  className="mt-1 w-full bg-black/30 border border-zinc-700 rounded-xl px-3 py-2 text-sm"
-                  value={tokenOut}
-                  onChange={(e) => setTokenOut(e.target.value.trim())}
-                  placeholder="0x..."
-                />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Amount In (token units)</label>
+              <div className="rounded-2xl border border-white/10 bg-[#101114] p-4">
+                <div className="text-sm text-zinc-300 mb-2">Sell</div>
+                <div className="flex items-end justify-between gap-3">
                   <input
-                    className="mt-1 w-full bg-black/30 border border-zinc-700 rounded-xl px-3 py-2 text-sm"
+                    className="w-full bg-transparent text-4xl leading-none font-medium text-white outline-none"
                     value={amountInUnits}
                     onChange={(e) => setAmountInUnits(e.target.value)}
-                    placeholder="1"
+                    placeholder="0.0"
                   />
+                  <select
+                    value={tokenIn}
+                    onChange={(e) => setTokenIn(e.target.value)}
+                    className="rounded-full border border-white/20 bg-[#15161b] px-3 py-2 text-sm font-medium text-white"
+                  >
+                    {tokenOptions.map((opt) => (
+                      <option key={opt.address} value={opt.address}>{opt.symbol}</option>
+                    ))}
+                  </select>
                 </div>
-                <div>
-                  <label className="label">Slippage %</label>
-                  <input
-                    className="mt-1 w-full bg-black/30 border border-zinc-700 rounded-xl px-3 py-2 text-sm"
-                    value={slippagePct}
-                    onChange={(e) => setSlippagePct(e.target.value)}
-                    placeholder="0.5"
-                  />
-                </div>
+                <div className="mt-2 text-xs text-zinc-500 break-all">{tokenIn}</div>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="relative z-10 -my-3 flex justify-center">
                 <button
                   type="button"
-                  onClick={handleQuote}
-                  disabled={!isReady || busy !== null || !identityReady}
-                  className="btn-accent rounded-full px-4 py-2 text-xs disabled:opacity-50"
+                  onClick={handleSwitchTokens}
+                  className="rounded-xl border border-white/20 bg-[#15161b] p-2 text-zinc-300 hover:text-white"
+                  title="Switch tokens"
                 >
-                  {busy === 'quote' ? 'Quoting…' : '1) Get Quote'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCheckApproval}
-                  disabled={!isReady || busy !== null || !identityReady}
-                  className="rounded-full border border-zinc-700 px-4 py-2 text-xs disabled:opacity-50"
-                >
-                  {busy === 'approval' ? 'Checking…' : '2) Check Approval'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleBuildSwap}
-                  disabled={!quote || busy !== null || !identityReady}
-                  className="rounded-full border border-zinc-700 px-4 py-2 text-xs disabled:opacity-50"
-                >
-                  {busy === 'buildSwap' ? 'Building…' : '3) Build Swap Tx'}
+                  <ArrowDown className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => openConfirm('approval')}
-                  disabled={!approvalData || busy !== null || !identityReady}
-                  className="rounded-full border border-zinc-700 px-4 py-2 text-xs disabled:opacity-50"
-                >
-                  {busy === 'executeApproval' ? 'Sending…' : '4) Execute Approval (ERC-4337)'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openConfirm('swap')}
-                  disabled={!swapTx || busy !== null || !identityReady}
-                  className="rounded-full border border-zinc-700 px-4 py-2 text-xs disabled:opacity-50"
-                >
-                  {busy === 'executeSwap' ? 'Sending…' : '5) Execute Swap (ERC-4337)'}
-                </button>
-              </div>
-
-              {status ? <div className="text-emerald-300 text-xs">{status}</div> : null}
-              {error ? <div className="text-rose-300 text-xs">{error}</div> : null}
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-white/3 p-5 space-y-4">
-              <div className="label">Execution Wallet</div>
-              {isConnected ? (
-                <div className="space-y-2 text-xs">
-                  <div className="text-zinc-500">Connected signer</div>
-                  <div className="text-zinc-300 break-all">{address}</div>
-                  <div className="text-zinc-500 mt-2">Canonical smart wallet (executor)</div>
-                  <div className="text-zinc-300 break-all">{canonicalAddress ?? 'Not detected'}</div>
-                  <div className="text-zinc-500 mt-2">Owner check</div>
-                  <div className={canOperateCanonical ? 'text-emerald-300' : 'text-amber-300'}>
-                    {canOperateCanonical ? 'Connected signer can operate canonical CSW' : 'Signer is not an owner of canonical CSW'}
+              <div className="rounded-2xl border border-white/10 bg-[#101114] p-4">
+                <div className="text-sm text-zinc-300 mb-2">Buy</div>
+                <div className="flex items-end justify-between gap-3">
+                  <div className="w-full text-4xl leading-none font-medium text-white">
+                    {estimatedOut ? formatDisplayAmount(estimatedOut) : '0.0'}
                   </div>
+                  <select
+                    value={tokenOut}
+                    onChange={(e) => setTokenOut(e.target.value)}
+                    className="rounded-full border border-white/20 bg-[#15161b] px-3 py-2 text-sm font-medium text-white"
+                  >
+                    {tokenOptions.map((opt) => (
+                      <option key={opt.address} value={opt.address}>{opt.symbol}</option>
+                    ))}
+                  </select>
                 </div>
-              ) : (
-                <ConnectButtonWeb3 />
-              )}
-              <div className="text-[11px] text-zinc-500">
-                Swap execution is pinned to canonical ERC-4337 flow, matching Zora-style smart-wallet behavior.
+                <div className="mt-2 text-xs text-zinc-500 break-all">{tokenOut}</div>
               </div>
-              {!canonicalAddress ? (
-                <div className="text-[11px] text-amber-300">
-                  Canonical smart wallet not detected from your profile. Complete account setup or reconnect your canonical wallet.
+
+              <button
+                type="button"
+                onClick={handleReviewTrade}
+                disabled={!isConnected || !identityReady || !isReady || busy !== null}
+                className="mt-3 w-full rounded-2xl bg-fuchsia-500 px-4 py-3 text-lg font-semibold text-white hover:bg-fuchsia-400 disabled:opacity-50"
+              >
+                {busy === 'review' ? 'Reviewing…' : 'Review'}
+              </button>
+
+              <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
+                <span>Pair: {tokenInSymbol} / {tokenOutSymbol}</span>
+                <span>Slippage {parsedSlippage}%</span>
+              </div>
+
+              {status ? <div className="mt-2 text-emerald-300 text-xs">{status}</div> : null}
+              {error ? <div className="mt-2 text-rose-300 text-xs">{error}</div> : null}
+              {!isConnected ? (
+                <div className="mt-3"><ConnectButtonWeb3 /></div>
+              ) : null}
+              {isConnected && !identityReady ? (
+                <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                  Connect an owner signer for your canonical smart wallet to trade.
+                </div>
+              ) : null}
+
+              {showAdvanced ? (
+                <div className="mt-4 space-y-3 rounded-2xl border border-white/10 bg-black/25 p-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">Token In Address</label>
+                      <input
+                        className="mt-1 w-full bg-black/30 border border-zinc-700 rounded-xl px-3 py-2 text-xs"
+                        value={tokenIn}
+                        onChange={(e) => setTokenIn(e.target.value.trim())}
+                        placeholder="0x..."
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Token Out Address</label>
+                      <input
+                        className="mt-1 w-full bg-black/30 border border-zinc-700 rounded-xl px-3 py-2 text-xs"
+                        value={tokenOut}
+                        onChange={(e) => setTokenOut(e.target.value.trim())}
+                        placeholder="0x..."
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Slippage %</label>
+                    <input
+                      className="mt-1 w-full bg-black/30 border border-zinc-700 rounded-xl px-3 py-2 text-xs"
+                      value={slippagePct}
+                      onChange={(e) => setSlippagePct(e.target.value)}
+                      placeholder="0.5"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={handleQuote} disabled={busy !== null || !identityReady} className="rounded-full border border-zinc-700 px-3 py-1.5 text-[11px] disabled:opacity-50">Quote</button>
+                    <button type="button" onClick={handleCheckApproval} disabled={busy !== null || !identityReady} className="rounded-full border border-zinc-700 px-3 py-1.5 text-[11px] disabled:opacity-50">Approval</button>
+                    <button type="button" onClick={handleBuildSwap} disabled={busy !== null || !quote} className="rounded-full border border-zinc-700 px-3 py-1.5 text-[11px] disabled:opacity-50">Build</button>
+                    <button type="button" onClick={() => openConfirm('approval')} disabled={busy !== null || !approvalRequired} className="rounded-full border border-zinc-700 px-3 py-1.5 text-[11px] disabled:opacity-50">Approve now</button>
+                    <button type="button" onClick={() => openConfirm('swap')} disabled={busy !== null || !swapTx} className="rounded-full border border-zinc-700 px-3 py-1.5 text-[11px] disabled:opacity-50">Swap now</button>
+                  </div>
+                  <details className="text-[11px] text-zinc-400">
+                    <summary className="cursor-pointer select-none">Debug payloads</summary>
+                    <div className="mt-2 grid gap-2">
+                      <pre className="rounded-xl border border-white/10 bg-black/30 p-2 overflow-auto max-h-40">{quote ? JSON.stringify(quote, null, 2) : 'Quote response'}</pre>
+                      <pre className="rounded-xl border border-white/10 bg-black/30 p-2 overflow-auto max-h-40">{approvalData ? JSON.stringify(approvalData, null, 2) : 'Approval response'}</pre>
+                      <pre className="rounded-xl border border-white/10 bg-black/30 p-2 overflow-auto max-h-40">{swapTx ? JSON.stringify(swapTx, null, 2) : 'Swap transaction'}</pre>
+                    </div>
+                  </details>
                 </div>
               ) : null}
             </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <pre className="lg:col-span-1 rounded-2xl border border-white/10 bg-black/30 p-4 text-[11px] text-zinc-300 overflow-auto max-h-80">
-              {quote ? JSON.stringify(quote, null, 2) : 'Quote response'}
-            </pre>
-            <pre className="lg:col-span-1 rounded-2xl border border-white/10 bg-black/30 p-4 text-[11px] text-zinc-300 overflow-auto max-h-80">
-              {approvalData ? JSON.stringify(approvalData, null, 2) : 'Approval response'}
-            </pre>
-            <pre className="lg:col-span-1 rounded-2xl border border-white/10 bg-black/30 p-4 text-[11px] text-zinc-300 overflow-auto max-h-80">
-              {swapTx ? JSON.stringify(swapTx, null, 2) : 'Swap transaction'}
-            </pre>
-          </div>
+          </motion.div>
         </div>
       </section>
       {confirmIntent ? (
         <div className="fixed inset-0 z-90 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-zinc-950 p-5 space-y-4">
-            <div className="text-white font-semibold text-lg">Confirm canonical ERC-4337 execution</div>
+            <div className="text-white font-semibold text-lg">Review trade</div>
             <div className="text-xs text-zinc-400 space-y-1">
               <div>Action: {confirmIntent === 'approval' ? 'Approval transaction' : 'Swap transaction'}</div>
               <div>Executor: {canonicalAddress ?? 'N/A'}</div>
               <div>Owner signer: {signerAddress ?? 'N/A'}</div>
-              <div>
-                Pair: {tokenIn} → {tokenOut}
-              </div>
-              <div>Amount: {amountInUnits}</div>
+              <div>Pair: {tokenInSymbol} → {tokenOutSymbol}</div>
+              <div>Amount: {amountInUnits} {tokenInSymbol}</div>
+              <div>Estimated out: {estimatedOut || 'N/A'} {tokenOutSymbol}</div>
+              {approvalRequired && confirmIntent === 'swap' ? (
+                <div className="text-amber-300">Approval required first. We will submit approval, then swap.</div>
+              ) : null}
             </div>
             <div className="flex justify-end gap-2">
               <button

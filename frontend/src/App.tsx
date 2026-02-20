@@ -529,6 +529,7 @@ function App() {
                 <Route path="/explore/content/:chain/pool/:poolIdOrPoolKeyHash" element={<ExploreContentPoolAlias />} />
                 <Route path="/explore/tokens" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
                 <Route path="/explore/pools" element={<Navigate to={withReason('/explore/content', 'legacy-route')} replace />} />
+                <Route path="/trade" element={<Swap />} />
                 <Route path="/swap" element={<Swap />} />
                 <Route path="/positions" element={<Positions />} />
                 <Route path="/portfolio" element={<Portfolio />} />

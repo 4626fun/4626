@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Home, LayoutDashboard, Mail, ShieldCheck } from 'lucide-react'
+import { ArrowLeftRight, Home, LayoutDashboard, Mail, ShieldCheck } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { VaultNavBar } from './brand/VaultNavBar'
 import { ChatWidget } from './chat/ChatWidget'
@@ -29,6 +29,7 @@ type ResolvedAgentSubdomain = {
 const navItems: MobileNavItem[] = [
   { path: '/', icon: Home, label: 'Home', activePrefixes: ['/'] },
   { path: '/explore/creators', icon: LayoutDashboard, label: 'Explore', activePrefixes: ['/explore', '/dashboard'] },
+  { path: '/trade', icon: ArrowLeftRight, label: 'Trade', activePrefixes: ['/trade', '/swap'] },
   { path: '/deploy', icon: LayoutDashboard, label: 'Deploy', activePrefixes: ['/deploy', '/launch', '/status'] },
 ]
 
@@ -111,7 +112,7 @@ export function Layout() {
       {hostMode === 'app' && <ChatWidget />}
 
       {/* Mobile Nav - Minimal */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[70] border-t border-vault-border/60 bg-vault-bg/80 backdrop-blur-xl">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-70 border-t border-vault-border/60 bg-vault-bg/80 backdrop-blur-xl">
         <div className="flex items-center justify-around py-4 px-6">
           {items.map((item) => {
             const { path, icon: Icon, label } = item

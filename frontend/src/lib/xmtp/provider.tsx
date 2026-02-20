@@ -17,6 +17,7 @@ import {
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { getHostMode } from '@/lib/host'
 import { getBasename } from '@/lib/basename-api'
+import { apiFetch } from '@/lib/apiBase'
 import {
   Client,
   Opfs,
@@ -28,6 +29,7 @@ import {
   type AsyncStreamProxy,
 } from '@xmtp/browser-sdk'
 import { IdentifierKind } from '@xmtp/browser-sdk'
+import { getAddress, isAddress } from 'viem'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -74,6 +76,29 @@ type XmtpContextValue = {
   /** Resolve an XMTP inboxId to an Ethereum address (cached). */
   resolveInboxAddress: (inboxId: string) => Promise<string | null>
 }
+
+type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+type WaitlistMeData = {
+  cswAddress?: string | null
+  primarySmartWallet?: string | null
+  baseSubAccount?: string | null
+  connectedAccounts?: Array<{
+    address?: string | null
+    provider?: string | null
+    verifiedAt?: string | null
+    isCanonicalSmartWallet?: boolean
+  }>
+}
+
+const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
+  {
+    type: 'function',
+    name: 'isOwnerAddress',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+] as const
 
 const noop = () => {}
 const XmtpContext = createContext<XmtpContextValue>({
@@ -210,6 +235,46 @@ function hexToBytes(hex: string): Uint8Array {
 function truncateAddress(addr: string): string {
   if (addr.length <= 10) return addr
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
+}
+
+function normalizeEvmAddress(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const raw = value.trim()
+  if (!raw || !isAddress(raw)) return null
+  return getAddress(raw).toLowerCase()
+}
+
+function pickCanonicalSmartWalletAddress(row: WaitlistMeData | null): string | null {
+  if (!row) return null
+
+  const canonicalFromAccounts = (row.connectedAccounts ?? [])
+    .filter((item) => item?.isCanonicalSmartWallet)
+    .map((item) => ({
+      address: normalizeEvmAddress(item?.address),
+      provider: String(item?.provider ?? '').toLowerCase(),
+      verifiedAt: Date.parse(String(item?.verifiedAt ?? '')),
+    }))
+    .filter((item) => Boolean(item.address))
+    .sort((a, b) => {
+      if (a.provider.includes('privy') !== b.provider.includes('privy')) {
+        return a.provider.includes('privy') ? 1 : -1
+      }
+      const aMs = Number.isFinite(a.verifiedAt) ? a.verifiedAt : -1
+      const bMs = Number.isFinite(b.verifiedAt) ? b.verifiedAt : -1
+      return bMs - aMs
+    })
+  if (canonicalFromAccounts[0]?.address) return canonicalFromAccounts[0].address
+
+  const candidates: Array<string | null | undefined> = [
+    row.cswAddress,
+    row.primarySmartWallet,
+    row.baseSubAccount,
+  ]
+  for (const c of candidates) {
+    const normalized = normalizeEvmAddress(c)
+    if (normalized) return normalized
+  }
+  return null
 }
 
 function extractInstallationLimitInboxId(message: string): string | null {
@@ -397,6 +462,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const conversationsRef = useRef<ChatConversation[]>([])
   const mountedRef = useRef(true)
   const connectInFlightRef = useRef(false)
+  const resolvedIdentityByWalletRef = useRef<Map<string, string>>(new Map())
 
   // Cleanup on unmount
   useEffect(() => {
@@ -507,6 +573,45 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   }
 
   // ------- connect -------
+  const resolveXmtpIdentityAddress = useCallback(async (connectedAddress: string): Promise<string> => {
+    const connected = normalizeEvmAddress(connectedAddress)
+    if (!connected) return connectedAddress.toLowerCase()
+
+    const cached = resolvedIdentityByWalletRef.current.get(connected)
+    if (cached) return cached
+
+    let preferred = connected
+    try {
+      const res = await apiFetch('/api/waitlist/me', {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<WaitlistMeData | null> | null
+      const row = res.ok && json?.success ? (json.data ?? null) : null
+      const canonical = pickCanonicalSmartWalletAddress(row)
+      if (canonical) preferred = canonical
+    } catch {
+      // Best-effort canonical identity resolution; fallback to connected wallet.
+    }
+
+    if (preferred !== connected && publicClient) {
+      try {
+        const isOwner = (await publicClient.readContract({
+          address: preferred as `0x${string}`,
+          abi: COINBASE_SMART_WALLET_OWNER_CHECK_ABI,
+          functionName: 'isOwnerAddress',
+          args: [connected as `0x${string}`],
+        })) as boolean
+        if (!isOwner) preferred = connected
+      } catch {
+        preferred = connected
+      }
+    }
+
+    resolvedIdentityByWalletRef.current.set(connected, preferred)
+    return preferred
+  }, [publicClient])
+
   const connect = useCallback(async () => {
     if (!address || !walletClient) return
     if (clientRef.current) return // already connected
@@ -514,12 +619,15 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     if (getHostMode() !== 'app') return // XMTP only on app.4626.fun to avoid multi-origin installations
 
     connectInFlightRef.current = true
+    let xmtpIdentityAddress = String(address).toLowerCase()
     try {
       setError(null)
       setInstallationLimitInboxId(null)
+      xmtpIdentityAddress = await resolveXmtpIdentityAddress(address)
+      console.log('[xmtp] Using identity for connect:', xmtpIdentityAddress)
 
       const identifier = {
-        identifier: address as `0x${string}`,
+        identifier: xmtpIdentityAddress as `0x${string}`,
         identifierKind: IdentifierKind.Ethereum,
       }
       const baseOptions = {
@@ -577,7 +685,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         msgStreamRef.current = allMsgStream
         void requestNotificationPermission()
         if (mountedRef.current) {
-          setAutoConnectEnabled(address)
+          setAutoConnectEnabled(xmtpIdentityAddress)
           setStatus('connected')
         }
 
@@ -623,7 +731,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       // Encryption key: the Browser SDK does NOT use it for encryption (per XMTP
       // docs), but the API still accepts it.  We keep the stored key for backward
       // compat with databases created by older versions of this code.
-      const encKeyHex = getOrCreateEncKeyHex(address)
+      const encKeyHex = getOrCreateEncKeyHex(xmtpIdentityAddress)
       const encKeyBytes = hexToBytes(encKeyHex)
 
       // ── Phase 1: Try Client.build (restore from local OPFS DB, zero popups) ──
@@ -741,12 +849,12 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
       setStatus('connecting')
 
-      // Detect whether the connected wallet is a smart contract wallet (SCW).
+      // Detect whether the XMTP identity is a smart contract wallet (SCW).
       let isSmartWallet = false
       const chainId = walletClient.chain?.id ?? 8453
       if (publicClient) {
         try {
-          const code = await publicClient.getCode({ address })
+          const code = await publicClient.getCode({ address: xmtpIdentityAddress as `0x${string}` })
           isSmartWallet = typeof code === 'string' && code !== '0x' && code.length > 2
         } catch {
           isSmartWallet = chainId === 8453
@@ -763,13 +871,13 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       const signer: Signer = isSmartWallet
         ? {
             type: 'SCW',
-            getIdentifier: () => ({ identifier: address as `0x${string}`, identifierKind: IdentifierKind.Ethereum }),
+            getIdentifier: () => ({ identifier: xmtpIdentityAddress as `0x${string}`, identifierKind: IdentifierKind.Ethereum }),
             signMessage: signMessageFn,
             getChainId: () => BigInt(chainId),
           }
         : {
             type: 'EOA',
-            getIdentifier: () => ({ identifier: address as `0x${string}`, identifierKind: IdentifierKind.Ethereum }),
+            getIdentifier: () => ({ identifier: xmtpIdentityAddress as `0x${string}`, identifierKind: IdentifierKind.Ethereum }),
             signMessage: signMessageFn,
           }
 
@@ -822,7 +930,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           setInstallationLimitInboxId(extractInstallationLimitInboxId(msg))
           // Disable auto-connect so the 10/10 error doesn't fire on every page load.
           // Auto-connect is re-enabled after a successful resetInstallations() → connect().
-          if (address) clearAutoConnect(address)
+          clearAutoConnect(xmtpIdentityAddress)
         }
         setStatus('error')
         setError(msg)
@@ -830,7 +938,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     } finally {
       connectInFlightRef.current = false
     }
-  }, [address, walletClient, publicClient])
+  }, [address, walletClient, publicClient, resolveXmtpIdentityAddress])
 
   const resetInstallations = useCallback(async () => {
     if (!address || !walletClient) throw new Error('Connect wallet first.')
