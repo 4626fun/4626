@@ -46,7 +46,15 @@ type WaitlistMeData = {
   }>
 }
 
-type TokenOption = { symbol: string; address: string }
+type TokenOption = { symbol: string; address: string; group: 'core' | 'creator' | 'share' }
+
+const CORE_TOKENS: TokenOption[] = [
+  { symbol: 'ETH', address: CONTRACTS.weth, group: 'core' },
+  { symbol: 'USDC', address: CONTRACTS.usdc, group: 'core' },
+  { symbol: 'BTC', address: '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf', group: 'core' }, // cbBTC (Base)
+  { symbol: 'USDT', address: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2', group: 'core' },
+  { symbol: 'ZORA', address: CONTRACTS.zora, group: 'core' },
+]
 
 function isAddressLike(value: unknown): value is `0x${string}` {
   return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value.trim())
@@ -190,20 +198,25 @@ export function Swap() {
   }, [slippagePct])
 
   const tokenOptions = useMemo<TokenOption[]>(() => {
-    const base: TokenOption[] = [
-      { symbol: 'ETH', address: CONTRACTS.weth },
-      { symbol: 'USDC', address: CONTRACTS.usdc },
-    ]
-    const seen = new Set(base.map((t) => t.address.toLowerCase()))
-    for (const candidate of [tokenIn, tokenOut]) {
-      if (!isAddress(candidate)) continue
-      const lc = candidate.toLowerCase()
-      if (seen.has(lc)) continue
-      seen.add(lc)
-      base.push({ symbol: shortAddress(candidate), address: candidate })
+    const creatorCoin = (searchParams.get('token') ?? '').trim()
+    const shareCoin = (searchParams.get('share') ?? searchParams.get('shareToken') ?? '').trim()
+    const base = [...CORE_TOKENS]
+
+    if (isAddress(creatorCoin)) {
+      base.push({ symbol: 'Creator Coin', address: getAddress(creatorCoin), group: 'creator' })
     }
-    return base
-  }, [tokenIn, tokenOut])
+    if (isAddress(shareCoin)) {
+      base.push({ symbol: 'Share Token', address: getAddress(shareCoin), group: 'share' })
+    }
+
+    const seen = new Set<string>()
+    return base.filter((token) => {
+      const lc = token.address.toLowerCase()
+      if (seen.has(lc)) return false
+      seen.add(lc)
+      return true
+    })
+  }, [searchParams])
 
   const tokenInSymbol = useMemo(() => {
     const match = tokenOptions.find((opt) => opt.address.toLowerCase() === tokenIn.toLowerCase())
@@ -491,33 +504,31 @@ export function Swap() {
   return (
     <div className="relative pb-24 md:pb-0">
       <section className="cinematic-section">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <div className="mx-auto grid max-w-6xl gap-6 px-4 sm:px-6 lg:grid-cols-[1.1fr_0.9fr]">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="mx-auto w-full max-w-[560px]"
+            className="space-y-4"
           >
-            <div className="rounded-[28px] border border-white/10 bg-black/55 p-3 sm:p-4 shadow-[0_20px_80px_-30px_rgba(0,0,0,0.9)]">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <button className="rounded-full bg-white/10 px-3 py-1 font-semibold text-white">Swap</button>
-                  <button className="rounded-full px-3 py-1 text-zinc-500" disabled>Limit</button>
-                  <button className="rounded-full px-3 py-1 text-zinc-500" disabled>Buy</button>
-                  <button className="rounded-full px-3 py-1 text-zinc-500" disabled>Sell</button>
+            <div className="rounded-[28px] border border-white/10 bg-black/45 p-6 shadow-[0_20px_80px_-30px_rgba(0,0,0,0.9)] backdrop-blur-xl">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-400">Uniswap routing</div>
+                  <h1 className="mt-1 text-2xl font-semibold text-white">Trade</h1>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowAdvanced((v) => !v)}
-                  className="rounded-full p-2 text-zinc-400 hover:text-zinc-200 hover:bg-white/10"
+                  className="rounded-full border border-white/15 p-2 text-zinc-400 transition hover:bg-white/10 hover:text-zinc-200"
                   title="Trade settings"
                 >
                   <Settings className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-[#101114] p-4">
-                <div className="text-sm text-zinc-300 mb-2">Sell</div>
+              <div className="space-y-2 rounded-2xl border border-white/10 bg-[#101114]/90 p-4">
+                <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">Sell</div>
                 <div className="flex items-end justify-between gap-3">
                   <input
                     className="w-full bg-transparent text-4xl leading-none font-medium text-white outline-none"
@@ -530,27 +541,34 @@ export function Swap() {
                     onChange={(e) => setTokenIn(e.target.value)}
                     className="rounded-full border border-white/20 bg-[#15161b] px-3 py-2 text-sm font-medium text-white"
                   >
-                    {tokenOptions.map((opt) => (
-                      <option key={opt.address} value={opt.address}>{opt.symbol}</option>
-                    ))}
+                    <optgroup label="Core tokens">
+                      {tokenOptions.filter((opt) => opt.group === 'core').map((opt) => (
+                        <option key={opt.address} value={opt.address}>{opt.symbol}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Creator ecosystem">
+                      {tokenOptions.filter((opt) => opt.group !== 'core').map((opt) => (
+                        <option key={opt.address} value={opt.address}>{opt.symbol}</option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
-                <div className="mt-2 text-xs text-zinc-500 break-all">{tokenIn}</div>
+                <div className="text-xs text-zinc-500 break-all">{tokenIn}</div>
               </div>
 
               <div className="relative z-10 -my-3 flex justify-center">
                 <button
                   type="button"
                   onClick={handleSwitchTokens}
-                  className="rounded-xl border border-white/20 bg-[#15161b] p-2 text-zinc-300 hover:text-white"
+                  className="rounded-xl border border-white/20 bg-[#15161b] p-2 text-zinc-300 transition hover:text-white"
                   title="Switch tokens"
                 >
                   <ArrowDown className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-[#101114] p-4">
-                <div className="text-sm text-zinc-300 mb-2">Buy</div>
+              <div className="space-y-2 rounded-2xl border border-white/10 bg-[#101114]/90 p-4">
+                <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">Buy</div>
                 <div className="flex items-end justify-between gap-3">
                   <div className="w-full text-4xl leading-none font-medium text-white">
                     {estimatedOut ? formatDisplayAmount(estimatedOut) : '0.0'}
@@ -560,33 +578,38 @@ export function Swap() {
                     onChange={(e) => setTokenOut(e.target.value)}
                     className="rounded-full border border-white/20 bg-[#15161b] px-3 py-2 text-sm font-medium text-white"
                   >
-                    {tokenOptions.map((opt) => (
-                      <option key={opt.address} value={opt.address}>{opt.symbol}</option>
-                    ))}
+                    <optgroup label="Core tokens">
+                      {tokenOptions.filter((opt) => opt.group === 'core').map((opt) => (
+                        <option key={opt.address} value={opt.address}>{opt.symbol}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Creator ecosystem">
+                      {tokenOptions.filter((opt) => opt.group !== 'core').map((opt) => (
+                        <option key={opt.address} value={opt.address}>{opt.symbol}</option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
-                <div className="mt-2 text-xs text-zinc-500 break-all">{tokenOut}</div>
+                <div className="text-xs text-zinc-500 break-all">{tokenOut}</div>
               </div>
 
               <button
                 type="button"
                 onClick={handleReviewTrade}
                 disabled={!isConnected || !identityReady || !isReady || busy !== null}
-                className="mt-3 w-full rounded-2xl bg-fuchsia-500 px-4 py-3 text-lg font-semibold text-white hover:bg-fuchsia-400 disabled:opacity-50"
+                className="mt-4 w-full rounded-2xl bg-fuchsia-500 px-4 py-3 text-lg font-semibold text-white transition hover:bg-fuchsia-400 disabled:opacity-50"
               >
-                {busy === 'review' ? 'Reviewing…' : 'Review'}
+                {busy === 'review' ? 'Reviewing…' : 'Review trade'}
               </button>
 
-              <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
-                <span>Pair: {tokenInSymbol} / {tokenOutSymbol}</span>
-                <span>Slippage {parsedSlippage}%</span>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-400">
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">Pair: {tokenInSymbol} / {tokenOutSymbol}</div>
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-right">Slippage {parsedSlippage}%</div>
               </div>
 
-              {status ? <div className="mt-2 text-emerald-300 text-xs">{status}</div> : null}
-              {error ? <div className="mt-2 text-rose-300 text-xs">{error}</div> : null}
-              {!isConnected ? (
-                <div className="mt-3"><ConnectButtonWeb3 /></div>
-              ) : null}
+              {status ? <div className="mt-2 text-xs text-emerald-300">{status}</div> : null}
+              {error ? <div className="mt-2 text-xs text-rose-300">{error}</div> : null}
+              {!isConnected ? <div className="mt-3"><ConnectButtonWeb3 /></div> : null}
               {isConnected && !identityReady ? (
                 <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
                   Connect an owner signer for your canonical smart wallet to trade.
@@ -595,30 +618,10 @@ export function Swap() {
 
               {showAdvanced ? (
                 <div className="mt-4 space-y-3 rounded-2xl border border-white/10 bg-black/25 p-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="label">Token In Address</label>
-                      <input
-                        className="mt-1 w-full bg-black/30 border border-zinc-700 rounded-xl px-3 py-2 text-xs"
-                        value={tokenIn}
-                        onChange={(e) => setTokenIn(e.target.value.trim())}
-                        placeholder="0x..."
-                      />
-                    </div>
-                    <div>
-                      <label className="label">Token Out Address</label>
-                      <input
-                        className="mt-1 w-full bg-black/30 border border-zinc-700 rounded-xl px-3 py-2 text-xs"
-                        value={tokenOut}
-                        onChange={(e) => setTokenOut(e.target.value.trim())}
-                        placeholder="0x..."
-                      />
-                    </div>
-                  </div>
                   <div>
                     <label className="label">Slippage %</label>
                     <input
-                      className="mt-1 w-full bg-black/30 border border-zinc-700 rounded-xl px-3 py-2 text-xs"
+                      className="mt-1 w-full rounded-xl border border-zinc-700 bg-black/30 px-3 py-2 text-xs"
                       value={slippagePct}
                       onChange={(e) => setSlippagePct(e.target.value)}
                       placeholder="0.5"
@@ -631,18 +634,28 @@ export function Swap() {
                     <button type="button" onClick={() => openConfirm('approval')} disabled={busy !== null || !approvalRequired} className="rounded-full border border-zinc-700 px-3 py-1.5 text-[11px] disabled:opacity-50">Approve now</button>
                     <button type="button" onClick={() => openConfirm('swap')} disabled={busy !== null || !swapTx} className="rounded-full border border-zinc-700 px-3 py-1.5 text-[11px] disabled:opacity-50">Swap now</button>
                   </div>
-                  <details className="text-[11px] text-zinc-400">
-                    <summary className="cursor-pointer select-none">Debug payloads</summary>
-                    <div className="mt-2 grid gap-2">
-                      <pre className="rounded-xl border border-white/10 bg-black/30 p-2 overflow-auto max-h-40">{quote ? JSON.stringify(quote, null, 2) : 'Quote response'}</pre>
-                      <pre className="rounded-xl border border-white/10 bg-black/30 p-2 overflow-auto max-h-40">{approvalData ? JSON.stringify(approvalData, null, 2) : 'Approval response'}</pre>
-                      <pre className="rounded-xl border border-white/10 bg-black/30 p-2 overflow-auto max-h-40">{swapTx ? JSON.stringify(swapTx, null, 2) : 'Swap transaction'}</pre>
-                    </div>
-                  </details>
                 </div>
               ) : null}
             </div>
           </motion.div>
+
+          <motion.aside
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.05 }}
+            className="space-y-3"
+          >
+            <div className="rounded-3xl border border-white/10 bg-black/35 p-5 backdrop-blur-xl">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-400">Supported assets</h2>
+              <div className="mt-3 space-y-2 text-sm text-zinc-200">
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">ETH · USDC · BTC · USDT · ZORA</div>
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">Creator coins + share tokens (when opened from a creator page)</div>
+              </div>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-black/35 p-5 text-sm text-zinc-300 backdrop-blur-xl">
+              Powered by Uniswap routing on Base and executed from your canonical smart wallet for a premium, secure trading experience.
+            </div>
+          </motion.aside>
         </div>
       </section>
       {confirmIntent ? (
@@ -686,4 +699,3 @@ export function Swap() {
     </div>
   )
 }
-
