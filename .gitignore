@@ -118,7 +118,10 @@ scripts/solana/vanity-pool/*.lock
 !script/DeployInfrastructure.s.sol
 !script/deploy-with-aa.ts
 !script/deploy.sh
-test/
+# Ignore most local tests by default, but allow targeted regression tests.
+test/**
+!test/vault/
+!test/vault/CreatorCharmStrategyOracle.t.sol
 telegram-bot/
 relayer/
 monitoring/

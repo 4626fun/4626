@@ -428,6 +428,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     error MaxTotalSupplyBelowCurrent(uint256 provided, uint256 current);
     error TooManyBlocks(uint256 provided, uint256 max);
     error CannotRescueCreatorCoin();
+    /// @notice Creator coin transfer did not move the expected amount (fee-on-transfer / rebasing / deflationary not supported).
+    error TransferAmountMismatch(uint256 expected, uint256 actual);
 
     // =================================
     // MODIFIERS
@@ -628,7 +630,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @dev Includes idle balance + strategy deployments
      */
     function totalAssets() public view override returns (uint256) {
-        uint256 total = coinBalance;
+        uint256 total = CREATOR_COIN.balanceOf(address(this));
         
         // Add strategy holdings
         uint256 len = strategyList.length;
@@ -681,14 +683,10 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         }
         
         // Pull Creator Coin
-        CREATOR_COIN.safeTransferFrom(msg.sender, address(this), assets);
-        coinBalance += assets;
+        _pullCreatorCoinExact(msg.sender, assets);
         
         // Mint shares
         _mint(receiver, shares);
-        
-        // SECURITY: Track deposit block for flash loan protection
-        lastDepositBlock[receiver] = block.number;
         
         // SECURITY: Verify price didn't change dramatically (prevents manipulation)
         if (!isFirstDeposit) {
@@ -741,14 +739,10 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         }
         
         // Pull Creator Coin
-        CREATOR_COIN.safeTransferFrom(msg.sender, address(this), assets);
-        coinBalance += assets;
+        _pullCreatorCoinExact(msg.sender, assets);
         
         // Mint shares
         _mint(receiver, shares);
-        
-        // SECURITY: Track deposit block for flash loan protection
-        lastDepositBlock[receiver] = block.number;
         
         // SECURITY: Verify price stability (skip for first deposit)
         if (!isFirstDeposit) {
@@ -798,8 +792,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         // Ensure we have enough Creator Coin
         _ensureCoin(assets);
         
-        coinBalance -= assets;
-        CREATOR_COIN.safeTransfer(receiver, assets);
+        _pushCreatorCoinExact(receiver, assets);
         
         emit Withdraw(msg.sender, receiver, owner_, assets, shares);
     }
@@ -843,8 +836,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         // Ensure we have enough Creator Coin
         _ensureCoin(assets);
         
-        coinBalance -= assets;
-        CREATOR_COIN.safeTransfer(receiver, assets);
+        _pushCreatorCoinExact(receiver, assets);
         
         emit Withdraw(msg.sender, receiver, owner_, assets, shares);
     }
@@ -923,8 +915,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         _ensureCoin(assets);
         
         // Transfer
-        coinBalance -= assets;
-        CREATOR_COIN.safeTransfer(receiver, assets);
+        _pushCreatorCoinExact(receiver, assets);
         
         emit WithdrawalClaimed(msg.sender, assets);
     }
@@ -998,20 +989,96 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // ENSURE COIN HELPER
     // =================================
+
+    /**
+     * @notice Synchronize internal `coinBalance` to the real token balance.
+     * @dev `coinBalance` is used for operational decisions; we keep it strict and synced
+     *      to prevent share pricing / solvency issues with non-standard ERC-20 behavior.
+     */
+    function _syncCoinBalance() internal returns (uint256 actual) {
+        actual = CREATOR_COIN.balanceOf(address(this));
+        coinBalance = actual;
+    }
+
+    /**
+     * @notice Pull creator coin and require exact receipt.
+     * @dev Rejects fee-on-transfer / deflationary / rebasing tokens by enforcing
+     *      that the vault's balance increases by exactly `amount`.
+     */
+    function _pullCreatorCoinExact(address from, uint256 amount) internal returns (uint256 received) {
+        uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
+        CREATOR_COIN.safeTransferFrom(from, address(this), amount);
+        uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
+
+        received = afterBal - beforeBal;
+        if (received != amount) revert TransferAmountMismatch(amount, received);
+
+        // Keep internal accounting synchronized with the actual balance.
+        coinBalance = afterBal;
+    }
+
+    /**
+     * @notice Push creator coin out of vault and require exact vault-side debit.
+     * @dev Enforces that the vault's own balance decreases by exactly `amount`.
+     */
+    function _pushCreatorCoinExact(address to, uint256 amount) internal returns (uint256 spent) {
+        uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
+        CREATOR_COIN.safeTransfer(to, amount);
+        uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
+
+        spent = beforeBal - afterBal;
+        if (spent != amount) revert TransferAmountMismatch(amount, spent);
+
+        coinBalance = afterBal;
+    }
+
+    /**
+     * @notice Deploy creator coin into a strategy with strict accounting checks.
+     * @dev Requires both vault-side token debit and strategy reported `deposited`
+     *      amount to exactly equal `amount`.
+     */
+    function _depositIntoStrategyExact(address strategy, uint256 amount) internal returns (uint256 deposited) {
+        uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
+        CREATOR_COIN.forceApprove(strategy, amount);
+        deposited = IStrategy(strategy).deposit(amount);
+        uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
+
+        uint256 spent = beforeBal - afterBal;
+        if (spent != amount) revert TransferAmountMismatch(amount, spent);
+        if (deposited != amount) revert TransferAmountMismatch(amount, deposited);
+
+        coinBalance = afterBal;
+    }
+
+    /**
+     * @notice Withdraw from strategy and validate returned amount against balance delta.
+     */
+    function _withdrawFromStrategyMeasured(address strategy, uint256 amount) internal returns (uint256 withdrawn) {
+        uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
+        withdrawn = IStrategy(strategy).withdraw(amount);
+        uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
+
+        uint256 received = afterBal - beforeBal;
+        if (received != withdrawn) revert TransferAmountMismatch(withdrawn, received);
+
+        coinBalance = afterBal;
+    }
     
     /**
      * @notice Ensure vault has enough Creator Coin for redemptions
      * @dev Withdraws from strategies if needed
      */
     function _ensureCoin(uint256 coinNeeded) internal {
-        if (coinBalance >= coinNeeded) return;
+        uint256 available = _syncCoinBalance();
+        if (available >= coinNeeded) return;
         
-        uint256 deficit = coinNeeded - coinBalance;
+        uint256 deficit = coinNeeded - available;
         
         // Withdraw from strategies
         _withdrawFromStrategies(deficit);
-        
-        if (coinBalance < coinNeeded) {
+
+        available = _syncCoinBalance();
+        if (available < coinNeeded) {
             revert InsufficientBalance();
         }
     }
@@ -1095,8 +1162,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         // Withdraw all funds from strategy
         uint256 currentDebt = strategyDebt[strategy];
         if (currentDebt > 0) {
-            uint256 withdrawn = IStrategy(strategy).withdraw(currentDebt);
-            coinBalance += withdrawn;
+            _withdrawFromStrategyMeasured(strategy, currentDebt);
             totalDebt -= currentDebt;
             strategyDebt[strategy] = 0;
             emit DebtUpdated(strategy, currentDebt, 0);
@@ -1173,11 +1239,14 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      */
     function _deployToStrategies() internal {
         if (totalStrategyWeight == 0) return;
+
+        // Keep coinBalance aligned to real idle balance before computing deployable amounts.
+        uint256 idleBalance = _syncCoinBalance();
         
         // Yearn V3: Use minimumTotalIdle instead of deploymentThreshold
         uint256 minIdle = minimumTotalIdle > deploymentThreshold ? minimumTotalIdle : deploymentThreshold;
-        uint256 deployable = coinBalance > minIdle 
-            ? coinBalance - minIdle 
+        uint256 deployable = idleBalance > minIdle 
+            ? idleBalance - minIdle 
             : 0;
         
         if (deployable == 0) return;
@@ -1192,9 +1261,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
                 
                 if (amount > 0) {
                     uint256 currentDebt = strategyDebt[strategy];
-                    coinBalance -= amount;
-                    CREATOR_COIN.forceApprove(strategy, amount);
-                    uint256 deposited = IStrategy(strategy).deposit(amount);
+                    uint256 deposited = _depositIntoStrategyExact(strategy, amount);
                     
                     // Yearn V3: Track strategy debt
                     uint256 newDebt = currentDebt + deposited;
@@ -1235,9 +1302,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
                         emit UnrealisedLossAssessed(strategy, unrealizedLoss);
                     }
                     
-                    uint256 withdrawn = IStrategy(strategy).withdraw(toWithdraw);
-                    
-                    coinBalance += withdrawn;
+                    uint256 withdrawn = _withdrawFromStrategyMeasured(strategy, toWithdraw);
                     totalWithdrawn += withdrawn;
                     remaining = remaining > withdrawn ? remaining - withdrawn : 0;
                     
@@ -1295,18 +1360,18 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         
         address firstStrategy = defaultQueue[0];
         if (!activeStrategies[firstStrategy]) return;
+
+        uint256 idleBalance = _syncCoinBalance();
         
         uint256 minIdle = minimumTotalIdle > deploymentThreshold ? minimumTotalIdle : deploymentThreshold;
-        if (coinBalance <= minIdle) return;
+        if (idleBalance <= minIdle) return;
         
-        uint256 toAllocate = coinBalance - minIdle;
+        uint256 toAllocate = idleBalance - minIdle;
         if (toAllocate == 0) return;
         
         uint256 currentDebt = strategyDebt[firstStrategy];
         
-        coinBalance -= toAllocate;
-        CREATOR_COIN.forceApprove(firstStrategy, toAllocate);
-        uint256 deposited = IStrategy(firstStrategy).deposit(toAllocate);
+        uint256 deposited = _depositIntoStrategyExact(firstStrategy, toAllocate);
         
         uint256 newDebt = currentDebt + deposited;
         strategyDebt[firstStrategy] = newDebt;
@@ -1402,7 +1467,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @notice Perform maintenance without full report
      */
     function tend() external nonReentrant onlyKeepers {
-        if (coinBalance > deploymentThreshold && totalStrategyWeight > 0) {
+        uint256 idleBalance = _syncCoinBalance();
+        if (idleBalance > deploymentThreshold && totalStrategyWeight > 0) {
             _deployToStrategies();
         }
     }
@@ -1441,8 +1507,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         // Store price before
         uint256 priceBefore = pricePerShare();
         
-        CREATOR_COIN.safeTransferFrom(msg.sender, address(this), amount);
-        coinBalance += amount;
+        _pullCreatorCoinExact(msg.sender, amount);
         
         // SECURITY: Verify price change is within bounds
         uint256 priceAfter = pricePerShare();
@@ -1527,8 +1592,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         uint256 _amount = amount > currentDebt ? currentDebt : amount;
         
         // Buyer sends Creator Coin to vault
-        CREATOR_COIN.safeTransferFrom(msg.sender, address(this), _amount);
-        coinBalance += _amount;
+        _pullCreatorCoinExact(msg.sender, _amount);
         
         // Reduce strategy debt
         uint256 newDebt = currentDebt - _amount;
@@ -1566,8 +1630,15 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         for (uint256 i = 0; i < length; i++) {
             address strategy = strategyList[i];
             if (activeStrategies[strategy]) {
-                try IStrategy(strategy).emergencyWithdraw() returns (uint256 withdrawn) {
-                    coinBalance += withdrawn;
+                uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
+                try IStrategy(strategy).emergencyWithdraw() returns (uint256) {
+                    // In emergencies we prefer progress over strictness; still keep accounting synced.
+                    uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
+                    if (afterBal >= beforeBal) {
+                        coinBalance = afterBal;
+                    } else {
+                        _syncCoinBalance();
+                    }
                 } catch {}
             }
         }
@@ -1867,6 +1938,30 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         }
         if (to == address(0)) revert ZeroAddress();
         IERC20(token).safeTransfer(to, amount);
+    }
+
+    /**
+     * @dev Track the latest share acquisition block for delay enforcement.
+     *      - Mint: receiver gets current block.
+     *      - Transfer: receiver inherits sender recency (max semantics).
+     *      - Burn: no update needed.
+     */
+    function _update(address from, address to, uint256 value) internal override {
+        super._update(from, to, value);
+
+        if (to == address(0)) {
+            return;
+        }
+
+        if (from == address(0)) {
+            lastDepositBlock[to] = block.number;
+            return;
+        }
+
+        uint256 inheritedBlock = lastDepositBlock[from];
+        if (inheritedBlock > lastDepositBlock[to]) {
+            lastDepositBlock[to] = inheritedBlock;
+        }
     }
 
     // =================================

@@ -3,10 +3,12 @@ pragma solidity ^0.8.20;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { IUniswapV3Factory } from "../../../interfaces/uniswap/IUniswapV3Factory.sol";
 import { IUniswapV3Pool } from "../../../interfaces/uniswap/IUniswapV3Pool.sol";
+import { TickMathCompat } from "../../../libraries/TickMathCompat.sol";
 import "../../../interfaces/IStrategy.sol";
 
 /**
@@ -80,6 +82,11 @@ contract CreatorCharmStrategy is IStrategy, ReentrancyGuard, Ownable {
     // STATE VARIABLES
     // =================================
 
+    /// @dev Default TWAP window used for valuation (share pricing).
+    uint32 internal constant DEFAULT_TWAP_DURATION = 1800; // 30 minutes
+    uint32 public constant MIN_TWAP_DURATION = 60; // 1 minute
+    uint32 public constant MAX_TWAP_DURATION = 1 days;
+
     address public immutable vault;           // CreatorOVault address
     IERC20 public immutable CREATOR;          // Creator token
     IERC20 public immutable USDC;             // USDC (quote token)
@@ -87,6 +94,10 @@ contract CreatorCharmStrategy is IStrategy, ReentrancyGuard, Ownable {
 
     ICharmVault public charmVault;
     IUniswapV3Pool public swapPool;           // CREATOR/USDC pool for pricing
+
+    /// @notice TWAP window (seconds) used for valuation inside `getTotalAssets()`.
+    /// @dev This impacts ERC-4626 share pricing via `CreatorOVault.totalAssets()`.
+    uint32 public twapDuration = DEFAULT_TWAP_DURATION;
 
     /// @notice zRouter for gas-efficient swaps (optional)
     /// @dev Base: TBD
@@ -124,6 +135,7 @@ contract CreatorCharmStrategy is IStrategy, ReentrancyGuard, Ownable {
     event DepositFailed(string reason);
     event UnusedTokensReturned(uint256 creatorAmount, uint256 usdcAmount);
     event ParametersUpdated(uint256 maxSwapPercent, uint256 swapSlippageBps);
+    event TwapDurationUpdated(uint32 oldDuration, uint32 newDuration);
 
     // =================================
     // ERRORS
@@ -133,6 +145,8 @@ contract CreatorCharmStrategy is IStrategy, ReentrancyGuard, Ownable {
     error NotActive();
     error ZeroAddress();
     error SlippageExceeded(uint256 expected, uint256 actual);
+    error InvalidTwapDuration(uint32 duration);
+    error TwapUnavailable();
 
     // =================================
     // MODIFIERS
@@ -189,6 +203,15 @@ contract CreatorCharmStrategy is IStrategy, ReentrancyGuard, Ownable {
 
     function setSwapPool(address _swapPool) external onlyOwner {
         swapPool = IUniswapV3Pool(_swapPool);
+    }
+
+    function setTwapDuration(uint32 _twapDuration) external onlyOwner {
+        if (_twapDuration < MIN_TWAP_DURATION || _twapDuration > MAX_TWAP_DURATION) {
+            revert InvalidTwapDuration(_twapDuration);
+        }
+        uint32 old = twapDuration;
+        twapDuration = _twapDuration;
+        emit TwapDurationUpdated(old, _twapDuration);
     }
 
     /// @notice Set zRouter address for gas-efficient swaps
@@ -307,10 +330,76 @@ contract CreatorCharmStrategy is IStrategy, ReentrancyGuard, Ownable {
             : (total0 * ourShares) / totalShares;
 
         // Convert USDC to CREATOR equivalent for total value
-        uint256 creatorPerUsdc = _getPoolPrice();
+        (uint256 creatorPerUsdc, bool ok) = _getPoolPriceTWAP(twapDuration);
+        if (!ok) {
+            // Safer failure mode than returning a manipulable / incorrect valuation:
+            // if we have USDC exposure but cannot compute a TWAP, don't provide share pricing.
+            if (ourUsdc > 0) revert TwapUnavailable();
+            creatorPerUsdc = 0;
+        }
         uint256 usdcInCreator = (ourUsdc * creatorPerUsdc) / 1e6; // USDC has 6 decimals
 
         return ourCreator + usdcInCreator + CREATOR.balanceOf(address(this));
+    }
+
+    /**
+     * @notice Get manipulation-resistant valuation price (CREATOR per USDC, 1e18).
+     * @dev Uses Uniswap V3 TWAP (pool observations), not spot `slot0` (manipulable intra-tx).
+     *      If observations are unavailable, returns (0,false). Callers should not silently fall back to spot pricing.
+     */
+    function _getPoolPriceTWAP(uint32 duration) internal view returns (uint256 creatorPerUsdc, bool ok) {
+        if (address(swapPool) == address(0) || duration == 0) return (0, false);
+
+        // Explicitly require enough oracle history for TWAP valuation.
+        // If not available, valuation should ignore the USDC leg (safe underestimation).
+        (,,, uint16 observationCardinality,,,) = swapPool.slot0();
+        if (observationCardinality < 2) return (0, false);
+
+        uint32[] memory secondsAgos = new uint32[](2);
+        secondsAgos[0] = duration;
+        secondsAgos[1] = 0;
+
+        try swapPool.observe(secondsAgos) returns (int56[] memory tickCumulatives, uint160[] memory) {
+            int56 tickDelta = tickCumulatives[1] - tickCumulatives[0];
+            int56 timeDelta = int56(uint56(duration));
+
+            int56 meanTick = tickDelta / timeDelta;
+            // Uniswap V3 standard: round toward negative infinity.
+            if (tickDelta < 0 && (tickDelta % timeDelta != 0)) meanTick--;
+
+            // Quote: how much CREATOR for 1 USDC (1e6 base units) -> returns CREATOR units (1e18).
+            uint256 quote = _getQuoteAtTick(int24(meanTick), uint128(1e6), address(USDC), address(CREATOR));
+            if (quote == 0) return (0, false);
+            return (quote, true);
+        } catch {
+            return (0, false);
+        }
+    }
+
+    /**
+     * @dev Minimal Uniswap V3 OracleLibrary-style quote at tick.
+     *      Returns `quoteToken` amount for `baseAmount` of `baseToken`.
+     *      Tick is assumed to be for the canonical Uniswap V3 ordering (token0 < token1).
+     */
+    function _getQuoteAtTick(
+        int24 tick,
+        uint128 baseAmount,
+        address baseToken,
+        address quoteToken
+    ) internal pure returns (uint256 quoteAmount) {
+        uint160 sqrtRatioX96 = TickMathCompat.getSqrtRatioAtTick(tick);
+
+        if (sqrtRatioX96 <= type(uint128).max) {
+            uint256 ratioX192 = uint256(sqrtRatioX96) * uint256(sqrtRatioX96);
+            quoteAmount = baseToken < quoteToken
+                ? Math.mulDiv(ratioX192, baseAmount, uint256(1) << 192)
+                : Math.mulDiv(uint256(1) << 192, baseAmount, ratioX192);
+        } else {
+            uint256 ratioX128 = Math.mulDiv(uint256(sqrtRatioX96), uint256(sqrtRatioX96), uint256(1) << 64);
+            quoteAmount = baseToken < quoteToken
+                ? Math.mulDiv(ratioX128, baseAmount, uint256(1) << 128)
+                : Math.mulDiv(uint256(1) << 128, baseAmount, ratioX128);
+        }
     }
 
     // =================================
