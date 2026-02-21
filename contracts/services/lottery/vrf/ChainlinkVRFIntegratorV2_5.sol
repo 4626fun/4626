@@ -28,6 +28,8 @@ interface IRandomWordsCallbackV2_5 {
 contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
     using OptionsBuilder for bytes;
 
+    error UnauthorizedSponsoredCaller();
+
     // State variables
     uint64 public requestCounter;
     uint32 public defaultGasLimit = 690420;
@@ -62,6 +64,7 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
     }
     mapping(uint64 => RequestStatus) public s_requests;
     mapping(uint64 => address) public randomWordsProviders;
+    mapping(address => bool) public authorizedSponsoredCallers;
 
     // Events
     event RandomWordsRequested(uint64 indexed requestId, address indexed requester, uint32 dstEid);
@@ -71,6 +74,7 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
     event CallbackSucceeded(uint64 indexed sequence, address indexed provider);
     event RequestExpired(uint64 indexed sequence, address indexed provider);
     event GasLimitUpdated(uint32 oldLimit, uint32 newLimit);
+    event SponsoredCallerAuthorizationUpdated(address indexed caller, bool authorized);
 
     // Configuration
     uint256 public requestTimeout = 1 hours;
@@ -90,6 +94,8 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
         require(_owner != address(0), "Invalid owner");
         require(_hubEid != 0, "Invalid hub EID");
         hubEid = _hubEid;
+        authorizedSponsoredCallers[_owner] = true;
+        emit SponsoredCallerAuthorizationUpdated(_owner, true);
     }
 
     /**
@@ -208,11 +214,23 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
         external
         returns (MessagingReceipt memory receipt, uint64 requestId)
     {
+        if (!authorizedSponsoredCallers[msg.sender]) revert UnauthorizedSponsoredCaller();
         return _requestRandomWords(hubEid, false);
     }
 
     /**
      * @notice Request random words with caller-provided fee
+     */
+    function requestRandomWordsPayable(uint32 targetEid)
+        external
+        payable
+        returns (MessagingReceipt memory receipt, uint64 requestId)
+    {
+        return _requestRandomWords(targetEid, true);
+    }
+
+    /**
+     * @notice Backward-compatible caller-pays request to hub
      */
     function requestRandomWordsPayable()
         external
@@ -291,6 +309,12 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
     function setPriceOracle(address _oracle) external onlyOwner {
         priceOracle = _oracle;
         emit PriceOracleSet(_oracle);
+    }
+
+    function setSponsoredCallerAuthorization(address caller, bool authorized) external onlyOwner {
+        require(caller != address(0), "Invalid caller");
+        authorizedSponsoredCallers[caller] = authorized;
+        emit SponsoredCallerAuthorizationUpdated(caller, authorized);
     }
 
     /**

@@ -67,6 +67,41 @@ function setLotteryConfig(
 ) external onlyOwner;
 ```
 
+### Cross-Chain Fee Sponsorship Guardrails
+
+When cross-chain VRF and winner callbacks are enabled, the manager can sponsor LayerZero native fees.
+To prevent unbounded fee burn, `CreatorLotteryManager` uses a hybrid model:
+
+- **Caller-funded first**: if a swap caller provides `msg.value`, VRF request fees use caller funds.
+- **Bounded sponsorship fallback**: if caller funds are absent/insufficient, sponsorship is allowed only under policy limits.
+- **Callback sponsorship limits**: winner callback sends are independently bounded and remain non-blocking.
+
+Operator controls:
+
+```solidity
+function setSponsoredVrfMinSwapAmountUSD(uint256 minSwapAmountUSD) external;
+
+function setVrfSponsorshipPolicy(
+    bool enabled,
+    uint256 maxFeePerMessage,
+    uint256 budgetPerEpoch,
+    uint256 epochDuration
+) external;
+
+function setCallbackSponsorshipPolicy(
+    bool enabled,
+    uint256 maxFeePerMessage,
+    uint256 budgetPerEpoch,
+    uint256 epochDuration
+) external;
+```
+
+Observability events:
+
+- `SponsorshipPolicyUpdated`
+- `SponsorshipSpendRecorded`
+- `SponsorshipSkipped`
+
 ## Prize Payout
 
 Winners receive **69% of jackpot** from **ALL active creator vaults**:

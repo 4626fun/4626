@@ -10,6 +10,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
+import {IStrategyValuation} from "../interfaces/IStrategyValuation.sol";
 
 /**
  * @title CreatorOVault
@@ -406,6 +407,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     
     // Yearn V3 inspired errors
     error StrategyHasUnrealisedLosses(address strategy, uint256 lossAmount);
+    /// @notice Strategy explicitly reports valuation inputs are unhealthy (oracle stale/unavailable).
+    error StrategyValuationNotReady(address strategy);
     error InsufficientIdleForWithdrawal(uint256 requested, uint256 available);
     error QueueTooLong(uint256 length, uint256 maxLength);
     error StrategyNotInQueue(address strategy);
@@ -430,6 +433,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     error CannotRescueCreatorCoin();
     /// @notice Creator coin transfer did not move the expected amount (fee-on-transfer / rebasing / deflationary not supported).
     error TransferAmountMismatch(uint256 expected, uint256 actual);
+    error ETHTransferFailed();
 
     // =================================
     // MODIFIERS
@@ -573,6 +577,40 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     }
 
     /**
+     * @notice Adjust report baseline upward for user principal inflows
+     * @dev Bootstraps from live assets when baseline is uninitialized (legacy vaults)
+     */
+    function _increaseReportBaselineForPrincipalInflow(uint256 assets) internal {
+        if (assets == 0) return;
+
+        uint256 previousTotalAssets = totalAssetsAtLastReport;
+        if (previousTotalAssets == 0) {
+            totalAssetsAtLastReport = totalAssets();
+            return;
+        }
+
+        totalAssetsAtLastReport = previousTotalAssets + assets;
+    }
+
+    /**
+     * @notice Adjust report baseline downward for user principal outflows
+     * @dev Uses floor-at-zero semantics to avoid underflow on extreme outflows
+     */
+    function _decreaseReportBaselineForPrincipalOutflow(uint256 assets) internal {
+        if (assets == 0) return;
+
+        uint256 previousTotalAssets = totalAssetsAtLastReport;
+        if (previousTotalAssets == 0) {
+            totalAssetsAtLastReport = totalAssets();
+            return;
+        }
+
+        totalAssetsAtLastReport = assets >= previousTotalAssets
+            ? 0
+            : previousTotalAssets - assets;
+    }
+
+    /**
      * @notice Burn matured profit-lock shares to realize unlock progression
      */
     function _processProfitUnlock() internal {
@@ -636,11 +674,49 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         uint256 len = strategyList.length;
         for (uint256 i; i < len; i++) {
             if (activeStrategies[strategyList[i]]) {
-                total += IStrategy(strategyList[i]).getTotalAssets();
+                total += _getStrategyAssetsSafe(strategyList[i]);
             }
         }
         
         return total;
+    }
+
+    /**
+     * @notice Read strategy assets without allowing a single faulty strategy to brick the vault.
+     * @dev Returns 0 when strategy valuation reverts.
+     */
+    function _getStrategyAssetsSafe(address strategy) internal view returns (uint256 assets) {
+        try IStrategy(strategy).getTotalAssets() returns (uint256 reportedAssets) {
+            assets = reportedAssets;
+        } catch {
+            assets = 0;
+        }
+    }
+
+    /**
+     * @notice Find the first active strategy explicitly reporting unhealthy valuation.
+     * @dev For backwards compatibility, strategies that do not implement `IStrategyValuation`
+     *      (or revert on the call) are treated as valuation-ready.
+     */
+    function _firstStrategyValuationNotReady() internal view returns (address bad) {
+        uint256 len = strategyList.length;
+        for (uint256 i; i < len; i++) {
+            address strategy = strategyList[i];
+            if (!activeStrategies[strategy]) continue;
+
+            try IStrategyValuation(strategy).isValuationReady() returns (bool ok) {
+                if (!ok) return strategy;
+            } catch {
+                // Strategy does not support valuation readiness or misbehaved; don't brick the vault.
+            }
+        }
+
+        return address(0);
+    }
+
+    function _requireStrategyValuationsReady() internal view {
+        address bad = _firstStrategyValuationNotReady();
+        if (bad != address(0)) revert StrategyValuationNotReady(bad);
     }
     
     /**
@@ -672,6 +748,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         // Store price before for sanity check (only if not first deposit)
         bool isFirstDeposit = totalSupply() == 0;
         uint256 priceBefore = isFirstDeposit ? 0 : pricePerShare();
+
+        // SECURITY: Prevent share dilution when any strategy valuation is unhealthy.
+        _requireStrategyValuationsReady();
         
         shares = previewDeposit(assets);
         if (shares == 0) revert ZeroShares();
@@ -693,6 +772,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
             uint256 priceAfter = pricePerShare();
             _checkPriceChange(priceBefore, priceAfter);
         }
+
+        _increaseReportBaselineForPrincipalInflow(assets);
         
         emit Deposit(msg.sender, receiver, assets, shares);
         
@@ -723,6 +804,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         // Store price before for sanity check (only if not first deposit)
         bool isFirstDeposit = totalSupply() == 0;
         uint256 priceBefore = isFirstDeposit ? 0 : pricePerShare();
+
+        // SECURITY: Prevent share dilution when any strategy valuation is unhealthy.
+        _requireStrategyValuationsReady();
         
         assets = previewMint(shares);
         if (assets == 0) revert ZeroAmount();
@@ -749,6 +833,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
             uint256 priceAfter = pricePerShare();
             _checkPriceChange(priceBefore, priceAfter);
         }
+
+        _increaseReportBaselineForPrincipalInflow(assets);
         
         emit Deposit(msg.sender, receiver, assets, shares);
     }
@@ -793,6 +879,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         _ensureCoin(assets);
         
         _pushCreatorCoinExact(receiver, assets);
+
+        _decreaseReportBaselineForPrincipalOutflow(assets);
         
         emit Withdraw(msg.sender, receiver, owner_, assets, shares);
     }
@@ -837,6 +925,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         _ensureCoin(assets);
         
         _pushCreatorCoinExact(receiver, assets);
+
+        _decreaseReportBaselineForPrincipalOutflow(assets);
         
         emit Withdraw(msg.sender, receiver, owner_, assets, shares);
     }
@@ -916,6 +1006,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         
         // Transfer
         _pushCreatorCoinExact(receiver, assets);
+
+        _decreaseReportBaselineForPrincipalOutflow(assets);
         
         emit WithdrawalClaimed(msg.sender, assets);
     }
@@ -947,6 +1039,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     function maxDeposit(address receiver) public view override returns (uint256) {
         if (paused || isShutdown) return 0;
         if (whitelistEnabled && !whitelist[receiver]) return 0;
+        if (_firstStrategyValuationNotReady() != address(0)) return 0;
         uint256 currentSupply = totalSupply();
         if (currentSupply >= maxTotalSupply) return 0;
         
@@ -963,6 +1056,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     function maxMint(address receiver) public view override returns (uint256) {
         if (paused || isShutdown) return 0;
         if (whitelistEnabled && !whitelist[receiver]) return 0;
+        if (_firstStrategyValuationNotReady() != address(0)) return 0;
         uint256 currentSupply = totalSupply();
         if (currentSupply >= maxTotalSupply) return 0;
         return maxTotalSupply - currentSupply;
@@ -1291,7 +1385,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
             address strategy = queue[i];
             if (activeStrategies[strategy]) {
                 uint256 currentDebt = strategyDebt[strategy];
-                uint256 strategyAssets = IStrategy(strategy).getTotalAssets();
+                uint256 strategyAssets = _getStrategyAssetsSafe(strategy);
                 
                 if (strategyAssets > 0) {
                     uint256 toWithdraw = remaining > strategyAssets ? strategyAssets : remaining;
@@ -1332,7 +1426,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         uint256 currentDebt,
         uint256 assetsNeeded
     ) internal view returns (uint256) {
-        uint256 strategyAssets = IStrategy(strategy).getTotalAssets();
+        uint256 strategyAssets = _getStrategyAssetsSafe(strategy);
         
         // If no losses, return 0
         if (strategyAssets >= currentDebt || currentDebt == 0) {
@@ -1393,6 +1487,14 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         _processProfitUnlock();
         uint256 currentTotalAssets = totalAssets();
         uint256 previousTotalAssets = totalAssetsAtLastReport;
+
+        // Bootstrap baseline for legacy/uninitialized vaults to prevent principal-as-profit minting.
+        if (previousTotalAssets == 0) {
+            lastReport = uint96(block.timestamp);
+            totalAssetsAtLastReport = currentTotalAssets;
+            emit Reported(0, 0, 0, currentTotalAssets);
+            return (0, 0);
+        }
         
         if (currentTotalAssets > previousTotalAssets) {
             profit = currentTotalAssets - previousTotalAssets;
@@ -1928,7 +2030,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     function rescueETH() external onlyOwner {
         uint256 balance = address(this).balance;
         if (balance > 0) {
-            payable(owner()).transfer(balance);
+            (bool success,) = payable(owner()).call{value: balance}("");
+            if (!success) revert ETHTransferFailed();
         }
     }
     

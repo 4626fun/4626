@@ -80,7 +80,8 @@ function makeRequestBody() {
   return {
     smartWallet: '0x0000000000000000000000000000000000000002',
     creatorToken: '0x0000000000000000000000000000000000000003',
-    ownerAddress: '0x0000000000000000000000000000000000000001',
+    // Handler invariant: ownerAddress must match smartWallet (canonical deploy sender)
+    ownerAddress: '0x0000000000000000000000000000000000000002',
     phase2Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x' }],
     phase3Calls: [],
   }

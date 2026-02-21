@@ -3,14 +3,14 @@ pragma solidity ^0.8.20;
 
 /**
  * @title CreatorLotteryManager
- * @author 0xakita.eth 
+ * @author 0xakita.eth
  * @notice SHARED swap-based lottery service for ALL Creator Coins (hub-only, deployed on Base)
- * 
+ *
  * @dev ARCHITECTURE (Hub-Centric):
  *      This is a SHARED service deployed ONLY on the hub chain (Base).
  *      It serves ALL Creator Coins by looking up their contracts from the registry.
  *      Remote chain OFTs send lottery entry messages here via LayerZero.
- * 
+ *
  * @dev LOTTERY MECHANICS:
  *      1. User trades ANY share token (■AKITA, ■DRAGON, etc) on ANY chain
  *      2. Hub: local processSwapLottery() is called directly
@@ -19,7 +19,7 @@ pragma solidity ^0.8.20;
  *      4. ve4626 lockers get boosted win chances
  *      5. Winners receive % from ALL active creator vaults (diversified prize!)
  *      6. Winner callback sent to source chain OFT for UX notification
- * 
+ *
  * @dev MULTI-TOKEN PRIZE PAYOUT:
  *      Winner gets shares from EVERY active creator vault on Base:
  *        - ■AKITA shares (69% of AKITA vault jackpot)
@@ -27,12 +27,12 @@ pragma solidity ^0.8.20;
  *        - ■XYZ shares (69% of XYZ vault jackpot)
  *        - ... etc for ALL active creators
  *      Result: Winner gets a diversified portfolio of ALL creator tokens!
- * 
+ *
  * @dev CROSS-CHAIN FLOW (Hub-Centric):
  *      Trade on Base:
  *        1. OFT calls processSwapLottery() directly
  *        2. VRF + payout happen locally
- *      
+ *
  *      Trade on Remote (e.g., Arbitrum):
  *        1. Remote OFT sends MSG_TYPE_LOTTERY_ENTRY to this contract
  *        2. This contract processes VRF locally on Base
@@ -74,8 +74,8 @@ interface ICreatorRegistryLottery {
 }
 
 interface ICreatorGaugeControllerLottery {
-    function getJackpotReserve(address vault) external view returns (uint256);
-    function payJackpot(address vault, address winner, uint256 shares) external;
+    function getJackpotReserve() external view returns (uint256);
+    function payJackpot(address winner, uint256 shares) external;
 }
 
 interface ICreatorVRFConsumer {
@@ -106,7 +106,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     // CONSTANTS
     // ================================
 
-    uint256 public constant MIN_SWAP_USD = 1_000_000;      // $1 (6 decimals)
+    uint256 public constant MIN_SWAP_USD = 1_000_000; // $1 (6 decimals)
     uint256 public constant MAX_SWAP_USD = 1_000_000_000_000; // $1M
     uint256 public constant BASIS_POINTS = 10_000;
 
@@ -117,7 +117,12 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     uint128 public constant DEFAULT_GAS_LIMIT = 200_000;
     uint128 public constant DEFAULT_MSG_VALUE = 0;
     uint128 public constant DEFAULT_CALLBACK_GAS_LIMIT = 100_000;
-    
+    uint256 public constant DEFAULT_SPONSOR_EPOCH_DURATION = 1 hours;
+    uint256 public constant DEFAULT_VRF_SPONSOR_MAX_FEE = 0.01 ether;
+    uint256 public constant DEFAULT_VRF_SPONSOR_BUDGET = 0.25 ether;
+    uint256 public constant DEFAULT_CALLBACK_SPONSOR_MAX_FEE = 0.01 ether;
+    uint256 public constant DEFAULT_CALLBACK_SPONSOR_BUDGET = 0.1 ether;
+
     /// @notice Maximum boost for ve4626 lockers (2.5x = 25000 bps)
     uint256 public constant MAX_VE_BOOST = 25000;
 
@@ -127,7 +132,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
     /// @notice Registry for looking up per-creator contracts
     ICreatorRegistryLottery public immutable registry;
-    
+
     /// @notice Authorized swap contracts that can trigger lottery
     mapping(address => bool) public authorizedSwapContracts;
 
@@ -150,27 +155,52 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     /// @notice Lottery configuration (shared across all creators)
     struct LotteryConfig {
         uint256 minSwapAmount;
-        uint256 rewardPercentage;  // bps of jackpot
+        uint256 rewardPercentage; // bps of jackpot
         bool isActive;
-        uint256 baseWinChance;     // PPM (parts per million)
-        uint256 maxWinChance;      // PPM
-        uint256 usdMultiplierBps;  // Bonus for slippage (10500 = 1.05x)
+        uint256 baseWinChance; // PPM (parts per million)
+        uint256 maxWinChance; // PPM
+        uint256 usdMultiplierBps; // Bonus for slippage (10500 = 1.05x)
     }
 
     LotteryConfig public lotteryConfig;
 
     /// @notice VRF request tracking - includes creator coin and source chain
-    enum VRFType { LOCAL, CROSS_CHAIN }
+    enum VRFType {
+        LOCAL,
+        CROSS_CHAIN
+    }
+    enum SponsorshipSkipReason {
+        DISABLED,
+        BELOW_MIN_SWAP,
+        FEE_ABOVE_CAP,
+        BUDGET_EXCEEDED,
+        INSUFFICIENT_BALANCE,
+        SEND_FAILED
+    }
+
+    struct SponsorshipPolicy {
+        bool enabled;
+        uint256 maxFeePerMessage;
+        uint256 budgetPerEpoch;
+        uint256 epochDuration;
+        uint256 epochStart;
+        uint256 spentInEpoch;
+    }
 
     struct VRFRequest {
         address user;
-        address creatorCoin;     // Which creator coin this entry is for
+        address creatorCoin; // Which creator coin this entry is for
         uint256 amountUSD;
         VRFType vrfType;
-        uint32 sourceChainEid;   // 0 = local (hub), non-zero = remote chain lottery entry
+        uint32 sourceChainEid; // 0 = local (hub), non-zero = remote chain lottery entry
     }
 
     mapping(uint256 => VRFRequest) public vrfRequests;
+
+    /// @notice Funding policy for cross-chain VRF requests and winner callbacks.
+    SponsorshipPolicy public vrfSponsorshipPolicy;
+    SponsorshipPolicy public callbackSponsorshipPolicy;
+    uint256 public sponsoredVrfMinSwapAmountUSD = MIN_SWAP_USD;
 
     /// @notice Authorized remote OFT peers that can send lottery entries
     /// @dev Maps (srcEid, senderBytes32) → authorized
@@ -186,7 +216,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     uint256 public totalLotteryEntries;
     uint256 public totalWinners;
     uint256 public totalRewardsPaid;
-    
+
     /// @notice Per-creator statistics (vault share units)
     struct CreatorStats {
         uint256 entries;
@@ -204,49 +234,57 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
     event LotteryEntryCreated(
         address indexed creatorCoin,
-        address indexed user, 
-        uint256 swapAmountUSD, 
-        uint256 winChancePPM, 
+        address indexed user,
+        uint256 swapAmountUSD,
+        uint256 winChancePPM,
         uint256 requestId
     );
     event LotteryWinner(
         address indexed creatorCoin,
-        address indexed user, 
-        uint256 swapAmountUSD, 
-        uint256 rewardAmount, 
+        address indexed user,
+        uint256 swapAmountUSD,
+        uint256 rewardAmount,
         uint256 requestId
     );
     event LotteryResultProcessed(
         address indexed creatorCoin,
-        address indexed user, 
-        uint256 swapAmountUSD, 
-        bool won, 
-        uint256 rewardAmount, 
+        address indexed user,
+        uint256 swapAmountUSD,
+        bool won,
+        uint256 rewardAmount,
         uint256 requestId
     );
     event SwapContractAuthorized(address indexed swapContract, bool authorized);
     event LotteryConfigUpdated(uint256 minSwap, uint256 rewardPercentage, bool isActive);
-    event CrossChainJackpotPaid(address indexed creatorCoin, address indexed winner, uint256 shares, uint256 tokenValue);
-    event LotteryWon(address indexed creatorCoin, uint256 indexed entryId, address indexed winner, uint256 shares, uint256 tokenValue);
+    event CrossChainJackpotPaid(
+        address indexed creatorCoin, address indexed winner, uint256 shares, uint256 tokenValue
+    );
+    event LotteryWon(
+        address indexed creatorCoin, uint256 indexed entryId, address indexed winner, uint256 shares, uint256 tokenValue
+    );
     event MultiTokenJackpotWon(address indexed triggeringCoin, address indexed winner, uint256 numVaultsPaid);
+    event JackpotPayoutFailed(address indexed creatorCoin, address indexed winner, uint256 shares);
     event RemoteLotteryEntryReceived(
-        uint32 indexed srcEid,
-        address indexed buyer,
-        address indexed tokenIn,
-        uint256 amount,
-        uint32 sourceChainId
+        uint32 indexed srcEid, address indexed buyer, address indexed tokenIn, uint256 amount, uint32 sourceChainId
     );
     event WinnerCallbackSent(
-        uint32 indexed dstEid,
-        address indexed winner,
-        address indexed creatorCoin,
-        uint256 totalSharesPaid
+        uint32 indexed dstEid, address indexed winner, address indexed creatorCoin, uint256 totalSharesPaid
     );
     event RemoteOFTAuthorized(uint32 indexed srcEid, bytes32 sender, bool authorized);
     event CallbackGasLimitUpdated(uint128 newGasLimit);
     event VRFConsumerUpdated(address indexed consumer);
     event TargetEidUpdated(uint32 indexed targetEid);
     event VRFIntegratorUpdated(address indexed integrator, bool trusted);
+    event SponsorshipPolicyUpdated(
+        bytes32 indexed context, bool enabled, uint256 maxFeePerMessage, uint256 budgetPerEpoch, uint256 epochDuration
+    );
+    event SponsoredVrfMinSwapUpdated(uint256 minSwapAmountUSD);
+    event SponsorshipSpendRecorded(
+        bytes32 indexed context, uint256 amount, uint256 spentInEpoch, uint256 budgetPerEpoch, uint256 epochStart
+    );
+    event SponsorshipSkipped(
+        bytes32 indexed context, SponsorshipSkipReason reason, uint256 feeNative, uint256 valueHint
+    );
     event BoostManagerUpdated(address indexed manager);
     event VaultGaugeVotingUpdated(address indexed vaultGaugeVoting);
     event MinVaultWeightUpdated(uint256 minWeightBps);
@@ -272,13 +310,10 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
      * @param _registry CreatorRegistry address
      * @param owner_ Owner address
      */
-    constructor(
-        address _registry,
-        address owner_
-    ) OApp(
-        ICreatorRegistryLottery(_registry).getLayerZeroEndpoint(uint16(block.chainid)),
-        owner_
-    ) Ownable(owner_) {
+    constructor(address _registry, address owner_)
+        OApp(ICreatorRegistryLottery(_registry).getLayerZeroEndpoint(uint16(block.chainid)), owner_)
+        Ownable(owner_)
+    {
         if (owner_ == address(0)) revert ZeroAddress();
         if (_registry == address(0)) revert ZeroAddress();
 
@@ -289,9 +324,27 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
             minSwapAmount: MIN_SWAP_USD,
             rewardPercentage: 6900, // 69% of jackpot
             isActive: true,
-            baseWinChance: 40,      // 0.004%
-            maxWinChance: 40000,    // 4%
+            baseWinChance: 40, // 0.004%
+            maxWinChance: 40000, // 4%
             usdMultiplierBps: 10500 // 1.05x
+        });
+
+        vrfSponsorshipPolicy = SponsorshipPolicy({
+            enabled: true,
+            maxFeePerMessage: DEFAULT_VRF_SPONSOR_MAX_FEE,
+            budgetPerEpoch: DEFAULT_VRF_SPONSOR_BUDGET,
+            epochDuration: DEFAULT_SPONSOR_EPOCH_DURATION,
+            epochStart: block.timestamp,
+            spentInEpoch: 0
+        });
+
+        callbackSponsorshipPolicy = SponsorshipPolicy({
+            enabled: true,
+            maxFeePerMessage: DEFAULT_CALLBACK_SPONSOR_MAX_FEE,
+            budgetPerEpoch: DEFAULT_CALLBACK_SPONSOR_BUDGET,
+            epochDuration: DEFAULT_SPONSOR_EPOCH_DURATION,
+            epochStart: block.timestamp,
+            spentInEpoch: 0
         });
     }
 
@@ -317,22 +370,25 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
      * @param amountIn Amount swapped
      * @return entryId VRF request ID (0 if no entry)
      */
-    function processSwapLottery(
-        address buyer,
-        address tokenIn,
-        uint256 amountIn
-    ) external payable nonReentrant onlyAuthorizedSwapContract whenNotPaused returns (uint256 entryId) {
+    function processSwapLottery(address buyer, address tokenIn, uint256 amountIn)
+        external
+        payable
+        nonReentrant
+        onlyAuthorizedSwapContract
+        whenNotPaused
+        returns (uint256 entryId)
+    {
         if (buyer == address(0)) revert ZeroAddress();
         if (tokenIn == address(0)) revert ZeroAddress();
         if (amountIn == 0) revert InvalidAmount();
-        
+
         // Derive creator coin from tokenIn (■TOKEN)
         address creatorCoin = registry.getTokenForShareOFT(tokenIn);
         if (creatorCoin == address(0)) {
             // Silently skip unregistered tokens (no lottery entry)
             return 0;
         }
-        
+
         // Verify creator coin is registered AND active
         if (!registry.isCreatorCoinActive(creatorCoin)) {
             // Silently skip inactive/unregistered creators (no lottery entry)
@@ -361,7 +417,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         if (useLocalVRF && address(localVRFConsumer) != address(0)) {
             return _requestLocalVRF(creatorCoin, buyer, swapValueUSD, boostedWinChance);
         } else {
-            return _requestCrossChainVRF(creatorCoin, buyer, swapValueUSD, boostedWinChance);
+            return _requestCrossChainVRF(creatorCoin, buyer, swapValueUSD, boostedWinChance, msg.value);
         }
     }
 
@@ -372,20 +428,19 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         address creatorCoin,
         address buyer,
         uint256 swapValueUSD,
-        uint256 winChancePPM
+        uint256 winChancePPM,
+        uint256 callerFeeValue
     ) internal returns (uint256) {
-        return _requestCrossChainVRFWithSource(creatorCoin, buyer, swapValueUSD, winChancePPM, 0);
+        return _requestCrossChainVRFWithSource(creatorCoin, buyer, swapValueUSD, winChancePPM, 0, callerFeeValue);
     }
 
     /**
      * @notice Request local VRF (hub local call path, sourceChainEid = 0)
      */
-    function _requestLocalVRF(
-        address creatorCoin,
-        address buyer,
-        uint256 swapValueUSD,
-        uint256 winChancePPM
-    ) internal returns (uint256) {
+    function _requestLocalVRF(address creatorCoin, address buyer, uint256 swapValueUSD, uint256 winChancePPM)
+        internal
+        returns (uint256)
+    {
         return _requestLocalVRFWithSource(creatorCoin, buyer, swapValueUSD, winChancePPM, 0);
     }
 
@@ -421,13 +476,8 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         uint256 randomResult = randomWords[0] % 1_000_000;
 
         if (randomResult < winChancePPM) {
-            uint256 reward = _processWin(
-                request.creatorCoin,
-                request.user,
-                request.amountUSD,
-                requestId,
-                request.sourceChainEid
-            );
+            uint256 reward =
+                _processWin(request.creatorCoin, request.user, request.amountUSD, requestId, request.sourceChainEid);
             emit LotteryResultProcessed(request.creatorCoin, request.user, request.amountUSD, true, reward, requestId);
         } else {
             emit LotteryResultProcessed(request.creatorCoin, request.user, request.amountUSD, false, 0, requestId);
@@ -441,25 +491,35 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     /**
      * @notice Calculate USD value of tokens using per-creator oracle
      */
-    function _calculateTokenUSD(
-        address creatorCoin,
-        address tokenIn,
-        uint256 amount
-    ) internal view returns (uint256 usd1e6) {
+    function _calculateTokenUSD(address creatorCoin, address tokenIn, uint256 amount)
+        internal
+        view
+        returns (uint256 usd1e6)
+    {
         // Get per-creator oracle
         address oracleAddr = registry.getOracleForToken(creatorCoin);
         if (oracleAddr == address(0)) return 0;
-        
+
         // Get per-creator shareOFT
         address shareOFT = registry.getShareOFTForToken(creatorCoin);
-        
+
         // Only works for creator token or its shareOFT
         if (tokenIn != creatorCoin && tokenIn != shareOFT) return 0;
         if (amount == 0) return 0;
 
         ICreatorOracle oracle = ICreatorOracle(oracleAddr);
-        (int256 priceUSD, uint256 timestamp) = oracle.getCreatorPrice();
+        int256 priceUSD;
+        uint256 timestamp;
+        // Oracle reads should never be able to revert swap processing.
+        try oracle.getCreatorPrice() returns (int256 p, uint256 t) {
+            priceUSD = p;
+            timestamp = t;
+        } catch {
+            return 0;
+        }
         if (priceUSD <= 0 || timestamp == 0) return 0;
+        // Prevent underflow and freshness spoofing from future timestamps.
+        if (timestamp > block.timestamp) return 0;
         if (block.timestamp - timestamp > 7200) return 0;
 
         // forge-lint: disable-next-line(unsafe-typecast)
@@ -503,12 +563,11 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
      * - LockDurationBoostPPM: additional additive boost from lock duration
      * - VaultGaugeBoostPPM: additive boost allocated from a bounded weekly gauge budget
      */
-    function _applyBoost(
-        address user,
-        address vault,
-        uint256 swapAmountUSD,
-        uint256 baseWinChance
-    ) internal view returns (uint256 boostedWinChance) {
+    function _applyBoost(address user, address vault, uint256 swapAmountUSD, uint256 baseWinChance)
+        internal
+        view
+        returns (uint256 boostedWinChance)
+    {
         boostedWinChance = baseWinChance;
 
         // STEP 1: Apply personal ve4626 boost (up to 2.5x)
@@ -594,18 +653,12 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
      * @notice Receive LayerZero messages (lottery entries from remote OFTs)
      * @dev Only accepts MSG_TYPE_LOTTERY_ENTRY from authorized remote OFTs
      */
-    function _lzReceive(
-        Origin calldata _origin,
-        bytes32,
-        bytes calldata _payload,
-        address,
-        bytes calldata
-    ) internal override {
+    function _lzReceive(Origin calldata _origin, bytes32, bytes calldata _payload, address, bytes calldata)
+        internal
+        override
+    {
         // Verify sender is an authorized remote OFT
-        require(
-            authorizedRemoteOFTs[_origin.srcEid][_origin.sender],
-            "Unauthorized remote OFT"
-        );
+        require(authorizedRemoteOFTs[_origin.srcEid][_origin.sender], "Unauthorized remote OFT");
 
         // Decode message type
         require(_payload.length >= 32, "Invalid payload");
@@ -623,8 +676,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
      *      Payload: (msgType, buyer, tokenIn, amount, sourceChainId)
      */
     function _handleLotteryEntry(uint32 srcEid, bytes calldata _payload) internal {
-        (
-            , // msgType (already checked)
+        (, // msgType (already checked)
             address buyer,
             address tokenIn,
             uint256 amount,
@@ -658,7 +710,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         if (useLocalVRF && address(localVRFConsumer) != address(0)) {
             entryId = _requestLocalVRFWithSource(creatorCoin, buyer, swapValueUSD, boostedWinChance, srcEid);
         } else {
-            entryId = _requestCrossChainVRFWithSource(creatorCoin, buyer, swapValueUSD, boostedWinChance, srcEid);
+            entryId = _requestCrossChainVRFWithSource(creatorCoin, buyer, swapValueUSD, boostedWinChance, srcEid, 0);
         }
 
         if (entryId > 0) {
@@ -673,7 +725,8 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         address creatorCoin,
         address buyer,
         uint256 swapValueUSD,
-        uint256 /* winChancePPM */,
+        uint256,
+        /* winChancePPM */
         uint32 sourceChainEid
     ) internal returns (uint256) {
         if (address(localVRFConsumer) == address(0)) return 0;
@@ -701,36 +754,51 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         address creatorCoin,
         address buyer,
         uint256 swapValueUSD,
-        uint256 /* winChancePPM */,
-        uint32 sourceChainEid
+        uint256,
+        /* winChancePPM */
+        uint32 sourceChainEid,
+        uint256 callerFeeValue
     ) internal returns (uint256) {
         if (address(vrfIntegrator) == address(0) || targetEid == 0) return 0;
         if (!trustedVrfIntegrators[address(vrfIntegrator)]) return 0;
 
         try vrfIntegrator.quoteFee() returns (MessagingFee memory fee) {
-            if (address(this).balance >= fee.nativeFee) {
-                try vrfIntegrator.requestRandomWordsPayable{value: fee.nativeFee}(targetEid) returns (
-                    MessagingReceipt memory,
-                    uint64 sequence
-                ) {
-                    vrfRequests[uint256(sequence)] = VRFRequest({
-                        user: buyer,
-                        creatorCoin: creatorCoin,
-                        amountUSD: swapValueUSD,
-                        vrfType: VRFType.CROSS_CHAIN,
-                        sourceChainEid: sourceChainEid
-                    });
-                    totalLotteryEntries++;
-                    creatorStats[creatorCoin].entries++;
-                    return uint256(sequence);
-                } catch {
+            uint256 nativeFee = fee.nativeFee;
+            bool useCallerFunds = callerFeeValue >= nativeFee;
+
+            if (!useCallerFunds) {
+                if (!_consumeSponsorship(
+                        vrfSponsorshipPolicy, _sponsorshipContext("VRF_REQUEST"), nativeFee, swapValueUSD, true
+                    )) {
                     return 0;
                 }
+            }
+
+            try vrfIntegrator.requestRandomWordsPayable{value: nativeFee}(targetEid) returns (
+                MessagingReceipt memory, uint64 sequence
+            ) {
+                vrfRequests[uint256(sequence)] = VRFRequest({
+                    user: buyer,
+                    creatorCoin: creatorCoin,
+                    amountUSD: swapValueUSD,
+                    vrfType: VRFType.CROSS_CHAIN,
+                    sourceChainEid: sourceChainEid
+                });
+                totalLotteryEntries++;
+                creatorStats[creatorCoin].entries++;
+                return uint256(sequence);
+            } catch {
+                if (!useCallerFunds && nativeFee > 0) {
+                    _rollbackSponsoredSpend(vrfSponsorshipPolicy, nativeFee);
+                    emit SponsorshipSkipped(
+                        _sponsorshipContext("VRF_REQUEST"), SponsorshipSkipReason.SEND_FAILED, nativeFee, swapValueUSD
+                    );
+                }
+                return 0;
             }
         } catch {
             return 0;
         }
-        return 0;
     }
 
     /**
@@ -738,30 +806,83 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
      *      Payload: (msgType, winner, creatorCoin, totalSharesPaid)
      *      Target: the remote CreatorShareOFT that sent the lottery entry
      */
-    function _sendWinnerCallback(
-        uint32 dstEid,
-        address winner,
-        address creatorCoin,
-        uint256 totalSharesPaid
-    ) internal {
+    function _sendWinnerCallback(uint32 dstEid, address winner, address creatorCoin, uint256 totalSharesPaid) internal {
         // Build callback payload (matches CreatorShareOFT._handleWinnerCallback decoder)
-        bytes memory payload = abi.encode(
-            MSG_TYPE_WINNER_CALLBACK,
-            winner,
-            creatorCoin,
-            totalSharesPaid
-        );
+        bytes memory payload = abi.encode(MSG_TYPE_WINNER_CALLBACK, winner, creatorCoin, totalSharesPaid);
 
         bytes memory options = _buildOptions(dstEid);
 
         MessagingFee memory fee = _quote(dstEid, payload, options, false);
 
-        // Only send if contract has enough gas, don't block payout
-        if (address(this).balance >= fee.nativeFee) {
-            _lzSend(dstEid, payload, options, fee, payable(address(this)));
-            emit WinnerCallbackSent(dstEid, winner, creatorCoin, totalSharesPaid);
-        }
+        if (!_consumeSponsorship(
+                callbackSponsorshipPolicy, _sponsorshipContext("WINNER_CALLBACK"), fee.nativeFee, 0, false
+            )) return;
+
+        _lzSend(dstEid, payload, options, fee, payable(address(this)));
+        emit WinnerCallbackSent(dstEid, winner, creatorCoin, totalSharesPaid);
         // If insufficient gas, silently skip — payout already happened on hub
+    }
+
+    function _sponsorshipContext(string memory label) internal pure returns (bytes32) {
+        return keccak256(bytes(label));
+    }
+
+    function _refreshSponsorshipEpoch(SponsorshipPolicy storage policy) internal {
+        if (policy.epochDuration == 0) return;
+        if (block.timestamp >= policy.epochStart + policy.epochDuration) {
+            policy.epochStart = block.timestamp;
+            policy.spentInEpoch = 0;
+        }
+    }
+
+    function _consumeSponsorship(
+        SponsorshipPolicy storage policy,
+        bytes32 context,
+        uint256 feeNative,
+        uint256 valueHint,
+        bool enforceMinSwap
+    ) internal returns (bool) {
+        if (feeNative == 0) return true;
+
+        _refreshSponsorshipEpoch(policy);
+
+        if (!policy.enabled) {
+            emit SponsorshipSkipped(context, SponsorshipSkipReason.DISABLED, feeNative, valueHint);
+            return false;
+        }
+
+        if (enforceMinSwap && valueHint < sponsoredVrfMinSwapAmountUSD) {
+            emit SponsorshipSkipped(context, SponsorshipSkipReason.BELOW_MIN_SWAP, feeNative, valueHint);
+            return false;
+        }
+
+        if (feeNative > policy.maxFeePerMessage) {
+            emit SponsorshipSkipped(context, SponsorshipSkipReason.FEE_ABOVE_CAP, feeNative, valueHint);
+            return false;
+        }
+
+        if (address(this).balance < feeNative) {
+            emit SponsorshipSkipped(context, SponsorshipSkipReason.INSUFFICIENT_BALANCE, feeNative, valueHint);
+            return false;
+        }
+
+        if (policy.spentInEpoch + feeNative > policy.budgetPerEpoch) {
+            emit SponsorshipSkipped(context, SponsorshipSkipReason.BUDGET_EXCEEDED, feeNative, valueHint);
+            return false;
+        }
+
+        policy.spentInEpoch += feeNative;
+        emit SponsorshipSpendRecorded(context, feeNative, policy.spentInEpoch, policy.budgetPerEpoch, policy.epochStart);
+        return true;
+    }
+
+    function _rollbackSponsoredSpend(SponsorshipPolicy storage policy, uint256 feeNative) internal {
+        if (feeNative == 0) return;
+        if (policy.spentInEpoch >= feeNative) {
+            policy.spentInEpoch -= feeNative;
+        } else {
+            policy.spentInEpoch = 0;
+        }
     }
 
     function _buildOptions(uint32 dstEid) internal view returns (bytes memory) {
@@ -771,19 +892,17 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
             return enforcedOpts;
         }
 
-        return OptionsBuilder.newOptions()
-            .addExecutorLzReceiveOption(callbackGasLimit, DEFAULT_MSG_VALUE);
+        return OptionsBuilder.newOptions().addExecutorLzReceiveOption(callbackGasLimit, DEFAULT_MSG_VALUE);
     }
 
     /**
      * @notice Quote the fee for a winner callback message
      */
-    function quoteWinnerCallback(
-        uint32 dstEid,
-        address winner,
-        address creatorCoin,
-        uint256 totalSharesPaid
-    ) external view returns (MessagingFee memory fee) {
+    function quoteWinnerCallback(uint32 dstEid, address winner, address creatorCoin, uint256 totalSharesPaid)
+        external
+        view
+        returns (MessagingFee memory fee)
+    {
         bytes memory payload = abi.encode(MSG_TYPE_WINNER_CALLBACK, winner, creatorCoin, totalSharesPaid);
         bytes memory options = _buildOptions(dstEid);
         return _quote(dstEid, payload, options, false);
@@ -796,57 +915,55 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
      * @param payoutBps Percentage of each vault's jackpot to pay (6900 = 69%)
      * @return totalPaidOut Total number of vaults that paid out
      */
-    function _payoutLocalJackpot(
-        address triggeringCoin,
-        address winner,
-        uint16 payoutBps
-    ) internal returns (uint256) {
+    function _payoutLocalJackpot(address triggeringCoin, address winner, uint16 payoutBps) internal returns (uint256) {
         if (_payoutLock == 1) revert ReentrancyGuardReentrantCall();
         _payoutLock = 1;
 
         // Get ALL registered creator coins
         address[] memory allCreators = registry.getAllCreatorCoins();
         uint256 totalPaidOut = 0;
-        
+
         // Pay from EVERY active creator vault
         for (uint256 i = 0; i < allCreators.length; i++) {
             address creatorCoin = allCreators[i];
-            
+
             // Skip inactive creators
             // slither-disable-next-line calls-loop
             if (!registry.isCreatorCoinActive(creatorCoin)) continue;
-            
+
             // Look up per-creator contracts
             // slither-disable-next-line calls-loop
             address vaultAddr = registry.getVaultForToken(creatorCoin);
             // slither-disable-next-line calls-loop
             address gaugeAddr = registry.getGaugeControllerForToken(creatorCoin);
-            
+
             if (vaultAddr == address(0) || gaugeAddr == address(0)) continue;
 
             ICreatorGaugeControllerLottery gaugeController = ICreatorGaugeControllerLottery(gaugeAddr);
-            
+
             // slither-disable-next-line calls-loop
-            uint256 jackpotShares = gaugeController.getJackpotReserve(vaultAddr);
+            uint256 jackpotShares = gaugeController.getJackpotReserve();
 
             if (jackpotShares == 0) continue;
 
             uint256 rewardShares = (jackpotShares * payoutBps) / BASIS_POINTS;
 
             if (rewardShares > 0) {
-                totalRewardsPaid += rewardShares;
-                creatorStats[creatorCoin].rewardsPaid += rewardShares;
-                totalPaidOut++;
-
-                emit LotteryWon(creatorCoin, 0, winner, rewardShares, 0);
-                emit CrossChainJackpotPaid(creatorCoin, winner, rewardShares, 0);
-
                 // slither-disable-next-line calls-loop
                 // slither-disable-next-line reentrancy-no-eth
-                gaugeController.payJackpot(vaultAddr, winner, rewardShares);
+                try gaugeController.payJackpot(winner, rewardShares) {
+                    totalRewardsPaid += rewardShares;
+                    creatorStats[creatorCoin].rewardsPaid += rewardShares;
+                    totalPaidOut++;
+
+                    emit LotteryWon(creatorCoin, 0, winner, rewardShares, 0);
+                    emit CrossChainJackpotPaid(creatorCoin, winner, rewardShares, 0);
+                } catch {
+                    emit JackpotPayoutFailed(creatorCoin, winner, rewardShares);
+                }
             }
         }
-        
+
         // Emit special event for multi-token win
         if (totalPaidOut > 0) {
             emit MultiTokenJackpotWon(triggeringCoin, winner, totalPaidOut);
@@ -885,6 +1002,54 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
     function setUseLocalVRF(bool _useLocal) external onlyOwner {
         useLocalVRF = _useLocal;
+    }
+
+    function setSponsoredVrfMinSwapAmountUSD(uint256 _minSwapAmountUSD) external onlyOwner {
+        require(_minSwapAmountUSD >= MIN_SWAP_USD && _minSwapAmountUSD <= MAX_SWAP_USD, "Invalid min");
+        sponsoredVrfMinSwapAmountUSD = _minSwapAmountUSD;
+        emit SponsoredVrfMinSwapUpdated(_minSwapAmountUSD);
+    }
+
+    function setVrfSponsorshipPolicy(
+        bool enabled,
+        uint256 maxFeePerMessage,
+        uint256 budgetPerEpoch,
+        uint256 epochDuration
+    ) external onlyOwner {
+        require(epochDuration > 0, "Invalid epoch");
+        _refreshSponsorshipEpoch(vrfSponsorshipPolicy);
+        vrfSponsorshipPolicy.enabled = enabled;
+        vrfSponsorshipPolicy.maxFeePerMessage = maxFeePerMessage;
+        vrfSponsorshipPolicy.budgetPerEpoch = budgetPerEpoch;
+        vrfSponsorshipPolicy.epochDuration = epochDuration;
+        if (vrfSponsorshipPolicy.epochStart == 0) {
+            vrfSponsorshipPolicy.epochStart = block.timestamp;
+        }
+
+        emit SponsorshipPolicyUpdated(
+            _sponsorshipContext("VRF_REQUEST"), enabled, maxFeePerMessage, budgetPerEpoch, epochDuration
+        );
+    }
+
+    function setCallbackSponsorshipPolicy(
+        bool enabled,
+        uint256 maxFeePerMessage,
+        uint256 budgetPerEpoch,
+        uint256 epochDuration
+    ) external onlyOwner {
+        require(epochDuration > 0, "Invalid epoch");
+        _refreshSponsorshipEpoch(callbackSponsorshipPolicy);
+        callbackSponsorshipPolicy.enabled = enabled;
+        callbackSponsorshipPolicy.maxFeePerMessage = maxFeePerMessage;
+        callbackSponsorshipPolicy.budgetPerEpoch = budgetPerEpoch;
+        callbackSponsorshipPolicy.epochDuration = epochDuration;
+        if (callbackSponsorshipPolicy.epochStart == 0) {
+            callbackSponsorshipPolicy.epochStart = block.timestamp;
+        }
+
+        emit SponsorshipPolicyUpdated(
+            _sponsorshipContext("WINNER_CALLBACK"), enabled, maxFeePerMessage, budgetPerEpoch, epochDuration
+        );
     }
 
     function setBoostManager(address _manager) external onlyOwner {
@@ -938,20 +1103,11 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     /**
      * @notice Set enforced options for winner callback messages
      */
-    function setCallbackOptions(
-        uint32 dstEid,
-        uint128 gasLimit,
-        uint128 msgValue
-    ) external onlyOwner {
-        bytes memory options = OptionsBuilder.newOptions()
-            .addExecutorLzReceiveOption(gasLimit, msgValue);
+    function setCallbackOptions(uint32 dstEid, uint128 gasLimit, uint128 msgValue) external onlyOwner {
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(gasLimit, msgValue);
 
         EnforcedOptionParam[] memory params = new EnforcedOptionParam[](1);
-        params[0] = EnforcedOptionParam({
-            eid: dstEid,
-            msgType: MSG_TYPE_WINNER_CALLBACK,
-            options: options
-        });
+        params[0] = EnforcedOptionParam({eid: dstEid, msgType: MSG_TYPE_WINNER_CALLBACK, options: options});
 
         _setEnforcedOptions(params);
     }
@@ -970,16 +1126,17 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     /**
      * @notice Batch authorize remote OFTs
      */
-    function batchSetAuthorizedRemoteOFTs(
-        uint32[] calldata srcEids,
-        bytes32[] calldata senders,
-        bool authorized
-    ) external onlyOwner {
+    function batchSetAuthorizedRemoteOFTs(uint32[] calldata srcEids, bytes32[] calldata senders, bool authorized)
+        external
+        onlyOwner
+    {
         require(srcEids.length == senders.length, "Length mismatch");
         for (uint256 i; i < srcEids.length;) {
             authorizedRemoteOFTs[srcEids[i]][senders[i]] = authorized;
             emit RemoteOFTAuthorized(srcEids[i], senders[i], authorized);
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -1010,32 +1167,27 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     /**
      * @notice Get global lottery stats
      */
-    function getGlobalStats() external view returns (
-        uint256 entries,
-        uint256 winners,
-        uint256 rewards
-    ) {
+    function getGlobalStats() external view returns (uint256 entries, uint256 winners, uint256 rewards) {
         return (totalLotteryEntries, totalWinners, totalRewardsPaid);
     }
 
     /**
      * @notice Get lottery stats for a specific creator coin
      */
-    function getCreatorLotteryStats(address creatorCoin) external view returns (
-        uint256 entries,
-        uint256 winners,
-        uint256 rewardsPaid,
-        uint256 jackpotBalance
-    ) {
+    function getCreatorLotteryStats(address creatorCoin)
+        external
+        view
+        returns (uint256 entries, uint256 winners, uint256 rewardsPaid, uint256 jackpotBalance)
+    {
         CreatorStats storage stats = creatorStats[creatorCoin];
-        
+
         // Get jackpot balance from per-creator contracts
         address vaultAddr = registry.getVaultForToken(creatorCoin);
         address gaugeAddr = registry.getGaugeControllerForToken(creatorCoin);
-        
+
         if (vaultAddr != address(0) && gaugeAddr != address(0)) {
             ICreatorGaugeControllerLottery gaugeController = ICreatorGaugeControllerLottery(gaugeAddr);
-            jackpotBalance = gaugeController.getJackpotReserve(vaultAddr);
+            jackpotBalance = gaugeController.getJackpotReserve();
         }
 
         return (stats.entries, stats.winners, stats.rewardsPaid, jackpotBalance);
@@ -1054,7 +1206,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
     function emergencyWithdraw(address token, uint256 amount) external onlyOwner {
         if (token == address(0)) {
-            (bool ok, ) = payable(owner()).call{value: amount}("");
+            (bool ok,) = payable(owner()).call{value: amount}("");
             require(ok, "Failed");
         } else {
             IERC20(token).safeTransfer(owner(), amount);

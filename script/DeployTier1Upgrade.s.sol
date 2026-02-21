@@ -75,6 +75,14 @@ contract DeployTier1Upgrade is Script {
 
     uint16 constant BASE_CHAIN_ID = 8453;
 
+    // Lottery sponsorship guardrails (hybrid model defaults)
+    uint256 constant SPONSORED_MIN_SWAP_USD = 1_000_000; // $1 (1e6)
+    uint256 constant SPONSOR_EPOCH_DURATION = 1 hours;
+    uint256 constant VRF_SPONSOR_MAX_FEE = 0.01 ether;
+    uint256 constant VRF_SPONSOR_BUDGET = 0.25 ether;
+    uint256 constant CALLBACK_SPONSOR_MAX_FEE = 0.01 ether;
+    uint256 constant CALLBACK_SPONSOR_BUDGET = 0.10 ether;
+
     // ═══════════════════════════════════════════════════════════════════
     //                           OUTPUT
     // ═══════════════════════════════════════════════════════════════════
@@ -145,6 +153,26 @@ contract DeployTier1Upgrade is Script {
         newLotteryManager.setAuthorizedSwapContract(SOLANA_BRIDGE_ADAPTER, true);
         console.log("  setAuthorizedSwapContract(SolanaBridgeAdapter): true");
 
+        // Configure bounded sponsorship defaults for cross-chain fees
+        newLotteryManager.setSponsoredVrfMinSwapAmountUSD(SPONSORED_MIN_SWAP_USD);
+        console.log("  setSponsoredVrfMinSwapAmountUSD: $1");
+
+        newLotteryManager.setVrfSponsorshipPolicy(
+            true,
+            VRF_SPONSOR_MAX_FEE,
+            VRF_SPONSOR_BUDGET,
+            SPONSOR_EPOCH_DURATION
+        );
+        console.log("  setVrfSponsorshipPolicy: enabled, maxFee 0.01 ETH, budget 0.25 ETH/hr");
+
+        newLotteryManager.setCallbackSponsorshipPolicy(
+            true,
+            CALLBACK_SPONSOR_MAX_FEE,
+            CALLBACK_SPONSOR_BUDGET,
+            SPONSOR_EPOCH_DURATION
+        );
+        console.log("  setCallbackSponsorshipPolicy: enabled, maxFee 0.01 ETH, budget 0.10 ETH/hr");
+
         console.log("");
 
         // ═══════════════════════════════════════════════════════════════
@@ -206,7 +234,7 @@ contract DeployTier1Upgrade is Script {
         console.log(unicode"│                                                                 │");
         console.log(unicode"│  4. Fund VRF Consumer with ETH for LZ cross-chain responses     │");
         console.log(unicode"│                                                                 │");
-        console.log(unicode"│  5. Fund LotteryManager with ETH for winner callbacks           │");
+        console.log(unicode"│  5. Fund LotteryManager with bounded ETH sponsorship budget      │");
         console.log(unicode"│                                                                 │");
         console.log(unicode"│  6. Update frontend/backend to reference new contract addresses │");
         console.log(unicode"│                                                                 │");

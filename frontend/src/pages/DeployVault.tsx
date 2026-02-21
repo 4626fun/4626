@@ -1513,6 +1513,19 @@ function AddressRow({ label, address }: { label: string; address: Address | null
   )
 }
 
+// `finalizePhase2` exists in two deployed shapes:
+// - legacy: no `meteoraAlphaVault` / `solanaIxs`
+// - upgraded: includes Meteora payload fields (fail-closed)
+// Build Meteora payloads only when the loaded ABI supports them.
+const FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD = (() => {
+  const finalizePhase2 = (CREATOR_VAULT_BATCHER_ABI as readonly any[]).find(
+    (item) => item?.type === 'function' && item?.name === 'finalizePhase2',
+  ) as { inputs?: Array<{ type?: string; components?: Array<{ name?: string }> }> } | undefined
+  const components = finalizePhase2?.inputs?.[0]?.type === 'tuple' ? finalizePhase2.inputs?.[0]?.components ?? [] : []
+  const names = new Set(components.map((component) => String(component?.name ?? '')))
+  return names.has('meteoraAlphaVault') && names.has('solanaIxs')
+})()
+
 function DeployVaultBatcher({
   creatorToken,
   owner,
@@ -2764,15 +2777,21 @@ function DeployVaultBatcher({
           shareOFT: expected.shareOFT,
           adapter: solanaBridgeAdapter,
           buildOnly,
+          expectsMeteoraPayload: FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD,
         })
         const registerBody: Record<string, unknown> = {
           shareOft: expected.shareOFT,
           batcherAddress: batcherAddress,
           buildOnly,
         }
-        if (typeof opts?.expectedSolanaAmountBase === 'bigint' && opts.expectedSolanaAmountBase > 0n) {
+        const expectedSolanaAmountBaseForMeteora = opts?.expectedSolanaAmountBase
+        if (
+          FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD &&
+          typeof expectedSolanaAmountBaseForMeteora === 'bigint' &&
+          expectedSolanaAmountBaseForMeteora > 0n
+        ) {
           registerBody.creatorToken = creatorToken
-          registerBody.expectedSolanaAmount = opts.expectedSolanaAmountBase.toString()
+          registerBody.expectedSolanaAmount = expectedSolanaAmountBaseForMeteora.toString()
           registerBody.shareDecimals = 18
         }
         if (solanaMintOverride) registerBody.solanaMint = solanaMintOverride
@@ -3162,9 +3181,12 @@ function DeployVaultBatcher({
 
         const meteoraPayload = await ensureShareOftRegisteredForSolanaBridge({
           buildOnly: true,
-          expectedSolanaAmountBase,
+          expectedSolanaAmountBase: FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD ? expectedSolanaAmountBase : undefined,
         })
-        if (meteoraPayload && (!meteoraPayload.meteoraAlphaVault || meteoraPayload.solanaIxs.length === 0)) {
+        if (
+          FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD &&
+          (!meteoraPayload || !meteoraPayload.meteoraAlphaVault || meteoraPayload.solanaIxs.length === 0)
+        ) {
           throw new Error(
             'Solana auto-deposit is enabled, but Meteora payload is missing. ' +
               'Check per-creator Meteora mapping and provisioner configuration.',

@@ -9,9 +9,19 @@ import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { ConnectButtonWeb3 } from '@/components/ConnectButtonWeb3'
 import { TransactionLifecycle, type TxLifecycleState } from '@/components/trade/TransactionLifecycle'
 import { CONTRACTS } from '@/config/contracts'
-import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
-import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
-import { apiFetch } from '@/lib/apiBase'
+import { useCanonicalWallet } from '@/hooks/useCanonicalWallet'
+import { useSwapExecution } from '@/hooks/useSwapExecution'
+import { useSwapState } from '@/hooks/useSwapState'
+import { useTokenIdentity } from '@/hooks/useTokenIdentity'
+import { detectUniswapWalletCapabilities } from '@/lib/uniswap/capabilities'
+import {
+  claimLiquidityFees,
+  createPosition,
+  fetchLiquidityPositions,
+  quoteCreatePosition,
+  removeLiquidity,
+} from '@/lib/uniswap/liquidityApi'
+import { pickSwapQuote } from '@/lib/uniswap/tradingApi'
 import {
   assertValidSwapTransaction,
   buildSwap,
@@ -64,39 +74,85 @@ function isAddressLike(value: unknown): value is `0x${string}` {
   return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value.trim())
 }
 
-function asBigInt(v: unknown): bigint {
-  if (typeof v === 'bigint') return v
-  if (typeof v === 'number' && Number.isFinite(v)) return BigInt(Math.floor(v))
-  if (typeof v === 'string' && v.trim()) return BigInt(v)
-  return 0n
+// ─── Liquidity position card ────────────────────────────────────────────────
+
+type LpPosition = {
+  id?: string
+  tokenId?: string
+  token0Symbol?: string
+  token1Symbol?: string
+  feeTier?: number | string
+  tickLower?: number | string
+  tickUpper?: number | string
+  tokensOwed0?: string
+  tokensOwed1?: string
+  liquidity?: string
 }
 
-function shortAddress(value: string): string {
-  if (!isAddress(value)) return value
-  return `${value.slice(0, 6)}...${value.slice(-4)}`
+function LpPositionCard(props: {
+  position: LpPosition
+  busy: string | null
+  onClaim: (id: string) => void
+  onRemove: (id: string) => void
+}) {
+  const { position } = props
+  const posId = String(position.id ?? position.tokenId ?? '')
+  const pair = [position.token0Symbol, position.token1Symbol].filter(Boolean).join(' / ') || 'Unknown pair'
+  const feeTier = position.feeTier ? `${(Number(position.feeTier) / 10000).toFixed(2)}%` : '--'
+  const range =
+    position.tickLower !== undefined && position.tickUpper !== undefined
+      ? `${position.tickLower} → ${position.tickUpper}`
+      : '--'
+  const fees = [position.tokensOwed0, position.tokensOwed1].filter(Boolean).join(' / ') || '--'
+
+  return (
+    <div className="rounded-2xl border border-white/8 bg-vault-card/50 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-white">{pair}</div>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            <span className="rounded-full border border-white/10 bg-white/4 px-2 py-0.5 text-[10px] text-zinc-500">
+              Fee {feeTier}
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/4 px-2 py-0.5 text-[10px] text-zinc-500">
+              Range {range}
+            </span>
+          </div>
+        </div>
+        {posId && (
+          <span className="rounded-full border border-white/8 bg-white/4 px-2 py-0.5 font-mono text-[10px] text-zinc-600 shrink-0">
+            #{posId.slice(-6)}
+          </span>
+        )}
+      </div>
+      <div className="mt-2 text-[11px] text-zinc-500">
+        Unclaimed fees: <span className="text-zinc-400">{fees}</span>
+      </div>
+      {posId && (
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => props.onClaim(posId)}
+            disabled={props.busy !== null}
+            className="flex-1 rounded-xl border border-emerald-400/25 bg-emerald-500/8 py-1.5 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/15 disabled:opacity-50"
+          >
+            Claim fees
+          </button>
+          <button
+            type="button"
+            onClick={() => props.onRemove(posId)}
+            disabled={props.busy !== null}
+            className="flex-1 rounded-xl border border-rose-400/25 bg-rose-500/8 py-1.5 text-xs font-medium text-rose-300 transition hover:bg-rose-500/15 disabled:opacity-50"
+          >
+            Remove
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }
 
-function getNestedAmountOut(input: unknown): string | null {
-  const obj = input as any
-  const candidates = [
-    obj?.quote?.output?.amount,
-    obj?.output?.amount,
-    obj?.amountOut,
-    obj?.outAmount,
-    obj?.currencyAmountOut,
-  ]
-  for (const value of candidates) {
-    if (typeof value === 'string' && value.trim()) return value
-    if (typeof value === 'number' && Number.isFinite(value)) return String(Math.floor(value))
-  }
-  return null
-}
-
-function formatDisplayAmount(value: string): string {
-  const n = Number(value)
-  if (!Number.isFinite(n)) return value
-  return n.toFixed(6)
-}
+// ─── Main page ──────────────────────────────────────────────────────────────
 
 export function Swap() {
   const [searchParams] = useSearchParams()
@@ -136,88 +192,61 @@ export function Swap() {
   const [lpStatus, setLpStatus] = useState<string>('')
   const [lpError, setLpError] = useState<string>('')
 
+  const [walletCapabilities, setWalletCapabilities] = useState<{
+    supports5792: boolean
+    supports7702: boolean
+  }>({ supports5792: false, supports7702: false })
+
+  // ─── LP state ─────────────────────────────────────────────────────────────
+  const [lpBusy, setLpBusy] = useState<string | null>(null)
+  const [lpMode, setLpMode] = useState<'simple' | 'advanced'>('simple')
+  const [lpFeeTier, setLpFeeTier] = useState<string>('3000')
+  const [lpAmountA, setLpAmountA] = useState<string>('1')
+  const [lpAmountB, setLpAmountB] = useState<string>('1')
+  const [lpLowerTick, setLpLowerTick] = useState<string>('')
+  const [lpUpperTick, setLpUpperTick] = useState<string>('')
+  const [lpPositionId, setLpPositionId] = useState<string>('')
+  const [lpStatus, setLpStatus] = useState<string>('')
+  const [lpError, setLpError] = useState<string>('')
+
+  // ─── URL params ───────────────────────────────────────────────────────────
   useEffect(() => {
     const qToken = (searchParams.get('token') ?? '').trim()
-    if (isAddress(qToken)) setTokenOut(qToken)
-  }, [searchParams])
+    if (isAddress(qToken)) setTokenOut(getAddress(qToken))
+  }, [searchParams, setTokenOut])
 
-  const waitlistMeQuery = useQuery({
-    queryKey: ['swap', 'waitlist-me'],
-    queryFn: async (): Promise<WaitlistMeData | null> => {
-      const res = await apiFetch('/api/waitlist/me', {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      })
-      const json = (await res.json().catch(() => null)) as ApiEnvelope<WaitlistMeData | null> | null
-      if (!res.ok || !json?.success) return null
-      return json.data ?? null
-    },
-    staleTime: 15_000,
+  // ─── Canonical wallet ─────────────────────────────────────────────────────
+  const {
+    canonicalAddress,
+    signerAddress,
+    identityReady,
+  } = useCanonicalWallet({
+    address,
+    publicClient,
+    walletReady: Boolean(walletClient),
   })
 
-  const canonicalSmartWalletAddress = useMemo(() => {
-    const row = waitlistMeQuery.data
-    if (!row) return null
+  // Whether the system has a canonical CSW address on file for this user.
+  // When false (null DB row), "Smart Wallet" mode is unavailable AND linking
+  // requires account registration — not just the ownership check failure.
+  const canonicalConfigured = canonicalAddress !== null
 
-    const canonicalFromAccounts = (row.connectedAccounts ?? [])
-      .filter((item) => item?.isCanonicalSmartWallet && isAddressLike(item?.address))
-      .sort((a, b) => {
-        const aProvider = String(a.provider ?? '').toLowerCase()
-        const bProvider = String(b.provider ?? '').toLowerCase()
-        if (aProvider.includes('privy') !== bProvider.includes('privy')) {
-          return aProvider.includes('privy') ? 1 : -1
-        }
-        const aMs = Date.parse(String(a.verifiedAt ?? ''))
-        const bMs = Date.parse(String(b.verifiedAt ?? ''))
-        if (Number.isFinite(aMs) && Number.isFinite(bMs)) return bMs - aMs
-        if (Number.isFinite(aMs)) return -1
-        if (Number.isFinite(bMs)) return 1
-        return String(a.address ?? '').localeCompare(String(b.address ?? ''))
-      })[0]
+  const canonicalReady = identityReady
+  const eoaReady = Boolean(signerAddress && walletClient && publicClient)
 
-    const candidates: Array<string | null | undefined> = [
-      canonicalFromAccounts?.address,
-      row.cswAddress,
-      row.primarySmartWallet,
-      row.baseSubAccount,
-    ]
-    for (const value of candidates) {
-      if (!isAddressLike(value)) continue
-      return getAddress(value).toLowerCase()
-    }
-    return null
-  }, [waitlistMeQuery.data])
+  const [preferredExecutionMode, setPreferredExecutionMode] = useState<WalletMode>(() =>
+    readPreferredWalletMode(),
+  )
 
-  const connectedAddressLc = useMemo(() => {
-    if (!address || !isAddress(address)) return null
-    return getAddress(address).toLowerCase()
-  }, [address])
-
-  const connectedOwnerQuery = useQuery({
-    queryKey: ['swap', 'can-operate-canonical', canonicalSmartWalletAddress, connectedAddressLc],
-    enabled: Boolean(canonicalSmartWalletAddress && connectedAddressLc && publicClient),
-    staleTime: 10_000,
-    queryFn: async () => {
-      if (!canonicalSmartWalletAddress || !connectedAddressLc || !publicClient) return false
-      try {
-        const isOwner = (await publicClient.readContract({
-          address: canonicalSmartWalletAddress as `0x${string}`,
-          abi: COINBASE_SMART_WALLET_OWNER_CHECK_ABI,
-          functionName: 'isOwnerAddress',
-          args: [connectedAddressLc as `0x${string}`],
-        })) as boolean
-        return isOwner === true
-      } catch {
-        return false
-      }
-    },
-  })
-
-  const parsedSlippage = useMemo(() => {
-    const n = Number(slippagePct)
-    if (!Number.isFinite(n) || n <= 0) return 0.5
-    return Math.min(5, n)
-  }, [slippagePct])
+  const executionMode = useMemo<WalletMode>(
+    () =>
+      getDefaultWalletMode({
+        preferredMode: preferredExecutionMode,
+        canonicalReady,
+        eoaReady,
+      }),
+    [preferredExecutionMode, canonicalReady, eoaReady],
+  )
 
   const tokenOptions = useMemo<TokenOption[]>(() => {
     const creatorCoin = (searchParams.get('token') ?? '').trim()
@@ -317,31 +346,9 @@ export function Swap() {
     }
   }, [address, canonicalAddress, isReady, parsedSlippage, tokenIn, tokenOut, amountInUnits, getTokenDecimals])
 
-  async function handleCheckApproval() {
-    if (!canonicalAddress || !isReady) return
-    setBusy('approval')
-    setError('')
-    setStatus('')
-    try {
-      const tokenInDecimals = await getTokenDecimals(tokenIn)
-      const amount = parseUnits(amountInUnits, tokenInDecimals).toString()
-      const data = await checkTradeApproval({
-        walletAddress: canonicalAddress,
-        token: tokenIn,
-        amount,
-        chainId: BASE_CHAIN_ID,
-        tokenOut,
-        tokenOutChainId: BASE_CHAIN_ID,
-        includeGasInfo: true,
-      })
-      setApprovalData(data)
-      setStatus('Approval check complete')
-    } catch (e: any) {
-      setError(e?.message || 'Approval check failed')
-    } finally {
-      setBusy(null)
-    }
-  }
+  useEffect(() => {
+    writePreferredWalletMode(preferredExecutionMode)
+  }, [preferredExecutionMode])
 
   async function handleBuildSwap() {
     if (!quote) return
@@ -414,9 +421,58 @@ export function Swap() {
       setQuoteUpdatedAt(Date.now())
       setApprovalData(nextApproval)
 
-      const outRaw = getNestedAmountOut(pickSwapQuote(nextQuote) ?? nextQuote)
-      if (outRaw) setEstimatedOut(formatUnits(BigInt(outRaw), tokenOutDecimals))
-      else setEstimatedOut('')
+  const selectedQuote = useMemo<QuoteShape | null>(() => {
+    if (!quote) return null
+    const candidate = pickSwapQuote(quote) ?? quote
+    return candidate as QuoteShape
+  }, [quote])
+
+  const routeSummary = useMemo(() => {
+    const routeCandidate =
+      selectedQuote?.route ?? selectedQuote?.routeString ?? selectedQuote?.routing ?? quote?.routing
+    if (routeCandidate === null || routeCandidate === undefined) return null
+    const text = String(routeCandidate).trim()
+    return text || null
+  }, [selectedQuote, quote])
+
+  const priceImpactLabel = useMemo(() => {
+    const priceImpactCandidate =
+      selectedQuote?.priceImpact ??
+      selectedQuote?.priceImpactPercent ??
+      quote?.priceImpact ??
+      quote?.priceImpactPercent
+    return formatPercent(priceImpactCandidate)
+  }, [selectedQuote, quote])
+
+  const gasEstimateLabel = useMemo(() => {
+    const gasCandidate =
+      selectedQuote?.gasFeeUSD ??
+      selectedQuote?.gasEstimateUSD ??
+      quote?.gasFeeUSD ??
+      quote?.gasEstimateUSD
+    if (typeof gasCandidate === 'string' && gasCandidate.trim()) return gasCandidate
+    const numeric = typeof gasCandidate === 'number' ? gasCandidate : Number(gasCandidate)
+    if (!Number.isFinite(numeric)) return null
+    return `$${numeric.toFixed(2)}`
+  }, [selectedQuote, quote])
+
+  const handleSwitchTokens = useCallback(() => {
+    switchTokens()
+    resetTradeState()
+  }, [switchTokens, resetTradeState])
+
+  const handleSetExecutionMode = useCallback((nextMode: WalletMode) => {
+    setPreferredExecutionMode(nextMode)
+  }, [])
+
+  const handleEnableCanonical = useCallback(() => {
+    window.location.assign('/account')
+  }, [])
+
+  // Reset when execution address changes
+  useEffect(() => {
+    resetTradeState()
+  }, [executionAddress, resetTradeState])
 
       const selectedQuote = pickSwapQuote(nextQuote)
       if (!selectedQuote) throw new Error('Quote does not contain executable swap payload')
@@ -438,48 +494,42 @@ export function Swap() {
     }
   }
 
-  async function executeViaCanonical4337(params: {
-    calls: Array<{ to: `0x${string}`; data?: `0x${string}`; value?: bigint }>
-    successLabel: string
-  }) {
-    if (!canonicalAddress || !signerAddress || !walletClient || !publicClient) {
-      throw new Error('Canonical smart wallet or owner signer is not ready')
-    }
-    const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-    const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-    const result = await sendCoinbaseSmartWalletUserOperation({
-      publicClient: publicClient as any,
-      walletClient: walletClient as any,
-      bundlerUrl,
-      smartWallet: canonicalAddress,
-      ownerAddress: signerAddress,
-      calls: params.calls,
-      version: '1',
+  // Debounced auto-quote: only fires when actual swap inputs change.
+  useEffect(() => {
+    if (!executionReady || !isReady) return
+    const timer = window.setTimeout(() => {
+      if (busyRef.current) return
+      void handleQuote()
+    }, 450)
+    return () => window.clearTimeout(timer)
+    // `busy` intentionally omitted — use busyRef to check at call-time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokenIn, tokenOut, amountInUnits, parsedSlippage, executionReady, isReady, handleQuote])
+
+  // Wallet capabilities
+  useEffect(() => {
+    let cancelled = false
+    void detectUniswapWalletCapabilities(walletClient).then((caps) => {
+      if (!cancelled) setWalletCapabilities(caps)
     })
     setTxHash(result.transactionHash)
     setTxState('pending')
     setStatus(`${params.successLabel}: ${result.transactionHash}`)
   }
 
-  async function executeApprovalNow() {
-    if (!approvalData) return
-    const tx = approvalData.approval as Record<string, unknown> | undefined
-    if (!tx?.to || !tx?.data) {
-      setStatus('No approval transaction required')
-      return
-    }
-    setBusy('executeApproval')
-    setError('')
+  // ─── LP handlers ──────────────────────────────────────────────────────────
+  async function handleLpQuote() {
+    if (!canonicalAddress) return
+    setLpBusy('lpQuote'); setLpError(''); setLpStatus('')
     try {
-      await executeViaCanonical4337({
-        calls: [
-          {
-            to: tx.to as `0x${string}`,
-            data: tx.data as `0x${string}`,
-            value: asBigInt(tx.value),
-          },
-        ],
-        successLabel: 'Approval submitted via ERC-4337',
+      await quoteCreatePosition({
+        chainId: BASE_CHAIN_ID,
+        walletAddress: canonicalAddress,
+        token0: tokenIn, token1: tokenOut,
+        amount0: lpAmountA, amount1: lpAmountB,
+        feeTier: Number(lpFeeTier),
+        lowerTick: lpMode === 'advanced' && lpLowerTick.trim() ? Number(lpLowerTick) : undefined,
+        upperTick: lpMode === 'advanced' && lpUpperTick.trim() ? Number(lpUpperTick) : undefined,
       })
       setTxState('success')
     } catch (e: any) {
@@ -492,21 +542,18 @@ export function Swap() {
     }
   }
 
-  async function executeSwapNow() {
-    if (!swapTx) return
-    assertValidSwapTransaction(swapTx)
-    setBusy('executeSwap')
-    setError('')
+  async function handleCreatePosition() {
+    if (!canonicalAddress) return
+    setLpBusy('lpCreate'); setLpError(''); setLpStatus('')
     try {
-      await executeViaCanonical4337({
-        calls: [
-          {
-            to: swapTx.to as `0x${string}`,
-            data: swapTx.data as `0x${string}`,
-            value: asBigInt(swapTx.value),
-          },
-        ],
-        successLabel: 'Swap submitted via canonical ERC-4337',
+      const data = await createPosition({
+        chainId: BASE_CHAIN_ID,
+        walletAddress: canonicalAddress,
+        token0: tokenIn, token1: tokenOut,
+        amount0: lpAmountA, amount1: lpAmountB,
+        feeTier: Number(lpFeeTier),
+        lowerTick: lpMode === 'advanced' && lpLowerTick.trim() ? Number(lpLowerTick) : undefined,
+        upperTick: lpMode === 'advanced' && lpUpperTick.trim() ? Number(lpUpperTick) : undefined,
       })
       setTxState('success')
     } catch (e: any) {
@@ -519,13 +566,28 @@ export function Swap() {
     }
   }
 
-  function openConfirm(intent: 'approval' | 'swap') {
-    setConfirmIntent(intent)
+  async function handleClaimFees(posId?: string) {
+    const id = posId ?? lpPositionId.trim()
+    if (!canonicalAddress || !id) return
+    setLpBusy('lpClaim'); setLpError('')
+    try {
+      await claimLiquidityFees({ chainId: BASE_CHAIN_ID, walletAddress: canonicalAddress, positionId: id })
+      setLpStatus('Fee claim submitted')
+    } catch (e: unknown) {
+      setLpError((e as Error)?.message || 'Unable to claim fees')
+    } finally { setLpBusy(null) }
   }
 
-  function closeConfirm() {
-    if (busy) return
-    setConfirmIntent(null)
+  async function handleRemoveLiquidity(posId?: string) {
+    const id = posId ?? lpPositionId.trim()
+    if (!canonicalAddress || !id) return
+    setLpBusy('lpRemove'); setLpError('')
+    try {
+      await removeLiquidity({ chainId: BASE_CHAIN_ID, walletAddress: canonicalAddress, positionId: id })
+      setLpStatus('Remove liquidity submitted')
+    } catch (e: unknown) {
+      setLpError((e as Error)?.message || 'Unable to remove liquidity')
+    } finally { setLpBusy(null) }
   }
 
   useEffect(() => {
@@ -566,7 +628,9 @@ export function Swap() {
     } catch {
       // Errors are already surfaced via `setError`.
     }
-  }
+    if (Array.isArray(data)) return data as LpPosition[]
+    return []
+  }, [lpPositionsQuery.data])
 
 
   async function handleLpQuote() {
@@ -667,11 +731,11 @@ export function Swap() {
   })
 
   return (
-    <div className="relative pb-24 md:pb-0">
+    <div className="relative pb-[calc(env(safe-area-inset-bottom)+9rem)] md:pb-0">
       <section className="cinematic-section">
         <div className="mx-auto grid max-w-6xl gap-6 px-4 sm:px-6 lg:grid-cols-[1.1fr_0.9fr]">
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
             className="space-y-4"
@@ -822,44 +886,287 @@ export function Swap() {
           </motion.aside>
         </div>
       </section>
-      {confirmIntent ? (
-        <div className="fixed inset-0 z-90 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-zinc-950 p-5 space-y-4">
-            <div className="text-white font-semibold text-lg">Review trade</div>
-            <div className="text-xs text-zinc-400 space-y-1">
-              <div>Action: {confirmIntent === 'approval' ? 'Approval transaction' : 'Swap transaction'}</div>
-              <div>Executor: {canonicalAddress ?? 'N/A'}</div>
-              <div>Owner signer: {signerAddress ?? 'N/A'}</div>
-              <div>Pair: {tokenInSymbol} → {tokenOutSymbol}</div>
-              <div>Amount: {amountInUnits} {tokenInSymbol}</div>
-              <div>Estimated out: {estimatedOut || 'N/A'} {tokenOutSymbol}</div>
-              {approvalRequired && confirmIntent === 'swap' ? (
-                <div className="text-amber-300">Approval required first. We will submit approval, then swap.</div>
-              ) : null}
-            </div>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeConfirm}
-                disabled={busy !== null}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-xs disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void confirmAndExecute()
-                }}
-                disabled={busy !== null}
-                className="btn-accent rounded-full px-4 py-2 text-xs disabled:opacity-50"
-              >
-                Continue
-              </button>
-            </div>
+
+      {/* ─── Sheets / Modals ────────────────────────────────────────────── */}
+      <SwapSettingsSheet
+        open={showAdvanced}
+        busy={busy !== null}
+        slippagePct={slippagePct}
+        deadlineMinutes={deadlineMinutes}
+        onClose={() => setShowAdvanced(false)}
+        onSetSlippagePct={setSlippagePct}
+        onSetDeadlineMinutes={setDeadlineMinutes}
+      />
+
+      <SwapConfirmModal
+        intent={confirmIntent}
+        busy={busy}
+        quoteIsStale={quoteIsStale}
+        executionMode={executionMode}
+        executionAddress={executionAddress}
+        signerAddress={signerAddress}
+        tokenInSymbol={tokenInSymbol}
+        tokenOutSymbol={tokenOutSymbol}
+        tokenInLogoUrl={tokenInDisplay.logoUrl}
+        tokenOutLogoUrl={tokenOutDisplay.logoUrl}
+        amountInUnits={amountInUnits}
+        estimatedOut={estimatedOut}
+        parsedSlippage={parsedSlippage}
+        gasEstimateLabel={gasEstimateLabel}
+        priceImpactLabel={priceImpactLabel}
+        routeSummary={routeSummary}
+        approvalRequired={approvalRequired}
+        permitSignatureRequired={permitSignatureRequired}
+        permitSignaturePending={permitSignaturePending}
+        permitSignatureReady={permitSignatureReady}
+        onCancel={closeConfirm}
+        onConfirm={() => { void confirmAndExecute() }}
+      />
+    </div>
+  )
+}
+
+// ─── Liquidity panel component ──────────────────────────────────────────────
+
+function LiquidityPanel(props: {
+  tokenInSymbol: string
+  tokenOutSymbol: string
+  lpMode: 'simple' | 'advanced'
+  lpFeeTier: string
+  lpAmountA: string
+  lpAmountB: string
+  lpLowerTick: string
+  lpUpperTick: string
+  lpPositionId: string
+  lpStatus: string
+  lpError: string
+  lpBusy: string | null
+  anyBusy: boolean
+  identityReady: boolean
+  positions: LpPosition[]
+  positionsLoading: boolean
+  positionsError: string | null
+  activePanel: 'swap' | 'liquidity'
+  onSetLpMode: (m: 'simple' | 'advanced') => void
+  onSetLpFeeTier: (v: string) => void
+  onSetLpAmountA: (v: string) => void
+  onSetLpAmountB: (v: string) => void
+  onSetLpLowerTick: (v: string) => void
+  onSetLpUpperTick: (v: string) => void
+  onSetLpPositionId: (v: string) => void
+  onLpQuote: () => void
+  onCreatePosition: () => void
+  onClaimFees: (id?: string) => void
+  onRemoveLiquidity: (id?: string) => void
+  onRefreshPositions: () => void
+  onSetActivePanel: (panel: 'swap' | 'liquidity') => void
+  onOpenSettings: () => void
+}) {
+  return (
+    <div className="space-y-4">
+      {/* ─── Execution bar (mirrors swap panel) ─── */}
+      <div className="flex items-center gap-2">
+        <div className="inline-flex rounded-full border border-white/12 bg-black/40 p-0.5 text-xs">
+          {(['swap', 'liquidity'] as const).map((panel) => (
+            <button
+              key={panel}
+              type="button"
+              onClick={() => props.onSetActivePanel(panel)}
+              className={`min-h-7 rounded-full px-3 py-1 transition-colors capitalize ${
+                props.activePanel === panel
+                  ? 'bg-white/15 text-white font-medium'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              {panel}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1" />
+        <button
+          type="button"
+          onClick={props.onOpenSettings}
+          className="rounded-full border border-white/12 bg-white/4 p-2 text-zinc-400 transition hover:bg-white/8 hover:text-zinc-200"
+          title="Settings"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.5}>
+            <circle cx="8" cy="8" r="2" /><path d="M8 2v1M8 13v1M2 8H1m13 0h1M4.05 4.05l-.71-.71m9.32 9.32-.71-.71M4.05 11.95l-.71.71m9.32-9.32-.71.71" />
+          </svg>
+        </button>
+      </div>
+
+      {/* ─── Add liquidity form ─── */}
+      <div className="rounded-2xl border border-white/8 bg-vault-card/50 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-xs font-semibold text-white">Add position</span>
+          <button
+            type="button"
+            onClick={() => props.onSetLpMode(props.lpMode === 'simple' ? 'advanced' : 'simple')}
+            className="rounded-full border border-white/12 bg-white/4 px-3 py-1 text-[11px] text-zinc-400 transition hover:bg-white/8 hover:text-zinc-200"
+          >
+            {props.lpMode === 'simple' ? 'Simple' : 'Advanced'}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="label mb-1 block">{props.tokenInSymbol} amount</label>
+            <input
+              className="min-h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-brand-primary/40"
+              value={props.lpAmountA}
+              onChange={(e) => props.onSetLpAmountA(e.target.value)}
+              placeholder="0.0"
+            />
+          </div>
+          <div>
+            <label className="label mb-1 block">{props.tokenOutSymbol} amount</label>
+            <input
+              className="min-h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-brand-primary/40"
+              value={props.lpAmountB}
+              onChange={(e) => props.onSetLpAmountB(e.target.value)}
+              placeholder="0.0"
+            />
           </div>
         </div>
-      ) : null}
+
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <div>
+            <label className="label mb-1 block">Fee tier</label>
+            <select
+              value={props.lpFeeTier}
+              onChange={(e) => props.onSetLpFeeTier(e.target.value)}
+              className="min-h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none"
+            >
+              <option value="500">0.05%</option>
+              <option value="3000">0.30%</option>
+              <option value="10000">1.00%</option>
+            </select>
+          </div>
+          <div>
+            <label className="label mb-1 block">Position ID</label>
+            <input
+              className="min-h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600"
+              value={props.lpPositionId}
+              onChange={(e) => props.onSetLpPositionId(e.target.value)}
+              placeholder="For claim / remove"
+            />
+          </div>
+        </div>
+
+        {props.lpMode === 'advanced' && (
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <input
+              className="min-h-10 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600"
+              value={props.lpLowerTick}
+              onChange={(e) => props.onSetLpLowerTick(e.target.value)}
+              placeholder="Lower tick"
+            />
+            <input
+              className="min-h-10 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600"
+              value={props.lpUpperTick}
+              onChange={(e) => props.onSetLpUpperTick(e.target.value)}
+              placeholder="Upper tick"
+            />
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={props.onLpQuote}
+            disabled={props.anyBusy || !props.identityReady}
+            className="rounded-xl border border-white/12 bg-white/4 py-2 text-sm text-zinc-300 transition hover:bg-white/8 disabled:opacity-50"
+          >
+            {props.lpBusy === 'lpQuote' ? 'Quoting…' : 'Get quote'}
+          </button>
+          <button
+            type="button"
+            onClick={props.onCreatePosition}
+            disabled={props.anyBusy || !props.identityReady}
+            className="flex items-center justify-center gap-1.5 rounded-xl bg-brand-primary py-2 text-sm font-semibold text-white shadow-[0_4px_20px_-8px_rgba(0,82,255,0.5)] transition hover:bg-brand-hover disabled:opacity-50"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {props.lpBusy === 'lpCreate' ? 'Adding…' : 'Add liquidity'}
+          </button>
+          <button
+            type="button"
+            onClick={() => props.onClaimFees()}
+            disabled={props.anyBusy || !props.identityReady || !props.lpPositionId.trim()}
+            className="rounded-xl border border-emerald-400/20 bg-emerald-500/8 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/15 disabled:opacity-50"
+          >
+            {props.lpBusy === 'lpClaim' ? 'Claiming…' : 'Claim fees'}
+          </button>
+          <button
+            type="button"
+            onClick={() => props.onRemoveLiquidity()}
+            disabled={props.anyBusy || !props.identityReady || !props.lpPositionId.trim()}
+            className="rounded-xl border border-rose-400/20 bg-rose-500/8 py-2 text-sm font-medium text-rose-300 transition hover:bg-rose-500/15 disabled:opacity-50"
+          >
+            {props.lpBusy === 'lpRemove' ? 'Removing…' : 'Remove'}
+          </button>
+        </div>
+
+        {props.lpStatus && (
+          <div className="mt-2 text-xs text-emerald-400">{props.lpStatus}</div>
+        )}
+        {props.lpError && (
+          <div className="mt-2 text-xs text-rose-400">{props.lpError}</div>
+        )}
+      </div>
+
+      {/* ─── Positions ─── */}
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
+            <Droplets className="h-3.5 w-3.5" />
+            Your positions
+          </div>
+          <button
+            type="button"
+            onClick={props.onRefreshPositions}
+            disabled={props.positionsLoading}
+            className="rounded-full border border-white/10 p-1.5 text-zinc-500 transition hover:text-zinc-300 disabled:opacity-50"
+            aria-label="Refresh positions"
+          >
+            <RefreshCw className={`h-3 w-3 ${props.positionsLoading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+
+        {props.positionsLoading && (
+          <div className="space-y-2">
+            {[1, 2].map((i) => (
+              <div key={i} className="h-24 animate-pulse rounded-2xl bg-white/4" />
+            ))}
+          </div>
+        )}
+
+        {props.positionsError && !props.positionsLoading && (
+          <div className="rounded-xl border border-rose-400/20 bg-rose-500/8 px-3 py-2 text-xs text-rose-400">
+            {props.positionsError}
+          </div>
+        )}
+
+        {!props.positionsLoading && !props.positionsError && props.positions.length === 0 && (
+          <div className="rounded-2xl border border-white/6 bg-white/3 px-4 py-6 text-center text-sm text-zinc-600">
+            No active positions
+          </div>
+        )}
+
+        {!props.positionsLoading && props.positions.length > 0 && (
+          <div className="space-y-2">
+            {props.positions.map((pos, i) => (
+              <LpPositionCard
+                key={pos.id ?? pos.tokenId ?? i}
+                position={pos}
+                busy={props.lpBusy}
+                onClaim={props.onClaimFees}
+                onRemove={props.onRemoveLiquidity}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

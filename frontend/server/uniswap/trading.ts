@@ -4,7 +4,7 @@ import { readJsonBody } from '../auth/_shared.js'
 
 type JsonObject = Record<string, unknown>
 
-const DEFAULT_TRADE_API_BASE = 'https://trade.api.uniswap.org/v1'
+const DEFAULT_TRADE_API_BASE = 'https://trade-api.uniswap.org/v1'
 
 function getTradeApiBase(): string {
   const raw = (process.env.UNISWAP_TRADE_API_BASE ?? '').trim()

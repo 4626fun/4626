@@ -894,6 +894,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
 
   const emailTrimmed = useMemo(() => normalizeEmail(email), [email])
   const isEmailValid = useMemo(() => isValidEmail(emailTrimmed), [emailTrimmed])
+  const emailOk = emailTrimmed.length === 0 || isEmailValid
   const connectedAddress = useMemo(
     () =>
       typeof connectedAddressRaw === 'string' && connectedAddressRaw.startsWith('0x') ? connectedAddressRaw.toLowerCase() : null,
@@ -950,8 +951,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     payoutRecipientNormalized,
     verifiedWalletNormalized,
   ])
-  const canSubmit =
-    isEmailValid && (Boolean(creatorCoin?.address) || creatorCoinDeclaredMissing) && connectedWalletAuthorized
+  const canSubmit = emailOk && (Boolean(creatorCoin?.address) || creatorCoinDeclaredMissing) && connectedWalletAuthorized
 
   useEffect(() => {
     if (!verifiedWalletNormalized) return
@@ -1470,9 +1470,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       }
       if (emailTrimmed.length > 0 && !isEmailValid && !emailOptOut) {
         throw new Error('Enter a valid email address.')
-      }
-      if (emailTrimmed.length === 0 && !emailOptOut) {
-        throw new Error('Add an email or continue with wallet only.')
       }
 
       const emailForSubmit = isEmailValid ? emailTrimmed : buildSyntheticEmail(primaryWalletForSubmit())

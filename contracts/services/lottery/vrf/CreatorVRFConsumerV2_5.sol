@@ -105,6 +105,18 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
     mapping(uint256 => VRFRequest) public vrfRequests;
     mapping(uint64 => uint256) public sequenceToRequestId;
     mapping(uint64 => bool) public pendingResponses;
+    mapping(address => bool) public authorizedRelayers;
+
+    struct RateLimitState {
+        uint64 windowStart;
+        uint64 requestCount;
+    }
+
+    mapping(uint32 => RateLimitState) public chainRateLimits;
+    mapping(uint32 => uint64) public chainMaxRequestsPerWindow;
+    uint64 public rateLimitWindowSeconds = 60;
+    uint64 public defaultMaxRequestsPerWindow = 120;
+    bool public rateLimitingEnabled = true;
 
     /// @notice Local request tracking
     uint256 public localRequestCounter;
@@ -156,10 +168,22 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
     event ChainSupportUpdated(uint32 chainEid, bool supported, uint32 gasLimit);
     event ContractFunded(address indexed funder, uint256 amount, uint256 newBalance);
     event LocalCallerAuthorized(address indexed caller, bool authorized);
+    event RelayerAuthorizationUpdated(address indexed relayer, bool authorized);
+    event ResponseQueuedForRelay(uint64 indexed sequence, uint256 indexed requestId, uint32 targetChain, uint256 quotedFee);
+    event PendingResponseRelayed(uint64 indexed sequence, uint256 indexed requestId, address indexed relayer, uint256 feePaid);
     event ChainPriceReceived(uint32 indexed chainEid, int256 creatorPriceUSD, uint256 timestamp);
     event LocalPriceUpdated(int256 creatorPriceUSD, uint256 timestamp);
     event AggregatedPriceCalculated(int256 avgPrice, uint256 numChains, uint256 timestamp);
     event PriceOracleSet(address oracle);
+    event CrossChainRequestRateLimited(
+        uint64 indexed sequence,
+        uint32 indexed srcEid,
+        bytes32 indexed sender,
+        uint64 windowStart,
+        uint64 requestCount,
+        uint64 maxRequests
+    );
+    event RateLimitConfigUpdated(uint32 indexed chainEid, uint64 maxRequestsPerWindow, uint64 windowSeconds, bool enabled);
 
     // ================================
     // ERRORS
@@ -171,6 +195,12 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
     error DuplicateSequence();
     error InsufficientBalance();
     error InvalidRequest();
+    error UnauthorizedRelayer();
+    error NotPendingResponse();
+    error ResponseNotReady();
+    error ResponseAlreadySent();
+    error RelayFeeMismatch(uint256 provided, uint256 expected);
+    error InvalidRateLimitConfig();
 
     // ================================
     // CONSTRUCTOR
@@ -193,6 +223,7 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
         
         // Enable owner for local requests
         authorizedLocalCallers[_owner] = true;
+        authorizedRelayers[_owner] = true;
     }
 
     // ================================
@@ -265,6 +296,7 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
         }
 
         if (sequenceToRequestId[sequence] != 0) revert DuplicateSequence();
+        if (!_consumeRateLimit(_origin.srcEid, sequence, _origin.sender)) return;
 
         // Request VRF
         uint256 requestId = vrfCoordinator.requestRandomWords(
@@ -398,26 +430,50 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
         VRFRequest storage request,
         uint256[] calldata
     ) internal {
-        uint32 targetGasLimit = chainGasLimits[request.sourceChainEid];
-        if (targetGasLimit == 0) targetGasLimit = defaultGasLimit;
+        (MessagingFee memory fee, ) = _quoteResponseFee(request);
+        pendingResponses[request.sequence] = true;
+        emit ResponseQueuedForRelay(request.sequence, requestId, request.sourceChainEid, fee.nativeFee);
+        emit ResponsePending(request.sequence, requestId, request.sourceChainEid, "Awaiting relayer funding");
+    }
 
-        bytes memory payload = abi.encode(request.sequence, request.randomWord);
-        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(targetGasLimit, 0);
-        MessagingFee memory fee = _quote(request.sourceChainEid, payload, options, false);
+    function relayPendingResponse(uint64 sequence) external payable nonReentrant {
+        if (msg.sender != owner() && !authorizedRelayers[msg.sender]) revert UnauthorizedRelayer();
 
-        // Add 5% buffer
-        fee.nativeFee = fee.nativeFee * 105 / 100;
+        uint256 requestId = sequenceToRequestId[sequence];
+        if (requestId == 0) revert InvalidRequest();
 
-        if (address(this).balance < fee.nativeFee) {
-            pendingResponses[request.sequence] = true;
-            emit ResponsePending(request.sequence, requestId, request.sourceChainEid, "Insufficient balance");
-            return;
-        }
+        VRFRequest storage request = vrfRequests[requestId];
+        if (request.timestamp == 0 || request.isLocalRequest) revert InvalidRequest();
+        if (!request.fulfilled) revert ResponseNotReady();
+        if (request.responseSent) revert ResponseAlreadySent();
+        if (!pendingResponses[sequence]) revert NotPendingResponse();
+
+        (MessagingFee memory fee, ) = _quoteResponseFee(request);
+        if (msg.value != fee.nativeFee) revert RelayFeeMismatch(msg.value, fee.nativeFee);
 
         _sendResponseToChain(request, fee);
+        emit PendingResponseRelayed(sequence, requestId, msg.sender, fee.nativeFee);
+    }
+
+    function _quoteResponseFee(VRFRequest storage request)
+        internal
+        view
+        returns (MessagingFee memory fee, uint32 targetGasLimit)
+    {
+        targetGasLimit = chainGasLimits[request.sourceChainEid];
+        if (targetGasLimit == 0) targetGasLimit = defaultGasLimit;
+
+        (int256 aggregatedPrice, ) = getAggregatedCreatorPrice();
+        bytes memory payload = abi.encode(request.sequence, request.randomWord, aggregatedPrice, block.timestamp);
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(targetGasLimit, 0);
+
+        fee = _quote(request.sourceChainEid, payload, options, false);
+        fee.nativeFee = (fee.nativeFee * 105) / 100;
     }
 
     function _sendResponseToChain(VRFRequest storage _request, MessagingFee memory _fee) internal {
+        if (_request.responseSent) revert ResponseAlreadySent();
+
         uint32 targetGasLimit = chainGasLimits[_request.sourceChainEid];
         if (targetGasLimit == 0) targetGasLimit = defaultGasLimit;
 
@@ -443,10 +499,41 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
             payable(owner())
         );
 
+        pendingResponses[_request.sequence] = false;
         emit ResponseSentToChain(_request.sequence, _request.randomWord, _request.sourceChainEid, _fee.nativeFee);
         if (aggregatedPrice > 0) {
             emit AggregatedPriceCalculated(aggregatedPrice, numChains, block.timestamp);
         }
+    }
+
+    function _consumeRateLimit(uint32 sourceChainEid, uint64 sequence, bytes32 sender) internal returns (bool) {
+        if (!rateLimitingEnabled) return true;
+
+        uint64 maxRequests = getChainMaxRequestsPerWindow(sourceChainEid);
+        if (maxRequests == 0) return true;
+
+        RateLimitState storage state = chainRateLimits[sourceChainEid];
+        uint64 nowTs = uint64(block.timestamp);
+
+        if (state.windowStart == 0 || nowTs >= state.windowStart + rateLimitWindowSeconds) {
+            state.windowStart = nowTs;
+            state.requestCount = 0;
+        }
+
+        if (state.requestCount >= maxRequests) {
+            emit CrossChainRequestRateLimited(
+                sequence,
+                sourceChainEid,
+                sender,
+                state.windowStart,
+                state.requestCount,
+                maxRequests
+            );
+            return false;
+        }
+
+        state.requestCount += 1;
+        return true;
     }
 
     // ================================
@@ -530,6 +617,34 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
         emit LocalCallerAuthorized(caller, authorized);
     }
 
+    function setRelayerAuthorization(address relayer, bool authorized) external onlyOwner {
+        if (relayer == address(0)) revert ZeroAddress();
+        authorizedRelayers[relayer] = authorized;
+        emit RelayerAuthorizationUpdated(relayer, authorized);
+    }
+
+    function setRateLimitDefaults(
+        uint64 windowSeconds,
+        uint64 maxRequestsPerWindow,
+        bool enabled
+    ) external onlyOwner {
+        if (windowSeconds == 0) revert InvalidRateLimitConfig();
+        rateLimitWindowSeconds = windowSeconds;
+        defaultMaxRequestsPerWindow = maxRequestsPerWindow;
+        rateLimitingEnabled = enabled;
+        emit RateLimitConfigUpdated(0, maxRequestsPerWindow, windowSeconds, enabled);
+    }
+
+    function setChainRateLimit(uint32 chainEid, uint64 maxRequestsPerWindow) external onlyOwner {
+        chainMaxRequestsPerWindow[chainEid] = maxRequestsPerWindow;
+        emit RateLimitConfigUpdated(chainEid, maxRequestsPerWindow, rateLimitWindowSeconds, rateLimitingEnabled);
+    }
+
+    function clearChainRateLimit(uint32 chainEid) external onlyOwner {
+        delete chainMaxRequestsPerWindow[chainEid];
+        emit RateLimitConfigUpdated(chainEid, defaultMaxRequestsPerWindow, rateLimitWindowSeconds, rateLimitingEnabled);
+    }
+
     function setSupportedChain(uint32 chainEid, bool supported, uint32 gasLimit) external onlyOwner {
         supportedChains[chainEid] = supported;
         if (supported) {
@@ -579,6 +694,51 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
     // ================================
     // VIEW FUNCTIONS
     // ================================
+
+    function getChainMaxRequestsPerWindow(uint32 chainEid) public view returns (uint64) {
+        uint64 overrideLimit = chainMaxRequestsPerWindow[chainEid];
+        if (overrideLimit > 0) return overrideLimit;
+        return defaultMaxRequestsPerWindow;
+    }
+
+    function quotePendingResponseFee(uint64 sequence) external view returns (uint256 nativeFee, bool relayable) {
+        uint256 requestId = sequenceToRequestId[sequence];
+        if (requestId == 0) return (0, false);
+
+        VRFRequest storage request = vrfRequests[requestId];
+        bool canRelay = pendingResponses[sequence] && request.fulfilled && !request.responseSent && !request.isLocalRequest;
+        if (!canRelay) return (0, false);
+
+        (MessagingFee memory fee, ) = _quoteResponseFee(request);
+        return (fee.nativeFee, true);
+    }
+
+    function getPendingResponseStatus(uint64 sequence)
+        external
+        view
+        returns (
+            uint256 requestId,
+            bool pending,
+            bool fulfilled,
+            bool responseSent,
+            uint32 sourceChainEid,
+            uint256 quotedFee
+        )
+    {
+        requestId = sequenceToRequestId[sequence];
+        if (requestId == 0) return (0, false, false, false, 0, 0);
+
+        VRFRequest storage request = vrfRequests[requestId];
+        pending = pendingResponses[sequence];
+        fulfilled = request.fulfilled;
+        responseSent = request.responseSent;
+        sourceChainEid = request.sourceChainEid;
+
+        if (pending && fulfilled && !responseSent && !request.isLocalRequest) {
+            (MessagingFee memory fee, ) = _quoteResponseFee(request);
+            quotedFee = fee.nativeFee;
+        }
+    }
 
     function getLocalRequest(uint256 requestId) external view returns (
         address requester,

@@ -292,7 +292,9 @@ export const VerifyStep = memo(function VerifyStep({
         ) : null}
 
         <motion.div {...fadeUp} className={`${panelClass} p-4 space-y-2.5`}>
-          <label className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Email</label>
+          <label className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+            Email <span className="text-zinc-700">(optional)</span>
+          </label>
           <input
             type="email"
             value={emailValue}
@@ -300,6 +302,7 @@ export const VerifyStep = memo(function VerifyStep({
             placeholder="you@example.com"
             className="w-full rounded-xl border border-white/10 bg-white/3 px-3 py-2.5 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-[#0052FF]/50"
           />
+          <div className="text-[11px] text-zinc-600">Leave blank to continue wallet-first. You can add a recovery email later.</div>
           {emailError ? <div className="text-[11px] text-amber-300">{emailError}</div> : null}
         </motion.div>
 
@@ -681,7 +684,9 @@ export const VerifyStep = memo(function VerifyStep({
       {showSubmitButton ? (
         <motion.div {...scaleIn} className="pt-2 space-y-3">
           <div className={`${panelClass} p-4 space-y-2.5`}>
-            <label className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Email</label>
+            <label className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+              Email <span className="text-zinc-700">(optional)</span>
+            </label>
             <input
               type="email"
               value={emailValue}
@@ -689,6 +694,7 @@ export const VerifyStep = memo(function VerifyStep({
               placeholder="you@example.com"
               className="w-full rounded-xl border border-white/10 bg-white/3 px-3 py-2.5 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-[#0052FF]/50"
             />
+            <div className="text-[11px] text-zinc-600">Leave blank to continue wallet-first. You can add a recovery email later.</div>
             {emailError ? <div className="text-[11px] text-amber-300">{emailError}</div> : null}
           </div>
           <button

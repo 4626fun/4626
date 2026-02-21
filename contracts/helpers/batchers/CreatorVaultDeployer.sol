@@ -68,7 +68,7 @@ interface ISolanaBridgeAdapter {
 }
 
 interface IOFTBootstrapRegistry {
-    function setLayerZeroEndpoint(uint16 chainId, address endpoint) external;
+    function getLayerZeroEndpoint(uint16 chainId) external pure returns (address);
 }
 
 interface IUniswapV3Factory {
@@ -528,9 +528,6 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         if (out.oftBootstrapRegistry.code.length == 0) {
             create2Deployer.deploy(oftBootstrapSalt, codeIds.oftBootstrap, bytes(""));
         }
-
-        address lzEndpoint = registry.getLayerZeroEndpoint(uint16(block.chainid));
-        IOFTBootstrapRegistry(out.oftBootstrapRegistry).setLayerZeroEndpoint(uint16(block.chainid), lzEndpoint);
 
         bytes memory vaultArgs = abi.encode(params.creatorToken, tempOwner, params.vaultName, params.vaultSymbol);
         out.vault = create2Deployer.deploy(vaultSalt, codeIds.vault, vaultArgs);

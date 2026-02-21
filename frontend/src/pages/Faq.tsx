@@ -165,7 +165,7 @@ const FAQ_SECTIONS: FaqSection[] = [
         answer: (
           <>
             <p>
-              Use the <Link to="/dashboard" className="text-brand-accent hover:text-brand-400 underline underline-offset-4">Dashboard</Link> for discovery,
+              Use the <Link to="/explore/creators" className="text-brand-accent hover:text-brand-400 underline underline-offset-4">Explore</Link> for discovery,
               and each <span className="mono">/vault/:address</span> page for details.
             </p>
             <p>
