@@ -36,7 +36,6 @@ Auction settlement is a one-time event (~7 days after deployment). The system tr
 - `settled_at` — after successful `sweepCurrency()` + `sweepUnsoldTokens()`
 
 Once settled, vaults are excluded from the auction-settlement workflow to avoid wasting CRE quota on redundant reads. The `sweepCurrencyBlock` on-chain check provides a secondary guard against double-sweeping.
-
 ## Solana Workflows
 
 The Solana integration runs as separate workflows (cron-driven, independent from the unified 4626 runner):
@@ -203,7 +202,6 @@ Optional (ERC-4337 smart wallet mode):
 
 Optional (alerting):
 - `KEEPR_ALERT_WEBHOOK_URL` — webhook URL for payout-integrity and settlement alerts
-
 ### 2. Register Vaults
 
 Each vault is registered via `POST /api/keepr/vault/upsert`. Include contract addresses in `config_json`:
