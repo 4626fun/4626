@@ -13,6 +13,8 @@ export function WalletModeToggle(props: {
   executionAddress: `0x${string}` | null
   busy: boolean
   canonicalAvailable: boolean
+  /** True when the system has a canonical CSW address on file (may still be unavailable). */
+  canonicalConfigured?: boolean
   eoaAvailable: boolean
   fallbackActive: boolean
   onChange: (mode: WalletMode) => void
@@ -56,7 +58,7 @@ export function WalletModeToggle(props: {
               {LABELS[m]}
               {m === 'canonical' && !props.canonicalAvailable && (
                 <span className="ml-1 inline-block rounded-full bg-amber-500/20 px-1 py-px text-[9px] text-amber-300">
-                  Set up
+                  {props.canonicalConfigured === false ? 'Set up' : 'Unavailable'}
                 </span>
               )}
             </motion.button>

@@ -198,11 +198,20 @@ export function Swap() {
   }, [searchParams, setTokenOut])
 
   // ─── Canonical wallet ─────────────────────────────────────────────────────
-  const { canonicalAddress, signerAddress, identityReady } = useCanonicalWallet({
+  const {
+    canonicalAddress,
+    signerAddress,
+    identityReady,
+  } = useCanonicalWallet({
     address,
     publicClient,
     walletReady: Boolean(walletClient),
   })
+
+  // Whether the system has a canonical CSW address on file for this user.
+  // When false (null DB row), "Smart Wallet" mode is unavailable AND linking
+  // requires account registration — not just the ownership check failure.
+  const canonicalConfigured = canonicalAddress !== null
 
   const canonicalReady = identityReady
   const eoaReady = Boolean(signerAddress && walletClient && publicClient)
@@ -550,6 +559,7 @@ export function Swap() {
                   executionAddress={executionAddress}
                   executionReady={executionReady}
                   canonicalAvailable={canonicalAvailable}
+                  canonicalConfigured={canonicalConfigured}
                   eoaAvailable={eoaReady}
                   executionFallbackActive={executionFallbackActive}
                   parsedSlippage={parsedSlippage}

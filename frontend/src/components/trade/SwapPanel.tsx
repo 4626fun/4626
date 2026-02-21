@@ -33,6 +33,7 @@ export function SwapPanel(props: {
   executionAddress: `0x${string}` | null
   executionReady: boolean
   canonicalAvailable: boolean
+  canonicalConfigured: boolean
   eoaAvailable: boolean
   executionFallbackActive: boolean
   // Trade state
@@ -131,6 +132,7 @@ export function SwapPanel(props: {
           executionAddress={props.executionAddress}
           busy={props.busy !== null}
           canonicalAvailable={props.canonicalAvailable}
+          canonicalConfigured={props.canonicalConfigured}
           eoaAvailable={props.eoaAvailable}
           fallbackActive={props.executionFallbackActive}
           onChange={props.onSetExecutionMode}
@@ -272,12 +274,12 @@ export function SwapPanel(props: {
           {/* ─── TX lifecycle ────────────────────────────────────────────── */}
           {props.lifecycle}
 
-          {/* Safe-area spacer for sticky CTA on mobile */}
-          <div className="h-24 md:hidden" />
+          {/* Safe-area spacer — tall enough to clear the sticky CTA + its shadow */}
+          <div className="h-36 md:hidden" />
 
           {/* ─── Sticky CTA ──────────────────────────────────────────────── */}
           <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] z-60 px-4 md:static md:inset-auto md:bottom-auto md:z-auto md:mt-4 md:px-0">
-            <div className="pointer-events-auto rounded-2xl border border-white/8 bg-vault-card/90 p-2 shadow-[0_-14px_40px_-12px_rgba(0,0,0,0.9)] backdrop-blur-xl md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-0">
+            <div className="pointer-events-auto rounded-2xl border border-white/8 bg-vault-card/90 p-2 shadow-[0_-6px_20px_-4px_rgba(0,0,0,0.7)] backdrop-blur-xl md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-0">
               <motion.button
                 type="button"
                 onClick={props.onReviewTrade}

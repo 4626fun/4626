@@ -45,9 +45,19 @@ export function useCanonicalWallet(params: {
     return getAddress(params.address).toLowerCase() as `0x${string}`
   }, [params.address])
 
+  // When the user connects WITH their CSW directly (e.g., Base miniapp / Coinbase
+  // Wallet browser), signerAddress === canonicalSmartWalletAddress. In that case the
+  // isOwnerAddress check is meaningless (a contract can't own itself as an EOA) and
+  // will always return false — skip it and grant canOperateCanonical immediately.
+  const isSelfConnect = Boolean(
+    canonicalSmartWalletAddress &&
+      signerAddress &&
+      canonicalSmartWalletAddress.toLowerCase() === signerAddress.toLowerCase(),
+  )
+
   const connectedOwnerQuery = useQuery({
     queryKey: ['swap', 'can-operate-canonical', canonicalSmartWalletAddress, signerAddress],
-    enabled: Boolean(canonicalSmartWalletAddress && signerAddress && params.publicClient),
+    enabled: Boolean(canonicalSmartWalletAddress && signerAddress && params.publicClient && !isSelfConnect),
     staleTime: 10_000,
     queryFn: async () => {
       if (!canonicalSmartWalletAddress || !signerAddress || !params.publicClient) return false
@@ -68,7 +78,8 @@ export function useCanonicalWallet(params: {
   const canonicalAddress = canonicalSmartWalletAddress
     ? (canonicalSmartWalletAddress as `0x${string}`)
     : null
-  const canOperateCanonical = connectedOwnerQuery.data === true
+  // Self-connect (CSW is the directly-connected account) → always authorised.
+  const canOperateCanonical = isSelfConnect || connectedOwnerQuery.data === true
   const identityReady = Boolean(
     canonicalAddress && signerAddress && params.publicClient && params.walletReady && canOperateCanonical,
   )
