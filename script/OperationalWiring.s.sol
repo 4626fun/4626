@@ -41,6 +41,19 @@ interface ILotteryManager {
     function setAuthorizedSwapContract(address swapContract, bool authorized) external;
     function setLocalVRFConsumer(address consumer) external;
     function setUseLocalVRF(bool useLocal) external;
+    function setSponsoredVrfMinSwapAmountUSD(uint256 minSwapAmountUSD) external;
+    function setVrfSponsorshipPolicy(
+        bool enabled,
+        uint256 maxFeePerMessage,
+        uint256 budgetPerEpoch,
+        uint256 epochDuration
+    ) external;
+    function setCallbackSponsorshipPolicy(
+        bool enabled,
+        uint256 maxFeePerMessage,
+        uint256 budgetPerEpoch,
+        uint256 epochDuration
+    ) external;
 }
 
 interface IRegistry {
@@ -77,6 +90,14 @@ contract OperationalWiring is Script {
     uint32  constant VRF_CALLBACK_GAS    = 500_000;
     uint16  constant VRF_CONFIRMATIONS   = 3;
 
+    // Lottery sponsorship guardrails (hybrid model defaults)
+    uint256 constant SPONSORED_MIN_SWAP_USD = 1_000_000; // $1 (1e6)
+    uint256 constant SPONSOR_EPOCH_DURATION = 1 hours;
+    uint256 constant VRF_SPONSOR_MAX_FEE = 0.01 ether;
+    uint256 constant VRF_SPONSOR_BUDGET = 0.25 ether;
+    uint256 constant CALLBACK_SPONSOR_MAX_FEE = 0.01 ether;
+    uint256 constant CALLBACK_SPONSOR_BUDGET = 0.10 ether;
+
     // ═══════════════════════════════════════════════════════════════════
     //                              MAIN
     // ═══════════════════════════════════════════════════════════════════
@@ -104,7 +125,7 @@ contract OperationalWiring is Script {
         //  1. VRF Consumer: Authorize LotteryManager as local caller
         // ────────────────────────────────────────────────────────────────
 
-        console.log("[1/6] VRF Consumer: Authorizing LotteryManager as local caller...");
+        console.log("[1/7] VRF Consumer: Authorizing LotteryManager as local caller...");
         if (vrfConsumer.authorizedLocalCallers(LOTTERY_MANAGER)) {
             console.log(unicode"   [skip] Already authorized");
         } else {
@@ -116,7 +137,7 @@ contract OperationalWiring is Script {
         //  2. VRF Consumer: Set VRF config (subscriptionId, keyHash, etc.)
         // ────────────────────────────────────────────────────────────────
 
-        console.log("\n[2/6] VRF Consumer: Setting VRF config...");
+        console.log("\n[2/7] VRF Consumer: Setting VRF config...");
         vrfConsumer.setVRFConfig(
             VRF_SUBSCRIPTION_ID,
             VRF_KEYHASH,
@@ -132,7 +153,7 @@ contract OperationalWiring is Script {
         //  3. VRF Consumer: Set VRF Coordinator
         // ────────────────────────────────────────────────────────────────
 
-        console.log("\n[3/6] VRF Consumer: Setting VRF Coordinator...");
+        console.log("\n[3/7] VRF Consumer: Setting VRF Coordinator...");
         vrfConsumer.setVRFCoordinator(VRF_COORDINATOR);
         console.log(unicode"   ✓ VRF Coordinator:", VRF_COORDINATOR);
 
@@ -140,7 +161,7 @@ contract OperationalWiring is Script {
         //  4. LotteryManager: Set VRF Consumer + enable local VRF
         // ────────────────────────────────────────────────────────────────
 
-        console.log("\n[4/6] LotteryManager: Setting VRF consumer + local mode...");
+        console.log("\n[4/7] LotteryManager: Setting VRF consumer + local mode...");
         lotteryManager.setLocalVRFConsumer(VRF_CONSUMER);
         console.log(unicode"   ✓ setLocalVRFConsumer:", VRF_CONSUMER);
 
@@ -148,10 +169,34 @@ contract OperationalWiring is Script {
         console.log(unicode"   ✓ setUseLocalVRF: true");
 
         // ────────────────────────────────────────────────────────────────
-        //  5. LotteryManager: Authorize swap contracts
+        //  5. LotteryManager: Configure sponsorship guardrails
         // ────────────────────────────────────────────────────────────────
 
-        console.log("\n[5/6] LotteryManager: Authorizing swap contracts...");
+        console.log("\n[5/7] LotteryManager: Configuring sponsorship guardrails...");
+        lotteryManager.setSponsoredVrfMinSwapAmountUSD(SPONSORED_MIN_SWAP_USD);
+        console.log(unicode"   ✓ setSponsoredVrfMinSwapAmountUSD: $1");
+
+        lotteryManager.setVrfSponsorshipPolicy(
+            true,
+            VRF_SPONSOR_MAX_FEE,
+            VRF_SPONSOR_BUDGET,
+            SPONSOR_EPOCH_DURATION
+        );
+        console.log(unicode"   ✓ VRF sponsorship policy set (maxFee=0.01 ETH, budget=0.25 ETH/hr)");
+
+        lotteryManager.setCallbackSponsorshipPolicy(
+            true,
+            CALLBACK_SPONSOR_MAX_FEE,
+            CALLBACK_SPONSOR_BUDGET,
+            SPONSOR_EPOCH_DURATION
+        );
+        console.log(unicode"   ✓ callback sponsorship policy set (maxFee=0.01 ETH, budget=0.10 ETH/hr)");
+
+        // ────────────────────────────────────────────────────────────────
+        //  6. LotteryManager: Authorize swap contracts
+        // ────────────────────────────────────────────────────────────────
+
+        console.log("\n[6/7] LotteryManager: Authorizing swap contracts...");
 
         // SolanaBridgeAdapter (for Solana-originated lottery entries)
         if (lotteryManager.authorizedSwapContracts(SOLANA_BRIDGE_ADAPTER)) {
@@ -170,10 +215,10 @@ contract OperationalWiring is Script {
         }
 
         // ────────────────────────────────────────────────────────────────
-        //  6. Registry: Authorize factories (idempotent re-auth)
+        //  7. Registry: Authorize factories (idempotent re-auth)
         // ────────────────────────────────────────────────────────────────
 
-        console.log("\n[6/6] Registry: Re-confirming factory authorizations...");
+        console.log("\n[7/7] Registry: Re-confirming factory authorizations...");
         registry.setAuthorizedFactory(CREATOR_FACTORY, true);
         console.log(unicode"   ✓ CreatorOVaultFactory");
 
@@ -198,6 +243,7 @@ contract OperationalWiring is Script {
         console.log(unicode"  ✓ VRF Config set (sub, keyHash, gas, confirmations)");
         console.log(unicode"  ✓ VRF Coordinator set");
         console.log(unicode"  ✓ LotteryManager -> VRF Consumer linked + local mode on");
+        console.log(unicode"  ✓ LotteryManager sponsorship guardrails configured");
         console.log(unicode"  ✓ LotteryManager authorized: SolanaBridgeAdapter, TaxHook");
         console.log(unicode"  ✓ Registry factories confirmed");
         console.log("");

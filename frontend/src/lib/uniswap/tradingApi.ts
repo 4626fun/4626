@@ -1,8 +1,13 @@
+import { normalizeUniswapError } from './error'
+
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; details?: unknown }
 
 const QUOTE_CACHE_TTL_MS = 8_000
 const quoteCache = new Map<string, { at: number; data: TradeQuoteResponse }>()
 const quoteInFlight = new Map<string, Promise<TradeQuoteResponse>>()
+const RETRYABLE_STATUS = new Set([429, 500, 503])
+const DEFAULT_RETRIES = 2
+const RETRY_BASE_DELAY_MS = 125
 
 export type TradeQuoteRequest = {
   tokenIn: string
@@ -16,6 +21,10 @@ export type TradeQuoteRequest = {
   autoSlippage?: 'DEFAULT'
   permitAmount?: 'FULL' | 'EXACT'
   urgency?: 'urgent' | 'normal'
+  protocols?: string[]
+  routingPreference?: string
+  spreadOptimization?: string
+  generatePermitAsTransaction?: boolean
   xChainedActionsEnabled?: boolean
 }
 
@@ -29,6 +38,7 @@ export type TradeQuoteResponse = Record<string, unknown> & {
   chainedQuote?: Record<string, unknown>
   permitSingleData?: Record<string, unknown>
   permitTransferFromData?: Record<string, unknown>
+  permitData?: Record<string, unknown>
 }
 
 export type TransactionRequest = {
@@ -44,19 +54,52 @@ export type TransactionRequest = {
 }
 
 export type UserOpCall = { to: `0x${string}`; data?: `0x${string}`; value?: bigint }
+export type PermitSignPayload = {
+  domain: Record<string, unknown>
+  types: Record<string, unknown>
+  primaryType: string
+  message: Record<string, unknown>
+}
 
-async function post<T>(path: string, body: Record<string, unknown>): Promise<T> {
-  const res = await fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null
-  if (!res.ok || !json?.success) {
-    const message = json?.error || `Request failed (${res.status})`
-    throw new Error(message)
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function normalizeAmountString(amount: string): string {
+  const raw = String(amount ?? '').trim()
+  if (!/^\d+$/.test(raw)) {
+    throw new Error('Invalid amount: must be a positive integer in smallest units.')
   }
-  return json.data as T
+  if (BigInt(raw) <= 0n) {
+    throw new Error('Invalid amount: must be greater than zero.')
+  }
+  return raw
+}
+
+function isRetryableHttpStatus(status: number): boolean {
+  return RETRYABLE_STATUS.has(status)
+}
+
+async function post<T>(path: string, body: Record<string, unknown>, retries = DEFAULT_RETRIES): Promise<T> {
+  let attempt = 0
+  while (true) {
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null
+    if (res.ok && json?.success) return json.data as T
+
+    const message = json?.error || `Request failed (${res.status})`
+    const normalized = normalizeUniswapError(message)
+    if (attempt < retries && isRetryableHttpStatus(res.status)) {
+      await sleep(RETRY_BASE_DELAY_MS * 2 ** attempt)
+      attempt += 1
+      continue
+    }
+    throw new Error(normalized.message)
+  }
 }
 
 async function get<T>(path: string): Promise<T> {
@@ -64,7 +107,7 @@ async function get<T>(path: string): Promise<T> {
   const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null
   if (!res.ok || !json?.success) {
     const message = json?.error || `Request failed (${res.status})`
-    throw new Error(message)
+    throw new Error(normalizeUniswapError(message).message)
   }
   return json.data as T
 }
@@ -78,7 +121,7 @@ async function patch<T>(path: string, body: Record<string, unknown>): Promise<T>
   const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null
   if (!res.ok || !json?.success) {
     const message = json?.error || `Request failed (${res.status})`
-    throw new Error(message)
+    throw new Error(normalizeUniswapError(message).message)
   }
   return json.data as T
 }
@@ -93,15 +136,61 @@ export function pickSwapQuote(quote: TradeQuoteResponse): Record<string, unknown
   )
 }
 
+export function pickPermitData(quote: TradeQuoteResponse | null | undefined): Record<string, unknown> | null {
+  if (!quote) return null
+  const candidates = [
+    quote.permitData,
+    quote.permitSingleData,
+    quote.permitTransferFromData,
+  ]
+  for (const item of candidates) {
+    if (item && typeof item === 'object' && !Array.isArray(item)) return item
+  }
+  return null
+}
+
+export function toPermitSignPayload(permitData: Record<string, unknown>): PermitSignPayload | null {
+  const domain = permitData.domain
+  const typesRaw = permitData.types
+  const messageRaw = permitData.values ?? permitData.message
+  const explicitPrimaryType = typeof permitData.primaryType === 'string' ? permitData.primaryType.trim() : ''
+
+  if (!domain || typeof domain !== 'object' || Array.isArray(domain)) return null
+  if (!typesRaw || typeof typesRaw !== 'object' || Array.isArray(typesRaw)) return null
+  if (!messageRaw || typeof messageRaw !== 'object' || Array.isArray(messageRaw)) return null
+
+  const typesEntries = Object.entries(typesRaw as Record<string, unknown>).filter(
+    ([key]) => key !== 'EIP712Domain',
+  )
+  const types = Object.fromEntries(typesEntries)
+  const primaryType = explicitPrimaryType || typesEntries[0]?.[0] || ''
+  if (!primaryType || !types[primaryType]) return null
+
+  return {
+    domain: domain as Record<string, unknown>,
+    types,
+    primaryType,
+    message: messageRaw as Record<string, unknown>,
+  }
+}
+
 export async function fetchTradeQuote(body: TradeQuoteRequest): Promise<TradeQuoteResponse> {
-  const key = JSON.stringify(body)
+  const requestBody: TradeQuoteRequest = {
+    ...body,
+    amount: normalizeAmountString(body.amount),
+    urgency: body.urgency ?? 'normal',
+    permitAmount: body.permitAmount ?? 'FULL',
+    routingPreference: body.routingPreference ?? 'BEST_PRICE',
+    spreadOptimization: body.spreadOptimization ?? 'EXECUTION',
+  }
+  const key = JSON.stringify(requestBody)
   const cached = quoteCache.get(key)
   if (cached && Date.now() - cached.at < QUOTE_CACHE_TTL_MS) return cached.data
 
   const pending = quoteInFlight.get(key)
   if (pending) return pending
 
-  const request = post<TradeQuoteResponse>('/api/uniswap/quote', body)
+  const request = post<TradeQuoteResponse>('/api/uniswap/quote', requestBody)
     .then((data) => {
       quoteCache.set(key, { at: Date.now(), data })
       quoteInFlight.delete(key)
@@ -126,7 +215,11 @@ export async function checkTradeApproval(body: {
   includeGasInfo?: boolean
   urgency?: 'urgent' | 'normal'
 }): Promise<Record<string, unknown>> {
-  return post<Record<string, unknown>>('/api/uniswap/checkApproval', body)
+  return post<Record<string, unknown>>('/api/uniswap/checkApproval', {
+    ...body,
+    amount: normalizeAmountString(body.amount),
+    urgency: body.urgency ?? 'normal',
+  })
 }
 
 export async function buildSwap(body: {
@@ -139,15 +232,35 @@ export async function buildSwap(body: {
   simulateTransaction?: boolean
   safetyMode?: 'RELAXED' | 'SAFE'
 }): Promise<{ requestId?: string; swap: TransactionRequest; gasFee?: string }> {
-  return post<{ requestId?: string; swap: TransactionRequest; gasFee?: string }>('/api/uniswap/swap', body)
+  const hasSignature = typeof body.signature === 'string' && body.signature.trim().length > 0
+  const hasPermitData = typeof body.permitData === 'object' && body.permitData !== null
+  if (hasSignature !== hasPermitData) {
+    throw new Error('Permit2 signature and permitData must be provided together.')
+  }
+
+  const response = await post<{ requestId?: string; swap: TransactionRequest; gasFee?: string }>(
+    '/api/uniswap/swap',
+    body,
+  )
+  assertValidSwapTransaction(response.swap)
+  return response
 }
 
 export function assertValidSwapTransaction(tx: TransactionRequest): void {
-  if (!tx.to || !tx.data || tx.data === '0x') {
-    throw new Error('Invalid swap transaction: missing to/data')
+  if (!tx.to || !/^0x[a-fA-F0-9]{40}$/.test(tx.to)) {
+    throw new Error('Invalid swap transaction: missing or invalid recipient address')
+  }
+  if (!tx.from || !/^0x[a-fA-F0-9]{40}$/.test(tx.from)) {
+    throw new Error('Invalid swap transaction: missing or invalid sender address')
+  }
+  if (!tx.data || tx.data === '0x') {
+    throw new Error('Invalid swap transaction: missing call data')
   }
   if (!/^0x[0-9a-fA-F]+$/.test(tx.data)) {
     throw new Error('Invalid swap transaction: data is not valid hex')
+  }
+  if (tx.maxFeePerGas && tx.gasPrice) {
+    throw new Error('Invalid swap transaction: cannot set both maxFeePerGas and gasPrice')
   }
 }
 

@@ -117,6 +117,11 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     uint128 public constant DEFAULT_GAS_LIMIT = 200_000;
     uint128 public constant DEFAULT_MSG_VALUE = 0;
     uint128 public constant DEFAULT_CALLBACK_GAS_LIMIT = 100_000;
+    uint256 public constant DEFAULT_SPONSOR_EPOCH_DURATION = 1 hours;
+    uint256 public constant DEFAULT_VRF_SPONSOR_MAX_FEE = 0.01 ether;
+    uint256 public constant DEFAULT_VRF_SPONSOR_BUDGET = 0.25 ether;
+    uint256 public constant DEFAULT_CALLBACK_SPONSOR_MAX_FEE = 0.01 ether;
+    uint256 public constant DEFAULT_CALLBACK_SPONSOR_BUDGET = 0.10 ether;
     
     /// @notice Maximum boost for ve4626 lockers (2.5x = 25000 bps)
     uint256 public constant MAX_VE_BOOST = 25000;
@@ -161,6 +166,23 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
     /// @notice VRF request tracking - includes creator coin and source chain
     enum VRFType { LOCAL, CROSS_CHAIN }
+    enum SponsorshipSkipReason {
+        DISABLED,
+        BELOW_MIN_SWAP,
+        FEE_ABOVE_CAP,
+        BUDGET_EXCEEDED,
+        INSUFFICIENT_BALANCE,
+        SEND_FAILED
+    }
+
+    struct SponsorshipPolicy {
+        bool enabled;
+        uint256 maxFeePerMessage;
+        uint256 budgetPerEpoch;
+        uint256 epochDuration;
+        uint256 epochStart;
+        uint256 spentInEpoch;
+    }
 
     struct VRFRequest {
         address user;
@@ -171,6 +193,11 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     }
 
     mapping(uint256 => VRFRequest) public vrfRequests;
+
+    /// @notice Funding policy for cross-chain VRF requests and winner callbacks.
+    SponsorshipPolicy public vrfSponsorshipPolicy;
+    SponsorshipPolicy public callbackSponsorshipPolicy;
+    uint256 public sponsoredVrfMinSwapAmountUSD = MIN_SWAP_USD;
 
     /// @notice Authorized remote OFT peers that can send lottery entries
     /// @dev Maps (srcEid, senderBytes32) → authorized
@@ -247,6 +274,27 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     event VRFConsumerUpdated(address indexed consumer);
     event TargetEidUpdated(uint32 indexed targetEid);
     event VRFIntegratorUpdated(address indexed integrator, bool trusted);
+    event SponsorshipPolicyUpdated(
+        bytes32 indexed context,
+        bool enabled,
+        uint256 maxFeePerMessage,
+        uint256 budgetPerEpoch,
+        uint256 epochDuration
+    );
+    event SponsoredVrfMinSwapUpdated(uint256 minSwapAmountUSD);
+    event SponsorshipSpendRecorded(
+        bytes32 indexed context,
+        uint256 amount,
+        uint256 spentInEpoch,
+        uint256 budgetPerEpoch,
+        uint256 epochStart
+    );
+    event SponsorshipSkipped(
+        bytes32 indexed context,
+        SponsorshipSkipReason reason,
+        uint256 feeNative,
+        uint256 valueHint
+    );
     event BoostManagerUpdated(address indexed manager);
     event VaultGaugeVotingUpdated(address indexed vaultGaugeVoting);
     event MinVaultWeightUpdated(uint256 minWeightBps);
@@ -292,6 +340,24 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
             baseWinChance: 40,      // 0.004%
             maxWinChance: 40000,    // 4%
             usdMultiplierBps: 10500 // 1.05x
+        });
+
+        vrfSponsorshipPolicy = SponsorshipPolicy({
+            enabled: true,
+            maxFeePerMessage: DEFAULT_VRF_SPONSOR_MAX_FEE,
+            budgetPerEpoch: DEFAULT_VRF_SPONSOR_BUDGET,
+            epochDuration: DEFAULT_SPONSOR_EPOCH_DURATION,
+            epochStart: block.timestamp,
+            spentInEpoch: 0
+        });
+
+        callbackSponsorshipPolicy = SponsorshipPolicy({
+            enabled: true,
+            maxFeePerMessage: DEFAULT_CALLBACK_SPONSOR_MAX_FEE,
+            budgetPerEpoch: DEFAULT_CALLBACK_SPONSOR_BUDGET,
+            epochDuration: DEFAULT_SPONSOR_EPOCH_DURATION,
+            epochStart: block.timestamp,
+            spentInEpoch: 0
         });
     }
 
@@ -361,7 +427,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         if (useLocalVRF && address(localVRFConsumer) != address(0)) {
             return _requestLocalVRF(creatorCoin, buyer, swapValueUSD, boostedWinChance);
         } else {
-            return _requestCrossChainVRF(creatorCoin, buyer, swapValueUSD, boostedWinChance);
+            return _requestCrossChainVRF(creatorCoin, buyer, swapValueUSD, boostedWinChance, msg.value);
         }
     }
 
@@ -372,9 +438,10 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         address creatorCoin,
         address buyer,
         uint256 swapValueUSD,
-        uint256 winChancePPM
+        uint256 winChancePPM,
+        uint256 callerFeeValue
     ) internal returns (uint256) {
-        return _requestCrossChainVRFWithSource(creatorCoin, buyer, swapValueUSD, winChancePPM, 0);
+        return _requestCrossChainVRFWithSource(creatorCoin, buyer, swapValueUSD, winChancePPM, 0, callerFeeValue);
     }
 
     /**
@@ -658,7 +725,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         if (useLocalVRF && address(localVRFConsumer) != address(0)) {
             entryId = _requestLocalVRFWithSource(creatorCoin, buyer, swapValueUSD, boostedWinChance, srcEid);
         } else {
-            entryId = _requestCrossChainVRFWithSource(creatorCoin, buyer, swapValueUSD, boostedWinChance, srcEid);
+            entryId = _requestCrossChainVRFWithSource(creatorCoin, buyer, swapValueUSD, boostedWinChance, srcEid, 0);
         }
 
         if (entryId > 0) {
@@ -702,35 +769,57 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         address buyer,
         uint256 swapValueUSD,
         uint256 /* winChancePPM */,
-        uint32 sourceChainEid
+        uint32 sourceChainEid,
+        uint256 callerFeeValue
     ) internal returns (uint256) {
         if (address(vrfIntegrator) == address(0) || targetEid == 0) return 0;
         if (!trustedVrfIntegrators[address(vrfIntegrator)]) return 0;
 
         try vrfIntegrator.quoteFee() returns (MessagingFee memory fee) {
-            if (address(this).balance >= fee.nativeFee) {
-                try vrfIntegrator.requestRandomWordsPayable{value: fee.nativeFee}(targetEid) returns (
-                    MessagingReceipt memory,
-                    uint64 sequence
-                ) {
-                    vrfRequests[uint256(sequence)] = VRFRequest({
-                        user: buyer,
-                        creatorCoin: creatorCoin,
-                        amountUSD: swapValueUSD,
-                        vrfType: VRFType.CROSS_CHAIN,
-                        sourceChainEid: sourceChainEid
-                    });
-                    totalLotteryEntries++;
-                    creatorStats[creatorCoin].entries++;
-                    return uint256(sequence);
-                } catch {
+            uint256 nativeFee = fee.nativeFee;
+            bool useCallerFunds = callerFeeValue >= nativeFee;
+
+            if (!useCallerFunds) {
+                if (!_consumeSponsorship(
+                    vrfSponsorshipPolicy,
+                    _sponsorshipContext("VRF_REQUEST"),
+                    nativeFee,
+                    swapValueUSD,
+                    true
+                )) {
                     return 0;
                 }
+            }
+
+            try vrfIntegrator.requestRandomWordsPayable{value: nativeFee}(targetEid) returns (
+                MessagingReceipt memory,
+                uint64 sequence
+            ) {
+                vrfRequests[uint256(sequence)] = VRFRequest({
+                    user: buyer,
+                    creatorCoin: creatorCoin,
+                    amountUSD: swapValueUSD,
+                    vrfType: VRFType.CROSS_CHAIN,
+                    sourceChainEid: sourceChainEid
+                });
+                totalLotteryEntries++;
+                creatorStats[creatorCoin].entries++;
+                return uint256(sequence);
+            } catch {
+                if (!useCallerFunds && nativeFee > 0) {
+                    _rollbackSponsoredSpend(vrfSponsorshipPolicy, nativeFee);
+                    emit SponsorshipSkipped(
+                        _sponsorshipContext("VRF_REQUEST"),
+                        SponsorshipSkipReason.SEND_FAILED,
+                        nativeFee,
+                        swapValueUSD
+                    );
+                }
+                return 0;
             }
         } catch {
             return 0;
         }
-        return 0;
     }
 
     /**
@@ -756,12 +845,85 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
         MessagingFee memory fee = _quote(dstEid, payload, options, false);
 
-        // Only send if contract has enough gas, don't block payout
-        if (address(this).balance >= fee.nativeFee) {
-            _lzSend(dstEid, payload, options, fee, payable(address(this)));
-            emit WinnerCallbackSent(dstEid, winner, creatorCoin, totalSharesPaid);
-        }
+        if (!_consumeSponsorship(
+            callbackSponsorshipPolicy,
+            _sponsorshipContext("WINNER_CALLBACK"),
+            fee.nativeFee,
+            0,
+            false
+        )) return;
+
+        _lzSend(dstEid, payload, options, fee, payable(address(this)));
+        emit WinnerCallbackSent(dstEid, winner, creatorCoin, totalSharesPaid);
         // If insufficient gas, silently skip — payout already happened on hub
+    }
+
+    function _sponsorshipContext(string memory label) internal pure returns (bytes32) {
+        return keccak256(bytes(label));
+    }
+
+    function _refreshSponsorshipEpoch(SponsorshipPolicy storage policy) internal {
+        if (policy.epochDuration == 0) return;
+        if (block.timestamp >= policy.epochStart + policy.epochDuration) {
+            policy.epochStart = block.timestamp;
+            policy.spentInEpoch = 0;
+        }
+    }
+
+    function _consumeSponsorship(
+        SponsorshipPolicy storage policy,
+        bytes32 context,
+        uint256 feeNative,
+        uint256 valueHint,
+        bool enforceMinSwap
+    ) internal returns (bool) {
+        if (feeNative == 0) return true;
+
+        _refreshSponsorshipEpoch(policy);
+
+        if (!policy.enabled) {
+            emit SponsorshipSkipped(context, SponsorshipSkipReason.DISABLED, feeNative, valueHint);
+            return false;
+        }
+
+        if (enforceMinSwap && valueHint < sponsoredVrfMinSwapAmountUSD) {
+            emit SponsorshipSkipped(context, SponsorshipSkipReason.BELOW_MIN_SWAP, feeNative, valueHint);
+            return false;
+        }
+
+        if (feeNative > policy.maxFeePerMessage) {
+            emit SponsorshipSkipped(context, SponsorshipSkipReason.FEE_ABOVE_CAP, feeNative, valueHint);
+            return false;
+        }
+
+        if (address(this).balance < feeNative) {
+            emit SponsorshipSkipped(context, SponsorshipSkipReason.INSUFFICIENT_BALANCE, feeNative, valueHint);
+            return false;
+        }
+
+        if (policy.spentInEpoch + feeNative > policy.budgetPerEpoch) {
+            emit SponsorshipSkipped(context, SponsorshipSkipReason.BUDGET_EXCEEDED, feeNative, valueHint);
+            return false;
+        }
+
+        policy.spentInEpoch += feeNative;
+        emit SponsorshipSpendRecorded(
+            context,
+            feeNative,
+            policy.spentInEpoch,
+            policy.budgetPerEpoch,
+            policy.epochStart
+        );
+        return true;
+    }
+
+    function _rollbackSponsoredSpend(SponsorshipPolicy storage policy, uint256 feeNative) internal {
+        if (feeNative == 0) return;
+        if (policy.spentInEpoch >= feeNative) {
+            policy.spentInEpoch -= feeNative;
+        } else {
+            policy.spentInEpoch = 0;
+        }
     }
 
     function _buildOptions(uint32 dstEid) internal view returns (bytes memory) {
@@ -885,6 +1047,62 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
     function setUseLocalVRF(bool _useLocal) external onlyOwner {
         useLocalVRF = _useLocal;
+    }
+
+    function setSponsoredVrfMinSwapAmountUSD(uint256 _minSwapAmountUSD) external onlyOwner {
+        require(_minSwapAmountUSD >= MIN_SWAP_USD && _minSwapAmountUSD <= MAX_SWAP_USD, "Invalid min");
+        sponsoredVrfMinSwapAmountUSD = _minSwapAmountUSD;
+        emit SponsoredVrfMinSwapUpdated(_minSwapAmountUSD);
+    }
+
+    function setVrfSponsorshipPolicy(
+        bool enabled,
+        uint256 maxFeePerMessage,
+        uint256 budgetPerEpoch,
+        uint256 epochDuration
+    ) external onlyOwner {
+        require(epochDuration > 0, "Invalid epoch");
+        _refreshSponsorshipEpoch(vrfSponsorshipPolicy);
+        vrfSponsorshipPolicy.enabled = enabled;
+        vrfSponsorshipPolicy.maxFeePerMessage = maxFeePerMessage;
+        vrfSponsorshipPolicy.budgetPerEpoch = budgetPerEpoch;
+        vrfSponsorshipPolicy.epochDuration = epochDuration;
+        if (vrfSponsorshipPolicy.epochStart == 0) {
+            vrfSponsorshipPolicy.epochStart = block.timestamp;
+        }
+
+        emit SponsorshipPolicyUpdated(
+            _sponsorshipContext("VRF_REQUEST"),
+            enabled,
+            maxFeePerMessage,
+            budgetPerEpoch,
+            epochDuration
+        );
+    }
+
+    function setCallbackSponsorshipPolicy(
+        bool enabled,
+        uint256 maxFeePerMessage,
+        uint256 budgetPerEpoch,
+        uint256 epochDuration
+    ) external onlyOwner {
+        require(epochDuration > 0, "Invalid epoch");
+        _refreshSponsorshipEpoch(callbackSponsorshipPolicy);
+        callbackSponsorshipPolicy.enabled = enabled;
+        callbackSponsorshipPolicy.maxFeePerMessage = maxFeePerMessage;
+        callbackSponsorshipPolicy.budgetPerEpoch = budgetPerEpoch;
+        callbackSponsorshipPolicy.epochDuration = epochDuration;
+        if (callbackSponsorshipPolicy.epochStart == 0) {
+            callbackSponsorshipPolicy.epochStart = block.timestamp;
+        }
+
+        emit SponsorshipPolicyUpdated(
+            _sponsorshipContext("WINNER_CALLBACK"),
+            enabled,
+            maxFeePerMessage,
+            budgetPerEpoch,
+            epochDuration
+        );
     }
 
     function setBoostManager(address _manager) external onlyOwner {

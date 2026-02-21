@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
@@ -16,6 +16,10 @@ export function Home() {
   const showJoinWaitlistCta = hostMode === 'marketing'
   const showExploreCreatorsCta = hostMode === 'app'
   const showDeployVaultCta = hostMode === 'app'
+
+  if (hostMode === 'app') {
+    return <Navigate to="/swap" replace />
+  }
 
   useEffect(() => {
     if (location.hash === '#waitlist') return

@@ -178,11 +178,25 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     // STATE - REMOTE CHAIN LOTTERY ENTRY
     // ================================
 
+    struct PendingLotteryEntry {
+        address buyer;
+        uint256 amount;
+    }
+
     /// @notice LayerZero peer for the hub LotteryManager (bytes32-encoded address)
     bytes32 public hubLotteryPeer;
 
     /// @notice Gas limit for lottery entry messages to hub
     uint128 public lotteryEntryGasLimit = DEFAULT_LOTTERY_GAS_LIMIT;
+
+    /// @notice Next id for pending remote lottery entries
+    uint256 public nextPendingLotteryEntryId = 1;
+
+    /// @notice Pending remote lottery entries keyed by entry id
+    mapping(uint256 => PendingLotteryEntry) public pendingLotteryEntries;
+
+    /// @notice Number of pending remote entries per buyer
+    mapping(address => uint256) public pendingLotteryEntryCount;
 
     /// @notice Total lottery entries sent to hub (lifetime, remote only)
     uint256 public totalLotteryEntriesSent;
@@ -217,6 +231,18 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     /// @notice Emitted when a lottery entry is sent to the hub from a remote chain
     event LotteryEntrySent(address indexed buyer, uint256 amount, uint32 indexed hubEid);
 
+    /// @notice Emitted when a remote buy creates a pending lottery entry
+    event PendingLotteryEntryQueued(uint256 indexed entryId, address indexed buyer, uint256 amount, uint32 indexed hubEid);
+
+    /// @notice Emitted when a pending remote lottery entry is submitted
+    event PendingLotteryEntrySubmitted(
+        uint256 indexed entryId,
+        address indexed buyer,
+        uint256 amount,
+        uint256 nativeFeePaid,
+        uint32 indexed hubEid
+    );
+
     /// @notice Emitted on remote chain when the hub notifies of a lottery win
     event LotteryWinnerNotification(
         address indexed winner,
@@ -243,6 +269,9 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     error HubNotConfigured();
     error NotHub();
     error InvalidCallback();
+    error PendingLotteryEntryNotFound();
+    error NotPendingLotteryEntryOwner();
+    error InvalidLotteryEntryFee(uint256 provided, uint256 required);
     
     // ================================
     // MODIFIERS
@@ -553,7 +582,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      * @param amount Amount of tokens bought
      *
      * @notice Hub mode: calls local CreatorLotteryManager.processSwapLottery()
-     *         Remote mode: sends a LayerZero message to hub with (buyer, token, amount)
+     *         Remote mode: queues a pending entry that the buyer submits with native gas
      *
      * @notice Uses the actual transfer recipient address to support:
      *         - EOA wallets (traditional)
@@ -572,7 +601,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         if (isHub) {
             _triggerLotteryLocal(buyer, amount);
         } else {
-            _sendLotteryEntry(buyer, amount);
+            _queuePendingLotteryEntry(buyer, amount);
         }
     }
 
@@ -594,34 +623,50 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     }
 
     /**
-     * @dev Remote-only: send lottery entry to hub via LayerZero
-     *      Payload: (buyer, tokenAddress, amount, sourceChainEid)
-     *      The hub LotteryManager will process VRF + payout locally
+     * @dev Queue a pending remote lottery entry for explicit buyer-paid submission.
      */
-    function _sendLotteryEntry(address buyer, uint256 amount) internal {
-        if (hubLotteryPeer == bytes32(0) || hubEid == 0) return;
-        
-        bytes memory payload = abi.encode(
-            MSG_TYPE_LOTTERY_ENTRY,
-            buyer,
-            address(this), // tokenIn (this ShareOFT)
-            amount,
-            uint32(block.chainid) // sourceChainId for winner callback routing
+    function _queuePendingLotteryEntry(address buyer, uint256 amount) internal {
+        if (amount == 0) return;
+
+        uint256 entryId = nextPendingLotteryEntryId;
+        nextPendingLotteryEntryId = entryId + 1;
+
+        pendingLotteryEntries[entryId] = PendingLotteryEntry({buyer: buyer, amount: amount});
+        pendingLotteryEntryCount[buyer] += 1;
+
+        emit PendingLotteryEntryQueued(entryId, buyer, amount, hubEid);
+    }
+
+    /**
+     * @notice Submit a previously queued remote lottery entry and pay LayerZero native fee.
+     * @dev Remote-only path. Keeps transfer flow ERC20-compatible by moving fee payment to an explicit call.
+     */
+    function submitPendingLotteryEntry(uint256 entryId) external payable nonReentrant {
+        if (isHub) revert NotHub();
+
+        PendingLotteryEntry memory entry = pendingLotteryEntries[entryId];
+        if (entry.buyer == address(0)) revert PendingLotteryEntryNotFound();
+        if (entry.buyer != _msgSender()) revert NotPendingLotteryEntryOwner();
+        if (hubLotteryPeer == bytes32(0) || hubEid == 0 || peers[hubEid] == bytes32(0)) revert HubNotConfigured();
+
+        (bytes memory payload, bytes memory options, MessagingFee memory fee) = _prepareLotteryEntryMessage(
+            entry.buyer,
+            entry.amount
         );
 
-        bytes memory options = OptionsBuilder.newOptions()
-            .addExecutorLzReceiveOption(lotteryEntryGasLimit, 0);
-
-        // Quote the fee
-        MessagingFee memory fee = _quote(hubEid, payload, options, false);
-
-        // Only send if contract has enough native gas
-        if (address(this).balance >= fee.nativeFee) {
-            _lzSend(hubEid, payload, options, fee, payable(address(this)));
-            totalLotteryEntriesSent++;
-            emit LotteryEntrySent(buyer, amount, hubEid);
+        if (msg.value != fee.nativeFee) {
+            revert InvalidLotteryEntryFee(msg.value, fee.nativeFee);
         }
-        // If insufficient gas, silently skip (lottery should not block transfers)
+
+        // CEI: clear state before external call. Revert restores state if send fails.
+        delete pendingLotteryEntries[entryId];
+        pendingLotteryEntryCount[entry.buyer] -= 1;
+
+        _lzSend(hubEid, payload, options, fee, payable(_msgSender()));
+        totalLotteryEntriesSent++;
+
+        emit LotteryEntrySent(entry.buyer, entry.amount, hubEid);
+        emit PendingLotteryEntrySubmitted(entryId, entry.buyer, entry.amount, fee.nativeFee, hubEid);
     }
 
     /**
@@ -630,21 +675,39 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      * @return fee The native gas fee required
      */
     function quoteLotteryEntry(uint256 amount) external view returns (MessagingFee memory fee) {
-        if (hubLotteryPeer == bytes32(0) || hubEid == 0) {
+        if (hubLotteryPeer == bytes32(0) || hubEid == 0 || peers[hubEid] == bytes32(0)) {
             return MessagingFee(0, 0);
         }
 
-        bytes memory payload = abi.encode(
+        (, , fee) = _prepareLotteryEntryMessage(address(0), amount);
+    }
+
+    /**
+     * @notice Quote the LayerZero fee for a queued remote lottery entry.
+     * @param entryId Pending entry id
+     * @return fee LayerZero native/lzToken fee quote (zeroed if entry/config missing)
+     */
+    function quotePendingLotteryEntry(uint256 entryId) external view returns (MessagingFee memory fee) {
+        PendingLotteryEntry memory entry = pendingLotteryEntries[entryId];
+        if (entry.buyer == address(0)) return MessagingFee(0, 0);
+        if (hubLotteryPeer == bytes32(0) || hubEid == 0 || peers[hubEid] == bytes32(0)) return MessagingFee(0, 0);
+
+        (, , fee) = _prepareLotteryEntryMessage(entry.buyer, entry.amount);
+    }
+
+    function _prepareLotteryEntryMessage(
+        address buyer,
+        uint256 amount
+    ) internal view returns (bytes memory payload, bytes memory options, MessagingFee memory fee) {
+        payload = abi.encode(
             MSG_TYPE_LOTTERY_ENTRY,
-            address(0), // placeholder buyer
-            address(this),
+            buyer,
+            address(this), // tokenIn (this ShareOFT)
             amount,
-            uint32(block.chainid)
+            uint32(block.chainid) // sourceChainId for winner callback routing
         );
 
-        bytes memory options = OptionsBuilder.newOptions()
-            .addExecutorLzReceiveOption(lotteryEntryGasLimit, 0);
-
+        options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(lotteryEntryGasLimit, 0);
         fee = _quote(hubEid, payload, options, false);
     }
     
@@ -1039,9 +1102,9 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Accept native gas for lottery entry and fee flush operations
-     * @dev On remote chains, the contract needs native gas to send LayerZero messages.
-     *      Fund via direct transfer or this receive function.
+     * @notice Accept native token transfers/refunds.
+     * @dev Remote lottery entries are buyer-funded via submitPendingLotteryEntry(),
+     *      but this contract can still receive native token via direct transfer.
      */
     receive() external payable {}
 }

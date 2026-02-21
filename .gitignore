@@ -122,6 +122,7 @@ scripts/solana/vanity-pool/*.lock
 test/**
 !test/vault/
 !test/vault/CreatorCharmStrategyOracle.t.sol
+!test/vault/CreatorVRFConsumerV2_5.RelayFunding.t.sol
 telegram-bot/
 relayer/
 monitoring/
