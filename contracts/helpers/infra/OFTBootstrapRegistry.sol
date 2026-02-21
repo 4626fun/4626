@@ -19,8 +19,9 @@ contract OFTBootstrapRegistry {
     error ZeroAddress();
 
     /// @notice Set (or update) the LayerZero endpoint for a chain.
-    /// @dev Permissionless by design — safe because it is only used during OFT construction,
-    ///      and our AA batch sets the value atomically immediately before deployment.
+    /// @dev Permissionless by design.
+    ///      For split-phase deployments, callers must re-sync to the canonical endpoint
+    ///      in the same transaction immediately before OFT construction.
     function setLayerZeroEndpoint(uint16 chainId, address endpoint) external {
         if (endpoint == address(0)) revert ZeroAddress();
         layerZeroEndpoints[chainId] = endpoint;

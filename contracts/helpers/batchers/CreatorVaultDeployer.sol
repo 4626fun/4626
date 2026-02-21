@@ -69,6 +69,7 @@ interface ISolanaBridgeAdapter {
 
 interface IOFTBootstrapRegistry {
     function setLayerZeroEndpoint(uint16 chainId, address endpoint) external;
+    function getLayerZeroEndpoint(uint16 chainId) external view returns (address);
 }
 
 interface IUniswapV3Factory {
@@ -301,6 +302,7 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     error MissingMeteoraAlphaVault();
     error MissingSolanaBridgeIxs();
     error InvalidSolanaBridgeIx(uint256 index);
+    error BootstrapEndpointMismatch(address expected, address actual);
 
     ICreatorRegistry public immutable registry;
     IUniversalBytecodeStore public immutable bytecodeStore;
@@ -593,6 +595,15 @@ contract CreatorVaultDeployer is ReentrancyGuard {
             if (state.shareOFT == address(0) || state.shareOFT.code.length == 0) revert Phase1Missing();
             out.shareOFT = state.shareOFT;
             return out;
+        }
+
+        // Re-sync the bootstrap endpoint right before OFT deployment to eliminate inter-tx poisoning windows.
+        uint16 chainId = uint16(block.chainid);
+        address canonicalEndpoint = registry.getLayerZeroEndpoint(chainId);
+        IOFTBootstrapRegistry(out.oftBootstrapRegistry).setLayerZeroEndpoint(chainId, canonicalEndpoint);
+        address bootstrapEndpoint = IOFTBootstrapRegistry(out.oftBootstrapRegistry).getLayerZeroEndpoint(chainId);
+        if (bootstrapEndpoint != canonicalEndpoint) {
+            revert BootstrapEndpointMismatch(canonicalEndpoint, bootstrapEndpoint);
         }
 
         bytes memory shareOftArgs = abi.encode(params.shareName, shareSymbolUpper, out.oftBootstrapRegistry, address(this));
