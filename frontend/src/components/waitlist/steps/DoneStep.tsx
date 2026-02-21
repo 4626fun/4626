@@ -83,7 +83,7 @@ function AdminDeployLink() {
   )
 }
 
-function PreprovisionStatus() {
+function PreprovisionStatus({ onData }: { onData?: (data: PreprovData | null) => void }) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [data, setData] = useState<PreprovData | null>(null)
 
@@ -95,7 +95,9 @@ function PreprovisionStatus() {
         const res = await apiFetch('/api/waitlist/preprovision', { method: 'POST' })
         const json = await res.json().catch(() => null)
         if (!cancelled && json?.success && json.data) {
-          setData(json.data as PreprovData)
+          const next = json.data as PreprovData
+          setData(next)
+          onData?.(next)
           setStatus('done')
         } else if (!cancelled) {
           setStatus(res.status === 404 ? 'idle' : 'error')
@@ -106,7 +108,7 @@ function PreprovisionStatus() {
     }
     void run()
     return () => { cancelled = true }
-  }, [])
+  }, [onData])
 
   if (status === 'idle') return null
 
@@ -277,22 +279,34 @@ export const DoneStep = memo(function DoneStep({
 }: DoneStepProps) {
   const [exiting, setExiting] = useState(false)
   const [rankDelta, setRankDelta] = useState<number>(0)
+  const [preprovData, setPreprovData] = useState<PreprovData | null>(null)
 
   useEffect(() => {
     const currentRank = waitlistPosition?.rank?.total
     if (typeof currentRank !== 'number' || !Number.isFinite(currentRank) || currentRank <= 0) return
     const key = `cv:waitlist:last-rank:${referralCode || 'anon'}`
+    let cancelled = false
+    const applyRankDelta = (value: number) => {
+      // Avoid synchronous setState inside effect (lint + cascading renders).
+      void Promise.resolve().then(() => {
+        if (cancelled) return
+        setRankDelta(value)
+      })
+    }
     try {
       const prevRaw = window.localStorage.getItem(key)
       const prev = prevRaw ? Number(prevRaw) : null
       if (typeof prev === 'number' && Number.isFinite(prev) && prev > currentRank) {
-        setRankDelta(prev - currentRank)
+        applyRankDelta(prev - currentRank)
       } else {
-        setRankDelta(0)
+        applyRankDelta(0)
       }
       window.localStorage.setItem(key, String(currentRank))
     } catch {
-      setRankDelta(0)
+      applyRankDelta(0)
+    }
+    return () => {
+      cancelled = true
     }
   }, [referralCode, waitlistPosition?.rank?.total])
 
@@ -308,6 +322,27 @@ export const DoneStep = memo(function DoneStep({
       setExiting(false)
     }
   }, [primaryCta])
+
+  const coinSeed = useMemo(() => {
+    const raw = preprovData?.farcasterUsername ?? preprovData?.zoraHandle ?? null
+    const trimmed = typeof raw === 'string' ? raw.trim() : ''
+    if (!trimmed) return null
+    return trimmed.startsWith('@') ? trimmed.slice(1) : trimmed
+  }, [preprovData?.farcasterUsername, preprovData?.zoraHandle])
+
+  const coinSeedSymbolClean = useMemo(() => {
+    const raw = coinSeed ? coinSeed.toUpperCase() : ''
+    return raw.replace(/[^A-Z0-9]/g, '').slice(0, 8)
+  }, [coinSeed])
+
+  const smartWalletAddressForCoin = smartWalletAddress ?? null
+  const ownerAddressForCoin = ownerAddress ?? null
+
+  const canOneClickLaunchCoin = Boolean(coinSeed && coinSeed.trim().length >= 2 && coinSeedSymbolClean.length >= 2)
+  const shouldShowLaunchCoinCard =
+    Boolean(creatorCoinMissing && smartWalletAddressForCoin && ownerAddressForCoin) &&
+    canOneClickLaunchCoin &&
+    !(preprovData?.coinAddress && preprovData?.coinSymbol)
 
   return (
     <AnimatePresence mode="wait">
@@ -360,16 +395,19 @@ export const DoneStep = memo(function DoneStep({
           </motion.div>
 
           {/* Pre-provisioning status */}
-          <PreprovisionStatus />
+          <PreprovisionStatus onData={setPreprovData} />
 
           {/* Launch Creator Coin — shown when the user has no existing Creator Coin */}
-          {creatorCoinMissing && smartWalletAddress && ownerAddress && (
+          {shouldShowLaunchCoinCard ? (
             <LaunchCoinCard
-              smartWalletAddress={smartWalletAddress}
-              ownerAddress={ownerAddress}
+              mode="one-click"
+              defaultName={coinSeed}
+              defaultSymbol={coinSeed}
+              smartWalletAddress={smartWalletAddressForCoin}
+              ownerAddress={ownerAddressForCoin}
               onCoinCreated={onCoinCreated}
             />
-          )}
+          ) : null}
 
           {/* CTA area: loading skeleton, deploy button, or waitlisted state */}
           {deployAccessState === 'checking' && !primaryCta ? (
