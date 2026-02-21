@@ -62,7 +62,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const payload = input && typeof input.payload === 'object' && !Array.isArray(input.payload)
         ? (input.payload as Record<string, unknown>)
         : {}
-      const data = await executeUniswapSkill(tool as UniswapSkillName, payload, { source: 'openclaw' })
+      const data = await executeUniswapSkill(tool as UniswapSkillName, payload)
       return res.status(200).json({ success: true, data } satisfies ApiEnvelope<unknown>)
     }
 

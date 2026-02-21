@@ -5,9 +5,6 @@ type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; details?: un
 const QUOTE_CACHE_TTL_MS = 8_000
 const quoteCache = new Map<string, { at: number; data: TradeQuoteResponse }>()
 const quoteInFlight = new Map<string, Promise<TradeQuoteResponse>>()
-const RETRYABLE_STATUS = new Set([429, 500, 503])
-const DEFAULT_RETRIES = 2
-const RETRY_BASE_DELAY_MS = 125
 
 export type TradeQuoteRequest = {
   tokenIn: string
@@ -176,25 +173,14 @@ export function toPermitSignPayload(permitData: Record<string, unknown>): Permit
 }
 
 export async function fetchTradeQuote(body: TradeQuoteRequest): Promise<TradeQuoteResponse> {
-  const requestBody: TradeQuoteRequest = {
-    ...body,
-    amount: normalizeAmountString(body.amount),
-    urgency: body.urgency ?? 'normal',
-    permitAmount: body.permitAmount ?? 'FULL',
-    routingPreference: body.routingPreference ?? 'BEST_PRICE',
-    spreadOptimization: body.spreadOptimization ?? 'EXECUTION',
-  }
-  const key = JSON.stringify(requestBody)
+  const key = JSON.stringify(body)
   const cached = quoteCache.get(key)
   if (cached && Date.now() - cached.at < QUOTE_CACHE_TTL_MS) return cached.data
 
   const pending = quoteInFlight.get(key)
   if (pending) return pending
 
-  const payload: Record<string, unknown> = { ...requestBody }
-  delete payload.walletModeKey
-
-  const request = post<TradeQuoteResponse>('/api/uniswap/quote', payload)
+  const request = post<TradeQuoteResponse>('/api/uniswap/quote', body)
     .then((data) => {
       quoteCache.set(key, { at: Date.now(), data })
       quoteInFlight.delete(key)

@@ -40,12 +40,12 @@ const uniswapSkillAction: Action = {
   ) => {
     const parsed = parseSkillInvocation(message.content?.text ?? '')
     if (!parsed) {
-      await callback?.({ text: 'Invalid /uniswap command. Format: /uniswap <skill_name> <json_payload>. Mutating skills require {"confirmed":true}.' } as Content)
+      await callback?.({ text: 'Invalid /uniswap command. Format: /uniswap <skill_name> <json_payload>' } as Content)
       return
     }
 
     try {
-      const data = await executeUniswapSkill(parsed.skill, parsed.payload, { source: 'eliza' })
+      const data = await executeUniswapSkill(parsed.skill, parsed.payload)
       await callback?.({ text: JSON.stringify({ skill: parsed.skill, data }, null, 2) } as Content)
     } catch (error: any) {
       await callback?.({ text: `Uniswap skill failed: ${error?.message ?? 'unknown error'}` } as Content)
