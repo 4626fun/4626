@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import { isObject, readJsonObjectBody, toCleanErrorMessage, uniswapTradeFetch } from '../../../server/uniswap/trading.js'
+import { validateAddressField, validateChainIdField, validateIntegerAmountField } from '../../../server/uniswap/guards.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -29,6 +30,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   for (const key of required) {
     if (!(key in body)) return res.status(400).json({ success: false, error: `Missing required field: ${key}` })
   }
+
+
+  for (const field of ['tokenInChainId', 'tokenOutChainId']) {
+    const err = validateChainIdField(body, field)
+    if (err) return res.status(400).json({ success: false, error: err })
+  }
+  for (const field of ['tokenIn', 'tokenOut', 'swapper']) {
+    const err = validateAddressField(body, field)
+    if (err) return res.status(400).json({ success: false, error: err })
+  }
+  const amountErr = validateIntegerAmountField(body, 'amount')
+  if (amountErr) return res.status(400).json({ success: false, error: amountErr })
 
   const tokenInChainId = Number(body.tokenInChainId)
   const tokenOutChainId = Number(body.tokenOutChainId)

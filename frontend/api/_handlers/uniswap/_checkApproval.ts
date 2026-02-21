@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import { isObject, readJsonObjectBody, toCleanErrorMessage, uniswapTradeFetch } from '../../../server/uniswap/trading.js'
+import { validateAddressField, validateChainIdField, validateIntegerAmountField } from '../../../server/uniswap/guards.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -27,6 +28,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   for (const key of required) {
     if (!(key in body)) return res.status(400).json({ success: false, error: `Missing required field: ${key}` })
   }
+
+
+  const chainErr = validateChainIdField(body, 'chainId')
+  if (chainErr) return res.status(400).json({ success: false, error: chainErr })
+  for (const field of ['walletAddress', 'token']) {
+    const err = validateAddressField(body, field)
+    if (err) return res.status(400).json({ success: false, error: err })
+  }
+  const amountErr = validateIntegerAmountField(body, 'amount')
+  if (amountErr) return res.status(400).json({ success: false, error: amountErr })
 
   const upstream = await uniswapTradeFetch({
     path: '/check_approval',

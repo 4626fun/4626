@@ -104,6 +104,9 @@ function actionScoreFromMessage(actionName: string, text: string): { score: numb
   if (normalizedText.startsWith('/coin') && normalizedName.includes('zora')) {
     return { score: 0.9, reason: 'prefix_/coin' }
   }
+  if (normalizedText.startsWith('/uniswap') && normalizedName.includes('uniswap')) {
+    return { score: 0.93, reason: 'prefix_/uniswap' }
+  }
   if (normalizedText.startsWith('/keepr') && normalizedName.includes('keepr')) {
     return { score: 0.9, reason: 'prefix_/keepr' }
   }
