@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
+import { validateAddressField, validateChainIdField, validateIntegerAmountField } from '../../../server/uniswap/guards.js'
 import { isObject, readJsonObjectBody, toCleanErrorMessage, uniswapTradeFetch } from '../../../server/uniswap/trading.js'
 
 const ACTION_PATH: Record<string, string> = {
@@ -14,31 +15,19 @@ const ACTION_PATH: Record<string, string> = {
   migrate: '/liquidity/migrate',
 }
 
-const ALLOWED_CHAIN_IDS = new Set([8453])
-const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
-
-function isAddress(value: unknown): value is `0x${string}` {
-  return typeof value === 'string' && ADDRESS_RE.test(value.trim())
-}
-
 function assertPayloadSafety(payload: Record<string, unknown>): string | null {
-  const chainIdRaw = payload.chainId
-  if (chainIdRaw !== undefined) {
-    const chainId = Number(chainIdRaw)
-    if (!Number.isInteger(chainId) || !ALLOWED_CHAIN_IDS.has(chainId)) return 'Unsupported chainId'
-  }
+  const chainErr = validateChainIdField(payload, 'chainId')
+  if (chainErr) return chainErr
 
   for (const key of ['walletAddress', 'token0', 'token1', 'tokenIn', 'tokenOut']) {
-    const value = payload[key]
-    if (value === undefined || value === null || value === '') continue
-    if (!isAddress(value)) return `Invalid address field: ${key}`
+    const err = validateAddressField(payload, key)
+    if (err) return err
   }
 
-  for (const [k, v] of Object.entries(payload)) {
-    if (!/^amount/i.test(k)) continue
-    if (typeof v !== 'string' && typeof v !== 'number') return `Invalid amount field: ${k}`
-    const n = typeof v === 'number' ? v : Number(v)
-    if (!Number.isFinite(n) || n <= 0 || n > 1e15) return `Amount out of bounds: ${k}`
+  for (const key of Object.keys(payload)) {
+    if (!/^amount/i.test(key)) continue
+    const err = validateIntegerAmountField(payload, key)
+    if (err) return err
   }
 
   return null

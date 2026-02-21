@@ -659,7 +659,7 @@ export function Swap() {
     queryKey: ['uniswap', 'lp-positions', canonicalAddress],
     enabled: Boolean(activePanel === 'liquidity' && canonicalAddress),
     queryFn: async () => fetchLiquidityPositions(canonicalAddress!, BASE_CHAIN_ID),
-    refetchInterval: activePanel === 'liquidity' ? 20_000 : false,
+    refetchInterval: activePanel === 'liquidity' ? () => (typeof document !== 'undefined' && document.hidden ? false : 20_000) : false,
     staleTime: 10_000,
     retry: 2,
     retryDelay: (attempt) => Math.min(30_000, 1_000 * 2 ** attempt),
@@ -732,7 +732,7 @@ export function Swap() {
                     <div className="text-xs text-zinc-500 break-all">{tokenOut}</div>
                   </div>
 
-                  <button type="button" onClick={handleReviewTrade} disabled={!isConnected || !identityReady || !isReady || busy !== null} className="mt-4 w-full rounded-2xl bg-fuchsia-500 px-4 py-3 text-lg font-semibold text-white transition hover:bg-fuchsia-400 disabled:opacity-50">{busy === 'review' ? 'Reviewing…' : 'Review trade'}</button>
+                  <button type="button" onClick={handleReviewTrade} disabled={!isConnected || !identityReady || !isReady || busy !== null || quoteIsStale} className="mt-4 w-full rounded-2xl bg-fuchsia-500 px-4 py-3 text-lg font-semibold text-white transition hover:bg-fuchsia-400 disabled:opacity-50">{busy === 'review' ? 'Reviewing…' : 'Review trade'}</button>
                   {tokenIn.toLowerCase() === tokenOut.toLowerCase() ? <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">Choose two different tokens to generate a quote.</div> : null}
 
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-400">
@@ -763,6 +763,7 @@ export function Swap() {
                       </div>
                     </div>
                   ) : null}
+                  {quoteIsStale ? <button type="button" onClick={() => { void handleQuote() }} disabled={busy !== null || !identityReady} className="mt-2 rounded-full border border-amber-400/40 px-3 py-1 text-xs text-amber-200 disabled:opacity-50">Refresh quote</button> : null}
                   <TransactionLifecycle state={txState} message={status || error || (quoteIsStale ? 'Quote needs refresh' : undefined)} txHash={txHash} />
                 </>
               ) : (

@@ -5,6 +5,9 @@ export type UniswapErrorCode =
   | 'CHAIN_MISMATCH'
   | 'SLIPPAGE_EXCEEDED'
   | 'RATE_LIMITED'
+  | 'WALLET_REJECTED'
+  | 'NONCE_CONFLICT'
+  | 'NETWORK_TIMEOUT'
   | 'UNKNOWN'
 
 export type NormalizedUniswapError = {
@@ -47,13 +50,13 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
     return { code: 'RATE_LIMITED', message: 'Too many requests. Please wait and try again.', retryable: true }
   }
   if (msg.includes('rejected') || msg.includes('user denied') || msg.includes('action_rejected')) {
-    return { code: 'UNKNOWN', message: 'Transaction was rejected in your wallet.', retryable: true }
+    return { code: 'WALLET_REJECTED', message: 'Transaction was rejected in your wallet.', retryable: true }
   }
   if (msg.includes('nonce too low') || msg.includes('replacement transaction underpriced')) {
-    return { code: 'UNKNOWN', message: 'Network nonce conflict. Please retry in a few seconds.', retryable: true }
+    return { code: 'NONCE_CONFLICT', message: 'Network nonce conflict. Please retry in a few seconds.', retryable: true }
   }
-  if (msg.includes('timeout') || msg.includes('network error')) {
-    return { code: 'UNKNOWN', message: 'Network timeout. Please check connection and retry.', retryable: true }
+  if (msg.includes('timeout') || msg.includes('network error') || msg.includes('failed to fetch')) {
+    return { code: 'NETWORK_TIMEOUT', message: 'Network timeout. Please check connection and retry.', retryable: true }
   }
 
   return { ...FALLBACK, message: raw.slice(0, 220) }
