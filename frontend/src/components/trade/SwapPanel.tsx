@@ -24,6 +24,8 @@ export function SwapPanel(props: {
   estimatedOut: string
   tokenInSymbol: string
   tokenOutSymbol: string
+  tokenInBalanceLabel?: string
+  tokenOutBalanceLabel?: string
   // Wallet / execution
   isConnected: boolean
   executionMode: WalletMode
@@ -98,11 +100,15 @@ export function SwapPanel(props: {
           ))}
         </div>
 
-        {/* Route chip */}
-        <div className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/4 px-2.5 py-1 text-[11px] text-zinc-400">
+        {/* Route chip — tapping opens the settings sheet */}
+        <button
+          type="button"
+          onClick={props.onOpenSettings}
+          className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/4 px-2.5 py-1 text-[11px] text-zinc-400 transition hover:bg-white/8 hover:text-zinc-300"
+        >
           <Zap className="h-3 w-3 text-brand-400" />
           <RouteViz routeSummary={props.routeSummary} compact />
-        </div>
+        </button>
 
         {/* Spacer */}
         <div className="flex-1" />
@@ -148,6 +154,7 @@ export function SwapPanel(props: {
               onTokenChange={props.onSetTokenIn}
               amountPlaceholder="0"
               fiatValueLabel="≈ -- USD"
+              balanceLabel={props.tokenInBalanceLabel}
               showMax={false}
               className="rounded-b-md"
             />
@@ -168,6 +175,7 @@ export function SwapPanel(props: {
               amountPlaceholder="0"
               readOnlyAmount
               fiatValueLabel="≈ -- USD"
+              balanceLabel={props.tokenOutBalanceLabel}
               className="rounded-t-md"
             />
           </div>
@@ -190,37 +198,60 @@ export function SwapPanel(props: {
             </div>
           )}
 
-          {/* ─── Inline notices ──────────────────────────────────────────── */}
+          {/* ─── Inline notices (single priority notice shown at a time) ─── */}
           {props.tokensEquivalent && (
             <div className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/8 px-3 py-2 text-xs text-rose-300">
               Select two different tokens to get a quote.
             </div>
           )}
-          {props.permitSignatureRequired && (
-            <div
-              className={`mt-2 rounded-xl border px-3 py-2 text-xs ${
-                props.permitSignaturePending
-                  ? 'border-amber-400/30 bg-amber-500/8 text-amber-300'
-                  : props.permitSignatureReady
-                    ? 'border-emerald-400/30 bg-emerald-500/8 text-emerald-200'
-                    : 'border-blue-400/25 bg-blue-500/8 text-blue-300'
-              }`}
-            >
-              {props.permitSignaturePending
-                ? 'Check your wallet — signature required.'
-                : props.permitSignatureReady
-                  ? 'Signature captured. Ready to swap.'
-                  : 'A one-time signature is needed before submission.'}
-            </div>
-          )}
-          {props.error && (
-            <div className="mt-2 rounded-xl border border-rose-500/25 bg-rose-500/8 px-3 py-2 text-xs text-rose-300">
-              {props.error}
-            </div>
-          )}
-          {props.status && !props.error && (
-            <div className="mt-2 text-xs text-emerald-400">{props.status}</div>
-          )}
+
+          {!props.tokensEquivalent && (() => {
+            // Show exactly one notice based on priority:
+            // 1. error  2. stale quote  3. permit signature  4. status
+            if (props.error) {
+              return (
+                <div className="mt-2 rounded-xl border border-rose-500/25 bg-rose-500/8 px-3 py-2 text-xs text-rose-300">
+                  {props.error}
+                </div>
+              )
+            }
+            if (props.quoteIsStale && props.executionReady) {
+              return (
+                <motion.button
+                  type="button"
+                  onClick={props.onRefreshQuote}
+                  disabled={props.busy !== null}
+                  whileTap={{ scale: 0.97 }}
+                  className="mt-2 rounded-full border border-amber-400/30 bg-amber-500/8 px-3 py-1 text-xs text-amber-300 transition hover:bg-amber-500/15 disabled:opacity-50"
+                >
+                  Quote expired — refresh
+                </motion.button>
+              )
+            }
+            if (props.permitSignatureRequired) {
+              return (
+                <div
+                  className={`mt-2 rounded-xl border px-3 py-2 text-xs ${
+                    props.permitSignaturePending
+                      ? 'border-amber-400/30 bg-amber-500/8 text-amber-300'
+                      : props.permitSignatureReady
+                        ? 'border-emerald-400/30 bg-emerald-500/8 text-emerald-200'
+                        : 'border-blue-400/25 bg-blue-500/8 text-blue-300'
+                  }`}
+                >
+                  {props.permitSignaturePending
+                    ? 'Check your wallet — signature required.'
+                    : props.permitSignatureReady
+                      ? 'Signature captured. Ready to swap.'
+                      : 'A one-time signature is needed before submission.'}
+                </div>
+              )
+            }
+            if (props.status) {
+              return <div className="mt-2 text-xs text-emerald-400">{props.status}</div>
+            }
+            return null
+          })()}
 
           {/* ─── Not connected ───────────────────────────────────────────── */}
           {!props.isConnected && (
@@ -236,19 +267,6 @@ export function SwapPanel(props: {
                 ? 'Set up your Smart Wallet to trade with enhanced security.'
                 : 'Your wallet is not ready to submit transactions.'}
             </div>
-          )}
-
-          {/* ─── Refresh stale quote ─────────────────────────────────────── */}
-          {props.quoteIsStale && props.executionReady && (
-            <motion.button
-              type="button"
-              onClick={props.onRefreshQuote}
-              disabled={props.busy !== null}
-              whileTap={{ scale: 0.97 }}
-              className="mt-2 rounded-full border border-amber-400/30 bg-amber-500/8 px-3 py-1 text-xs text-amber-300 transition hover:bg-amber-500/15 disabled:opacity-50"
-            >
-              Quote expired — refresh
-            </motion.button>
           )}
 
           {/* ─── TX lifecycle ────────────────────────────────────────────── */}

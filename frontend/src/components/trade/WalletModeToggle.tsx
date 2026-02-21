@@ -33,19 +33,30 @@ export function WalletModeToggle(props: {
             <motion.button
               key={m}
               type="button"
-              onClick={() => props.onChange(m)}
-              disabled={!available || props.busy}
+              onClick={() => {
+                // If CSW isn't set up yet, clicking it navigates to setup instead of
+                // silently failing with a disabled-button NOP.
+                if (!available && m === 'canonical') {
+                  props.onEnableCanonical?.()
+                  return
+                }
+                if (!available) return
+                props.onChange(m)
+              }}
+              disabled={props.busy}
               whileTap={{ scale: 0.96 }}
               className={`relative min-h-7 rounded-full px-3 py-1 transition-colors disabled:opacity-40 ${
                 active
                   ? 'bg-white/15 text-white font-medium'
-                  : 'text-zinc-500 hover:text-zinc-300'
+                  : available
+                    ? 'text-zinc-500 hover:text-zinc-300'
+                    : 'text-zinc-600 hover:text-zinc-400'
               }`}
             >
               {LABELS[m]}
               {m === 'canonical' && !props.canonicalAvailable && (
                 <span className="ml-1 inline-block rounded-full bg-amber-500/20 px-1 py-px text-[9px] text-amber-300">
-                  Off
+                  Set up
                 </span>
               )}
             </motion.button>

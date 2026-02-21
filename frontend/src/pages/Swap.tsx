@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Droplets, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { getAddress, isAddress } from 'viem'
-import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
+import { useAccount, useBalance, usePublicClient, useWalletClient } from 'wagmi'
 
 import { SwapConfirmModal } from '@/components/trade/SwapConfirmModal'
 import { SwapPanel } from '@/components/trade/SwapPanel'
@@ -49,6 +49,15 @@ const CORE_TOKENS: TokenOption[] = [
 ]
 
 type QuoteShape = Record<string, unknown>
+
+function fmtBal(d: { formatted: string; symbol: string } | undefined): string | undefined {
+  if (!d) return undefined
+  const n = parseFloat(d.formatted)
+  if (!Number.isFinite(n)) return undefined
+  if (n === 0) return `0 ${d.symbol}`
+  if (n < 0.0001) return `<0.0001 ${d.symbol}`
+  return `${parseFloat(n.toPrecision(4))} ${d.symbol}`
+}
 
 function formatPercent(value: unknown): string | null {
   const n = typeof value === 'number' ? value : Number(value)
@@ -278,6 +287,24 @@ export function Swap() {
   const tokenOutDisplay = tokenOutIdentity.display
   const tokenInSymbol = tokenInDisplay.symbol
   const tokenOutSymbol = tokenOutDisplay.symbol
+
+  // ─── Token balances ───────────────────────────────────────────────────────
+  const isTokenInNative = tokenIn.toLowerCase() === CONTRACTS.weth.toLowerCase()
+  const isTokenOutNative = tokenOut.toLowerCase() === CONTRACTS.weth.toLowerCase()
+  const { data: tokenInBalData } = useBalance({
+    address: executionAddress ?? undefined,
+    token: isTokenInNative ? undefined : (tokenIn as `0x${string}`),
+    chainId: BASE_CHAIN_ID,
+    query: { enabled: Boolean(executionAddress) && isAddress(tokenIn) },
+  })
+  const { data: tokenOutBalData } = useBalance({
+    address: executionAddress ?? undefined,
+    token: isTokenOutNative ? undefined : (tokenOut as `0x${string}`),
+    chainId: BASE_CHAIN_ID,
+    query: { enabled: Boolean(executionAddress) && isAddress(tokenOut) },
+  })
+  const tokenInBalanceLabel = fmtBal(tokenInBalData)
+  const tokenOutBalanceLabel = fmtBal(tokenOutBalData)
 
   // ─── Swap execution ───────────────────────────────────────────────────────
   const {
@@ -515,6 +542,8 @@ export function Swap() {
                   estimatedOut={estimatedOut}
                   tokenInSymbol={tokenInSymbol}
                   tokenOutSymbol={tokenOutSymbol}
+                  tokenInBalanceLabel={tokenInBalanceLabel}
+                  tokenOutBalanceLabel={tokenOutBalanceLabel}
                   isConnected={isConnected}
                   executionMode={executionMode}
                   preferredMode={preferredExecutionMode}
@@ -539,12 +568,17 @@ export function Swap() {
                   permitSignatureReady={permitSignatureReady}
                   activePanel={activePanel}
                   lifecycle={
-                    <TransactionLifecycle
-                      state={txState}
-                      message={status || error || (quoteIsStale ? 'Quote expired — refresh to continue.' : undefined)}
-                      txHash={txHash}
-                      onReset={resetTradeState}
-                    />
+                    // Only show the lifecycle widget when a tx is actually in-flight
+                    // or has completed. 'idle' and 'review' are pre-execution states
+                    // handled by the inline banners below.
+                    txState !== 'idle' && txState !== 'review' ? (
+                      <TransactionLifecycle
+                        state={txState}
+                        message={status || undefined}
+                        txHash={txHash}
+                        onReset={resetTradeState}
+                      />
+                    ) : null
                   }
                   onSetTokenIn={setTokenIn}
                   onSetTokenOut={setTokenOut}
