@@ -1,9 +1,15 @@
 {
+  "lib/continuous-clearing-auction": {
+    "rev": "148a0e1c4d549a12e2e91cf03442345138377a5b"
+  },
   "lib/forge-std": {
     "tag": {
       "name": "v1.12.0",
       "rev": "7117c90c8cf6c68e5acce4f09a6b24715cea4de6"
     }
+  },
+  "lib/liquidity-launcher": {
+    "rev": "a50af7b5cc2c79863587f4797d4478c1612605d1"
   },
   "lib/solidity-lib": {
     "tag": {

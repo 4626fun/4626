@@ -10,6 +10,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
+import {IStrategyValuation} from "../interfaces/IStrategyValuation.sol";
 
 /**
  * @title CreatorOVault
@@ -406,6 +407,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     
     // Yearn V3 inspired errors
     error StrategyHasUnrealisedLosses(address strategy, uint256 lossAmount);
+    /// @notice Strategy explicitly reports valuation inputs are unhealthy (oracle stale/unavailable).
+    error StrategyValuationNotReady(address strategy);
     error InsufficientIdleForWithdrawal(uint256 requested, uint256 available);
     error QueueTooLong(uint256 length, uint256 maxLength);
     error StrategyNotInQueue(address strategy);
@@ -689,6 +692,32 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
             assets = 0;
         }
     }
+
+    /**
+     * @notice Find the first active strategy explicitly reporting unhealthy valuation.
+     * @dev For backwards compatibility, strategies that do not implement `IStrategyValuation`
+     *      (or revert on the call) are treated as valuation-ready.
+     */
+    function _firstStrategyValuationNotReady() internal view returns (address bad) {
+        uint256 len = strategyList.length;
+        for (uint256 i; i < len; i++) {
+            address strategy = strategyList[i];
+            if (!activeStrategies[strategy]) continue;
+
+            try IStrategyValuation(strategy).isValuationReady() returns (bool ok) {
+                if (!ok) return strategy;
+            } catch {
+                // Strategy does not support valuation readiness or misbehaved; don't brick the vault.
+            }
+        }
+
+        return address(0);
+    }
+
+    function _requireStrategyValuationsReady() internal view {
+        address bad = _firstStrategyValuationNotReady();
+        if (bad != address(0)) revert StrategyValuationNotReady(bad);
+    }
     
     /**
      * @notice Deposit Creator Coin into vault
@@ -719,6 +748,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         // Store price before for sanity check (only if not first deposit)
         bool isFirstDeposit = totalSupply() == 0;
         uint256 priceBefore = isFirstDeposit ? 0 : pricePerShare();
+
+        // SECURITY: Prevent share dilution when any strategy valuation is unhealthy.
+        _requireStrategyValuationsReady();
         
         shares = previewDeposit(assets);
         if (shares == 0) revert ZeroShares();
@@ -772,6 +804,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         // Store price before for sanity check (only if not first deposit)
         bool isFirstDeposit = totalSupply() == 0;
         uint256 priceBefore = isFirstDeposit ? 0 : pricePerShare();
+
+        // SECURITY: Prevent share dilution when any strategy valuation is unhealthy.
+        _requireStrategyValuationsReady();
         
         assets = previewMint(shares);
         if (assets == 0) revert ZeroAmount();
@@ -1004,6 +1039,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     function maxDeposit(address receiver) public view override returns (uint256) {
         if (paused || isShutdown) return 0;
         if (whitelistEnabled && !whitelist[receiver]) return 0;
+        if (_firstStrategyValuationNotReady() != address(0)) return 0;
         uint256 currentSupply = totalSupply();
         if (currentSupply >= maxTotalSupply) return 0;
         
@@ -1020,6 +1056,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     function maxMint(address receiver) public view override returns (uint256) {
         if (paused || isShutdown) return 0;
         if (whitelistEnabled && !whitelist[receiver]) return 0;
+        if (_firstStrategyValuationNotReady() != address(0)) return 0;
         uint256 currentSupply = totalSupply();
         if (currentSupply >= maxTotalSupply) return 0;
         return maxTotalSupply - currentSupply;
