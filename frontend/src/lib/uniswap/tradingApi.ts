@@ -1,5 +1,9 @@
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; details?: unknown }
 
+const QUOTE_CACHE_TTL_MS = 8_000
+const quoteCache = new Map<string, { at: number; data: TradeQuoteResponse }>()
+const quoteInFlight = new Map<string, Promise<TradeQuoteResponse>>()
+
 export type TradeQuoteRequest = {
   tokenIn: string
   tokenOut: string
@@ -90,7 +94,26 @@ export function pickSwapQuote(quote: TradeQuoteResponse): Record<string, unknown
 }
 
 export async function fetchTradeQuote(body: TradeQuoteRequest): Promise<TradeQuoteResponse> {
-  return post<TradeQuoteResponse>('/api/uniswap/quote', body)
+  const key = JSON.stringify(body)
+  const cached = quoteCache.get(key)
+  if (cached && Date.now() - cached.at < QUOTE_CACHE_TTL_MS) return cached.data
+
+  const pending = quoteInFlight.get(key)
+  if (pending) return pending
+
+  const request = post<TradeQuoteResponse>('/api/uniswap/quote', body)
+    .then((data) => {
+      quoteCache.set(key, { at: Date.now(), data })
+      quoteInFlight.delete(key)
+      return data
+    })
+    .catch((error) => {
+      quoteInFlight.delete(key)
+      throw error
+    })
+
+  quoteInFlight.set(key, request)
+  return request
 }
 
 export async function checkTradeApproval(body: {

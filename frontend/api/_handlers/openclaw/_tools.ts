@@ -21,6 +21,49 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const tools: ToolSchema[] = [
+
+    {
+      name: 'uniswap_quote',
+      description: 'Create a Uniswap swap quote via structured agent skill.',
+      inputSchema: { type: 'object', properties: { payload: { type: 'object' } }, required: ['payload'] },
+      outputSchema: { type: 'object' },
+    },
+    {
+      name: 'uniswap_check_approval',
+      description: 'Check token approval requirement on Uniswap.',
+      inputSchema: { type: 'object', properties: { payload: { type: 'object' } }, required: ['payload'] },
+      outputSchema: { type: 'object' },
+    },
+    {
+      name: 'uniswap_build_swap',
+      description: 'Build swap transaction payload from Uniswap quote.',
+      inputSchema: { type: 'object', properties: { payload: { type: 'object' } }, required: ['payload'] },
+      outputSchema: { type: 'object' },
+    },
+    {
+      name: 'uniswap_batch_swap_5792',
+      description: 'Build EIP-5792 batch calls for Uniswap swap.',
+      inputSchema: { type: 'object', properties: { payload: { type: 'object' } }, required: ['payload'] },
+      outputSchema: { type: 'object' },
+    },
+    {
+      name: 'uniswap_delegated_swap_7702',
+      description: 'Build EIP-7702 delegated swap payload.',
+      inputSchema: { type: 'object', properties: { payload: { type: 'object' } }, required: ['payload'] },
+      outputSchema: { type: 'object' },
+    },
+    {
+      name: 'uniswap_crosschain_plan',
+      description: 'Create/update cross-chain swap plan with Uniswap.',
+      inputSchema: { type: 'object', properties: { payload: { type: 'object' } }, required: ['payload'] },
+      outputSchema: { type: 'object' },
+    },
+    {
+      name: 'uniswap_liquidity',
+      description: 'Invoke Uniswap liquidity skill action.',
+      inputSchema: { type: 'object', properties: { payload: { type: 'object' } }, required: ['payload'] },
+      outputSchema: { type: 'object' },
+    },
     {
       name: 'lens_mapping',
       description: 'Resolve a wallet to its canonical Lens profile mapping.',

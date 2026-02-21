@@ -178,6 +178,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'uniswap/swap5792': () => import('./uniswap/_swap5792.js'),
   'uniswap/swap7702': () => import('./uniswap/_swap7702.js'),
   'uniswap/plan': () => import('./uniswap/_plan.js'),
+  'uniswap/liquidity': () => import('./uniswap/_liquidity.js'),
 
   // Token metadata (ERC-7572) - supports both query param and path-based addresses
   'token/metadata': () => import('./token/_metadata.js'),
