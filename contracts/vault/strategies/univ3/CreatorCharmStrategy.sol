@@ -10,6 +10,8 @@ import { IUniswapV3Factory } from "../../../interfaces/uniswap/IUniswapV3Factory
 import { IUniswapV3Pool } from "../../../interfaces/uniswap/IUniswapV3Pool.sol";
 import { TickMathCompat } from "../../../libraries/TickMathCompat.sol";
 import "../../../interfaces/IStrategy.sol";
+import { ICreatorOracle } from "../../../interfaces/ICreatorOracle.sol";
+import { IStrategyValuation } from "../../../interfaces/IStrategyValuation.sol";
 
 /**
  * @title CreatorCharmStrategy
@@ -75,7 +77,7 @@ interface IzRouter {
 
 // Interfaces imported from v3-core and interfaces/IStrategy.sol
 
-contract CreatorCharmStrategy is IStrategy, ReentrancyGuard, Ownable {
+contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
 
     // =================================
@@ -94,6 +96,10 @@ contract CreatorCharmStrategy is IStrategy, ReentrancyGuard, Ownable {
 
     ICharmVault public charmVault;
     IUniswapV3Pool public swapPool;           // CREATOR/USDC pool for pricing
+
+    /// @notice CreatorOracle used for USDC valuation inside `getTotalAssets()`.
+    /// @dev This is intentionally distinct from Uniswap TWAP used for swap sizing/slippage.
+    ICreatorOracle public creatorOracle;
 
     /// @notice TWAP window (seconds) used for valuation inside `getTotalAssets()`.
     /// @dev This impacts ERC-4626 share pricing via `CreatorOVault.totalAssets()`.
@@ -136,6 +142,7 @@ contract CreatorCharmStrategy is IStrategy, ReentrancyGuard, Ownable {
     event UnusedTokensReturned(uint256 creatorAmount, uint256 usdcAmount);
     event ParametersUpdated(uint256 maxSwapPercent, uint256 swapSlippageBps);
     event TwapDurationUpdated(uint32 oldDuration, uint32 newDuration);
+    event CreatorOracleUpdated(address indexed oldOracle, address indexed newOracle);
 
     // =================================
     // ERRORS
@@ -204,6 +211,12 @@ contract CreatorCharmStrategy is IStrategy, ReentrancyGuard, Ownable {
 
     function setSwapPool(address _swapPool) external onlyOwner {
         swapPool = IUniswapV3Pool(_swapPool);
+    }
+
+    function setCreatorOracle(address _creatorOracle) external onlyOwner {
+        address old = address(creatorOracle);
+        creatorOracle = ICreatorOracle(_creatorOracle);
+        emit CreatorOracleUpdated(old, _creatorOracle);
     }
 
     function setTwapDuration(uint32 _twapDuration) external onlyOwner {
@@ -305,49 +318,123 @@ contract CreatorCharmStrategy is IStrategy, ReentrancyGuard, Ownable {
         return address(CREATOR);
     }
 
+    /**
+     * @notice Strategy valuation health check for ERC-4626 deposit/mint gating.
+     * @dev MUST NOT revert. If the strategy has any USDC exposure, this requires a
+     *      configured and fresh `creatorOracle` price. If there is no USDC exposure,
+     *      returns true even if the oracle is unset.
+     */
+    function isValuationReady() external view override returns (bool) {
+        uint256 idleUsdc = USDC.balanceOf(address(this));
+        uint256 usdcExposure = idleUsdc;
+
+        // Include USDC exposure inside Charm vault position when present.
+        if (address(charmVault) != address(0)) {
+            uint256 ourShares;
+            uint256 totalShares;
+
+            try charmVault.balanceOf(address(this)) returns (uint256 s) {
+                ourShares = s;
+            } catch {
+                return false;
+            }
+
+            try charmVault.totalSupply() returns (uint256 ts) {
+                totalShares = ts;
+            } catch {
+                return false;
+            }
+
+            if (totalShares != 0 && ourShares != 0) {
+                uint256 total0;
+                uint256 total1;
+                try charmVault.getTotalAmounts() returns (uint256 a0, uint256 a1) {
+                    total0 = a0;
+                    total1 = a1;
+                } catch {
+                    return false;
+                }
+
+                bool creatorIsToken0;
+                try charmVault.token0() returns (address t0) {
+                    creatorIsToken0 = (t0 == address(CREATOR));
+                } catch {
+                    return false;
+                }
+
+                uint256 ourUsdc = creatorIsToken0
+                    ? (total1 * ourShares) / totalShares
+                    : (total0 * ourShares) / totalShares;
+
+                usdcExposure += ourUsdc;
+            }
+        }
+
+        if (usdcExposure == 0) return true;
+
+        ICreatorOracle oracle = creatorOracle;
+        if (address(oracle) == address(0)) return false;
+
+        try oracle.isPriceFresh() returns (bool fresh) {
+            return fresh;
+        } catch {
+            return false;
+        }
+    }
+
     function getTotalAssets() public view override returns (uint256) {
         uint256 idleCreator = CREATOR.balanceOf(address(this));
         uint256 idleUsdc = USDC.balanceOf(address(this));
+        uint256 ourCreator = 0;
+        uint256 ourUsdc = 0;
 
-        (uint256 creatorPerUsdc, bool hasTwap) = _getPoolPriceTWAP(twapDuration);
+        if (address(charmVault) != address(0)) {
+            uint256 ourShares = charmVault.balanceOf(address(this));
+            uint256 totalShares = charmVault.totalSupply();
 
-        if (address(charmVault) == address(0)) {
-            if (!hasTwap || idleUsdc == 0) {
-                return idleCreator;
+            if (totalShares != 0 && ourShares != 0) {
+                (uint256 total0, uint256 total1) = charmVault.getTotalAmounts();
+
+                // Determine which token is CREATOR
+                bool creatorIsToken0 = address(charmVault.token0()) == address(CREATOR);
+
+                ourCreator = creatorIsToken0
+                    ? (total0 * ourShares) / totalShares
+                    : (total1 * ourShares) / totalShares;
+
+                ourUsdc = creatorIsToken0
+                    ? (total1 * ourShares) / totalShares
+                    : (total0 * ourShares) / totalShares;
             }
-            return idleCreator + ((idleUsdc * creatorPerUsdc) / 1e6);
         }
 
-        uint256 ourShares = charmVault.balanceOf(address(this));
-        uint256 totalShares = charmVault.totalSupply();
-        
-        if (totalShares == 0 || ourShares == 0) {
-            if (!hasTwap || idleUsdc == 0) {
-                return idleCreator;
-            }
-            return idleCreator + ((idleUsdc * creatorPerUsdc) / 1e6);
-        }
-
-        (uint256 total0, uint256 total1) = charmVault.getTotalAmounts();
-        
-        // Determine which token is CREATOR
-        bool creatorIsToken0 = address(charmVault.token0()) == address(CREATOR);
-        
-        uint256 ourCreator = creatorIsToken0 
-            ? (total0 * ourShares) / totalShares
-            : (total1 * ourShares) / totalShares;
-            
-        uint256 ourUsdc = creatorIsToken0
-            ? (total1 * ourShares) / totalShares
-            : (total0 * ourShares) / totalShares;
-
-        if (!hasTwap) {
-            // Conservative valuation under oracle failure: ignore all USDC legs.
-            return ourCreator + idleCreator;
-        }
-
-        uint256 usdcInCreator = ((ourUsdc + idleUsdc) * creatorPerUsdc) / 1e6; // USDC has 6 decimals
+        uint256 usdcInCreator = _usdcToCreatorValue(ourUsdc + idleUsdc);
         return ourCreator + idleCreator + usdcInCreator;
+    }
+
+    function _usdcToCreatorValue(uint256 usdcAmount) internal view returns (uint256 creatorAmount) {
+        if (usdcAmount == 0) return 0;
+
+        ICreatorOracle oracle = creatorOracle;
+        if (address(oracle) == address(0)) return 0;
+
+        // Strict: require freshness; if stale/unavailable, return conservative valuation.
+        bool fresh;
+        try oracle.isPriceFresh() returns (bool ok) {
+            fresh = ok;
+        } catch {
+            return 0;
+        }
+        if (!fresh) return 0;
+
+        try oracle.getCreatorPrice() returns (int256 priceUsd, uint256) {
+            if (priceUsd <= 0) return 0;
+            // USDC (1e6) -> USD (1e18): * 1e12, then USD (1e18) -> CREATOR (1e18): *1e18/priceUsd
+            // => usdcAmount * 1e30 / priceUsd
+            creatorAmount = Math.mulDiv(usdcAmount, 1e30, uint256(priceUsd));
+        } catch {
+            return 0;
+        }
     }
 
     /**

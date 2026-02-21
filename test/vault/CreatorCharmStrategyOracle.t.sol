@@ -170,6 +170,26 @@ contract MockRouter {
     }
 }
 
+contract MockCreatorOracle {
+    int256 public priceUsd18;
+    uint256 public timestamp;
+    bool public fresh;
+
+    function setPrice(int256 _priceUsd18, uint256 _timestamp, bool _fresh) external {
+        priceUsd18 = _priceUsd18;
+        timestamp = _timestamp;
+        fresh = _fresh;
+    }
+
+    function isPriceFresh() external view returns (bool) {
+        return fresh;
+    }
+
+    function getCreatorPrice() external view returns (int256 price, uint256 ts) {
+        return (priceUsd18, timestamp);
+    }
+}
+
 contract CreatorCharmStrategyOracleTest is Test {
     function _deployStrategy(
         MockERC20 creator,
@@ -199,7 +219,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         );
     }
 
-    function test_getTotalAssets_usesTwap_notSpotSlot0() external {
+    function test_getTotalAssets_usesOracle_notPoolPrice() external {
         MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
         MockERC20 creator = new MockERC20("Creator", "CRT", 18);
         MockV3Pool pool = new MockV3Pool(address(usdc), address(creator));
@@ -208,17 +228,23 @@ contract CreatorCharmStrategyOracleTest is Test {
         MockCharmVault charm = new MockCharmVault(address(usdc), address(creator));
         CreatorCharmStrategy strategy = _deployStrategy(creator, usdc, charm, pool);
 
+        MockCreatorOracle oracle = new MockCreatorOracle();
+        oracle.setPrice(1e18, block.timestamp, true); // 1 USD per CREATOR
+        strategy.setCreatorOracle(address(oracle));
+
         charm.setTotalSupply(100e18);
         charm.setBalance(address(strategy), 100e18);
-        charm.setTotalAmounts(5_000_000e6, 0);
+        charm.setTotalAmounts(77e18, 1_500_000e6);
 
         uint256 beforeAssets = strategy.getTotalAssets();
 
         pool.setSpotSqrtPriceX96(type(uint160).max);
+        pool.setTwapTick(12000);
         uint256 afterUp = strategy.getTotalAssets();
         assertEq(afterUp, beforeAssets, "spot increase changed valuation");
 
         pool.setSpotSqrtPriceX96(1);
+        pool.setTwapTick(-12000);
         uint256 afterDown = strategy.getTotalAssets();
         assertEq(afterDown, beforeAssets, "spot decrease changed valuation");
     }
@@ -247,7 +273,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         assertApproxEqAbs(assetsCreatorToken0, assetsUsdcToken0, 2, "token orientation changed valuation");
     }
 
-    function test_getTotalAssets_whenTwapUnavailable_returnsConservativeValue() external {
+    function test_getTotalAssets_whenTwapUnavailable_usesOracleIfFresh() external {
         MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
         MockERC20 creator = new MockERC20("Creator", "CRT", 18);
         MockV3Pool pool = new MockV3Pool(address(usdc), address(creator));
@@ -256,25 +282,40 @@ contract CreatorCharmStrategyOracleTest is Test {
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
         CreatorCharmStrategy strategy = _deployStrategy(creator, usdc, charm, pool);
 
+        MockCreatorOracle oracle = new MockCreatorOracle();
+        oracle.setPrice(1e18, block.timestamp, true); // 1 USD per CREATOR
+        strategy.setCreatorOracle(address(oracle));
+
         charm.setTotalSupply(100e18);
         charm.setBalance(address(strategy), 100e18);
         charm.setTotalAmounts(77e18, 1_500_000e6);
 
-        uint256 noObservationAssets = strategy.getTotalAssets();
-        assertEq(noObservationAssets, 77e18);
-
-        pool.setObservationCardinality(2);
-        pool.setRevertObserve(true);
-        uint256 revertedObserveAssets = strategy.getTotalAssets();
-        assertEq(revertedObserveAssets, 77e18);
-
-        // If there's no USDC exposure, valuation can proceed without TWAP.
-        charm.setTotalAmounts(77e18, 0);
+        // TWAP is unavailable, but valuation should still include USDC via CreatorOracle when fresh.
         uint256 totalAssets = strategy.getTotalAssets();
-        assertEq(totalAssets, 77e18);
+        assertEq(totalAssets, 77e18 + 1_500_000e18, "should include USDC via oracle");
     }
 
-    function test_getTotalAssets_countsIdleUsdc_onlyWhenTwapAvailable() external {
+    function test_getTotalAssets_ignoresUsdc_whenOracleNotFresh() external {
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockERC20 creator = new MockERC20("Creator", "CRT", 18);
+        MockV3Pool pool = new MockV3Pool(address(usdc), address(creator));
+
+        MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        CreatorCharmStrategy strategy = _deployStrategy(creator, usdc, charm, pool);
+
+        MockCreatorOracle oracle = new MockCreatorOracle();
+        oracle.setPrice(1e18, block.timestamp, false);
+        strategy.setCreatorOracle(address(oracle));
+
+        charm.setTotalSupply(100e18);
+        charm.setBalance(address(strategy), 100e18);
+        charm.setTotalAmounts(77e18, 1_500_000e6);
+
+        assertEq(strategy.getTotalAssets(), 77e18, "should be conservative without fresh oracle");
+        assertEq(strategy.isValuationReady(), false, "valuation should not be ready without fresh oracle");
+    }
+
+    function test_getTotalAssets_countsIdleUsdc_onlyWhenOracleFresh() external {
         MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
         MockERC20 creator = new MockERC20("Creator", "CRT", 18);
         MockV3Pool pool = new MockV3Pool(address(usdc), address(creator));
@@ -283,17 +324,38 @@ contract CreatorCharmStrategyOracleTest is Test {
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
         CreatorCharmStrategy strategy = _deployStrategy(creator, usdc, charm, pool);
 
+        MockCreatorOracle oracle = new MockCreatorOracle();
+        oracle.setPrice(1e18, block.timestamp, true);
+        strategy.setCreatorOracle(address(oracle));
+
         charm.setTotalSupply(100e18);
         charm.setBalance(address(strategy), 100e18);
         charm.setTotalAmounts(50e18, 0);
 
         usdc.mint(address(strategy), 2_000_000e6);
-        uint256 withTwap = strategy.getTotalAssets();
-        assertGt(withTwap, 50e18, "idle usdc should be valued with twap");
+        uint256 withOracle = strategy.getTotalAssets();
+        assertGt(withOracle, 50e18, "idle usdc should be valued with oracle when fresh");
+        assertEq(strategy.isValuationReady(), true, "valuation should be ready when oracle is fresh");
 
-        pool.setObservationCardinality(1);
-        uint256 noTwap = strategy.getTotalAssets();
-        assertEq(noTwap, 50e18, "idle usdc should be ignored without twap");
+        oracle.setPrice(1e18, block.timestamp, false);
+        uint256 noOracle = strategy.getTotalAssets();
+        assertEq(noOracle, 50e18, "idle usdc should be ignored without fresh oracle");
+        assertEq(strategy.isValuationReady(), false, "valuation should not be ready when oracle is stale");
+    }
+
+    function test_isValuationReady_true_whenNoUsdcExposure_evenWithoutOracle() external {
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockERC20 creator = new MockERC20("Creator", "CRT", 18);
+        MockV3Pool pool = new MockV3Pool(address(usdc), address(creator));
+
+        MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        CreatorCharmStrategy strategy = _deployStrategy(creator, usdc, charm, pool);
+
+        charm.setTotalSupply(100e18);
+        charm.setBalance(address(strategy), 100e18);
+        charm.setTotalAmounts(77e18, 0);
+
+        assertEq(strategy.isValuationReady(), true, "no usdc exposure => ready without oracle");
     }
 
     function test_setTwapDuration_bounds() external {

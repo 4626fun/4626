@@ -90,20 +90,6 @@ contract MockShareOFT {
     function setHubConfig(bool, uint32, address) external {}
 }
 
-contract NonCompliantBootstrapRegistry {
-    address public forcedEndpoint;
-
-    constructor(address _forcedEndpoint) {
-        forcedEndpoint = _forcedEndpoint;
-    }
-
-    function setLayerZeroEndpoint(uint16, address) external {}
-
-    function getLayerZeroEndpoint(uint16) external view returns (address) {
-        return forcedEndpoint;
-    }
-}
-
 contract MockUniversalCreate2Deployer {
     bytes32 public bootstrapSalt;
     bytes32 public bootstrapCodeId;
@@ -225,40 +211,43 @@ contract CreatorVaultDeployerPhase1EndpointPoisoningTest is Test {
 
         deployer.deployPhase1Core(_phase1Params(), _codeIds());
 
-        assertEq(bootstrap.layerZeroEndpoints(uint16(block.chainid)), CANONICAL_ENDPOINT, "core should seed canonical endpoint");
+        // Bootstrap registry is intentionally write-free; it always returns the canonical LZ endpoint.
+        assertEq(
+            bootstrap.getLayerZeroEndpoint(uint16(block.chainid)),
+            bootstrap.LZ_COMMON_ENDPOINT(),
+            "bootstrap should return canonical common endpoint"
+        );
     }
 
     function test_finalizePhase1_overwritesPoisonedBootstrapEndpointBeforeShareDeployment() public {
         OFTBootstrapRegistry bootstrap = new OFTBootstrapRegistry();
-        (CreatorVaultDeployer deployer,,) = _deployFixture(address(bootstrap));
+        (CreatorVaultDeployer deployer, MockCreatorRegistry registry,) = _deployFixture(address(bootstrap));
 
         deployer.deployPhase1Core(_phase1Params(), _codeIds());
 
+        // Even if the main registry endpoint is changed (\"poisoned\"), the ShareOFT constructor binds
+        // the chain-global bootstrap registry endpoint, not the mutable registry endpoint.
         vm.prank(ATTACKER);
-        bootstrap.setLayerZeroEndpoint(uint16(block.chainid), ATTACKER_ENDPOINT);
-        assertEq(bootstrap.layerZeroEndpoints(uint16(block.chainid)), ATTACKER_ENDPOINT, "attacker poisoned endpoint");
+        registry.setEndpoint(ATTACKER_ENDPOINT);
 
         CreatorVaultDeployer.Phase1Result memory out = deployer.finalizePhase1(_phase1Params(), _codeIds());
 
         assertEq(
-            bootstrap.layerZeroEndpoints(uint16(block.chainid)),
-            CANONICAL_ENDPOINT,
-            "finalize should restore canonical endpoint"
-        );
-        assertEq(
             MockShareOFT(out.shareOFT).constructorEndpoint(),
-            CANONICAL_ENDPOINT,
-            "shareOFT should bind canonical endpoint"
+            bootstrap.LZ_COMMON_ENDPOINT(),
+            "shareOFT should bind canonical common endpoint"
         );
     }
 
-    function test_finalizePhase1_revertsIfBootstrapCannotBeSynchronized() public {
-        NonCompliantBootstrapRegistry bootstrap = new NonCompliantBootstrapRegistry(ATTACKER_ENDPOINT);
-        (CreatorVaultDeployer deployer,,) = _deployFixture(address(bootstrap));
+    function test_finalizePhase1_ignoresRegistryEndpointPoisoning() public {
+        OFTBootstrapRegistry bootstrap = new OFTBootstrapRegistry();
+        (CreatorVaultDeployer deployer, MockCreatorRegistry registry,) = _deployFixture(address(bootstrap));
 
         deployer.deployPhase1Core(_phase1Params(), _codeIds());
 
-        vm.expectRevert();
-        deployer.finalizePhase1(_phase1Params(), _codeIds());
+        registry.setEndpoint(ATTACKER_ENDPOINT);
+
+        CreatorVaultDeployer.Phase1Result memory out = deployer.finalizePhase1(_phase1Params(), _codeIds());
+        assertEq(MockShareOFT(out.shareOFT).constructorEndpoint(), bootstrap.LZ_COMMON_ENDPOINT());
     }
 }
