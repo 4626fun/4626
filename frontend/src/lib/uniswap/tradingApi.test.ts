@@ -116,7 +116,7 @@ describe('fetchTradeQuote', () => {
   })
 
   it('keys quote cache by wallet mode without forwarding mode key upstream', async () => {
-    const fetchMock = vi.fn(async () => ({
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({
       ok: true,
       status: 200,
       json: async () => ({ success: true, data: { requestId: 'rq_mode', routing: 'CLASSIC' } }),

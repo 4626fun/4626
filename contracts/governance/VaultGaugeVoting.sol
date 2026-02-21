@@ -31,6 +31,7 @@ interface Ive4626 {
     function getVotingPower(address user) external view returns (uint256);
     function getTotalVotingPower() external view returns (uint256);
     function hasActiveLock(address user) external view returns (bool);
+    function getRemainingLockTime(address user) external view returns (uint256);
 }
 
 interface ICreatorRegistry {
@@ -173,6 +174,7 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
     error ArrayLengthMismatch();
     error ZeroWeight();
     error EpochNotEnded();
+    error LockExpiresBeforeEpochEnd();
 
     // ================================
     // CONSTRUCTOR
@@ -220,6 +222,7 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
 
         uint256 userPower = ve4626.getVotingPower(msg.sender);
         if (userPower == 0) revert NoVotingPower();
+        if (ve4626.getRemainingLockTime(msg.sender) < timeUntilNextEpoch()) revert LockExpiresBeforeEpochEnd();
 
         uint256 epoch = currentEpoch();
 

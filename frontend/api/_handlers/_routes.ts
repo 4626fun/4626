@@ -42,6 +42,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'v1/agents/creators/provision-wallet': () => import('./v1/agents/creators/_provisionWallet.js'),
   'v1/agents/feedback': () => import('./v1/agents/feedback/_read.js'),
   'v1/agents/feedback/submit': () => import('./v1/agents/feedback/_submit.js'),
+  'v1/agents/identity/verification': () => import('./v1/agents/identity/_verification.js'),
   'v1/agents/identity/set-agent-wallet': () => import('./v1/agents/identity/_setAgentWallet.js'),
   'v1/agents/wallet-intelligence': () => import('./v1/agents/_wallet-intelligence.js'),
   'v1/agents/publish': () => import('./v1/agents/_publish.js'),

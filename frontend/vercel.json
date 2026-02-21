@@ -98,6 +98,21 @@
       "continue": true
     },
     {
+      "src": "/agents",
+      "headers": { "x-robots-tag": "noindex, nofollow" },
+      "continue": true
+    },
+    {
+      "src": "/agents/register",
+      "headers": { "x-robots-tag": "noindex, nofollow" },
+      "continue": true
+    },
+    {
+      "src": "/agents/uri-service",
+      "headers": { "x-robots-tag": "noindex, nofollow" },
+      "continue": true
+    },
+    {
       "src": "/admin",
       "headers": { "x-robots-tag": "noindex, nofollow" },
       "continue": true
