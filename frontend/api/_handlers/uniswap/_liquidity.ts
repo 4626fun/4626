@@ -14,6 +14,36 @@ const ACTION_PATH: Record<string, string> = {
   migrate: '/liquidity/migrate',
 }
 
+const ALLOWED_CHAIN_IDS = new Set([8453])
+const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
+
+function isAddress(value: unknown): value is `0x${string}` {
+  return typeof value === 'string' && ADDRESS_RE.test(value.trim())
+}
+
+function assertPayloadSafety(payload: Record<string, unknown>): string | null {
+  const chainIdRaw = payload.chainId
+  if (chainIdRaw !== undefined) {
+    const chainId = Number(chainIdRaw)
+    if (!Number.isInteger(chainId) || !ALLOWED_CHAIN_IDS.has(chainId)) return 'Unsupported chainId'
+  }
+
+  for (const key of ['walletAddress', 'token0', 'token1', 'tokenIn', 'tokenOut']) {
+    const value = payload[key]
+    if (value === undefined || value === null || value === '') continue
+    if (!isAddress(value)) return `Invalid address field: ${key}`
+  }
+
+  for (const [k, v] of Object.entries(payload)) {
+    if (!/^amount/i.test(k)) continue
+    if (typeof v !== 'string' && typeof v !== 'number') return `Invalid amount field: ${k}`
+    const n = typeof v === 'number' ? v : Number(v)
+    if (!Number.isFinite(n) || n <= 0 || n > 1e15) return `Amount out of bounds: ${k}`
+  }
+
+  return null
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -40,17 +70,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid liquidity action payload' })
   }
 
+  const safetyError = assertPayloadSafety(payload)
+  if (safetyError) return res.status(400).json({ success: false, error: safetyError })
+
   const upstream = await uniswapTradeFetch({
     path,
     method: 'POST',
     body: payload,
+    timeoutMs: 15_000,
   })
 
   if (upstream.status >= 400) {
     return res.status(upstream.status).json({
       success: false,
       error: toCleanErrorMessage(upstream.payload, `Liquidity action failed: ${action}`),
-      details: upstream.payload,
     })
   }
 

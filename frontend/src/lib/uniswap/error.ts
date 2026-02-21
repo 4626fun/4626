@@ -46,6 +46,15 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
   if (msg.includes('rate limit') || msg.includes('429')) {
     return { code: 'RATE_LIMITED', message: 'Too many requests. Please wait and try again.', retryable: true }
   }
+  if (msg.includes('rejected') || msg.includes('user denied') || msg.includes('action_rejected')) {
+    return { code: 'UNKNOWN', message: 'Transaction was rejected in your wallet.', retryable: true }
+  }
+  if (msg.includes('nonce too low') || msg.includes('replacement transaction underpriced')) {
+    return { code: 'UNKNOWN', message: 'Network nonce conflict. Please retry in a few seconds.', retryable: true }
+  }
+  if (msg.includes('timeout') || msg.includes('network error')) {
+    return { code: 'UNKNOWN', message: 'Network timeout. Please check connection and retry.', retryable: true }
+  }
 
   return { ...FALLBACK, message: raw.slice(0, 220) }
 }

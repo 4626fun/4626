@@ -5,6 +5,7 @@
 - [ ] Change token pair and amount; verify debounced quote auto-refresh updates output.
 - [ ] Set same token for buy/sell and confirm validation warning appears.
 - [ ] Open advanced panel and run quote + approval + build.
+- [ ] Run wrap/unwrap pair (ETH <-> WETH equivalent path if available) and validate output + execution.
 - [ ] Execute review flow and verify status or explicit failure handling.
 
 ## Cross-chain / advanced

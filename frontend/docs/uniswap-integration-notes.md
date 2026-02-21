@@ -11,12 +11,15 @@ Required variables:
 
 ```bash
 cd frontend
+cp .env.example .env
+pnpm i
 pnpm dev
 ```
 
 ## Capability detection and fallbacks
 
 - **EIP-5792 / EIP-7702** are treated as progressive enhancements via existing `swap5792` / `swap7702` endpoints in the Uniswap client.
+- Runtime capability probing lives in `src/lib/uniswap/capabilities.ts` and surfaces support in the UI.
 - Default swap execution keeps the canonical smart-wallet ERC-4337 path for compatibility.
 - If advanced flows are unavailable for a wallet/provider, the app falls back to approval + standard swap build/execute.
 

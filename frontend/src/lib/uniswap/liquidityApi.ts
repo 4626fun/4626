@@ -10,17 +10,22 @@ export type LiquidityRequest<T = Record<string, unknown>> = {
 }
 
 export async function callLiquidityApi<T = Record<string, unknown>>(body: LiquidityRequest): Promise<T> {
-  const res = await fetch('/api/uniswap/liquidity', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null
-  if (!res.ok || !json?.success) {
-    const normalized = normalizeUniswapError(json?.error ?? `Request failed (${res.status})`)
+  try {
+    const res = await fetch('/api/uniswap/liquidity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null
+    if (!res.ok || !json?.success) {
+      const normalized = normalizeUniswapError(json?.error ?? `Request failed (${res.status})`)
+      throw new Error(normalized.message)
+    }
+    return json.data as T
+  } catch (error: any) {
+    const normalized = normalizeUniswapError(error?.message ?? error)
     throw new Error(normalized.message)
   }
-  return json.data as T
 }
 
 export async function fetchLiquidityPositions(walletAddress: string, chainId: number) {

@@ -26,4 +26,22 @@ describe('callLiquidityApi', () => {
 
     await expect(callLiquidityApi({ action: 'create', payload: {} })).rejects.toThrow('Approval is required before continuing.')
   })
+
+  it('maps server 5xx into retryable message', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      json: async () => ({ success: false, error: 'network timeout from upstream' }),
+    } as any)))
+
+    await expect(callLiquidityApi({ action: 'positions', payload: {} })).rejects.toThrow('Network timeout. Please check connection and retry.')
+  })
+
+  it('handles non-json/network failures safely', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new Error('network error')
+    }))
+
+    await expect(callLiquidityApi({ action: 'positions', payload: {} })).rejects.toThrow()
+  })
 })

@@ -7,6 +7,7 @@ import { erc20Abi, formatUnits, getAddress, isAddress, parseUnits } from 'viem'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 
 import { ConnectButtonWeb3 } from '@/components/ConnectButtonWeb3'
+import { TransactionLifecycle, type TxLifecycleState } from '@/components/trade/TransactionLifecycle'
 import { CONTRACTS } from '@/config/contracts'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
@@ -21,8 +22,10 @@ import {
   type TransactionRequest,
 } from '@/lib/uniswap/tradingApi'
 import { claimLiquidityFees, createPosition, fetchLiquidityPositions, quoteCreatePosition, removeLiquidity } from '@/lib/uniswap/liquidityApi'
+import { detectUniswapWalletCapabilities } from '@/lib/uniswap/capabilities'
 
 const BASE_CHAIN_ID = 8453
+const QUOTE_TTL_MS = 30_000
 const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
   {
     type: 'function',
@@ -116,6 +119,13 @@ export function Swap() {
   const [activePanel, setActivePanel] = useState<'swap' | 'liquidity'>('swap')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [quoteUpdatedAt, setQuoteUpdatedAt] = useState<number | null>(null)
+  const [deadlineMinutes, setDeadlineMinutes] = useState<string>('15')
+  const [txState, setTxState] = useState<TxLifecycleState>('idle')
+  const [txHash, setTxHash] = useState<string | null>(null)
+  const [walletCapabilities, setWalletCapabilities] = useState<{ supports5792: boolean; supports7702: boolean }>({
+    supports5792: false,
+    supports7702: false,
+  })
   const [lpMode, setLpMode] = useState<'simple' | 'advanced'>('simple')
   const [lpFeeTier, setLpFeeTier] = useState<string>('3000')
   const [lpAmountA, setLpAmountA] = useState<string>('1')
@@ -247,6 +257,12 @@ export function Swap() {
   const isReady = isAddress(tokenIn) && isAddress(tokenOut) && tokenIn.toLowerCase() !== tokenOut.toLowerCase() && Number(amountInUnits) > 0 && Boolean(canonicalAddress)
   const approvalTx = approvalData?.approval as Record<string, unknown> | undefined
   const approvalRequired = Boolean(approvalTx?.to && approvalTx?.data)
+  const quoteIsStale = quoteUpdatedAt ? Date.now() - quoteUpdatedAt > QUOTE_TTL_MS : true
+  const parsedDeadlineMinutes = useMemo(() => {
+    const n = Number(deadlineMinutes)
+    if (!Number.isFinite(n) || n <= 0) return 15
+    return Math.min(30, n)
+  }, [deadlineMinutes])
 
   const getTokenDecimals = useCallback(async (token: string): Promise<number> => {
     if (!publicClient || !isAddress(token)) return 18
@@ -292,6 +308,7 @@ export function Swap() {
         setEstimatedOut('')
       }
       setStatus(`Quote ready for canonical CSW (routing=${String(data.routing ?? 'unknown')})`)
+      setTxState('review')
     } catch (e: any) {
       setEstimatedOut('')
       setError(e?.message || 'Quote failed')
@@ -338,6 +355,7 @@ export function Swap() {
         quote: selectedQuote,
         refreshGasPrice: true,
         simulateTransaction: true,
+        deadline: Math.floor(Date.now() / 1000) + parsedDeadlineMinutes * 60,
       })
       assertValidSwapTransaction(data.swap)
       setSwapTx(data.swap)
@@ -406,10 +424,12 @@ export function Swap() {
         quote: selectedQuote,
         refreshGasPrice: true,
         simulateTransaction: true,
+        deadline: Math.floor(Date.now() / 1000) + parsedDeadlineMinutes * 60,
       })
       assertValidSwapTransaction(built.swap)
       setSwapTx(built.swap)
       setStatus('Review ready')
+      setTxState('review')
       setConfirmIntent('swap')
     } catch (e: any) {
       setError(e?.message || 'Unable to prepare trade')
@@ -436,6 +456,8 @@ export function Swap() {
       calls: params.calls,
       version: '1',
     })
+    setTxHash(result.transactionHash)
+    setTxState('pending')
     setStatus(`${params.successLabel}: ${result.transactionHash}`)
   }
 
@@ -459,9 +481,11 @@ export function Swap() {
         ],
         successLabel: 'Approval submitted via ERC-4337',
       })
+      setTxState('success')
     } catch (e: any) {
       const message = e?.message || 'Approval transaction failed'
       setError(message)
+      setTxState('error')
       throw new Error(message)
     } finally {
       setBusy(null)
@@ -484,9 +508,11 @@ export function Swap() {
         ],
         successLabel: 'Swap submitted via canonical ERC-4337',
       })
+      setTxState('success')
     } catch (e: any) {
       const message = e?.message || 'Swap transaction failed'
       setError(message)
+      setTxState('error')
       throw new Error(message)
     } finally {
       setBusy(null)
@@ -511,11 +537,27 @@ export function Swap() {
     return () => window.clearTimeout(timer)
   }, [tokenIn, tokenOut, amountInUnits, parsedSlippage, identityReady, isReady, busy, handleQuote])
 
+  useEffect(() => {
+    let cancelled = false
+    void detectUniswapWalletCapabilities(walletClient).then((caps) => {
+      if (!cancelled) setWalletCapabilities(caps)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [walletClient])
+
   async function confirmAndExecute() {
     if (!confirmIntent || busy) return
+    if (quoteIsStale) {
+      setError('Quote is stale. Please refresh quote before submitting.')
+      setTxState('error')
+      return
+    }
     const action = confirmIntent
     setConfirmIntent(null)
     try {
+      setTxState('signing')
       if (action === 'approval') await executeApprovalNow()
       if (action === 'swap') {
         if (approvalRequired) await executeApprovalNow()
@@ -618,6 +660,10 @@ export function Swap() {
     enabled: Boolean(activePanel === 'liquidity' && canonicalAddress),
     queryFn: async () => fetchLiquidityPositions(canonicalAddress!, BASE_CHAIN_ID),
     refetchInterval: activePanel === 'liquidity' ? 20_000 : false,
+    staleTime: 10_000,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(30_000, 1_000 * 2 ** attempt),
+    refetchOnWindowFocus: false,
   })
 
   return (
@@ -704,6 +750,10 @@ export function Swap() {
                         <label className="label">Slippage %</label>
                         <input className="mt-1 w-full rounded-xl border border-zinc-700 bg-black/30 px-3 py-2 text-xs" value={slippagePct} onChange={(e) => setSlippagePct(e.target.value)} placeholder="0.5" />
                       </div>
+                      <div>
+                        <label className="label">Deadline (minutes)</label>
+                        <input className="mt-1 w-full rounded-xl border border-zinc-700 bg-black/30 px-3 py-2 text-xs" value={deadlineMinutes} onChange={(e) => setDeadlineMinutes(e.target.value)} placeholder="15" />
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         <button type="button" onClick={handleQuote} disabled={busy !== null || !identityReady} className="rounded-full border border-zinc-700 px-3 py-1.5 text-[11px] disabled:opacity-50">Quote</button>
                         <button type="button" onClick={handleCheckApproval} disabled={busy !== null || !identityReady} className="rounded-full border border-zinc-700 px-3 py-1.5 text-[11px] disabled:opacity-50">Approval</button>
@@ -713,6 +763,7 @@ export function Swap() {
                       </div>
                     </div>
                   ) : null}
+                  <TransactionLifecycle state={txState} message={status || error || (quoteIsStale ? 'Quote needs refresh' : undefined)} txHash={txHash} />
                 </>
               ) : (
                 <div className="space-y-3">
@@ -765,6 +816,7 @@ export function Swap() {
             </div>
             <div className="rounded-3xl border border-white/10 bg-black/35 p-5 text-sm text-zinc-300 backdrop-blur-xl">
               Powered by Uniswap APIs on Base with mobile-first swap + LP flows, including graceful fallbacks when advanced wallet capabilities are unavailable.
+              <div className="mt-2 text-xs text-zinc-400">5792: {walletCapabilities.supports5792 ? 'supported' : 'fallback'} · 7702: {walletCapabilities.supports7702 ? 'supported' : 'fallback'}</div>
             </div>
           </motion.aside>
         </div>
