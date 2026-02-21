@@ -14,6 +14,7 @@ import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
 import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
 import { buildShareTokenMetadata } from '../../../server/_lib/shareTokenMetadata.js'
 import { requireServerKey } from '../../../server/zora/_shared.js'
+import { executeUniswapSkill, type UniswapSkillName } from '../../../server/uniswap/agentSkills.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -48,6 +49,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+
+    if (
+      tool === 'uniswap_quote' ||
+      tool === 'uniswap_check_approval' ||
+      tool === 'uniswap_build_swap' ||
+      tool === 'uniswap_batch_swap_5792' ||
+      tool === 'uniswap_delegated_swap_7702' ||
+      tool === 'uniswap_crosschain_plan' ||
+      tool === 'uniswap_liquidity'
+    ) {
+      const payload = input && typeof input.payload === 'object' && !Array.isArray(input.payload)
+        ? (input.payload as Record<string, unknown>)
+        : {}
+      const data = await executeUniswapSkill(tool as UniswapSkillName, payload)
+      return res.status(200).json({ success: true, data } satisfies ApiEnvelope<unknown>)
+    }
+
     if (tool === 'lens_mapping') {
       const walletRaw = normalizeAddress(input.address)
       if (!walletRaw || !isAddressLike(walletRaw)) {
