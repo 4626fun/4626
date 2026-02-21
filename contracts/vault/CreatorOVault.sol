@@ -430,6 +430,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     error CannotRescueCreatorCoin();
     /// @notice Creator coin transfer did not move the expected amount (fee-on-transfer / rebasing / deflationary not supported).
     error TransferAmountMismatch(uint256 expected, uint256 actual);
+    error ETHTransferFailed();
 
     // =================================
     // MODIFIERS
@@ -573,6 +574,40 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     }
 
     /**
+     * @notice Adjust report baseline upward for user principal inflows
+     * @dev Bootstraps from live assets when baseline is uninitialized (legacy vaults)
+     */
+    function _increaseReportBaselineForPrincipalInflow(uint256 assets) internal {
+        if (assets == 0) return;
+
+        uint256 previousTotalAssets = totalAssetsAtLastReport;
+        if (previousTotalAssets == 0) {
+            totalAssetsAtLastReport = totalAssets();
+            return;
+        }
+
+        totalAssetsAtLastReport = previousTotalAssets + assets;
+    }
+
+    /**
+     * @notice Adjust report baseline downward for user principal outflows
+     * @dev Uses floor-at-zero semantics to avoid underflow on extreme outflows
+     */
+    function _decreaseReportBaselineForPrincipalOutflow(uint256 assets) internal {
+        if (assets == 0) return;
+
+        uint256 previousTotalAssets = totalAssetsAtLastReport;
+        if (previousTotalAssets == 0) {
+            totalAssetsAtLastReport = totalAssets();
+            return;
+        }
+
+        totalAssetsAtLastReport = assets >= previousTotalAssets
+            ? 0
+            : previousTotalAssets - assets;
+    }
+
+    /**
      * @notice Burn matured profit-lock shares to realize unlock progression
      */
     function _processProfitUnlock() internal {
@@ -693,6 +728,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
             uint256 priceAfter = pricePerShare();
             _checkPriceChange(priceBefore, priceAfter);
         }
+
+        _increaseReportBaselineForPrincipalInflow(assets);
         
         emit Deposit(msg.sender, receiver, assets, shares);
         
@@ -749,6 +786,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
             uint256 priceAfter = pricePerShare();
             _checkPriceChange(priceBefore, priceAfter);
         }
+
+        _increaseReportBaselineForPrincipalInflow(assets);
         
         emit Deposit(msg.sender, receiver, assets, shares);
     }
@@ -793,6 +832,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         _ensureCoin(assets);
         
         _pushCreatorCoinExact(receiver, assets);
+
+        _decreaseReportBaselineForPrincipalOutflow(assets);
         
         emit Withdraw(msg.sender, receiver, owner_, assets, shares);
     }
@@ -837,6 +878,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         _ensureCoin(assets);
         
         _pushCreatorCoinExact(receiver, assets);
+
+        _decreaseReportBaselineForPrincipalOutflow(assets);
         
         emit Withdraw(msg.sender, receiver, owner_, assets, shares);
     }
@@ -916,6 +959,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         
         // Transfer
         _pushCreatorCoinExact(receiver, assets);
+
+        _decreaseReportBaselineForPrincipalOutflow(assets);
         
         emit WithdrawalClaimed(msg.sender, assets);
     }
@@ -1393,6 +1438,14 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         _processProfitUnlock();
         uint256 currentTotalAssets = totalAssets();
         uint256 previousTotalAssets = totalAssetsAtLastReport;
+
+        // Bootstrap baseline for legacy/uninitialized vaults to prevent principal-as-profit minting.
+        if (previousTotalAssets == 0) {
+            lastReport = uint96(block.timestamp);
+            totalAssetsAtLastReport = currentTotalAssets;
+            emit Reported(0, 0, 0, currentTotalAssets);
+            return (0, 0);
+        }
         
         if (currentTotalAssets > previousTotalAssets) {
             profit = currentTotalAssets - previousTotalAssets;
@@ -1928,7 +1981,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     function rescueETH() external onlyOwner {
         uint256 balance = address(this).balance;
         if (balance > 0) {
-            payable(owner()).transfer(balance);
+            (bool success,) = payable(owner()).call{value: balance}("");
+            if (!success) revert ETHTransferFailed();
         }
     }
     
