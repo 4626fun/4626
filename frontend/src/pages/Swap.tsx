@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -371,15 +371,24 @@ export function Swap() {
     resetTradeState()
   }, [executionAddress, resetTradeState])
 
-  // Debounced auto-quote
+  // Sync busy into a ref so the auto-quote timer can check it without becoming
+  // a dependency — having `busy` in the deps list causes the effect to re-fire
+  // every time a quote completes (null→'quote'→null), creating an infinite
+  // request flood when the upstream API is unhealthy (e.g. 403/429).
+  const busyRef = useRef(busy)
+  busyRef.current = busy
+
+  // Debounced auto-quote: only fires when actual swap inputs change.
   useEffect(() => {
     if (!executionReady || !isReady) return
     const timer = window.setTimeout(() => {
-      if (busy) return
+      if (busyRef.current) return
       void handleQuote()
     }, 450)
     return () => window.clearTimeout(timer)
-  }, [tokenIn, tokenOut, amountInUnits, parsedSlippage, executionReady, isReady, busy, handleQuote])
+    // `busy` intentionally omitted — use busyRef to check at call-time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokenIn, tokenOut, amountInUnits, parsedSlippage, executionReady, isReady, handleQuote])
 
   // Wallet capabilities
   useEffect(() => {
