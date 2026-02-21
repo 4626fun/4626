@@ -1,5 +1,11 @@
+import { motion } from 'framer-motion'
 import type { WalletMode } from '@/lib/uniswap/walletMode'
 import { shortAddress } from '@/lib/uniswap/swapUtils'
+
+const LABELS: Record<WalletMode, string> = {
+  canonical: 'Smart Wallet',
+  eoa: 'Connected',
+}
 
 export function WalletModeToggle(props: {
   mode: WalletMode
@@ -11,50 +17,74 @@ export function WalletModeToggle(props: {
   fallbackActive: boolean
   onChange: (mode: WalletMode) => void
   onEnableCanonical: () => void
+  /** Compact mode hides address and extra copy — used in ExecutionBar */
+  compact?: boolean
 }) {
+  const modes: WalletMode[] = ['canonical', 'eoa']
+
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/3 p-3">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Execution</div>
-      <div className="mt-2 inline-flex rounded-full border border-white/15 bg-black/35 p-1 text-xs">
-        <button
-          type="button"
-          onClick={() => props.onChange('canonical')}
-          disabled={!props.canonicalAvailable || props.busy}
-          className={`min-h-10 rounded-full px-3 transition disabled:opacity-50 ${
-            props.mode === 'canonical' ? 'bg-white/15 text-white' : 'text-zinc-400 hover:text-zinc-200'
-          }`}
-        >
-          Canonical CSW
-        </button>
-        <button
-          type="button"
-          onClick={() => props.onChange('eoa')}
-          disabled={!props.eoaAvailable || props.busy}
-          className={`min-h-10 rounded-full px-3 transition disabled:opacity-50 ${
-            props.mode === 'eoa' ? 'bg-white/15 text-white' : 'text-zinc-400 hover:text-zinc-200'
-          }`}
-        >
-          Connected EOA
-        </button>
+    <div className={props.compact ? 'flex items-center gap-2' : 'space-y-2'}>
+      {/* Segmented pill toggle */}
+      <div className="inline-flex rounded-full border border-white/12 bg-black/40 p-0.5 text-xs">
+        {modes.map((m) => {
+          const available = m === 'canonical' ? props.canonicalAvailable : props.eoaAvailable
+          const active = props.mode === m
+          return (
+            <motion.button
+              key={m}
+              type="button"
+              onClick={() => props.onChange(m)}
+              disabled={!available || props.busy}
+              whileTap={{ scale: 0.96 }}
+              className={`relative min-h-7 rounded-full px-3 py-1 transition-colors disabled:opacity-40 ${
+                active
+                  ? 'bg-white/15 text-white font-medium'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              {LABELS[m]}
+              {m === 'canonical' && !props.canonicalAvailable && (
+                <span className="ml-1 inline-block rounded-full bg-amber-500/20 px-1 py-px text-[9px] text-amber-300">
+                  Off
+                </span>
+              )}
+            </motion.button>
+          )
+        })}
       </div>
-      <div className="mt-2 text-xs text-zinc-400">
-        Using {props.mode === 'canonical' ? 'Zora Coinbase Smart Wallet' : 'Connected EOA'}{' '}
-        {props.executionAddress ? `(${shortAddress(props.executionAddress)})` : ''}
-      </div>
-      {props.fallbackActive ? (
-        <div className="mt-1 text-[11px] text-amber-300">
-          Preferred mode ({props.preferredMode === 'canonical' ? 'Canonical CSW' : 'Connected EOA'}) is unavailable.
+
+      {/* Execution address + status — hidden in compact mode */}
+      {!props.compact && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {props.executionAddress && (
+            <span className="rounded-full border border-white/8 bg-white/4 px-2 py-0.5 font-mono text-[10px] text-zinc-500">
+              {shortAddress(props.executionAddress)}
+            </span>
+          )}
+          {props.fallbackActive && (
+            <span className="rounded-full border border-amber-400/25 bg-amber-500/8 px-2 py-0.5 text-[10px] text-amber-300">
+              Fallback active
+            </span>
+          )}
+          {props.mode === 'eoa' && !props.fallbackActive && (
+            <span className="rounded-full border border-white/8 bg-white/4 px-2 py-0.5 text-[10px] text-zinc-500">
+              Standard mode
+            </span>
+          )}
         </div>
-      ) : null}
-      {props.preferredMode === 'canonical' && !props.canonicalAvailable ? (
-        <button
+      )}
+
+      {/* Enable CSW CTA (shown when preferred=canonical but unavailable) */}
+      {!props.compact && props.preferredMode === 'canonical' && !props.canonicalAvailable && (
+        <motion.button
           type="button"
           onClick={props.onEnableCanonical}
-          className="mt-2 min-h-10 rounded-full border border-brand-primary/30 bg-brand-primary/10 px-3 text-xs text-brand-100 hover:bg-brand-primary/20"
+          whileTap={{ scale: 0.97 }}
+          className="inline-flex items-center gap-1.5 rounded-full border border-brand-primary/30 bg-brand-primary/10 px-3 py-1.5 text-xs text-brand-300 transition hover:bg-brand-primary/20"
         >
-          Enable CSW
-        </button>
-      ) : null}
+          Set up Smart Wallet →
+        </motion.button>
+      )}
     </div>
   )
 }

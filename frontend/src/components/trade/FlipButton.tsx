@@ -1,15 +1,33 @@
+import { useState } from 'react'
+import { motion } from 'framer-motion'
 import { ArrowDown } from 'lucide-react'
 
-export function FlipButton(props: { onClick: () => void }) {
+export function FlipButton(props: { onClick: () => void; disabled?: boolean }) {
+  const [flipped, setFlipped] = useState(false)
+
+  function handleClick() {
+    setFlipped((prev) => !prev)
+    props.onClick()
+  }
+
   return (
-    <button
+    <motion.button
       type="button"
-      onClick={props.onClick}
-      className="rounded-full border border-white/20 bg-black/40 p-2 text-zinc-300 shadow-[0_12px_24px_-18px_rgba(0,0,0,0.9)] transition hover:text-white motion-safe:hover:rotate-180"
+      onClick={handleClick}
+      disabled={props.disabled}
+      whileTap={{ scale: 0.88 }}
+      whileHover={{ boxShadow: '0 0 0 4px rgba(0, 82, 255, 0.12)' }}
+      className="relative z-10 rounded-full border border-white/15 bg-[#0f0f0f] p-3 text-zinc-300 shadow-[0_8px_32px_-10px_rgba(0,0,0,0.9)] transition-colors hover:border-white/25 hover:text-white disabled:opacity-50"
       title="Switch tokens"
       aria-label="Switch token direction"
     >
-      <ArrowDown className="h-4 w-4" />
-    </button>
+      <motion.span
+        animate={{ rotate: flipped ? 180 : 0 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 22 }}
+        className="block motion-reduce:transform-none"
+      >
+        <ArrowDown className="h-4 w-4" />
+      </motion.span>
+    </motion.button>
   )
 }
