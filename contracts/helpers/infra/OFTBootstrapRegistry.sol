@@ -6,31 +6,19 @@ pragma solidity ^0.8.20;
  * @author 0xakita.eth
  * @notice Minimal registry for CreatorShareOFT construction.
  * @dev Used only during OFT deployment to resolve the LayerZero endpoint.
+ *      The endpoint is the canonical LZ v2 EndpointV2, deployed at the same
+ *      address on all EVM chains via CREATE2. No mutable state is needed or
+ *      permitted — this contract is intentionally write-free to eliminate the
+ *      endpoint poisoning attack surface.
  */
 contract OFTBootstrapRegistry {
-    /// @dev LayerZero v2 common endpoint (used as a fallback).
-    ///      This is the same value used by CreatorRegistry (`layerZeroCommonEndpoint`).
+    /// @dev LayerZero v2 EndpointV2 — identical address on all EVM chains.
     address public constant LZ_COMMON_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
 
-    mapping(uint16 => address) public layerZeroEndpoints;
-
-    event LayerZeroEndpointUpdated(uint16 indexed chainId, address endpoint);
-
-    error ZeroAddress();
-
-    /// @notice Set (or update) the LayerZero endpoint for a chain.
-    /// @dev Permissionless by design.
-    ///      For split-phase deployments, callers must re-sync to the canonical endpoint
-    ///      in the same transaction immediately before OFT construction.
-    function setLayerZeroEndpoint(uint16 chainId, address endpoint) external {
-        if (endpoint == address(0)) revert ZeroAddress();
-        layerZeroEndpoints[chainId] = endpoint;
-        emit LayerZeroEndpointUpdated(chainId, endpoint);
-    }
-
-    /// @notice Return the LayerZero endpoint for a chain, with a common fallback.
-    function getLayerZeroEndpoint(uint16 chainId) external view returns (address) {
-        address ep = layerZeroEndpoints[chainId];
-        return ep == address(0) ? LZ_COMMON_ENDPOINT : ep;
+    /// @notice Return the LayerZero endpoint for any chain.
+    /// @dev Always returns LZ_COMMON_ENDPOINT. The chain ID parameter is
+    ///      accepted for interface compatibility but has no effect.
+    function getLayerZeroEndpoint(uint16) external pure returns (address) {
+        return LZ_COMMON_ENDPOINT;
     }
 }

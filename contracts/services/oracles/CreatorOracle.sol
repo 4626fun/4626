@@ -60,6 +60,12 @@ contract CreatorOracle is OApp {
     
     /// @notice Default TWAP duration
     uint32 public constant DEFAULT_TWAP_DURATION = 1800; // 30 minutes
+
+    /// @notice Minimum TWAP duration accepted by public price update functions
+    uint32 public constant MIN_TWAP_DURATION = 1800; // 30 minutes
+
+    /// @notice Maximum allowed price deviation per update (20%)
+    uint256 public constant MAX_PRICE_DEVIATION = 0.20e18;
     
     /// @notice Maximum observations to store
     uint16 public constant MAX_CARDINALITY = 1024;
@@ -224,6 +230,8 @@ contract CreatorOracle is OApp {
     error NeedMoreObservations();
     error StalePrice();
     error InvalidDuration();
+    error PriceUpdateCooldown();
+    error PriceDeviationTooHigh();
     
     // ================================
     // CONSTRUCTOR
@@ -334,7 +342,7 @@ contract CreatorOracle is OApp {
         uint32 _twapDuration
     ) external onlyOwner {
         if (_pool == address(0) || _creatorToken == address(0) || _usdToken == address(0)) revert ZeroAddress();
-        if (_twapDuration == 0) revert InvalidDuration();
+        if (_twapDuration < MIN_TWAP_DURATION) revert InvalidDuration();
 
         address t0 = IUniswapV3Pool(_pool).token0();
         address t1 = IUniswapV3Pool(_pool).token1();
@@ -929,9 +937,10 @@ contract CreatorOracle is OApp {
      * @param twapDuration TWAP duration in seconds
      */
     function updateCreatorPriceFromTWAP(uint32 twapDuration) external {
-        if (block.chainid != BASE_CHAIN_ID && msg.sender != owner()) {
-            revert Unauthorized();
-        }
+        if (msg.sender != owner() && !isPriceUpdater[msg.sender]) revert Unauthorized();
+        if (twapDuration < MIN_TWAP_DURATION) revert InvalidDuration();
+        if (creatorPriceTimestamp > 0 && block.timestamp - creatorPriceTimestamp < priceUpdateCooldown) revert PriceUpdateCooldown();
+
         // Chainlink-style price: V4 TWAP (Creator/ETH) × Chainlink (ETH/USD).
         if (!v4PoolConfigured) revert V4NotConfigured();
         if (observationState.cardinality < 2) revert NeedMoreObservations();
@@ -953,6 +962,16 @@ contract CreatorOracle is OApp {
         
         uint256 ethUSD18 = uint256(ethUSD) * 1e10;
         int256 creatorUSD = int256((creatorPerEth * ethUSD18) / 1e18);
+
+        // Sanity: reject updates that move price more than MAX_PRICE_DEVIATION from the stored value
+        if (creatorPriceUSD > 0) {
+            uint256 oldP = uint256(creatorPriceUSD);
+            uint256 newP = creatorUSD > 0 ? uint256(creatorUSD) : 0;
+            uint256 deviation = oldP > newP
+                ? ((oldP - newP) * 1e18) / oldP
+                : ((newP - oldP) * 1e18) / oldP;
+            if (deviation > MAX_PRICE_DEVIATION) revert PriceDeviationTooHigh();
+        }
         
         creatorPriceUSD = creatorUSD;
         creatorPriceTimestamp = block.timestamp;
@@ -965,14 +984,23 @@ contract CreatorOracle is OApp {
      * @dev Useful for Ajna bucket selection or cross-checking. Does not require Chainlink.
      */
     function updateCreatorPriceFromV3TWAP(uint32 twapDuration) external {
-        if (block.chainid != BASE_CHAIN_ID && msg.sender != owner()) {
-            revert Unauthorized();
-        }
+        if (msg.sender != owner() && !isPriceUpdater[msg.sender]) revert Unauthorized();
         if (!v3PoolConfigured) revert V3NotConfigured();
         uint32 dur = twapDuration == 0 ? v3TwapDuration : twapDuration;
+        if (dur < MIN_TWAP_DURATION) revert InvalidDuration();
+        if (creatorPriceTimestamp > 0 && block.timestamp - creatorPriceTimestamp < priceUpdateCooldown) revert PriceUpdateCooldown();
 
         uint256 creatorUsd18 = getCreatorUsdTWAP(dur);
         if (creatorUsd18 == 0) revert InvalidPrice();
+
+        // Sanity: reject updates that move price more than MAX_PRICE_DEVIATION from the stored value
+        if (creatorPriceUSD > 0) {
+            uint256 oldP = uint256(creatorPriceUSD);
+            uint256 deviation = oldP > creatorUsd18
+                ? ((oldP - creatorUsd18) * 1e18) / oldP
+                : ((creatorUsd18 - oldP) * 1e18) / oldP;
+            if (deviation > MAX_PRICE_DEVIATION) revert PriceDeviationTooHigh();
+        }
 
         creatorPriceUSD = int256(creatorUsd18);
         creatorPriceTimestamp = block.timestamp;

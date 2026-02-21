@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import { Test } from "forge-std/Test.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import { CreatorCharmStrategy } from "../../contracts/vault/strategies/univ3/CreatorCharmStrategy.sol";
+import { CreatorCharmStrategy, ISwapRouter } from "../../contracts/vault/strategies/univ3/CreatorCharmStrategy.sol";
 
 contract MockERC20 is ERC20 {
     uint8 private immutable _decimals;
@@ -29,6 +29,8 @@ contract MockCharmVault {
     uint256 public totalSupply;
     uint256 public total0;
     uint256 public total1;
+    uint256 public withdrawAmount0;
+    uint256 public withdrawAmount1;
     mapping(address => uint256) public balanceOf;
 
     constructor(address token0_, address token1_) {
@@ -61,8 +63,20 @@ contract MockCharmVault {
         return (0, 0, 0);
     }
 
-    function withdraw(uint256, uint256, uint256, address) external pure returns (uint256, uint256) {
-        return (0, 0);
+    function setWithdrawAmounts(uint256 amount0, uint256 amount1) external {
+        withdrawAmount0 = amount0;
+        withdrawAmount1 = amount1;
+    }
+
+    function withdraw(uint256, uint256, uint256, address to) external returns (uint256 amount0, uint256 amount1) {
+        amount0 = withdrawAmount0;
+        amount1 = withdrawAmount1;
+        if (amount0 > 0) {
+            ERC20(token0).transfer(to, amount0);
+        }
+        if (amount1 > 0) {
+            ERC20(token1).transfer(to, amount1);
+        }
     }
 
     function baseLower() external pure returns (int24) {
@@ -130,7 +144,31 @@ contract MockV3Pool {
     }
 }
 
-contract MockRouter { }
+contract MockRouter {
+    bool public shouldRevert;
+    uint256 public amountOutToReturn;
+    uint256 public lastAmountOutMinimum;
+
+    function setShouldRevert(bool value) external {
+        shouldRevert = value;
+    }
+
+    function setAmountOutToReturn(uint256 value) external {
+        amountOutToReturn = value;
+    }
+
+    function exactInputSingle(ISwapRouter.ExactInputSingleParams calldata params) external returns (uint256 amountOut) {
+        if (shouldRevert) revert("SWAP_FAIL");
+        lastAmountOutMinimum = params.amountOutMinimum;
+        if (params.amountIn > 0) {
+            ERC20(params.tokenIn).transferFrom(msg.sender, address(this), params.amountIn);
+        }
+        if (amountOutToReturn > 0) {
+            ERC20(params.tokenOut).transfer(params.recipient, amountOutToReturn);
+        }
+        amountOut = amountOutToReturn;
+    }
+}
 
 contract CreatorCharmStrategyOracleTest is Test {
     function _deployStrategy(
@@ -139,11 +177,22 @@ contract CreatorCharmStrategyOracleTest is Test {
         MockCharmVault charm,
         MockV3Pool pool
     ) internal returns (CreatorCharmStrategy strategy) {
+        MockRouter router = new MockRouter();
+        strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+    }
+
+    function _deployStrategyWithRouter(
+        MockERC20 creator,
+        MockERC20 usdc,
+        MockCharmVault charm,
+        MockV3Pool pool,
+        MockRouter router
+    ) internal returns (CreatorCharmStrategy strategy) {
         strategy = new CreatorCharmStrategy(
             address(this),
             address(creator),
             address(usdc),
-            address(new MockRouter()),
+            address(router),
             address(charm),
             address(pool),
             address(this)
@@ -198,7 +247,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         assertApproxEqAbs(assetsCreatorToken0, assetsUsdcToken0, 2, "token orientation changed valuation");
     }
 
-    function test_getTotalAssets_whenTwapUnavailable_revertsIfUsdcExposure() external {
+    function test_getTotalAssets_whenTwapUnavailable_returnsConservativeValue() external {
         MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
         MockERC20 creator = new MockERC20("Creator", "CRT", 18);
         MockV3Pool pool = new MockV3Pool(address(usdc), address(creator));
@@ -211,18 +260,40 @@ contract CreatorCharmStrategyOracleTest is Test {
         charm.setBalance(address(strategy), 100e18);
         charm.setTotalAmounts(77e18, 1_500_000e6);
 
-        vm.expectRevert(CreatorCharmStrategy.TwapUnavailable.selector);
-        strategy.getTotalAssets();
+        uint256 noObservationAssets = strategy.getTotalAssets();
+        assertEq(noObservationAssets, 77e18);
 
         pool.setObservationCardinality(2);
         pool.setRevertObserve(true);
-        vm.expectRevert(CreatorCharmStrategy.TwapUnavailable.selector);
-        strategy.getTotalAssets();
+        uint256 revertedObserveAssets = strategy.getTotalAssets();
+        assertEq(revertedObserveAssets, 77e18);
 
         // If there's no USDC exposure, valuation can proceed without TWAP.
         charm.setTotalAmounts(77e18, 0);
         uint256 totalAssets = strategy.getTotalAssets();
         assertEq(totalAssets, 77e18);
+    }
+
+    function test_getTotalAssets_countsIdleUsdc_onlyWhenTwapAvailable() external {
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockERC20 creator = new MockERC20("Creator", "CRT", 18);
+        MockV3Pool pool = new MockV3Pool(address(usdc), address(creator));
+        pool.setTwapTick(5000);
+
+        MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        CreatorCharmStrategy strategy = _deployStrategy(creator, usdc, charm, pool);
+
+        charm.setTotalSupply(100e18);
+        charm.setBalance(address(strategy), 100e18);
+        charm.setTotalAmounts(50e18, 0);
+
+        usdc.mint(address(strategy), 2_000_000e6);
+        uint256 withTwap = strategy.getTotalAssets();
+        assertGt(withTwap, 50e18, "idle usdc should be valued with twap");
+
+        pool.setObservationCardinality(1);
+        uint256 noTwap = strategy.getTotalAssets();
+        assertEq(noTwap, 50e18, "idle usdc should be ignored without twap");
     }
 
     function test_setTwapDuration_bounds() external {
@@ -240,6 +311,61 @@ contract CreatorCharmStrategyOracleTest is Test {
 
         strategy.setTwapDuration(3600);
         assertEq(strategy.twapDuration(), 3600);
+    }
+
+    function test_withdraw_revertsAtomically_whenRequiredSwapFails() external {
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockERC20 creator = new MockERC20("Creator", "CRT", 18);
+        MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
+        pool.setTwapTick(5000);
+        MockRouter router = new MockRouter();
+        router.setShouldRevert(true);
+
+        MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        CreatorCharmStrategy strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        strategy.initializeApprovals();
+
+        charm.setTotalSupply(100e18);
+        charm.setBalance(address(strategy), 100e18);
+        charm.setTotalAmounts(100e18, 1_000_000e6);
+        charm.setWithdrawAmounts(20e18, 2_000_000e6);
+
+        creator.mint(address(charm), 50e18);
+        usdc.mint(address(charm), 5_000_000e6);
+
+        vm.expectRevert(CreatorCharmStrategy.RequiredSwapFailed.selector);
+        strategy.withdraw(100e18);
+    }
+
+    function test_withdraw_usesTwapQuote_notSpot_forMinOut() external {
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockERC20 creator = new MockERC20("Creator", "CRT", 18);
+        MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
+        pool.setTwapTick(5000);
+        MockRouter router = new MockRouter();
+        router.setAmountOutToReturn(0);
+
+        MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        CreatorCharmStrategy strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        strategy.initializeApprovals();
+
+        charm.setTotalSupply(100e18);
+        charm.setBalance(address(strategy), 100e18);
+        charm.setTotalAmounts(100e18, 1_000_000e6);
+        charm.setWithdrawAmounts(20e18, 500_000e6);
+
+        creator.mint(address(charm), 100e18);
+        usdc.mint(address(charm), 5_000_000e6);
+
+        strategy.withdraw(100e18);
+        uint256 minOutBefore = router.lastAmountOutMinimum();
+
+        pool.setSpotSqrtPriceX96(type(uint160).max);
+        strategy.withdraw(100e18);
+        uint256 minOutAfter = router.lastAmountOutMinimum();
+
+        assertGt(minOutBefore, 0, "expected non-zero minOut");
+        assertEq(minOutAfter, minOutBefore, "spot manipulation changed minOut");
     }
 }
 
