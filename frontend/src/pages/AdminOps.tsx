@@ -192,7 +192,7 @@ const CREATOR_REGISTRY_ABI = [
       { name: 'creator', type: 'address' },
       { name: 'pool', type: 'address' },
       { name: 'poolFee', type: 'uint24' },
-      { name: 'primaryChainId', type: 'uint16' },
+      { name: 'primaryChainId', type: 'uint256' },
       { name: 'isActive', type: 'bool' },
       { name: 'registeredAt', type: 'uint256' },
     ],

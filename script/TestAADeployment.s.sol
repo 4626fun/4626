@@ -23,10 +23,10 @@ contract TestAADeployment is Script, Test {
     // Base addresses
     address constant AKITA = 0x5b674196812451B7cEC024FE9d22D2c0b172fa75;
     address constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
-    
+
     // Mock addresses for testing (replace with real ones)
     address constant CREATOR_VAULT = address(0x1); // Replace with actual vault
-    address constant AJNA_POOL = address(0x2);     // Replace with actual Ajna pool
+    address constant AJNA_POOL = address(0x2); // Replace with actual Ajna pool
 
     function run() external {
         vm.startBroadcast();
@@ -64,12 +64,14 @@ contract TestAADeployment is Script, Test {
             USDC,
             CREATOR_VAULT,
             AJNA_POOL,
-            3000,  // 0.3% fee
+            3000, // 0.3% fee
             initialSqrtPriceX96,
             tx.origin,
             "CreatorVault: akita/USDC",
             "CV-akita-USDC"
-        ) returns (StrategyDeploymentBatcher.DeploymentResult memory result) {
+        ) returns (
+            StrategyDeploymentBatcher.DeploymentResult memory result
+        ) {
             console.log("   SUCCESS! Strategies deployed:");
             console.log("   - V3 Pool:", result.v3Pool);
             console.log("   - Charm Vault:", result.charmVault);
@@ -82,18 +84,13 @@ contract TestAADeployment is Script, Test {
             // PHASE 3: Generate AA Batch Calls for Adding Strategies
             // ═══════════════════════════════════════════════════════════
             console.log("Phase 3: Generating AA batch calls...");
-            
+
             // Vault strategy weights are in basis points (sum <= 10_000)
             // 69.00% to Charm, 21.39% to Ajna (leaves 9.61% idle)
             uint256 charmWeightBps = 6900;
             uint256 ajnaWeightBps = 2139;
 
-            bytes[] memory calls = batcher.encodeAddStrategyBatch(
-                CREATOR_VAULT,
-                result,
-                charmWeightBps,
-                ajnaWeightBps
-            );
+            bytes[] memory calls = batcher.encodeAddStrategyBatch(CREATOR_VAULT, result, charmWeightBps, ajnaWeightBps);
 
             console.log("   Generated", calls.length, "batch calls:");
             console.log("   1. vault.addStrategy(charmStrategy, 6900 bps)");
@@ -106,34 +103,34 @@ contract TestAADeployment is Script, Test {
             // PHASE 4: Verify Deployment
             // ═══════════════════════════════════════════════════════════
             console.log("Phase 4: Verifying deployment...");
-            
+
             // Check Charm vault exists
             require(result.charmVault != address(0), "Charm vault not deployed");
             console.log("   Charm vault exists");
-            
+
             // Check strategy connected (Charm factory vaults may not have external strategy)
             try ICharmVaultInfo(result.charmVault).strategy() returns (address connectedStrategy) {
                 if (connectedStrategy != address(0)) {
                     console.log("   Charm strategy:", connectedStrategy);
                 }
             } catch {}
-            
+
             // Check governance/manager
             address governance = ICharmVaultInfo(result.charmVault).governance();
             console.log("   Charm governance:", governance);
-            
+
             // Check Creator Charm Strategy configuration
             address charmStrategyVault = CreatorCharmStrategy(result.creatorCharmStrategy).vault();
             require(charmStrategyVault == CREATOR_VAULT, "Wrong vault");
             console.log("   Creator Charm Strategy configured");
-            
+
             // Check Ajna Strategy (if deployed)
             if (result.ajnaStrategy != address(0)) {
                 address ajnaStrategyVault = AjnaStrategy(result.ajnaStrategy).vault();
                 require(ajnaStrategyVault == CREATOR_VAULT, "Wrong vault in Ajna");
                 console.log("   Ajna Strategy configured");
             }
-            
+
             console.log("");
 
             // ═══════════════════════════════════════════════════════════
@@ -155,7 +152,6 @@ contract TestAADeployment is Script, Test {
             console.log("3. Call charmStrategy.rebalance() to set positions");
             console.log("4. Verify yields are being generated");
             console.log("");
-
         } catch Error(string memory reason) {
             console.log("   FAILED:", reason);
             revert(reason);

@@ -5,7 +5,7 @@ pragma solidity ^0.8.20;
  * @title ve4626 - CreatorVault Protocol Token
  * @author 0xakita.eth
  * @notice Vote-escrowed ERC4626 (ve■4626) for protocol-wide boosts.
- * @dev Users lock ■4626 (or ▢4626) to get voting power and lottery boosts.
+ * @dev Users lock ■4626 to get voting power and lottery boosts.
  */
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -107,12 +107,7 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
      * @param _wrappedShareOFT The ■4626 (or similar) token to lock
      * @param _owner Owner address
      */
-    constructor(
-        string memory _name,
-        string memory _symbol,
-        address _wrappedShareOFT,
-        address _owner
-    )
+    constructor(string memory _name, string memory _symbol, address _wrappedShareOFT, address _owner)
         ERC20(_name, _symbol)
         ERC20Permit(_name)
         Ownable(_owner)
@@ -132,11 +127,12 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
      * @param amount Amount to lock
      * @param duration Lock duration in seconds
      */
-    function lock(
-        address _token,
-        uint256 amount,
-        uint256 duration
-    ) external override nonReentrant returns (uint256 votingPowerAmount) {
+    function lock(address _token, uint256 amount, uint256 duration)
+        external
+        override
+        nonReentrant
+        returns (uint256 votingPowerAmount)
+    {
         if (!acceptedTokens[_token]) revert InvalidToken();
         if (amount == 0) revert ZeroAmount();
         if (duration < MIN_LOCK_DURATION) revert InvalidLockDuration();
@@ -278,7 +274,15 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         return (amount * duration) / MAX_LOCK_DURATION;
     }
 
-    function _getUnderlyingValue(address /* token */, uint256 amount) internal view returns (uint256) {
+    function _getUnderlyingValue(
+        address,
+        /* token */
+        uint256 amount
+    )
+        internal
+        view
+        returns (uint256)
+    {
         if (vault == address(0)) return amount;
 
         // If token is vault shares, get underlying value

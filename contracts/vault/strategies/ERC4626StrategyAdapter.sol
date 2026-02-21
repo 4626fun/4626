@@ -9,6 +9,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import {IStrategy} from "../../interfaces/IStrategy.sol";
+import {IStrategyValuation} from "../../interfaces/IStrategyValuation.sol";
 
 interface ICreatorOVaultLike {
     function CREATOR_COIN() external view returns (IERC20);
@@ -20,7 +21,7 @@ interface ICreatorOVaultLike {
  * @notice Adapts an ERC-4626 vault to the `IStrategy` interface.
  * @dev Used by CreatorOVault to integrate ERC-4626 yield sources.
  */
-contract ERC4626StrategyAdapter is IStrategy, Ownable, ReentrancyGuard {
+contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // ================================
@@ -94,6 +95,30 @@ contract ERC4626StrategyAdapter is IStrategy, Ownable, ReentrancyGuard {
 
     function asset() external view override returns (address) {
         return address(ASSET);
+    }
+
+    /**
+     * @notice Strategy valuation health check for ERC-4626 deposit/mint gating.
+     * @dev MUST NOT revert. Returns false when the underlying ERC-4626 conversion
+     *      reverts for any held shares.
+     */
+    function isValuationReady() external view override returns (bool) {
+        uint256 sharesHeld;
+        try ERC4626_VAULT.balanceOf(address(this)) returns (uint256 s) {
+            sharesHeld = s;
+        } catch {
+            return false;
+        }
+
+        if (sharesHeld == 0) return true;
+
+        try ERC4626_VAULT.convertToAssets(sharesHeld) returns (
+            uint256 /* assetsFromShares */
+        ) {
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     function getTotalAssets() public view override returns (uint256) {
@@ -237,7 +262,9 @@ contract ERC4626StrategyAdapter is IStrategy, Ownable, ReentrancyGuard {
         if (toWithdraw == 0) return 0;
 
         // Prefer withdraw(assets) to keep accounting in asset terms.
-        try ERC4626_VAULT.withdraw(toWithdraw, address(this), address(this)) returns (uint256 /* shares */) {
+        try ERC4626_VAULT.withdraw(toWithdraw, address(this), address(this)) returns (
+            uint256 /* shares */
+        ) {
             pulled = toWithdraw;
             return pulled;
         } catch {

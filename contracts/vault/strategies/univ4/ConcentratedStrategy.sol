@@ -26,22 +26,22 @@ import {V4LiquidityAmounts} from "../../../libraries/V4LiquidityAmounts.sol";
  * @title ConcentratedStrategy
  * @author 0xakita.eth (CreatorVault)
  * @notice Concentrated liquidity around current price for maximum capital efficiency
- * 
+ *
  * @dev STRATEGY (inspired by Charm Finance Alpha Vaults):
  *      - Provides liquidity in a tight range around current price
  *      - Higher capital efficiency = more fees per dollar of liquidity
  *      - Requires active management to stay in range
  *      - Auto-rebalances when price moves out of range
- * 
+ *
  * @dev REBALANCE GUARDS (from Charm):
  *      1. Time-based: Must wait `period` seconds between rebalances
  *      2. Price movement: Must move at least `minTickMove` ticks
  *      3. TWAP deviation: Current price must be within `maxTwapDeviation` of TWAP
  *      4. Boundary check: Price can't be too close to MIN/MAX tick
- * 
+ *
  * @dev TWAP PROTECTION:
  *      Prevents flash loan attacks by comparing spot price to time-weighted average
- * 
+ *
  * @dev INTEGRATION:
  *      - Plugs into CreatorLPManager
  *      - Most capital efficient but highest maintenance
@@ -154,8 +154,12 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     event Withdrawn(uint256 liquidity, uint256 creatorCoinAmount, uint256 pairedAmount);
     event Rebalanced(int24 oldTickLower, int24 oldTickUpper, int24 newTickLower, int24 newTickUpper, int24 tick);
     event Snapshot(int24 tick, uint256 totalAmount0, uint256 totalAmount1, uint256 totalSupply);
-    event PoolConfigured(bytes32 poolId, address poolManager, address positionManager, address permit2, bool creatorIsCurrency0);
-    event ParametersUpdated(int24 baseThreshold, uint32 period, int24 minTickMove, int24 maxTwapDeviation, uint32 twapDuration);
+    event PoolConfigured(
+        bytes32 poolId, address poolManager, address positionManager, address permit2, bool creatorIsCurrency0
+    );
+    event ParametersUpdated(
+        int24 baseThreshold, uint32 period, int24 minTickMove, int24 maxTwapDeviation, uint32 twapDuration
+    );
 
     // =================================
     // ERRORS
@@ -167,10 +171,10 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     error ZeroAmount();
     error PoolNotConfigured();
     error InsufficientLiquidity();
-    error PeriodNotElapsed();           // PE - time check
-    error InsufficientTickMove();       // TM - price movement check
-    error TwapDeviationTooHigh();       // TP - TWAP check
-    error PriceTooCloseToBoundary();    // PB - boundary check
+    error PeriodNotElapsed(); // PE - time check
+    error InsufficientTickMove(); // TM - price movement check
+    error TwapDeviationTooHigh(); // TP - TWAP check
+    error PriceTooCloseToBoundary(); // PB - boundary check
     error InvalidParameters();
     error PoolNotFullyConfigured();
     error TwapOracleNotSet();
@@ -193,12 +197,7 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     // CONSTRUCTOR
     // =================================
 
-    constructor(
-        address _creatorCoin,
-        address _pairedToken,
-        address _lpManager,
-        address _owner
-    ) Ownable(_owner) {
+    constructor(address _creatorCoin, address _pairedToken, address _lpManager, address _owner) Ownable(_owner) {
         if (_creatorCoin == address(0)) revert ZeroAddress();
         if (_pairedToken == address(0)) revert ZeroAddress();
 
@@ -223,11 +222,8 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         address c0 = Currency.unwrap(_poolKey.currency0);
         address c1 = Currency.unwrap(_poolKey.currency1);
         bool _creatorIsCurrency0 = c0 == address(CREATOR_COIN);
-        if (
-            !(
-                (_creatorIsCurrency0 && c1 == address(PAIRED_TOKEN)) || (c0 == address(PAIRED_TOKEN) && c1 == address(CREATOR_COIN))
-            )
-        ) revert PoolNotFullyConfigured();
+        if (!((_creatorIsCurrency0 && c1 == address(PAIRED_TOKEN))
+                    || (c0 == address(PAIRED_TOKEN) && c1 == address(CREATOR_COIN)))) revert PoolNotFullyConfigured();
         if (_poolKey.tickSpacing == 0) revert PoolNotFullyConfigured();
 
         poolManager = IPoolManager(_poolManager);
@@ -241,8 +237,10 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         // Approvals for PosM: token -> Permit2, then Permit2 -> PosM
         CREATOR_COIN.forceApprove(_permit2, type(uint256).max);
         PAIRED_TOKEN.forceApprove(_permit2, type(uint256).max);
-        IAllowanceTransfer(_permit2).approve(address(CREATOR_COIN), _positionManager, type(uint160).max, type(uint48).max);
-        IAllowanceTransfer(_permit2).approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
+        IAllowanceTransfer(_permit2)
+            .approve(address(CREATOR_COIN), _positionManager, type(uint160).max, type(uint48).max);
+        IAllowanceTransfer(_permit2)
+            .approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
 
         emit PoolConfigured(PoolId.unwrap(poolId), _poolManager, _positionManager, _permit2, _creatorIsCurrency0);
     }
@@ -289,10 +287,13 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     /**
      * @notice Deposit liquidity into concentrated position
      */
-    function deposit(
-        uint256 creatorCoinAmount,
-        uint256 pairedAmount
-    ) external nonReentrant onlyLPManager whenActive returns (uint256 liquidity) {
+    function deposit(uint256 creatorCoinAmount, uint256 pairedAmount)
+        external
+        nonReentrant
+        onlyLPManager
+        whenActive
+        returns (uint256 liquidity)
+    {
         _requireConfigured();
         if (creatorCoinAmount == 0 && pairedAmount == 0) revert ZeroAmount();
 
@@ -316,9 +317,8 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
             tickUpper = position.tickUpper;
         }
 
-        (uint256 amountCurrency0, uint256 amountCurrency1) = creatorIsCurrency0
-            ? (creatorCoinAmount, pairedAmount)
-            : (pairedAmount, creatorCoinAmount);
+        (uint256 amountCurrency0, uint256 amountCurrency1) =
+            creatorIsCurrency0 ? (creatorCoinAmount, pairedAmount) : (pairedAmount, creatorCoinAmount);
 
         (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(poolId);
         uint128 liq = LiquidityAmounts.getLiquidityForAmounts(
@@ -351,9 +351,12 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     /**
      * @notice Withdraw liquidity
      */
-    function withdraw(
-        uint256 liquidity
-    ) external nonReentrant onlyLPManager returns (uint256 creatorCoinAmount, uint256 pairedAmount) {
+    function withdraw(uint256 liquidity)
+        external
+        nonReentrant
+        onlyLPManager
+        returns (uint256 creatorCoinAmount, uint256 pairedAmount)
+    {
         _requireConfigured();
         if (liquidity == 0) revert ZeroAmount();
         if (liquidity > totalLiquidity) revert InsufficientLiquidity();
@@ -385,7 +388,12 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     /**
      * @notice Withdraw all liquidity
      */
-    function withdrawAll() external nonReentrant onlyLPManager returns (uint256 creatorCoinAmount, uint256 pairedAmount) {
+    function withdrawAll()
+        external
+        nonReentrant
+        onlyLPManager
+        returns (uint256 creatorCoinAmount, uint256 pairedAmount)
+    {
         _requireConfigured();
         if (totalLiquidity == 0) return (0, 0);
         uint256 balCreatorBefore = CREATOR_COIN.balanceOf(address(this));
@@ -450,7 +458,8 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         uint256 creatorBal = CREATOR_COIN.balanceOf(address(this));
         uint256 pairedBal = PAIRED_TOKEN.balanceOf(address(this));
 
-        (uint256 amountCurrency0, uint256 amountCurrency1) = creatorIsCurrency0 ? (creatorBal, pairedBal) : (pairedBal, creatorBal);
+        (uint256 amountCurrency0, uint256 amountCurrency1) =
+            creatorIsCurrency0 ? (creatorBal, pairedBal) : (pairedBal, creatorBal);
         (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(poolId);
         uint128 newLiquidity = LiquidityAmounts.getLiquidityForAmounts(
             sqrtPriceX96,
@@ -490,25 +499,23 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         int24 currentTick = _getCurrentTick();
 
         // 2. Check price has moved enough
-        int24 tickMove = currentTick > lastTick 
-            ? currentTick - lastTick 
-            : lastTick - currentTick;
+        int24 tickMove = currentTick > lastTick ? currentTick - lastTick : lastTick - currentTick;
         if (lastTimestamp != 0 && tickMove < minTickMove) {
             revert InsufficientTickMove();
         }
 
         // 3. Check price is near TWAP (anti-manipulation)
         int24 twap = getTwap();
-        int24 twapDeviation = currentTick > twap 
-            ? currentTick - twap 
-            : twap - currentTick;
+        int24 twapDeviation = currentTick > twap ? currentTick - twap : twap - currentTick;
         if (twapDeviation > maxTwapDeviation) {
             revert TwapDeviationTooHigh();
         }
 
         // 4. Check price is not too close to boundary
-        if (currentTick <= MIN_TICK + baseThreshold + tickSpacing ||
-            currentTick >= MAX_TICK - baseThreshold - tickSpacing) {
+        if (
+            currentTick <= MIN_TICK + baseThreshold + tickSpacing
+                || currentTick >= MAX_TICK - baseThreshold - tickSpacing
+        ) {
             revert PriceTooCloseToBoundary();
         }
     }
@@ -580,37 +587,35 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     /**
      * @notice Get current position details
      */
-    function getPosition() external view returns (
-        int24 tickLower,
-        int24 tickUpper,
-        uint256 liquidity,
-        uint256 tokenId
-    ) {
-        return (
-            position.tickLower,
-            position.tickUpper,
-            position.liquidity,
-            position.tokenId
-        );
+    function getPosition()
+        external
+        view
+        returns (int24 tickLower, int24 tickUpper, uint256 liquidity, uint256 tokenId)
+    {
+        return (position.tickLower, position.tickUpper, position.liquidity, position.tokenId);
     }
 
     /**
      * @notice Get rebalance status info
      */
-    function getRebalanceInfo() external view returns (
-        int24 currentTick,
-        int24 twap,
-        int24 twapDeviation,
-        uint256 timeSinceLastRebalance,
-        int24 tickMoveSinceLast,
-        bool canRebalanceNow
-    ) {
+    function getRebalanceInfo()
+        external
+        view
+        returns (
+            int24 currentTick,
+            int24 twap,
+            int24 twapDeviation,
+            uint256 timeSinceLastRebalance,
+            int24 tickMoveSinceLast,
+            bool canRebalanceNow
+        )
+    {
         currentTick = _getCurrentTick();
         twap = getTwap();
         twapDeviation = currentTick > twap ? currentTick - twap : twap - currentTick;
         timeSinceLastRebalance = block.timestamp - lastTimestamp;
         tickMoveSinceLast = currentTick > lastTick ? currentTick - lastTick : lastTick - currentTick;
-        
+
         try this.checkCanRebalance() {
             canRebalanceNow = true;
         } catch {
@@ -712,8 +717,12 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         uint256 creatorCoinAmount,
         uint256 pairedAmount,
         int24, /* tickLower */
-        int24  /* tickUpper */
-    ) internal pure returns (uint256) {
+        int24 /* tickUpper */
+    )
+        internal
+        pure
+        returns (uint256)
+    {
         // Simplified - production uses V4 LiquidityAmounts math
         if (creatorCoinAmount == 0 || pairedAmount == 0) {
             return creatorCoinAmount + pairedAmount;
@@ -721,9 +730,11 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         return _sqrt(creatorCoinAmount * pairedAmount);
     }
 
-    function _calculateAmountsForLiquidity(
-        uint256 liquidity
-    ) internal view returns (uint256 creatorCoinAmount, uint256 pairedAmount) {
+    function _calculateAmountsForLiquidity(uint256 liquidity)
+        internal
+        view
+        returns (uint256 creatorCoinAmount, uint256 pairedAmount)
+    {
         // Simplified - production queries V4 position
         creatorCoinAmount = liquidity / 2;
         pairedAmount = liquidity / 2;

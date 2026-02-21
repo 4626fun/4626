@@ -52,7 +52,7 @@ contract AuthorizeSolanaAdapter is Script {
             return;
         }
 
-        (bool ok, ) = adapter.call(abi.encodeWithSignature("setLotteryManager(address)", lotteryManager));
+        (bool ok,) = adapter.call(abi.encodeWithSignature("setLotteryManager(address)", lotteryManager));
         if (!ok) {
             console.log("setLotteryManager failed (owner/adapter-version mismatch); skipping");
             return;
@@ -66,11 +66,11 @@ contract AuthorizeSolanaAdapter is Script {
             return;
         }
 
-        (bool okFee, ) = adapter.call(abi.encodeWithSignature("setFeeKeeper(bytes32,bool)", keeperPubkey, true));
+        (bool okFee,) = adapter.call(abi.encodeWithSignature("setFeeKeeper(bytes32,bool)", keeperPubkey, true));
         require(okFee, "setFeeKeeper failed");
         console.log("Authorized fee keeper");
 
-        (bool okEntry, ) = adapter.call(abi.encodeWithSignature("setEntryKeeper(bytes32,bool)", keeperPubkey, true));
+        (bool okEntry,) = adapter.call(abi.encodeWithSignature("setEntryKeeper(bytes32,bool)", keeperPubkey, true));
         require(okEntry, "setEntryKeeper failed");
         console.log("Authorized entry keeper");
     }
@@ -94,10 +94,7 @@ contract AuthorizeSolanaAdapter is Script {
 
         // 1. Authorize SolanaBridgeAdapter as a swap contract on LotteryManager.
         //    This allows the adapter to call processSwapLottery().
-        ICreatorLotteryManagerAuth(lotteryManager).setAuthorizedSwapContract(
-            solanaBridgeAdapter,
-            true
-        );
+        ICreatorLotteryManagerAuth(lotteryManager).setAuthorizedSwapContract(solanaBridgeAdapter, true);
         console.log("Authorized SolanaBridgeAdapter as swap contract on LotteryManager");
 
         // 2. Optional: set Solana adapter + destination on CreatorVaultDeployer.

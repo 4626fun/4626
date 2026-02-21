@@ -15,7 +15,7 @@ description: Operate the CreatorVault lottery randomness system (Chainlink VRF 2
   - `callbackGasLimit` and `requestConfirmations` are sane
 - If cross-chain, confirm the hub can respond:
   - fulfilled responses are queued (`pendingResponses`) and require a funded relayer call
-  - relayer is authorized on hub (`authorizedRelayers`) and can send `relayPendingResponse(sequence)`
+  - relayer is authorized on hub (`authorizedRelayers`) and can send `relayPendingResponse(srcEid, sequence)`
 - Run a small verification (read-only) using `cast call` before making any state changes.
 
 ## System Model (how randomness flows here)
@@ -72,8 +72,8 @@ cast call --rpc-url $RPC_URL $VRF_CONSUMER "keyHash()(bytes32)"
 cast call --rpc-url $RPC_URL $VRF_CONSUMER "callbackGasLimit()(uint32)"
 cast call --rpc-url $RPC_URL $VRF_CONSUMER "requestConfirmations()(uint16)"
 cast call --rpc-url $RPC_URL $VRF_CONSUMER "getContractStatus()(uint256,uint256,bool,uint32,uint256)"
-cast call --rpc-url $RPC_URL $VRF_CONSUMER "quotePendingResponseFee(uint64)(uint256,bool)" $SEQUENCE
-cast call --rpc-url $RPC_URL $VRF_CONSUMER "getPendingResponseStatus(uint64)(uint256,bool,bool,bool,uint32,uint256)" $SEQUENCE
+cast call --rpc-url $RPC_URL $VRF_CONSUMER "quotePendingResponseFee(uint32,uint64)(uint256,bool)" $SRC_EID $SEQUENCE
+cast call --rpc-url $RPC_URL $VRF_CONSUMER "getPendingResponseStatus(uint32,uint64)(uint256,bool,bool,bool,uint32,uint256)" $SRC_EID $SEQUENCE
 
 # Lottery manager VRF mode
 cast call --rpc-url $RPC_URL $LOTTERY_MANAGER "useLocalVRF()(bool)"
@@ -106,7 +106,7 @@ Checklist:
 - LayerZero peers are configured between spoke integrator and hub VRF consumer (both directions)
 - Hub relayer path is configured:
   - `authorizedRelayers(relayer) == true` (or relayer is owner)
-  - relayer funds `relayPendingResponse(sequence)` with `quotePendingResponseFee(sequence).nativeFee`
+  - relayer funds `relayPendingResponse(srcEid, sequence)` with `quotePendingResponseFee(srcEid, sequence).nativeFee`
 - Verify receive-side protection is configured:
   - `rateLimitingEnabled` and per-chain/default limits are sane for traffic
 - Lottery manager is configured:
@@ -130,7 +130,7 @@ Checklist:
 
 - Remote requests stuck / no callback:
   - Check hub emitted `ResponsePending(sequence, requestId, targetChain, reason)` and `ResponseQueuedForRelay(...)`.
-  - Query `quotePendingResponseFee(sequence)` and relay with exact value via `relayPendingResponse(sequence)`.
+  - Query `quotePendingResponseFee(srcEid, sequence)` and relay with exact value via `relayPendingResponse(srcEid, sequence)`.
   - Ensure caller is authorized (`authorizedRelayers`) or owner.
   - Verify LayerZero peers: `peers(eid)` must match the expected remote sender (both hub and spoke).
   - Check `supportedChains(srcEid)` on the hub for that remote chain.

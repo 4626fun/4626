@@ -18,7 +18,7 @@ contract OFTBootstrapRegistry {
     /// @notice Return the LayerZero endpoint for any chain.
     /// @dev Always returns LZ_COMMON_ENDPOINT. The chain ID parameter is
     ///      accepted for interface compatibility but has no effect.
-    function getLayerZeroEndpoint(uint16) external pure returns (address) {
+    function getLayerZeroEndpoint(uint256) external pure returns (address) {
         return LZ_COMMON_ENDPOINT;
     }
 }

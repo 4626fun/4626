@@ -80,6 +80,89 @@ contract MockValuationStrategy is IStrategy, IStrategyValuation {
     function rebalance() external override {}
 }
 
+contract MockValuationReadyButAssetsRevertStrategy is IStrategy, IStrategyValuation {
+    IERC20 public immutable TOKEN;
+    bool public active = true;
+
+    constructor(address token_) {
+        TOKEN = IERC20(token_);
+    }
+
+    function isValuationReady() external pure override returns (bool) {
+        return true;
+    }
+
+    function isActive() external view override returns (bool) {
+        return active;
+    }
+
+    function asset() external view override returns (address) {
+        return address(TOKEN);
+    }
+
+    function getTotalAssets() external pure override returns (uint256) {
+        revert("ASSETS_REVERT");
+    }
+
+    function deposit(uint256 amount) external pure override returns (uint256 deposited) {
+        deposited = amount;
+    }
+
+    function withdraw(uint256 amount) external pure override returns (uint256 withdrawn) {
+        withdrawn = amount;
+    }
+
+    function emergencyWithdraw() external pure override returns (uint256 withdrawn) {
+        withdrawn = 0;
+    }
+
+    function harvest() external pure override returns (uint256 profit) {
+        profit = 0;
+    }
+
+    function rebalance() external pure override {}
+}
+
+contract MockNoValuationInterfaceStrategy is IStrategy {
+    IERC20 public immutable TOKEN;
+    bool public active = true;
+    uint256 public trackedAssets;
+
+    constructor(address token_) {
+        TOKEN = IERC20(token_);
+    }
+
+    function isActive() external view override returns (bool) {
+        return active;
+    }
+
+    function asset() external view override returns (address) {
+        return address(TOKEN);
+    }
+
+    function getTotalAssets() external view override returns (uint256) {
+        return trackedAssets;
+    }
+
+    function deposit(uint256 amount) external pure override returns (uint256 deposited) {
+        deposited = amount;
+    }
+
+    function withdraw(uint256 amount) external pure override returns (uint256 withdrawn) {
+        withdrawn = amount;
+    }
+
+    function emergencyWithdraw() external pure override returns (uint256 withdrawn) {
+        withdrawn = 0;
+    }
+
+    function harvest() external pure override returns (uint256 profit) {
+        profit = 0;
+    }
+
+    function rebalance() external pure override {}
+}
+
 contract CreatorOVaultValuationGuardTest is Test {
     bytes4 private constant STRATEGY_VALUATION_NOT_READY_SELECTOR =
         bytes4(keccak256("StrategyValuationNotReady(address)"));
@@ -136,6 +219,53 @@ contract CreatorOVaultValuationGuardTest is Test {
         vm.prank(alice);
         uint256 shares = vault.deposit(assets, alice);
         assertGt(shares, 0);
+    }
+
+    function test_deposit_reverts_whenStrategyGetTotalAssetsReverts_evenIfValuationReady() external {
+        CreatorOVault freshVault = new CreatorOVault(address(creatorCoin), address(this), "Creator OVault 2", "ovCR8R2");
+        MockValuationReadyButAssetsRevertStrategy bad =
+            new MockValuationReadyButAssetsRevertStrategy(address(creatorCoin));
+        freshVault.addStrategy(address(bad), 10_000, true);
+
+        creatorCoin.mint(alice, freshVault.MINIMUM_FIRST_DEPOSIT() * 4);
+        vm.prank(alice);
+        creatorCoin.approve(address(freshVault), type(uint256).max);
+
+        assertEq(freshVault.maxDeposit(alice), 0, "maxDeposit should be 0 when valuation reads revert");
+        assertEq(freshVault.maxMint(alice), 0, "maxMint should be 0 when valuation reads revert");
+
+        uint256 assets = freshVault.MINIMUM_FIRST_DEPOSIT() * 2;
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(STRATEGY_VALUATION_NOT_READY_SELECTOR, address(bad)));
+        freshVault.deposit(assets, alice);
+
+        uint256 shares = assets * 1000; // _decimalsOffset() = 3
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(STRATEGY_VALUATION_NOT_READY_SELECTOR, address(bad)));
+        freshVault.mint(shares, alice);
+    }
+
+    function test_deposit_reverts_whenStrategyMissingIStrategyValuation() external {
+        CreatorOVault freshVault = new CreatorOVault(address(creatorCoin), address(this), "Creator OVault 3", "ovCR8R3");
+        MockNoValuationInterfaceStrategy bad = new MockNoValuationInterfaceStrategy(address(creatorCoin));
+        freshVault.addStrategy(address(bad), 10_000, true);
+
+        creatorCoin.mint(alice, freshVault.MINIMUM_FIRST_DEPOSIT() * 4);
+        vm.prank(alice);
+        creatorCoin.approve(address(freshVault), type(uint256).max);
+
+        assertEq(freshVault.maxDeposit(alice), 0, "maxDeposit should be 0 when valuation interface missing");
+        assertEq(freshVault.maxMint(alice), 0, "maxMint should be 0 when valuation interface missing");
+
+        uint256 assets = freshVault.MINIMUM_FIRST_DEPOSIT() * 2;
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(STRATEGY_VALUATION_NOT_READY_SELECTOR, address(bad)));
+        freshVault.deposit(assets, alice);
+
+        uint256 shares = assets * 1000; // _decimalsOffset() = 3
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(STRATEGY_VALUATION_NOT_READY_SELECTOR, address(bad)));
+        freshVault.mint(shares, alice);
     }
 }
 

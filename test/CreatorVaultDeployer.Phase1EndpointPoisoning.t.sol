@@ -6,7 +6,7 @@ import {CreatorVaultDeployer} from "../contracts/helpers/batchers/CreatorVaultDe
 import {OFTBootstrapRegistry} from "../contracts/helpers/infra/OFTBootstrapRegistry.sol";
 
 interface IEndpointRegistryLike {
-    function getLayerZeroEndpoint(uint16 chainId) external view returns (address);
+    function getLayerZeroEndpoint(uint256 chainId) external view returns (address);
 }
 
 contract MockBytecodeStore {}
@@ -22,7 +22,7 @@ contract MockCreatorRegistry {
         endpoint = _endpoint;
     }
 
-    function getLayerZeroEndpoint(uint16) external view returns (address) {
+    function getLayerZeroEndpoint(uint256) external view returns (address) {
         return endpoint;
     }
 }
@@ -74,7 +74,7 @@ contract MockShareOFT {
         shareSymbol = _symbol;
         constructorRegistry = _registry;
         owner = _owner;
-        constructorEndpoint = IEndpointRegistryLike(_registry).getLayerZeroEndpoint(uint16(block.chainid));
+        constructorEndpoint = IEndpointRegistryLike(_registry).getLayerZeroEndpoint(block.chainid);
     }
 
     function setRegistry(address _registry) external {
@@ -122,7 +122,8 @@ contract MockUniversalCreate2Deployer {
             return address(new MockVault(creatorToken, owner, vaultName, vaultSymbol));
         }
         if (kind == 2) {
-            (address creatorToken, address vault, address owner) = abi.decode(constructorArgs, (address, address, address));
+            (address creatorToken, address vault, address owner) =
+                abi.decode(constructorArgs, (address, address, address));
             return address(new MockWrapper(creatorToken, vault, owner));
         }
         if (kind == 3) {
@@ -216,7 +217,7 @@ contract CreatorVaultDeployerPhase1EndpointPoisoningTest is Test {
         // Bootstrap registry is intentionally write-free; it always returns the canonical LZ endpoint.
         assertEq(out.oftBootstrapRegistry, address(bootstrap));
         assertEq(
-            bootstrap.getLayerZeroEndpoint(uint16(block.chainid)),
+            bootstrap.getLayerZeroEndpoint(block.chainid),
             bootstrap.LZ_COMMON_ENDPOINT(),
             "bootstrap should return canonical common endpoint"
         );

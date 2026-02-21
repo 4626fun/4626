@@ -15,6 +15,8 @@ const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as ContractAddress
 
 export const BASE_DEFAULTS = {
   // Shared infrastructure
+  // NOTE: If you redeploy CreatorRegistry (e.g. after ABI/storage breaking changes),
+  // set `VITE_REGISTRY` in the environment and/or update this default.
   registry: addr('888482d648D1fCa1A735268A9e579b44Bf644626'),
   lotteryManager: addr('77740C44A3E1d8262e8bfAB6204A29B2cbeE4626'),
   vrfConsumer: addr('0265236984DE964CB0422BaeFbDb2de7C9d590F5'),

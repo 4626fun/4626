@@ -7,7 +7,7 @@ pragma solidity ^0.8.20;
  * @dev Spoke chain contract that receives random words requests and forwards them to Hub chain
  *      for Chainlink VRF 2.5 processing. Part of the CreatorVault cross-chain lottery
  *      and random words infrastructure.
- * 
+ *
  * @notice Ready for future cross-chain VRF implementation
  */
 
@@ -30,24 +30,28 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
 
     error UnauthorizedSponsoredCaller();
 
+    bytes32 internal constant IGNORE_REQUEST_NOT_FOUND = bytes32("REQUEST_NOT_FOUND");
+    bytes32 internal constant IGNORE_ALREADY_FULFILLED = bytes32("ALREADY_FULFILLED");
+    bytes32 internal constant IGNORE_PROVIDER_NOT_FOUND = bytes32("PROVIDER_NOT_FOUND");
+
     // State variables
     uint64 public requestCounter;
     uint32 public defaultGasLimit = 690420;
-    
+
     /// @notice Hub chain EID for VRF requests (Base by default)
     uint32 public hubEid;
 
     // ================================
     // PRICE PIGGYBACKING STATE
     // ================================
-    
+
     /// @notice Price oracle for token/USD price
     address public priceOracle;
-    
+
     /// @notice Last aggregated token/USD price received from Hub
     int256 public lastAggregatedPrice;
     uint256 public lastPriceTimestamp;
-    
+
     // Events for price piggybacking
     event PriceReported(int256 priceUSD, uint256 timestamp);
     event AggregatedPriceReceived(int256 aggregatedPrice, uint256 timestamp);
@@ -73,6 +77,9 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
     event CallbackFailed(uint64 indexed sequence, address indexed provider, string reason);
     event CallbackSucceeded(uint64 indexed sequence, address indexed provider);
     event RequestExpired(uint64 indexed sequence, address indexed provider);
+    event RandomWordsResponseIgnored(uint64 indexed sequence, uint256 randomWord, bytes32 reason);
+    event RandomWordsReceivedLate(uint64 indexed sequence, address indexed provider, uint256 requestTimestamp, uint256 receivedAt);
+    event InvalidVrfResponsePayload(uint32 indexed srcEid, bytes32 indexed sender, uint256 payloadLength);
     event GasLimitUpdated(uint32 oldLimit, uint32 newLimit);
     event SponsoredCallerAuthorizationUpdated(address indexed caller, bool authorized);
 
@@ -85,11 +92,7 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
      * @param _owner Owner address
      * @param _hubEid Hub chain EID (e.g., Base = 30184)
      */
-    constructor(
-        address _endpoint,
-        address _owner,
-        uint32 _hubEid
-    ) OApp(_endpoint, _owner) Ownable(_owner) {
+    constructor(address _endpoint, address _owner, uint32 _hubEid) OApp(_endpoint, _owner) Ownable(_owner) {
         require(_endpoint != address(0), "Invalid endpoint");
         require(_owner != address(0), "Invalid owner");
         require(_hubEid != 0, "Invalid hub EID");
@@ -101,27 +104,22 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
     /**
      * @dev Receives random words responses from Hub VRF Consumer
      */
-    function _lzReceive(
-        Origin calldata _origin,
-        bytes32,
-        bytes calldata _payload,
-        address,
-        bytes calldata
-    ) internal override {
+    function _lzReceive(Origin calldata _origin, bytes32, bytes calldata _payload, address, bytes calldata)
+        internal
+        override
+    {
         require(peers[_origin.srcEid] == _origin.sender, "Unauthorized");
-        
+
         uint64 sequence;
         uint256 randomWord;
         int256 aggregatedPrice;
         uint256 priceTimestamp;
-        
+
         if (_payload.length == 128) {
             // New format with price piggybacking
-            (sequence, randomWord, aggregatedPrice, priceTimestamp) = abi.decode(
-                _payload, 
-                (uint64, uint256, int256, uint256)
-            );
-            
+            (sequence, randomWord, aggregatedPrice, priceTimestamp) =
+                abi.decode(_payload, (uint64, uint256, int256, uint256));
+
             if (aggregatedPrice > 0) {
                 lastAggregatedPrice = aggregatedPrice;
                 lastPriceTimestamp = priceTimestamp;
@@ -131,16 +129,33 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
             // Legacy format without price
             (sequence, randomWord) = abi.decode(_payload, (uint64, uint256));
         } else {
-            revert("Invalid payload size");
+            // Never revert on payload format mismatches. Ordered delivery means a single reverting
+            // message can brick the entire inbound path. Emit an event for monitoring and return.
+            emit InvalidVrfResponsePayload(_origin.srcEid, _origin.sender, _payload.length);
+            return;
         }
 
         RequestStatus storage request = s_requests[sequence];
-        require(request.exists, "Request not found");
-        require(!request.fulfilled, "Already fulfilled");
-        require(block.timestamp <= request.timestamp + requestTimeout, "Expired");
+        if (!request.exists) {
+            emit RandomWordsResponseIgnored(sequence, randomWord, IGNORE_REQUEST_NOT_FOUND);
+            return;
+        }
+        if (request.fulfilled) {
+            emit RandomWordsResponseIgnored(sequence, randomWord, IGNORE_ALREADY_FULFILLED);
+            return;
+        }
 
         address provider = request.provider;
-        require(provider != address(0), "Provider not found");
+        if (provider == address(0)) {
+            emit RandomWordsResponseIgnored(sequence, randomWord, IGNORE_PROVIDER_NOT_FOUND);
+            return;
+        }
+
+        // Treat lateness as informational only: accept late randomness so inbound ordered delivery
+        // never bricks and downstream protocols can still finalize.
+        if (block.timestamp > request.timestamp + requestTimeout) {
+            emit RandomWordsReceivedLate(sequence, provider, request.timestamp, block.timestamp);
+        }
 
         request.fulfilled = true;
         request.randomWord = randomWord;
@@ -210,10 +225,7 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
     /**
      * @notice Request random words (contract-sponsored fee)
      */
-    function requestRandomWords()
-        external
-        returns (MessagingReceipt memory receipt, uint64 requestId)
-    {
+    function requestRandomWords() external returns (MessagingReceipt memory receipt, uint64 requestId) {
         if (!authorizedSponsoredCallers[msg.sender]) revert UnauthorizedSponsoredCaller();
         return _requestRandomWords(hubEid, false);
     }
@@ -232,11 +244,7 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
     /**
      * @notice Backward-compatible caller-pays request to hub
      */
-    function requestRandomWordsPayable()
-        external
-        payable
-        returns (MessagingReceipt memory receipt, uint64 requestId)
-    {
+    function requestRandomWordsPayable() external payable returns (MessagingReceipt memory receipt, uint64 requestId) {
         return _requestRandomWords(hubEid, true);
     }
 
@@ -244,6 +252,9 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
         internal
         returns (MessagingReceipt memory receipt, uint64 requestId)
     {
+        // Permission the *entire* request surface (including payable variants) so
+        // an arbitrary EOA cannot externalize hub VRF subscription spend.
+        if (!authorizedSponsoredCallers[msg.sender]) revert UnauthorizedSponsoredCaller();
         require(dstEid == hubEid, "Invalid destination");
         bytes memory options = hex"000301001101000000000000000000000000000A88F4";
 
@@ -265,22 +276,16 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
         randomWordsProviders[requestId] = msg.sender;
 
         bytes memory payload = abi.encode(requestId, int256(0), uint256(0));
-        
+
         MessagingFee memory fee = quoteFee();
-        
+
         if (payable_) {
             require(msg.value >= fee.nativeFee, "Insufficient fee");
         } else {
             require(address(this).balance >= fee.nativeFee, "NotEnoughNative");
         }
 
-        receipt = _lzSend(
-            hubEid,
-            payload,
-            options,
-            fee,
-            payable(payable_ ? msg.sender : address(this))
-        );
+        receipt = _lzSend(hubEid, payload, options, fee, payable(payable_ ? msg.sender : address(this)));
 
         emit RandomWordsRequested(requestId, msg.sender, hubEid);
         emit MessageSent(requestId, hubEid, payload);
@@ -327,7 +332,6 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
 
             if (request.exists && !request.fulfilled && block.timestamp > request.timestamp + requestTimeout) {
                 address provider = request.provider;
-                delete s_requests[requestId];
                 delete randomWordsProviders[requestId];
                 emit RequestExpired(requestId, provider);
             }

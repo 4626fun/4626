@@ -109,10 +109,8 @@ contract DeployBaseMainnetDeployer is Script {
         bytes memory storeInit = type(UniversalBytecodeStoreV2).creationCode;
         address storeAddr = _create2(CREATE2_FACTORY_ADDR, STORE_SALT_V2, keccak256(storeInit));
 
-        bytes memory create2DeployerInit = abi.encodePacked(
-            type(UniversalCreate2DeployerFromStore).creationCode,
-            abi.encode(storeAddr)
-        );
+        bytes memory create2DeployerInit =
+            abi.encodePacked(type(UniversalCreate2DeployerFromStore).creationCode, abi.encode(storeAddr));
         address create2DeployerAddr = _create2(CREATE2_FACTORY_ADDR, DEPLOYER_SALT_V2, keccak256(create2DeployerInit));
 
         console2.log("UniversalBytecodeStoreV2 (predicted):", storeAddr);
@@ -143,19 +141,19 @@ contract DeployBaseMainnetDeployer is Script {
 
         // Deploy v2 store (if missing).
         if (storeAddr.code.length == 0) {
-            (bool ok, ) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(STORE_SALT_V2, storeInit));
+            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(STORE_SALT_V2, storeInit));
             require(ok, "STORE_V2 deploy failed");
         }
 
         // Deploy v2 create2 deployer (if missing).
         if (create2DeployerAddr.code.length == 0) {
-            (bool ok, ) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(DEPLOYER_SALT_V2, create2DeployerInit));
+            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(DEPLOYER_SALT_V2, create2DeployerInit));
             require(ok, "DEPLOYER_V2 deploy failed");
         }
 
         // Deploy phased deployer (if missing).
         if (deployerAddr.code.length == 0) {
-            (bool ok, ) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(DEPLOYER_SALT, deployerInit));
+            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(DEPLOYER_SALT, deployerInit));
             require(ok, "CREATOR_VAULT_DEPLOYER deploy failed");
         }
 

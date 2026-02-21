@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { Test } from "forge-std/Test.sol";
-import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import { CreatorCharmStrategy, ISwapRouter } from "../../contracts/vault/strategies/univ3/CreatorCharmStrategy.sol";
+import {Test} from "forge-std/Test.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {CreatorCharmStrategy, ISwapRouter} from "../../contracts/vault/strategies/univ3/CreatorCharmStrategy.sol";
 
 contract MockERC20 is ERC20 {
     uint8 private immutable _decimals;
@@ -119,11 +119,7 @@ contract MockV3Pool {
         revertObserve = value;
     }
 
-    function slot0()
-        external
-        view
-        returns (uint160, int24, uint16, uint16, uint16, uint8, bool)
-    {
+    function slot0() external view returns (uint160, int24, uint16, uint16, uint16, uint8, bool) {
         return (spotSqrtPriceX96, twapTick, 0, observationCardinality, observationCardinality, 0, true);
     }
 
@@ -191,12 +187,10 @@ contract MockCreatorOracle {
 }
 
 contract CreatorCharmStrategyOracleTest is Test {
-    function _deployStrategy(
-        MockERC20 creator,
-        MockERC20 usdc,
-        MockCharmVault charm,
-        MockV3Pool pool
-    ) internal returns (CreatorCharmStrategy strategy) {
+    function _deployStrategy(MockERC20 creator, MockERC20 usdc, MockCharmVault charm, MockV3Pool pool)
+        internal
+        returns (CreatorCharmStrategy strategy)
+    {
         MockRouter router = new MockRouter();
         strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
     }

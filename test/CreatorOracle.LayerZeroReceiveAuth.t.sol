@@ -15,7 +15,7 @@ contract MockRegistryForOracleLzReceiveAuth {
         hubEid = _hubEid;
     }
 
-    function getLayerZeroEndpoint(uint16) external view returns (address) {
+    function getLayerZeroEndpoint(uint256) external view returns (address) {
         return endpoint;
     }
 

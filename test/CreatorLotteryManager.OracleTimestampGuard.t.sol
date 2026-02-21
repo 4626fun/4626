@@ -58,7 +58,7 @@ contract MockLotteryRegistryTimestampGuard {
         return token == creatorCoin;
     }
 
-    function getLayerZeroEndpoint(uint16) external view returns (address) {
+    function getLayerZeroEndpoint(uint256) external view returns (address) {
         return endpoint;
     }
 

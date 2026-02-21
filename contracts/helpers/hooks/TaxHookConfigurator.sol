@@ -5,12 +5,12 @@ pragma solidity ^0.8.20;
  * @title TaxHookConfigurator
  * @author 0xakita.eth (CreatorVault)
  * @notice Helper to configure the existing V4 Tax Hook for CreatorVault
- * 
+ *
  * @dev EXISTING TAX HOOK:
  *      Address: 0xca975B9dAF772C71161f3648437c3616E5Be0088 (Base)
  *      This hook is already deployed and approved on Uniswap V4!
  *      We just need to configure it for our ■AKITA/ETH pool.
- * 
+ *
  * @dev CONFIGURATION:
  *      - Set 6.9% (690 bps) fee on swaps
  *      - Route fees to CreatorGaugeController
@@ -41,34 +41,31 @@ contract TaxHookConfigurator is Ownable {
     using PoolIdLibrary for PoolKey;
 
     constructor(address initialOwner) Ownable(initialOwner) {}
-    
+
     // =================================
     // CONSTANTS
     // =================================
-    
+
     /// @notice The existing tax hook on Base
     address public constant TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
-    
+
     /// @notice Uniswap V4 Pool Manager on Base
     address public constant POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
-    
+
     /// @notice WETH on Base
     address public constant WETH = 0x4200000000000000000000000000000000000006;
-    
+
     /// @notice Default fee: 6.9% = 690 basis points
     uint256 public constant DEFAULT_FEE_BPS = 690;
-    
+
     // =================================
     // EVENTS
     // =================================
-    
+
     event PoolConfigured(
-        bytes32 indexed poolId,
-        address indexed shareOFT,
-        address indexed gaugeController,
-        uint256 feeBps
+        bytes32 indexed poolId, address indexed shareOFT, address indexed gaugeController, uint256 feeBps
     );
-    
+
     // =================================
     // MAIN FUNCTIONS
     // =================================
@@ -107,10 +104,7 @@ contract TaxHookConfigurator is Ownable {
     /**
      * @notice Update fee recipient (e.g., to new GaugeController)
      */
-    function updateFeeRecipient(
-        bytes32 poolId,
-        address _newRecipient
-    ) external onlyOwner {
+    function updateFeeRecipient(bytes32 poolId, address _newRecipient) external onlyOwner {
         require(_newRecipient != address(0), "Invalid recipient");
         require(ITaxHook(TAX_HOOK).canConfigure(poolId, address(this)), "Not authorized for pool");
         ITaxHook.TaxConfig memory config = ITaxHook(TAX_HOOK).getTaxConfig(poolId);
@@ -121,11 +115,7 @@ contract TaxHookConfigurator is Ownable {
     /**
      * @notice Update fee percentage
      */
-    function updateFeeBps(
-        bytes32 poolId,
-        uint256 _newBuyFeeBps,
-        uint256 _newSellFeeBps
-    ) external onlyOwner {
+    function updateFeeBps(bytes32 poolId, uint256 _newBuyFeeBps, uint256 _newSellFeeBps) external onlyOwner {
         require(_newBuyFeeBps <= 1000 && _newSellFeeBps <= 1000, "Fee too high");
         require(ITaxHook(TAX_HOOK).canConfigure(poolId, address(this)), "Not authorized for pool");
         ITaxHook.TaxConfig memory config = ITaxHook(TAX_HOOK).getTaxConfig(poolId);
@@ -160,9 +150,7 @@ contract TaxHookConfigurator is Ownable {
         require(_feeBps <= 1000, "Fee too high (max 10%)");
 
         // Sort tokens (V4 requires currency0 < currency1)
-        (address token0, address token1) = _shareOFT < WETH
-            ? (_shareOFT, WETH)
-            : (WETH, _shareOFT);
+        (address token0, address token1) = _shareOFT < WETH ? (_shareOFT, WETH) : (WETH, _shareOFT);
 
         // Compute pool ID exactly as v4 does: keccak256(abi.encode(PoolKey))
         PoolKey memory key = PoolKey({
@@ -177,32 +165,23 @@ contract TaxHookConfigurator is Ownable {
         require(ITaxHook(TAX_HOOK).canConfigure(poolId, address(this)), "Not authorized for pool");
 
         ITaxHook.TaxConfig memory config = ITaxHook.TaxConfig({
-            buyTaxBps: _feeBps,
-            sellTaxBps: _feeBps,
-            taxRecipient: _gaugeController,
-            enabled: true
+            buyTaxBps: _feeBps, sellTaxBps: _feeBps, taxRecipient: _gaugeController, enabled: true
         });
 
         ITaxHook(TAX_HOOK).setTaxConfig(poolId, config);
 
         emit PoolConfigured(poolId, _shareOFT, _gaugeController, _feeBps);
     }
-    
+
     // =================================
     // VIEW FUNCTIONS
     // =================================
-    
+
     /**
      * @notice Get pool ID for a token pair
      */
-    function getPoolId(
-        address _shareOFT,
-        uint24 _poolLPFee,
-        int24 _tickSpacing
-    ) external pure returns (bytes32) {
-        (address token0, address token1) = _shareOFT < WETH 
-            ? (_shareOFT, WETH) 
-            : (WETH, _shareOFT);
+    function getPoolId(address _shareOFT, uint24 _poolLPFee, int24 _tickSpacing) external pure returns (bytes32) {
+        (address token0, address token1) = _shareOFT < WETH ? (_shareOFT, WETH) : (WETH, _shareOFT);
         PoolKey memory key = PoolKey({
             currency0: Currency.wrap(token0),
             currency1: Currency.wrap(token1),

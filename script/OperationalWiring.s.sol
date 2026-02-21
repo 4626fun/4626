@@ -26,13 +26,10 @@ interface IVRFConsumer {
     function owner() external view returns (address);
     function authorizedLocalCallers(address) external view returns (bool);
     function setLocalCallerAuthorization(address caller, bool authorized) external;
-    function setVRFConfig(
-        uint256 subscriptionId,
-        bytes32 keyHash,
-        uint32 callbackGasLimit,
-        uint16 requestConfirmations
-    ) external;
+    function setVRFConfig(uint256 subscriptionId, bytes32 keyHash, uint32 callbackGasLimit, uint16 requestConfirmations)
+        external;
     function setVRFCoordinator(address coordinator) external;
+    function setRemotePriceReportingEnabled(bool enabled) external;
 }
 
 interface ILotteryManager {
@@ -62,33 +59,33 @@ interface IRegistry {
 }
 
 contract OperationalWiring is Script {
-
     // ═══════════════════════════════════════════════════════════════════
     //                    DEPLOYED ADDRESSES
     // ═══════════════════════════════════════════════════════════════════
 
-    address constant REGISTRY             = 0x888482d648D1fCa1A735268A9e579b44Bf644626;
-    address constant LOTTERY_MANAGER      = 0x77740C44A3E1d8262e8bfAB6204A29B2cbeE4626;
-    address constant VRF_CONSUMER         = 0x0265236984DE964CB0422BaeFbDb2de7C9d590F5;
+    address constant REGISTRY = 0x888482d648D1fCa1A735268A9e579b44Bf644626;
+    address constant LOTTERY_MANAGER = 0x77740C44A3E1d8262e8bfAB6204A29B2cbeE4626;
+    address constant VRF_CONSUMER = 0x0265236984DE964CB0422BaeFbDb2de7C9d590F5;
     address constant SOLANA_BRIDGE_ADAPTER = 0x648A01f6e125A46c4695CA70D0EB455f053d36A2;
-    address constant VRF_COORDINATOR      = 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634;
+    address constant VRF_COORDINATOR = 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634;
 
     // Uniswap V4 Tax Hook (processes swaps)
-    address constant TAX_HOOK             = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
+    address constant TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
 
     // Factories / Batchers
-    address constant CREATOR_FACTORY      = 0xcCa08f9b94dD478266D0D1D2e9B7758414280FfD;
-    address constant VAULT_BATCHER        = 0x32e91185B92c6c13dd56D745aBf24F009cdD3019;
-    address constant VAULT_ACT_BATCHER    = 0x4b67e3a4284090e5191c27B8F24248eC82DF055D;
+    address constant CREATOR_FACTORY = 0xcCa08f9b94dD478266D0D1D2e9B7758414280FfD;
+    address constant VAULT_BATCHER = 0x32e91185B92c6c13dd56D745aBf24F009cdD3019;
+    address constant VAULT_ACT_BATCHER = 0x4b67e3a4284090e5191c27B8F24248eC82DF055D;
 
     // ═══════════════════════════════════════════════════════════════════
     //                    VRF CONFIG
     // ═══════════════════════════════════════════════════════════════════
 
-    uint256 constant VRF_SUBSCRIPTION_ID = 47863839619354659993460736640231400533612753469382997188258012673937790980789;
-    bytes32 constant VRF_KEYHASH         = 0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab;
-    uint32  constant VRF_CALLBACK_GAS    = 500_000;
-    uint16  constant VRF_CONFIRMATIONS   = 3;
+    uint256 constant VRF_SUBSCRIPTION_ID =
+        47863839619354659993460736640231400533612753469382997188258012673937790980789;
+    bytes32 constant VRF_KEYHASH = 0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab;
+    uint32 constant VRF_CALLBACK_GAS = 500_000;
+    uint16 constant VRF_CONFIRMATIONS = 3;
 
     // Lottery sponsorship guardrails (hybrid model defaults)
     uint256 constant SPONSORED_MIN_SWAP_USD = 1_000_000; // $1 (1e6)
@@ -96,7 +93,7 @@ contract OperationalWiring is Script {
     uint256 constant VRF_SPONSOR_MAX_FEE = 0.01 ether;
     uint256 constant VRF_SPONSOR_BUDGET = 0.25 ether;
     uint256 constant CALLBACK_SPONSOR_MAX_FEE = 0.01 ether;
-    uint256 constant CALLBACK_SPONSOR_BUDGET = 0.10 ether;
+    uint256 constant CALLBACK_SPONSOR_BUDGET = 0.1 ether;
 
     // ═══════════════════════════════════════════════════════════════════
     //                              MAIN
@@ -107,9 +104,13 @@ contract OperationalWiring is Script {
         address deployer = vm.addr(deployerPrivateKey);
 
         console.log("");
-        console.log(unicode"╔════════════════════════════════════════════════════════════════╗");
+        console.log(
+            unicode"╔════════════════════════════════════════════════════════════════╗"
+        );
         console.log(unicode"║          Operational Wiring — Contract Authorization           ║");
-        console.log(unicode"╚════════════════════════════════════════════════════════════════╝");
+        console.log(
+            unicode"╚════════════════════════════════════════════════════════════════╝"
+        );
         console.log("");
         console.log("Deployer/Caller:", deployer);
         console.log("Chain ID:       ", block.chainid);
@@ -138,12 +139,7 @@ contract OperationalWiring is Script {
         // ────────────────────────────────────────────────────────────────
 
         console.log("\n[2/7] VRF Consumer: Setting VRF config...");
-        vrfConsumer.setVRFConfig(
-            VRF_SUBSCRIPTION_ID,
-            VRF_KEYHASH,
-            VRF_CALLBACK_GAS,
-            VRF_CONFIRMATIONS
-        );
+        vrfConsumer.setVRFConfig(VRF_SUBSCRIPTION_ID, VRF_KEYHASH, VRF_CALLBACK_GAS, VRF_CONFIRMATIONS);
         console.log(unicode"   ✓ subscriptionId set");
         console.log(unicode"   ✓ keyHash set");
         console.log(unicode"   ✓ callbackGasLimit: 500,000");
@@ -156,6 +152,10 @@ contract OperationalWiring is Script {
         console.log("\n[3/7] VRF Consumer: Setting VRF Coordinator...");
         vrfConsumer.setVRFCoordinator(VRF_COORDINATOR);
         console.log(unicode"   ✓ VRF Coordinator:", VRF_COORDINATOR);
+
+        // Safety default: ignore any remote price piggybacking unless explicitly enabled.
+        vrfConsumer.setRemotePriceReportingEnabled(false);
+        console.log(unicode"   ✓ setRemotePriceReportingEnabled: false");
 
         // ────────────────────────────────────────────────────────────────
         //  4. LotteryManager: Set VRF Consumer + enable local VRF
@@ -176,19 +176,11 @@ contract OperationalWiring is Script {
         lotteryManager.setSponsoredVrfMinSwapAmountUSD(SPONSORED_MIN_SWAP_USD);
         console.log(unicode"   ✓ setSponsoredVrfMinSwapAmountUSD: $1");
 
-        lotteryManager.setVrfSponsorshipPolicy(
-            true,
-            VRF_SPONSOR_MAX_FEE,
-            VRF_SPONSOR_BUDGET,
-            SPONSOR_EPOCH_DURATION
-        );
+        lotteryManager.setVrfSponsorshipPolicy(true, VRF_SPONSOR_MAX_FEE, VRF_SPONSOR_BUDGET, SPONSOR_EPOCH_DURATION);
         console.log(unicode"   ✓ VRF sponsorship policy set (maxFee=0.01 ETH, budget=0.25 ETH/hr)");
 
         lotteryManager.setCallbackSponsorshipPolicy(
-            true,
-            CALLBACK_SPONSOR_MAX_FEE,
-            CALLBACK_SPONSOR_BUDGET,
-            SPONSOR_EPOCH_DURATION
+            true, CALLBACK_SPONSOR_MAX_FEE, CALLBACK_SPONSOR_BUDGET, SPONSOR_EPOCH_DURATION
         );
         console.log(unicode"   ✓ callback sponsorship policy set (maxFee=0.01 ETH, budget=0.10 ETH/hr)");
 
@@ -235,9 +227,13 @@ contract OperationalWiring is Script {
         // ────────────────────────────────────────────────────────────────
 
         console.log("");
-        console.log(unicode"╔════════════════════════════════════════════════════════════════╗");
+        console.log(
+            unicode"╔════════════════════════════════════════════════════════════════╗"
+        );
         console.log(unicode"║                    WIRING COMPLETE                             ║");
-        console.log(unicode"╚════════════════════════════════════════════════════════════════╝");
+        console.log(
+            unicode"╚════════════════════════════════════════════════════════════════╝"
+        );
         console.log("");
         console.log(unicode"  ✓ VRF Consumer authorized LotteryManager as local caller");
         console.log(unicode"  ✓ VRF Config set (sub, keyHash, gas, confirmations)");
@@ -247,12 +243,18 @@ contract OperationalWiring is Script {
         console.log(unicode"  ✓ LotteryManager authorized: SolanaBridgeAdapter, TaxHook");
         console.log(unicode"  ✓ Registry factories confirmed");
         console.log("");
-        console.log(unicode"┌─────────────────────────────────────────────────────────────────┐");
+        console.log(
+            unicode"┌─────────────────────────────────────────────────────────────────┐"
+        );
         console.log(unicode"│  REMAINING MANUAL STEP (if not already done):                   │");
-        console.log(unicode"├─────────────────────────────────────────────────────────────────┤");
+        console.log(
+            unicode"├─────────────────────────────────────────────────────────────────┤"
+        );
         console.log(unicode"│  Chainlink VRF dashboard: ensure VRF Consumer is added as a     │");
         console.log(unicode"│  consumer on subscription ID. (Already done if funded with LINK) │");
-        console.log(unicode"└─────────────────────────────────────────────────────────────────┘");
+        console.log(
+            unicode"└─────────────────────────────────────────────────────────────────┘"
+        );
         console.log("");
     }
 }

@@ -26,71 +26,70 @@ import {ICreatorRegistry} from "../contracts/interfaces/core/ICreatorRegistry.so
  *          -vvvv
  */
 contract SeedCreatorRegistry is Script {
-
     // ═══════════════════════════════════════════════════════════════════
     //                    DEPLOYED REGISTRY
     // ═══════════════════════════════════════════════════════════════════
 
-    address constant REGISTRY = 0x888482d648D1fCa1A735268A9e579b44Bf644626;
+    address internal constant DEFAULT_REGISTRY = 0x888482d648D1fCa1A735268A9e579b44Bf644626;
 
     // ═══════════════════════════════════════════════════════════════════
     //                    CHAIN CONSTANTS
     // ═══════════════════════════════════════════════════════════════════
 
     // --- Base (Hub) ---
-    uint16  constant BASE_CHAIN_ID   = 8453;
-    uint32  constant BASE_EID        = 30184;
-    address constant BASE_WETH       = 0x4200000000000000000000000000000000000006;
+    uint256 constant BASE_CHAIN_ID = 8453;
+    uint32 constant BASE_EID = 30184;
+    address constant BASE_WETH = 0x4200000000000000000000000000000000000006;
     address constant BASE_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
 
     // --- Ethereum ---
-    uint16  constant ETH_CHAIN_ID    = 1;
-    uint32  constant ETH_EID         = 30101;
-    address constant ETH_WETH        = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    uint256 constant ETH_CHAIN_ID = 1;
+    uint32 constant ETH_EID = 30101;
+    address constant ETH_WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address constant ETH_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
 
     // --- Arbitrum ---
-    uint16  constant ARB_CHAIN_ID    = 42161;
-    uint32  constant ARB_EID         = 30110;
-    address constant ARB_WETH        = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
+    uint256 constant ARB_CHAIN_ID = 42161;
+    uint32 constant ARB_EID = 30110;
+    address constant ARB_WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
     address constant ARB_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
 
     // --- BSC ---
-    uint16  constant BSC_CHAIN_ID    = 56;
-    uint32  constant BSC_EID         = 30102;
-    address constant BSC_WBNB        = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
+    uint256 constant BSC_CHAIN_ID = 56;
+    uint32 constant BSC_EID = 30102;
+    address constant BSC_WBNB = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
     address constant BSC_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
 
     // --- Avalanche ---
-    uint16  constant AVAX_CHAIN_ID   = 43114;
-    uint32  constant AVAX_EID        = 30106;
-    address constant AVAX_WAVAX      = 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7;
+    uint256 constant AVAX_CHAIN_ID = 43114;
+    uint32 constant AVAX_EID = 30106;
+    address constant AVAX_WAVAX = 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7;
     address constant AVAX_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
 
     // --- Monad ---
-    uint16  constant MONAD_CHAIN_ID  = 10143;
-    uint32  constant MONAD_EID       = 30390;
-    address constant MONAD_WMON      = address(0); // TBD at launch
+    uint256 constant MONAD_CHAIN_ID = 10143;
+    uint32 constant MONAD_EID = 30390;
+    address constant MONAD_WMON = address(0); // TBD at launch
     address constant MONAD_LZ_ENDPOINT = 0x6F475642a6e85809B1c36Fa62763669b1b48DD5B;
 
     // ═══════════════════════════════════════════════════════════════════
     //                    BASE DEX INFRASTRUCTURE
     // ═══════════════════════════════════════════════════════════════════
 
-    address constant POOL_MANAGER     = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
-    address constant SWAP_ROUTER      = 0x2626664c2603336E57B271c5C0b26F421741e481;
+    address constant POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
+    address constant SWAP_ROUTER = 0x2626664c2603336E57B271c5C0b26F421741e481;
     address constant POSITION_MANAGER = address(0); // Set later if needed
-    address constant QUOTER           = address(0); // Set later if needed
+    address constant QUOTER = address(0); // Set later if needed
 
     // ═══════════════════════════════════════════════════════════════════
     //                    OTHER INFRA
     // ═══════════════════════════════════════════════════════════════════
 
-    address constant CHAINLINK_ETH_USD   = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
-    address constant CREATOR_FACTORY     = 0xcCa08f9b94dD478266D0D1D2e9B7758414280FfD;
-    address constant LOTTERY_MANAGER     = 0x77740C44A3E1d8262e8bfAB6204A29B2cbeE4626;
-    address constant VAULT_BATCHER       = 0x32e91185B92c6c13dd56D745aBf24F009cdD3019;
-    address constant VAULT_ACT_BATCHER   = 0x4b67e3a4284090e5191c27B8F24248eC82DF055D;
+    address constant CHAINLINK_ETH_USD = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
+    address constant CREATOR_FACTORY = 0xcCa08f9b94dD478266D0D1D2e9B7758414280FfD;
+    address constant LOTTERY_MANAGER = 0x77740C44A3E1d8262e8bfAB6204A29B2cbeE4626;
+    address constant VAULT_BATCHER = 0x32e91185B92c6c13dd56D745aBf24F009cdD3019;
+    address constant VAULT_ACT_BATCHER = 0x4b67e3a4284090e5191c27B8F24248eC82DF055D;
 
     // ═══════════════════════════════════════════════════════════════════
     //                              MAIN
@@ -100,14 +99,19 @@ contract SeedCreatorRegistry is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
 
-        CreatorRegistry registry = CreatorRegistry(REGISTRY);
+        address registryAddr = vm.envOr("REGISTRY", DEFAULT_REGISTRY);
+        CreatorRegistry registry = CreatorRegistry(registryAddr);
 
         console.log("");
-        console.log(unicode"╔════════════════════════════════════════════════════════════════╗");
+        console.log(
+            unicode"╔════════════════════════════════════════════════════════════════╗"
+        );
         console.log(unicode"║       SeedCreatorRegistry — Protocol Config (no creators)      ║");
-        console.log(unicode"╚════════════════════════════════════════════════════════════════╝");
+        console.log(
+            unicode"╚════════════════════════════════════════════════════════════════╝"
+        );
         console.log("");
-        console.log("Registry:    ", REGISTRY);
+        console.log("Registry:    ", registryAddr);
         console.log("Owner:       ", registry.owner());
         console.log("Deployer/Tx: ", deployer);
         console.log("Chain ID:    ", block.chainid);
@@ -203,13 +207,7 @@ contract SeedCreatorRegistry is Script {
 
         console.log("\n[4/5] Configuring Base DEX infrastructure & hub chain...");
 
-        registry.setDexInfrastructure(
-            BASE_CHAIN_ID,
-            POOL_MANAGER,
-            SWAP_ROUTER,
-            POSITION_MANAGER,
-            QUOTER
-        );
+        registry.setDexInfrastructure(BASE_CHAIN_ID, POOL_MANAGER, SWAP_ROUTER, POSITION_MANAGER, QUOTER);
         console.log(unicode"   ✓ DEX infra (PoolManager, SwapRouter)");
 
         registry.setHubChain(BASE_CHAIN_ID, BASE_EID);
@@ -243,11 +241,15 @@ contract SeedCreatorRegistry is Script {
         // ────────────────────────────────────────────────────────────────
 
         console.log("");
-        console.log(unicode"╔════════════════════════════════════════════════════════════════╗");
+        console.log(
+            unicode"╔════════════════════════════════════════════════════════════════╗"
+        );
         console.log(unicode"║                    SEED COMPLETE                               ║");
-        console.log(unicode"╚════════════════════════════════════════════════════════════════╝");
+        console.log(
+            unicode"╚════════════════════════════════════════════════════════════════╝"
+        );
         console.log("");
-        console.log(unicode"  ✓ Registry:          ", REGISTRY);
+        console.log(unicode"  ✓ Registry:          ", registryAddr);
         console.log(unicode"  ✓ Chains registered:  Base, Ethereum, Arbitrum, BSC, Avalanche");
         console.log(unicode"  ✓ LZ endpoints set:   5 chains");
         console.log(unicode"  ✓ EID mappings set:   5 chains");
@@ -267,12 +269,9 @@ contract SeedCreatorRegistry is Script {
     /**
      * @dev Attempts to register a chain. Checks if already registered first to avoid reverts.
      */
-    function _tryRegisterChain(
-        CreatorRegistry registry,
-        uint16 chainId,
-        string memory name,
-        address wrappedNative
-    ) internal {
+    function _tryRegisterChain(CreatorRegistry registry, uint256 chainId, string memory name, address wrappedNative)
+        internal
+    {
         // Check if chain already exists by reading config
         ICreatorRegistry.ChainConfig memory cfg = registry.getChainConfig(chainId);
         if (cfg.chainId != 0) {
