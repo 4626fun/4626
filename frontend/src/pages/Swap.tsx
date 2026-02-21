@@ -8,7 +8,9 @@ import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 
 import { SwapConfirmModal } from '@/components/trade/SwapConfirmModal'
 import { SwapPanel } from '@/components/trade/SwapPanel'
+import { SwapSettingsSheet } from '@/components/trade/SwapSettingsSheet'
 import { TransactionLifecycle } from '@/components/trade/TransactionLifecycle'
+import { WalletModeToggle } from '@/components/trade/WalletModeToggle'
 import { CONTRACTS } from '@/config/contracts'
 import { useCanonicalWallet } from '@/hooks/useCanonicalWallet'
 import { useSwapExecution } from '@/hooks/useSwapExecution'
@@ -16,6 +18,15 @@ import { useSwapState } from '@/hooks/useSwapState'
 import { useTokenIdentity } from '@/hooks/useTokenIdentity'
 import { detectUniswapWalletCapabilities } from '@/lib/uniswap/capabilities'
 import { claimLiquidityFees, createPosition, fetchLiquidityPositions, quoteCreatePosition, removeLiquidity } from '@/lib/uniswap/liquidityApi'
+import { pickSwapQuote } from '@/lib/uniswap/tradingApi'
+import {
+  getDefaultWalletMode,
+  getExecutionContext,
+  isCSWAvailable,
+  readPreferredWalletMode,
+  writePreferredWalletMode,
+  type WalletMode,
+} from '@/lib/uniswap/walletMode'
 import { BASE_CHAIN_ID, buildTokenOptions, trustWalletBaseLogo, type TokenOption } from '@/lib/uniswap/swapUtils'
 
 const CORE_TOKENS: TokenOption[] = [
@@ -25,6 +36,14 @@ const CORE_TOKENS: TokenOption[] = [
   { symbol: 'USDT', name: 'Tether USD', address: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2', group: 'core', logoUrl: trustWalletBaseLogo('0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2') },
   { symbol: 'ZORA', name: 'Zora', address: CONTRACTS.zora, group: 'core', logoUrl: trustWalletBaseLogo(CONTRACTS.zora) },
 ]
+
+type QuoteShape = Record<string, unknown>
+
+function formatPercent(value: unknown): string | null {
+  const n = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(n)) return null
+  return `${n.toFixed(2)}%`
+}
 
 export function Swap() {
   const [searchParams] = useSearchParams()
@@ -81,6 +100,54 @@ export function Swap() {
     walletReady: Boolean(walletClient),
   })
 
+  const canonicalReady = identityReady
+  const eoaReady = Boolean(signerAddress && walletClient && publicClient)
+  const [preferredExecutionMode, setPreferredExecutionMode] = useState<WalletMode>(() =>
+    readPreferredWalletMode(),
+  )
+  const executionMode = useMemo<WalletMode>(
+    () =>
+      getDefaultWalletMode({
+        preferredMode: preferredExecutionMode,
+        canonicalReady,
+        eoaReady,
+      }),
+    [preferredExecutionMode, canonicalReady, eoaReady],
+  )
+  const executionContext = useMemo(
+    () =>
+      getExecutionContext(executionMode, {
+        canonicalAddress,
+        signerAddress,
+        canonicalReady,
+        eoaReady,
+        supports5792: walletCapabilities.supports5792,
+        supports7702: walletCapabilities.supports7702,
+      }),
+    [
+      executionMode,
+      canonicalAddress,
+      signerAddress,
+      canonicalReady,
+      eoaReady,
+      walletCapabilities.supports5792,
+      walletCapabilities.supports7702,
+    ],
+  )
+  const executionAddress = executionContext.address
+  const executionReady = executionContext.ready
+  const executionFallbackActive = executionMode !== preferredExecutionMode
+  const canonicalAvailable = isCSWAvailable({
+    canonicalAddress,
+    signerAddress,
+    canonicalReady,
+    eoaReady,
+  })
+
+  useEffect(() => {
+    writePreferredWalletMode(preferredExecutionMode)
+  }, [preferredExecutionMode])
+
   const tokenOptions = useMemo<TokenOption[]>(() => {
     const creatorCoin = (searchParams.get('token') ?? '').trim()
     const shareCoin = (searchParams.get('share') ?? searchParams.get('shareToken') ?? '').trim()
@@ -115,7 +182,6 @@ export function Swap() {
   const {
     estimatedOut,
     quote,
-    swapTx,
     busy,
     status,
     error,
@@ -126,21 +192,24 @@ export function Swap() {
     isReady,
     approvalRequired,
     quoteIsStale,
+    permitSignatureRequired,
+    permitSignaturePending,
+    permitSignatureReady,
     handleQuote,
-    handleCheckApproval,
-    handleBuildSwap,
     handleReviewTrade,
-    openConfirm,
     closeConfirm,
     confirmAndExecute,
     resetTradeState,
+    tokensEquivalent,
   } = useSwapExecution({
     address,
     walletClient,
     publicClient,
     canonicalAddress,
     signerAddress,
-    identityReady,
+    executionMode,
+    executionAddress,
+    executionReady,
     tokenIn,
     tokenOut,
     amountInUnits,
@@ -148,19 +217,66 @@ export function Swap() {
     parsedDeadlineMinutes,
   })
 
+  const selectedQuote = useMemo<QuoteShape | null>(() => {
+    if (!quote) return null
+    const candidate = pickSwapQuote(quote) ?? quote
+    return candidate as QuoteShape
+  }, [quote])
+
+  const routeSummary = useMemo(() => {
+    const routeCandidate =
+      selectedQuote?.route ?? selectedQuote?.routeString ?? selectedQuote?.routing ?? quote?.routing
+    if (routeCandidate === null || routeCandidate === undefined) return null
+    const text = String(routeCandidate).trim()
+    return text || null
+  }, [selectedQuote, quote])
+
+  const priceImpactLabel = useMemo(() => {
+    const priceImpactCandidate =
+      selectedQuote?.priceImpact ??
+      selectedQuote?.priceImpactPercent ??
+      quote?.priceImpact ??
+      quote?.priceImpactPercent
+    return formatPercent(priceImpactCandidate)
+  }, [selectedQuote, quote])
+
+  const gasEstimateLabel = useMemo(() => {
+    const gasCandidate =
+      selectedQuote?.gasFeeUSD ??
+      selectedQuote?.gasEstimateUSD ??
+      quote?.gasFeeUSD ??
+      quote?.gasEstimateUSD
+    if (typeof gasCandidate === 'string' && gasCandidate.trim()) return gasCandidate
+    const numeric = typeof gasCandidate === 'number' ? gasCandidate : Number(gasCandidate)
+    if (!Number.isFinite(numeric)) return null
+    return `$${numeric.toFixed(2)}`
+  }, [selectedQuote, quote])
+
   const handleSwitchTokens = useCallback(() => {
     switchTokens()
     resetTradeState()
   }, [switchTokens, resetTradeState])
 
+  const handleSetExecutionMode = useCallback((nextMode: WalletMode) => {
+    setPreferredExecutionMode(nextMode)
+  }, [])
+
+  const handleEnableCanonical = useCallback(() => {
+    window.location.assign('/account')
+  }, [])
+
   useEffect(() => {
-    if (!identityReady || !isReady) return
+    resetTradeState()
+  }, [executionAddress, resetTradeState])
+
+  useEffect(() => {
+    if (!executionReady || !isReady) return
     const timer = window.setTimeout(() => {
       if (busy) return
       void handleQuote()
     }, 450)
     return () => window.clearTimeout(timer)
-  }, [tokenIn, tokenOut, amountInUnits, parsedSlippage, identityReady, isReady, busy, handleQuote])
+  }, [tokenIn, tokenOut, amountInUnits, parsedSlippage, executionReady, isReady, busy, handleQuote])
 
   useEffect(() => {
     let cancelled = false
@@ -272,7 +388,7 @@ export function Swap() {
   const anyBusy = busy !== null || lpBusy !== null
 
   return (
-    <div className="relative pb-24 md:pb-0">
+    <div className="relative pb-[calc(env(safe-area-inset-bottom)+9rem)] md:pb-0">
       <section className="cinematic-section">
         <div className="mx-auto grid max-w-6xl gap-6 px-4 sm:px-6 lg:grid-cols-[1.1fr_0.9fr]">
           <motion.div
@@ -291,7 +407,12 @@ export function Swap() {
                   </div>
                   <h1 className="mt-2 text-2xl font-semibold text-white">{activePanel === 'swap' ? 'Trade' : 'Provide Liquidity'}</h1>
                   <div className="mt-2 flex items-center gap-2 text-[11px] text-zinc-400">
-                    <Sparkles className="h-3.5 w-3.5 text-fuchsia-300" /> Smart routed
+                    <span className="inline-flex items-center rounded-full border border-cyan-300/35 bg-cyan-400/10 px-2 py-0.5 font-medium text-cyan-200">
+                      Base
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Sparkles className="h-3.5 w-3.5 text-fuchsia-300" /> Smart routed
+                    </span>
                     {quoteUpdatedAt ? (
                       <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />Updated {new Date(quoteUpdatedAt).toLocaleTimeString()}</span>
                     ) : null}
@@ -299,7 +420,7 @@ export function Swap() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowAdvanced((v) => !v)}
+                  onClick={() => setShowAdvanced(true)}
                   className="rounded-full border border-white/15 p-2 text-zinc-400 transition hover:bg-white/10 hover:text-zinc-200"
                   title="Trade settings"
                 >
@@ -308,47 +429,64 @@ export function Swap() {
               </div>
 
               {activePanel === 'swap' ? (
-                <SwapPanel
-                  tokenOptions={tokenOptions}
-                  tokenIn={tokenIn}
-                  tokenOut={tokenOut}
-                  tokenInDisplay={tokenInDisplay}
-                  tokenOutDisplay={tokenOutDisplay}
-                  tokenInIdentityLoading={tokenInIdentity.isLoading}
-                  tokenOutIdentityLoading={tokenOutIdentity.isLoading}
-                  amountInUnits={amountInUnits}
-                  estimatedOut={estimatedOut}
-                  tokenInSymbol={tokenInSymbol}
-                  tokenOutSymbol={tokenOutSymbol}
-                  parsedSlippage={parsedSlippage}
-                  isConnected={isConnected}
-                  identityReady={identityReady}
-                  isReady={isReady}
-                  busy={busy}
-                  quoteIsStale={quoteIsStale}
-                  status={status}
-                  error={error}
-                  showAdvanced={showAdvanced}
-                  slippagePct={slippagePct}
-                  deadlineMinutes={deadlineMinutes}
-                  approvalRequired={approvalRequired}
-                  hasQuote={Boolean(quote)}
-                  hasSwapTx={Boolean(swapTx)}
-                  lifecycle={<TransactionLifecycle state={txState} message={status || error || (quoteIsStale ? 'Quote needs refresh' : undefined)} txHash={txHash} />}
-                  onSetTokenIn={setTokenIn}
-                  onSetTokenOut={setTokenOut}
-                  onSetAmountInUnits={setAmountInUnits}
-                  onSetSlippagePct={setSlippagePct}
-                  onSetDeadlineMinutes={setDeadlineMinutes}
-                  onSwitchTokens={handleSwitchTokens}
-                  onReviewTrade={() => void handleReviewTrade()}
-                  onQuote={() => void handleQuote()}
-                  onCheckApproval={() => void handleCheckApproval()}
-                  onBuildSwap={() => void handleBuildSwap()}
-                  onOpenApprovalConfirm={() => openConfirm('approval')}
-                  onOpenSwapConfirm={() => openConfirm('swap')}
-                  onRefreshQuote={() => void handleQuote()}
-                />
+                <>
+                  <div className="mb-3">
+                    <WalletModeToggle
+                      mode={executionMode}
+                      preferredMode={preferredExecutionMode}
+                      executionAddress={executionAddress}
+                      busy={busy !== null}
+                      canonicalAvailable={canonicalAvailable}
+                      eoaAvailable={eoaReady}
+                      fallbackActive={executionFallbackActive}
+                      onChange={handleSetExecutionMode}
+                      onEnableCanonical={handleEnableCanonical}
+                    />
+                    {executionMode === 'eoa' ? (
+                      <div className="mt-1 text-[11px] text-amber-300">
+                        EOA mode submits approval and swap transactions directly from your connected wallet.
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <SwapPanel
+                    tokenOptions={tokenOptions}
+                    tokenIn={tokenIn}
+                    tokenOut={tokenOut}
+                    tokenInDisplay={tokenInDisplay}
+                    tokenOutDisplay={tokenOutDisplay}
+                    tokenInIdentityLoading={tokenInIdentity.isLoading}
+                    tokenOutIdentityLoading={tokenOutIdentity.isLoading}
+                    amountInUnits={amountInUnits}
+                    estimatedOut={estimatedOut}
+                    tokenInSymbol={tokenInSymbol}
+                    tokenOutSymbol={tokenOutSymbol}
+                    parsedSlippage={parsedSlippage}
+                    isConnected={isConnected}
+                    executionMode={executionMode}
+                    executionReady={executionReady}
+                    isReady={isReady}
+                    busy={busy}
+                    quoteIsStale={quoteIsStale}
+                    quoteUpdatedAt={quoteUpdatedAt}
+                    status={status}
+                    error={error}
+                    tokensEquivalent={tokensEquivalent}
+                    priceImpactLabel={priceImpactLabel}
+                    gasEstimateLabel={gasEstimateLabel}
+                    routeSummary={routeSummary}
+                    permitSignatureRequired={permitSignatureRequired}
+                    permitSignaturePending={permitSignaturePending}
+                    permitSignatureReady={permitSignatureReady}
+                    lifecycle={<TransactionLifecycle state={txState} message={status || error || (quoteIsStale ? 'Quote needs refresh' : undefined)} txHash={txHash} />}
+                    onSetTokenIn={setTokenIn}
+                    onSetTokenOut={setTokenOut}
+                    onSetAmountInUnits={setAmountInUnits}
+                    onSwitchTokens={handleSwitchTokens}
+                    onReviewTrade={() => void handleReviewTrade()}
+                    onRefreshQuote={() => void handleQuote()}
+                  />
+                </>
               ) : (
                 <div className="space-y-3">
                   <div className="rounded-2xl border border-white/10 bg-[#101114]/90 p-4">
@@ -400,23 +538,41 @@ export function Swap() {
             </div>
             <div className="rounded-3xl border border-white/10 bg-black/35 p-5 text-sm text-zinc-300 backdrop-blur-xl">
               Powered by Uniswap APIs on Base with mobile-first swap + LP flows, including graceful fallbacks when advanced wallet capabilities are unavailable.
-              <div className="mt-2 text-xs text-zinc-400">5792: {walletCapabilities.supports5792 ? 'supported' : 'fallback'} · 7702: {walletCapabilities.supports7702 ? 'supported' : 'fallback'}</div>
+              <div className="mt-2 text-xs text-zinc-400">
+                Active mode: {executionMode === 'canonical' ? 'Canonical CSW' : 'Connected EOA'} · 5792:{' '}
+                {executionContext.capabilities.supports5792 ? 'supported' : 'fallback'} · 7702:{' '}
+                {executionContext.capabilities.supports7702 ? 'supported' : 'fallback'}
+              </div>
             </div>
           </motion.aside>
         </div>
       </section>
 
+      <SwapSettingsSheet
+        open={showAdvanced}
+        busy={busy !== null}
+        slippagePct={slippagePct}
+        deadlineMinutes={deadlineMinutes}
+        onClose={() => setShowAdvanced(false)}
+        onSetSlippagePct={setSlippagePct}
+        onSetDeadlineMinutes={setDeadlineMinutes}
+      />
+
       <SwapConfirmModal
         intent={confirmIntent}
         busy={busy}
         quoteIsStale={quoteIsStale}
-        canonicalAddress={canonicalAddress}
+        executionMode={executionMode}
+        executionAddress={executionAddress}
         signerAddress={signerAddress}
         tokenInSymbol={tokenInSymbol}
         tokenOutSymbol={tokenOutSymbol}
         amountInUnits={amountInUnits}
         estimatedOut={estimatedOut}
         approvalRequired={approvalRequired}
+        permitSignatureRequired={permitSignatureRequired}
+        permitSignaturePending={permitSignaturePending}
+        permitSignatureReady={permitSignatureReady}
         onCancel={closeConfirm}
         onConfirm={() => {
           void confirmAndExecute()

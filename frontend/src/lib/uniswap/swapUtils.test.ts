@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  areEquivalentSwapTokens,
   buildTokenOptions,
   getNestedAmountOut,
+  NATIVE_TOKEN_ADDRESS,
   resolveTokenDisplay,
   sanitizeDecimalInput,
   sanitizeIntegerInput,
@@ -93,6 +95,13 @@ describe('swapUtils token identity', () => {
   it('sanitizes integer-only inputs', () => {
     expect(sanitizeIntegerInput('15m', 3)).toBe('15')
     expect(sanitizeIntegerInput('123456', 3)).toBe('123')
+  })
+
+  it('compares native and wrapped-native as equivalent', () => {
+    const weth = '0x4200000000000000000000000000000000000006'
+    expect(areEquivalentSwapTokens(NATIVE_TOKEN_ADDRESS, weth, weth)).toBe(true)
+    expect(areEquivalentSwapTokens(weth, NATIVE_TOKEN_ADDRESS, weth)).toBe(true)
+    expect(areEquivalentSwapTokens(weth, '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', weth)).toBe(false)
   })
 })
 

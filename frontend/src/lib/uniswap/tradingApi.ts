@@ -25,6 +25,7 @@ export type TradeQuoteRequest = {
   routingPreference?: string
   spreadOptimization?: string
   generatePermitAsTransaction?: boolean
+  walletModeKey?: 'canonical' | 'eoa'
   xChainedActionsEnabled?: boolean
 }
 
@@ -190,7 +191,10 @@ export async function fetchTradeQuote(body: TradeQuoteRequest): Promise<TradeQuo
   const pending = quoteInFlight.get(key)
   if (pending) return pending
 
-  const request = post<TradeQuoteResponse>('/api/uniswap/quote', requestBody)
+  const payload: Record<string, unknown> = { ...requestBody }
+  delete payload.walletModeKey
+
+  const request = post<TradeQuoteResponse>('/api/uniswap/quote', payload)
     .then((data) => {
       quoteCache.set(key, { at: Date.now(), data })
       quoteInFlight.delete(key)

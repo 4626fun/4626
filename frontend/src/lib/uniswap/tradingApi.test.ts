@@ -114,6 +114,27 @@ describe('fetchTradeQuote', () => {
     expect(result.requestId).toBe('rq_123')
     expect((globalThis.fetch as any).mock.calls.length).toBe(2)
   })
+
+  it('keys quote cache by wallet mode without forwarding mode key upstream', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: { requestId: 'rq_mode', routing: 'CLASSIC' } }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const canonicalReq: TradeQuoteRequest = { ...quoteRequest('9101'), walletModeKey: 'canonical' }
+    const eoaReq: TradeQuoteRequest = { ...quoteRequest('9101'), walletModeKey: 'eoa' }
+
+    await fetchTradeQuote(canonicalReq)
+    await fetchTradeQuote(eoaReq)
+    await fetchTradeQuote(canonicalReq)
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const [firstBody, secondBody] = fetchMock.mock.calls.map((call) => JSON.parse(String(call[1]?.body ?? '{}')))
+    expect(firstBody.walletModeKey).toBeUndefined()
+    expect(secondBody.walletModeKey).toBeUndefined()
+  })
 })
 
 describe('permit helpers', () => {

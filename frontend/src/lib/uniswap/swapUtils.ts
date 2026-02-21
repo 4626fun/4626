@@ -1,6 +1,7 @@
 import { getAddress, isAddress } from 'viem'
 
 export const BASE_CHAIN_ID = 8453
+export const NATIVE_TOKEN_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 export type TokenGroup = 'core' | 'creator' | 'share'
 
@@ -80,6 +81,26 @@ export function normalizeTokenAddress(value: string | null | undefined): string 
   const trimmed = typeof value === 'string' ? value.trim() : ''
   if (!trimmed || !isAddress(trimmed)) return null
   return getAddress(trimmed)
+}
+
+export function areEquivalentSwapTokens(
+  tokenA: string | null | undefined,
+  tokenB: string | null | undefined,
+  wrappedNativeAddress?: string | null,
+): boolean {
+  const a = normalizeTokenAddress(tokenA)
+  const b = normalizeTokenAddress(tokenB)
+  if (!a || !b) return false
+  if (a.toLowerCase() === b.toLowerCase()) return true
+
+  const wrapped = normalizeTokenAddress(wrappedNativeAddress)
+  if (!wrapped) return false
+  const aIsNative = a.toLowerCase() === NATIVE_TOKEN_ADDRESS
+  const bIsNative = b.toLowerCase() === NATIVE_TOKEN_ADDRESS
+  if ((aIsNative && b.toLowerCase() === wrapped.toLowerCase()) || (bIsNative && a.toLowerCase() === wrapped.toLowerCase())) {
+    return true
+  }
+  return false
 }
 
 export function uniqueTokenOptions(options: TokenOption[]): TokenOption[] {

@@ -3,8 +3,9 @@ import { erc20Abi, formatUnits, isAddress, parseUnits } from 'viem'
 
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
+import { CONTRACTS } from '@/config/contracts'
 import { normalizeUniswapError } from '@/lib/uniswap/error'
-import { BASE_CHAIN_ID, getNestedAmountOut } from '@/lib/uniswap/swapUtils'
+import { areEquivalentSwapTokens, BASE_CHAIN_ID, getNestedAmountOut } from '@/lib/uniswap/swapUtils'
 import {
   assertValidSwapTransaction,
   buildSwap,
@@ -27,6 +28,12 @@ function asBigInt(v: unknown): bigint {
   return 0n
 }
 
+function asOptionalBigInt(v: unknown): bigint | undefined {
+  if (v === null || v === undefined) return undefined
+  if (typeof v === 'string' && !v.trim()) return undefined
+  return asBigInt(v)
+}
+
 function toParsableAmount(value: string): string | null {
   const raw = String(value ?? '').trim()
   if (!raw) return null
@@ -43,7 +50,9 @@ export function useSwapExecution(params: {
   publicClient: any
   canonicalAddress: `0x${string}` | null
   signerAddress: `0x${string}` | null
-  identityReady: boolean
+  executionMode: 'canonical' | 'eoa'
+  executionAddress: `0x${string}` | null
+  executionReady: boolean
   tokenIn: string
   tokenOut: string
   amountInUnits: string
@@ -60,6 +69,9 @@ export function useSwapExecution(params: {
   const [confirmIntent, setConfirmIntent] = useState<'approval' | 'swap' | null>(null)
   const [quoteUpdatedAt, setQuoteUpdatedAt] = useState<number | null>(null)
   const [quoteClockMs, setQuoteClockMs] = useState<number>(() => Date.now())
+  const [permitSignatureRequired, setPermitSignatureRequired] = useState(false)
+  const [permitSignaturePending, setPermitSignaturePending] = useState(false)
+  const [permitSignatureReady, setPermitSignatureReady] = useState(false)
   const [txState, setTxState] = useState<TxLifecycleState>('idle')
   const [txHash, setTxHash] = useState<string | null>(null)
   const quoteRunRef = useRef(0)
@@ -69,14 +81,19 @@ export function useSwapExecution(params: {
     return message || fallback
   }, [])
 
+  const tokensEquivalent = useMemo(
+    () => areEquivalentSwapTokens(params.tokenIn, params.tokenOut, CONTRACTS.weth),
+    [params.tokenIn, params.tokenOut],
+  )
+
   const isReady = useMemo(
     () =>
       isAddress(params.tokenIn) &&
       isAddress(params.tokenOut) &&
-      params.tokenIn.toLowerCase() !== params.tokenOut.toLowerCase() &&
+      !tokensEquivalent &&
       Number(params.amountInUnits) > 0 &&
-      Boolean(params.canonicalAddress),
-    [params.tokenIn, params.tokenOut, params.amountInUnits, params.canonicalAddress],
+      Boolean(params.executionAddress),
+    [params.tokenIn, params.tokenOut, params.amountInUnits, params.executionAddress, tokensEquivalent],
   )
 
   const approvalTx = approvalData?.approval as Record<string, unknown> | undefined
@@ -103,38 +120,65 @@ export function useSwapExecution(params: {
     }
   }, [params.publicClient])
 
+  const syncPermitRequirement = useCallback((nextQuote: TradeQuoteResponse | null | undefined) => {
+    const requiresPermit = Boolean(pickPermitData(nextQuote))
+    setPermitSignatureRequired(requiresPermit)
+    setPermitSignaturePending(false)
+    setPermitSignatureReady(false)
+  }, [])
+
   const signPermitIfRequired = useCallback(async (nextQuote: TradeQuoteResponse): Promise<{
     permitData?: Record<string, unknown>
     signature?: string
   }> => {
     const permitData = pickPermitData(nextQuote)
-    if (!permitData) return {}
+    if (!permitData) {
+      setPermitSignatureRequired(false)
+      setPermitSignaturePending(false)
+      setPermitSignatureReady(false)
+      return {}
+    }
+
+    setPermitSignatureRequired(true)
+    setPermitSignaturePending(true)
+    setPermitSignatureReady(false)
 
     const typed = toPermitSignPayload(permitData)
     if (!typed) {
+      setPermitSignaturePending(false)
       throw new Error('Permit2 payload is malformed. Please refresh the quote and try again.')
     }
     if (!params.walletClient || !params.signerAddress) {
+      setPermitSignaturePending(false)
       throw new Error('Permit2 signature is required, but owner signer is not available.')
     }
     const signer = params.walletClient as any
     if (typeof signer.signTypedData !== 'function') {
+      setPermitSignaturePending(false)
       throw new Error('Connected wallet does not support typed-data signatures required for Permit2.')
     }
 
-    setStatus('Awaiting Permit2 signature…')
-    const signature = await signer.signTypedData({
-      account: params.signerAddress,
-      domain: typed.domain,
-      types: typed.types,
-      primaryType: typed.primaryType,
-      message: typed.message,
-    })
-    if (typeof signature !== 'string' || !signature.startsWith('0x')) {
-      throw new Error('Wallet returned an invalid Permit2 signature.')
+    setStatus('Permit2 signature required. Confirm in wallet…')
+    try {
+      const signature = await signer.signTypedData({
+        account: params.signerAddress,
+        domain: typed.domain,
+        types: typed.types,
+        primaryType: typed.primaryType,
+        message: typed.message,
+      })
+      if (typeof signature !== 'string' || !signature.startsWith('0x')) {
+        throw new Error('Wallet returned an invalid Permit2 signature.')
+      }
+      setPermitSignaturePending(false)
+      setPermitSignatureReady(true)
+      setStatus('Permit2 signature captured. Building swap…')
+      return { permitData, signature }
+    } catch (error) {
+      setPermitSignaturePending(false)
+      setPermitSignatureReady(false)
+      throw error
     }
-
-    return { permitData, signature }
   }, [params.walletClient, params.signerAddress])
 
   const resetTradeState = useCallback(() => {
@@ -144,6 +188,9 @@ export function useSwapExecution(params: {
     setSwapTx(null)
     setEstimatedOut('')
     setQuoteUpdatedAt(null)
+    setPermitSignatureRequired(false)
+    setPermitSignaturePending(false)
+    setPermitSignatureReady(false)
     setStatus('')
     setError('')
     setTxState('idle')
@@ -151,7 +198,7 @@ export function useSwapExecution(params: {
   }, [])
 
   const handleQuote = useCallback(async () => {
-    if (!params.address || !isReady || !params.canonicalAddress) return
+    if (!params.address || !isReady || !params.executionAddress) return
     const runId = ++quoteRunRef.current
     setBusy('quote')
     setError('')
@@ -169,12 +216,14 @@ export function useSwapExecution(params: {
         tokenOutChainId: BASE_CHAIN_ID,
         type: 'EXACT_INPUT',
         amount,
-        swapper: params.canonicalAddress,
+        swapper: params.executionAddress,
         slippageTolerance: params.parsedSlippage,
+        walletModeKey: params.executionMode,
       })
       if (runId !== quoteRunRef.current) return
       setQuote(data)
       setQuoteUpdatedAt(Date.now())
+      syncPermitRequirement(data)
       setApprovalData(null)
       setSwapTx(null)
       const outRaw = getNestedAmountOut(pickSwapQuote(data) ?? data)
@@ -185,7 +234,11 @@ export function useSwapExecution(params: {
       } else {
         setEstimatedOut('')
       }
-      setStatus(`Quote ready for canonical CSW (routing=${String(data.routing ?? 'unknown')})`)
+      setStatus(
+        `Quote ready for ${params.executionMode === 'canonical' ? 'canonical CSW' : 'connected EOA'} (routing=${String(
+          data.routing ?? 'unknown',
+        )})`,
+      )
       setTxState('review')
     } catch (e: any) {
       if (runId !== quoteRunRef.current) return
@@ -196,7 +249,8 @@ export function useSwapExecution(params: {
     }
   }, [
     params.address,
-    params.canonicalAddress,
+    params.executionAddress,
+    params.executionMode,
     params.amountInUnits,
     params.parsedSlippage,
     params.tokenIn,
@@ -204,10 +258,11 @@ export function useSwapExecution(params: {
     isReady,
     getTokenDecimals,
     getErrorMessage,
+    syncPermitRequirement,
   ])
 
   const handleCheckApproval = useCallback(async () => {
-    if (!params.canonicalAddress || !isReady) return
+    if (!params.executionAddress || !isReady) return
     setBusy('approval')
     setError('')
     setStatus('')
@@ -217,7 +272,7 @@ export function useSwapExecution(params: {
       const tokenInDecimals = await getTokenDecimals(params.tokenIn)
       const amount = parseUnits(parsableAmount, tokenInDecimals).toString()
       const data = await checkTradeApproval({
-        walletAddress: params.canonicalAddress,
+        walletAddress: params.executionAddress,
         token: params.tokenIn,
         amount,
         chainId: BASE_CHAIN_ID,
@@ -232,7 +287,7 @@ export function useSwapExecution(params: {
     } finally {
       setBusy(null)
     }
-  }, [params.canonicalAddress, params.tokenIn, params.tokenOut, params.amountInUnits, isReady, getTokenDecimals, getErrorMessage])
+  }, [params.executionAddress, params.tokenIn, params.tokenOut, params.amountInUnits, isReady, getTokenDecimals, getErrorMessage])
 
   const handleBuildSwap = useCallback(async () => {
     if (!quote) return
@@ -261,7 +316,7 @@ export function useSwapExecution(params: {
   }, [quote, params.parsedDeadlineMinutes, getErrorMessage, signPermitIfRequired])
 
   const handleReviewTrade = useCallback(async () => {
-    if (!params.canonicalAddress || !params.identityReady || !isReady) return
+    if (!params.executionAddress || !params.executionReady || !isReady) return
     const runId = ++quoteRunRef.current
     setBusy('review')
     setError('')
@@ -282,11 +337,12 @@ export function useSwapExecution(params: {
           tokenOutChainId: BASE_CHAIN_ID,
           type: 'EXACT_INPUT',
           amount,
-          swapper: params.canonicalAddress,
+          swapper: params.executionAddress,
           slippageTolerance: params.parsedSlippage,
+          walletModeKey: params.executionMode,
         }),
         checkTradeApproval({
-          walletAddress: params.canonicalAddress,
+          walletAddress: params.executionAddress,
           token: params.tokenIn,
           amount,
           chainId: BASE_CHAIN_ID,
@@ -298,6 +354,7 @@ export function useSwapExecution(params: {
       if (runId !== quoteRunRef.current) return
       setQuote(nextQuote)
       setQuoteUpdatedAt(Date.now())
+      syncPermitRequirement(nextQuote)
       setApprovalData(nextApproval)
 
       const outRaw = getNestedAmountOut(pickSwapQuote(nextQuote) ?? nextQuote)
@@ -328,17 +385,19 @@ export function useSwapExecution(params: {
       if (runId === quoteRunRef.current) setBusy(null)
     }
   }, [
-    params.canonicalAddress,
-    params.identityReady,
     params.tokenIn,
     params.tokenOut,
     params.amountInUnits,
     params.parsedDeadlineMinutes,
     params.parsedSlippage,
+    params.executionMode,
     isReady,
     getTokenDecimals,
     getErrorMessage,
+    syncPermitRequirement,
     signPermitIfRequired,
+    params.executionAddress,
+    params.executionReady,
   ])
 
   const executeViaCanonical4337 = useCallback(async (executeParams: {
@@ -364,6 +423,34 @@ export function useSwapExecution(params: {
     setStatus(`${executeParams.successLabel}: ${result.transactionHash}`)
   }, [params.canonicalAddress, params.signerAddress, params.walletClient, params.publicClient])
 
+  const executeViaEoa = useCallback(async (executeParams: {
+    tx: TransactionRequest
+    successLabel: string
+  }) => {
+    if (!params.signerAddress || !params.walletClient) {
+      throw new Error('Connected EOA signer is not ready')
+    }
+    const wallet = params.walletClient as any
+    if (typeof wallet.sendTransaction !== 'function') {
+      throw new Error('Connected wallet does not support direct transaction sends')
+    }
+
+    const hash = await wallet.sendTransaction({
+      account: params.signerAddress,
+      to: executeParams.tx.to as `0x${string}`,
+      data: executeParams.tx.data as `0x${string}`,
+      value: asOptionalBigInt(executeParams.tx.value),
+      gas: asOptionalBigInt(executeParams.tx.gasLimit),
+      gasPrice: asOptionalBigInt(executeParams.tx.gasPrice),
+      maxFeePerGas: asOptionalBigInt(executeParams.tx.maxFeePerGas),
+      maxPriorityFeePerGas: asOptionalBigInt(executeParams.tx.maxPriorityFeePerGas),
+    })
+
+    setTxHash(hash)
+    setTxState('pending')
+    setStatus(`${executeParams.successLabel}: ${hash}`)
+  }, [params.signerAddress, params.walletClient])
+
   const executeApprovalNow = useCallback(async () => {
     if (!approvalData) return
     const tx = approvalData.approval as Record<string, unknown> | undefined
@@ -374,16 +461,33 @@ export function useSwapExecution(params: {
     setBusy('executeApproval')
     setError('')
     try {
-      await executeViaCanonical4337({
-        calls: [
-          {
-            to: tx.to as `0x${string}`,
-            data: tx.data as `0x${string}`,
-            value: asBigInt(tx.value),
+      if (params.executionMode === 'canonical') {
+        await executeViaCanonical4337({
+          calls: [
+            {
+              to: tx.to as `0x${string}`,
+              data: tx.data as `0x${string}`,
+              value: asBigInt(tx.value),
+            },
+          ],
+          successLabel: 'Approval submitted via canonical ERC-4337',
+        })
+      } else {
+        await executeViaEoa({
+          tx: {
+            to: tx.to as string,
+            from: (tx.from as string) ?? params.signerAddress ?? '',
+            data: tx.data as string,
+            value: typeof tx.value === 'string' ? tx.value : undefined,
+            gasLimit: typeof tx.gasLimit === 'string' ? tx.gasLimit : undefined,
+            maxFeePerGas: typeof tx.maxFeePerGas === 'string' ? tx.maxFeePerGas : undefined,
+            maxPriorityFeePerGas:
+              typeof tx.maxPriorityFeePerGas === 'string' ? tx.maxPriorityFeePerGas : undefined,
+            gasPrice: typeof tx.gasPrice === 'string' ? tx.gasPrice : undefined,
           },
-        ],
-        successLabel: 'Approval submitted via ERC-4337',
-      })
+          successLabel: 'Approval submitted via connected EOA',
+        })
+      }
       setTxState('success')
     } catch (e: any) {
       const message = getErrorMessage(e, 'Approval transaction failed')
@@ -393,7 +497,7 @@ export function useSwapExecution(params: {
     } finally {
       setBusy(null)
     }
-  }, [approvalData, executeViaCanonical4337, getErrorMessage])
+  }, [approvalData, executeViaCanonical4337, executeViaEoa, getErrorMessage, params.executionMode, params.signerAddress])
 
   const executeSwapNow = useCallback(async () => {
     if (!swapTx) return
@@ -401,16 +505,23 @@ export function useSwapExecution(params: {
     setBusy('executeSwap')
     setError('')
     try {
-      await executeViaCanonical4337({
-        calls: [
-          {
-            to: swapTx.to as `0x${string}`,
-            data: swapTx.data as `0x${string}`,
-            value: asBigInt(swapTx.value),
-          },
-        ],
-        successLabel: 'Swap submitted via canonical ERC-4337',
-      })
+      if (params.executionMode === 'canonical') {
+        await executeViaCanonical4337({
+          calls: [
+            {
+              to: swapTx.to as `0x${string}`,
+              data: swapTx.data as `0x${string}`,
+              value: asBigInt(swapTx.value),
+            },
+          ],
+          successLabel: 'Swap submitted via canonical ERC-4337',
+        })
+      } else {
+        await executeViaEoa({
+          tx: swapTx,
+          successLabel: 'Swap submitted via connected EOA',
+        })
+      }
       setTxState('success')
     } catch (e: any) {
       const message = getErrorMessage(e, 'Swap transaction failed')
@@ -420,7 +531,7 @@ export function useSwapExecution(params: {
     } finally {
       setBusy(null)
     }
-  }, [swapTx, executeViaCanonical4337, getErrorMessage])
+  }, [swapTx, executeViaCanonical4337, executeViaEoa, getErrorMessage, params.executionMode])
 
   const openConfirm = useCallback((intent: 'approval' | 'swap') => {
     setConfirmIntent(intent)
@@ -433,12 +544,15 @@ export function useSwapExecution(params: {
 
   const confirmAndExecute = useCallback(async () => {
     if (!confirmIntent || busy) return
-    if (quoteIsStale) {
-      setError('Quote is stale. Please refresh quote before submitting.')
-      setTxState('error')
+    const action = confirmIntent
+    if (action === 'swap' && quoteIsStale) {
+      setConfirmIntent(null)
+      setError('')
+      setStatus('Quote expired. Refreshing quote and rebuilding review…')
+      setTxState('review')
+      await handleReviewTrade()
       return
     }
-    const action = confirmIntent
     setConfirmIntent(null)
     try {
       setTxState('signing')
@@ -450,7 +564,7 @@ export function useSwapExecution(params: {
     } catch {
       // Errors are already surfaced in state.
     }
-  }, [approvalRequired, busy, confirmIntent, executeApprovalNow, executeSwapNow, quoteIsStale])
+  }, [approvalRequired, busy, confirmIntent, executeApprovalNow, executeSwapNow, handleReviewTrade, quoteIsStale])
 
   return {
     estimatedOut,
@@ -466,7 +580,11 @@ export function useSwapExecution(params: {
     txHash,
     isReady,
     approvalRequired,
+    tokensEquivalent,
     quoteIsStale,
+    permitSignatureRequired,
+    permitSignaturePending,
+    permitSignatureReady,
     setStatus,
     setError,
     setTxState,

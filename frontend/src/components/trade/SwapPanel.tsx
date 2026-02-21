@@ -1,10 +1,10 @@
-import type { ReactNode } from 'react'
-
-import { ArrowDown } from 'lucide-react'
-
 import { ConnectButtonWeb3 } from '@/components/ConnectButtonWeb3'
-import { TokenIdentityDisplay } from '@/components/trade/TokenIdentityDisplay'
-import { formatDisplayAmount, type TokenDisplay, type TokenOption } from '@/lib/uniswap/swapUtils'
+import { FlipButton } from '@/components/trade/FlipButton'
+import { TokenAmountInput } from '@/components/trade/TokenAmountInput'
+import { TradeCard } from '@/components/trade/TradeCard'
+import { TradeDetails } from '@/components/trade/TradeDetails'
+import type { ReactNode } from 'react'
+import type { TokenDisplay, TokenOption } from '@/lib/uniswap/swapUtils'
 
 export function SwapPanel(props: {
   tokenOptions: TokenOption[]
@@ -20,142 +20,109 @@ export function SwapPanel(props: {
   tokenOutSymbol: string
   parsedSlippage: number
   isConnected: boolean
-  identityReady: boolean
+  executionMode: 'canonical' | 'eoa'
+  executionReady: boolean
   isReady: boolean
   busy: string | null
   quoteIsStale: boolean
+  quoteUpdatedAt: number | null
   status: string
   error: string
-  showAdvanced: boolean
-  slippagePct: string
-  deadlineMinutes: string
-  approvalRequired: boolean
-  hasQuote: boolean
-  hasSwapTx: boolean
+  tokensEquivalent: boolean
+  priceImpactLabel?: string | null
+  gasEstimateLabel?: string | null
+  routeSummary?: string | null
+  permitSignatureRequired: boolean
+  permitSignaturePending: boolean
+  permitSignatureReady: boolean
   lifecycle: ReactNode
   onSetTokenIn: (next: string) => void
   onSetTokenOut: (next: string) => void
   onSetAmountInUnits: (next: string) => void
-  onSetSlippagePct: (next: string) => void
-  onSetDeadlineMinutes: (next: string) => void
   onSwitchTokens: () => void
   onReviewTrade: () => void
-  onQuote: () => void
-  onCheckApproval: () => void
-  onBuildSwap: () => void
-  onOpenApprovalConfirm: () => void
-  onOpenSwapConfirm: () => void
   onRefreshQuote: () => void
 }) {
-  const coreOptions = props.tokenOptions.filter((opt) => opt.group === 'core')
-  const ecosystemOptions = props.tokenOptions.filter((opt) => opt.group !== 'core')
+  const reviewDisabled =
+    !props.isConnected ||
+    !props.executionReady ||
+    !props.isReady ||
+    props.busy !== null ||
+    props.quoteIsStale ||
+    props.tokenInIdentityLoading ||
+    props.tokenOutIdentityLoading
 
   return (
     <>
-      <div className="space-y-2 rounded-2xl border border-white/10 bg-[#101114]/90 p-4">
-        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">Sell</div>
-        <div className="flex items-end justify-between gap-3">
-          <input
-            className="w-full bg-transparent text-4xl leading-none font-medium text-white outline-none"
-            value={props.amountInUnits}
-            onChange={(e) => props.onSetAmountInUnits(e.target.value)}
-            placeholder="0.0"
-          />
-          <select
-            value={props.tokenIn}
-            onChange={(e) => props.onSetTokenIn(e.target.value)}
-            className="rounded-full border border-white/20 bg-[#15161b] px-3 py-2 text-sm font-medium text-white"
-          >
-            <optgroup label="Core tokens">
-              {coreOptions.map((opt) => (
-                <option key={opt.address} value={opt.address}>{`${opt.symbol} - ${opt.name}`}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Creator ecosystem">
-              {ecosystemOptions.map((opt) => (
-                <option key={opt.address} value={opt.address}>{`${opt.symbol} - ${opt.name}`}</option>
-              ))}
-            </optgroup>
-          </select>
-        </div>
-        <TokenIdentityDisplay
-          address={props.tokenIn}
+      <TradeCard>
+        <TokenAmountInput
+          label="Sell"
+          amount={props.amountInUnits}
+          token={props.tokenIn}
+          tokenOptions={props.tokenOptions}
           display={props.tokenInDisplay}
           isLoading={props.tokenInIdentityLoading}
+          onAmountChange={props.onSetAmountInUnits}
+          onTokenChange={props.onSetTokenIn}
+          fiatValueLabel="≈ -- USD"
+          amountPlaceholder="0.0"
         />
+      </TradeCard>
+
+      <div className="-my-2 flex justify-center">
+        <FlipButton onClick={props.onSwitchTokens} />
       </div>
 
-      <div className="relative z-10 -my-3 flex justify-center">
-        <button
-          type="button"
-          onClick={props.onSwitchTokens}
-          className="rounded-xl border border-white/20 bg-[#15161b] p-2 text-zinc-300 transition hover:text-white"
-          title="Switch tokens"
-        >
-          <ArrowDown className="h-4 w-4" />
-        </button>
-      </div>
-
-      <div className="space-y-2 rounded-2xl border border-white/10 bg-[#101114]/90 p-4">
-        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">Buy</div>
-        <div className="flex items-end justify-between gap-3">
-          <div className="w-full text-4xl leading-none font-medium text-white">
-            {props.estimatedOut ? formatDisplayAmount(props.estimatedOut) : '0.0'}
-          </div>
-          <select
-            value={props.tokenOut}
-            onChange={(e) => props.onSetTokenOut(e.target.value)}
-            className="rounded-full border border-white/20 bg-[#15161b] px-3 py-2 text-sm font-medium text-white"
-          >
-            <optgroup label="Core tokens">
-              {coreOptions.map((opt) => (
-                <option key={opt.address} value={opt.address}>{`${opt.symbol} - ${opt.name}`}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Creator ecosystem">
-              {ecosystemOptions.map((opt) => (
-                <option key={opt.address} value={opt.address}>{`${opt.symbol} - ${opt.name}`}</option>
-              ))}
-            </optgroup>
-          </select>
-        </div>
-        <TokenIdentityDisplay
-          address={props.tokenOut}
+      <TradeCard>
+        <TokenAmountInput
+          label="Buy"
+          amount={props.estimatedOut}
+          token={props.tokenOut}
+          tokenOptions={props.tokenOptions}
           display={props.tokenOutDisplay}
           isLoading={props.tokenOutIdentityLoading}
+          onTokenChange={props.onSetTokenOut}
+          amountPlaceholder="0.0"
+          readOnlyAmount
+          fiatValueLabel="≈ -- USD"
         />
-      </div>
+      </TradeCard>
 
-      <button
-        type="button"
-        onClick={props.onReviewTrade}
-        disabled={
-          !props.isConnected ||
-          !props.identityReady ||
-          !props.isReady ||
-          props.busy !== null ||
-          props.quoteIsStale ||
-          props.tokenInIdentityLoading ||
-          props.tokenOutIdentityLoading
-        }
-        className="mt-4 w-full rounded-2xl bg-fuchsia-500 px-4 py-3 text-lg font-semibold text-white transition hover:bg-fuchsia-400 disabled:opacity-50"
-      >
-        {props.busy === 'review' ? 'Reviewing…' : 'Review trade'}
-      </button>
-      {props.tokenIn.toLowerCase() === props.tokenOut.toLowerCase() ? (
+      <TradeDetails
+        tokenInSymbol={props.tokenInSymbol}
+        tokenOutSymbol={props.tokenOutSymbol}
+        amountInUnits={props.amountInUnits}
+        estimatedOut={props.estimatedOut}
+        parsedSlippage={props.parsedSlippage}
+        quoteUpdatedAt={props.quoteUpdatedAt}
+        quoteIsStale={props.quoteIsStale}
+        priceImpactLabel={props.priceImpactLabel}
+        gasEstimateLabel={props.gasEstimateLabel}
+        routeSummary={props.routeSummary}
+      />
+
+      {props.tokensEquivalent ? (
         <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
-          Choose two different tokens to generate a quote.
+          Choose two non-equivalent tokens to generate a quote.
         </div>
       ) : null}
-
-      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-400">
-        <div className="rounded-xl border border-white/10 bg-white/3 px-3 py-2">
-          Pair: {props.tokenInSymbol} / {props.tokenOutSymbol}
+      {props.permitSignatureRequired ? (
+        <div
+          className={`mt-2 rounded-xl border px-3 py-2 text-xs ${
+            props.permitSignaturePending
+              ? 'border-amber-400/40 bg-amber-500/10 text-amber-200'
+              : props.permitSignatureReady
+                ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-200'
+                : 'border-blue-400/40 bg-blue-500/10 text-blue-200'
+          }`}
+        >
+          {props.permitSignaturePending
+            ? 'Permit2 signature pending in wallet (off-chain).'
+            : props.permitSignatureReady
+              ? 'Permit2 signature captured for this quote.'
+              : 'This quote requires a Permit2 off-chain signature before swap submission.'}
         </div>
-        <div className="rounded-xl border border-white/10 bg-white/3 px-3 py-2 text-right">
-          Slippage {props.parsedSlippage}%
-        </div>
-      </div>
+      ) : null}
       {props.status ? <div className="mt-2 text-xs text-emerald-300">{props.status}</div> : null}
       {props.error ? <div className="mt-2 text-xs text-rose-300">{props.error}</div> : null}
       {!props.isConnected ? (
@@ -163,87 +130,39 @@ export function SwapPanel(props: {
           <ConnectButtonWeb3 />
         </div>
       ) : null}
-      {props.isConnected && !props.identityReady ? (
+      {props.isConnected && !props.executionReady ? (
         <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-          Connect an owner signer for your canonical smart wallet to trade.
+          {props.executionMode === 'canonical'
+            ? 'Connect an owner signer for your canonical smart wallet to trade.'
+            : 'Connected wallet is not ready to submit transactions.'}
         </div>
       ) : null}
 
-      {props.showAdvanced ? (
-        <div className="mt-4 space-y-3 rounded-2xl border border-white/10 bg-black/25 p-3">
-          <div>
-            <label className="label">Slippage %</label>
-            <input
-              className="mt-1 w-full rounded-xl border border-zinc-700 bg-black/30 px-3 py-2 text-xs"
-              value={props.slippagePct}
-              onChange={(e) => props.onSetSlippagePct(e.target.value)}
-              placeholder="0.5"
-            />
-          </div>
-          <div>
-            <label className="label">Deadline (minutes)</label>
-            <input
-              className="mt-1 w-full rounded-xl border border-zinc-700 bg-black/30 px-3 py-2 text-xs"
-              value={props.deadlineMinutes}
-              onChange={(e) => props.onSetDeadlineMinutes(e.target.value)}
-              placeholder="15"
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={props.onQuote}
-              disabled={props.busy !== null || !props.identityReady}
-              className="rounded-full border border-zinc-700 px-3 py-1.5 text-[11px] disabled:opacity-50"
-            >
-              Quote
-            </button>
-            <button
-              type="button"
-              onClick={props.onCheckApproval}
-              disabled={props.busy !== null || !props.identityReady}
-              className="rounded-full border border-zinc-700 px-3 py-1.5 text-[11px] disabled:opacity-50"
-            >
-              Approval
-            </button>
-            <button
-              type="button"
-              onClick={props.onBuildSwap}
-              disabled={props.busy !== null || !props.hasQuote}
-              className="rounded-full border border-zinc-700 px-3 py-1.5 text-[11px] disabled:opacity-50"
-            >
-              Build
-            </button>
-            <button
-              type="button"
-              onClick={props.onOpenApprovalConfirm}
-              disabled={props.busy !== null || !props.approvalRequired}
-              className="rounded-full border border-zinc-700 px-3 py-1.5 text-[11px] disabled:opacity-50"
-            >
-              Approve now
-            </button>
-            <button
-              type="button"
-              onClick={props.onOpenSwapConfirm}
-              disabled={props.busy !== null || !props.hasSwapTx}
-              className="rounded-full border border-zinc-700 px-3 py-1.5 text-[11px] disabled:opacity-50"
-            >
-              Swap now
-            </button>
-          </div>
-        </div>
-      ) : null}
       {props.quoteIsStale ? (
         <button
           type="button"
           onClick={props.onRefreshQuote}
-          disabled={props.busy !== null || !props.identityReady}
+          disabled={props.busy !== null || !props.executionReady}
           className="mt-2 rounded-full border border-amber-400/40 px-3 py-1 text-xs text-amber-200 disabled:opacity-50"
         >
           Refresh quote
         </button>
       ) : null}
       {props.lifecycle}
+
+      <div className="h-24 md:hidden" />
+      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.2rem)] z-60 px-4 md:static md:inset-auto md:bottom-auto md:z-auto md:mt-4 md:px-0">
+        <div className="pointer-events-auto rounded-2xl border border-white/10 bg-vault-card/90 p-2 shadow-[0_-14px_36px_-20px_rgba(0,0,0,0.9)] backdrop-blur-xl md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-0">
+          <button
+            type="button"
+            onClick={props.onReviewTrade}
+            disabled={reviewDisabled}
+            className="min-h-11 w-full rounded-xl bg-fuchsia-500 px-4 py-3 text-base font-semibold text-white transition hover:bg-fuchsia-400 disabled:opacity-50"
+          >
+            {props.busy === 'review' ? 'Reviewing…' : 'Review swap'}
+          </button>
+        </div>
+      </div>
     </>
   )
 }

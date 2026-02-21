@@ -233,15 +233,41 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
             totalWeight += weights[i];
         }
 
-        // Apply votes
+        // Aggregate duplicate vault entries within this call so each vault is
+        // applied exactly once to epoch totals and per-user storage.
+        address[] memory uniqueVaults = new address[](vaults.length);
+        uint256[] memory aggregatedWeights = new uint256[](vaults.length);
+        uint256 uniqueCount = 0;
+
         for (uint256 i = 0; i < vaults.length; i++) {
             address vault = vaults[i];
-            
+            uint256 existingIndex = type(uint256).max;
+
+            for (uint256 j = 0; j < uniqueCount; j++) {
+                if (uniqueVaults[j] == vault) {
+                    existingIndex = j;
+                    break;
+                }
+            }
+
+            if (existingIndex == type(uint256).max) {
+                uniqueVaults[uniqueCount] = vault;
+                aggregatedWeights[uniqueCount] = weights[i];
+                uniqueCount++;
+            } else {
+                aggregatedWeights[existingIndex] += weights[i];
+            }
+        }
+
+        // Apply each unique vault vote once using the aggregated relative weight.
+        for (uint256 i = 0; i < uniqueCount; i++) {
+            address vault = uniqueVaults[i];
+
             // Check whitelist
             if (!_isVaultWhitelisted(vault)) revert VaultNotWhitelisted(vault);
 
-            // Normalize weight: userPower * (weight / totalWeight)
-            uint256 normalizedWeight = (userPower * weights[i]) / totalWeight;
+            // Normalize weight: userPower * (aggregatedWeight / totalWeight)
+            uint256 normalizedWeight = (userPower * aggregatedWeights[i]) / totalWeight;
 
             // Update vault votes
             _epochVaultVotes[epoch][vault] += normalizedWeight;
@@ -251,7 +277,7 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
             _epochUserVaultVotes[epoch][msg.sender][vault] = normalizedWeight;
             bool added = _epochUserVotedVaults[epoch][msg.sender].add(vault);
             if (!added) {
-                // Vault already tracked for this user/epoch; weights still updated above.
+                // Vault already tracked for this user/epoch; no action needed.
             }
 
             emit Voted(msg.sender, vault, normalizedWeight, epoch);
