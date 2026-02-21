@@ -32,7 +32,7 @@
     "@meteora-ag/dlmm": "^1.9.3",
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
-    "bn.js": "^5.2.2",
+    "bn.js": "5.2.3",
     "bs58": "^6.0.0",
     "viem": "^2.21.0"
   },
@@ -45,6 +45,7 @@
   },
   "overrides": {
     "axios": "1.13.5",
+    "bn.js": "5.2.3",
     "cross-fetch": "3.2.0",
     "esbuild": "0.27.3",
     "node-fetch": "2.7.0",

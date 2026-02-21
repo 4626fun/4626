@@ -74,8 +74,8 @@ interface ICreatorRegistryLottery {
 }
 
 interface ICreatorGaugeControllerLottery {
-    function getJackpotReserve(address vault) external view returns (uint256);
-    function payJackpot(address vault, address winner, uint256 shares) external;
+    function getJackpotReserve() external view returns (uint256);
+    function payJackpot(address winner, uint256 shares) external;
 }
 
 interface ICreatorVRFConsumer {
@@ -256,6 +256,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     event CrossChainJackpotPaid(address indexed creatorCoin, address indexed winner, uint256 shares, uint256 tokenValue);
     event LotteryWon(address indexed creatorCoin, uint256 indexed entryId, address indexed winner, uint256 shares, uint256 tokenValue);
     event MultiTokenJackpotWon(address indexed triggeringCoin, address indexed winner, uint256 numVaultsPaid);
+    event JackpotPayoutFailed(address indexed creatorCoin, address indexed winner, uint256 shares);
     event RemoteLotteryEntryReceived(
         uint32 indexed srcEid,
         address indexed buyer,
@@ -989,23 +990,25 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
             ICreatorGaugeControllerLottery gaugeController = ICreatorGaugeControllerLottery(gaugeAddr);
             
             // slither-disable-next-line calls-loop
-            uint256 jackpotShares = gaugeController.getJackpotReserve(vaultAddr);
+            uint256 jackpotShares = gaugeController.getJackpotReserve();
 
             if (jackpotShares == 0) continue;
 
             uint256 rewardShares = (jackpotShares * payoutBps) / BASIS_POINTS;
 
             if (rewardShares > 0) {
-                totalRewardsPaid += rewardShares;
-                creatorStats[creatorCoin].rewardsPaid += rewardShares;
-                totalPaidOut++;
-
-                emit LotteryWon(creatorCoin, 0, winner, rewardShares, 0);
-                emit CrossChainJackpotPaid(creatorCoin, winner, rewardShares, 0);
-
                 // slither-disable-next-line calls-loop
                 // slither-disable-next-line reentrancy-no-eth
-                gaugeController.payJackpot(vaultAddr, winner, rewardShares);
+                try gaugeController.payJackpot(winner, rewardShares) {
+                    totalRewardsPaid += rewardShares;
+                    creatorStats[creatorCoin].rewardsPaid += rewardShares;
+                    totalPaidOut++;
+
+                    emit LotteryWon(creatorCoin, 0, winner, rewardShares, 0);
+                    emit CrossChainJackpotPaid(creatorCoin, winner, rewardShares, 0);
+                } catch {
+                    emit JackpotPayoutFailed(creatorCoin, winner, rewardShares);
+                }
             }
         }
         
@@ -1253,7 +1256,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         
         if (vaultAddr != address(0) && gaugeAddr != address(0)) {
             ICreatorGaugeControllerLottery gaugeController = ICreatorGaugeControllerLottery(gaugeAddr);
-            jackpotBalance = gaugeController.getJackpotReserve(vaultAddr);
+            jackpotBalance = gaugeController.getJackpotReserve();
         }
 
         return (stats.entries, stats.winners, stats.rewardsPaid, jackpotBalance);
