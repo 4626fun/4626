@@ -2784,13 +2784,14 @@ function DeployVaultBatcher({
           batcherAddress: batcherAddress,
           buildOnly,
         }
-        const shouldBuildMeteoraPayload =
+        const expectedSolanaAmountBaseForMeteora = opts?.expectedSolanaAmountBase
+        if (
           FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD &&
-          typeof opts?.expectedSolanaAmountBase === 'bigint' &&
-          opts.expectedSolanaAmountBase > 0n
-        if (shouldBuildMeteoraPayload) {
+          typeof expectedSolanaAmountBaseForMeteora === 'bigint' &&
+          expectedSolanaAmountBaseForMeteora > 0n
+        ) {
           registerBody.creatorToken = creatorToken
-          registerBody.expectedSolanaAmount = opts.expectedSolanaAmountBase.toString()
+          registerBody.expectedSolanaAmount = expectedSolanaAmountBaseForMeteora.toString()
           registerBody.shareDecimals = 18
         }
         if (solanaMintOverride) registerBody.solanaMint = solanaMintOverride

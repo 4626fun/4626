@@ -13,6 +13,7 @@ import { apiFetch } from '@/lib/apiBase'
 import { useIdentity } from '@/hooks/useIdentity'
 import { useXmtp } from '@/lib/xmtp/provider'
 import { PageMeta, META } from '@/components/seo/PageMeta'
+import { AgentVerificationCard } from '@/components/agents/AgentVerificationCard'
 
 type AgentRow = {
   creatorAddress: string
@@ -190,6 +191,10 @@ export function AgentDirectory() {
             </button>
           </div>
         )}
+      </div>
+
+      <div className="mb-10">
+        <AgentVerificationCard />
       </div>
 
       {/* Loading */}

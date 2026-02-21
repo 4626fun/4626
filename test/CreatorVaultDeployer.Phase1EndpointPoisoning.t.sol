@@ -143,7 +143,9 @@ contract CreatorVaultDeployerPhase1EndpointPoisoningTest is Test {
     bytes32 internal constant CCA_CODE_ID = bytes32(uint256(6));
     bytes32 internal constant ORACLE_CODE_ID = bytes32(uint256(7));
 
-    address internal constant CANONICAL_ENDPOINT = address(0x1111111111111111111111111111111111111111);
+    // Canonical LayerZero v2 EndpointV2 address (CREATE2-deployed identically across EVM chains).
+    // Must match `contracts/helpers/infra/OFTBootstrapRegistry.sol`.
+    address internal constant CANONICAL_ENDPOINT = address(0x1a44076050125825900e736c501f859c50fE728c);
     address internal constant ATTACKER_ENDPOINT = address(0x2222222222222222222222222222222222222222);
     address internal constant ATTACKER = address(0xBEEF);
 
@@ -205,13 +207,14 @@ contract CreatorVaultDeployerPhase1EndpointPoisoningTest is Test {
         );
     }
 
-    function test_deployPhase1Core_setsBootstrapEndpointFromCanonicalRegistry() public {
+    function test_deployPhase1Core_bootstrapReturnsCanonicalEndpoint() public {
         OFTBootstrapRegistry bootstrap = new OFTBootstrapRegistry();
         (CreatorVaultDeployer deployer,,) = _deployFixture(address(bootstrap));
 
-        deployer.deployPhase1Core(_phase1Params(), _codeIds());
+        CreatorVaultDeployer.Phase1Result memory out = deployer.deployPhase1Core(_phase1Params(), _codeIds());
 
         // Bootstrap registry is intentionally write-free; it always returns the canonical LZ endpoint.
+        assertEq(out.oftBootstrapRegistry, address(bootstrap));
         assertEq(
             bootstrap.getLayerZeroEndpoint(uint16(block.chainid)),
             bootstrap.LZ_COMMON_ENDPOINT(),
@@ -219,7 +222,7 @@ contract CreatorVaultDeployerPhase1EndpointPoisoningTest is Test {
         );
     }
 
-    function test_finalizePhase1_overwritesPoisonedBootstrapEndpointBeforeShareDeployment() public {
+    function test_finalizePhase1_deploysShareOFTBoundToCanonicalEndpoint() public {
         OFTBootstrapRegistry bootstrap = new OFTBootstrapRegistry();
         (CreatorVaultDeployer deployer, MockCreatorRegistry registry,) = _deployFixture(address(bootstrap));
 

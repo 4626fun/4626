@@ -852,7 +852,9 @@ async function tryProvisionDynamicRoute(params: {
     )
   }
 
-  let mintBytes32: Hex
+  // Initialize to a sentinel so TS definite-assignment is satisfied; we validate
+  // that provisioning replaced it before using it.
+  let mintBytes32: Hex = ZERO_BYTES32
   let mintedPubkey: string | null = null
   let provisionRunner: string | null = null
   if (cliDir && existsSync(cliDir)) {
@@ -948,6 +950,10 @@ async function tryProvisionDynamicRoute(params: {
       'Dynamic Solana route is enabled, but neither a valid local SOLANA_BRIDGE_CLI_DIR exists ' +
         'nor SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL / SOLANA_DYNAMIC_ROUTE_PROVISIONER_URLS is set.',
     )
+  }
+
+  if (mintBytes32.toLowerCase() === ZERO_BYTES32.toLowerCase()) {
+    throw new Error('Dynamic Solana route provisioning failed to return a mintBytes32.')
   }
 
   for (let i = 0; i < 24; i += 1) {
