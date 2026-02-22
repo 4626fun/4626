@@ -137,14 +137,23 @@ function ChatWidgetInner() {
   const activeMobileWindow = openWindows[openWindows.length - 1]
   const showMobileBar = barExpanded && !activeMobileWindow
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const isChatOverlayActiveOnMobile = isMobile && (showMobileBar || Boolean(activeMobileWindow))
+    window.dispatchEvent(new CustomEvent('vault-mobile-chat-overlay-change', { detail: { active: isChatOverlayActiveOnMobile } }))
+    return () => {
+      window.dispatchEvent(new CustomEvent('vault-mobile-chat-overlay-change', { detail: { active: false } }))
+    }
+  }, [isMobile, showMobileBar, activeMobileWindow])
+
   // Don't render anything if wallet is not connected
   if (!isConnected) return null
 
   return (
     <>
-      <div className="fixed inset-0 z-50 pointer-events-none md:hidden">
+      <div className="fixed inset-0 z-[90] pointer-events-none md:hidden">
         {showMobileBar && (
-          <div className="absolute inset-0 pointer-events-auto">
+          <div className="absolute inset-0 z-[90] pointer-events-auto">
             <ChatBar
               expanded
               variant="mobile"
@@ -156,7 +165,7 @@ function ChatWidgetInner() {
         )}
 
         {activeMobileWindow && (
-          <div className="absolute inset-0 pointer-events-auto">
+          <div className="absolute inset-0 z-[90] pointer-events-auto">
             <ChatWindow
               conversationId={activeMobileWindow.id}
               conversationName={activeMobileWindow.name}
@@ -173,7 +182,7 @@ function ChatWidgetInner() {
         )}
 
         {!showMobileBar && !activeMobileWindow && (
-          <div className="absolute top-4 right-4 pointer-events-auto">
+          <div className="absolute right-4 bottom-[calc(env(safe-area-inset-bottom)+6.25rem)] z-[90] pointer-events-auto">
             <ChatBar
               expanded={false}
               variant="mobile"
