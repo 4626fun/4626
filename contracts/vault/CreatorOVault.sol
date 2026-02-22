@@ -394,6 +394,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     /// @notice Flash loan protection - must wait before withdrawing
     error WithdrawTooSoon(uint256 currentBlock, uint256 requiredBlock);
 
+    /// @notice Flash loan protection - must wait before transferring freshly minted shares
+    error TransferTooSoon(uint256 currentBlock, uint256 requiredBlock);
+
     /// @notice Large withdrawal must be queued
     error LargeWithdrawalMustBeQueued(uint256 amount, uint256 threshold);
 
@@ -2084,10 +2087,21 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     /**
      * @dev Track the latest share acquisition block for delay enforcement.
      *      - Mint: receiver gets current block.
-     *      - Transfer: receiver inherits sender recency (max semantics).
+     *      - Transfer: does NOT update cooldown state (prevents griefing via dust transfers).
      *      - Burn: no update needed.
      */
     function _update(address from, address to, uint256 value) internal override {
+        // Enforce the withdrawal cooldown on share transfers out.
+        //
+        // Without this, removing transfer-based cooldown inheritance would allow
+        // `deposit -> transfer -> withdraw` to bypass the delay across addresses.
+        if (withdrawDelayBlocks != 0 && from != address(0) && to != address(0) && from != address(this)) {
+            uint256 requiredBlock = lastDepositBlock[from] + withdrawDelayBlocks;
+            if (block.number < requiredBlock) {
+                revert TransferTooSoon(block.number, requiredBlock);
+            }
+        }
+
         super._update(from, to, value);
 
         if (to == address(0)) {
@@ -2095,13 +2109,12 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         }
 
         if (from == address(0)) {
-            lastDepositBlock[to] = block.number;
+            // Do not track internal mints (eg profit locking shares minted to this vault),
+            // otherwise vault-internal transfers (eg queued withdrawal cancellations) could be blocked.
+            if (to != address(this)) {
+                lastDepositBlock[to] = block.number;
+            }
             return;
-        }
-
-        uint256 inheritedBlock = lastDepositBlock[from];
-        if (inheritedBlock > lastDepositBlock[to]) {
-            lastDepositBlock[to] = inheritedBlock;
         }
     }
 

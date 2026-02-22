@@ -63,19 +63,19 @@ contract OperationalWiring is Script {
     //                    DEPLOYED ADDRESSES
     // ═══════════════════════════════════════════════════════════════════
 
-    address constant REGISTRY = 0x888482d648D1fCa1A735268A9e579b44Bf644626;
-    address constant LOTTERY_MANAGER = 0x77740C44A3E1d8262e8bfAB6204A29B2cbeE4626;
-    address constant VRF_CONSUMER = 0x0265236984DE964CB0422BaeFbDb2de7C9d590F5;
-    address constant SOLANA_BRIDGE_ADAPTER = 0x648A01f6e125A46c4695CA70D0EB455f053d36A2;
+    address constant REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
+    address constant LOTTERY_MANAGER = 0x77705A2f173dd52F28300447506Dc35086c34626;
+    address constant VRF_CONSUMER = 0x9F85d8EEe5d2b8dC1E99b598B9c2B084934d0304;
+    address constant SOLANA_BRIDGE_ADAPTER = 0x2414b595c4f18532A5836B6e2E6d536832c572e8;
     address constant VRF_COORDINATOR = 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634;
 
     // Uniswap V4 Tax Hook (processes swaps)
     address constant TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
 
     // Factories / Batchers
-    address constant CREATOR_FACTORY = 0xcCa08f9b94dD478266D0D1D2e9B7758414280FfD;
-    address constant VAULT_BATCHER = 0x32e91185B92c6c13dd56D745aBf24F009cdD3019;
-    address constant VAULT_ACT_BATCHER = 0x4b67e3a4284090e5191c27B8F24248eC82DF055D;
+    address constant CREATOR_FACTORY = 0x90D25129072059ed5AfF321434f36d40B4556Cfc;
+    address constant VAULT_BATCHER = 0x4184D9118ec31061cEDd6041B6bD676ac19F29a5;
+    address constant VAULT_ACT_BATCHER = 0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB;
 
     // ═══════════════════════════════════════════════════════════════════
     //                    VRF CONFIG

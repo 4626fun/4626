@@ -78,9 +78,6 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     /// @notice Wrapped ShareOFT token (e.g., ■4626)
     address public immutable wrappedShareOFT;
 
-    /// @notice Vault shares token (e.g., ▢4626) - alternative lock token
-    address public vaultShares;
-
     /// @notice Vault for calculating underlying value
     address public vault;
 
@@ -92,9 +89,6 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
 
     /// @notice Total voting supply
     uint256 private _totalVotingSupply;
-
-    /// @notice Accepted tokens for locking
-    mapping(address => bool) public acceptedTokens;
 
     // ================================
     // CONSTRUCTOR
@@ -114,7 +108,6 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     {
         require(_wrappedShareOFT != address(0), "Invalid wrapped share token");
         wrappedShareOFT = _wrappedShareOFT;
-        acceptedTokens[_wrappedShareOFT] = true;
     }
 
     // ================================
@@ -122,8 +115,8 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     // ================================
 
     /**
-     * @notice Lock wrapped shares (■4626) or vault shares (▢4626) to receive voting power
-     * @param _token Token to lock (wrappedShareOFT or vaultShares)
+     * @notice Lock wrapped shares (■4626) to receive voting power
+     * @param _token Token to lock (must be wrappedShareOFT)
      * @param amount Amount to lock
      * @param duration Lock duration in seconds
      */
@@ -133,7 +126,7 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         nonReentrant
         returns (uint256 votingPowerAmount)
     {
-        if (!acceptedTokens[_token]) revert InvalidToken();
+        if (_token != wrappedShareOFT) revert InvalidToken();
         if (amount == 0) revert ZeroAmount();
         if (duration < MIN_LOCK_DURATION) revert InvalidLockDuration();
         if (duration > MAX_LOCK_DURATION) revert InvalidLockDuration();
@@ -205,6 +198,7 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
 
         Lock storage userLock = _locks[msg.sender];
         if (userLock.amount == 0) revert NoExistingLock();
+        if (userLock.lockedToken != wrappedShareOFT) revert InvalidToken();
         if (block.timestamp >= userLock.end) revert LockExpired();
 
         uint256 oldPower = balanceOf(msg.sender);
@@ -348,22 +342,12 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     // ADMIN
     // ================================
 
-    function setVaultShares(address _vaultShares) external onlyOwner {
-        require(_vaultShares != address(0), "Invalid");
-        vaultShares = _vaultShares;
-        acceptedTokens[_vaultShares] = true;
-    }
-
     function setVault(address _vault) external onlyOwner {
         vault = _vault;
     }
 
     function setBoostManager(address _boostManager) external onlyOwner {
         boostManager = _boostManager;
-    }
-
-    function setAcceptedToken(address token, bool accepted) external onlyOwner {
-        acceptedTokens[token] = accepted;
     }
 
     // ================================

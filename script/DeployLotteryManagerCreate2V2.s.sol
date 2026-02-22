@@ -23,6 +23,9 @@ interface ICreatorRegistryLotteryManager {
     function owner() external view returns (address);
     function getLotteryManager(uint256 chainId) external view returns (address);
     function setLotteryManager(uint256 chainId, address manager) external;
+
+    function getAllCreatorCoins() external view returns (address[] memory);
+    function getShareOFTForToken(address token) external view returns (address);
 }
 
 interface ICreatorVRFConsumerAuth {
@@ -48,10 +51,10 @@ contract DeployLotteryManagerCreate2V2 is Script {
     address constant DETERMINISTIC_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
     // Mined salt for the current initcode (re-mine if bytecode/args change).
-    bytes32 constant SALT = 0xce340df3ec09bdfc555f66ee86726abde71ece76dc07cbb5e477f0d16c9843bf;
+    bytes32 constant SALT = 0xe65abe49028b3b75b120aca5277cf7d7f9fd3df6b60794260956285cf5d43fa4;
 
     // Expected vanity address for this salt+initcode on Base.
-    address constant EXPECTED_ADDRESS = 0x77755C208Ca692c9060312B378C2B1B5082f4626;
+    address constant EXPECTED_ADDRESS = 0x77705A2f173dd52F28300447506Dc35086c34626;
 
     // Base mainnet canonical registry + owner (EOA that holds registry ownership).
     address constant REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
@@ -59,11 +62,11 @@ contract DeployLotteryManagerCreate2V2 is Script {
     uint256 constant BASE_CHAIN_ID = 8453;
 
     // Base VRF hub consumer (local VRF mode).
-    address constant VRF_CONSUMER = 0x0265236984DE964CB0422BaeFbDb2de7C9d590F5;
+    address constant VRF_CONSUMER = 0x9F85d8EEe5d2b8dC1E99b598B9c2B084934d0304;
 
     // Swap entrypoints that should be allowed to create lottery entries.
     address constant TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
-    address constant SOLANA_BRIDGE_ADAPTER = 0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92;
+    address constant SOLANA_BRIDGE_ADAPTER = 0x2414b595c4f18532A5836B6e2E6d536832c572e8;
     // Legacy adapter address (safe to keep authorized).
     address constant SOLANA_BRIDGE_ADAPTER_LEGACY = 0x648A01f6e125A46c4695CA70D0EB455f053d36A2;
 
@@ -157,6 +160,19 @@ contract DeployLotteryManagerCreate2V2 is Script {
         if (registry.getLotteryManager(BASE_CHAIN_ID) != predicted) {
             registry.setLotteryManager(BASE_CHAIN_ID, predicted);
             console.log("registry.setLotteryManager(Base, lottery)");
+        }
+
+        // Authorize existing ShareOFTs to trigger buy-side lottery entries.
+        // ShareOFT calls `processSwapLottery()` directly from `_triggerLotteryLocal(...)`,
+        // so the token contract must be an authorized swap entrypoint.
+        address[] memory tokens = registry.getAllCreatorCoins();
+        for (uint256 i; i < tokens.length; i++) {
+            address shareOFT = registry.getShareOFTForToken(tokens[i]);
+            if (shareOFT == address(0)) continue;
+            if (!lottery.authorizedSwapContracts(shareOFT)) {
+                lottery.setAuthorizedSwapContract(shareOFT, true);
+                console.log("authorized ShareOFT:", shareOFT);
+            }
         }
 
         vm.stopBroadcast();

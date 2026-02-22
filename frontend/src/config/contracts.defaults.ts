@@ -17,13 +17,13 @@ export const BASE_DEFAULTS = {
   // Shared infrastructure
   // NOTE: If you redeploy CreatorRegistry (e.g. after ABI/storage breaking changes),
   // set `VITE_REGISTRY` in the environment and/or update this default.
-  registry: addr('888482d648D1fCa1A735268A9e579b44Bf644626'),
-  lotteryManager: addr('77740C44A3E1d8262e8bfAB6204A29B2cbeE4626'),
-  vrfConsumer: addr('0265236984DE964CB0422BaeFbDb2de7C9d590F5'),
+  registry: addr('888506B92181c57A2fD06516FFFb6F375b7A4626'),
+  lotteryManager: addr('77705A2f173dd52F28300447506Dc35086c34626'),
+  vrfConsumer: addr('9F85d8EEe5d2b8dC1E99b598B9c2B084934d0304'),
   payoutRouterFactory: addr('9C53cEaA15AdDB436c89A1F929fF12ED2BD26ea9'),
 
   // Base↔Solana bridge integration
-  solanaBridgeAdapter: addr('5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92'),
+  solanaBridgeAdapter: addr('2414b595c4f18532A5836B6e2E6d536832c572e8'),
 
   // CREATE2 infra
   create2Factory: addr('4e59b44847b379578588920cA78FbF26c0B4956C'),
@@ -37,7 +37,7 @@ export const BASE_DEFAULTS = {
   vaultActivationBatcher: addr('d17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB'),
   // v2-infra CreatorVaultBatcher (deterministic, deployed via CREATE2 factory)
   // NOTE: This is the phased `CreatorVaultDeployer` (Phases 1–3).
-  creatorVaultBatcher: addr('32e91185B92c6c13dd56D745aBf24F009cdD3019'),
+  creatorVaultBatcher: addr('4184D9118ec31061cEDd6041B6bD676ac19F29a5'),
 
   // Treasury
   protocolTreasury: addr('7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3'),

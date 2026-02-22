@@ -86,10 +86,10 @@ contract SeedCreatorRegistry is Script {
     // ═══════════════════════════════════════════════════════════════════
 
     address constant CHAINLINK_ETH_USD = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
-    address constant CREATOR_FACTORY = 0xcCa08f9b94dD478266D0D1D2e9B7758414280FfD;
-    address constant LOTTERY_MANAGER = 0x77740C44A3E1d8262e8bfAB6204A29B2cbeE4626;
-    address constant VAULT_BATCHER = 0x32e91185B92c6c13dd56D745aBf24F009cdD3019;
-    address constant VAULT_ACT_BATCHER = 0x4b67e3a4284090e5191c27B8F24248eC82DF055D;
+    address constant CREATOR_FACTORY = 0x90D25129072059ed5AfF321434f36d40B4556Cfc;
+    address constant LOTTERY_MANAGER = 0x77705A2f173dd52F28300447506Dc35086c34626;
+    address constant VAULT_BATCHER = 0x4184D9118ec31061cEDd6041B6bD676ac19F29a5;
+    address constant VAULT_ACT_BATCHER = 0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB;
 
     // ═══════════════════════════════════════════════════════════════════
     //                              MAIN

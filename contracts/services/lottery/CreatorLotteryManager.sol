@@ -15,7 +15,7 @@ pragma solidity ^0.8.20;
  *      1. User trades ANY share token (■AKITA, ■DRAGON, etc) on ANY chain
  *      2. Hub: local processSwapLottery() is called directly
  *         Remote: OFT sends MSG_TYPE_LOTTERY_ENTRY via LayerZero to this contract
- *      3. Win probability scales with trade size ($1 = base, $1000 = max)
+ *      3. Win probability scales with trade size ($1 = base, $10,000 = max)
  *      4. ve4626 lockers get boosted win chances
  *      5. Winners receive % from ALL active creator vaults (diversified prize!)
  *      6. Winner callback sent to source chain OFT for UX notification
@@ -507,7 +507,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
      * @notice Local VRF callback
      */
     function receiveRandomWords(uint256 requestId, uint256[] memory randomWords) external nonReentrant {
-        require(msg.sender == address(localVRFConsumer), "Only VRF consumer");
+        if (msg.sender != address(localVRFConsumer)) revert Unauthorized();
         _processVRFResult(requestId, randomWords);
     }
 
@@ -515,7 +515,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
      * @notice Cross-chain VRF callback
      */
     function receiveRandomWords(uint256[] memory randomWords, uint256 sequence) external nonReentrant {
-        require(msg.sender == address(vrfIntegrator), "Only VRF integrator");
+        if (msg.sender != address(vrfIntegrator)) revert Unauthorized();
         _processVRFResult(sequence, randomWords);
     }
 
@@ -638,7 +638,10 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         }
 
         uint256 scaledAmount = swapAmountUSD - lotteryConfig.minSwapAmount;
-        uint256 maxScale = 1_000_000_000; // $1000
+        // Cap max probability scaling at $10,000 total swap value.
+        // scaledAmount is (swap - minSwap), and minSwap defaults to $1 (1e6),
+        // so $10,000 corresponds to (10_000 - 1) * 1e6 = 9_999_000_000.
+        uint256 maxScale = 9_999_000_000; // $9,999 above minSwap ($1), 6 decimals
 
         if (scaledAmount >= maxScale) {
             return lotteryConfig.maxWinChance;
@@ -713,10 +716,10 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         if (swapAmountUSD <= minSwap) return 0;
 
         uint256 scaledAmount = swapAmountUSD - minSwap;
-        uint256 maxScale = 1_000_000_000; // $1000 (6 decimals)
+        uint256 maxScale = 9_999_000_000; // $9,999 above minSwap ($1), 6 decimals
         if (scaledAmount >= maxScale) return gaugeBoostPPM;
 
-        // Linear ramp from 0 → full boost over the first $1000 above minSwap
+        // Linear ramp from 0 → full boost up to a $10,000 swap size (given default minSwap = $1).
         return (gaugeBoostPPM * scaledAmount) / maxScale;
     }
 
@@ -762,16 +765,16 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         _requireNotPaused();
 
         // Verify sender is an authorized remote OFT
-        require(authorizedRemoteOFTs[_origin.srcEid][_origin.sender], "Unauthorized remote OFT");
+        if (!authorizedRemoteOFTs[_origin.srcEid][_origin.sender]) revert Unauthorized();
 
         // Decode message type
-        require(_payload.length >= 32, "Invalid payload");
+        if (_payload.length < 32) revert InvalidAmount();
         uint16 msgType = abi.decode(_payload[:32], (uint16));
 
         if (msgType == MSG_TYPE_LOTTERY_ENTRY) {
             _handleLotteryEntry(_origin.srcEid, _origin.sender, _payload);
         } else {
-            revert("Unknown message type");
+            revert InvalidAmount();
         }
     }
 
@@ -1260,7 +1263,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     }
 
     function setSponsoredVrfMinSwapAmountUSD(uint256 _minSwapAmountUSD) external onlyOwner {
-        require(_minSwapAmountUSD >= MIN_SWAP_USD && _minSwapAmountUSD <= MAX_SWAP_USD, "Invalid min");
+        if (_minSwapAmountUSD < MIN_SWAP_USD || _minSwapAmountUSD > MAX_SWAP_USD) revert InvalidAmount();
         sponsoredVrfMinSwapAmountUSD = _minSwapAmountUSD;
         emit SponsoredVrfMinSwapUpdated(_minSwapAmountUSD);
     }
@@ -1271,7 +1274,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         uint256 budgetPerEpoch,
         uint256 epochDuration
     ) external onlyOwner {
-        require(epochDuration > 0, "Invalid epoch");
+        if (epochDuration == 0) revert InvalidAmount();
         _refreshSponsorshipEpoch(vrfSponsorshipPolicy);
         vrfSponsorshipPolicy.enabled = enabled;
         vrfSponsorshipPolicy.maxFeePerMessage = maxFeePerMessage;
@@ -1292,7 +1295,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         uint256 budgetPerEpoch,
         uint256 epochDuration
     ) external onlyOwner {
-        require(epochDuration > 0, "Invalid epoch");
+        if (epochDuration == 0) revert InvalidAmount();
         _refreshSponsorshipEpoch(callbackSponsorshipPolicy);
         callbackSponsorshipPolicy.enabled = enabled;
         callbackSponsorshipPolicy.maxFeePerMessage = maxFeePerMessage;
@@ -1349,7 +1352,8 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
      * @param _minWeightBps Minimum weight (e.g., 100 = 1%)
      */
     function setMinVaultWeightBps(uint256 _minWeightBps) external onlyOwner {
-        require(_minWeightBps <= 1000, "Max 10%"); // Cap at 10%
+        // Cap at 10%
+        if (_minWeightBps > 1000) revert InvalidAmount();
         minVaultWeightBps = _minWeightBps;
         emit MinVaultWeightUpdated(_minWeightBps);
     }
@@ -1362,11 +1366,11 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         uint256 _maxWinChance,
         uint256 _usdMultiplierBps
     ) external onlyOwner {
-        require(_minSwap >= MIN_SWAP_USD && _minSwap <= MAX_SWAP_USD, "Invalid min");
-        require(_rewardPercentage <= BASIS_POINTS, "Invalid reward");
-        require(_maxWinChance <= 100_000, "Max too high");
-        require(_baseWinChance <= _maxWinChance, "Base > max");
-        require(_usdMultiplierBps >= 10000 && _usdMultiplierBps <= 15000, "Invalid multiplier");
+        if (_minSwap < MIN_SWAP_USD || _minSwap > MAX_SWAP_USD) revert InvalidAmount();
+        if (_rewardPercentage > BASIS_POINTS) revert InvalidAmount();
+        if (_maxWinChance > 100_000) revert InvalidAmount();
+        if (_baseWinChance > _maxWinChance) revert InvalidAmount();
+        if (_usdMultiplierBps < 10000 || _usdMultiplierBps > 15000) revert InvalidAmount();
 
         lotteryConfig.minSwapAmount = _minSwap;
         lotteryConfig.rewardPercentage = _rewardPercentage;
@@ -1384,7 +1388,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     }
 
     function setOracleDeviationGuard(uint256 _maxDeviationBps, uint256 _deviationWindow) external onlyOwner {
-        require(_maxDeviationBps <= BASIS_POINTS, "Invalid deviation");
+        if (_maxDeviationBps > BASIS_POINTS) revert InvalidAmount();
         oracleMaxDeviationBps = _maxDeviationBps;
         oracleDeviationWindow = _deviationWindow;
         emit OracleDeviationGuardUpdated(_maxDeviationBps, _deviationWindow);
@@ -1420,7 +1424,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         external
         onlyOwner
     {
-        require(srcEids.length == senders.length, "Length mismatch");
+        if (srcEids.length != senders.length) revert InvalidAmount();
         for (uint256 i; i < srcEids.length;) {
             authorizedRemoteOFTs[srcEids[i]][senders[i]] = authorized;
             emit RemoteOFTAuthorized(srcEids[i], senders[i], authorized);
@@ -1497,7 +1501,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     function emergencyWithdraw(address token, uint256 amount) external onlyOwner {
         if (token == address(0)) {
             (bool ok,) = payable(owner()).call{value: amount}("");
-            require(ok, "Failed");
+            if (!ok) revert InvalidAmount();
         } else {
             IERC20(token).safeTransfer(owner(), amount);
         }

@@ -127,6 +127,7 @@ test/**
 !test/vault/CreatorVRFConsumerV2_5.RelayFunding.t.sol
 !test/CreatorOracle.LayerZeroReceiveAuth.t.sol
 !test/CreatorLotteryManager.OracleTimestampGuard.t.sol
+!test/ve4626.LockTokenRestriction.t.sol
 telegram-bot/
 relayer/
 monitoring/
