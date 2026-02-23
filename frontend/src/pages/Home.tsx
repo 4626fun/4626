@@ -7,6 +7,7 @@ import { useEffect, useMemo } from 'react'
 import { WaitlistModal } from '@/components/waitlist/WaitlistModal'
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
+const WAITLIST_STICKY_OPEN_KEY = 'cv:waitlist:sticky_open'
 
 export function Home() {
   const location = useLocation()
@@ -17,12 +18,31 @@ export function Home() {
     const wl = (qs.get('wl') ?? '').trim().toLowerCase()
     if (wl === '1' || wl === 'true' || wl === 'yes') return true
     const ref = (qs.get('ref') ?? '').trim()
-    return ref.length > 0
+    if (ref.length > 0) return true
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage.getItem(WAITLIST_STICKY_OPEN_KEY) === '1') return true
+    } catch {
+      // ignore
+    }
+    return false
   }, [location.hash, location.search])
   const hostMode = getHostMode()
   const showJoinWaitlistCta = hostMode === 'marketing'
   const showExploreCreatorsCta = hostMode === 'app'
   const showDeployVaultCta = hostMode === 'app'
+
+  // Keep the waitlist modal open across full-page OAuth redirects (e.g. Privy <-> X).
+  // We intentionally avoid encoding this state in query params, since OAuth redirect URLs
+  // must match allowlists exactly (and query params can break that).
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      if (waitlistOpen) window.sessionStorage.setItem(WAITLIST_STICKY_OPEN_KEY, '1')
+      else window.sessionStorage.removeItem(WAITLIST_STICKY_OPEN_KEY)
+    } catch {
+      // ignore
+    }
+  }, [waitlistOpen])
 
   useEffect(() => {
     if (hostMode === 'app') return
@@ -44,6 +64,11 @@ export function Home() {
 
   const closeWaitlistModal = () => {
     if (typeof window === 'undefined') return
+    try {
+      window.sessionStorage.removeItem(WAITLIST_STICKY_OPEN_KEY)
+    } catch {
+      // ignore
+    }
     try {
       const url = new URL(window.location.href)
       let changed = false
