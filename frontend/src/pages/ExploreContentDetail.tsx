@@ -317,6 +317,32 @@ export function ExploreContentDetail() {
     staleTime: 30_000,
   })
 
+  const activityRows = useMemo(() => {
+    const contentAddressLower = contentCoinAddress?.toLowerCase() ?? ''
+    return (swaps ?? []).map((swap: UniswapSwap) => {
+      const amount0 = parseNumber(swap.amount0)
+      const amount1 = parseNumber(swap.amount1)
+      const amountUsd = parseNumber(swap.amountUSD)
+      const contentInToken0 = swap.token0.id.toLowerCase() === contentAddressLower
+      const contentAmount = contentInToken0 ? amount0 : amount1
+      const side = contentAmount < 0 ? 'Buy' : contentAmount > 0 ? 'Sell' : 'Swap'
+      const wallet = swap.origin || swap.sender
+      const ts = parseNumber(swap.timestamp || swap.transaction?.timestamp || 0)
+      return {
+        id: swap.id,
+        timestamp: ts,
+        side,
+        amountUsd,
+        amount0,
+        amount1,
+        token0Symbol: swap.token0.symbol || 'TOKEN0',
+        token1Symbol: swap.token1.symbol || 'TOKEN1',
+        wallet,
+        txHash: swap.transaction?.id ?? '',
+      }
+    })
+  }, [swaps, contentCoinAddress])
+
   if (!chain || !isSupportedChain(chain)) {
     return <Navigate replace to="/explore/content" />
   }
@@ -346,31 +372,6 @@ export function ExploreContentDetail() {
   const priceDelta = history?.priceChangePercent ?? parseNumber(coin?.marketCapDelta24h)
 
   const points = history?.dataPoints ?? []
-  const activityRows = useMemo(() => {
-    const contentAddressLower = contentCoinAddress?.toLowerCase() ?? ''
-    return (swaps ?? []).map((swap: UniswapSwap) => {
-      const amount0 = parseNumber(swap.amount0)
-      const amount1 = parseNumber(swap.amount1)
-      const amountUsd = parseNumber(swap.amountUSD)
-      const contentInToken0 = swap.token0.id.toLowerCase() === contentAddressLower
-      const contentAmount = contentInToken0 ? amount0 : amount1
-      const side = contentAmount < 0 ? 'Buy' : contentAmount > 0 ? 'Sell' : 'Swap'
-      const wallet = swap.origin || swap.sender
-      const ts = parseNumber(swap.timestamp || swap.transaction?.timestamp || 0)
-      return {
-        id: swap.id,
-        timestamp: ts,
-        side,
-        amountUsd,
-        amount0,
-        amount1,
-        token0Symbol: swap.token0.symbol || 'TOKEN0',
-        token1Symbol: swap.token1.symbol || 'TOKEN1',
-        wallet,
-        txHash: swap.transaction?.id ?? '',
-      }
-    })
-  }, [swaps, contentCoinAddress])
 
   const liquidityCV = calcCoefficientOfVariation(points.map((p) => p.tvlUSD))
   const priceCV = calcCoefficientOfVariation(points.map((p) => p.close ?? 0))

@@ -422,7 +422,6 @@ export function Swap() {
     }, 450)
     return () => window.clearTimeout(timer)
     // `busy` intentionally omitted — use busyRef to check at call-time.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokenIn, tokenOut, amountInUnits, parsedSlippage, executionReady, isReady, handleQuote])
 
   // Wallet capabilities
@@ -585,7 +584,6 @@ export function Swap() {
                         state={txState}
                         message={status || undefined}
                         txHash={txHash}
-                        onReset={resetTradeState}
                       />
                     ) : null
                   }

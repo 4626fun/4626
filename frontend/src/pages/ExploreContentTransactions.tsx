@@ -91,19 +91,20 @@ export function ExploreContentTransactions() {
   const contentCoinAddressRaw = String(params.contentCoinAddress ?? '').trim()
   const contentCoinAddress = isAddress(contentCoinAddressRaw) ? getAddress(contentCoinAddressRaw) : null
 
-  if (!chain || !isSupportedChain(chain) || !contentCoinAddress) {
-    return <Navigate replace to="/explore/transactions" />
-  }
+  const isValid = Boolean(chain && isSupportedChain(chain) && contentCoinAddress)
+  const queryAddress = (contentCoinAddress ?? '0x0000000000000000000000000000000000000000') as `0x${string}`
 
   const { data: coin } = useQuery({
-    queryKey: ['coin', contentCoinAddress, 'transactionsPage'],
-    queryFn: async () => fetchZoraCoin(contentCoinAddress as `0x${string}`, 8453),
+    queryKey: ['coin', queryAddress, 'transactionsPage'],
+    queryFn: async () => fetchZoraCoin(queryAddress, 8453),
+    enabled: isValid,
     staleTime: 30_000,
   })
 
   const { data: pools = [], isLoading: poolsLoading } = useQuery({
-    queryKey: ['uniswap', 'poolsByToken', contentCoinAddress],
-    queryFn: async () => getPoolsByToken(contentCoinAddress),
+    queryKey: ['uniswap', 'poolsByToken', queryAddress],
+    queryFn: async () => getPoolsByToken(queryAddress),
+    enabled: isValid,
     staleTime: 60_000,
   })
 
@@ -123,7 +124,7 @@ export function ExploreContentTransactions() {
   })
 
   const rows = useMemo(() => {
-    const contentAddressLower = contentCoinAddress.toLowerCase()
+    const contentAddressLower = contentCoinAddress?.toLowerCase() ?? ''
     return swaps.map((swap) => {
       const amount0 = parseNumber(swap.amount0)
       const amount1 = parseNumber(swap.amount1)
@@ -143,6 +144,10 @@ export function ExploreContentTransactions() {
       }
     })
   }, [swaps, contentCoinAddress])
+
+  if (!isValid || !contentCoinAddress) {
+    return <Navigate replace to="/explore/transactions" />
+  }
 
   const name = coin?.name || 'Content Coin'
   const symbol = coin?.symbol || 'CONTENT'

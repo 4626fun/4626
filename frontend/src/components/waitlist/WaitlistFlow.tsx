@@ -29,6 +29,7 @@ import { DoneStep } from './steps/DoneStep'
 import { useWaitlistApi } from './useWaitlistApi'
 import { useWaitlistVerification } from './useWaitlistVerification'
 import { useWaitlistReferral, getStoredReferralCode } from './useWaitlistReferral'
+import { resolveDoneStepDeployAccessState } from './_waitlistDeployAccess'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const EVM_RE = /^0x[a-fA-F0-9]{40}$/
@@ -1011,14 +1012,24 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   const [deployAccessState, setDeployAccessState] = useState<'checking' | 'ready' | 'waitlist'>('checking')
 
   useEffect(() => {
+    if (step !== 'done') return
+
+    const intent = resolveDoneStepDeployAccessState({ isBypassAdmin, verifiedWallet })
+    setDeployAccessState(intent.state)
+
+    if (intent.state !== 'checking' || !intent.addressToCheck) return
+
+    const addrToCheck = intent.addressToCheck
     let cancelled = false
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8_000)
+
     const run = async () => {
-      if (step !== 'done') return
-      const addr = typeof verifiedWallet === 'string' && isValidEvmAddress(verifiedWallet) ? verifiedWallet.toLowerCase() : null
-      if (!addr) return
       try {
-        if (!cancelled) setDeployAccessState('checking')
-        const res = await apiFetch(`/api/creator-allowlist?address=${encodeURIComponent(addr)}`, { method: 'GET' })
+        const res = await apiFetch(
+          `/api/creator-allowlist?address=${encodeURIComponent(addrToCheck)}`,
+          { method: 'GET', signal: controller.signal },
+        )
         const json = (await res.json().catch(() => null)) as any
         const data = json?.success ? json?.data : null
         const mode = typeof data?.mode === 'string' ? String(data.mode) : null
@@ -1027,11 +1038,15 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         if (!cancelled) setDeployAccessState(ok ? 'ready' : 'waitlist')
       } catch {
         if (!cancelled) setDeployAccessState('waitlist')
+      } finally {
+        clearTimeout(timeoutId)
       }
     }
     void run()
     return () => {
       cancelled = true
+      clearTimeout(timeoutId)
+      controller.abort()
     }
   }, [apiFetch, isBypassAdmin, step, verifiedWallet])
 
@@ -1054,8 +1069,9 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       if (!siwe.isSignedIn) {
         const signed = await siwe.signIn({ method: 'auto' }).catch(() => null)
         if (!signed) {
-          patchWaitlist({ inviteToast: 'Sign in with your wallet first, then continue to Deploy.' })
-          return
+          patchWaitlist({ inviteToast: 'Sign in with your wallet first, then enter the app.' })
+          // Throw so the DoneStep can exit-cancel and re-render the CTA.
+          throw new Error('waitlist_deploy_handoff_signin_required')
         }
       }
       if (deployUrl.startsWith('http')) {
@@ -1087,12 +1103,12 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   const primaryCta = useMemo(() => {
     if (deployAccessState !== 'ready') return null
     return {
-      label: 'Continue to Deploy',
+      label: 'Enter App',
       href: deployUrl,
       onClick: handleContinueToDeploy,
       disabled: deployHandoffBusy,
       busy: deployHandoffBusy,
-      busyLabel: 'Preparing Deploy…',
+      busyLabel: 'Entering App…',
     }
   }, [deployAccessState, deployHandoffBusy, handleContinueToDeploy, deployUrl])
 
