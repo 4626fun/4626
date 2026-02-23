@@ -175,6 +175,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'uniswap/poolHistory': () => import('./uniswap/_poolHistory.js'),
   'uniswap/quote': () => import('./uniswap/_quote.js'),
   'uniswap/swap': () => import('./uniswap/_swap.js'),
+  'uniswap/order': () => import('./uniswap/_order.js'),
   'uniswap/checkApproval': () => import('./uniswap/_checkApproval.js'),
   'uniswap/swap5792': () => import('./uniswap/_swap5792.js'),
   'uniswap/swap7702': () => import('./uniswap/_swap7702.js'),

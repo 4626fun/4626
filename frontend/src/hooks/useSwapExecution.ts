@@ -10,7 +10,11 @@ import {
   assertValidSwapTransaction,
   buildSwap,
   checkTradeApproval,
+  createOrder,
   fetchTradeQuote,
+  isUniswapXRouting,
+  pickQuote,
+  pickOrderQuote,
   pickSwapQuote,
   pickPermitData,
   toPermitSignPayload,
@@ -63,10 +67,19 @@ export function useSwapExecution(params: {
   const [quote, setQuote] = useState<TradeQuoteResponse | null>(null)
   const [approvalData, setApprovalData] = useState<Record<string, unknown> | null>(null)
   const [swapTx, setSwapTx] = useState<TransactionRequest | null>(null)
+  const [orderRequest, setOrderRequest] = useState<{
+    quote: Record<string, unknown>
+    signature: string
+    routing?: TradeQuoteResponse['routing']
+  } | null>(null)
+  const [, setOrderStatus] = useState<{
+    orderId: string
+    orderStatus: string
+  } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [status, setStatus] = useState<string>('')
   const [error, setError] = useState<string>('')
-  const [confirmIntent, setConfirmIntent] = useState<'approval' | 'swap' | null>(null)
+  const [confirmIntent, setConfirmIntent] = useState<'approval' | 'swap' | 'order' | null>(null)
   const [quoteUpdatedAt, setQuoteUpdatedAt] = useState<number | null>(null)
   const [quoteClockMs, setQuoteClockMs] = useState<number>(() => Date.now())
   const [permitSignatureRequired, setPermitSignatureRequired] = useState(false)
@@ -186,6 +199,8 @@ export function useSwapExecution(params: {
     setQuote(null)
     setApprovalData(null)
     setSwapTx(null)
+    setOrderRequest(null)
+    setOrderStatus(null)
     setEstimatedOut('')
     setQuoteUpdatedAt(null)
     setPermitSignatureRequired(false)
@@ -218,6 +233,7 @@ export function useSwapExecution(params: {
         amount,
         swapper: params.executionAddress,
         slippageTolerance: params.parsedSlippage,
+        routingPreference: 'BEST_PRICE',
         walletModeKey: params.executionMode,
       })
       if (runId !== quoteRunRef.current) return
@@ -226,7 +242,9 @@ export function useSwapExecution(params: {
       syncPermitRequirement(data)
       setApprovalData(null)
       setSwapTx(null)
-      const outRaw = getNestedAmountOut(pickSwapQuote(data) ?? data)
+      setOrderRequest(null)
+      setOrderStatus(null)
+      const outRaw = getNestedAmountOut(pickQuote(data) ?? data)
       if (outRaw) {
         const tokenOutDecimals = await getTokenDecimals(params.tokenOut)
         if (runId !== quoteRunRef.current) return
@@ -301,6 +319,7 @@ export function useSwapExecution(params: {
       const data = await buildSwap({
         quote: selectedQuote,
         ...permitPayload,
+        includeGasInfo: false,
         refreshGasPrice: true,
         simulateTransaction: true,
         deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
@@ -339,6 +358,7 @@ export function useSwapExecution(params: {
           amount,
           swapper: params.executionAddress,
           slippageTolerance: params.parsedSlippage,
+          routingPreference: 'BEST_PRICE',
           walletModeKey: params.executionMode,
         }),
         checkTradeApproval({
@@ -357,9 +377,31 @@ export function useSwapExecution(params: {
       syncPermitRequirement(nextQuote)
       setApprovalData(nextApproval)
 
-      const outRaw = getNestedAmountOut(pickSwapQuote(nextQuote) ?? nextQuote)
+      const outRaw = getNestedAmountOut(pickQuote(nextQuote) ?? nextQuote)
       if (outRaw) setEstimatedOut(formatUnits(BigInt(outRaw), tokenOutDecimals))
       else setEstimatedOut('')
+
+      if (isUniswapXRouting(nextQuote.routing)) {
+        const orderQuote = pickOrderQuote(nextQuote)
+        if (!orderQuote) throw new Error('Quote does not contain executable UniswapX order payload')
+        const permitPayload = await signPermitIfRequired(nextQuote)
+        if (runId !== quoteRunRef.current) return
+        if (!permitPayload.signature) {
+          throw new Error('UniswapX order requires a Permit2 signature. Please refresh and try again.')
+        }
+
+        setSwapTx(null)
+        setOrderRequest({
+          quote: orderQuote,
+          signature: permitPayload.signature,
+          routing: nextQuote.routing,
+        })
+        setOrderStatus(null)
+        setStatus('Review ready')
+        setTxState('review')
+        setConfirmIntent('order')
+        return
+      }
 
       const selectedQuote = pickSwapQuote(nextQuote)
       if (!selectedQuote) throw new Error('Quote does not contain executable swap payload')
@@ -368,6 +410,7 @@ export function useSwapExecution(params: {
       const built = await buildSwap({
         quote: selectedQuote,
         ...permitPayload,
+        includeGasInfo: false,
         refreshGasPrice: true,
         simulateTransaction: true,
         deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
@@ -375,6 +418,8 @@ export function useSwapExecution(params: {
       if (runId !== quoteRunRef.current) return
       assertValidSwapTransaction(built.swap)
       setSwapTx(built.swap)
+      setOrderRequest(null)
+      setOrderStatus(null)
       setStatus('Review ready')
       setTxState('review')
       setConfirmIntent('swap')
@@ -478,7 +523,8 @@ export function useSwapExecution(params: {
             to: tx.to as string,
             from: (tx.from as string) ?? params.signerAddress ?? '',
             data: tx.data as string,
-            value: typeof tx.value === 'string' ? tx.value : undefined,
+            value: typeof tx.value === 'string' && tx.value.trim() ? tx.value : '0',
+            chainId: BASE_CHAIN_ID,
             gasLimit: typeof tx.gasLimit === 'string' ? tx.gasLimit : undefined,
             maxFeePerGas: typeof tx.maxFeePerGas === 'string' ? tx.maxFeePerGas : undefined,
             maxPriorityFeePerGas:
@@ -533,7 +579,40 @@ export function useSwapExecution(params: {
     }
   }, [swapTx, executeViaCanonical4337, executeViaEoa, getErrorMessage, params.executionMode])
 
-  const openConfirm = useCallback((intent: 'approval' | 'swap') => {
+  const executeOrderNow = useCallback(async () => {
+    if (!orderRequest) return
+    if (!orderRequest.signature || !orderRequest.signature.startsWith('0x')) {
+      throw new Error('Order is missing a valid Permit2 signature. Please refresh the quote and try again.')
+    }
+    setBusy('executeOrder')
+    setError('')
+    try {
+      setTxHash(null)
+      setTxState('pending')
+      setStatus('Submitting UniswapX order…')
+      const result = await createOrder({
+        quote: orderRequest.quote,
+        signature: orderRequest.signature,
+        routing: orderRequest.routing,
+      })
+      const orderId = typeof (result as any).orderId === 'string' ? String((result as any).orderId) : ''
+      const orderStatusValue =
+        typeof (result as any).orderStatus === 'string' ? String((result as any).orderStatus) : ''
+
+      setOrderStatus(orderId ? { orderId, orderStatus: orderStatusValue || 'OPEN' } : null)
+      setTxState('success')
+      setStatus(orderId ? `Order submitted (id=${orderId})` : 'Order submitted')
+    } catch (e: any) {
+      const message = getErrorMessage(e, 'Order submission failed')
+      setError(message)
+      setTxState('error')
+      throw new Error(message)
+    } finally {
+      setBusy(null)
+    }
+  }, [getErrorMessage, orderRequest])
+
+  const openConfirm = useCallback((intent: 'approval' | 'swap' | 'order') => {
     setConfirmIntent(intent)
   }, [])
 
@@ -545,7 +624,7 @@ export function useSwapExecution(params: {
   const confirmAndExecute = useCallback(async () => {
     if (!confirmIntent || busy) return
     const action = confirmIntent
-    if (action === 'swap' && quoteIsStale) {
+    if ((action === 'swap' || action === 'order') && quoteIsStale) {
       setConfirmIntent(null)
       setError('')
       setStatus('Quote expired. Refreshing quote and rebuilding review…')
@@ -561,10 +640,23 @@ export function useSwapExecution(params: {
         if (approvalRequired) await executeApprovalNow()
         await executeSwapNow()
       }
+      if (action === 'order') {
+        if (approvalRequired) await executeApprovalNow()
+        await executeOrderNow()
+      }
     } catch {
       // Errors are already surfaced in state.
     }
-  }, [approvalRequired, busy, confirmIntent, executeApprovalNow, executeSwapNow, handleReviewTrade, quoteIsStale])
+  }, [
+    approvalRequired,
+    busy,
+    confirmIntent,
+    executeApprovalNow,
+    executeOrderNow,
+    executeSwapNow,
+    handleReviewTrade,
+    quoteIsStale,
+  ])
 
   return {
     estimatedOut,
