@@ -21,6 +21,8 @@ interface ICreatorOVaultBurn {
  * - Weekly epochs aligned to Thursday 00:00 UTC (Unix epoch is Thursday 00:00 UTC).
  * - Shares minted to this contract are queued for the NEXT epoch.
  * - During an active epoch, anyone can call `drip()` to burn the proportional amount.
+ * - If `drip()` is not called for a long time, the next call burns the full catch-up amount in one tx
+ *   (up to the full epoch), which can create a discrete price-per-share jump. Run a keeper for smoothness.
  */
 contract VaultShareBurnStream is ReentrancyGuard {
     // Weekly epochs (7 days)
@@ -40,7 +42,9 @@ contract VaultShareBurnStream is ReentrancyGuard {
 
     event SharesQueued(uint256 shares, uint256 indexed scheduledEpochStart);
     event StreamStarted(uint256 indexed epochStart, uint256 shares);
-    event StreamDripped(uint256 indexed epochStart, uint256 burnedNow, uint256 burnedTotal, uint256 remaining, uint256 pps);
+    event StreamDripped(
+        uint256 indexed epochStart, uint256 burnedNow, uint256 burnedTotal, uint256 remaining, uint256 pps
+    );
     event StreamCompleted(uint256 indexed epochStart, uint256 totalBurned, uint256 pps);
 
     error ZeroAddress();
@@ -49,6 +53,7 @@ contract VaultShareBurnStream is ReentrancyGuard {
     error TooSoon(uint256 nowTs, uint256 requiredTs);
     error NoActiveStream();
     error NoNewShares();
+    error PendingEpochMismatch(uint256 pendingEpochStart, uint256 requiredEpochStart);
 
     constructor(address _vault) {
         if (_vault == address(0)) revert ZeroAddress();
@@ -74,15 +79,34 @@ contract VaultShareBurnStream is ReentrancyGuard {
     // QUEUE NEW SHARES
     // ================================
 
-    /**
-     * @notice Queue newly-minted/received vault shares for the next epoch.
-     * @dev `shares` must correspond to NEW shares not yet accounted as pending/active.
-     *      This lets routers call `queueShares(sharesMinted)` right after `vault.deposit(..., this)`.
-     */
-    function queueShares(uint256 shares) public nonReentrant {
-        if (shares == 0) revert ZeroAmount();
+    function _remainingActive() internal view returns (uint256) {
+        return activeShares > burnedActive ? activeShares - burnedActive : 0;
+    }
 
-        uint256 remainingActive = activeShares > burnedActive ? activeShares - burnedActive : 0;
+    function _startPendingInternal() internal {
+        activeShares = pendingShares;
+        activeEpochStart = pendingEpochStart;
+        burnedActive = 0;
+
+        pendingShares = 0;
+        pendingEpochStart = 0;
+
+        emit StreamStarted(activeEpochStart, activeShares);
+    }
+
+    function _rolloverIfNeeded() internal {
+        // Advance/complete any active stream first.
+        _drip();
+
+        // If the pending bucket is now due, activate it before accepting new shares.
+        // This prevents attributing shares received after an epoch boundary to the prior pending epoch.
+        if (activeShares == 0 && pendingShares > 0 && pendingEpochStart != 0 && block.timestamp >= pendingEpochStart) {
+            _startPendingInternal();
+        }
+    }
+
+    function _queueSharesAfterRollover(uint256 shares) internal {
+        uint256 remainingActive = _remainingActive();
         uint256 accounted = pendingShares + remainingActive;
         uint256 bal = vaultShares.balanceOf(address(this));
         if (bal < accounted + shares) revert NoNewShares();
@@ -90,23 +114,42 @@ contract VaultShareBurnStream is ReentrancyGuard {
         uint256 scheduled = nextEpochStart(block.timestamp);
         if (pendingShares == 0) {
             pendingEpochStart = scheduled;
+        } else if (pendingEpochStart != scheduled) {
+            // Never allow a pending bucket to span multiple epochs.
+            // If this triggers, call `checkpoint()` to advance state, or investigate misconfiguration.
+            revert PendingEpochMismatch(pendingEpochStart, scheduled);
         }
-        // If pendingEpochStart is already set, we keep it — this batches all deposits that
-        // occurred within the same epoch into the same next-epoch stream (by construction).
 
         pendingShares += shares;
         emit SharesQueued(shares, pendingEpochStart);
+    }
+
+    function _queueSharesInternal(uint256 shares) internal {
+        if (shares == 0) revert ZeroAmount();
+        _rolloverIfNeeded();
+        _queueSharesAfterRollover(shares);
+    }
+
+    /**
+     * @notice Queue newly-minted/received vault shares for the next epoch.
+     * @dev `shares` must correspond to NEW shares not yet accounted as pending/active.
+     *      This lets routers call `queueShares(sharesMinted)` right after `vault.deposit(..., this)`.
+     */
+    function queueShares(uint256 shares) public nonReentrant {
+        _queueSharesInternal(shares);
     }
 
     /**
      * @notice Convenience: queue ALL unaccounted shares.
      */
     function syncUnaccounted() external nonReentrant {
-        uint256 remainingActive = activeShares > burnedActive ? activeShares - burnedActive : 0;
+        _rolloverIfNeeded();
+
+        uint256 remainingActive = _remainingActive();
         uint256 accounted = pendingShares + remainingActive;
         uint256 bal = vaultShares.balanceOf(address(this));
         if (bal <= accounted) revert NoNewShares();
-        queueShares(bal - accounted);
+        _queueSharesAfterRollover(bal - accounted);
     }
 
     // ================================
@@ -124,14 +167,7 @@ contract VaultShareBurnStream is ReentrancyGuard {
         // Only one active stream at a time (one epoch).
         if (activeShares != 0) revert NothingToStart();
 
-        activeShares = pendingShares;
-        activeEpochStart = pendingEpochStart;
-        burnedActive = 0;
-
-        pendingShares = 0;
-        pendingEpochStart = 0;
-
-        emit StreamStarted(activeEpochStart, activeShares);
+        _startPendingInternal();
 
         // If we started late, burn what should already have been burned.
         _drip();
@@ -149,26 +185,16 @@ contract VaultShareBurnStream is ReentrancyGuard {
      * @notice Convenience: sync → start (if ready) → drip.
      */
     function checkpoint() external nonReentrant returns (uint256 burnedNow) {
-        // Sync any unaccounted shares into the pending bucket.
-        uint256 remainingActive = activeShares > burnedActive ? activeShares - burnedActive : 0;
+        // Advance active and start a due pending stream (if any) before syncing.
+        // This ensures newly received shares are always scheduled for the correct NEXT epoch.
+        _rolloverIfNeeded();
+
+        // Sync any unaccounted shares into the pending bucket (non-reverting).
+        uint256 remainingActive = _remainingActive();
         uint256 accounted = pendingShares + remainingActive;
         uint256 bal = vaultShares.balanceOf(address(this));
         if (bal > accounted) {
-            // queueShares() already has a nonReentrant guard, so we inline the accounting here.
-            uint256 scheduled = nextEpochStart(block.timestamp);
-            if (pendingShares == 0) pendingEpochStart = scheduled;
-            pendingShares += (bal - accounted);
-            emit SharesQueued(bal - accounted, pendingEpochStart);
-        }
-
-        if (activeShares == 0 && pendingShares > 0 && pendingEpochStart != 0 && block.timestamp >= pendingEpochStart) {
-            // Start and immediately drip.
-            activeShares = pendingShares;
-            activeEpochStart = pendingEpochStart;
-            burnedActive = 0;
-            pendingShares = 0;
-            pendingEpochStart = 0;
-            emit StreamStarted(activeEpochStart, activeShares);
+            _queueSharesAfterRollover(bal - accounted);
         }
 
         burnedNow = _drip();

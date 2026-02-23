@@ -41,11 +41,11 @@ contract TripleCheckAjnaOnBaseFork is Script {
 
         // Deploy AjnaStrategy (vault = deployer EOA for test)
         AjnaStrategy strategy = new AjnaStrategy(
-            deployer,              // vault
-            WETH,                  // creator coin (quote token we lend)
-            AJNA_ERC20_FACTORY,    // Ajna factory
-            USDC,                  // collateral token
-            deployer               // owner
+            deployer, // vault
+            WETH, // creator coin (quote token we lend)
+            AJNA_ERC20_FACTORY, // Ajna factory
+            USDC, // collateral token
+            deployer // owner
         );
 
         // Choose an empty bucket for deterministic math
@@ -67,8 +67,8 @@ contract TripleCheckAjnaOnBaseFork is Script {
         require(pool.collateralAddress() == USDC, "pool collateral mismatch");
 
         // Check lender/bucket accounting
-        (uint256 lpBalance, ) = pool.lenderInfo(testBucket, address(strategy));
-        (uint256 bucketLPTotal, , , uint256 bucketDeposit, uint256 bucketScale) = pool.bucketInfo(testBucket);
+        (uint256 lpBalance,) = pool.lenderInfo(testBucket, address(strategy));
+        (uint256 bucketLPTotal,,, uint256 bucketDeposit, uint256 bucketScale) = pool.bucketInfo(testBucket);
 
         console.log("Bucket:", testBucket);
         console.log("LP balance:", lpBalance);

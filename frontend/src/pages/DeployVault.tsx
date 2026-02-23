@@ -26,6 +26,7 @@ import { useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { RequestCreatorAccess } from '@/components/RequestCreatorAccess'
+import { LaunchCoinCard } from '@/components/waitlist/LaunchCoinCard'
 import { CONTRACTS } from '@/config/contracts'
 import { useCreatorAllowlist, useFarcasterAuth, useMiniAppContext, useDeploymentTracker } from '@/hooks'
 import { DeploymentSuccess, AlreadyDeployedBanner } from '@/components/DeploymentSuccess'
@@ -33,6 +34,7 @@ import type { DeploymentRecord } from '@/hooks/useDeploymentTracker'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { logger } from '@/lib/logger'
 import { useZoraCoin, useZoraProfile } from '@/lib/zora/hooks'
+import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
 import { getFarcasterUserByFid } from '@/lib/neynar-api'
 import { resolveCreatorIdentity } from '@/lib/identity/creatorIdentity'
 import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
@@ -78,14 +80,28 @@ const BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR = '4154f24e'
 const BATCHER_PHASE1_FINALIZE_SELECTOR = 'a98ec9d8'
 const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = '3bc09a8b'
 const NO_EOA_STRICT_BLOCKER = 'No-EOA deploy is only available for preconfigured Privy-owner wallets.'
+const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
+  {
+    name: 'getAuctionStatus',
+    type: 'function',
+    inputs: [],
+    outputs: [
+      { name: 'auction', type: 'address' },
+      { name: 'isActive', type: 'bool' },
+      { name: 'isGraduated', type: 'bool' },
+      { name: 'clearingPrice', type: 'uint256' },
+      { name: 'currencyRaised', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+] as const
 
 type DeployMode = 'default' | 'no_eoa_strict'
 
 function resolveDeployMode(): DeployMode {
-  const raw = String((import.meta as any)?.env?.VITE_DEPLOY_MODE ?? '')
-    .trim()
-    .toLowerCase()
-  if (raw === 'no_eoa_strict') return 'no_eoa_strict'
+  // Keep deploy on the single proven path:
+  // canonical CSW + connected owner/signer flow.
+  // Ignore strict no-EOA runtime toggles to avoid accidental lockouts.
   return 'default'
 }
 
@@ -96,6 +112,8 @@ const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
 const BASE_CHAIN_ID_HEX = `0x${base.id.toString(16)}`
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}`
 const MAX_UINT256 = (1n << 256n) - 1n
+const DEFAULT_DEPLOYMENT_VERSION = 'v1.3.2'
+const DEPLOYMENT_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
 function isDebugEnabled(): boolean {
   if (import.meta.env.VITE_DEBUG_LOGS === 'true') return true
@@ -141,6 +159,22 @@ function parseUint8(value: unknown): number | null {
     if (Number.isFinite(n) && n >= 0 && n <= 255) return Math.floor(n)
   }
   return null
+}
+
+function normalizeDeploymentVersion(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const v = value.trim()
+  if (!v) return null
+  if (!DEPLOYMENT_VERSION_RE.test(v)) return null
+  return v
+}
+
+function resolveDeploymentVersionFromRuntime(): string {
+  const envVersion = normalizeDeploymentVersion(import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined)
+  if (typeof window === 'undefined') return envVersion ?? DEFAULT_DEPLOYMENT_VERSION
+  const params = new URLSearchParams(window.location.search)
+  const queryVersion = normalizeDeploymentVersion(params.get('deploymentVersion'))
+  return queryVersion ?? envVersion ?? DEFAULT_DEPLOYMENT_VERSION
 }
 
 function normalizeHexSuffix(value: unknown): string | null {
@@ -397,6 +431,15 @@ async function waitForPhase1CoreState(params: {
 }
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
+type SolanaBridgeIxPayload = {
+  programId: Hex
+  serializedAccounts: Hex[]
+  data: Hex
+}
+type RegisterShareOftPayload = {
+  meteoraAlphaVault: Hex | null
+  solanaIxs: SolanaBridgeIxPayload[]
+}
 type AdminAuthResponse = { address: string; isAdmin: boolean } | null
 type ServerDeployResponse = {
   userOpHash: string
@@ -407,6 +450,8 @@ type ServerDeployResponse = {
     gaugeController: Address
     ccaStrategy: Address
     oracle: Address
+    burnStream?: Address
+    payoutRouter?: Address
   }
 }
 type DeploySessionCall = { to: Address; value: string; data: Hex }
@@ -1160,6 +1205,16 @@ const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
+          { name: 'meteoraAlphaVault', type: 'bytes32' },
+          {
+            name: 'solanaIxs',
+            type: 'tuple[]',
+            components: [
+              { name: 'programId', type: 'bytes32' },
+              { name: 'serializedAccounts', type: 'bytes[]' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
         ],
       },
       {
@@ -1458,6 +1513,19 @@ function AddressRow({ label, address }: { label: string; address: Address | null
   )
 }
 
+// `finalizePhase2` exists in two deployed shapes:
+// - legacy: no `meteoraAlphaVault` / `solanaIxs`
+// - upgraded: includes Meteora payload fields (fail-closed)
+// Build Meteora payloads only when the loaded ABI supports them.
+const FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD = (() => {
+  const finalizePhase2 = (CREATOR_VAULT_BATCHER_ABI as readonly any[]).find(
+    (item) => item?.type === 'function' && item?.name === 'finalizePhase2',
+  ) as { inputs?: Array<{ type?: string; components?: Array<{ name?: string }> }> } | undefined
+  const components = finalizePhase2?.inputs?.[0]?.type === 'tuple' ? finalizePhase2.inputs?.[0]?.components ?? [] : []
+  const names = new Set(components.map((component) => String(component?.name ?? '')))
+  return names.has('meteoraAlphaVault') && names.has('solanaIxs')
+})()
+
 function DeployVaultBatcher({
   creatorToken,
   owner,
@@ -1537,6 +1605,8 @@ function DeployVaultBatcher({
   
   // Detect Coinbase Wallet direct connection (not via Privy)
   const isCoinbaseWalletDirect = connectorId === 'coinbaseWalletSDK' || connectorId === 'com.coinbase.wallet'
+  // In strict no-EOA mode we still permit a verified connected owner EOA to unblock deploys.
+  const strictNoEoaEnforced = strictNoEoaMode && !connectedEoaOwnerReady
 
   // NOTE: Zora cross-app integration is read-only in this app, so we do not use it for signing/transactions.
 
@@ -1637,17 +1707,24 @@ function DeployVaultBatcher({
     tx4?: Hex
   }>({})
   const expectedRef = useRef<ServerDeployResponse['addresses'] | null>(null)
+  const lastPolledStepRef = useRef<string>('')
   const useServerContinue = useMemo(() => {
-    if (strictNoEoaMode) return false
+    if (strictNoEoaEnforced) return false
     // Enforce server-continue for default deploy mode:
     // one owner-EOA setup tx, then all phases run server-side.
     return true
-  }, [strictNoEoaMode])
-  const deploySessionStorageKey = useMemo(() => {
+  }, [strictNoEoaEnforced])
+  const legacyDeploySessionStorageKey = useMemo(() => {
     const ct = String(creatorToken ?? '').toLowerCase()
     const ow = String(owner ?? '').toLowerCase()
     return `cv:deploy:session:${ct}:${ow}`
   }, [creatorToken, owner])
+  const deploySessionStorageKey = useMemo(() => {
+    const ct = String(creatorToken ?? '').toLowerCase()
+    const ow = String(owner ?? '').toLowerCase()
+    const vv = String(deploymentVersion ?? '').trim().toLowerCase()
+    return `cv:deploy:session:${ct}:${ow}:${vv}`
+  }, [creatorToken, deploymentVersion, owner])
   const persistDeploySession = useCallback(
     (sessionId: string) => {
       if (typeof window === 'undefined') return
@@ -1658,6 +1735,7 @@ function DeployVaultBatcher({
             sessionId,
             creatorToken: String(creatorToken).toLowerCase(),
             owner: String(owner).toLowerCase(),
+            version: String(deploymentVersion),
             createdAt: new Date().toISOString(),
           }),
         )
@@ -1665,28 +1743,40 @@ function DeployVaultBatcher({
         // ignore storage errors
       }
     },
-    [creatorToken, deploySessionStorageKey, owner],
+    [creatorToken, deploySessionStorageKey, deploymentVersion, owner],
   )
   const clearDeploySession = useCallback(() => {
     if (typeof window === 'undefined') return
     try {
       localStorage.removeItem(deploySessionStorageKey)
+      localStorage.removeItem(legacyDeploySessionStorageKey)
     } catch {
       // ignore
     }
-  }, [deploySessionStorageKey])
+  }, [deploySessionStorageKey, legacyDeploySessionStorageKey])
   const loadDeploySession = useCallback((): string | null => {
     if (typeof window === 'undefined') return null
     try {
       const raw = localStorage.getItem(deploySessionStorageKey)
       if (!raw) return null
       const parsed = JSON.parse(raw)
+      const rawVersion = typeof parsed?.version === 'string' ? parsed.version.trim() : ''
+      if (rawVersion && rawVersion !== deploymentVersion) return null
       const sessionId = typeof parsed?.sessionId === 'string' ? parsed.sessionId.trim() : ''
       return sessionId.length > 0 ? sessionId : null
     } catch {
       return null
     }
-  }, [deploySessionStorageKey])
+  }, [deploySessionStorageKey, deploymentVersion])
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      // One-time cleanup so old unscoped sessions cannot be resumed after version bumps.
+      localStorage.removeItem(legacyDeploySessionStorageKey)
+    } catch {
+      // ignore
+    }
+  }, [legacyDeploySessionStorageKey])
   const shareOftVanityCacheRef = useRef<{ key: string; salt: Hex } | null>(null)
   const ensurePaymasterSession = useCallback(async () => {
     if (!getAccessToken || typeof signInWithPrivyToken !== 'function') return
@@ -1851,6 +1941,23 @@ function DeployVaultBatcher({
         'If needed, disable server-continue (`VITE_DEPLOY_USE_SERVER_CONTINUE=false`) and run phases client-side.'
       )
     }
+    if (lower.includes('session_owner_not_installed') || lower.includes('deploy-session signer is not installed')) {
+      return (
+        'Deploy-session signer is not installed on your canonical smart wallet yet. ' +
+        'Approve the one-time add-owner transaction from an owner EOA (for example Coinbase Wallet), then retry deploy.'
+      )
+    }
+    if (
+      lower.includes('user rejected') ||
+      lower.includes('rejected the request') ||
+      lower.includes('action_rejected') ||
+      lower.includes('user denied') ||
+      lower.includes('user cancelled')
+    ) {
+      return (
+        'Wallet request was cancelled. Approve the wallet prompt to continue deploy, or reconnect your owner EOA/WalletConnect session and retry.'
+      )
+    }
     if (lower.includes('missing_primary_call')) {
       const expectedMatch = msg.match(/expectedBatcher=(0x[a-fA-F0-9]{40})/i)
       const seenMatch = msg.match(/seen=(0x[a-fA-F0-9]{40}):(0x[a-fA-F0-9]{8})/i)
@@ -1891,10 +1998,286 @@ function DeployVaultBatcher({
     return msg
   }, [switchAuthLabel])
 
+  const ensureDeploySessionSignerInstalled = useCallback(async (sessionSigner: Address): Promise<void> => {
+    let installed = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionSigner })
+    if (installed) return
+
+    const addOwnerData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+      functionName: 'addOwnerAddress',
+      args: [sessionSigner],
+    })
+    const addOwnerCalls = [{ to: owner, value: 0n, data: addOwnerData }]
+    const bundlerUrl = resolveCdpPaymasterUrl(import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined) || '/api/paymaster'
+
+    // Try gas-sponsored ERC-4337 UserOp when a Privy signer is already an onchain owner
+    let erc4337Succeeded = false
+    if (publicClient) {
+      // PATH A: Privy embedded EOA owner
+      if (privyEmbeddedEoaIsCanonicalOwner && privyEmbeddedEoaCanSign && privyEmbeddedEoaAddress) {
+        try {
+          const embeddedProvider = await getPrivyEmbeddedEoaProvider()
+          if (embeddedProvider?.request) {
+            await ensureProviderOnBase(embeddedProvider, 'Privy embedded EOA')
+            const embeddedWalletClientAdapter = {
+              request: async (args: { method: string; params?: any[] }) => {
+                if (args?.method === 'eth_sign') {
+                  const p = Array.isArray(args.params) ? args.params : []
+                  const hashCandidate = typeof p[1] === 'string' ? p[1] : ''
+                  const isHash = /^0x[0-9a-fA-F]{64}$/.test(hashCandidate)
+                  if (isHash) {
+                    try {
+                      const rawSig = await embeddedProvider.request({
+                        method: 'secp256k1_sign',
+                        params: [hashCandidate],
+                      })
+                      return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.secp256k1_sign')
+                    } catch (signErr) {
+                      logger.warn('[DeployVault] Privy embedded secp256k1_sign failed; falling back to eth_sign', {
+                        context: 'addOwner',
+                        error: signErr instanceof Error ? signErr.message : String(signErr ?? ''),
+                      })
+                    }
+                  }
+                }
+                return await embeddedProvider.request(args as any)
+              },
+              signMessage: async (args: { account: Address; message: any }) => {
+                const raw =
+                  typeof args?.message === 'object' && args.message !== null && 'raw' in args.message
+                    ? (args.message as any).raw
+                    : args?.message
+                const msgHex = typeof raw === 'string' && raw.startsWith('0x') ? raw : toHex(String(raw ?? ''))
+                const rawSig = await embeddedProvider.request({
+                  method: 'personal_sign',
+                  params: [msgHex, privyEmbeddedEoaAddress],
+                })
+                return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.personal_sign')
+              },
+              signTypedData: async (typedData: any) => {
+                const rawSig = await embeddedProvider.request({
+                  method: 'eth_signTypedData_v4',
+                  params: [privyEmbeddedEoaAddress, JSON.stringify(typedData)],
+                })
+                return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.signTypedData')
+              },
+            }
+            const result = await sendCoinbaseSmartWalletUserOperation({
+              publicClient: publicClient as any,
+              walletClient: embeddedWalletClientAdapter as any,
+              bundlerUrl,
+              smartWallet: owner,
+              ownerAddress: privyEmbeddedEoaAddress,
+              calls: addOwnerCalls,
+              version: '1',
+              userOpSignMode: 'eth_sign',
+              ownerIsContract: false,
+              allowEoaSignMessageFallback: false,
+              retryWithLowGasContractSigner: false,
+            })
+            setTxId(result.transactionHash)
+            erc4337Succeeded = true
+            logger.info('[DeployVault] addOwner via ERC-4337 (privy embedded EOA owner)', {
+              sessionSigner,
+              txHash: result.transactionHash,
+            })
+          }
+        } catch (embeddedErr) {
+          logger.warn('[DeployVault] Privy embedded EOA addOwner UserOp failed; trying smart wallet or fallback', {
+            privyEmbeddedEoaAddress,
+            error: embeddedErr instanceof Error ? embeddedErr.message : String(embeddedErr ?? ''),
+          })
+        }
+      }
+
+      // PATH B: Privy smart wallet owner
+      if (!erc4337Succeeded && privySmartWalletIsCanonicalOwner && privySmartWalletCanSign && smartWalletClient && privySmartWalletAddress) {
+        try {
+          await ensureProviderOnBase(smartWalletClient, 'Privy smart wallet')
+          const smartWalletClientAdapter = {
+            request: async (args: { method: string; params: any[] }) => {
+              const client: any = smartWalletClient as any
+              if (args.method === 'eth_sign' || args.method === 'personal_sign') {
+                if (typeof client?.request !== 'function') {
+                  throw new Error('Privy smart wallet client does not support request()')
+                }
+                const rawResult = await client.request(args)
+                const sig = ensureSignatureHex(rawResult, `privySmartWallet.${args.method}`)
+                logNonEoaSignature(sig, `privySmartWallet.${args.method}`)
+                return sig
+              }
+              if (typeof client?.request === 'function') {
+                return await client.request(args)
+              }
+              throw new Error('Privy smart wallet client does not support request()')
+            },
+            signMessage: async (args: { account: Address; message: any }) => {
+              const msg =
+                typeof args.message === 'object' && args.message !== null && 'raw' in args.message
+                  ? args.message.raw
+                  : args.message
+              const client: any = smartWalletClient as any
+              const account: any = client?.account
+              const hasAccountSignMessage = typeof account?.signMessage === 'function'
+              const hasClientSignMessage = typeof client?.signMessage === 'function'
+              const hasSignMessage = hasAccountSignMessage || hasClientSignMessage
+
+              if (hasSignMessage) {
+                const rawMessage =
+                  typeof msg === 'string' && /^0x[0-9a-fA-F]{64}$/.test(msg)
+                    ? ({ raw: msg } as any)
+                    : msg
+                const rawResult = await withTimeout(
+                  (async () => {
+                    try {
+                      return hasAccountSignMessage
+                        ? await account.signMessage({ message: rawMessage })
+                        : await client.signMessage({ account: privySmartWalletAddress, message: rawMessage })
+                    } catch {
+                      return hasAccountSignMessage
+                        ? await account.signMessage({ message: msg })
+                        : await client.signMessage({ account: privySmartWalletAddress, message: msg })
+                    }
+                  })(),
+                  20_000,
+                  'privySmartWallet.signMessage',
+                )
+                const sig = ensureSignatureHex(rawResult, 'privySmartWallet.signMessage')
+                logNonEoaSignature(sig, 'privySmartWallet.signMessage')
+                return sig
+              }
+              throw new Error(
+                'Privy smart wallet signer not supported. Use Coinbase Wallet (Base Account) or connect an owner EOA.',
+              )
+            },
+            signTypedData: async (args: any) => {
+              const client: any = smartWalletClient as any
+              const account: any = client?.account
+              if (typeof account?.signTypedData === 'function' || typeof client?.signTypedData === 'function') {
+                const rawResult = await withTimeout(
+                  typeof account?.signTypedData === 'function'
+                    ? account.signTypedData(args as any)
+                    : client.signTypedData({ account: privySmartWalletAddress, ...(args as any) }),
+                  20_000,
+                  'privySmartWallet.signTypedData',
+                )
+                const sig = ensureSignatureHex(rawResult, 'privySmartWallet.signTypedData')
+                logNonEoaSignature(sig, 'privySmartWallet.signTypedData')
+                return sig
+              }
+              throw new Error(
+                'Privy smart wallet signer not supported. Use Coinbase Wallet (Base Account) or connect an owner EOA.',
+              )
+            },
+          }
+          const result = await sendCoinbaseSmartWalletUserOperation({
+            publicClient: publicClient as any,
+            walletClient: smartWalletClientAdapter as any,
+            bundlerUrl,
+            smartWallet: owner,
+            ownerAddress: privySmartWalletAddress,
+            calls: addOwnerCalls,
+            version: '1',
+            userOpSignMode: 'auto',
+            ownerIsContract: true,
+            retryWithLowGasContractSigner: false,
+          })
+          setTxId(result.transactionHash)
+          erc4337Succeeded = true
+          logger.info('[DeployVault] addOwner via ERC-4337 (privy smart wallet owner)', {
+            sessionSigner,
+            txHash: result.transactionHash,
+          })
+        } catch (smartWalletErr) {
+          logger.warn('[DeployVault] Privy smart wallet addOwner UserOp failed; trying fallback', {
+            privySmartWalletAddress,
+            error: smartWalletErr instanceof Error ? smartWalletErr.message : String(smartWalletErr ?? ''),
+          })
+        }
+      }
+    }
+
+    if (erc4337Succeeded) {
+      installed = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionSigner })
+      if (installed) return
+    }
+
+    // Fallback: external owner EOA + direct tx (existing behavior)
+    if (!connectedAddress || !wagmiWalletClient || connectedAddress.toLowerCase() === owner.toLowerCase()) {
+      throw new Error(
+        'Deploy session signer is not installed. Connect an owner EOA wallet (for example Coinbase Wallet) and retry.',
+      )
+    }
+
+    const callerIsOwner = await isCoinbaseSmartWalletOwner({
+      smartWallet: owner,
+      ownerAddress: connectedAddress as Address,
+    })
+    if (!callerIsOwner) {
+      throw new Error('Connected wallet is not an owner of your canonical smart wallet.')
+    }
+
+    await ensureBaseChain('Owner wallet')
+
+    if (publicClient) {
+      try {
+        await publicClient.simulateContract({
+          account: connectedAddress as Address,
+          address: owner,
+          abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+          functionName: 'addOwnerAddress',
+          args: [sessionSigner],
+        })
+      } catch (simErr: unknown) {
+        const simMessage = simErr instanceof Error ? simErr.message : String(simErr)
+        if (/AlreadyOwner/i.test(simMessage)) {
+          installed = true
+        }
+      }
+    }
+
+    if (!installed) {
+      const rawTxHash = await (wagmiWalletClient as any).sendTransaction({
+        to: owner,
+        data: addOwnerData,
+        value: 0n,
+        account: connectedAddress as Address,
+        chain: base,
+      })
+      const txHash = ensureSignatureHex(rawTxHash, 'ownerWallet.sendTransaction(addOwner)') as Hex
+      if (txHash.length !== 66) throw new Error('Invalid tx hash returned from owner wallet')
+      setTxId(txHash)
+      if (!publicClient) throw new Error('Missing Base public client')
+      await publicClient.waitForTransactionReceipt({ hash: txHash })
+    }
+
+    installed = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionSigner })
+    if (!installed) throw new Error('session_owner_not_installed')
+  }, [
+    connectedAddress,
+    ensureBaseChain,
+    ensureProviderOnBase,
+    getPrivyEmbeddedEoaProvider,
+    owner,
+    privyEmbeddedEoaAddress,
+    privyEmbeddedEoaCanSign,
+    privyEmbeddedEoaIsCanonicalOwner,
+    privySmartWalletAddress,
+    privySmartWalletCanSign,
+    privySmartWalletIsCanonicalOwner,
+    publicClient,
+    setTxId,
+    smartWalletClient,
+    wagmiWalletClient,
+  ])
+
   const pollServerDeploySession = useCallback(async (sessionId: string) => {
     let delayMs = 2000
     let backoff = false
     const started = Date.now()
+    let sentStepWithoutHash = ''
+    let sentStepWithoutHashSinceMs: number | null = null
+    const isHexHash = (value: unknown): value is Hex => typeof value === 'string' && /^0x[a-fA-F0-9]{64}$/.test(value)
     while (true) {
       const sres = await fetch('/api/deploy/session/status', {
         method: 'POST',
@@ -1904,12 +2287,39 @@ function DeployVaultBatcher({
       const sjson = (await sres.json().catch(() => null)) as ApiEnvelope<any> | null
       if (!sres.ok || !sjson?.success) throw new Error(sjson?.error || 'Failed to fetch deploy status')
       const step = String(sjson.data?.step ?? '')
+      const lastTxHash = typeof sjson.data?.lastTxHash === 'string' ? sjson.data.lastTxHash : null
+      const lastUserOpHash = typeof sjson.data?.lastUserOpHash === 'string' ? sjson.data.lastUserOpHash : null
+      const lastError = sjson.data?.lastError ? String(sjson.data.lastError) : null
+      if (lastPolledStepRef.current !== step) {
+        lastPolledStepRef.current = step
+        // Keep plain console logs visible even when debug logger is disabled.
+        console.log('[DeployVault] session_step', {
+          sessionId,
+          step,
+          lastTxHash,
+          lastUserOpHash,
+          lastError,
+        })
+      }
       if (step === 'created' || step.startsWith('phase1')) setPhase('phase1')
       else if (step.startsWith('phase2')) setPhase('phase2')
       else if (step.startsWith('phase3')) setPhase('phase3')
+      else if (step.startsWith('phase4')) setPhase('phase4')
+      if (lastTxHash && isHexHash(lastTxHash)) {
+        setPhaseTxs((s) => {
+          if (step.startsWith('phase1')) return { ...s, tx1: lastTxHash as Hex }
+          if (step.startsWith('phase2')) return { ...s, tx2: lastTxHash as Hex }
+          if (step.startsWith('phase3')) return { ...s, tx3: lastTxHash as Hex }
+          if (step.startsWith('phase4')) return { ...s, tx4: lastTxHash as Hex }
+          return s
+        })
+      }
       if (step === 'completed') {
-        const lastTxHash = (sjson.data?.lastTxHash ?? null) as Hex | null
-        if (lastTxHash) setTxId(lastTxHash)
+        const completedTxHash = (sjson.data?.lastTxHash ?? null) as Hex | null
+        if (completedTxHash) {
+          setTxId(completedTxHash)
+          setPhaseTxs((s) => (s.tx4 ? s : { ...s, tx4: completedTxHash }))
+        }
         setPhase('done')
         clearDeploySession()
         if (expectedRef.current) {
@@ -1921,6 +2331,31 @@ function DeployVaultBatcher({
       if (step === 'failed' || step === 'cancelled') {
         clearDeploySession()
         throw new Error(String(sjson.data?.lastError ?? 'Server deploy failed'))
+      }
+      if (step.endsWith('_sent') || step === 'cleanup_sent') {
+        const hasUserOpHash = isHexHash(lastUserOpHash)
+        if (!hasUserOpHash) {
+          if (sentStepWithoutHash !== step) {
+            sentStepWithoutHash = step
+            sentStepWithoutHashSinceMs = Date.now()
+          }
+          const stalledMs = sentStepWithoutHashSinceMs ? Date.now() - sentStepWithoutHashSinceMs : 0
+          if (lastError) {
+            throw new Error(`Deploy stalled at ${step}: ${lastError}`)
+          }
+          if (stalledMs > 90_000) {
+            throw new Error(
+              `Deploy stalled at ${step}. No UserOp hash was recorded for over 90 seconds. ` +
+                'Retry deploy to create a fresh session.',
+            )
+          }
+        } else {
+          sentStepWithoutHash = ''
+          sentStepWithoutHashSinceMs = null
+        }
+      } else {
+        sentStepWithoutHash = ''
+        sentStepWithoutHashSinceMs = null
       }
       if (Date.now() - started > 10 * 60 * 1000) {
         throw new Error('Server deploy did not complete in time. Check status and retry continue.')
@@ -1944,6 +2379,7 @@ function DeployVaultBatcher({
       setBusy(true)
       setError(null)
       setPhase('phase1')
+      lastPolledStepRef.current = ''
       try {
         await ensurePaymasterSession()
         const statusRes = await fetch('/api/deploy/session/status', {
@@ -1955,6 +2391,13 @@ function DeployVaultBatcher({
         if (!statusRes.ok || !statusJson?.success) throw new Error(statusJson?.error || 'Failed to fetch deploy status')
         const step = String(statusJson.data?.step ?? '')
         if (step === 'created') {
+          const sessionSignerRaw = String(
+            statusJson.data?.sessionSignerAddress ?? statusJson.data?.sessionOwner ?? '',
+          ).trim()
+          if (!isAddress(sessionSignerRaw)) {
+            throw new Error('Invalid deploy session status response')
+          }
+          await ensureDeploySessionSignerInstalled(getAddress(sessionSignerRaw) as Address)
           const continueRes = await fetch('/api/deploy/session/continue', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1976,7 +2419,15 @@ function DeployVaultBatcher({
     return () => {
       cancelled = true
     }
-  }, [busy, ensurePaymasterSession, formatDeployError, loadDeploySession, pollServerDeploySession, useServerContinue])
+  }, [
+    busy,
+    ensureDeploySessionSignerInstalled,
+    ensurePaymasterSession,
+    formatDeployError,
+    loadDeploySession,
+    pollServerDeploySession,
+    useServerContinue,
+  ])
 
   const isTxHash = (h?: string | null) => typeof h === 'string' && /^0x[a-fA-F0-9]{64}$/.test(h)
   const hrefForTx = (h?: string | null) => (isTxHash(h) ? `https://basescan.org/tx/${h}` : null)
@@ -2156,7 +2607,12 @@ function DeployVaultBatcher({
           .catch(() => null)) ?? null
       const supportsPhase1WithSalt = (() => {
         if (!batcherBytecode || batcherBytecode === '0x') return false
-        return batcherBytecode.toLowerCase().includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
+        const bytecodeLower = batcherBytecode.toLowerCase()
+        const supportsLegacySalt = bytecodeLower.includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
+        const supportsSplitSalt =
+          bytecodeLower.includes(BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR) &&
+          bytecodeLower.includes(BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR)
+        return supportsLegacySalt || supportsSplitSalt
       })()
 
       const baseSalt = deriveBaseSalt({ creatorToken, owner, chainId: base.id, version: deploymentVersion })
@@ -2458,6 +2914,7 @@ function DeployVaultBatcher({
       setTxId(null)
       setPhase('idle')
       setPhaseTxs({})
+      lastPolledStepRef.current = ''
     }
 
     try {
@@ -2466,7 +2923,10 @@ function DeployVaultBatcher({
       if (!publicClient) throw new Error('Network client not ready')
       if (!expected || !expectedGauge || !expectedBurnStream || !expectedPayoutRouter || !expectedCreate2Deployer)
         throw new Error('Failed to compute expected deployment addresses')
-      const ensureShareOftRegisteredForSolanaBridge = async () => {
+      const ensureShareOftRegisteredForSolanaBridge = async (opts?: {
+        buildOnly?: boolean
+        expectedSolanaAmountBase?: bigint
+      }): Promise<RegisterShareOftPayload | null> => {
         // If batcher-level Solana bridging is enabled, ensure the ShareOFT is registered on the adapter.
         // This must run after Phase 1 finalize, because registerToken() reads ShareOFT decimals().
         const [solanaBridgeAdapterRaw, solanaDestinationRaw] = await Promise.all([
@@ -2492,21 +2952,13 @@ function DeployVaultBatcher({
           solanaBridgeAdapter.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
           String(solanaDestination).toLowerCase() !== ZERO_BYTES32.toLowerCase()
 
-        if (!solanaBridgeEnabled) return
+        if (!solanaBridgeEnabled) return null
 
         const adapterCode = await publicClient.getBytecode({ address: solanaBridgeAdapter })
         if (!adapterCode || adapterCode === '0x') {
           throw new Error(
             `Batcher Solana adapter is configured to ${solanaBridgeAdapter}, but no contract code exists there. ` +
               'Ask protocol treasury to fix setSolanaConfig(adapter,destination) or disable it for now.',
-          )
-        }
-
-        const shareOftCode = await publicClient.getBytecode({ address: expected.shareOFT })
-        if (!shareOftCode || shareOftCode === '0x') {
-          throw new Error(
-            `Solana bridge is enabled, but ShareOFT ${shortAddress(expected.shareOFT)} is not deployed yet. ` +
-              'Phase 1 finalize must complete before Solana registration.',
           )
         }
 
@@ -2519,16 +2971,39 @@ function DeployVaultBatcher({
           })
           .then((v) => Boolean(v))
           .catch(() => null)
+        const buildOnly = opts?.buildOnly === true
+        if (!buildOnly && shareRegistered === true) return null
 
-        if (shareRegistered === true) return
+        if (!buildOnly) {
+          const shareOftCode = await publicClient.getBytecode({ address: expected.shareOFT })
+          if (!shareOftCode || shareOftCode === '0x') {
+            throw new Error(
+              `Solana bridge is enabled, but ShareOFT ${shortAddress(expected.shareOFT)} is not deployed yet. ` +
+                'Phase 1 finalize must complete before Solana registration.',
+            )
+          }
+        }
 
-        logger.info('[DeployVault] ShareOFT not registered on Solana adapter, attempting auto-registration', {
+        logger.info('[DeployVault] Ensuring ShareOFT Solana route + Meteora ix payload', {
           shareOFT: expected.shareOFT,
           adapter: solanaBridgeAdapter,
+          buildOnly,
+          expectsMeteoraPayload: FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD,
         })
         const registerBody: Record<string, unknown> = {
           shareOft: expected.shareOFT,
           batcherAddress: batcherAddress,
+          buildOnly,
+        }
+        const expectedSolanaAmountBaseForMeteora = opts?.expectedSolanaAmountBase
+        if (
+          FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD &&
+          typeof expectedSolanaAmountBaseForMeteora === 'bigint' &&
+          expectedSolanaAmountBaseForMeteora > 0n
+        ) {
+          registerBody.creatorToken = creatorToken
+          registerBody.expectedSolanaAmount = expectedSolanaAmountBaseForMeteora.toString()
+          registerBody.shareDecimals = 18
         }
         if (solanaMintOverride) registerBody.solanaMint = solanaMintOverride
         if (solanaDecimalsOverride !== null) registerBody.solanaDecimals = solanaDecimalsOverride
@@ -2539,6 +3014,15 @@ function DeployVaultBatcher({
         })
         const registerJson = (await registerRes.json().catch(() => null)) as ApiEnvelope<any> | null
         if (!registerRes.ok || !registerJson?.success) {
+          const backendError = registerJson?.error
+            ? String(registerJson.error)
+            : `HTTP ${registerRes.status}`
+          if (buildOnly) {
+            const mappingHint = backendError.includes('Missing Meteora Alpha Vault mapping')
+              ? ' Add creator mapping in `creator_meteora_alpha_vaults` or `METEORA_CREATOR_ALPHA_VAULT_MAP_JSON`.'
+              : ''
+            throw new Error(`Solana auto-deposit payload build failed: ${backendError}.${mappingHint}`)
+          }
           const adapterOwner = await publicClient
             .readContract({
               address: solanaBridgeAdapter,
@@ -2557,16 +3041,26 @@ function DeployVaultBatcher({
               detail,
           )
         }
-        logger.info('[DeployVault] ShareOFT auto-registration complete', {
+        const responseData = (registerJson?.data ?? {}) as any
+        const payload: RegisterShareOftPayload | null =
+          typeof responseData?.meteoraAlphaVault === 'string' && Array.isArray(responseData?.solanaIxs)
+            ? {
+                meteoraAlphaVault: responseData.meteoraAlphaVault as Hex,
+                solanaIxs: responseData.solanaIxs as SolanaBridgeIxPayload[],
+              }
+            : null
+        logger.info('[DeployVault] ShareOFT Solana route prepared', {
           shareOFT: expected.shareOFT,
           adapter: solanaBridgeAdapter,
-          txHash: (registerJson?.data as any)?.txHash ?? null,
+          txHash: responseData?.txHash ?? null,
+          ixCount: payload?.solanaIxs.length ?? 0,
         })
+        return payload
       }
       if (!floorPriceQ96Aligned || floorPriceQ96Aligned <= 0n) {
         throw new Error('Market floor price not available. Wait for pricing to load.')
       }
-      if (strictNoEoaMode) {
+      if (strictNoEoaEnforced) {
         logger.info('[DeployVault] deploy_mode=no_eoa_strict', {
           deploy_mode: 'no_eoa_strict',
           useServerContinue,
@@ -2587,6 +3081,7 @@ function DeployVaultBatcher({
       }
 
       const depositAmount = minFirstDeposit
+      const expectedSolanaAmountBase = (depositAmount * 20n) / 100n
       const auctionSteps = encodeUniswapCcaLinearSteps(DEFAULT_CCA_DURATION_BLOCKS)
       // Safety: `CreatorVaultBatcher` tries to call `CreatorCoin.setPayoutRecipient(payoutRecipient)` when non-zero.
       // Zora Creator Coins restrict `setPayoutRecipient` to the coin owner, so that internal call reverts (msg.sender=batcher).
@@ -2731,7 +3226,7 @@ function DeployVaultBatcher({
           batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR)
         )
       })()
-      if (strictNoEoaMode) {
+      if (strictNoEoaEnforced) {
         const hasAllSplitSelectors =
           batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_SELECTOR) &&
           batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR) &&
@@ -2895,6 +3390,20 @@ function DeployVaultBatcher({
           floorPriceQ96: floorPriceQ96Aligned,
         } as const
 
+        const meteoraPayload = await ensureShareOftRegisteredForSolanaBridge({
+          buildOnly: true,
+          expectedSolanaAmountBase: FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD ? expectedSolanaAmountBase : undefined,
+        })
+        if (
+          FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD &&
+          (!meteoraPayload || !meteoraPayload.meteoraAlphaVault || meteoraPayload.solanaIxs.length === 0)
+        ) {
+          throw new Error(
+            'Solana auto-deposit is enabled, but Meteora payload is missing. ' +
+              'Check per-creator Meteora mapping and provisioner configuration.',
+          )
+        }
+
         const phase2FinalizeParams = {
           creatorToken,
           owner,
@@ -2909,6 +3418,8 @@ function DeployVaultBatcher({
           requiredRaise: DEFAULT_REQUIRED_RAISE_WEI,
           floorPriceQ96: floorPriceQ96Aligned,
           auctionSteps,
+          meteoraAlphaVault: meteoraPayload?.meteoraAlphaVault ?? ZERO_BYTES32,
+          solanaIxs: meteoraPayload?.solanaIxs ?? [],
         } as const
 
         // Phase 3 (strategies): Charm CREATOR/USDC + Ajna lending
@@ -3049,7 +3560,7 @@ function DeployVaultBatcher({
         // Hard guard: require at least one executable signer path.
         // For server-continue mode, a verified owner EOA is also valid because it can install
         // the temporary session owner on the canonical CSW in one user-approved tx.
-        const hasOwnerEoaServerContinuePath = useServerContinue && !strictNoEoaMode && connectedEoaOwnerReady
+        const hasOwnerEoaServerContinuePath = useServerContinue && !strictNoEoaEnforced && connectedEoaOwnerReady
         if (!planOnly && !canUsePrivySmartWallet && !canUseWalletSendCalls && !hasOwnerEoaServerContinuePath) {
           throw new Error(
             'Smart wallet required. Sign in with wallet to access your Zora smart wallet, or use Coinbase Wallet (Base Account), then retry.',
@@ -3302,7 +3813,7 @@ function DeployVaultBatcher({
         }
 
         logger.info('[DeployVault] deploy_start', {
-          deploy_mode: strictNoEoaMode ? 'no_eoa_strict' : 'default',
+          deploy_mode: strictNoEoaEnforced ? 'no_eoa_strict' : 'default',
           creatorToken,
           owner,
           deploymentVersion,
@@ -3313,41 +3824,67 @@ function DeployVaultBatcher({
 
         // Debug helper: expose phase1 call data on window for console testing
         if (typeof window !== 'undefined' && phase1Calls.length > 0) {
+          const phaseCallMap = {
+            phase1: phase1Calls,
+            phase2: phase2FinalizeCalls,
+            phase3: phase3Calls,
+            phase4: phase4Calls,
+          } as const
+          const testPhaseCall = async (
+            phase: 'phase1' | 'phase2' | 'phase3' | 'phase4' = 'phase1',
+            index = 0,
+          ) => {
+            if (!publicClient) throw new Error('No publicClient')
+            const calls = phaseCallMap[phase]
+            const call = calls[index]
+            if (!call) throw new Error(`No call at ${phase}[${index}]`)
+            console.log('[DEBUG] Testing direct eth_call', {
+              phase,
+              index,
+              to: call.target,
+              data: call.data.slice(0, 10),
+              from: owner,
+            })
+            try {
+              const result = await (publicClient as any).call({
+                to: call.target,
+                data: call.data,
+                account: owner,
+              })
+              console.log('[DEBUG] Direct call SUCCESS', { phase, index, result })
+              return { success: true, result }
+            } catch (e: any) {
+              console.error('[DEBUG] Direct call FAILED', {
+                phase,
+                index,
+                error: e?.message,
+                shortMessage: e?.shortMessage,
+                cause: e?.cause,
+                data: e?.cause?.data ?? e?.data,
+              })
+              return { success: false, error: e }
+            }
+          }
           const debugInfo = {
             phase1Call: phase1Calls[0],
+            phaseCallCounts: {
+              phase1: phase1Calls.length,
+              phase2: phase2FinalizeCalls.length,
+              phase3: phase3Calls.length,
+              phase4: phase4Calls.length,
+            },
             owner,
             batcherAddress,
             creatorToken,
             deploymentVersion,
-            testDirectCall: async () => {
-              if (!publicClient) throw new Error('No publicClient')
-              const call = phase1Calls[0]
-              console.log('[DEBUG] Testing direct eth_call to batcher...', {
-                to: call.target,
-                data: call.data.slice(0, 10),
-                from: owner,
-              })
-              try {
-                const result = await (publicClient as any).call({
-                  to: call.target,
-                  data: call.data,
-                  account: owner,
-                })
-                console.log('[DEBUG] Direct call SUCCESS', result)
-                return { success: true, result }
-              } catch (e: any) {
-                console.error('[DEBUG] Direct call FAILED', {
-                  error: e?.message,
-                  shortMessage: e?.shortMessage,
-                  cause: e?.cause,
-                  data: e?.cause?.data ?? e?.data,
-                })
-                return { success: false, error: e }
-              }
-            },
+            testPhaseCall,
+            // Backward compatibility with existing console hint.
+            testDirectCall: () => testPhaseCall('phase1', 0),
           }
           ;(window as any).__cvDeployDebug = debugInfo
-          console.log('[DeployVault] Debug helper available: window.__cvDeployDebug.testDirectCall()')
+          console.log(
+            '[DeployVault] Debug helper available: window.__cvDeployDebug.testDirectCall(), window.__cvDeployDebug.testPhaseCall("phase3", 0)',
+          )
         }
 
         // Helper to convert calls format
@@ -3419,7 +3956,7 @@ function DeployVaultBatcher({
           logPhaseLabel: string,
           reason: unknown,
         ): Promise<boolean> => {
-          if (strictNoEoaMode) return false
+          if (strictNoEoaEnforced) return false
           if (isUserRejectedError(reason)) return false
           if (!isLikelyPaymasterOrSponsorshipFailure(reason)) return false
           if (!canonicalSmartWallet || !connectedAddress || !wagmiWalletClient || !publicClient) return false
@@ -3734,7 +4271,7 @@ function DeployVaultBatcher({
           // PATH 1: Direct Coinbase Wallet connection
           // Only use this when embedded signer path is not available.
           if (
-            !strictNoEoaMode &&
+            !strictNoEoaEnforced &&
             isCoinbaseWalletDirect &&
             connectedAddress &&
             wagmiWalletClient &&
@@ -3980,7 +4517,7 @@ function DeployVaultBatcher({
 
             try {
               const isStrictPhase1CoreSegment =
-                strictNoEoaMode && phaseLabel === 'phase1' && (!opts?.segment || opts.segment === 'core')
+                strictNoEoaEnforced && phaseLabel === 'phase1' && (!opts?.segment || opts.segment === 'core')
               const contractOwnerVerificationGasProfile = isStrictPhase1CoreSegment
                 ? [1_000_000n, 1_300_000n, 1_600_000n, 1_900_000n, 2_200_000n, 2_500_000n]
                 : undefined
@@ -4061,7 +4598,7 @@ function DeployVaultBatcher({
                   failureClass,
                   error: msg,
                 })
-                if (strictNoEoaMode) {
+                if (strictNoEoaEnforced) {
                   logger.warn('[DeployVault] fallback_blocked', {
                     deploy_mode: 'no_eoa_strict',
                     phaseLabel: logPhaseLabel,
@@ -4159,7 +4696,7 @@ function DeployVaultBatcher({
           
           // No additional signer fallback branches: keep deploy deterministic.
           // No valid ERC-4337 path available
-          if (strictNoEoaMode) {
+          if (strictNoEoaEnforced) {
             throw new Error(NO_EOA_STRICT_BLOCKER)
           }
           throw new Error(
@@ -4207,6 +4744,24 @@ function DeployVaultBatcher({
               // ignore cleanup failures
             }
           }
+          const shouldCancelSessionAfterError = async (): Promise<boolean> => {
+            if (!sessionId) return false
+            try {
+              const statusRes = await fetch('/api/deploy/session/status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId }),
+              })
+              const statusJson = (await statusRes.json().catch(() => null)) as ApiEnvelope<any> | null
+              if (!statusRes.ok || !statusJson?.success) return false
+              const step = String(statusJson.data?.step ?? '')
+              // Preserve progressed sessions (phase*_sent / confirmed) so retries can resume.
+              // Cancel only brand-new sessions that never sent a stage.
+              return step === 'created'
+            } catch {
+              return false
+            }
+          }
           const shouldRetrySessionAuth = (message: string): boolean => {
             const lower = String(message || '').toLowerCase()
             return (
@@ -4247,69 +4802,13 @@ function DeployVaultBatcher({
             // After installation of the temporary owner, the server will submit all phases and then clean up.
             const createJson = await postDeploySessionCreate(false)
             sessionId = String(createJson.data?.sessionId ?? '').trim()
-            const sessionOwnerRaw = String(createJson.data?.sessionOwner ?? '').trim()
+            const sessionOwnerRaw = String(createJson.data?.sessionSignerAddress ?? createJson.data?.sessionOwner ?? '').trim()
             if (!sessionId || !isAddress(sessionOwnerRaw)) throw new Error('Invalid deploy session response')
             const sessionOwner = getAddress(sessionOwnerRaw) as Address
             persistDeploySession(sessionId)
 
-            // Install the temporary owner via a single user-approved transaction.
-            // This MUST be an owner EOA transaction (not a smart wallet self-call).
-            let alreadyInstalled = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionOwner })
-            if (!alreadyInstalled) {
-              const addOwnerData = encodeFunctionData({
-                abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
-                functionName: 'addOwnerAddress',
-                args: [sessionOwner],
-              })
-
-              let installed = false
-              // Setup tx must be sent by an EOA owner (not the smart wallet itself).
-              if (connectedAddress && wagmiWalletClient && connectedAddress.toLowerCase() !== owner.toLowerCase()) {
-                const isOwner = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: connectedAddress as Address })
-                if (isOwner) {
-                  await ensureBaseChain('Owner wallet')
-                  // Simulate before sending: if addOwnerAddress reverts with AlreadyOwner, agent is already installed.
-                  if (publicClient) {
-                    try {
-                      await publicClient.simulateContract({
-                        account: connectedAddress,
-                        address: owner,
-                        abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
-                        functionName: 'addOwnerAddress',
-                        args: [sessionOwner],
-                      })
-                    } catch (simErr: unknown) {
-                      const msg = simErr instanceof Error ? simErr.message : String(simErr)
-                      if (/AlreadyOwner/i.test(msg)) {
-                        alreadyInstalled = true
-                        installed = true
-                      }
-                    }
-                  }
-                  if (!installed) {
-                    const rawTxHash = await (wagmiWalletClient as any).sendTransaction({
-                      to: owner,
-                      data: addOwnerData,
-                      value: 0n,
-                      account: connectedAddress,
-                      chain: base,
-                    })
-                    const txHash = ensureSignatureHex(rawTxHash, 'ownerWallet.sendTransaction(addOwner)') as Hex
-                    if (txHash.length !== 66) throw new Error('Invalid tx hash returned from owner wallet')
-                    setTxId(txHash)
-                    if (!publicClient) throw new Error('Missing Base public client')
-                    await publicClient.waitForTransactionReceipt({ hash: txHash })
-                    installed = true
-                  }
-                }
-              }
-              if (!installed) {
-                throw new Error(
-                  'Server continuation requires an owner EOA to install a temporary deploy-session owner. ' +
-                    'Connect an owner EOA wallet (e.g. Coinbase Wallet) and retry.',
-                )
-              }
-            }
+            // Install the deploy-session signer via a one-time owner EOA transaction if needed.
+            await ensureDeploySessionSignerInstalled(sessionOwner)
 
             // Kick off server continuation; status polling will advance remaining phases.
             const continueRes = await fetch('/api/deploy/session/continue', {
@@ -4325,7 +4824,9 @@ function DeployVaultBatcher({
             await pollServerDeploySession(sessionId)
             return null
           } catch (err) {
-            await cancelSession()
+            if (await shouldCancelSessionAfterError()) {
+              await cancelSession()
+            }
             throw err
           }
         }
@@ -4418,11 +4919,22 @@ function DeployVaultBatcher({
                       : 'tx4'
               ]: txHash,
             }))
-            // Show success message - user should refresh to see vault
-            setPhase('done')
-            logger.info('[DeployVault] deploy_success (recovered from estimation error)', { txHash })
-            if (expected) onSuccess(expected)
-            return null
+            logger.info('[DeployVault] tx_confirmed_after_error; continuing deploy flow', {
+              txHash,
+              phase,
+              useServerContinue,
+            })
+            if (useServerContinue) {
+              const activeSessionId = loadDeploySession()
+              if (activeSessionId) {
+                await pollServerDeploySession(activeSessionId)
+                return null
+              }
+            }
+            throw new Error(
+              `A ${phase.toUpperCase()} transaction was submitted and confirmed, but deploy completion could not be verified. ` +
+                'Click Deploy again to continue from the latest confirmed phase.',
+            )
           }
         } catch (receiptError) {
           logger.warn('[DeployVault] Failed to get receipt for submitted tx', { txHash, error: receiptError })
@@ -4430,7 +4942,14 @@ function DeployVaultBatcher({
       }
       
       let pretty = formatDeployError(e)
-      logger.warn('[DeployVault] deploy_failed', { error: pretty })
+      const isUserRejected =
+        rawMsg.toLowerCase().includes('user rejected') ||
+        rawMsg.toLowerCase().includes('rejected the request') ||
+        rawMsg.toLowerCase().includes('action_rejected') ||
+        rawMsg.toLowerCase().includes('user denied') ||
+        rawMsg.toLowerCase().includes('user cancelled')
+      if (isUserRejected) logger.info('[DeployVault] deploy_cancelled_by_user', { error: pretty })
+      else logger.warn('[DeployVault] deploy_failed', { error: pretty })
       setError(pretty)
     } finally {
       if (!planOnly) setBusy(false)
@@ -4438,7 +4957,7 @@ function DeployVaultBatcher({
     return null
   }
 
-  const exportPlan = useCallback(async () => {
+  const exportPlan = async () => {
     if (busy || exportBusy) return
     setExportBusy(true)
     setExportStatus(null)
@@ -4464,7 +4983,7 @@ function DeployVaultBatcher({
     } finally {
       setExportBusy(false)
     }
-  }, [busy, creatorToken, exportBusy, formatDeployError, submit])
+  }
 
   const expectedError = expectedQuery.isError
     ? ((expectedQuery.error as any)?.message || 'Failed to compute deployment addresses.')
@@ -4482,7 +5001,7 @@ function DeployVaultBatcher({
   const disabled = Boolean(disabledReason)
   const hasPrivyEmbeddedOwnerSigner = privyEmbeddedEoaIsCanonicalOwner && privyEmbeddedEoaCanSign
   const hasPrivySmartWalletOwnerSigner = privySmartWalletIsCanonicalOwner && privySmartWalletCanSign
-  const hasDeploySignerPath = strictNoEoaMode
+  const hasDeploySignerPath = strictNoEoaEnforced
     ? hasPrivyEmbeddedOwnerSigner || hasPrivySmartWalletOwnerSigner
     : isCoinbaseWalletDirect || connectedEoaOwnerReady || hasPrivyEmbeddedOwnerSigner || hasPrivySmartWalletOwnerSigner
 
@@ -4605,7 +5124,7 @@ function DeployVaultBatcher({
             <AddressRow label="Active batcher" address={batcherAddress} />
             <div className="flex items-center justify-between gap-4 text-[11px]">
               <div className="text-zinc-500">Deploy mode</div>
-              <div className="font-mono text-zinc-200/90">{strictNoEoaMode ? 'no_eoa_strict' : 'default'}</div>
+              <div className="font-mono text-zinc-200/90">{strictNoEoaEnforced ? 'no_eoa_strict' : 'default'}</div>
             </div>
           </div>
 
@@ -4681,7 +5200,7 @@ function DeployVaultBatcher({
         <div className="space-y-2">
           <div className="text-[10px] text-green-400/80 flex items-center gap-1">
             <span>✓</span>{' '}
-            {strictNoEoaMode
+            {strictNoEoaEnforced
               ? hasPrivyEmbeddedOwnerSigner
                 ? 'Gas-free ERC-4337 via preconfigured Privy embedded owner'
                 : 'Gas-free ERC-4337 via preconfigured app smart wallet owner'
@@ -4702,9 +5221,9 @@ function DeployVaultBatcher({
       ) : (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
           <div className="text-sm font-medium text-amber-200">
-            {strictNoEoaMode ? 'No-EOA deploy requirements' : 'ERC-4337 Setup Required'}
+            {strictNoEoaEnforced ? 'No-EOA deploy requirements' : 'ERC-4337 Setup Required'}
           </div>
-          {strictNoEoaMode ? (
+          {strictNoEoaEnforced ? (
             <div className="text-[11px] text-amber-200/70 leading-relaxed">{NO_EOA_STRICT_BLOCKER}</div>
           ) : (
             <>
@@ -4972,11 +5491,7 @@ function DeployVaultMain() {
     privyLinkedEoaAddress,
     privySmartWalletAddress,
   ])
-  const deploymentVersion = useMemo(() => {
-    const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.2.36'
-    const v = String(raw).trim()
-    return v.length > 0 ? v : 'v1.2.36'
-  }, [])
+  const deploymentVersion = useMemo(() => resolveDeploymentVersionFromRuntime(), [])
   const deployMode = useMemo(() => resolveDeployMode(), [])
   const strictNoEoaMode = deployMode === 'no_eoa_strict'
   const shareOftSaltOverride = useMemo(() => {
@@ -5520,7 +6035,56 @@ function DeployVaultMain() {
   // Deployment tracking: 1 deployment per owner per version
   const deploymentTracker = useDeploymentTracker(deploySender, deploymentVersion)
   const [justCompletedDeployment, setJustCompletedDeployment] = useState<DeploymentRecord | null>(null)
-  const alreadyDeployed = !!(justCompletedDeployment || deploymentTracker.hasDeployed)
+  const trackerDeployment = deploymentTracker.existingDeployment
+  const justCompletedCcaStrategy = justCompletedDeployment?.contracts.ccaStrategy
+  const trackerCcaStrategy = trackerDeployment?.contracts.ccaStrategy
+  const hasRequiredContracts = useCallback((record: DeploymentRecord | null | undefined): boolean => {
+    if (!record) return false
+    return (
+      isAddress(record.contracts.vault) &&
+      isAddress(record.contracts.wrapper) &&
+      isAddress(record.contracts.shareOFT) &&
+      isAddress(record.contracts.gaugeController ?? '') &&
+      isAddress(record.contracts.ccaStrategy ?? '') &&
+      isAddress(record.contracts.oracle ?? '')
+    )
+  }, [])
+  const isAuctionReadyForStrategy = useCallback(
+    async (ccaStrategy: Address | null | undefined): Promise<boolean> => {
+      if (!ccaStrategy || !publicClient) return false
+      const status = (await publicClient.readContract({
+        address: ccaStrategy,
+        abi: CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI,
+        functionName: 'getAuctionStatus',
+      })) as readonly [Address, boolean, boolean, bigint, bigint]
+      const auction = String(status?.[0] ?? '').toLowerCase()
+      return /^0x[a-f0-9]{40}$/.test(auction) && auction !== ZERO_ADDRESS
+    },
+    [publicClient],
+  )
+  const trackerAuctionReadyQuery = useQuery({
+    queryKey: ['deployVault', 'trackerDeployment', 'auctionReady', trackerCcaStrategy],
+    enabled: !!trackerCcaStrategy && !!publicClient,
+    staleTime: 20_000,
+    queryFn: async () => isAuctionReadyForStrategy(trackerCcaStrategy as Address),
+  })
+  const justCompletedAuctionReadyQuery = useQuery({
+    queryKey: ['deployVault', 'justCompletedDeployment', 'auctionReady', justCompletedCcaStrategy],
+    enabled: !!justCompletedCcaStrategy && !!publicClient,
+    staleTime: 20_000,
+    queryFn: async () => isAuctionReadyForStrategy(justCompletedCcaStrategy as Address),
+  })
+  const trackerDeploymentIsComplete = useMemo(() => {
+    if (!hasRequiredContracts(trackerDeployment)) return false
+    return trackerAuctionReadyQuery.data === true
+  }, [hasRequiredContracts, trackerAuctionReadyQuery.data, trackerDeployment])
+  const justCompletedDeploymentIsComplete = useMemo(() => {
+    if (!hasRequiredContracts(justCompletedDeployment)) return false
+    return justCompletedAuctionReadyQuery.data === true
+  }, [hasRequiredContracts, justCompletedAuctionReadyQuery.data, justCompletedDeployment])
+  const staleIncompleteDeploymentRecord = Boolean(trackerDeployment && !trackerDeploymentIsComplete)
+  const pendingJustCompletedDeployment = Boolean(justCompletedDeployment && !justCompletedDeploymentIsComplete)
+  const alreadyDeployed = Boolean(justCompletedDeploymentIsComplete || trackerDeploymentIsComplete)
 
   // Handler for when deployment completes successfully
   const handleDeploymentSuccess = useCallback((addresses: ServerDeployResponse['addresses']) => {
@@ -5534,6 +6098,8 @@ function DeployVaultMain() {
         shareOFT: addresses.shareOFT,
         gaugeController: addresses.gaugeController,
         ccaStrategy: addresses.ccaStrategy,
+        burnStream: addresses.burnStream,
+        payoutRouter: addresses.payoutRouter,
         oracle: addresses.oracle,
       },
     })
@@ -6220,21 +6786,23 @@ function DeployVaultMain() {
       walletClient &&
       executionCanOperateCanonical,
   )
+  const strictNoEoaEnforced = strictNoEoaMode && !connectedEoaOwnerReady
   const strictNoEoaEligibility = Boolean(
     canonicalIdentityIsContract &&
       canonicalIdentityAddress &&
       (privyEmbeddedOwnerReady || privySmartWalletOwnerReady),
   )
   // Smart wallet is ready only if it matches canonical OR an authorized owner signer is available.
-  // In strict no-EOA mode we only allow preconfigured Privy owner flow.
-  const smartWalletCapabilityReady = strictNoEoaMode
+  // In strict no-EOA mode we only allow preconfigured Privy owner flow unless a verified
+  // connected owner EOA path is already available in-session.
+  const smartWalletCapabilityReady = strictNoEoaEnforced
     ? strictNoEoaEligibility
     : isCoinbaseWalletDirect ||
       connectedEoaOwnerReady ||
       (privySmartWalletReady &&
         (smartWalletMatchesCanonical || privySmartWalletOwnerReady || privyEmbeddedOwnerReady))
   const oneTimePrivyOwnerApprovalNeeded = Boolean(
-    !strictNoEoaMode &&
+    !strictNoEoaEnforced &&
       canonicalIdentityIsContract &&
       canonicalIdentityAddress &&
       privySmartWalletAddress &&
@@ -6248,6 +6816,7 @@ function DeployVaultMain() {
     tokenIsValid &&
     !!zoraCoin &&
     isCreatorCoin &&
+    canonicalIdentityType === 'contract' &&
     coinAgeOk &&
     marketFloorOk &&
     isAuthorizedDeployerOrOperator &&
@@ -6270,6 +6839,14 @@ function DeployVaultMain() {
   const vrfConsumerConfigured = isAddress(String(vrfConsumerAddress ?? ''))
   const allowlistReady = allowlistMode === 'disabled' ? true : isAllowlistedCreator
   const creatorCoinReady = tokenIsValid && !!zoraCoin && isCreatorCoin
+  const canCreateCoinInApp = Boolean(canonicalIdentityAddress && connectedWalletAddress)
+  const zoraCoinHandoffHref = useMemo(() => {
+    const params = new URLSearchParams()
+    params.set('from', 'zora')
+    params.set('gate', 'vault')
+    if (tokenIsValid && creatorToken) params.set('token', creatorToken)
+    return buildZoraHandoffUrl({ returnPath: `/deploy?${params.toString()}`, context: 'vault' })
+  }, [creatorToken, tokenIsValid])
   const coinAgeReady = creatorCoinReady && coinAgeOk
   const fundingReady = fundingGateOk
   const authReady = isAuthorizedDeployerOrOperator
@@ -6373,6 +6950,8 @@ function DeployVaultMain() {
         ? 'Token is not a Zora Creator Coin.'
         : tokenIsValid && zoraCoin && !isCreatorCoin
           ? 'Only Creator Coins can deploy a vault.'
+          : tokenIsValid && zoraCoin && canonicalIdentityType === 'eoa'
+            ? 'Deploy requires your canonical Zora Coinbase Smart Wallet as sender. Connect with the canonical smart wallet identity.'
           : tokenIsValid && zoraCoin && isCreatorCoin && !coinAgeOk
             ? `Creator Coin must be at least ${minCoinAgeDays} days old to deploy.`
           : creatorAllowlistQuery.isLoading
@@ -6387,7 +6966,7 @@ function DeployVaultMain() {
                     ? 'Connect the creator or payout recipient wallet.'
                     : !fundingGateOk
                       ? `Needs 5,000,000 ${underlyingSymbolUpper || 'TOKENS'} to deploy.`
-                      : strictNoEoaMode && !strictNoEoaEligibility
+                      : strictNoEoaEnforced && !strictNoEoaEligibility
                         ? NO_EOA_STRICT_BLOCKER
                       : identityBlockingReason
                         ? identityBlockingReason
@@ -6559,17 +7138,41 @@ function DeployVaultMain() {
             ) : null}
 
           {/* Deployment Status */}
-          {justCompletedDeployment ? (
+          {justCompletedDeployment && justCompletedDeploymentIsComplete ? (
             <DeploymentSuccess
               deployment={justCompletedDeployment}
               tokenSymbol={underlyingSymbolUpper || undefined}
               shareSymbol={derivedShareSymbol || undefined}
             />
-          ) : deploymentTracker.hasDeployed && deploymentTracker.existingDeployment ? (
+          ) : trackerDeploymentIsComplete && trackerDeployment ? (
             <AlreadyDeployedBanner
-              deployment={deploymentTracker.existingDeployment}
+              deployment={trackerDeployment}
               tokenSymbol={underlyingSymbolUpper || undefined}
             />
+          ) : null}
+          {pendingJustCompletedDeployment ? (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 text-[12px] text-amber-200/90">
+              Deployment is still finalizing on-chain. We now wait for the deferred auction (Phase 4) to be confirmed before
+              marking this version complete.
+            </div>
+          ) : null}
+          {staleIncompleteDeploymentRecord ? (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
+              <div className="text-[12px] text-amber-200">
+                Found an older local deployment record for this version, but final on-chain completion is missing. You can resume
+                deployment now.
+              </div>
+              <button
+                type="button"
+                className="btn-secondary text-[12px]"
+                onClick={() => {
+                  deploymentTracker.clearCurrentDeployment()
+                  setJustCompletedDeployment(null)
+                }}
+              >
+                Clear stale local record
+              </button>
+            </div>
           ) : null}
 
           {!alreadyDeployed && isAdmin ? (
@@ -7019,6 +7622,28 @@ function DeployVaultMain() {
                     <button type="button" className="btn-primary w-full" onClick={switchAuthCta.onClick}>
                       {switchAuthCta.label}
                     </button>
+                  ) : null}
+                  {!creatorCoinReady ? (
+                    <div className="space-y-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                      <div className="text-[11px] text-amber-200 font-medium">Creator Coin required before vault deploy</div>
+                      <div className="text-[11px] text-amber-100/80">
+                        Create your Zora Creator Coin first, then this page will resume vault deployment with the detected coin.
+                      </div>
+                      {canCreateCoinInApp && canonicalIdentityIsContract ? (
+                        <LaunchCoinCard
+                          smartWalletAddress={canonicalIdentityAddress}
+                          ownerAddress={connectedWalletAddress}
+                          onCoinCreated={(coinAddress) => setCreatorToken(coinAddress)}
+                        />
+                      ) : (
+                        <a
+                          href={zoraCoinHandoffHref}
+                          className="inline-flex items-center gap-1 rounded-md border border-amber-300/30 bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-100 hover:bg-amber-400/20"
+                        >
+                          Create or claim on Zora <ChevronDown className="h-3 w-3 -rotate-90" />
+                        </a>
+                      )}
+                    </div>
                   ) : null}
                 </div>
               ) : null}

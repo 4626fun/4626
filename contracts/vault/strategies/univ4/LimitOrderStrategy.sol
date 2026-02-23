@@ -25,17 +25,17 @@ import {V4LiquidityAmounts} from "../../../libraries/V4LiquidityAmounts.sol";
  * @title LimitOrderStrategy
  * @author 0xakita.eth (CreatorVault)
  * @notice Single-tick liquidity positions that act as limit orders
- * 
+ *
  * @dev STRATEGY:
  *      - Places liquidity in a single tick (or very narrow range)
  *      - Acts as a limit order: gets filled when price crosses the tick
  *      - Used for price support (buy walls) or resistance (sell walls)
  *      - Higher capital efficiency within the specific tick
- * 
+ *
  * @dev USE CASES:
  *      1. BUY SUPPORT: Place below current price - buys creator coin when price drops
  *      2. SELL RESISTANCE: Place above current price - sells creator coin when price rises
- * 
+ *
  * @dev INTEGRATION:
  *      - Plugs into CreatorLPManager
  *      - Multiple limit order positions can be active simultaneously
@@ -51,8 +51,8 @@ struct LimitOrder {
     int24 tickLower;
     int24 tickUpper;
     uint256 liquidity;
-    uint256 tokenId;           // V4 position NFT
-    bool isBuyOrder;           // true = support (below price), false = resistance (above price)
+    uint256 tokenId; // V4 position NFT
+    bool isBuyOrder; // true = support (below price), false = resistance (above price)
     uint256 createdAt;
     bool isActive;
 }
@@ -127,7 +127,9 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
     event Deposited(uint256 creatorCoinAmount, uint256 pairedAmount, uint256 liquidity);
     event Withdrawn(uint256 liquidity, uint256 creatorCoinAmount, uint256 pairedAmount);
     event Rebalanced(uint256 timestamp, uint256 ordersMoved);
-    event PoolConfigured(bytes32 poolId, address poolManager, address positionManager, address permit2, bool creatorIsCurrency0);
+    event PoolConfigured(
+        bytes32 poolId, address poolManager, address positionManager, address permit2, bool creatorIsCurrency0
+    );
 
     // =================================
     // ERRORS
@@ -162,12 +164,7 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
     // CONSTRUCTOR
     // =================================
 
-    constructor(
-        address _creatorCoin,
-        address _pairedToken,
-        address _lpManager,
-        address _owner
-    ) Ownable(_owner) {
+    constructor(address _creatorCoin, address _pairedToken, address _lpManager, address _owner) Ownable(_owner) {
         if (_creatorCoin == address(0)) revert ZeroAddress();
         if (_pairedToken == address(0)) revert ZeroAddress();
 
@@ -192,11 +189,8 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
         address c0 = Currency.unwrap(_poolKey.currency0);
         address c1 = Currency.unwrap(_poolKey.currency1);
         bool _creatorIsCurrency0 = c0 == address(CREATOR_COIN);
-        if (
-            !(
-                (_creatorIsCurrency0 && c1 == address(PAIRED_TOKEN)) || (c0 == address(PAIRED_TOKEN) && c1 == address(CREATOR_COIN))
-            )
-        ) revert PoolNotFullyConfigured();
+        if (!((_creatorIsCurrency0 && c1 == address(PAIRED_TOKEN))
+                    || (c0 == address(PAIRED_TOKEN) && c1 == address(CREATOR_COIN)))) revert PoolNotFullyConfigured();
         if (_poolKey.tickSpacing == 0) revert PoolNotFullyConfigured();
 
         poolManager = IPoolManager(_poolManager);
@@ -210,8 +204,10 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
         // Approvals for PosM: token -> Permit2, then Permit2 -> PosM
         CREATOR_COIN.forceApprove(_permit2, type(uint256).max);
         PAIRED_TOKEN.forceApprove(_permit2, type(uint256).max);
-        IAllowanceTransfer(_permit2).approve(address(CREATOR_COIN), _positionManager, type(uint160).max, type(uint48).max);
-        IAllowanceTransfer(_permit2).approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
+        IAllowanceTransfer(_permit2)
+            .approve(address(CREATOR_COIN), _positionManager, type(uint160).max, type(uint48).max);
+        IAllowanceTransfer(_permit2)
+            .approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
 
         emit PoolConfigured(PoolId.unwrap(poolId), _poolManager, _positionManager, _permit2, _creatorIsCurrency0);
     }
@@ -227,12 +223,12 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
      * @param amount Amount of token to provide
      * @param isBuyOrder True for buy support, false for sell resistance
      */
-    function createOrder(
-        int24 tickLower,
-        int24 tickUpper,
-        uint256 amount,
-        bool isBuyOrder
-    ) external onlyLPManager whenActive returns (uint256 orderId, uint256 liquidity) {
+    function createOrder(int24 tickLower, int24 tickUpper, uint256 amount, bool isBuyOrder)
+        external
+        onlyLPManager
+        whenActive
+        returns (uint256 orderId, uint256 liquidity)
+    {
         _requireConfigured();
         if (_getActiveOrderCount() >= MAX_ORDERS) revert TooManyOrders();
         if (amount == 0) revert ZeroAmount();
@@ -257,15 +253,17 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
         _posmMint(tickLower, tickUpper, liq);
 
         orderId = orders.length;
-        orders.push(LimitOrder({
-            tickLower: tickLower,
-            tickUpper: tickUpper,
-            liquidity: uint256(liq),
-            tokenId: tokenId,
-            isBuyOrder: isBuyOrder,
-            createdAt: block.timestamp,
-            isActive: true
-        }));
+        orders.push(
+            LimitOrder({
+                tickLower: tickLower,
+                tickUpper: tickUpper,
+                liquidity: uint256(liq),
+                tokenId: tokenId,
+                isBuyOrder: isBuyOrder,
+                createdAt: block.timestamp,
+                isActive: true
+            })
+        );
 
         liquidity = uint256(liq);
         totalLiquidity += liquidity;
@@ -277,11 +275,13 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
      * @notice Cancel an existing order
      * @param orderId Order ID to cancel
      */
-    function cancelOrder(
-        uint256 orderId
-    ) external onlyLPManager returns (uint256 creatorCoinAmount, uint256 pairedAmount) {
+    function cancelOrder(uint256 orderId)
+        external
+        onlyLPManager
+        returns (uint256 creatorCoinAmount, uint256 pairedAmount)
+    {
         if (orderId >= orders.length) revert OrderNotFound();
-        
+
         LimitOrder storage order = orders[orderId];
         if (!order.isActive) revert OrderNotFound();
 
@@ -318,10 +318,13 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
     /**
      * @notice Deposit creates a new limit order at default offset
      */
-    function deposit(
-        uint256 creatorCoinAmount,
-        uint256 pairedAmount
-    ) external nonReentrant onlyLPManager whenActive returns (uint256 liquidity) {
+    function deposit(uint256 creatorCoinAmount, uint256 pairedAmount)
+        external
+        nonReentrant
+        onlyLPManager
+        whenActive
+        returns (uint256 liquidity)
+    {
         _requireConfigured();
         if (creatorCoinAmount == 0 && pairedAmount == 0) revert ZeroAmount();
 
@@ -343,17 +346,19 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
             if (buyLiquidity > 0) {
                 uint256 tokenId = IPositionManager(positionManager).nextTokenId();
                 _posmMint(buyTick, buyTick + tickSpacing, buyLiquidity);
-            
-                orders.push(LimitOrder({
-                    tickLower: buyTick,
-                    tickUpper: buyTick + tickSpacing,
-                    liquidity: uint256(buyLiquidity),
-                    tokenId: tokenId,
-                    isBuyOrder: true,
-                    createdAt: block.timestamp,
-                    isActive: true
-                }));
-            
+
+                orders.push(
+                    LimitOrder({
+                        tickLower: buyTick,
+                        tickUpper: buyTick + tickSpacing,
+                        liquidity: uint256(buyLiquidity),
+                        tokenId: tokenId,
+                        isBuyOrder: true,
+                        createdAt: block.timestamp,
+                        isActive: true
+                    })
+                );
+
                 liquidity += uint256(buyLiquidity);
             }
         }
@@ -361,21 +366,24 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
         // Create sell order (above price) with creator coin
         if (creatorCoinAmount > 0) {
             int24 sellTick = _roundDownToSpacing(currentTick + defaultTickOffset);
-            uint128 sellLiquidity = _liquidityForSingleSidedAmount(creatorCoinAmount, sellTick, sellTick + tickSpacing, false);
+            uint128 sellLiquidity =
+                _liquidityForSingleSidedAmount(creatorCoinAmount, sellTick, sellTick + tickSpacing, false);
             if (sellLiquidity > 0) {
                 uint256 tokenId = IPositionManager(positionManager).nextTokenId();
                 _posmMint(sellTick, sellTick + tickSpacing, sellLiquidity);
-            
-                orders.push(LimitOrder({
-                    tickLower: sellTick,
-                    tickUpper: sellTick + tickSpacing,
-                    liquidity: uint256(sellLiquidity),
-                    tokenId: tokenId,
-                    isBuyOrder: false,
-                    createdAt: block.timestamp,
-                    isActive: true
-                }));
-            
+
+                orders.push(
+                    LimitOrder({
+                        tickLower: sellTick,
+                        tickUpper: sellTick + tickSpacing,
+                        liquidity: uint256(sellLiquidity),
+                        tokenId: tokenId,
+                        isBuyOrder: false,
+                        createdAt: block.timestamp,
+                        isActive: true
+                    })
+                );
+
                 liquidity += uint256(sellLiquidity);
             }
         }
@@ -388,9 +396,12 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
     /**
      * @notice Withdraw proportionally from all active orders
      */
-    function withdraw(
-        uint256 liquidity
-    ) external nonReentrant onlyLPManager returns (uint256 creatorCoinAmount, uint256 pairedAmount) {
+    function withdraw(uint256 liquidity)
+        external
+        nonReentrant
+        onlyLPManager
+        returns (uint256 creatorCoinAmount, uint256 pairedAmount)
+    {
         if (liquidity == 0) revert ZeroAmount();
         if (liquidity > totalLiquidity) revert InsufficientLiquidity();
 
@@ -441,7 +452,12 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
     /**
      * @notice Withdraw all liquidity
      */
-    function withdrawAll() external nonReentrant onlyLPManager returns (uint256 creatorCoinAmount, uint256 pairedAmount) {
+    function withdrawAll()
+        external
+        nonReentrant
+        onlyLPManager
+        returns (uint256 creatorCoinAmount, uint256 pairedAmount)
+    {
         if (totalLiquidity == 0) return (0, 0);
 
         _requireConfigured();
@@ -490,7 +506,7 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
 
             // Check if order is filled (price has crossed through it)
             bool isFilled = _isOrderFilled(order, currentTick);
-            
+
             if (isFilled) {
                 // Conservative behavior: unwind filled orders (burn+collect), leave proceeds idle.
                 if (order.tokenId != 0) {
@@ -570,7 +586,7 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
     function getActiveOrders() external view returns (LimitOrder[] memory activeOrders) {
         uint256 count = _getActiveOrderCount();
         activeOrders = new LimitOrder[](count);
-        
+
         uint256 idx = 0;
         uint256 ordersLen = orders.length;
         for (uint256 i = 0; i < ordersLen; i++) {
@@ -688,9 +704,11 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
 
     // _calculateLiquidityForAmount removed in favor of LiquidityAmounts + PosM paths.
 
-    function _estimateOrderValue(
-        LimitOrder storage order
-    ) internal view returns (uint256 creatorCoinAmount, uint256 pairedAmount) {
+    function _estimateOrderValue(LimitOrder storage order)
+        internal
+        view
+        returns (uint256 creatorCoinAmount, uint256 pairedAmount)
+    {
         // Simplified estimation based on order type
         // In production, query actual position from V4
         if (order.isBuyOrder) {
@@ -702,10 +720,7 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
         }
     }
 
-    function _isOrderFilled(
-        LimitOrder storage order,
-        int24 currentTick
-    ) internal view returns (bool) {
+    function _isOrderFilled(LimitOrder storage order, int24 currentTick) internal view returns (bool) {
         if (order.isBuyOrder) {
             // Buy order filled if price dropped below it
             return currentTick < order.tickLower;

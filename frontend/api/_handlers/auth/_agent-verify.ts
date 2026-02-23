@@ -186,7 +186,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const canonicalOwner = await resolveCanonicalSmartWalletAddress(ownerAddress)
-  if (!canonicalOwner || canonicalOwner.toLowerCase() !== ownerAddress.toLowerCase()) {
+  const canonicalOwnerMatches =
+    !!canonicalOwner && canonicalOwner.toLowerCase() === ownerAddress.toLowerCase()
+  const nonceOwnerMatches = !!nonceOwnerLower && nonceOwnerLower === ownerAddress.toLowerCase()
+  if (!canonicalOwnerMatches && !nonceOwnerMatches) {
     return res.status(403).json({
       success: false,
       error: 'Agent owner must be a verified canonical smart wallet',

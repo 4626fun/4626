@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useVaultGaugeVoting, useTimeRemaining, formatVotingPower } from '../../hooks/useVaultGaugeVoting'
 import { logger } from '@/lib/logger'
@@ -42,23 +42,14 @@ export function VaultGaugeVotingPanel({ vaults = [], className = '' }: VaultGaug
     ve4626Address: CONTRACTS.ve4626,
   })
 
-  const [allocations, setAllocations] = useState<VaultVoteAllocation[]>([])
-  const [showSuccess, setShowSuccess] = useState(false)
-
-  // Initialize allocations from vaults
-  useEffect(() => {
-    if (vaults.length > 0 && allocations.length === 0) {
-      setAllocations(vaults.map(v => ({ vault: v.address, name: v.name, weight: 0 })))
-    }
-  }, [vaults, allocations.length])
-
-  // Show success message when tx completes
-  useEffect(() => {
-    if (txSuccess) {
-      setShowSuccess(true)
-      setTimeout(() => setShowSuccess(false), 3000)
-    }
-  }, [txSuccess])
+  const [weightsByVault, setWeightsByVault] = useState<Record<string, number>>({})
+  const allocations = useMemo<VaultVoteAllocation[]>(() => {
+    return vaults.map((v) => ({
+      vault: v.address,
+      name: v.name,
+      weight: weightsByVault[v.address] ?? 0,
+    }))
+  }, [vaults, weightsByVault])
 
   const totalAllocation = useMemo(() => {
     return allocations.reduce((sum, a) => sum + a.weight, 0)
@@ -67,9 +58,8 @@ export function VaultGaugeVotingPanel({ vaults = [], className = '' }: VaultGaug
   const timeRemaining = useTimeRemaining(epochInfo?.timeRemaining ?? 0)
 
   const handleWeightChange = (vaultAddress: string, weight: number) => {
-    setAllocations(prev => 
-      prev.map(a => a.vault === vaultAddress ? { ...a, weight: Math.max(0, Math.min(100, weight)) } : a)
-    )
+    const next = Math.max(0, Math.min(100, weight))
+    setWeightsByVault((prev) => ({ ...prev, [vaultAddress]: next }))
   }
 
   const handleVote = async () => {
@@ -89,7 +79,7 @@ export function VaultGaugeVotingPanel({ vaults = [], className = '' }: VaultGaug
   const handleReset = async () => {
     try {
       await resetVotes()
-      setAllocations(prev => prev.map(a => ({ ...a, weight: 0 })))
+      setWeightsByVault({})
     } catch (err) {
       logger.error('Reset failed', err)
     }
@@ -243,7 +233,7 @@ export function VaultGaugeVotingPanel({ vaults = [], className = '' }: VaultGaug
 
       {/* Success Toast */}
       <AnimatePresence>
-        {showSuccess && (
+        {txSuccess && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

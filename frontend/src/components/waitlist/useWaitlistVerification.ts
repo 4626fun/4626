@@ -85,7 +85,8 @@ export function useWaitlistVerification({
     const openWallet = () => {
       // Prefer the same Privy wallet-login modal used by Zora-style flows.
       if (!privyAuthed && typeof privyLogin === 'function') {
-        return privyLogin({ loginMethods: ['wallet'] })
+        // Allow signup via wallet, email, or X (Twitter).
+        return privyLogin({ loginMethods: ['wallet', 'email', 'twitter'] })
       }
       if (privyAuthed && typeof privyLinkWallet === 'function') {
         return privyLinkWallet(walletOptions as any)

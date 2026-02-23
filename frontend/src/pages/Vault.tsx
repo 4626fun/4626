@@ -362,8 +362,8 @@ export function Vault() {
               <h1 className="headline text-3xl sm:text-5xl mt-4">Invalid vault address</h1>
               <p className="text-zinc-600 text-sm font-light mt-4">Check the URL and try again.</p>
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
-                <Link to="/dashboard" className="btn-accent inline-flex items-center justify-center rounded-full px-5 py-3 text-xs">
-                  Back to Dashboard
+                <Link to="/explore/creators" className="btn-accent inline-flex items-center justify-center rounded-full px-5 py-3 text-xs">
+                  Back to Explore
                 </Link>
               </div>
             </div>
@@ -390,8 +390,8 @@ export function Vault() {
               </p>
               <div className="mt-3 text-[11px] font-mono text-zinc-600 break-all">{addressParam}</div>
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
-                <Link to="/dashboard" className="btn-accent inline-flex items-center justify-center rounded-full px-5 py-3 text-xs">
-                  Back to Dashboard
+                <Link to="/explore/creators" className="btn-accent inline-flex items-center justify-center rounded-full px-5 py-3 text-xs">
+                  Back to Explore
                 </Link>
                 <a
                   href={`https://basescan.org/address/${addressParam}`}
