@@ -511,6 +511,14 @@ function App() {
                 </MarketingOnlyRoute>
               }
             />
+            <Route
+              path="/status"
+              element={
+                <MarketingOnlyRoute>
+                  <Status />
+                </MarketingOnlyRoute>
+              }
+            />
             <Route path="/home" element={<Navigate to={withReason(resolveLegacyRedirect('/home') ?? CANONICAL_SWAP_ROUTE, 'legacy-route')} replace />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
 
@@ -547,7 +555,6 @@ function App() {
                 <Route path="/coin/:address/manage" element={<CoinManage />} />
                 <Route path="/creator/earnings" element={<CreatorEarnings />} />
                 <Route path="/creator/:identifier/earnings" element={<CreatorEarnings />} />
-                <Route path="/status" element={<Status />} />
                 <Route path="/vote" element={<GaugeVoting />} />
                 <Route path="/activate-akita" element={<Navigate to={withReason('/deploy', 'legacy-route')} replace />} />
                 <Route path="/auction/bid/:address" element={<AuctionBid />} />

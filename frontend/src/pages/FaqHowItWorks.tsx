@@ -124,18 +124,17 @@ export function FaqHowItWorks() {
             </div>
 
             <div className={`${surface} p-6 sm:p-8`}>
-              <span className="label">What to verify</span>
-              <div className="mt-4 space-y-3 text-sm text-zinc-500 font-light leading-relaxed">
-                <p>
-                  If you’re about to deploy or bid, verify contracts and configuration on the{' '}
-                  <Link to="/status" className="text-brand-accent hover:text-brand-400 underline underline-offset-4">
-                    Status
-                  </Link>{' '}
-                  page first.
+              <span className="label">More questions?</span>
+              <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <p className="text-sm text-zinc-500 font-light leading-relaxed max-w-prose">
+                  Browse the full FAQ for definitions, mechanics, and troubleshooting.
                 </p>
-                <p className="text-zinc-600">
-                  Creator Vaults is experimental software. Start small and avoid signing transactions you don’t understand.
-                </p>
+                <Link
+                  to="/faq"
+                  className="btn-accent rounded-lg px-5 py-3 text-sm inline-flex items-center justify-center gap-2 whitespace-nowrap"
+                >
+                  View FAQ <ArrowRight className="w-4 h-4" />
+                </Link>
               </div>
             </div>
           </motion.div>

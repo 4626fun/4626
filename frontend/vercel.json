@@ -93,6 +93,11 @@
       "continue": true
     },
     {
+      "src": "/status",
+      "headers": { "x-robots-tag": "noindex, nofollow" },
+      "continue": true
+    },
+    {
       "src": "/dashboard",
       "headers": { "x-robots-tag": "noindex, nofollow" },
       "continue": true
