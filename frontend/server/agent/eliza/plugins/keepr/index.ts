@@ -41,6 +41,9 @@ function isKeeprCommand(text: string): boolean {
     t.startsWith('/whois') ||
     t === 'whois' ||
     t.startsWith('whois ') ||
+    t.startsWith('/mkt') ||
+    t.startsWith('mkt ') ||
+    t === 'mkt' ||
     t.startsWith('/send') ||
     t.startsWith('send ') ||
     t.startsWith('/fc') ||
