@@ -51,7 +51,7 @@ Production override safety:
 ### Split Phase-1 rollout (Base mainnet + Vercel)
 
 Current canonical Base defaults:
-- `CreatorVaultDeployer` (split Phase-1 batcher): `0x32e91185B92c6c13dd56D745aBf24F009cdD3019`
+- `CreatorVaultDeployer` (split Phase-1 batcher): `0x4184D9118ec31061cEDd6041B6bD676ac19F29a5`
 - `UniversalBytecodeStoreV2`: `0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13`
 - `UniversalCreate2DeployerFromStoreV2`: `0x74183076C7D33346880A5bf0e263B761FB4d38BA`
 
@@ -82,11 +82,13 @@ forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore 
   --broadcast
 ```
 
+If you use `./script/deploy.sh infra-v2` or `./script/deploy-infra-v2.sh`, this seed step now runs automatically.
+
 3. Onchain sanity checks:
 
 ```bash
 export BASE_RPC_URL=https://mainnet.base.org
-export NEW_BATCHER=0x32e91185B92c6c13dd56D745aBf24F009cdD3019
+export NEW_BATCHER=0x4184D9118ec31061cEDd6041B6bD676ac19F29a5
 
 # infra wiring
 cast call "$NEW_BATCHER" "bytecodeStore()(address)" --rpc-url "$BASE_RPC_URL"
@@ -107,8 +109,8 @@ cast call 0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13 \
 ```bash
 export PRIVATE_KEY=... # must be protocolTreasury for setSolanaConfig
 export BASE_RPC_URL=https://mainnet.base.org
-export CREATOR_VAULT_BATCHER=0x32e91185B92c6c13dd56D745aBf24F009cdD3019
-export SOLANA_BRIDGE_ADAPTER=0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92
+export CREATOR_VAULT_BATCHER=0x4184D9118ec31061cEDd6041B6bD676ac19F29a5
+export SOLANA_BRIDGE_ADAPTER=0x2414b595c4f18532A5836B6e2E6d536832c572e8
 export SOLANA_DESTINATION=0x<32-byte-solana-pubkey>
 export SET_BATCHER_SOLANA_CONFIG=1
 

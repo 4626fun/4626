@@ -79,11 +79,19 @@ function formatCountCompact(value: number | null | undefined): string | null {
 
 type VerifyStepProps = {
   verifiedWallet: string | null
+  emailValue: string
+  isEmailValid: boolean
+  onEmailChange: (value: string) => void
   showPrivy: boolean
   showPrivyReady: boolean
   privyReady: boolean
   privyVerifyBusy: boolean
   privyVerifyError: string | null
+  showSiwf?: boolean
+  siwfFid?: number | null
+  siwfBusy?: boolean
+  siwfError?: string | null
+  onSiwfContinue?: () => void
   walletOwnershipValid: boolean
   ownershipEvidenceAvailable: boolean
   cswMismatch?: boolean
@@ -109,11 +117,19 @@ type VerifyStepProps = {
 
 export const VerifyStep = memo(function VerifyStep({
   verifiedWallet,
+  emailValue,
+  isEmailValid,
+  onEmailChange,
   showPrivy,
   showPrivyReady,
   privyReady,
   privyVerifyBusy,
   privyVerifyError,
+  showSiwf,
+  siwfFid,
+  siwfBusy,
+  siwfError,
+  onSiwfContinue,
   walletOwnershipValid,
   ownershipEvidenceAvailable,
   cswMismatch,
@@ -133,14 +149,15 @@ export const VerifyStep = memo(function VerifyStep({
   onPrivyFallback,
   onSubmit,
 }: VerifyStepProps) {
+  const hasVerification = Boolean(verifiedWallet) || Boolean(siwfFid)
   const hasCreatorCoin = !!creatorCoin?.address
-  const showSubmitButton = verifiedWallet && (hasCreatorCoin || creatorCoinDeclaredMissing)
+  const showSubmitButton = hasVerification && (hasCreatorCoin || creatorCoinDeclaredMissing)
   const ownerWallets = useMemo(() => creatorCoin?.ownerWallets ?? [], [creatorCoin?.ownerWallets])
   const payoutRecipient = useMemo(() => creatorCoin?.payoutRecipient ?? null, [creatorCoin?.payoutRecipient])
   const canonicalSmartWallet = useMemo(() => creatorCoin?.canonicalSmartWallet ?? null, [creatorCoin?.canonicalSmartWallet])
   const ownershipGateActive = Boolean(hasCreatorCoin && ownershipEvidenceAvailable)
-  const headerTitle = !verifiedWallet ? 'Verify wallet' : showSubmitButton ? 'Join the waitlist' : 'Checking ownership'
-  const headerSubtitle = !verifiedWallet
+  const headerTitle = !hasVerification ? 'Verify wallet' : showSubmitButton ? 'Join the waitlist' : 'Checking ownership'
+  const headerSubtitle = !hasVerification
     ? ''
     : showSubmitButton
       ? ownershipGateActive && !walletOwnershipValid
@@ -149,7 +166,8 @@ export const VerifyStep = memo(function VerifyStep({
       : 'One moment…'
   const [showTrouble, setShowTrouble] = useState(false)
   const canContinue = !privyVerifyBusy && !busy
-  const showPrivyError = Boolean(privyVerifyError)
+  const showPrivyError = Boolean(privyVerifyError) || Boolean(siwfError)
+  const emailError = emailValue.trim().length > 0 && !isEmailValid ? 'Enter a valid email address.' : null
 
   const helperText = useMemo(() => {
     if (privyVerifyBusy) return 'Opening…'
@@ -161,7 +179,11 @@ export const VerifyStep = memo(function VerifyStep({
     ownershipGateActive && !walletOwnershipValid
       ? 'Switch to a payout or owner wallet to continue.'
       : null
-  const connectedWalletShort = useMemo(() => shortAddress(verifiedWallet, 8, 6), [verifiedWallet])
+  const connectedWalletShort = useMemo(() => {
+    if (verifiedWallet) return shortAddress(verifiedWallet, 8, 6)
+    if (siwfFid) return `FID ${siwfFid}`
+    return 'Unavailable'
+  }, [siwfFid, verifiedWallet])
   const creatorCoinAddressShort = useMemo(() => shortAddress(creatorCoin?.address, 8, 6), [creatorCoin?.address])
   const payoutRecipientShort = useMemo(() => shortAddress(payoutRecipient, 8, 6), [payoutRecipient])
   const coinMarketCap = useMemo(() => formatUsdCompact(creatorCoin?.marketCapUsd), [creatorCoin?.marketCapUsd])
@@ -182,10 +204,10 @@ export const VerifyStep = memo(function VerifyStep({
   const ownershipStatusClass = walletOwnershipValid
     ? 'border-emerald-400/35 bg-emerald-500/10 text-emerald-200'
     : 'border-amber-400/35 bg-amber-500/10 text-amber-100'
-  const panelClass = 'rounded-2xl border border-white/[0.06] bg-white/[0.02]'
-  const microPanelClass = 'rounded-xl border border-white/[0.04] bg-white/[0.01]'
+  const panelClass = 'rounded-2xl border border-white/6 bg-white/2'
+  const microPanelClass = 'rounded-xl border border-white/4 bg-white/1'
 
-  if (verifiedWallet && simpleVerifiedMode) {
+  if (hasVerification && simpleVerifiedMode) {
     const profileReady = Boolean(hasCreatorCoin || creatorCoinDeclaredMissing)
     const ownerReady = !ownershipGateActive || walletOwnershipValid
     const setupReady = profileReady && ownerReady
@@ -269,6 +291,21 @@ export const VerifyStep = memo(function VerifyStep({
           </motion.div>
         ) : null}
 
+        <motion.div {...fadeUp} className={`${panelClass} p-4 space-y-2.5`}>
+          <label className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+            Email <span className="text-zinc-700">(optional)</span>
+          </label>
+          <input
+            type="email"
+            value={emailValue}
+            onChange={(e) => onEmailChange(e.target.value)}
+            placeholder="you@example.com"
+            className="w-full rounded-xl border border-white/10 bg-white/3 px-3 py-2.5 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-[#0052FF]/50"
+          />
+          <div className="text-[11px] text-zinc-600">Leave blank to continue wallet-first. You can add a recovery email later.</div>
+          {emailError ? <div className="text-[11px] text-amber-300">{emailError}</div> : null}
+        </motion.div>
+
         {!busy && canSubmit ? (
           <motion.div {...scaleIn}>
             <button
@@ -298,7 +335,7 @@ export const VerifyStep = memo(function VerifyStep({
         {headerSubtitle ? (
           <p className="max-w-[48ch] text-[14px] text-zinc-500 leading-relaxed">{headerSubtitle}</p>
         ) : null}
-        {verifiedWallet ? (
+        {hasVerification ? (
           <div className="inline-flex items-center gap-2 rounded-full border border-[#0052FF]/20 bg-[#0052FF]/5 px-3 py-1.5 text-[11px] font-medium text-[#8AB5FF]">
             <Sparkles className="h-3.5 w-3.5" />
             Founding Creator Access
@@ -307,7 +344,7 @@ export const VerifyStep = memo(function VerifyStep({
       </motion.div>
 
       {/* Single primary CTA + progressive disclosure */}
-      {!verifiedWallet ? (
+      {!hasVerification ? (
         <motion.div {...scaleIn} className="space-y-4">
           <button
             type="button"
@@ -317,12 +354,33 @@ export const VerifyStep = memo(function VerifyStep({
           >
             <span className="relative flex items-center gap-3">
               <img src={BASE_SQUARE_WHITE} alt="" className="w-4 h-4" aria-hidden="true" />
-              Sign in with wallet
+              Sign up
             </span>
             <ChevronRight className="relative w-4 h-4 opacity-80" />
           </button>
 
           <p className="text-[13px] text-zinc-500">We'll continue automatically.</p>
+
+          {showSiwf ? (
+            <button
+              type="button"
+              className="w-full flex items-center justify-center gap-2 min-h-[48px] rounded-2xl border border-white/10 bg-white/2 text-zinc-200 font-medium text-[14px] px-4 py-3 transition-all duration-200 hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={Boolean(siwfBusy) || busy}
+              onClick={onSiwfContinue}
+            >
+              {siwfBusy ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Verifying Farcaster…
+                </>
+              ) : (
+                <>
+                  <Fingerprint className="w-4 h-4" />
+                  Verify with Farcaster
+                </>
+              )}
+            </button>
+          ) : null}
 
           <div className="flex items-center justify-between">
             <div className="text-[12px] text-zinc-500">{helperText || '\u00A0'}</div>
@@ -351,7 +409,7 @@ export const VerifyStep = memo(function VerifyStep({
               {...fadeUp}
               className="rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-[13px] text-red-200/90"
             >
-              {privyVerifyError}
+              {siwfError || privyVerifyError}
             </motion.div>
           ) : null}
 
@@ -419,10 +477,10 @@ export const VerifyStep = memo(function VerifyStep({
       </AnimatePresence>
 
       {/* Loading Creator Coin */}
-      {verifiedWallet && creatorCoinBusy ? (
+      {hasVerification && creatorCoinBusy ? (
         <motion.div
           {...fadeUp}
-          className="flex items-center justify-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] py-4"
+          className="flex items-center justify-center gap-3 rounded-2xl border border-white/6 bg-white/2 py-4"
         >
           <div className="w-5 h-5 rounded-full border-2 border-zinc-600 border-t-[#0052FF] animate-spin" />
           <span className="text-[13px] text-zinc-500">Reading Zora profile and creator coin owners…</span>
@@ -430,10 +488,10 @@ export const VerifyStep = memo(function VerifyStep({
       ) : null}
 
       {/* Verified summary (fills the empty state) */}
-      {verifiedWallet && (hasCreatorCoin || creatorCoinDeclaredMissing) ? (
+      {hasVerification && (hasCreatorCoin || creatorCoinDeclaredMissing) ? (
         <motion.div
           {...scaleIn}
-          className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:p-5"
+          className="relative overflow-hidden rounded-2xl border border-white/6 bg-white/2 p-4 sm:p-5"
         >
           <motion.div
             className="relative space-y-3"
@@ -466,7 +524,7 @@ export const VerifyStep = memo(function VerifyStep({
                     loading="lazy"
                   />
                 ) : (
-                    <div className="h-12 w-12 rounded-2xl border border-white/15 bg-gradient-to-br from-zinc-900 to-zinc-800 flex items-center justify-center text-[12px] text-zinc-300 font-semibold">
+                    <div className="h-12 w-12 rounded-2xl border border-white/15 bg-linear-to-br from-zinc-900 to-zinc-800 flex items-center justify-center text-[12px] text-zinc-300 font-semibold">
                       {(creatorCoin?.symbol || 'CC').slice(0, 2)}
                     </div>
                 )}
@@ -624,7 +682,21 @@ export const VerifyStep = memo(function VerifyStep({
 
       {/* Submit button */}
       {showSubmitButton ? (
-        <motion.div {...scaleIn} className="pt-2">
+        <motion.div {...scaleIn} className="pt-2 space-y-3">
+          <div className={`${panelClass} p-4 space-y-2.5`}>
+            <label className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+              Email <span className="text-zinc-700">(optional)</span>
+            </label>
+            <input
+              type="email"
+              value={emailValue}
+              onChange={(e) => onEmailChange(e.target.value)}
+              placeholder="you@example.com"
+              className="w-full rounded-xl border border-white/10 bg-white/3 px-3 py-2.5 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-[#0052FF]/50"
+            />
+            <div className="text-[11px] text-zinc-600">Leave blank to continue wallet-first. You can add a recovery email later.</div>
+            {emailError ? <div className="text-[11px] text-amber-300">{emailError}</div> : null}
+          </div>
           <button
             type="button"
             className="w-full flex items-center justify-center gap-2 min-h-[56px] rounded-2xl bg-[#0052FF] text-white font-semibold text-[15px] px-6 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_8px_32px_-8px_rgba(0,82,255,0.5)] transition-all duration-200 ease-out hover:bg-[#1a66ff] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.15),0_12px_40px_-8px_rgba(0,82,255,0.6)] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
@@ -644,7 +716,7 @@ export const VerifyStep = memo(function VerifyStep({
       ) : null}
 
       {!showPrivy ? (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-center text-[13px] text-zinc-500">
+        <div className="rounded-2xl border border-white/6 bg-white/2 px-4 py-3 text-center text-[13px] text-zinc-500">
           Wallet login unavailable
         </div>
       ) : null}

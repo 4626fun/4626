@@ -155,6 +155,10 @@ function getInitRetryWindowMs(): number {
   return parsePositiveInt(process.env.POSTGRES_INIT_RETRY_MS) ?? 10_000
 }
 
+function getSessionSaturationRetryWindowMs(): number {
+  return parsePositiveInt(process.env.POSTGRES_INIT_RETRY_MS_MAX_CLIENTS) ?? 60_000
+}
+
 function getAuthInitRetryWindowMs(): number {
   return parsePositiveInt(process.env.POSTGRES_INIT_RETRY_MS_AUTH) ?? 300_000
 }
@@ -293,11 +297,15 @@ export async function getDb(): Promise<DbPool | null> {
         // consistent and controlled via POSTGRES_SSL_REJECT_UNAUTHORIZED.
         const poolConnectionString = stripQueryParams(cs, ['sslmode', 'ssl', 'sslrootcert'])
         const isVercelRuntime = Boolean(process.env.VERCEL) || Boolean(process.env.VERCEL_ENV)
+        const isSupabaseTarget = isSupabaseDatabaseUrl(poolConnectionString)
+        const useConservativeServerlessPool = isVercelRuntime || isSupabaseTarget
         // In serverless, keep client count very small per instance to avoid
         // Supabase Session mode `MaxClientsInSessionMode` saturation.
-        const max = parsePositiveInt(process.env.POSTGRES_POOL_MAX) ?? (isVercelRuntime ? 1 : 10)
-        const idleTimeoutMillis = parsePositiveInt(process.env.POSTGRES_POOL_IDLE_TIMEOUT_MS) ?? 5_000
-        const connectionTimeoutMillis = parsePositiveInt(process.env.POSTGRES_POOL_CONNECT_TIMEOUT_MS) ?? 5_000
+        const max = parsePositiveInt(process.env.POSTGRES_POOL_MAX) ?? (useConservativeServerlessPool ? 1 : 10)
+        // Keep idle connections short-lived on serverless / Supabase so each lambda
+        // releases scarce session-mode clients quickly.
+        const idleTimeoutMillis = parsePositiveInt(process.env.POSTGRES_POOL_IDLE_TIMEOUT_MS) ?? (useConservativeServerlessPool ? 1_000 : 5_000)
+        const connectionTimeoutMillis = parsePositiveInt(process.env.POSTGRES_POOL_CONNECT_TIMEOUT_MS) ?? (useConservativeServerlessPool ? 3_000 : 5_000)
         const maxUses = parsePositiveInt(process.env.POSTGRES_POOL_MAX_USES) ?? 7_500
         const pool = new Pool({
           connectionString: poolConnectionString,
@@ -331,15 +339,26 @@ export async function getDb(): Promise<DbPool | null> {
         return cachedDb
       } catch (err) {
         const authLike = isDbAuthConfigError(err)
-        const retryWindow = authLike ? getAuthInitRetryWindowMs() : getInitRetryWindowMs()
+        const sessionModeSaturated = isSessionModeMaxClientsError(err)
+        const retryWindow =
+          sessionModeSaturated
+            ? getSessionSaturationRetryWindowMs()
+            : authLike
+              ? getAuthInitRetryWindowMs()
+              : getInitRetryWindowMs()
         initRetryWindowMs = retryWindow
         const message = err instanceof Error ? err.message : String(err)
         const code = String((err as any)?.code ?? '').trim().toUpperCase()
         const signature = `${code}:${message}`
 
-        if (isSessionModeMaxClientsError(err)) {
+        if (sessionModeSaturated) {
           if (shouldLogInitError(signature, retryWindow)) {
-            console.error('Postgres pool saturated (session mode max clients reached); will retry init', err)
+            console.error(
+              `Postgres pool saturated (session mode max clients reached); backing off retries for ${Math.round(
+                retryWindow / 1000,
+              )}s. Tune POSTGRES_POOL_MAX/POSTGRES_POOL_IDLE_TIMEOUT_MS or increase Supabase pool_size.`,
+              err,
+            )
           }
         } else if (authLike) {
           if (shouldLogInitError(signature, retryWindow)) {

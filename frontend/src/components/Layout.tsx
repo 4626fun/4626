@@ -1,6 +1,6 @@
-import { Suspense } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Home, LayoutDashboard, Mail, ShieldCheck } from 'lucide-react'
+import { ArrowLeftRight, Droplets, LayoutDashboard, Mail, ShieldCheck, Wallet } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { VaultNavBar } from './brand/VaultNavBar'
 import { ChatWidget } from './chat/ChatWidget'
@@ -27,9 +27,10 @@ type ResolvedAgentSubdomain = {
 }
 
 const navItems: MobileNavItem[] = [
-  { path: '/', icon: Home, label: 'Home', activePrefixes: ['/'] },
-  { path: '/explore/creators', icon: LayoutDashboard, label: 'Explore', activePrefixes: ['/explore', '/dashboard'] },
-  { path: '/deploy', icon: LayoutDashboard, label: 'Deploy', activePrefixes: ['/deploy', '/launch', '/status'] },
+  { path: '/swap', icon: ArrowLeftRight, label: 'Trade', activePrefixes: ['/swap'] },
+  { path: '/explore/creators', icon: LayoutDashboard, label: 'Explore', activePrefixes: ['/explore'] },
+  { path: '/deploy', icon: Droplets, label: 'Vault', activePrefixes: ['/deploy', '/status', '/vault'] },
+  { path: '/portfolio', icon: Wallet, label: 'Portfolio', activePrefixes: ['/portfolio'] },
 ]
 
 const navItemsPublic: MobileNavItem[] = [
@@ -60,6 +61,7 @@ export function Layout() {
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
   const { isAdmin } = useAdminStatus()
+  const [isMobileChatOverlayActive, setIsMobileChatOverlayActive] = useState(false)
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
   const baseItems = publicMode || hostMode === 'marketing' ? navItemsPublic : navItems
   const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, adminNavItem] : baseItems
@@ -74,6 +76,18 @@ export function Layout() {
       return json.data ?? null
     },
   })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const handleOverlayChange = (event: Event) => {
+      const customEvent = event as CustomEvent<{ active?: boolean }>
+      setIsMobileChatOverlayActive(Boolean(customEvent.detail?.active))
+    }
+
+    window.addEventListener('vault-mobile-chat-overlay-change', handleOverlayChange as EventListener)
+    return () => window.removeEventListener('vault-mobile-chat-overlay-change', handleOverlayChange as EventListener)
+  }, [])
 
   return (
     <div className="min-h-screen flex flex-col bg-vault-bg">
@@ -111,7 +125,11 @@ export function Layout() {
       {hostMode === 'app' && <ChatWidget />}
 
       {/* Mobile Nav - Minimal */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[70] border-t border-vault-border/60 bg-vault-bg/80 backdrop-blur-xl">
+      <nav
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-70 border-t border-vault-border/60 bg-vault-bg/80 backdrop-blur-xl ${
+          isMobileChatOverlayActive ? 'hidden' : ''
+        }`}
+      >
         <div className="flex items-center justify-around py-4 px-6">
           {items.map((item) => {
             const { path, icon: Icon, label } = item

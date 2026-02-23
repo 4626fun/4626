@@ -11,6 +11,8 @@ interface ICrossChainERC20Factory {
 
     function isCrossChainErc20(address token) external view returns (bool);
 
-    function deploy(bytes32 remoteToken, string calldata name, string calldata symbol, uint8 decimals) external returns (address);
+    function deploy(bytes32 remoteToken, string calldata name, string calldata symbol, uint8 decimals)
+        external
+        returns (address);
 }
 

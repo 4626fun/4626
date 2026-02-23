@@ -2,7 +2,8 @@
  * React hook for checking coin migration status
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { fetchMigratedCoins, hasCoinMigratedSync, preloadMigratedCoins } from '@/lib/zora/migrations'
 
 // Start preloading on module load
@@ -46,38 +47,29 @@ export function useMigratedCoins() {
  * Hook to check if a specific coin has migrated
  */
 export function useIsCoinMigrated(coinAddress: string | undefined): boolean | undefined {
-  const [isMigrated, setIsMigrated] = useState<boolean | undefined>(() => {
-    if (!coinAddress) return undefined
-    return hasCoinMigratedSync(coinAddress)
-  })
-
-  useEffect(() => {
-    if (!coinAddress) {
-      setIsMigrated(undefined)
-      return
-    }
-
-    // Check sync first
-    const syncResult = hasCoinMigratedSync(coinAddress)
-    if (syncResult !== undefined) {
-      setIsMigrated(syncResult)
-      return
-    }
-
-    // Otherwise fetch and check
-    let cancelled = false
-    fetchMigratedCoins().then((coins) => {
-      if (!cancelled) {
-        setIsMigrated(coins.has(coinAddress.toLowerCase()))
-      }
-    })
-
-    return () => {
-      cancelled = true
-    }
+  const normalized = useMemo(() => {
+    return coinAddress ? coinAddress.toLowerCase() : null
   }, [coinAddress])
 
-  return isMigrated
+  const syncResult = useMemo(() => {
+    if (!coinAddress) return undefined
+    return hasCoinMigratedSync(coinAddress)
+  }, [coinAddress])
+
+  const query = useQuery({
+    queryKey: ['migrations', 'isCoinMigrated', normalized],
+    enabled: Boolean(normalized && syncResult === undefined),
+    queryFn: async () => {
+      const coins = await fetchMigratedCoins()
+      return coins.has(normalized as string)
+    },
+    staleTime: 60_000,
+    retry: 0,
+  })
+
+  if (!normalized) return undefined
+  if (syncResult !== undefined) return syncResult
+  return query.data
 }
 
 /**
@@ -86,17 +78,12 @@ export function useIsCoinMigrated(coinAddress: string | undefined): boolean | un
  */
 export function useBatchMigrationCheck(coinAddresses: string[]): Map<string, boolean> {
   const { migratedCoins, isLoading } = useMigratedCoins()
-  const [results, setResults] = useState<Map<string, boolean>>(new Map())
-
-  useEffect(() => {
-    if (isLoading || !migratedCoins) return
-
-    const newResults = new Map<string, boolean>()
+  return useMemo(() => {
+    const out = new Map<string, boolean>()
+    if (isLoading || !migratedCoins) return out
     for (const addr of coinAddresses) {
-      newResults.set(addr.toLowerCase(), migratedCoins.has(addr.toLowerCase()))
+      out.set(addr.toLowerCase(), migratedCoins.has(addr.toLowerCase()))
     }
-    setResults(newResults)
+    return out
   }, [coinAddresses, migratedCoins, isLoading])
-
-  return results
 }

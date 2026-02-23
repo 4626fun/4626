@@ -40,6 +40,24 @@ function receiveWETHFees(uint256 amount) external;
 function deposit(uint256 amount) external;
 ```
 
+### WETH Fee Processing
+
+WETH fees accumulate in `pendingWETHFees` and are processed via a swap (WETH → CreatorCoin) then deposited into the vault and distributed as vault shares.
+
+```solidity
+// Process pending WETH fees: WETH → CreatorCoin → Vault → Distribute
+function processWETHFees() external;
+```
+
+Default MEV hardening behavior:
+- Large WETH swaps are not permissionless by default (owner/keeper only).
+- Permissionless execution can be enabled for small batches via a cap.
+- Auto-processing on fee intake is disabled by default.
+
+Relevant config (owner-only):
+- `setWethFeeKeeper(address keeper)` (optional)
+- `setWethProcessingConfig(uint256 maxPermissionlessWethProcess, bool autoProcessWethFees)`
+
 ### Distribution
 
 ```solidity

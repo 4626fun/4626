@@ -93,6 +93,9 @@ This app follows [Base Mini App guidelines](https://docs.base.org/mini-apps/quic
 
 ## Deployment
 
+- See `docs/erc7712-agent-permission-plan.md` for a proposed ERC-7712 delegated-permission rollout for deploy/agent flows.
+
+
 ### Vercel (Recommended)
 
 ```bash

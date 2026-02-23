@@ -12,6 +12,17 @@ export type FarcasterVerifiedSession = {
 
 type Status = 'idle' | 'loading' | 'verified' | 'unauthenticated' | 'error'
 
+function parseSiwfPrimaryAddress(message: string): string | null {
+  const m = typeof message === 'string' ? message : ''
+  if (!m) return null
+  const lines = m.split('\n')
+  const marker = 'wants you to sign in with your Ethereum account:'
+  const idx = lines.findIndex((line) => line.includes(marker))
+  if (idx < 0) return null
+  const candidate = (lines[idx + 1] ?? '').trim()
+  return /^0x[a-fA-F0-9]{40}$/.test(candidate) ? candidate : null
+}
+
 export function useFarcasterAuth() {
   const mini = useMiniAppContext()
 
@@ -103,6 +114,7 @@ export function useFarcasterAuth() {
       }
 
       const { message, signature } = await sdk.actions.signIn({ nonce, acceptAuthAddress: true })
+      const parsedPrimaryAddress = parseSiwfPrimaryAddress(message)
 
       const verifyRes = await apiFetch('/api/farcaster/verify', {
         method: 'POST',
@@ -130,9 +142,9 @@ export function useFarcasterAuth() {
         // ignore
       }
 
-      setSession({ fid: outFid })
+      setSession({ fid: outFid, primaryAddress: parsedPrimaryAddress })
       setStatus('verified')
-      return { fid: outFid }
+      return { fid: outFid, primaryAddress: parsedPrimaryAddress }
     } catch (e: unknown) {
       setSession(null)
       setStatus('error')

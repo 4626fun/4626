@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, useState } from 'react'
+import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Coins, Loader2, CheckCircle2, Upload, AlertCircle } from 'lucide-react'
 import { usePublicClient, useWalletClient } from 'wagmi'
@@ -10,14 +10,13 @@ import { uploadImmutableBlob, uploadImmutableJson } from '@/lib/lens/grove'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { logger } from '@/lib/logger'
+import { getZoraPlatformReferrerAddress } from '@/lib/zora/referrals'
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const PLATFORM_REFERRER =
-  (import.meta.env.VITE_ZORA_PLATFORM_REFERRER_ADDRESS as string | undefined)?.trim() ||
-  '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF'
+const PLATFORM_REFERRER = getZoraPlatformReferrerAddress()
 
 const GROVE_BASE_CHAIN_ID = 8453 // Base mainnet for immutable uploads
 
@@ -34,6 +33,12 @@ const fadeUp = {
 type LaunchStep = 'form' | 'uploading' | 'signing' | 'confirming' | 'done' | 'error'
 
 type LaunchCoinCardProps = {
+  /** UI mode: full form (default) or 1-click prefilled */
+  mode?: 'form' | 'one-click'
+  /** Prefill coin name (used in one-click mode) */
+  defaultName?: string | null
+  /** Prefill coin symbol seed (used in one-click mode) */
+  defaultSymbol?: string | null
   /** The user's Coinbase Smart Wallet address (coin creator) */
   smartWalletAddress: string | null
   /** The EOA owner address that will sign the UserOp */
@@ -47,6 +52,9 @@ type LaunchCoinCardProps = {
 // ---------------------------------------------------------------------------
 
 export const LaunchCoinCard = memo(function LaunchCoinCard({
+  mode = 'form',
+  defaultName,
+  defaultSymbol,
   smartWalletAddress,
   ownerAddress,
   onCoinCreated,
@@ -70,13 +78,25 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
   const [txHash, setTxHash] = useState<string | null>(null)
 
   // Derived
-  const symbolClean = symbol.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
+  const isOneClick = mode === 'one-click'
+  const effectiveName = useMemo(() => {
+    const raw = isOneClick ? String(defaultName ?? '') : name
+    return raw.trim()
+  }, [defaultName, isOneClick, name])
+  const effectiveSymbolRaw = useMemo(() => {
+    return isOneClick ? String(defaultSymbol ?? '') : symbol
+  }, [defaultSymbol, isOneClick, symbol])
+  const symbolClean = useMemo(() => {
+    return effectiveSymbolRaw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
+  }, [effectiveSymbolRaw])
   const canSubmit =
-    name.trim().length >= 2 &&
+    effectiveName.length >= 2 &&
     symbolClean.length >= 2 &&
     step === 'form' &&
     !!smartWalletAddress &&
-    !!ownerAddress
+    !!ownerAddress &&
+    !!publicClient &&
+    !!walletClient
 
   // Image handling
   const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,8 +144,8 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
       // Step 2: Upload metadata JSON
       // ---------------------------------------------------------------
       const metadata = {
-        name: name.trim(),
-        description: description.trim() || `${name.trim()} Creator Coin on CreatorVault`,
+        name: effectiveName,
+        description: description.trim() || `${effectiveName} Creator Coin on CreatorVault`,
         ...(imageUri ? { image: imageUri } : {}),
         properties: {
           symbol: symbolClean,
@@ -145,7 +165,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
 
       const callResult = await createCoinCall({
         creator: smartWalletAddress,
-        name: name.trim(),
+        name: effectiveName,
         symbol: symbolClean,
         metadata: { type: 'RAW_URI', uri: metadataUri },
         currency: 'ETH',
@@ -219,7 +239,18 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
       setStep('error')
       setError(msg.length > 300 ? msg.slice(0, 300) + '...' : msg)
     }
-  }, [canSubmit, publicClient, walletClient, smartWalletAddress, ownerAddress, imageFile, name, symbolClean, description, onCoinCreated])
+  }, [
+    canSubmit,
+    description,
+    effectiveName,
+    imageFile,
+    onCoinCreated,
+    ownerAddress,
+    publicClient,
+    smartWalletAddress,
+    symbolClean,
+    walletClient,
+  ])
 
   // Reset to form
   const handleRetry = useCallback(() => {
@@ -279,6 +310,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
   }
 
   const isBusy = step === 'uploading' || step === 'signing' || step === 'confirming'
+  const createLabel = isOneClick && symbolClean ? `Create $${symbolClean}` : 'Create Coin'
 
   return (
     <motion.div {...fadeUp} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 space-y-4">
@@ -288,92 +320,105 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
           <Coins className="w-4.5 h-4.5 text-[#0052FF]" />
         </div>
         <div>
-          <div className="text-[14px] font-semibold text-white">Launch Your Creator Coin</div>
+          <div className="text-[14px] font-semibold text-white">{isOneClick ? 'Create your Creator Coin' : 'Launch Your Creator Coin'}</div>
           <div className="text-[11px] text-zinc-500">Free to create — gas is sponsored</div>
         </div>
       </div>
 
-      {/* Form */}
-      <div className="space-y-3">
-        {/* Name */}
-        <div>
-          <label className="text-[11px] text-zinc-500 uppercase tracking-wider block mb-1">Name</label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Akita"
-            disabled={isBusy}
-            maxLength={64}
-            className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[14px] placeholder:text-zinc-600 focus:outline-none focus:border-[#0052FF]/40 transition-colors disabled:opacity-50"
-          />
-        </div>
-
-        {/* Symbol */}
-        <div>
-          <label className="text-[11px] text-zinc-500 uppercase tracking-wider block mb-1">Symbol</label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-[14px]">$</span>
-            <input
-              type="text"
-              value={symbol}
-              onChange={(e) => setSymbol(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))}
-              placeholder="e.g. AKITA"
-              disabled={isBusy}
-              maxLength={8}
-              className="w-full pl-7 pr-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[14px] placeholder:text-zinc-600 focus:outline-none focus:border-[#0052FF]/40 transition-colors disabled:opacity-50 uppercase"
-            />
+      {isOneClick ? (
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+          <div className="text-[11px] uppercase tracking-wider text-zinc-600">Prefilled</div>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[14px] text-white font-medium truncate">{effectiveName || '--'}</div>
+              <div className="text-[12px] text-zinc-500 font-mono truncate">${symbolClean || '--'}</div>
+            </div>
+            <div className="text-[11px] text-zinc-600 text-right">Uses your username</div>
           </div>
         </div>
+      ) : (
+        /* Form */
+        <div className="space-y-3">
+          {/* Name */}
+          <div>
+            <label className="text-[11px] text-zinc-500 uppercase tracking-wider block mb-1">Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Akita"
+              disabled={isBusy}
+              maxLength={64}
+              className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[14px] placeholder:text-zinc-600 focus:outline-none focus:border-[#0052FF]/40 transition-colors disabled:opacity-50"
+            />
+          </div>
 
-        {/* Description (optional) */}
-        <div>
-          <label className="text-[11px] text-zinc-500 uppercase tracking-wider block mb-1">
-            Description <span className="text-zinc-700">(optional)</span>
-          </label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="What's your coin about?"
-            disabled={isBusy}
-            maxLength={280}
-            rows={2}
-            className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[13px] placeholder:text-zinc-600 focus:outline-none focus:border-[#0052FF]/40 transition-colors disabled:opacity-50 resize-none"
-          />
-        </div>
+          {/* Symbol */}
+          <div>
+            <label className="text-[11px] text-zinc-500 uppercase tracking-wider block mb-1">Symbol</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-[14px]">$</span>
+              <input
+                type="text"
+                value={symbol}
+                onChange={(e) => setSymbol(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))}
+                placeholder="e.g. AKITA"
+                disabled={isBusy}
+                maxLength={8}
+                className="w-full pl-7 pr-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[14px] placeholder:text-zinc-600 focus:outline-none focus:border-[#0052FF]/40 transition-colors disabled:opacity-50 uppercase"
+              />
+            </div>
+          </div>
 
-        {/* Image upload */}
-        <div>
-          <label className="text-[11px] text-zinc-500 uppercase tracking-wider block mb-1">
-            Image <span className="text-zinc-700">(optional)</span>
-          </label>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={ACCEPTED_IMAGE_TYPES.join(',')}
-            onChange={handleImageSelect}
-            className="hidden"
-          />
-          <button
-            type="button"
-            disabled={isBusy}
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] text-zinc-500 text-[13px] hover:border-white/[0.12] hover:text-zinc-400 transition-colors disabled:opacity-50 cursor-pointer"
-          >
-            {imagePreview ? (
-              <div className="flex items-center gap-2">
-                <img src={imagePreview} alt="preview" className="w-6 h-6 rounded object-cover" />
-                <span className="truncate max-w-[180px]">{imageFile?.name}</span>
-              </div>
-            ) : (
-              <>
-                <Upload className="w-3.5 h-3.5" />
-                <span>Upload image</span>
-              </>
-            )}
-          </button>
+          {/* Description (optional) */}
+          <div>
+            <label className="text-[11px] text-zinc-500 uppercase tracking-wider block mb-1">
+              Description <span className="text-zinc-700">(optional)</span>
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What's your coin about?"
+              disabled={isBusy}
+              maxLength={280}
+              rows={2}
+              className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[13px] placeholder:text-zinc-600 focus:outline-none focus:border-[#0052FF]/40 transition-colors disabled:opacity-50 resize-none"
+            />
+          </div>
+
+          {/* Image upload */}
+          <div>
+            <label className="text-[11px] text-zinc-500 uppercase tracking-wider block mb-1">
+              Image <span className="text-zinc-700">(optional)</span>
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_IMAGE_TYPES.join(',')}
+              onChange={handleImageSelect}
+              className="hidden"
+            />
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] text-zinc-500 text-[13px] hover:border-white/[0.12] hover:text-zinc-400 transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              {imagePreview ? (
+                <div className="flex items-center gap-2">
+                  <img src={imagePreview} alt="preview" className="w-6 h-6 rounded object-cover" />
+                  <span className="truncate max-w-[180px]">{imageFile?.name}</span>
+                </div>
+              ) : (
+                <>
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Upload image</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Error */}
       {(error || step === 'error') && (
@@ -416,7 +461,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
           ].join(' ')}
         >
           <Coins className="w-4 h-4" />
-          Create Coin
+          {createLabel}
         </button>
       )}
 

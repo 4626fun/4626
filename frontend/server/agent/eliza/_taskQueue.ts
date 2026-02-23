@@ -14,6 +14,9 @@ type TaskWorker = {
   stop: () => void
 }
 
+const TASK_RETRY_BASE_MS = Math.max(250, Number(process.env.ELIZA_TASK_RETRY_BASE_MS ?? '2000') || 2_000)
+const TASK_RETRY_MAX_MS = Math.max(TASK_RETRY_BASE_MS, Number(process.env.ELIZA_TASK_RETRY_MAX_MS ?? '60000') || 60_000)
+
 const CREATE_QUEUE_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS agent_background_tasks (
     id BIGSERIAL PRIMARY KEY,
@@ -165,6 +168,10 @@ export function startAgentBackgroundTaskWorker(params: {
     : 5
   let stopped = false
   let tickRunning = false
+  const backoffForAttempt = (attempt: number): number => {
+    const safeAttempt = Math.max(1, attempt)
+    return Math.min(TASK_RETRY_MAX_MS, TASK_RETRY_BASE_MS * Math.pow(2, safeAttempt - 1))
+  }
 
   const tick = async () => {
     if (stopped || tickRunning) return
@@ -182,7 +189,7 @@ export function startAgentBackgroundTaskWorker(params: {
           await markTaskFailed({
             id: task.id,
             error: message,
-            retryDelayMs: 2_000 * Math.max(1, task.attempts),
+            retryDelayMs: backoffForAttempt(task.attempts),
           })
         }
       }

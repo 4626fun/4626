@@ -8,6 +8,7 @@ type WaitlistPositionResponse = {
   profileCompletedAt: string | null
 
   referralCode: string | null
+  borderTier: number
 
   points: {
     total: number
@@ -84,7 +85,7 @@ export default async function handler(req: any, res: any) {
   let me
   if (hasValidEmail) {
     me = await db.sql`
-      SELECT id, email, referral_code, profile_completed_at
+      SELECT id, email, referral_code, profile_completed_at, border_tier
       FROM profiles
       WHERE email = ${email}
       LIMIT 1;
@@ -94,7 +95,7 @@ export default async function handler(req: any, res: any) {
   // If no result by email, try by wallet
   if ((!me?.rows?.length) && hasValidWallet) {
     me = await db.sql`
-      SELECT id, email, referral_code, profile_completed_at
+      SELECT id, email, referral_code, profile_completed_at, border_tier
       FROM profiles
       WHERE LOWER(primary_wallet) = ${wallet}
          OR LOWER(embedded_wallet) = ${wallet}
@@ -109,6 +110,7 @@ export default async function handler(req: any, res: any) {
 
   const profileCompletedAt = row?.profile_completed_at ? String(row.profile_completed_at) : null
   const referralCode = typeof row?.referral_code === 'string' ? String(row.referral_code) : null
+  const borderTier = safeInt(row?.border_tier)
 
   const pointsAgg = await db.sql`
     SELECT
@@ -229,6 +231,7 @@ export default async function handler(req: any, res: any) {
     signupId,
     profileCompletedAt,
     referralCode,
+    borderTier,
     points,
     rank: { invite: inviteRank, total: totalRank },
     totalCount,

@@ -51,13 +51,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const limitRaw = typeof req.query?.limit === 'string' ? req.query.limit : ''
   const listedRaw = typeof req.query?.listed === 'string' ? req.query.listed : 'true'
   const cursorRaw = typeof req.query?.cursor === 'string' ? req.query.cursor : ''
+  const creatorAddressRaw = typeof req.query?.creatorAddress === 'string' ? req.query.creatorAddress.trim() : ''
 
   const limit = clampInt(Number(limitRaw || '50'), 1, 200)
   const listedOnly = !(listedRaw.toLowerCase() === 'false' || listedRaw === '0')
   const cursor = parseCursor(cursorRaw)
+  const creatorAddress =
+    creatorAddressRaw.length > 0 && /^0x[a-fA-F0-9]{40}$/.test(creatorAddressRaw)
+      ? (creatorAddressRaw.toLowerCase() as `0x${string}`)
+      : null
+  if (creatorAddressRaw.length > 0 && !creatorAddress) {
+    return res.status(400).json({ success: false, error: 'Invalid creatorAddress' })
+  }
 
   try {
-    const { rows, nextCursor } = await listCreatorXmtpAgents({ listedOnly, limit, cursor: cursor ?? undefined })
+    const { rows, nextCursor } = await listCreatorXmtpAgents({
+      listedOnly,
+      limit,
+      cursor: cursor ?? undefined,
+      creatorAddress: creatorAddress ?? undefined,
+    })
     setCache(res, 60)
     return res.status(200).json({
       success: true,

@@ -3,7 +3,7 @@ use anchor_spl::token_2022::Token2022;
 use anchor_spl::token_interface::Mint as MintInterface;
 use anchor_lang::solana_program::program::invoke;
 use spl_token_2022::extension::StateWithExtensions;
-use spl_token_2022::extension::transfer_fee::instruction as transfer_fee_instruction;
+use spl_token_2022::instruction as token_instruction;
 use spl_token_2022::state::Account as TokenAccount;
 
 use crate::constants::*;
@@ -43,7 +43,7 @@ pub struct FlushFees<'info> {
     pub token_program: Program<'info, Token2022>,
 }
 
-pub fn handler<'info>(ctx: Context<'_, '_, '_, 'info, FlushFees<'info>>) -> Result<()> {
+pub fn handler(ctx: Context<FlushFees>) -> Result<()> {
     let mint_key = ctx.accounts.mint.key();
 
     // Validate fee_vault is a Token-2022 account for this mint.
@@ -60,12 +60,12 @@ pub fn handler<'info>(ctx: Context<'_, '_, '_, 'info, FlushFees<'info>>) -> Resu
     // Step 1: Harvest withheld fees from token accounts to the mint.
     // The token accounts are provided as remaining_accounts.
     if !ctx.remaining_accounts.is_empty() {
-        let sources: Vec<&Pubkey> = ctx
+        let sources: Vec<Pubkey> = ctx
             .remaining_accounts
             .iter()
-            .map(|a| a.key)
+            .map(|a| *a.key)
             .collect();
-        let harvest_ix = transfer_fee_instruction::harvest_withheld_tokens_to_mint(
+        let harvest_ix = token_instruction::harvest_withheld_tokens_to_mint(
             &ctx.accounts.token_program.key(),
             &mint_key,
             &sources,
@@ -73,13 +73,13 @@ pub fn handler<'info>(ctx: Context<'_, '_, '_, 'info, FlushFees<'info>>) -> Resu
 
         let mut harvest_accounts = Vec::with_capacity(1 + ctx.remaining_accounts.len());
         harvest_accounts.push(ctx.accounts.mint.to_account_info());
-        harvest_accounts.extend(ctx.remaining_accounts.iter().cloned());
+        harvest_accounts.extend(ctx.remaining_accounts.iter().map(|a| a.to_account_info()));
 
         invoke(&harvest_ix, &harvest_accounts)?;
     }
 
     // Step 2: Withdraw all withheld tokens from the mint into fee_vault.
-    let withdraw_ix = transfer_fee_instruction::withdraw_withheld_tokens_from_mint(
+    let withdraw_ix = token_instruction::withdraw_withheld_tokens_from_mint(
         &ctx.accounts.token_program.key(),
         &mint_key,
         fee_vault_info.key,

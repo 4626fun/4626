@@ -6,6 +6,7 @@ import { encodeFunctionData, getAddress } from 'viem'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
+import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -45,6 +46,13 @@ type PublishData = {
     storageKey: string
     statusUrl: string | null
   }
+}
+
+type WaitlistMeData = {
+  cswAddress?: string | null
+  primarySmartWallet?: string | null
+  baseSubAccount?: string | null
+  connectedAccounts?: Array<{ address?: string | null; isCanonicalSmartWallet?: boolean }>
 }
 
 // ---------------------------------------------------------------------------
@@ -169,6 +177,41 @@ export function AdminAgentSetup() {
     return addr ? String(addr).toLowerCase() : null
   }, [authAddress, address])
 
+  const waitlistMeQuery = useQuery({
+    queryKey: ['admin', 'waitlist-me', creatorAddress],
+    queryFn: async (): Promise<WaitlistMeData | null> => {
+      const res = await apiFetch('/api/waitlist/me', { method: 'GET', headers: { Accept: 'application/json' } })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<WaitlistMeData | null> | null
+      if (!res.ok || !json?.success) return null
+      return json.data ?? null
+    },
+    enabled: Boolean(creatorAddress),
+    staleTime: 15_000,
+  })
+
+  const canonicalCswAddress = useMemo(() => {
+    const row = waitlistMeQuery.data
+    const rawCandidates = [
+      row?.cswAddress,
+      row?.primarySmartWallet,
+      row?.baseSubAccount,
+      ...(Array.isArray(row?.connectedAccounts)
+        ? row.connectedAccounts.filter((item) => item?.isCanonicalSmartWallet).map((item) => item?.address ?? null)
+        : []),
+    ]
+    for (const candidate of rawCandidates) {
+      const value = typeof candidate === 'string' ? candidate.trim() : ''
+      if (!isAddressLike(value)) continue
+      return value.toLowerCase()
+    }
+    return null
+  }, [waitlistMeQuery.data])
+
+  const zoraHandoffHref = useMemo(() => {
+    const returnPath = '/admin/agent-setup?from=zora&gate=agent'
+    return buildZoraHandoffUrl({ returnPath, context: 'agent' })
+  }, [])
+
   // -----------------------------------------------------------------------
   // Agent status
   // -----------------------------------------------------------------------
@@ -192,16 +235,16 @@ export function AdminAgentSetup() {
   // Server wallet provisioning (for CSW mode — needed to sign server-side)
   // -----------------------------------------------------------------------
   const serverWalletQuery = useQuery({
-    queryKey: ['admin', 'serverWallet', creatorAddress],
+    queryKey: ['admin', 'serverWallet', canonicalCswAddress],
     queryFn: async (): Promise<{ walletId: string; address: string } | null> => {
-      if (!creatorAddress) return null
+      if (!canonicalCswAddress) return null
       try {
-        return await provisionServerWallet(creatorAddress)
+        return await provisionServerWallet(canonicalCswAddress)
       } catch {
         return null
       }
     },
-    enabled: Boolean(creatorAddress) && agentMode === 'csw',
+    enabled: Boolean(canonicalCswAddress) && agentMode === 'csw',
     staleTime: 60_000,
   })
 
@@ -209,12 +252,12 @@ export function AdminAgentSetup() {
   // Check if the server wallet is already an owner of the CSW
   // -----------------------------------------------------------------------
   const isOwnerQuery = useQuery({
-    queryKey: ['admin', 'isOwner', creatorAddress, serverWalletQuery.data?.address],
+    queryKey: ['admin', 'isOwner', canonicalCswAddress, serverWalletQuery.data?.address],
     queryFn: async (): Promise<boolean> => {
-      if (!creatorAddress || !serverWalletQuery.data?.address || !publicClient) return false
+      if (!canonicalCswAddress || !serverWalletQuery.data?.address || !publicClient) return false
       try {
         const result = await publicClient.readContract({
-          address: getAddress(creatorAddress) as `0x${string}`,
+          address: getAddress(canonicalCswAddress) as `0x${string}`,
           abi: CSW_ABI,
           functionName: 'isOwnerAddress',
           args: [getAddress(serverWalletQuery.data.address) as `0x${string}`],
@@ -225,7 +268,7 @@ export function AdminAgentSetup() {
         return false
       }
     },
-    enabled: Boolean(creatorAddress) && Boolean(serverWalletQuery.data?.address) && Boolean(publicClient),
+    enabled: Boolean(canonicalCswAddress) && Boolean(serverWalletQuery.data?.address) && Boolean(publicClient),
     staleTime: 15_000,
   })
 
@@ -234,7 +277,7 @@ export function AdminAgentSetup() {
   // -----------------------------------------------------------------------
   const addOwnerMutation = useMutation({
     mutationFn: async () => {
-      if (!walletClient || !creatorAddress || !serverWalletQuery.data?.address) {
+      if (!walletClient || !canonicalCswAddress || !serverWalletQuery.data?.address) {
         throw new Error('Wallet not connected or server wallet not provisioned')
       }
       const data = encodeFunctionData({
@@ -243,7 +286,7 @@ export function AdminAgentSetup() {
         args: [getAddress(serverWalletQuery.data.address) as `0x${string}`],
       })
       const hash = await walletClient.sendTransaction({
-        to: getAddress(creatorAddress) as `0x${string}`,
+        to: getAddress(canonicalCswAddress) as `0x${string}`,
         data,
         chain: walletClient.chain,
       })
@@ -400,8 +443,9 @@ export function AdminAgentSetup() {
       publish: PublishData
     }> => {
       if (!creatorAddress) throw new Error('Connect your wallet first')
+      if (!canonicalCswAddress) throw new Error('Create or connect your Zora Coinbase Smart Wallet first.')
 
-      const wallet = serverWallet ?? (await provisionServerWallet(creatorAddress))
+      const wallet = serverWallet ?? (await provisionServerWallet(canonicalCswAddress))
       let ownerTxHash: `0x${string}` | null = null
 
       let ownerReady = isServerWalletOwner
@@ -413,7 +457,7 @@ export function AdminAgentSetup() {
           args: [getAddress(wallet.address) as `0x${string}`],
         })
         const hash = await walletClient.sendTransaction({
-          to: getAddress(creatorAddress) as `0x${string}`,
+          to: getAddress(canonicalCswAddress) as `0x${string}`,
           data,
           chain: walletClient.chain,
         })
@@ -422,7 +466,7 @@ export function AdminAgentSetup() {
           await publicClient.waitForTransactionReceipt({ hash })
           try {
             const result = await publicClient.readContract({
-              address: getAddress(creatorAddress) as `0x${string}`,
+              address: getAddress(canonicalCswAddress) as `0x${string}`,
               abi: CSW_ABI,
               functionName: 'isOwnerAddress',
               args: [getAddress(wallet.address) as `0x${string}`],
@@ -438,7 +482,7 @@ export function AdminAgentSetup() {
       }
 
       const agent = await enableCswAgent({
-        cswAddress: creatorAddress,
+        cswAddress: canonicalCswAddress,
         privyWalletId: wallet.walletId,
         listed: true,
       })
@@ -671,7 +715,22 @@ export function AdminAgentSetup() {
 
               {/* CSW flow */}
               {agentMode === 'csw' && (
-                <div className="space-y-3 rounded-lg border border-emerald-500/10 bg-emerald-500/[0.02] p-4">
+                <div className="space-y-3 rounded-lg border border-emerald-500/10 bg-emerald-500/2 p-4">
+                  {!canonicalCswAddress ? (
+                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-3">
+                      <div className="text-[11px] text-amber-200 font-medium">Canonical Zora CSW required</div>
+                      <div className="mt-1 text-[10px] text-amber-100/80">
+                        One-click agent setup is locked until your canonical Zora Coinbase Smart Wallet is connected.
+                      </div>
+                      <a
+                        href={zoraHandoffHref}
+                        className="mt-2 inline-flex items-center gap-1 rounded-md border border-amber-300/30 bg-amber-400/10 px-2.5 py-1 text-[10px] text-amber-100 hover:bg-amber-400/20"
+                      >
+                        Create or connect on Zora <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  ) : null}
+
                   <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
@@ -683,7 +742,7 @@ export function AdminAgentSetup() {
                       <button
                         type="button"
                         onClick={() => void oneClickMutation.mutateAsync()}
-                        disabled={oneClickMutation.isPending || !creatorAddress}
+                        disabled={oneClickMutation.isPending || !canonicalCswAddress}
                         className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[11px] text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-60"
                       >
                         {oneClickMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
@@ -705,12 +764,12 @@ export function AdminAgentSetup() {
                     ) : null}
                   </div>
 
-                  {creatorAddress && (
+                  {canonicalCswAddress && (
                     <div>
                       <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Your Smart Wallet</div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs text-emerald-400">{truncAddr(creatorAddress)}</span>
-                        <CopyButton text={creatorAddress} />
+                        <span className="font-mono text-xs text-emerald-400">{truncAddr(canonicalCswAddress)}</span>
+                        <CopyButton text={canonicalCswAddress} />
                       </div>
                     </div>
                   )}
@@ -748,10 +807,10 @@ export function AdminAgentSetup() {
                             onClick={() => void enableMutation.mutateAsync({
                               listed: true,
                               agentType: 'csw',
-                              cswAddress: creatorAddress!,
+                              cswAddress: canonicalCswAddress!,
                               privyWalletId: serverWallet.walletId,
                             })}
-                            disabled={enableMutation.isPending || !creatorAddress}
+                            disabled={enableMutation.isPending || !canonicalCswAddress}
                             className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
                           >
                             {enableMutation.isPending ? (

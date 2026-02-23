@@ -8,6 +8,7 @@
 import { Agent, createUser, createSigner, filter, getInstallationInfo } from '@xmtp/agent-sdk'
 import type { MessageContext, ConversationContext } from '@xmtp/agent-sdk'
 import type { Plugin } from '@elizaos/core'
+import { AgentError } from '../../_errors.js'
 
 const ETHEREUM_IDENTIFIER_KIND = 0
 
@@ -24,9 +25,66 @@ function getEthereumAddressFromInboxState(state: any): string | null {
 }
 
 function readEnvDbEncryptionKey(): `0x${string}` | undefined {
+  const plaintextOnlyRaw = String(process.env.XMTP_DB_PLAINTEXT_ONLY ?? '').trim().toLowerCase()
+  if (
+    plaintextOnlyRaw === '1' ||
+    plaintextOnlyRaw === 'true' ||
+    plaintextOnlyRaw === 'yes' ||
+    plaintextOnlyRaw === 'on'
+  ) {
+    return undefined
+  }
   const raw = (process.env.XMTP_DB_ENCRYPTION_KEY ?? '').trim()
   if (!raw) return undefined
   return (raw.startsWith('0x') ? raw : `0x${raw}`) as `0x${string}`
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  const n = Number(String(raw ?? '').trim())
+  if (!Number.isFinite(n) || n <= 0) return fallback
+  return Math.floor(n)
+}
+
+async function withRetry<T>(input: {
+  operationName: string
+  maxAttempts: number
+  baseDelayMs: number
+  run: () => Promise<T>
+}): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= input.maxAttempts; attempt += 1) {
+    try {
+      return await input.run()
+    } catch (error) {
+      lastError = error
+      const message = error instanceof Error ? error.message : String(error)
+      const lower = message.toLowerCase()
+      const retryable =
+        lower.includes('timeout') ||
+        lower.includes('tempor') ||
+        lower.includes('429') ||
+        lower.includes('503') ||
+        lower.includes('network')
+      if (!retryable || attempt >= input.maxAttempts) break
+      const waitMs = input.baseDelayMs * Math.pow(2, attempt - 1)
+      await sleep(waitMs)
+    }
+  }
+  throw new AgentError(
+    'UPSTREAM_ERROR',
+    `${input.operationName}_failed_after_retries`,
+    {
+      retryable: true,
+      details: {
+        maxAttempts: input.maxAttempts,
+      },
+      cause: lastError,
+    },
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -123,6 +181,8 @@ export class XmtpService {
     const createOpts: Record<string, unknown> = {
       env: this.config.env ?? 'production',
     }
+    const startMaxAttempts = parsePositiveInt(process.env.ELIZA_XMTP_START_MAX_RETRIES, 3)
+    const startRetryBaseMs = parsePositiveInt(process.env.ELIZA_XMTP_START_RETRY_BASE_MS, 1_000)
 
     // Persist the local database so the SDK reuses the same installation
     // across restarts instead of registering a new one each time.
@@ -136,26 +196,40 @@ export class XmtpService {
     }
 
     let effectiveDbEncryptionKey = this.config.dbEncryptionKey
-    try {
-      this.agent = await Agent.create(signer, createOpts as any)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      const retryKey = !effectiveDbEncryptionKey ? readEnvDbEncryptionKey() : undefined
-      const isUnsupportedFormat = message.toLowerCase().includes('unsupported file format')
-      if (!retryKey || !isUnsupportedFormat) throw err
+    this.agent = await withRetry({
+      operationName: 'xmtp_agent_create',
+      maxAttempts: startMaxAttempts,
+      baseDelayMs: startRetryBaseMs,
+      run: async () => {
+        try {
+          return await Agent.create(signer, createOpts as any)
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          const retryKey = !effectiveDbEncryptionKey ? readEnvDbEncryptionKey() : undefined
+          const isUnsupportedFormat = message.toLowerCase().includes('unsupported file format')
+          if (!retryKey || !isUnsupportedFormat) throw err
 
-      console.warn(
-        '[xmtp-service] Initial DB open failed with unsupported file format; retrying once with XMTP_DB_ENCRYPTION_KEY',
-      )
-      effectiveDbEncryptionKey = retryKey
-      this.agent = await Agent.create(
-        signer,
-        {
-          ...createOpts,
-          dbEncryptionKey: retryKey,
-        } as any,
-      )
-    }
+          // Some runtimes intermittently report unsupported format during first open.
+          // Retry once with the same options before switching to env key fallback.
+          try {
+            return await Agent.create(signer, createOpts as any)
+          } catch (retryErr) {
+            const retryMessage = retryErr instanceof Error ? retryErr.message : String(retryErr)
+            if (!retryMessage.toLowerCase().includes('unsupported file format')) throw retryErr
+          }
+
+          // Retry once with env fallback key when initial open keeps reporting unsupported format.
+          effectiveDbEncryptionKey = retryKey
+          return await Agent.create(
+            signer,
+            {
+              ...createOpts,
+              dbEncryptionKey: retryKey,
+            } as any,
+          )
+        }
+      },
+    })
 
     // Log installation info for persistence debugging
     try {
@@ -204,7 +278,14 @@ export class XmtpService {
       console.error('[xmtp-service] Unhandled error:', error)
     })
 
-    await this.agent.start()
+    await withRetry({
+      operationName: 'xmtp_agent_start',
+      maxAttempts: startMaxAttempts,
+      baseDelayMs: startRetryBaseMs,
+      run: async () => {
+        await this.agent!.start()
+      },
+    })
     console.log(`[xmtp-service] Agent started: ${this.agent.address}`)
   }
 
