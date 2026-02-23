@@ -75,7 +75,7 @@ contract DeployTier1Upgrade is Script {
     uint256 constant BASE_CHAIN_ID = 8453;
 
     // Lottery sponsorship guardrails (hybrid model defaults)
-    uint256 constant SPONSORED_MIN_SWAP_USD = 1_000_000; // $1 (1e6)
+    uint256 constant SPONSORED_MIN_SWAP_USD = 10_000_000; // $10 (1e6)
     uint256 constant SPONSOR_EPOCH_DURATION = 1 hours;
     uint256 constant VRF_SPONSOR_MAX_FEE = 0.01 ether;
     uint256 constant VRF_SPONSOR_BUDGET = 0.25 ether;
@@ -155,7 +155,10 @@ contract DeployTier1Upgrade is Script {
 
         // Configure bounded sponsorship defaults for cross-chain fees
         newLotteryManager.setSponsoredVrfMinSwapAmountUSD(SPONSORED_MIN_SWAP_USD);
-        console.log("  setSponsoredVrfMinSwapAmountUSD: $1");
+        console.log("  setSponsoredVrfMinSwapAmountUSD: $10");
+
+        newLotteryManager.setSponsorshipRateLimits(2, 10, 1, 10);
+        console.log("  setSponsorshipRateLimits: vrfBuyer=2, vrfOrigin=10, cbBuyer=1, cbOrigin=10");
 
         newLotteryManager.setVrfSponsorshipPolicy(true, VRF_SPONSOR_MAX_FEE, VRF_SPONSOR_BUDGET, SPONSOR_EPOCH_DURATION);
         console.log("  setVrfSponsorshipPolicy: enabled, maxFee 0.01 ETH, budget 0.25 ETH/hr");

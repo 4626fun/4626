@@ -125,6 +125,7 @@ test/**
 !test/vault/
 !test/vault/CreatorCharmStrategyOracle.t.sol
 !test/vault/CreatorVRFConsumerV2_5.RelayFunding.t.sol
+!test/vault/CreatorLotteryManager.VrfSponsorshipHardening.t.sol
 !test/CreatorOracle.LayerZeroReceiveAuth.t.sol
 !test/CreatorOracle.TwapSafety.t.sol
 !test/CreatorOracle.BroadcastCreatorPrice.t.sol
