@@ -2,6 +2,9 @@ import { normalizeUniswapError } from './error'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; details?: unknown }
 
+const DEFAULT_RETRIES = 1
+const RETRY_BASE_DELAY_MS = 500
+const RETRYABLE_STATUS = new Set([503, 502, 429])
 const QUOTE_CACHE_TTL_MS = 8_000
 const quoteCache = new Map<string, { at: number; data: TradeQuoteResponse }>()
 const quoteInFlight = new Map<string, Promise<TradeQuoteResponse>>()
@@ -173,14 +176,17 @@ export function toPermitSignPayload(permitData: Record<string, unknown>): Permit
 }
 
 export async function fetchTradeQuote(body: TradeQuoteRequest): Promise<TradeQuoteResponse> {
-  const key = JSON.stringify(body)
+  const normalizedAmount = normalizeAmountString(body.amount)
+  const normalizedBody = normalizedAmount === body.amount ? body : { ...body, amount: normalizedAmount }
+  const key = JSON.stringify(normalizedBody)
   const cached = quoteCache.get(key)
   if (cached && Date.now() - cached.at < QUOTE_CACHE_TTL_MS) return cached.data
 
   const pending = quoteInFlight.get(key)
   if (pending) return pending
 
-  const request = post<TradeQuoteResponse>('/api/uniswap/quote', body)
+  const { walletModeKey: _wm, ...upstreamBody } = normalizedBody
+  const request = post<TradeQuoteResponse>('/api/uniswap/quote', upstreamBody)
     .then((data) => {
       quoteCache.set(key, { at: Date.now(), data })
       quoteInFlight.delete(key)

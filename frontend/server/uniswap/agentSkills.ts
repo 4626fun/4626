@@ -17,6 +17,14 @@ type SkillRouteConfig = {
   requireDelegation?: boolean
 }
 
+const MUTATING_SKILLS: UniswapSkillName[] = [
+  'uniswap_build_swap',
+  'uniswap_batch_swap_5792',
+  'uniswap_delegated_swap_7702',
+  'uniswap_crosschain_plan',
+  'uniswap_liquidity',
+]
+
 const SKILL_ROUTES: Record<UniswapSkillName, SkillRouteConfig> = {
   uniswap_quote: { path: '/quote' },
   uniswap_check_approval: { path: '/check_approval' },
@@ -65,6 +73,16 @@ function validateCommon(payload: Record<string, unknown>): string | null {
 }
 
 export async function executeUniswapSkill(name: UniswapSkillName, payload: Record<string, unknown>) {
+  const enabled = process.env.ELIZA_UNISWAP_SKILLS_ENABLED
+  if (enabled === '0' || enabled === 'false') {
+    throw new Error('Uniswap skills disabled by policy')
+  }
+
+  const requireConfirmation = process.env.ELIZA_UNISWAP_REQUIRE_CONFIRMATION === '1'
+  if (requireConfirmation && MUTATING_SKILLS.includes(name) && payload.confirm !== true) {
+    throw new Error('This skill requires explicit confirmation')
+  }
+
   const route = SKILL_ROUTES[name]
   if (!route) throw new Error(`Unsupported Uniswap skill: ${name}`)
 
@@ -91,5 +109,7 @@ export async function executeUniswapSkill(name: UniswapSkillName, payload: Recor
   if (upstream.status >= 400) {
     throw new Error(toCleanErrorMessage(upstream.payload, `Uniswap skill failed: ${name}`))
   }
-  return upstream.payload
+
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+  return { requestId, data: upstream.payload }
 }
