@@ -15,7 +15,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
-import { getHostMode } from '@/lib/host'
+import { APP_ORIGIN } from '@/lib/host'
 import { getBasename } from '@/lib/basename-api'
 import { apiFetch } from '@/lib/apiBase'
 import {
@@ -616,7 +616,25 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     if (!address || !walletClient) return
     if (clientRef.current) return // already connected
     if (connectInFlightRef.current) return
-    if (getHostMode() !== 'app') return // XMTP only on app.4626.fun to avoid multi-origin installations
+
+    // XMTP installations are scoped to a browser origin. Allowing messaging on
+    // preview/staging origins would create additional installations and can
+    // quickly hit 10/10 for users. We restrict to the canonical app origin.
+    const canonicalAppOrigin = APP_ORIGIN.replace(/\/+$/, '')
+    const currentOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+    const hostname = typeof window !== 'undefined' ? (window.location.hostname ?? '').toLowerCase() : ''
+    const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1'
+    const isCanonicalOrigin = currentOrigin === canonicalAppOrigin
+    if (!isCanonicalOrigin && !isLocalDev) {
+      const msg =
+        `Messaging is disabled on ${currentOrigin || 'this origin'} to prevent XMTP installation churn. ` +
+        `Open ${canonicalAppOrigin} to use chat.`
+      if (mountedRef.current) {
+        setStatus('error')
+        setError(msg)
+      }
+      return
+    }
 
     connectInFlightRef.current = true
     let xmtpIdentityAddress = String(address).toLowerCase()

@@ -38,6 +38,9 @@ function isKeeprCommand(text: string): boolean {
   return (
     t.startsWith('/keepr') ||
     t.startsWith('keepr') ||
+    t.startsWith('/whois') ||
+    t === 'whois' ||
+    t.startsWith('whois ') ||
     t.startsWith('/send') ||
     t.startsWith('send ') ||
     t.startsWith('/fc') ||

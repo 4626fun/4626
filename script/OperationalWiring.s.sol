@@ -51,6 +51,13 @@ interface ILotteryManager {
         uint256 budgetPerEpoch,
         uint256 epochDuration
     ) external;
+
+    function setSponsorshipRateLimits(
+        uint32 vrfMaxPerBuyerPerEpoch,
+        uint32 vrfMaxPerOriginPerEpoch,
+        uint32 callbackMaxPerBuyerPerEpoch,
+        uint32 callbackMaxPerOriginPerEpoch
+    ) external;
 }
 
 interface IRegistry {
@@ -88,7 +95,7 @@ contract OperationalWiring is Script {
     uint16 constant VRF_CONFIRMATIONS = 3;
 
     // Lottery sponsorship guardrails (hybrid model defaults)
-    uint256 constant SPONSORED_MIN_SWAP_USD = 1_000_000; // $1 (1e6)
+    uint256 constant SPONSORED_MIN_SWAP_USD = 10_000_000; // $10 (1e6)
     uint256 constant SPONSOR_EPOCH_DURATION = 1 hours;
     uint256 constant VRF_SPONSOR_MAX_FEE = 0.01 ether;
     uint256 constant VRF_SPONSOR_BUDGET = 0.25 ether;
@@ -174,7 +181,10 @@ contract OperationalWiring is Script {
 
         console.log("\n[5/7] LotteryManager: Configuring sponsorship guardrails...");
         lotteryManager.setSponsoredVrfMinSwapAmountUSD(SPONSORED_MIN_SWAP_USD);
-        console.log(unicode"   ✓ setSponsoredVrfMinSwapAmountUSD: $1");
+        console.log(unicode"   ✓ setSponsoredVrfMinSwapAmountUSD: $10");
+
+        lotteryManager.setSponsorshipRateLimits(2, 10, 1, 10);
+        console.log(unicode"   ✓ setSponsorshipRateLimits: vrfBuyer=2, vrfOrigin=10, cbBuyer=1, cbOrigin=10");
 
         lotteryManager.setVrfSponsorshipPolicy(true, VRF_SPONSOR_MAX_FEE, VRF_SPONSOR_BUDGET, SPONSOR_EPOCH_DURATION);
         console.log(unicode"   ✓ VRF sponsorship policy set (maxFee=0.01 ETH, budget=0.25 ETH/hr)");
