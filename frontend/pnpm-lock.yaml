@@ -23,7 +23,7 @@ overrides:
 patchedDependencies:
   elliptic@6.6.1:
     hash: 519a227221353691ac66b7279563217bf16d443818874c422c115ef821ffb37a
-    path: ../patches/elliptic@6.6.1.patch
+    path: patches/elliptic@6.6.1.patch
 
 importers:
 

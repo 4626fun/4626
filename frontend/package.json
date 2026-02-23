@@ -119,7 +119,7 @@
       "undici": ">=6.23.0"
     },
     "patchedDependencies": {
-      "elliptic@6.6.1": "../patches/elliptic@6.6.1.patch"
+      "elliptic@6.6.1": "patches/elliptic@6.6.1.patch"
     }
   }
 }
