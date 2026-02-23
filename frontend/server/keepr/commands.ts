@@ -5,6 +5,7 @@ import { getKeeprVaultByGroupId, setKeeprJoinLocked } from '../_lib/keeprRegistr
 import { handleFarcasterCommand } from '../farcaster/commands.js'
 import { handleCoinCommand } from '../zora/commands.js'
 import { handleSendCommand } from './sendCommand.js'
+import { handleWhoisCommand } from './whoisCommand.js'
 import { generateLlmResponse } from '../ai/chat.js'
 
 export type KeeprRole = 'OWNER' | 'ADMIN' | 'MEMBER'
@@ -73,6 +74,7 @@ function formatKeeprHelp(): string {
     '',
     'Wallet & Reputation:',
     '',
+    '- /whois <address> — ENS + Basename identity',
     '- /intel <address> — wallet intelligence report',
     '- /reputation [agentId] — ERC-8004 reputation graph',
     '- /feedback [agentId] — feedback summary',
@@ -129,6 +131,12 @@ export async function handleKeeprCommand(params: {
   const rawLower = raw.toLowerCase()
   if (rawLower === '/help' || rawLower === 'help') {
     return { ok: true, response: formatKeeprHelp() }
+  }
+
+  // Identity lookup commands should work without vault config/DB.
+  const looksLikeWhois = rawLower.startsWith('/whois') || rawLower === 'whois' || rawLower.startsWith('whois ')
+  if (looksLikeWhois) {
+    return handleWhoisCommand({ text: raw })
   }
 
   // AI commands should work even when vault config/DB is unavailable.
