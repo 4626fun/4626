@@ -6,12 +6,14 @@
  */
 
 import { useCallback, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { MessageSquare, Bot, Loader2, ExternalLink, Users } from 'lucide-react'
 import { apiFetch } from '@/lib/apiBase'
 import { useIdentity } from '@/hooks/useIdentity'
 import { useXmtp } from '@/lib/xmtp/provider'
 import { PageMeta, META } from '@/components/seo/PageMeta'
+import { AgentVerificationCard } from '@/components/agents/AgentVerificationCard'
 
 type AgentRow = {
   creatorAddress: string
@@ -37,11 +39,11 @@ function AgentCard({
   const agentIdentity = useIdentity(agent.xmtpAgentAddress)
 
   return (
-    <div className="group relative rounded-2xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-colors overflow-hidden">
+    <div className="group relative rounded-2xl border border-white/5 bg-white/2 hover:bg-white/4 transition-colors overflow-hidden">
       <div className="p-5 space-y-4">
         {/* Creator identity */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center overflow-hidden flex-shrink-0">
+          <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center overflow-hidden shrink-0">
             {creatorIdentity.avatar ? (
               <img src={creatorIdentity.avatar} alt="" className="w-full h-full object-cover" />
             ) : (
@@ -157,7 +159,7 @@ export function AgentDirectory() {
           <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center">
             <Users className="w-5 h-5 text-brand-primary" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-zinc-100 tracking-tight">
               Creator Agents
             </h1>
@@ -165,6 +167,13 @@ export function AgentDirectory() {
               Message creator agents via XMTP
             </p>
           </div>
+          <Link
+            to="/agents/register"
+            className="ml-auto inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-zinc-300 hover:text-zinc-100"
+          >
+            <Bot className="h-3.5 w-3.5" />
+            Register Agent
+          </Link>
         </div>
 
         {status !== 'connected' && (
@@ -182,6 +191,10 @@ export function AgentDirectory() {
             </button>
           </div>
         )}
+      </div>
+
+      <div className="mb-10">
+        <AgentVerificationCard />
       </div>
 
       {/* Loading */}

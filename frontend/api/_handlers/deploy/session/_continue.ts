@@ -19,6 +19,70 @@ declare const process: { env: Record<string, string | undefined> }
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type ContinueRequest = { sessionId: string }
+const STAGE_USEROP_HASH_PREFIX = 'stageUserOpHash_'
+
+function stageUserOpHashKey(step: string): string {
+  return `${STAGE_USEROP_HASH_PREFIX}${step}`
+}
+
+function isPlainObject(value: unknown): value is Record<string, any> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const proto = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
+}
+
+function normalizeErrorMessage(error: unknown): string {
+  if (typeof error === 'string' && error.trim()) return error.trim()
+  if (error instanceof Error && error.message.trim()) return error.message.trim()
+  const anyErr = error as any
+  const candidates = [
+    anyErr?.shortMessage,
+    anyErr?.details,
+    anyErr?.cause?.shortMessage,
+    anyErr?.cause?.details,
+    anyErr?.cause?.message,
+    anyErr?.data?.message,
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
+  }
+  try {
+    const raw = JSON.stringify(error)
+    if (raw && raw !== '{}' && raw !== 'null') return raw
+  } catch {
+    // ignore
+  }
+  return 'continue_failed'
+}
+
+function truncateMessage(input: string, max = 420): string {
+  const msg = String(input ?? '')
+  return msg.length > max ? `${msg.slice(0, max)}...` : msg
+}
+
+function isOnchainRevertLike(message: string): boolean {
+  const m = String(message || '').toLowerCase()
+  return (
+    m.includes('execution reverted') ||
+    m.includes('user operation execution failed') ||
+    m.includes('useroperationexecutionerror') ||
+    m.includes('aa23 reverted') ||
+    m.includes('aa33 reverted')
+  )
+}
+
+function asPayloadObject(value: unknown): Record<string, any> {
+  if (isPlainObject(value)) return value
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      if (isPlainObject(parsed)) return parsed
+    } catch {
+      // ignore malformed payload strings
+    }
+  }
+  throw new Error('deploy_payload_invalid')
+}
 
 function isTruthyEnv(value: string | undefined, fallback: boolean): boolean {
   if (value == null) return fallback
@@ -63,6 +127,7 @@ function getBundlerEndpoint(origin: string): { url: string; viaProxy: boolean } 
 const COINBASE_SMART_WALLET_OWNERS_ABI = [
   { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'ownerAtIndex', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'bytes' }] },
+  { type: 'function', name: 'nextOwnerIndex', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 ] as const
 
 const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
@@ -80,24 +145,41 @@ async function findOwnerIndex(params: {
   ownerAddress: Address
   maxScan?: number
 }): Promise<number | null> {
-  const { publicClient, smartWallet, ownerAddress, maxScan = 64 } = params
+  const { publicClient, smartWallet, ownerAddress, maxScan = 512 } = params
   const countRaw = (await publicClient.readContract({
     address: smartWallet,
     abi: COINBASE_SMART_WALLET_OWNERS_ABI,
     functionName: 'ownerCount',
   })) as bigint
   const count = Number(countRaw)
-  if (!Number.isFinite(count) || count <= 0) return null
-
-  const expected = asOwnerBytes(ownerAddress).toLowerCase()
-  const limit = Math.min(count, Math.max(1, maxScan))
-  for (let i = 0; i < limit; i++) {
-    const b = (await publicClient.readContract({
+  let upperBound = Number.isFinite(count) ? count : 0
+  try {
+    const nextRaw = (await publicClient.readContract({
       address: smartWallet,
       abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-      functionName: 'ownerAtIndex',
-      args: [BigInt(i)],
-    })) as Hex
+      functionName: 'nextOwnerIndex',
+    })) as bigint
+    const next = Number(nextRaw)
+    if (Number.isFinite(next) && next > 0) upperBound = Math.max(upperBound, next)
+  } catch {
+    // ignore: not all contract versions expose nextOwnerIndex
+  }
+  if (!Number.isFinite(upperBound) || upperBound <= 0) return null
+
+  const expected = asOwnerBytes(ownerAddress).toLowerCase()
+  const limit = Math.min(upperBound, Math.max(1, maxScan))
+  for (let i = 0; i < limit; i++) {
+    let b: Hex
+    try {
+      b = (await publicClient.readContract({
+        address: smartWallet,
+        abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+        functionName: 'ownerAtIndex',
+        args: [BigInt(i)],
+      })) as Hex
+    } catch {
+      continue
+    }
     if (String(b).toLowerCase() === expected) return i
   }
   return null
@@ -142,7 +224,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     // Server signs userops using the deploy-session owner.
     // New sessions use a Privy-managed deploy signer wallet; legacy sessions use an encrypted raw private key.
-    const payload: any = rec.payload ?? {}
+    const payload = asPayloadObject(rec.payload)
     const erc7712Grant = parseGrant(payload?.erc7712Grant)
     const deploySignerWalletId =
       typeof payload?.deploySignerWalletId === 'string'
@@ -193,7 +275,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       publicClient: createPublicClient({ chain: base, transport: http((process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()) }),
       smartWallet,
       ownerAddress: sessionOwner,
-      maxScan: 128,
+      maxScan: 512,
     })
     if (ownerIndex === null) throw new Error('session_owner_not_installed')
 
@@ -241,31 +323,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return 0n
     }
 
-    const normalizeCalls = (raw: any[]): Array<{ to: Address; value: bigint; data: Hex }> => {
+    const normalizeCalls = (raw: unknown): Array<{ to: Address; value: bigint; data: Hex }> => {
       if (!Array.isArray(raw)) return []
-      return raw
-        .map((c) => ({
-          to: getAddress(c.to),
-          value: toBigInt(c.value ?? 0),
-          data: c.data as Hex,
-        }))
-        .filter((c) => typeof c.data === 'string' && c.data.startsWith('0x'))
+      const out: Array<{ to: Address; value: bigint; data: Hex }> = []
+      for (const entry of raw) {
+        const c = entry as any
+        if (!c || typeof c !== 'object') continue
+        const data = typeof c.data === 'string' ? c.data : ''
+        if (!data.startsWith('0x')) continue
+        try {
+          out.push({
+            to: getAddress(c.to),
+            value: toBigInt(c.value ?? 0),
+            data: data as Hex,
+          })
+        } catch {
+          // Skip malformed calls; required-stage checks below will prevent false completion.
+        }
+      }
+      return out
     }
 
-    const phase1Calls = normalizeCalls(Array.isArray(payload.phase1Calls) ? payload.phase1Calls : [])
+    const rawPhase1Calls = Array.isArray(payload.phase1Calls) ? payload.phase1Calls : []
+    const phase1Calls = normalizeCalls(rawPhase1Calls)
     const phase1CoreCalls = phase1Calls.length > 1 ? phase1Calls.slice(0, 1) : phase1Calls
     const phase1FinalizeCalls = phase1Calls.length > 1 ? phase1Calls.slice(1) : []
     const phase2CoreCalls = normalizeCalls(Array.isArray(payload.phase2CoreCalls) ? payload.phase2CoreCalls : [])
-    const phase2FinalizeCallsRaw = normalizeCalls(
-      Array.isArray(payload.phase2FinalizeCalls) ? payload.phase2FinalizeCalls : [],
-    )
-    const legacyPhase2Calls = normalizeCalls(Array.isArray(payload.phase2Calls) ? payload.phase2Calls : [])
-    const phase2FinalizeCalls = phase2FinalizeCallsRaw.length > 0 ? phase2FinalizeCallsRaw : legacyPhase2Calls
-    const phase3Calls = normalizeCalls(Array.isArray(payload.phase3Calls) ? payload.phase3Calls : [])
-    const phase4Calls = normalizeCalls(Array.isArray(payload.phase4Calls) ? payload.phase4Calls : [])
-    const postPhase2Calls = [...phase3Calls, ...phase4Calls]
+    const expectedStages = isPlainObject(payload.expectedStages) ? payload.expectedStages : {}
+    const rawPhase2FinalizeCalls = Array.isArray(payload.phase2FinalizeCalls) ? payload.phase2FinalizeCalls : []
+    const rawLegacyPhase2Calls = Array.isArray(payload.phase2Calls) ? payload.phase2Calls : []
+    const rawSelectedPhase2FinalizeCalls = rawPhase2FinalizeCalls.length > 0 ? rawPhase2FinalizeCalls : rawLegacyPhase2Calls
+    const hasPhase2Finalize =
+      expectedStages.hasPhase2Finalize === true || rawSelectedPhase2FinalizeCalls.length > 0
+    const phase2FinalizeCalls = normalizeCalls(rawSelectedPhase2FinalizeCalls)
+    const rawPhase3Calls = Array.isArray(payload.phase3Calls) ? payload.phase3Calls : []
+    const rawPhase4Calls = Array.isArray(payload.phase4Calls) ? payload.phase4Calls : []
+    const hasPhase3 = expectedStages.hasPhase3 === true || rawPhase3Calls.length > 0
+    const hasPhase4 = expectedStages.hasPhase4 === true || rawPhase4Calls.length > 0
+    const phase3Calls = normalizeCalls(rawPhase3Calls)
+    const phase4Calls = normalizeCalls(rawPhase4Calls)
+    if (hasPhase2Finalize && phase2FinalizeCalls.length === 0) throw new Error('phase2_finalize_calls_invalid')
+    if (hasPhase3 && phase3Calls.length === 0) throw new Error('phase3_calls_invalid')
+    if (hasPhase4 && phase4Calls.length === 0) throw new Error('phase4_calls_invalid')
 
-    const isInFlight = ['phase1_sent', 'phase1_finalize_sent', 'phase2_core_sent', 'phase2_sent', 'phase3_sent', 'cleanup_sent'].includes(rec.step)
+    const isInFlight = [
+      'phase1_sent',
+      'phase1_finalize_sent',
+      'phase2_core_sent',
+      'phase2_sent',
+      'phase3_sent',
+      'phase4_sent',
+      'cleanup_sent',
+    ].includes(rec.step)
 
     // Cleanup call (remove session owner). For managed owners, this can be skipped to reduce repeated prompts.
     const removeOwnerCall = (() => {
@@ -278,7 +387,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return { to: smartWallet, value: 0n, data } as const
     })()
 
-    const hasPostPhase2 = postPhase2Calls.length > 0
+    const hasPostPhase2 = hasPhase3 || hasPhase4
+    const sendNextAfterPhase2 = () => {
+      if (hasPhase3) return sendStage('phase3_sent', phase3Calls, !hasPhase4)
+      if (hasPhase4) return sendStage('phase4_sent', phase4Calls, true)
+      return null
+    }
     const sendStage = async (toStep: string, stageCalls: Array<{ to: Address; value: bigint; data: Hex }>, attachCleanup: boolean) => {
       const calls = [...stageCalls]
       const shouldAttachCleanup = attachCleanup && !persistSessionOwner
@@ -301,6 +415,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         id: rec.id,
         fromStep: rec.step,
         toStep: toStep as any,
+        lastUserOpHash: null,
+        lastTxHash: null,
+        lastError: null,
+        payloadPatch: { [stageUserOpHashKey(toStep)]: null },
       })
       if (!transitioned) {
         return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
@@ -310,8 +428,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         calls,
         paymaster: { getPaymasterData: paymasterClient.getPaymasterData, getPaymasterStubData: paymasterClient.getPaymasterStubData },
       })
-      await updateDeploySession({ id: rec.id, step: toStep as any, lastUserOpHash, lastTxHash: null })
+      await updateDeploySession({
+        id: rec.id,
+        step: toStep as any,
+        lastUserOpHash,
+        lastTxHash: null,
+        lastError: null,
+        payloadPatch: { [stageUserOpHashKey(toStep)]: lastUserOpHash },
+      })
       return res.status(200).json({ success: true, data: { id: rec.id, step: toStep, lastUserOpHash } } satisfies ApiEnvelope<any>)
+    }
+    const completeFrom = async (fromStep: string) => {
+      const transitioned = await transitionDeploySession({
+        id: rec.id,
+        fromStep: fromStep as any,
+        toStep: 'completed',
+      })
+      if (!transitioned) {
+        return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
+      }
+      return res.status(200).json({
+        success: true,
+        data: {
+          id: rec.id,
+          step: 'completed',
+        },
+      } satisfies ApiEnvelope<any>)
     }
 
     // Kick off whichever stage is next based on persisted step.
@@ -322,59 +464,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const attachCleanup =
           phase1FinalizeCalls.length === 0 &&
           phase2CoreCalls.length === 0 &&
-          phase2FinalizeCalls.length === 0 &&
+          !hasPhase2Finalize &&
           !hasPostPhase2
         return sendStage('phase1_sent', phase1CoreCalls, attachCleanup)
       }
       if (phase2CoreCalls.length > 0) {
-        const attachCleanup = phase2FinalizeCalls.length === 0 && !hasPostPhase2
+        const attachCleanup = !hasPhase2Finalize && !hasPostPhase2
         return sendStage('phase2_core_sent', phase2CoreCalls, attachCleanup)
       }
-      if (phase2FinalizeCalls.length > 0) {
+      if (hasPhase2Finalize) {
         const attachCleanup = !hasPostPhase2
         return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
       }
-      if (postPhase2Calls.length > 0) return sendStage('phase3_sent', postPhase2Calls, true)
+      if (hasPostPhase2) return sendNextAfterPhase2()
       return null
     }
 
     const runFromPhase1Confirmed = () => {
       if (phase1FinalizeCalls.length > 0) {
-        const attachCleanup = phase2CoreCalls.length === 0 && phase2FinalizeCalls.length === 0 && !hasPostPhase2
+        const attachCleanup = phase2CoreCalls.length === 0 && !hasPhase2Finalize && !hasPostPhase2
         return sendStage('phase1_finalize_sent', phase1FinalizeCalls, attachCleanup)
       }
       if (phase2CoreCalls.length > 0) {
-        const attachCleanup = phase2FinalizeCalls.length === 0 && !hasPostPhase2
+        const attachCleanup = !hasPhase2Finalize && !hasPostPhase2
         return sendStage('phase2_core_sent', phase2CoreCalls, attachCleanup)
       }
-      if (phase2FinalizeCalls.length > 0) {
+      if (hasPhase2Finalize) {
         const attachCleanup = !hasPostPhase2
         return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
       }
-      if (postPhase2Calls.length > 0) return sendStage('phase3_sent', postPhase2Calls, true)
-      return null
+      if (hasPostPhase2) return sendNextAfterPhase2()
+      return completeFrom('phase1_confirmed')
     }
 
     const runFromPhase1FinalizeConfirmed = () => {
       if (phase2CoreCalls.length > 0) {
-        const attachCleanup = phase2FinalizeCalls.length === 0 && !hasPostPhase2
+        const attachCleanup = !hasPhase2Finalize && !hasPostPhase2
         return sendStage('phase2_core_sent', phase2CoreCalls, attachCleanup)
       }
-      if (phase2FinalizeCalls.length > 0) {
+      if (hasPhase2Finalize) {
         const attachCleanup = !hasPostPhase2
         return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
       }
-      if (postPhase2Calls.length > 0) return sendStage('phase3_sent', postPhase2Calls, true)
-      return null
+      if (hasPostPhase2) return sendNextAfterPhase2()
+      return completeFrom('phase1_finalize_confirmed')
     }
 
     const runFromPhase2CoreConfirmed = () => {
-      if (phase2FinalizeCalls.length > 0) {
+      if (hasPhase2Finalize) {
         const attachCleanup = !hasPostPhase2
         return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
       }
-      if (postPhase2Calls.length > 0) return sendStage('phase3_sent', postPhase2Calls, true)
-      return null
+      if (hasPostPhase2) return sendNextAfterPhase2()
+      return completeFrom('phase2_core_confirmed')
     }
 
     if (rec.step === 'created') {
@@ -393,36 +535,64 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const started = await runFromPhase2CoreConfirmed()
       if (started) return started
     }
-    if (rec.step === 'phase2_confirmed' && postPhase2Calls.length > 0) {
-      return await sendStage('phase3_sent', postPhase2Calls, true)
+    if (rec.step === 'phase2_confirmed' && hasPostPhase2) {
+      const started = await sendNextAfterPhase2()
+      if (started) return started
+    }
+    if (rec.step === 'phase2_confirmed' && !hasPostPhase2) {
+      return await completeFrom('phase2_confirmed')
+    }
+    if (rec.step === 'phase3_confirmed' && hasPhase4) {
+      return await sendStage('phase4_sent', phase4Calls, true)
+    }
+    if (rec.step === 'phase3_confirmed' && !hasPhase4) {
+      return await completeFrom('phase3_confirmed')
+    }
+    if (rec.step === 'phase4_confirmed') {
+      return await completeFrom('phase4_confirmed')
     }
 
     if (isInFlight) {
       return res.status(409).json({ success: false, error: 'Already in progress' } satisfies ApiEnvelope<null>)
     }
 
-    const transitioned = await transitionDeploySession({
-      id: rec.id,
-      fromStep: rec.step,
-      toStep: 'completed',
-    })
-    if (!transitioned) {
-      return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
-    }
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        id: rec.id,
-        step: 'completed',
-      },
-    } satisfies ApiEnvelope<any>)
+    return res.status(409).json({
+      success: false,
+      error: 'No deploy stage available from current step',
+    } satisfies ApiEnvelope<null>)
   } catch (err: any) {
-    const msg = err?.message ? String(err.message) : 'continue_failed'
+    const msg = normalizeErrorMessage(err)
+    const pretty = truncateMessage(msg)
+    let serializedErr = ''
+    try {
+      serializedErr = JSON.stringify(err)
+    } catch {
+      serializedErr = ''
+    }
+    const persistFailure = async () => {
+      try {
+        await updateDeploySession({ id: rec.id, step: 'failed', lastError: pretty })
+      } catch {
+        // ignore
+      }
+    }
     if (msg === 'session_owner_unavailable' || msg === 'session_owner_key_missing') {
       return res.status(409).json({
         success: false,
         error: 'Session owner credentials unavailable. Please restart deploy session.',
+      } satisfies ApiEnvelope<null>)
+    }
+    if (msg === 'session_owner_not_installed') {
+      return res.status(409).json({
+        success: false,
+        error:
+          'Deploy-session signer is not installed on the canonical smart wallet. Approve the one-time add-owner transaction, then retry.',
+      } satisfies ApiEnvelope<null>)
+    }
+    if (msg === 'deploy_payload_invalid' || msg.endsWith('_calls_invalid')) {
+      return res.status(409).json({
+        success: false,
+        error: 'Deploy session payload is invalid or missing required stage calls. Please restart deploy session.',
       } satisfies ApiEnvelope<null>)
     }
     if (msg === 'cdp_endpoint_missing_on_vercel') {
@@ -432,12 +602,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           'Deploy bundler/paymaster is not configured for this Vercel deployment. Set CDP_PAYMASTER_URL (or CDP_PAYMASTER_AND_BUNDLER_URL) to the Coinbase RPC endpoint; do not rely on same-origin /api/paymaster for server-side deploy-session calls.',
       } satisfies ApiEnvelope<null>)
     }
-    logger.error('deploy session continue failed', msg)
-    try {
-      await updateDeploySession({ id: rec.id, step: 'failed', lastError: msg })
-    } catch {
-      // ignore
+    if (isOnchainRevertLike(msg) || isOnchainRevertLike(serializedErr)) {
+      logger.warn('deploy session continue reverted', pretty)
+      await persistFailure()
+      return res.status(409).json({
+        success: false,
+        error: `Deploy execution reverted: ${pretty}`,
+      } satisfies ApiEnvelope<null>)
     }
+    logger.error('deploy session continue failed', pretty)
+    await persistFailure()
     return res.status(500).json({ success: false, error: 'Internal server error' } satisfies ApiEnvelope<null>)
   }
 }

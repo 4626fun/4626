@@ -192,7 +192,7 @@ const CREATOR_REGISTRY_ABI = [
       { name: 'creator', type: 'address' },
       { name: 'pool', type: 'address' },
       { name: 'poolFee', type: 'uint24' },
-      { name: 'primaryChainId', type: 'uint16' },
+      { name: 'primaryChainId', type: 'uint256' },
       { name: 'isActive', type: 'bool' },
       { name: 'registeredAt', type: 'uint256' },
     ],
@@ -452,6 +452,17 @@ function formatToken(value: bigint | undefined): string {
   if (value === undefined) return '—'
   const raw = formatUnits(value, 18)
   return raw.replace(/\.0+$/, '').replace(/(\.\d+?)0+$/, '$1')
+}
+
+function parseAmount(input: string): bigint | null {
+  const raw = input.trim()
+  if (!raw) return null
+  try {
+    const amount = parseUnits(raw, 18)
+    return amount > 0n ? amount : null
+  } catch {
+    return null
+  }
 }
 
 function buildTxHref(hash?: string): string | null {
@@ -1573,7 +1584,6 @@ function AgentFeedback() {
   const { switchChainAsync, isPending: switchPending } = useSwitchChain()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient({ chainId: base.id })
-  const { wallets: privyWallets } = useWallets()
   const { ensurePaymasterSession } = usePaymasterSessionGuard()
 
   const isBase = chainId === base.id
@@ -1731,7 +1741,6 @@ function AgentFeedback() {
     ensurePaymasterSession,
     publicClient,
     walletClient,
-    privyWallets,
     clientsQuery,
     summaryQuery,
     allFeedbackQuery,
@@ -2353,6 +2362,510 @@ function ShareTokenMetadata() {
   )
 }
 
+type LegacyVaultWithdrawalCardProps = {
+  legacy: LegacyVaultResolved
+  legacyResolveStatus: 'idle' | 'loading' | 'done' | 'error'
+  amountInput: string
+  setAmountInput: (next: string) => void
+  receiver: string
+  receiverValid: boolean
+  canonicalCswAddress: Address
+  connectedAddress: Address | null
+  canUseSmartWallet: boolean
+  isConnected: boolean
+  isBase: boolean
+  blockNumber: bigint | undefined
+  walletClient: unknown
+  txStates: Record<string, TxState>
+  sendTx: (
+    key: string,
+    config: { address: Address; abi: readonly unknown[]; functionName: string; args?: readonly unknown[] },
+  ) => Promise<void>
+  sendBatchTx: (key: string, calls: Array<{ to: Address; data: Hex }>) => Promise<void>
+}
+
+function LegacyVaultWithdrawalCard({
+  legacy,
+  legacyResolveStatus,
+  amountInput,
+  setAmountInput,
+  receiver,
+  receiverValid,
+  canonicalCswAddress,
+  connectedAddress,
+  canUseSmartWallet,
+  isConnected,
+  isBase,
+  blockNumber,
+  walletClient,
+  txStates,
+  sendTx,
+  sendBatchTx,
+}: LegacyVaultWithdrawalCardProps) {
+  const parsedAmount = parseAmount(amountInput)
+  const sharesToQueue = parsedAmount ? parsedAmount * 1000n : null
+  const hasShareOft = isAddress(legacy.shareOft)
+  const hasWrapper = isAddress(legacy.wrapper)
+  const hasVault = isAddress(legacy.vault)
+  const hasVesting = isAddress(legacy.vesting)
+  const isEmptyAutoSlot =
+    legacy.id.startsWith('legacy-auto-') && !hasShareOft && !hasWrapper && !hasVault && !hasVesting
+  const hasResolvedContracts = hasShareOft && hasWrapper && hasVault
+  const balanceAccount = canUseSmartWallet ? canonicalCswAddress : (connectedAddress ?? (ZERO_ADDRESS as Address))
+  const balanceLabel = canUseSmartWallet ? 'CSW balance' : 'Connected balance'
+
+  const shareOftAddress = (hasShareOft ? legacy.shareOft : ZERO_ADDRESS) as Address
+  const wrapperAddress = (hasWrapper ? legacy.wrapper : ZERO_ADDRESS) as Address
+  const vaultAddress = (hasVault ? legacy.vault : ZERO_ADDRESS) as Address
+  const vestingAddress = (hasVesting ? legacy.vesting : ZERO_ADDRESS) as Address
+
+  const balanceQuery = useReadContract({
+    address: shareOftAddress,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: [balanceAccount as Address],
+    query: { enabled: hasShareOft && canUseSmartWallet },
+  })
+  const releasableQuery = useReadContract({
+    address: vestingAddress,
+    abi: VESTING_ABI,
+    functionName: 'releasable',
+    query: { enabled: hasVesting },
+  })
+  const queuedQuery = useReadContract({
+    address: vaultAddress,
+    abi: QUEUED_WITHDRAWAL_ABI,
+    functionName: 'queuedWithdrawals',
+    args: [canonicalCswAddress],
+    chainId: base.id,
+    query: { enabled: canUseSmartWallet && isBase && hasVault },
+  })
+  const thresholdQuery = useReadContract({
+    address: vaultAddress,
+    abi: VAULT_ABI,
+    functionName: 'largeWithdrawalThreshold',
+    chainId: base.id,
+    query: { enabled: isBase && hasVault },
+  })
+  const vaultAssetQuery = useReadContract({
+    address: vaultAddress,
+    abi: VAULT_EMERGENCY_ABI,
+    functionName: 'asset',
+    chainId: base.id,
+    query: { enabled: isBase && hasVault },
+  })
+  const vaultAssetRaw = vaultAssetQuery.data as Address | undefined
+  const vaultAsset = vaultAssetRaw && isAddress(vaultAssetRaw) ? getAddress(vaultAssetRaw) : null
+  const vaultShutdownQuery = useReadContract({
+    address: vaultAddress,
+    abi: VAULT_EMERGENCY_ABI,
+    functionName: 'isShutdown',
+    chainId: base.id,
+    query: { enabled: isBase && hasVault },
+  })
+  const vaultAssetBalanceQuery = useReadContract({
+    address: ((vaultAsset ?? ZERO_ADDRESS) as Address),
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: [vaultAddress],
+    chainId: base.id,
+    query: { enabled: isBase && hasVault && !!vaultAsset },
+  })
+  const previewRedeemQuery = useReadContract({
+    address: vaultAddress,
+    abi: VAULT_ABI,
+    functionName: 'previewRedeem',
+    args: [sharesToQueue ?? 0n],
+    chainId: base.id,
+    query: { enabled: isBase && hasVault && !!sharesToQueue },
+  })
+
+  const releaseKey = `release-${legacy.id}`
+  const unwrapKey = `unwrap-${legacy.id}`
+  const queueKey = `queue-${legacy.id}`
+  const claimKey = `claim-${legacy.id}`
+  const oneClickKey = `oneclick-${legacy.id}`
+  const shutdownKey = `shutdown-${legacy.id}`
+  const emergencyPullKey = `emergency-pull-${legacy.id}`
+  const emergencyDrainKey = `emergency-drain-${legacy.id}`
+
+  const balance = balanceQuery.data as bigint | undefined
+  const releasable = releasableQuery.data as bigint | undefined
+  const largeWithdrawalThreshold = thresholdQuery.data as bigint | undefined
+  const vaultIsShutdown = vaultShutdownQuery.data === true
+  const vaultAssetBalance = vaultAssetBalanceQuery.data as bigint | undefined
+  const previewRedeem = previewRedeemQuery.data as bigint | undefined
+  const hasReleasable = typeof releasable === 'bigint' && releasable > 0n
+  const isBalanceZero = typeof balance === 'bigint' && balance === 0n
+  const queued = queuedQuery.data as
+    | readonly [bigint, bigint, Address]
+    | { shares: bigint; unlockBlock: bigint; receiver: Address }
+    | undefined
+  const isQueuedObject = (value: typeof queued): value is { shares: bigint; unlockBlock: bigint; receiver: Address } => {
+    return Boolean(value) && !Array.isArray(value)
+  }
+  const queuedTuple = Array.isArray(queued)
+    ? queued
+    : isQueuedObject(queued)
+      ? ([queued.shares, queued.unlockBlock, queued.receiver] as const)
+      : null
+  const queuedShares = queuedTuple ? queuedTuple[0] : undefined
+  const queuedUnlockBlock = queuedTuple ? queuedTuple[1] : undefined
+  const hasQueued = typeof queuedShares === 'bigint' && queuedShares > 0n
+  const currentBlock = typeof blockNumber === 'bigint' ? blockNumber : null
+  const isUnlocked =
+    hasQueued && typeof queuedUnlockBlock === 'bigint' && currentBlock !== null ? currentBlock >= queuedUnlockBlock : false
+  const blocksRemaining =
+    hasQueued && typeof queuedUnlockBlock === 'bigint' && currentBlock !== null && queuedUnlockBlock > currentBlock
+      ? queuedUnlockBlock - currentBlock
+      : null
+  const maxAvailable = (typeof balance === 'bigint' ? balance : 0n) + (hasReleasable ? (releasable ?? 0n) : 0n)
+  const oneClickAmount = parsedAmount ?? (maxAvailable > 0n ? maxAvailable : null)
+  const oneClickShares = typeof oneClickAmount === 'bigint' ? oneClickAmount * 1000n : null
+  const exceedsAvailable =
+    typeof oneClickAmount === 'bigint' && typeof maxAvailable === 'bigint' ? oneClickAmount > maxAvailable : false
+
+  const previewRedeemOneClickQuery = useReadContract({
+    address: vaultAddress,
+    abi: VAULT_ABI,
+    functionName: 'previewRedeem',
+    args: [oneClickShares ?? 0n],
+    chainId: base.id,
+    query: { enabled: isBase && hasVault && !!oneClickShares },
+  })
+  const previewRedeemOneClick = previewRedeemOneClickQuery.data as bigint | undefined
+  const shouldQueue =
+    typeof previewRedeem === 'bigint' && typeof largeWithdrawalThreshold === 'bigint' ? previewRedeem >= largeWithdrawalThreshold : true
+  const shouldQueueOneClick =
+    typeof previewRedeemOneClick === 'bigint' && typeof largeWithdrawalThreshold === 'bigint'
+      ? previewRedeemOneClick >= largeWithdrawalThreshold
+      : true
+
+  const canUnwrap = isConnected && isBase && canUseSmartWallet && hasResolvedContracts && !!parsedAmount
+  const canQueue = isConnected && isBase && canUseSmartWallet && hasVault && !!parsedAmount && receiverValid && shouldQueue
+  const canRedeem =
+    isConnected && isBase && canUseSmartWallet && hasVault && !!parsedAmount && receiverValid && !shouldQueue
+  const canClaim = isConnected && isBase && canUseSmartWallet && hasVault && hasQueued && isUnlocked
+  const canOneClick =
+    isConnected &&
+    isBase &&
+    canUseSmartWallet &&
+    hasResolvedContracts &&
+    receiverValid &&
+    typeof oneClickAmount === 'bigint' &&
+    oneClickAmount > 0n &&
+    !exceedsAvailable
+  const canEmergencyShutdown = isConnected && isBase && canUseSmartWallet && hasVault && !vaultIsShutdown
+  const canEmergencyPull = isConnected && isBase && canUseSmartWallet && hasVault && vaultIsShutdown
+  const canEmergencyDrain =
+    isConnected &&
+    isBase &&
+    canUseSmartWallet &&
+    hasVault &&
+    vaultIsShutdown &&
+    receiverValid &&
+    typeof vaultAssetBalance === 'bigint' &&
+    vaultAssetBalance > 0n
+
+  const queueConfig = {
+    address: vaultAddress,
+    abi: VAULT_ABI,
+    functionName: 'queueWithdrawal',
+    args: [sharesToQueue ?? 0n, receiver as Address],
+  }
+  const redeemConfig = {
+    address: vaultAddress,
+    abi: VAULT_ABI,
+    functionName: 'redeem',
+    args: [sharesToQueue ?? 0n, receiver as Address, canonicalCswAddress as Address],
+  }
+  const emergencyShutdownConfig = {
+    address: vaultAddress,
+    abi: VAULT_EMERGENCY_ABI,
+    functionName: 'shutdownVault',
+  }
+  const emergencyPullConfig = {
+    address: vaultAddress,
+    abi: VAULT_EMERGENCY_ABI,
+    functionName: 'emergencyWithdrawFromStrategies',
+  }
+  const emergencyDrainConfig = {
+    address: vaultAddress,
+    abi: VAULT_EMERGENCY_ABI,
+    functionName: 'emergencyWithdraw',
+    args: [vaultAssetBalance ?? 0n, receiver as Address],
+  }
+
+  const oneClickCalls: Array<{ to: Address; data: Hex }> = []
+  if (hasVesting && hasReleasable) {
+    oneClickCalls.push({
+      to: vestingAddress,
+      data: encodeFunctionData({ abi: VESTING_ABI as any, functionName: 'release' }),
+    })
+  }
+  if (typeof oneClickAmount === 'bigint' && oneClickAmount > 0n) {
+    oneClickCalls.push({
+      to: wrapperAddress,
+      data: encodeFunctionData({
+        abi: WRAPPER_ABI as any,
+        functionName: 'unwrap',
+        args: [oneClickAmount],
+      }),
+    })
+    if (receiverValid) {
+      if (shouldQueueOneClick) {
+        oneClickCalls.push({
+          to: vaultAddress,
+          data: encodeFunctionData({
+            abi: VAULT_ABI as any,
+            functionName: 'queueWithdrawal',
+            args: [oneClickShares ?? 0n, receiver as Address],
+          }),
+        })
+      } else {
+        oneClickCalls.push({
+          to: vaultAddress,
+          data: encodeFunctionData({
+            abi: VAULT_ABI as any,
+            functionName: 'redeem',
+            args: [oneClickShares ?? 0n, receiver as Address, canonicalCswAddress as Address],
+          }),
+        })
+      }
+    }
+  }
+
+  if (isEmptyAutoSlot) return null
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-sm text-zinc-300">{legacy.label}</div>
+          <div className="text-xs text-zinc-600 font-mono">ShareOFT {hasShareOft ? legacy.shareOft : '—'}</div>
+          <div className="text-xs text-zinc-600 font-mono">Wrapper {hasWrapper ? legacy.wrapper : '—'}</div>
+          <div className="text-xs text-zinc-600 font-mono">Vault {hasVault ? legacy.vault : '—'}</div>
+          <div className="text-xs text-zinc-600 font-mono">Vesting {hasVesting ? legacy.vesting : '—'}</div>
+          {!hasResolvedContracts ? (
+            <div className="text-xs text-amber-300/80">
+              {legacyResolveStatus === 'loading'
+                ? 'Resolving wrapper/shareOFT/vault from registry…'
+                : 'Registry match not found for this vault.'}
+            </div>
+          ) : null}
+          {!hasVesting ? (
+            <div className="text-xs text-amber-300/80">Vesting contract not found for the canonical CSW.</div>
+          ) : null}
+        </div>
+        <div className="text-xs text-zinc-500">
+          {balanceLabel}: <span className="text-zinc-200">{formatToken(balance)}</span>
+        </div>
+        {hasReleasable && isBalanceZero ? (
+          <div className="text-xs text-amber-300/80">
+            Release from vesting to move ShareOFT into the canonical smart wallet.
+          </div>
+        ) : null}
+        {exceedsAvailable ? (
+          <div className="text-xs text-amber-300/80">One-click amount exceeds available ShareOFT.</div>
+        ) : null}
+      </div>
+
+      <div className="rounded-lg border border-white/10 p-4 space-y-2">
+        <div className="text-sm text-zinc-300">One-click withdraw</div>
+        <div className="text-xs text-zinc-500">
+          {shouldQueueOneClick
+            ? 'Release + unwrap + queue in a single transaction.'
+            : 'Release + unwrap + withdraw now in a single transaction.'}
+        </div>
+        <button
+          type="button"
+          onClick={() => sendBatchTx(oneClickKey, oneClickCalls)}
+          disabled={!canOneClick}
+          className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          One-click withdraw
+        </button>
+        <TxMeta state={txStates[oneClickKey]} />
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="rounded-lg border border-white/10 p-4 space-y-2">
+          <div className="text-sm text-zinc-300">Step 1 · Release vested ShareOFT</div>
+          <div className="text-xs text-zinc-500">
+            Releasable now: <span className="text-zinc-200">{formatToken(releasable)}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              sendTx(releaseKey, {
+                address: vestingAddress,
+                abi: VESTING_ABI,
+                functionName: 'release',
+              })
+            }
+            disabled={!isBase || !walletClient || !canUseSmartWallet || !hasVesting}
+            className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Release from vesting
+          </button>
+          <TxMeta state={txStates[releaseKey]} />
+        </div>
+
+        <div className="rounded-lg border border-white/10 p-4 space-y-2">
+          <div className="text-sm text-zinc-300">Step 2 · Unwrap ShareOFT → Vault shares</div>
+          <div className="text-xs text-zinc-500">Amount to unwrap</div>
+          <div className="flex gap-2">
+            <input
+              value={amountInput}
+              onChange={(e) => setAmountInput(e.target.value)}
+              placeholder="0.0"
+              className="flex-1 bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof balance === 'bigint') setAmountInput(formatToken(balance))
+              }}
+              className="px-3 py-2 rounded-lg border border-white/10 text-xs text-zinc-300 hover:border-white/20"
+            >
+              Max
+            </button>
+          </div>
+          <div className="text-xs text-zinc-600">
+            Vault shares to queue: <span className="text-zinc-200">{sharesToQueue ? formatToken(sharesToQueue) : '—'}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              sendTx(unwrapKey, {
+                address: wrapperAddress,
+                abi: WRAPPER_ABI,
+                functionName: 'unwrap',
+                args: [parsedAmount ?? 0n],
+              })
+            }
+            disabled={!canUnwrap}
+            className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Unwrap ShareOFT
+          </button>
+          <TxMeta state={txStates[unwrapKey]} />
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="rounded-lg border border-white/10 p-4 space-y-2">
+          <div className="text-sm text-zinc-300">{shouldQueue ? 'Step 3 · Queue withdrawal' : 'Step 3 · Withdraw now'}</div>
+          <div className="text-xs text-zinc-500">
+            {shouldQueue
+              ? 'Large withdrawals require queueing. Wait 10 blocks, then claim.'
+              : 'Small withdrawals redeem immediately (no queue).'}
+          </div>
+          <button
+            type="button"
+            onClick={() => sendTx(queueKey, shouldQueue ? queueConfig : redeemConfig)}
+            disabled={shouldQueue ? !canQueue : !canRedeem}
+            className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {shouldQueue ? 'Queue withdrawal' : 'Withdraw now'}
+          </button>
+          <TxMeta state={txStates[queueKey]} />
+        </div>
+
+        <div className="rounded-lg border border-white/10 p-4 space-y-2">
+          <div className="text-sm text-zinc-300">Step 4 · Claim queued withdrawal</div>
+          <div className="text-xs text-zinc-500">Use after 10 blocks have passed.</div>
+          {hasQueued ? (
+            <div className="text-xs text-zinc-500">
+              {isUnlocked
+                ? 'Queued withdrawal is ready to claim.'
+                : blocksRemaining !== null
+                  ? `Unlocks in ~${blocksRemaining.toString()} blocks.`
+                  : 'Queued withdrawal pending.'}
+            </div>
+          ) : (
+            <div className="text-xs text-zinc-500">No queued withdrawal found.</div>
+          )}
+          <button
+            type="button"
+            onClick={() =>
+              sendTx(claimKey, {
+                address: vaultAddress,
+                abi: VAULT_ABI,
+                functionName: 'claimQueuedWithdrawal',
+              })
+            }
+            disabled={!canClaim}
+            className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Claim withdrawal
+          </button>
+          <TxMeta state={txStates[claimKey]} />
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-red-500/25 bg-red-500/4 p-4 space-y-3">
+        <div className="text-sm text-red-200">Emergency recovery (advanced)</div>
+        <div className="text-xs text-red-200/80">
+          Use only when normal withdraw flow is blocked. Sequence: shutdown vault, pull from strategies, then drain vault
+          asset to receiver.
+        </div>
+        <div className="grid gap-2 text-xs text-zinc-400 sm:grid-cols-2">
+          <div>
+            Vault shutdown:{' '}
+            <span className={vaultIsShutdown ? 'text-emerald-300' : 'text-zinc-300'}>{vaultIsShutdown ? 'Yes' : 'No'}</span>
+          </div>
+          <div>
+            Vault asset:{' '}
+            <span className="font-mono text-zinc-300">{vaultAsset ? shortAddress(vaultAsset) : 'Unknown'}</span>
+          </div>
+          <div className="sm:col-span-2">
+            Idle vault asset balance: <span className="text-zinc-200">{formatToken(vaultAssetBalance)}</span>
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => sendTx(shutdownKey, emergencyShutdownConfig)}
+              disabled={!canEmergencyShutdown}
+              className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Shutdown vault
+            </button>
+            <TxMeta state={txStates[shutdownKey]} />
+          </div>
+
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => sendTx(emergencyPullKey, emergencyPullConfig)}
+              disabled={!canEmergencyPull}
+              className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Pull from strategies
+            </button>
+            <TxMeta state={txStates[emergencyPullKey]} />
+          </div>
+
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => sendTx(emergencyDrainKey, emergencyDrainConfig)}
+              disabled={!canEmergencyDrain}
+              className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Drain vault asset
+            </button>
+            <TxMeta state={txStates[emergencyDrainKey]} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function LegacyWithdrawals() {
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
@@ -2837,17 +3350,6 @@ function LegacyWithdrawals() {
     }
   }
 
-  function parseAmount(input: string): bigint | null {
-    const raw = input.trim()
-    if (!raw) return null
-    try {
-      const amount = parseUnits(raw, 18)
-      return amount > 0n ? amount : null
-    } catch {
-      return null
-    }
-  }
-
   const receiverValid = isAddress(receiver)
 
   return (
@@ -2955,471 +3457,27 @@ function LegacyWithdrawals() {
             <div className="grid gap-6">
               {legacyVaults.map((legacy) => {
                 const amountInput = amounts[legacy.id] ?? ''
-                const parsedAmount = parseAmount(amountInput)
-                const sharesToQueue = parsedAmount ? parsedAmount * 1000n : null
-                const hasShareOft = isAddress(legacy.shareOft)
-                const hasWrapper = isAddress(legacy.wrapper)
-                const hasVault = isAddress(legacy.vault)
-                const hasVesting = isAddress(legacy.vesting)
-                const isEmptyAutoSlot = legacy.id.startsWith('legacy-auto-') && !hasShareOft && !hasWrapper && !hasVault && !hasVesting
-                const hasResolvedContracts = hasShareOft && hasWrapper && hasVault
-                const balanceAccount = canUseSmartWallet ? canonicalCswAddress : connectedAddress ?? ZERO_ADDRESS
-                const balanceLabel = canUseSmartWallet ? 'CSW balance' : 'Connected balance'
-                const balanceQuery = useReadContract({
-                  address: legacy.shareOft as Address,
-                  abi: erc20Abi,
-                  functionName: 'balanceOf',
-                  args: [balanceAccount as Address],
-                  query: { enabled: hasShareOft && canUseSmartWallet },
-                })
-                const releasableQuery = useReadContract({
-                  address: legacy.vesting as Address,
-                  abi: VESTING_ABI,
-                  functionName: 'releasable',
-                  query: { enabled: hasVesting },
-                })
-                const queuedQuery = useReadContract({
-                  address: legacy.vault as Address,
-                  abi: QUEUED_WITHDRAWAL_ABI,
-                  functionName: 'queuedWithdrawals',
-                  args: [canonicalCswAddress],
-                  chainId: base.id,
-                  query: { enabled: canUseSmartWallet && isBase && hasVault },
-                })
-                const thresholdQuery = useReadContract({
-                  address: legacy.vault as Address,
-                  abi: VAULT_ABI,
-                  functionName: 'largeWithdrawalThreshold',
-                  chainId: base.id,
-                  query: { enabled: isBase && hasVault },
-                })
-                const vaultAssetQuery = useReadContract({
-                  address: legacy.vault as Address,
-                  abi: VAULT_EMERGENCY_ABI,
-                  functionName: 'asset',
-                  chainId: base.id,
-                  query: { enabled: isBase && hasVault },
-                })
-                const vaultAssetRaw = vaultAssetQuery.data as Address | undefined
-                const vaultAsset = vaultAssetRaw && isAddress(vaultAssetRaw) ? getAddress(vaultAssetRaw) : null
-                const vaultShutdownQuery = useReadContract({
-                  address: legacy.vault as Address,
-                  abi: VAULT_EMERGENCY_ABI,
-                  functionName: 'isShutdown',
-                  chainId: base.id,
-                  query: { enabled: isBase && hasVault },
-                })
-                const vaultAssetBalanceQuery = useReadContract({
-                  address: (vaultAsset ?? ZERO_ADDRESS) as Address,
-                  abi: erc20Abi,
-                  functionName: 'balanceOf',
-                  args: [legacy.vault as Address],
-                  chainId: base.id,
-                  query: { enabled: isBase && hasVault && !!vaultAsset },
-                })
-                const previewRedeemQuery = useReadContract({
-                  address: legacy.vault as Address,
-                  abi: VAULT_ABI,
-                  functionName: 'previewRedeem',
-                  args: [sharesToQueue ?? 0n],
-                  chainId: base.id,
-                  query: { enabled: isBase && hasVault && !!sharesToQueue },
-                })
-                const releaseKey = `release-${legacy.id}`
-                const unwrapKey = `unwrap-${legacy.id}`
-                const queueKey = `queue-${legacy.id}`
-                const claimKey = `claim-${legacy.id}`
-                const oneClickKey = `oneclick-${legacy.id}`
-                const shutdownKey = `shutdown-${legacy.id}`
-                const emergencyPullKey = `emergency-pull-${legacy.id}`
-                const emergencyDrainKey = `emergency-drain-${legacy.id}`
-
-                const balance = balanceQuery.data as bigint | undefined
-                const releasable = releasableQuery.data as bigint | undefined
-                const largeWithdrawalThreshold = thresholdQuery.data as bigint | undefined
-                const vaultIsShutdown = vaultShutdownQuery.data === true
-                const vaultAssetBalance = vaultAssetBalanceQuery.data as bigint | undefined
-                const previewRedeem = previewRedeemQuery.data as bigint | undefined
-                const hasReleasable = typeof releasable === 'bigint' && releasable > 0n
-                const isBalanceZero = typeof balance === 'bigint' && balance === 0n
-                const queued = queuedQuery.data as
-                  | readonly [bigint, bigint, Address]
-                  | { shares: bigint; unlockBlock: bigint; receiver: Address }
-                  | undefined
-                const isQueuedObject = (
-                  value: typeof queued,
-                ): value is { shares: bigint; unlockBlock: bigint; receiver: Address } => {
-                  return Boolean(value) && !Array.isArray(value)
-                }
-                const queuedTuple = Array.isArray(queued)
-                  ? queued
-                  : isQueuedObject(queued)
-                    ? ([queued.shares, queued.unlockBlock, queued.receiver] as const)
-                    : null
-                const queuedShares = queuedTuple ? queuedTuple[0] : undefined
-                const queuedUnlockBlock = queuedTuple ? queuedTuple[1] : undefined
-                const hasQueued = typeof queuedShares === 'bigint' && queuedShares > 0n
-                const currentBlock = typeof blockNumber === 'bigint' ? blockNumber : null
-                const isUnlocked =
-                  hasQueued && typeof queuedUnlockBlock === 'bigint' && currentBlock !== null
-                    ? currentBlock >= queuedUnlockBlock
-                    : false
-                const blocksRemaining =
-                  hasQueued && typeof queuedUnlockBlock === 'bigint' && currentBlock !== null && queuedUnlockBlock > currentBlock
-                    ? queuedUnlockBlock - currentBlock
-                    : null
-                const maxAvailable =
-                  (typeof balance === 'bigint' ? balance : 0n) + (hasReleasable ? (releasable ?? 0n) : 0n)
-                const oneClickAmount = parsedAmount ?? (maxAvailable > 0n ? maxAvailable : null)
-                const oneClickShares = typeof oneClickAmount === 'bigint' ? oneClickAmount * 1000n : null
-                const exceedsAvailable =
-                  typeof oneClickAmount === 'bigint' && typeof maxAvailable === 'bigint' ? oneClickAmount > maxAvailable : false
-                const previewRedeemOneClickQuery = useReadContract({
-                  address: legacy.vault as Address,
-                  abi: VAULT_ABI,
-                  functionName: 'previewRedeem',
-                  args: [oneClickShares ?? 0n],
-                  chainId: base.id,
-                  query: { enabled: isBase && hasVault && !!oneClickShares },
-                })
-                const previewRedeemOneClick = previewRedeemOneClickQuery.data as bigint | undefined
-                const shouldQueue =
-                  typeof previewRedeem === 'bigint' && typeof largeWithdrawalThreshold === 'bigint'
-                    ? previewRedeem >= largeWithdrawalThreshold
-                    : true
-                const shouldQueueOneClick =
-                  typeof previewRedeemOneClick === 'bigint' && typeof largeWithdrawalThreshold === 'bigint'
-                    ? previewRedeemOneClick >= largeWithdrawalThreshold
-                    : true
-                const canUnwrap = isConnected && isBase && canUseSmartWallet && hasResolvedContracts && !!parsedAmount
-                const canQueue = isConnected && isBase && canUseSmartWallet && hasVault && !!parsedAmount && receiverValid && shouldQueue
-                const canRedeem = isConnected && isBase && canUseSmartWallet && hasVault && !!parsedAmount && receiverValid && !shouldQueue
-                const canClaim = isConnected && isBase && canUseSmartWallet && hasVault && hasQueued && isUnlocked
-                const canOneClick =
-                  isConnected &&
-                  isBase &&
-                  canUseSmartWallet &&
-                  hasResolvedContracts &&
-                  receiverValid &&
-                  typeof oneClickAmount === 'bigint' &&
-                  oneClickAmount > 0n &&
-                  !exceedsAvailable
-                const canEmergencyShutdown =
-                  isConnected && isBase && canUseSmartWallet && hasVault && !vaultIsShutdown
-                const canEmergencyPull =
-                  isConnected && isBase && canUseSmartWallet && hasVault && vaultIsShutdown
-                const canEmergencyDrain =
-                  isConnected &&
-                  isBase &&
-                  canUseSmartWallet &&
-                  hasVault &&
-                  vaultIsShutdown &&
-                  receiverValid &&
-                  typeof vaultAssetBalance === 'bigint' &&
-                  vaultAssetBalance > 0n
-                const queueConfig = {
-                  address: legacy.vault as Address,
-                  abi: VAULT_ABI,
-                  functionName: 'queueWithdrawal',
-                  args: [sharesToQueue ?? 0n, receiver as Address],
-                }
-                const redeemConfig = {
-                  address: legacy.vault as Address,
-                  abi: VAULT_ABI,
-                  functionName: 'redeem',
-                  args: [sharesToQueue ?? 0n, receiver as Address, canonicalCswAddress as Address],
-                }
-                const emergencyShutdownConfig = {
-                  address: legacy.vault as Address,
-                  abi: VAULT_EMERGENCY_ABI,
-                  functionName: 'shutdownVault',
-                }
-                const emergencyPullConfig = {
-                  address: legacy.vault as Address,
-                  abi: VAULT_EMERGENCY_ABI,
-                  functionName: 'emergencyWithdrawFromStrategies',
-                }
-                const emergencyDrainConfig = {
-                  address: legacy.vault as Address,
-                  abi: VAULT_EMERGENCY_ABI,
-                  functionName: 'emergencyWithdraw',
-                  args: [vaultAssetBalance ?? 0n, receiver as Address],
-                }
-                const oneClickCalls: Array<{ to: Address; data: Hex }> = []
-                if (hasVesting && hasReleasable) {
-                  oneClickCalls.push({
-                    to: legacy.vesting as Address,
-                    data: encodeFunctionData({ abi: VESTING_ABI as any, functionName: 'release' }),
-                  })
-                }
-                if (typeof oneClickAmount === 'bigint' && oneClickAmount > 0n) {
-                  oneClickCalls.push({
-                    to: legacy.wrapper as Address,
-                    data: encodeFunctionData({
-                      abi: WRAPPER_ABI as any,
-                      functionName: 'unwrap',
-                      args: [oneClickAmount],
-                    }),
-                  })
-                  if (receiverValid) {
-                    if (shouldQueueOneClick) {
-                      oneClickCalls.push({
-                        to: legacy.vault as Address,
-                        data: encodeFunctionData({
-                          abi: VAULT_ABI as any,
-                          functionName: 'queueWithdrawal',
-                          args: [oneClickShares ?? 0n, receiver as Address],
-                        }),
-                      })
-                    } else {
-                      oneClickCalls.push({
-                        to: legacy.vault as Address,
-                        data: encodeFunctionData({
-                          abi: VAULT_ABI as any,
-                          functionName: 'redeem',
-                          args: [oneClickShares ?? 0n, receiver as Address, canonicalCswAddress as Address],
-                        }),
-                      })
-                    }
-                  }
-                }
-                if (isEmptyAutoSlot) return null
-
+                const setAmountInput = (next: string) => setAmounts((prev) => ({ ...prev, [legacy.id]: next }))
                 return (
-                  <div key={legacy.id} className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <div className="text-sm text-zinc-300">{legacy.label}</div>
-                        <div className="text-xs text-zinc-600 font-mono">ShareOFT {hasShareOft ? legacy.shareOft : '—'}</div>
-                        <div className="text-xs text-zinc-600 font-mono">Wrapper {hasWrapper ? legacy.wrapper : '—'}</div>
-                        <div className="text-xs text-zinc-600 font-mono">Vault {hasVault ? legacy.vault : '—'}</div>
-                        <div className="text-xs text-zinc-600 font-mono">Vesting {hasVesting ? legacy.vesting : '—'}</div>
-                        {!hasResolvedContracts ? (
-                          <div className="text-xs text-amber-300/80">
-                            {legacyResolveStatus === 'loading'
-                              ? 'Resolving wrapper/shareOFT/vault from registry…'
-                              : 'Registry match not found for this vault.'}
-                          </div>
-                        ) : null}
-                        {!hasVesting ? (
-                          <div className="text-xs text-amber-300/80">
-                            Vesting contract not found for the canonical CSW.
-                          </div>
-                        ) : null}
-                      </div>
-                        <div className="text-xs text-zinc-500">
-                          {balanceLabel}: <span className="text-zinc-200">{formatToken(balance)}</span>
-                        </div>
-                        {hasReleasable && isBalanceZero ? (
-                          <div className="text-xs text-amber-300/80">
-                            Release from vesting to move ShareOFT into the canonical smart wallet.
-                          </div>
-                        ) : null}
-                        {exceedsAvailable ? (
-                          <div className="text-xs text-amber-300/80">
-                            One-click amount exceeds available ShareOFT.
-                          </div>
-                        ) : null}
-                    </div>
-
-                    <div className="rounded-lg border border-white/10 p-4 space-y-2">
-                      <div className="text-sm text-zinc-300">One-click withdraw</div>
-                      <div className="text-xs text-zinc-500">
-                        {shouldQueueOneClick
-                          ? 'Release + unwrap + queue in a single transaction.'
-                          : 'Release + unwrap + withdraw now in a single transaction.'}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => sendBatchTx(oneClickKey, oneClickCalls)}
-                        disabled={!canOneClick}
-                        className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        One-click withdraw
-                      </button>
-                      <TxMeta state={txStates[oneClickKey]} />
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div className="rounded-lg border border-white/10 p-4 space-y-2">
-                        <div className="text-sm text-zinc-300">Step 1 · Release vested ShareOFT</div>
-                        <div className="text-xs text-zinc-500">
-                          Releasable now: <span className="text-zinc-200">{formatToken(releasable)}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            sendTx(releaseKey, {
-                              address: legacy.vesting as Address,
-                              abi: VESTING_ABI,
-                              functionName: 'release',
-                            })
-                          }
-                          disabled={!isBase || !walletClient || !canUseSmartWallet || !hasVesting}
-                          className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Release from vesting
-                        </button>
-                        <TxMeta state={txStates[releaseKey]} />
-                      </div>
-
-                      <div className="rounded-lg border border-white/10 p-4 space-y-2">
-                        <div className="text-sm text-zinc-300">Step 2 · Unwrap ShareOFT → Vault shares</div>
-                        <div className="text-xs text-zinc-500">Amount to unwrap</div>
-                        <div className="flex gap-2">
-                          <input
-                            value={amountInput}
-                            onChange={(e) => setAmounts((prev) => ({ ...prev, [legacy.id]: e.target.value }))}
-                            placeholder="0.0"
-                            className="flex-1 bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (balance) setAmounts((prev) => ({ ...prev, [legacy.id]: formatToken(balance) }))
-                            }}
-                            className="px-3 py-2 rounded-lg border border-white/10 text-xs text-zinc-300 hover:border-white/20"
-                          >
-                            Max
-                          </button>
-                        </div>
-                        <div className="text-xs text-zinc-600">
-                          Vault shares to queue: <span className="text-zinc-200">{sharesToQueue ? formatToken(sharesToQueue) : '—'}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            sendTx(unwrapKey, {
-                              address: legacy.wrapper as Address,
-                              abi: WRAPPER_ABI,
-                              functionName: 'unwrap',
-                              args: [parsedAmount ?? 0n],
-                            })
-                          }
-                          disabled={!canUnwrap}
-                          className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Unwrap ShareOFT
-                        </button>
-                        <TxMeta state={txStates[unwrapKey]} />
-                      </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div className="rounded-lg border border-white/10 p-4 space-y-2">
-                        <div className="text-sm text-zinc-300">
-                          {shouldQueue ? 'Step 3 · Queue withdrawal' : 'Step 3 · Withdraw now'}
-                        </div>
-                        <div className="text-xs text-zinc-500">
-                          {shouldQueue
-                            ? 'Large withdrawals require queueing. Wait 10 blocks, then claim.'
-                            : 'Small withdrawals redeem immediately (no queue).'}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => sendTx(queueKey, shouldQueue ? queueConfig : redeemConfig)}
-                          disabled={shouldQueue ? !canQueue : !canRedeem}
-                          className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {shouldQueue ? 'Queue withdrawal' : 'Withdraw now'}
-                        </button>
-                        <TxMeta state={txStates[queueKey]} />
-                      </div>
-
-                      <div className="rounded-lg border border-white/10 p-4 space-y-2">
-                        <div className="text-sm text-zinc-300">Step 4 · Claim queued withdrawal</div>
-                        <div className="text-xs text-zinc-500">Use after 10 blocks have passed.</div>
-                        {hasQueued ? (
-                          <div className="text-xs text-zinc-500">
-                            {isUnlocked
-                              ? 'Queued withdrawal is ready to claim.'
-                              : blocksRemaining !== null
-                                ? `Unlocks in ~${blocksRemaining.toString()} blocks.`
-                                : 'Queued withdrawal pending.'}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-zinc-500">No queued withdrawal found.</div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            sendTx(claimKey, {
-                              address: legacy.vault as Address,
-                              abi: VAULT_ABI,
-                              functionName: 'claimQueuedWithdrawal',
-                            })
-                          }
-                          disabled={!canClaim}
-                          className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Claim withdrawal
-                        </button>
-                        <TxMeta state={txStates[claimKey]} />
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg border border-red-500/25 bg-red-500/4 p-4 space-y-3">
-                      <div className="text-sm text-red-200">Emergency recovery (advanced)</div>
-                      <div className="text-xs text-red-200/80">
-                        Use only when normal withdraw flow is blocked. Sequence: shutdown vault, pull from strategies, then drain vault
-                        asset to receiver.
-                      </div>
-                      <div className="grid gap-2 text-xs text-zinc-400 sm:grid-cols-2">
-                        <div>
-                          Vault shutdown:{' '}
-                          <span className={vaultIsShutdown ? 'text-emerald-300' : 'text-zinc-300'}>
-                            {vaultIsShutdown ? 'Yes' : 'No'}
-                          </span>
-                        </div>
-                        <div>
-                          Vault asset:{' '}
-                          <span className="font-mono text-zinc-300">{vaultAsset ? shortAddress(vaultAsset) : 'Unknown'}</span>
-                        </div>
-                        <div className="sm:col-span-2">
-                          Idle vault asset balance:{' '}
-                          <span className="text-zinc-200">{formatToken(vaultAssetBalance)}</span>
-                        </div>
-                      </div>
-
-                      <div className="grid gap-3 md:grid-cols-3">
-                        <div className="space-y-2">
-                          <button
-                            type="button"
-                            onClick={() => sendTx(shutdownKey, emergencyShutdownConfig)}
-                            disabled={!canEmergencyShutdown}
-                            className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            Shutdown vault
-                          </button>
-                          <TxMeta state={txStates[shutdownKey]} />
-                        </div>
-
-                        <div className="space-y-2">
-                          <button
-                            type="button"
-                            onClick={() => sendTx(emergencyPullKey, emergencyPullConfig)}
-                            disabled={!canEmergencyPull}
-                            className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            Pull from strategies
-                          </button>
-                          <TxMeta state={txStates[emergencyPullKey]} />
-                        </div>
-
-                        <div className="space-y-2">
-                          <button
-                            type="button"
-                            onClick={() => sendTx(emergencyDrainKey, emergencyDrainConfig)}
-                            disabled={!canEmergencyDrain}
-                            className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            Drain vault asset
-                          </button>
-                          <TxMeta state={txStates[emergencyDrainKey]} />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <LegacyVaultWithdrawalCard
+                    key={legacy.id}
+                    legacy={legacy}
+                    legacyResolveStatus={legacyResolveStatus}
+                    amountInput={amountInput}
+                    setAmountInput={setAmountInput}
+                    receiver={receiver}
+                    receiverValid={receiverValid}
+                    canonicalCswAddress={canonicalCswAddress}
+                    connectedAddress={connectedAddress}
+                    canUseSmartWallet={canUseSmartWallet}
+                    isConnected={isConnected}
+                    isBase={isBase}
+                    blockNumber={blockNumber}
+                    walletClient={walletClient}
+                    txStates={txStates}
+                    sendTx={sendTx}
+                    sendBatchTx={sendBatchTx}
+                  />
                 )
               })}
             </div>

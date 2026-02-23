@@ -108,9 +108,13 @@ function makeDeploySession(step: string) {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     lastError: null,
-    lastUserOpHash: '0xhash',
+    lastUserOpHash: `0x${'1'.repeat(64)}`,
     lastTxHash: null,
   }
+}
+
+function makeCall(to: string, data = '0x12345678') {
+  return { to, value: '0', data }
 }
 
 describe('deploy session optimistic concurrency', () => {
@@ -185,7 +189,6 @@ describe('deploy session optimistic concurrency', () => {
     expect(res.statusCode).toBe(400)
     expect(String(res.body?.error ?? '')).toContain('completed')
   })
-
 
   it('blocks continue when ERC-7712 grant does not allow stage calls', async () => {
     const rec = {
@@ -335,6 +338,7 @@ describe('deploy session optimistic concurrency', () => {
       payload: { phase2Calls: [{ to: '0xcalltarget', value: '0', data: '0x' }], phase3Calls: [] },
     }
     getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
 
     const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
     const res = createMockRes()
@@ -342,5 +346,152 @@ describe('deploy session optimistic concurrency', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body?.data?.id).toBe('sess_1')
+  })
+
+  it('continue sequences phase3 before phase4 when both are present', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_confirmed'),
+      payload: {
+        phase2Calls: [],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xphase4target')],
+      },
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
+    const args = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
+    expect(String(args.calls[0]?.to)).toBe('0xphase3target')
+    expect(updateDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', step: 'phase3_sent' }),
+    )
+  })
+
+  it('continue transitions phase3_confirmed to phase4_sent', async () => {
+    const rec = {
+      ...makeDeploySession('phase3_confirmed'),
+      payload: {
+        phase2Calls: [],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xphase4target')],
+      },
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
+    const args = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
+    expect(String(args.calls[0]?.to)).toBe('0xphase4target')
+    expect(updateDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', step: 'phase4_sent' }),
+    )
+  })
+
+  it('status advances phase3_sent to phase4_sent when phase4 calls exist', async () => {
+    const rec = {
+      ...makeDeploySession('phase3_sent'),
+      payload: {
+        phase2Calls: [],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xphase4target')],
+      },
+    }
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({ ...rec, step: 'phase4_sent', lastUserOpHash: '0xuserop' })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('phase4_sent')
+    expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
+    const args = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
+    expect(String(args.calls[0]?.to)).toBe('0xphase4target')
+  })
+
+  it('continue honors required downstream stages when payload is stringified JSON', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_core_confirmed'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xphase2target')],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xphase4target')],
+      }),
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
+    const args = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
+    expect(String(args.calls[0]?.to)).toBe('0xphase2target')
+    expect(updateDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', step: 'phase2_sent' }),
+    )
+  })
+
+  it('status does not auto-complete when downstream stages are still required', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_core_sent'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xphase2target')],
+        phase3Calls: [makeCall('0xphase3target')],
+      }),
+    }
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({ ...rec, step: 'phase2_sent', lastUserOpHash: '0xuserop' })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('phase2_sent')
+    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase2_core_sent', toStep: 'phase2_core_confirmed' }),
+    )
+  })
+
+  it('status advances phase4_sent to completed', async () => {
+    const rec = {
+      ...makeDeploySession('phase4_sent'),
+      payload: {
+        phase2Calls: [],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xphase4target')],
+      },
+    }
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({ ...rec, step: 'completed', lastTxHash: '0xtxhash' })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('completed')
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
   })
 })

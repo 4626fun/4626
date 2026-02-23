@@ -73,18 +73,12 @@ interface ICreatorOracle {
     // STATE HELPERS
     // ================================
 
-    function getObservationState() external view returns (
-        uint16 index,
-        uint16 cardinality,
-        uint16 cardinalityNext,
-        uint32 lastTimestamp
-    );
+    function getObservationState()
+        external
+        view
+        returns (uint16 index, uint16 cardinality, uint16 cardinalityNext, uint32 lastTimestamp);
 
-    function getTickCapState() external view returns (
-        int24 currentCap,
-        uint64 capFrequency,
-        bool autoTunePaused
-    );
+    function getTickCapState() external view returns (int24 currentCap, uint64 capFrequency, bool autoTunePaused);
 
     function creatorSymbol() external view returns (string memory);
 

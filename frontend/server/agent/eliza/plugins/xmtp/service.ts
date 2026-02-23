@@ -25,6 +25,15 @@ function getEthereumAddressFromInboxState(state: any): string | null {
 }
 
 function readEnvDbEncryptionKey(): `0x${string}` | undefined {
+  const plaintextOnlyRaw = String(process.env.XMTP_DB_PLAINTEXT_ONLY ?? '').trim().toLowerCase()
+  if (
+    plaintextOnlyRaw === '1' ||
+    plaintextOnlyRaw === 'true' ||
+    plaintextOnlyRaw === 'yes' ||
+    plaintextOnlyRaw === 'on'
+  ) {
+    return undefined
+  }
   const raw = (process.env.XMTP_DB_ENCRYPTION_KEY ?? '').trim()
   if (!raw) return undefined
   return (raw.startsWith('0x') ? raw : `0x${raw}`) as `0x${string}`
@@ -200,11 +209,18 @@ export class XmtpService {
           const isUnsupportedFormat = message.toLowerCase().includes('unsupported file format')
           if (!retryKey || !isUnsupportedFormat) throw err
 
-          console.warn(
-            '[xmtp-service] Initial DB open failed with unsupported file format; retrying once with XMTP_DB_ENCRYPTION_KEY',
-          )
+          // Some runtimes intermittently report unsupported format during first open.
+          // Retry once with the same options before switching to env key fallback.
+          try {
+            return await Agent.create(signer, createOpts as any)
+          } catch (retryErr) {
+            const retryMessage = retryErr instanceof Error ? retryErr.message : String(retryErr)
+            if (!retryMessage.toLowerCase().includes('unsupported file format')) throw retryErr
+          }
+
+          // Retry once with env fallback key when initial open keeps reporting unsupported format.
           effectiveDbEncryptionKey = retryKey
-          return Agent.create(
+          return await Agent.create(
             signer,
             {
               ...createOpts,

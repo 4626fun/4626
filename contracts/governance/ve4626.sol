@@ -5,7 +5,7 @@ pragma solidity ^0.8.20;
  * @title ve4626 - CreatorVault Protocol Token
  * @author 0xakita.eth
  * @notice Vote-escrowed ERC4626 (ve■4626) for protocol-wide boosts.
- * @dev Users lock ■4626 (or ▢4626) to get voting power and lottery boosts.
+ * @dev Users lock ■4626 to get voting power and lottery boosts.
  */
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -78,9 +78,6 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     /// @notice Wrapped ShareOFT token (e.g., ■4626)
     address public immutable wrappedShareOFT;
 
-    /// @notice Vault shares token (e.g., ▢4626) - alternative lock token
-    address public vaultShares;
-
     /// @notice Vault for calculating underlying value
     address public vault;
 
@@ -93,9 +90,6 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     /// @notice Total voting supply
     uint256 private _totalVotingSupply;
 
-    /// @notice Accepted tokens for locking
-    mapping(address => bool) public acceptedTokens;
-
     // ================================
     // CONSTRUCTOR
     // ================================
@@ -107,19 +101,13 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
      * @param _wrappedShareOFT The ■4626 (or similar) token to lock
      * @param _owner Owner address
      */
-    constructor(
-        string memory _name,
-        string memory _symbol,
-        address _wrappedShareOFT,
-        address _owner
-    )
+    constructor(string memory _name, string memory _symbol, address _wrappedShareOFT, address _owner)
         ERC20(_name, _symbol)
         ERC20Permit(_name)
         Ownable(_owner)
     {
         require(_wrappedShareOFT != address(0), "Invalid wrapped share token");
         wrappedShareOFT = _wrappedShareOFT;
-        acceptedTokens[_wrappedShareOFT] = true;
     }
 
     // ================================
@@ -127,17 +115,18 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     // ================================
 
     /**
-     * @notice Lock wrapped shares (■4626) or vault shares (▢4626) to receive voting power
-     * @param _token Token to lock (wrappedShareOFT or vaultShares)
+     * @notice Lock wrapped shares (■4626) to receive voting power
+     * @param _token Token to lock (must be wrappedShareOFT)
      * @param amount Amount to lock
      * @param duration Lock duration in seconds
      */
-    function lock(
-        address _token,
-        uint256 amount,
-        uint256 duration
-    ) external override nonReentrant returns (uint256 votingPowerAmount) {
-        if (!acceptedTokens[_token]) revert InvalidToken();
+    function lock(address _token, uint256 amount, uint256 duration)
+        external
+        override
+        nonReentrant
+        returns (uint256 votingPowerAmount)
+    {
+        if (_token != wrappedShareOFT) revert InvalidToken();
         if (amount == 0) revert ZeroAmount();
         if (duration < MIN_LOCK_DURATION) revert InvalidLockDuration();
         if (duration > MAX_LOCK_DURATION) revert InvalidLockDuration();
@@ -209,6 +198,7 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
 
         Lock storage userLock = _locks[msg.sender];
         if (userLock.amount == 0) revert NoExistingLock();
+        if (userLock.lockedToken != wrappedShareOFT) revert InvalidToken();
         if (block.timestamp >= userLock.end) revert LockExpired();
 
         uint256 oldPower = balanceOf(msg.sender);
@@ -278,7 +268,15 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         return (amount * duration) / MAX_LOCK_DURATION;
     }
 
-    function _getUnderlyingValue(address /* token */, uint256 amount) internal view returns (uint256) {
+    function _getUnderlyingValue(
+        address,
+        /* token */
+        uint256 amount
+    )
+        internal
+        view
+        returns (uint256)
+    {
         if (vault == address(0)) return amount;
 
         // If token is vault shares, get underlying value
@@ -344,22 +342,12 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     // ADMIN
     // ================================
 
-    function setVaultShares(address _vaultShares) external onlyOwner {
-        require(_vaultShares != address(0), "Invalid");
-        vaultShares = _vaultShares;
-        acceptedTokens[_vaultShares] = true;
-    }
-
     function setVault(address _vault) external onlyOwner {
         vault = _vault;
     }
 
     function setBoostManager(address _boostManager) external onlyOwner {
         boostManager = _boostManager;
-    }
-
-    function setAcceptedToken(address token, bool accepted) external onlyOwner {
-        acceptedTokens[token] = accepted;
     }
 
     // ================================

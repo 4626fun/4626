@@ -1,0 +1,693 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { erc20Abi, formatUnits, isAddress, parseUnits } from 'viem'
+
+import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
+import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
+import { CONTRACTS } from '@/config/contracts'
+import { normalizeUniswapError } from '@/lib/uniswap/error'
+import { areEquivalentSwapTokens, BASE_CHAIN_ID, getNestedAmountOut } from '@/lib/uniswap/swapUtils'
+import {
+  assertValidSwapTransaction,
+  buildSwap,
+  checkTradeApproval,
+  createOrder,
+  fetchTradeQuote,
+  isUniswapXRouting,
+  pickQuote,
+  pickOrderQuote,
+  pickSwapQuote,
+  pickPermitData,
+  toPermitSignPayload,
+  type TradeQuoteResponse,
+  type TransactionRequest,
+} from '@/lib/uniswap/tradingApi'
+import type { TxLifecycleState } from '@/components/trade/TransactionLifecycle'
+
+const QUOTE_TTL_MS = 30_000
+
+function asBigInt(v: unknown): bigint {
+  if (typeof v === 'bigint') return v
+  if (typeof v === 'number' && Number.isFinite(v)) return BigInt(Math.floor(v))
+  if (typeof v === 'string' && v.trim()) return BigInt(v)
+  return 0n
+}
+
+function asOptionalBigInt(v: unknown): bigint | undefined {
+  if (v === null || v === undefined) return undefined
+  if (typeof v === 'string' && !v.trim()) return undefined
+  return asBigInt(v)
+}
+
+function toParsableAmount(value: string): string | null {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  const normalized = raw.endsWith('.') ? raw.slice(0, -1) : raw
+  if (!normalized) return null
+  const n = Number(normalized)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return normalized
+}
+
+export function useSwapExecution(params: {
+  address: string | undefined
+  walletClient: unknown
+  publicClient: any
+  canonicalAddress: `0x${string}` | null
+  signerAddress: `0x${string}` | null
+  executionMode: 'canonical' | 'eoa'
+  executionAddress: `0x${string}` | null
+  executionReady: boolean
+  tokenIn: string
+  tokenOut: string
+  amountInUnits: string
+  parsedSlippage: number
+  parsedDeadlineMinutes: number
+}) {
+  const [estimatedOut, setEstimatedOut] = useState<string>('')
+  const [quote, setQuote] = useState<TradeQuoteResponse | null>(null)
+  const [approvalData, setApprovalData] = useState<Record<string, unknown> | null>(null)
+  const [swapTx, setSwapTx] = useState<TransactionRequest | null>(null)
+  const [orderRequest, setOrderRequest] = useState<{
+    quote: Record<string, unknown>
+    signature: string
+    routing?: TradeQuoteResponse['routing']
+  } | null>(null)
+  const [, setOrderStatus] = useState<{
+    orderId: string
+    orderStatus: string
+  } | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [status, setStatus] = useState<string>('')
+  const [error, setError] = useState<string>('')
+  const [confirmIntent, setConfirmIntent] = useState<'approval' | 'swap' | 'order' | null>(null)
+  const [quoteUpdatedAt, setQuoteUpdatedAt] = useState<number | null>(null)
+  const [quoteClockMs, setQuoteClockMs] = useState<number>(() => Date.now())
+  const [permitSignatureRequired, setPermitSignatureRequired] = useState(false)
+  const [permitSignaturePending, setPermitSignaturePending] = useState(false)
+  const [permitSignatureReady, setPermitSignatureReady] = useState(false)
+  const [txState, setTxState] = useState<TxLifecycleState>('idle')
+  const [txHash, setTxHash] = useState<string | null>(null)
+  const quoteRunRef = useRef(0)
+  const getErrorMessage = useCallback((value: unknown, fallback: string): string => {
+    const normalized = normalizeUniswapError(value)
+    const message = normalized.message.trim()
+    return message || fallback
+  }, [])
+
+  const tokensEquivalent = useMemo(
+    () => areEquivalentSwapTokens(params.tokenIn, params.tokenOut, CONTRACTS.weth),
+    [params.tokenIn, params.tokenOut],
+  )
+
+  const isReady = useMemo(
+    () =>
+      isAddress(params.tokenIn) &&
+      isAddress(params.tokenOut) &&
+      !tokensEquivalent &&
+      Number(params.amountInUnits) > 0 &&
+      Boolean(params.executionAddress),
+    [params.tokenIn, params.tokenOut, params.amountInUnits, params.executionAddress, tokensEquivalent],
+  )
+
+  const approvalTx = approvalData?.approval as Record<string, unknown> | undefined
+  const approvalRequired = Boolean(approvalTx?.to && approvalTx?.data)
+  const quoteIsStale = quoteUpdatedAt ? quoteClockMs - quoteUpdatedAt > QUOTE_TTL_MS : true
+
+  useEffect(() => {
+    if (!quoteUpdatedAt) return
+    const tick = window.setInterval(() => setQuoteClockMs(Date.now()), 1_000)
+    return () => window.clearInterval(tick)
+  }, [quoteUpdatedAt])
+
+  const getTokenDecimals = useCallback(async (token: string): Promise<number> => {
+    if (!params.publicClient || !isAddress(token)) return 18
+    try {
+      const decimals = await params.publicClient.readContract({
+        address: token as `0x${string}`,
+        abi: erc20Abi,
+        functionName: 'decimals',
+      })
+      return Number(decimals)
+    } catch {
+      return 18
+    }
+  }, [params.publicClient])
+
+  const syncPermitRequirement = useCallback((nextQuote: TradeQuoteResponse | null | undefined) => {
+    const requiresPermit = Boolean(pickPermitData(nextQuote))
+    setPermitSignatureRequired(requiresPermit)
+    setPermitSignaturePending(false)
+    setPermitSignatureReady(false)
+  }, [])
+
+  const signPermitIfRequired = useCallback(async (nextQuote: TradeQuoteResponse): Promise<{
+    permitData?: Record<string, unknown>
+    signature?: string
+  }> => {
+    const permitData = pickPermitData(nextQuote)
+    if (!permitData) {
+      setPermitSignatureRequired(false)
+      setPermitSignaturePending(false)
+      setPermitSignatureReady(false)
+      return {}
+    }
+
+    setPermitSignatureRequired(true)
+    setPermitSignaturePending(true)
+    setPermitSignatureReady(false)
+
+    const typed = toPermitSignPayload(permitData)
+    if (!typed) {
+      setPermitSignaturePending(false)
+      throw new Error('Permit2 payload is malformed. Please refresh the quote and try again.')
+    }
+    if (!params.walletClient || !params.signerAddress) {
+      setPermitSignaturePending(false)
+      throw new Error('Permit2 signature is required, but owner signer is not available.')
+    }
+    const signer = params.walletClient as any
+    if (typeof signer.signTypedData !== 'function') {
+      setPermitSignaturePending(false)
+      throw new Error('Connected wallet does not support typed-data signatures required for Permit2.')
+    }
+
+    setStatus('Permit2 signature required. Confirm in wallet…')
+    try {
+      const signature = await signer.signTypedData({
+        account: params.signerAddress,
+        domain: typed.domain,
+        types: typed.types,
+        primaryType: typed.primaryType,
+        message: typed.message,
+      })
+      if (typeof signature !== 'string' || !signature.startsWith('0x')) {
+        throw new Error('Wallet returned an invalid Permit2 signature.')
+      }
+      setPermitSignaturePending(false)
+      setPermitSignatureReady(true)
+      setStatus('Permit2 signature captured. Building swap…')
+      return { permitData, signature }
+    } catch (error) {
+      setPermitSignaturePending(false)
+      setPermitSignatureReady(false)
+      throw error
+    }
+  }, [params.walletClient, params.signerAddress])
+
+  const resetTradeState = useCallback(() => {
+    quoteRunRef.current += 1
+    setQuote(null)
+    setApprovalData(null)
+    setSwapTx(null)
+    setOrderRequest(null)
+    setOrderStatus(null)
+    setEstimatedOut('')
+    setQuoteUpdatedAt(null)
+    setPermitSignatureRequired(false)
+    setPermitSignaturePending(false)
+    setPermitSignatureReady(false)
+    setStatus('')
+    setError('')
+    setTxState('idle')
+    setTxHash(null)
+  }, [])
+
+  const handleQuote = useCallback(async () => {
+    if (!params.address || !isReady || !params.executionAddress) return
+    const runId = ++quoteRunRef.current
+    setBusy('quote')
+    setError('')
+    setStatus('')
+    try {
+      const parsableAmount = toParsableAmount(params.amountInUnits)
+      if (!parsableAmount) throw new Error('Enter a valid amount greater than 0.')
+      const tokenInDecimals = await getTokenDecimals(params.tokenIn)
+      if (runId !== quoteRunRef.current) return
+      const amount = parseUnits(parsableAmount, tokenInDecimals).toString()
+      const data = await fetchTradeQuote({
+        tokenIn: params.tokenIn,
+        tokenOut: params.tokenOut,
+        tokenInChainId: BASE_CHAIN_ID,
+        tokenOutChainId: BASE_CHAIN_ID,
+        type: 'EXACT_INPUT',
+        amount,
+        swapper: params.executionAddress,
+        slippageTolerance: params.parsedSlippage,
+        routingPreference: 'BEST_PRICE',
+        walletModeKey: params.executionMode,
+      })
+      if (runId !== quoteRunRef.current) return
+      setQuote(data)
+      setQuoteUpdatedAt(Date.now())
+      syncPermitRequirement(data)
+      setApprovalData(null)
+      setSwapTx(null)
+      setOrderRequest(null)
+      setOrderStatus(null)
+      const outRaw = getNestedAmountOut(pickQuote(data) ?? data)
+      if (outRaw) {
+        const tokenOutDecimals = await getTokenDecimals(params.tokenOut)
+        if (runId !== quoteRunRef.current) return
+        setEstimatedOut(formatUnits(BigInt(outRaw), tokenOutDecimals))
+      } else {
+        setEstimatedOut('')
+      }
+      setStatus(
+        `Quote ready for ${params.executionMode === 'canonical' ? 'canonical CSW' : 'connected EOA'} (routing=${String(
+          data.routing ?? 'unknown',
+        )})`,
+      )
+      setTxState('review')
+    } catch (e: any) {
+      if (runId !== quoteRunRef.current) return
+      setEstimatedOut('')
+      setError(getErrorMessage(e, 'Quote failed'))
+    } finally {
+      if (runId === quoteRunRef.current) setBusy(null)
+    }
+  }, [
+    params.address,
+    params.executionAddress,
+    params.executionMode,
+    params.amountInUnits,
+    params.parsedSlippage,
+    params.tokenIn,
+    params.tokenOut,
+    isReady,
+    getTokenDecimals,
+    getErrorMessage,
+    syncPermitRequirement,
+  ])
+
+  const handleCheckApproval = useCallback(async () => {
+    if (!params.executionAddress || !isReady) return
+    setBusy('approval')
+    setError('')
+    setStatus('')
+    try {
+      const parsableAmount = toParsableAmount(params.amountInUnits)
+      if (!parsableAmount) throw new Error('Enter a valid amount greater than 0.')
+      const tokenInDecimals = await getTokenDecimals(params.tokenIn)
+      const amount = parseUnits(parsableAmount, tokenInDecimals).toString()
+      const data = await checkTradeApproval({
+        walletAddress: params.executionAddress,
+        token: params.tokenIn,
+        amount,
+        chainId: BASE_CHAIN_ID,
+        tokenOut: params.tokenOut,
+        tokenOutChainId: BASE_CHAIN_ID,
+        includeGasInfo: true,
+      })
+      setApprovalData(data)
+      setStatus('Approval check complete')
+    } catch (e: any) {
+      setError(getErrorMessage(e, 'Approval check failed'))
+    } finally {
+      setBusy(null)
+    }
+  }, [params.executionAddress, params.tokenIn, params.tokenOut, params.amountInUnits, isReady, getTokenDecimals, getErrorMessage])
+
+  const handleBuildSwap = useCallback(async () => {
+    if (!quote) return
+    setBusy('buildSwap')
+    setError('')
+    setStatus('')
+    try {
+      const selectedQuote = pickSwapQuote(quote)
+      if (!selectedQuote) throw new Error('Quote does not contain executable swap payload')
+      const permitPayload = await signPermitIfRequired(quote)
+      const data = await buildSwap({
+        quote: selectedQuote,
+        ...permitPayload,
+        includeGasInfo: false,
+        refreshGasPrice: true,
+        simulateTransaction: true,
+        deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
+      })
+      assertValidSwapTransaction(data.swap)
+      setSwapTx(data.swap)
+      setStatus('Swap transaction built')
+    } catch (e: any) {
+      setError(getErrorMessage(e, 'Swap build failed'))
+    } finally {
+      setBusy(null)
+    }
+  }, [quote, params.parsedDeadlineMinutes, getErrorMessage, signPermitIfRequired])
+
+  const handleReviewTrade = useCallback(async () => {
+    if (!params.executionAddress || !params.executionReady || !isReady) return
+    const runId = ++quoteRunRef.current
+    setBusy('review')
+    setError('')
+    setStatus('')
+    try {
+      const parsableAmount = toParsableAmount(params.amountInUnits)
+      if (!parsableAmount) throw new Error('Enter a valid amount greater than 0.')
+      const tokenInDecimals = await getTokenDecimals(params.tokenIn)
+      const tokenOutDecimals = await getTokenDecimals(params.tokenOut)
+      if (runId !== quoteRunRef.current) return
+      const amount = parseUnits(parsableAmount, tokenInDecimals).toString()
+
+      const [nextQuote, nextApproval] = await Promise.all([
+        fetchTradeQuote({
+          tokenIn: params.tokenIn,
+          tokenOut: params.tokenOut,
+          tokenInChainId: BASE_CHAIN_ID,
+          tokenOutChainId: BASE_CHAIN_ID,
+          type: 'EXACT_INPUT',
+          amount,
+          swapper: params.executionAddress,
+          slippageTolerance: params.parsedSlippage,
+          routingPreference: 'BEST_PRICE',
+          walletModeKey: params.executionMode,
+        }),
+        checkTradeApproval({
+          walletAddress: params.executionAddress,
+          token: params.tokenIn,
+          amount,
+          chainId: BASE_CHAIN_ID,
+          tokenOut: params.tokenOut,
+          tokenOutChainId: BASE_CHAIN_ID,
+          includeGasInfo: true,
+        }),
+      ])
+      if (runId !== quoteRunRef.current) return
+      setQuote(nextQuote)
+      setQuoteUpdatedAt(Date.now())
+      syncPermitRequirement(nextQuote)
+      setApprovalData(nextApproval)
+
+      const outRaw = getNestedAmountOut(pickQuote(nextQuote) ?? nextQuote)
+      if (outRaw) setEstimatedOut(formatUnits(BigInt(outRaw), tokenOutDecimals))
+      else setEstimatedOut('')
+
+      if (isUniswapXRouting(nextQuote.routing)) {
+        const orderQuote = pickOrderQuote(nextQuote)
+        if (!orderQuote) throw new Error('Quote does not contain executable UniswapX order payload')
+        const permitPayload = await signPermitIfRequired(nextQuote)
+        if (runId !== quoteRunRef.current) return
+        if (!permitPayload.signature) {
+          throw new Error('UniswapX order requires a Permit2 signature. Please refresh and try again.')
+        }
+
+        setSwapTx(null)
+        setOrderRequest({
+          quote: orderQuote,
+          signature: permitPayload.signature,
+          routing: nextQuote.routing,
+        })
+        setOrderStatus(null)
+        setStatus('Review ready')
+        setTxState('review')
+        setConfirmIntent('order')
+        return
+      }
+
+      const selectedQuote = pickSwapQuote(nextQuote)
+      if (!selectedQuote) throw new Error('Quote does not contain executable swap payload')
+      const permitPayload = await signPermitIfRequired(nextQuote)
+      if (runId !== quoteRunRef.current) return
+      const built = await buildSwap({
+        quote: selectedQuote,
+        ...permitPayload,
+        includeGasInfo: false,
+        refreshGasPrice: true,
+        simulateTransaction: true,
+        deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
+      })
+      if (runId !== quoteRunRef.current) return
+      assertValidSwapTransaction(built.swap)
+      setSwapTx(built.swap)
+      setOrderRequest(null)
+      setOrderStatus(null)
+      setStatus('Review ready')
+      setTxState('review')
+      setConfirmIntent('swap')
+    } catch (e: any) {
+      if (runId !== quoteRunRef.current) return
+      setError(getErrorMessage(e, 'Unable to prepare trade'))
+    } finally {
+      if (runId === quoteRunRef.current) setBusy(null)
+    }
+  }, [
+    params.tokenIn,
+    params.tokenOut,
+    params.amountInUnits,
+    params.parsedDeadlineMinutes,
+    params.parsedSlippage,
+    params.executionMode,
+    isReady,
+    getTokenDecimals,
+    getErrorMessage,
+    syncPermitRequirement,
+    signPermitIfRequired,
+    params.executionAddress,
+    params.executionReady,
+  ])
+
+  const executeViaCanonical4337 = useCallback(async (executeParams: {
+    calls: Array<{ to: `0x${string}`; data?: `0x${string}`; value?: bigint }>
+    successLabel: string
+  }) => {
+    if (!params.canonicalAddress || !params.signerAddress || !params.walletClient || !params.publicClient) {
+      throw new Error('Canonical smart wallet or owner signer is not ready')
+    }
+    const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+    const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+    const result = await sendCoinbaseSmartWalletUserOperation({
+      publicClient: params.publicClient as any,
+      walletClient: params.walletClient as any,
+      bundlerUrl,
+      smartWallet: params.canonicalAddress,
+      ownerAddress: params.signerAddress,
+      calls: executeParams.calls,
+      version: '1',
+    })
+    setTxHash(result.transactionHash)
+    setTxState('pending')
+    setStatus(`${executeParams.successLabel}: ${result.transactionHash}`)
+  }, [params.canonicalAddress, params.signerAddress, params.walletClient, params.publicClient])
+
+  const executeViaEoa = useCallback(async (executeParams: {
+    tx: TransactionRequest
+    successLabel: string
+  }) => {
+    if (!params.signerAddress || !params.walletClient) {
+      throw new Error('Connected EOA signer is not ready')
+    }
+    const wallet = params.walletClient as any
+    if (typeof wallet.sendTransaction !== 'function') {
+      throw new Error('Connected wallet does not support direct transaction sends')
+    }
+
+    const hash = await wallet.sendTransaction({
+      account: params.signerAddress,
+      to: executeParams.tx.to as `0x${string}`,
+      data: executeParams.tx.data as `0x${string}`,
+      value: asOptionalBigInt(executeParams.tx.value),
+      gas: asOptionalBigInt(executeParams.tx.gasLimit),
+      gasPrice: asOptionalBigInt(executeParams.tx.gasPrice),
+      maxFeePerGas: asOptionalBigInt(executeParams.tx.maxFeePerGas),
+      maxPriorityFeePerGas: asOptionalBigInt(executeParams.tx.maxPriorityFeePerGas),
+    })
+
+    setTxHash(hash)
+    setTxState('pending')
+    setStatus(`${executeParams.successLabel}: ${hash}`)
+  }, [params.signerAddress, params.walletClient])
+
+  const executeApprovalNow = useCallback(async () => {
+    if (!approvalData) return
+    const tx = approvalData.approval as Record<string, unknown> | undefined
+    if (!tx?.to || !tx?.data) {
+      setStatus('No approval transaction required')
+      return
+    }
+    setBusy('executeApproval')
+    setError('')
+    try {
+      if (params.executionMode === 'canonical') {
+        await executeViaCanonical4337({
+          calls: [
+            {
+              to: tx.to as `0x${string}`,
+              data: tx.data as `0x${string}`,
+              value: asBigInt(tx.value),
+            },
+          ],
+          successLabel: 'Approval submitted via canonical ERC-4337',
+        })
+      } else {
+        await executeViaEoa({
+          tx: {
+            to: tx.to as string,
+            from: (tx.from as string) ?? params.signerAddress ?? '',
+            data: tx.data as string,
+            value: typeof tx.value === 'string' && tx.value.trim() ? tx.value : '0',
+            chainId: BASE_CHAIN_ID,
+            gasLimit: typeof tx.gasLimit === 'string' ? tx.gasLimit : undefined,
+            maxFeePerGas: typeof tx.maxFeePerGas === 'string' ? tx.maxFeePerGas : undefined,
+            maxPriorityFeePerGas:
+              typeof tx.maxPriorityFeePerGas === 'string' ? tx.maxPriorityFeePerGas : undefined,
+            gasPrice: typeof tx.gasPrice === 'string' ? tx.gasPrice : undefined,
+          },
+          successLabel: 'Approval submitted via connected EOA',
+        })
+      }
+      setTxState('success')
+    } catch (e: any) {
+      const message = getErrorMessage(e, 'Approval transaction failed')
+      setError(message)
+      setTxState('error')
+      throw new Error(message)
+    } finally {
+      setBusy(null)
+    }
+  }, [approvalData, executeViaCanonical4337, executeViaEoa, getErrorMessage, params.executionMode, params.signerAddress])
+
+  const executeSwapNow = useCallback(async () => {
+    if (!swapTx) return
+    assertValidSwapTransaction(swapTx)
+    setBusy('executeSwap')
+    setError('')
+    try {
+      if (params.executionMode === 'canonical') {
+        await executeViaCanonical4337({
+          calls: [
+            {
+              to: swapTx.to as `0x${string}`,
+              data: swapTx.data as `0x${string}`,
+              value: asBigInt(swapTx.value),
+            },
+          ],
+          successLabel: 'Swap submitted via canonical ERC-4337',
+        })
+      } else {
+        await executeViaEoa({
+          tx: swapTx,
+          successLabel: 'Swap submitted via connected EOA',
+        })
+      }
+      setTxState('success')
+    } catch (e: any) {
+      const message = getErrorMessage(e, 'Swap transaction failed')
+      setError(message)
+      setTxState('error')
+      throw new Error(message)
+    } finally {
+      setBusy(null)
+    }
+  }, [swapTx, executeViaCanonical4337, executeViaEoa, getErrorMessage, params.executionMode])
+
+  const executeOrderNow = useCallback(async () => {
+    if (!orderRequest) return
+    if (!orderRequest.signature || !orderRequest.signature.startsWith('0x')) {
+      throw new Error('Order is missing a valid Permit2 signature. Please refresh the quote and try again.')
+    }
+    setBusy('executeOrder')
+    setError('')
+    try {
+      setTxHash(null)
+      setTxState('pending')
+      setStatus('Submitting UniswapX order…')
+      const result = await createOrder({
+        quote: orderRequest.quote,
+        signature: orderRequest.signature,
+        routing: orderRequest.routing,
+      })
+      const orderId = typeof (result as any).orderId === 'string' ? String((result as any).orderId) : ''
+      const orderStatusValue =
+        typeof (result as any).orderStatus === 'string' ? String((result as any).orderStatus) : ''
+
+      setOrderStatus(orderId ? { orderId, orderStatus: orderStatusValue || 'OPEN' } : null)
+      setTxState('success')
+      setStatus(orderId ? `Order submitted (id=${orderId})` : 'Order submitted')
+    } catch (e: any) {
+      const message = getErrorMessage(e, 'Order submission failed')
+      setError(message)
+      setTxState('error')
+      throw new Error(message)
+    } finally {
+      setBusy(null)
+    }
+  }, [getErrorMessage, orderRequest])
+
+  const openConfirm = useCallback((intent: 'approval' | 'swap' | 'order') => {
+    setConfirmIntent(intent)
+  }, [])
+
+  const closeConfirm = useCallback(() => {
+    if (busy) return
+    setConfirmIntent(null)
+  }, [busy])
+
+  const confirmAndExecute = useCallback(async () => {
+    if (!confirmIntent || busy) return
+    const action = confirmIntent
+    if ((action === 'swap' || action === 'order') && quoteIsStale) {
+      setConfirmIntent(null)
+      setError('')
+      setStatus('Quote expired. Refreshing quote and rebuilding review…')
+      setTxState('review')
+      await handleReviewTrade()
+      return
+    }
+    setConfirmIntent(null)
+    try {
+      setTxState('signing')
+      if (action === 'approval') await executeApprovalNow()
+      if (action === 'swap') {
+        if (approvalRequired) await executeApprovalNow()
+        await executeSwapNow()
+      }
+      if (action === 'order') {
+        if (approvalRequired) await executeApprovalNow()
+        await executeOrderNow()
+      }
+    } catch {
+      // Errors are already surfaced in state.
+    }
+  }, [
+    approvalRequired,
+    busy,
+    confirmIntent,
+    executeApprovalNow,
+    executeOrderNow,
+    executeSwapNow,
+    handleReviewTrade,
+    quoteIsStale,
+  ])
+
+  return {
+    estimatedOut,
+    quote,
+    approvalData,
+    swapTx,
+    busy,
+    status,
+    error,
+    confirmIntent,
+    quoteUpdatedAt,
+    txState,
+    txHash,
+    isReady,
+    approvalRequired,
+    tokensEquivalent,
+    quoteIsStale,
+    permitSignatureRequired,
+    permitSignaturePending,
+    permitSignatureReady,
+    setStatus,
+    setError,
+    setTxState,
+    handleQuote,
+    handleCheckApproval,
+    handleBuildSwap,
+    handleReviewTrade,
+    openConfirm,
+    closeConfirm,
+    confirmAndExecute,
+    resetTradeState,
+  }
+}
+

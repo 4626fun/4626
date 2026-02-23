@@ -11,6 +11,7 @@ type LeaderboardRow = {
   pointsTotal: number
   pointsInvite: number
   pointsAgent: number
+  borderTier: number
 }
 
 type LeaderboardResponse = {
@@ -162,10 +163,25 @@ export function Leaderboard() {
           {data?.leaderboard?.length ? (
             <div>
               {data.leaderboard.map((r) => (
-                <div key={`${r.rank}-${r.signupId}`} className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-white/5">
+                <div
+                  key={`${r.rank}-${r.signupId}`}
+                  className={[
+                    'grid grid-cols-12 gap-2 px-4 py-3 border-b border-white/5',
+                    r.borderTier >= 1 ? 'bg-[#0052FF]/[0.035] border-l-2 border-l-[#0052FF]/30' : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
                   <div className="col-span-2 text-sm text-zinc-300">#{r.rank}</div>
                   <div className="col-span-6 text-sm text-zinc-200">
-                    <div className="font-mono">{r.display}</div>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="font-mono truncate">{r.display}</div>
+                      {r.borderTier >= 1 ? (
+                        <div className="shrink-0 inline-flex items-center rounded-full border border-[#0052FF]/30 bg-[#0052FF]/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#9bbcff]">
+                          Tier {r.borderTier}
+                        </div>
+                      ) : null}
+                    </div>
                     {r.referralCode ? <div className="text-[11px] text-zinc-700">code: {r.referralCode}</div> : null}
                   </div>
                   <div className="col-span-4 text-right text-sm text-zinc-200 tabular-nums">

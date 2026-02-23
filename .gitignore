@@ -118,7 +118,21 @@ scripts/solana/vanity-pool/*.lock
 !script/DeployInfrastructure.s.sol
 !script/deploy-with-aa.ts
 !script/deploy.sh
-test/
+# Ignore most local tests by default, but allow targeted regression tests.
+test/**
+!test/CreatorOVault.ValuationGuard.t.sol
+!test/CreatorOVault.WithdrawDelay.t.sol
+!test/CreatorOVault.WithdrawDelayTransferGriefing.t.sol
+!test/CreatorOVaultWrapper.ShareOFTValidation.t.sol
+!test/vault/
+!test/vault/CreatorCharmStrategyOracle.t.sol
+!test/vault/CreatorVRFConsumerV2_5.RelayFunding.t.sol
+!test/vault/CreatorLotteryManager.VrfSponsorshipHardening.t.sol
+!test/CreatorOracle.LayerZeroReceiveAuth.t.sol
+!test/CreatorOracle.TwapSafety.t.sol
+!test/CreatorOracle.BroadcastCreatorPrice.t.sol
+!test/CreatorLotteryManager.OracleTimestampGuard.t.sol
+!test/ve4626.LockTokenRestriction.t.sol
 telegram-bot/
 relayer/
 monitoring/

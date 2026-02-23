@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { INVITE_COPY, REFERRAL_TWEET_TEMPLATES, fillTweetTemplate } from '@/components/waitlist/referralsCopy'
 
 type ApiFetch = (path: string, init?: RequestInit & { withCredentials?: boolean }) => Promise<Response>
+const WAITLIST_REFERRAL_LINK_OVERRIDE =
+  (import.meta.env.VITE_WAITLIST_REFERRAL_LINK as string | undefined)?.trim() || ''
 
 type Params = {
   locationSearch: string
@@ -82,6 +84,9 @@ export function useWaitlistReferral({
       const url = new URL(window.location.href)
       if (!url.searchParams.has('ref')) return
       url.searchParams.delete('ref')
+      // Keep the waitlist modal open without relying on a hash.
+      // (Hash links aren't great for sharing, and we want clean referral URLs.)
+      if (url.hash !== '#waitlist') url.searchParams.set('wl', '1')
       const next = `${url.pathname}${url.search}${url.hash}`
       window.history.replaceState(window.history.state, '', next)
     } catch {
@@ -117,8 +122,10 @@ export function useWaitlistReferral({
   }, [inviteTemplateIdx, setInviteTemplateIdx])
 
   const referralLink = useMemo(() => {
+    if (WAITLIST_REFERRAL_LINK_OVERRIDE) return WAITLIST_REFERRAL_LINK_OVERRIDE
     if (referralCode) {
-      return `${shareBaseUrl}/?ref=${encodeURIComponent(referralCode)}#waitlist`
+      // URLs are case-insensitive for our referral codes; prefer lowercase for cleaner sharing.
+      return `${shareBaseUrl}/?ref=${encodeURIComponent(referralCode.toLowerCase())}`
     }
     return `${shareBaseUrl}/#waitlist`
   }, [referralCode, shareBaseUrl])

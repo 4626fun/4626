@@ -188,7 +188,11 @@ export async function preprovisionWaitlistUser(
     serverWalletId = wallet.walletId
     serverWalletAddress = wallet.address
   } catch (err) {
-    logger.warn('[preprovision] Server wallet provisioning failed', err)
+    logger.warn('[preprovision] Server wallet provisioning failed', {
+      signupId,
+      wallet: addr.slice(0, 10),
+      error: err,
+    })
     // Continue — we still store the identity data
   }
 
@@ -225,7 +229,11 @@ export async function preprovisionWaitlistUser(
       zora: zoraProfile?.handle ?? 'none',
     })
   } catch (err) {
-    logger.warn('[preprovision] Failed to store results', err)
+    logger.warn('[preprovision] Failed to store results', {
+      signupId,
+      wallet: addr.slice(0, 10),
+      error: err,
+    })
   }
 
   return result

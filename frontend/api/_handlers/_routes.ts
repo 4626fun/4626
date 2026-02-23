@@ -42,6 +42,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'v1/agents/creators/provision-wallet': () => import('./v1/agents/creators/_provisionWallet.js'),
   'v1/agents/feedback': () => import('./v1/agents/feedback/_read.js'),
   'v1/agents/feedback/submit': () => import('./v1/agents/feedback/_submit.js'),
+  'v1/agents/identity/verification': () => import('./v1/agents/identity/_verification.js'),
   'v1/agents/identity/set-agent-wallet': () => import('./v1/agents/identity/_setAgentWallet.js'),
   'v1/agents/wallet-intelligence': () => import('./v1/agents/_wallet-intelligence.js'),
   'v1/agents/publish': () => import('./v1/agents/_publish.js'),
@@ -100,6 +101,9 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'auth/privy': () => import('./auth/_privy.js'),
   'auth/verify': () => import('./auth/_verify.js'),
   'wallet/sync': () => import('./wallet/_sync.js'),
+  'wallet/solana/setCanonical': () => import('./wallet/solana/_setCanonical.js'),
+  'wallet/solana/sweep/enqueue': () => import('./wallet/solana/sweep/_enqueue.js'),
+  'wallet/solana/sweep/process': () => import('./wallet/solana/sweep/_process.js'),
   'portfolio/me': () => import('./portfolio/_me.js'),
 
   'creator-allowlist': () => import('./_creator-allowlist.js'),
@@ -164,11 +168,20 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'waitlist/task-claim': () => import('./waitlist/_task-claim.js'),
   'waitlist/update-email': () => import('./waitlist/_update-email.js'),
   'waitlist/verify-social': () => import('./waitlist/_verify-social.js'),
+  'waitlist/verify-x': () => import('./waitlist/_verify-x.js'),
   'rpc': () => import('./rpc/_proxy.js'),
   'webhook': () => import('./_webhook.js'),
 
   'uniswap/query': () => import('./uniswap/_query.js'),
   'uniswap/poolHistory': () => import('./uniswap/_poolHistory.js'),
+  'uniswap/quote': () => import('./uniswap/_quote.js'),
+  'uniswap/swap': () => import('./uniswap/_swap.js'),
+  'uniswap/order': () => import('./uniswap/_order.js'),
+  'uniswap/checkApproval': () => import('./uniswap/_checkApproval.js'),
+  'uniswap/swap5792': () => import('./uniswap/_swap5792.js'),
+  'uniswap/swap7702': () => import('./uniswap/_swap7702.js'),
+  'uniswap/plan': () => import('./uniswap/_plan.js'),
+  'uniswap/liquidity': () => import('./uniswap/_liquidity.js'),
 
   // Token metadata (ERC-7572) - supports both query param and path-based addresses
   'token/metadata': () => import('./token/_metadata.js'),

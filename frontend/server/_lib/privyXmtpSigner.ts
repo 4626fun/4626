@@ -26,7 +26,7 @@
 
 import { createPublicClient, http, hashMessage, encodeAbiParameters } from 'viem'
 import { base } from 'viem/chains'
-import { walletRpc } from './privyWalletApi.js'
+import { getWalletById, walletRpc } from './privyWalletApi.js'
 
 // Re-use the Signer shape from @xmtp/agent-sdk (re-exports from @xmtp/node-sdk)
 // We define the interface here to avoid import issues with transitive deps.
@@ -64,6 +64,30 @@ const REPLAY_SAFE_HASH_ABI = [{
   outputs: [{ name: '', type: 'bytes32' as const }],
   stateMutability: 'view' as const,
 }]
+
+const OWNER_SCAN_ABI = [
+  {
+    type: 'function' as const,
+    name: 'ownerCount' as const,
+    stateMutability: 'view' as const,
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' as const }],
+  },
+  {
+    type: 'function' as const,
+    name: 'nextOwnerIndex' as const,
+    stateMutability: 'view' as const,
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' as const }],
+  },
+  {
+    type: 'function' as const,
+    name: 'ownerAtIndex' as const,
+    stateMutability: 'view' as const,
+    inputs: [{ name: 'index', type: 'uint256' as const }],
+    outputs: [{ name: '', type: 'bytes' as const }],
+  },
+]
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -106,6 +130,64 @@ function encodeSignatureWrapperStruct(ownerIndex: number, signatureData: `0x${st
   )
 }
 
+function asOwnerBytes(ownerAddress: `0x${string}`): `0x${string}` {
+  return encodeAbiParameters([{ type: 'address' as const }], [ownerAddress])
+}
+
+function ownerBytesToAddress(ownerBytes: `0x${string}`): `0x${string}` | null {
+  const hex = String(ownerBytes ?? '').toLowerCase()
+  if (!hex || hex === '0x') return null
+  if (!/^0x[0-9a-f]+$/.test(hex)) return null
+  if (hex.length < 42) return null
+  return `0x${hex.slice(-40)}` as `0x${string}`
+}
+
+async function findOwnerIndex(params: {
+  client: any
+  cswAddress: `0x${string}`
+  ownerAddress: `0x${string}`
+  maxScan?: number
+}): Promise<number | null> {
+  const { client, cswAddress, ownerAddress, maxScan = 512 } = params
+  const countRaw = (await client.readContract({
+    address: cswAddress,
+    abi: OWNER_SCAN_ABI,
+    functionName: 'ownerCount',
+  })) as bigint
+  const count = Number(countRaw)
+  let upperBound = Number.isFinite(count) ? count : 0
+  try {
+    const nextRaw = (await client.readContract({
+      address: cswAddress,
+      abi: OWNER_SCAN_ABI,
+      functionName: 'nextOwnerIndex',
+    })) as bigint
+    const next = Number(nextRaw)
+    if (Number.isFinite(next) && next > 0) upperBound = Math.max(upperBound, next)
+  } catch {
+    // ignore for CSW variants without nextOwnerIndex
+  }
+  if (!Number.isFinite(upperBound) || upperBound <= 0) return null
+
+  const expected = asOwnerBytes(ownerAddress).toLowerCase()
+  const limit = Math.min(upperBound, Math.max(1, maxScan))
+  for (let i = 0; i < limit; i++) {
+    let ownerBytes: `0x${string}`
+    try {
+      ownerBytes = (await client.readContract({
+        address: cswAddress,
+        abi: OWNER_SCAN_ABI,
+        functionName: 'ownerAtIndex',
+        args: [BigInt(i)],
+      })) as `0x${string}`
+    } catch {
+      continue
+    }
+    if (String(ownerBytes).toLowerCase() === expected) return i
+  }
+  return null
+}
+
 // ---------------------------------------------------------------------------
 // Signer factory
 // ---------------------------------------------------------------------------
@@ -129,7 +211,10 @@ export function createPrivyScwSigner(params: {
   rpcUrl?: string
 }): XmtpSigner {
   const chainId = BigInt(params.chainId ?? 8453)
-  const ownerIndex = params.ownerIndex ?? 0
+  const configuredOwnerIndex =
+    Number.isFinite(params.ownerIndex) && Number(params.ownerIndex) >= 0
+      ? Math.floor(Number(params.ownerIndex))
+      : null
 
   // Lazy-init the public client (only created on first signMessage call).
   // Typed as `any` end-to-end to avoid TS2589 with viem OP Stack chains on TS 5.9.
@@ -142,6 +227,102 @@ export function createPrivyScwSigner(params: {
       }) as any
     }
     return _client
+  }
+
+  let resolvedOwnerIndex: number | null = null
+  let resolveOwnerIndexInFlight: Promise<number> | null = null
+  let resolveSignerAddressInFlight: Promise<`0x${string}` | null> | null = null
+
+  async function resolvePrivyWalletAddress(): Promise<`0x${string}` | null> {
+    if (resolveSignerAddressInFlight) return resolveSignerAddressInFlight
+    resolveSignerAddressInFlight = getWalletById(params.walletId)
+      .then((wallet) => wallet.address)
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error)
+        console.warn(
+          '[xmtp] Failed to resolve Privy wallet address for CSW owner-index discovery; ' +
+          'falling back to configured owner index when available.',
+          { walletId: params.walletId.slice(0, 12), error: message },
+        )
+        return null
+      })
+    return resolveSignerAddressInFlight
+  }
+
+  async function readOwnerAddressAtIndex(index: number): Promise<`0x${string}` | null> {
+    try {
+      const ownerBytes = (await getClient().readContract({
+        address: params.cswAddress,
+        abi: OWNER_SCAN_ABI,
+        functionName: 'ownerAtIndex',
+        args: [BigInt(index)],
+      })) as `0x${string}`
+      return ownerBytesToAddress(ownerBytes)
+    } catch {
+      return null
+    }
+  }
+
+  async function ensureOwnerIndex(): Promise<number> {
+    if (resolvedOwnerIndex != null) return resolvedOwnerIndex
+    if (resolveOwnerIndexInFlight) return resolveOwnerIndexInFlight
+    resolveOwnerIndexInFlight = (async () => {
+      const signerAddress = await resolvePrivyWalletAddress()
+
+      if (configuredOwnerIndex != null) {
+        if (!signerAddress) {
+          return configuredOwnerIndex
+        }
+        const ownerAtConfigured = await readOwnerAddressAtIndex(configuredOwnerIndex)
+        if (ownerAtConfigured && ownerAtConfigured.toLowerCase() === signerAddress.toLowerCase()) {
+          return configuredOwnerIndex
+        }
+        console.warn(
+          '[xmtp] Configured CSW owner index does not match Privy wallet signer; auto-discovering owner index.',
+          {
+            configuredOwnerIndex,
+            signerAddress,
+            ownerAtConfigured,
+            cswAddress: params.cswAddress,
+          },
+        )
+      }
+
+      if (!signerAddress) {
+        if (configuredOwnerIndex != null) return configuredOwnerIndex
+        throw new Error('xmtp_owner_index_resolution_failed: signer address unavailable')
+      }
+
+      const discovered = await findOwnerIndex({
+        client: getClient(),
+        cswAddress: params.cswAddress,
+        ownerAddress: signerAddress,
+      })
+      if (discovered == null) {
+        throw new Error(
+          `xmtp_owner_index_resolution_failed: signer ${signerAddress} is not an owner of CSW ${params.cswAddress}`,
+        )
+      }
+      if (configuredOwnerIndex != null && configuredOwnerIndex !== discovered) {
+        console.warn(
+          '[xmtp] Auto-corrected CSW owner index at runtime.',
+          { configuredOwnerIndex, discoveredOwnerIndex: discovered, cswAddress: params.cswAddress, signerAddress },
+        )
+      } else {
+        console.log('[xmtp] Resolved CSW owner index from onchain owners.', {
+          ownerIndex: discovered,
+          cswAddress: params.cswAddress,
+          signerAddress,
+        })
+      }
+      return discovered
+    })()
+    try {
+      resolvedOwnerIndex = await resolveOwnerIndexInFlight
+      return resolvedOwnerIndex
+    } finally {
+      resolveOwnerIndexInFlight = null
+    }
   }
 
   return {
@@ -181,6 +362,7 @@ export function createPrivyScwSigner(params: {
       }
 
       // Step 4: Wrap in SignatureWrapper struct for the CSW's isValidSignature.
+      const ownerIndex = await ensureOwnerIndex()
       const wrapped = encodeSignatureWrapperStruct(ownerIndex, signature as `0x${string}`)
 
       return hexToBytes(wrapped)

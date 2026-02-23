@@ -1,6 +1,17 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { createPublicClient, encodeAbiParameters, encodeFunctionData, getAddress, http, isAddress, type Address, type Hex } from 'viem'
+import {
+  createPublicClient,
+  encodeAbiParameters,
+  encodeFunctionData,
+  encodePacked,
+  getAddress,
+  http,
+  isAddress,
+  keccak256,
+  type Address,
+  type Hex,
+} from 'viem'
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts'
 import { base } from 'viem/chains'
 
@@ -56,6 +67,36 @@ type CreateDeploySessionResponse = {
 type OwnershipCheck = {
   ok: boolean
   reason?: string
+}
+
+const CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI = [
+  {
+    type: 'function',
+    name: 'pendingAuctions',
+    stateMutability: 'view',
+    inputs: [{ name: 'salt', type: 'bytes32' }],
+    outputs: [
+      {
+        type: 'tuple',
+        components: [
+          { name: 'shareOFT', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'amount', type: 'uint256' },
+        ],
+      },
+    ],
+  },
+] as const
+
+function deriveBaseSalt(params: { creatorToken: Address; owner: Address; chainId: number; version: string }): Hex {
+  return keccak256(
+    encodePacked(['address', 'address', 'uint256', 'string'], [
+      params.creatorToken,
+      params.owner,
+      BigInt(params.chainId),
+      `CreatorVault:deploy:${params.version}`,
+    ]),
+  ) as Hex
 }
 
 function isTruthyEnv(value: string | undefined, fallback: boolean): boolean {
@@ -416,6 +457,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!isAddress(smartWallet) || !isAddress(creatorToken) || !isAddress(ownerAddress)) {
       return res.status(400).json({ success: false, error: 'Invalid addresses' } satisfies ApiEnvelope<null>)
     }
+    if (ownerAddress.toLowerCase() !== smartWallet.toLowerCase()) {
+      return res.status(400).json({
+        success: false,
+        error: 'ownerAddress must match smartWallet (canonical deploy sender)',
+      } satisfies ApiEnvelope<null>)
+    }
+
+    const origin = getCanonicalOrigin(req)
+    const infra = await checkDeployInfraReady(origin)
+    if (!infra.ok) {
+      return res.status(503).json({ success: false, error: infra.error || 'Deploy infrastructure unavailable' } satisfies ApiEnvelope<null>)
+    }
 
     const origin = getCanonicalOrigin(req)
     const infra = await checkDeployInfraReady(origin)
@@ -469,6 +522,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const phase2Calls = Array.isArray(body.phase2Calls) ? body.phase2Calls : []
     const phase3Calls = Array.isArray(body.phase3Calls) ? body.phase3Calls : []
     const phase4Calls = Array.isArray(body.phase4Calls) ? body.phase4Calls : []
+    const hasPhase2Finalize = phase2FinalizeCalls.length > 0 || phase2Calls.length > 0
 
     const hasAnyWork =
       phase1Calls.length > 0 ||
@@ -479,6 +533,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       phase4Calls.length > 0
     if (!hasAnyWork) {
       return res.status(400).json({ success: false, error: 'Missing deploy calls' } satisfies ApiEnvelope<null>)
+    }
+    if (phase2CoreCalls.length > 0 && !hasPhase2Finalize) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing phase2 finalize calls',
+      } satisfies ApiEnvelope<null>)
+    }
+
+    // Phase-4 safety: when launching deferred auction without a same-session phase2 finalize,
+    // require pending state to already exist for this deployment namespace.
+    const hasSameSessionPhase2Finalize = phase2FinalizeCalls.length > 0 || phase2Calls.length > 0
+    if (phase4Calls.length > 0 && !hasSameSessionPhase2Finalize) {
+      const version = String(body.version ?? '').trim()
+      if (!version) {
+        return res.status(400).json({
+          success: false,
+          error: 'version is required when phase4Calls are present',
+        } satisfies ApiEnvelope<null>)
+      }
+      const batcherAddress = getAddress(phase4Calls[0]!.to)
+      const baseSalt = deriveBaseSalt({ creatorToken, owner: ownerAddress, chainId: 8453, version })
+      const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+      const readClient = createPublicClient({
+        chain: base,
+        transport: http(rpc, { timeout: 12_000 }),
+      })
+      try {
+        const pending = (await readClient.readContract({
+          address: batcherAddress,
+          abi: CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI,
+          functionName: 'pendingAuctions',
+          args: [baseSalt],
+        })) as unknown
+        const pendingAny = pending as any
+        const pendingAmount = BigInt(pendingAny?.amount ?? pendingAny?.[2] ?? 0n)
+        if (pendingAmount <= 0n) {
+          return res.status(409).json({
+            success: false,
+            error: `phase4 precheck failed: no pending deferred auction for deployment version ${version}`,
+          } satisfies ApiEnvelope<null>)
+        }
+      } catch {
+        return res.status(409).json({
+          success: false,
+          error: `phase4 precheck failed: could not validate pending deferred auction for deployment version ${version}`,
+        } satisfies ApiEnvelope<null>)
+      }
     }
 
     const deployToken = randomDeployToken()
@@ -570,6 +671,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ...(deploySignerWalletId ? { agentWalletId: deploySignerWalletId } : null),
         ...(deploySignerAddress ? { agentWalletAddress: deploySignerAddress } : null),
         persistSessionOwner,
+        expectedStages: {
+          hasPhase1Core: phase1Calls.length > 0,
+          hasPhase1Finalize: phase1Calls.length > 1,
+          hasPhase2Core: phase2CoreCalls.length > 0,
+          hasPhase2Finalize,
+          hasPhase3: phase3Calls.length > 0,
+          hasPhase4: phase4Calls.length > 0,
+        },
         version: String(body.version ?? ''),
         phase1Calls,
         phase2CoreCalls,

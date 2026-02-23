@@ -2,7 +2,7 @@ import { createPublicClient, http, parseAbiItem, type Address } from 'viem'
 import { base, mainnet } from 'viem/chains'
 
 import { getDb } from '../server/_lib/postgres.js'
-import { ensureAgentSubdomainsSchema } from '../server/_lib/agentSubdomains.js'
+import { ensureAgentSubdomainsSchema, isReservedSubdomainLabel, normalizeSubdomainLabel } from '../server/_lib/agentSubdomains.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -86,7 +86,7 @@ async function postUpsert(params: {
   apiUrl: string
   secret: string
   body: Record<string, unknown>
-}): Promise<void> {
+}): Promise<{ ok: boolean; status: number; bodyText: string }> {
   const res = await fetch(params.apiUrl, {
     method: 'POST',
     headers: {
@@ -95,10 +95,8 @@ async function postUpsert(params: {
     },
     body: JSON.stringify(params.body),
   })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`upsert_failed_${res.status}: ${text.slice(0, 600)}`)
-  }
+  const text = await res.text().catch(() => '')
+  return { ok: res.ok, status: res.status, bodyText: text.slice(0, 600) }
 }
 
 async function run(): Promise<void> {
@@ -158,6 +156,7 @@ async function run(): Promise<void> {
         toBlock,
       })
 
+      let hardFailure = false
       for (const log of logs) {
         const args = log.args as {
           parentId?: bigint
@@ -168,8 +167,13 @@ async function run(): Promise<void> {
           price?: bigint
           label?: string
         }
-        const label = String(args.label ?? '').trim().toLowerCase()
-        if (!label) continue
+        const label = normalizeSubdomainLabel(String(args.label ?? ''))
+        if (!label || isReservedSubdomainLabel(label)) {
+          process.stdout.write(
+            `[subdomain-indexer] skipped invalid/reserved label tx=${String(log.transactionHash ?? '')} label=${String(args.label ?? '')}\n`,
+          )
+          continue
+        }
         const ownerAddress = String(args.to ?? args.buyer ?? '').toLowerCase()
         if (!isAddressLike(ownerAddress)) continue
 
@@ -194,7 +198,24 @@ async function run(): Promise<void> {
             indexedAt: new Date().toISOString(),
           },
         } as const
-        await postUpsert({ apiUrl: upsertApiUrl, secret: indexerSecret, body: payload })
+        const upsert = await postUpsert({ apiUrl: upsertApiUrl, secret: indexerSecret, body: payload })
+        if (!upsert.ok) {
+          if (upsert.status >= 400 && upsert.status < 500) {
+            process.stderr.write(
+              `[subdomain-indexer] skipped client error status=${upsert.status} tx=${String(log.transactionHash ?? '')} label=${label} body=${upsert.bodyText}\n`,
+            )
+            continue
+          }
+          process.stderr.write(
+            `[subdomain-indexer] upsert server error status=${upsert.status} tx=${String(log.transactionHash ?? '')} label=${label} body=${upsert.bodyText}\n`,
+          )
+          hardFailure = true
+          break
+        }
+      }
+
+      if (hardFailure) {
+        throw new Error(`upsert_failed_range_${fromBlock.toString()}_${toBlock.toString()}`)
       }
 
       await writeCursor(db as any, toBlock + 1n)

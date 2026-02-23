@@ -18,12 +18,23 @@ import {
 import { logger } from '../../../server/_lib/logger.js'
 import { getApiContracts } from '../../../server/_lib/contracts.js'
 import { readDeployAuthFromRequest } from '../../../server/_lib/deployAuth.js'
+import { resolveMeteoraAlphaVaultConfig } from '../../../server/_lib/meteoraAlphaVaultConfig.js'
 
 type RegisterShareOftRequest = {
   shareOft?: string
   batcherAddress?: string
   solanaMint?: string
   solanaDecimals?: number | string
+  creatorToken?: string
+  expectedSolanaAmount?: string | number
+  shareDecimals?: number | string
+  buildOnly?: boolean
+}
+
+type SolanaBridgeIxPayload = {
+  programId: Hex
+  serializedAccounts: Hex[]
+  data: Hex
 }
 
 type RegisterShareOftResponse = {
@@ -37,6 +48,8 @@ type RegisterShareOftResponse = {
   txHash: Hex | null
   solanaMint: Hex | null
   solanaDecimals: number | null
+  meteoraAlphaVault: Hex | null
+  solanaIxs: SolanaBridgeIxPayload[]
 }
 
 type WrapRunner = {
@@ -117,6 +130,30 @@ const BASE_SOLANA_BRIDGE_ABI = [
   },
 ] as const
 
+const ERC20_METADATA_ABI = [
+  {
+    type: 'function',
+    name: 'name',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'string' }],
+  },
+  {
+    type: 'function',
+    name: 'symbol',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'string' }],
+  },
+  {
+    type: 'function',
+    name: 'decimals',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint8' }],
+  },
+] as const
+
 function isBytes32Hex(value: unknown): value is Hex {
   return typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)
 }
@@ -145,6 +182,36 @@ function parseDecimals(value: unknown): number | null {
     if (Number.isFinite(n) && n >= 0 && n <= 255) return Math.floor(n)
   }
   return null
+}
+
+function parseBigIntLike(value: unknown): bigint | null {
+  if (typeof value === 'bigint') return value >= 0n ? value : null
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return BigInt(Math.floor(value))
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = BigInt(value.trim())
+      return parsed >= 0n ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function toRemoteAmountExact(baseAmount: bigint, baseDecimals: number, solanaDecimals: number): bigint {
+  if (baseAmount <= 0n) throw new Error('invalid_base_amount')
+  if (baseDecimals === solanaDecimals) return baseAmount
+  if (solanaDecimals > baseDecimals) {
+    const diff = BigInt(solanaDecimals - baseDecimals)
+    const factor = 10n ** diff
+    return baseAmount * factor
+  }
+  const diff = BigInt(baseDecimals - solanaDecimals)
+  const factor = 10n ** diff
+  if (baseAmount % factor !== 0n) {
+    throw new Error('base_amount_not_exactly_convertible_to_remote_units')
+  }
+  return baseAmount / factor
 }
 
 function readSolanaDecimalsFromEnv(): number {
@@ -183,12 +250,33 @@ function readDynamicSolanaRouteEnabled(): boolean {
   return v === '1' || v === 'true' || v === 'yes'
 }
 
-function readDynamicProvisionerUrl(): string {
-  return String(
+function splitUrlList(raw: string): string[] {
+  return raw
+    .split(/[,\n\r\t ]+/)
+    .map((v) => v.trim())
+    .filter(Boolean)
+}
+
+function readDynamicProvisionerUrls(): string[] {
+  const listEnv = String(
+    process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_URLS ??
+      process.env.SOLANA_BRIDGE_PROVISIONER_URLS ??
+      '',
+  ).trim()
+  const singleEnv = String(
     process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL ??
       process.env.SOLANA_BRIDGE_PROVISIONER_URL ??
       '',
   ).trim()
+  const combined = [...splitUrlList(listEnv), ...splitUrlList(singleEnv)]
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const url of combined) {
+    if (seen.has(url)) continue
+    seen.add(url)
+    out.push(url)
+  }
+  return out
 }
 
 function readDynamicProvisionerSecret(): string {
@@ -197,6 +285,267 @@ function readDynamicProvisionerSecret(): string {
       process.env.SOLANA_BRIDGE_PROVISIONER_SECRET ??
       '',
   ).trim()
+}
+
+function readDynamicProvisionerHealthUrl(provisionerUrl: string): string {
+  const env = String(
+    process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL ??
+      process.env.SOLANA_BRIDGE_PROVISIONER_HEALTH_URL ??
+      '',
+  ).trim()
+  if (env) return env
+  try {
+    const url = new URL(provisionerUrl)
+    url.pathname = '/healthz'
+    url.search = ''
+    url.hash = ''
+    return url.toString()
+  } catch {
+    return ''
+  }
+}
+
+function readDynamicProvisionerHealthUrls(provisionerUrls: string[]): string[] {
+  const listEnv = String(
+    process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URLS ??
+      process.env.SOLANA_BRIDGE_PROVISIONER_HEALTH_URLS ??
+      '',
+  ).trim()
+  const explicit = splitUrlList(listEnv)
+  if (explicit.length > 0) return explicit
+  return provisionerUrls.map((url) => readDynamicProvisionerHealthUrl(url))
+}
+
+function toMeteoraIxsEndpoint(urlRaw: string): string {
+  try {
+    const url = new URL(urlRaw)
+    url.pathname = '/meteora-ixs'
+    url.search = ''
+    url.hash = ''
+    return url.toString()
+  } catch {
+    return ''
+  }
+}
+
+function readMeteoraProvisionerUrls(dynamicProvisionerUrls: string[]): string[] {
+  const listEnv = String(process.env.METEORA_IX_PROVISIONER_URLS ?? '').trim()
+  const singleEnv = String(process.env.METEORA_IX_PROVISIONER_URL ?? '').trim()
+  const explicit = [...splitUrlList(listEnv), ...splitUrlList(singleEnv)]
+  const source = explicit.length > 0 ? explicit : dynamicProvisionerUrls.map((url) => toMeteoraIxsEndpoint(url)).filter(Boolean)
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const url of source) {
+    if (!url || seen.has(url)) continue
+    seen.add(url)
+    out.push(url)
+  }
+  return out
+}
+
+function readMeteoraProvisionerSecret(): string {
+  return String(process.env.METEORA_IX_PROVISIONER_SECRET ?? readDynamicProvisionerSecret()).trim()
+}
+
+async function readShareOftMetadata(params: {
+  publicClient: any
+  shareOft: Address
+}): Promise<{ name: string; symbol: string } | null> {
+  try {
+    const [nameRaw, symbolRaw] = await Promise.all([
+      params.publicClient.readContract({
+        address: params.shareOft,
+        abi: ERC20_METADATA_ABI,
+        functionName: 'name',
+      }),
+      params.publicClient.readContract({
+        address: params.shareOft,
+        abi: ERC20_METADATA_ABI,
+        functionName: 'symbol',
+      }),
+    ])
+    const name = typeof nameRaw === 'string' ? nameRaw.trim() : ''
+    const symbol = typeof symbolRaw === 'string' ? symbolRaw.trim() : ''
+    if (!name || !symbol) return null
+    return { name, symbol }
+  } catch {
+    return null
+  }
+}
+
+const WRAP_TOKEN_NAME_MAX_LENGTH = 32
+const WRAP_TOKEN_SYMBOL_MAX_LENGTH = 12
+type WrapTokenSymbolMode = 'auto' | 'unicode' | 'ascii'
+
+function sanitizeWrapTokenName(raw: string, shareOft: Address): string {
+  const fallback = `CreatorShare-${shareOft.slice(2, 8)}`
+  const ascii = String(raw ?? '')
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const resolved = ascii || fallback
+  return resolved.slice(0, WRAP_TOKEN_NAME_MAX_LENGTH)
+}
+
+function readWrapTokenSymbolMode(): WrapTokenSymbolMode {
+  const raw = String(process.env.SOLANA_BRIDGE_WRAP_SYMBOL_MODE ?? 'auto')
+    .trim()
+    .toLowerCase()
+  if (raw === 'unicode' || raw === 'ascii' || raw === 'auto') return raw
+  return 'auto'
+}
+
+function sanitizeWrapTokenSymbolUnicode(raw: string, shareOft: Address): string {
+  const fallback = `■${shareOft.slice(2, 6).toUpperCase()}`
+  const normalized = String(raw ?? '')
+    .normalize('NFKC')
+    .toUpperCase()
+    .replace(/\s+/g, '')
+  const cleaned = normalized.replace(/[^A-Z0-9■]/g, '')
+  const resolved = cleaned || fallback
+  return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
+}
+
+function sanitizeWrapTokenSymbolAscii(raw: string, shareOft: Address): string {
+  const fallbackPrefixRaw = process.env.SOLANA_BRIDGE_WRAP_SYMBOL_PREFIX
+  const fallbackPrefix = (fallbackPrefixRaw === undefined ? 'CS' : String(fallbackPrefixRaw))
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  const fallback = `${fallbackPrefix}${shareOft.slice(2, 6).toUpperCase()}`
+  const cleaned = String(raw ?? '')
+    .normalize('NFKD')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  const resolved = cleaned || fallback
+  return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
+}
+
+function buildWrapTokenSymbolCandidates(raw: string, shareOft: Address): string[] {
+  const mode = readWrapTokenSymbolMode()
+  const unicode = sanitizeWrapTokenSymbolUnicode(raw, shareOft)
+  const ascii = sanitizeWrapTokenSymbolAscii(raw, shareOft)
+  const out: string[] = []
+  const pushUnique = (value: string): void => {
+    if (!value || out.includes(value)) return
+    out.push(value)
+  }
+  if (mode === 'unicode') pushUnique(unicode)
+  else if (mode === 'ascii') pushUnique(ascii)
+  else {
+    pushUnique(unicode)
+    pushUnique(ascii)
+  }
+  return out
+}
+
+function isLikelyUnicodeSymbolUnsupportedError(message: string): boolean {
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('utf-8') ||
+    lower.includes('utf8') ||
+    lower.includes('unicode') ||
+    lower.includes('invalid symbol') ||
+    lower.includes('symbol is invalid') ||
+    lower.includes('invalid metadata') ||
+    lower.includes('invalid character')
+  )
+}
+
+function buildWrapTokenMetadata(metadata: { name: string; symbol: string }, shareOft: Address): {
+  tokenName: string
+  tokenSymbolCandidates: string[]
+  tokenNameSource: string
+  tokenSymbolSource: string
+} {
+  const originalName = String(metadata.name ?? '').trim()
+  const originalSymbol = String(metadata.symbol ?? '').trim()
+  const tokenName = sanitizeWrapTokenName(originalName, shareOft)
+  const tokenSymbolCandidates = buildWrapTokenSymbolCandidates(originalSymbol, shareOft)
+  const primarySymbol = tokenSymbolCandidates[0] ?? ''
+  const tokenNameSource = tokenName === originalName ? 'base_shareoft' : 'base_shareoft_sanitized'
+  const tokenSymbolSource = primarySymbol === originalSymbol
+    ? 'base_shareoft'
+    : primarySymbol.includes('■')
+      ? 'base_shareoft_unicode_sanitized'
+      : 'base_shareoft_ascii_sanitized'
+  return { tokenName, tokenSymbolCandidates, tokenNameSource, tokenSymbolSource }
+}
+
+function describeFetchFailure(error: unknown): string {
+  if (error instanceof Error) {
+    const parts: string[] = []
+    if (error.name) parts.push(error.name)
+    if (error.message) parts.push(error.message)
+    const cause = (error as any).cause
+    const causeCode = cause && typeof cause === 'object' ? (cause as any).code : undefined
+    const causeMessage =
+      cause && typeof cause === 'object' && typeof (cause as any).message === 'string'
+        ? String((cause as any).message)
+        : ''
+    if (causeCode) parts.push(`cause.code=${String(causeCode)}`)
+    if (causeMessage) parts.push(`cause.message=${causeMessage}`)
+    return parts.join(' | ') || 'Unknown fetch error'
+  }
+  return String(error ?? 'Unknown fetch error')
+}
+
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+  timeoutMs = 20_000,
+): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+function parseEnvInt(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback
+  const parsed = Number.parseInt(String(value).trim(), 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return parsed
+}
+
+function readProvisionerRetryAttempts(): number {
+  const attempts = parseEnvInt(process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_ATTEMPTS, 3)
+  return Math.min(Math.max(attempts, 1), 8)
+}
+
+function readProvisionerRetryDelayMs(): number {
+  const delayMs = parseEnvInt(process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_DELAY_MS, 1_200)
+  return Math.max(delayMs, 0)
+}
+
+function readProvisionerRequestTimeoutMs(): number {
+  const timeoutMs = parseEnvInt(process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_TIMEOUT_MS, 90_000)
+  return Math.min(Math.max(timeoutMs, 10_000), 300_000)
+}
+
+function isRetryableRemoteProvisionError(message: string): boolean {
+  const lower = message.toLowerCase()
+  const statusMatch = lower.match(/status=(\d{3})/)
+  const status = statusMatch ? Number.parseInt(statusMatch[1], 10) : null
+  if (status !== null && (status === 408 || status === 425 || status === 429 || status >= 500)) {
+    return true
+  }
+  return (
+    lower.includes('blockhash not found') ||
+    lower.includes('transaction simulation failed') ||
+    lower.includes('fetch failed') ||
+    lower.includes('aborterror') ||
+    lower.includes('operation was aborted') ||
+    lower.includes('timeout') ||
+    lower.includes('timed out') ||
+    lower.includes('temporarily unavailable') ||
+    lower.includes('econnreset') ||
+    lower.includes('enotfound')
+  )
 }
 
 function decodeBase58(value: string): Uint8Array {
@@ -350,141 +699,261 @@ async function tryProvisionDynamicRoute(params: {
   const deployEnv = String(process.env.SOLANA_BRIDGE_DEPLOY_ENV ?? 'mainnet').trim() || 'mainnet'
   const payerKp = String(process.env.SOLANA_BRIDGE_PAYER_KP ?? 'config').trim() || 'config'
   const scalerExponent = parseDecimals(process.env.SOLANA_BRIDGE_SCALER_EXPONENT) ?? params.solanaDecimals
-  const namePrefixRaw = process.env.SOLANA_BRIDGE_WRAP_NAME_PREFIX
-  const namePrefix = namePrefixRaw === undefined ? 'CreatorShare' : String(namePrefixRaw).trim()
-  const symbolPrefixRaw = process.env.SOLANA_BRIDGE_WRAP_SYMBOL_PREFIX
-  const symbolPrefix = symbolPrefixRaw === undefined ? 'CS' : String(symbolPrefixRaw).trim()
-  const symbolSuffix = String(process.env.SOLANA_BRIDGE_WRAP_SYMBOL_SUFFIX ?? '').trim()
-  const suffix = params.shareOft.slice(2, 8)
-  const tokenName = `${namePrefix || 'CreatorShare'}-${suffix}`
-  const tokenSymbol = symbolSuffix
-    ? `${symbolPrefix}${symbolSuffix}`
-    : `${symbolPrefix}${suffix.slice(0, 4).toUpperCase()}`
+  const shareOftMetadata = await readShareOftMetadata({
+    publicClient: params.publicClient,
+    shareOft: params.shareOft,
+  })
+  if (!shareOftMetadata) {
+    throw new Error(
+      'ShareOFT metadata unavailable for Solana wrap. CreatorShareOFT name/symbol are required before provisioning.',
+    )
+  }
+  // Prefer canonical Unicode symbol, with deterministic ASCII fallback when needed.
+  const { tokenName, tokenSymbolCandidates, tokenNameSource, tokenSymbolSource } = buildWrapTokenMetadata(
+    shareOftMetadata,
+    params.shareOft,
+  )
+  const primaryTokenSymbol = tokenSymbolCandidates[0] ?? ''
+  const fallbackTokenSymbol = tokenSymbolCandidates[1] ?? null
   const payForRelay = String(process.env.SOLANA_BRIDGE_PAY_FOR_RELAY ?? '1').trim() !== '0'
-  const provisionerUrl = readDynamicProvisionerUrl()
+  const provisionerUrls = readDynamicProvisionerUrls()
+  const provisionerHealthUrls = readDynamicProvisionerHealthUrls(provisionerUrls)
 
   const provisionViaRemote = async (): Promise<{ mintBytes32: Hex; runner: string }> => {
-    logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (remote provisioner)', {
-      shareOft: params.shareOft,
-      provisionerUrl,
-      deployEnv,
-      payerKp,
-      tokenName,
-      tokenSymbol,
-      payForRelay,
-    })
+    const retryAttempts = readProvisionerRetryAttempts()
+    const retryDelayMs = readProvisionerRetryDelayMs()
+    const requestTimeoutMs = readProvisionerRequestTimeoutMs()
     const provisionerSecret = readDynamicProvisionerSecret()
-    const response = await fetch(String(provisionerUrl), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(provisionerSecret ? { Authorization: `Bearer ${provisionerSecret}` } : {}),
-      },
-      body: JSON.stringify({
+    const failures: string[] = []
+    for (let i = 0; i < provisionerUrls.length; i += 1) {
+      const provisionerUrl = provisionerUrls[i]
+      const provisionerHealthUrl =
+        provisionerHealthUrls[i] || readDynamicProvisionerHealthUrl(provisionerUrl)
+      let candidateError = 'Unknown remote provisioner error'
+      for (let attempt = 1; attempt <= retryAttempts; attempt += 1) {
+        logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (remote provisioner)', {
+          shareOft: params.shareOft,
+          provisionerUrl,
+          provisionerHealthUrl: provisionerHealthUrl || null,
+          candidateIndex: i + 1,
+          candidateCount: provisionerUrls.length,
+          attemptIndex: attempt,
+          attemptCount: retryAttempts,
+          requestTimeoutMs,
+          deployEnv,
+          payerKp,
+          tokenName,
+          tokenSymbol: primaryTokenSymbol,
+          tokenSymbolFallback: fallbackTokenSymbol,
+          tokenNameSource,
+          tokenSymbolSource,
+          payForRelay,
+        })
+        try {
+          const response = await fetchWithTimeout(
+            String(provisionerUrl),
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(provisionerSecret ? { Authorization: `Bearer ${provisionerSecret}` } : {}),
+              },
+              body: JSON.stringify({
+                shareOft: params.shareOft,
+                deployEnv,
+                solanaDecimals: params.solanaDecimals,
+                tokenName,
+                tokenSymbol: primaryTokenSymbol,
+                tokenSymbolFallback: fallbackTokenSymbol,
+                scalerExponent,
+                payerKp,
+                payForRelay,
+              }),
+            },
+            requestTimeoutMs,
+          ).catch((error) => {
+            const details = describeFetchFailure(error)
+            const healthHint = provisionerHealthUrl
+              ? ` Check health endpoint: ${provisionerHealthUrl}`
+              : ''
+            throw new Error(`Remote provisioner request failed (${details}).${healthHint}`)
+          })
+          const rawBody = await response.text().catch(() => '')
+          let json: Record<string, unknown> | null = null
+          try {
+            json = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : null
+          } catch {
+            json = null
+          }
+          if (!response.ok || !json) {
+            const detail =
+              json && typeof json.error === 'string'
+                ? json.error
+                : rawBody
+                  ? rawBody.slice(0, 300)
+                  : 'No error body.'
+            const healthHint = provisionerHealthUrl
+              ? ` Check health endpoint: ${provisionerHealthUrl}`
+              : ''
+            throw new Error(
+              `Remote provisioner failed (status=${response.status}). ${detail}.${healthHint}`,
+            )
+          }
+          const mintBytes32Raw =
+            typeof (json as any).mintBytes32 === 'string'
+              ? (json as any).mintBytes32
+              : typeof (json as any)?.data?.mintBytes32 === 'string'
+                ? (json as any).data.mintBytes32
+                : ''
+          if (!isBytes32Hex(mintBytes32Raw)) {
+            throw new Error('Remote provisioner did not return a valid mintBytes32.')
+          }
+          const runner =
+            typeof (json as any).runner === 'string'
+              ? String((json as any).runner)
+              : typeof (json as any)?.data?.runner === 'string'
+                ? String((json as any).data.runner)
+                : 'remote-provisioner'
+          return { mintBytes32: mintBytes32Raw as Hex, runner }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          const retryable = isRetryableRemoteProvisionError(message)
+          const willRetry = retryable && attempt < retryAttempts
+          candidateError = message
+          logger.warn('[deploy/registerShareOft] Remote provisioner candidate attempt failed', {
+            shareOft: params.shareOft,
+            provisionerUrl,
+            candidateIndex: i + 1,
+            candidateCount: provisionerUrls.length,
+            attemptIndex: attempt,
+            attemptCount: retryAttempts,
+            retryable,
+            willRetry,
+            error: message,
+          })
+          if (!willRetry) break
+          const backoffMs = retryDelayMs * attempt
+          if (backoffMs > 0) {
+            await new Promise((resolve) => setTimeout(resolve, backoffMs))
+          }
+        }
+      }
+      failures.push(`${provisionerUrl}: ${candidateError}`)
+      logger.warn('[deploy/registerShareOft] Remote provisioner candidate failed', {
         shareOft: params.shareOft,
-        deployEnv,
-        solanaDecimals: params.solanaDecimals,
-        tokenName,
-        tokenSymbol,
-        scalerExponent,
-        payerKp,
-        payForRelay,
-      }),
-    })
-    const json = await response.json().catch(() => null)
-    if (!response.ok || !json) {
-      throw new Error(
-        `Remote provisioner failed (${response.status}). ` +
-          `${json && typeof json === 'object' && 'error' in json ? String((json as any).error) : 'No error body.'}`,
-      )
+        provisionerUrl,
+        candidateIndex: i + 1,
+        candidateCount: provisionerUrls.length,
+        error: candidateError,
+      })
     }
-    const mintBytes32Raw =
-      typeof (json as any).mintBytes32 === 'string'
-        ? (json as any).mintBytes32
-        : typeof (json as any)?.data?.mintBytes32 === 'string'
-          ? (json as any).data.mintBytes32
-          : ''
-    if (!isBytes32Hex(mintBytes32Raw)) {
-      throw new Error('Remote provisioner did not return a valid mintBytes32.')
-    }
-    const runner =
-      typeof (json as any).runner === 'string'
-        ? String((json as any).runner)
-        : typeof (json as any)?.data?.runner === 'string'
-          ? String((json as any).data.runner)
-          : 'remote-provisioner'
-    return { mintBytes32: mintBytes32Raw as Hex, runner }
+    throw new Error(
+      `Remote provisioner failed for all configured endpoints. ${failures.join(' | ')}`,
+    )
   }
 
-  let mintBytes32: Hex
+  // Initialize to a sentinel so TS definite-assignment is satisfied; we validate
+  // that provisioning replaced it before using it.
+  let mintBytes32: Hex = ZERO_BYTES32
   let mintedPubkey: string | null = null
   let provisionRunner: string | null = null
   if (cliDir && existsSync(cliDir)) {
-    const wrapArgs = [
-      'sol',
-      'bridge',
-      'wrap-token',
-      '--deploy-env',
-      deployEnv,
-      '--remote-token',
-      params.shareOft,
-      '--decimals',
-      String(params.solanaDecimals),
-      '--name',
-      tokenName,
-      '--symbol',
-      tokenSymbol,
-      '--scaler-exponent',
-      String(scalerExponent),
-      '--payer-kp',
-      payerKp,
-    ]
-    if (payForRelay) wrapArgs.push('--pay-for-relay')
-
-    logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (local CLI)', {
-      shareOft: params.shareOft,
-      cliDir,
-      deployEnv,
-      payerKp,
-      tokenName,
-      tokenSymbol,
-      payForRelay,
-    })
+    const buildWrapArgs = (tokenSymbol: string): string[] => {
+      const args = [
+        'sol',
+        'bridge',
+        'wrap-token',
+        '--deploy-env',
+        deployEnv,
+        '--remote-token',
+        params.shareOft,
+        '--decimals',
+        String(params.solanaDecimals),
+        '--name',
+        tokenName,
+        '--symbol',
+        tokenSymbol,
+        '--scaler-exponent',
+        String(scalerExponent),
+        '--payer-kp',
+        payerKp,
+      ]
+      if (payForRelay) args.push('--pay-for-relay')
+      return args
+    }
 
     try {
-      const { output: combined, runner } = await runWrapToken(cliDir, cliBin, wrapArgs)
-      provisionRunner = runner
-      const mintPubkey = parseMintPubkeyFromWrapOutput(combined)
-      if (!mintPubkey) {
-        throw new Error(`Dynamic route created unknown mint (could not parse output). Output: ${combined.slice(-1200)}`)
+      let localError: unknown = null
+      for (let i = 0; i < tokenSymbolCandidates.length; i += 1) {
+        const tokenSymbol = tokenSymbolCandidates[i]
+        logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (local CLI)', {
+          shareOft: params.shareOft,
+          cliDir,
+          deployEnv,
+          payerKp,
+          tokenName,
+          tokenSymbol,
+          tokenSymbolCandidate: `${i + 1}/${tokenSymbolCandidates.length}`,
+          tokenNameSource,
+          tokenSymbolSource,
+          payForRelay,
+        })
+        try {
+          const { output: combined, runner } = await runWrapToken(cliDir, cliBin, buildWrapArgs(tokenSymbol))
+          provisionRunner = runner
+          const mintPubkey = parseMintPubkeyFromWrapOutput(combined)
+          if (!mintPubkey) {
+            throw new Error(`Dynamic route created unknown mint (could not parse output). Output: ${combined.slice(-1200)}`)
+          }
+          mintedPubkey = mintPubkey
+          mintBytes32 = solanaPubkeyToBytes32Hex(mintPubkey)
+          localError = null
+          break
+        } catch (error) {
+          localError = error
+          const message = error instanceof Error ? error.message : String(error)
+          const hasFallback = i < tokenSymbolCandidates.length - 1
+          const shouldFallback = hasFallback && isLikelyUnicodeSymbolUnsupportedError(message)
+          logger.warn('[deploy/registerShareOft] Local CLI symbol candidate failed', {
+            shareOft: params.shareOft,
+            tokenSymbol,
+            tokenSymbolCandidate: `${i + 1}/${tokenSymbolCandidates.length}`,
+            fallback: shouldFallback,
+            error: message,
+          })
+          if (!shouldFallback) throw error
+        }
       }
-      mintedPubkey = mintPubkey
-      mintBytes32 = solanaPubkeyToBytes32Hex(mintPubkey)
+      if (localError) throw localError
     } catch (error) {
       const localError = error instanceof Error ? error.message : String(error)
       const canFallbackToRemote =
-        !!provisionerUrl && (isRunnerUnavailable(error) || localError.includes('No usable bridge CLI runner found'))
+        provisionerUrls.length > 0 && (isRunnerUnavailable(error) || localError.includes('No usable bridge CLI runner found'))
       if (!canFallbackToRemote) throw error
       logger.warn('[deploy/registerShareOft] Local dynamic route provisioning failed; falling back to remote provisioner', {
         shareOft: params.shareOft,
         cliDir,
         cliBin,
         localError,
-        provisionerUrl,
+        provisionerUrls,
       })
       const remote = await provisionViaRemote()
       mintBytes32 = remote.mintBytes32
       provisionRunner = remote.runner
     }
-  } else if (provisionerUrl) {
+  } else if (provisionerUrls.length > 0) {
     const remote = await provisionViaRemote()
     mintBytes32 = remote.mintBytes32
     provisionRunner = remote.runner
   } else {
     throw new Error(
       'Dynamic Solana route is enabled, but neither a valid local SOLANA_BRIDGE_CLI_DIR exists ' +
-        'nor SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL is set.',
+        'nor SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL / SOLANA_DYNAMIC_ROUTE_PROVISIONER_URLS is set.',
     )
+  }
+
+  if (mintBytes32.toLowerCase() === ZERO_BYTES32.toLowerCase()) {
+    throw new Error('Dynamic Solana route provisioning failed to return a mintBytes32.')
   }
 
   for (let i = 0; i < 24; i += 1) {
@@ -515,6 +984,87 @@ async function tryProvisionDynamicRoute(params: {
   )
 }
 
+async function buildMeteoraIxsViaProvisioner(params: {
+  creatorToken: Address
+  shareOft: Address
+  expectedRemoteAmount: bigint
+  meteoraAlphaVault: string
+  alphaVaultProgramId: string
+  depositAccounts: Array<{ pubkey: string; isSigner: boolean; isWritable: boolean }>
+  provisionerUrls: string[]
+  provisionerSecret: string
+  requestTimeoutMs: number
+}): Promise<{ meteoraAlphaVault: Hex; solanaIxs: SolanaBridgeIxPayload[]; runner: string | null }> {
+  if (params.provisionerUrls.length === 0) {
+    throw new Error('Meteora ix provisioner is not configured (METEORA_IX_PROVISIONER_URL[S]).')
+  }
+  const failures: string[] = []
+  for (const url of params.provisionerUrls) {
+    try {
+      const response = await fetchWithTimeout(
+        url,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(params.provisionerSecret ? { Authorization: `Bearer ${params.provisionerSecret}` } : {}),
+          },
+          body: JSON.stringify({
+            creatorToken: params.creatorToken,
+            shareOft: params.shareOft,
+            meteoraAlphaVault: params.meteoraAlphaVault,
+            alphaVaultProgramId: params.alphaVaultProgramId,
+            expectedRemoteAmount: params.expectedRemoteAmount.toString(),
+            depositAccounts: params.depositAccounts,
+          }),
+        },
+        params.requestTimeoutMs,
+      )
+      const rawBody = await response.text().catch(() => '')
+      const json = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : null
+      if (!response.ok || !json || json.success !== true) {
+        const detail = typeof json?.error === 'string' ? json.error : rawBody.slice(0, 240)
+        throw new Error(`status=${response.status} ${detail}`)
+      }
+      const data = (json.data ?? json) as Record<string, unknown>
+      const meteoraAlphaVault = String(data.meteoraAlphaVault ?? '').trim()
+      const solanaIxsRaw = Array.isArray(data.solanaIxs) ? data.solanaIxs : []
+      if (!isBytes32Hex(meteoraAlphaVault)) {
+        throw new Error('provisioner returned invalid meteoraAlphaVault')
+      }
+      const solanaIxs: SolanaBridgeIxPayload[] = []
+      for (const item of solanaIxsRaw) {
+        if (!item || typeof item !== 'object') throw new Error('provisioner returned invalid solanaIxs item')
+        const row = item as Record<string, unknown>
+        const programId = String(row.programId ?? '').trim()
+        const dataHex = String(row.data ?? '').trim()
+        const serializedAccountsRaw = Array.isArray(row.serializedAccounts) ? row.serializedAccounts : []
+        if (!isBytes32Hex(programId) || !/^0x[0-9a-fA-F]*$/.test(dataHex)) {
+          throw new Error('provisioner returned invalid ix fields')
+        }
+        const serializedAccounts = serializedAccountsRaw
+          .map((v) => String(v ?? '').trim())
+          .filter((v) => /^0x[0-9a-fA-F]*$/.test(v)) as Hex[]
+        if (serializedAccounts.length === 0) throw new Error('provisioner returned ix with empty serializedAccounts')
+        solanaIxs.push({
+          programId: programId as Hex,
+          serializedAccounts,
+          data: dataHex as Hex,
+        })
+      }
+      if (solanaIxs.length === 0) throw new Error('provisioner returned empty solanaIxs')
+      return {
+        meteoraAlphaVault: meteoraAlphaVault as Hex,
+        solanaIxs,
+        runner: typeof (data as any).runner === 'string' ? String((data as any).runner) : null,
+      }
+    } catch (error) {
+      failures.push(`${url}: ${describeFetchFailure(error)}`)
+    }
+  }
+  throw new Error(`All Meteora ix provisioner endpoints failed. ${failures.join(' | ')}`)
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setNoStore(res)
   if (handleOptions(req, res)) return
@@ -535,6 +1085,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid shareOft address' } satisfies ApiEnvelope<never>)
   }
   const shareOft = getAddress(shareOftRaw)
+  const buildOnly = body?.buildOnly === true
+  const creatorTokenRaw = typeof body?.creatorToken === 'string' ? body.creatorToken.trim() : ''
+  const creatorToken = isAddress(creatorTokenRaw) ? getAddress(creatorTokenRaw) : null
+  const expectedSolanaAmountBase = parseBigIntLike(body?.expectedSolanaAmount)
+  const requestedShareDecimals = parseDecimals(body?.shareDecimals)
 
   const contracts = getApiContracts()
   const batcherRaw = typeof body?.batcherAddress === 'string' && isAddress(body.batcherAddress)
@@ -609,6 +1164,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ])
     const alreadyRegistered = Boolean(alreadyRegisteredRaw)
     const adapterOwner = getAddress(String(adapterOwnerRaw) as Address)
+    const solanaDecimals = parseDecimals(body?.solanaDecimals) ?? readSolanaDecimalsFromEnv()
+
+    let meteoraAlphaVault: Hex | null = null
+    let solanaIxs: SolanaBridgeIxPayload[] = []
+    if (creatorToken) {
+      if (!expectedSolanaAmountBase || expectedSolanaAmountBase <= 0n) {
+        return res.status(400).json({
+          success: false,
+          error: 'expectedSolanaAmount is required when creatorToken is provided.',
+        } satisfies ApiEnvelope<never>)
+      }
+      const meteoraConfig = await resolveMeteoraAlphaVaultConfig({ creatorToken })
+      if (!meteoraConfig) {
+        return res.status(409).json({
+          success: false,
+          error: `Missing Meteora Alpha Vault mapping for creator token ${creatorToken}.`,
+        } satisfies ApiEnvelope<never>)
+      }
+      const shareDecimals =
+        requestedShareDecimals ??
+        (await publicClient
+          .readContract({
+            address: shareOft,
+            abi: ERC20_METADATA_ABI,
+            functionName: 'decimals',
+          })
+          .then((v) => Number(v as number))
+          .catch(() => null)) ??
+        18
+      let expectedRemoteAmount: bigint
+      try {
+        expectedRemoteAmount = toRemoteAmountExact(expectedSolanaAmountBase, shareDecimals, solanaDecimals)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return res.status(409).json({
+          success: false,
+          error: `Invalid Solana allocation amount for Meteora ix generation: ${message}`,
+        } satisfies ApiEnvelope<never>)
+      }
+      const dynamicProvisionerUrls = readDynamicProvisionerUrls()
+      const meteoraProvisionerUrls = readMeteoraProvisionerUrls(dynamicProvisionerUrls)
+      const meteoraProvisionerSecret = readMeteoraProvisionerSecret()
+      const meteoraPayload = await buildMeteoraIxsViaProvisioner({
+        creatorToken,
+        shareOft,
+        expectedRemoteAmount,
+        meteoraAlphaVault: meteoraConfig.meteoraAlphaVault,
+        alphaVaultProgramId: meteoraConfig.alphaVaultProgramId,
+        depositAccounts: meteoraConfig.depositAccounts,
+        provisionerUrls: meteoraProvisionerUrls,
+        provisionerSecret: meteoraProvisionerSecret,
+        requestTimeoutMs: readProvisionerRequestTimeoutMs(),
+      })
+      meteoraAlphaVault = meteoraPayload.meteoraAlphaVault
+      solanaIxs = meteoraPayload.solanaIxs
+      logger.info('[deploy/registerShareOft] Built Meteora ix payload', {
+        creatorToken,
+        shareOft,
+        configSource: meteoraConfig.source,
+        expectedSolanaAmountBase: expectedSolanaAmountBase.toString(),
+        expectedRemoteAmount: expectedRemoteAmount.toString(),
+        meteoraAlphaVault,
+        ixCount: solanaIxs.length,
+      })
+    }
 
     if (alreadyRegistered) {
       return res.status(200).json({
@@ -624,6 +1244,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           txHash: null,
           solanaMint: null,
           solanaDecimals: null,
+          meteoraAlphaVault,
+          solanaIxs,
+        },
+      } satisfies ApiEnvelope<RegisterShareOftResponse>)
+    }
+
+    if (buildOnly) {
+      const hintedMint = typeof body?.solanaMint === 'string' && isBytes32Hex(body.solanaMint.trim())
+        ? (body.solanaMint.trim() as Hex)
+        : readSolanaMintFromEnv()
+      return res.status(200).json({
+        success: true,
+        data: {
+          shareOft,
+          batcher,
+          adapter,
+          destination,
+          adapterOwner,
+          signer: null,
+          registered: false,
+          txHash: null,
+          solanaMint: hintedMint,
+          solanaDecimals,
+          meteoraAlphaVault,
+          solanaIxs,
         },
       } satisfies ApiEnvelope<RegisterShareOftResponse>)
     }
@@ -673,7 +1318,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         })
         .then((v) => (typeof v === 'string' && isAddress(v) ? getAddress(v as Address) : ZERO_ADDRESS))
         .catch(() => ZERO_ADDRESS)
-    const solanaDecimals = parseDecimals(body?.solanaDecimals) ?? readSolanaDecimalsFromEnv()
 
     const readRouteScalar = async (mint: Hex): Promise<bigint | null> =>
       publicClient
@@ -819,6 +1463,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         txHash,
         solanaMint,
         solanaDecimals,
+        meteoraAlphaVault,
+        solanaIxs,
       },
     } satisfies ApiEnvelope<RegisterShareOftResponse>)
   } catch (err) {

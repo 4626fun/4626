@@ -8,7 +8,7 @@ import { base } from 'viem/chains'
 
 const DEFAULT_ORIGIN = process.env.CANONICAL_ORIGIN || 'http://localhost:5173'
 const DEFAULT_RPC = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
-const DEFAULT_BATCHER = '0x32e91185B92c6c13dd56D745aBf24F009cdD3019'
+const DEFAULT_BATCHER = '0x4184D9118ec31061cEDd6041B6bD676ac19F29a5'
 const DEFAULT_STORE = '0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13'
 const DEFAULT_DEPLOYER = '0x74183076C7D33346880A5bf0e263B761FB4d38BA'
 
@@ -259,6 +259,8 @@ async function main() {
     'phase1_finalize_confirmed',
     'phase2_core_confirmed',
     'phase2_confirmed',
+    'phase3_confirmed',
+    'phase4_confirmed',
   ])
   const inFlight = new Set([
     'phase1_sent',
@@ -266,6 +268,7 @@ async function main() {
     'phase2_core_sent',
     'phase2_sent',
     'phase3_sent',
+    'phase4_sent',
     'cleanup_sent',
   ])
   const terminal = new Set(['completed', 'failed', 'cancelled'])

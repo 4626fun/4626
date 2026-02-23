@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 export type TextScrambleFont = 'sans' | 'mono' | 'doto'
 export type TextScrambleComplexity = 'simple' | 'complex'
@@ -41,15 +41,16 @@ export function TextScramble({
   speed = 1.0,
   complexity = 'simple',
 }: TextScrambleProps) {
-  const [output, setOutput] = useState<ScrambleChar[]>([])
+  const baselineOutput = useMemo(() => {
+    return text.split('').map((char) => ({ char, style: {} }))
+  }, [text])
+
+  const [output, setOutput] = useState<ScrambleChar[]>(baselineOutput)
   const frameRef = useRef<number>(0)
   const progressRef = useRef<number>(0)
 
   useEffect(() => {
-    if (!trigger) {
-      setOutput(text.split('').map((char) => ({ char, style: {} })))
-      return
-    }
+    if (!trigger) return
 
     progressRef.current = 0
 
@@ -103,10 +104,11 @@ export function TextScramble({
   }, [trigger, text, speed, complexity])
 
   const fontClass = font === 'doto' ? 'font-doto' : font === 'mono' ? 'font-mono' : 'font-sans'
+  const visible = trigger ? output : baselineOutput
 
   return (
     <span className={`${fontClass} ${className} inline-flex whitespace-pre`}>
-      {output.map((item, i) => (
+      {visible.map((item, i) => (
         <span key={i} style={item.style} className="transition-colors duration-75">
           {item.char}
         </span>
