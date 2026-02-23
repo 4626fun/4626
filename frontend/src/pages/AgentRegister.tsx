@@ -206,7 +206,9 @@ export function AgentRegister() {
   const { address: connectedAddress, chainId, isConnected, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
   const { wallets: privyWallets } = useWallets()
-  const publicClient = usePublicClient({ chainId: base.id }) ?? usePublicClient()
+  const basePublicClient = usePublicClient({ chainId: base.id })
+  const fallbackPublicClient = usePublicClient()
+  const publicClient = basePublicClient ?? fallbackPublicClient
   const { switchChainAsync } = useSwitchChain()
 
   const registryAddress = useMemo(() => {
@@ -707,7 +709,6 @@ export function AgentRegister() {
     canonicalSmartWalletAddress,
     canOperateCanonicalCsw,
     connectedAddress,
-    connectedAddressLc,
     ensureBaseChain,
     ensureProviderOnBase,
     getPrivyEmbeddedEoaProvider,

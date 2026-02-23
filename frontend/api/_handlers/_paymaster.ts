@@ -1338,6 +1338,7 @@ async function validateInnerCalls(params: {
     | 'activate'
     | 'approve_only'
     | 'legacy_withdraw'
+    | 'deploy_session_setup'
     | 'agent_registry'
     | 'reputation_feedback'
     | null = null
@@ -1443,121 +1444,130 @@ async function validateInnerCalls(params: {
   }
 
   if (!mode || !expectedCreatorToken) {
-    const approveOnlyToken = (() => {
-      if (innerCalls.length === 0) return null
-      const firstTarget = innerCalls[0].target
-      const allowedSpenders = new Set<Address>([creatorVaultBatcher, vaultActivationBatcher, permit2])
-      const ok = innerCalls.every((c) => {
-        if (c.target !== firstTarget) return false
-        if (getSelector(c.data) !== SELECTOR_ERC20_APPROVE) return false
-        const spender = decodeAddressArgFromCalldata(c.data, 0)
-        return !!spender && allowedSpenders.has(spender)
-      })
-      return ok ? getAddress(firstTarget) : null
-    })()
+    const isSelfcallOnly =
+      innerCalls.length > 0 &&
+      innerCalls.every((c) => c.target === params.sender && ALLOWED_SELF_SELECTORS.has(getSelector(c.data)))
 
-    if (approveOnlyToken) {
-      mode = 'approve_only'
-      expectedCreatorToken = approveOnlyToken
+    if (isSelfcallOnly) {
+      mode = 'deploy_session_setup'
+      expectedCreatorToken = null
     } else {
-      const legacyResolved = await (async () => {
-        const client = await getBaseClient()
-        let legacyVault: Address | null = null
-        let legacyWrapper: Address | null = null
-        let legacyShareOFT: Address | null = null
-        let legacyVesting: Address | null = null
-
-        const setVault = (next: Address) => {
-          if (!legacyVault) {
-            legacyVault = next
-            return
-          }
-          if (getAddress(legacyVault) !== getAddress(next)) throw new Error('legacy_vault_mismatch')
-        }
-
-        const setShareOft = (next: Address) => {
-          if (!legacyShareOFT) {
-            legacyShareOFT = next
-            return
-          }
-          if (getAddress(legacyShareOFT) !== getAddress(next)) throw new Error('legacy_shareoft_mismatch')
-        }
-
-        for (const c of innerCalls) {
-          const selector = getSelector(c.data)
-          if (selector === SELECTOR_VESTING_RELEASE) {
-            legacyVesting = c.target
-            const [token, beneficiary] = (await Promise.all([
-              client.readContract({ address: c.target, abi: LEGACY_VESTING_VIEW_ABI, functionName: 'token' }).catch(() => null),
-              client.readContract({ address: c.target, abi: LEGACY_VESTING_VIEW_ABI, functionName: 'beneficiary' }).catch(() => null),
-            ])) as [Address | null, Address | null]
-            if (beneficiary && isAddress(beneficiary)) {
-              if (getAddress(beneficiary) !== getAddress(params.sender)) {
-                throw new Error('legacy_vesting_beneficiary_mismatch')
-              }
-            }
-            if (token && isAddress(token)) {
-              const share = getAddress(token)
-              setShareOft(share)
-              const vaultFromShare = (await client.readContract({
-                address: share,
-                abi: SHARE_OFT_VIEW_ABI,
-                functionName: 'vault',
-              }).catch(() => null)) as Address | null
-              if (vaultFromShare && isAddress(vaultFromShare)) {
-                setVault(getAddress(vaultFromShare))
-              }
-            }
-            continue
-          }
-          if (selector === SELECTOR_WRAPPER_UNWRAP) {
-            legacyWrapper = c.target
-            const [wrapperVault, wrapperShare] = (await Promise.all([
-              client.readContract({ address: c.target, abi: WRAPPER_VIEW_ABI, functionName: 'vault' }).catch(() => null),
-              client.readContract({ address: c.target, abi: WRAPPER_VIEW_ABI, functionName: 'shareOFT' }).catch(() => null),
-            ])) as [Address | null, Address | null]
-            if (wrapperVault && isAddress(wrapperVault)) setVault(getAddress(wrapperVault))
-            if (wrapperShare && isAddress(wrapperShare)) setShareOft(getAddress(wrapperShare))
-            continue
-          }
-          if (ALL_LEGACY_VAULT_SELECTORS.has(selector)) {
-            setVault(c.target)
-            continue
-          }
-          return null
-        }
-
-        if (!legacyVault) return null
-        const asset = (await client.readContract({
-          address: legacyVault,
-          abi: ERC4626_ASSET_ABI,
-          functionName: 'asset',
-        }).catch(() => null)) as Address | null
-        if (!asset || !isAddress(asset)) throw new Error('legacy_vault_asset_not_found')
-        return {
-          creatorToken: getAddress(asset),
-          vault: legacyVault,
-          wrapper: legacyWrapper,
-          shareOFT: legacyShareOFT,
-          vesting: legacyVesting,
-        }
+      const approveOnlyToken = (() => {
+        if (innerCalls.length === 0) return null
+        const firstTarget = innerCalls[0].target
+        const allowedSpenders = new Set<Address>([creatorVaultBatcher, vaultActivationBatcher, permit2])
+        const ok = innerCalls.every((c) => {
+          if (c.target !== firstTarget) return false
+          if (getSelector(c.data) !== SELECTOR_ERC20_APPROVE) return false
+          const spender = decodeAddressArgFromCalldata(c.data, 0)
+          return !!spender && allowedSpenders.has(spender)
+        })
+        return ok ? getAddress(firstTarget) : null
       })()
 
-      if (legacyResolved?.creatorToken && legacyResolved?.vault) {
-        mode = 'legacy_withdraw'
-        expectedCreatorToken = legacyResolved.creatorToken
-        expectedVault = legacyResolved.vault
-        expectedWrapper = legacyResolved.wrapper ?? null
-        expectedShareOFT = legacyResolved.shareOFT ?? null
-        expectedVesting = legacyResolved.vesting ?? null
+      if (approveOnlyToken) {
+        mode = 'approve_only'
+        expectedCreatorToken = approveOnlyToken
       } else {
-      const sample = innerCalls
-        .slice(0, 3)
-        .map((c) => `${c.target}:${getSelector(c.data)}`)
-        .join(',')
-      throw new Error(
-        `missing_primary_call(expectedBatcher=${creatorVaultBatcher},expectedActivation=${vaultActivationBatcher},seen=${sample})`,
-      )
+        const legacyResolved = await (async () => {
+          const client = await getBaseClient()
+          let legacyVault: Address | null = null
+          let legacyWrapper: Address | null = null
+          let legacyShareOFT: Address | null = null
+          let legacyVesting: Address | null = null
+
+          const setVault = (next: Address) => {
+            if (!legacyVault) {
+              legacyVault = next
+              return
+            }
+            if (getAddress(legacyVault) !== getAddress(next)) throw new Error('legacy_vault_mismatch')
+          }
+
+          const setShareOft = (next: Address) => {
+            if (!legacyShareOFT) {
+              legacyShareOFT = next
+              return
+            }
+            if (getAddress(legacyShareOFT) !== getAddress(next)) throw new Error('legacy_shareoft_mismatch')
+          }
+
+          for (const c of innerCalls) {
+            const selector = getSelector(c.data)
+            if (selector === SELECTOR_VESTING_RELEASE) {
+              legacyVesting = c.target
+              const [token, beneficiary] = (await Promise.all([
+                client.readContract({ address: c.target, abi: LEGACY_VESTING_VIEW_ABI, functionName: 'token' }).catch(() => null),
+                client.readContract({ address: c.target, abi: LEGACY_VESTING_VIEW_ABI, functionName: 'beneficiary' }).catch(() => null),
+              ])) as [Address | null, Address | null]
+              if (beneficiary && isAddress(beneficiary)) {
+                if (getAddress(beneficiary) !== getAddress(params.sender)) {
+                  throw new Error('legacy_vesting_beneficiary_mismatch')
+                }
+              }
+              if (token && isAddress(token)) {
+                const share = getAddress(token)
+                setShareOft(share)
+                const vaultFromShare = (await client.readContract({
+                  address: share,
+                  abi: SHARE_OFT_VIEW_ABI,
+                  functionName: 'vault',
+                }).catch(() => null)) as Address | null
+                if (vaultFromShare && isAddress(vaultFromShare)) {
+                  setVault(getAddress(vaultFromShare))
+                }
+              }
+              continue
+            }
+            if (selector === SELECTOR_WRAPPER_UNWRAP) {
+              legacyWrapper = c.target
+              const [wrapperVault, wrapperShare] = (await Promise.all([
+                client.readContract({ address: c.target, abi: WRAPPER_VIEW_ABI, functionName: 'vault' }).catch(() => null),
+                client.readContract({ address: c.target, abi: WRAPPER_VIEW_ABI, functionName: 'shareOFT' }).catch(() => null),
+              ])) as [Address | null, Address | null]
+              if (wrapperVault && isAddress(wrapperVault)) setVault(getAddress(wrapperVault))
+              if (wrapperShare && isAddress(wrapperShare)) setShareOft(getAddress(wrapperShare))
+              continue
+            }
+            if (ALL_LEGACY_VAULT_SELECTORS.has(selector)) {
+              setVault(c.target)
+              continue
+            }
+            return null
+          }
+
+          if (!legacyVault) return null
+          const asset = (await client.readContract({
+            address: legacyVault,
+            abi: ERC4626_ASSET_ABI,
+            functionName: 'asset',
+          }).catch(() => null)) as Address | null
+          if (!asset || !isAddress(asset)) throw new Error('legacy_vault_asset_not_found')
+          return {
+            creatorToken: getAddress(asset),
+            vault: legacyVault,
+            wrapper: legacyWrapper,
+            shareOFT: legacyShareOFT,
+            vesting: legacyVesting,
+          }
+        })()
+
+        if (legacyResolved?.creatorToken && legacyResolved?.vault) {
+          mode = 'legacy_withdraw'
+          expectedCreatorToken = legacyResolved.creatorToken
+          expectedVault = legacyResolved.vault
+          expectedWrapper = legacyResolved.wrapper ?? null
+          expectedShareOFT = legacyResolved.shareOFT ?? null
+          expectedVesting = legacyResolved.vesting ?? null
+        } else {
+          const sample = innerCalls
+            .slice(0, 3)
+            .map((c) => `${c.target}:${getSelector(c.data)}`)
+            .join(',')
+          throw new Error(
+            `missing_primary_call(expectedBatcher=${creatorVaultBatcher},expectedActivation=${vaultActivationBatcher},seen=${sample})`,
+          )
+        }
       }
     }
   }
@@ -1727,7 +1737,7 @@ async function validateInnerCalls(params: {
       }
     }
 
-    const burnSalt = expectedBurnStreamSalt({ creatorToken: expectedCreatorToken, sender: params.sender })
+    const burnSalt = expectedBurnStreamSalt({ creatorToken: expectedCreatorToken as Address, sender: params.sender })
     expectedBurnStream = await computeCreate2AddressFromStore({
       store: bytecodeStore,
       deployer: create2DeployerFromStore,
@@ -1736,14 +1746,14 @@ async function validateInnerCalls(params: {
       constructorArgs: abiEncodeAddresses([expectedVault]),
     })
 
-    const routerSalt = expectedPayoutRouterSalt({ creatorToken: expectedCreatorToken, sender: params.sender })
+    const routerSalt = expectedPayoutRouterSalt({ creatorToken: expectedCreatorToken as Address, sender: params.sender })
     expectedPayoutRouter = await computeCreate2AddressFromStore({
       store: bytecodeStore,
       deployer: create2DeployerFromStore,
       salt: routerSalt,
       codeId: PAYOUT_ROUTER_CODE_ID as Hex,
       constructorArgs: abiEncodeAddresses([
-        expectedCreatorToken,
+        expectedCreatorToken as Address,
         expectedVault,
         expectedBurnStream,
         params.sender,
@@ -1907,12 +1917,12 @@ async function validateInnerCalls(params: {
 
       const codeIdLc = String(codeId).toLowerCase()
       if (codeIdLc === String(VAULT_SHARE_BURN_STREAM_CODE_ID).toLowerCase()) {
-        const expectedSalt = expectedBurnStreamSalt({ creatorToken: expectedCreatorToken, sender: params.sender })
+        const expectedSalt = expectedBurnStreamSalt({ creatorToken: expectedCreatorToken as Address, sender: params.sender })
         if (String(salt).toLowerCase() !== String(expectedSalt).toLowerCase()) throw new Error('create2_salt_not_allowed')
         const vaultArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 0)
         if (!vaultArg || vaultArg !== expectedVault) throw new Error('burn_stream_vault_mismatch')
       } else if (codeIdLc === String(PAYOUT_ROUTER_CODE_ID).toLowerCase()) {
-        const expectedSalt = expectedPayoutRouterSalt({ creatorToken: expectedCreatorToken, sender: params.sender })
+        const expectedSalt = expectedPayoutRouterSalt({ creatorToken: expectedCreatorToken as Address, sender: params.sender })
         if (String(salt).toLowerCase() !== String(expectedSalt).toLowerCase()) throw new Error('create2_salt_not_allowed')
 
         // PayoutRouter constructor args:

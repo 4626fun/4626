@@ -7,6 +7,7 @@ import { LaunchCoinCard } from '../LaunchCoinCard'
 import type { WaitlistState } from '../waitlistTypes'
 import { apiFetch } from '@/lib/apiBase'
 import { getAppBaseUrl } from '@/lib/host'
+import { classifyPreprovisionResponse } from '../preprovisionStatus'
 
 const baseEase = [0.4, 0, 0.2, 1] as const
 const fadeUp = {
@@ -94,13 +95,14 @@ function PreprovisionStatus({ onData }: { onData?: (data: PreprovData | null) =>
       try {
         const res = await apiFetch('/api/waitlist/preprovision', { method: 'POST' })
         const json = await res.json().catch(() => null)
-        if (!cancelled && json?.success && json.data) {
-          const next = json.data as PreprovData
-          setData(next)
-          onData?.(next)
-          setStatus('done')
-        } else if (!cancelled) {
-          setStatus(res.status === 404 ? 'idle' : 'error')
+        const uiStatus = classifyPreprovisionResponse({ httpStatus: res.status, json })
+        if (!cancelled) {
+          if (uiStatus === 'done' && json?.data) {
+            const next = json.data as PreprovData
+            setData(next)
+            onData?.(next)
+          }
+          setStatus(uiStatus)
         }
       } catch {
         if (!cancelled) setStatus('error')

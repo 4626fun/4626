@@ -67,6 +67,11 @@ export function createMockRes(): VercelResponse & {
       this.headersSent = true
       return this
     },
+    send(payload?: any) {
+      this.body = payload
+      this.headersSent = true
+      return this
+    },
   }
 
   return res
