@@ -22,6 +22,13 @@ function isMarketingHost(hostname: string): boolean {
   return MARKETING_HOSTNAMES.some((m) => h === m)
 }
 
+function hostModeOverride(): HostMode | null {
+  const raw = (import.meta.env.VITE_HOST_MODE_OVERRIDE as string | undefined) ?? ''
+  const v = raw.trim().toLowerCase()
+  if (v === 'app' || v === 'marketing') return v
+  return null
+}
+
 /**
  * Host mode detection.
  *
@@ -30,6 +37,8 @@ function isMarketingHost(hostname: string): boolean {
  */
 export function getHostMode(): HostMode {
   if (typeof window === 'undefined') return 'app'
+  const override = hostModeOverride()
+  if (override) return override
   const hostname = window.location.hostname ?? ''
   return isMarketingHost(hostname) ? 'marketing' : 'app'
 }

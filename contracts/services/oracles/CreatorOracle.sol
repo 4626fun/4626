@@ -257,7 +257,7 @@ contract CreatorOracle is OApp {
      *      This allows same constructor args → same CREATE2 address on all chains.
      */
     constructor(address _registry, address _chainlinkFeed, string memory _creatorSymbol, address _owner)
-        OApp(ICreatorRegistry(_registry).getLayerZeroEndpoint(uint16(block.chainid)), _owner)
+        OApp(ICreatorRegistry(_registry).getLayerZeroEndpoint(block.chainid), _owner)
         Ownable(_owner)
     {
         if (_registry == address(0)) revert ZeroAddress();
@@ -561,14 +561,19 @@ contract CreatorOracle is OApp {
 
         uint160 newSecondsPerLiquidity = prevObs.secondsPerLiquidityCumulativeX128;
         if (liquidity > 0) {
-            newSecondsPerLiquidity += uint160(delta) << 128 / liquidity;
+            // secondsPerLiquidityCumulativeX128 += (delta << 128) / liquidity
+            newSecondsPerLiquidity += uint160((uint256(delta) << 128) / liquidity);
         }
 
-        // Grow cardinality if needed
-        uint16 newIndex = (observationState.index + 1) % observationState.cardinalityNext;
-        if (observationState.cardinalityNext < MAX_CARDINALITY) {
-            observationState.cardinalityNext++;
+        // Grow observation ring buffer (counts only initialized slots)
+        uint16 cardinalityNext = observationState.cardinalityNext;
+        if (cardinalityNext < MAX_CARDINALITY) {
+            cardinalityNext++;
+            observationState.cardinalityNext = cardinalityNext;
         }
+
+        uint16 newIndex = (observationState.index + 1) % cardinalityNext;
+        bool wasInitialized = observations[newIndex].initialized;
 
         // Write new observation
         observations[newIndex] = Observation({
@@ -581,7 +586,7 @@ contract CreatorOracle is OApp {
         });
 
         observationState.index = newIndex;
-        if (observationState.cardinality < observationState.cardinalityNext) {
+        if (!wasInitialized && observationState.cardinality < cardinalityNext) {
             observationState.cardinality++;
         }
         lastObservationTimestamp = uint32(block.timestamp);
@@ -682,12 +687,14 @@ contract CreatorOracle is OApp {
 
         uint16 currentIndex = observationState.index;
         Observation storage currentObs = observations[currentIndex];
+        if (!currentObs.initialized) revert NeedMoreObservations();
 
         // Find oldest observation within duration
         uint32 targetTime = uint32(block.timestamp) - duration;
         uint16 oldIndex = _findObservationBefore(targetTime);
 
         Observation storage oldObs = observations[oldIndex];
+        if (!oldObs.initialized) revert NeedMoreObservations();
 
         uint32 timeDelta = currentObs.blockTimestamp - oldObs.blockTimestamp;
         if (timeDelta == 0) revert NeedMoreObservations();
@@ -706,16 +713,31 @@ contract CreatorOracle is OApp {
         uint16 currentIndex = observationState.index;
         uint16 cardinality = observationState.cardinality;
 
-        // Binary search through observations
+        bool foundAny;
+        uint16 oldestIndex = currentIndex;
+        uint32 oldestTs = type(uint32).max;
+
+        // Walk backwards through the ring (newest -> oldest)
         for (uint16 i = 0; i < cardinality; i++) {
             uint16 checkIndex = (currentIndex + cardinality - i) % cardinality;
-            if (observations[checkIndex].blockTimestamp <= targetTime) {
+            Observation storage obs = observations[checkIndex];
+            if (!obs.initialized) continue;
+
+            foundAny = true;
+            if (obs.blockTimestamp < oldestTs) {
+                oldestTs = obs.blockTimestamp;
+                oldestIndex = checkIndex;
+            }
+
+            if (obs.blockTimestamp <= targetTime) {
                 return checkIndex;
             }
         }
 
-        // Return oldest if none found
-        return (currentIndex + 1) % cardinality;
+        if (!foundAny) revert NeedMoreObservations();
+
+        // Not enough history for `targetTime` → return oldest initialized observation.
+        return oldestIndex;
     }
 
     /**
@@ -727,8 +749,15 @@ contract CreatorOracle is OApp {
         uint160 sqrtPriceX96 = TickMath.getSqrtPriceAtTick(tick);
         uint256 sqrtPrice = uint256(sqrtPriceX96);
 
-        // price = (sqrtPrice / 2^96)^2 in 1e18
-        price = (sqrtPrice * sqrtPrice * 1e18) >> 192;
+        // price = (sqrtPriceX96 / 2^96)^2, scaled to 1e18.
+        // Use full-precision math to avoid overflow at valid tick bounds.
+        if (sqrtPriceX96 <= type(uint128).max) {
+            uint256 ratioX192 = sqrtPrice * sqrtPrice;
+            price = Math.mulDiv(ratioX192, 1e18, uint256(1) << 192);
+        } else {
+            uint256 ratioX128 = Math.mulDiv(sqrtPrice, sqrtPrice, uint256(1) << 64);
+            price = Math.mulDiv(ratioX128, 1e18, uint256(1) << 128);
+        }
 
         // Invert if creator is token0
         if (creatorIsToken0 && price > 0) {
@@ -870,22 +899,26 @@ contract CreatorOracle is OApp {
         if (block.timestamp - creatorPriceTimestamp < priceUpdateCooldown) return;
         if (observationState.cardinality < 2) return;
 
-        // Calculate effective duration
-        uint16 prevIndex = observationState.index == 0 ? observationState.cardinality - 1 : observationState.index - 1;
-        uint32 oldestTs = observations[prevIndex].blockTimestamp;
-        if (oldestTs == 0) return;
+        // Fixed, non-bypassable window for auto-updates.
+        uint32 duration = DEFAULT_TWAP_DURATION;
+        uint32 nowTs = uint32(block.timestamp);
+        if (nowTs <= duration) return;
 
-        uint32 effectiveDuration = uint32(block.timestamp) - oldestTs;
-        if (effectiveDuration > DEFAULT_TWAP_DURATION) {
-            effectiveDuration = DEFAULT_TWAP_DURATION;
-        }
-        if (effectiveDuration < 60) {
-            effectiveDuration = 60;
-        }
+        // Require at least MIN_TWAP_DURATION of real observation history before writing a price.
+        uint16 currentIndex = observationState.index;
+        Observation storage currentObs = observations[currentIndex];
+        if (!currentObs.initialized) return;
+
+        uint16 oldIndex = _findObservationBefore(nowTs - duration);
+        Observation storage oldObs = observations[oldIndex];
+        if (!oldObs.initialized) return;
+
+        uint32 timeDelta = currentObs.blockTimestamp - oldObs.blockTimestamp;
+        if (timeDelta < MIN_TWAP_DURATION) return;
 
         // Get Creator/ETH TWAP
         uint256 creatorPerEth;
-        try this.getCreatorEthTWAP(effectiveDuration) returns (uint256 price) {
+        try this.getCreatorEthTWAP(duration) returns (uint256 price) {
             creatorPerEth = price;
         } catch {
             return;
@@ -905,8 +938,17 @@ contract CreatorOracle is OApp {
             // Convert Chainlink 8 decimals to 18
             uint256 ethUSD18 = uint256(ethUSD) * 1e10;
 
-            // Creator/USD = Creator/ETH * ETH/USD
-            int256 creatorUSD = int256((creatorPerEth * ethUSD18) / 1e18);
+            // USD per CREATOR = (USD per ETH) / (CREATOR per ETH)
+            int256 creatorUSD = int256(Math.mulDiv(ethUSD18, 1e18, creatorPerEth));
+
+            // Sanity: reject updates that move price more than MAX_PRICE_DEVIATION from the stored value.
+            // Auto-update is called inside a swap-path try/catch; return instead of reverting.
+            if (creatorPriceUSD > 0) {
+                uint256 oldP = uint256(creatorPriceUSD);
+                uint256 newP = creatorUSD > 0 ? uint256(creatorUSD) : 0;
+                uint256 deviation = oldP > newP ? ((oldP - newP) * 1e18) / oldP : ((newP - oldP) * 1e18) / oldP;
+                if (deviation > MAX_PRICE_DEVIATION) return;
+            }
 
             creatorPriceUSD = creatorUSD;
             creatorPriceTimestamp = block.timestamp;
@@ -928,7 +970,7 @@ contract CreatorOracle is OApp {
             revert PriceUpdateCooldown();
         }
 
-        // Chainlink-style price: V4 TWAP (Creator/ETH) × Chainlink (ETH/USD).
+        // USD/CREATOR = Chainlink(ETH/USD) ÷ V4_TWAP(CREATOR/ETH).
         if (!v4PoolConfigured) revert V4NotConfigured();
         if (observationState.cardinality < 2) revert NeedMoreObservations();
 
@@ -943,7 +985,8 @@ contract CreatorOracle is OApp {
         if (block.timestamp - updatedAt > MAX_STALENESS) revert StalePrice();
 
         uint256 ethUSD18 = uint256(ethUSD) * 1e10;
-        int256 creatorUSD = int256((creatorPerEth * ethUSD18) / 1e18);
+        // USD per CREATOR = (USD per ETH) / (CREATOR per ETH)
+        int256 creatorUSD = int256(Math.mulDiv(ethUSD18, 1e18, creatorPerEth));
 
         // Sanity: reject updates that move price more than MAX_PRICE_DEVIATION from the stored value
         if (creatorPriceUSD > 0) {
@@ -1005,6 +1048,8 @@ contract CreatorOracle is OApp {
     {
         if (creatorPriceUSD <= 0) revert InvalidPrice();
         if (!isPriceUpdater[msg.sender] && msg.sender != owner()) revert Unauthorized();
+        require(dstEids.length > 0, "No destinations");
+        require(msg.value % dstEids.length == 0, "FeeNotDivisible");
 
         receipts = new MessagingReceipt[](dstEids.length);
         bytes memory payload = abi.encode(creatorPriceUSD, creatorPriceTimestamp, creatorSymbol);
@@ -1016,6 +1061,13 @@ contract CreatorOracle is OApp {
         }
 
         emit CreatorPriceBroadcast(dstEids, creatorPriceUSD, creatorPriceTimestamp);
+    }
+
+    /// @dev Override LayerZero default behavior to allow multi-destination broadcasts in one transaction.
+    ///      The contract spends from its balance (funded by `msg.value`) across multiple `_lzSend` calls.
+    function _payNative(uint256 _nativeFee) internal override returns (uint256 nativeFee) {
+        if (address(this).balance < _nativeFee) revert NotEnoughNative(msg.value);
+        return _nativeFee;
     }
 
     /**
@@ -1033,9 +1085,15 @@ contract CreatorOracle is OApp {
 
         if (price <= 0) revert InvalidPrice();
 
-        creatorPriceUSD = price;
         // Clamp to prevent freshness spoofing and future-timestamp underflow in staleness checks.
         uint256 safeTimestamp = timestamp > block.timestamp ? block.timestamp : timestamp;
+
+        // Defense-in-depth: ignore out-of-order updates so delayed/replayed packets cannot roll back freshness.
+        if (creatorPriceTimestamp != 0 && safeTimestamp < creatorPriceTimestamp) {
+            return;
+        }
+
+        creatorPriceUSD = price;
         creatorPriceTimestamp = safeTimestamp;
 
         // Update symbol if different (for multi-creator support)

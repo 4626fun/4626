@@ -67,7 +67,6 @@ vi.mock('../../server/_lib/creatorAgentWallets.js', () => ({
   getOrCreateCreatorAgentWallet: getOrCreateCreatorAgentWalletMock,
 }))
 
-
 vi.mock('../../server/_lib/origin.js', () => ({
   getCanonicalOrigin: vi.fn(() => 'https://4626-test-akita-llc.vercel.app'),
 }))
@@ -80,7 +79,8 @@ function makeRequestBody() {
   return {
     smartWallet: '0x0000000000000000000000000000000000000002',
     creatorToken: '0x0000000000000000000000000000000000000003',
-    ownerAddress: '0x0000000000000000000000000000000000000001',
+    // Handler invariant: ownerAddress must match smartWallet (canonical deploy sender)
+    ownerAddress: '0x0000000000000000000000000000000000000002',
     phase2Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x' }],
     phase3Calls: [],
   }
@@ -157,7 +157,6 @@ describe('deploy session ownership guardrails', () => {
     expect((insertArgs.payload?.erc7712Grant?.allowedTargets ?? []).map((v: string) => v.toLowerCase())).toContain('0x0000000000000000000000000000000000000010')
     expect(insertArgs.payload?.persistSessionOwner).toBe(true)
   })
-
 
   it('falls back to local session owner key when agent wallet id is missing', async () => {
     getOrCreateCreatorAgentWalletMock.mockResolvedValueOnce({

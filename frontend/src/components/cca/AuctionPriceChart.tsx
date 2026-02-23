@@ -241,7 +241,9 @@ export function AuctionPriceChart({
       {/* X-axis labels (time) - bottom */}
       <div className="absolute bottom-0 left-0 right-0 flex justify-between items-end px-12 pb-1">
         <div className="text-[9px] text-zinc-500">
-          {points.length > 0 ? `${Math.floor((Date.now() - points[0].time) / 60000)}m ago` : ''}
+          {points.length > 0
+            ? `${Math.max(0, Math.floor(((points[points.length - 1]?.time ?? points[0]!.time) - points[0]!.time) / 60000))}m ago`
+            : ''}
         </div>
         <div className="text-[9px] text-zinc-500">now</div>
       </div>

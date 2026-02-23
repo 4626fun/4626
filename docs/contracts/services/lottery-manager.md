@@ -72,14 +72,27 @@ function setLotteryConfig(
 When cross-chain VRF and winner callbacks are enabled, the manager can sponsor LayerZero native fees.
 To prevent unbounded fee burn, `CreatorLotteryManager` uses a hybrid model:
 
-- **Caller-funded first**: if a swap caller provides `msg.value`, VRF request fees use caller funds.
-- **Bounded sponsorship fallback**: if caller funds are absent/insufficient, sponsorship is allowed only under policy limits.
+Defaults (new deployments):
+- Sponsorship is disabled by default (`vrfSponsorshipPolicy.enabled == false`, `callbackSponsorshipPolicy.enabled == false`).
+- Sponsored VRF requires a higher minimum swap size (`sponsoredVrfMinSwapAmountUSD`, default `$10`).
+- Sponsored traffic is rate-limited per epoch (defaults: VRF buyer `2`, VRF origin `10`, callback buyer `1`, callback origin `10`).
+
+Funding model:
+- **Caller-funded (exact fee)**: if a swap caller provides `msg.value`, it must equal the integrator-quoted `nativeFee`. If the VRF request send fails, the value is refunded and the entry is skipped.
+- **Sponsored fallback (opt-in)**: if `msg.value == 0`, sponsorship may pay fees from the manager balance, but only under policy limits (max fee per message, budget per epoch, min sponsored swap, and rate limits).
 - **Callback sponsorship limits**: winner callback sends are independently bounded and remain non-blocking.
 
 Operator controls:
 
 ```solidity
 function setSponsoredVrfMinSwapAmountUSD(uint256 minSwapAmountUSD) external;
+
+function setSponsorshipRateLimits(
+    uint32 vrfMaxPerBuyerPerEpoch,
+    uint32 vrfMaxPerOriginPerEpoch,
+    uint32 callbackMaxPerBuyerPerEpoch,
+    uint32 callbackMaxPerOriginPerEpoch
+) external;
 
 function setVrfSponsorshipPolicy(
     bool enabled,

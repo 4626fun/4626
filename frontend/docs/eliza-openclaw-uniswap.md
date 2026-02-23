@@ -32,18 +32,6 @@ Use:
 /uniswap <skill_name> <json_payload>
 ```
 
-For mutating skills, include explicit confirmation in payload:
-
-```json
-{"confirmed": true}
-```
-
-## Policy toggles (server env)
-
-- `ELIZA_UNISWAP_SKILLS_ENABLED=1|0` (default `1`)
-- `ELIZA_UNISWAP_ALLOWED_SKILLS=uniswap_quote,uniswap_check_approval,...` (optional allowlist)
-- `ELIZA_UNISWAP_REQUIRE_CONFIRMATION=1|0` (default `1`; mutating skills require `confirmed: true`)
-
 Example:
 
 ```text

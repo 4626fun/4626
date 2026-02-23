@@ -15,7 +15,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
-import { getHostMode } from '@/lib/host'
+import { APP_ORIGIN } from '@/lib/host'
 import { getBasename } from '@/lib/basename-api'
 import { apiFetch } from '@/lib/apiBase'
 import {
@@ -503,7 +503,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   // ------- resolve address → display name (Basename / ENS / truncated) -------
   const nameCache = useRef<Map<string, string>>(new Map())
 
-  async function resolveDisplayName(address: string): Promise<string> {
+  const resolveDisplayName = useCallback(async (address: string): Promise<string> => {
     const lower = address.toLowerCase()
     const cached = nameCache.current.get(lower)
     if (cached) return cached
@@ -523,10 +523,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     const truncated = truncateAddress(address)
     nameCache.current.set(lower, truncated)
     return truncated
-  }
+  }, [])
 
   // ------- build conversation summary -------
-  async function buildConvoSummary(convo: Conversation | Dm | Group): Promise<ChatConversation> {
+  const buildConvoSummary = useCallback(async (convo: Conversation | Dm | Group): Promise<ChatConversation> => {
     const isDm = 'peerInboxId' in convo
     let name = ''
     let peerInboxId: string | undefined
@@ -570,7 +570,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       lastMessageAt,
       unreadCount: 0,
     }
-  }
+  }, [resolveDisplayName])
 
   // ------- connect -------
   const resolveXmtpIdentityAddress = useCallback(async (connectedAddress: string): Promise<string> => {
@@ -616,7 +616,25 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     if (!address || !walletClient) return
     if (clientRef.current) return // already connected
     if (connectInFlightRef.current) return
-    if (getHostMode() !== 'app') return // XMTP only on app.4626.fun to avoid multi-origin installations
+
+    // XMTP installations are scoped to a browser origin. Allowing messaging on
+    // preview/staging origins would create additional installations and can
+    // quickly hit 10/10 for users. We restrict to the canonical app origin.
+    const canonicalAppOrigin = APP_ORIGIN.replace(/\/+$/, '')
+    const currentOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+    const hostname = typeof window !== 'undefined' ? (window.location.hostname ?? '').toLowerCase() : ''
+    const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1'
+    const isCanonicalOrigin = currentOrigin === canonicalAppOrigin
+    if (!isCanonicalOrigin && !isLocalDev) {
+      const msg =
+        `Messaging is disabled on ${currentOrigin || 'this origin'} to prevent XMTP installation churn. ` +
+        `Open ${canonicalAppOrigin} to use chat.`
+      if (mountedRef.current) {
+        setStatus('error')
+        setError(msg)
+      }
+      return
+    }
 
     connectInFlightRef.current = true
     let xmtpIdentityAddress = String(address).toLowerCase()
@@ -938,7 +956,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     } finally {
       connectInFlightRef.current = false
     }
-  }, [address, walletClient, publicClient, resolveXmtpIdentityAddress])
+  }, [address, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary])
 
   const resetInstallations = useCallback(async () => {
     if (!address || !walletClient) throw new Error('Connect wallet first.')
@@ -1133,7 +1151,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       console.error('[xmtp] startDm error:', e)
       return null
     }
-  }, [])
+  }, [buildConvoSummary])
 
   // ------- subscribe to per-conversation messages -------
   const subscribeToMessages = useCallback(

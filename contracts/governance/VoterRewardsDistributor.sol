@@ -83,11 +83,7 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
     event Claimed(uint256 indexed epoch, address indexed vault, address indexed user, address token, uint256 amount);
     event ProtocolTreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
     event ZeroVoteEpochSwept(
-        uint256 indexed epoch,
-        address indexed vault,
-        address indexed token,
-        uint256 amount,
-        address protocolTreasury
+        uint256 indexed epoch, address indexed vault, address indexed token, uint256 amount, address protocolTreasury
     );
 
     // ================================
@@ -281,5 +277,4 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
         emit Claimed(epoch, vault, user, token, amount);
     }
 }
-
 

@@ -5,10 +5,10 @@ import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
 
 // Legacy tasks
-type LegacyTaskKey = 'shareX' | 'copyLink' | 'share' | 'follow' | 'saveApp'
+type LegacyTaskKey = 'shareX' | 'copyLink' | 'share' | 'saveApp'
 
 // Social tasks (verified or honor system)
-type SocialTaskKey = 'farcaster' | 'baseApp' | 'zora' | 'x' | 'discord' | 'telegram'
+type SocialTaskKey = 'farcaster' | 'baseApp' | 'zora' | 'discord' | 'telegram'
 
 // Bonus tasks (honor system)
 type BonusTaskKey = 'github' | 'tiktok' | 'instagram' | 'reddit'
@@ -20,13 +20,11 @@ const TASK_POINTS: Record<TaskKey, number> = {
   shareX: 10,
   copyLink: 5,
   share: 7,
-  follow: WAITLIST_POINTS.x,
   saveApp: 6,
   // Social (verified)
   farcaster: WAITLIST_POINTS.farcaster,
   baseApp: WAITLIST_POINTS.baseApp,
   zora: WAITLIST_POINTS.zora,
-  x: WAITLIST_POINTS.x,
   discord: WAITLIST_POINTS.discord,
   telegram: WAITLIST_POINTS.telegram,
   // Bonus (honor system)
@@ -41,12 +39,10 @@ const TASK_SOURCE_MAP: Record<TaskKey, string> = {
   shareX: 'task',
   copyLink: 'task',
   share: 'task',
-  follow: 'social_x',
   saveApp: 'task',
   farcaster: 'social_farcaster',
   baseApp: 'social_base_app',
   zora: 'social_zora',
-  x: 'social_x',
   discord: 'social_discord',
   telegram: 'social_telegram',
   github: 'bonus_github',
@@ -83,6 +79,13 @@ export default async function handler(req: any, res: any) {
   }
 
   const taskKeyRaw = typeof body?.taskKey === 'string' ? body.taskKey : ''
+  // X follow is now verified (not honor system). Route callers to the verifier endpoint.
+  if (taskKeyRaw === 'x' || taskKeyRaw === 'follow') {
+    return res.status(400).json({
+      success: false,
+      error: 'Use /api/waitlist/verify-x to verify X follow.',
+    } satisfies ApiEnvelope<never>)
+  }
   const taskKey = (Object.keys(TASK_POINTS) as TaskKey[]).includes(taskKeyRaw as TaskKey) ? (taskKeyRaw as TaskKey) : null
   if (!taskKey) {
     return res.status(400).json({ success: false, error: 'Invalid task key' } satisfies ApiEnvelope<never>)

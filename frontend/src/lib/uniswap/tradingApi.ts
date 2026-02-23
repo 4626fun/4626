@@ -1,58 +1,42 @@
 import { normalizeUniswapError } from './error'
+import type { components } from './generated/tradeApi'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; details?: unknown }
 
+const DEFAULT_RETRIES = 1
+const RETRY_BASE_DELAY_MS = 500
+const RETRYABLE_STATUS = new Set([503, 502, 429])
 const QUOTE_CACHE_TTL_MS = 8_000
 const quoteCache = new Map<string, { at: number; data: TradeQuoteResponse }>()
 const quoteInFlight = new Map<string, Promise<TradeQuoteResponse>>()
-const RETRYABLE_STATUS = new Set([429, 500, 503])
-const DEFAULT_RETRIES = 2
-const RETRY_BASE_DELAY_MS = 125
 
-export type TradeQuoteRequest = {
-  tokenIn: string
-  tokenOut: string
-  tokenInChainId: number
-  tokenOutChainId: number
-  type: 'EXACT_INPUT' | 'EXACT_OUTPUT'
-  amount: string
-  swapper: string
-  slippageTolerance?: number
-  autoSlippage?: 'DEFAULT'
-  permitAmount?: 'FULL' | 'EXACT'
-  urgency?: 'urgent' | 'normal'
-  protocols?: string[]
-  routingPreference?: string
-  spreadOptimization?: string
-  generatePermitAsTransaction?: boolean
+export type Routing = components['schemas']['Routing']
+export type QuoteRequest = components['schemas']['QuoteRequest']
+export type QuoteResponse = components['schemas']['QuoteResponse']
+export type ApprovalRequest = components['schemas']['ApprovalRequest']
+export type ApprovalResponse = components['schemas']['ApprovalResponse']
+export type TransactionRequest = components['schemas']['TransactionRequest']
+export type CreateSwapRequest = components['schemas']['CreateSwapRequest']
+export type CreateSwapResponse = components['schemas']['CreateSwapResponse']
+export type OrderRequest = components['schemas']['OrderRequest']
+export type OrderResponse = components['schemas']['OrderResponse']
+
+export type TradeQuoteRequest = QuoteRequest & {
+  // Local-only: used for caching + execution-mode attribution. Stripped before forwarding upstream.
   walletModeKey?: 'canonical' | 'eoa'
+  // Local-only: forwarded to our Vercel handler, which decides whether to set `x-chained-actions-enabled`.
   xChainedActionsEnabled?: boolean
+  chainedActionsEnabled?: boolean
 }
 
-export type TradeQuoteResponse = Record<string, unknown> & {
-  requestId?: string
-  routing?: string | number
-  classicQuote?: Record<string, unknown>
-  bridgeQuote?: Record<string, unknown>
-  wrapUnwrapQuote?: Record<string, unknown>
-  priorityQuote?: Record<string, unknown>
-  chainedQuote?: Record<string, unknown>
-  permitSingleData?: Record<string, unknown>
-  permitTransferFromData?: Record<string, unknown>
-  permitData?: Record<string, unknown>
-}
+export type TradeQuoteResponse = QuoteResponse & Record<string, unknown>
 
-export type TransactionRequest = {
-  to: string
-  from: string
-  data: string
-  value?: string
-  chainId?: number
-  gasLimit?: string
-  maxFeePerGas?: string
-  maxPriorityFeePerGas?: string
-  gasPrice?: string
-}
+// OpenAPI currently types approval/cancel as always-present transactions, but the
+// endpoint can return `null` when no approval/cancel is required.
+export type TradeApprovalResponse = Omit<ApprovalResponse, 'approval' | 'cancel'> & {
+  approval: TransactionRequest | null
+  cancel: TransactionRequest | null
+} & Record<string, unknown>
 
 export type UserOpCall = { to: `0x${string}`; data?: `0x${string}`; value?: bigint }
 export type PermitSignPayload = {
@@ -79,6 +63,10 @@ function normalizeAmountString(amount: string): string {
 
 function isRetryableHttpStatus(status: number): boolean {
   return RETRYABLE_STATUS.has(status)
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 async function post<T>(path: string, body: Record<string, unknown>, retries = DEFAULT_RETRIES): Promise<T> {
@@ -127,25 +115,62 @@ async function patch<T>(path: string, body: Record<string, unknown>): Promise<T>
   return json.data as T
 }
 
-export function pickSwapQuote(quote: TradeQuoteResponse): Record<string, unknown> | null {
-  return (
-    quote.classicQuote ??
-    quote.wrapUnwrapQuote ??
-    quote.bridgeQuote ??
-    quote.priorityQuote ??
+export type ProtocolSwapRouting = Extract<Routing, 'CLASSIC' | 'WRAP' | 'UNWRAP' | 'BRIDGE'>
+export type UniswapXRouting = Extract<Routing, 'DUTCH_LIMIT' | 'DUTCH_V2' | 'DUTCH_V3' | 'LIMIT_ORDER' | 'PRIORITY'>
+
+export function isProtocolSwapRouting(routing: unknown): routing is ProtocolSwapRouting {
+  const r = typeof routing === 'string' ? routing : String(routing ?? '')
+  return r === 'CLASSIC' || r === 'WRAP' || r === 'UNWRAP' || r === 'BRIDGE'
+}
+
+export function isUniswapXRouting(routing: unknown): routing is UniswapXRouting {
+  const r = typeof routing === 'string' ? routing : String(routing ?? '')
+  return r === 'DUTCH_LIMIT' || r === 'DUTCH_V2' || r === 'DUTCH_V3' || r === 'LIMIT_ORDER' || r === 'PRIORITY'
+}
+
+export function pickQuote(quote: TradeQuoteResponse | null | undefined): Record<string, unknown> | null {
+  if (!quote) return null
+
+  // OpenAPI: `quote` is the canonical oneOf payload. Keep fallbacks for any
+  // legacy/experimental response shapes we may have cached.
+  const candidate =
+    (quote as any).quote ??
+    (quote as any).classicQuote ??
+    (quote as any).wrapUnwrapQuote ??
+    (quote as any).bridgeQuote ??
+    (quote as any).priorityQuote ??
+    (quote as any).chainedQuote ??
     null
-  )
+
+  return isPlainObject(candidate) ? candidate : null
+}
+
+// Protocol swaps: POST /swap expects ClassicQuote | WrapUnwrapQuote | BridgeQuote.
+export function pickSwapQuote(quote: TradeQuoteResponse | null | undefined): Record<string, unknown> | null {
+  if (!quote) return null
+  if (!isProtocolSwapRouting(quote.routing)) return null
+  return pickQuote(quote)
+}
+
+// UniswapX gasless orders: POST /order expects DutchQuoteV2 | DutchQuoteV3 | PriorityQuote.
+export function pickOrderQuote(quote: TradeQuoteResponse | null | undefined): Record<string, unknown> | null {
+  if (!quote) return null
+  if (!isUniswapXRouting(quote.routing)) return null
+  return pickQuote(quote)
 }
 
 export function pickPermitData(quote: TradeQuoteResponse | null | undefined): Record<string, unknown> | null {
   if (!quote) return null
-  const candidates = [
-    quote.permitData,
-    quote.permitSingleData,
-    quote.permitTransferFromData,
+
+  const candidates: unknown[] = [
+    (quote as any).permitData, // OpenAPI: NullablePermit | null
+    (quote as any).permitSingleData, // legacy
+    (quote as any).permitTransferFromData, // legacy
+    (quote as any).quote?.permitData, // extremely defensive: nested shapes
   ]
+
   for (const item of candidates) {
-    if (item && typeof item === 'object' && !Array.isArray(item)) return item
+    if (isPlainObject(item)) return item
   }
   return null
 }
@@ -176,25 +201,17 @@ export function toPermitSignPayload(permitData: Record<string, unknown>): Permit
 }
 
 export async function fetchTradeQuote(body: TradeQuoteRequest): Promise<TradeQuoteResponse> {
-  const requestBody: TradeQuoteRequest = {
-    ...body,
-    amount: normalizeAmountString(body.amount),
-    urgency: body.urgency ?? 'normal',
-    permitAmount: body.permitAmount ?? 'FULL',
-    routingPreference: body.routingPreference ?? 'BEST_PRICE',
-    spreadOptimization: body.spreadOptimization ?? 'EXECUTION',
-  }
-  const key = JSON.stringify(requestBody)
+  const normalizedAmount = normalizeAmountString(body.amount)
+  const normalizedBody = normalizedAmount === body.amount ? body : { ...body, amount: normalizedAmount }
+  const key = JSON.stringify(normalizedBody)
   const cached = quoteCache.get(key)
   if (cached && Date.now() - cached.at < QUOTE_CACHE_TTL_MS) return cached.data
 
   const pending = quoteInFlight.get(key)
   if (pending) return pending
 
-  const payload: Record<string, unknown> = { ...requestBody }
-  delete payload.walletModeKey
-
-  const request = post<TradeQuoteResponse>('/api/uniswap/quote', payload)
+  const { walletModeKey: _wm, ...upstreamBody } = normalizedBody
+  const request = post<TradeQuoteResponse>('/api/uniswap/quote', upstreamBody)
     .then((data) => {
       quoteCache.set(key, { at: Date.now(), data })
       quoteInFlight.delete(key)
@@ -209,45 +226,40 @@ export async function fetchTradeQuote(body: TradeQuoteRequest): Promise<TradeQuo
   return request
 }
 
-export async function checkTradeApproval(body: {
-  walletAddress: string
-  token: string
-  amount: string
-  chainId: number
-  tokenOut?: string
-  tokenOutChainId?: number
-  includeGasInfo?: boolean
-  urgency?: 'urgent' | 'normal'
-}): Promise<Record<string, unknown>> {
-  return post<Record<string, unknown>>('/api/uniswap/checkApproval', {
-    ...body,
-    amount: normalizeAmountString(body.amount),
-    urgency: body.urgency ?? 'normal',
+export async function checkTradeApproval(body: ApprovalRequest): Promise<TradeApprovalResponse> {
+  const rawAmount = typeof (body as any).amount === 'string' ? ((body as any).amount as string) : ''
+  return post<TradeApprovalResponse>('/api/uniswap/checkApproval', {
+    ...(body as Record<string, unknown>),
+    amount: normalizeAmountString(rawAmount),
+    urgency: (body as any).urgency ?? 'normal',
   })
 }
 
-export async function buildSwap(body: {
+export type BuildSwapParams = Omit<CreateSwapRequest, 'quote' | 'permitData'> & {
   quote: Record<string, unknown>
-  signature?: string
   permitData?: Record<string, unknown>
-  deadline?: number
-  urgency?: 'urgent' | 'normal'
-  refreshGasPrice?: boolean
-  simulateTransaction?: boolean
-  safetyMode?: 'RELAXED' | 'SAFE'
-}): Promise<{ requestId?: string; swap: TransactionRequest; gasFee?: string }> {
+}
+
+export async function buildSwap(body: BuildSwapParams): Promise<CreateSwapResponse> {
   const hasSignature = typeof body.signature === 'string' && body.signature.trim().length > 0
   const hasPermitData = typeof body.permitData === 'object' && body.permitData !== null
   if (hasSignature !== hasPermitData) {
     throw new Error('Permit2 signature and permitData must be provided together.')
   }
 
-  const response = await post<{ requestId?: string; swap: TransactionRequest; gasFee?: string }>(
-    '/api/uniswap/swap',
-    body,
-  )
+  const response = await post<CreateSwapResponse>('/api/uniswap/swap', body)
   assertValidSwapTransaction(response.swap)
   return response
+}
+
+export type CreateOrderParams = Omit<OrderRequest, 'quote'> & {
+  quote: Record<string, unknown>
+}
+
+export async function createOrder(body: CreateOrderParams): Promise<OrderResponse> {
+  // /order has side-effects (submits to filler network). Caller should ensure
+  // the user has confirmed before invoking.
+  return post<OrderResponse>('/api/uniswap/order', body)
 }
 
 export function assertValidSwapTransaction(tx: TransactionRequest): void {

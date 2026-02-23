@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { getHostMode } from '@/lib/host'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { WaitlistModal } from '@/components/waitlist/WaitlistModal'
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
@@ -11,17 +11,21 @@ const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
 export function Home() {
   const location = useLocation()
   const navigate = useNavigate()
-  const waitlistOpen = location.hash === '#waitlist'
+  const waitlistOpen = useMemo(() => {
+    if (location.hash === '#waitlist') return true
+    const qs = new URLSearchParams(location.search)
+    const wl = (qs.get('wl') ?? '').trim().toLowerCase()
+    if (wl === '1' || wl === 'true' || wl === 'yes') return true
+    const ref = (qs.get('ref') ?? '').trim()
+    return ref.length > 0
+  }, [location.hash, location.search])
   const hostMode = getHostMode()
   const showJoinWaitlistCta = hostMode === 'marketing'
   const showExploreCreatorsCta = hostMode === 'app'
   const showDeployVaultCta = hostMode === 'app'
 
-  if (hostMode === 'app') {
-    return <Navigate to="/swap" replace />
-  }
-
   useEffect(() => {
+    if (hostMode === 'app') return
     if (location.hash === '#waitlist') return
 
     if (!location.hash) return
@@ -32,11 +36,39 @@ export function Home() {
     requestAnimationFrame(() => {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
-  }, [location.hash])
+  }, [hostMode, location.hash])
+
+  if (hostMode === 'app') {
+    return <Navigate to="/swap" replace />
+  }
 
   const closeWaitlistModal = () => {
-    if (location.hash !== '#waitlist') return
-    navigate(`${location.pathname}${location.search}`, { replace: true })
+    if (typeof window === 'undefined') return
+    try {
+      const url = new URL(window.location.href)
+      let changed = false
+      if (url.hash === '#waitlist') {
+        url.hash = ''
+        changed = true
+      }
+      if (url.searchParams.has('wl')) {
+        url.searchParams.delete('wl')
+        changed = true
+      }
+      // If user closes before the referral param is consumed, remove it
+      // so the modal doesn't immediately reopen.
+      if (url.searchParams.has('ref')) {
+        url.searchParams.delete('ref')
+        changed = true
+      }
+      if (!changed) return
+      navigate(`${url.pathname}${url.search}${url.hash}`, { replace: true })
+    } catch {
+      // Best-effort: at minimum, drop the waitlist hash.
+      if (location.hash === '#waitlist') {
+        navigate(`${location.pathname}${location.search}`, { replace: true })
+      }
+    }
   }
 
   return (

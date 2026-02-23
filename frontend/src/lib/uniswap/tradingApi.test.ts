@@ -3,18 +3,25 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   assertValidSwapTransaction,
   buildSwap,
+  createOrder,
   fetchTradeQuote,
+  isProtocolSwapRouting,
+  isUniswapXRouting,
+  pickOrderQuote,
+  pickSwapQuote,
   pickPermitData,
   toPermitSignPayload,
   type TradeQuoteRequest,
+  type TradeQuoteResponse,
 } from './tradingApi'
 
 const VALID_TX = {
   to: '0x0000000000000000000000000000000000000001',
   from: '0x0000000000000000000000000000000000000002',
   data: '0x1234',
+  value: '0',
   chainId: 8453,
-}
+} as const
 
 function quoteRequest(amount: string): TradeQuoteRequest {
   return {
@@ -26,6 +33,15 @@ function quoteRequest(amount: string): TradeQuoteRequest {
     amount,
     swapper: '0x0000000000000000000000000000000000000002',
   }
+}
+
+function quoteResponse(routing: string): TradeQuoteResponse {
+  return {
+    requestId: 'rq_test',
+    routing: routing as any,
+    quote: { output: { amount: '123' } },
+    permitData: null,
+  } as any
 }
 
 describe('assertValidSwapTransaction', () => {
@@ -57,6 +73,9 @@ describe('buildSwap', () => {
       buildSwap({
         quote: { quoteId: 'q1' },
         signature: '0xabc',
+        includeGasInfo: false,
+        refreshGasPrice: false,
+        simulateTransaction: false,
       }),
     ).rejects.toThrow('Permit2 signature and permitData must be provided together.')
   })
@@ -77,6 +96,9 @@ describe('buildSwap', () => {
     await expect(
       buildSwap({
         quote: { quoteId: 'q2' },
+        includeGasInfo: false,
+        refreshGasPrice: false,
+        simulateTransaction: false,
       }),
     ).rejects.toThrow('Invalid swap transaction: missing call data')
   })
@@ -106,7 +128,7 @@ describe('fetchTradeQuote', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          json: async () => ({ success: true, data: { requestId: 'rq_123', routing: 'CLASSIC' } }),
+          json: async () => ({ success: true, data: { ...quoteResponse('CLASSIC'), requestId: 'rq_123' } }),
         }),
     )
 
@@ -116,10 +138,10 @@ describe('fetchTradeQuote', () => {
   })
 
   it('keys quote cache by wallet mode without forwarding mode key upstream', async () => {
-    const fetchMock = vi.fn(async () => ({
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({
       ok: true,
       status: 200,
-      json: async () => ({ success: true, data: { requestId: 'rq_mode', routing: 'CLASSIC' } }),
+      json: async () => ({ success: true, data: { ...quoteResponse('CLASSIC'), requestId: 'rq_mode' } }),
     }))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -159,5 +181,65 @@ describe('permit helpers', () => {
 
   it('returns null for malformed payloads', () => {
     expect(toPermitSignPayload({})).toBeNull()
+  })
+})
+
+describe('routing helpers', () => {
+  it('detects protocol swap routings', () => {
+    expect(isProtocolSwapRouting('CLASSIC')).toBe(true)
+    expect(isProtocolSwapRouting('WRAP')).toBe(true)
+    expect(isProtocolSwapRouting('DUTCH_V2')).toBe(false)
+  })
+
+  it('detects UniswapX routings', () => {
+    expect(isUniswapXRouting('DUTCH_V2')).toBe(true)
+    expect(isUniswapXRouting('PRIORITY')).toBe(true)
+    expect(isUniswapXRouting('CLASSIC')).toBe(false)
+  })
+})
+
+describe('quote pickers', () => {
+  it('picks swap quote for protocol routing', () => {
+    const resp = quoteResponse('CLASSIC')
+    expect(pickSwapQuote(resp)).toEqual((resp as any).quote)
+    expect(pickOrderQuote(resp)).toBeNull()
+  })
+
+  it('picks order quote for UniswapX routing', () => {
+    const resp = {
+      ...quoteResponse('DUTCH_V2'),
+      quote: { encodedOrder: '0xabc', orderId: 'oid', orderInfo: {} },
+    } as any
+    expect(pickOrderQuote(resp)).toEqual(resp.quote)
+    expect(pickSwapQuote(resp)).toBeNull()
+  })
+})
+
+describe('createOrder', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('posts an order to /api/uniswap/order', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: { requestId: 'req_o', orderId: 'ord1', orderStatus: 'OPEN' } }),
+    }))
+    vi.stubGlobal('fetch', fetchMock as any)
+
+    const result = await createOrder({
+      signature: '0xabc',
+      quote: { encodedOrder: '0x01', orderId: 'ord1', orderInfo: {} },
+    })
+
+    expect(result.orderId).toBe('ord1')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/uniswap/order')
+    expect(init?.method).toBe('POST')
+    expect((init?.headers as any)?.['Content-Type']).toBe('application/json')
+    const sentBody = JSON.parse(String(init?.body ?? '{}'))
+    expect(sentBody.signature).toBe('0xabc')
   })
 })

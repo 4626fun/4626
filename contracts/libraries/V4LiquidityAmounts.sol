@@ -19,7 +19,9 @@ library V4LiquidityAmounts {
 
         // amount0 = liquidity * (sqrtB - sqrtA) / (sqrtB * sqrtA)
         // = (liquidity << 96) * (sqrtB - sqrtA) / sqrtB / sqrtA
-        uint256 numerator = FullMath.mulDiv(uint256(liquidity) << FixedPoint96.RESOLUTION, sqrtPriceBX96 - sqrtPriceAX96, sqrtPriceBX96);
+        uint256 numerator = FullMath.mulDiv(
+            uint256(liquidity) << FixedPoint96.RESOLUTION, sqrtPriceBX96 - sqrtPriceAX96, sqrtPriceBX96
+        );
         amount0 = numerator / sqrtPriceAX96;
     }
 
@@ -42,7 +44,9 @@ library V4LiquidityAmounts {
         uint160 sqrtPriceBX96,
         uint128 liquidity
     ) internal pure returns (uint256 amount0, uint256 amount1) {
-        if (sqrtPriceAX96 > sqrtPriceBX96) (sqrtPriceAX96, sqrtPriceBX96) = (sqrtPriceBX96, sqrtPriceAX96);
+        if (sqrtPriceAX96 > sqrtPriceBX96) {
+            (sqrtPriceAX96, sqrtPriceBX96) = (sqrtPriceBX96, sqrtPriceAX96);
+        }
 
         if (sqrtPriceX96 <= sqrtPriceAX96) {
             amount0 = getAmount0ForLiquidity(sqrtPriceAX96, sqrtPriceBX96, liquidity);

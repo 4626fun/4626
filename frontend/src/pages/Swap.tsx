@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Droplets, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress } from 'viem'
 import { useAccount, useBalance, usePublicClient, useWalletClient } from 'wagmi'
 
@@ -10,7 +10,6 @@ import { SwapConfirmModal } from '@/components/trade/SwapConfirmModal'
 import { SwapPanel } from '@/components/trade/SwapPanel'
 import { SwapSettingsSheet } from '@/components/trade/SwapSettingsSheet'
 import { TransactionLifecycle } from '@/components/trade/TransactionLifecycle'
-import { WalletModeToggle } from '@/components/trade/WalletModeToggle'
 import { CONTRACTS } from '@/config/contracts'
 import { useCanonicalWallet } from '@/hooks/useCanonicalWallet'
 import { useSwapExecution } from '@/hooks/useSwapExecution'
@@ -24,7 +23,7 @@ import {
   quoteCreatePosition,
   removeLiquidity,
 } from '@/lib/uniswap/liquidityApi'
-import { pickSwapQuote } from '@/lib/uniswap/tradingApi'
+import { isUniswapXRouting, pickQuote } from '@/lib/uniswap/tradingApi'
 import {
   getDefaultWalletMode,
   getExecutionContext,
@@ -356,9 +355,11 @@ export function Swap() {
 
   const selectedQuote = useMemo<QuoteShape | null>(() => {
     if (!quote) return null
-    const candidate = pickSwapQuote(quote) ?? quote
+    const candidate = pickQuote(quote) ?? quote
     return candidate as QuoteShape
   }, [quote])
+
+  const isOrderRoute = useMemo(() => isUniswapXRouting(quote?.routing), [quote])
 
   const routeSummary = useMemo(() => {
     const routeCandidate =
@@ -423,7 +424,6 @@ export function Swap() {
     }, 450)
     return () => window.clearTimeout(timer)
     // `busy` intentionally omitted — use busyRef to check at call-time.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokenIn, tokenOut, amountInUnits, parsedSlippage, executionReady, isReady, handleQuote])
 
   // Wallet capabilities
@@ -573,6 +573,7 @@ export function Swap() {
                   priceImpactLabel={priceImpactLabel}
                   gasEstimateLabel={gasEstimateLabel}
                   routeSummary={routeSummary}
+                  isOrderRoute={isOrderRoute}
                   permitSignatureRequired={permitSignatureRequired}
                   permitSignaturePending={permitSignaturePending}
                   permitSignatureReady={permitSignatureReady}
@@ -586,7 +587,6 @@ export function Swap() {
                         state={txState}
                         message={status || undefined}
                         txHash={txHash}
-                        onReset={resetTradeState}
                       />
                     ) : null
                   }

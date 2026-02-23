@@ -2,7 +2,11 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {CreatorVRFConsumerV2_5, IVRFCoordinatorV2Plus, RandomWordsRequest} from "../../contracts/services/lottery/vrf/CreatorVRFConsumerV2_5.sol";
+import {
+    CreatorVRFConsumerV2_5,
+    IVRFCoordinatorV2Plus,
+    RandomWordsRequest
+} from "../../contracts/services/lottery/vrf/CreatorVRFConsumerV2_5.sol";
 import {MessagingFee, Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {MessagingReceipt} from "@layerzerolabs/oapp-evm/contracts/oapp/OAppSender.sol";
 
@@ -23,7 +27,7 @@ contract MockCreatorRegistryForVRF {
         eid = _eid;
     }
 
-    function getLayerZeroEndpoint(uint16) external view returns (address) {
+    function getLayerZeroEndpoint(uint256) external view returns (address) {
         return endpoint;
     }
 
@@ -31,8 +35,8 @@ contract MockCreatorRegistryForVRF {
         return eid;
     }
 
-    function getSupportedChains() external pure returns (uint16[] memory chains) {
-        chains = new uint16[](0);
+    function getSupportedChains() external pure returns (uint256[] memory chains) {
+        chains = new uint256[](0);
     }
 }
 
@@ -57,30 +61,19 @@ contract CreatorVRFConsumerHarness is CreatorVRFConsumerV2_5 {
         mockNativeFee = _fee;
     }
 
-    function exposedLzReceive(
-        Origin calldata origin,
-        bytes calldata message_,
-        bytes calldata composeMsg
-    ) external {
+    function exposedLzReceive(Origin calldata origin, bytes calldata message_, bytes calldata composeMsg) external {
         _lzReceive(origin, bytes32(0), message_, address(0), composeMsg);
     }
 
-    function _quote(
-        uint32,
-        bytes memory,
-        bytes memory,
-        bool
-    ) internal view override returns (MessagingFee memory fee) {
+    function _quote(uint32, bytes memory, bytes memory, bool) internal view override returns (MessagingFee memory fee) {
         fee = MessagingFee({nativeFee: mockNativeFee, lzTokenFee: 0});
     }
 
-    function _lzSend(
-        uint32 _dstEid,
-        bytes memory,
-        bytes memory,
-        MessagingFee memory _fee,
-        address
-    ) internal override returns (MessagingReceipt memory receipt) {
+    function _lzSend(uint32 _dstEid, bytes memory, bytes memory, MessagingFee memory _fee, address)
+        internal
+        override
+        returns (MessagingReceipt memory receipt)
+    {
         lzSendCount += 1;
         lastDstEid = _dstEid;
         lastMsgValue = msg.value;
@@ -122,10 +115,10 @@ contract CreatorVRFConsumerV25RelayFundingTest is Test {
         _submitRemoteRequest(sequence);
         _fulfillRequest(1, 123);
 
-        assertTrue(consumer.pendingResponses(sequence));
+        assertTrue(consumer.pendingResponses(REMOTE_EID, sequence));
         assertEq(consumer.lzSendCount(), 0);
 
-        (, bool pending, bool fulfilled, bool responseSent,,) = consumer.getPendingResponseStatus(sequence);
+        (, bool pending, bool fulfilled, bool responseSent,,) = consumer.getPendingResponseStatus(REMOTE_EID, sequence);
         assertTrue(pending);
         assertTrue(fulfilled);
         assertFalse(responseSent);
@@ -136,13 +129,13 @@ contract CreatorVRFConsumerV25RelayFundingTest is Test {
         _submitRemoteRequest(sequence);
         _fulfillRequest(1, 777);
 
-        (uint256 expectedFee, bool relayable) = consumer.quotePendingResponseFee(sequence);
+        (uint256 expectedFee, bool relayable) = consumer.quotePendingResponseFee(REMOTE_EID, sequence);
         assertTrue(relayable);
         assertGt(expectedFee, 0);
 
         vm.expectRevert(CreatorVRFConsumerV2_5.UnauthorizedRelayer.selector);
         vm.prank(attacker);
-        consumer.relayPendingResponse{value: expectedFee}(sequence);
+        consumer.relayPendingResponse{value: expectedFee}(REMOTE_EID, sequence);
 
         consumer.setRelayerAuthorization(relayer, true);
 
@@ -150,17 +143,17 @@ contract CreatorVRFConsumerV25RelayFundingTest is Test {
             abi.encodeWithSelector(CreatorVRFConsumerV2_5.RelayFeeMismatch.selector, expectedFee - 1, expectedFee)
         );
         vm.prank(relayer);
-        consumer.relayPendingResponse{value: expectedFee - 1}(sequence);
+        consumer.relayPendingResponse{value: expectedFee - 1}(REMOTE_EID, sequence);
 
         vm.prank(relayer);
-        consumer.relayPendingResponse{value: expectedFee}(sequence);
+        consumer.relayPendingResponse{value: expectedFee}(REMOTE_EID, sequence);
 
         assertEq(consumer.lzSendCount(), 1);
         assertEq(consumer.lastDstEid(), REMOTE_EID);
         assertEq(consumer.lastMsgValue(), expectedFee);
-        assertFalse(consumer.pendingResponses(sequence));
+        assertFalse(consumer.pendingResponses(REMOTE_EID, sequence));
 
-        (,, bool fulfilled, bool responseSent,,) = consumer.getPendingResponseStatus(sequence);
+        (,, bool fulfilled, bool responseSent,,) = consumer.getPendingResponseStatus(REMOTE_EID, sequence);
         assertTrue(fulfilled);
         assertTrue(responseSent);
     }
@@ -169,10 +162,10 @@ contract CreatorVRFConsumerV25RelayFundingTest is Test {
         consumer.setRateLimitDefaults(60, 1, true);
 
         _submitRemoteRequest(100);
-        assertEq(consumer.sequenceToRequestId(100), 1);
+        assertEq(consumer.sequenceToRequestId(REMOTE_EID, 100), 1);
 
         _submitRemoteRequest(101);
-        assertEq(consumer.sequenceToRequestId(101), 0);
+        assertEq(consumer.sequenceToRequestId(REMOTE_EID, 101), 0);
     }
 
     function _submitRemoteRequest(uint64 sequence) internal {

@@ -15,6 +15,7 @@
     "docs": "pnpm exec typedoc",
     "test": "vitest run",
     "test:watch": "vitest",
+    "uniswap:openapi": "openapi-typescript https://trade-api.gateway.uniswap.org/v1/api.json --output src/lib/uniswap/generated/tradeApi.ts",
     "agent:start": "pnpm agent:eliza",
     "agent:eliza": "tsx --env-file=.env --env-file=../cre/.env server/agent/eliza/index.ts",
     "solana-provisioner:start": "if [ -f server/solana-provisioner/.env ]; then tsx --env-file=server/solana-provisioner/.env server/solana-provisioner/index.ts; else tsx server/solana-provisioner/index.ts; fi",
@@ -83,6 +84,7 @@
     "eslint": "^9.39.2",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.0",
+    "openapi-typescript": "^7.13.0",
     "playwright": "^1.58.1",
     "pngjs": "^7.0.0",
     "tailwindcss": "^4.1.18",
@@ -115,6 +117,9 @@
       "qs": "6.14.2",
       "tar": "7.5.8",
       "undici": ">=6.23.0"
+    },
+    "patchedDependencies": {
+      "elliptic@6.6.1": "../patches/elliptic@6.6.1.patch"
     }
   }
 }
