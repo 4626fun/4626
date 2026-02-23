@@ -32,6 +32,7 @@ contract CreatorOracleLayerZeroReceiveAuthTest is Test {
     address internal constant LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
 
     bytes4 internal constant INVALID_ORIGIN_EID_SELECTOR = bytes4(keccak256("InvalidOriginEid(uint32)"));
+    bytes4 internal constant ONLY_PEER_SELECTOR = bytes4(keccak256("OnlyPeer(uint32,bytes32)"));
 
     address internal owner = address(0xA11CE);
 
@@ -64,6 +65,16 @@ contract CreatorOracleLayerZeroReceiveAuthTest is Test {
         assertEq(oracle.creatorPriceUSD(), 2e18);
     }
 
+    function test_LzReceive_HubEidNonPeerSenderReverts() public {
+        bytes32 notPeer = bytes32(uint256(uint160(address(0xDEAD))));
+        Origin memory origin = Origin({srcEid: HUB_EID, sender: notPeer, nonce: 1});
+        bytes memory payload = abi.encode(int256(2e18), uint256(block.timestamp), string("TEST"));
+
+        vm.expectRevert(abi.encodeWithSelector(ONLY_PEER_SELECTOR, HUB_EID, notPeer));
+        vm.prank(LZ_ENDPOINT);
+        oracle.lzReceive(origin, bytes32(0), payload, address(0), "");
+    }
+
     function test_LzReceive_NonHubEidRevertsEvenWithValidPeer() public {
         Origin memory origin = Origin({srcEid: REMOTE_EID, sender: REMOTE_PEER, nonce: 1});
         bytes memory payload = abi.encode(int256(2e18), uint256(block.timestamp), string("TEST"));
@@ -71,6 +82,29 @@ contract CreatorOracleLayerZeroReceiveAuthTest is Test {
         vm.expectRevert(abi.encodeWithSelector(INVALID_ORIGIN_EID_SELECTOR, REMOTE_EID));
         vm.prank(LZ_ENDPOINT);
         oracle.lzReceive(origin, bytes32(0), payload, address(0), "");
+    }
+
+    function test_LzReceive_IgnoresOlderTimestampRollback() public {
+        vm.warp(1_700_000_000);
+
+        Origin memory origin = Origin({srcEid: HUB_EID, sender: HUB_PEER, nonce: 1});
+
+        uint256 t1 = block.timestamp;
+        bytes memory payload1 = abi.encode(int256(2e18), t1, string("TEST"));
+        vm.prank(LZ_ENDPOINT);
+        oracle.lzReceive(origin, bytes32(0), payload1, address(0), "");
+
+        assertEq(oracle.creatorPriceUSD(), 2e18);
+        assertEq(oracle.creatorPriceTimestamp(), t1);
+
+        // Attempt to roll back with an older timestamp; should be ignored.
+        uint256 t0 = t1 - 1;
+        bytes memory payload0 = abi.encode(int256(3e18), t0, string("TEST"));
+        vm.prank(LZ_ENDPOINT);
+        oracle.lzReceive(origin, bytes32(0), payload0, address(0), "");
+
+        assertEq(oracle.creatorPriceUSD(), 2e18, "older update should not overwrite price");
+        assertEq(oracle.creatorPriceTimestamp(), t1, "older update should not overwrite timestamp");
     }
 
     function test_LzReceive_ClampsFutureTimestampToNow() public {

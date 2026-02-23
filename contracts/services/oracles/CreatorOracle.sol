@@ -941,6 +941,15 @@ contract CreatorOracle is OApp {
             // USD per CREATOR = (USD per ETH) / (CREATOR per ETH)
             int256 creatorUSD = int256(Math.mulDiv(ethUSD18, 1e18, creatorPerEth));
 
+            // Sanity: reject updates that move price more than MAX_PRICE_DEVIATION from the stored value.
+            // Auto-update is called inside a swap-path try/catch; return instead of reverting.
+            if (creatorPriceUSD > 0) {
+                uint256 oldP = uint256(creatorPriceUSD);
+                uint256 newP = creatorUSD > 0 ? uint256(creatorUSD) : 0;
+                uint256 deviation = oldP > newP ? ((oldP - newP) * 1e18) / oldP : ((newP - oldP) * 1e18) / oldP;
+                if (deviation > MAX_PRICE_DEVIATION) return;
+            }
+
             creatorPriceUSD = creatorUSD;
             creatorPriceTimestamp = block.timestamp;
 
@@ -1039,6 +1048,8 @@ contract CreatorOracle is OApp {
     {
         if (creatorPriceUSD <= 0) revert InvalidPrice();
         if (!isPriceUpdater[msg.sender] && msg.sender != owner()) revert Unauthorized();
+        require(dstEids.length > 0, "No destinations");
+        require(msg.value % dstEids.length == 0, "FeeNotDivisible");
 
         receipts = new MessagingReceipt[](dstEids.length);
         bytes memory payload = abi.encode(creatorPriceUSD, creatorPriceTimestamp, creatorSymbol);
@@ -1050,6 +1061,13 @@ contract CreatorOracle is OApp {
         }
 
         emit CreatorPriceBroadcast(dstEids, creatorPriceUSD, creatorPriceTimestamp);
+    }
+
+    /// @dev Override LayerZero default behavior to allow multi-destination broadcasts in one transaction.
+    ///      The contract spends from its balance (funded by `msg.value`) across multiple `_lzSend` calls.
+    function _payNative(uint256 _nativeFee) internal override returns (uint256 nativeFee) {
+        if (address(this).balance < _nativeFee) revert NotEnoughNative(msg.value);
+        return _nativeFee;
     }
 
     /**
@@ -1067,9 +1085,15 @@ contract CreatorOracle is OApp {
 
         if (price <= 0) revert InvalidPrice();
 
-        creatorPriceUSD = price;
         // Clamp to prevent freshness spoofing and future-timestamp underflow in staleness checks.
         uint256 safeTimestamp = timestamp > block.timestamp ? block.timestamp : timestamp;
+
+        // Defense-in-depth: ignore out-of-order updates so delayed/replayed packets cannot roll back freshness.
+        if (creatorPriceTimestamp != 0 && safeTimestamp < creatorPriceTimestamp) {
+            return;
+        }
+
+        creatorPriceUSD = price;
         creatorPriceTimestamp = safeTimestamp;
 
         // Update symbol if different (for multi-creator support)
