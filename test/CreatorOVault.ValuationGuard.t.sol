@@ -5,6 +5,9 @@ import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import "../contracts/vault/CreatorOVault.sol";
+import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVaultAdminModule.sol";
+import {CreatorOVaultCoreModule} from "../contracts/vault/modules/CreatorOVaultCoreModule.sol";
+import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorOVaultStrategiesModule.sol";
 import "../contracts/interfaces/IStrategy.sol";
 import "../contracts/interfaces/IStrategyValuation.sol";
 
@@ -171,11 +174,20 @@ contract CreatorOVaultValuationGuardTest is Test {
     CreatorOVault internal vault;
     MockValuationStrategy internal strategy;
 
+    address internal coreModule;
+    address internal strategiesModule;
+    address internal adminModule;
+
     address internal alice = makeAddr("alice");
 
     function setUp() public {
         creatorCoin = new MockCreatorCoinForValuationGuard();
         vault = new CreatorOVault(address(creatorCoin), address(this), "Creator OVault", "ovCR8R");
+
+        coreModule = address(new CreatorOVaultCoreModule());
+        strategiesModule = address(new CreatorOVaultStrategiesModule());
+        adminModule = address(new CreatorOVaultAdminModule());
+        vault.setModulesOnce(coreModule, strategiesModule, adminModule);
 
         strategy = new MockValuationStrategy(address(creatorCoin));
         vault.addStrategy(address(strategy), 10_000, true);
@@ -223,6 +235,7 @@ contract CreatorOVaultValuationGuardTest is Test {
 
     function test_deposit_reverts_whenStrategyGetTotalAssetsReverts_evenIfValuationReady() external {
         CreatorOVault freshVault = new CreatorOVault(address(creatorCoin), address(this), "Creator OVault 2", "ovCR8R2");
+        freshVault.setModulesOnce(coreModule, strategiesModule, adminModule);
         MockValuationReadyButAssetsRevertStrategy bad =
             new MockValuationReadyButAssetsRevertStrategy(address(creatorCoin));
         freshVault.addStrategy(address(bad), 10_000, true);
@@ -247,6 +260,7 @@ contract CreatorOVaultValuationGuardTest is Test {
 
     function test_deposit_reverts_whenStrategyMissingIStrategyValuation() external {
         CreatorOVault freshVault = new CreatorOVault(address(creatorCoin), address(this), "Creator OVault 3", "ovCR8R3");
+        freshVault.setModulesOnce(coreModule, strategiesModule, adminModule);
         MockNoValuationInterfaceStrategy bad = new MockNoValuationInterfaceStrategy(address(creatorCoin));
         freshVault.addStrategy(address(bad), 10_000, true);
 

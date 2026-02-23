@@ -7,6 +7,9 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {CreatorOVault} from "../contracts/vault/CreatorOVault.sol";
+import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVaultAdminModule.sol";
+import {CreatorOVaultCoreModule} from "../contracts/vault/modules/CreatorOVaultCoreModule.sol";
+import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorOVaultStrategiesModule.sol";
 
 contract MockCreatorCoinCooldown is ERC20 {
     constructor() ERC20("Creator Coin", "CR8R") {}
@@ -20,9 +23,20 @@ contract CreatorOVaultWithdrawDelayTransferGriefingTest is Test {
     address internal attacker = makeAddr("attacker");
     address internal victim = makeAddr("victim");
 
+    address internal coreModule;
+    address internal strategiesModule;
+    address internal adminModule;
+
+    function setUp() public {
+        coreModule = address(new CreatorOVaultCoreModule());
+        strategiesModule = address(new CreatorOVaultStrategiesModule());
+        adminModule = address(new CreatorOVaultAdminModule());
+    }
+
     function _deploy() internal returns (MockCreatorCoinCooldown coin, CreatorOVault vault) {
         coin = new MockCreatorCoinCooldown();
         vault = new CreatorOVault(address(coin), address(this), "Creator OVault", "ovTEST");
+        vault.setModulesOnce(coreModule, strategiesModule, adminModule);
     }
 
     function _approve(address who, IERC20 token, address spender) internal {

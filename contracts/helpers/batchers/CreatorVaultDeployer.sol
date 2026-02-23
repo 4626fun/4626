@@ -315,6 +315,11 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     address public immutable uniswapRouter;
     address public immutable ajnaFactory;
 
+    // CreatorOVault delegatecall modules (shared logic contracts).
+    address public immutable vaultCoreModule;
+    address public immutable vaultStrategiesModule;
+    address public immutable vaultAdminModule;
+
     /// @notice Pending auction allocations keyed by creator/owner/version salt.
     mapping(bytes32 => PendingAuction) public pendingAuctions;
     /// @notice Split phase-1 state keyed by creator/owner/version salt.
@@ -423,7 +428,10 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         address _usdc,
         address _uniswapV3Factory,
         address _uniswapRouter,
-        address _ajnaFactory
+        address _ajnaFactory,
+        address _vaultCoreModule,
+        address _vaultStrategiesModule,
+        address _vaultAdminModule
     ) {
         if (_registry == address(0) || _bytecodeStore == address(0) || _create2Deployer == address(0)) revert ZeroAddress();
         if (_protocolTreasury == address(0) || _poolManager == address(0) || _taxHook == address(0)) {
@@ -434,6 +442,9 @@ contract CreatorVaultDeployer is ReentrancyGuard {
             _usdc == address(0) || _uniswapV3Factory == address(0) || _uniswapRouter == address(0)
                 || _ajnaFactory == address(0)
         ) {
+            revert ZeroAddress();
+        }
+        if (_vaultCoreModule == address(0) || _vaultStrategiesModule == address(0) || _vaultAdminModule == address(0)) {
             revert ZeroAddress();
         }
 
@@ -451,6 +462,10 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         uniswapV3Factory = _uniswapV3Factory;
         uniswapRouter = _uniswapRouter;
         ajnaFactory = _ajnaFactory;
+
+        vaultCoreModule = _vaultCoreModule;
+        vaultStrategiesModule = _vaultStrategiesModule;
+        vaultAdminModule = _vaultAdminModule;
     }
 
     // ================================
@@ -534,6 +549,7 @@ contract CreatorVaultDeployer is ReentrancyGuard {
 
         bytes memory vaultArgs = abi.encode(params.creatorToken, tempOwner, params.vaultName, params.vaultSymbol);
         out.vault = create2Deployer.deploy(vaultSalt, codeIds.vault, vaultArgs);
+        ICreatorOVault(out.vault).setModulesOnce(vaultCoreModule, vaultStrategiesModule, vaultAdminModule);
 
         bytes memory wrapperArgs = abi.encode(params.creatorToken, out.vault, tempOwner);
         out.wrapper = create2Deployer.deploy(wrapperSalt, codeIds.wrapper, wrapperArgs);

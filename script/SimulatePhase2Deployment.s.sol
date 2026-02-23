@@ -6,6 +6,9 @@ import "forge-std/Script.sol";
 import {Create2Deployer} from "../contracts/factories/Create2Deployer.sol";
 import {CreatorOVault} from "../contracts/vault/CreatorOVault.sol";
 import {CreatorOVaultWrapper} from "../contracts/vault/CreatorOVaultWrapper.sol";
+import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVaultAdminModule.sol";
+import {CreatorOVaultCoreModule} from "../contracts/vault/modules/CreatorOVaultCoreModule.sol";
+import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorOVaultStrategiesModule.sol";
 import {CreatorShareOFT} from "../contracts/services/messaging/CreatorShareOFT.sol";
 import {CreatorGaugeController} from "../contracts/governance/CreatorGaugeController.sol";
 import {CCALaunchStrategy} from "../contracts/vault/strategies/CCALaunchStrategy.sol";
@@ -109,6 +112,15 @@ contract SimulatePhase2Deployment is Script {
         // Deploy contracts in the same order as the Phase 2 UI
         address deployedVault = d.deploy(saltVault, initVault);
         require(deployedVault == predictedVault, "vault addr mismatch");
+
+        // CreatorOVault now uses delegatecall modules for EIP-170 runtime size compliance.
+        // Deploy modules (one-time per chain in production) and set once on the vault.
+        CreatorOVaultCoreModule coreModule = new CreatorOVaultCoreModule();
+        CreatorOVaultStrategiesModule strategiesModule = new CreatorOVaultStrategiesModule();
+        CreatorOVaultAdminModule adminModule = new CreatorOVaultAdminModule();
+        CreatorOVault(payable(predictedVault)).setModulesOnce(
+            address(coreModule), address(strategiesModule), address(adminModule)
+        );
 
         address deployedWrapper = d.deploy(saltWrapper, initWrapper);
         require(deployedWrapper == predictedWrapper, "wrapper addr mismatch");

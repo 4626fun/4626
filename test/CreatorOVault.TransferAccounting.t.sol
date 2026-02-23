@@ -5,8 +5,27 @@ import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import "../contracts/vault/CreatorOVault.sol";
+import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVaultAdminModule.sol";
+import {CreatorOVaultCoreModule} from "../contracts/vault/modules/CreatorOVaultCoreModule.sol";
+import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorOVaultStrategiesModule.sol";
 import "../contracts/interfaces/IStrategy.sol";
 import "../contracts/interfaces/IStrategyValuation.sol";
+
+abstract contract CreatorOVaultModulesTestBase is Test {
+    address internal coreModule;
+    address internal strategiesModule;
+    address internal adminModule;
+
+    function setUp() public virtual {
+        coreModule = address(new CreatorOVaultCoreModule());
+        strategiesModule = address(new CreatorOVaultStrategiesModule());
+        adminModule = address(new CreatorOVaultAdminModule());
+    }
+
+    function _setVaultModules(CreatorOVault v) internal {
+        v.setModulesOnce(coreModule, strategiesModule, adminModule);
+    }
+}
 
 contract MockCreatorCoinStandard is ERC20 {
     constructor() ERC20("Creator Coin", "CR8R") {}
@@ -54,13 +73,14 @@ contract CreatorOVaultDebtHarness is CreatorOVault {
     }
 }
 
-contract CreatorOVaultTransferAccountingTest is Test {
+contract CreatorOVaultTransferAccountingTest is CreatorOVaultModulesTestBase {
     address internal alice = makeAddr("alice");
     address internal donor = makeAddr("donor");
 
     function test_deposit_reverts_when_feeOnTransfer_token_receivedLessThanRequested() public {
         MockCreatorCoinFeeOnTransfer creatorCoin = new MockCreatorCoinFeeOnTransfer();
         CreatorOVault vault = new CreatorOVault(address(creatorCoin), address(this), "Creator OVault", "ovFEE");
+        _setVaultModules(vault);
 
         uint256 amount = vault.MINIMUM_FIRST_DEPOSIT(); // divisible by 10
         creatorCoin.mint(alice, amount);
@@ -82,6 +102,7 @@ contract CreatorOVaultTransferAccountingTest is Test {
     function test_mint_reverts_when_feeOnTransfer_token_receivedLessThanRequested() public {
         MockCreatorCoinFeeOnTransfer creatorCoin = new MockCreatorCoinFeeOnTransfer();
         CreatorOVault vault = new CreatorOVault(address(creatorCoin), address(this), "Creator OVault", "ovFEE");
+        _setVaultModules(vault);
 
         uint256 assets = vault.MINIMUM_FIRST_DEPOSIT(); // divisible by 10
         // For OZ ERC4626 with _decimalsOffset() = 3 and supply=0/totalAssets=0, this corresponds to `assets`.
@@ -105,6 +126,7 @@ contract CreatorOVaultTransferAccountingTest is Test {
     function test_injectCapital_reverts_when_feeOnTransfer_token_receivedLessThanRequested() public {
         MockCreatorCoinFeeOnTransfer creatorCoin = new MockCreatorCoinFeeOnTransfer();
         CreatorOVault vault = new CreatorOVault(address(creatorCoin), address(this), "Creator OVault", "ovFEE");
+        _setVaultModules(vault);
 
         uint256 amount = 1_000e18;
         creatorCoin.mint(donor, amount);
@@ -125,6 +147,7 @@ contract CreatorOVaultTransferAccountingTest is Test {
     function test_buyDebt_reverts_when_feeOnTransfer_token_receivedLessThanRequested() public {
         MockCreatorCoinFeeOnTransfer creatorCoin = new MockCreatorCoinFeeOnTransfer();
         CreatorOVaultDebtHarness vault = new CreatorOVaultDebtHarness(address(creatorCoin), address(this));
+        _setVaultModules(vault);
 
         address strategy = makeAddr("strategy");
         uint256 debt = 10_000e18;
@@ -149,6 +172,7 @@ contract CreatorOVaultTransferAccountingTest is Test {
     function test_coinBalance_tracks_actual_balance_for_standard_token_success_paths() public {
         MockCreatorCoinStandard creatorCoin = new MockCreatorCoinStandard();
         CreatorOVault vault = new CreatorOVault(address(creatorCoin), address(this), "Creator OVault", "ovCR8R");
+        _setVaultModules(vault);
 
         uint256 amount = vault.MINIMUM_FIRST_DEPOSIT();
         creatorCoin.mint(alice, amount + 100e18);
@@ -244,7 +268,7 @@ contract MockRevertableStrategy is IStrategy, IStrategyValuation {
     function rebalance() external override {}
 }
 
-contract CreatorOVaultStrategyResilienceTest is Test {
+contract CreatorOVaultStrategyResilienceTest is CreatorOVaultModulesTestBase {
     MockCreatorCoinStandard internal creatorCoin;
     CreatorOVault internal vault;
     MockRevertableStrategy internal revertingStrategy;
@@ -252,9 +276,12 @@ contract CreatorOVaultStrategyResilienceTest is Test {
 
     address internal alice = makeAddr("alice");
 
-    function setUp() public {
+    function setUp() public override {
+        super.setUp();
+
         creatorCoin = new MockCreatorCoinStandard();
         vault = new CreatorOVault(address(creatorCoin), address(this), "Creator OVault", "ovCR8R");
+        _setVaultModules(vault);
         revertingStrategy = new MockRevertableStrategy(address(creatorCoin));
         healthyStrategy = new MockRevertableStrategy(address(creatorCoin));
 
