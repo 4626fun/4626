@@ -2,8 +2,8 @@
   "name": "bigint-buffer",
   "version": "1.1.6",
   "description": "bigint to buffer conversion (pure JS fork; removes native bindings)",
-  "main": "dist/node.js",
-  "types": "dist/index.d.ts",
+  "main": "index.js",
+  "types": "index.d.ts",
   "license": "Apache-2.0",
   "engines": {
     "node": ">=10.0.0"
