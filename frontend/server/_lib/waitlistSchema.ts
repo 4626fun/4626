@@ -25,6 +25,8 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
         has_creator_coin BOOLEAN NULL,
         farcaster_fid BIGINT NULL,
         contact_preference TEXT NULL,
+        border_tier INT NOT NULL DEFAULT 0,
+        x_follow_verified_at TIMESTAMPTZ NULL,
         app_access_status TEXT NOT NULL DEFAULT 'pending',
         app_access_decision_note TEXT NULL,
         app_access_decided_at TIMESTAMPTZ NULL,
@@ -59,6 +61,8 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS csw_address TEXT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS primary_smart_wallet TEXT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS primary_embedded_eoa TEXT NULL;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS border_tier INT NOT NULL DEFAULT 0;`
+      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS x_follow_verified_at TIMESTAMPTZ NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS display_name TEXT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS bio TEXT NULL;`
       await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS website TEXT NULL;`

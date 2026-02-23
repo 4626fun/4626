@@ -354,7 +354,7 @@ export const VerifyStep = memo(function VerifyStep({
           >
             <span className="relative flex items-center gap-3">
               <img src={BASE_SQUARE_WHITE} alt="" className="w-4 h-4" aria-hidden="true" />
-              Sign in with wallet
+              Sign up
             </span>
             <ChevronRight className="relative w-4 h-4 opacity-80" />
           </button>

@@ -264,6 +264,10 @@ function buildSyntheticEmail(primaryWallet: string | null): string {
 function formatPrivyConnectError(code: string): string {
   const c = code.trim().toLowerCase()
   if (!c) return 'Wallet connect failed.'
+  // Privy OAuth linkage failure (e.g. X already linked to another Privy user).
+  if (c.includes('already been linked to another user') || c.includes('linked to another user')) {
+    return 'Authentication failed: This account has already been linked to another user.'
+  }
   if (c.includes('user_exited') || c.includes('user_rejected')) return 'Connection cancelled.'
   if (c.includes('client_request_timeout') || c.includes('timeout')) return 'Wallet connection timed out. Try again.'
   if (c.includes('disallowed_login_method')) {
@@ -559,6 +563,9 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     cswProofBusy,
     cswProofError,
   } = waitlist
+
+  const borderTier = waitlistPosition?.borderTier ?? 0
+  const hasUpgradedBorder = borderTier >= 1
   const siwfFid = useMemo(() => {
     const fid = typeof farcasterAuth.fid === 'number' ? farcasterAuth.fid : null
     return fid && Number.isFinite(fid) && fid > 0 ? fid : null
@@ -581,7 +588,12 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       finishPrivyVerify()
     },
     onError: (error: unknown) => {
-      const code = String(error || '')
+      const code =
+        error instanceof Error
+          ? error.message
+          : typeof (error as any)?.message === 'string'
+            ? String((error as any).message)
+            : String(error ?? '')
       const msg = formatPrivyConnectError(code)
       setPrivyVerifyError(msg)
     },
@@ -591,7 +603,12 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       finishPrivyVerify()
     },
     onError: (error: unknown) => {
-      const code = String(error || '')
+      const code =
+        error instanceof Error
+          ? error.message
+          : typeof (error as any)?.message === 'string'
+            ? String((error as any).message)
+            : String(error ?? '')
       const msg = formatPrivyConnectError(code)
       setPrivyVerifyError(msg)
     },
@@ -824,7 +841,8 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
             // ignore
           }
         }
-        await privyLogin({ loginMethods: ['wallet'] })
+        // Allow users who started with email/X to retry in the same flow.
+        await privyLogin({ loginMethods: ['wallet', 'email', 'twitter'] })
       } catch (e: any) {
         const msg = formatPrivyConnectError(e?.message ? String(e.message) : String(e ?? ''))
         setPrivyVerifyError(msg)
@@ -1186,6 +1204,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
           if (res.ok && data) {
             patchWaitlist({
               waitlistPosition: {
+                borderTier: typeof data?.borderTier === 'number' ? data.borderTier : 0,
                 points: {
                   total: typeof data?.points?.total === 'number' ? data.points.total : 0,
                   invite: typeof data?.points?.invite === 'number' ? data.points.invite : 0,
@@ -1839,10 +1858,16 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
 
   const cardWrapClass =
     variant === 'page'
-      ? 'relative overflow-hidden rounded-3xl border border-white/[0.06] bg-[#0d0d0f]/95 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_24px_80px_-24px_rgba(0,0,0,0.6)] p-6 sm:p-8'
+      ? `relative overflow-hidden rounded-3xl border ${
+          hasUpgradedBorder ? 'border-[#0052FF]/25' : 'border-white/[0.06]'
+        } bg-[#0d0d0f]/95 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_24px_80px_-24px_rgba(0,0,0,0.6)] p-6 sm:p-8`
       : variant === 'modal'
-        ? 'relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0d0d0f]/95 backdrop-blur-xl shadow-[0_20px_80px_-30px_rgba(0,0,0,0.75)] p-5 sm:p-6'
-        : 'relative overflow-hidden rounded-3xl border border-white/[0.06] bg-[#0d0d0f]/95 backdrop-blur-xl p-6 sm:p-8'
+        ? `relative overflow-hidden rounded-3xl border ${
+            hasUpgradedBorder ? 'border-[#0052FF]/28' : 'border-white/[0.08]'
+          } bg-[#0d0d0f]/95 backdrop-blur-xl shadow-[0_20px_80px_-30px_rgba(0,0,0,0.75)] p-5 sm:p-6`
+        : `relative overflow-hidden rounded-3xl border ${
+            hasUpgradedBorder ? 'border-[#0052FF]/25' : 'border-white/[0.06]'
+          } bg-[#0d0d0f]/95 backdrop-blur-xl p-6 sm:p-8`
 
   const progressSteps = [
     { key: 'connect', label: 'Connect', done: step === 'done' || Boolean(verifiedWallet) || Boolean(siwfFid) },
@@ -1870,7 +1895,12 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         )}
 
         <motion.div className={cardWrapClass}>
-          <div className="pointer-events-none absolute inset-0 rounded-3xl ring-1 ring-inset ring-white/4" />
+          <div
+            className={[
+              'pointer-events-none absolute inset-0 rounded-3xl ring-1 ring-inset',
+              hasUpgradedBorder ? 'ring-[#0052FF]/20' : 'ring-white/4',
+            ].join(' ')}
+          />
           <div className="relative z-10">
           <div className="mb-5">
             <div className="grid grid-cols-4 gap-2">
@@ -1925,8 +1955,8 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     canSubmit={canSubmit}
                     simpleVerifiedMode
                     submitError={submitError}
-                    onPrivyContinue={openPrivyLogin}
-                    onPrivyFallback={openInAppPrivyLogin}
+                    onPrivyContinue={openInAppPrivyLogin}
+                    onPrivyFallback={openPrivyLogin}
                     onSubmit={submitWaitlist}
                   />
                 </motion.div>
@@ -1941,6 +1971,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                   transition={{ duration: BASE_MOTION_MS + 0.06, ease: BASE_EASE }}
                 >
                   <DoneStep
+                    doneEmail={doneEmail}
                     displayEmail={displayEmail}
                     isBypassAdmin={isBypassAdmin}
                     waitlistPosition={waitlistPosition}
@@ -1954,6 +1985,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     smartWalletAddress={effectiveCswAddress}
                     ownerAddress={connectedAddress || (siweAuthAddress ? siweAuthAddress.toLowerCase() : null)}
                     onCoinCreated={handleCoinCreated}
+                    onRefreshPosition={doneEmail ? () => refreshPosition(doneEmail) : undefined}
                   />
                 </motion.div>
               ) : null}
