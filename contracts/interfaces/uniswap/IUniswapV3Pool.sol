@@ -97,13 +97,9 @@ interface IUniswapV3Pool {
     /// @param data Any data that should be passed through to the callback
     /// @return amount0 The amount of token0 that was paid to mint the given amount of liquidity
     /// @return amount1 The amount of token1 that was paid to mint the given amount of liquidity
-    function mint(
-        address recipient,
-        int24 tickLower,
-        int24 tickUpper,
-        uint128 amount,
-        bytes calldata data
-    ) external returns (uint256 amount0, uint256 amount1);
+    function mint(address recipient, int24 tickLower, int24 tickUpper, uint128 amount, bytes calldata data)
+        external
+        returns (uint256 amount0, uint256 amount1);
 
     /// @notice Burn liquidity from the sender and account tokens owed for the liquidity to the position
     /// @param tickLower The lower tick of the position for which to burn liquidity
@@ -111,11 +107,7 @@ interface IUniswapV3Pool {
     /// @param amount How much liquidity to burn
     /// @return amount0 The amount of token0 sent to the recipient
     /// @return amount1 The amount of token1 sent to the recipient
-    function burn(
-        int24 tickLower,
-        int24 tickUpper,
-        uint128 amount
-    ) external returns (uint256 amount0, uint256 amount1);
+    function burn(int24 tickLower, int24 tickUpper, uint128 amount) external returns (uint256 amount0, uint256 amount1);
 
     /// @notice Swap token0 for token1, or token1 for token0
     /// @param recipient The address to receive the output of the swap

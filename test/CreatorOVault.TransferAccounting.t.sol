@@ -5,6 +5,8 @@ import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import "../contracts/vault/CreatorOVault.sol";
+import "../contracts/interfaces/IStrategy.sol";
+import "../contracts/interfaces/IStrategyValuation.sol";
 
 contract MockCreatorCoinStandard is ERC20 {
     constructor() ERC20("Creator Coin", "CR8R") {}
@@ -68,9 +70,7 @@ contract CreatorOVaultTransferAccountingTest is Test {
 
         uint256 expectedReceived = amount - (amount / 10);
         vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(CreatorOVault.TransferAmountMismatch.selector, amount, expectedReceived)
-        );
+        vm.expectRevert(abi.encodeWithSelector(CreatorOVault.TransferAmountMismatch.selector, amount, expectedReceived));
         vault.deposit(amount, alice);
 
         assertEq(vault.totalSupply(), 0);
@@ -93,9 +93,7 @@ contract CreatorOVaultTransferAccountingTest is Test {
 
         uint256 expectedReceived = assets - (assets / 10);
         vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(CreatorOVault.TransferAmountMismatch.selector, assets, expectedReceived)
-        );
+        vm.expectRevert(abi.encodeWithSelector(CreatorOVault.TransferAmountMismatch.selector, assets, expectedReceived));
         vault.mint(shares, alice);
 
         assertEq(vault.totalSupply(), 0);
@@ -116,9 +114,7 @@ contract CreatorOVaultTransferAccountingTest is Test {
 
         uint256 expectedReceived = amount - (amount / 10);
         vm.prank(donor);
-        vm.expectRevert(
-            abi.encodeWithSelector(CreatorOVault.TransferAmountMismatch.selector, amount, expectedReceived)
-        );
+        vm.expectRevert(abi.encodeWithSelector(CreatorOVault.TransferAmountMismatch.selector, amount, expectedReceived));
         vault.injectCapital(amount);
 
         assertEq(creatorCoin.balanceOf(address(vault)), 0);
@@ -128,8 +124,7 @@ contract CreatorOVaultTransferAccountingTest is Test {
 
     function test_buyDebt_reverts_when_feeOnTransfer_token_receivedLessThanRequested() public {
         MockCreatorCoinFeeOnTransfer creatorCoin = new MockCreatorCoinFeeOnTransfer();
-        CreatorOVaultDebtHarness vault =
-            new CreatorOVaultDebtHarness(address(creatorCoin), address(this));
+        CreatorOVaultDebtHarness vault = new CreatorOVaultDebtHarness(address(creatorCoin), address(this));
 
         address strategy = makeAddr("strategy");
         uint256 debt = 10_000e18;
@@ -143,9 +138,7 @@ contract CreatorOVaultTransferAccountingTest is Test {
 
         uint256 expectedReceived = debt - (debt / 10);
         vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(CreatorOVault.TransferAmountMismatch.selector, debt, expectedReceived)
-        );
+        vm.expectRevert(abi.encodeWithSelector(CreatorOVault.TransferAmountMismatch.selector, debt, expectedReceived));
         vault.buyDebt(strategy, debt);
 
         assertEq(creatorCoin.balanceOf(address(vault)), 0);
@@ -179,6 +172,164 @@ contract CreatorOVaultTransferAccountingTest is Test {
         vm.prank(alice);
         vault.withdraw(50e18, alice, alice);
         assertEq(vault.coinBalance(), creatorCoin.balanceOf(address(vault)));
+    }
+}
+
+contract MockRevertableStrategy is IStrategy, IStrategyValuation {
+    IERC20 public immutable TOKEN;
+    bool public active = true;
+    bool public revertOnGetTotalAssets;
+    bool public revertOnWithdraw;
+    uint256 public trackedAssets;
+    uint256 public withdrawCalls;
+
+    constructor(address token_) {
+        TOKEN = IERC20(token_);
+    }
+
+    function setRevertOnGetTotalAssets(bool value) external {
+        revertOnGetTotalAssets = value;
+    }
+
+    function setRevertOnWithdraw(bool value) external {
+        revertOnWithdraw = value;
+    }
+
+    function isValuationReady() external view override returns (bool) {
+        // Match the vault's strict guard: if `getTotalAssets()` would revert, valuation is not ready.
+        return !revertOnGetTotalAssets;
+    }
+
+    function isActive() external view override returns (bool) {
+        return active;
+    }
+
+    function asset() external view override returns (address) {
+        return address(TOKEN);
+    }
+
+    function getTotalAssets() external view override returns (uint256) {
+        if (revertOnGetTotalAssets) revert("GET_TOTAL_ASSETS_REVERT");
+        return trackedAssets;
+    }
+
+    function deposit(uint256 amount) external override returns (uint256 deposited) {
+        if (amount == 0) return 0;
+        require(TOKEN.transferFrom(msg.sender, address(this), amount), "transferFrom failed");
+        trackedAssets += amount;
+        return amount;
+    }
+
+    function withdraw(uint256 amount) external override returns (uint256 withdrawn) {
+        if (revertOnWithdraw) revert("WITHDRAW_REVERT");
+        withdrawCalls += 1;
+        withdrawn = amount > trackedAssets ? trackedAssets : amount;
+        if (withdrawn == 0) return 0;
+        trackedAssets -= withdrawn;
+        require(TOKEN.transfer(msg.sender, withdrawn), "transfer failed");
+    }
+
+    function emergencyWithdraw() external override returns (uint256 withdrawn) {
+        withdrawn = trackedAssets;
+        trackedAssets = 0;
+        if (withdrawn > 0) {
+            require(TOKEN.transfer(msg.sender, withdrawn), "transfer failed");
+        }
+    }
+
+    function harvest() external pure override returns (uint256 profit) {
+        return 0;
+    }
+
+    function rebalance() external override {}
+}
+
+contract CreatorOVaultStrategyResilienceTest is Test {
+    MockCreatorCoinStandard internal creatorCoin;
+    CreatorOVault internal vault;
+    MockRevertableStrategy internal revertingStrategy;
+    MockRevertableStrategy internal healthyStrategy;
+
+    address internal alice = makeAddr("alice");
+
+    function setUp() public {
+        creatorCoin = new MockCreatorCoinStandard();
+        vault = new CreatorOVault(address(creatorCoin), address(this), "Creator OVault", "ovCR8R");
+        revertingStrategy = new MockRevertableStrategy(address(creatorCoin));
+        healthyStrategy = new MockRevertableStrategy(address(creatorCoin));
+
+        vault.addStrategy(address(revertingStrategy), 1, true);
+        vault.addStrategy(address(healthyStrategy), 9_999, true);
+        vault.setFlashLoanProtection(0, type(uint256).max, 1);
+
+        uint256 depositAmount = vault.MINIMUM_FIRST_DEPOSIT() * 2;
+        creatorCoin.mint(alice, depositAmount + 500_000e18);
+        vm.prank(alice);
+        creatorCoin.approve(address(vault), type(uint256).max);
+        vm.prank(alice);
+        vault.deposit(depositAmount, alice);
+
+        vault.forceDeployToStrategies();
+    }
+
+    function test_totalAssets_skipsRevertingStrategyAndCountsHealthy() external {
+        revertingStrategy.setRevertOnGetTotalAssets(true);
+
+        uint256 expected = creatorCoin.balanceOf(address(vault)) + healthyStrategy.trackedAssets()
+            + vault.strategyDebt(address(revertingStrategy));
+        assertEq(vault.totalAssets(), expected);
+    }
+
+    function test_previewDeposit_and_previewWithdraw_doNotRevertWhenStrategyReverts() external {
+        revertingStrategy.setRevertOnGetTotalAssets(true);
+
+        uint256 depositPreview = vault.previewDeposit(1_000e18);
+        assertGt(depositPreview, 0);
+
+        uint256 withdrawPreview = vault.previewWithdraw(5_000e18);
+        assertGt(withdrawPreview, 0);
+    }
+
+    function test_deposit_reverts_whenStrategyReverts() external {
+        revertingStrategy.setRevertOnGetTotalAssets(true);
+
+        assertEq(vault.maxDeposit(alice), 0);
+        assertEq(vault.maxMint(alice), 0);
+
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(CreatorOVault.StrategyValuationNotReady.selector, address(revertingStrategy))
+        );
+        vault.deposit(10_000e18, alice);
+    }
+
+    function test_withdraw_usesHealthyStrategyEvenIfFirstQueueStrategyReverts() external {
+        revertingStrategy.setRevertOnGetTotalAssets(true);
+
+        uint256 assetsToWithdraw = 50_000e18;
+        uint256 balanceBefore = creatorCoin.balanceOf(alice);
+
+        vm.prank(alice);
+        uint256 sharesSpent = vault.withdraw(assetsToWithdraw, alice, alice);
+
+        assertGt(sharesSpent, 0);
+        assertEq(creatorCoin.balanceOf(alice), balanceBefore + assetsToWithdraw);
+        assertGt(revertingStrategy.withdrawCalls(), 0);
+        assertGt(healthyStrategy.withdrawCalls(), 0);
+    }
+
+    function test_withdraw_bestEffortContinuesWhenStrategyWithdrawReverts() external {
+        revertingStrategy.setRevertOnWithdraw(true);
+
+        uint256 assetsToWithdraw = 50_000e18;
+        uint256 balanceBefore = creatorCoin.balanceOf(alice);
+
+        vm.prank(alice);
+        uint256 sharesSpent = vault.withdraw(assetsToWithdraw, alice, alice);
+
+        assertGt(sharesSpent, 0);
+        assertEq(creatorCoin.balanceOf(alice), balanceBefore + assetsToWithdraw);
+        assertGt(healthyStrategy.withdrawCalls(), 0);
     }
 }
 

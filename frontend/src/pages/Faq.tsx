@@ -165,7 +165,7 @@ const FAQ_SECTIONS: FaqSection[] = [
         answer: (
           <>
             <p>
-              Use the <Link to="/dashboard" className="text-brand-accent hover:text-brand-400 underline underline-offset-4">Dashboard</Link> for discovery,
+              Use the <Link to="/explore/creators" className="text-brand-accent hover:text-brand-400 underline underline-offset-4">Explore</Link> for discovery,
               and each <span className="mono">/vault/:address</span> page for details.
             </p>
             <p>
@@ -634,6 +634,26 @@ export function Faq() {
   )
 
   const visibleItemIds = useMemo(() => sections.flatMap((s) => s.items.map((i) => i.id)), [sections])
+  const effectiveActiveSection = useMemo(() => {
+    if (sections.length === 0) return activeSection
+    if (sections.some((s) => s.id === activeSection)) return activeSection
+    return sections[0]!.id
+  }, [activeSection, sections])
+
+  function applyQuery(nextQuery: string) {
+    setQuery(nextQuery)
+    const q = nextQuery.trim().toLowerCase()
+    if (!q) return
+    // Auto-expand filtered results to make search feel "instant answer" instead of "find then click".
+    const next: Record<string, boolean> = {}
+    for (const section of FAQ_SECTIONS) {
+      for (const item of section.items) {
+        const haystack = `${item.question} ${item.search}`.toLowerCase()
+        if (haystack.includes(q)) next[item.id] = true
+      }
+    }
+    setOpen(next)
+  }
 
   function expandAllVisible() {
     setOpen((prev) => {
@@ -665,14 +685,6 @@ export function Faq() {
   }, [])
 
   useEffect(() => {
-    // Auto-expand filtered results to make search feel "instant answer" instead of "find then click".
-    if (!normalizedQuery) return
-    const next: Record<string, boolean> = {}
-    for (const id of visibleItemIds) next[id] = true
-    setOpen(next)
-  }, [normalizedQuery, visibleItemIds])
-
-  useEffect(() => {
     // Update active section for the desktop TOC.
     const ids = sections.map((s) => `faq-section-${s.id}`)
     const els = ids
@@ -697,13 +709,6 @@ export function Faq() {
     for (const el of els) obs.observe(el)
     return () => obs.disconnect()
   }, [sections])
-
-  useEffect(() => {
-    // If filtering changes which sections exist, keep the highlighted section valid.
-    if (sections.length === 0) return
-    if (sections.some((s) => s.id === activeSection)) return
-    setActiveSection(sections[0].id)
-  }, [sections, activeSection])
 
   return (
     <div className="relative">
@@ -761,14 +766,14 @@ export function Faq() {
                     <input
                       ref={searchRef}
                       value={query}
-                      onChange={(e) => setQuery(e.target.value)}
+                      onChange={(e) => applyQuery(e.target.value)}
                       placeholder="Try: CCA, withdraw, oracle, 5M…"
                       className="w-full bg-transparent outline-none text-sm text-zinc-200 placeholder:text-zinc-700"
                     />
                     {normalizedQuery ? (
                       <button
                         type="button"
-                        onClick={() => setQuery('')}
+                        onClick={() => applyQuery('')}
                         className="p-1 rounded-md hover:bg-white/[0.04] text-zinc-500 hover:text-zinc-300 transition-colors"
                         aria-label="Clear search"
                       >
@@ -793,7 +798,7 @@ export function Faq() {
                         <button
                           key={t}
                           type="button"
-                          onClick={() => setQuery(t)}
+                          onClick={() => applyQuery(t)}
                           className="text-[11px] px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/5 text-zinc-400 hover:text-white hover:border-white/10 transition"
                         >
                           {t}
@@ -833,7 +838,7 @@ export function Faq() {
                       key={s.id}
                       href={`#faq-section-${s.id}`}
                       className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 transition-colors ${
-                        activeSection === s.id ? 'bg-white/[0.04] text-white' : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.02]'
+                        effectiveActiveSection === s.id ? 'bg-white/[0.04] text-white' : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.02]'
                       }`}
                     >
                       <span className="text-sm font-light">{s.title}</span>

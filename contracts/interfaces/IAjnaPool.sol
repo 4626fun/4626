@@ -16,11 +16,9 @@ interface IAjnaPool {
      * @return bucketLP The amount of LP tokens received
      * @return addedAmount The actual amount of tokens added
      */
-    function addQuoteToken(
-        uint256 amount,
-        uint256 index,
-        uint256 expiry
-    ) external returns (uint256 bucketLP, uint256 addedAmount);
+    function addQuoteToken(uint256 amount, uint256 index, uint256 expiry)
+        external
+        returns (uint256 bucketLP, uint256 addedAmount);
 
     /**
      * @notice Remove quote tokens from a lending bucket
@@ -29,10 +27,9 @@ interface IAjnaPool {
      * @return removedAmount The amount of quote tokens removed
      * @return redeemedLP The amount of LP tokens burned
      */
-    function removeQuoteToken(
-        uint256 amount,
-        uint256 index
-    ) external returns (uint256 removedAmount, uint256 redeemedLP);
+    function removeQuoteToken(uint256 amount, uint256 index)
+        external
+        returns (uint256 removedAmount, uint256 redeemedLP);
 
     /**
      * @notice Move quote tokens between buckets
@@ -44,16 +41,9 @@ interface IAjnaPool {
      * @return toBucketLP LP tokens received in destination
      * @return movedAmount Amount of quote tokens moved
      */
-    function moveQuoteToken(
-        uint256 maxAmount,
-        uint256 fromIndex,
-        uint256 toIndex,
-        uint256 expiry
-    ) external returns (
-        uint256 fromBucketLP,
-        uint256 toBucketLP,
-        uint256 movedAmount
-    );
+    function moveQuoteToken(uint256 maxAmount, uint256 fromIndex, uint256 toIndex, uint256 expiry)
+        external
+        returns (uint256 fromBucketLP, uint256 toBucketLP, uint256 movedAmount);
 
     /**
      * @notice Get lender info for a specific bucket
@@ -62,10 +52,7 @@ interface IAjnaPool {
      * @return lpBalance LP token balance in bucket
      * @return depositTime Timestamp of last deposit
      */
-    function lenderInfo(
-        uint256 index,
-        address lender
-    ) external view returns (uint256 lpBalance, uint256 depositTime);
+    function lenderInfo(uint256 index, address lender) external view returns (uint256 lpBalance, uint256 depositTime);
 
     /**
      * @notice Get bucket info
@@ -76,15 +63,10 @@ interface IAjnaPool {
      * @return deposit Total quote tokens deposited
      * @return scale Scaling factor
      */
-    function bucketInfo(
-        uint256 index
-    ) external view returns (
-        uint256 lpBalance,
-        uint256 collateral,
-        uint256 bankruptcyTime,
-        uint256 deposit,
-        uint256 scale
-    );
+    function bucketInfo(uint256 index)
+        external
+        view
+        returns (uint256 lpBalance, uint256 collateral, uint256 bankruptcyTime, uint256 deposit, uint256 scale);
 
     /**
      * @notice Get the pool's quote token address
@@ -123,11 +105,7 @@ interface IAjnaPoolFactory {
      * @param interestRate Initial interest rate
      * @return pool Address of deployed pool
      */
-    function deployPool(
-        address collateral,
-        address quote,
-        uint256 interestRate
-    ) external returns (address pool);
+    function deployPool(address collateral, address quote, uint256 interestRate) external returns (address pool);
 
     /**
      * @notice Constant used for standard ERC20 pools (non-subset hash)
@@ -141,11 +119,7 @@ interface IAjnaPoolFactory {
      * @param quote Quote token
      * @return pool Pool address (address(0) if doesn't exist)
      */
-    function deployedPools(
-        bytes32 subsetHash,
-        address collateral,
-        address quote
-    ) external view returns (address pool);
+    function deployedPools(bytes32 subsetHash, address collateral, address quote) external view returns (address pool);
 
     /**
      * @notice Minimum allowed interest rate (WAD)
@@ -167,9 +141,6 @@ interface IAjnaPoolFactory {
      */
     function deployedPoolsList(uint256 index) external view returns (address pool);
 }
-
-
-
 
 /**
  * @title IAjnaPool

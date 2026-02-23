@@ -4,7 +4,9 @@ import { readJsonBody } from '../auth/_shared.js'
 
 type JsonObject = Record<string, unknown>
 
-const DEFAULT_TRADE_API_BASE = 'https://trade.api.uniswap.org/v1'
+// OpenAPI `servers` base for Trading API
+const DEFAULT_TRADE_API_BASE = 'https://trade-api.gateway.uniswap.org/v1'
+const DEFAULT_UNIVERSAL_ROUTER_VERSION = '2.0'
 
 function getTradeApiBase(): string {
   const raw = (process.env.UNISWAP_TRADE_API_BASE ?? '').trim()
@@ -41,6 +43,7 @@ export async function uniswapTradeFetch(params: {
   body?: JsonObject
   query?: Record<string, string | number | boolean | undefined>
   headers?: Record<string, string>
+  timeoutMs?: number
 }): Promise<{ status: number; payload: unknown }> {
   const apiKey = getUniswapApiKey()
   if (!apiKey) {
@@ -61,17 +64,23 @@ export async function uniswapTradeFetch(params: {
 
   const headers: Record<string, string> = {
     'x-api-key': apiKey,
+    // Must remain consistent across /quote -> /swap (/order does not require it, but ignores safely)
+    'x-universal-router-version': DEFAULT_UNIVERSAL_ROUTER_VERSION,
     Accept: 'application/json',
     ...params.headers,
   }
   if (params.method !== 'GET') headers['Content-Type'] = 'application/json'
 
   try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), Math.max(1_000, Number(params.timeoutMs ?? 15_000)))
     const res = await fetch(url.toString(), {
       method: params.method,
       headers,
       body: params.method === 'GET' ? undefined : JSON.stringify(params.body ?? {}),
+      signal: controller.signal,
     })
+    clearTimeout(timeout)
 
     const raw = await res.text()
     let payload: unknown = null
@@ -83,9 +92,15 @@ export async function uniswapTradeFetch(params: {
 
     return { status: res.status, payload }
   } catch (error: any) {
+    const isTimeout = String(error?.name ?? '').toLowerCase() === 'aborterror'
     return {
-      status: 502,
-      payload: { success: false, error: toCleanErrorMessage(error?.message, 'Upstream Uniswap API unreachable') },
+      status: isTimeout ? 504 : 502,
+      payload: {
+        success: false,
+        error: isTimeout
+          ? 'Uniswap API request timed out. Please retry.'
+          : toCleanErrorMessage(error?.message, 'Upstream Uniswap API unreachable'),
+      },
     }
   }
 }

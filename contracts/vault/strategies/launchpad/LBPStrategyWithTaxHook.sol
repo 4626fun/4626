@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IContinuousClearingAuction, AuctionParameters} from "continuous-clearing-auction/src/interfaces/IContinuousClearingAuction.sol";
-import {IContinuousClearingAuctionFactory} from
-    "continuous-clearing-auction/src/interfaces/IContinuousClearingAuctionFactory.sol";
+import {
+    IContinuousClearingAuction,
+    AuctionParameters
+} from "continuous-clearing-auction/src/interfaces/IContinuousClearingAuction.sol";
+import {
+    IContinuousClearingAuctionFactory
+} from "continuous-clearing-auction/src/interfaces/IContinuousClearingAuctionFactory.sol";
 
 import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
 import {FixedPoint96} from "@uniswap/v4-core/src/libraries/FixedPoint96.sol";
@@ -248,13 +252,17 @@ contract LBPStrategyWithTaxHook is ILBPStrategyBasicCompat {
         } else if (migratorParams.tokenSplitToAuction >= TokenDistribution.MAX_TOKEN_SPLIT) {
             revert TokenSplitTooHigh(migratorParams.tokenSplitToAuction, TokenDistribution.MAX_TOKEN_SPLIT);
         } else if (
-            migratorParams.poolTickSpacing > TickMath.MAX_TICK_SPACING || migratorParams.poolTickSpacing < TickMath.MIN_TICK_SPACING
+            migratorParams.poolTickSpacing > TickMath.MAX_TICK_SPACING
+                || migratorParams.poolTickSpacing < TickMath.MIN_TICK_SPACING
         ) {
-            revert InvalidTickSpacing(migratorParams.poolTickSpacing, TickMath.MIN_TICK_SPACING, TickMath.MAX_TICK_SPACING);
+            revert InvalidTickSpacing(
+                migratorParams.poolTickSpacing, TickMath.MIN_TICK_SPACING, TickMath.MAX_TICK_SPACING
+            );
         } else if (migratorParams.poolLPFee > LPFeeLibrary.MAX_LP_FEE) {
             revert InvalidFee(migratorParams.poolLPFee, LPFeeLibrary.MAX_LP_FEE);
         } else if (
-            migratorParams.positionRecipient == address(0) || migratorParams.positionRecipient == ActionConstants.MSG_SENDER
+            migratorParams.positionRecipient == address(0)
+                || migratorParams.positionRecipient == ActionConstants.MSG_SENDER
                 || migratorParams.positionRecipient == ActionConstants.ADDRESS_THIS
         ) {
             revert InvalidPositionRecipient(migratorParams.positionRecipient);
@@ -356,7 +364,8 @@ contract LBPStrategyWithTaxHook is ILBPStrategyBasicCompat {
         });
 
         plan = plan.planFullRangePosition(
-            baseParams, FullRangeParams({tokenAmount: data.initialTokenAmount, currencyAmount: data.initialCurrencyAmount})
+            baseParams,
+            FullRangeParams({tokenAmount: data.initialTokenAmount, currencyAmount: data.initialCurrencyAmount})
         );
 
         bool hasOneSidedParams = false;
@@ -364,9 +373,7 @@ contract LBPStrategyWithTaxHook is ILBPStrategyBasicCompat {
             uint128 amount = data.leftoverCurrency > 0 ? data.leftoverCurrency : reserveSupply - data.initialTokenAmount;
             bool inToken = data.leftoverCurrency == 0;
             uint256 paramsBefore = plan.params.length;
-            plan = plan.planOneSidedPosition(
-                baseParams, OneSidedParams({amount: amount, inToken: inToken})
-            );
+            plan = plan.planOneSidedPosition(baseParams, OneSidedParams({amount: amount, inToken: inToken}));
             hasOneSidedParams = plan.params.length > paramsBefore;
         }
 
@@ -389,7 +396,10 @@ contract LBPStrategyWithTaxHook is ILBPStrategyBasicCompat {
     }
 
     function _getTokenTransferAmount(MigrationData memory data) private view returns (uint128) {
-        return (reserveSupply > data.initialTokenAmount && data.hasOneSidedParams) ? reserveSupply : data.initialTokenAmount;
+        return
+            (reserveSupply > data.initialTokenAmount && data.hasOneSidedParams)
+                ? reserveSupply
+                : data.initialTokenAmount;
     }
 
     function _getCurrencyTransferAmount(MigrationData memory data) private pure returns (uint128) {
@@ -401,7 +411,9 @@ contract LBPStrategyWithTaxHook is ILBPStrategyBasicCompat {
     /// @dev Only accept native currency transfers from the auction when currency is native.
     receive() external payable {
         if (Currency.wrap(currency).isAddressZero()) {
-            if (msg.sender != address(auction)) revert NativeCurrencyTransferNotFromAuction(msg.sender, address(auction));
+            if (msg.sender != address(auction)) {
+                revert NativeCurrencyTransferNotFromAuction(msg.sender, address(auction));
+            }
         }
     }
 }

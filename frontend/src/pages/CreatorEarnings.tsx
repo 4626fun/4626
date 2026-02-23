@@ -349,7 +349,7 @@ export function CreatorEarnings() {
         <div className="max-w-4xl mx-auto px-6">
           <div className="mb-10 flex items-center justify-between gap-6">
             <Link
-              to="/dashboard"
+              to="/explore/creators"
               className="inline-flex items-center gap-2 text-zinc-600 hover:text-zinc-400 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />

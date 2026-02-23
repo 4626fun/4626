@@ -5,18 +5,18 @@ pragma solidity ^0.8.20;
  * @title VaultGaugeVoting
  * @author 0xakita.eth
  * @notice ve(3,3) style gauge voting for directing jackpot probability to creator vaults
- * 
+ *
  * @dev VOTING MECHANISM:
  *      ve4626 holders vote to direct jackpot probability to specific creator vaults.
  *      This is similar to how veCRV/veVELO holders vote to direct emissions to pools,
  *      but instead of emissions, we're directing PROBABILITY.
- * 
+ *
  * @dev EPOCH SYSTEM:
  *      - Weekly epochs (7 days), starting Thursday 00:00 UTC
  *      - Users can vote anytime during an epoch
  *      - Votes are tallied at epoch end
  *      - Historical weights are stored per epoch
- * 
+ *
  * @dev VOTING POWER:
  *      - Voting power comes from ve4626 (locked ■4626)
  *      - Users can split votes across multiple vaults
@@ -31,6 +31,7 @@ interface Ive4626 {
     function getVotingPower(address user) external view returns (uint256);
     function getTotalVotingPower() external view returns (uint256);
     function hasActiveLock(address user) external view returns (bool);
+    function getRemainingLockTime(address user) external view returns (uint256);
 }
 
 interface ICreatorRegistry {
@@ -45,18 +46,18 @@ interface IVaultGaugeVoting {
     // User functions
     function vote(address[] calldata vaults, uint256[] calldata weights) external;
     function resetVotes() external;
-    
+
     // View functions
     function getVaultWeight(address vault) external view returns (uint256);
     function getTotalWeight() external view returns (uint256);
     function getVaultWeightBps(address vault) external view returns (uint256);
     function getUserVotes(address user) external view returns (address[] memory vaults, uint256[] memory weights);
-    
+
     // Epoch management
     function checkpoint() external;
     function currentEpoch() external view returns (uint256);
     function epochStartTime(uint256 epoch) external view returns (uint256);
-    
+
     // Events
     event Voted(address indexed user, address indexed vault, uint256 weight, uint256 epoch);
     event VotesReset(address indexed user, uint256 epoch);
@@ -150,15 +151,15 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
     /// @notice Last epoch that emitted a checkpoint event (for UI/debug)
     uint256 public lastCheckpointedEpoch;
 
+    /// @dev Tracks which epochs have emitted `EpochCheckpointed` (idempotency guard).
+    mapping(uint256 => bool) private _epochCheckpointed;
+
     // ================================
     // EVENTS
     // ================================
 
     event GaugeProbabilityBudgetParamsUpdated(
-        uint256 minCreators,
-        uint256 maxCreators,
-        uint256 minBudgetBps,
-        uint256 maxBudgetBps
+        uint256 minCreators, uint256 maxCreators, uint256 minBudgetBps, uint256 maxBudgetBps
     );
     event GaugeProbabilityTvlMultiplierUpdated(uint256 tvlMultiplierBps);
 
@@ -173,6 +174,7 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
     error ArrayLengthMismatch();
     error ZeroWeight();
     error EpochNotEnded();
+    error LockExpiresBeforeEpochEnd();
 
     // ================================
     // CONSTRUCTOR
@@ -211,15 +213,13 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
      * @param weights Array of relative weights for each vault
      * @dev Weights are relative - [100, 50, 50] means 50%/25%/25%
      */
-    function vote(
-        address[] calldata vaults,
-        uint256[] calldata weights
-    ) external override nonReentrant {
+    function vote(address[] calldata vaults, uint256[] calldata weights) external override nonReentrant {
         if (vaults.length != weights.length) revert ArrayLengthMismatch();
         if (vaults.length > MAX_VAULTS_PER_VOTE) revert TooManyVaults();
 
         uint256 userPower = ve4626.getVotingPower(msg.sender);
         if (userPower == 0) revert NoVotingPower();
+        if (ve4626.getRemainingLockTime(msg.sender) < timeUntilNextEpoch()) revert LockExpiresBeforeEpochEnd();
 
         uint256 epoch = currentEpoch();
 
@@ -233,15 +233,41 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
             totalWeight += weights[i];
         }
 
-        // Apply votes
+        // Aggregate duplicate vault entries within this call so each vault is
+        // applied exactly once to epoch totals and per-user storage.
+        address[] memory uniqueVaults = new address[](vaults.length);
+        uint256[] memory aggregatedWeights = new uint256[](vaults.length);
+        uint256 uniqueCount = 0;
+
         for (uint256 i = 0; i < vaults.length; i++) {
             address vault = vaults[i];
-            
+            uint256 existingIndex = type(uint256).max;
+
+            for (uint256 j = 0; j < uniqueCount; j++) {
+                if (uniqueVaults[j] == vault) {
+                    existingIndex = j;
+                    break;
+                }
+            }
+
+            if (existingIndex == type(uint256).max) {
+                uniqueVaults[uniqueCount] = vault;
+                aggregatedWeights[uniqueCount] = weights[i];
+                uniqueCount++;
+            } else {
+                aggregatedWeights[existingIndex] += weights[i];
+            }
+        }
+
+        // Apply each unique vault vote once using the aggregated relative weight.
+        for (uint256 i = 0; i < uniqueCount; i++) {
+            address vault = uniqueVaults[i];
+
             // Check whitelist
             if (!_isVaultWhitelisted(vault)) revert VaultNotWhitelisted(vault);
 
-            // Normalize weight: userPower * (weight / totalWeight)
-            uint256 normalizedWeight = (userPower * weights[i]) / totalWeight;
+            // Normalize weight: userPower * (aggregatedWeight / totalWeight)
+            uint256 normalizedWeight = (userPower * aggregatedWeights[i]) / totalWeight;
 
             // Update vault votes
             _epochVaultVotes[epoch][vault] += normalizedWeight;
@@ -251,7 +277,7 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
             _epochUserVaultVotes[epoch][msg.sender][vault] = normalizedWeight;
             bool added = _epochUserVotedVaults[epoch][msg.sender].add(vault);
             if (!added) {
-                // Vault already tracked for this user/epoch; weights still updated above.
+                // Vault already tracked for this user/epoch; no action needed.
             }
 
             emit Voted(msg.sender, vault, normalizedWeight, epoch);
@@ -296,15 +322,21 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Checkpoint the current epoch (anyone can call)
-     * @dev Stores final weights for the epoch that just ended
+     * @notice Checkpoint the most recently ended epoch (anyone can call)
+     * @dev Emits exactly once per ended epoch (integrator-safe, idempotent).
      */
     function checkpoint() external override {
-        uint256 epoch = currentEpoch();
-        if (lastCheckpointedEpoch < epoch) {
-            lastCheckpointedEpoch = epoch;
-        }
-        emit EpochCheckpointed(epoch, _epochTotalVotes[epoch]);
+        uint256 current = currentEpoch();
+
+        // There is no "ended epoch" to finalize while still in epoch 0 (or before genesis).
+        if (current == 0) revert EpochNotEnded();
+
+        uint256 epochToCheckpoint = current - 1;
+        if (_epochCheckpointed[epochToCheckpoint]) return;
+
+        _epochCheckpointed[epochToCheckpoint] = true;
+        lastCheckpointedEpoch = epochToCheckpoint;
+        emit EpochCheckpointed(epochToCheckpoint, _epochTotalVotes[epochToCheckpoint]);
     }
 
     /**
@@ -466,10 +498,12 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
      * @return vaults Array of vault addresses
      * @return weights Array of vote weights
      */
-    function getUserVotes(address user) external view override returns (
-        address[] memory vaults,
-        uint256[] memory weights
-    ) {
+    function getUserVotes(address user)
+        external
+        view
+        override
+        returns (address[] memory vaults, uint256[] memory weights)
+    {
         uint256 epoch = currentEpoch();
         EnumerableSet.AddressSet storage votedVaults = _epochUserVotedVaults[epoch][user];
         uint256 length = votedVaults.length();
@@ -534,20 +568,23 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
      * @dev Check if a vault is whitelisted
      */
     function _isVaultWhitelisted(address vault) internal view returns (bool) {
-        // Check manual whitelist first
-        if (isWhitelistedVault[vault]) return true;
+        // Single source of truth: a vault must be explicitly whitelisted to be vote-eligible.
+        if (!isWhitelistedVault[vault]) return false;
 
-        // Check registry if enabled
-        if (useRegistryWhitelist && address(registry) != address(0)) {
-            // slither-disable-next-line calls-loop
-            try registry.isRegisteredVault(vault) returns (bool registered) {
-                return registered;
-            } catch {
-                return false;
-            }
+        // Optional additional gate: require the vault to be registered in the CreatorRegistry.
+        if (useRegistryWhitelist) return _isVaultRegistered(vault);
+
+        return true;
+    }
+
+    function _isVaultRegistered(address vault) internal view returns (bool) {
+        if (address(registry) == address(0)) return false;
+        // slither-disable-next-line calls-loop
+        try registry.isRegisteredVault(vault) returns (bool registered) {
+            return registered;
+        } catch {
+            return false;
         }
-
-        return false;
     }
 
     /**
@@ -566,9 +603,14 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
      */
     function setVaultWhitelist(address vault, bool status) external onlyOwner {
         if (vault == address(0)) revert ZeroAddress();
-        
+
+        if (status && useRegistryWhitelist) {
+            require(address(registry) != address(0), "Registry not set");
+            require(_isVaultRegistered(vault), "Vault not registered");
+        }
+
         isWhitelistedVault[vault] = status;
-        
+
         if (status) {
             bool added = _whitelistedVaults.add(vault);
             if (!added) {
@@ -589,17 +631,19 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
      * @param vaults Array of vault addresses
      * @param statuses Array of whitelist statuses
      */
-    function batchSetVaultWhitelist(
-        address[] calldata vaults,
-        bool[] calldata statuses
-    ) external onlyOwner {
+    function batchSetVaultWhitelist(address[] calldata vaults, bool[] calldata statuses) external onlyOwner {
         if (vaults.length != statuses.length) revert ArrayLengthMismatch();
 
         for (uint256 i = 0; i < vaults.length; i++) {
             if (vaults[i] == address(0)) revert ZeroAddress();
-            
+
+            if (statuses[i] && useRegistryWhitelist) {
+                require(address(registry) != address(0), "Registry not set");
+                require(_isVaultRegistered(vaults[i]), "Vault not registered");
+            }
+
             isWhitelistedVault[vaults[i]] = statuses[i];
-            
+
             if (statuses[i]) {
                 bool added = _whitelistedVaults.add(vaults[i]);
                 if (!added) {

@@ -39,7 +39,7 @@ const CREATOR_REGISTRY_COIN_ABI = [
           { name: 'canonicalWallet', type: 'address' },
           { name: 'pool', type: 'address' },
           { name: 'poolFee', type: 'uint24' },
-          { name: 'primaryChainId', type: 'uint16' },
+          { name: 'primaryChainId', type: 'uint256' },
           { name: 'isActive', type: 'bool' },
           { name: 'registeredAt', type: 'uint256' },
         ],

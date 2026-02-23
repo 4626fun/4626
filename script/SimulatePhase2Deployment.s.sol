@@ -62,12 +62,21 @@ contract SimulatePhase2Deployment is Script {
         bytes32 saltOracle = _derive(baseSalt, "CreatorOracle");
 
         // Build init code
-        bytes memory initVault = abi.encodePacked(type(CreatorOVault).creationCode, abi.encode(creatorToken, owner, vaultName, vaultSymbol));
-        bytes memory initWrapper = abi.encodePacked(type(CreatorOVaultWrapper).creationCode, abi.encode(creatorToken, address(0), owner)); // vault set later once computed
-        bytes memory initShare = abi.encodePacked(type(CreatorShareOFT).creationCode, abi.encode(shareName, shareSymbol, REGISTRY, owner));
-        bytes memory initGauge = abi.encodePacked(type(CreatorGaugeController).creationCode, abi.encode(address(0), creatorTreasury, PROTOCOL_TREASURY, owner)); // shareOFT set later once computed
-        bytes memory initCCA = abi.encodePacked(type(CCALaunchStrategy).creationCode, abi.encode(address(0), address(0), address(0), address(0), owner)); // filled later
-        bytes memory initOracle = abi.encodePacked(type(CreatorOracle).creationCode, abi.encode(REGISTRY, CHAINLINK_ETH_USD, creatorSymbol, owner));
+        bytes memory initVault =
+            abi.encodePacked(type(CreatorOVault).creationCode, abi.encode(creatorToken, owner, vaultName, vaultSymbol));
+        bytes memory initWrapper =
+            abi.encodePacked(type(CreatorOVaultWrapper).creationCode, abi.encode(creatorToken, address(0), owner)); // vault set later once computed
+        bytes memory initShare =
+            abi.encodePacked(type(CreatorShareOFT).creationCode, abi.encode(shareName, shareSymbol, REGISTRY, owner));
+        bytes memory initGauge = abi.encodePacked(
+            type(CreatorGaugeController).creationCode, abi.encode(address(0), creatorTreasury, PROTOCOL_TREASURY, owner)
+        ); // shareOFT set later once computed
+        bytes memory initCCA = abi.encodePacked(
+            type(CCALaunchStrategy).creationCode, abi.encode(address(0), address(0), address(0), address(0), owner)
+        ); // filled later
+        bytes memory initOracle = abi.encodePacked(
+            type(CreatorOracle).creationCode, abi.encode(REGISTRY, CHAINLINK_ETH_USD, creatorSymbol, owner)
+        );
 
         Create2Deployer d = Create2Deployer(CREATE2_DEPLOYER);
 
@@ -75,15 +84,22 @@ contract SimulatePhase2Deployment is Script {
         address predictedVault = d.computeAddress(saltVault, keccak256(initVault));
 
         // Now that we know predictedVault, rebuild initWrapper/CCA with real args
-        initWrapper = abi.encodePacked(type(CreatorOVaultWrapper).creationCode, abi.encode(creatorToken, predictedVault, owner));
+        initWrapper =
+            abi.encodePacked(type(CreatorOVaultWrapper).creationCode, abi.encode(creatorToken, predictedVault, owner));
 
         address predictedWrapper = d.computeAddress(saltWrapper, keccak256(initWrapper));
         address predictedShare = d.computeAddress(saltShare, keccak256(initShare));
 
-        initGauge = abi.encodePacked(type(CreatorGaugeController).creationCode, abi.encode(predictedShare, creatorTreasury, PROTOCOL_TREASURY, owner));
+        initGauge = abi.encodePacked(
+            type(CreatorGaugeController).creationCode,
+            abi.encode(predictedShare, creatorTreasury, PROTOCOL_TREASURY, owner)
+        );
         address predictedGauge = d.computeAddress(saltGauge, keccak256(initGauge));
 
-        initCCA = abi.encodePacked(type(CCALaunchStrategy).creationCode, abi.encode(predictedShare, address(0), predictedVault, predictedVault, owner));
+        initCCA = abi.encodePacked(
+            type(CCALaunchStrategy).creationCode,
+            abi.encode(predictedShare, address(0), predictedVault, predictedVault, owner)
+        );
         address predictedCCA = d.computeAddress(saltCCA, keccak256(initCCA));
 
         address predictedOracle = d.computeAddress(saltOracle, keccak256(initOracle));
@@ -125,7 +141,8 @@ contract SimulatePhase2Deployment is Script {
         CreatorGaugeController(payable(predictedGauge)).setOracle(predictedOracle);
 
         CCALaunchStrategy(payable(predictedCCA)).setApprovedLauncher(VAULT_ACTIVATION_BATCHER, true);
-        CCALaunchStrategy(payable(predictedCCA)).setOracleConfig(predictedOracle, POOL_MANAGER, TAX_HOOK, creatorTreasury);
+        CCALaunchStrategy(payable(predictedCCA))
+            .setOracleConfig(predictedOracle, POOL_MANAGER, TAX_HOOK, creatorTreasury);
 
         vm.stopBroadcast();
 
@@ -135,6 +152,9 @@ contract SimulatePhase2Deployment is Script {
         require(CreatorShareOFT(payable(predictedShare)).isMinter(predictedWrapper), "wrapper not minter");
         require(CreatorOVault(payable(predictedVault)).gaugeController() == predictedGauge, "vault->gauge");
         require(CreatorOVault(payable(predictedVault)).whitelist(predictedWrapper), "wrapper not whitelisted");
-        require(CCALaunchStrategy(payable(predictedCCA)).approvedLaunchers(VAULT_ACTIVATION_BATCHER), "launcher not approved");
+        require(
+            CCALaunchStrategy(payable(predictedCCA)).approvedLaunchers(VAULT_ACTIVATION_BATCHER),
+            "launcher not approved"
+        );
     }
 }
