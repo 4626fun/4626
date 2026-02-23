@@ -11,7 +11,6 @@ export const APP_ONLY_PATHS = [
   '/deploy',
   '/launch',
   '/vault',
-  '/status',
   '/vote',
   '/auction',
   '/admin',

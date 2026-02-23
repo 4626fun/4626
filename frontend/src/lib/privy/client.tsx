@@ -102,8 +102,14 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
   } as const
   const loginMethods = ['wallet', 'email', 'google', 'twitter', 'farcaster'] as const
 
+  // Privy OAuth redirects are validated against an allowlist and must match exactly (no query params).
+  // Our marketing waitlist commonly adds `?wl=1` / `?ref=...`, so defaulting to `window.location.href`
+  // can cause OAuth init to fail with "Redirect URL is not allowed".
+  const customOAuthRedirectUrl = typeof window !== 'undefined' ? window.location.origin : null
+
   const baseConfig: PrivyProviderConfig = {
     appearance,
+    ...(customOAuthRedirectUrl ? { customOAuthRedirectUrl } : {}),
     // Enable embedded wallets - this is the signer for the Coinbase Smart Wallet
     embeddedWallets: {
       ethereum: { createOnLogin: 'users-without-wallets' },
@@ -117,6 +123,7 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
 
   const safeConfig: PrivyProviderConfig = {
     appearance,
+    ...(customOAuthRedirectUrl ? { customOAuthRedirectUrl } : {}),
     // Intentionally omit `embeddedWallets` so HTTP/insecure dev origins don't crash the app.
     loginMethods,
     defaultChain: base,

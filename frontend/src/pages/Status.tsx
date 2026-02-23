@@ -6,6 +6,7 @@ import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagm
 import { base } from 'wagmi/chains'
 import { CheckCircle, XCircle, AlertTriangle, Loader2, ExternalLink, ShieldCheck, Wrench } from 'lucide-react'
 import { AKITA, CONTRACTS } from '@/config/contracts'
+import { ConnectButton } from '@/components/ConnectButton'
 
 type CheckStatus = 'pass' | 'fail' | 'warn' | 'info'
 
@@ -334,7 +335,10 @@ export function Status() {
     }
   }, [])
 
-  const displayVault = vaultParamAddress ?? vaultInputAddress
+  const displayVault =
+    vaultParamAddress && vaultInputAddress && vaultParamAddress.toLowerCase() === vaultInputAddress.toLowerCase()
+      ? vaultParamAddress
+      : null
 
   const ctx = (vaultQuery.data?.context ?? {}) as VaultFixContext
   const vaultAddress = typeof ctx.vault === 'string' && isAddressLike(ctx.vault) ? ctx.vault : vaultParamAddress
@@ -642,14 +646,14 @@ export function Status() {
               <div className="space-y-1">
                 <div className="label">Verify a vault</div>
                 <div className="text-xs text-zinc-600">Paste a vault address to generate a shareable report.</div>
+                <div className="text-[10px] text-zinc-700 font-mono break-all">
+                  Example: {AKITA.vault}
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => {
                   setVaultInput(AKITA.vault)
-                  const next = new URLSearchParams(searchParams)
-                  next.set('vault', AKITA.vault)
-                  setSearchParams(next)
                 }}
                 className="text-[10px] text-zinc-600 hover:text-zinc-300 transition-colors"
               >
@@ -692,7 +696,8 @@ export function Status() {
               </div>
             ) : (
               <div className="text-xs text-zinc-700">
-                Tip: after deploying, use the vault address shown in the Deploy details panel.
+                Tip: paste a vault address, then click <span className="text-zinc-600">Run checks</span> to generate a shareable{' '}
+                <span className="font-mono">/status?vault=0x…</span> link.
               </div>
             )}
 
@@ -724,8 +729,11 @@ export function Status() {
                 </div>
 
                 {!isConnected ? (
-                  <div className="text-xs text-zinc-600">
-                    Connect your wallet to apply fixes.
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="text-xs text-zinc-600">
+                      Connect your wallet to apply fixes.
+                    </div>
+                    <ConnectButton />
                   </div>
                 ) : !isBase ? (
                   <div className="text-xs text-zinc-600">

@@ -67,7 +67,6 @@ vi.mock('../../server/_lib/creatorAgentWallets.js', () => ({
   getOrCreateCreatorAgentWallet: getOrCreateCreatorAgentWalletMock,
 }))
 
-
 vi.mock('../../server/_lib/origin.js', () => ({
   getCanonicalOrigin: vi.fn(() => 'https://4626-test-akita-llc.vercel.app'),
 }))
@@ -158,7 +157,6 @@ describe('deploy session ownership guardrails', () => {
     expect((insertArgs.payload?.erc7712Grant?.allowedTargets ?? []).map((v: string) => v.toLowerCase())).toContain('0x0000000000000000000000000000000000000010')
     expect(insertArgs.payload?.persistSessionOwner).toBe(true)
   })
-
 
   it('falls back to local session owner key when agent wallet id is missing', async () => {
     getOrCreateCreatorAgentWalletMock.mockResolvedValueOnce({

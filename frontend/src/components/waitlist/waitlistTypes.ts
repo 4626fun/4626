@@ -75,6 +75,7 @@ export type WaitlistState = {
   cswProofBusy: boolean
   cswProofError: string | null
   waitlistPosition: {
+    borderTier: number
     points: {
       total: number
       invite: number

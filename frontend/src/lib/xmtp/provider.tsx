@@ -269,6 +269,16 @@ function normalizeEvmAddress(value: unknown): string | null {
   return getAddress(raw).toLowerCase()
 }
 
+function resolveXmtpChainId(walletChainId: number | null | undefined): number {
+  // XMTP SCW identities are registered against a specific EVM chain.
+  // Some wallets briefly report chain id `0` during hydration/reconnect;
+  // treat non-positive/non-finite values as unknown and default to Base.
+  if (typeof walletChainId !== 'number' || !Number.isFinite(walletChainId) || walletChainId <= 0) {
+    return 8453
+  }
+  return Math.floor(walletChainId)
+}
+
 function pickCanonicalSmartWalletAddress(row: WaitlistMeData | null): string | null {
   if (!row) return null
 
@@ -908,7 +918,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       setStatus('connecting')
 
       // Detect whether the XMTP identity is a smart contract wallet (SCW).
-      const walletChainId = walletClient.chain?.id ?? CANONICAL_SCW_CHAIN_ID
+      const walletChainId = resolveXmtpChainId(walletClient.chain?.id)
       const storedSignerType = readStoredSignerType(xmtpIdentityAddress)
 
       let isSmartWallet = Boolean(resolved.isCanonicalSmartWallet || storedSignerType === 'SCW')
@@ -1019,7 +1029,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     setStatus('signing')
     setError(null)
 
-    const walletChainId = walletClient.chain?.id ?? CANONICAL_SCW_CHAIN_ID
+    const walletChainId = resolveXmtpChainId(walletClient.chain?.id)
     const signMessageFn = async (message: string) => {
       const s = await walletClient.signMessage({ message })
       return hexToBytes(s)
