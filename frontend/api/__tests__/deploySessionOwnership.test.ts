@@ -67,7 +67,6 @@ vi.mock('../../server/_lib/creatorAgentWallets.js', () => ({
   getOrCreateCreatorAgentWallet: getOrCreateCreatorAgentWalletMock,
 }))
 
-
 vi.mock('../../server/_lib/origin.js', () => ({
   getCanonicalOrigin: vi.fn(() => 'https://4626-test-akita-llc.vercel.app'),
 }))
