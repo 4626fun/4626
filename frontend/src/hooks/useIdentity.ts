@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react'
 import { createPublicClient, http } from 'viem'
 import { mainnet } from 'viem/chains'
-import { getBasename, formatBasename } from '@/lib/basename-api'
+import { getBasenameProfile, formatBasename } from '@/lib/basename-api'
 
 export type IdentitySource = 'farcaster' | 'lens' | 'ens' | 'basename' | 'address'
 
@@ -247,14 +247,17 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
   if (pending) return pending
 
   const promise = (async () => {
-    const [farcaster, lens, ensName, basenameRaw] = await Promise.all([
+    const [farcaster, lens, ensName, basenameProfile] = await Promise.all([
       fetchFarcasterUser(address).catch(() => null),
       fetchLensUser(address).catch(() => null),
       ensClient.getEnsName({ address: address as `0x${string}` }).catch(() => null),
-      getBasename(address).catch(() => null),
+      getBasenameProfile(address).catch(() => null),
     ])
 
+    const basenameRaw = basenameProfile?.name ?? null
     const basename = basenameRaw ? (formatBasename(basenameRaw) || basenameRaw) : null
+    const basenameDisplayName = (basenameProfile?.displayName ?? '').trim() || basename
+    const basenameAvatar = basenameProfile?.avatar ?? null
 
     if (farcaster) {
       const handle = farcaster.username ? `@${farcaster.username}` : null
@@ -267,7 +270,7 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
       ])
       const result: IdentityCacheEntry = {
         displayName: farcaster.displayName,
-        avatar: farcaster.avatar ?? lens?.avatar ?? null,
+        avatar: farcaster.avatar ?? lens?.avatar ?? basenameAvatar,
         source: 'farcaster',
         secondary,
         farcasterHandle: farcaster.username,
@@ -286,7 +289,7 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
       const lensHandle = lens.handle ? `@${lens.handle}` : null
       const result: IdentityCacheEntry = {
         displayName: lens.displayName,
-        avatar: lens.avatar,
+        avatar: lens.avatar ?? basenameAvatar,
         source: 'lens',
         secondary: compactUnique([
           lensHandle && lc(lensHandle) !== lc(lens.displayName) ? lensHandle : null,
@@ -309,7 +312,7 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
     if (ensName) {
       const result: IdentityCacheEntry = {
         displayName: ensName,
-        avatar: null,
+        avatar: basenameAvatar,
         source: 'ens',
         secondary: compactUnique([
           basename && lc(basename) !== lc(ensName) ? basename : null,
@@ -329,8 +332,8 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
 
     if (basename) {
       const result: IdentityCacheEntry = {
-        displayName: basename,
-        avatar: null,
+        displayName: basenameDisplayName ?? basename,
+        avatar: basenameAvatar,
         source: 'basename',
         secondary: truncate(address),
         farcasterHandle: null,

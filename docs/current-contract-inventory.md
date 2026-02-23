@@ -1,22 +1,22 @@
 # Current Contract Inventory (Base)
 
-Generated on: 2026-02-12  
+Generated on: 2026-02-22  
 Scope: CreatorVault deploy stack and related infra used by this repo.
 
 ## Sources
 
-1. Live onchain batcher (phased deployer): `0x32e91185B92c6c13dd56D745aBf24F009cdD3019`
+1. Live onchain batcher (phased deployer): `0x4184D9118ec31061cEDd6041B6bD676ac19F29a5`
 2. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
 3. Deployment manifests: `deployments/base/contracts/**/*.json`
 4. Local env snapshot: `.env`
 
 ## Live Onchain (Authoritative For Current Deploy Path)
 
-Queried from `CreatorVaultDeployer` at `0x32e91185B92c6c13dd56D745aBf24F009cdD3019`:
+Queried from `CreatorVaultDeployer` at `0x4184D9118ec31061cEDd6041B6bD676ac19F29a5`:
 
 | Contract / Field | Address |
 |---|---|
-| `registry` | `0x02c8031c39E10832A831b954Df7a2c1bf9Df052D` |
+| `registry` | `0x888506B92181c57A2fD06516FFFb6F375b7A4626` |
 | `bytecodeStore` | `0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13` |
 | `create2Deployer` | `0x74183076C7D33346880A5bf0e263B761FB4d38BA` |
 | `protocolTreasury` | `0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3` |
@@ -24,7 +24,9 @@ Queried from `CreatorVaultDeployer` at `0x32e91185B92c6c13dd56D745aBf24F009cdD30
 | `taxHook` | `0xca975B9dAF772C71161f3648437c3616E5Be0088` |
 | `chainlinkEthUsd` | `0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70` |
 | `vaultActivationBatcher` | `0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB` |
-| `lotteryManager` | `0xc0329794016478e133F3D933b3D53273AB8325FC` |
+| `lotteryManager` | `0x77705A2f173dd52F28300447506Dc35086c34626` |
+| `solanaBridgeAdapter` | `0x2414b595c4f18532A5836B6e2E6d536832c572e8` |
+| `solanaDestination` | `0x5f38e34ec3b546c53e682f2cf84d35d2edcbd15b498367651835942416f8d4d1` |
 | `permit2` | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
 | `usdc` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 | `uniswapV3Factory` | `0x33128a8fC17869897dcE68Ed026d694621f6FDfD` |
@@ -38,12 +40,12 @@ From `frontend/src/config/contracts.defaults.ts`:
 
 | Key | Address |
 |---|---|
-| `registry` | `0x02c8031c39E10832A831b954Df7a2c1bf9Df052D` |
-| `lotteryManager` | `0xc0329794016478e133F3D933b3D53273AB8325FC` |
-| `vrfConsumer` | `0x0265236984DE964CB0422BaeFbDb2de7C9d590F5` |
+| `registry` | `0x888506B92181c57A2fD06516FFFb6F375b7A4626` |
+| `lotteryManager` | `0x77705A2f173dd52F28300447506Dc35086c34626` |
+| `vrfConsumer` | `0x9F85d8EEe5d2b8dC1E99b598B9c2B084934d0304` |
 | `vaultActivationBatcher` | `0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB` |
-| `creatorVaultBatcher` | `0x32e91185B92c6c13dd56D745aBf24F009cdD3019` |
-| `solanaBridgeAdapter` | `0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92` |
+| `creatorVaultBatcher` | `0x4184D9118ec31061cEDd6041B6bD676ac19F29a5` |
+| `solanaBridgeAdapter` | `0x2414b595c4f18532A5836B6e2E6d536832c572e8` |
 | `universalBytecodeStore` | `0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13` |
 | `universalCreate2DeployerFromStore` | `0x74183076C7D33346880A5bf0e263B761FB4d38BA` |
 
@@ -60,12 +62,12 @@ From `deployments/base/contracts/**/*.json`:
 | UniversalBytecodeStore | `0xCDf45B94348DBBABba4bE6f4a5341badb83D4dC4` | `2026-01-14` |
 | CreatorLotteryManager | `0xA02A858E67c98320dCFB218831B645692E8f3483` | `2026-01-14` |
 | CreatorVRFConsumerV2_5 | `0x0265236984DE964CB0422BaeFbDb2de7C9d590F5` | `2026-01-14` |
-| SolanaBridgeAdapter | `0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92` | `2026-01-19T07:17:35Z` |
+| SolanaBridgeAdapter | `0x2414b595c4f18532A5836B6e2E6d536832c572e8` | `2026-02-22T06:16:05Z` |
 
 ## Current Drift (Needs Canonical Decision)
 
 1. Deployment manifests are historical and still include older infra addresses (`0xA02A...`, `0xDb65...`, `0xCDf4...`).
-2. Live phased deployer currently has `solanaBridgeAdapter=0x0` and `solanaDestination=0x0` until `setSolanaConfig` is applied.
+2. Live phased deployer has Solana routing enabled (`solanaBridgeAdapter` + `solanaDestination` are set).
 3. Legacy `CreatorOVaultFactory` remains in manifests/scripts but is not used in phased deploy runtime.
 
 ## Usage Notes

@@ -541,7 +541,7 @@ export function AdminWaitlist() {
     if (first) setSelectedId(first.id)
   }, [listQuery.data?.items, selectedId])
 
-  const items = listQuery.data?.items ?? []
+  const items = useMemo(() => listQuery.data?.items ?? [], [listQuery.data?.items])
   const detail = detailQuery.data?.signup ?? null
 
   useEffect(() => {

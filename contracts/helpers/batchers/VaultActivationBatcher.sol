@@ -56,11 +56,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
     // ================================
 
     event BatchActivation(
-        address indexed user,
-        address indexed vault,
-        uint256 depositAmount,
-        uint256 auctionAmount,
-        address auction
+        address indexed user, address indexed vault, uint256 depositAmount, uint256 auctionAmount, address auction
     );
 
     event BatchActivationFor(
@@ -142,7 +138,9 @@ contract VaultActivationBatcher is ReentrancyGuard {
             reserveAmount = (shareTokens * creatorReservePercent) / 100;
             if (reserveAmount > 0) {
                 IERC20(shareToken).safeTransfer(creatorReserveRecipient, reserveAmount);
-                emit CreatorReserveAllocated(identity, creatorReserveRecipient, shareToken, reserveAmount, creatorReservePercent);
+                emit CreatorReserveAllocated(
+                    identity, creatorReserveRecipient, shareToken, reserveAmount, creatorReservePercent
+                );
             }
         }
 
@@ -270,8 +268,10 @@ contract VaultActivationBatcher is ReentrancyGuard {
         bytes calldata signature
     ) external nonReentrant returns (address auction) {
         // Validate inputs
-        if (identity == address(0) || creatorToken == address(0) || vault == address(0) ||
-            wrapper == address(0) || ccaStrategy == address(0)) revert ZeroAddress();
+        if (
+            identity == address(0) || creatorToken == address(0) || vault == address(0) || wrapper == address(0)
+                || ccaStrategy == address(0)
+        ) revert ZeroAddress();
         if (depositAmount == 0) revert ZeroAmount();
         if (auctionPercent > 100) revert InvalidPercent();
 
@@ -279,7 +279,9 @@ contract VaultActivationBatcher is ReentrancyGuard {
         if (vaultOwner != identity) revert NotVaultOwner(identity, vaultOwner);
 
         if (msg.sender != identity) {
-            if (!IOperatorAuthorizableVault(vault).isAuthorizedOperator(msg.sender, OP_ACTIVATE)) revert NotAuthorizedOperator();
+            if (!IOperatorAuthorizableVault(vault).isAuthorizedOperator(msg.sender, OP_ACTIVATE)) {
+                revert NotAuthorizedOperator();
+            }
         }
 
         if (permit.permitted.token != creatorToken) revert PermitTokenMismatch();
@@ -330,7 +332,10 @@ contract VaultActivationBatcher is ReentrancyGuard {
         ISignatureTransfer.PermitTransferFrom calldata permit,
         bytes calldata signature
     ) external nonReentrant returns (address auction) {
-        if (identity == address(0) || creatorToken == address(0) || vault == address(0) || wrapper == address(0) || ccaStrategy == address(0)) {
+        if (
+            identity == address(0) || creatorToken == address(0) || vault == address(0) || wrapper == address(0)
+                || ccaStrategy == address(0)
+        ) {
             revert ZeroAddress();
         }
         if (depositAmount == 0) revert ZeroAmount();
@@ -339,7 +344,9 @@ contract VaultActivationBatcher is ReentrancyGuard {
         address vaultOwner = IOwnable(vault).owner();
         if (vaultOwner != identity) revert NotVaultOwner(identity, vaultOwner);
         if (msg.sender != identity) {
-            if (!IOperatorAuthorizableVault(vault).isAuthorizedOperator(msg.sender, OP_ACTIVATE)) revert NotAuthorizedOperator();
+            if (!IOperatorAuthorizableVault(vault).isAuthorizedOperator(msg.sender, OP_ACTIVATE)) {
+                revert NotAuthorizedOperator();
+            }
         }
         if (permit.permitted.token != creatorToken) revert PermitTokenMismatch();
         if (permit.permitted.amount < depositAmount) revert PermitAmountTooLow();
@@ -387,8 +394,10 @@ contract VaultActivationBatcher is ReentrancyGuard {
         bytes calldata signature
     ) external nonReentrant returns (address auction) {
         // Validate inputs
-        if (identity == address(0) || creatorToken == address(0) || vault == address(0) ||
-            wrapper == address(0) || ccaStrategy == address(0)) revert ZeroAddress();
+        if (
+            identity == address(0) || creatorToken == address(0) || vault == address(0) || wrapper == address(0)
+                || ccaStrategy == address(0)
+        ) revert ZeroAddress();
         if (depositAmount == 0) revert ZeroAmount();
         if (auctionPercent > 100) revert InvalidPercent();
 
@@ -396,7 +405,9 @@ contract VaultActivationBatcher is ReentrancyGuard {
         if (vaultOwner != identity) revert NotVaultOwner(identity, vaultOwner);
 
         if (msg.sender != identity) {
-            if (!IOperatorAuthorizableVault(vault).isAuthorizedOperator(msg.sender, OP_ACTIVATE)) revert NotAuthorizedOperator();
+            if (!IOperatorAuthorizableVault(vault).isAuthorizedOperator(msg.sender, OP_ACTIVATE)) {
+                revert NotAuthorizedOperator();
+            }
         }
 
         if (permit.permitted.token != creatorToken) revert PermitTokenMismatch();
@@ -447,7 +458,10 @@ contract VaultActivationBatcher is ReentrancyGuard {
         ISignatureTransfer.PermitTransferFrom calldata permit,
         bytes calldata signature
     ) external nonReentrant returns (address auction) {
-        if (identity == address(0) || creatorToken == address(0) || vault == address(0) || wrapper == address(0) || ccaStrategy == address(0)) {
+        if (
+            identity == address(0) || creatorToken == address(0) || vault == address(0) || wrapper == address(0)
+                || ccaStrategy == address(0)
+        ) {
             revert ZeroAddress();
         }
         if (depositAmount == 0) revert ZeroAmount();
@@ -456,7 +470,9 @@ contract VaultActivationBatcher is ReentrancyGuard {
         address vaultOwner = IOwnable(vault).owner();
         if (vaultOwner != identity) revert NotVaultOwner(identity, vaultOwner);
         if (msg.sender != identity) {
-            if (!IOperatorAuthorizableVault(vault).isAuthorizedOperator(msg.sender, OP_ACTIVATE)) revert NotAuthorizedOperator();
+            if (!IOperatorAuthorizableVault(vault).isAuthorizedOperator(msg.sender, OP_ACTIVATE)) {
+                revert NotAuthorizedOperator();
+            }
         }
         if (permit.permitted.token != creatorToken) revert PermitTokenMismatch();
         if (permit.permitted.amount < depositAmount) revert PermitAmountTooLow();

@@ -93,6 +93,9 @@ This app follows [Base Mini App guidelines](https://docs.base.org/mini-apps/quic
 
 ## Deployment
 
+- See `docs/erc7712-agent-permission-plan.md` for a proposed ERC-7712 delegated-permission rollout for deploy/agent flows.
+
+
 ### Vercel (Recommended)
 
 ```bash
@@ -127,6 +130,8 @@ npm run build
 | `PRIVY_WAITLIST_PREGENERATE` | Optional | server | If true, `/api/waitlist` creates/fetches a Privy user and pregenerates an embedded Ethereum wallet |
 
 ## Waitlist (DB)
+
+See also: `docs/waitlist-entry-scenarios.md` for entry-path and email-rule behavior (including CSW-first flows).
 
 The waitlist API stores signups in Postgres. Create the table once:
 

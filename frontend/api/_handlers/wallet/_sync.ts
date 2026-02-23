@@ -12,6 +12,8 @@ declare const process: { env: Record<string, string | undefined> }
 
 type WalletSyncResponse = {
   canonicalSmartWallet: { address: string; provider: string } | null
+  canonicalSolanaWallet: { address: string; provider: string } | null
+  operationalSolanaWallet: { address: string; provider: string } | null
   embeddedEoa: { address: string; chainType: string; clientType: string | null } | null
   connectedWallets: Array<{ address: string; walletType: string; provider: string }>
 }
@@ -95,6 +97,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const data: WalletSyncResponse = {
       canonicalSmartWallet: syncResult.canonicalSmartWallet,
+      canonicalSolanaWallet: syncResult.canonicalSolanaWallet,
+      operationalSolanaWallet: syncResult.operationalSolanaWallet,
       embeddedEoa: syncResult.embeddedEoa,
       connectedWallets: syncResult.connectedWallets,
     }

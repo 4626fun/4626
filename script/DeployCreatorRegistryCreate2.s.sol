@@ -15,7 +15,7 @@ import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
  *      The calldata sent to the proxy is: salt (32 bytes) ++ initcode (bytecode + constructor args).
  *      The resulting address is: keccak256(0xff ++ proxy ++ salt ++ keccak256(initcode))[12..]
  *
- *      The salt was mined using tools/create2-miner to produce an address ending in "4626".
+ *      The salt was mined using `cast create2` to produce an address ending in "4626".
  *
  * @dev PREREQUISITES:
  *      1. PRIVATE_KEY env var set (deployer wallet)
@@ -36,7 +36,6 @@ import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
  *          -vvvv
  */
 contract DeployCreatorRegistryCreate2 is Script {
-
     // ═══════════════════════════════════════════════════════════════════
     //                    DETERMINISTIC DEPLOYMENT PROXY
     // ═══════════════════════════════════════════════════════════════════
@@ -49,46 +48,60 @@ contract DeployCreatorRegistryCreate2 is Script {
     //                    MINED SALT → ADDRESS ENDING IN 4626
     // ═══════════════════════════════════════════════════════════════════
     //
-    //  These were mined with tools/create2-miner:
+    //  These were mined with `cast create2`:
     //
-    //    ./create2-miner \
-    //      --init-code-hash 0xf36909e3e6419fbf814ce67dfdd83c0136dd6f6a489b1b81a0af2f71cd6b0d73 \
-    //      --suffix 4626
+    //    cast create2 --init-code-hash <initCodeHash> --starts-with 888 --ends-with 4626
     //
-    //  The init code hash depends on the constructor args (owner address).
-    //  If the owner changes, the salt must be re-mined.
+    //  The init code hash depends on:
+    //   - the CreatorRegistry bytecode, and
+    //   - the constructor args (owner address).
+    //  If either changes, the salt must be re-mined to keep the vanity suffix.
     //
     //  Results (owner = 0xB05Cf01231cF2fF99499682E64D3780d57c80FdD):
-    //    Salt: 0x00000000000000000000000000000000000000000000000049ffffffffe6b074
-    //    → Address: 0x888482d648D1fCa1A735268A9e579b44Bf644626
+    //    Init code hash: 0xb9f69ba28177a5646b913753b98b2dc17b997bfd782451705d4ba50206af65e1
+    //    Salt:          0x14266ffc5394023d8ef7a879e273c01eee258d6b32c16f1a5451ce85484e8158
+    //    → Address:     0x888506B92181c57A2fD06516FFFb6F375b7A4626
     //
     // ═══════════════════════════════════════════════════════════════════
 
-    bytes32 constant SALT = 0x00000000000000000000000000000000000000000000000049ffffffffe6b074;
+    /// @notice Default owner for the registry (override with env `OWNER`)
+    address constant DEFAULT_OWNER = 0xB05Cf01231cF2fF99499682E64D3780d57c80FdD;
 
-    /// @notice Expected address (for verification)
-    address constant EXPECTED_ADDRESS = 0x888482d648D1fCa1A735268A9e579b44Bf644626;
+    /// @notice Default salt (override with env `SALT`)
+    bytes32 constant DEFAULT_SALT = 0x14266ffc5394023d8ef7a879e273c01eee258d6b32c16f1a5451ce85484e8158;
+
+    /// @notice Default expected address (override with env `EXPECTED_ADDRESS`)
+    address constant DEFAULT_EXPECTED_ADDRESS = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
 
     function run() external {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(deployerPrivateKey);
+        uint256 broadcasterPrivateKey = vm.envUint("PRIVATE_KEY");
+        address broadcaster = vm.addr(broadcasterPrivateKey);
+        address owner = vm.envOr("OWNER", DEFAULT_OWNER);
 
         console.log("");
-        console.log(unicode"╔════════════════════════════════════════════════════════════════╗");
+        console.log(
+            unicode"╔════════════════════════════════════════════════════════════════╗"
+        );
         console.log(unicode"║       CreatorRegistry — CREATE2 Vanity Deployment (4626)       ║");
-        console.log(unicode"╚════════════════════════════════════════════════════════════════╝");
+        console.log(
+            unicode"╚════════════════════════════════════════════════════════════════╝"
+        );
         console.log("");
-        console.log("Deployer (owner):", deployer);
+        console.log("Broadcaster (tx):", broadcaster);
+        console.log("Owner:           ", owner);
         console.log("Chain ID:        ", block.chainid);
-        console.log("Salt:            ", vm.toString(SALT));
-        console.log("Expected address:", EXPECTED_ADDRESS);
+        bytes32 salt = vm.envOr("SALT", DEFAULT_SALT);
+        address expected = vm.envOr("EXPECTED_ADDRESS", DEFAULT_EXPECTED_ADDRESS);
+        console.log("Salt:            ", vm.toString(salt));
+        if (expected != address(0)) {
+            console.log("Expected address:", expected);
+        } else {
+            console.log("Expected address: (not set)");
+        }
         console.log("");
 
         // Build the initcode: bytecode + ABI-encoded constructor args
-        bytes memory initcode = abi.encodePacked(
-            type(CreatorRegistry).creationCode,
-            abi.encode(deployer)
-        );
+        bytes memory initcode = abi.encodePacked(type(CreatorRegistry).creationCode, abi.encode(owner));
 
         // Verify the init code hash matches what we mined against
         bytes32 initCodeHash = keccak256(initcode);
@@ -96,27 +109,15 @@ contract DeployCreatorRegistryCreate2 is Script {
 
         // Predict the address
         address predicted = address(
-            uint160(
-                uint256(
-                    keccak256(
-                        abi.encodePacked(
-                            bytes1(0xff),
-                            DETERMINISTIC_DEPLOYER,
-                            SALT,
-                            initCodeHash
-                        )
-                    )
-                )
-            )
+            uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), DETERMINISTIC_DEPLOYER, salt, initCodeHash))))
         );
         console.log("Predicted address:", predicted);
 
-        require(
-            predicted == EXPECTED_ADDRESS,
-            "Predicted address does not match expected! Salt may be stale."
-        );
+        if (expected != address(0)) {
+            require(predicted == expected, "Predicted address does not match expected");
+        }
         console.log("");
-        console.log(unicode"  ✓ Address prediction verified");
+        console.log(unicode"  ✓ Address prediction ready");
         console.log("");
 
         // Check if already deployed
@@ -130,13 +131,13 @@ contract DeployCreatorRegistryCreate2 is Script {
             return;
         }
 
-        vm.startBroadcast(deployerPrivateKey);
+        vm.startBroadcast(broadcasterPrivateKey);
 
         // Deploy via the Deterministic Deployment Proxy
         // Calldata = salt (32 bytes) ++ initcode
-        bytes memory callData = abi.encodePacked(SALT, initcode);
+        bytes memory callData = abi.encodePacked(salt, initcode);
 
-        (bool success, ) = DETERMINISTIC_DEPLOYER.call(callData);
+        (bool success,) = DETERMINISTIC_DEPLOYER.call(callData);
         require(success, "CREATE2 deployment failed");
 
         vm.stopBroadcast();
@@ -150,29 +151,44 @@ contract DeployCreatorRegistryCreate2 is Script {
 
         // Verify the registry is functional
         CreatorRegistry registry = CreatorRegistry(predicted);
-        require(registry.owner() == deployer, "Owner mismatch");
+        require(registry.owner() == owner, "Owner mismatch");
 
         console.log("");
-        console.log(unicode"╔════════════════════════════════════════════════════════════════╗");
+        console.log(
+            unicode"╔════════════════════════════════════════════════════════════════╗"
+        );
         console.log(unicode"║                    DEPLOYMENT COMPLETE                         ║");
-        console.log(unicode"╚════════════════════════════════════════════════════════════════╝");
+        console.log(
+            unicode"╚════════════════════════════════════════════════════════════════╝"
+        );
         console.log("");
         console.log(unicode"  ✓ CreatorRegistry deployed at:", predicted);
-        console.log("    Owner:                      ", deployer);
+        console.log("    Owner:                      ", owner);
         console.log("");
-        console.log(unicode"┌─────────────────────────────────────────────────────────────────┐");
+        console.log(
+            unicode"┌─────────────────────────────────────────────────────────────────┐"
+        );
         console.log(unicode"│  ENVIRONMENT VARIABLE                                           │");
-        console.log(unicode"├─────────────────────────────────────────────────────────────────┤");
+        console.log(
+            unicode"├─────────────────────────────────────────────────────────────────┤"
+        );
         console.log("  CREATOR_REGISTRY=", predicted);
-        console.log(unicode"└─────────────────────────────────────────────────────────────────┘");
+        console.log(
+            unicode"└─────────────────────────────────────────────────────────────────┘"
+        );
         console.log("");
-        console.log(unicode"┌─────────────────────────────────────────────────────────────────┐");
+        console.log(
+            unicode"┌─────────────────────────────────────────────────────────────────┐"
+        );
         console.log(unicode"│  NEXT STEPS                                                     │");
-        console.log(unicode"├─────────────────────────────────────────────────────────────────┤");
-        console.log(unicode"│  1. Update .env with new CREATOR_REGISTRY address               │");
-        console.log(unicode"│  2. Update DeployTier1Upgrade.s.sol REGISTRY constant            │");
-        console.log(unicode"│  3. Migrate data from old registry (if applicable)              │");
-        console.log(unicode"│  4. Point all dependent contracts to new registry               │");
-        console.log(unicode"└─────────────────────────────────────────────────────────────────┘");
+        console.log(
+            unicode"├─────────────────────────────────────────────────────────────────┤"
+        );
+        console.log(unicode"│  1. Update env/config with CREATOR_REGISTRY                      │");
+        console.log(unicode"│  2. Seed the new registry (chains, LZ endpoints/EIDs, DEX infra) │");
+        console.log(unicode"│  3. Redeploy/wire dependent contracts to the new registry        │");
+        console.log(
+            unicode"└─────────────────────────────────────────────────────────────────┘"
+        );
     }
 }

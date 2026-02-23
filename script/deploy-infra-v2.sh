@@ -75,4 +75,9 @@ else
   echo "Skipping Solana config (set SOLANA_BRIDGE_ADAPTER and SOLANA_DESTINATION to enable)."
 fi
 
+echo "Seeding v2 bytecode store (idempotent)..."
+forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore \
+  --rpc-url "$BASE_RPC_URL" \
+  --broadcast
+
 echo "Done."

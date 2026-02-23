@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CheckCircle2, Copy, ExternalLink, Mail, RefreshCw, ShieldCheck, Wallet } from 'lucide-react'
-import type { Address } from 'viem'
+import { CheckCircle2, Copy, ExternalLink, Mail, RefreshCw, ShieldCheck, Trash2, Wallet } from 'lucide-react'
+import { encodeFunctionData, getAddress, type Address, type Hex } from 'viem'
+import { base } from 'viem/chains'
+import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 import { useExportWallet, usePrivy } from '@privy-io/react-auth'
 
 import { apiFetch } from '@/lib/apiBase'
@@ -21,6 +23,8 @@ type ConnectedAccount = {
   source: string
   isPrimary: boolean
   isCanonicalSmartWallet: boolean
+  isCanonicalSolanaWallet: boolean
+  isOperationalSolanaWallet: boolean
   isEmbeddedEoa: boolean
   verifiedAt: string | null
 }
@@ -38,6 +42,8 @@ type WaitlistMeResponse = {
   embeddedWalletClientType: string | null
   cswAddress: string | null
   solanaWallet: string | null
+  canonicalSolanaWallet: string | null
+  operationalSolanaWallet: string | null
   farcasterFid: number | null
   preprovCoinAddress: string | null
   preprovCoinSymbol: string | null
@@ -52,11 +58,23 @@ type WaitlistMeResponse = {
   connectedAccounts: ConnectedAccount[]
 }
 
+type SetCanonicalSolanaResponse = {
+  canonicalSolanaWallet: string
+  operationalSolanaWallet: string | null
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function isEvmAddress(value: string | null | undefined): value is string {
   const input = typeof value === 'string' ? value.trim() : ''
   return /^0x[a-fA-F0-9]{40}$/.test(input)
+}
+
+function isSolanaAddress(value: string | null | undefined): value is string {
+  const input = typeof value === 'string' ? value.trim() : ''
+  if (!input) return false
+  if (input.length < 32 || input.length > 44) return false
+  return /^[1-9A-HJ-NP-Za-km-z]+$/.test(input)
 }
 
 function formatRole(
@@ -68,15 +86,20 @@ function formatRole(
   const primarySmartWalletLc = opts?.primarySmartWalletAddress?.toLowerCase() ?? null
   const addressLc = account.address.toLowerCase()
   const walletType = (account.walletType ?? '').toLowerCase()
+  const provider = (account.provider ?? '').toLowerCase()
   // When a canonical address is resolved, treat it as the single source of truth
   // to prevent stale synced flags from labeling multiple wallets as canonical.
   const isCanonicalSmartWallet = canonicalLc ? canonicalLc === addressLc : account.isCanonicalSmartWallet
 
   if (account.isPrimary) labels.push('Primary')
-  if (isCanonicalSmartWallet) labels.push('Canonical Smart Wallet')
+  if (isCanonicalSmartWallet) labels.push('Canonical Smart Wallet from Zora')
+  if (account.isCanonicalSolanaWallet) labels.push('Canonical Solana Wallet')
+  if (account.isOperationalSolanaWallet) labels.push('Operational Solana Wallet')
   if (walletType === 'smart_wallet' && primarySmartWalletLc && primarySmartWalletLc === addressLc) labels.push('Primary Smart Wallet')
   if (account.isEmbeddedEoa) labels.push('Embedded EOA')
-  if (!isCanonicalSmartWallet && walletType === 'smart_wallet') labels.push('App Smart Wallet')
+  if (!isCanonicalSmartWallet && walletType === 'smart_wallet') {
+    labels.push(provider.includes('privy') ? 'Deploy Session Signer (Privy)' : 'App Smart Wallet')
+  }
   if (labels.length === 0) labels.push('Connected')
   return labels
 }
@@ -130,6 +153,11 @@ function inferProviderLabel(account: ConnectedAccount): string {
 
 function formatAccountSummary(account: ConnectedAccount): string {
   const provider = inferProviderLabel(account)
+  const providerRaw = typeof account.provider === 'string' ? account.provider.trim().toLowerCase() : ''
+  const walletTypeRaw = typeof account.walletType === 'string' ? account.walletType.trim().toLowerCase() : ''
+  if (walletTypeRaw === 'smart_wallet' && providerRaw.includes('privy')) {
+    return 'Privy Smart Wallet signer'
+  }
   const walletType = formatWalletTypeLabel(account.walletType)
   const chain = formatChainLabel(account.chain)
   const parts: string[] = []
@@ -191,12 +219,50 @@ type KnownAddress = {
   verifiedAt: string | null
 }
 
+type KnownAddressWithOwners = KnownAddress & {
+  ownerSlots: SmartWalletOwner[]
+}
+
 type AssociatedAccount = {
   label: string
   value: string
   href?: string
   mono?: boolean
 }
+
+type SmartWalletOwner = {
+  index: number
+  ownerBytes: string
+  ownerAddress: string | null
+  isAddressOwner: boolean
+}
+
+type SmartWalletOwnersResponse = {
+  smartWallet: string
+  ownerCount: number
+  nextOwnerIndex: number | null
+  owners: SmartWalletOwner[]
+}
+
+const COINBASE_SMART_WALLET_OWNER_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'isOwnerAddress',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+] as const
+
+const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+  {
+    type: 'function',
+    name: 'removeOwnerAtIndex',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'index', type: 'uint256' }, { name: 'owner', type: 'bytes' }],
+    outputs: [],
+  },
+] as const
 
 function useSafeExportWalletHook(enabled: boolean) {
   try {
@@ -230,6 +296,10 @@ function useSafePrivyUserHook(enabled: boolean): { user: any | null } {
 
 export function AccountSettings() {
   const auth = useSiweAuth()
+  const { address: connectedAddressRaw, chainId } = useAccount()
+  const { data: walletClient } = useWalletClient({ chainId: base.id })
+  const publicClient = usePublicClient({ chainId: base.id })
+  const { switchChainAsync } = useSwitchChain()
   const privyEnabled = isPrivyClientEnabled()
   const { exportWallet } = useSafeExportWalletHook(privyEnabled)
   const { user: privyUser } = useSafePrivyUserHook(privyEnabled)
@@ -242,6 +312,11 @@ export function AccountSettings() {
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
   const [exportBusy, setExportBusy] = useState(false)
   const [exportMessage, setExportMessage] = useState<string | null>(null)
+  const [ownersActionMessage, setOwnersActionMessage] = useState<string | null>(null)
+  const [ownersActionError, setOwnersActionError] = useState<string | null>(null)
+  const [revokeBusyIndex, setRevokeBusyIndex] = useState<number | null>(null)
+  const [selectedCanonicalSolanaWallet, setSelectedCanonicalSolanaWallet] = useState('')
+  const [solanaWalletActionBusy, setSolanaWalletActionBusy] = useState(false)
 
   const loadProfile = useCallback(async () => {
     setLoading(true)
@@ -279,6 +354,51 @@ export function AccountSettings() {
     return trimmed !== (profile?.email ?? '').trim().toLowerCase()
   }, [emailDraft, profile?.email])
 
+  const canonicalSolanaWalletAddress = useMemo(() => {
+    const canonical = profile?.canonicalSolanaWallet
+    const legacy = profile?.solanaWallet
+    if (isSolanaAddress(canonical)) return canonical
+    if (isSolanaAddress(legacy)) return legacy
+    return null
+  }, [profile?.canonicalSolanaWallet, profile?.solanaWallet])
+
+  const operationalSolanaWalletAddress = useMemo(() => {
+    const operational = profile?.operationalSolanaWallet
+    if (isSolanaAddress(operational)) return operational
+    return null
+  }, [profile?.operationalSolanaWallet])
+
+  const linkedSolanaWallets = useMemo(() => {
+    const map = new Map<string, { address: string; summary: string }>()
+    for (const account of profile?.connectedAccounts ?? []) {
+      if (!isSolanaAddress(account.address)) continue
+      const chain = typeof account.chain === 'string' ? account.chain.trim().toLowerCase() : ''
+      if (chain && !chain.includes('solana')) continue
+      map.set(account.address, {
+        address: account.address,
+        summary: formatAccountSummary(account),
+      })
+    }
+    if (canonicalSolanaWalletAddress && !map.has(canonicalSolanaWalletAddress)) {
+      map.set(canonicalSolanaWalletAddress, {
+        address: canonicalSolanaWalletAddress,
+        summary: 'Canonical Solana Wallet',
+      })
+    }
+    if (operationalSolanaWalletAddress && !map.has(operationalSolanaWalletAddress)) {
+      map.set(operationalSolanaWalletAddress, {
+        address: operationalSolanaWalletAddress,
+        summary: 'Operational Solana Wallet',
+      })
+    }
+    return Array.from(map.values())
+  }, [canonicalSolanaWalletAddress, operationalSolanaWalletAddress, profile?.connectedAccounts])
+
+  useEffect(() => {
+    const fallback = canonicalSolanaWalletAddress ?? linkedSolanaWallets[0]?.address ?? ''
+    setSelectedCanonicalSolanaWallet((prev) => (prev && linkedSolanaWallets.some((w) => w.address === prev) ? prev : fallback))
+  }, [canonicalSolanaWalletAddress, linkedSolanaWallets])
+
   const onSaveEmail = useCallback(async () => {
     if (!canSaveEmail || saving) return
     setSaving(true)
@@ -310,6 +430,50 @@ export function AccountSettings() {
     }
   }, [canSaveEmail, emailDraft, loadProfile, profile?.email, saving])
 
+  const canSetCanonicalSolanaWallet = useMemo(() => {
+    if (!isSolanaAddress(selectedCanonicalSolanaWallet)) return false
+    if (!linkedSolanaWallets.some((wallet) => wallet.address === selectedCanonicalSolanaWallet)) return false
+    if (solanaWalletActionBusy) return false
+    if (!canonicalSolanaWalletAddress) return true
+    return selectedCanonicalSolanaWallet !== canonicalSolanaWalletAddress
+  }, [canonicalSolanaWalletAddress, linkedSolanaWallets, selectedCanonicalSolanaWallet, solanaWalletActionBusy])
+
+  const onSetCanonicalSolanaWallet = useCallback(async () => {
+    if (!canSetCanonicalSolanaWallet || !isSolanaAddress(selectedCanonicalSolanaWallet)) return
+    setSolanaWalletActionBusy(true)
+    setSuccess(null)
+    setError(null)
+    try {
+      const res = await apiFetch('/api/wallet/solana/setCanonical', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ wallet: selectedCanonicalSolanaWallet }),
+      })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<SetCanonicalSolanaResponse> | null
+      if (!res.ok || !json?.success || !json?.data?.canonicalSolanaWallet) {
+        throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to set canonical Solana wallet.')
+      }
+      const nextCanonical = json.data.canonicalSolanaWallet
+      const nextOperational = json.data.operationalSolanaWallet ?? null
+      setProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              canonicalSolanaWallet: nextCanonical,
+              operationalSolanaWallet: nextOperational,
+              solanaWallet: nextCanonical,
+            }
+          : prev,
+      )
+      setSuccess('Canonical Solana wallet updated.')
+      void loadProfile()
+    } catch (e: any) {
+      setError(typeof e?.message === 'string' ? e.message : 'Failed to set canonical Solana wallet.')
+    } finally {
+      setSolanaWalletActionBusy(false)
+    }
+  }, [canSetCanonicalSolanaWallet, loadProfile, selectedCanonicalSolanaWallet])
+
   const onCopyAddress = useCallback((address: string) => {
     void navigator.clipboard.writeText(address).then(() => {
       setCopiedAddress(address.toLowerCase())
@@ -340,22 +504,180 @@ export function AccountSettings() {
     return null
   }, [privyUser])
 
+  // Resolve Zora-linked wallets (prefer handle when available) so canonical CSW
+  // can be anchored to the creator's Zora identity instead of stale local flags.
+  const zoraCanonicalSeedIdentifier = useMemo(() => {
+    const fromHandle = normalizeHandle(profile?.preprovZoraHandle)
+    if (fromHandle) return fromHandle
+    const primaryWallet = profile?.primaryWallet
+    if (isEvmAddress(primaryWallet)) return primaryWallet
+    return undefined
+  }, [profile?.preprovZoraHandle, profile?.primaryWallet])
+  const zoraCanonicalSeedQuery = useZoraProfile(zoraCanonicalSeedIdentifier)
+  const zoraCanonicalSeedProfile = zoraCanonicalSeedQuery.data ?? null
+
   const canonicalSmartWalletAddress = useMemo(() => {
     if (!profile) return null
-    if (isEvmAddress(profile.cswAddress)) return profile.cswAddress
-    const canonicalFromAccounts = (profile.connectedAccounts ?? []).find((a) => a.isCanonicalSmartWallet && isEvmAddress(a.address))
+    const connectedSmartWallets = (profile.connectedAccounts ?? [])
+      .filter((a) => isEvmAddress(a.address) && String(a.walletType ?? '').toLowerCase() === 'smart_wallet')
+      .map((a) => a.address.toLowerCase())
+    const connectedSmartWalletSet = new Set(connectedSmartWallets)
+    const zoraCandidates = [
+      zoraCanonicalSeedProfile?.publicWallet?.walletAddress,
+      ...((zoraCanonicalSeedProfile?.linkedWallets?.edges ?? []).map((edge) => edge?.node?.walletAddress ?? null)),
+    ]
+    for (const candidate of zoraCandidates) {
+      if (!isEvmAddress(candidate)) continue
+      if (connectedSmartWalletSet.has(candidate.toLowerCase())) return getAddress(candidate)
+    }
+    const canonicalFromAccounts = (profile.connectedAccounts ?? [])
+      .filter((a) => a.isCanonicalSmartWallet && isEvmAddress(a.address))
+      .sort((a, b) => {
+        const aProvider = String(a.provider ?? '').toLowerCase()
+        const bProvider = String(b.provider ?? '').toLowerCase()
+        // Prefer non-Privy CSWs when both are marked canonical.
+        if (aProvider.includes('privy') !== bProvider.includes('privy')) {
+          return aProvider.includes('privy') ? 1 : -1
+        }
+        const aMs = Date.parse(a.verifiedAt ?? '')
+        const bMs = Date.parse(b.verifiedAt ?? '')
+        if (Number.isFinite(aMs) && Number.isFinite(bMs)) return bMs - aMs
+        if (Number.isFinite(aMs)) return -1
+        if (Number.isFinite(bMs)) return 1
+        return a.address.localeCompare(b.address)
+      })[0]
     if (canonicalFromAccounts?.address) return canonicalFromAccounts.address
+    if (isEvmAddress(profile.cswAddress)) return profile.cswAddress
     if (isEvmAddress(profile.primarySmartWallet)) return profile.primarySmartWallet
     if (isEvmAddress(profile.baseSubAccount)) return profile.baseSubAccount
     if (isEvmAddress(privyCrossAppSmartWalletAddress)) return privyCrossAppSmartWalletAddress
     return null
-  }, [privyCrossAppSmartWalletAddress, profile])
+  }, [privyCrossAppSmartWalletAddress, profile, zoraCanonicalSeedProfile])
 
   const primarySmartWalletAddress = useMemo(() => {
     if (canonicalSmartWalletAddress) return canonicalSmartWalletAddress
-    if (isEvmAddress(profile?.primarySmartWallet)) return profile.primarySmartWallet
+    const primarySmartWallet = profile?.primarySmartWallet
+    if (isEvmAddress(primarySmartWallet)) return primarySmartWallet
     return null
   }, [canonicalSmartWalletAddress, profile?.primarySmartWallet])
+
+  const connectedAddress = useMemo(() => {
+    if (!isEvmAddress(connectedAddressRaw)) return null
+    return getAddress(connectedAddressRaw)
+  }, [connectedAddressRaw])
+
+  const smartWalletOwnersQuery = useQuery({
+    queryKey: ['smartWalletOwners', canonicalSmartWalletAddress ?? 'none'],
+    enabled: Boolean(canonicalSmartWalletAddress),
+    staleTime: 20_000,
+    retry: 0,
+    queryFn: async () => {
+      if (!canonicalSmartWalletAddress) return null
+      const params = new URLSearchParams({ smartWallet: canonicalSmartWalletAddress })
+      const res = await apiFetch(`/api/deploy/smartWalletOwners?${params.toString()}`, { method: 'GET' })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<SmartWalletOwnersResponse> | null
+      if (!res.ok || !json?.success || !json.data) {
+        throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to load smart wallet owners.')
+      }
+      return json.data
+    },
+  })
+
+  const smartWalletOwners = useMemo(
+    () => smartWalletOwnersQuery.data?.owners ?? [],
+    [smartWalletOwnersQuery.data?.owners],
+  )
+  const addressOwnerCount = useMemo(
+    () => smartWalletOwners.filter((owner) => owner.isAddressOwner && isEvmAddress(owner.ownerAddress)).length,
+    [smartWalletOwners],
+  )
+  const connectedAddressIsOwner = useMemo(() => {
+    if (!connectedAddress) return false
+    const connectedLc = connectedAddress.toLowerCase()
+    return smartWalletOwners.some((owner) => owner.ownerAddress?.toLowerCase() === connectedLc)
+  }, [connectedAddress, smartWalletOwners])
+
+  const ensureBaseChain = useCallback(async () => {
+    if (chainId === base.id) return
+    if (!switchChainAsync) {
+      throw new Error('Switch to Base in your wallet to manage smart wallet owners.')
+    }
+    await switchChainAsync({ chainId: base.id })
+  }, [chainId, switchChainAsync])
+
+  const onRevokeOwner = useCallback(async (owner: SmartWalletOwner) => {
+    if (!canonicalSmartWalletAddress || !isEvmAddress(canonicalSmartWalletAddress)) {
+      setOwnersActionError('Missing canonical smart wallet address.')
+      return
+    }
+    if (!connectedAddress) {
+      setOwnersActionError('Connect an owner EOA wallet to revoke an owner.')
+      return
+    }
+    if (!walletClient || !publicClient) {
+      setOwnersActionError('Wallet client unavailable. Reconnect and try again.')
+      return
+    }
+    if (!owner.ownerBytes || !/^0x[0-9a-fA-F]+$/.test(owner.ownerBytes)) {
+      setOwnersActionError('Invalid owner entry.')
+      return
+    }
+    if (owner.ownerAddress && owner.ownerAddress.toLowerCase() === connectedAddress.toLowerCase()) {
+      setOwnersActionError('For safety, you cannot revoke your currently connected owner from this page.')
+      return
+    }
+    if (owner.isAddressOwner && addressOwnerCount <= 1) {
+      setOwnersActionError('Cannot revoke the last address owner.')
+      return
+    }
+
+    setOwnersActionError(null)
+    setOwnersActionMessage(null)
+    setRevokeBusyIndex(owner.index)
+    try {
+      await ensureBaseChain()
+
+      const callerIsOwner = (await publicClient.readContract({
+        address: getAddress(canonicalSmartWalletAddress) as Address,
+        abi: COINBASE_SMART_WALLET_OWNER_VIEW_ABI,
+        functionName: 'isOwnerAddress',
+        args: [connectedAddress as Address],
+      })) as boolean
+      if (!callerIsOwner) {
+        throw new Error('Connected wallet is not an owner of this smart wallet.')
+      }
+
+      const data = encodeFunctionData({
+        abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+        functionName: 'removeOwnerAtIndex',
+        args: [BigInt(owner.index), owner.ownerBytes as Hex],
+      })
+      const hash = await walletClient.sendTransaction({
+        to: getAddress(canonicalSmartWalletAddress) as Address,
+        data,
+        value: 0n,
+        account: connectedAddress as Address,
+        chain: base,
+      })
+      await publicClient.waitForTransactionReceipt({ hash })
+      await smartWalletOwnersQuery.refetch()
+      void loadProfile()
+      setOwnersActionMessage(`Owner revoked at index ${owner.index}.`)
+    } catch (e: any) {
+      setOwnersActionError(typeof e?.message === 'string' ? e.message : 'Failed to revoke owner.')
+    } finally {
+      setRevokeBusyIndex(null)
+    }
+  }, [
+    addressOwnerCount,
+    canonicalSmartWalletAddress,
+    connectedAddress,
+    ensureBaseChain,
+    loadProfile,
+    publicClient,
+    smartWalletOwnersQuery,
+    walletClient,
+  ])
 
   const knownAddresses = useMemo<KnownAddress[]>(() => {
     if (!profile) return []
@@ -399,7 +721,7 @@ export function AccountSettings() {
       }
     }
 
-    upsert(canonicalSmartWalletAddress, 'Canonical Smart Wallet', 100, 'Coinbase Smart Wallet')
+    upsert(canonicalSmartWalletAddress, 'Canonical Smart Wallet from Zora', 100, 'Coinbase Smart Wallet')
     upsert(primarySmartWalletAddress, 'Primary Smart Wallet', 98, 'Coinbase Smart Wallet')
     upsert(profile.primaryWallet, 'Primary Wallet', 80, 'External Wallet')
     upsert(profile.primaryEmbeddedEoa, 'Primary Embedded EOA', 70, 'Privy Embedded')
@@ -442,11 +764,52 @@ export function AccountSettings() {
       .sort((a, b) => b.rank - a.rank || a.address.localeCompare(b.address))
   }, [canonicalSmartWalletAddress, primarySmartWalletAddress, profile])
 
+  const ownerSlotsByAddress = useMemo(() => {
+    const map = new Map<string, SmartWalletOwner[]>()
+    for (const owner of smartWalletOwners) {
+      if (!owner.ownerAddress || !isEvmAddress(owner.ownerAddress)) continue
+      const key = owner.ownerAddress.toLowerCase()
+      const existing = map.get(key) ?? []
+      existing.push(owner)
+      map.set(key, existing)
+    }
+    for (const entry of map.values()) {
+      entry.sort((a, b) => a.index - b.index)
+    }
+    return map
+  }, [smartWalletOwners])
+
+  const knownAddressesWithOwners = useMemo<KnownAddressWithOwners[]>(() => {
+    const map = new Map<string, KnownAddressWithOwners>()
+    for (const item of knownAddresses) {
+      const key = item.address.toLowerCase()
+      map.set(key, {
+        ...item,
+        ownerSlots: ownerSlotsByAddress.get(key) ?? [],
+      })
+    }
+
+    for (const [address, ownerSlots] of ownerSlotsByAddress.entries()) {
+      if (map.has(address)) continue
+      map.set(address, {
+        address: getAddress(address),
+        badges: ['Smart Wallet Owner'],
+        subtitle: 'Canonical Smart Wallet owner',
+        rank: 76,
+        verifiedAt: null,
+        ownerSlots,
+      })
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.rank - a.rank || a.address.localeCompare(b.address))
+  }, [knownAddresses, ownerSlotsByAddress])
+
   const zoraProfileIdentifier = useMemo(() => {
     const fromHandle = normalizeHandle(profile?.preprovZoraHandle)
     if (fromHandle) return fromHandle
     if (canonicalSmartWalletAddress) return canonicalSmartWalletAddress
-    if (isEvmAddress(profile?.primaryWallet)) return profile.primaryWallet
+    const primaryWallet = profile?.primaryWallet
+    if (isEvmAddress(primaryWallet)) return primaryWallet
     return undefined
   }, [canonicalSmartWalletAddress, profile?.preprovZoraHandle, profile?.primaryWallet])
 
@@ -455,9 +818,11 @@ export function AccountSettings() {
   const zoraHandle = normalizeHandle(typeof zoraProfile?.handle === 'string' ? zoraProfile.handle : null)
 
   const creatorCoinAddress = useMemo(() => {
-    const fromProfile = isEvmAddress(zoraProfile?.creatorCoin?.address) ? zoraProfile.creatorCoin.address : null
+    const zoraCoinAddress = zoraProfile?.creatorCoin?.address
+    const fromProfile = isEvmAddress(zoraCoinAddress) ? zoraCoinAddress : null
     if (fromProfile) return fromProfile.toLowerCase() as Address
-    if (isEvmAddress(profile?.preprovCoinAddress)) return profile.preprovCoinAddress.toLowerCase() as Address
+    const preprovCoinAddress = profile?.preprovCoinAddress
+    if (isEvmAddress(preprovCoinAddress)) return preprovCoinAddress.toLowerCase() as Address
     return undefined
   }, [profile?.preprovCoinAddress, zoraProfile?.creatorCoin?.address])
 
@@ -472,7 +837,8 @@ export function AccountSettings() {
     queryFn: async () => {
       const fid = typeof profile?.farcasterFid === 'number' && profile.farcasterFid > 0 ? profile.farcasterFid : null
       if (fid) return await getFarcasterUserByFid(fid)
-      const fallbackAddress = canonicalSmartWalletAddress ?? (isEvmAddress(profile?.primaryWallet) ? profile.primaryWallet : null)
+      const primaryWallet = profile?.primaryWallet
+      const fallbackAddress = canonicalSmartWalletAddress ?? (isEvmAddress(primaryWallet) ? primaryWallet : null)
       if (!fallbackAddress) return null
       return await getFarcasterUserByAddress(fallbackAddress)
     },
@@ -505,8 +871,10 @@ export function AccountSettings() {
   }, [creatorCoin?.marketCap, creatorCoin?.volume24h, creatorCoin?.uniqueHolders, zoraProfile?.creatorCoin?.marketCap])
 
   const embeddedExportAddress = useMemo(() => {
-    if (isEvmAddress(profile?.primaryEmbeddedEoa)) return profile.primaryEmbeddedEoa
-    if (isEvmAddress(profile?.embeddedWallet)) return profile.embeddedWallet
+    const primaryEmbeddedEoa = profile?.primaryEmbeddedEoa
+    if (isEvmAddress(primaryEmbeddedEoa)) return primaryEmbeddedEoa
+    const embeddedWallet = profile?.embeddedWallet
+    if (isEvmAddress(embeddedWallet)) return embeddedWallet
     const embedded = (profile?.connectedAccounts ?? []).find((a) => a.isEmbeddedEoa && isEvmAddress(a.address))
     if (embedded) return embedded.address
     return null
@@ -578,24 +946,34 @@ export function AccountSettings() {
       })
     }
 
-    if (profile?.solanaWallet) {
+    if (canonicalSolanaWalletAddress) {
+      add({ label: 'Canonical Solana Wallet', value: canonicalSolanaWalletAddress, mono: true })
+    } else if (profile?.solanaWallet) {
       add({ label: 'Solana Wallet', value: profile.solanaWallet, mono: true })
     }
-    if (isEvmAddress(profile?.lensAccountAddress)) {
-      add({ label: 'Lens Account Address', value: profile.lensAccountAddress, mono: true })
+    if (operationalSolanaWalletAddress) {
+      add({ label: 'Operational Solana Wallet', value: operationalSolanaWalletAddress, mono: true })
     }
-    if (isEvmAddress(profile?.lensOwnerAddress)) {
-      add({ label: 'Lens Owner Address', value: profile.lensOwnerAddress, mono: true })
+    const lensAccountAddress = profile?.lensAccountAddress
+    if (isEvmAddress(lensAccountAddress)) {
+      add({ label: 'Lens Account Address', value: lensAccountAddress, mono: true })
     }
-    if (isEvmAddress(farcasterIdentity?.custodyAddress)) {
-      add({ label: 'Farcaster Custody Wallet', value: farcasterIdentity.custodyAddress, mono: true })
+    const lensOwnerAddress = profile?.lensOwnerAddress
+    if (isEvmAddress(lensOwnerAddress)) {
+      add({ label: 'Lens Owner Address', value: lensOwnerAddress, mono: true })
+    }
+    const farcasterCustodyAddress = farcasterIdentity?.custodyAddress
+    if (isEvmAddress(farcasterCustodyAddress)) {
+      add({ label: 'Farcaster Custody Wallet', value: farcasterCustodyAddress, mono: true })
     }
     for (const wallet of farcasterIdentity?.verifiedEthAddresses ?? []) {
       if (!isEvmAddress(wallet)) continue
       add({ label: 'Farcaster Verified Wallet', value: wallet, mono: true })
     }
 
-    const zoraLinkedWallets = Array.isArray(zoraProfile?.linkedWallets?.edges) ? zoraProfile.linkedWallets.edges : []
+    const zoraLinkedWallets = Array.isArray(zoraProfile?.linkedWallets?.edges)
+      ? zoraProfile?.linkedWallets?.edges ?? []
+      : []
     for (const edge of zoraLinkedWallets) {
       const walletAddress = edge?.node?.walletAddress
       if (!isEvmAddress(walletAddress)) continue
@@ -619,6 +997,8 @@ export function AccountSettings() {
     profile?.lensAccountAddress,
     profile?.lensHandle,
     profile?.lensOwnerAddress,
+    canonicalSolanaWalletAddress,
+    operationalSolanaWalletAddress,
     profile?.solanaWallet,
     zoraHandle,
     zoraProfile?.linkedWallets?.edges,
@@ -723,11 +1103,99 @@ export function AccountSettings() {
         </div>
         <p className="text-sm text-zinc-400">Wallets and linked accounts associated with your profile.</p>
 
-        {knownAddresses.length > 0 ? (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
-            <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Known Addresses</div>
+        {canonicalSmartWalletAddress ? (
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 space-y-2">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+              <span>Canonical Smart Wallet from Zora: <span className="font-mono text-zinc-300">{canonicalSmartWalletAddress}</span></span>
+              {connectedAddress ? (
+                <span>Connected owner EOA: <span className="font-mono text-zinc-300">{connectedAddress}</span></span>
+              ) : (
+                <span>Connect an owner EOA to revoke owner slots.</span>
+              )}
+            </div>
+            <div className="text-[11px] text-zinc-500">
+              Non-canonical Privy smart wallets are shown as deploy-session signers, not as the canonical smart wallet.
+            </div>
+            {ownersActionMessage ? (
+              <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+                {ownersActionMessage}
+              </div>
+            ) : null}
+            {ownersActionError ? (
+              <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+                {ownersActionError}
+              </div>
+            ) : null}
+            {smartWalletOwnersQuery.isLoading ? <div className="text-xs text-zinc-500">Loading owner slots…</div> : null}
+            {smartWalletOwnersQuery.isError ? (
+              <div className="text-xs text-red-300">
+                {smartWalletOwnersQuery.error instanceof Error
+                  ? smartWalletOwnersQuery.error.message
+                  : 'Failed to load owner slots.'}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 space-y-3">
+          <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Solana Wallet Roles</div>
+          <div className="space-y-2 text-sm text-zinc-300">
+            <div>
+              Canonical Solana Wallet:{' '}
+              <span className="font-mono text-zinc-100 break-all">
+                {canonicalSolanaWalletAddress ?? 'Not set'}
+              </span>
+            </div>
+            <div>
+              Operational Solana Wallet:{' '}
+              <span className="font-mono text-zinc-100 break-all">
+                {operationalSolanaWalletAddress ?? 'None'}
+              </span>
+            </div>
+          </div>
+          <div className="text-[11px] text-zinc-500">
+            Canonical is the default custody destination. Operational is automation-only and should not be your primary funds destination.
+          </div>
+          {linkedSolanaWallets.length > 0 ? (
             <div className="space-y-2">
-              {knownAddresses.map((item) => (
+              <label htmlFor="canonical-solana-wallet" className="text-xs uppercase tracking-[0.12em] text-zinc-500">
+                Set Canonical Solana Wallet
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <select
+                  id="canonical-solana-wallet"
+                  value={selectedCanonicalSolanaWallet}
+                  onChange={(e) => setSelectedCanonicalSolanaWallet(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none focus:border-brand-primary"
+                >
+                  {linkedSolanaWallets.map((wallet) => (
+                    <option key={`solana-option:${wallet.address}`} value={wallet.address}>
+                      {wallet.address} ({wallet.summary})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void onSetCanonicalSolanaWallet()}
+                  disabled={!canSetCanonicalSolanaWallet}
+                  className="btn-secondary disabled:opacity-50"
+                >
+                  {solanaWalletActionBusy ? 'Updating…' : 'Set Canonical'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-zinc-500">
+              No linked Solana wallets found yet. Link one first to set a canonical destination.
+            </div>
+          )}
+        </div>
+
+        {knownAddressesWithOwners.length > 0 ? (
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
+            <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Known Addresses & Owner Slots</div>
+            <div className="space-y-2">
+              {knownAddressesWithOwners.map((item) => (
                 <div key={`known:${item.address.toLowerCase()}`} className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2.5">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="font-mono text-xs sm:text-sm text-zinc-100 break-all">{item.address}</div>
@@ -762,6 +1230,48 @@ export function AccountSettings() {
                   {formatDateTime(item.verifiedAt) ? (
                     <div className="mt-1 text-[11px] text-zinc-500">Verified {formatDateTime(item.verifiedAt)}</div>
                   ) : null}
+                  {item.ownerSlots.length > 0 ? (
+                    <div className="mt-2 space-y-2 rounded-md border border-zinc-800 bg-black/20 p-2">
+                      <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
+                        Owner Slots: {item.ownerSlots.map((slot) => `#${slot.index}`).join(', ')}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {item.ownerSlots.map((slot) => {
+                          const slotOwnerAddress = slot.ownerAddress && isEvmAddress(slot.ownerAddress) ? getAddress(slot.ownerAddress) : null
+                          const isConnectedOwner = Boolean(
+                            slotOwnerAddress && connectedAddress && slotOwnerAddress.toLowerCase() === connectedAddress.toLowerCase(),
+                          )
+                          const disableRevoke =
+                            revokeBusyIndex !== null ||
+                            !connectedAddressIsOwner ||
+                            !slotOwnerAddress ||
+                            isConnectedOwner ||
+                            addressOwnerCount <= 1
+                          return (
+                            <button
+                              key={`revoke:${item.address.toLowerCase()}:${slot.index}`}
+                              type="button"
+                              onClick={() => void onRevokeOwner(slot)}
+                              disabled={disableRevoke}
+                              className="inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] text-red-200 disabled:opacity-40"
+                              title={
+                                !connectedAddressIsOwner
+                                  ? 'Connected wallet is not an owner'
+                                  : isConnectedOwner
+                                    ? 'Cannot revoke connected owner from this page'
+                                    : addressOwnerCount <= 1
+                                      ? 'Cannot revoke the last address owner'
+                                      : undefined
+                              }
+                            >
+                              {revokeBusyIndex === slot.index ? `Revoking #${slot.index}…` : `Revoke #${slot.index}`}
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -772,7 +1282,7 @@ export function AccountSettings() {
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 space-y-2">
             <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Sync Summary</div>
             <div className="text-sm text-zinc-300">
-              {knownAddresses.length} unique addresses from {profile.connectedAccounts.length} synced records.
+              {knownAddressesWithOwners.length} unique addresses from {profile.connectedAccounts.length} synced records.
             </div>
           </div>
         ) : (

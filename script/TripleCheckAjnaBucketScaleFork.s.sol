@@ -30,7 +30,7 @@ contract TripleCheckAjnaBucketScaleFork is Script {
         vm.startBroadcast(pk);
 
         uint256 bucket = 1; // bucket 0 reverts with InvalidIndex() on this pool
-        (, , , uint256 dep0, uint256 scale0) = pool.bucketInfo(bucket);
+        (,,, uint256 dep0, uint256 scale0) = pool.bucketInfo(bucket);
         console.log("Pool:", poolAddr);
         console.log("Bucket 0 pre deposit:", dep0);
         console.log("Bucket 0 scale pre:", scale0);
@@ -44,8 +44,8 @@ contract TripleCheckAjnaBucketScaleFork is Script {
         console.log("addQuoteToken lpReceived:", lpReceived);
         console.log("addQuoteToken addedAmount:", addedAmount);
 
-        (uint256 lpBalance, ) = pool.lenderInfo(bucket, deployer);
-        (uint256 bucketLPTotal, , , uint256 bucketDeposit, uint256 bucketScale) = pool.bucketInfo(bucket);
+        (uint256 lpBalance,) = pool.lenderInfo(bucket, deployer);
+        (uint256 bucketLPTotal,,, uint256 bucketDeposit, uint256 bucketScale) = pool.bucketInfo(bucket);
         console.log("LP balance:", lpBalance);
         console.log("Bucket LP total:", bucketLPTotal);
         console.log("Bucket deposit (raw):", bucketDeposit);

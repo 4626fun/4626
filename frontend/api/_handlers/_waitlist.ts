@@ -1,11 +1,13 @@
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../server/auth/_shared.js'
-import { getDb } from '../../server/_lib/postgres.js'
+import { getDb, getDbInitError, isDbConfigured } from '../../server/_lib/postgres.js'
 import { normalizeReferralCode, getClientIp, getUserAgent, hashForAttribution } from '../../server/_lib/referrals.js'
 import { checkRateLimit, RATE_LIMITS, rateLimitKey, getClientIp as getRateLimitIp } from '../../server/_lib/rateLimit.js'
+import { resolveBasenameHandle } from '../../server/_lib/basenameResolver.js'
 import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../server/_lib/waitlistPoints.js'
 import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
 import { readRequestPrincipalAddress } from '../../server/_lib/requestPrincipal.js'
 import { preprovisionWaitlistUser } from '../../server/_lib/waitlistPreprovision.js'
+import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -41,7 +43,7 @@ function isValidEmail(v: string): boolean {
 }
 
 function isSyntheticEmail(v: string): boolean {
-  return v.endsWith('@noemail.4626.fun')
+  return v.endsWith('@noemail.4626.fun') || v.endsWith('@wallet.4626.fun')
 }
 
 function isLegacySyntheticEmail(v: string): boolean {
@@ -199,6 +201,25 @@ function extractEmbeddedWalletMeta(user: any): EmbeddedWalletMeta {
   return { address: null, chainType: null, walletClientType: null }
 }
 
+function extractPrivySolanaWallet(user: any): string | null {
+  const wallets = Array.isArray(user?.wallets) ? user.wallets : []
+  const primaryWallet = user?.wallet && typeof user.wallet === 'object' ? [user.wallet] : []
+  const linked = Array.isArray(user?.linked_accounts) ? user.linked_accounts : Array.isArray(user?.linkedAccounts) ? user.linkedAccounts : []
+  const all = [...primaryWallet, ...wallets, ...linked]
+
+  for (const wallet of all) {
+    const chainType = String(wallet?.chain_type ?? wallet?.chainType ?? wallet?.chain ?? '').trim().toLowerCase()
+    const rawAddress = typeof wallet?.address === 'string' ? wallet.address : ''
+    const address = rawAddress.trim()
+    const type = String(wallet?.type ?? '').trim().toLowerCase()
+    if (!address) continue
+    if (chainType.includes('solana') || type.includes('solana')) {
+      if (isValidSolanaAddress(address)) return address
+    }
+  }
+  return null
+}
+
 async function privyGetUserByEmail(params: { appId: string; appSecret: string; email: string }): Promise<any | null> {
   const { appId, appSecret, email } = params
   const url = `https://auth.privy.io/api/v1/apps/${encodeURIComponent(appId)}/profiles/email/${encodeURIComponent(email)}`
@@ -218,7 +239,7 @@ async function privyGetUserByEmail(params: { appId: string; appSecret: string; e
   return await res.json()
 }
 
-async function privyCreateUserWithEthereumWallet(params: {
+async function privyCreateUserWithWallets(params: {
   appId: string
   appSecret: string
   email: string
@@ -234,7 +255,7 @@ async function privyCreateUserWithEthereumWallet(params: {
     },
     body: JSON.stringify({
       linked_accounts: [{ type: 'email', address: email }],
-      wallets: [{ chain_type: 'ethereum' }],
+      wallets: [{ chain_type: 'ethereum' }, { chain_type: 'solana' }],
     }),
   })
   if (!res.ok) {
@@ -249,17 +270,32 @@ async function privyCreateOrGetWaitlistUser(email: string): Promise<{
   embeddedWallet: string | null
   embeddedWalletChain: string | null
   embeddedWalletClientType: string | null
+  solanaWallet: string | null
   created: boolean
 }> {
   const auth = getPrivyAuth()
   if (!auth)
-    return { privyUserId: null, embeddedWallet: null, embeddedWalletChain: null, embeddedWalletClientType: null, created: false }
+    return {
+      privyUserId: null,
+      embeddedWallet: null,
+      embeddedWalletChain: null,
+      embeddedWalletClientType: null,
+      solanaWallet: null,
+      created: false,
+    }
   if (!isPrivyWaitlistEnabled())
-    return { privyUserId: null, embeddedWallet: null, embeddedWalletChain: null, embeddedWalletClientType: null, created: false }
+    return {
+      privyUserId: null,
+      embeddedWallet: null,
+      embeddedWalletChain: null,
+      embeddedWalletClientType: null,
+      solanaWallet: null,
+      created: false,
+    }
 
   const existing = await privyGetUserByEmail({ ...auth, email })
   const created = !existing
-  const user = existing ?? (await privyCreateUserWithEthereumWallet({ ...auth, email }))
+  const user = existing ?? (await privyCreateUserWithWallets({ ...auth, email }))
 
   const privyUserId =
     typeof user?.id === 'string'
@@ -269,11 +305,13 @@ async function privyCreateOrGetWaitlistUser(email: string): Promise<{
         : null
 
   const embeddedMeta = extractEmbeddedWalletMeta(user?.user ?? user)
+  const solanaWallet = extractPrivySolanaWallet(user?.user ?? user)
   return {
     privyUserId,
     embeddedWallet: embeddedMeta.address,
     embeddedWalletChain: embeddedMeta.chainType,
     embeddedWalletClientType: embeddedMeta.walletClientType,
+    solanaWallet,
     created,
   }
 }
@@ -332,7 +370,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const solRaw = typeof body.solanaWallet === 'string' ? body.solanaWallet : ''
-  const solanaWallet = String(solRaw || '').trim()
+  let solanaWallet = String(solRaw || '').trim()
   if (solanaWallet.length > 0 && !isValidSolanaAddress(solanaWallet)) {
     return res.status(400).json({ success: false, error: 'Invalid Solana wallet address' } satisfies ApiEnvelope<never>)
   }
@@ -390,12 +428,191 @@ export default async function handler(req: any, res: any) {
 
   const referralFromBody = normalizeReferralCodeOrNull(body.referralCode)
   const claimReferralCode = normalizeReferralCodeOrNull(body.claimReferralCode)
+  let privyUserId: string | null = null
+  let embeddedWallet: string | null = null
+  let embeddedWalletChain: string | null = null
+  let embeddedWalletClientType: string | null = null
+  const ipHash = hashForAttribution(getClientIp(req))
+  const uaHash = hashForAttribution(getUserAgent(req))
 
-  const db = await getDb()
+  if (!isAnySyntheticEmail(email)) {
+    try {
+      const privy = await privyCreateOrGetWaitlistUser(email)
+      privyUserId = privy.privyUserId
+      embeddedWallet = privy.embeddedWallet
+      embeddedWalletChain = privy.embeddedWalletChain
+      embeddedWalletClientType = privy.embeddedWalletClientType
+      if (!solanaWallet && privy.solanaWallet) {
+        solanaWallet = privy.solanaWallet
+      }
+      if (privyUserId || embeddedWallet) {
+        console.info(
+          'waitlist: privy user',
+          JSON.stringify({
+            email,
+            privyUserId,
+            embeddedWallet,
+            embeddedWalletChain,
+            embeddedWalletClientType,
+            solanaWallet: privy.solanaWallet,
+            created: privy.created,
+          }),
+        )
+      }
+    } catch (e: any) {
+      // Privy is optional. If it fails, we still accept the waitlist signup.
+      // Surface a minimal warning in logs only (no PII beyond email already provided).
+      console.warn('waitlist: privy error', e?.message ? String(e.message) : e)
+    }
+  }
+
+  const dbConfigured = isDbConfigured()
+  const supabaseOnly = isSupabaseAdminConfigured()
+  const db = supabaseOnly ? null : await getDb()
+  let supabaseFallbackError: string | null = null
   if (!db) {
+    if (isSupabaseAdminConfigured()) {
+      try {
+        const supabase = getSupabaseAdmin()
+        const nowIso = new Date().toISOString()
+        const toProfileRow = (value: any): { id: number; email: string; referral_code: string | null; primary_wallet: string | null } | null => {
+          if (!value || typeof value !== 'object') return null
+          const id = Number((value as any).id)
+          if (!Number.isFinite(id) || id <= 0) return null
+          const rowEmail = String((value as any).email ?? '').trim()
+          return {
+            id,
+            email: rowEmail || email,
+            referral_code: typeof (value as any).referral_code === 'string' ? String((value as any).referral_code) : null,
+            primary_wallet: typeof (value as any).primary_wallet === 'string' ? String((value as any).primary_wallet) : null,
+          }
+        }
+
+        const { data: existingRaw, error: existingErr } = await supabase
+          .from('profiles')
+          .select('id,email,referral_code,primary_wallet')
+          .eq('email', email)
+          .maybeSingle()
+        if (existingErr) throw new Error(existingErr.message)
+
+        let created = false
+        let row = toProfileRow(existingRaw)
+
+        if (row) {
+          const patch: Record<string, unknown> = { updated_at: nowIso }
+          if (primaryWallet.length > 0) patch.primary_wallet = primaryWallet
+          if (solanaWallet.length > 0) {
+            patch.solana_wallet = solanaWallet
+            patch.canonical_solana_wallet = solanaWallet
+          }
+          if (privyUserId) patch.privy_user_id = privyUserId
+          if (embeddedWallet) patch.embedded_wallet = embeddedWallet
+          if (embeddedWalletChain) patch.embedded_wallet_chain = embeddedWalletChain
+          if (embeddedWalletClientType) patch.embedded_wallet_client_type = embeddedWalletClientType
+          if (baseSubAccount.length > 0) patch.base_sub_account = baseSubAccount
+          if (persona) patch.persona = persona
+          if (typeof hasCreatorCoinRaw === 'boolean') patch.has_creator_coin = hasCreatorCoinRaw
+          if (typeof farcasterFid === 'number' && farcasterFid > 0) patch.farcaster_fid = farcasterFid
+          if (contactPreference) patch.contact_preference = contactPreference
+          if (verifications.length > 0) patch.verifications = verifications
+          if (cswAddress.length > 0) {
+            patch.csw_address = cswAddress
+            if (!row.primary_wallet) patch.primary_wallet = cswAddress
+          }
+
+          const { data: updatedRaw, error: updateErr } = await supabase
+            .from('profiles')
+            .update(patch)
+            .eq('id', row.id)
+            .select('id,email,referral_code,primary_wallet')
+            .single()
+          if (updateErr) throw new Error(updateErr.message)
+          row = toProfileRow(updatedRaw) ?? row
+        } else {
+          const insertPayload: Record<string, unknown> = {
+            email,
+            primary_wallet: primaryWallet.length > 0 ? primaryWallet : cswAddress.length > 0 ? cswAddress : null,
+            solana_wallet: solanaWallet.length > 0 ? solanaWallet : null,
+            privy_user_id: privyUserId,
+            embedded_wallet: embeddedWallet,
+            embedded_wallet_chain: embeddedWalletChain,
+            embedded_wallet_client_type: embeddedWalletClientType,
+            base_sub_account: baseSubAccount.length > 0 ? baseSubAccount : null,
+            csw_address: cswAddress.length > 0 ? cswAddress : null,
+            persona,
+            has_creator_coin: hasCreatorCoinRaw,
+            farcaster_fid: farcasterFid,
+            contact_preference: contactPreference,
+            verifications: verifications.length > 0 ? verifications : null,
+            created_at: nowIso,
+            updated_at: nowIso,
+          }
+          const { data: insertedRaw, error: insertErr } = await supabase
+            .from('profiles')
+            .insert(insertPayload)
+            .select('id,email,referral_code,primary_wallet')
+            .single()
+          if (insertErr) throw new Error(insertErr.message)
+          row = toProfileRow(insertedRaw)
+          created = true
+        }
+
+        if (!row?.id) throw new Error('waitlist_supabase_write_failed')
+
+        let referralCodeOut = row.referral_code
+        if (!referralCodeOut) {
+          const desired =
+            claimReferralCode ||
+            (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveBasenameHandle(primaryWallet)) : null) ||
+            (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveCreatorCoinSymbolFromWallet(primaryWallet)) : null) ||
+            `C${Number(row.id).toString(36).toUpperCase()}`
+          const { data: referralRaw, error: referralErr } = await supabase
+            .from('profiles')
+            .update({ referral_code: desired, referral_claimed_at: nowIso, updated_at: nowIso })
+            .eq('id', row.id)
+            .is('referral_code', null)
+            .select('referral_code')
+            .maybeSingle()
+          if (!referralErr && typeof referralRaw?.referral_code === 'string') {
+            referralCodeOut = String(referralRaw.referral_code)
+          } else {
+            referralCodeOut = desired
+          }
+        }
+
+        const provisionWallet = cswAddress.length > 0 ? cswAddress : primaryWallet.length > 0 ? primaryWallet : null
+        if (row.id && provisionWallet && persona === 'creator') {
+          void preprovisionWaitlistUser(row.id, provisionWallet).catch((err) => {
+            console.warn('waitlist: preprovision error', err?.message ? String(err.message) : err)
+          })
+        }
+
+        const data: WaitlistResponse = {
+          created,
+          email: String(row.email || email),
+          referralCode: referralCodeOut,
+        }
+        return res.status(200).json({ success: true, data } satisfies ApiEnvelope<WaitlistResponse>)
+      } catch (fallbackErr: any) {
+        const fallbackMessage = fallbackErr?.message ? String(fallbackErr.message) : 'waitlist_supabase_write_failed'
+        supabaseFallbackError = fallbackMessage
+        console.error('waitlist: supabase fallback failed', fallbackMessage)
+      }
+    }
+
+    const dbInitError = getDbInitError()
+    const errorMessage = supabaseOnly
+      ? supabaseFallbackError
+        ? `Waitlist Supabase write failed: ${supabaseFallbackError}`
+        : 'Waitlist Supabase write failed.'
+      : dbConfigured
+      ? dbInitError
+        ? `Waitlist database unavailable: ${dbInitError}`
+        : 'Waitlist database is unavailable. Please retry shortly.'
+      : 'Waitlist requires DB configuration (DATABASE_URL, POSTGRES_URL, or POSTGRES_URL_NON_POOLING).'
     return res.status(500).json({
       success: false,
-      error: 'Waitlist requires DB configuration (DATABASE_URL, POSTGRES_URL, or POSTGRES_URL_NON_POOLING).',
+      error: errorMessage,
     } satisfies ApiEnvelope<never>)
   }
 
@@ -408,40 +625,6 @@ export default async function handler(req: any, res: any) {
   }
   // Keep points schema ensured even if this handler is hot-reloaded separately.
   await ensureWaitlistPointsSchema(db as any)
-
-  const ipHash = hashForAttribution(getClientIp(req))
-  const uaHash = hashForAttribution(getUserAgent(req))
-
-  let privyUserId: string | null = null
-  let embeddedWallet: string | null = null
-  let embeddedWalletChain: string | null = null
-  let embeddedWalletClientType: string | null = null
-  if (!isAnySyntheticEmail(email)) {
-    try {
-      const privy = await privyCreateOrGetWaitlistUser(email)
-      privyUserId = privy.privyUserId
-      embeddedWallet = privy.embeddedWallet
-      embeddedWalletChain = privy.embeddedWalletChain
-      embeddedWalletClientType = privy.embeddedWalletClientType
-      if (privyUserId || embeddedWallet) {
-        console.info(
-          'waitlist: privy user',
-          JSON.stringify({
-            email,
-            privyUserId,
-            embeddedWallet,
-            embeddedWalletChain,
-            embeddedWalletClientType,
-            created: privy.created,
-          }),
-        )
-      }
-    } catch (e: any) {
-      // Privy is optional. If it fails, we still accept the waitlist signup.
-      // Surface a minimal warning in logs only (no PII beyond email already provided).
-      console.warn('waitlist: privy error', e?.message ? String(e.message) : e)
-    }
-  }
 
   // ---------------------------------------------------------------------------
   // Dedup guard: check if a profile already exists for this wallet/privy_user_id
@@ -475,7 +658,7 @@ export default async function handler(req: any, res: any) {
         ORDER BY
           CASE
             WHEN p.privy_user_id IS NOT NULL THEN 0
-            WHEN LOWER(p.email) LIKE '%@noemail.4626.fun' THEN 3
+            WHEN LOWER(p.email) LIKE '%@noemail.4626.fun' OR LOWER(p.email) LIKE '%@wallet.4626.fun' THEN 3
             WHEN LOWER(p.email) LIKE '%@example.com' THEN 2
             ELSE 1
           END,
@@ -523,6 +706,7 @@ export default async function handler(req: any, res: any) {
         SET email = ${nextEmail},
             primary_wallet = COALESCE(${walletForDedup}, primary_wallet),
             solana_wallet = COALESCE(${solanaWallet.length > 0 ? solanaWallet : null}, solana_wallet),
+            canonical_solana_wallet = COALESCE(${solanaWallet.length > 0 ? solanaWallet : null}, canonical_solana_wallet),
             privy_user_id = COALESCE(${privyUserId}, privy_user_id),
             embedded_wallet = COALESCE(${embeddedWallet}, embedded_wallet),
             embedded_wallet_chain = COALESCE(${embeddedWalletChain}, embedded_wallet_chain),
@@ -592,6 +776,7 @@ export default async function handler(req: any, res: any) {
         if (signupId && !referralCodeOut) {
           const desired =
             claimReferralCode ||
+            (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveBasenameHandle(primaryWallet)) : null) ||
             (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveCreatorCoinSymbolFromWallet(primaryWallet)) : null) ||
             `C${Number(signupId).toString(36).toUpperCase()}`
           try {
@@ -638,7 +823,7 @@ export default async function handler(req: any, res: any) {
 
         const data: WaitlistResponse = { created: false, email: String(row.email ?? ''), referralCode: referralCodeOut }
 
-        const provisionWallet = primaryWallet.length > 0 ? primaryWallet : cswAddress.length > 0 ? cswAddress : null
+        const provisionWallet = cswAddress.length > 0 ? cswAddress : primaryWallet.length > 0 ? primaryWallet : null
         if (signupId && provisionWallet && persona === 'creator') {
           void preprovisionWaitlistUser(signupId, provisionWallet).catch((err) => {
             console.warn('waitlist: preprovision error', err?.message ? String(err.message) : err)
@@ -655,6 +840,7 @@ export default async function handler(req: any, res: any) {
         email,
         primary_wallet,
         solana_wallet,
+        canonical_solana_wallet,
         privy_user_id,
         embedded_wallet,
         embedded_wallet_chain,
@@ -672,6 +858,7 @@ export default async function handler(req: any, res: any) {
         ${email},
         ${primaryWallet.length > 0 ? primaryWallet : null},
         ${solanaWallet.length > 0 ? solanaWallet : null},
+        ${solanaWallet.length > 0 ? solanaWallet : null},
         ${privyUserId},
         ${embeddedWallet},
         ${embeddedWalletChain},
@@ -688,6 +875,7 @@ export default async function handler(req: any, res: any) {
       ON CONFLICT (email) DO UPDATE
         SET primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),
             solana_wallet = COALESCE(EXCLUDED.solana_wallet, profiles.solana_wallet),
+            canonical_solana_wallet = COALESCE(EXCLUDED.canonical_solana_wallet, profiles.canonical_solana_wallet),
             privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
             embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, profiles.embedded_wallet),
             embedded_wallet_chain = COALESCE(EXCLUDED.embedded_wallet_chain, profiles.embedded_wallet_chain),
@@ -743,6 +931,7 @@ export default async function handler(req: any, res: any) {
     if (signupId && !referralCodeOut) {
       const desired =
         claimReferralCode ||
+        (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveBasenameHandle(primaryWallet)) : null) ||
         (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveCreatorCoinSymbolFromWallet(primaryWallet)) : null) ||
         `C${Number(signupId).toString(36).toUpperCase()}`
       try {
@@ -835,7 +1024,7 @@ export default async function handler(req: any, res: any) {
 
     // Fire-and-forget: pre-provision server wallet + resolve identities.
     // This runs after the response so it doesn't block signup.
-    const provisionWallet = primaryWallet.length > 0 ? primaryWallet : cswAddress.length > 0 ? cswAddress : null
+    const provisionWallet = cswAddress.length > 0 ? cswAddress : primaryWallet.length > 0 ? primaryWallet : null
     if (signupId && provisionWallet && persona === 'creator') {
       void preprovisionWaitlistUser(signupId, provisionWallet).catch((err) => {
         console.warn('waitlist: preprovision error', err?.message ? String(err.message) : err)
@@ -856,6 +1045,7 @@ export default async function handler(req: any, res: any) {
             email,
             primary_wallet,
             solana_wallet,
+            canonical_solana_wallet,
             privy_user_id,
             embedded_wallet,
             embedded_wallet_chain,
@@ -873,6 +1063,7 @@ export default async function handler(req: any, res: any) {
             ${email},
             ${primaryWallet.length > 0 ? primaryWallet : null},
             ${solanaWallet.length > 0 ? solanaWallet : null},
+            ${solanaWallet.length > 0 ? solanaWallet : null},
             ${privyUserId},
             ${embeddedWallet},
             ${embeddedWalletChain},
@@ -889,6 +1080,7 @@ export default async function handler(req: any, res: any) {
           ON CONFLICT (email) DO UPDATE
             SET primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),
                 solana_wallet = COALESCE(EXCLUDED.solana_wallet, profiles.solana_wallet),
+                canonical_solana_wallet = COALESCE(EXCLUDED.canonical_solana_wallet, profiles.canonical_solana_wallet),
                 privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),
                 embedded_wallet = COALESCE(EXCLUDED.embedded_wallet, profiles.embedded_wallet),
                 embedded_wallet_chain = COALESCE(EXCLUDED.embedded_wallet_chain, profiles.embedded_wallet_chain),

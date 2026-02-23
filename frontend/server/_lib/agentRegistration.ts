@@ -1,6 +1,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { resolveFarcasterProfile } from './farcasterProvider.js'
+import { getDb, isDbConfigured } from './postgres.js'
+
 export type RegistrationService = {
   name: string
   endpoint: string
@@ -67,6 +70,10 @@ const registrationPaths = [
   path.join(process.cwd(), 'frontend', 'public', '.well-known', 'agent-registration.json'),
 ]
 
+type Db = {
+  sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
+}
+
 function parseRegistration(raw: string): RegistrationFile | null {
   try {
     const parsed = JSON.parse(raw) as RegistrationFile
@@ -128,8 +135,88 @@ function parseSupportedTrust(raw: string | undefined): string[] {
     .filter(Boolean)
 }
 
+function parseBooleanFlag(raw: string | undefined): boolean | null {
+  if (typeof raw !== 'string') return null
+  const normalized = raw.trim().toLowerCase()
+  if (!normalized) return null
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false
+  return null
+}
+
+function upsertServiceByName(services: RegistrationService[], next: RegistrationService): void {
+  const key = String(next.name ?? '').trim().toLowerCase()
+  if (!key) return
+  const idx = services.findIndex((entry) => String(entry?.name ?? '').trim().toLowerCase() === key)
+  if (idx >= 0) services[idx] = next
+  else services.push(next)
+}
+
 function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
+}
+
+function normalizeAddress(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : ''
+}
+
+function normalizeHandle(value: unknown): string | null {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (!raw) return null
+  const out = raw.startsWith('@') ? raw.slice(1).trim() : raw
+  return out || null
+}
+
+function parsePositiveInt(value: unknown): number | null {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0 || Math.floor(n) !== n) return null
+  return n
+}
+
+function warpcastProfileUrl(params: { fid?: number | null; username?: string | null }): string | null {
+  const username = normalizeHandle(params.username)
+  if (username) return `https://warpcast.com/${username}`
+  const fid = parsePositiveInt(params.fid)
+  if (fid) return `https://warpcast.com/~/profiles/${fid}`
+  return null
+}
+
+async function resolveProfileFarcasterByAddress(address: string): Promise<{ fid: number | null; username: string | null } | null> {
+  const owner = normalizeAddress(address)
+  if (!isAddressLike(owner)) return null
+  if (!isDbConfigured()) return null
+  const db = (await getDb()) as unknown as Db | null
+  if (!db) return null
+
+  const result = await db.sql`
+    SELECT
+      farcaster_fid,
+      preprov_farcaster_username,
+      updated_at,
+      created_at
+    FROM profiles
+    WHERE LOWER(primary_wallet) = ${owner}
+       OR LOWER(embedded_wallet) = ${owner}
+       OR LOWER(csw_address) = ${owner}
+       OR LOWER(base_sub_account) = ${owner}
+       OR LOWER(primary_smart_wallet) = ${owner}
+       OR LOWER(primary_embedded_eoa) = ${owner}
+       OR EXISTS (
+         SELECT 1
+         FROM profile_wallets pw
+         WHERE pw.profile_id = profiles.id
+           AND LOWER(pw.address) = ${owner}
+       )
+    ORDER BY updated_at DESC NULLS LAST, created_at ASC
+    LIMIT 1;
+  `
+
+  const row = result.rows?.[0]
+  if (!row) return null
+  return {
+    fid: parsePositiveInt(row.farcaster_fid),
+    username: normalizeHandle(row.preprov_farcaster_username),
+  }
 }
 
 function parseAgentRegistryRef(value: string): { chainId: number; registryAddress: string } | null {
@@ -316,6 +403,12 @@ export function buildAgentRegistration(origin: string): {
     else services.splice(services.findIndex((s) => s.name === 'XMTP') + 1, 0, walletService)
   }
 
+
+  const envX402Support = parseBooleanFlag(process.env.ERC8004_X402_SUPPORT)
+  const x402Support =
+    envX402Support ??
+    (typeof base.x402Support === 'boolean' ? base.x402Support : false)
+
   const payload: RegistrationFile = {
     ...base,
     type: REGISTRATION_TYPE,
@@ -323,7 +416,7 @@ export function buildAgentRegistration(origin: string): {
     description,
     image: normalizeUrl(imageRaw, origin),
     services,
-    x402Support: typeof base.x402Support === 'boolean' ? base.x402Support : false,
+    x402Support,
     active: typeof base.active === 'boolean' ? base.active : true,
     registrations: [
       {
@@ -336,4 +429,44 @@ export function buildAgentRegistration(origin: string): {
   }
 
   return { payload }
+}
+
+export async function enrichAgentRegistrationWithFarcaster(params: {
+  payload: RegistrationFile
+  ownerAddress?: string | null
+}): Promise<RegistrationFile> {
+  const owner = normalizeAddress(params.ownerAddress)
+  if (!isAddressLike(owner)) return params.payload
+
+  const profileHint = await resolveProfileFarcasterByAddress(owner).catch(() => null)
+  const providerResolved = await resolveFarcasterProfile({
+    address: owner,
+    fid: profileHint?.fid ?? null,
+  }).catch(() => null)
+
+  const fid = parsePositiveInt(providerResolved?.profile?.fid) ?? profileHint?.fid ?? null
+  const username = normalizeHandle(providerResolved?.profile?.username) ?? profileHint?.username ?? null
+  const profileUrl = warpcastProfileUrl({ fid, username })
+  if (!profileUrl) return params.payload
+
+  const nextServices = Array.isArray(params.payload.services) ? [...params.payload.services] : []
+  const farcasterService: RegistrationService = {
+    name: 'farcaster',
+    endpoint: profileUrl,
+    ...(username ? { username } : null),
+    ...(fid ? { fid } : null),
+  }
+  const idx = nextServices.findIndex((service) => String(service?.name ?? '').trim().toLowerCase() === 'farcaster')
+  if (idx >= 0) nextServices[idx] = farcasterService
+  else nextServices.push(farcasterService)
+
+  return {
+    ...params.payload,
+    services: nextServices,
+    farcaster: {
+      ...(username ? { username } : null),
+      ...(fid ? { fid } : null),
+      profileUrl,
+    },
+  }
 }

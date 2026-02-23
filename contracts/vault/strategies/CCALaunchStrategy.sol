@@ -33,12 +33,9 @@ interface ITaxHook {
  * @notice Interface for Uniswap's CCA Factory
  */
 interface IContinuousClearingAuctionFactory {
-    function initializeDistribution(
-        address token,
-        uint256 amount,
-        bytes calldata configData,
-        bytes32 salt
-    ) external returns (address);
+    function initializeDistribution(address token, uint256 amount, bytes calldata configData, bytes32 salt)
+        external
+        returns (address);
 }
 
 /**
@@ -46,14 +43,11 @@ interface IContinuousClearingAuctionFactory {
  * @notice Interface for individual CCA auctions
  */
 interface IContinuousClearingAuction {
-    function submitBid(
-        uint256 maxPrice,
-        uint128 amount,
-        address owner,
-        uint256 prevTickPrice,
-        bytes calldata hookData
-    ) external payable returns (uint256 bidId);
-    
+    function submitBid(uint256 maxPrice, uint128 amount, address owner, uint256 prevTickPrice, bytes calldata hookData)
+        external
+        payable
+        returns (uint256 bidId);
+
     // v1.1.0 returns a Checkpoint struct; we don't need return data for our usage.
     function checkpoint() external;
     function exitBid(uint256 bidId) external;
@@ -61,7 +55,7 @@ interface IContinuousClearingAuction {
     function isGraduated() external view returns (bool);
     function sweepCurrency() external;
     function sweepUnsoldTokens() external;
-    
+
     function clearingPrice() external view returns (uint256);
     function currencyRaised() external view returns (uint256);
     function totalSupply() external view returns (uint128);
@@ -71,19 +65,19 @@ interface IContinuousClearingAuction {
  * @title CCALaunchStrategy
  * @author 0xakita.eth
  * @notice Fair launch strategy using Uniswap's Continuous Clearing Auction
- * 
+ *
  * @dev USE CASES:
  *      1. Initial ■AKITA token launch - fair price discovery
  *      2. Creator token fundraise - no sniping, early participants rewarded
  *      3. Periodic fee auctions - sell accumulated fees fairly
- * 
+ *
  * @dev WHY CCA?
  *      - Official Uniswap mechanism (already deployed on Base)
  *      - Fair price discovery - no timing games
  *      - Early participants get better prices naturally
  *      - No MEV/sandwich attacks
  *      - Graduates to Uniswap V4 pool automatically
- * 
+ *
  * @dev CCA Factory is chain-specific; configure via `CCA_FACTORY`.
  */
 contract CCALaunchStrategy is Ownable, ReentrancyGuard {
@@ -96,7 +90,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     /// @notice Uniswap v1.1.0 CCA factory (canonical on Base/Mainnet/Unichain/Sepolia)
     /// @dev See https://github.com/Uniswap/continuous-clearing-auction#deployments
     address public constant UNISWAP_CCA_FACTORY_V110 = 0xcca1101C61cF5cb44C968947985300DF945C3565;
-    
+
     /// @notice Milli-basis points constant
     uint24 public constant MPS = 1e7;
     /// @notice Q96 fixed point scalar (2^96) used by Uniswap pricing
@@ -108,47 +102,47 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
 
     /// @notice Token being auctioned (e.g., ■AKITA)
     IERC20 public immutable auctionToken;
-    
+
     /// @notice Currency to raise (address(0) for ETH)
     address public currency;
 
     /// @notice Uniswap CCA factory used to create auctions (upgradeable by owner)
     /// @dev Stored in state so we can migrate factory versions without redeploying this strategy.
     address public ccaFactory;
-    
+
     /// @notice Current active auction (if any)
     address public currentAuction;
-    
+
     /// @notice Historical auctions
     address[] public pastAuctions;
-    
+
     /// @notice Funds recipient (vault or treasury)
     address public fundsRecipient;
-    
+
     /// @notice Unsold tokens recipient
     address public tokensRecipient;
-    
+
     /// @notice Oracle to configure with V4 pool on graduation
     address public oracle;
-    
+
     /// @notice V4 PoolManager (configure via `setPoolManager`)
     IPoolManager public poolManager;
-    
+
     /// @notice Tax hook for the V4 pool (configure via `setTaxHook`)
     address public taxHook;
-    
+
     /// @notice Fee recipient for the tax hook (GaugeController)
     address public feeRecipient;
-    
+
     /// @notice Tax rate in basis points (690 = 6.9%)
     uint256 public taxRateBps = 690;
-    
+
     /// @notice Fee tier for V4 pool (default 3000 = 0.3%)
     uint24 public poolFeeTier = 3000;
-    
+
     /// @notice Tick spacing for V4 pool
     int24 public poolTickSpacing = 60;
-    
+
     /// @notice Approved addresses that can launch auctions (e.g., VaultActivationBatcher)
     mapping(address => bool) public approvedLaunchers;
 
@@ -158,14 +152,14 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
 
     /// @notice Default auction duration in blocks (~1 week on Base at 2s blocks)
     uint64 public defaultDuration = 302_400; // ~7 days
-    
+
     /// @notice Default claim delay after auction ends
     uint64 public defaultClaimDelay = 3600; // ~2 hours
-    
+
     /// @notice Default tick spacing in Q96 (recommended ~1% of floor price)
     /// @dev In Uniswap CCA, tickSpacing is a *price granularity* in Q96, not an ERC20/ETH amount.
     uint256 public defaultTickSpacing = (Q96 / 1000) / 100; // 1% of 0.001 ETH per token (Q96)
-    
+
     /// @notice Default floor price in Q96
     /// @dev 0.001 ETH per 1 token => 1 ETH buys 1000 tokens => floorPrice = 0.001 * 2^96 = Q96/1000.
     uint256 public defaultFloorPrice = Q96 / 1000;
@@ -175,17 +169,13 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     // ================================
 
     event AuctionCreated(
-        address indexed auction,
-        address indexed token,
-        uint256 totalSupply,
-        uint64 startBlock,
-        uint64 endBlock
+        address indexed auction, address indexed token, uint256 totalSupply, uint64 startBlock, uint64 endBlock
     );
-    
+
     event AuctionGraduated(address indexed auction, uint256 currencyRaised, uint256 finalPrice);
     event FundsSwept(address indexed auction, uint256 amount);
     event TokensSwept(address indexed auction, uint256 amount);
-    
+
     event ConfigUpdated(string param, uint256 value);
     event RecipientsUpdated(address fundsRecipient, address tokensRecipient);
     event OracleConfigured(address indexed oracle, address poolManager, address hook);
@@ -228,7 +218,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         if (_auctionToken == address(0)) revert ZeroAddress();
         if (_fundsRecipient == address(0)) revert ZeroAddress();
         if (_tokensRecipient == address(0)) revert ZeroAddress();
-        
+
         auctionToken = IERC20(_auctionToken);
         currency = _currency;
         fundsRecipient = _fundsRecipient;
@@ -314,14 +304,8 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         uint64 claimBlock = endBlock + defaultClaimDelay;
 
         // Build auction parameters
-        bytes memory configData = _encodeAuctionParams(
-            floorPrice,
-            requiredRaise,
-            startBlock,
-            endBlock,
-            claimBlock,
-            auctionSteps
-        );
+        bytes memory configData =
+            _encodeAuctionParams(floorPrice, requiredRaise, startBlock, endBlock, claimBlock, auctionSteps);
 
         // Transfer tokens to this contract for auction
         auctionToken.safeTransferFrom(msg.sender, address(this), amount);
@@ -333,12 +317,8 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         // NOTE: Uniswap's verified Base deployment expects a `bytes32 salt` parameter.
         // We derive a deterministic salt from the config to avoid collisions.
         bytes32 salt = keccak256(abi.encode(address(auctionToken), amount, configData));
-        auction = IContinuousClearingAuctionFactory(ccaFactory).initializeDistribution(
-            address(auctionToken),
-            amount,
-            configData,
-            salt
-        );
+        auction = IContinuousClearingAuctionFactory(ccaFactory)
+            .initializeDistribution(address(auctionToken), amount, configData, salt);
 
         currentAuction = auction;
 
@@ -352,12 +332,12 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
      * @param requiredRaise Minimum currency to raise for graduation
      * @param auctionSteps Packed auction steps data
      */
-    function launchAuction(
-        uint256 amount,
-        uint256 floorPrice,
-        uint128 requiredRaise,
-        bytes calldata auctionSteps
-    ) external onlyApprovedOrOwner nonReentrant returns (address auction) {
+    function launchAuction(uint256 amount, uint256 floorPrice, uint128 requiredRaise, bytes calldata auctionSteps)
+        external
+        onlyApprovedOrOwner
+        nonReentrant
+        returns (address auction)
+    {
         return _launchAuctionInternal(amount, floorPrice, requiredRaise, auctionSteps);
     }
 
@@ -366,18 +346,20 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
      * @param amount Amount of tokens to auction
      * @param requiredRaise Minimum currency to raise
      */
-    function launchAuctionSimple(
-        uint256 amount,
-        uint128 requiredRaise
-    ) external onlyApprovedOrOwner nonReentrant returns (address auction) {
+    function launchAuctionSimple(uint256 amount, uint128 requiredRaise)
+        external
+        onlyApprovedOrOwner
+        nonReentrant
+        returns (address auction)
+    {
         // Create default Uniswap-safe auction steps:
         // - monotonically increasing issuance rate
         // - large issuance in final block to reduce end-price manipulability
         bytes memory auctionSteps = _createUniswapSafeDefaultSteps(defaultDuration);
-        
+
         // Use default floor price
         uint256 floorPrice = defaultFloorPrice;
-        
+
         // Forward to internal implementation (preserves msg.sender and nonReentrant semantics)
         return _launchAuctionInternal(amount, floorPrice, requiredRaise, auctionSteps);
     }
@@ -406,28 +388,28 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         if (!IContinuousClearingAuction(currentAuction).isGraduated()) {
             revert AuctionNotGraduated();
         }
-        
+
         IContinuousClearingAuction auction = IContinuousClearingAuction(currentAuction);
-        
+
         uint256 raised = auction.currencyRaised();
         uint256 finalPrice = auction.clearingPrice();
-        
+
         auction.sweepCurrency();
-        
+
         // Configure oracle with V4 pool if all components are set
         if (oracle != address(0) && address(poolManager) != address(0)) {
             _configureOracleV4Pool();
         }
-        
+
         // NOTE: Tax hook must be configured separately by token owner!
         // The SimpleSellTaxHook
         // requires msg.sender == token.owner() to call setTaxConfig.
         // Use getTaxHookCalldata() to get the exact calldata for ERC-4337 batching.
-        
+
         emit AuctionGraduated(currentAuction, raised, finalPrice);
         emit FundsSwept(currentAuction, raised);
     }
-    
+
     /**
      * @notice Configure oracle with V4 pool details
      * @dev Called automatically on graduation if oracle is set
@@ -436,11 +418,11 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         // Sort tokens for pool key (token0 < token1)
         address token0;
         address token1;
-        
+
         // currency = address(0) means ETH, which is Currency.wrap(address(0)) in V4
         address tokenAddr = address(auctionToken);
         address currencyAddr = currency; // address(0) for ETH
-        
+
         if (tokenAddr < currencyAddr || currencyAddr == address(0)) {
             // ETH (address(0)) is always token0 in Uniswap V4
             if (currencyAddr == address(0)) {
@@ -454,7 +436,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
             token0 = currencyAddr;
             token1 = tokenAddr;
         }
-        
+
         // Build pool key
         PoolKey memory poolKey = PoolKey({
             currency0: Currency.wrap(token0),
@@ -463,14 +445,14 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
             tickSpacing: poolTickSpacing,
             hooks: IHooks(taxHook)
         });
-        
+
         // Configure oracle (Chainlink-style price uses V4 TWAP × Chainlink ETH/USD)
         bool creatorIsToken0 = token0 == tokenAddr;
         ICreatorOracle(oracle).setV4Pool(address(poolManager), poolKey, creatorIsToken0);
-        
+
         emit V4PoolConfigured(oracle, token0, token1);
     }
-    
+
     /**
      * @notice Get the calldata for configuring the tax hook
      * @dev Returns the exact bytes to call on the tax hook (for ERC-4337 batching)
@@ -482,16 +464,16 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         target = taxHook;
         data = abi.encodeWithSelector(
             ITaxHook.setTaxConfig.selector,
-            address(auctionToken),  // The ■TOKEN
-            currency,               // Counter asset (address(0) for ETH)
-            feeRecipient,           // GaugeController receives fees
-            taxRateBps,             // 690 = 6.9%
+            address(auctionToken), // The ■TOKEN
+            currency, // Counter asset (address(0) for ETH)
+            feeRecipient, // GaugeController receives fees
+            taxRateBps, // 690 = 6.9%
             currency == address(0), // counterIsEth
-            true,                   // enabled
-            false                   // don't lock (allow changes)
+            true, // enabled
+            false // don't lock (allow changes)
         );
     }
-    
+
     /**
      * @notice Get all calldata needed for "Click 2" (complete auction + configure hook)
      * @dev Returns array of calls for ERC-4337 batching:
@@ -500,17 +482,14 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
      * @return targets Array of addresses to call
      * @return calldatas Array of calldata for each call
      */
-    function getCompleteAuctionCalldata() external view returns (
-        address[] memory targets,
-        bytes[] memory calldatas
-    ) {
+    function getCompleteAuctionCalldata() external view returns (address[] memory targets, bytes[] memory calldatas) {
         targets = new address[](2);
         calldatas = new bytes[](2);
-        
+
         // Call 1: sweepCurrency on this strategy
         targets[0] = address(this);
         calldatas[0] = abi.encodeWithSelector(this.sweepCurrency.selector);
-        
+
         // Call 2: setTaxConfig on the tax hook
         targets[1] = taxHook;
         calldatas[1] = abi.encodeWithSelector(
@@ -524,7 +503,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
             false
         );
     }
-    
+
     /**
      * @notice Manually configure oracle V4 pool (if not done on graduation)
      */
@@ -539,12 +518,12 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
      */
     function sweepUnsoldTokens() external nonReentrant {
         if (currentAuction == address(0)) revert NoActiveAuction();
-        
+
         IContinuousClearingAuction auction = IContinuousClearingAuction(currentAuction);
-        
+
         uint256 unsold = auctionToken.balanceOf(currentAuction);
         auction.sweepUnsoldTokens();
-        
+
         emit TokensSwept(currentAuction, unsold);
     }
 
@@ -565,17 +544,17 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     ) internal view returns (bytes memory) {
         // AuctionParameters struct encoding
         return abi.encode(
-            currency,           // currency (address(0) for ETH)
-            tokensRecipient,    // tokensRecipient
-            fundsRecipient,     // fundsRecipient
-            startBlock,         // startBlock
-            endBlock,           // endBlock
-            claimBlock,         // claimBlock
+            currency, // currency (address(0) for ETH)
+            tokensRecipient, // tokensRecipient
+            fundsRecipient, // fundsRecipient
+            startBlock, // startBlock
+            endBlock, // endBlock
+            claimBlock, // claimBlock
             defaultTickSpacing, // tickSpacing
-            address(0),         // validationHook (none for now)
-            floorPrice,         // floorPrice
-            requiredRaise,      // requiredCurrencyRaised
-            auctionSteps        // auctionStepsData
+            address(0), // validationHook (none for now)
+            floorPrice, // floorPrice
+            requiredRaise, // requiredCurrencyRaised
+            auctionSteps // auctionStepsData
         );
     }
 
@@ -587,11 +566,11 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         // Single step: sell 100% of tokens evenly over duration
         // mps = MPS (100% = 10,000,000 mps over entire duration)
         uint24 mpsPerBlock = uint24(MPS / duration);
-        
+
         // Pack: HIGH 24 bits = mps, LOW 40 bits = blockDelta
         // StepLib.parse() expects: mps = uint24(bytes3(data)), blockDelta = uint40(uint64(data))
         bytes8 packed = bytes8((uint64(mpsPerBlock) << 40) | uint64(duration));
-        
+
         return abi.encodePacked(packed);
     }
 
@@ -604,25 +583,25 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         uint64 phase1Duration = duration / 2;
         uint64 phase2Duration = duration / 4;
         uint64 phase3Duration = duration - phase1Duration - phase2Duration;
-        
+
         // Use uint256 for intermediate calculations to avoid overflow
         uint256 mpsValue = uint256(MPS);
-        
+
         // Pack format: HIGH 24 bits = mps, LOW 40 bits = blockDelta
         // StepLib.parse() expects: mps = uint24(bytes3(data)), blockDelta = uint40(uint64(data))
-        
+
         // Phase 1: 20% over 50% of time = slow
         uint24 mps1 = uint24((mpsValue * 2000) / 10000 / phase1Duration); // 20% / phase1
         bytes8 packed1 = bytes8((uint64(mps1) << 40) | uint64(phase1Duration));
-        
+
         // Phase 2: 30% over 25% of time = medium
         uint24 mps2 = uint24((mpsValue * 3000) / 10000 / phase2Duration);
         bytes8 packed2 = bytes8((uint64(mps2) << 40) | uint64(phase2Duration));
-        
+
         // Phase 3: 50% over 25% of time = fast
         uint24 mps3 = uint24((mpsValue * 5000) / 10000 / phase3Duration);
         bytes8 packed3 = bytes8((uint64(mps3) << 40) | uint64(phase3Duration));
-        
+
         return abi.encodePacked(packed1, packed2, packed3);
     }
 
@@ -712,7 +691,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         tokensRecipient = _tokensRecipient;
         emit RecipientsUpdated(_fundsRecipient, _tokensRecipient);
     }
-    
+
     /**
      * @notice Configure oracle for V4 pool setup on graduation
      * @param _oracle Oracle address to configure
@@ -720,19 +699,17 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
      * @param _taxHook Tax hook address for the pool
      * @param _feeRecipient GaugeController to receive 6.9% trade fees
      */
-    function setOracleConfig(
-        address _oracle,
-        address _poolManager,
-        address _taxHook,
-        address _feeRecipient
-    ) external onlyOwner {
+    function setOracleConfig(address _oracle, address _poolManager, address _taxHook, address _feeRecipient)
+        external
+        onlyOwner
+    {
         oracle = _oracle;
         poolManager = IPoolManager(_poolManager);
         taxHook = _taxHook;
         feeRecipient = _feeRecipient;
         emit OracleConfigured(_oracle, _poolManager, _taxHook);
     }
-    
+
     /**
      * @notice Update fee recipient (GaugeController)
      * @param _feeRecipient New fee recipient address
@@ -741,7 +718,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         if (_feeRecipient == address(0)) revert ZeroAddress();
         feeRecipient = _feeRecipient;
     }
-    
+
     /**
      * @notice Update tax rate
      * @param _taxRateBps Tax rate in basis points (690 = 6.9%)
@@ -750,7 +727,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         if (_taxRateBps > 1000) revert("Tax too high"); // Max 10%
         taxRateBps = _taxRateBps;
     }
-    
+
     /**
      * @notice Update V4 pool fee tier
      * @param _feeTier Fee in hundredths of bips (3000 = 0.3%)
@@ -759,7 +736,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         poolFeeTier = _feeTier;
         emit ConfigUpdated("poolFeeTier", _feeTier);
     }
-    
+
     /**
      * @notice Update V4 pool tick spacing
      * @param _tickSpacing Tick spacing for the pool
@@ -776,18 +753,16 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     /**
      * @notice Get current auction status
      */
-    function getAuctionStatus() external view returns (
-        address auction,
-        bool isActive,
-        bool isGraduated,
-        uint256 clearingPrice,
-        uint256 currencyRaised
-    ) {
+    function getAuctionStatus()
+        external
+        view
+        returns (address auction, bool isActive, bool isGraduated, uint256 clearingPrice, uint256 currencyRaised)
+    {
         auction = currentAuction;
         if (auction == address(0)) {
             return (address(0), false, false, 0, 0);
         }
-        
+
         IContinuousClearingAuction cca = IContinuousClearingAuction(auction);
         isGraduated = cca.isGraduated();
         isActive = !isGraduated;
@@ -818,11 +793,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     /**
      * @notice Emergency withdraw tokens stuck in strategy
      */
-    function emergencyWithdraw(
-        address token,
-        uint256 amount,
-        address to
-    ) external onlyOwner {
+    function emergencyWithdraw(address token, uint256 amount, address to) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
         IERC20(token).safeTransfer(to, amount);
     }
@@ -838,5 +809,4 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
 
     receive() external payable {}
 }
-
 

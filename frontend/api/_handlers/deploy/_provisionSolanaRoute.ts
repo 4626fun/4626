@@ -20,8 +20,6 @@ type ProvisionRouteRequest = {
   shareOft?: string
   solanaDecimals?: number | string
   deployEnv?: string
-  tokenName?: string
-  tokenSymbol?: string
   scalerExponent?: number | string
   payerKp?: string
   payForRelay?: boolean
@@ -32,6 +30,7 @@ type ProvisionRouteResponse = {
   mintPubkey: string
   mintBytes32: Hex
   runner?: string
+  tokenSymbol?: string
   routeScalar: string
 }
 
@@ -58,6 +57,129 @@ const BASE_SOLANA_BRIDGE_ABI = [
     outputs: [{ type: 'uint256' }],
   },
 ] as const
+
+const ERC20_METADATA_ABI = [
+  {
+    type: 'function',
+    name: 'name',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'string' }],
+  },
+  {
+    type: 'function',
+    name: 'symbol',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'string' }],
+  },
+] as const
+
+async function readShareOftMetadata(params: {
+  publicClient: any
+  shareOft: Address
+}): Promise<{ name: string; symbol: string } | null> {
+  try {
+    const [nameRaw, symbolRaw] = await Promise.all([
+      params.publicClient.readContract({
+        address: params.shareOft,
+        abi: ERC20_METADATA_ABI,
+        functionName: 'name',
+      }),
+      params.publicClient.readContract({
+        address: params.shareOft,
+        abi: ERC20_METADATA_ABI,
+        functionName: 'symbol',
+      }),
+    ])
+    const name = typeof nameRaw === 'string' ? nameRaw.trim() : ''
+    const symbol = typeof symbolRaw === 'string' ? symbolRaw.trim() : ''
+    if (!name || !symbol) return null
+    return { name, symbol }
+  } catch {
+    return null
+  }
+}
+
+const WRAP_TOKEN_NAME_MAX_LENGTH = 32
+const WRAP_TOKEN_SYMBOL_MAX_LENGTH = 12
+type WrapTokenSymbolMode = 'auto' | 'unicode' | 'ascii'
+
+function sanitizeWrapTokenName(raw: string, shareOft: Address): string {
+  const fallback = `CreatorShare-${shareOft.slice(2, 8)}`
+  const ascii = String(raw ?? '')
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const resolved = ascii || fallback
+  return resolved.slice(0, WRAP_TOKEN_NAME_MAX_LENGTH)
+}
+
+function readWrapTokenSymbolMode(): WrapTokenSymbolMode {
+  const raw = String(process.env.SOLANA_BRIDGE_WRAP_SYMBOL_MODE ?? 'auto')
+    .trim()
+    .toLowerCase()
+  if (raw === 'unicode' || raw === 'ascii' || raw === 'auto') return raw
+  return 'auto'
+}
+
+function sanitizeWrapTokenSymbolUnicode(raw: string, shareOft: Address): string {
+  const fallback = `■${shareOft.slice(2, 6).toUpperCase()}`
+  const normalized = String(raw ?? '')
+    .normalize('NFKC')
+    .toUpperCase()
+    .replace(/\s+/g, '')
+  const cleaned = normalized.replace(/[^A-Z0-9■]/g, '')
+  const resolved = cleaned || fallback
+  return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
+}
+
+function sanitizeWrapTokenSymbolAscii(raw: string, shareOft: Address): string {
+  const fallbackPrefixRaw = process.env.SOLANA_BRIDGE_WRAP_SYMBOL_PREFIX
+  const fallbackPrefix = (fallbackPrefixRaw === undefined ? 'CS' : String(fallbackPrefixRaw))
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  const fallback = `${fallbackPrefix}${shareOft.slice(2, 6).toUpperCase()}`
+  const cleaned = String(raw ?? '')
+    .normalize('NFKD')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  const resolved = cleaned || fallback
+  return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
+}
+
+function buildWrapTokenSymbolCandidates(raw: string, shareOft: Address): string[] {
+  const mode = readWrapTokenSymbolMode()
+  const unicode = sanitizeWrapTokenSymbolUnicode(raw, shareOft)
+  const ascii = sanitizeWrapTokenSymbolAscii(raw, shareOft)
+  const out: string[] = []
+  const pushUnique = (value: string): void => {
+    if (!value || out.includes(value)) return
+    out.push(value)
+  }
+  if (mode === 'unicode') pushUnique(unicode)
+  else if (mode === 'ascii') pushUnique(ascii)
+  else {
+    pushUnique(unicode)
+    pushUnique(ascii)
+  }
+  return out
+}
+
+function isLikelyUnicodeSymbolUnsupportedError(message: string): boolean {
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('utf-8') ||
+    lower.includes('utf8') ||
+    lower.includes('unicode') ||
+    lower.includes('invalid symbol') ||
+    lower.includes('symbol is invalid') ||
+    lower.includes('invalid metadata') ||
+    lower.includes('invalid character')
+  )
+}
 
 function readProvisionerSecret(): string {
   return String(
@@ -261,41 +383,85 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const payForRelay = typeof body?.payForRelay === 'boolean'
     ? body.payForRelay
     : String(process.env.SOLANA_BRIDGE_PAY_FOR_RELAY ?? '1').trim() !== '0'
-  const tokenName = String(body?.tokenName ?? `CreatorShare-${shareOft.slice(2, 8)}`).trim() || `CreatorShare-${shareOft.slice(2, 8)}`
-  const tokenSymbol = String(body?.tokenSymbol ?? process.env.SOLANA_BRIDGE_WRAP_SYMBOL_SUFFIX ?? '4626').trim() || '4626'
+  const rpcUrl = (process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http(rpcUrl, { timeout: 20_000 }),
+  })
+  const shareOftMetadata = await readShareOftMetadata({ publicClient, shareOft })
+  if (!shareOftMetadata) {
+    return res.status(409).json({
+      success: false,
+      error: 'ShareOFT metadata unavailable. CreatorShareOFT name/symbol are required for Solana route provisioning.',
+    } satisfies ApiEnvelope<never>)
+  }
+  const tokenName = sanitizeWrapTokenName(shareOftMetadata.name, shareOft)
+  const tokenSymbolCandidates = buildWrapTokenSymbolCandidates(shareOftMetadata.symbol, shareOft)
 
   try {
-    const wrapArgs = [
-      'sol',
-      'bridge',
-      'wrap-token',
-      '--deploy-env',
-      deployEnv,
-      '--remote-token',
-      shareOft,
-      '--decimals',
-      String(solanaDecimals),
-      '--name',
-      tokenName,
-      '--symbol',
-      tokenSymbol,
-      '--scaler-exponent',
-      String(scalerExponent),
-      '--payer-kp',
-      payerKp,
-    ]
-    if (payForRelay) wrapArgs.push('--pay-for-relay')
+    const buildWrapArgs = (tokenSymbol: string): string[] => {
+      const args = [
+        'sol',
+        'bridge',
+        'wrap-token',
+        '--deploy-env',
+        deployEnv,
+        '--remote-token',
+        shareOft,
+        '--decimals',
+        String(solanaDecimals),
+        '--name',
+        tokenName,
+        '--symbol',
+        tokenSymbol,
+        '--scaler-exponent',
+        String(scalerExponent),
+        '--payer-kp',
+        payerKp,
+      ]
+      if (payForRelay) args.push('--pay-for-relay')
+      return args
+    }
 
-    logger.info('[deploy/provisionSolanaRoute] Starting wrap-token provisioning', {
-      shareOft,
-      deployEnv,
-      tokenName,
-      tokenSymbol,
-      payerKp,
-      cliDir,
-    })
+    let combined = ''
+    let runner = ''
+    let tokenSymbolUsed = tokenSymbolCandidates[0] ?? ''
+    let wrapError: unknown = null
+    for (let i = 0; i < tokenSymbolCandidates.length; i += 1) {
+      const candidate = tokenSymbolCandidates[i]
+      logger.info('[deploy/provisionSolanaRoute] Starting wrap-token provisioning', {
+        shareOft,
+        deployEnv,
+        tokenName,
+        tokenSymbol: candidate,
+        tokenSymbolCandidate: `${i + 1}/${tokenSymbolCandidates.length}`,
+        payerKp,
+        cliDir,
+      })
+      try {
+        const result = await runWrapToken(cliDir, cliBin, buildWrapArgs(candidate))
+        combined = result.output
+        runner = result.runner
+        tokenSymbolUsed = candidate
+        wrapError = null
+        break
+      } catch (error) {
+        wrapError = error
+        const message = error instanceof Error ? error.message : String(error)
+        const hasFallback = i < tokenSymbolCandidates.length - 1
+        const shouldFallback = hasFallback && isLikelyUnicodeSymbolUnsupportedError(message)
+        logger.warn('[deploy/provisionSolanaRoute] Symbol candidate failed', {
+          shareOft,
+          tokenSymbol: candidate,
+          tokenSymbolCandidate: `${i + 1}/${tokenSymbolCandidates.length}`,
+          fallback: shouldFallback,
+          error: message,
+        })
+        if (!shouldFallback) throw error
+      }
+    }
+    if (wrapError) throw wrapError
 
-    const { output: combined, runner } = await runWrapToken(cliDir, cliBin, wrapArgs)
     const mintPubkey = parseMintPubkeyFromWrapOutput(combined)
     if (!mintPubkey) {
       return res.status(500).json({
@@ -304,12 +470,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<never>)
     }
     const mintBytes32 = solanaPubkeyToBytes32Hex(mintPubkey)
-
-    const rpcUrl = (process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()
-    const publicClient = createPublicClient({
-      chain: base,
-      transport: http(rpcUrl, { timeout: 20_000 }),
-    })
 
     let scalar = 0n
     for (let i = 0; i < 24; i += 1) {
@@ -340,6 +500,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         mintPubkey,
         mintBytes32,
         runner,
+        tokenSymbol: tokenSymbolUsed,
         routeScalar: scalar.toString(),
       },
     } satisfies ApiEnvelope<ProvisionRouteResponse>)

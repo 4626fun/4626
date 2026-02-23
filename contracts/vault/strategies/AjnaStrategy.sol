@@ -7,6 +7,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import {IStrategy} from "../../interfaces/IStrategy.sol";
+import {IStrategyValuation} from "../../interfaces/IStrategyValuation.sol";
 import {IAjnaPool} from "../../interfaces/IAjnaPool.sol";
 import {IAjnaPoolFactory} from "../../interfaces/IAjnaPool.sol";
 
@@ -16,15 +17,15 @@ import {IAjnaPoolFactory} from "../../interfaces/IAjnaPool.sol";
  * @notice Yield strategy for Creator Coins via Ajna permissionless lending
  * @dev LENDS the vault's creator tokens as the Ajna pool QUOTE TOKEN.
  *      Borrowers post collateral (e.g., USDC) and borrow the creator token (quote).
- * 
+ *
  * Ajna is permissionless - any token can be used without governance approval.
  * This strategy creates/uses a creator token lending pool where users can:
  * - Lend tokens (what we do) and earn interest
  * - Borrow tokens using collateral
- * 
+ *
  * Yield Source: Interest paid by borrowers
  */
-contract AjnaStrategy is IStrategy, Ownable, ReentrancyGuard {
+contract AjnaStrategy is IStrategy, IStrategyValuation, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // ================================
@@ -118,18 +119,14 @@ contract AjnaStrategy is IStrategy, Ownable, ReentrancyGuard {
      * @param _ajnaFactory The Ajna ERC20 pool factory
      * @param _collateralToken The collateral token for the pool (e.g., USDC, WETH)
      * @param _owner The owner of this strategy
-     * 
+     *
      * @dev Bucket index defaults to 4156 (price = 1.0 quote per collateral, WAD).
      *      After deployment, call setBucketIndex() to adjust based on market price
      *      or use moveToBucket() to rebalance existing positions.
      */
-    constructor(
-        address _vault,
-        address _creatorCoin,
-        address _ajnaFactory,
-        address _collateralToken,
-        address _owner
-    ) Ownable(_owner) {
+    constructor(address _vault, address _creatorCoin, address _ajnaFactory, address _collateralToken, address _owner)
+        Ownable(_owner)
+    {
         require(_vault != address(0), "Invalid vault");
         require(_creatorCoin != address(0), "Invalid creator coin");
         require(_ajnaFactory != address(0), "Invalid Ajna factory");
@@ -140,7 +137,7 @@ contract AjnaStrategy is IStrategy, Ownable, ReentrancyGuard {
         ajnaFactory = _ajnaFactory;
         collateralToken = _collateralToken;
         _isActive = true;
-        
+
         strategyName = "Ajna Lending Strategy";
         // 1.0 price bucket (quote per collateral)
         bucketIndex = 4156;
@@ -207,7 +204,7 @@ contract AjnaStrategy is IStrategy, Ownable, ReentrancyGuard {
         // We always "deploy" the full amount from the vault's perspective (strategy now controls it),
         // whether it sits idle or inside Ajna.
         deployed = amount;
-        
+
         emit StrategyDeposit(amount, deployed);
     }
 
@@ -323,11 +320,7 @@ contract AjnaStrategy is IStrategy, Ownable, ReentrancyGuard {
 
         // Add quote tokens to lending bucket.
         // If some amount is not accepted for any reason, it remains idle in this strategy.
-        IAjnaPool(ajnaPool).addQuoteToken(
-            amount,
-            bucketIndex,
-            block.timestamp + 1 hours
-        );
+        IAjnaPool(ajnaPool).addQuoteToken(amount, bucketIndex, block.timestamp + 1 hours);
     }
 
     /**
@@ -336,7 +329,10 @@ contract AjnaStrategy is IStrategy, Ownable, ReentrancyGuard {
     function _withdrawFromAjna(uint256 amount) internal returns (uint256) {
         // Determine LP needed to withdraw `amount` based on current bucket state.
         uint256 lpBalance;
-        try IAjnaPool(ajnaPool).lenderInfo(bucketIndex, address(this)) returns (uint256 _lp, uint256 /* depositTime */) {
+        try IAjnaPool(ajnaPool).lenderInfo(bucketIndex, address(this)) returns (
+            uint256 _lp,
+            uint256 /* depositTime */
+        ) {
             lpBalance = _lp;
         } catch {
             return 0;
@@ -347,8 +343,8 @@ contract AjnaStrategy is IStrategy, Ownable, ReentrancyGuard {
         uint256 bucketDeposit;
         try IAjnaPool(ajnaPool).bucketInfo(bucketIndex) returns (
             uint256 _bucketLPTotal,
-            uint256 /* collateral */,
-            uint256 /* bankruptcyTime */,
+            uint256, /* collateral */
+            uint256, /* bankruptcyTime */
             uint256 _bucketDeposit,
             uint256 /* scale */
         ) {
@@ -364,7 +360,10 @@ contract AjnaStrategy is IStrategy, Ownable, ReentrancyGuard {
         if (lpToBurn == 0) lpToBurn = 1; // ensure progress for small withdrawals
         if (lpToBurn > lpBalance) lpToBurn = lpBalance;
 
-        try IAjnaPool(ajnaPool).removeQuoteToken(lpToBurn, bucketIndex) returns (uint256 removedAmount, uint256 /* redeemedLP */) {
+        try IAjnaPool(ajnaPool).removeQuoteToken(lpToBurn, bucketIndex) returns (
+            uint256 removedAmount,
+            uint256 /* redeemedLP */
+        ) {
             return removedAmount;
         } catch {
             return 0;
@@ -379,7 +378,10 @@ contract AjnaStrategy is IStrategy, Ownable, ReentrancyGuard {
 
         // Query Ajna for our LP balance in the bucket
         uint256 lpBalance;
-        try IAjnaPool(ajnaPool).lenderInfo(bucketIndex, address(this)) returns (uint256 _lp, uint256 /* depositTime */) {
+        try IAjnaPool(ajnaPool).lenderInfo(bucketIndex, address(this)) returns (
+            uint256 _lp,
+            uint256 /* depositTime */
+        ) {
             lpBalance = _lp;
         } catch {
             return 0;
@@ -391,8 +393,8 @@ contract AjnaStrategy is IStrategy, Ownable, ReentrancyGuard {
         uint256 bucketDeposit;
         try IAjnaPool(ajnaPool).bucketInfo(bucketIndex) returns (
             uint256 _bucketLPTotal,
-            uint256 /* collateral */,
-            uint256 /* bankruptcyTime */,
+            uint256, /* collateral */
+            uint256, /* bankruptcyTime */
             uint256 _bucketDeposit,
             uint256 /* scale */
         ) {
@@ -414,6 +416,49 @@ contract AjnaStrategy is IStrategy, Ownable, ReentrancyGuard {
     // ================================
     // VIEW FUNCTIONS
     // ================================
+
+    /**
+     * @notice Strategy valuation health check for ERC-4626 deposit/mint gating.
+     * @dev MUST NOT revert. Return false when Ajna accounting reads are unavailable.
+     */
+    function isValuationReady() external view override returns (bool) {
+        address pool = ajnaPool;
+        if (pool == address(0)) return true; // no Ajna integration configured
+
+        // If we cannot reliably query our Ajna position, valuation is not safe.
+        uint256 lpBalance;
+        try IAjnaPool(pool).lenderInfo(bucketIndex, address(this)) returns (
+            uint256 _lp,
+            uint256 /* depositTime */
+        ) {
+            lpBalance = _lp;
+        } catch {
+            return false;
+        }
+
+        // No Ajna exposure (only idle balance is valued).
+        if (lpBalance == 0) return true;
+
+        uint256 bucketLPTotal;
+        uint256 bucketDeposit;
+        try IAjnaPool(pool).bucketInfo(bucketIndex) returns (
+            uint256 _bucketLPTotal,
+            uint256, /* collateral */
+            uint256, /* bankruptcyTime */
+            uint256 _bucketDeposit,
+            uint256 /* scale */
+        ) {
+            bucketLPTotal = _bucketLPTotal;
+            bucketDeposit = _bucketDeposit;
+        } catch {
+            return false;
+        }
+
+        // If we cannot form a meaningful share-of-bucket valuation, treat as not ready.
+        if (bucketLPTotal == 0 || bucketDeposit == 0) return false;
+
+        return true;
+    }
 
     function asset() external view override returns (address) {
         return address(CREATOR_COIN);
@@ -463,7 +508,7 @@ contract AjnaStrategy is IStrategy, Ownable, ReentrancyGuard {
     function setAjnaPool(address _pool) external onlyOwner {
         // If we have an existing pool with LP, must withdraw first
         if (ajnaPool != address(0)) {
-            (uint256 lpBalance, ) = IAjnaPool(ajnaPool).lenderInfo(bucketIndex, address(this));
+            (uint256 lpBalance,) = IAjnaPool(ajnaPool).lenderInfo(bucketIndex, address(this));
             require(lpBalance == 0, "Withdraw from current pool first");
         }
         if (_pool != address(0)) {
@@ -482,13 +527,13 @@ contract AjnaStrategy is IStrategy, Ownable, ReentrancyGuard {
     function setBucketIndex(uint256 _index) external onlyOwner {
         // Ajna has MAX_FENWICK_INDEX = 7388, and index 0 is invalid for add/move.
         require(_index > 0 && _index <= 7388, "Invalid bucket index");
-        
+
         // If we have LP in the current bucket, must move it first
         if (ajnaPool != address(0)) {
-            (uint256 lpBalance, ) = IAjnaPool(ajnaPool).lenderInfo(bucketIndex, address(this));
+            (uint256 lpBalance,) = IAjnaPool(ajnaPool).lenderInfo(bucketIndex, address(this));
             require(lpBalance == 0, "Move liquidity before changing bucket");
         }
-        
+
         bucketIndex = _index;
     }
 
@@ -499,20 +544,21 @@ contract AjnaStrategy is IStrategy, Ownable, ReentrancyGuard {
     function moveToBucket(uint256 newIndex, uint256 lpAmount) external onlyOwner {
         require(newIndex > 0 && newIndex <= 7388, "Invalid bucket index");
         require(ajnaPool != address(0), "Pool not set");
-        
+
         if (lpAmount == 0) {
-            (uint256 lpBalance, ) = IAjnaPool(ajnaPool).lenderInfo(bucketIndex, address(this));
+            (uint256 lpBalance,) = IAjnaPool(ajnaPool).lenderInfo(bucketIndex, address(this));
             lpAmount = lpBalance;
         }
         if (lpAmount == 0) return;
 
         // Move LP tokens to new bucket
-        IAjnaPool(ajnaPool).moveQuoteToken(
-            lpAmount,
-            bucketIndex,      // From current bucket
-            newIndex,         // To new bucket
-            block.timestamp + 1 hours
-        );
+        IAjnaPool(ajnaPool)
+            .moveQuoteToken(
+                lpAmount,
+                bucketIndex, // From current bucket
+                newIndex, // To new bucket
+                block.timestamp + 1 hours
+            );
 
         bucketIndex = newIndex;
     }

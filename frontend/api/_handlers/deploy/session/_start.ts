@@ -26,6 +26,7 @@ type StartRequest = {
 const COINBASE_SMART_WALLET_OWNERS_ABI = [
   { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'ownerAtIndex', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'bytes' }] },
+  { type: 'function', name: 'nextOwnerIndex', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 ] as const
 
 function asOwnerBytes(owner: Address): Hex {
@@ -44,17 +45,34 @@ async function isOwnerInstalled(params: { smartWallet: Address; ownerAddress: Ad
     functionName: 'ownerCount',
   })) as bigint
   const count = Number(countRaw)
-  if (!Number.isFinite(count) || count <= 0) return false
-
-  const expected = asOwnerBytes(params.ownerAddress).toLowerCase()
-  const limit = Math.min(count, Math.max(1, params.maxScan ?? 128))
-  for (let i = 0; i < limit; i++) {
-    const owner = (await publicClient.readContract({
+  let upperBound = Number.isFinite(count) ? count : 0
+  try {
+    const nextRaw = (await publicClient.readContract({
       address: params.smartWallet,
       abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-      functionName: 'ownerAtIndex',
-      args: [BigInt(i)],
-    })) as Hex
+      functionName: 'nextOwnerIndex',
+    })) as bigint
+    const next = Number(nextRaw)
+    if (Number.isFinite(next) && next > 0) upperBound = Math.max(upperBound, next)
+  } catch {
+    // ignore: not all contract versions expose nextOwnerIndex
+  }
+  if (!Number.isFinite(upperBound) || upperBound <= 0) return false
+
+  const expected = asOwnerBytes(params.ownerAddress).toLowerCase()
+  const limit = Math.min(upperBound, Math.max(1, params.maxScan ?? 512))
+  for (let i = 0; i < limit; i++) {
+    let owner: Hex
+    try {
+      owner = (await publicClient.readContract({
+        address: params.smartWallet,
+        abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+        functionName: 'ownerAtIndex',
+        args: [BigInt(i)],
+      })) as Hex
+    } catch {
+      continue
+    }
     if (String(owner).toLowerCase() === expected) return true
   }
   return false
@@ -110,7 +128,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const origin = getCanonicalOrigin(req)
     const headers = forwardAuthHeaders(req)
 
-    const created = await proxyPost<{ sessionId: string; sessionOwner: Address; expiresAt: string }>({
+    const created = await proxyPost<{
+      sessionId: string
+      sessionSignerAddress?: Address
+      sessionOwner: Address
+      expiresAt: string
+    }>({
       origin,
       path: 'deploy/session/create',
       body,
@@ -123,7 +146,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const sessionId = String(created.payload.data.sessionId)
-    const sessionOwner = getAddress(created.payload.data.sessionOwner)
+    const sessionSignerAddressRaw = String(
+      created.payload.data.sessionSignerAddress ?? created.payload.data.sessionOwner ?? '',
+    ).trim()
+    const sessionOwner = getAddress(sessionSignerAddressRaw)
     const smartWallet = getAddress(body.smartWallet)
 
     const autoContinue = body.autoContinue !== false
@@ -142,7 +168,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const ownerInstalled = await isOwnerInstalled({
       smartWallet,
       ownerAddress: sessionOwner,
-      maxScan: 256,
+      maxScan: 512,
     })
     if (!ownerInstalled) {
       return res.status(200).json({
