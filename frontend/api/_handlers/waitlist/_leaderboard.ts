@@ -12,6 +12,7 @@ type LeaderboardRow = {
   pointsTotal: number
   pointsInvite: number
   pointsAgent: number
+  borderTier: number
 }
 
 type LeaderboardResponse = {
@@ -66,7 +67,7 @@ export default async function handler(req: any, res: any) {
     pointsType === 'total'
       ? await db.sql`
           WITH eligible AS (
-            SELECT id, primary_wallet, embedded_wallet, referral_code
+            SELECT id, primary_wallet, embedded_wallet, referral_code, border_tier
             FROM profiles
             WHERE profile_completed_at IS NOT NULL
             ORDER BY id ASC
@@ -76,14 +77,16 @@ export default async function handler(req: any, res: any) {
             SELECT
               id,
               COALESCE(NULLIF(primary_wallet, ''), NULLIF(embedded_wallet, '')) AS wallet_key,
-              referral_code
+              referral_code,
+              border_tier
             FROM eligible
           ),
           wallet_rollup AS (
             SELECT
               wallet_key,
               MIN(id)::bigint AS canonical_signup_id,
-              MAX(referral_code) FILTER (WHERE referral_code IS NOT NULL) AS referral_code
+              MAX(referral_code) FILTER (WHERE referral_code IS NOT NULL) AS referral_code,
+              COALESCE(MAX(border_tier), 0)::int AS border_tier
             FROM eligible_with_key
             WHERE wallet_key IS NOT NULL
             GROUP BY wallet_key
@@ -94,13 +97,14 @@ export default async function handler(req: any, res: any) {
               w.wallet_key AS primary_wallet,
               NULL::text AS embedded_wallet,
               w.referral_code,
+              w.border_tier,
               COALESCE(SUM(l.amount), 0)::int AS total_points,
               COALESCE(SUM(CASE WHEN l.source = 'referral_qualified' THEN l.amount ELSE 0 END), 0)::int AS invite_points,
               COALESCE(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount ELSE 0 END), 0)::int AS agent_points
             FROM wallet_rollup w
             LEFT JOIN eligible_with_key e ON e.wallet_key = w.wallet_key
             LEFT JOIN points l ON l.signup_id = e.id
-            GROUP BY w.canonical_signup_id, w.wallet_key, w.referral_code
+            GROUP BY w.canonical_signup_id, w.wallet_key, w.referral_code, w.border_tier
           ),
           ranked AS (
             SELECT
@@ -108,13 +112,14 @@ export default async function handler(req: any, res: any) {
               primary_wallet,
               embedded_wallet,
               referral_code,
+              border_tier,
               total_points,
               invite_points,
               agent_points,
               ROW_NUMBER() OVER (ORDER BY total_points DESC, invite_points DESC, agent_points DESC, signup_id ASC)::int AS rank
             FROM scored
           )
-          SELECT rank, signup_id, primary_wallet, embedded_wallet, referral_code, total_points, invite_points, agent_points
+          SELECT rank, signup_id, primary_wallet, embedded_wallet, referral_code, border_tier, total_points, invite_points, agent_points
           FROM ranked
           ORDER BY rank ASC
           OFFSET ${offset}
@@ -123,7 +128,7 @@ export default async function handler(req: any, res: any) {
       : pointsType === 'agent'
       ? await db.sql`
           WITH eligible AS (
-            SELECT id, primary_wallet, embedded_wallet, referral_code
+            SELECT id, primary_wallet, embedded_wallet, referral_code, border_tier
             FROM profiles
             WHERE profile_completed_at IS NOT NULL
             ORDER BY id ASC
@@ -133,14 +138,16 @@ export default async function handler(req: any, res: any) {
             SELECT
               id,
               COALESCE(NULLIF(primary_wallet, ''), NULLIF(embedded_wallet, '')) AS wallet_key,
-              referral_code
+              referral_code,
+              border_tier
             FROM eligible
           ),
           wallet_rollup AS (
             SELECT
               wallet_key,
               MIN(id)::bigint AS canonical_signup_id,
-              MAX(referral_code) FILTER (WHERE referral_code IS NOT NULL) AS referral_code
+              MAX(referral_code) FILTER (WHERE referral_code IS NOT NULL) AS referral_code,
+              COALESCE(MAX(border_tier), 0)::int AS border_tier
             FROM eligible_with_key
             WHERE wallet_key IS NOT NULL
             GROUP BY wallet_key
@@ -151,13 +158,14 @@ export default async function handler(req: any, res: any) {
               w.wallet_key AS primary_wallet,
               NULL::text AS embedded_wallet,
               w.referral_code,
+              w.border_tier,
               COALESCE(SUM(l.amount), 0)::int AS total_points,
               COALESCE(SUM(CASE WHEN l.source = 'referral_qualified' THEN l.amount ELSE 0 END), 0)::int AS invite_points,
               COALESCE(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount ELSE 0 END), 0)::int AS agent_points
             FROM wallet_rollup w
             LEFT JOIN eligible_with_key e ON e.wallet_key = w.wallet_key
             LEFT JOIN points l ON l.signup_id = e.id
-            GROUP BY w.canonical_signup_id, w.wallet_key, w.referral_code
+            GROUP BY w.canonical_signup_id, w.wallet_key, w.referral_code, w.border_tier
           ),
           ranked AS (
             SELECT
@@ -165,13 +173,14 @@ export default async function handler(req: any, res: any) {
               primary_wallet,
               embedded_wallet,
               referral_code,
+              border_tier,
               total_points,
               invite_points,
               agent_points,
               ROW_NUMBER() OVER (ORDER BY agent_points DESC, total_points DESC, invite_points DESC, signup_id ASC)::int AS rank
             FROM scored
           )
-          SELECT rank, signup_id, primary_wallet, embedded_wallet, referral_code, total_points, invite_points, agent_points
+          SELECT rank, signup_id, primary_wallet, embedded_wallet, referral_code, border_tier, total_points, invite_points, agent_points
           FROM ranked
           ORDER BY rank ASC
           OFFSET ${offset}
@@ -179,7 +188,7 @@ export default async function handler(req: any, res: any) {
         `
       : await db.sql`
           WITH eligible AS (
-            SELECT id, primary_wallet, embedded_wallet, referral_code
+            SELECT id, primary_wallet, embedded_wallet, referral_code, border_tier
             FROM profiles
             WHERE profile_completed_at IS NOT NULL
             ORDER BY id ASC
@@ -189,14 +198,16 @@ export default async function handler(req: any, res: any) {
             SELECT
               id,
               COALESCE(NULLIF(primary_wallet, ''), NULLIF(embedded_wallet, '')) AS wallet_key,
-              referral_code
+              referral_code,
+              border_tier
             FROM eligible
           ),
           wallet_rollup AS (
             SELECT
               wallet_key,
               MIN(id)::bigint AS canonical_signup_id,
-              MAX(referral_code) FILTER (WHERE referral_code IS NOT NULL) AS referral_code
+              MAX(referral_code) FILTER (WHERE referral_code IS NOT NULL) AS referral_code,
+              COALESCE(MAX(border_tier), 0)::int AS border_tier
             FROM eligible_with_key
             WHERE wallet_key IS NOT NULL
             GROUP BY wallet_key
@@ -207,13 +218,14 @@ export default async function handler(req: any, res: any) {
               w.wallet_key AS primary_wallet,
               NULL::text AS embedded_wallet,
               w.referral_code,
+              w.border_tier,
               COALESCE(SUM(l.amount), 0)::int AS total_points,
               COALESCE(SUM(CASE WHEN l.source = 'referral_qualified' THEN l.amount ELSE 0 END), 0)::int AS invite_points,
               COALESCE(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount ELSE 0 END), 0)::int AS agent_points
             FROM wallet_rollup w
             LEFT JOIN eligible_with_key e ON e.wallet_key = w.wallet_key
             LEFT JOIN points l ON l.signup_id = e.id
-            GROUP BY w.canonical_signup_id, w.wallet_key, w.referral_code
+            GROUP BY w.canonical_signup_id, w.wallet_key, w.referral_code, w.border_tier
           ),
           ranked AS (
             SELECT
@@ -221,13 +233,14 @@ export default async function handler(req: any, res: any) {
               primary_wallet,
               embedded_wallet,
               referral_code,
+              border_tier,
               total_points,
               invite_points,
               agent_points,
               ROW_NUMBER() OVER (ORDER BY invite_points DESC, total_points DESC, agent_points DESC, signup_id ASC)::int AS rank
             FROM scored
           )
-          SELECT rank, signup_id, primary_wallet, embedded_wallet, referral_code, total_points, invite_points, agent_points
+          SELECT rank, signup_id, primary_wallet, embedded_wallet, referral_code, border_tier, total_points, invite_points, agent_points
           FROM ranked
           ORDER BY rank ASC
           OFFSET ${offset}
@@ -248,6 +261,7 @@ export default async function handler(req: any, res: any) {
           pointsTotal: safeInt(r.total_points),
           pointsInvite: safeInt(r.invite_points),
           pointsAgent: safeInt(r.agent_points),
+          borderTier: safeInt(r.border_tier),
         }
       })
     : []

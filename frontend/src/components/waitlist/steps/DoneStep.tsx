@@ -2,11 +2,14 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle2, ArrowRight, Copy, Bot, Coins, User, Loader2, Share2, Trophy } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useLinkAccount, usePrivy } from '@privy-io/react-auth'
 import { WaitlistDoneCelebrationBackground } from '../WaitlistDoneCelebrationBackground'
 import { LaunchCoinCard } from '../LaunchCoinCard'
 import type { WaitlistState } from '../waitlistTypes'
 import { apiFetch } from '@/lib/apiBase'
 import { getAppBaseUrl } from '@/lib/host'
+import { isPrivyClientEnabled } from '@/lib/flags'
+import { usePrivyClientStatus } from '@/lib/privy/client'
 import { classifyPreprovisionResponse } from '../preprovisionStatus'
 
 const baseEase = [0.4, 0, 0.2, 1] as const
@@ -22,6 +25,68 @@ const scaleIn = {
   transition: { duration: 0.18, ease: baseEase },
 }
 
+let warnedPrivyHookFailure = false
+function warnPrivyHookFailure(scope: string, error: unknown) {
+  if (warnedPrivyHookFailure) return
+  warnedPrivyHookFailure = true
+  console.warn(`[waitlist] Privy hook unavailable in ${scope}; hiding X verification`, error)
+}
+
+function useSafePrivyHook(enabled: boolean) {
+  try {
+    const value = usePrivy() as any
+    if (!enabled) {
+      return {
+        authenticated: false,
+        user: null,
+        getAccessToken: async () => null,
+      } as any
+    }
+    return value
+  } catch (error) {
+    warnPrivyHookFailure('usePrivy', error)
+    return {
+      authenticated: false,
+      user: null,
+      getAccessToken: async () => null,
+    } as any
+  }
+}
+
+function useSafeLinkAccountHook(callbacks: any, enabled: boolean) {
+  try {
+    const value = useLinkAccount(callbacks) as any
+    if (!enabled) return { linkTwitter: () => {} } as any
+    return value
+  } catch (error) {
+    warnPrivyHookFailure('useLinkAccount', error)
+    return { linkTwitter: () => {} } as any
+  }
+}
+
+function extractPrivyTwitter(user: any): { subject: string | null; username: string | null } {
+  const subjectDirect = typeof user?.twitter?.subject === 'string' ? String(user.twitter.subject).trim() : ''
+  const usernameDirect = typeof user?.twitter?.username === 'string' ? String(user.twitter.username).trim() : ''
+  if (subjectDirect) {
+    return { subject: subjectDirect, username: usernameDirect || null }
+  }
+
+  const linked = Array.isArray(user?.linked_accounts)
+    ? user.linked_accounts
+    : Array.isArray(user?.linkedAccounts)
+      ? user.linkedAccounts
+      : []
+  for (const acct of linked) {
+    const t = typeof acct?.type === 'string' ? String(acct.type) : ''
+    if (t !== 'twitter_oauth') continue
+    const subject = typeof acct?.subject === 'string' ? String(acct.subject).trim() : ''
+    const username = typeof acct?.username === 'string' ? String(acct.username).trim() : ''
+    if (subject) return { subject, username: username || null }
+  }
+
+  return { subject: null, username: null }
+}
+
 type PreprovData = {
   serverWalletAddress: string | null
   coinAddress: string | null
@@ -32,6 +97,8 @@ type PreprovData = {
 }
 
 type DoneStepProps = {
+  /** The canonical key used by waitlist APIs (may be synthetic). */
+  doneEmail: string | null
   displayEmail: string | null
   isBypassAdmin: boolean
   waitlistPosition: WaitlistState['waitlistPosition']
@@ -59,6 +126,8 @@ type DoneStepProps = {
   ownerAddress?: string | null
   /** Callback when a coin is successfully created */
   onCoinCreated?: (coinAddress: string, symbol: string) => void
+  /** Best-effort refresh of waitlist position after actions. */
+  onRefreshPosition?: () => void | Promise<void>
 }
 
 function truncAddr(addr: string): string {
@@ -117,7 +186,7 @@ function PreprovisionStatus({ onData }: { onData?: (data: PreprovData | null) =>
   return (
     <motion.div
       {...fadeUp}
-      className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 space-y-2"
+      className="rounded-2xl border border-white/6 bg-white/2 p-4 space-y-2"
     >
       <div className="text-[11px] uppercase tracking-wider text-zinc-600 flex items-center gap-2">
         {status === 'loading' ? (
@@ -176,7 +245,7 @@ function PreprovisionStatus({ onData }: { onData?: (data: PreprovData | null) =>
 function CtaLoadingSkeleton() {
   return (
     <motion.div {...fadeUp}>
-      <div className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+      <div className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl border border-white/6 bg-white/2">
         <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
         <span className="text-[14px] sm:text-[15px] text-zinc-500 font-medium">Checking access...</span>
       </div>
@@ -226,7 +295,7 @@ function WaitlistedCta({
 
       <button
         type="button"
-        className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl border border-white/[0.08] bg-white/[0.03] text-white text-[14px] sm:text-[15px] font-medium transition-all duration-200 hover:bg-white/[0.06] active:scale-[0.99] cursor-pointer"
+        className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl border border-white/8 bg-white/3 text-white text-[14px] sm:text-[15px] font-medium transition-all duration-200 hover:bg-white/6 active:scale-[0.99] cursor-pointer"
         onClick={onCopyReferral}
       >
         <Share2 className="w-4 h-4" />
@@ -238,7 +307,7 @@ function WaitlistedCta({
           href={xShareHref}
           target="_blank"
           rel="noreferrer"
-          className="w-full text-center px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.02] text-zinc-300 text-[12px] hover:bg-white/[0.05]"
+          className="w-full text-center px-3 py-2 rounded-xl border border-white/8 bg-white/2 text-zinc-300 text-[12px] hover:bg-white/5"
         >
           Share on X
         </a>
@@ -246,7 +315,7 @@ function WaitlistedCta({
           href={farcasterShareHref}
           target="_blank"
           rel="noreferrer"
-          className="w-full text-center px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.02] text-zinc-300 text-[12px] hover:bg-white/[0.05]"
+          className="w-full text-center px-3 py-2 rounded-xl border border-white/8 bg-white/2 text-zinc-300 text-[12px] hover:bg-white/5"
         >
           Share on Farcaster
         </a>
@@ -265,6 +334,7 @@ function WaitlistedCta({
 }
 
 export const DoneStep = memo(function DoneStep({
+  doneEmail,
   displayEmail,
   isBypassAdmin,
   waitlistPosition,
@@ -278,10 +348,107 @@ export const DoneStep = memo(function DoneStep({
   smartWalletAddress,
   ownerAddress,
   onCoinCreated,
+  onRefreshPosition,
 }: DoneStepProps) {
   const [exiting, setExiting] = useState(false)
   const [rankDelta, setRankDelta] = useState<number>(0)
   const [preprovData, setPreprovData] = useState<PreprovData | null>(null)
+  const borderTier = waitlistPosition?.borderTier ?? 0
+
+  const privyStatus = usePrivyClientStatus()
+  const showPrivy = isPrivyClientEnabled()
+  const privyHooksEnabled = showPrivy && privyStatus === 'ready'
+  const { authenticated: privyAuthed, user: privyUser, getAccessToken } = useSafePrivyHook(privyHooksEnabled)
+  const privyTwitter = useMemo(() => extractPrivyTwitter(privyUser), [privyUser])
+  const twitterConnected = Boolean(privyTwitter.subject)
+
+  const [xLinkBusy, setXLinkBusy] = useState(false)
+  const [xLinkError, setXLinkError] = useState<string | null>(null)
+  const [xVerifyBusy, setXVerifyBusy] = useState(false)
+  const [xVerifyError, setXVerifyError] = useState<string | null>(null)
+
+  const { linkTwitter } = useSafeLinkAccountHook(
+    {
+      onSuccess: () => {
+        setXLinkBusy(false)
+        setXLinkError(null)
+      },
+      onError: (error: unknown) => {
+        setXLinkBusy(false)
+        const raw =
+          error instanceof Error
+            ? error.message
+            : typeof (error as any)?.message === 'string'
+              ? String((error as any).message)
+              : String(error ?? '')
+        const lower = raw.toLowerCase()
+        if (lower.includes('already been linked to another user') || lower.includes('linked to another user')) {
+          setXLinkError('Authentication failed: This account has already been linked to another user.')
+        } else {
+          setXLinkError(raw || 'Failed to connect X.')
+        }
+      },
+    },
+    privyHooksEnabled,
+  )
+
+  const handleConnectX = useCallback(() => {
+    if (xLinkBusy) return
+    setXLinkError(null)
+    if (!privyAuthed) {
+      setXLinkError('Sign in again to connect X.')
+      return
+    }
+    setXLinkBusy(true)
+    try {
+      linkTwitter()
+    } catch (e: any) {
+      setXLinkBusy(false)
+      setXLinkError(e?.message ? String(e.message) : 'Failed to connect X.')
+    }
+  }, [linkTwitter, privyAuthed, xLinkBusy])
+
+  const handleVerifyX = useCallback(async () => {
+    if (xVerifyBusy) return
+    if (borderTier >= 1) return
+    setXVerifyBusy(true)
+    setXVerifyError(null)
+    try {
+      if (!doneEmail) throw new Error('Missing waitlist entry key. Refresh and try again.')
+      if (!twitterConnected) throw new Error('Connect X first.')
+      if (typeof getAccessToken !== 'function') throw new Error('Sign in again to verify.')
+
+      const privyToken = await getAccessToken().catch(() => null)
+      if (!privyToken) throw new Error('Sign in again to verify.')
+
+      const res = await apiFetch('/api/waitlist/verify-x', {
+        method: 'POST',
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'x-privy-token': privyToken,
+        },
+        body: JSON.stringify({ email: doneEmail }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json || json.success !== true) {
+        const msg = json?.error ?? `Verification failed (HTTP ${res.status})`
+        throw new Error(typeof msg === 'string' ? msg : 'Verification failed')
+      }
+
+      const verified = json?.data?.verified === true
+      if (!verified) {
+        throw new Error('Follow @4626fun on X, then click Verify.')
+      }
+
+      await Promise.resolve(onRefreshPosition?.())
+    } catch (e: any) {
+      setXVerifyError(e?.message ? String(e.message) : 'Verification failed')
+    } finally {
+      setXVerifyBusy(false)
+    }
+  }, [borderTier, doneEmail, getAccessToken, onRefreshPosition, twitterConnected, xVerifyBusy])
 
   useEffect(() => {
     const currentRank = waitlistPosition?.rank?.total
@@ -399,6 +566,96 @@ export const DoneStep = memo(function DoneStep({
           {/* Pre-provisioning status */}
           <PreprovisionStatus onData={setPreprovData} />
 
+          {/* X follow verification (unlocks next border tier) */}
+          {showPrivy ? (
+            <motion.div
+              {...fadeUp}
+              className="rounded-2xl border border-white/6 bg-white/2 p-4 space-y-3"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-600">Verification</div>
+                  <div className="text-[14px] text-white font-medium mt-1">Unlock your next border</div>
+                  <div className="text-[12px] text-zinc-500 mt-1 leading-relaxed">
+                    Follow <span className="text-zinc-200">@4626fun</span> on X to complete verification and unlock your next border.
+                  </div>
+                </div>
+                <div
+                  className={[
+                    'shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border',
+                    borderTier >= 1
+                      ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
+                      : 'border-white/10 bg-black/20 text-zinc-500',
+                  ].join(' ')}
+                >
+                  Tier {borderTier}
+                </div>
+              </div>
+
+              {borderTier >= 1 ? (
+                <div className="flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-500/5 px-3 py-2 text-[12px] text-emerald-200">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  X verified. Border unlocked.
+                </div>
+              ) : !privyAuthed ? (
+                <div className="text-[12px] text-zinc-500">Sign in to connect X.</div>
+              ) : !twitterConnected ? (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={handleConnectX}
+                    disabled={xLinkBusy}
+                    className={[
+                      'w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-white/8 bg-white/3 text-white text-[14px] font-medium transition-all duration-200 active:scale-[0.99]',
+                      xLinkBusy ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/6 cursor-pointer',
+                    ].join(' ')}
+                  >
+                    {xLinkBusy ? <Loader2 className="w-4 h-4 animate-spin text-zinc-300" /> : null}
+                    {xLinkBusy ? 'Connecting X…' : 'Connect X'}
+                  </button>
+                  {xLinkError ? (
+                    <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2 text-[12px] text-red-200/90">
+                      {xLinkError}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <a
+                      href="https://x.com/4626fun"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full text-center px-3 py-2.5 rounded-xl border border-white/8 bg-white/2 text-zinc-200 text-[13px] hover:bg-white/5"
+                    >
+                      Follow @4626fun
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => void handleVerifyX()}
+                      disabled={xVerifyBusy}
+                      className={[
+                        'w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-[#0052FF] text-white text-[13px] font-semibold transition-all duration-200 active:scale-[0.99]',
+                        xVerifyBusy ? 'opacity-60 cursor-not-allowed' : 'hover:bg-[#1a66ff] cursor-pointer',
+                      ].join(' ')}
+                    >
+                      {xVerifyBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      {xVerifyBusy ? 'Verifying…' : 'Verify'}
+                    </button>
+                  </div>
+                  <div className="text-[11px] text-zinc-600">
+                    Connected{privyTwitter.username ? ` as @${privyTwitter.username}` : ''}.
+                  </div>
+                  {xVerifyError ? (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[12px] text-amber-200/90">
+                      {xVerifyError}
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </motion.div>
+          ) : null}
+
           {/* Launch Creator Coin — shown when the user has no existing Creator Coin */}
           {shouldShowLaunchCoinCard ? (
             <LaunchCoinCard
@@ -441,7 +698,7 @@ export const DoneStep = memo(function DoneStep({
 
           {/* Quick Referral Link */}
           {referralCode && (
-            <motion.div {...fadeUp} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+            <motion.div {...fadeUp} className="rounded-2xl border border-white/6 bg-white/2 p-4">
               <div className="flex items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="text-[12px] text-zinc-500 mb-1">Share with friends</div>
@@ -451,7 +708,7 @@ export const DoneStep = memo(function DoneStep({
                 </div>
                 <button
                   type="button"
-                  className="p-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.02] transition-colors shrink-0"
+                  className="p-2.5 rounded-xl border border-white/6 bg-white/2 hover:bg-white/2 transition-colors shrink-0"
                   onClick={onCopyReferral}
                 >
                   <Copy className="w-4 h-4 text-zinc-400" />
