@@ -158,7 +158,6 @@ describe('deploy session ownership guardrails', () => {
     expect(insertArgs.payload?.persistSessionOwner).toBe(true)
   })
 
-
   it('falls back to local session owner key when agent wallet id is missing', async () => {
     getOrCreateCreatorAgentWalletMock.mockResolvedValueOnce({
       walletId: '',
