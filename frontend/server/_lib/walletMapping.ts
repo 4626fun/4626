@@ -12,6 +12,8 @@ export type MappedWallet = {
 export type ClassifiedLinkedAccounts = {
   embeddedEoa: { address: string; chainType: string; clientType: string | null } | null
   canonicalSmartWallet: { address: string; provider: WalletProvider } | null
+  canonicalSolanaWallet: { address: string; provider: WalletProvider } | null
+  operationalSolanaWallet: { address: string; provider: WalletProvider } | null
   allWallets: MappedWallet[]
   primaryWalletAddress: string | null
 }
@@ -28,15 +30,27 @@ function normalizeLower(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
 }
 
-function normalizeAddress(value: unknown): string | null {
+function normalizeEvmAddress(value: unknown): string | null {
   const raw = typeof value === 'string' ? value.trim() : ''
   if (!/^0x[a-fA-F0-9]{40}$/.test(raw)) return null
   return raw.toLowerCase()
 }
 
+function normalizeSolanaAddress(value: unknown): string | null {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (!raw) return null
+  if (raw.length < 32 || raw.length > 44) return null
+  if (!/^[1-9A-HJ-NP-Za-km-z]+$/.test(raw)) return null
+  return raw
+}
+
 function isEvmChain(raw: string): boolean {
   if (!raw) return true
   return raw.includes('eth') || raw.includes('evm') || raw.includes('base')
+}
+
+function isSolanaChain(raw: string): boolean {
+  return raw.includes('solana')
 }
 
 function inferProvider(clientType: string): WalletProvider {
@@ -70,27 +84,33 @@ function getWalletType(rawType: string, clientType: string): WalletType {
 }
 
 function toWalletRecord(raw: any): MappedWallet | null {
-  const address = normalizeAddress(raw?.address ?? raw?.walletAddress ?? raw?.wallet_address)
-  if (!address) return null
-
   const chainType = normalizeLower(raw?.chainType ?? raw?.chain_type ?? raw?.chain ?? raw?.network)
-  if (!isEvmChain(chainType)) return null
+  const solanaChain = isSolanaChain(chainType)
+  if (!solanaChain && !isEvmChain(chainType)) return null
+
+  const address = solanaChain
+    ? normalizeSolanaAddress(raw?.address ?? raw?.walletAddress ?? raw?.wallet_address)
+    : normalizeEvmAddress(raw?.address ?? raw?.walletAddress ?? raw?.wallet_address)
+  if (!address) return null
 
   const rawType = normalizeLower(raw?.type)
   const clientType = extractClientType(raw)
-  const walletType = getWalletType(rawType, clientType)
+  const walletType = solanaChain
+    ? (clientType.includes('privy') || clientType.includes('embedded') ? 'embedded_eoa' : 'external_eoa')
+    : getWalletType(rawType, clientType)
   const provider = inferProvider(clientType)
 
   return {
     address,
     walletType,
     provider,
-    chain: 'evm',
+    chain: solanaChain ? 'solana' : 'evm',
     clientType: clientType || null,
   }
 }
 
 function isCanonicalSmartWalletCandidate(wallet: MappedWallet): boolean {
+  if (wallet.chain !== 'evm') return false
   if (wallet.walletType !== 'smart_wallet') return false
   const clientType = normalizeLower(wallet.clientType)
   if (wallet.provider === 'privy') return false
@@ -150,17 +170,37 @@ export function classifyLinkedAccounts(user: PrivyUserLike): ClassifiedLinkedAcc
     if (clientSmartWallet) canonicalSmartWallet = { address: clientSmartWallet.address, provider: clientSmartWallet.provider }
   }
 
-  const embedded = allWallets.find((w) => w.walletType === 'embedded_eoa') ?? null
+  const embedded = allWallets.find((w) => w.walletType === 'embedded_eoa' && w.chain === 'evm') ?? null
   const embeddedEoa = embedded
     ? { address: embedded.address, chainType: embedded.chain, clientType: embedded.clientType }
     : null
 
+  const solanaWallets = allWallets.filter((w) => w.chain === 'solana')
+  const externalSolana = solanaWallets.find((w) => w.walletType === 'external_eoa') ?? null
+  const embeddedSolana = solanaWallets.find((w) => w.walletType === 'embedded_eoa') ?? null
+  const canonicalSolanaWallet = externalSolana
+    ? { address: externalSolana.address, provider: externalSolana.provider }
+    : embeddedSolana
+      ? { address: embeddedSolana.address, provider: embeddedSolana.provider }
+      : null
+  const operationalSolanaWallet =
+    embeddedSolana && (!canonicalSolanaWallet || normalizeLower(embeddedSolana.address) !== normalizeLower(canonicalSolanaWallet.address))
+      ? { address: embeddedSolana.address, provider: embeddedSolana.provider }
+      : null
+
   const primaryWalletAddress =
     canonicalSmartWallet?.address ??
     embeddedEoa?.address ??
-    allWallets.find((w) => w.walletType === 'external_eoa')?.address ??
-    allWallets[0]?.address ??
+    allWallets.find((w) => w.walletType === 'external_eoa' && w.chain === 'evm')?.address ??
+    allWallets.find((w) => w.chain === 'evm')?.address ??
     null
 
-  return { embeddedEoa, canonicalSmartWallet, allWallets, primaryWalletAddress }
+  return {
+    embeddedEoa,
+    canonicalSmartWallet,
+    canonicalSolanaWallet,
+    operationalSolanaWallet,
+    allWallets,
+    primaryWalletAddress,
+  }
 }

@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { getDbMock, isAdminAddressMock } = vi.hoisted(() => ({
+const { getDbMock, buildRuntimeSessionContextMock } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
-  isAdminAddressMock: vi.fn(() => true),
+  buildRuntimeSessionContextMock: vi.fn((address: string) => ({
+    address,
+    isAdmin: true,
+    source: 'xmtp',
+  })),
 }))
 
 vi.mock('../../../_lib/postgres.js', () => ({
@@ -10,7 +14,7 @@ vi.mock('../../../_lib/postgres.js', () => ({
 }))
 
 vi.mock('../../../_lib/session.js', () => ({
-  isAdminAddress: isAdminAddressMock,
+  buildRuntimeSessionContext: buildRuntimeSessionContextMock,
 }))
 
 describe('runtime bridge', () => {
@@ -54,6 +58,7 @@ describe('runtime bridge', () => {
     expect((state as any).session).toEqual({
       address: '0x1111111111111111111111111111111111111111',
       isAdmin: true,
+      source: 'xmtp',
     })
     expect(ranked.map((r) => r.action.name)).toEqual(['CRE_TRIGGER', 'GENERIC_ACTION'])
     expect(ranked[0]?.score).toBeGreaterThan(ranked[1]?.score ?? 0)
@@ -81,7 +86,7 @@ describe('runtime bridge', () => {
     })
     await bridge.runtime.createMemory(inbound as any, 'messages' as any)
 
-    const insertCall = db.sql.mock.calls.find((call) =>
+    const insertCall = (db.sql.mock.calls as any[]).find((call: any[]) =>
       String(call?.[0]?.[0] ?? '').includes('INSERT INTO agent_message_memory'),
     )
     expect(db.query).toHaveBeenCalled()

@@ -140,6 +140,7 @@ function buildSystemPrompt(vault: KeeprVaultRow | null): string {
     )
   }
 
+
   return base.join('\n')
 }
 

@@ -14,7 +14,7 @@ export type BonusActionKey = 'github' | 'tiktok' | 'instagram' | 'reddit'
 export type ActionKey = LegacyActionKey | SocialActionKey | BonusActionKey
 
 export type ContactPreference = 'wallet' | 'email'
-export type VerificationMethod = 'siwe' | 'privy' | 'solana' | 'csw-erc1271' | 'siwe-csw-owner'
+export type VerificationMethod = 'siwe' | 'privy' | 'siwf' | 'solana' | 'csw-erc1271' | 'siwe-csw-owner'
 export type VerificationClaim = { method: VerificationMethod; subject: string; timestamp: string }
 
 export type FlowState = {
@@ -75,6 +75,7 @@ export type WaitlistState = {
   cswProofBusy: boolean
   cswProofError: string | null
   waitlistPosition: {
+    borderTier: number
     points: {
       total: number
       invite: number

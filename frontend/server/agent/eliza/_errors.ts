@@ -1,10 +1,14 @@
 export type AgentErrorCode =
   | 'INVALID_ENV'
+  | 'STARTUP_FAILED'
+  | 'DEPENDENCY_UNAVAILABLE'
   | 'RATE_LIMITED'
   | 'BUDGET_EXCEEDED'
   | 'UPSTREAM_TIMEOUT'
   | 'UPSTREAM_ERROR'
   | 'ACTION_FAILED'
+  | 'QUEUE_ERROR'
+  | 'SESSION_ERROR'
   | 'RUNTIME_ERROR'
   | 'UNKNOWN'
 
@@ -31,6 +35,29 @@ export class AgentError extends Error {
       ;(this as { cause?: unknown }).cause = options.cause
     }
   }
+}
+
+export function isRetryableAgentError(error: unknown): boolean {
+  return error instanceof AgentError && error.retryable
+}
+
+export function toErrorDetails(error: unknown): Record<string, unknown> {
+  if (error instanceof AgentError) {
+    return {
+      code: error.code,
+      message: error.message,
+      retryable: error.retryable,
+      details: error.details ?? null,
+      cause: (error as { cause?: unknown }).cause ?? null,
+    }
+  }
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      stack: error.stack,
+    }
+  }
+  return { value: String(error) }
 }
 
 export function toAgentError(

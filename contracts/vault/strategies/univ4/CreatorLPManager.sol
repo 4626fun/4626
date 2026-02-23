@@ -26,39 +26,39 @@ import {V4LiquidityAmounts} from "../../../libraries/V4LiquidityAmounts.sol";
  * @title CreatorLPManager
  * @author 0xakita.eth
  * @notice Manages LP liquidity for CreatorShareOFT (■AKITA) on Uniswap V4
- * 
+ *
  * @dev PURPOSE:
  *      This strategy manages liquidity for the WRAPPED SHARE TOKEN (■AKITA)
  *      on Uniswap V4 with 6.9% fee hooks for the lottery system.
- * 
+ *
  *      NOT for the original Creator Coin - that uses CreatorCharmStrategy on V3.
- * 
+ *
  * @dev TOKEN DISTINCTION:
  *      ┌────────────────────────────────────────────────────────────┐
  *      │ AKITA (Creator Coin)  →  CreatorCharmStrategy  →  V3 Pool  │
  *      │ ■AKITA (ShareOFT)     →  CreatorLPManager      →  V4 Pool  │
  *      │                                                  + 6.9% Hook
  *      └────────────────────────────────────────────────────────────┘
- * 
+ *
  * @dev WHY V4 FOR SHARE TOKEN:
  *      - V4 hooks enable the 6.9% fee on trades
  *      - Fees feed into the lottery jackpot via GaugeController
  *      - The ShareOFT (■AKITA) is the primary trading token for the lottery system
- * 
+ *
  * @dev ARCHITECTURE (inspired by Charm Alpha Pro Vault):
  *      CreatorOVault → CreatorLPManager → Uniswap V4 Positions
- * 
+ *
  * @dev THREE-POSITION STRATEGY:
  *      1. Full Range: Passive liquidity across entire price range
  *      2. Base Order: Concentrated around current price (both sides)
  *      3. Limit Order: Single-sided bid or ask (excess token)
- * 
+ *
  * @dev REBALANCE FLOW:
  *      1. Withdraw all liquidity from all positions
  *      2. Place full range order (weighted %)
  *      3. Place base order with remaining liquidity
  *      4. Place limit order with excess token (bid or ask)
- * 
+ *
  * @dev REBALANCE GUARDS (from Charm):
  *      - Time: Must wait `period` seconds between rebalances
  *      - Price: Must move at least `minTickMove` ticks
@@ -84,10 +84,10 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
 
     /// @notice Creator Coin token (token0 or token1 depending on sort)
     IERC20 public immutable CREATOR_COIN;
-    
+
     /// @notice Paired token (WETH)
     IERC20 public immutable PAIRED_TOKEN;
-    
+
     /// @notice Uniswap V4 PoolManager (holds all pools)
     IPoolManager public poolManager;
 
@@ -105,10 +105,10 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
 
     /// @notice Permit2 contract used by PosM for token pulls into PoolManager
     address public permit2;
-    
+
     /// @notice Vault that owns this manager
     address public vault;
-    
+
     /// @notice Tick spacing of the pool
     int24 public tickSpacing;
 
@@ -127,7 +127,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         uint128 liquidity;
         uint256 tokenId;
     }
-    
+
     PositionInfo public fullRangePosition;
     PositionInfo public basePosition;
     PositionInfo public limitPosition;
@@ -169,7 +169,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
 
     /// @notice Accrued protocol fees (token0)
     uint256 public accruedFees0;
-    
+
     /// @notice Accrued protocol fees (token1)
     uint256 public accruedFees1;
 
@@ -193,7 +193,9 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
     event Snapshot(int24 tick, uint256 totalAmount0, uint256 totalAmount1);
     event FeesCollected(uint256 fees0, uint256 fees1);
     event ParametersUpdated(uint24 fullRangeWeight, int24 baseThreshold, int24 limitThreshold);
-    event PoolConfigured(bytes32 poolId, address poolManager, address positionManager, address permit2, bool creatorIsCurrency0);
+    event PoolConfigured(
+        bytes32 poolId, address poolManager, address positionManager, address permit2, bool creatorIsCurrency0
+    );
 
     // =================================
     // ERRORS
@@ -232,19 +234,14 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
     // CONSTRUCTOR
     // =================================
 
-    constructor(
-        address _creatorCoin,
-        address _pairedToken,
-        address _vault,
-        address _owner
-    ) Ownable(_owner) {
+    constructor(address _creatorCoin, address _pairedToken, address _vault, address _owner) Ownable(_owner) {
         if (_creatorCoin == address(0)) revert ZeroAddress();
         if (_pairedToken == address(0)) revert ZeroAddress();
-        
+
         CREATOR_COIN = IERC20(_creatorCoin);
         PAIRED_TOKEN = IERC20(_pairedToken);
         vault = _vault;
-        
+
         isManager[_owner] = true;
     }
 
@@ -264,11 +261,8 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         address c0 = Currency.unwrap(_poolKey.currency0);
         address c1 = Currency.unwrap(_poolKey.currency1);
         bool _creatorIsCurrency0 = c0 == address(CREATOR_COIN);
-        if (
-            !(
-                (_creatorIsCurrency0 && c1 == address(PAIRED_TOKEN)) || (c0 == address(PAIRED_TOKEN) && c1 == address(CREATOR_COIN))
-            )
-        ) revert InvalidPoolKey();
+        if (!((_creatorIsCurrency0 && c1 == address(PAIRED_TOKEN))
+                    || (c0 == address(PAIRED_TOKEN) && c1 == address(CREATOR_COIN)))) revert InvalidPoolKey();
         if (_poolKey.tickSpacing == 0) revert InvalidPoolKey();
 
         poolManager = IPoolManager(_poolManager);
@@ -286,8 +280,10 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         // Approvals for PosM: token -> Permit2, then Permit2 -> PosM
         CREATOR_COIN.forceApprove(_permit2, type(uint256).max);
         PAIRED_TOKEN.forceApprove(_permit2, type(uint256).max);
-        IAllowanceTransfer(_permit2).approve(address(CREATOR_COIN), _positionManager, type(uint160).max, type(uint48).max);
-        IAllowanceTransfer(_permit2).approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
+        IAllowanceTransfer(_permit2)
+            .approve(address(CREATOR_COIN), _positionManager, type(uint160).max, type(uint48).max);
+        IAllowanceTransfer(_permit2)
+            .approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
 
         emit PoolConfigured(PoolId.unwrap(poolId), _poolManager, _positionManager, _permit2, _creatorIsCurrency0);
     }
@@ -335,10 +331,12 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
     /**
      * @notice Deposit tokens (held until next rebalance)
      */
-    function deposit(
-        uint256 amount0,
-        uint256 amount1
-    ) external nonReentrant onlyVault returns (uint256 totalLiquidity) {
+    function deposit(uint256 amount0, uint256 amount1)
+        external
+        nonReentrant
+        onlyVault
+        returns (uint256 totalLiquidity)
+    {
         if (amount0 == 0 && amount1 == 0) revert ZeroAmount();
 
         if (amount0 > 0) {
@@ -357,28 +355,18 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
     /**
      * @notice Withdraw proportional share from all positions
      */
-    function withdraw(
-        uint256 shares,
-        uint256 totalShares
-    ) external nonReentrant onlyVault returns (uint256 amount0, uint256 amount1) {
+    function withdraw(uint256 shares, uint256 totalShares)
+        external
+        nonReentrant
+        onlyVault
+        returns (uint256 amount0, uint256 amount1)
+    {
         if (shares == 0) revert ZeroAmount();
 
         // Withdraw from each position proportionally
-        (uint256 full0, uint256 full1) = _burnLiquidityShare(
-            fullRangePosition,
-            shares,
-            totalShares
-        );
-        (uint256 base0, uint256 base1) = _burnLiquidityShare(
-            basePosition,
-            shares,
-            totalShares
-        );
-        (uint256 limit0, uint256 limit1) = _burnLiquidityShare(
-            limitPosition,
-            shares,
-            totalShares
-        );
+        (uint256 full0, uint256 full1) = _burnLiquidityShare(fullRangePosition, shares, totalShares);
+        (uint256 base0, uint256 base1) = _burnLiquidityShare(basePosition, shares, totalShares);
+        (uint256 limit0, uint256 limit1) = _burnLiquidityShare(limitPosition, shares, totalShares);
 
         // Add idle balances proportionally
         uint256 idle0 = (getBalance0() * shares) / totalShares;
@@ -407,7 +395,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
      */
     function rebalance() external nonReentrant onlyManager {
         _requireConfigured();
-        
+
         // Check all rebalance guards
         checkCanRebalance();
 
@@ -436,12 +424,8 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
 
         // 1. Place full range order (weighted %)
         {
-            uint128 maxFullLiquidity = _liquidityForAmounts(
-                fullRangePosition.tickLower,
-                fullRangePosition.tickUpper,
-                balance0,
-                balance1
-            );
+            uint128 maxFullLiquidity =
+                _liquidityForAmounts(fullRangePosition.tickLower, fullRangePosition.tickUpper, balance0, balance1);
             uint128 fullLiquidity = uint128((uint256(maxFullLiquidity) * fullRangeWeight) / PRECISION);
             _mintLiquidity(fullRangePosition, fullLiquidity);
         }
@@ -462,7 +446,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         {
             uint128 bidLiquidity = _liquidityForAmounts(_bidLower, _bidUpper, balance0, balance1);
             uint128 askLiquidity = _liquidityForAmounts(_askLower, _askUpper, balance0, balance1);
-            
+
             if (bidLiquidity > askLiquidity) {
                 // More token1 (WETH) - place bid order below price
                 limitPosition.tickLower = _bidLower;
@@ -508,8 +492,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
 
         // 4. Check price not too close to boundary
         int24 maxThreshold = baseThreshold > limitThreshold ? baseThreshold : limitThreshold;
-        if (tick <= MIN_TICK + maxThreshold + tickSpacing ||
-            tick >= MAX_TICK - maxThreshold - tickSpacing) {
+        if (tick <= MIN_TICK + maxThreshold + tickSpacing || tick >= MAX_TICK - maxThreshold - tickSpacing) {
             revert PriceTooCloseToBoundary();
         }
     }
@@ -535,7 +518,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         (uint256 full0, uint256 full1) = _getPositionAmounts(fullRangePosition);
         (uint256 base0, uint256 base1) = _getPositionAmounts(basePosition);
         (uint256 limit0, uint256 limit1) = _getPositionAmounts(limitPosition);
-        
+
         total0 = getBalance0() + full0 + base0 + limit0;
         total1 = getBalance1() + full1 + base1 + limit1;
     }
@@ -568,11 +551,11 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
     /**
      * @notice Get position info
      */
-    function getPositions() external view returns (
-        PositionInfo memory fullRange,
-        PositionInfo memory base,
-        PositionInfo memory limit
-    ) {
+    function getPositions()
+        external
+        view
+        returns (PositionInfo memory fullRange, PositionInfo memory base, PositionInfo memory limit)
+    {
         return (fullRangePosition, basePosition, limitPosition);
     }
 
@@ -594,7 +577,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
 
     function _mintLiquidity(PositionInfo storage pos, uint128 liquidity) internal {
         if (liquidity == 0) return;
-        
+
         _requireConfigured();
 
         // Mint a new ERC721 position for this range (we burn+mint on range changes)
@@ -652,11 +635,10 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         pos.tokenId = 0;
     }
 
-    function _burnLiquidityShare(
-        PositionInfo storage pos,
-        uint256 shares,
-        uint256 totalShares
-    ) internal returns (uint256 amount0, uint256 amount1) {
+    function _burnLiquidityShare(PositionInfo storage pos, uint256 shares, uint256 totalShares)
+        internal
+        returns (uint256 amount0, uint256 amount1)
+    {
         if (pos.liquidity == 0) return (0, 0);
 
         uint128 liquidityToBurn = uint128((uint256(pos.liquidity) * shares) / totalShares);
@@ -685,9 +667,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         pos.liquidity -= liquidityToBurn;
     }
 
-    function _getPositionAmounts(
-        PositionInfo storage pos
-    ) internal view returns (uint256 amount0, uint256 amount1) {
+    function _getPositionAmounts(PositionInfo storage pos) internal view returns (uint256 amount0, uint256 amount1) {
         if (pos.liquidity == 0) return (0, 0);
         if (address(poolManager) == address(0)) return (0, 0);
 
@@ -705,20 +685,22 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         return (amountCurrency1, amountCurrency0);
     }
 
-    function _liquidityForAmounts(
-        int24 tickLower,
-        int24 tickUpper,
-        uint256 amount0,
-        uint256 amount1
-    ) internal view returns (uint128) {
+    function _liquidityForAmounts(int24 tickLower, int24 tickUpper, uint256 amount0, uint256 amount1)
+        internal
+        view
+        returns (uint128)
+    {
         if (address(poolManager) == address(0)) return 0;
 
         (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(poolId);
         uint160 sqrtPriceAX96 = TickMath.getSqrtPriceAtTick(tickLower);
         uint160 sqrtPriceBX96 = TickMath.getSqrtPriceAtTick(tickUpper);
 
-        (uint256 amountCurrency0, uint256 amountCurrency1) = creatorIsCurrency0 ? (amount0, amount1) : (amount1, amount0);
-        return LiquidityAmounts.getLiquidityForAmounts(sqrtPriceX96, sqrtPriceAX96, sqrtPriceBX96, amountCurrency0, amountCurrency1);
+        (uint256 amountCurrency0, uint256 amountCurrency1) =
+            creatorIsCurrency0 ? (amount0, amount1) : (amount1, amount0);
+        return LiquidityAmounts.getLiquidityForAmounts(
+            sqrtPriceX96, sqrtPriceAX96, sqrtPriceBX96, amountCurrency0, amountCurrency1
+        );
     }
 
     function _requireConfigured() internal view {
@@ -763,16 +745,16 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
 
     function collectFees() external {
         if (feeRecipient == address(0)) return;
-        
+
         uint256 fees0 = accruedFees0;
         uint256 fees1 = accruedFees1;
-        
+
         accruedFees0 = 0;
         accruedFees1 = 0;
-        
+
         if (fees0 > 0) CREATOR_COIN.safeTransfer(feeRecipient, fees0);
         if (fees1 > 0) PAIRED_TOKEN.safeTransfer(feeRecipient, fees1);
-        
+
         emit FeesCollected(fees0, fees1);
     }
 

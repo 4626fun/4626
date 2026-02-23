@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useSignMessage } from 'wagmi'
 
 import { signInWithSiwaAgent, type SignInWithSiwaAgentParams, type SignInWithSiwaAgentResult } from '@/lib/siwaAgentAuth'
@@ -17,11 +17,7 @@ export function useSiwaAgentAuth() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<SignInWithSiwaAgentResult | null>(null)
-  const [version, setVersion] = useState(0)
-
-  const receipt = useMemo(() => {
-    return getStoredSiwaReceipt()
-  }, [version])
+  const [receipt, setReceipt] = useState<string | null>(() => getStoredSiwaReceipt())
 
   const signIn = useCallback(async (params: SignInParams) => {
     setBusy(true)
@@ -32,7 +28,7 @@ export function useSiwaAgentAuth() {
         signMessage: async (message: string) => signMessageAsync({ message }),
       })
       setLastResult(result)
-      setVersion((v) => v + 1)
+      setReceipt(getStoredSiwaReceipt())
       return result
     } catch (e: unknown) {
       const message = toErrorMessage(e, 'SIWA sign-in failed')
@@ -47,7 +43,7 @@ export function useSiwaAgentAuth() {
     clearStoredSiwaReceipt()
     setLastResult(null)
     setError(null)
-    setVersion((v) => v + 1)
+    setReceipt(null)
   }, [])
 
   return {

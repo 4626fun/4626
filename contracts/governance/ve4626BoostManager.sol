@@ -21,7 +21,7 @@ interface Ive4626 {
 }
 
 interface ICreatorGaugeController {
-    function getJackpotReserve(address vault) external view returns (uint256);
+    function getJackpotReserve() external view returns (uint256);
 }
 
 contract ve4626BoostManager is Ownable, ReentrancyGuard {

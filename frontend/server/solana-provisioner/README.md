@@ -9,6 +9,8 @@ This service is designed for VM/container runtimes where the bridge CLI is avail
 `/api/deploy/registerShareOft` in the app can auto-register ShareOFTs, but on serverless runtimes it cannot execute local bridge CLI paths.
 
 Point `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL` to this service's `/provision` endpoint.
+For Meteora auto-deposit payloads, point `METEORA_IX_PROVISIONER_URL` to `/meteora-ixs`
+(or rely on automatic `/meteora-ixs` derivation from the dynamic-route URL).
 
 ## Endpoints
 
@@ -19,6 +21,10 @@ Point `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL` to this service's `/provision` endp
   - Runs `cli sol bridge wrap-token`
   - Verifies route scalar on Base
   - Returns `mintBytes32` (both top-level and inside `data`)
+- `POST /meteora-ixs`
+  - Bearer-authenticated
+  - Builds Base bridge `Ix[]` payload for Meteora Alpha Vault `deposit(max_amount)`
+  - Returns `meteoraAlphaVault` (`bytes32`) + serialized `solanaIxs`
 
 ## Request contract (`POST /provision`)
 
@@ -29,6 +35,7 @@ Point `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL` to this service's `/provision` endp
   "solanaDecimals": 9,
   "tokenName": "CreatorShare-1234",
   "tokenSymbol": "CS1234",
+  "tokenSymbolFallback": "CS1234",
   "scalerExponent": 9,
   "payerKp": "config",
   "payForRelay": true
@@ -46,6 +53,42 @@ Point `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL` to this service's `/provision` endp
     "mintPubkey": "...",
     "mintBytes32": "0x...",
     "routeScalar": "1"
+  }
+}
+```
+
+## Request contract (`POST /meteora-ixs`)
+
+```json
+{
+  "creatorToken": "0x...",
+  "shareOft": "0x...",
+  "meteoraAlphaVault": "<base58 pubkey>",
+  "alphaVaultProgramId": "<base58 pubkey>",
+  "expectedRemoteAmount": "1000000000",
+  "depositAccounts": [
+    { "pubkey": "<base58 pubkey>", "isSigner": false, "isWritable": true }
+  ]
+}
+```
+
+## Response contract (`POST /meteora-ixs`, success)
+
+```json
+{
+  "success": true,
+  "data": {
+    "creatorToken": "0x...",
+    "shareOft": "0x...",
+    "meteoraAlphaVault": "0x...",
+    "expectedRemoteAmount": "1000000000",
+    "solanaIxs": [
+      {
+        "programId": "0x...",
+        "serializedAccounts": ["0x..."],
+        "data": "0x..."
+      }
+    ]
   }
 }
 ```
@@ -99,6 +142,7 @@ Route only:
 
 - `GET /healthz`
 - `POST /provision`
+- `POST /meteora-ixs`
 
 ## Wire app runtime
 
@@ -107,11 +151,22 @@ In the app server env (Vercel or otherwise):
 - `SOLANA_DYNAMIC_ROUTE_ENABLED=1`
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL=https://<host>/provision`
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET=<same as PROVISIONER_BEARER_TOKEN>`
+- `METEORA_IX_PROVISIONER_URL=https://<host>/meteora-ixs` (optional; defaults from dynamic route URL)
+- `METEORA_IX_PROVISIONER_SECRET=<same as PROVISIONER_BEARER_TOKEN>` (optional)
 
 Optional but recommended:
 
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL=https://<host>/healthz` (for your external monitoring)
 - `SOLANA_DEFAULT_SHARE_OFT=0x...` (enables scalar(route) validation in `/api/deploy/solanaInfraStatus`)
+- `SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_ATTEMPTS=3`
+- `SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_DELAY_MS=1200`
+- `SOLANA_DYNAMIC_ROUTE_PROVISIONER_TIMEOUT_MS=90000`
+- `SOLANA_BRIDGE_WRAP_SYMBOL_MODE=auto` (`auto` | `unicode` | `ascii`)
+
+In the provisioner runtime (`server/solana-provisioner/.env`), enable retry for transient Solana RPC simulation failures:
+
+- `PROVISIONER_WRAP_RETRY_ATTEMPTS=3`
+- `PROVISIONER_WRAP_RETRY_DELAY_MS=1200`
 
 ## Security notes
 

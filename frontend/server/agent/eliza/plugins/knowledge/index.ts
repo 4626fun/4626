@@ -13,6 +13,20 @@ const DOC_PATHS = [
   { title: 'Onchain Reputation', filePath: 'docs/onchain-reputation-system.md' },
 ]
 
+function getConfiguredDocPaths(): Array<{ title: string; filePath: string }> {
+  const raw = String(process.env.ELIZA_KNOWLEDGE_DOC_PATHS ?? '').trim()
+  if (!raw) return DOC_PATHS
+  const extras = raw
+    .split(/[,\n]+/g)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((filePath) => ({
+      title: `Doc: ${filePath}`,
+      filePath,
+    }))
+  return [...DOC_PATHS, ...extras]
+}
+
 let cachedDocs: KnowledgeDoc[] | null = null
 let lastLoadAtMs = 0
 
@@ -31,7 +45,7 @@ function readKnowledgeDocs(): KnowledgeDoc[] {
 
   const root = process.cwd()
   const docs: KnowledgeDoc[] = []
-  for (const entry of DOC_PATHS) {
+  for (const entry of getConfiguredDocPaths()) {
     try {
       const absolute = path.join(root, entry.filePath)
       if (!fs.existsSync(absolute)) continue
@@ -75,13 +89,27 @@ function scoreDoc(doc: KnowledgeDoc, queryTokens: string[]): number {
   return score / queryTokens.length
 }
 
+function buildSnippet(body: string, queryTokens: string[]): string {
+  if (queryTokens.length === 0) return body.slice(0, 320).trim()
+  const bodyLc = body.toLowerCase()
+  let firstMatch = -1
+  for (const token of queryTokens) {
+    const idx = bodyLc.indexOf(token)
+    if (idx >= 0 && (firstMatch === -1 || idx < firstMatch)) firstMatch = idx
+  }
+  if (firstMatch < 0) return body.slice(0, 320).trim()
+  const start = Math.max(0, firstMatch - 120)
+  const end = Math.min(body.length, firstMatch + 220)
+  return body.slice(start, end).trim()
+}
+
 function topKnowledgeSnippets(query: string, limit = 3): Array<{ title: string; snippet: string; score: number }> {
   const docs = readKnowledgeDocs()
   const tokens = tokenize(query)
   const scored = docs
     .map((doc) => {
       const score = scoreDoc(doc, tokens)
-      const snippet = doc.body.slice(0, 320).trim()
+      const snippet = buildSnippet(doc.body, tokens)
       return { title: doc.title, snippet, score }
     })
     .filter((entry) => entry.score > 0)

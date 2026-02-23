@@ -37,11 +37,10 @@ interface ICharmFactory {
  * @dev Used by AA deployment flows to create pools, vaults, and adapters.
  */
 contract StrategyDeploymentBatcher is ReentrancyGuard {
-
     // Base Network Constants
     address public constant V3_FACTORY = 0x33128a8fC17869897dcE68Ed026d694621f6FDfD;
     address public constant UNISWAP_ROUTER = 0x2626664c2603336E57B271c5C0b26F421741e481;
-    
+
     /// @notice Charm Finance Alpha Vault Factory on Base
     /// @dev Vaults created via this factory appear on alpha.charm.fi UI
     address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;
@@ -69,11 +68,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
         address v3Pool;
     }
 
-    event StrategiesDeployed(
-        address indexed creator,
-        address indexed underlyingToken,
-        DeploymentResult result
-    );
+    event StrategiesDeployed(address indexed creator, address indexed underlyingToken, DeploymentResult result);
 
     /**
      * @notice Deploy all strategies for a creator vault (FULLY AUTOMATED)
@@ -130,19 +125,20 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
         // STEP 2: Deploy Charm Alpha Vault via Charm Factory (shows on alpha.charm.fi UI)
         // ═══════════════════════════════════════════════════════════
         // NOTE: Using Charm's official factory ensures vault appears on their UI
-        // Parameters: manager=owner can rebalance, baseThreshold=3000 ticks, 
+        // Parameters: manager=owner can rebalance, baseThreshold=3000 ticks,
         //             limitThreshold=6000 ticks, fullRangeWeight=0 (no full range), period=1800s (30min)
-        result.charmVault = ICharmFactory(CHARM_FACTORY).createVault(
-            result.v3Pool,
-            owner,                 // manager (can call rebalance)
-            type(uint256).max,     // maxTotalSupply (unlimited)
-            3000,                  // baseThreshold (ticks)
-            6000,                  // limitThreshold (ticks)
-            0,                     // fullRangeWeight (0 = no full range position)
-            1800,                  // period (30 minutes between rebalances)
-            vaultName,
-            vaultSymbol
-        );
+        result.charmVault = ICharmFactory(CHARM_FACTORY)
+            .createVault(
+                result.v3Pool,
+                owner, // manager (can call rebalance)
+                type(uint256).max, // maxTotalSupply (unlimited)
+                3000, // baseThreshold (ticks)
+                6000, // limitThreshold (ticks)
+                0, // fullRangeWeight (0 = no full range position)
+                1800, // period (30 minutes between rebalances)
+                vaultName,
+                vaultSymbol
+            );
 
         // ═══════════════════════════════════════════════════════════
         // STEP 3: No separate initialization needed - factory handles it
@@ -153,27 +149,17 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
         // ═══════════════════════════════════════════════════════════
         // STEP 4: Deploy Creator Charm Strategy V2 (Vault Integration)
         // ═══════════════════════════════════════════════════════════
-        result.creatorCharmStrategy = ICreatorCharmStrategyFactory(creatorCharmStrategyFactory).deployAndInitialize(
-            creatorVault,
-            underlyingToken,
-            quoteToken,
-            UNISWAP_ROUTER,
-            result.charmVault,
-            result.v3Pool,
-            owner
-        );
+        result.creatorCharmStrategy = ICreatorCharmStrategyFactory(creatorCharmStrategyFactory)
+            .deployAndInitialize(
+                creatorVault, underlyingToken, quoteToken, UNISWAP_ROUTER, result.charmVault, result.v3Pool, owner
+            );
 
         // ═══════════════════════════════════════════════════════════
         // STEP 5: Deploy Ajna Strategy (if factory provided)
         // ═══════════════════════════════════════════════════════════
         if (_ajnaFactory != address(0)) {
-            result.ajnaStrategy = IAjnaStrategyFactory(ajnaStrategyFactory).deploy(
-                creatorVault,
-                underlyingToken,
-                _ajnaFactory,
-                quoteToken,
-                owner
-            );
+            result.ajnaStrategy = IAjnaStrategyFactory(ajnaStrategyFactory)
+                .deploy(creatorVault, underlyingToken, _ajnaFactory, quoteToken, owner);
         }
 
         emit StrategiesDeployed(msg.sender, underlyingToken, result);
@@ -184,10 +170,11 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
      * @dev Returns calldata for batched execution
      */
     function encodeAddStrategyBatch(
-        address /* vault */,
+        address,
+        /* vault */
         DeploymentResult memory result,
-        uint256 charmWeightBps,  // e.g., 6900 for 69.00%
-        uint256 ajnaWeightBps    // e.g., 2139 for 21.39%
+        uint256 charmWeightBps, // e.g., 6900 for 69.00%
+        uint256 ajnaWeightBps // e.g., 2139 for 21.39%
     ) external pure returns (bytes[] memory calls) {
         uint256 numCalls = result.ajnaStrategy != address(0) ? 2 : 1;
         calls = new bytes[](numCalls);

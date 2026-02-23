@@ -45,7 +45,7 @@ describe('deploy solana infra status handler', () => {
     getSessionAddressMock.mockReturnValue('0x1111111111111111111111111111111111111111')
     isAdminAddressMock.mockReturnValue(true)
     getApiContractsMock.mockReturnValue({
-      creatorVaultBatcher: '0x32e91185B92c6c13dd56D745aBf24F009cdD3019',
+      creatorVaultBatcher: '0x4184D9118ec31061cEDd6041B6bD676ac19F29a5',
     })
   })
 
@@ -68,17 +68,19 @@ describe('deploy solana infra status handler', () => {
       SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET: undefined,
       SOLANA_ADAPTER_OWNER_PRIVATE_KEY: 'not-a-hex-private-key',
       SOLANA_DEFAULT_MINT_BYTES32: undefined,
+      KEEPR_PRIVATE_KEY: undefined,
+      PRIVATE_KEY: undefined,
     })
     try {
       const mockPublicClient = {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92'
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'owner':
-              return '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80'
+              return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
             default:
               throw new Error(`Unexpected read ${String(args.functionName)}`)
           }

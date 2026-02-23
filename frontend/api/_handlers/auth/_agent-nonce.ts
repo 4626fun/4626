@@ -31,6 +31,16 @@ type AgentNonceResponse = {
   ownerAddress: string
 }
 
+const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
+  {
+    type: 'function',
+    name: 'isOwnerAddress',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+] as const
+
 function parseAgentId(value: unknown): number | null {
   const n = Number(value)
   if (!Number.isFinite(n) || Math.floor(n) !== n || n < 0) return null
@@ -111,11 +121,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
+  const client = createPublicClient({
+    chain: base,
+    transport: http(getBaseRpcUrl(), { timeout: 12_000 }),
+  })
+
   const canonicalOwner = await resolveCanonicalSmartWalletAddress(ownerAddress)
-  if (!canonicalOwner || canonicalOwner.toLowerCase() !== ownerAddress.toLowerCase()) {
+  let validatedOwnerAddress = ''
+  if (canonicalOwner && canonicalOwner.toLowerCase() === ownerAddress.toLowerCase()) {
+    validatedOwnerAddress = canonicalOwner.toLowerCase()
+  } else {
+    const principalLower = String(principalAddress || '').trim().toLowerCase()
+    const ownerLower = ownerAddress.toLowerCase()
+    const principalCanControlOwner =
+      isAddressLike(principalLower) &&
+      (principalLower === ownerLower ||
+        (await client
+          .readContract({
+            address: ownerLower as `0x${string}`,
+            abi: COINBASE_SMART_WALLET_OWNER_CHECK_ABI,
+            functionName: 'isOwnerAddress',
+            args: [principalLower as `0x${string}`],
+          })
+          .then((v) => v === true)
+          .catch(() => false)))
+    if (principalCanControlOwner) {
+      validatedOwnerAddress = ownerLower
+    }
+  }
+  if (!validatedOwnerAddress) {
     return res.status(403).json({
       success: false,
-      error: 'ownerAddress must be a verified canonical smart wallet',
+      error: 'ownerAddress must be a verified canonical smart wallet (or controlled by the authenticated owner)',
     } satisfies ApiEnvelope<never>)
   }
 
@@ -125,13 +162,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'SIWA nonce service unavailable' } satisfies ApiEnvelope<never>)
   }
 
-  const client = createPublicClient({
-    chain: base,
-    transport: http(getBaseRpcUrl(), { timeout: 12_000 }),
-  })
-
   const nonceResult = await createSIWANonce(
-    { address: canonicalOwner, agentId, agentRegistry: registryRaw.toLowerCase() },
+    { address: validatedOwnerAddress, agentId, agentRegistry: registryRaw.toLowerCase() },
     client as any,
   )
 
@@ -148,7 +180,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       nonce: nonceResult.nonce,
       agentId,
       agentRegistry: registryRaw,
-      ownerAddress: canonicalOwner,
+      ownerAddress: validatedOwnerAddress,
       expiresAt: new Date(nonceResult.expirationTime),
       createdByAddress: principal?.address ?? null,
     })
@@ -170,7 +202,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       chainId: registryRef.chainId,
       agentId,
       agentRegistry: registryRaw.toLowerCase(),
-      ownerAddress: canonicalOwner,
+      ownerAddress: validatedOwnerAddress,
     } satisfies AgentNonceResponse,
   } satisfies ApiEnvelope<AgentNonceResponse>)
 }

@@ -46,7 +46,6 @@ import {VaultActivationBatcher} from "../contracts/helpers/batchers/VaultActivat
  *          -vvvv
  */
 contract DeployTier1Upgrade is Script {
-
     // ═══════════════════════════════════════════════════════════════════
     //                    EXISTING DEPLOYED CONTRACTS
     // ═══════════════════════════════════════════════════════════════════
@@ -73,7 +72,15 @@ contract DeployTier1Upgrade is Script {
     //                         BASE CONFIG
     // ═══════════════════════════════════════════════════════════════════
 
-    uint16 constant BASE_CHAIN_ID = 8453;
+    uint256 constant BASE_CHAIN_ID = 8453;
+
+    // Lottery sponsorship guardrails (hybrid model defaults)
+    uint256 constant SPONSORED_MIN_SWAP_USD = 10_000_000; // $10 (1e6)
+    uint256 constant SPONSOR_EPOCH_DURATION = 1 hours;
+    uint256 constant VRF_SPONSOR_MAX_FEE = 0.01 ether;
+    uint256 constant VRF_SPONSOR_BUDGET = 0.25 ether;
+    uint256 constant CALLBACK_SPONSOR_MAX_FEE = 0.01 ether;
+    uint256 constant CALLBACK_SPONSOR_BUDGET = 0.1 ether;
 
     // ═══════════════════════════════════════════════════════════════════
     //                           OUTPUT
@@ -87,9 +94,13 @@ contract DeployTier1Upgrade is Script {
         address deployer = vm.addr(deployerPrivateKey);
 
         console.log("");
-        console.log(unicode"╔════════════════════════════════════════════════════════════════╗");
+        console.log(
+            unicode"╔════════════════════════════════════════════════════════════════╗"
+        );
         console.log(unicode"║          Tier 1 Upgrade: Hub-Centric Architecture              ║");
-        console.log(unicode"╚════════════════════════════════════════════════════════════════╝");
+        console.log(
+            unicode"╚════════════════════════════════════════════════════════════════╝"
+        );
         console.log("");
         console.log("Deployer:       ", deployer);
         console.log("Chain ID:       ", block.chainid);
@@ -107,10 +118,7 @@ contract DeployTier1Upgrade is Script {
 
         console.log("[1/2] Deploying CreatorLotteryManager (hub-centric)...");
 
-        newLotteryManager = new CreatorLotteryManager(
-            REGISTRY,
-            deployer
-        );
+        newLotteryManager = new CreatorLotteryManager(REGISTRY, deployer);
 
         console.log("       Address:", address(newLotteryManager));
         console.log("");
@@ -144,6 +152,21 @@ contract DeployTier1Upgrade is Script {
         // (so it can call processSwapLottery for Solana-originated entries)
         newLotteryManager.setAuthorizedSwapContract(SOLANA_BRIDGE_ADAPTER, true);
         console.log("  setAuthorizedSwapContract(SolanaBridgeAdapter): true");
+
+        // Configure bounded sponsorship defaults for cross-chain fees
+        newLotteryManager.setSponsoredVrfMinSwapAmountUSD(SPONSORED_MIN_SWAP_USD);
+        console.log("  setSponsoredVrfMinSwapAmountUSD: $10");
+
+        newLotteryManager.setSponsorshipRateLimits(2, 10, 1, 10);
+        console.log("  setSponsorshipRateLimits: vrfBuyer=2, vrfOrigin=10, cbBuyer=1, cbOrigin=10");
+
+        newLotteryManager.setVrfSponsorshipPolicy(true, VRF_SPONSOR_MAX_FEE, VRF_SPONSOR_BUDGET, SPONSOR_EPOCH_DURATION);
+        console.log("  setVrfSponsorshipPolicy: enabled, maxFee 0.01 ETH, budget 0.25 ETH/hr");
+
+        newLotteryManager.setCallbackSponsorshipPolicy(
+            true, CALLBACK_SPONSOR_MAX_FEE, CALLBACK_SPONSOR_BUDGET, SPONSOR_EPOCH_DURATION
+        );
+        console.log("  setCallbackSponsorshipPolicy: enabled, maxFee 0.01 ETH, budget 0.10 ETH/hr");
 
         console.log("");
 
@@ -180,20 +203,34 @@ contract DeployTier1Upgrade is Script {
         //                         SUMMARY
         // ═══════════════════════════════════════════════════════════════
 
-        console.log(unicode"╔════════════════════════════════════════════════════════════════╗");
+        console.log(
+            unicode"╔════════════════════════════════════════════════════════════════╗"
+        );
         console.log(unicode"║                    DEPLOYMENT COMPLETE                         ║");
-        console.log(unicode"╚════════════════════════════════════════════════════════════════╝");
+        console.log(
+            unicode"╚════════════════════════════════════════════════════════════════╝"
+        );
         console.log("");
-        console.log(unicode"┌─────────────────────────────────────────────────────────────────┐");
+        console.log(
+            unicode"┌─────────────────────────────────────────────────────────────────┐"
+        );
         console.log(unicode"│  NEW CONTRACTS                                                  │");
-        console.log(unicode"├─────────────────────────────────────────────────────────────────┤");
+        console.log(
+            unicode"├─────────────────────────────────────────────────────────────────┤"
+        );
         console.log("  CreatorLotteryManager: ", address(newLotteryManager));
         console.log("  VaultActivationBatcher:", address(newBatcher));
-        console.log(unicode"└─────────────────────────────────────────────────────────────────┘");
+        console.log(
+            unicode"└─────────────────────────────────────────────────────────────────┘"
+        );
         console.log("");
-        console.log(unicode"┌─────────────────────────────────────────────────────────────────┐");
+        console.log(
+            unicode"┌─────────────────────────────────────────────────────────────────┐"
+        );
         console.log(unicode"│  REMAINING MANUAL STEPS                                         │");
-        console.log(unicode"├─────────────────────────────────────────────────────────────────┤");
+        console.log(
+            unicode"├─────────────────────────────────────────────────────────────────┤"
+        );
         console.log(unicode"│                                                                 │");
         console.log(unicode"│  1. VRF Consumer: authorize new LotteryManager as caller        │");
         console.log(unicode"│     vrfConsumer.setAuthorizedCaller(newLotteryManager, true)     │");
@@ -206,21 +243,28 @@ contract DeployTier1Upgrade is Script {
         console.log(unicode"│                                                                 │");
         console.log(unicode"│  4. Fund VRF Consumer with ETH for LZ cross-chain responses     │");
         console.log(unicode"│                                                                 │");
-        console.log(unicode"│  5. Fund LotteryManager with ETH for winner callbacks           │");
+        console.log(unicode"│  5. Fund LotteryManager with bounded ETH sponsorship budget      │");
         console.log(unicode"│                                                                 │");
         console.log(unicode"│  6. Update frontend/backend to reference new contract addresses │");
         console.log(unicode"│                                                                 │");
         console.log(unicode"│  7. (Optional) Pause old LotteryManager                        │");
         console.log(unicode"│     oldLotteryManager.pause()                                   │");
         console.log(unicode"│                                                                 │");
-        console.log(unicode"└─────────────────────────────────────────────────────────────────┘");
+        console.log(
+            unicode"└─────────────────────────────────────────────────────────────────┘"
+        );
         console.log("");
-        console.log(unicode"┌─────────────────────────────────────────────────────────────────┐");
+        console.log(
+            unicode"┌─────────────────────────────────────────────────────────────────┐"
+        );
         console.log(unicode"│  ENVIRONMENT VARIABLES                                          │");
-        console.log(unicode"├─────────────────────────────────────────────────────────────────┤");
+        console.log(
+            unicode"├─────────────────────────────────────────────────────────────────┤"
+        );
         console.log("  LOTTERY_MANAGER=", address(newLotteryManager));
         console.log("  VAULT_ACTIVATION_BATCHER=", address(newBatcher));
-        console.log(unicode"└─────────────────────────────────────────────────────────────────┘");
+        console.log(
+            unicode"└─────────────────────────────────────────────────────────────────┘"
+        );
     }
-
 }
