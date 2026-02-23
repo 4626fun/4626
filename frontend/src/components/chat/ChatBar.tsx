@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { MessageSquare, ChevronDown, Plus, Loader2, Wifi, WifiOff, X } from 'lucide-react'
 import { useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
 import { useIdentity } from '@/hooks/useIdentity'
+import { getAgentIdentity } from './agentIdentity'
 
 type Props = {
   expanded: boolean
@@ -65,16 +66,17 @@ function ConversationItem({
     (convo.peerInboxId && resolvedPeer?.inboxId === convo.peerInboxId ? resolvedPeer.address : null)
 
   const identity = useIdentity(convo.type === 'dm' ? peerAddress : null)
+  const agentIdentity = convo.type === 'dm' ? getAgentIdentity(peerAddress) : null
   const displayName =
     convo.type === 'dm' && peerAddress
-      ? identity.displayName
+      ? (agentIdentity?.name ?? identity.displayName)
       : convo.name
   const displaySecondary =
     convo.type === 'dm' && peerAddress
-      ? (identity.secondary ?? truncateAddress(peerAddress))
+      ? (agentIdentity ? 'CreatorVault assistant' : (identity.secondary ?? truncateAddress(peerAddress)))
       : null
   const avatar = convo.type === 'dm'
-    ? identity.avatar
+    ? (agentIdentity?.avatar ?? identity.avatar)
     : (convo.imageUrl ?? null)
   const subtitle = convo.lastMessageText
     ? (displaySecondary ? `${displaySecondary} · ${convo.lastMessageText}` : convo.lastMessageText)
@@ -228,7 +230,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
             <div className="px-4 pb-3">
               <div className="flex items-center gap-2 rounded-full bg-zinc-900 px-4 py-2 text-sm text-zinc-500">
                 <MessageSquare className="w-4 h-4 text-zinc-400" />
-                Ask Meta AI or Search
+                Ask Keepr or Search
               </div>
             </div>
           )}

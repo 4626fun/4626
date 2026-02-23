@@ -3,6 +3,10 @@ import type { Address } from 'viem'
 
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { buildAgentRegistration } from '../../../server/_lib/agentRegistration.js'
+import {
+  publishAgentRegistrationToGrove,
+  resolveAgentRegistrationKey,
+} from '../../../server/_lib/agentRegistrationPublisher.js'
 import { DEFAULT_CHAIN_ID } from '../../../server/zora/_shared.js'
 import { resolveCanonicalSmartWalletAddress } from '../../../server/_lib/canonicalWalletResolver.js'
 import { resolveLensUserByOwner } from '../../../server/_lib/lensAccounts.js'
@@ -10,6 +14,7 @@ import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
 import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
 import { buildShareTokenMetadata } from '../../../server/_lib/shareTokenMetadata.js'
 import { requireServerKey } from '../../../server/zora/_shared.js'
+import { executeUniswapSkill, type UniswapSkillName } from '../../../server/uniswap/agentSkills.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -44,6 +49,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+
+    if (
+      tool === 'uniswap_quote' ||
+      tool === 'uniswap_check_approval' ||
+      tool === 'uniswap_build_swap' ||
+      tool === 'uniswap_batch_swap_5792' ||
+      tool === 'uniswap_delegated_swap_7702' ||
+      tool === 'uniswap_crosschain_plan' ||
+      tool === 'uniswap_liquidity'
+    ) {
+      const payload = input && typeof input.payload === 'object' && !Array.isArray(input.payload)
+        ? (input.payload as Record<string, unknown>)
+        : {}
+      const data = await executeUniswapSkill(tool as UniswapSkillName, payload)
+      return res.status(200).json({ success: true, data } satisfies ApiEnvelope<unknown>)
+    }
+
     if (tool === 'lens_mapping') {
       const walletRaw = normalizeAddress(input.address)
       if (!walletRaw || !isAddressLike(walletRaw)) {
@@ -373,16 +395,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           missing: result.missing ?? [],
         })
       }
-      const registration = {
-        ...result.payload,
-        generatedAt: new Date().toISOString(),
-        source: 'erc8004.registration',
-      }
+      const registration = result.payload
       const shouldStore = input.store !== false
       let grove = null
       if (shouldStore) {
-        const attempt = await tryUploadImmutableJson(registration)
-        if (attempt.ok) grove = attempt.result
+        const publish = await publishAgentRegistrationToGrove({
+          payload: registration,
+          agentKey: resolveAgentRegistrationKey(registration),
+        })
+        if (publish.ok) {
+          grove = {
+            lensUri: publish.lensUri,
+            gatewayUrl: publish.gatewayUrl,
+            storageKey: publish.storageKey ?? publish.lensUri.replace(/^lens:\/\//, ''),
+            statusUrl: null,
+          }
+        }
       }
       return res.status(200).json({ success: true, data: { registration, grove } })
     }

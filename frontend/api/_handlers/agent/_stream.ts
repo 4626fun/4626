@@ -43,9 +43,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
   res.setHeader('Cache-Control', 'no-cache, no-transform')
   res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
   res.flushHeaders?.()
 
+  let clientClosed = false
+  if (typeof (req as any).on === 'function') {
+    ;(req as any).on('close', () => {
+      clientClosed = true
+    })
+  }
+
+  const heartbeat = setInterval(() => {
+    if (clientClosed) return
+    try {
+      res.write(': ping\n\n')
+    } catch {
+      // Client disconnected.
+    }
+  }, 15_000)
+
   const writeEvent = (event: string, data: unknown) => {
+    if (clientClosed) return
     try {
       res.write(`event: ${event}\n`)
       res.write(`data: ${JSON.stringify(data)}\n\n`)
@@ -64,6 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       correlationId,
       preferredModel: String(creatorVaultCharacter.settings?.model ?? '').trim() || undefined,
     })) {
+      if (clientClosed) break
       writeEvent(event.type, event.data)
     }
     writeEvent('close', { ok: true })
@@ -74,6 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     writeEvent('error', { message: 'stream_failed' })
   } finally {
+    clearInterval(heartbeat)
     res.end()
   }
 }

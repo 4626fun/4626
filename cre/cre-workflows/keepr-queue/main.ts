@@ -5,13 +5,14 @@
  * API, and updates their status. This is a pure HTTP workflow — no EVM
  * reads or writes.
  *
- * CRE Quota Budget (5 HTTP calls max per execution):
- *   1. GET  /keepr/actions/pending?limit=2        (1 call)
- *   2. POST /keepr/actions/updateStatus (claim)    (1 call per action)
- *   3. POST /keepr/actions/execute                 (1 call per action)
- *   Total: 1 + 2*2 = 5 calls for 2 actions
+ * CRE Quota Budget (4 HTTP calls max per execution by default):
+ *   1. GET  /keepr/actions/pending?limit=1         (1 call)
+ *   2. POST /keepr/actions/updateStatus (claim)    (1 call)
+ *   3. POST /keepr/actions/execute                 (1 call)
+ *   4. POST /keepr/actions/updateStatus (finalize) (1 call)
+ *   Total: 4 calls for 1 action
  *
- * To compensate for the reduced batch size (was 10, now 2), the cron
+ * To compensate for the reduced batch size (was 10, now 1), the cron
  * schedule runs every 30 seconds instead of every 5 minutes.
  */
 
@@ -87,6 +88,10 @@ type QueueResult = {
   skipped: number
 }
 
+const QUEUE_MAX_ATTEMPTS = 5
+const RETRY_BASE_SECONDS = 60
+const RETRY_MAX_SECONDS = 600
+
 // ---------------------------------------------------------------------------
 // HTTP helper — runs inside runInNodeMode for consensus
 // ---------------------------------------------------------------------------
@@ -131,7 +136,7 @@ function fetchPendingActions(
   }
 
   // Process up to maxActionsPerExecution actions
-  // Each action uses 2 HTTP calls (claim + execute) = 4 calls for 2 actions
+  // Each action uses 3 HTTP calls (claim + execute + finalize).
   for (const action of actions) {
     result.processed++
 
@@ -180,14 +185,76 @@ function fetchPendingActions(
     ) as ExecuteResponse
 
     if (execBody.success && execBody.data?.executed) {
-      result.succeeded++
-    } else {
-      const retryable = execBody.data?.retryable ?? false
-      const shouldRetry = retryable && action.attemptCount < 4
-      if (shouldRetry) {
+      const doneResp = httpClient.sendRequest(nodeRuntime, {
+        url: `${baseUrl}/keepr/actions/updateStatus`,
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: btoa(JSON.stringify({ id: action.id, status: "executed" })),
+      }).result()
+      const doneBody = JSON.parse(
+        new TextDecoder().decode(doneResp.body),
+      ) as UpdateStatusResponse
+      if (doneBody.success && doneBody.data?.updated) {
+        result.succeeded++
+      } else {
+        result.failed++
+      }
+      continue
+    }
+
+    const retryable = execBody.data?.retryable ?? false
+    const shouldRetry = retryable && action.attemptCount < (QUEUE_MAX_ATTEMPTS - 1)
+    if (shouldRetry) {
+      const retryDelaySeconds = Math.min(
+        RETRY_MAX_SECONDS,
+        RETRY_BASE_SECONDS * Math.pow(2, Math.max(0, action.attemptCount)),
+      )
+      const retryResp = httpClient.sendRequest(nodeRuntime, {
+        url: `${baseUrl}/keepr/actions/updateStatus`,
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: btoa(JSON.stringify({
+          id: action.id,
+          status: "retry",
+          error: execBody.data?.error ?? execBody.error ?? "execution_failed",
+          retryDelaySeconds,
+        })),
+      }).result()
+      const retryBody = JSON.parse(
+        new TextDecoder().decode(retryResp.body),
+      ) as UpdateStatusResponse
+      if (retryBody.success && retryBody.data?.updated) {
         result.retried++
       } else {
         result.failed++
+      }
+    } else {
+      const failResp = httpClient.sendRequest(nodeRuntime, {
+        url: `${baseUrl}/keepr/actions/updateStatus`,
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: btoa(JSON.stringify({
+          id: action.id,
+          status: "failed",
+          error: execBody.data?.error ?? execBody.error ?? "execution_failed",
+        })),
+      }).result()
+      const failBody = JSON.parse(
+        new TextDecoder().decode(failResp.body),
+      ) as UpdateStatusResponse
+      if (failBody.success && failBody.data?.updated) {
+        result.failed++
+      } else {
+        result.skipped++
       }
     }
   }

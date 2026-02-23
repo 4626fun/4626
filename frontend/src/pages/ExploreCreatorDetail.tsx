@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ExternalLink, ArrowLeft, Copy, Check, Share2, Globe, Users, Coins, TrendingUp, Calendar } from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
@@ -368,12 +368,6 @@ export function ExploreCreatorDetail() {
 
     return items
   }, [contentPage, totalContentPages])
-
-  useEffect(() => {
-    if (contentCoinsPage > totalContentPages) {
-      setContentCoinsPage(totalContentPages)
-    }
-  }, [contentCoinsPage, totalContentPages])
 
   if (!chain || !isSupportedChain(chain)) {
     return <Navigate replace to="/explore/creators" />

@@ -17,6 +17,7 @@ interface ICreatorLotteryManagerForRewards {
 interface ICreatorRegistryForRewards {
     function getAllCreatorCoins() external view returns (address[] memory);
     function getGaugeControllerForToken(address token) external view returns (address);
+    function getVaultForToken(address token) external view returns (address);
 }
 
 interface ICreatorGaugeControllerForRewards {
@@ -102,10 +103,45 @@ contract DeployRewardsEcosystem is Script {
             console2.log("\nConfigure VaultGaugeVoting registry whitelist...");
             voting.setRegistry(registry);
             voting.setUseRegistryWhitelist(true);
+
+            // Seed the manual whitelist from the registry so the gauge is usable immediately.
+            console2.log("\nSeed VaultGaugeVoting manual whitelist from registry vaults...");
+            ICreatorRegistryForRewards reg = ICreatorRegistryForRewards(registry);
+            address[] memory tokens = reg.getAllCreatorCoins();
+            address[] memory vaultsTmp = new address[](tokens.length);
+            uint256 count = 0;
+
+            for (uint256 i = 0; i < tokens.length; i++) {
+                address vault = reg.getVaultForToken(tokens[i]);
+                if (vault == address(0)) continue;
+                vaultsTmp[count] = vault;
+                count++;
+            }
+
+            console2.log("Registry token count:", tokens.length);
+            console2.log("Whitelisting vault count:", count);
+
+            if (count > 0) {
+                uint256 chunkSize = 100;
+                for (uint256 start = 0; start < count; start += chunkSize) {
+                    uint256 end = start + chunkSize;
+                    if (end > count) end = count;
+
+                    address[] memory vaults = new address[](end - start);
+                    bool[] memory statuses = new bool[](end - start);
+
+                    for (uint256 j = start; j < end; j++) {
+                        vaults[j - start] = vaultsTmp[j];
+                        statuses[j - start] = true;
+                    }
+
+                    voting.batchSetVaultWhitelist(vaults, statuses);
+                }
+            }
         }
 
         console2.log("\nDeploy VoterRewardsDistributor...");
-        VoterRewardsDistributor rewards = new VoterRewardsDistributor(address(voting), owner);
+        VoterRewardsDistributor rewards = new VoterRewardsDistributor(address(voting), registry, owner);
         rewards.setProtocolTreasury(protocolTreasury);
         console2.log("VoterRewardsDistributor:", address(rewards));
 

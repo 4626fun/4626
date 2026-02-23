@@ -13,7 +13,8 @@ The CreatorShareOFT:
 - Enables cross-chain transfers via LayerZero V2
 - Collects 6.9% fee on all DEX trades
 - Routes fees to GaugeController
-- Triggers lottery entries for traders
+- Triggers lottery entries for traders on hub
+- Queues remote-chain lottery entries for explicit buyer-paid submission
 
 ## Key Functions
 
@@ -59,18 +60,34 @@ function setLotteryEnabled(bool enabled) external onlyOwner;
 function setFeesEnabled(bool enabled) external onlyOwner;
 ```
 
+### Remote Lottery Entry Submission
+
+```solidity
+// Quote fee for a queued remote lottery entry
+function quotePendingLotteryEntry(uint256 entryId)
+    external
+    view
+    returns (MessagingFee memory fee);
+
+// Submit queued entry and pay exact native LayerZero fee
+function submitPendingLotteryEntry(uint256 entryId) external payable;
+```
+
 ## Fee Collection Flow
 
 ```
-User trades on Uniswap V4 (marked as SwapOnly)
+User trades on SwapOnly venue
    ↓
-transfer() hook detects SwapOnly sender
+transfer() hook detects buy
    ↓
 6.9% fee calculated
    ↓
-Fee sent to GaugeController
+Hub chain: fee routed to GaugeController + local lottery trigger
+Remote chain: fee accumulated + pending lottery entry queued
    ↓
-Lottery entry triggered for buyer
+Remote buyer calls submitPendingLotteryEntry(entryId) with exact msg.value
+   ↓
+LayerZero message sent to hub LotteryManager
 ```
 
 ## Address Type Matrix
@@ -97,3 +114,18 @@ DEX aggregators are marked as `SwapOnly`:
 - Multi-hop routes
 
 The final recipient receives the lottery entry, not the aggregator.
+
+## Emergency Mitigation
+
+If remote lottery sponsorship risk needs immediate containment, disable lottery on affected remote ShareOFTs:
+
+```bash
+forge script script/EmergencyDisableRemoteLottery.s.sol:EmergencyDisableRemoteLottery \
+  --rpc-url $RPC_URL \
+  --broadcast \
+  -vvvv
+```
+
+Required env vars:
+- `PRIVATE_KEY`
+- `SHARE_OFT` (remote deployment address)

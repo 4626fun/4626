@@ -37,12 +37,23 @@ contract BribeDepot is Ownable, ReentrancyGuard {
     /// @notice epoch => token => user => claimed
     mapping(uint256 => mapping(address => mapping(address => bool))) public claimed;
 
+    /// @notice epoch => token => total amount paid out (sum of transfers attempted)
+    mapping(uint256 => mapping(address => uint256)) public claimedAmount;
+
+    /// @notice epoch => token => closed (no further claims; may have been rolled forward)
+    mapping(uint256 => mapping(address => bool)) public isClosed;
+
+    /// @notice Number of epochs to wait before rolling forward leftover bribes.
+    /// @dev 4 epochs ≈ 4 weeks after the epoch ends.
+    uint256 public rolloverGraceEpochs = 4;
+
     // ================================
     // EVENTS
     // ================================
 
     event Bribed(address indexed token, uint256 amount, uint256 indexed epoch);
     event Claimed(address indexed user, address indexed token, uint256 amount, uint256 indexed epoch);
+    event BribeRolledOver(address indexed token, uint256 indexed fromEpoch, uint256 indexed toEpoch, uint256 amount);
 
     // ================================
     // ERRORS
@@ -52,6 +63,10 @@ contract BribeDepot is Ownable, ReentrancyGuard {
     error ZeroAmount();
     error AlreadyClaimed();
     error NoUserVotes();
+    error EpochNotEnded();
+    error EpochClosed();
+    error RolloverNotAllowedYet();
+    error NotZeroVoteEpoch();
 
     constructor(address _vault, address _gaugeVoting) Ownable(msg.sender) {
         if (_vault == address(0) || _gaugeVoting == address(0)) revert ZeroAddress();
@@ -69,10 +84,15 @@ contract BribeDepot is Ownable, ReentrancyGuard {
         if (amount == 0) revert ZeroAmount();
 
         uint256 epoch = gaugeVoting.currentEpoch();
+        uint256 beforeBal = IERC20(token).balanceOf(address(this));
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-        totalBribes[epoch][token] += amount;
+        uint256 afterBal = IERC20(token).balanceOf(address(this));
 
-        emit Bribed(token, amount, epoch);
+        // Credit the actual received amount (supports fee-on-transfer tokens).
+        uint256 received = afterBal - beforeBal;
+        totalBribes[epoch][token] += received;
+
+        emit Bribed(token, received, epoch);
     }
 
     /**
@@ -81,6 +101,9 @@ contract BribeDepot is Ownable, ReentrancyGuard {
      * @param token Token to claim
      */
     function claim(uint256 epoch, address token) external nonReentrant returns (uint256 amount) {
+        if (epoch >= gaugeVoting.currentEpoch()) revert EpochNotEnded();
+        if (token == address(0)) revert ZeroAddress();
+        if (isClosed[epoch][token]) revert EpochClosed();
         if (claimed[epoch][token][msg.sender]) revert AlreadyClaimed();
 
         uint256 totalWeight = gaugeVoting.getVaultWeightAtEpoch(epoch, vault);
@@ -93,8 +116,70 @@ contract BribeDepot is Ownable, ReentrancyGuard {
         amount = (totalAmount * userWeight) / totalWeight;
 
         claimed[epoch][token][msg.sender] = true;
-        IERC20(token).safeTransfer(msg.sender, amount);
+        claimedAmount[epoch][token] += amount;
+        if (amount > 0) {
+            IERC20(token).safeTransfer(msg.sender, amount);
+        }
 
         emit Claimed(msg.sender, token, amount, epoch);
+    }
+
+    /**
+     * @notice Roll bribes from an epoch with zero vault weight into the current epoch.
+     * @dev Safe because there were no eligible claimants for that epoch.
+     */
+    function rolloverZeroVoteEpoch(uint256 epoch, address token) external nonReentrant returns (uint256 rolled) {
+        if (token == address(0)) revert ZeroAddress();
+
+        uint256 current = gaugeVoting.currentEpoch();
+        if (epoch >= current) revert EpochNotEnded();
+        if (isClosed[epoch][token]) revert EpochClosed();
+
+        // Only roll epochs with 0 votes for this vault (no eligible claimants).
+        if (gaugeVoting.getVaultWeightAtEpoch(epoch, vault) != 0) revert NotZeroVoteEpoch();
+
+        rolled = totalBribes[epoch][token];
+
+        // Close the epoch/token to prevent late claims pulling from rolled-forward liquidity.
+        isClosed[epoch][token] = true;
+        totalBribes[epoch][token] = 0;
+
+        if (rolled > 0) {
+            totalBribes[current][token] += rolled;
+        }
+
+        emit BribeRolledOver(token, epoch, current, rolled);
+    }
+
+    /**
+     * @notice Roll leftover (unclaimed + rounding dust) forward after a grace period.
+     * @dev Once rolled, the epoch/token is closed and can no longer be claimed.
+     */
+    function rolloverExpiredEpoch(uint256 epoch, address token) external nonReentrant returns (uint256 rolled) {
+        if (token == address(0)) revert ZeroAddress();
+
+        uint256 current = gaugeVoting.currentEpoch();
+        if (epoch >= current) revert EpochNotEnded();
+        if (isClosed[epoch][token]) revert EpochClosed();
+        if (epoch + rolloverGraceEpochs >= current) revert RolloverNotAllowedYet();
+
+        uint256 totalAmount = totalBribes[epoch][token];
+        uint256 alreadyClaimed = claimedAmount[epoch][token];
+
+        // Clamp: never underflow even if a non-standard token causes unexpected behavior.
+        if (alreadyClaimed >= totalAmount) {
+            isClosed[epoch][token] = true;
+            emit BribeRolledOver(token, epoch, current, 0);
+            return 0;
+        }
+
+        rolled = totalAmount - alreadyClaimed;
+        isClosed[epoch][token] = true;
+
+        if (rolled > 0) {
+            totalBribes[current][token] += rolled;
+        }
+
+        emit BribeRolledOver(token, epoch, current, rolled);
     }
 }

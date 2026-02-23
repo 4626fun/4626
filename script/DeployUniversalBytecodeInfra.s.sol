@@ -36,7 +36,8 @@ contract DeployUniversalBytecodeInfra is Script {
         bytes memory storeInit = type(UniversalBytecodeStore).creationCode;
         address storeAddr = _computeCreate2(UNIVERSAL_CREATE2_FACTORY, STORE_SALT, keccak256(storeInit));
 
-        bytes memory deployerInit = abi.encodePacked(type(UniversalCreate2DeployerFromStore).creationCode, abi.encode(storeAddr));
+        bytes memory deployerInit =
+            abi.encodePacked(type(UniversalCreate2DeployerFromStore).creationCode, abi.encode(storeAddr));
         address deployerAddr = _computeCreate2(UNIVERSAL_CREATE2_FACTORY, DEPLOYER_SALT, keccak256(deployerInit));
 
         console2.log("UniversalBytecodeStore (predicted):", storeAddr);
@@ -46,13 +47,13 @@ contract DeployUniversalBytecodeInfra is Script {
 
         // Deploy the store (if missing)
         if (storeAddr.code.length == 0) {
-            (bool ok, ) = UNIVERSAL_CREATE2_FACTORY.call(abi.encodePacked(STORE_SALT, storeInit));
+            (bool ok,) = UNIVERSAL_CREATE2_FACTORY.call(abi.encodePacked(STORE_SALT, storeInit));
             require(ok, "STORE deploy failed");
         }
 
         // Deploy the deployer (if missing)
         if (deployerAddr.code.length == 0) {
-            (bool ok, ) = UNIVERSAL_CREATE2_FACTORY.call(abi.encodePacked(DEPLOYER_SALT, deployerInit));
+            (bool ok,) = UNIVERSAL_CREATE2_FACTORY.call(abi.encodePacked(DEPLOYER_SALT, deployerInit));
             require(ok, "DEPLOYER deploy failed");
         }
 
@@ -78,5 +79,4 @@ contract DeployUniversalBytecodeInfra is Script {
         vm.stopBroadcast();
     }
 }
-
 

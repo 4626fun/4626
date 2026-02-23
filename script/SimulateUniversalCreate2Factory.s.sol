@@ -20,14 +20,15 @@ contract SimulateUniversalCreate2Factory is Script {
         uint256 pk = vm.envUint("PRIVATE_KEY");
 
         // Use a unique salt so this simulation doesn't collide with anything that already exists on Base.
-        bytes32 salt = keccak256(abi.encodePacked("CreatorVault:universal-create2-factory:bootstrap-test:v1", vm.addr(pk)));
+        bytes32 salt =
+            keccak256(abi.encodePacked("CreatorVault:universal-create2-factory:bootstrap-test:v1", vm.addr(pk)));
         bytes memory initCode = type(OFTBootstrapRegistry).creationCode;
         address predicted = _computeCreate2(UNIVERSAL_CREATE2_FACTORY, salt, keccak256(initCode));
 
         // If it already exists, we still consider it a pass (same computation).
         if (predicted.code.length == 0) {
             vm.startBroadcast(pk);
-            (bool ok, ) = UNIVERSAL_CREATE2_FACTORY.call(abi.encodePacked(salt, initCode));
+            (bool ok,) = UNIVERSAL_CREATE2_FACTORY.call(abi.encodePacked(salt, initCode));
             require(ok, "CREATE2_FACTORY deploy failed");
             vm.stopBroadcast();
         }
@@ -35,7 +36,7 @@ contract SimulateUniversalCreate2Factory is Script {
         require(predicted.code.length > 0, "deployment did not create code");
 
         // Sanity: ensure the deployed contract responds as expected.
-        address ep = OFTBootstrapRegistry(predicted).getLayerZeroEndpoint(uint16(block.chainid));
+        address ep = OFTBootstrapRegistry(predicted).getLayerZeroEndpoint(block.chainid);
         require(ep != address(0), "endpoint should not be zero");
     }
 }

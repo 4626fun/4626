@@ -12,6 +12,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, readJsonBody } from '../../../../../server/auth/_shared.js'
 import { guardAgentApiRequest } from '../../../../../server/_lib/agentApiGuard.js'
+import { resolveCanonicalSmartWalletAddress } from '../../../../../server/_lib/canonicalWalletResolver.js'
 import { getOrCreateCreatorAgentWallet } from '../../../../../server/_lib/creatorAgentWallets.js'
 
 function setPublicCors(res: VercelResponse) {
@@ -41,13 +42,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = (await readJsonBody<RequestBody>(req)) ?? {}
-  // The creator address defaults to the signed-in address
-  const creatorAddress = body.creatorAddress?.trim().toLowerCase() || principalAddress
+  // The creator address defaults to the signed-in address.
+  const requestedAddress = body.creatorAddress?.trim().toLowerCase() || principalAddress
+  const canonicalForPrincipal = await resolveCanonicalSmartWalletAddress(principalAddress)
+  const allowedTargets = new Set<string>([
+    principalAddress,
+    ...(canonicalForPrincipal ? [canonicalForPrincipal.toLowerCase()] : []),
+  ])
 
-  // Only allow provisioning for the signed-in user (no wallet for other users)
-  if (creatorAddress !== principalAddress) {
-    return res.status(403).json({ success: false, error: 'Can only provision wallet for your own address' })
+  // Allow provisioning for:
+  // - the signed-in address itself
+  // - the signed-in address's canonical CSW (owner EOA flow)
+  if (!allowedTargets.has(requestedAddress)) {
+    return res.status(403).json({
+      success: false,
+      error: canonicalForPrincipal
+        ? `Can only provision wallet for your own address or canonical smart wallet (${canonicalForPrincipal.toLowerCase()})`
+        : 'Can only provision wallet for your own address',
+    })
   }
+
+  // Canonical CSW should be the stable wallet identity when known.
+  const creatorAddress = canonicalForPrincipal?.toLowerCase() || requestedAddress
 
   try {
     // Use the creator's address as the idempotency key for the wallet

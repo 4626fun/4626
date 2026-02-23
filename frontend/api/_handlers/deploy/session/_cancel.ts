@@ -19,9 +19,50 @@ declare const process: { env: Record<string, string | undefined> }
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type CancelRequest = { sessionId: string }
 
+function isTruthyEnv(value: string | undefined, fallback: boolean): boolean {
+  if (value == null) return fallback
+  const normalized = String(value).trim().toLowerCase()
+  if (!normalized) return fallback
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false
+  return fallback
+}
+
+function shouldPersistManagedSessionOwner(): boolean {
+  return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, true)
+}
+
+function isVercelDeploymentOrigin(origin: string): boolean {
+  try {
+    return new URL(origin).hostname.toLowerCase().endsWith('.vercel.app')
+  } catch {
+    return true
+  }
+}
+
+function getBundlerEndpoint(origin: string): { url: string; viaProxy: boolean } {
+  const direct =
+    (process.env.CDP_PAYMASTER_URL ?? '').trim() ||
+    (process.env.CDP_PAYMASTER_AND_BUNDLER_URL ?? '').trim() ||
+    (process.env.CDP_PAYMASTER_AND_BUNDLER_ENDPOINT ?? '').trim() ||
+    (process.env.PAYMASTER_URL ?? '').trim() ||
+    (process.env.BUNDLER_URL ?? '').trim()
+  if (direct) return { url: direct, viaProxy: false }
+
+  // On Vercel previews/production, same-origin /api/paymaster can be protected and fail
+  // with HTML auth responses for server-to-server calls. Require direct CDP config instead.
+  const isVercelEnv = Boolean(process.env.VERCEL) || Boolean(process.env.VERCEL_ENV)
+  if (isVercelEnv && isVercelDeploymentOrigin(origin)) {
+    throw new Error('cdp_endpoint_missing_on_vercel')
+  }
+
+  return { url: `${origin}/api/paymaster`, viaProxy: true }
+}
+
 const COINBASE_SMART_WALLET_OWNERS_ABI = [
   { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'ownerAtIndex', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'bytes' }] },
+  { type: 'function', name: 'nextOwnerIndex', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 ] as const
 
 const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
@@ -45,17 +86,34 @@ async function findOwnerIndex(params: {
     functionName: 'ownerCount',
   })) as bigint
   const count = Number(countRaw)
-  if (!Number.isFinite(count) || count <= 0) return null
-
-  const expected = asOwnerBytes(ownerAddress).toLowerCase()
-  const limit = Math.min(count, Math.max(1, maxScan))
-  for (let i = 0; i < limit; i++) {
-    const b = (await publicClient.readContract({
+  let upperBound = Number.isFinite(count) ? count : 0
+  try {
+    const nextRaw = (await publicClient.readContract({
       address: smartWallet,
       abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-      functionName: 'ownerAtIndex',
-      args: [BigInt(i)],
-    })) as Hex
+      functionName: 'nextOwnerIndex',
+    })) as bigint
+    const next = Number(nextRaw)
+    if (Number.isFinite(next) && next > 0) upperBound = Math.max(upperBound, next)
+  } catch {
+    // ignore: not all contract versions expose nextOwnerIndex
+  }
+  if (!Number.isFinite(upperBound) || upperBound <= 0) return null
+
+  const expected = asOwnerBytes(ownerAddress).toLowerCase()
+  const limit = Math.min(upperBound, Math.max(1, maxScan))
+  for (let i = 0; i < limit; i++) {
+    let b: Hex
+    try {
+      b = (await publicClient.readContract({
+        address: smartWallet,
+        abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+        functionName: 'ownerAtIndex',
+        args: [BigInt(i)],
+      })) as Hex
+    } catch {
+      continue
+    }
     if (String(b).toLowerCase() === expected) return i
   }
   return null
@@ -94,13 +152,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const payload: any = rec.payload ?? {}
-    const agentWalletId = typeof payload?.agentWalletId === 'string' ? payload.agentWalletId.trim() : ''
+    const deploySignerWalletId =
+      typeof payload?.deploySignerWalletId === 'string'
+        ? payload.deploySignerWalletId.trim()
+        : typeof payload?.agentWalletId === 'string'
+          ? payload.agentWalletId.trim()
+          : ''
+    const persistSessionOwner =
+      payload?.persistSessionOwner === true ||
+      (payload?.persistSessionOwner == null && Boolean(deploySignerWalletId) && shouldPersistManagedSessionOwner())
+    if (persistSessionOwner) {
+      await updateDeploySession({ id: rec.id, step: 'cancelled', lastError: null })
+      return res.status(200).json({
+        success: true,
+        data: { id: rec.id, step: 'cancelled', cleanupSkipped: true, reason: 'persistent_session_owner' },
+      } satisfies ApiEnvelope<any>)
+    }
     const sessionOwner = getAddress(rec.sessionOwner)
-    const ownerAccount = agentWalletId
+    const ownerAccount = deploySignerWalletId
       ? toAccount({
           address: sessionOwner,
           sign: async ({ hash }: { hash: Hex }) => {
-            return (await secp256k1SignHash({ walletId: agentWalletId, hash })) as Hex
+            return (await secp256k1SignHash({ walletId: deploySignerWalletId, hash })) as Hex
           },
         signTransaction: async () => {
           throw new Error('privy_sign_transaction_unsupported')
@@ -113,7 +186,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   ? message.raw
                   : `0x${Buffer.from(message.raw).toString('hex')}`
             const out = await walletRpc<any>({
-              walletId: agentWalletId,
+              walletId: deploySignerWalletId,
               method: 'personal_sign',
               rpcParams: { message: msg, encoding: 'hex' },
             })
@@ -126,10 +199,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         })
       : (() => {
-          if (!rec.sessionOwnerKeyEnc) throw new Error('session_owner_key_missing')
+          if (!rec.sessionOwnerKeyEnc) return null
           const pk = decryptWithSecret(rec.sessionOwnerKeyEnc) as Hex
           return privateKeyToAccount(pk)
         })()
+    if (!ownerAccount) {
+      await updateDeploySession({ id: rec.id, step: 'cancelled', lastError: 'cleanup_skipped_owner_unavailable' })
+      return res.status(200).json({
+        success: true,
+        data: { id: rec.id, step: 'cancelled', cleanupSkipped: true, reason: 'session_owner_unavailable' },
+      } satisfies ApiEnvelope<any>)
+    }
     const smartWallet = getAddress(rec.smartWallet)
 
     const publicClient = createPublicClient({
@@ -149,18 +229,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const origin = getCanonicalOrigin(req)
-    const bundlerUrl = `${origin}/api/paymaster`
+    const bundlerEndpoint = getBundlerEndpoint(origin)
 
     const deployToken = rec.deployToken
     const deploySig = signDeployToken(deployToken)
-    const transport = http(bundlerUrl, {
-      fetchOptions: {
-        headers: {
-          'X-CV-Deploy-Session': deployToken,
-          'X-CV-Deploy-Session-Signature': deploySig,
-        },
-      },
-    })
+    const transport = http(bundlerEndpoint.url, bundlerEndpoint.viaProxy
+      ? {
+          fetchOptions: {
+            headers: {
+              'X-CV-Deploy-Session': deployToken,
+              'X-CV-Deploy-Session-Signature': deploySig,
+            },
+          },
+        }
+      : undefined)
 
     const paymasterClient = createPaymasterClient({ transport })
     const bundlerClient = createBundlerClient({ client: publicClient as any, transport })
@@ -194,6 +276,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<any>)
   } catch (err: any) {
     const msg = err?.message ? String(err.message) : 'cancel_failed'
+    if (msg === 'cdp_endpoint_missing_on_vercel') {
+      return res.status(503).json({
+        success: false,
+        error:
+          'Deploy bundler/paymaster is not configured for this Vercel deployment. Set CDP_PAYMASTER_URL (or CDP_PAYMASTER_AND_BUNDLER_URL) to the Coinbase RPC endpoint; do not rely on same-origin /api/paymaster for server-side deploy-session calls.',
+      } satisfies ApiEnvelope<null>)
+    }
     logger.error('deploy session cancel failed', msg)
     try {
       await updateDeploySession({ id: rec.id, step: 'failed', lastError: msg })

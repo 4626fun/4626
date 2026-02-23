@@ -50,7 +50,7 @@ print_banner() {
 print_usage() {
     echo -e "${YELLOW}Usage:${NC}"
     echo "  ./script/deploy.sh infrastructure         Deploy all core contracts"
-    echo "  ./script/deploy.sh infra-v2               Deploy v2 bytecode store + deployer"
+    echo "  ./script/deploy.sh infra-v2               Deploy v2 infra and seed bytecode store"
     echo "  ./script/deploy.sh vault <TOKEN_ADDRESS>  Deploy vault for creator coin"
     echo "  ./script/deploy.sh aa <TOKEN> [--gasless] Deploy via ERC-4337"
     echo ""
@@ -101,7 +101,7 @@ deploy_infrastructure() {
     echo "3. Deploy creator vaults"
 }
 
-# Deploy v2 bytecode store + deployer + CreatorVaultDeployer
+# Deploy v2 bytecode store + deployer + CreatorVaultDeployer, then seed store
 deploy_infra_v2() {
     if [ -z "$BASE_RPC_URL" ]; then
         echo -e "${RED}Error: BASE_RPC_URL environment variable not set${NC}"
@@ -126,6 +126,12 @@ deploy_infra_v2() {
         echo ""
         echo -e "${YELLOW}Skipping Solana config (set SOLANA_BRIDGE_ADAPTER + SOLANA_DESTINATION to enable).${NC}"
     fi
+
+    echo ""
+    echo -e "${GREEN}Seeding v2 bytecode store (idempotent)...${NC}"
+    forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore \
+        --rpc-url "$BASE_RPC_URL" \
+        --broadcast
 
     echo ""
     echo -e "${GREEN}✓ v2 infra deployed successfully!${NC}"

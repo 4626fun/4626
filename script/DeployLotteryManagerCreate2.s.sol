@@ -33,9 +33,13 @@ contract DeployLotteryManagerCreate2 is Script {
         address deployer = vm.addr(deployerPrivateKey);
 
         console.log("");
-        console.log(unicode"╔════════════════════════════════════════════════════════════════╗");
+        console.log(
+            unicode"╔════════════════════════════════════════════════════════════════╗"
+        );
         console.log(unicode"║   CreatorLotteryManager — CREATE2 Vanity Deployment (4626)     ║");
-        console.log(unicode"╚════════════════════════════════════════════════════════════════╝");
+        console.log(
+            unicode"╚════════════════════════════════════════════════════════════════╝"
+        );
         console.log("");
         console.log("Deployer (tx sender):", deployer);
         console.log("Chain ID:            ", block.chainid);
@@ -46,10 +50,7 @@ contract DeployLotteryManagerCreate2 is Script {
         console.log("");
 
         // Build initcode: creation bytecode + constructor args
-        bytes memory initcode = abi.encodePacked(
-            type(CreatorLotteryManager).creationCode,
-            abi.encode(REGISTRY, OWNER)
-        );
+        bytes memory initcode = abi.encodePacked(type(CreatorLotteryManager).creationCode, abi.encode(REGISTRY, OWNER));
 
         // Verify init code hash
         bytes32 initCodeHash = keccak256(initcode);
@@ -57,25 +58,11 @@ contract DeployLotteryManagerCreate2 is Script {
 
         // Predict address
         address predicted = address(
-            uint160(
-                uint256(
-                    keccak256(
-                        abi.encodePacked(
-                            bytes1(0xff),
-                            DETERMINISTIC_DEPLOYER,
-                            SALT,
-                            initCodeHash
-                        )
-                    )
-                )
-            )
+            uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), DETERMINISTIC_DEPLOYER, SALT, initCodeHash))))
         );
         console.log("Predicted address:   ", predicted);
 
-        require(
-            predicted == EXPECTED_ADDRESS,
-            "Predicted address does not match expected; salt/initcode mismatch"
-        );
+        require(predicted == EXPECTED_ADDRESS, "Predicted address does not match expected; salt/initcode mismatch");
         console.log(unicode"  ✓ Address prediction verified");
         console.log("");
 
@@ -94,7 +81,7 @@ contract DeployLotteryManagerCreate2 is Script {
 
         // Calldata = salt (32 bytes) ++ initcode
         bytes memory callData = abi.encodePacked(SALT, initcode);
-        (bool success, ) = DETERMINISTIC_DEPLOYER.call(callData);
+        (bool success,) = DETERMINISTIC_DEPLOYER.call(callData);
         require(success, "CREATE2 deployment failed");
 
         vm.stopBroadcast();
@@ -111,18 +98,28 @@ contract DeployLotteryManagerCreate2 is Script {
         require(lottery.owner() == OWNER, "Owner mismatch");
 
         console.log("");
-        console.log(unicode"╔════════════════════════════════════════════════════════════════╗");
+        console.log(
+            unicode"╔════════════════════════════════════════════════════════════════╗"
+        );
         console.log(unicode"║                    DEPLOYMENT COMPLETE                         ║");
-        console.log(unicode"╚════════════════════════════════════════════════════════════════╝");
+        console.log(
+            unicode"╚════════════════════════════════════════════════════════════════╝"
+        );
         console.log("");
         console.log(unicode"  ✓ CreatorLotteryManager deployed at:", predicted);
         console.log("    Owner:                         ", OWNER);
         console.log("");
-        console.log(unicode"┌─────────────────────────────────────────────────────────────────┐");
+        console.log(
+            unicode"┌─────────────────────────────────────────────────────────────────┐"
+        );
         console.log(unicode"│  ENVIRONMENT VARIABLE                                           │");
-        console.log(unicode"├─────────────────────────────────────────────────────────────────┤");
+        console.log(
+            unicode"├─────────────────────────────────────────────────────────────────┤"
+        );
         console.log("  LOTTERY_MANAGER=", predicted);
-        console.log(unicode"└─────────────────────────────────────────────────────────────────┘");
+        console.log(
+            unicode"└─────────────────────────────────────────────────────────────────┘"
+        );
         console.log("");
     }
 }

@@ -27,6 +27,8 @@ export async function ensureCanonicalWalletsSchema(db: Db): Promise<void> {
     await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT NULL;`
     await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS banner_url TEXT NULL;`
     await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS profile_fields JSONB NULL;`
+    await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS canonical_solana_wallet TEXT NULL;`
+    await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS operational_solana_wallet TEXT NULL;`
 
     await db.sql`
       CREATE TABLE IF NOT EXISTS wallets (
@@ -45,6 +47,8 @@ export async function ensureCanonicalWalletsSchema(db: Db): Promise<void> {
         is_primary BOOLEAN NOT NULL DEFAULT false,
         is_canonical_smart_wallet BOOLEAN NOT NULL DEFAULT false,
         is_embedded_eoa BOOLEAN NOT NULL DEFAULT false,
+        is_canonical_solana_wallet BOOLEAN NOT NULL DEFAULT false,
+        is_operational_solana_wallet BOOLEAN NOT NULL DEFAULT false,
         verified_at TIMESTAMPTZ,
         metadata JSONB,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -52,6 +56,8 @@ export async function ensureCanonicalWalletsSchema(db: Db): Promise<void> {
         PRIMARY KEY (profile_id, address)
       );
     `
+    await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS is_canonical_solana_wallet BOOLEAN NOT NULL DEFAULT false;`
+    await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS is_operational_solana_wallet BOOLEAN NOT NULL DEFAULT false;`
 
     await db.sql`
       CREATE UNIQUE INDEX IF NOT EXISTS profile_wallets_one_canonical
@@ -62,6 +68,16 @@ export async function ensureCanonicalWalletsSchema(db: Db): Promise<void> {
       CREATE UNIQUE INDEX IF NOT EXISTS profile_wallets_one_embedded_eoa
       ON profile_wallets (profile_id)
       WHERE is_embedded_eoa = true;
+    `
+    await db.sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS profile_wallets_one_canonical_solana
+      ON profile_wallets (profile_id)
+      WHERE is_canonical_solana_wallet = true;
+    `
+    await db.sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS profile_wallets_one_operational_solana
+      ON profile_wallets (profile_id)
+      WHERE is_operational_solana_wallet = true;
     `
     await db.sql`
       CREATE UNIQUE INDEX IF NOT EXISTS profile_wallets_one_primary
@@ -76,6 +92,16 @@ export async function ensureCanonicalWalletsSchema(db: Db): Promise<void> {
       CREATE INDEX IF NOT EXISTS profiles_primary_smart_wallet_idx
       ON profiles (primary_smart_wallet)
       WHERE primary_smart_wallet IS NOT NULL;
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS profiles_canonical_solana_wallet_idx
+      ON profiles (canonical_solana_wallet)
+      WHERE canonical_solana_wallet IS NOT NULL;
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS profiles_operational_solana_wallet_idx
+      ON profiles (operational_solana_wallet)
+      WHERE operational_solana_wallet IS NOT NULL;
     `
 
     await assertNoDuplicatePrivyUserIds(db)

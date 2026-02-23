@@ -1,6 +1,17 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { createPublicClient, getAddress, http, isAddress, type Address, type Hex } from 'viem'
+import {
+  createPublicClient,
+  encodeAbiParameters,
+  encodeFunctionData,
+  encodePacked,
+  getAddress,
+  http,
+  isAddress,
+  keccak256,
+  type Address,
+  type Hex,
+} from 'viem'
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts'
 import { base } from 'viem/chains'
 
@@ -12,6 +23,8 @@ import { checkRateLimit, RATE_LIMITS, rateLimitKey } from '../../../../server/_l
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/supabaseAdmin.js'
 import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAgentWallets.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
+import { buildDeployPermissionGrant } from '../../../../server/_lib/erc7712Permissions.js'
+import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -43,6 +56,10 @@ type CreateDeploySessionRequest = {
 
 type CreateDeploySessionResponse = {
   sessionId: string
+  // Canonical field name for the signer identity used by server-side continuation.
+  // `sessionOwner` is kept for backward compatibility with existing clients.
+  sessionSignerAddress: Address
+  sessionSignerWalletId?: string
   sessionOwner: Address
   expiresAt: string
 }
@@ -50,6 +67,138 @@ type CreateDeploySessionResponse = {
 type OwnershipCheck = {
   ok: boolean
   reason?: string
+}
+
+const CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI = [
+  {
+    type: 'function',
+    name: 'pendingAuctions',
+    stateMutability: 'view',
+    inputs: [{ name: 'salt', type: 'bytes32' }],
+    outputs: [
+      {
+        type: 'tuple',
+        components: [
+          { name: 'shareOFT', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'amount', type: 'uint256' },
+        ],
+      },
+    ],
+  },
+] as const
+
+function deriveBaseSalt(params: { creatorToken: Address; owner: Address; chainId: number; version: string }): Hex {
+  return keccak256(
+    encodePacked(['address', 'address', 'uint256', 'string'], [
+      params.creatorToken,
+      params.owner,
+      BigInt(params.chainId),
+      `CreatorVault:deploy:${params.version}`,
+    ]),
+  ) as Hex
+}
+
+function isTruthyEnv(value: string | undefined, fallback: boolean): boolean {
+  if (value == null) return fallback
+  const normalized = String(value).trim().toLowerCase()
+  if (!normalized) return fallback
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false
+  return fallback
+}
+
+function shouldPersistManagedSessionOwner(): boolean {
+  // Keep Privy-managed session owners installed by default to reduce repeated add-owner prompts.
+  return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, true)
+}
+
+
+function isVercelDeploymentOrigin(origin: string): boolean {
+  try {
+    return new URL(origin).hostname.toLowerCase().endsWith('.vercel.app')
+  } catch {
+    return true
+  }
+}
+
+function getDirectCdpEndpoint(): string {
+  return (
+    (process.env.CDP_PAYMASTER_URL ?? '').trim() ||
+    (process.env.CDP_PAYMASTER_AND_BUNDLER_URL ?? '').trim() ||
+    (process.env.CDP_PAYMASTER_AND_BUNDLER_ENDPOINT ?? '').trim() ||
+    (process.env.PAYMASTER_URL ?? '').trim() ||
+    (process.env.BUNDLER_URL ?? '').trim()
+  )
+}
+
+async function checkDeployInfraReady(origin: string): Promise<{ ok: boolean; error?: string }> {
+  const endpoint = getDirectCdpEndpoint()
+  const isVercelEnv = Boolean(process.env.VERCEL) || Boolean(process.env.VERCEL_ENV)
+
+  if (!endpoint) {
+    if (isVercelEnv && isVercelDeploymentOrigin(origin)) {
+      return {
+        ok: false,
+        error:
+          'Deploy bundler/paymaster is not configured for this Vercel deployment. Set CDP_PAYMASTER_URL (or CDP_PAYMASTER_AND_BUNDLER_URL) to the Coinbase RPC endpoint.',
+      }
+    }
+    return { ok: true }
+  }
+
+  try {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 8_000)
+    const upstream = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_supportedEntryPoints', params: [] }),
+      signal: ctrl.signal,
+    })
+    clearTimeout(t)
+
+    const text = await upstream.text()
+    const textLower = text.toLowerCase()
+    if (textLower.includes('vercel authentication') || textLower.includes('x-vercel-protection-bypass') || textLower.includes('authentication required')) {
+      return {
+        ok: false,
+        error:
+          'Configured CDP_PAYMASTER_URL is Vercel-protected. Use the Coinbase RPC endpoint directly (https://api.developer.coinbase.com/rpc/v1/base/<CDP_API_KEY_ID>).',
+      }
+    }
+
+    let rpcErr: string | null = null
+    try {
+      const j = JSON.parse(text)
+      if (j && typeof j === 'object' && !Array.isArray(j) && (j as any)?.error?.message) {
+        rpcErr = String((j as any).error.message)
+      }
+    } catch {
+      // ignore parse errors
+    }
+
+    if (!upstream.ok) {
+      return { ok: false, error: rpcErr || `CDP endpoint probe failed (HTTP ${upstream.status})` }
+    }
+
+    if (rpcErr) {
+      return { ok: false, error: `CDP endpoint probe failed: ${rpcErr}` }
+    }
+
+    return { ok: true }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'CDP endpoint probe failed'
+    return { ok: false, error: `CDP endpoint probe failed: ${msg}` }
+  }
+}
+
+const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+  { type: 'function', name: 'removeOwnerAtIndex', stateMutability: 'nonpayable', inputs: [{ name: 'index', type: 'uint256' }, { name: 'owner', type: 'bytes' }], outputs: [] },
+] as const
+
+function asOwnerBytes(owner: Address): Hex {
+  return encodeAbiParameters([{ type: 'address' }], [owner]) as Hex
 }
 
 const COINBASE_SMART_WALLET_OWNER_LINK_ABI = [
@@ -308,6 +457,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!isAddress(smartWallet) || !isAddress(creatorToken) || !isAddress(ownerAddress)) {
       return res.status(400).json({ success: false, error: 'Invalid addresses' } satisfies ApiEnvelope<null>)
     }
+    if (ownerAddress.toLowerCase() !== smartWallet.toLowerCase()) {
+      return res.status(400).json({
+        success: false,
+        error: 'ownerAddress must match smartWallet (canonical deploy sender)',
+      } satisfies ApiEnvelope<null>)
+    }
+
+    const origin = getCanonicalOrigin(req)
+    const infra = await checkDeployInfraReady(origin)
+    if (!infra.ok) {
+      return res.status(503).json({ success: false, error: infra.error || 'Deploy infrastructure unavailable' } satisfies ApiEnvelope<null>)
+    }
+
+    const origin = getCanonicalOrigin(req)
+    const infra = await checkDeployInfraReady(origin)
+    if (!infra.ok) {
+      return res.status(503).json({ success: false, error: infra.error || 'Deploy infrastructure unavailable' } satisfies ApiEnvelope<null>)
+    }
 
     // Ownership is validated below against canonical profile linkage.
     // Do not hard-require sessionAddress===owner/smartWallet here because
@@ -355,6 +522,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const phase2Calls = Array.isArray(body.phase2Calls) ? body.phase2Calls : []
     const phase3Calls = Array.isArray(body.phase3Calls) ? body.phase3Calls : []
     const phase4Calls = Array.isArray(body.phase4Calls) ? body.phase4Calls : []
+    const hasPhase2Finalize = phase2FinalizeCalls.length > 0 || phase2Calls.length > 0
 
     const hasAnyWork =
       phase1Calls.length > 0 ||
@@ -366,27 +534,74 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!hasAnyWork) {
       return res.status(400).json({ success: false, error: 'Missing deploy calls' } satisfies ApiEnvelope<null>)
     }
+    if (phase2CoreCalls.length > 0 && !hasPhase2Finalize) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing phase2 finalize calls',
+      } satisfies ApiEnvelope<null>)
+    }
+
+    // Phase-4 safety: when launching deferred auction without a same-session phase2 finalize,
+    // require pending state to already exist for this deployment namespace.
+    const hasSameSessionPhase2Finalize = phase2FinalizeCalls.length > 0 || phase2Calls.length > 0
+    if (phase4Calls.length > 0 && !hasSameSessionPhase2Finalize) {
+      const version = String(body.version ?? '').trim()
+      if (!version) {
+        return res.status(400).json({
+          success: false,
+          error: 'version is required when phase4Calls are present',
+        } satisfies ApiEnvelope<null>)
+      }
+      const batcherAddress = getAddress(phase4Calls[0]!.to)
+      const baseSalt = deriveBaseSalt({ creatorToken, owner: ownerAddress, chainId: 8453, version })
+      const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+      const readClient = createPublicClient({
+        chain: base,
+        transport: http(rpc, { timeout: 12_000 }),
+      })
+      try {
+        const pending = (await readClient.readContract({
+          address: batcherAddress,
+          abi: CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI,
+          functionName: 'pendingAuctions',
+          args: [baseSalt],
+        })) as unknown
+        const pendingAny = pending as any
+        const pendingAmount = BigInt(pendingAny?.amount ?? pendingAny?.[2] ?? 0n)
+        if (pendingAmount <= 0n) {
+          return res.status(409).json({
+            success: false,
+            error: `phase4 precheck failed: no pending deferred auction for deployment version ${version}`,
+          } satisfies ApiEnvelope<null>)
+        }
+      } catch {
+        return res.status(409).json({
+          success: false,
+          error: `phase4 precheck failed: could not validate pending deferred auction for deployment version ${version}`,
+        } satisfies ApiEnvelope<null>)
+      }
+    }
 
     const deployToken = randomDeployToken()
     const tokenHash = hashDeployToken(deployToken)
     const id = randomId()
 
-    // Preferred: per-creator Privy-managed agent wallet (Keepr can reuse it for ops).
+    // Preferred: per-creator Privy-managed deploy signer wallet (Keepr can reuse it for ops).
     // Fallback: ephemeral local session owner key when Privy wallet provisioning is unavailable.
     let sessionOwnerPrivateKey: Hex | null = null
-    let agentWalletId: string | null = null
-    let agentWalletAddress: Address | null = null
+    let deploySignerWalletId: string | null = null
+    let deploySignerAddress: Address | null = null
     let sessionOwner: Address
     try {
       const agentWallet = await getOrCreateCreatorAgentWallet({ creatorToken: creatorToken.toLowerCase() as `0x${string}` })
       const walletId = String(agentWallet.walletId || '').trim()
       if (!walletId) throw new Error('agent_wallet_id_missing')
       sessionOwner = getAddress(agentWallet.address)
-      agentWalletId = walletId
-      agentWalletAddress = getAddress(agentWallet.address)
+      deploySignerWalletId = walletId
+      deploySignerAddress = getAddress(agentWallet.address)
     } catch (e: any) {
       const fallback = privateKeyToAccount(generatePrivateKey())
-      sessionOwnerPrivateKey = fallback.privateKey
+      sessionOwnerPrivateKey = (fallback as any).privateKey as Hex
       sessionOwner = getAddress(fallback.address)
       console.warn('deploy/session/create: falling back to ephemeral session owner key', {
         reason: e?.message ? String(e.message) : 'agent_wallet_create_failed',
@@ -395,6 +610,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const now = Date.now()
     const expiresAt = new Date(now + 10 * 60 * 1000) // 10 minutes
+    const persistSessionOwner = Boolean(deploySignerWalletId) && shouldPersistManagedSessionOwner()
+
+    const cleanupGrantCall = {
+      to: smartWallet,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+        functionName: 'removeOwnerAtIndex',
+        args: [0n, asOwnerBytes(sessionOwner)],
+      }),
+    }
+
+    const allCallsForGrant = [
+      ...phase1Calls,
+      ...phase2CoreCalls,
+      ...phase2FinalizeCalls,
+      ...phase2Calls,
+      ...phase3Calls,
+      ...phase4Calls,
+      ...(persistSessionOwner ? [] : [cleanupGrantCall]),
+    ]
+      .map((c) => ({ to: getAddress(c.to), value: typeof c.value === 'bigint' ? c.value : BigInt(c.value ?? 0), data: c.data as Hex }))
+      .filter((c) => typeof c.data === 'string' && c.data.startsWith('0x'))
+
+    const erc7712Grant = buildDeployPermissionGrant({
+      sessionId: id,
+      chainId: 8453,
+      validAfter: new Date(now),
+      validUntil: expiresAt,
+      calls: allCallsForGrant,
+    })
 
     await ensureDeploySessionsSchema()
     await insertDeploySession({
@@ -418,8 +664,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               authAgentChainId: auth.chainId,
             }
           : null),
-        ...(agentWalletId ? { agentWalletId } : null),
-        ...(agentWalletAddress ? { agentWalletAddress } : null),
+        // New names
+        ...(deploySignerWalletId ? { deploySignerWalletId } : null),
+        ...(deploySignerAddress ? { deploySignerAddress } : null),
+        // Legacy aliases (kept for backward compatibility)
+        ...(deploySignerWalletId ? { agentWalletId: deploySignerWalletId } : null),
+        ...(deploySignerAddress ? { agentWalletAddress: deploySignerAddress } : null),
+        persistSessionOwner,
+        expectedStages: {
+          hasPhase1Core: phase1Calls.length > 0,
+          hasPhase1Finalize: phase1Calls.length > 1,
+          hasPhase2Core: phase2CoreCalls.length > 0,
+          hasPhase2Finalize,
+          hasPhase3: phase3Calls.length > 0,
+          hasPhase4: phase4Calls.length > 0,
+        },
         version: String(body.version ?? ''),
         phase1Calls,
         phase2CoreCalls,
@@ -427,11 +686,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         phase2Calls,
         phase3Calls,
         phase4Calls,
+        erc7712Grant,
       },
       expiresAt,
     })
 
-    const out: CreateDeploySessionResponse = { sessionId: id, sessionOwner, expiresAt: expiresAt.toISOString() }
+    const out: CreateDeploySessionResponse = {
+      sessionId: id,
+      sessionSignerAddress: sessionOwner,
+      ...(deploySignerWalletId ? { sessionSignerWalletId: deploySignerWalletId } : null),
+      sessionOwner,
+      expiresAt: expiresAt.toISOString(),
+    }
     return res.status(200).json({ success: true, data: out } satisfies ApiEnvelope<CreateDeploySessionResponse>)
   } catch (e: any) {
     console.error('deploy/session/create error', e?.message ? String(e.message) : e)
