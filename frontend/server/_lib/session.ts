@@ -18,6 +18,12 @@ function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
+export type RuntimeSessionContext = {
+  address: `0x${string}`
+  isAdmin: boolean
+  source: 'xmtp'
+}
+
 export function getSessionAddress(req: VercelRequest): `0x${string}` | null {
   const session = readSessionFromRequest(req)
   const addr = session?.address ? String(session.address) : ''
@@ -54,6 +60,17 @@ export function isAdminAddress(address: `0x${string}`): boolean {
 
   const addrLc = address.toLowerCase()
   return set.has(addrLc)
+}
+
+export function buildRuntimeSessionContext(address: string | null | undefined): RuntimeSessionContext | null {
+  if (!address) return null
+  if (!isAddressLike(address)) return null
+  const normalized = address.toLowerCase() as `0x${string}`
+  return {
+    address: normalized,
+    isAdmin: isAdminAddress(normalized),
+    source: 'xmtp',
+  }
 }
 
 function normalizeEmail(v: string): string {

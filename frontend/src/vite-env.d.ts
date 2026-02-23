@@ -10,6 +10,8 @@ interface ImportMetaEnv {
   readonly VITE_PRIVY_ALLOWED_ORIGINS?: string
   readonly VITE_APP_ORIGIN?: string
   readonly VITE_MARKETING_ORIGIN?: string
+  readonly VITE_WAITLIST_REFERRAL_BASE_URL?: string
+  readonly VITE_WAITLIST_REFERRAL_LINK?: string
   readonly VITE_ENABLE_ZORA_CONNECT?: string
   readonly VITE_WAITLIST_CSW_PROOF?: string
   readonly VITE_REGISTRY_ADDRESS: string

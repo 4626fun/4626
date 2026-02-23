@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Minus, X, Send, Loader2, ArrowLeft } from 'lucide-react'
 import { useXmtp, type ChatMessage } from '@/lib/xmtp/provider'
 import { useIdentity } from '@/hooks/useIdentity'
+import { getAgentIdentity } from './agentIdentity'
 
 type Props = {
   conversationId: string
@@ -107,15 +108,16 @@ export function ChatWindow({
       ? (peerAddress ?? (peerInboxId && resolvedPeer?.inboxId === peerInboxId ? resolvedPeer.address : null))
       : null
   const dmIdentity = useIdentity(dmPeerAddress)
+  const agentIdentity = getAgentIdentity(dmPeerAddress)
   const headerName =
     conversationType === 'dm' && dmPeerAddress
-      ? dmIdentity.displayName
+      ? (agentIdentity?.name ?? dmIdentity.displayName)
       : conversationName
   const headerSubline =
     conversationType === 'dm' && dmPeerAddress
-      ? (dmIdentity.secondary ?? truncateAddress(dmPeerAddress))
+      ? (agentIdentity ? 'CreatorVault assistant' : (dmIdentity.secondary ?? truncateAddress(dmPeerAddress)))
       : null
-  const headerAvatar = conversationType === 'dm' ? dmIdentity.avatar : (conversationImageUrl ?? null)
+  const headerAvatar = conversationType === 'dm' ? (agentIdentity?.avatar ?? dmIdentity.avatar) : (conversationImageUrl ?? null)
   const headerInitials = initials(headerName)
   const lensBadge = conversationType === 'dm' && dmPeerAddress && dmIdentity.lensHandle
     ? `Lens @${dmIdentity.lensHandle}`

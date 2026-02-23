@@ -67,6 +67,9 @@ vi.mock('../../server/_lib/creatorAgentWallets.js', () => ({
   getOrCreateCreatorAgentWallet: getOrCreateCreatorAgentWalletMock,
 }))
 
+vi.mock('../../server/_lib/origin.js', () => ({
+  getCanonicalOrigin: vi.fn(() => 'https://4626-test-akita-llc.vercel.app'),
+}))
 vi.mock('viem/accounts', () => ({
   generatePrivateKey: generatePrivateKeyMock,
   privateKeyToAccount: privateKeyToAccountMock,
@@ -76,7 +79,8 @@ function makeRequestBody() {
   return {
     smartWallet: '0x0000000000000000000000000000000000000002',
     creatorToken: '0x0000000000000000000000000000000000000003',
-    ownerAddress: '0x0000000000000000000000000000000000000001',
+    // Handler invariant: ownerAddress must match smartWallet (canonical deploy sender)
+    ownerAddress: '0x0000000000000000000000000000000000000002',
     phase2Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x' }],
     phase3Calls: [],
   }
@@ -148,10 +152,11 @@ describe('deploy session ownership guardrails', () => {
 
     expect(res.statusCode).toBe(200)
     expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
-    const insertArgs = insertDeploySessionMock.mock.calls[0]?.[0] as any
+    const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
     expect(insertArgs.payload?.erc7712Grant?.version).toBe('erc7712-v1')
+    expect((insertArgs.payload?.erc7712Grant?.allowedTargets ?? []).map((v: string) => v.toLowerCase())).toContain('0x0000000000000000000000000000000000000010')
+    expect(insertArgs.payload?.persistSessionOwner).toBe(true)
   })
-
 
   it('falls back to local session owner key when agent wallet id is missing', async () => {
     getOrCreateCreatorAgentWalletMock.mockResolvedValueOnce({
@@ -167,9 +172,10 @@ describe('deploy session ownership guardrails', () => {
     expect(res.statusCode).toBe(200)
     expect(generatePrivateKeyMock).toHaveBeenCalledTimes(1)
     expect(privateKeyToAccountMock).toHaveBeenCalledTimes(1)
-    const insertArgs = insertDeploySessionMock.mock.calls[0]?.[0] as any
+    const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
     expect(insertArgs.sessionOwnerPrivateKey).toBe('0x' + '11'.repeat(32))
     expect(insertArgs.payload?.agentWalletId).toBeUndefined()
+    expect(insertArgs.payload?.persistSessionOwner).toBe(false)
   })
   it('falls back to local session owner key when agent wallet provisioning fails', async () => {
     getOrCreateCreatorAgentWalletMock.mockRejectedValueOnce(new Error('PRIVY_APP_ID missing'))
@@ -183,44 +189,32 @@ describe('deploy session ownership guardrails', () => {
     expect(generatePrivateKeyMock).toHaveBeenCalledTimes(1)
     expect(privateKeyToAccountMock).toHaveBeenCalledTimes(1)
     expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
-    const insertArgs = insertDeploySessionMock.mock.calls[0]?.[0] as any
+    const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
     expect(insertArgs.sessionOwnerPrivateKey).toBe('0x' + '11'.repeat(32))
     expect(insertArgs.payload?.agentWalletId).toBeUndefined()
+    expect(insertArgs.payload?.persistSessionOwner).toBe(false)
   })
 
+  it('returns 503 on Vercel when direct CDP endpoint env is missing', async () => {
+    const prevVercel = process.env.VERCEL
+    const prevCdp = process.env.CDP_PAYMASTER_URL
+    process.env.VERCEL = '1'
+    delete process.env.CDP_PAYMASTER_URL
 
-  it('falls back to local session owner key when agent wallet id is missing', async () => {
-    getOrCreateCreatorAgentWalletMock.mockResolvedValueOnce({
-      walletId: '',
-      address: '0x00000000000000000000000000000000000000f1',
-    })
     getDbMock.mockResolvedValue(makeCanonicalDb())
 
     const req = createMockReq({ method: 'POST', body: makeRequestBody() })
     const res = createMockRes()
     await handler(req, res)
 
-    expect(res.statusCode).toBe(200)
-    expect(generatePrivateKeyMock).toHaveBeenCalledTimes(1)
-    expect(privateKeyToAccountMock).toHaveBeenCalledTimes(1)
-    const insertArgs = insertDeploySessionMock.mock.calls[0]?.[0] as any
-    expect(insertArgs.sessionOwnerPrivateKey).toBe('0x' + '11'.repeat(32))
-    expect(insertArgs.payload?.agentWalletId).toBeUndefined()
-  })
-  it('falls back to local session owner key when agent wallet provisioning fails', async () => {
-    getOrCreateCreatorAgentWalletMock.mockRejectedValueOnce(new Error('PRIVY_APP_ID missing'))
-    getDbMock.mockResolvedValue(makeCanonicalDb())
+    expect(res.statusCode).toBe(503)
+    expect(String(res.body?.error || '')).toContain('CDP_PAYMASTER_URL')
+    expect(insertDeploySessionMock).not.toHaveBeenCalled()
 
-    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
-    const res = createMockRes()
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(200)
-    expect(generatePrivateKeyMock).toHaveBeenCalledTimes(1)
-    expect(privateKeyToAccountMock).toHaveBeenCalledTimes(1)
-    expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
-    const insertArgs = insertDeploySessionMock.mock.calls[0]?.[0] as any
-    expect(insertArgs.sessionOwnerPrivateKey).toBe('0x' + '11'.repeat(32))
-    expect(insertArgs.payload?.agentWalletId).toBeUndefined()
+    if (prevVercel == null) delete process.env.VERCEL
+    else process.env.VERCEL = prevVercel
+    if (prevCdp == null) delete process.env.CDP_PAYMASTER_URL
+    else process.env.CDP_PAYMASTER_URL = prevCdp
   })
+
 })

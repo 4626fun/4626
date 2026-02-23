@@ -23,6 +23,18 @@ const BASE_RPC_URL_RAW =
 
 const IS_BROWSER = typeof window !== 'undefined'
 
+function isValidRpcUrl(url: string): boolean {
+  const value = String(url || '').trim()
+  if (!value) return false
+  if (value.startsWith('/')) return true
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 
 function parseBuilderCodes(raw: string | undefined): string[] {
   return String(raw ?? '')
@@ -53,7 +65,11 @@ function isCorsRestrictedRpc(url: string): boolean {
   return false
 }
 
-const BASE_RPC_URL = IS_BROWSER && isCorsRestrictedRpc(BASE_RPC_URL_RAW) ? '' : BASE_RPC_URL_RAW
+const BASE_RPC_URL = (() => {
+  if (!isValidRpcUrl(BASE_RPC_URL_RAW)) return ''
+  if (IS_BROWSER && isCorsRestrictedRpc(BASE_RPC_URL_RAW)) return ''
+  return BASE_RPC_URL_RAW
+})()
 const BASE_RPC_PROXY = IS_BROWSER ? '/api/rpc' : ''
 const ENABLE_INJECTED_CONNECTOR =
   !['0', 'false', 'no', 'off'].includes(String(import.meta.env.VITE_ENABLE_INJECTED_CONNECTOR ?? '1').toLowerCase())
@@ -64,6 +80,7 @@ function uniqueNonEmptyStrings(values: Array<string | undefined | null>): string
   for (const v of values) {
     const s = typeof v === 'string' ? v.trim() : ''
     if (!s) continue
+    if (!isValidRpcUrl(s)) continue
     if (seen.has(s)) continue
     seen.add(s)
     out.push(s)

@@ -14,6 +14,7 @@ import {
 import { resolveLensUserByOwner } from '../../../server/_lib/lensAccounts.js'
 import { getGroveChainId, tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { resolveCanonicalSolanaWalletByPrincipalAddress } from '../../../server/_lib/canonicalSolanaResolver.js'
 import { readRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
 import { isAdminAddress } from '../../../server/_lib/session.js'
 
@@ -40,6 +41,11 @@ type SubdomainUpsertResponse = {
   record: AgentSubdomainRecord
   groveStatus: 'stored' | 'unavailable' | 'skipped'
   groveError?: string
+}
+
+type SubdomainUpsertSkippedResponse = {
+  skipped: true
+  reason: 'invalid_label' | 'reserved_label' | 'invalid_owner_address' | 'invalid_solana_address'
 }
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
@@ -71,6 +77,8 @@ function isValidSolanaAddress(value: string): boolean {
 }
 
 async function resolveProfileSolanaAddress(db: Db, ownerAddress: string): Promise<string | null> {
+  const canonical = await resolveCanonicalSolanaWalletByPrincipalAddress(ownerAddress)
+  if (canonical) return canonical
   try {
     const result = await db.sql`
       SELECT p.solana_wallet
@@ -110,14 +118,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = (await readJsonBody<UpsertBody>(req)) ?? {}
 
-  const label = normalizeSubdomainLabel(String(body.label ?? ''))
-  if (!label) {
-    return res.status(400).json({ success: false, error: 'Invalid label' } satisfies ApiEnvelope<never>)
-  }
-  if (isReservedSubdomainLabel(label)) {
-    return res.status(400).json({ success: false, error: 'Reserved label' } satisfies ApiEnvelope<never>)
-  }
-
   const principal = readRequestPrincipal(req, { lowercase: true })
   const indexerSecret = String(process.env.SUBDOMAIN_INDEXER_SECRET ?? '').trim()
   const isIndexerWrite = Boolean(indexerSecret) && readBearerToken(req) === indexerSecret
@@ -125,8 +125,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<never>)
   }
 
+  const label = normalizeSubdomainLabel(String(body.label ?? ''))
+  if (!label) {
+    if (isIndexerWrite) {
+      return res.status(200).json({
+        success: true,
+        data: { skipped: true, reason: 'invalid_label' } satisfies SubdomainUpsertSkippedResponse,
+      } satisfies ApiEnvelope<SubdomainUpsertSkippedResponse>)
+    }
+    return res.status(400).json({ success: false, error: 'Invalid label' } satisfies ApiEnvelope<never>)
+  }
+  if (isReservedSubdomainLabel(label)) {
+    if (isIndexerWrite) {
+      return res.status(200).json({
+        success: true,
+        data: { skipped: true, reason: 'reserved_label' } satisfies SubdomainUpsertSkippedResponse,
+      } satisfies ApiEnvelope<SubdomainUpsertSkippedResponse>)
+    }
+    return res.status(400).json({ success: false, error: 'Reserved label' } satisfies ApiEnvelope<never>)
+  }
+
   const ownerAddressRaw = String(body.ownerAddress ?? principal?.address ?? '').trim().toLowerCase()
   if (!isAddressLike(ownerAddressRaw)) {
+    if (isIndexerWrite) {
+      return res.status(200).json({
+        success: true,
+        data: { skipped: true, reason: 'invalid_owner_address' } satisfies SubdomainUpsertSkippedResponse,
+      } satisfies ApiEnvelope<SubdomainUpsertSkippedResponse>)
+    }
     return res.status(400).json({ success: false, error: 'Invalid ownerAddress' } satisfies ApiEnvelope<never>)
   }
 
@@ -149,6 +175,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? body.solanaWallet.trim()
         : ''
   if (submittedSolanaAddressRaw && !isValidSolanaAddress(submittedSolanaAddressRaw)) {
+    if (isIndexerWrite) {
+      return res.status(200).json({
+        success: true,
+        data: { skipped: true, reason: 'invalid_solana_address' } satisfies SubdomainUpsertSkippedResponse,
+      } satisfies ApiEnvelope<SubdomainUpsertSkippedResponse>)
+    }
     return res.status(400).json({ success: false, error: 'Invalid solanaAddress' } satisfies ApiEnvelope<never>)
   }
 

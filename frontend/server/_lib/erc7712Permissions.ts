@@ -60,6 +60,8 @@ export function validateCallsAgainstGrant(params: {
   grant: Erc7712PermissionGrant | null | undefined
   calls: DeployCall[]
   now?: Date
+  expectedChainId?: number
+  expectedSessionId?: string
 }): { ok: boolean; reason?: string } {
   const { grant, calls } = params
   if (!grant) return { ok: true }
@@ -69,6 +71,15 @@ export function validateCallsAgainstGrant(params: {
   const validUntil = Date.parse(String(grant.validUntil || ''))
   if (!Number.isFinite(validAfter) || !Number.isFinite(validUntil)) return { ok: false, reason: 'erc7712_invalid_window' }
   const ts = now.getTime()
+  const expectedChainId = Number.isFinite(Number(params.expectedChainId)) ? Number(params.expectedChainId) : null
+  const expectedSessionId = typeof params.expectedSessionId === 'string' ? params.expectedSessionId.trim() : ''
+  if (expectedChainId !== null && Number(grant.chainId) !== expectedChainId) {
+    return { ok: false, reason: 'erc7712_chain_mismatch' }
+  }
+  if (expectedSessionId && String(grant.sessionId || '') !== expectedSessionId) {
+    return { ok: false, reason: 'erc7712_session_mismatch' }
+  }
+
   if (ts < validAfter) return { ok: false, reason: 'erc7712_not_yet_valid' }
   if (ts > validUntil) return { ok: false, reason: 'erc7712_expired' }
 

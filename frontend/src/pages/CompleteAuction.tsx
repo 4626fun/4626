@@ -552,15 +552,13 @@ export function CompleteAuction() {
                   </>
                 )}
               </button>
-              <a
-                href={`https://app.uniswap.org/swap?inputCurrency=ETH&outputCurrency=${tokenAddress}&chain=base`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={() => navigate(`/swap?token=${tokenAddress}`)}
                 className="btn-secondary flex items-center justify-center gap-2"
               >
-                Trade on Uniswap
-                <ExternalLink className="w-4 h-4" />
-              </a>
+                Trade on 4626 Swap
+                <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
             {activateTxHash && (
               <a

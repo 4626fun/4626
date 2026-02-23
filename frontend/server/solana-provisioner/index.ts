@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { existsSync } from 'node:fs'
 import { promisify } from 'node:util'
-import { timingSafeEqual } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'node:crypto'
 
 import { createPublicClient, http, isAddress, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
@@ -25,15 +25,48 @@ const BASE_SOLANA_BRIDGE_ABI = [
   },
 ] as const
 
+const ERC20_METADATA_ABI = [
+  {
+    type: 'function',
+    name: 'name',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'string' }],
+  },
+  {
+    type: 'function',
+    name: 'symbol',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'string' }],
+  },
+] as const
+
 type ProvisionBody = {
   shareOft?: string
   deployEnv?: string
   solanaDecimals?: number | string
   tokenName?: string
   tokenSymbol?: string
+  tokenSymbolFallback?: string
   scalerExponent?: number | string
   payerKp?: string
   payForRelay?: boolean
+}
+
+type MeteoraAccountMetaBody = {
+  pubkey?: string
+  isSigner?: boolean
+  isWritable?: boolean
+}
+
+type MeteoraIxsBody = {
+  creatorToken?: string
+  shareOft?: string
+  meteoraAlphaVault?: string
+  alphaVaultProgramId?: string
+  expectedRemoteAmount?: number | string
+  depositAccounts?: MeteoraAccountMetaBody[]
 }
 
 type WrapRunner = {
@@ -41,6 +74,10 @@ type WrapRunner = {
   args: string[]
   label: string
 }
+
+const WRAP_TOKEN_NAME_MAX_LENGTH = 32
+const WRAP_TOKEN_SYMBOL_MAX_LENGTH = 12
+type WrapTokenSymbolMode = 'auto' | 'unicode' | 'ascii'
 
 function json(res: ServerResponse, statusCode: number, payload: unknown): void {
   const body = JSON.stringify(payload)
@@ -59,6 +96,36 @@ function parseDecimals(value: unknown): number | null {
     if (Number.isFinite(n) && n >= 0 && n <= 255) return Math.floor(n)
   }
   return null
+}
+
+function parseEnvInt(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback
+  const parsed = Number.parseInt(String(value).trim(), 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return parsed
+}
+
+function readProvisionerWrapRetryAttempts(): number {
+  const attempts = parseEnvInt(process.env.PROVISIONER_WRAP_RETRY_ATTEMPTS, 3)
+  return Math.min(Math.max(attempts, 1), 8)
+}
+
+function readProvisionerWrapRetryDelayMs(): number {
+  const delayMs = parseEnvInt(process.env.PROVISIONER_WRAP_RETRY_DELAY_MS, 1_200)
+  return Math.max(delayMs, 0)
+}
+
+function isRetryableWrapTokenError(message: string): boolean {
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('blockhash not found') ||
+    lower.includes('transaction simulation failed') ||
+    lower.includes('temporarily unavailable') ||
+    lower.includes('timed out') ||
+    lower.includes('timeout') ||
+    lower.includes('econnreset') ||
+    lower.includes('socket hang up')
+  )
 }
 
 function parseMintPubkeyFromWrapOutput(text: string): string | null {
@@ -103,10 +170,148 @@ function solanaPubkeyToBytes32Hex(pubkey: string): Hex {
   return `0x${Buffer.from(decoded).toString('hex')}` as Hex
 }
 
+function parseUint64(value: unknown): bigint | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return BigInt(Math.floor(value))
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = BigInt(value.trim())
+      return parsed >= 0n ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function encodeU64LE(value: bigint): Buffer {
+  if (value < 0n || value > 0xffff_ffff_ffff_ffffn) {
+    throw new Error('u64_out_of_range')
+  }
+  const out = Buffer.alloc(8)
+  let v = value
+  for (let i = 0; i < 8; i += 1) {
+    out[i] = Number(v & 0xffn)
+    v >>= 8n
+  }
+  return out
+}
+
+function encodeAnchorDiscriminator(signature: string): Buffer {
+  return createHash('sha256').update(signature).digest().subarray(0, 8)
+}
+
+function serializeAccountMeta(meta: { pubkey: string; isSigner: boolean; isWritable: boolean }): Hex {
+  const pubkey = solanaPubkeyToBytes32Hex(meta.pubkey).slice(2)
+  const signer = meta.isSigner ? '01' : '00'
+  const writable = meta.isWritable ? '01' : '00'
+  return `0x${pubkey}${signer}${writable}` as Hex
+}
+
 function envBool(key: string, fallback = false): boolean {
   const raw = String(process.env[key] ?? '').trim().toLowerCase()
   if (!raw) return fallback
   return raw === '1' || raw === 'true' || raw === 'yes'
+}
+
+function sanitizeWrapTokenName(raw: string, shareOft: Address): string {
+  const fallback = `CreatorShare-${shareOft.slice(2, 8)}`
+  const ascii = String(raw ?? '')
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const resolved = ascii || fallback
+  return resolved.slice(0, WRAP_TOKEN_NAME_MAX_LENGTH)
+}
+
+function readWrapTokenSymbolMode(): WrapTokenSymbolMode {
+  const raw = String(process.env.SOLANA_BRIDGE_WRAP_SYMBOL_MODE ?? 'auto')
+    .trim()
+    .toLowerCase()
+  if (raw === 'unicode' || raw === 'ascii' || raw === 'auto') return raw
+  return 'auto'
+}
+
+function sanitizeWrapTokenSymbolUnicode(raw: string, shareOft: Address): string {
+  const fallback = `■${shareOft.slice(2, 6).toUpperCase()}`
+  const normalized = String(raw ?? '')
+    .normalize('NFKC')
+    .toUpperCase()
+    .replace(/\s+/g, '')
+  const cleaned = normalized.replace(/[^A-Z0-9■]/g, '')
+  const resolved = cleaned || fallback
+  return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
+}
+
+function sanitizeWrapTokenSymbolAscii(raw: string, shareOft: Address): string {
+  const fallbackPrefixRaw = process.env.SOLANA_BRIDGE_WRAP_SYMBOL_PREFIX
+  const fallbackPrefix = (
+    fallbackPrefixRaw === undefined ? 'CS' : String(fallbackPrefixRaw).trim().toUpperCase()
+  ).replace(/[^A-Z0-9]/g, '')
+  const fallback = `${fallbackPrefix}${shareOft.slice(2, 6).toUpperCase()}`
+  const cleaned = String(raw ?? '')
+    .normalize('NFKD')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  const resolved = cleaned || fallback
+  return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
+}
+
+function buildWrapTokenSymbolCandidates(raw: string, shareOft: Address): string[] {
+  const mode = readWrapTokenSymbolMode()
+  const unicode = sanitizeWrapTokenSymbolUnicode(raw, shareOft)
+  const ascii = sanitizeWrapTokenSymbolAscii(raw, shareOft)
+  const out: string[] = []
+  const pushUnique = (value: string): void => {
+    if (!value || out.includes(value)) return
+    out.push(value)
+  }
+  if (mode === 'unicode') pushUnique(unicode)
+  else if (mode === 'ascii') pushUnique(ascii)
+  else {
+    pushUnique(unicode)
+    pushUnique(ascii)
+  }
+  return out
+}
+
+function isLikelyUnicodeSymbolUnsupportedError(message: string): boolean {
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('utf-8') ||
+    lower.includes('utf8') ||
+    lower.includes('unicode') ||
+    lower.includes('invalid symbol') ||
+    lower.includes('symbol is invalid') ||
+    lower.includes('invalid metadata') ||
+    lower.includes('invalid character')
+  )
+}
+
+async function readShareOftMetadata(params: {
+  publicClient: any
+  shareOft: Address
+}): Promise<{ name: string; symbol: string } | null> {
+  try {
+    const [nameRaw, symbolRaw] = await Promise.all([
+      params.publicClient.readContract({
+        address: params.shareOft,
+        abi: ERC20_METADATA_ABI,
+        functionName: 'name',
+      }),
+      params.publicClient.readContract({
+        address: params.shareOft,
+        abi: ERC20_METADATA_ABI,
+        functionName: 'symbol',
+      }),
+    ])
+    const name = typeof nameRaw === 'string' ? nameRaw.trim() : ''
+    const symbol = typeof symbolRaw === 'string' ? symbolRaw.trim() : ''
+    if (!name || !symbol) return null
+    return { name, symbol }
+  } catch {
+    return null
+  }
 }
 
 function readBody(req: IncomingMessage): Promise<string> {
@@ -231,6 +436,35 @@ async function runWrapToken(cliDir: string, cliBinRaw: string, wrapArgs: string[
   )
 }
 
+async function runWrapTokenWithRetry(
+  cliDir: string,
+  cliBinRaw: string,
+  wrapArgs: string[],
+): Promise<{ output: string; runner: string }> {
+  const retryAttempts = readProvisionerWrapRetryAttempts()
+  const retryDelayMs = readProvisionerWrapRetryDelayMs()
+
+  for (let attempt = 1; attempt <= retryAttempts; attempt += 1) {
+    try {
+      return await runWrapToken(cliDir, cliBinRaw, wrapArgs)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const retryable = isRetryableWrapTokenError(message)
+      const willRetry = retryable && attempt < retryAttempts
+      process.stderr.write(
+        `[solana-provisioner] wrap-token attempt failed attempt=${attempt}/${retryAttempts} retryable=${retryable} willRetry=${willRetry}: ${message}\n`,
+      )
+      if (!willRetry) throw error
+      const backoffMs = retryDelayMs * attempt
+      if (backoffMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, backoffMs))
+      }
+    }
+  }
+
+  throw new Error('wrap-token failed after retries')
+}
+
 async function handleHealth(res: ServerResponse): Promise<void> {
   const cliDir = String(process.env.SOLANA_BRIDGE_CLI_DIR ?? '').trim()
   const cliExists = !!cliDir && existsSync(cliDir)
@@ -288,35 +522,71 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
   const cliBin = String(process.env.SOLANA_BRIDGE_CLI_BIN ?? 'auto').trim() || 'auto'
   const payForRelay =
     typeof body?.payForRelay === 'boolean' ? body.payForRelay : envBool('SOLANA_BRIDGE_PAY_FOR_RELAY', true)
-  const tokenName = String(body?.tokenName ?? `CreatorShare-${shareOft.slice(2, 8)}`).trim() || `CreatorShare-${shareOft.slice(2, 8)}`
-  const symbolPrefixRaw = process.env.SOLANA_BRIDGE_WRAP_SYMBOL_PREFIX
-  const defaultSymbolPrefix = symbolPrefixRaw === undefined ? 'CS' : String(symbolPrefixRaw).trim()
-  const defaultTokenSymbol = `${defaultSymbolPrefix}${shareOft.slice(2, 6).toUpperCase()}`
-  const tokenSymbol = String(body?.tokenSymbol ?? defaultTokenSymbol).trim() || defaultTokenSymbol
-
-  const wrapArgs = [
-    'sol',
-    'bridge',
-    'wrap-token',
-    '--deploy-env',
-    deployEnv,
-    '--remote-token',
+  const rpcUrl = (process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http(rpcUrl, { timeout: 20_000 }),
+  })
+  const shareOftMetadata = await readShareOftMetadata({ publicClient, shareOft })
+  const tokenName = sanitizeWrapTokenName(
+    shareOftMetadata?.name ?? String(body?.tokenName ?? ''),
     shareOft,
-    '--decimals',
-    String(solanaDecimals),
-    '--name',
-    tokenName,
-    '--symbol',
-    tokenSymbol,
-    '--scaler-exponent',
-    String(scalerExponent),
-    '--payer-kp',
-    payerKp,
-  ]
-  if (payForRelay) wrapArgs.push('--pay-for-relay')
+  )
+  const tokenSymbolCandidates = buildWrapTokenSymbolCandidates(
+    shareOftMetadata?.symbol ?? String(body?.tokenSymbol ?? body?.tokenSymbolFallback ?? ''),
+    shareOft,
+  )
+  const buildWrapArgs = (tokenSymbol: string): string[] => {
+    const args = [
+      'sol',
+      'bridge',
+      'wrap-token',
+      '--deploy-env',
+      deployEnv,
+      '--remote-token',
+      shareOft,
+      '--decimals',
+      String(solanaDecimals),
+      '--name',
+      tokenName,
+      '--symbol',
+      tokenSymbol,
+      '--scaler-exponent',
+      String(scalerExponent),
+      '--payer-kp',
+      payerKp,
+    ]
+    if (payForRelay) args.push('--pay-for-relay')
+    return args
+  }
 
   try {
-    const { output: combined, runner } = await runWrapToken(cliDir, cliBin, wrapArgs)
+    let combined = ''
+    let runner = ''
+    let tokenSymbolUsed = tokenSymbolCandidates[0] ?? ''
+    let wrapError: unknown = null
+    for (let i = 0; i < tokenSymbolCandidates.length; i += 1) {
+      const candidate = tokenSymbolCandidates[i]
+      try {
+        const result = await runWrapTokenWithRetry(cliDir, cliBin, buildWrapArgs(candidate))
+        combined = result.output
+        runner = result.runner
+        tokenSymbolUsed = candidate
+        wrapError = null
+        break
+      } catch (error) {
+        wrapError = error
+        const message = error instanceof Error ? error.message : String(error)
+        const hasFallback = i < tokenSymbolCandidates.length - 1
+        const shouldFallback = hasFallback && isLikelyUnicodeSymbolUnsupportedError(message)
+        process.stderr.write(
+          `[solana-provisioner] wrap-token symbol candidate failed index=${i + 1}/${tokenSymbolCandidates.length} symbol=${candidate} fallback=${shouldFallback}: ${message}\n`,
+        )
+        if (!shouldFallback) throw error
+      }
+    }
+    if (wrapError) throw wrapError
+
     const mintPubkey = parseMintPubkeyFromWrapOutput(combined)
     if (!mintPubkey) {
       return json(res, 500, {
@@ -325,12 +595,6 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
       })
     }
     const mintBytes32 = solanaPubkeyToBytes32Hex(mintPubkey)
-
-    const rpcUrl = (process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()
-    const publicClient = createPublicClient({
-      chain: base,
-      transport: http(rpcUrl, { timeout: 20_000 }),
-    })
     let scalar = 0n
     for (let i = 0; i < 24; i += 1) {
       scalar = await publicClient
@@ -360,6 +624,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
         mintPubkey,
         mintBytes32,
         runner,
+        tokenSymbol: tokenSymbolUsed,
         routeScalar: scalar.toString(),
       },
     })
@@ -372,11 +637,6 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
     if (existingMintPubkey) {
       try {
         const mintBytes32 = solanaPubkeyToBytes32Hex(existingMintPubkey)
-        const rpcUrl = (process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()
-        const publicClient = createPublicClient({
-          chain: base,
-          transport: http(rpcUrl, { timeout: 20_000 }),
-        })
         let scalar = 0n
         for (let i = 0; i < 24; i += 1) {
           scalar = await publicClient
@@ -416,6 +676,91 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
   }
 }
 
+async function handleBuildMeteoraIxs(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const secret = String(process.env.PROVISIONER_BEARER_TOKEN ?? '').trim()
+  if (!secret) {
+    return json(res, 503, { success: false, error: 'PROVISIONER_BEARER_TOKEN is not configured.' })
+  }
+  if (!authOk(req, secret)) {
+    return json(res, 401, { success: false, error: 'Unauthorized' })
+  }
+
+  let body: MeteoraIxsBody
+  try {
+    const raw = await readBody(req)
+    body = (raw ? JSON.parse(raw) : {}) as MeteoraIxsBody
+  } catch {
+    return json(res, 400, { success: false, error: 'Invalid JSON body.' })
+  }
+
+  const meteoraAlphaVault = String(body?.meteoraAlphaVault ?? '').trim()
+  const alphaVaultProgramId = String(body?.alphaVaultProgramId ?? '').trim()
+  const remoteAmount = parseUint64(body?.expectedRemoteAmount)
+  const depositAccountsRaw = Array.isArray(body?.depositAccounts) ? body.depositAccounts : []
+  if (!meteoraAlphaVault || !alphaVaultProgramId) {
+    return json(res, 400, { success: false, error: 'Missing Meteora vault or program id.' })
+  }
+  if (remoteAmount === null || remoteAmount <= 0n) {
+    return json(res, 400, { success: false, error: 'Invalid expectedRemoteAmount (must be uint64 > 0).' })
+  }
+  if (depositAccountsRaw.length === 0) {
+    return json(res, 400, { success: false, error: 'Missing depositAccounts.' })
+  }
+
+  const parsedAccounts = depositAccountsRaw.map((entry) => ({
+    pubkey: String(entry?.pubkey ?? '').trim(),
+    isSigner: entry?.isSigner === true,
+    isWritable: entry?.isWritable === true,
+  }))
+  for (const account of parsedAccounts) {
+    if (!account.pubkey) return json(res, 400, { success: false, error: 'depositAccounts includes empty pubkey.' })
+    try {
+      solanaPubkeyToBytes32Hex(account.pubkey)
+    } catch {
+      return json(res, 400, { success: false, error: `Invalid deposit account pubkey: ${account.pubkey}` })
+    }
+  }
+
+  let meteoraAlphaVaultBytes32: Hex
+  let programIdBytes32: Hex
+  try {
+    meteoraAlphaVaultBytes32 = solanaPubkeyToBytes32Hex(meteoraAlphaVault)
+    programIdBytes32 = solanaPubkeyToBytes32Hex(alphaVaultProgramId)
+  } catch (error) {
+    return json(res, 400, {
+      success: false,
+      error: `Invalid Meteora vault/program pubkey: ${error instanceof Error ? error.message : String(error)}`,
+    })
+  }
+
+  try {
+    // Anchor `deposit(max_amount: u64)` instruction discriminator.
+    const discriminator = encodeAnchorDiscriminator('global:deposit')
+    const amount = encodeU64LE(remoteAmount)
+    const data = `0x${Buffer.concat([discriminator, amount]).toString('hex')}` as Hex
+    const solanaIxs = [
+      {
+        programId: programIdBytes32,
+        serializedAccounts: parsedAccounts.map((account) => serializeAccountMeta(account)),
+        data,
+      },
+    ]
+    return json(res, 200, {
+      success: true,
+      data: {
+        creatorToken: typeof body.creatorToken === 'string' ? body.creatorToken : null,
+        shareOft: typeof body.shareOft === 'string' ? body.shareOft : null,
+        meteoraAlphaVault: meteoraAlphaVaultBytes32,
+        expectedRemoteAmount: remoteAmount.toString(),
+        solanaIxs,
+      },
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return json(res, 500, { success: false, error: `Failed to build Meteora ixs: ${message}` })
+  }
+}
+
 async function main(): Promise<void> {
   const host = String(process.env.PROVISIONER_HOST ?? '0.0.0.0').trim() || '0.0.0.0'
   const port = Number(process.env.PROVISIONER_PORT ?? 8788)
@@ -424,6 +769,7 @@ async function main(): Promise<void> {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
     if (method === 'GET' && url.pathname === '/healthz') return handleHealth(res)
     if (method === 'POST' && url.pathname === '/provision') return handleProvision(req, res)
+    if (method === 'POST' && url.pathname === '/meteora-ixs') return handleBuildMeteoraIxs(req, res)
     return json(res, 404, { success: false, error: 'Not found' })
   })
 

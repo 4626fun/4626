@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronDown } from 'lucide-react'
 import { usePublicClient } from 'wagmi'
 import { base } from 'wagmi/chains'
 import { getAddress, isAddress, type Address } from 'viem'
+import { useQuery } from '@tanstack/react-query'
 import type { ZoraCoin } from '@/lib/zora/types'
 import { EXPLORE_TABLE_GROUPS, getExploreColumns, getGridTemplateColumns, getStickyLeftMap } from './tableColumns'
 import { fetchCoinbaseSmartWalletOwners } from '@/lib/aa/coinbaseErc4337'
@@ -240,26 +241,12 @@ export function TokenRow({
   }, [coin.creatorAddress, coin.payoutRecipientAddress])
 
   const candidateKey = cswCandidates.join('|')
-  const [cswOwners, setCswOwners] = useState<{
-    status: 'idle' | 'loading' | 'ready' | 'error'
-    address: Address | null
-    owners: Address[]
-    error?: string
-  }>({ status: 'idle', address: null, owners: [] })
+  const cswOwnersQuery = useQuery({
+    queryKey: ['coinbaseSmartWalletOwners', candidateKey],
+    enabled: Boolean(isExpanded && publicClient && cswCandidates.length > 0),
+    queryFn: async () => {
+      if (!publicClient) return { address: null as Address | null, owners: [] as Address[], error: 'Missing public client' }
 
-  useEffect(() => {
-    setCswOwners({ status: 'idle', address: null, owners: [] })
-  }, [candidateKey])
-
-  useEffect(() => {
-    if (!isExpanded) return
-    if (!publicClient) return
-    if (cswOwners.status === 'loading' || cswOwners.status === 'ready') return
-    if (cswCandidates.length === 0) return
-
-    let cancelled = false
-    setCswOwners((prev) => ({ ...prev, status: 'loading', error: undefined }))
-    ;(async () => {
       let lastError: string | undefined
       for (const candidate of cswCandidates) {
         try {
@@ -269,29 +256,33 @@ export function TokenRow({
             maxOwners: 24,
           })
           if (owners.length > 0) {
-            if (!cancelled) {
-              setCswOwners({ status: 'ready', address: candidate, owners })
-            }
-            return
+            return { address: candidate, owners, error: undefined }
           }
         } catch (e: any) {
           lastError = e?.message ? String(e.message) : 'Failed to read owners'
         }
       }
-      if (!cancelled) {
-        setCswOwners({
-          status: 'ready',
-          address: cswCandidates[0] ?? null,
-          owners: [],
-          error: lastError,
-        })
-      }
-    })()
 
-    return () => {
-      cancelled = true
-    }
-  }, [cswCandidates, cswOwners.status, isExpanded, publicClient])
+      return { address: cswCandidates[0] ?? null, owners: [] as Address[], error: lastError }
+    },
+    staleTime: 60_000,
+    retry: 0,
+  })
+
+  const cswOwners: {
+    status: 'idle' | 'loading' | 'ready'
+    address: Address | null
+    owners: Address[]
+    error?: string
+  } = (() => {
+    if (!isExpanded) return { status: 'idle', address: null, owners: [] }
+    if (cswCandidates.length === 0) return { status: 'idle', address: null, owners: [] }
+    if (cswOwnersQuery.isLoading) return { status: 'loading', address: null, owners: [] }
+    const data = cswOwnersQuery.data
+    if (data) return { status: 'ready', address: data.address, owners: data.owners, error: data.error }
+    // If query is disabled (missing client), treat as idle until expanded + ready.
+    return { status: 'idle', address: null, owners: [] }
+  })()
 
   return (
     <>

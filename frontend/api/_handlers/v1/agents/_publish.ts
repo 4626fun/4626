@@ -1,8 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
-import { buildAgentRegistration } from '../../../../server/_lib/agentRegistration.js'
-import { tryUploadImmutableJson } from '../../../../server/_lib/lensGrove.js'
+import { buildAgentRegistration, enrichAgentRegistrationWithFarcaster } from '../../../../server/_lib/agentRegistration.js'
+import {
+  publishAgentRegistrationToGrove,
+  resolveAgentRegistrationKey,
+} from '../../../../server/_lib/agentRegistrationPublisher.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { readRequestPrincipal } from '../../../../server/_lib/requestPrincipal.js'
 import { trackFarcasterRolloutEvent } from '../../../../server/_lib/farcasterRolloutTelemetry.js'
@@ -22,6 +25,11 @@ type PublishResult = {
   }
 }
 
+function ownerFromAgentKey(agentKey: string): string | null {
+  const match = String(agentKey).match(/^single-csw:(0x[a-fA-F0-9]{40})$/)
+  return match ? match[1].toLowerCase() : null
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -31,7 +39,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  if (!readRequestPrincipal(req)) {
+  const principal = readRequestPrincipal(req)
+  if (!principal) {
     return res.status(401).json({ success: false, error: 'Authentication required' } satisfies ApiEnvelope<never>)
   }
 
@@ -55,17 +64,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
+  // Keep registration payload deterministic across linked signer sessions by
+  // anchoring enrichment + state keying to canonical CSW identity.
+  const baseAgentKey = resolveAgentRegistrationKey(result.payload, 'single-agent')
+  const canonicalOwner = ownerFromAgentKey(baseAgentKey)
+  const registration = await enrichAgentRegistrationWithFarcaster({
+    payload: result.payload,
+    ownerAddress: canonicalOwner ?? principal.address,
+  })
+
   let groveStatus: PublishResult['groveStatus'] = 'skipped'
   let grove: PublishResult['grove'] | undefined
   if (storeOnGrove) {
-    const upload = await tryUploadImmutableJson(result.payload)
-    if (upload.ok) {
+    const agentKey = resolveAgentRegistrationKey(registration, baseAgentKey)
+    const publish = await publishAgentRegistrationToGrove({
+      payload: registration,
+      agentKey,
+    })
+    if (publish.ok) {
       groveStatus = 'stored'
       grove = {
-        lensUri: upload.result.lensUri,
-        gatewayUrl: upload.result.gatewayUrl,
-        storageKey: upload.result.storageKey,
-        statusUrl: upload.result.statusUrl,
+        lensUri: publish.lensUri,
+        gatewayUrl: publish.gatewayUrl,
+        storageKey: publish.storageKey ?? publish.lensUri.replace(/^lens:\/\//, ''),
+        statusUrl: null,
       }
     } else {
       groveStatus = 'unavailable'
@@ -84,7 +106,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   return res.status(200).json({
     success: true,
     data: {
-      registration: result.payload,
+      registration,
       groveStatus,
       grove,
     } satisfies PublishResult,

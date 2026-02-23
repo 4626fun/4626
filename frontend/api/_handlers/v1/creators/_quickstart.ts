@@ -293,7 +293,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         pendingActions.push('add_owner')
       }
     } catch (err) {
-      logger.warn('[quickstart] Server wallet provisioning failed', err)
+      logger.warn('[quickstart] Server wallet provisioning failed', {
+        creatorAddress,
+        error: err,
+      })
       pendingActions.push('provision_wallet')
     }
 

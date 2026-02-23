@@ -92,8 +92,8 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
 
   const appearance = {
     showWalletLoginFirst: true,
-    // This app is EVM-only in current flows; hide Solana wallet choices.
-    walletChainType: 'ethereum-only',
+    // Signup flow provisions both embedded EVM + Solana wallets.
+    walletChainType: 'all',
     walletList: ['metamask', 'coinbase_wallet', 'detected_ethereum_wallets'],
     logo: '',
     landingHeader: 'Sign in to 4626',
@@ -107,6 +107,7 @@ export function PrivyClientProvider({ children }: { children: ReactNode }) {
     // Enable embedded wallets - this is the signer for the Coinbase Smart Wallet
     embeddedWallets: {
       ethereum: { createOnLogin: 'users-without-wallets' },
+      solana: { createOnLogin: 'users-without-wallets' },
     },
     loginMethods,
     defaultChain: base,

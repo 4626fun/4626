@@ -17,9 +17,10 @@ type NavItem = {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'HOME', to: '/', activePrefixes: ['/'] },
-  { label: 'EXPLORE', to: '/explore/creators', activePrefixes: ['/explore', '/dashboard'] },
-  { label: 'DEPLOY', to: '/deploy', activePrefixes: ['/deploy', '/launch', '/status'] },
+  { label: 'TRADE', to: '/swap', activePrefixes: ['/swap'] },
+  { label: 'EXPLORE', to: '/explore/creators', activePrefixes: ['/explore'] },
+  { label: 'VAULT', to: '/deploy', activePrefixes: ['/deploy', '/status', '/vault'] },
+  { label: 'PORTFOLIO', to: '/portfolio', activePrefixes: ['/portfolio'] },
 ]
 
 const NAV_ITEMS_PUBLIC: NavItem[] = [
@@ -57,22 +58,22 @@ export function VaultNavBar() {
   const mini = useMiniAppContext()
   const baseItems = publicMode || hostMode === 'marketing' ? NAV_ITEMS_PUBLIC : NAV_ITEMS
   const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, ADMIN_ITEM] : baseItems
-  const brandHref = '/'
+  const brandHref = hostMode === 'marketing' ? '/' : '/swap'
   const showConnect = !publicMode && hostMode !== 'marketing'
 
   return (
     <header className="hidden md:block sticky top-0 left-0 right-0 z-50 transition-all duration-500">
       <div className="absolute inset-0 bg-vault-bg/70 backdrop-blur-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)]" />
 
-      <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-brand-primary/25 to-transparent opacity-60" />
+      <div className="absolute bottom-0 left-0 right-0 h-px bg-linear-to-r from-transparent via-brand-primary/25 to-transparent opacity-60" />
 
       <div className="relative max-w-[1400px] mx-auto px-6 md:px-12 h-24 flex items-center justify-between">
         <Link to={brandHref} className="flex items-center gap-4 group cursor-pointer">
           <Logo showText={false} width={40} height={40} />
           <div className="flex flex-col justify-center">
-            <span className="text-sm tracking-[0.1em] text-white font-medium transition-colors duration-300 leading-none">
+            <span className="text-sm tracking-widest text-white font-medium transition-colors duration-300 leading-none">
               Creator
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-primary to-brand-accent ml-1">
+              <span className="text-transparent bg-clip-text bg-linear-to-r from-brand-primary to-brand-accent ml-1">
                 Vaults
               </span>
             </span>

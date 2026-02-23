@@ -62,10 +62,14 @@ contract SeedUniversalBytecodeStore is Script {
             );
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(store, vm.getCode("out/CreatorShareOFT.sol/CreatorShareOFT.json"), "CreatorShareOFT", supportsChunking);
+            _storeIfMissing(
+                store, vm.getCode("out/CreatorShareOFT.sol/CreatorShareOFT.json"), "CreatorShareOFT", supportsChunking
+            );
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(store, vm.getCode("out/CreatorOVault.sol/CreatorOVault.json"), "CreatorOVault", supportsChunking);
+            _storeIfMissing(
+                store, vm.getCode("out/CreatorOVault.sol/CreatorOVault.json"), "CreatorOVault", supportsChunking
+            );
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(
@@ -84,13 +88,22 @@ contract SeedUniversalBytecodeStore is Script {
             );
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(store, vm.getCode("out/CCALaunchStrategy.sol/CCALaunchStrategy.json"), "CCALaunchStrategy", supportsChunking);
+            _storeIfMissing(
+                store,
+                vm.getCode("out/CCALaunchStrategy.sol/CCALaunchStrategy.json"),
+                "CCALaunchStrategy",
+                supportsChunking
+            );
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(store, vm.getCode("out/CreatorOracle.sol/CreatorOracle.json"), "CreatorOracle", supportsChunking);
+            _storeIfMissing(
+                store, vm.getCode("out/CreatorOracle.sol/CreatorOracle.json"), "CreatorOracle", supportsChunking
+            );
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(store, vm.getCode("out/PayoutRouter.sol/PayoutRouter.json"), "PayoutRouter", supportsChunking);
+            _storeIfMissing(
+                store, vm.getCode("out/PayoutRouter.sol/PayoutRouter.json"), "PayoutRouter", supportsChunking
+            );
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(
@@ -110,7 +123,9 @@ contract SeedUniversalBytecodeStore is Script {
             );
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(store, vm.getCode("out/AjnaStrategy.sol/AjnaStrategy.json"), "AjnaStrategy", supportsChunking);
+            _storeIfMissing(
+                store, vm.getCode("out/AjnaStrategy.sol/AjnaStrategy.json"), "AjnaStrategy", supportsChunking
+            );
         }
         vm.stopBroadcast();
     }
@@ -147,6 +162,6 @@ contract SeedUniversalBytecodeStore is Script {
     function _supportsChunking(address storeAddr) internal view returns (bool ok) {
         // `UniversalBytecodeStoreV2` exposes `chunkCount(bytes32)` for debugging.
         // v1 stores will not recognize the selector, causing the call to fail.
-        (ok, ) = storeAddr.staticcall(abi.encodeWithSignature("chunkCount(bytes32)", bytes32(0)));
+        (ok,) = storeAddr.staticcall(abi.encodeWithSignature("chunkCount(bytes32)", bytes32(0)));
     }
 }

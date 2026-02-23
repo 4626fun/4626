@@ -2,10 +2,28 @@ import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import type { Address } from 'viem'
+import { useQuery } from '@tanstack/react-query'
+import { usePublicClient } from 'wagmi'
 import { ExternalLink, CheckCircle2, ArrowRight, Wallet, BarChart3, Sparkles } from 'lucide-react'
 import type { DeploymentRecord } from '@/hooks/useDeploymentTracker'
 
 const shortAddress = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
+  {
+    name: 'getAuctionStatus',
+    type: 'function',
+    inputs: [],
+    outputs: [
+      { name: 'auction', type: 'address' },
+      { name: 'isActive', type: 'bool' },
+      { name: 'isGraduated', type: 'bool' },
+      { name: 'clearingPrice', type: 'uint256' },
+      { name: 'currencyRaised', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+] as const
 
 function AddressRow({ label, address, highlight }: { label: string; address: Address | string | null | undefined; highlight?: boolean }) {
   const a = address ? String(address) : ''
@@ -77,6 +95,27 @@ export interface DeploymentSuccessProps {
 }
 
 export function DeploymentSuccess({ deployment, shareSymbol }: DeploymentSuccessProps) {
+  const publicClient = usePublicClient({ chainId: 8453 })
+  const auctionStatusQuery = useQuery({
+    queryKey: ['deploymentSuccess', 'auctionStatus', deployment?.contracts.ccaStrategy],
+    enabled: !!deployment?.contracts.ccaStrategy && !!publicClient,
+    staleTime: 20_000,
+    queryFn: async () => {
+      if (!deployment?.contracts.ccaStrategy || !publicClient) return null
+      const status = (await publicClient.readContract({
+        address: deployment.contracts.ccaStrategy,
+        abi: CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI,
+        functionName: 'getAuctionStatus',
+      })) as readonly [Address, boolean, boolean, bigint, bigint]
+      const auction = String(status?.[0] ?? '').toLowerCase()
+      return {
+        hasAuction: /^0x[a-f0-9]{40}$/.test(auction) && auction !== ZERO_ADDRESS,
+        isActive: Boolean(status?.[1] ?? false),
+        isGraduated: Boolean(status?.[2] ?? false),
+      }
+    },
+  })
+
   const nextSteps = useMemo<NextStep[]>(() => {
     const steps: NextStep[] = []
     
@@ -103,19 +142,31 @@ export function DeploymentSuccess({ deployment, shareSymbol }: DeploymentSuccess
     })
     
     if (deployment?.contracts.ccaStrategy) {
-      steps.push({
-        icon: <Sparkles className="w-5 h-5" />,
-        title: 'CCA Auction Started',
-        description: 'Your Creator-Controlled Auction is now live. Share it with your community!',
-        action: {
-          label: 'View Auction',
-          to: `/auction/bid/${deployment.contracts.ccaStrategy}`,
-        },
-      })
+      if (auctionStatusQuery.data?.hasAuction) {
+        steps.push({
+          icon: <Sparkles className="w-5 h-5" />,
+          title: 'CCA Auction Started',
+          description: 'Your Creator-Controlled Auction is now live. Share it with your community!',
+          action: {
+            label: 'View Auction',
+            to: `/auction/bid/${deployment.contracts.ccaStrategy}`,
+          },
+        })
+      } else {
+        steps.push({
+          icon: <Sparkles className="w-5 h-5" />,
+          title: 'CCA Auction Pending',
+          description: 'Auction launch is not confirmed on-chain yet. Finish deployment before sharing auction links.',
+          action: {
+            label: 'View CCA Strategy',
+            href: `https://basescan.org/address/${deployment.contracts.ccaStrategy}`,
+          },
+        })
+      }
     }
     
     return steps
-  }, [deployment])
+  }, [auctionStatusQuery.data?.hasAuction, deployment])
 
   const deployedAt = deployment?.deployedAt
     ? new Date(deployment.deployedAt).toLocaleString(undefined, {
