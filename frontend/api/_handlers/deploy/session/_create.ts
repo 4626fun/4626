@@ -470,12 +470,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(503).json({ success: false, error: infra.error || 'Deploy infrastructure unavailable' } satisfies ApiEnvelope<null>)
     }
 
-    const origin = getCanonicalOrigin(req)
-    const infra = await checkDeployInfraReady(origin)
-    if (!infra.ok) {
-      return res.status(503).json({ success: false, error: infra.error || 'Deploy infrastructure unavailable' } satisfies ApiEnvelope<null>)
-    }
-
     // Ownership is validated below against canonical profile linkage.
     // Do not hard-require sessionAddress===owner/smartWallet here because
     // embedded EOAs and other linked wallets are valid operators.
