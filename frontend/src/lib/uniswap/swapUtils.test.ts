@@ -83,6 +83,8 @@ describe('swapUtils token identity', () => {
   it('extracts amountOut from nested quote shapes', () => {
     expect(getNestedAmountOut({ quote: { output: { amount: '123' } } })).toBe('123')
     expect(getNestedAmountOut({ output: { amount: 456 } })).toBe('456')
+    expect(getNestedAmountOut({ expectedAmountOut: '789' })).toBe('789')
+    expect(getNestedAmountOut({ orderInfo: { outputs: [{ startAmount: '2022' }] } })).toBe('2022')
     expect(getNestedAmountOut({})).toBeNull()
   })
 
