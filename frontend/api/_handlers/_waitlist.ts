@@ -2,6 +2,7 @@ import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../serv
 import { getDb, getDbInitError, isDbConfigured } from '../../server/_lib/postgres.js'
 import { normalizeReferralCode, getClientIp, getUserAgent, hashForAttribution } from '../../server/_lib/referrals.js'
 import { checkRateLimit, RATE_LIMITS, rateLimitKey, getClientIp as getRateLimitIp } from '../../server/_lib/rateLimit.js'
+import { resolveBasenameHandle } from '../../server/_lib/basenameResolver.js'
 import { awardWaitlistPoints, ensureWaitlistPointsSchema, WAITLIST_POINTS } from '../../server/_lib/waitlistPoints.js'
 import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
 import { readRequestPrincipalAddress } from '../../server/_lib/requestPrincipal.js'
@@ -562,6 +563,7 @@ export default async function handler(req: any, res: any) {
         if (!referralCodeOut) {
           const desired =
             claimReferralCode ||
+            (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveBasenameHandle(primaryWallet)) : null) ||
             (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveCreatorCoinSymbolFromWallet(primaryWallet)) : null) ||
             `C${Number(row.id).toString(36).toUpperCase()}`
           const { data: referralRaw, error: referralErr } = await supabase
@@ -774,6 +776,7 @@ export default async function handler(req: any, res: any) {
         if (signupId && !referralCodeOut) {
           const desired =
             claimReferralCode ||
+            (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveBasenameHandle(primaryWallet)) : null) ||
             (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveCreatorCoinSymbolFromWallet(primaryWallet)) : null) ||
             `C${Number(signupId).toString(36).toUpperCase()}`
           try {
@@ -928,6 +931,7 @@ export default async function handler(req: any, res: any) {
     if (signupId && !referralCodeOut) {
       const desired =
         claimReferralCode ||
+        (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveBasenameHandle(primaryWallet)) : null) ||
         (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveCreatorCoinSymbolFromWallet(primaryWallet)) : null) ||
         `C${Number(signupId).toString(36).toUpperCase()}`
       try {
