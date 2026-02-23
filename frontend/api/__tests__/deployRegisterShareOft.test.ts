@@ -61,7 +61,7 @@ describe('deploy registerShareOft handler', () => {
     vi.clearAllMocks()
     readDeployAuthMock.mockReturnValue({ address: '0x1111111111111111111111111111111111111111' })
     getApiContractsMock.mockReturnValue({
-      creatorVaultBatcher: '0x32e91185B92c6c13dd56D745aBf24F009cdD3019',
+      creatorVaultBatcher: '0x4184D9118ec31061cEDd6041B6bD676ac19F29a5',
     })
     resolveMeteoraConfigMock.mockResolvedValue(null)
   })
@@ -85,13 +85,13 @@ describe('deploy registerShareOft handler', () => {
       readContract: vi.fn(async (args: any) => {
         switch (args.functionName) {
           case 'solanaBridgeAdapter':
-            return '0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92'
+            return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
           case 'solanaDestination':
             return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
           case 'isRegistered':
             return true
           case 'owner':
-            return '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80'
+            return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
           case 'solanaMintToToken':
             return '0x0000000000000000000000000000000000000000'
           default:
@@ -135,13 +135,13 @@ describe('deploy registerShareOft handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92'
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
               return true
             case 'owner':
-              return '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80'
+              return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
             case 'decimals':
               return 18
             default:
@@ -201,19 +201,19 @@ describe('deploy registerShareOft handler', () => {
       readContract: vi.fn(async (args: any) => {
         switch (args.functionName) {
           case 'solanaBridgeAdapter':
-            return '0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92'
+            return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
           case 'solanaDestination':
             return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
           case 'isRegistered':
             return false
           case 'owner':
-            return '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80'
+            return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
           default:
             throw new Error(`Unexpected read ${String(args.functionName)}`)
         }
       }),
       getBytecode: vi.fn(async ({ address }: any) =>
-        String(address).toLowerCase() === '0x5d0e33a4dfaa4e1eb4bdf41b953baa03ca73ea92' ? '0x1234' : '0x',
+        String(address).toLowerCase() === '0x2414b595c4f18532a5836b6e2e6d536832c572e8' ? '0x1234' : '0x',
       ),
     }
     createPublicClientMock.mockReturnValue(mockPublicClient as any)
@@ -243,13 +243,13 @@ describe('deploy registerShareOft handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92'
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
               return false
             case 'owner':
-              return '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80'
+              return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
             case 'solanaMintToToken':
               return '0x0000000000000000000000000000000000000000'
             case 'scalars':
@@ -265,7 +265,7 @@ describe('deploy registerShareOft handler', () => {
       createPublicClientMock.mockReturnValue(mockPublicClient as any)
       createWalletClientMock.mockReturnValue({ writeContract: writeContractMock } as any)
       privateKeyToAccountMock.mockReturnValue({
-        address: '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80',
+        address: '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD',
       })
 
       const req = createMockReq({
@@ -300,13 +300,13 @@ describe('deploy registerShareOft handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92'
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
               return false
             case 'owner':
-              return '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80'
+              return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
             case 'solanaMintToToken':
               return '0x0000000000000000000000000000000000000000'
             case 'scalars':
@@ -319,7 +319,7 @@ describe('deploy registerShareOft handler', () => {
       }
       createPublicClientMock.mockReturnValue(mockPublicClient as any)
       privateKeyToAccountMock.mockReturnValue({
-        address: '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80',
+        address: '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD',
       })
 
       const req = createMockReq({
@@ -352,13 +352,13 @@ describe('deploy registerShareOft handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92'
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
               return false
             case 'owner':
-              return '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80'
+              return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
             case 'name':
               return 'Creator Share'
             case 'symbol':
@@ -371,7 +371,7 @@ describe('deploy registerShareOft handler', () => {
       }
       createPublicClientMock.mockReturnValue(mockPublicClient as any)
       privateKeyToAccountMock.mockReturnValue({
-        address: '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80',
+        address: '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD',
       })
 
       const req = createMockReq({
@@ -408,13 +408,13 @@ describe('deploy registerShareOft handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x5D0e33a4DFAA4e1EB4BDf41B953baa03CA73eA92'
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'isRegistered':
               return false
             case 'owner':
-              return '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80'
+              return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
             case 'solanaMintToToken':
               return '0x0000000000000000000000000000000000000000'
             case 'scalars':
@@ -434,7 +434,7 @@ describe('deploy registerShareOft handler', () => {
       createPublicClientMock.mockReturnValue(mockPublicClient as any)
       createWalletClientMock.mockReturnValue({ writeContract: writeContractMock } as any)
       privateKeyToAccountMock.mockReturnValue({
-        address: '0xd836414eF13a165cC5Ba63De10b4a46b8d1F5A80',
+        address: '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD',
       })
 
       const fetchMock = vi

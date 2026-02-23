@@ -35,6 +35,7 @@ For Meteora auto-deposit payloads, point `METEORA_IX_PROVISIONER_URL` to `/meteo
   "solanaDecimals": 9,
   "tokenName": "CreatorShare-1234",
   "tokenSymbol": "CS1234",
+  "tokenSymbolFallback": "CS1234",
   "scalerExponent": 9,
   "payerKp": "config",
   "payForRelay": true
@@ -160,6 +161,7 @@ Optional but recommended:
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_ATTEMPTS=3`
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_DELAY_MS=1200`
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_TIMEOUT_MS=90000`
+- `SOLANA_BRIDGE_WRAP_SYMBOL_MODE=auto` (`auto` | `unicode` | `ascii`)
 
 In the provisioner runtime (`server/solana-provisioner/.env`), enable retry for transient Solana RPC simulation failures:
 

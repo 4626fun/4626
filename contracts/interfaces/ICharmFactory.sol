@@ -14,7 +14,7 @@ interface ICharmFactory {
      * @param manager Address that will manage the vault (rebalancing)
      * @param maxTotalSupply Maximum total supply of vault shares (use type(uint256).max for unlimited)
      * @param baseThreshold Threshold for base position in ticks
-     * @param limitThreshold Threshold for limit position in ticks  
+     * @param limitThreshold Threshold for limit position in ticks
      * @param fullRangeWeight Weight for full range position (0-10000 basis points)
      * @param period Rebalance period in seconds
      * @param name ERC20 name for vault shares
@@ -35,10 +35,10 @@ interface ICharmFactory {
 
     /// @notice Get vault by index
     function allVaults(uint256 index) external view returns (address);
-    
+
     /// @notice Total number of vaults created
     function allVaultsLength() external view returns (uint256);
-    
+
     /// @notice Charm governance address
     function governance() external view returns (address);
 }

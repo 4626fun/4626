@@ -8,7 +8,7 @@ import "../contracts/helpers/batchers/VaultActivationBatcher.sol";
 /**
  * @title DeployEverything
  * @notice Deploys all required contracts for CreatorVault
- * 
+ *
  * Usage:
  * forge script script/DeployEverything.s.sol:DeployEverything \
  *   --rpc-url base \
@@ -19,19 +19,19 @@ contract DeployEverything is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
-        
+
         console.log("Deploying from:", deployer);
         console.log("Balance:", deployer.balance);
-        
+
         vm.startBroadcast(deployerPrivateKey);
-        
+
         // ═══════════════════════════════════════════════════════════
         // STEP 1: Deploy StrategyDeploymentBatcher
         // ═══════════════════════════════════════════════════════════
         console.log("\n1. Deploying StrategyDeploymentBatcher...");
         StrategyDeploymentBatcher strategyBatcher = new StrategyDeploymentBatcher();
         console.log("   Address:", address(strategyBatcher));
-        
+
         // ═══════════════════════════════════════════════════════════
         // STEP 2: Deploy VaultActivationBatcher
         // ═══════════════════════════════════════════════════════════
@@ -39,9 +39,9 @@ contract DeployEverything is Script {
         address permit2 = vm.envOr("PERMIT2", address(0x000000000022D473030F116dDEE9F6B43aC78BA3));
         VaultActivationBatcher activationBatcher = new VaultActivationBatcher(permit2);
         console.log("   Address:", address(activationBatcher));
-        
+
         vm.stopBroadcast();
-        
+
         // ═══════════════════════════════════════════════════════════
         // SUMMARY
         // ═══════════════════════════════════════════════════════════

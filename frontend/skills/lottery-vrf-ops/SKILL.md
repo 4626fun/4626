@@ -14,7 +14,8 @@ description: Operate the CreatorVault lottery randomness system (Chainlink VRF 2
   - `subscriptionId > 0` and `keyHash != 0x0`
   - `callbackGasLimit` and `requestConfirmations` are sane
 - If cross-chain, confirm the hub can respond:
-  - VRF hub has ETH balance to pay LayerZero fees (otherwise it emits `ResponsePending`)
+  - fulfilled responses are queued (`pendingResponses`) and require a funded relayer call
+  - relayer is authorized on hub (`authorizedRelayers`) and can send `relayPendingResponse(srcEid, sequence)`
 - Run a small verification (read-only) using `cast call` before making any state changes.
 
 ## System Model (how randomness flows here)
@@ -22,7 +23,7 @@ description: Operate the CreatorVault lottery randomness system (Chainlink VRF 2
 - Hub (Base): `contracts/services/lottery/vrf/CreatorVRFConsumerV2_5.sol`
   - Receives remote requests via LayerZero (`_lzReceive`)
   - Requests randomness from Chainlink VRF Coordinator 2.5
-  - Sends randomness back to the requesting chain via LayerZero
+  - Queues fulfilled remote responses and waits for relayer-funded send
   - Can also serve local requests (`requestRandomWordsLocal`) and call back local receivers
 - Spoke (remote chains): `contracts/services/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol`
   - Forwards "request randomness" to the hub
@@ -71,6 +72,8 @@ cast call --rpc-url $RPC_URL $VRF_CONSUMER "keyHash()(bytes32)"
 cast call --rpc-url $RPC_URL $VRF_CONSUMER "callbackGasLimit()(uint32)"
 cast call --rpc-url $RPC_URL $VRF_CONSUMER "requestConfirmations()(uint16)"
 cast call --rpc-url $RPC_URL $VRF_CONSUMER "getContractStatus()(uint256,uint256,bool,uint32,uint256)"
+cast call --rpc-url $RPC_URL $VRF_CONSUMER "quotePendingResponseFee(uint32,uint64)(uint256,bool)" $SRC_EID $SEQUENCE
+cast call --rpc-url $RPC_URL $VRF_CONSUMER "getPendingResponseStatus(uint32,uint64)(uint256,bool,bool,bool,uint32,uint256)" $SRC_EID $SEQUENCE
 
 # Lottery manager VRF mode
 cast call --rpc-url $RPC_URL $LOTTERY_MANAGER "useLocalVRF()(bool)"
@@ -101,7 +104,11 @@ Checklist:
 
 - Integrator has the correct `hubEid`
 - LayerZero peers are configured between spoke integrator and hub VRF consumer (both directions)
-- The hub contract has enough ETH to pay LayerZero response fees (otherwise `ResponsePending` fires)
+- Hub relayer path is configured:
+  - `authorizedRelayers(relayer) == true` (or relayer is owner)
+  - relayer funds `relayPendingResponse(srcEid, sequence)` with `quotePendingResponseFee(srcEid, sequence).nativeFee`
+- Verify receive-side protection is configured:
+  - `rateLimitingEnabled` and per-chain/default limits are sane for traffic
 - Lottery manager is configured:
   - `setVRFIntegrator(integrator)` (also marks it trusted)
   - `setTargetEid(<hubEid>)`
@@ -122,9 +129,14 @@ Checklist:
 ## Troubleshooting (common failures)
 
 - Remote requests stuck / no callback:
-  - Check hub emitted `ResponsePending(sequence, requestId, targetChain, reason)`; if yes, fund the hub (it must pay LayerZero response fees).
+  - Check hub emitted `ResponsePending(sequence, requestId, targetChain, reason)` and `ResponseQueuedForRelay(...)`.
+  - Query `quotePendingResponseFee(srcEid, sequence)` and relay with exact value via `relayPendingResponse(srcEid, sequence)`.
+  - Ensure caller is authorized (`authorizedRelayers`) or owner.
   - Verify LayerZero peers: `peers(eid)` must match the expected remote sender (both hub and spoke).
   - Check `supportedChains(srcEid)` on the hub for that remote chain.
+- Remote requests missing after bursts:
+  - Check for `CrossChainRequestRateLimited(...)` events on hub.
+  - Tune `setRateLimitDefaults(...)` / `setChainRateLimit(...)` to match expected throughput.
 - Local requests revert `Unauthorized`:
   - The hub requires `authorizedLocalCallers[msg.sender] = true` for `requestRandomWordsLocal()`.
   - Ensure the lottery manager (or your test caller) is authorized.

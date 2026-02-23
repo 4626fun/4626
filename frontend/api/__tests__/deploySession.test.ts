@@ -190,7 +190,6 @@ describe('deploy session optimistic concurrency', () => {
     expect(String(res.body?.error ?? '')).toContain('completed')
   })
 
-
   it('blocks continue when ERC-7712 grant does not allow stage calls', async () => {
     const rec = {
       ...makeDeploySession('created'),

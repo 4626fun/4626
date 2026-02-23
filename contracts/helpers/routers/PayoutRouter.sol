@@ -112,12 +112,8 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
         address _weth
     ) Ownable(_owner) {
         if (
-            _creatorCoin == address(0) ||
-            _vault == address(0) ||
-            _burnStream == address(0) ||
-            _owner == address(0) ||
-            _swapRouter == address(0) ||
-            _weth == address(0)
+            _creatorCoin == address(0) || _vault == address(0) || _burnStream == address(0) || _owner == address(0)
+                || _swapRouter == address(0) || _weth == address(0)
         ) {
             revert ZeroAddress();
         }
@@ -206,15 +202,16 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
             uint256 bal = inToken.balanceOf(address(this));
             if (bal < amountIn) revert ZeroAmount();
 
-            creatorOut = ISwapRouterV3(swapRouter).exactInput(
-                ISwapRouterV3.ExactInputParams({
+            creatorOut = ISwapRouterV3(swapRouter)
+                .exactInput(
+                    ISwapRouterV3.ExactInputParams({
                     path: path,
                     recipient: address(this),
                     deadline: block.timestamp,
                     amountIn: amountIn,
                     amountOutMinimum: minCreatorOut
                 })
-            );
+                );
         }
 
         if (creatorOut == 0) revert ZeroAmount();
@@ -238,7 +235,7 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
 
         if (token == address(0)) {
             // ETH withdraw
-            (bool ok, ) = to.call{value: amount}("");
+            (bool ok,) = to.call{value: amount}("");
             require(ok, "ETH transfer failed");
         } else {
             IERC20(token).safeTransfer(to, amount);

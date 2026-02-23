@@ -39,7 +39,7 @@ const INTENTS: IntentOption[] = [
     title: 'I am exploring',
     body: 'Take a quick look around and decide where to start.',
     cta: 'Start Exploring',
-    to: '/',
+    to: '/explore/creators',
     icon: Compass,
   },
 ]
@@ -84,7 +84,7 @@ export function OnboardingModal(props: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-100 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-md rounded-2xl border border-vault-border bg-vault-card shadow-void overflow-hidden">
         <div className="p-5 flex items-start justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">

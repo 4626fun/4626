@@ -1,0 +1,54 @@
+# Repo-root `.vercelignore` for Vercel CLI deployments.
+#
+# The Vercel project uses Root Directory = `frontend/`, but `vercel deploy`
+# from the repo root will still scan the whole repo unless we ignore
+# dependency/build artifacts and local secrets/caches here.
+
+# Dependencies (never upload)
+node_modules
+**/node_modules
+
+# Build artifacts / caches
+out
+**/out
+dist
+**/dist
+build
+**/build
+coverage
+**/coverage
+cache
+**/cache
+broadcast
+**/broadcast
+target
+**/target
+.vite
+**/.vite
+.turbo
+**/.turbo
+.tmp
+**/.tmp
+.temp
+**/.temp
+*.tsbuildinfo
+
+# Local env / secrets
+.env
+.env.*
+.env.local
+.env*.local
+
+# Tooling / editor state
+.git
+.github
+.cursor
+.vercel
+.playwright-mcp
+.worktrees
+.anchor
+
+# Local agent/runtime state
+.xmtp-data
+**/.xmtp-data
+

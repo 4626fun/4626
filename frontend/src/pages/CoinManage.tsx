@@ -235,7 +235,7 @@ export function CoinManage() {
         <div className="max-w-3xl mx-auto px-6">
           <div className="mb-10">
             <Link
-              to="/dashboard"
+              to="/explore/creators"
               className="inline-flex items-center gap-2 text-zinc-600 hover:text-zinc-400 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />

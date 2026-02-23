@@ -44,12 +44,9 @@ interface ICCALaunchStrategy {
     function setApprovedLauncher(address launcher, bool approved) external;
     function setOracleConfig(address _oracle, address _poolManager, address _taxHook, address _feeRecipient) external;
     function setDefaultTickSpacing(uint256 _spacing) external;
-    function launchAuction(
-        uint256 amount,
-        uint256 floorPrice,
-        uint128 requiredRaise,
-        bytes calldata auctionSteps
-    ) external returns (address auction);
+    function launchAuction(uint256 amount, uint256 floorPrice, uint128 requiredRaise, bytes calldata auctionSteps)
+        external
+        returns (address auction);
     function transferOwnership(address newOwner) external;
 }
 
@@ -68,7 +65,7 @@ interface ISolanaBridgeAdapter {
 }
 
 interface IOFTBootstrapRegistry {
-    function setLayerZeroEndpoint(uint16 chainId, address endpoint) external;
+    function getLayerZeroEndpoint(uint256 chainId) external pure returns (address);
 }
 
 interface IUniswapV3Factory {
@@ -122,7 +119,7 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint24 public constant V3_FEE_TIER = 3000; // 0.3% CREATOR/USDC pool
-    
+
     /// @notice Charm Finance Alpha Vault Factory on Base
     /// @dev Vaults created via this factory appear on alpha.charm.fi UI
     address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;
@@ -410,10 +407,7 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         uint256 solanaIxCount
     );
 
-    event SolanaConfigSet(
-        address indexed adapter,
-        bytes32 solanaDestination
-    );
+    event SolanaConfigSet(address indexed adapter, bytes32 solanaDestination);
 
     constructor(
         address _registry,
@@ -432,9 +426,14 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         address _ajnaFactory
     ) {
         if (_registry == address(0) || _bytecodeStore == address(0) || _create2Deployer == address(0)) revert ZeroAddress();
-        if (_protocolTreasury == address(0) || _poolManager == address(0) || _taxHook == address(0)) revert ZeroAddress();
+        if (_protocolTreasury == address(0) || _poolManager == address(0) || _taxHook == address(0)) {
+            revert ZeroAddress();
+        }
         if (_chainlinkEthUsd == address(0)) revert ZeroAddress();
-        if (_usdc == address(0) || _uniswapV3Factory == address(0) || _uniswapRouter == address(0) || _ajnaFactory == address(0)) {
+        if (
+            _usdc == address(0) || _uniswapV3Factory == address(0) || _uniswapRouter == address(0)
+                || _ajnaFactory == address(0)
+        ) {
             revert ZeroAddress();
         }
 
@@ -458,10 +457,11 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     // PHASE 1
     // ================================
 
-    function deployPhase1Core(
-        Phase1Params calldata params,
-        CodeIds calldata codeIds
-    ) external nonReentrant returns (Phase1Result memory out) {
+    function deployPhase1Core(Phase1Params calldata params, CodeIds calldata codeIds)
+        external
+        nonReentrant
+        returns (Phase1Result memory out)
+    {
         return _deployPhase1CoreInternal(params, codeIds, bytes32(0));
     }
 
@@ -473,10 +473,11 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         return _deployPhase1CoreInternal(params, codeIds, shareOftSaltOverride);
     }
 
-    function finalizePhase1(
-        Phase1Params calldata params,
-        CodeIds calldata codeIds
-    ) external nonReentrant returns (Phase1Result memory out) {
+    function finalizePhase1(Phase1Params calldata params, CodeIds calldata codeIds)
+        external
+        nonReentrant
+        returns (Phase1Result memory out)
+    {
         return _finalizePhase1InternalSplit(params, codeIds, bytes32(0));
     }
 
@@ -507,7 +508,9 @@ contract CreatorVaultDeployer is ReentrancyGuard {
 
         Phase1SplitState storage state = phase1SplitStates[baseSalt];
         if (state.coreDone) {
-            if (state.paramsHash != paramsHash || state.codeIdsHash != codeIdsHash || state.shareOftSalt != shareOftSalt) {
+            if (
+                state.paramsHash != paramsHash || state.codeIdsHash != codeIdsHash || state.shareOftSalt != shareOftSalt
+            ) {
                 revert Phase1StateMismatch();
             }
             out.oftBootstrapRegistry = state.oftBootstrapRegistry;
@@ -529,9 +532,6 @@ contract CreatorVaultDeployer is ReentrancyGuard {
             create2Deployer.deploy(oftBootstrapSalt, codeIds.oftBootstrap, bytes(""));
         }
 
-        address lzEndpoint = registry.getLayerZeroEndpoint(uint16(block.chainid));
-        IOFTBootstrapRegistry(out.oftBootstrapRegistry).setLayerZeroEndpoint(uint16(block.chainid), lzEndpoint);
-
         bytes memory vaultArgs = abi.encode(params.creatorToken, tempOwner, params.vaultName, params.vaultSymbol);
         out.vault = create2Deployer.deploy(vaultSalt, codeIds.vault, vaultArgs);
 
@@ -551,12 +551,7 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         state.finalized = false;
 
         emit Phase1CoreDeployed(
-            params.creatorToken,
-            params.owner,
-            out.oftBootstrapRegistry,
-            out.vault,
-            out.wrapper,
-            shareOftSalt
+            params.creatorToken, params.owner, out.oftBootstrapRegistry, out.vault, out.wrapper, shareOftSalt
         );
     }
 
@@ -580,7 +575,10 @@ contract CreatorVaultDeployer is ReentrancyGuard {
 
         Phase1SplitState storage state = phase1SplitStates[baseSalt];
         if (!state.coreDone) revert Phase1CoreMissing();
-        if (state.paramsHash != paramsHash || state.codeIdsHash != codeIdsHash || state.shareOftSalt != expectedShareOftSalt) {
+        if (
+            state.paramsHash != paramsHash || state.codeIdsHash != codeIdsHash
+                || state.shareOftSalt != expectedShareOftSalt
+        ) {
             revert Phase1StateMismatch();
         }
 
@@ -595,7 +593,8 @@ contract CreatorVaultDeployer is ReentrancyGuard {
             return out;
         }
 
-        bytes memory shareOftArgs = abi.encode(params.shareName, shareSymbolUpper, out.oftBootstrapRegistry, address(this));
+        bytes memory shareOftArgs =
+            abi.encode(params.shareName, shareSymbolUpper, out.oftBootstrapRegistry, address(this));
         out.shareOFT = create2Deployer.deploy(state.shareOftSalt, codeIds.shareOFT, shareOftArgs);
 
         // Minimal wiring so Phase 2 can proceed without redeploying Phase 1 components.
@@ -615,17 +614,20 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         state.shareOFT = out.shareOFT;
         state.finalized = true;
 
-        emit Phase1Deployed(params.creatorToken, params.owner, out.oftBootstrapRegistry, out.vault, out.wrapper, out.shareOFT);
+        emit Phase1Deployed(
+            params.creatorToken, params.owner, out.oftBootstrapRegistry, out.vault, out.wrapper, out.shareOFT
+        );
     }
 
     // ================================
     // PHASE 2
     // ================================
 
-    function deployPhase2AndLaunch(
-        Phase2Params calldata params,
-        CodeIds calldata codeIds
-    ) external nonReentrant returns (Phase2Result memory out) {
+    function deployPhase2AndLaunch(Phase2Params calldata params, CodeIds calldata codeIds)
+        external
+        nonReentrant
+        returns (Phase2Result memory out)
+    {
         _requireOwner(params.owner);
         _pullCreatorTokens(params.creatorToken, params.owner, params.depositAmount);
         Phase2Result memory coreOut = _deployPhase2Core(
@@ -707,17 +709,20 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         );
     }
 
-    function deployPhase2Core(
-        Phase2CoreParams calldata params,
-        CodeIds calldata codeIds
-    ) external nonReentrant returns (Phase2Result memory out) {
+    function deployPhase2Core(Phase2CoreParams calldata params, CodeIds calldata codeIds)
+        external
+        nonReentrant
+        returns (Phase2Result memory out)
+    {
         _requireOwner(params.owner);
         out = _deployPhase2Core(params, codeIds);
     }
 
-    function finalizePhase2(
-        Phase2FinalizeParams calldata params
-    ) external nonReentrant returns (Phase2Result memory out) {
+    function finalizePhase2(Phase2FinalizeParams calldata params)
+        external
+        nonReentrant
+        returns (Phase2Result memory out)
+    {
         _requireOwner(params.owner);
         _pullCreatorTokens(params.creatorToken, params.owner, params.depositAmount);
         out = _finalizePhase2Internal(params);
@@ -727,11 +732,15 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     // PHASE 4: Deferred auction launch
     // ================================
 
-    function launchDeferredAuction(
-        DeferredAuctionParams calldata params
-    ) external nonReentrant returns (address auction) {
+    function launchDeferredAuction(DeferredAuctionParams calldata params)
+        external
+        nonReentrant
+        returns (address auction)
+    {
         _requireOwner(params.owner);
-        if (params.creatorToken == address(0) || params.owner == address(0) || params.shareOFT == address(0)) revert ZeroAddress();
+        if (params.creatorToken == address(0) || params.owner == address(0) || params.shareOFT == address(0)) {
+            revert ZeroAddress();
+        }
 
         bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
         PendingAuction memory pending = pendingAuctions[baseSalt];
@@ -740,35 +749,30 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         if (IERC20(params.shareOFT).balanceOf(address(this)) < pending.amount) revert AuctionAmountMismatch();
 
         IERC20(params.shareOFT).forceApprove(pending.ccaStrategy, pending.amount);
-        auction = ICCALaunchStrategy(pending.ccaStrategy).launchAuction(
-            pending.amount,
-            params.floorPriceQ96,
-            params.requiredRaise,
-            params.auctionSteps
-        );
+        auction = ICCALaunchStrategy(pending.ccaStrategy)
+            .launchAuction(pending.amount, params.floorPriceQ96, params.requiredRaise, params.auctionSteps);
 
         delete pendingAuctions[baseSalt];
 
         emit AuctionLaunchedDeferred(
-            params.creatorToken,
-            params.owner,
-            params.shareOFT,
-            pending.ccaStrategy,
-            pending.amount,
-            auction
+            params.creatorToken, params.owner, params.shareOFT, pending.ccaStrategy, pending.amount, auction
         );
     }
 
-    function _deployPhase2Core(
-        Phase2CoreParams memory params,
-        CodeIds calldata codeIds
-    ) internal returns (Phase2Result memory out) {
+    function _deployPhase2Core(Phase2CoreParams memory params, CodeIds calldata codeIds)
+        internal
+        returns (Phase2Result memory out)
+    {
         if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
-        if (params.vault == address(0) || params.wrapper == address(0) || params.shareOFT == address(0)) revert ZeroAddress();
+        if (params.vault == address(0) || params.wrapper == address(0) || params.shareOFT == address(0)) {
+            revert ZeroAddress();
+        }
         _requirePhase2CodeIds(codeIds);
 
         // Require phase-1 contracts to exist.
-        if (params.vault.code.length == 0 || params.wrapper.code.length == 0 || params.shareOFT.code.length == 0) revert Phase1Missing();
+        if (params.vault.code.length == 0 || params.wrapper.code.length == 0 || params.shareOFT.code.length == 0) {
+            revert Phase1Missing();
+        }
 
         address treasury = params.creatorTreasury == address(0) ? params.owner : params.creatorTreasury;
         address tempOwner = address(this);
@@ -816,18 +820,25 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         emit Phase2CoreDeployed(params.creatorToken, params.owner, out.gaugeController, out.ccaStrategy, out.oracle);
     }
 
-    function _finalizePhase2Internal(
-        Phase2FinalizeParams memory params
-    ) internal returns (Phase2Result memory out) {
+    function _finalizePhase2Internal(Phase2FinalizeParams memory params) internal returns (Phase2Result memory out) {
         if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
-        if (params.vault == address(0) || params.wrapper == address(0) || params.shareOFT == address(0)) revert ZeroAddress();
-        if (params.gaugeController == address(0) || params.ccaStrategy == address(0) || params.oracle == address(0)) revert ZeroAddress();
+        if (params.vault == address(0) || params.wrapper == address(0) || params.shareOFT == address(0)) {
+            revert ZeroAddress();
+        }
+        if (params.gaugeController == address(0) || params.ccaStrategy == address(0) || params.oracle == address(0)) {
+            revert ZeroAddress();
+        }
         // Enforce deposit bounds: min 5M, max 50M.
         if (params.depositAmount < MIN_DEPOSIT || params.depositAmount > MAX_DEPOSIT) revert InvalidDepositAmount();
 
         // Require phase-1 + phase-2 contracts to exist.
-        if (params.vault.code.length == 0 || params.wrapper.code.length == 0 || params.shareOFT.code.length == 0) revert Phase1Missing();
-        if (params.gaugeController.code.length == 0 || params.ccaStrategy.code.length == 0 || params.oracle.code.length == 0) {
+        if (params.vault.code.length == 0 || params.wrapper.code.length == 0 || params.shareOFT.code.length == 0) {
+            revert Phase1Missing();
+        }
+        if (
+            params.gaugeController.code.length == 0 || params.ccaStrategy.code.length == 0
+                || params.oracle.code.length == 0
+        ) {
             revert Phase2Missing();
         }
 
@@ -845,17 +856,14 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         uint256 shareTokens = ICreatorOVaultWrapper(params.wrapper).wrap(shares);
 
         // ── Fixed Three-Way Split: 40% CCA / 20% Solana / 40% Vesting ──
-        uint256 auctionAmount = (shareTokens * AUCTION_PERCENT) / 100;   // 40%
-        uint256 solanaAmount  = (shareTokens * SOLANA_PERCENT) / 100;    // 20%
+        uint256 auctionAmount = (shareTokens * AUCTION_PERCENT) / 100; // 40%
+        uint256 solanaAmount = (shareTokens * SOLANA_PERCENT) / 100; // 20%
         uint256 vestingAmount = shareTokens - auctionAmount - solanaAmount; // 40% (remainder)
         if (auctionAmount > 0) {
             PendingAuction storage pending = pendingAuctions[baseSalt];
             if (pending.amount != 0) revert AuctionAlreadyPending();
-            pendingAuctions[baseSalt] = PendingAuction({
-                shareOFT: params.shareOFT,
-                ccaStrategy: params.ccaStrategy,
-                amount: auctionAmount
-            });
+            pendingAuctions[baseSalt] =
+                PendingAuction({shareOFT: params.shareOFT, ccaStrategy: params.ccaStrategy, amount: auctionAmount});
             emit AuctionDeferred(params.creatorToken, params.owner, params.shareOFT, params.ccaStrategy, auctionAmount);
         }
 
@@ -865,12 +873,8 @@ contract CreatorVaultDeployer is ReentrancyGuard {
             if (params.solanaIxs.length == 0) revert MissingSolanaBridgeIxs();
             _validateSolanaIxs(params.solanaIxs);
             IERC20(params.shareOFT).forceApprove(solanaBridgeAdapter, solanaAmount);
-            ISolanaBridgeAdapter(solanaBridgeAdapter).bridgeToSolanaWithIxs(
-                params.shareOFT,
-                solanaAmount,
-                solanaDestination,
-                params.solanaIxs
-            );
+            ISolanaBridgeAdapter(solanaBridgeAdapter)
+                .bridgeToSolanaWithIxs(params.shareOFT, solanaAmount, solanaDestination, params.solanaIxs);
             emit SolanaAllocationBridged(
                 params.shareOFT,
                 solanaAmount,
@@ -888,12 +892,8 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         if (vestingAmount > 0) {
             // Vest the creator’s ShareOFT allocation to reduce immediate sell pressure.
             // Default: linear over 365 days, no cliff, starting now.
-            CreatorLinearVesting vesting = new CreatorLinearVesting(
-                params.shareOFT,
-                params.owner,
-                uint64(block.timestamp),
-                uint64(365 days)
-            );
+            CreatorLinearVesting vesting =
+                new CreatorLinearVesting(params.shareOFT, params.owner, uint64(block.timestamp), uint64(365 days));
             IERC20(params.shareOFT).safeTransfer(address(vesting), vestingAmount);
             emit CreatorShareVestingDeployed(
                 params.shareOFT,
@@ -915,12 +915,7 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         IOwnableTransfer(params.oracle).transferOwnership(protocolTreasury);
 
         emit Phase2DeployedAndLaunched(
-            params.creatorToken,
-            params.owner,
-            params.gaugeController,
-            params.ccaStrategy,
-            params.oracle,
-            out.auction
+            params.creatorToken, params.owner, params.gaugeController, params.ccaStrategy, params.oracle, out.auction
         );
     }
 
@@ -932,18 +927,23 @@ contract CreatorVaultDeployer is ReentrancyGuard {
      * @notice Deploy + register initial yield strategies (Charm CREATOR/USDC + Ajna lending).
      * @dev Uses UniversalBytecodeStore + CREATE2 deployer to avoid embedding initcode in this batcher.
      */
-    function deployPhase3Strategies(
-        Phase3Params calldata params,
-        StrategyCodeIds calldata codeIds
-    ) external nonReentrant returns (Phase3Result memory out) {
+    function deployPhase3Strategies(Phase3Params calldata params, StrategyCodeIds calldata codeIds)
+        external
+        nonReentrant
+        returns (Phase3Result memory out)
+    {
         _requireOwner(params.owner);
 
-        if (params.creatorToken == address(0) || params.owner == address(0) || params.vault == address(0)) revert ZeroAddress();
+        if (params.creatorToken == address(0) || params.owner == address(0) || params.vault == address(0)) {
+            revert ZeroAddress();
+        }
         if (params.charmWeightBps == 0 || params.charmWeightBps > 10_000) revert InvalidWeight();
         if (params.ajnaWeightBps > 10_000) revert InvalidWeight();
         if (params.charmWeightBps + params.ajnaWeightBps > 10_000) revert InvalidWeight();
 
-        if (codeIds.charmAlphaVaultDeploy == bytes32(0) || codeIds.creatorCharmStrategy == bytes32(0)) revert InvalidCodeId();
+        if (codeIds.charmAlphaVaultDeploy == bytes32(0) || codeIds.creatorCharmStrategy == bytes32(0)) {
+            revert InvalidCodeId();
+        }
         if (params.ajnaWeightBps > 0 && codeIds.ajnaStrategy == bytes32(0)) revert InvalidCodeId();
 
         // ───────────────────────────────
@@ -962,35 +962,29 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         // 2) Deploy Charm alpha vault via Charm Factory (shows on alpha.charm.fi UI)
         // ───────────────────────────────
         // NOTE: Using Charm's official factory ensures vault appears on their UI
-        // Parameters: manager=protocolTreasury can rebalance, baseThreshold=3000 ticks, 
+        // Parameters: manager=protocolTreasury can rebalance, baseThreshold=3000 ticks,
         //             limitThreshold=6000 ticks, fullRangeWeight=0 (no full range), period=1800s (30min)
-        out.charmVault = ICharmFactory(CHARM_FACTORY).createVault(
-            v3Pool,
-            protocolTreasury,      // manager (can call rebalance)
-            type(uint256).max,     // maxTotalSupply (unlimited)
-            3000,                  // baseThreshold (ticks, must be multiple of tickSpacing)
-            6000,                  // limitThreshold (ticks)
-            0,                     // fullRangeWeight (0 = no full range position)
-            1800,                  // period (30 minutes between rebalances)
-            params.charmVaultName,
-            params.charmVaultSymbol
-        );
-        
+        out.charmVault = ICharmFactory(CHARM_FACTORY)
+            .createVault(
+                v3Pool,
+                protocolTreasury, // manager (can call rebalance)
+                type(uint256).max, // maxTotalSupply (unlimited)
+                3000, // baseThreshold (ticks, must be multiple of tickSpacing)
+                6000, // limitThreshold (ticks)
+                0, // fullRangeWeight (0 = no full range position)
+                1800, // period (30 minutes between rebalances)
+                params.charmVaultName,
+                params.charmVaultSymbol
+            );
+
         bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
 
         // ───────────────────────────────
         // 3) Deploy Charm strategy adapter + initialize approvals
         // ───────────────────────────────
         bytes32 charmStratSalt = _saltFor(baseSalt, "charmStrategyV3");
-        bytes memory charmStratArgs = abi.encode(
-            params.vault,
-            params.creatorToken,
-            usdc,
-            uniswapRouter,
-            out.charmVault,
-            v3Pool,
-            address(this)
-        );
+        bytes memory charmStratArgs =
+            abi.encode(params.vault, params.creatorToken, usdc, uniswapRouter, out.charmVault, v3Pool, address(this));
         out.charmStrategy = create2Deployer.deploy(charmStratSalt, codeIds.creatorCharmStrategy, charmStratArgs);
         ICreatorCharmStrategy(out.charmStrategy).initializeApprovals();
         IOwnableTransfer(out.charmStrategy).transferOwnership(protocolTreasury);
@@ -1061,16 +1055,15 @@ contract CreatorVaultDeployer is ReentrancyGuard {
 
     function _permitAndPull(address creatorToken, address owner, uint256 amount, PermitData calldata permit) internal {
         if (owner != msg.sender) revert NotOwner();
-        IERC20Permit(creatorToken).permit(msg.sender, address(this), amount, permit.deadline, permit.v, permit.r, permit.s);
+        IERC20Permit(creatorToken)
+            .permit(msg.sender, address(this), amount, permit.deadline, permit.v, permit.r, permit.s);
         IERC20(creatorToken).safeTransferFrom(msg.sender, address(this), amount);
     }
 
     function _requirePhase1CodeIds(CodeIds calldata codeIds) internal pure {
         if (
-            codeIds.vault == bytes32(0) ||
-            codeIds.wrapper == bytes32(0) ||
-            codeIds.shareOFT == bytes32(0) ||
-            codeIds.oftBootstrap == bytes32(0)
+            codeIds.vault == bytes32(0) || codeIds.wrapper == bytes32(0) || codeIds.shareOFT == bytes32(0)
+                || codeIds.oftBootstrap == bytes32(0)
         ) {
             revert InvalidCodeId();
         }
@@ -1100,7 +1093,11 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         return keccak256(abi.encode(codeIds.vault, codeIds.wrapper, codeIds.shareOFT, codeIds.oftBootstrap));
     }
 
-    function _deriveBaseSalt(address creatorToken, address owner, string memory version) internal view returns (bytes32) {
+    function _deriveBaseSalt(address creatorToken, address owner, string memory version)
+        internal
+        view
+        returns (bytes32)
+    {
         return keccak256(abi.encodePacked(creatorToken, owner, block.chainid, "CreatorVault:deploy:", version));
     }
 
@@ -1108,7 +1105,11 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         return keccak256(abi.encodePacked(baseSalt, label));
     }
 
-    function _deriveShareOftSalt(address owner, string memory shareSymbolLower, string memory version) internal pure returns (bytes32) {
+    function _deriveShareOftSalt(address owner, string memory shareSymbolLower, string memory version)
+        internal
+        pure
+        returns (bytes32)
+    {
         bytes32 base = keccak256(abi.encodePacked(owner, shareSymbolLower));
         return keccak256(abi.encodePacked(base, "CreatorShareOFT:", version));
     }

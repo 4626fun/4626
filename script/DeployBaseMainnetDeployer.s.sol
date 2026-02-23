@@ -47,13 +47,13 @@ contract DeployBaseMainnetDeployer is Script {
     bytes32 constant DEPLOYER_SALT = keccak256("CreatorVault:CreatorVaultDeployer:v4");
 
     // Defaults (Base mainnet) — can be overridden via env.
-    address constant DEFAULT_REGISTRY = 0x02c8031c39E10832A831b954Df7a2c1bf9Df052D;
+    address constant DEFAULT_REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
     address constant DEFAULT_PROTOCOL_TREASURY = 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3;
     address constant DEFAULT_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     address constant DEFAULT_TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
     address constant DEFAULT_CHAINLINK_ETH_USD = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
     address constant DEFAULT_VAULT_ACTIVATION_BATCHER = 0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB;
-    address constant DEFAULT_LOTTERY_MANAGER = 0xc0329794016478e133F3D933b3D53273AB8325FC;
+    address constant DEFAULT_LOTTERY_MANAGER = 0x77705A2f173dd52F28300447506Dc35086c34626;
     address constant DEFAULT_PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
     address constant DEFAULT_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address constant DEFAULT_UNISWAP_V3_FACTORY = 0x33128a8fC17869897dcE68Ed026d694621f6FDfD;
@@ -109,10 +109,8 @@ contract DeployBaseMainnetDeployer is Script {
         bytes memory storeInit = type(UniversalBytecodeStoreV2).creationCode;
         address storeAddr = _create2(CREATE2_FACTORY_ADDR, STORE_SALT_V2, keccak256(storeInit));
 
-        bytes memory create2DeployerInit = abi.encodePacked(
-            type(UniversalCreate2DeployerFromStore).creationCode,
-            abi.encode(storeAddr)
-        );
+        bytes memory create2DeployerInit =
+            abi.encodePacked(type(UniversalCreate2DeployerFromStore).creationCode, abi.encode(storeAddr));
         address create2DeployerAddr = _create2(CREATE2_FACTORY_ADDR, DEPLOYER_SALT_V2, keccak256(create2DeployerInit));
 
         console2.log("UniversalBytecodeStoreV2 (predicted):", storeAddr);
@@ -143,19 +141,19 @@ contract DeployBaseMainnetDeployer is Script {
 
         // Deploy v2 store (if missing).
         if (storeAddr.code.length == 0) {
-            (bool ok, ) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(STORE_SALT_V2, storeInit));
+            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(STORE_SALT_V2, storeInit));
             require(ok, "STORE_V2 deploy failed");
         }
 
         // Deploy v2 create2 deployer (if missing).
         if (create2DeployerAddr.code.length == 0) {
-            (bool ok, ) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(DEPLOYER_SALT_V2, create2DeployerInit));
+            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(DEPLOYER_SALT_V2, create2DeployerInit));
             require(ok, "DEPLOYER_V2 deploy failed");
         }
 
         // Deploy phased deployer (if missing).
         if (deployerAddr.code.length == 0) {
-            (bool ok, ) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(DEPLOYER_SALT, deployerInit));
+            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(DEPLOYER_SALT, deployerInit));
             require(ok, "CREATOR_VAULT_DEPLOYER deploy failed");
         }
 
