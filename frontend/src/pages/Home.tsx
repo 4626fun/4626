@@ -17,11 +17,8 @@ export function Home() {
   const showExploreCreatorsCta = hostMode === 'app'
   const showDeployVaultCta = hostMode === 'app'
 
-  if (hostMode === 'app') {
-    return <Navigate to="/swap" replace />
-  }
-
   useEffect(() => {
+    if (hostMode === 'app') return
     if (location.hash === '#waitlist') return
 
     if (!location.hash) return
@@ -32,7 +29,11 @@ export function Home() {
     requestAnimationFrame(() => {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
-  }, [location.hash])
+  }, [hostMode, location.hash])
+
+  if (hostMode === 'app') {
+    return <Navigate to="/swap" replace />
+  }
 
   const closeWaitlistModal = () => {
     if (location.hash !== '#waitlist') return

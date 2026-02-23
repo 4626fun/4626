@@ -68,6 +68,8 @@ describe('deploy solana infra status handler', () => {
       SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET: undefined,
       SOLANA_ADAPTER_OWNER_PRIVATE_KEY: 'not-a-hex-private-key',
       SOLANA_DEFAULT_MINT_BYTES32: undefined,
+      KEEPR_PRIVATE_KEY: undefined,
+      PRIVATE_KEY: undefined,
     })
     try {
       const mockPublicClient = {
