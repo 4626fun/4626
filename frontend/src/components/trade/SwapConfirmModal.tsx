@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowDown, X } from 'lucide-react'
 import { RouteViz } from '@/components/trade/RouteViz'
 
-type ConfirmIntent = 'approval' | 'swap'
+type ConfirmIntent = 'approval' | 'swap' | 'order'
 
 function TokenRow(props: {
   symbol: string
@@ -95,12 +95,16 @@ export function SwapConfirmModal(props: {
       ? 'Approving…'
       : props.busy === 'review'
         ? 'Preparing…'
-        : 'Swapping…'
+        : props.intent === 'order'
+          ? 'Submitting…'
+          : 'Swapping…'
     : props.quoteIsStale
       ? 'Refresh & confirm'
       : props.intent === 'approval'
         ? 'Approve token'
-        : 'Confirm swap'
+        : props.intent === 'order'
+          ? 'Submit order'
+          : 'Confirm swap'
 
   return (
     <AnimatePresence>
@@ -126,7 +130,7 @@ export function SwapConfirmModal(props: {
           {/* Header */}
           <div className="flex items-center justify-between px-5 pt-4 pb-4">
             <span className="text-sm font-semibold text-white">
-              {props.intent === 'approval' ? 'Approve token' : 'Review trade'}
+              {props.intent === 'approval' ? 'Approve token' : props.intent === 'order' ? 'Review order' : 'Review trade'}
             </span>
             <button
               type="button"
@@ -196,9 +200,9 @@ export function SwapConfirmModal(props: {
                   : 'A one-time signature is needed to proceed.'}
               </div>
             )}
-            {props.approvalRequired && props.intent === 'swap' && (
+            {props.approvalRequired && (props.intent === 'swap' || props.intent === 'order') && (
               <div className="mt-2 rounded-xl border border-amber-400/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-300">
-                Token approval needed — we'll submit it first, then the swap.
+                Token approval needed — we'll submit it first, then continue.
               </div>
             )}
             {props.quoteIsStale && (

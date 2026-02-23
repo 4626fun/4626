@@ -48,6 +48,7 @@ export function SwapPanel(props: {
   priceImpactLabel?: string | null
   gasEstimateLabel?: string | null
   routeSummary?: string | null
+  isOrderRoute: boolean
   permitSignatureRequired: boolean
   permitSignaturePending: boolean
   permitSignatureReady: boolean
@@ -244,7 +245,9 @@ export function SwapPanel(props: {
                   {props.permitSignaturePending
                     ? 'Check your wallet — signature required.'
                     : props.permitSignatureReady
-                      ? 'Signature captured. Ready to swap.'
+                      ? props.isOrderRoute
+                        ? 'Signature captured. Ready to submit order.'
+                        : 'Signature captured. Ready to swap.'
                       : 'A one-time signature is needed before submission.'}
                 </div>
               )
@@ -287,7 +290,7 @@ export function SwapPanel(props: {
                 whileTap={reviewDisabled ? {} : { scale: 0.985 }}
                 className="min-h-12 w-full rounded-xl bg-brand-primary px-4 py-3 text-base font-semibold text-white shadow-[0_4px_24px_-8px_rgba(0,82,255,0.5)] transition hover:bg-brand-hover disabled:opacity-50 disabled:shadow-none"
               >
-                {props.busy === 'review' ? 'Reviewing…' : 'Review swap'}
+                {props.busy === 'review' ? 'Reviewing…' : props.isOrderRoute ? 'Review order' : 'Review swap'}
               </motion.button>
             </div>
           </div>

@@ -4,7 +4,9 @@ import { readJsonBody } from '../auth/_shared.js'
 
 type JsonObject = Record<string, unknown>
 
-const DEFAULT_TRADE_API_BASE = 'https://trade-api.uniswap.org/v1'
+// OpenAPI `servers` base for Trading API
+const DEFAULT_TRADE_API_BASE = 'https://trade-api.gateway.uniswap.org/v1'
+const DEFAULT_UNIVERSAL_ROUTER_VERSION = '2.0'
 
 function getTradeApiBase(): string {
   const raw = (process.env.UNISWAP_TRADE_API_BASE ?? '').trim()
@@ -62,6 +64,8 @@ export async function uniswapTradeFetch(params: {
 
   const headers: Record<string, string> = {
     'x-api-key': apiKey,
+    // Must remain consistent across /quote -> /swap (/order does not require it, but ignores safely)
+    'x-universal-router-version': DEFAULT_UNIVERSAL_ROUTER_VERSION,
     Accept: 'application/json',
     ...params.headers,
   }

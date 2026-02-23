@@ -66,6 +66,11 @@ export function getNestedAmountOut(input: unknown): string | null {
   const candidates = [
     obj?.quote?.output?.amount,
     obj?.output?.amount,
+    // UniswapX quote shapes
+    obj?.expectedAmountOut,
+    obj?.expectedAmountOut?.amount,
+    obj?.orderInfo?.outputs?.[0]?.startAmount,
+    obj?.orderInfo?.outputs?.[0]?.amount,
     obj?.amountOut,
     obj?.outAmount,
     obj?.currencyAmountOut,

@@ -13,7 +13,6 @@
 
 import { createPublicClient, getAddress, http, isAddress, toCoinType } from 'viem'
 import { base, mainnet } from 'viem/chains'
-
 import { getEnsName } from './ensResolver.js'
 
 declare const process: { env: Record<string, string | undefined> }
