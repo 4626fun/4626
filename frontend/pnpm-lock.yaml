@@ -20,6 +20,11 @@ overrides:
   tar: 7.5.8
   undici: '>=6.23.0'
 
+patchedDependencies:
+  elliptic@6.6.1:
+    hash: 519a227221353691ac66b7279563217bf16d443818874c422c115ef821ffb37a
+    path: ../patches/elliptic@6.6.1.patch
+
 importers:
 
   .:
@@ -12011,7 +12016,7 @@ snapshots:
       browserify-rsa: 4.1.1
       create-hash: 1.2.0
       create-hmac: 1.1.7
-      elliptic: 6.6.1
+      elliptic: 6.6.1(patch_hash=519a227221353691ac66b7279563217bf16d443818874c422c115ef821ffb37a)
       inherits: 2.0.4
       parse-asn1: 5.1.9
       readable-stream: 2.3.8
@@ -12167,7 +12172,7 @@ snapshots:
   create-ecdh@4.0.4:
     dependencies:
       bn.js: 5.2.3
-      elliptic: 6.6.1
+      elliptic: 6.6.1(patch_hash=519a227221353691ac66b7279563217bf16d443818874c422c115ef821ffb37a)
 
   create-hash@1.2.0:
     dependencies:
@@ -12506,7 +12511,7 @@ snapshots:
 
   electron-to-chromium@1.5.286: {}
 
-  elliptic@6.6.1:
+  elliptic@6.6.1(patch_hash=519a227221353691ac66b7279563217bf16d443818874c422c115ef821ffb37a):
     dependencies:
       bn.js: 5.2.3
       brorand: 1.1.0
