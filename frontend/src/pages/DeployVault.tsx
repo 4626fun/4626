@@ -112,7 +112,7 @@ const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
 const BASE_CHAIN_ID_HEX = `0x${base.id.toString(16)}`
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}`
 const MAX_UINT256 = (1n << 256n) - 1n
-const DEFAULT_DEPLOYMENT_VERSION = 'v1.2.47'
+const DEFAULT_DEPLOYMENT_VERSION = 'v1.3.2'
 const DEPLOYMENT_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
 function isDebugEnabled(): boolean {
@@ -1513,6 +1513,19 @@ function AddressRow({ label, address }: { label: string; address: Address | null
   )
 }
 
+// `finalizePhase2` exists in two deployed shapes:
+// - legacy: no `meteoraAlphaVault` / `solanaIxs`
+// - upgraded: includes Meteora payload fields (fail-closed)
+// Build Meteora payloads only when the loaded ABI supports them.
+const FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD = (() => {
+  const finalizePhase2 = (CREATOR_VAULT_BATCHER_ABI as readonly any[]).find(
+    (item) => item?.type === 'function' && item?.name === 'finalizePhase2',
+  ) as { inputs?: Array<{ type?: string; components?: Array<{ name?: string }> }> } | undefined
+  const components = finalizePhase2?.inputs?.[0]?.type === 'tuple' ? finalizePhase2.inputs?.[0]?.components ?? [] : []
+  const names = new Set(components.map((component) => String(component?.name ?? '')))
+  return names.has('meteoraAlphaVault') && names.has('solanaIxs')
+})()
+
 function DeployVaultBatcher({
   creatorToken,
   owner,
@@ -1989,6 +2002,207 @@ function DeployVaultBatcher({
     let installed = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionSigner })
     if (installed) return
 
+    const addOwnerData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+      functionName: 'addOwnerAddress',
+      args: [sessionSigner],
+    })
+    const addOwnerCalls = [{ to: owner, value: 0n, data: addOwnerData }]
+    const bundlerUrl = resolveCdpPaymasterUrl(import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined) || '/api/paymaster'
+
+    // Try gas-sponsored ERC-4337 UserOp when a Privy signer is already an onchain owner
+    let erc4337Succeeded = false
+    if (publicClient) {
+      // PATH A: Privy embedded EOA owner
+      if (privyEmbeddedEoaIsCanonicalOwner && privyEmbeddedEoaCanSign && privyEmbeddedEoaAddress) {
+        try {
+          const embeddedProvider = await getPrivyEmbeddedEoaProvider()
+          if (embeddedProvider?.request) {
+            await ensureProviderOnBase(embeddedProvider, 'Privy embedded EOA')
+            const embeddedWalletClientAdapter = {
+              request: async (args: { method: string; params?: any[] }) => {
+                if (args?.method === 'eth_sign') {
+                  const p = Array.isArray(args.params) ? args.params : []
+                  const hashCandidate = typeof p[1] === 'string' ? p[1] : ''
+                  const isHash = /^0x[0-9a-fA-F]{64}$/.test(hashCandidate)
+                  if (isHash) {
+                    try {
+                      const rawSig = await embeddedProvider.request({
+                        method: 'secp256k1_sign',
+                        params: [hashCandidate],
+                      })
+                      return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.secp256k1_sign')
+                    } catch (signErr) {
+                      logger.warn('[DeployVault] Privy embedded secp256k1_sign failed; falling back to eth_sign', {
+                        context: 'addOwner',
+                        error: signErr instanceof Error ? signErr.message : String(signErr ?? ''),
+                      })
+                    }
+                  }
+                }
+                return await embeddedProvider.request(args as any)
+              },
+              signMessage: async (args: { account: Address; message: any }) => {
+                const raw =
+                  typeof args?.message === 'object' && args.message !== null && 'raw' in args.message
+                    ? (args.message as any).raw
+                    : args?.message
+                const msgHex = typeof raw === 'string' && raw.startsWith('0x') ? raw : toHex(String(raw ?? ''))
+                const rawSig = await embeddedProvider.request({
+                  method: 'personal_sign',
+                  params: [msgHex, privyEmbeddedEoaAddress],
+                })
+                return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.personal_sign')
+              },
+              signTypedData: async (typedData: any) => {
+                const rawSig = await embeddedProvider.request({
+                  method: 'eth_signTypedData_v4',
+                  params: [privyEmbeddedEoaAddress, JSON.stringify(typedData)],
+                })
+                return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.signTypedData')
+              },
+            }
+            const result = await sendCoinbaseSmartWalletUserOperation({
+              publicClient: publicClient as any,
+              walletClient: embeddedWalletClientAdapter as any,
+              bundlerUrl,
+              smartWallet: owner,
+              ownerAddress: privyEmbeddedEoaAddress,
+              calls: addOwnerCalls,
+              version: '1',
+              userOpSignMode: 'eth_sign',
+              ownerIsContract: false,
+              allowEoaSignMessageFallback: false,
+              retryWithLowGasContractSigner: false,
+            })
+            setTxId(result.transactionHash)
+            erc4337Succeeded = true
+            logger.info('[DeployVault] addOwner via ERC-4337 (privy embedded EOA owner)', {
+              sessionSigner,
+              txHash: result.transactionHash,
+            })
+          }
+        } catch (embeddedErr) {
+          logger.warn('[DeployVault] Privy embedded EOA addOwner UserOp failed; trying smart wallet or fallback', {
+            privyEmbeddedEoaAddress,
+            error: embeddedErr instanceof Error ? embeddedErr.message : String(embeddedErr ?? ''),
+          })
+        }
+      }
+
+      // PATH B: Privy smart wallet owner
+      if (!erc4337Succeeded && privySmartWalletIsCanonicalOwner && privySmartWalletCanSign && smartWalletClient && privySmartWalletAddress) {
+        try {
+          await ensureProviderOnBase(smartWalletClient, 'Privy smart wallet')
+          const smartWalletClientAdapter = {
+            request: async (args: { method: string; params: any[] }) => {
+              const client: any = smartWalletClient as any
+              if (args.method === 'eth_sign' || args.method === 'personal_sign') {
+                if (typeof client?.request !== 'function') {
+                  throw new Error('Privy smart wallet client does not support request()')
+                }
+                const rawResult = await client.request(args)
+                const sig = ensureSignatureHex(rawResult, `privySmartWallet.${args.method}`)
+                logNonEoaSignature(sig, `privySmartWallet.${args.method}`)
+                return sig
+              }
+              if (typeof client?.request === 'function') {
+                return await client.request(args)
+              }
+              throw new Error('Privy smart wallet client does not support request()')
+            },
+            signMessage: async (args: { account: Address; message: any }) => {
+              const msg =
+                typeof args.message === 'object' && args.message !== null && 'raw' in args.message
+                  ? args.message.raw
+                  : args.message
+              const client: any = smartWalletClient as any
+              const account: any = client?.account
+              const hasAccountSignMessage = typeof account?.signMessage === 'function'
+              const hasClientSignMessage = typeof client?.signMessage === 'function'
+              const hasSignMessage = hasAccountSignMessage || hasClientSignMessage
+
+              if (hasSignMessage) {
+                const rawMessage =
+                  typeof msg === 'string' && /^0x[0-9a-fA-F]{64}$/.test(msg)
+                    ? ({ raw: msg } as any)
+                    : msg
+                const rawResult = await withTimeout(
+                  (async () => {
+                    try {
+                      return hasAccountSignMessage
+                        ? await account.signMessage({ message: rawMessage })
+                        : await client.signMessage({ account: privySmartWalletAddress, message: rawMessage })
+                    } catch {
+                      return hasAccountSignMessage
+                        ? await account.signMessage({ message: msg })
+                        : await client.signMessage({ account: privySmartWalletAddress, message: msg })
+                    }
+                  })(),
+                  20_000,
+                  'privySmartWallet.signMessage',
+                )
+                const sig = ensureSignatureHex(rawResult, 'privySmartWallet.signMessage')
+                logNonEoaSignature(sig, 'privySmartWallet.signMessage')
+                return sig
+              }
+              throw new Error(
+                'Privy smart wallet signer not supported. Use Coinbase Wallet (Base Account) or connect an owner EOA.',
+              )
+            },
+            signTypedData: async (args: any) => {
+              const client: any = smartWalletClient as any
+              const account: any = client?.account
+              if (typeof account?.signTypedData === 'function' || typeof client?.signTypedData === 'function') {
+                const rawResult = await withTimeout(
+                  typeof account?.signTypedData === 'function'
+                    ? account.signTypedData(args as any)
+                    : client.signTypedData({ account: privySmartWalletAddress, ...(args as any) }),
+                  20_000,
+                  'privySmartWallet.signTypedData',
+                )
+                const sig = ensureSignatureHex(rawResult, 'privySmartWallet.signTypedData')
+                logNonEoaSignature(sig, 'privySmartWallet.signTypedData')
+                return sig
+              }
+              throw new Error(
+                'Privy smart wallet signer not supported. Use Coinbase Wallet (Base Account) or connect an owner EOA.',
+              )
+            },
+          }
+          const result = await sendCoinbaseSmartWalletUserOperation({
+            publicClient: publicClient as any,
+            walletClient: smartWalletClientAdapter as any,
+            bundlerUrl,
+            smartWallet: owner,
+            ownerAddress: privySmartWalletAddress,
+            calls: addOwnerCalls,
+            version: '1',
+            userOpSignMode: 'auto',
+            ownerIsContract: true,
+            retryWithLowGasContractSigner: false,
+          })
+          setTxId(result.transactionHash)
+          erc4337Succeeded = true
+          logger.info('[DeployVault] addOwner via ERC-4337 (privy smart wallet owner)', {
+            sessionSigner,
+            txHash: result.transactionHash,
+          })
+        } catch (smartWalletErr) {
+          logger.warn('[DeployVault] Privy smart wallet addOwner UserOp failed; trying fallback', {
+            privySmartWalletAddress,
+            error: smartWalletErr instanceof Error ? smartWalletErr.message : String(smartWalletErr ?? ''),
+          })
+        }
+      }
+    }
+
+    if (erc4337Succeeded) {
+      installed = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionSigner })
+      if (installed) return
+    }
+
+    // Fallback: external owner EOA + direct tx (existing behavior)
     if (!connectedAddress || !wagmiWalletClient || connectedAddress.toLowerCase() === owner.toLowerCase()) {
       throw new Error(
         'Deploy session signer is not installed. Connect an owner EOA wallet (for example Coinbase Wallet) and retry.',
@@ -2004,12 +2218,6 @@ function DeployVaultBatcher({
     }
 
     await ensureBaseChain('Owner wallet')
-
-    const addOwnerData = encodeFunctionData({
-      abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
-      functionName: 'addOwnerAddress',
-      args: [sessionSigner],
-    })
 
     if (publicClient) {
       try {
@@ -2045,7 +2253,23 @@ function DeployVaultBatcher({
 
     installed = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionSigner })
     if (!installed) throw new Error('session_owner_not_installed')
-  }, [connectedAddress, ensureBaseChain, owner, publicClient, wagmiWalletClient])
+  }, [
+    connectedAddress,
+    ensureBaseChain,
+    ensureProviderOnBase,
+    getPrivyEmbeddedEoaProvider,
+    owner,
+    privyEmbeddedEoaAddress,
+    privyEmbeddedEoaCanSign,
+    privyEmbeddedEoaIsCanonicalOwner,
+    privySmartWalletAddress,
+    privySmartWalletCanSign,
+    privySmartWalletIsCanonicalOwner,
+    publicClient,
+    setTxId,
+    smartWalletClient,
+    wagmiWalletClient,
+  ])
 
   const pollServerDeploySession = useCallback(async (sessionId: string) => {
     let delayMs = 2000
@@ -2764,15 +2988,21 @@ function DeployVaultBatcher({
           shareOFT: expected.shareOFT,
           adapter: solanaBridgeAdapter,
           buildOnly,
+          expectsMeteoraPayload: FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD,
         })
         const registerBody: Record<string, unknown> = {
           shareOft: expected.shareOFT,
           batcherAddress: batcherAddress,
           buildOnly,
         }
-        if (typeof opts?.expectedSolanaAmountBase === 'bigint' && opts.expectedSolanaAmountBase > 0n) {
+        const expectedSolanaAmountBaseForMeteora = opts?.expectedSolanaAmountBase
+        if (
+          FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD &&
+          typeof expectedSolanaAmountBaseForMeteora === 'bigint' &&
+          expectedSolanaAmountBaseForMeteora > 0n
+        ) {
           registerBody.creatorToken = creatorToken
-          registerBody.expectedSolanaAmount = opts.expectedSolanaAmountBase.toString()
+          registerBody.expectedSolanaAmount = expectedSolanaAmountBaseForMeteora.toString()
           registerBody.shareDecimals = 18
         }
         if (solanaMintOverride) registerBody.solanaMint = solanaMintOverride
@@ -3162,9 +3392,12 @@ function DeployVaultBatcher({
 
         const meteoraPayload = await ensureShareOftRegisteredForSolanaBridge({
           buildOnly: true,
-          expectedSolanaAmountBase,
+          expectedSolanaAmountBase: FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD ? expectedSolanaAmountBase : undefined,
         })
-        if (meteoraPayload && (!meteoraPayload.meteoraAlphaVault || meteoraPayload.solanaIxs.length === 0)) {
+        if (
+          FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD &&
+          (!meteoraPayload || !meteoraPayload.meteoraAlphaVault || meteoraPayload.solanaIxs.length === 0)
+        ) {
           throw new Error(
             'Solana auto-deposit is enabled, but Meteora payload is missing. ' +
               'Check per-creator Meteora mapping and provisioner configuration.',
@@ -4724,7 +4957,7 @@ function DeployVaultBatcher({
     return null
   }
 
-  const exportPlan = useCallback(async () => {
+  const exportPlan = async () => {
     if (busy || exportBusy) return
     setExportBusy(true)
     setExportStatus(null)
@@ -4750,7 +4983,7 @@ function DeployVaultBatcher({
     } finally {
       setExportBusy(false)
     }
-  }, [busy, creatorToken, exportBusy, formatDeployError, submit])
+  }
 
   const expectedError = expectedQuery.isError
     ? ((expectedQuery.error as any)?.message || 'Failed to compute deployment addresses.')

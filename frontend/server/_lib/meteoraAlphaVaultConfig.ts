@@ -128,12 +128,21 @@ function resolveFromEnv(creatorToken: Address): MeteoraAlphaVaultConfig | null {
   if (!mapRaw) return null
   try {
     const parsed = JSON.parse(mapRaw) as Record<string, unknown>
+    const checksumToken = getAddress(creatorToken)
     const direct = parsed[creatorToken]
-    const byChecksum = parsed[getAddress(creatorToken)]
+    const byChecksum = parsed[checksumToken]
+    const normalizedToken = creatorToken.toLowerCase()
+    const normalizedChecksumToken = checksumToken.toLowerCase()
+    const byCaseInsensitiveKey =
+      Object.entries(parsed).find(([key]) => {
+        const normalizedKey = key.trim().toLowerCase()
+        return normalizedKey === normalizedToken || normalizedKey === normalizedChecksumToken
+      })?.[1] ?? null
     const fallback = parsed.default
     return (
       parseConfig(direct, creatorToken, 'env') ??
       parseConfig(byChecksum, creatorToken, 'env') ??
+      parseConfig(byCaseInsensitiveKey, creatorToken, 'env') ??
       parseConfig(fallback, creatorToken, 'env')
     )
   } catch {
@@ -150,4 +159,3 @@ export async function resolveMeteoraAlphaVaultConfig(params: {
   if (dbConfig) return dbConfig
   return resolveFromEnv(creatorToken)
 }
-

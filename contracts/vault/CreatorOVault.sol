@@ -10,30 +10,31 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
+import {IStrategyValuation} from "../interfaces/IStrategyValuation.sol";
 
 /**
  * @title CreatorOVault
  * @author 0xakita.eth
  * @notice Synchronous ERC-4626 vault for Creator Coins with full strategy support
- * 
+ *
  * @dev ARCHITECTURE:
  *      - Fully ERC-4626 compliant vault
  *      - Deposit Creator Coin → mint vault shares
  *      - Deploy idle assets to yield strategies
  *      - Profit unlocking prevents PPS manipulation
- * 
+ *
  * @dev STRATEGY SYSTEM:
  *      - addStrategy() - Add yield strategy with allocation weight
  *      - removeStrategy() - Remove strategy and withdraw funds
  *      - deployToStrategies() - Deploy idle funds
  *      - report() - Harvest yields and update accounting
- * 
+ *
  * @dev ACCESS CONTROL:
  *      - Owner: Full control
  *      - Management: Strategy management, fees
  *      - Keeper: Can call report/tend
  *      - EmergencyAdmin: Can shutdown
- * 
+ *
  * @dev CONSTRUCTOR ARGS (same on all chains):
  *      - _creatorCoin: Creator Coin address
  *      - _owner: deployer
@@ -46,26 +47,26 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // CONSTANTS
     // =================================
-    
+
     /// @notice Maximum performance fee (20%)
     uint16 public constant MAX_FEE = 2_000;
-    
+
     /// @notice Basis points denominator
     uint256 internal constant MAX_BPS = 10_000;
-    
+
     /// @notice Extended precision for profit unlocking rate
     uint256 internal constant MAX_BPS_EXTENDED = 1_000_000_000_000;
-    
+
     /// @notice Seconds per year
     uint256 internal constant SECONDS_PER_YEAR = 31_556_952;
-    
+
     /// @notice Maximum strategies
     uint256 public constant MAX_STRATEGIES = 5;
-    
+
     // =================================
     // ANTI-INFLATION ATTACK CONSTANTS
     // =================================
-    
+
     /**
      * @notice Virtual offset for share calculations (prevents first-depositor inflation attack)
      * @dev Based on OpenZeppelin ERC4626 security recommendations
@@ -75,18 +76,18 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      */
     uint256 internal constant VIRTUAL_SHARES_OFFSET = 1e3;
     uint256 internal constant VIRTUAL_ASSETS_OFFSET = 1;
-    
+
     /**
      * @notice Minimum first deposit to ensure meaningful liquidity
      * @dev Serves two purposes:
      *      1. Prevents dust manipulation attacks
      *      2. Ensures creator launches have real liquidity
-     * 
+     *
      * @custom:security Prevents "dust deposit → inflate → drain" attack vector
      * @custom:economics TEMP: 5M tokens = 0.5% of typical 1B supply
      */
     uint256 public constant MINIMUM_FIRST_DEPOSIT = 5_000_000e18; // TEMP: 5,000,000 tokens minimum
-    
+
     /**
      * @notice Maximum price change per transaction (in basis points)
      * @dev Prevents catastrophic single-tx price manipulation
@@ -97,13 +98,13 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // STATE VARIABLES
     // =================================
-    
+
     /// @notice Creator Coin token
     IERC20 public immutable CREATOR_COIN;
-    
+
     /// @notice Current Creator Coin balance held directly by vault
     uint256 public coinBalance;
-    
+
     /// @notice Strategy management
     mapping(address => bool) public activeStrategies;
     mapping(address => uint256) public strategyWeights;
@@ -113,17 +114,17 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // ACCESS CONTROL
     // =================================
-    
+
     /// @notice Management role (can manage strategies)
     address public management;
     address public pendingManagement;
-    
+
     /// @notice Keeper role (can call report/tend)
     address public keeper;
-    
+
     /// @notice Emergency admin (can shutdown)
     address public emergencyAdmin;
-    
+
     /// @notice GaugeController (can burn shares)
     address public gaugeController;
 
@@ -134,26 +135,26 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // PERFORMANCE FEES
     // =================================
-    
+
     /// @notice Performance fee in basis points
     uint16 public performanceFee;
-    
+
     /// @notice Performance fee recipient
     address public performanceFeeRecipient;
 
     // =================================
     // PROFIT UNLOCKING
     // =================================
-    
+
     /// @notice Shares to unlock per second
     uint256 public profitUnlockingRate;
-    
+
     /// @notice When all profits unlocked
     uint96 public fullProfitUnlockDate;
-    
+
     /// @notice Max time to unlock profits
     uint32 public profitMaxUnlockTime;
-    
+
     /// @notice Shares locked from last report
     uint256 public totalLockedShares;
 
@@ -166,29 +167,29 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // REPORTING
     // =================================
-    
+
     /// @notice Last report timestamp
     uint96 public lastReport;
-    
+
     /// @notice Total assets at last report
     uint256 public totalAssetsAtLastReport;
-    
+
     /// @notice Total shares burned for price increase
     uint256 public totalSharesBurned;
 
     // =================================
     // CONTROLS
     // =================================
-    
+
     /// @notice Shutdown flag
     bool public isShutdown;
-    
+
     /// @notice Pause flag
     bool public paused;
-    
+
     /// @notice Whitelist enabled
     bool public whitelistEnabled;
-    
+
     /// @notice Whitelist mapping
     mapping(address => bool) public whitelist;
 
@@ -235,35 +236,35 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
 
     /// @notice Timestamp when `pendingRescueOwner` may be finalized by `protocolRescue`
     uint64 public rescueUnlockTime;
-    
+
     /// @notice Maximum total supply (in shares)
     uint256 public maxTotalSupply = type(uint256).max;
-    
+
     /// @notice Keep this much Creator Coin idle for redemptions
     uint256 public deploymentThreshold = 1000e18;
-    
+
     /// @notice Minimum deployment interval
     uint256 public minDeploymentInterval = 5 minutes;
-    
+
     /// @notice Last deployment timestamp
     uint256 public lastDeployment;
-    
+
     // =================================
     // FLASH LOAN / MEV PROTECTION
     // =================================
-    
+
     /// @notice Block number of last deposit (per user)
     mapping(address => uint256) public lastDepositBlock;
-    
+
     /// @notice Minimum blocks between deposit and withdraw (flash loan protection)
     uint256 public withdrawDelayBlocks = 1;
-    
+
     /// @notice Large withdrawal threshold (requires delay)
     uint256 public largeWithdrawalThreshold = 100_000e18; // 100k tokens
-    
+
     /// @notice Extra delay for large withdrawals (in blocks)
     uint256 public largeWithdrawalDelayBlocks = 10;
-    
+
     /// @notice Queued large withdrawals
     struct QueuedWithdrawal {
         uint256 shares;
@@ -275,49 +276,45 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // YEARN V3 INSPIRED FEATURES
     // =================================
-    
+
     /// @notice Default withdrawal queue (ordered list of strategies)
     /// @dev Based on Yearn V3: default_queue pattern for predictable withdrawals
     address[] public defaultQueue;
-    
+
     /// @notice Maximum queue size
     uint256 public constant MAX_QUEUE = 10;
-    
+
     /// @notice Force use of default queue (ignore custom queue in withdrawals)
     bool public useDefaultQueue;
-    
+
     /// @notice Automatically allocate deposits to first strategy in queue
     bool public autoAllocate;
-    
+
     /// @notice Minimum Creator Coin to keep idle for fast redemptions
     /// @dev Based on Yearn V3: minimum_total_idle pattern
     uint256 public minimumTotalIdle = 10_000e18; // 10k tokens default
-    
+
     /// @notice Current debt per strategy (tracks actual deployed amount)
     mapping(address => uint256) public strategyDebt;
-    
+
     /// @notice Total debt across all strategies
     uint256 public totalDebt;
-    
+
     /// @notice Debt purchaser role (can buy bad debt from vault)
     address public debtPurchaser;
 
     // =================================
     // EVENTS
     // =================================
-    
-    event Reported(
-        uint256 profit,
-        uint256 loss,
-        uint256 performanceFees,
-        uint256 totalAssets
-    );
-    
+
+    event Reported(uint256 profit, uint256 loss, uint256 performanceFees, uint256 totalAssets);
+
     event StrategyAdded(address indexed strategy, uint256 weight);
     event StrategyRemoved(address indexed strategy);
     event StrategyDeployed(address indexed strategy, uint256 amount);
     event StrategyWithdrawn(address indexed strategy, uint256 amount);
-    
+    event StrategyWithdrawFailed(address indexed strategy, uint256 amount, bytes revertData);
+
     event UpdateManagement(address indexed newManagement);
     event UpdatePendingManagement(address indexed newPendingManagement);
     event UpdateKeeper(address indexed newKeeper);
@@ -326,22 +323,22 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     event UpdatePerformanceFee(uint16 newPerformanceFee);
     event UpdatePerformanceFeeRecipient(address indexed newRecipient);
     event UpdateProfitMaxUnlockTime(uint256 newProfitMaxUnlockTime);
-    
+
     event BalancesSynced(uint256 coinBalance);
     event WhitelistEnabled(bool enabled);
     event WhitelistUpdated(address indexed account, bool status);
     event EmergencyPause(bool paused);
     event VaultShutdown();
-    
+
     event CapitalInjected(address indexed from, uint256 amount, uint256 newPricePerShare);
     event SharesBurnedForPrice(address indexed from, uint256 shares, uint256 newPricePerShare);
     event EmergencyWithdraw(address indexed to, uint256 amount);
-    
+
     // Flash loan / MEV protection events
     event WithdrawalQueued(address indexed user, uint256 shares, uint256 unlockBlock);
     event WithdrawalClaimed(address indexed user, uint256 assets);
     event WithdrawalCancelled(address indexed user, uint256 shares);
-    
+
     // Yearn V3 inspired events
     event UpdateDefaultQueue(address[] newDefaultQueue);
     event UpdateUseDefaultQueue(bool useDefaultQueue);
@@ -355,7 +352,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
 
     // Operator authorization events
     event OperatorPermsSet(uint256 indexed epoch, address indexed exec, uint256 perms);
-    event OperatorPermitted(uint256 indexed epoch, address indexed exec, uint256 perms, uint256 nonce, uint256 deadline);
+    event OperatorPermitted(
+        uint256 indexed epoch, address indexed exec, uint256 perms, uint256 nonce, uint256 deadline
+    );
     event OperatorEpochBumped(uint256 newEpoch);
 
     // Protocol rescue events (custody loss / recovery)
@@ -367,7 +366,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // ERRORS
     // =================================
-    
+
     error ZeroAddress();
     error ZeroAmount();
     error ZeroShares();
@@ -382,30 +381,35 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     error VaultIsShutdown();
     error VaultNotShutdown();
     error OnlyGaugeController();
-    
+
     /// @notice First deposit must meet minimum threshold
     error FirstDepositTooSmall(uint256 provided, uint256 minimum);
-    
+
     /// @notice Price change exceeds safety bounds
     error PriceChangeExceedsLimit(uint256 priceBefore, uint256 priceAfter, uint256 maxChangeBps);
-    
+
     /// @notice Mint would result in too many shares for assets (inflation protection)
     error InflationAttackDetected(uint256 assets, uint256 shares);
-    
+
     /// @notice Flash loan protection - must wait before withdrawing
     error WithdrawTooSoon(uint256 currentBlock, uint256 requiredBlock);
-    
+
+    /// @notice Flash loan protection - must wait before transferring freshly minted shares
+    error TransferTooSoon(uint256 currentBlock, uint256 requiredBlock);
+
     /// @notice Large withdrawal must be queued
     error LargeWithdrawalMustBeQueued(uint256 amount, uint256 threshold);
-    
+
     /// @notice Withdrawal not yet unlocked
     error WithdrawalNotUnlocked(uint256 currentBlock, uint256 unlockBlock);
-    
+
     /// @notice No queued withdrawal
     error NoQueuedWithdrawal();
-    
+
     // Yearn V3 inspired errors
     error StrategyHasUnrealisedLosses(address strategy, uint256 lossAmount);
+    /// @notice Strategy explicitly reports valuation inputs are unhealthy (oracle stale/unavailable).
+    error StrategyValuationNotReady(address strategy);
     error InsufficientIdleForWithdrawal(uint256 requested, uint256 available);
     error QueueTooLong(uint256 length, uint256 maxLength);
     error StrategyNotInQueue(address strategy);
@@ -428,50 +432,53 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     error MaxTotalSupplyBelowCurrent(uint256 provided, uint256 current);
     error TooManyBlocks(uint256 provided, uint256 max);
     error CannotRescueCreatorCoin();
+    /// @notice Creator coin transfer did not move the expected amount (fee-on-transfer / rebasing / deflationary not supported).
+    error TransferAmountMismatch(uint256 expected, uint256 actual);
+    error ETHTransferFailed();
 
     // =================================
     // MODIFIERS
     // =================================
-    
+
     modifier onlyManagement() {
         if (msg.sender != management && msg.sender != owner()) revert Unauthorized();
         _;
     }
-    
+
     modifier onlyKeepers() {
         if (msg.sender != keeper && msg.sender != management && msg.sender != owner()) {
             revert Unauthorized();
         }
         _;
     }
-    
+
     modifier onlyEmergencyAuthorized() {
         if (msg.sender != emergencyAdmin && msg.sender != management && msg.sender != owner()) {
             revert Unauthorized();
         }
         _;
     }
-    
+
     modifier onlyGaugeController() {
         if (msg.sender != gaugeController) revert OnlyGaugeController();
         _;
     }
-    
+
     modifier whenNotPaused() {
         if (paused) revert Paused();
         _;
     }
-    
+
     modifier whenNotShutdown() {
         if (isShutdown) revert VaultIsShutdown();
         _;
     }
-    
+
     modifier onlyWhitelisted() {
         if (whitelistEnabled && !whitelist[msg.sender]) revert Unauthorized();
         _;
     }
-    
+
     modifier onlyDebtPurchaser() {
         if (msg.sender != debtPurchaser && msg.sender != owner()) revert OnlyDebtPurchaser();
         _;
@@ -487,7 +494,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // CONSTRUCTOR
     // =================================
-    
+
     /**
      * @notice Deploy CreatorOVault with same address on all chains via CREATE2
      * @param _creatorCoin Creator Coin address
@@ -495,21 +502,16 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @param _name Vault name (e.g., "Creator OVault - AKITA")
      * @param _symbol Vault symbol (e.g., "▢AKITA")
      */
-    constructor(
-        address _creatorCoin,
-        address _owner,
-        string memory _name,
-        string memory _symbol
-    ) 
-        ERC20(_name, _symbol) 
-        ERC4626(IERC20(_creatorCoin)) 
+    constructor(address _creatorCoin, address _owner, string memory _name, string memory _symbol)
+        ERC20(_name, _symbol)
+        ERC4626(IERC20(_creatorCoin))
         Ownable(_owner)
         EIP712("CreatorOVault", "1")
     {
         if (_creatorCoin == address(0)) revert ZeroAddress();
-        
+
         CREATOR_COIN = IERC20(_creatorCoin);
-        
+
         // Initialize roles
         management = _owner;
         keeper = _owner;
@@ -518,7 +520,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         performanceFee = 1000; // 10% default
         profitMaxUnlockTime = 7 days;
         rescueDelay = uint64(7 days);
-        
+
         whitelist[_owner] = true;
         lastDeployment = block.timestamp;
         lastReport = uint96(block.timestamp);
@@ -528,7 +530,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // PROFIT UNLOCKING
     // =================================
-    
+
     /**
      * @notice Calculate unlocked shares pending burn
      * @dev Shows matured shares since last unlock processing checkpoint
@@ -552,7 +554,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         uint256 unlockedAmount = (profitUnlockingRate * elapsed) / MAX_BPS_EXTENDED;
         return unlockedAmount > locked ? locked : unlockedAmount;
     }
-    
+
     /**
      * @notice Get locked (not yet unlocked) shares
      */
@@ -568,6 +570,38 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         uint256 queued = totalQueuedWithdrawalShares;
         if (vaultBalance <= queued) return 0;
         return vaultBalance - queued;
+    }
+
+    /**
+     * @notice Adjust report baseline upward for user principal inflows
+     * @dev Bootstraps from live assets when baseline is uninitialized (legacy vaults)
+     */
+    function _increaseReportBaselineForPrincipalInflow(uint256 assets) internal {
+        if (assets == 0) return;
+
+        uint256 previousTotalAssets = totalAssetsAtLastReport;
+        if (previousTotalAssets == 0) {
+            totalAssetsAtLastReport = totalAssets();
+            return;
+        }
+
+        totalAssetsAtLastReport = previousTotalAssets + assets;
+    }
+
+    /**
+     * @notice Adjust report baseline downward for user principal outflows
+     * @dev Uses floor-at-zero semantics to avoid underflow on extreme outflows
+     */
+    function _decreaseReportBaselineForPrincipalOutflow(uint256 assets) internal {
+        if (assets == 0) return;
+
+        uint256 previousTotalAssets = totalAssetsAtLastReport;
+        if (previousTotalAssets == 0) {
+            totalAssetsAtLastReport = totalAssets();
+            return;
+        }
+
+        totalAssetsAtLastReport = assets >= previousTotalAssets ? 0 : previousTotalAssets - assets;
     }
 
     /**
@@ -606,9 +640,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         _burn(address(this), sharesToBurn);
         totalLockedShares = locked - sharesToBurn;
 
-        uint256 consumedElapsed = sharesToBurn == matured
-            ? elapsed
-            : (sharesToBurn * MAX_BPS_EXTENDED) / profitUnlockingRate;
+        uint256 consumedElapsed =
+            sharesToBurn == matured ? elapsed : (sharesToBurn * MAX_BPS_EXTENDED) / profitUnlockingRate;
         if (consumedElapsed == 0) consumedElapsed = 1;
         if (consumedElapsed > elapsed) consumedElapsed = elapsed;
         lastProfitUnlockUpdate = uint96(checkpoint + consumedElapsed);
@@ -622,25 +655,80 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // ERC4626 OVERRIDES
     // =================================
-    
+
     /**
      * @notice Total assets controlled by vault
      * @dev Includes idle balance + strategy deployments
      */
     function totalAssets() public view override returns (uint256) {
-        uint256 total = coinBalance;
-        
+        uint256 total = CREATOR_COIN.balanceOf(address(this));
+
         // Add strategy holdings
         uint256 len = strategyList.length;
         for (uint256 i; i < len; i++) {
             if (activeStrategies[strategyList[i]]) {
-                total += IStrategy(strategyList[i]).getTotalAssets();
+                total += _getStrategyAssetsSafe(strategyList[i]);
             }
         }
-        
+
         return total;
     }
-    
+
+    /**
+     * @notice Read strategy assets without allowing a single faulty strategy to brick the vault.
+     * @dev Returns tracked `strategyDebt` when strategy valuation reverts.
+     */
+    function _getStrategyAssetsSafe(address strategy) internal view returns (uint256 assets) {
+        try IStrategy(strategy).getTotalAssets() returns (uint256 reportedAssets) {
+            assets = reportedAssets;
+        } catch {
+            // If valuation is unavailable, fall back to vault-side accounting so:
+            // - `totalAssets()` remains usable for ERC-4626 previews
+            // - withdrawals can still attempt to pull liquidity
+            assets = strategyDebt[strategy];
+        }
+    }
+
+    /**
+     * @notice Find the first active strategy explicitly reporting unhealthy valuation.
+     * @dev Strategies MUST implement `IStrategyValuation` and MUST NOT revert in valuation
+     *      reads. Missing interfaces or any reverts are treated as NOT ready to prevent
+     *      ERC-4626 share dilution when `totalAssets()` would be under-reported.
+     */
+    function _firstStrategyValuationNotReady() internal view returns (address bad) {
+        uint256 len = strategyList.length;
+        for (uint256 i; i < len; i++) {
+            address strategy = strategyList[i];
+            if (!activeStrategies[strategy]) continue;
+
+            try IStrategyValuation(strategy).isValuationReady() returns (bool ok) {
+                if (!ok) return strategy;
+            } catch {
+                // Missing `IStrategyValuation` support or misbehaving implementation.
+                return strategy;
+            }
+
+            // Even when readiness returns true, do not proceed if valuation reads revert.
+            // If a strategy valuation reverts, `totalAssets()` would treat it as 0 via
+            // `_getStrategyAssetsSafe()`, which enables ERC-4626 share inflation.
+            try IStrategy(strategy).getTotalAssets() returns (
+                uint256 /* reportedAssets */
+            ) {
+            // ok
+            }
+            catch {
+                return strategy;
+            }
+        }
+
+        return address(0);
+    }
+
+    function _requireStrategyValuationsReady() internal view {
+        address bad = _firstStrategyValuationNotReady();
+        if (bad != address(0)) revert StrategyValuationNotReady(bad);
+    }
+
     /**
      * @notice Deposit Creator Coin into vault
      * @dev Protected against first-depositor inflation attacks via:
@@ -649,71 +737,72 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      *      3. Shares/assets ratio sanity check
      * @custom:security See yTUSD exploit mitigation notes
      */
-    function deposit(uint256 assets, address receiver) 
-        public 
-        override 
-        nonReentrant 
-        whenNotPaused 
+    function deposit(uint256 assets, address receiver)
+        public
+        override
+        nonReentrant
+        whenNotPaused
         whenNotShutdown
         onlyWhitelisted
-        returns (uint256 shares) 
+        returns (uint256 shares)
     {
         if (assets == 0) revert ZeroAmount();
         if (receiver == address(0)) revert ZeroAddress();
         _processProfitUnlock();
-        
+
         // SECURITY: First deposit must meet minimum to prevent dust manipulation
         if (totalSupply() == 0 && assets < MINIMUM_FIRST_DEPOSIT) {
             revert FirstDepositTooSmall(assets, MINIMUM_FIRST_DEPOSIT);
         }
-        
+
         // Store price before for sanity check (only if not first deposit)
         bool isFirstDeposit = totalSupply() == 0;
         uint256 priceBefore = isFirstDeposit ? 0 : pricePerShare();
-        
+
+        // SECURITY: Prevent share dilution when any strategy valuation is unhealthy.
+        _requireStrategyValuationsReady();
+
         shares = previewDeposit(assets);
         if (shares == 0) revert ZeroShares();
         if (totalSupply() + shares > maxTotalSupply) revert InvalidAmount();
-        
+
         // SECURITY: Check for inflation attack - shares should never be extremely larger than assets
         if (!isFirstDeposit && shares > assets * 10_000) {
             revert InflationAttackDetected(assets, shares);
         }
-        
+
         // Pull Creator Coin
-        CREATOR_COIN.safeTransferFrom(msg.sender, address(this), assets);
-        coinBalance += assets;
-        
+        _pullCreatorCoinExact(msg.sender, assets);
+
         // Mint shares
         _mint(receiver, shares);
-        
-        // SECURITY: Track deposit block for flash loan protection
-        lastDepositBlock[receiver] = block.number;
-        
+
         // SECURITY: Verify price didn't change dramatically (prevents manipulation)
         if (!isFirstDeposit) {
             uint256 priceAfter = pricePerShare();
             _checkPriceChange(priceBefore, priceAfter);
         }
-        
+
+        _increaseReportBaselineForPrincipalInflow(assets);
+
         emit Deposit(msg.sender, receiver, assets, shares);
-        
+
         // Yearn V3: Auto-allocate to first strategy if enabled
         if (autoAllocate && defaultQueue.length > 0) {
             _autoAllocateToStrategy();
         }
     }
-    
+
     /**
      * @notice Mint exact shares
      * @dev Protected against inflation attacks
      * @custom:security See yTUSD exploit mitigation notes
      */
-    function mint(uint256 shares, address receiver) 
-        public 
-        override 
-        nonReentrant 
-        whenNotPaused 
+    function mint(uint256 shares, address receiver)
+        public
+        override
+        nonReentrant
+        whenNotPaused
         whenNotShutdown
         onlyWhitelisted
         returns (uint256 assets)
@@ -721,44 +810,45 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         if (shares == 0) revert ZeroShares();
         if (receiver == address(0)) revert ZeroAddress();
         _processProfitUnlock();
-        
+
         // Store price before for sanity check (only if not first deposit)
         bool isFirstDeposit = totalSupply() == 0;
         uint256 priceBefore = isFirstDeposit ? 0 : pricePerShare();
-        
+
+        // SECURITY: Prevent share dilution when any strategy valuation is unhealthy.
+        _requireStrategyValuationsReady();
+
         assets = previewMint(shares);
         if (assets == 0) revert ZeroAmount();
         if (totalSupply() + shares > maxTotalSupply) revert InvalidAmount();
-        
+
         // SECURITY: First deposit must meet minimum
         if (isFirstDeposit && assets < MINIMUM_FIRST_DEPOSIT) {
             revert FirstDepositTooSmall(assets, MINIMUM_FIRST_DEPOSIT);
         }
-        
+
         // SECURITY: Check for inflation attack
         if (!isFirstDeposit && shares > assets * 10_000) {
             revert InflationAttackDetected(assets, shares);
         }
-        
+
         // Pull Creator Coin
-        CREATOR_COIN.safeTransferFrom(msg.sender, address(this), assets);
-        coinBalance += assets;
-        
+        _pullCreatorCoinExact(msg.sender, assets);
+
         // Mint shares
         _mint(receiver, shares);
-        
-        // SECURITY: Track deposit block for flash loan protection
-        lastDepositBlock[receiver] = block.number;
-        
+
         // SECURITY: Verify price stability (skip for first deposit)
         if (!isFirstDeposit) {
             uint256 priceAfter = pricePerShare();
             _checkPriceChange(priceBefore, priceAfter);
         }
-        
+
+        _increaseReportBaselineForPrincipalInflow(assets);
+
         emit Deposit(msg.sender, receiver, assets, shares);
     }
-    
+
     /**
      * @notice Redeem shares for Creator Coin
      * @dev SYNCHRONOUS - Transfers immediately for small amounts
@@ -774,36 +864,37 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         if (shares == 0) revert ZeroShares();
         if (receiver == address(0)) revert ZeroAddress();
         _processProfitUnlock();
-        
+
         // SECURITY: Flash loan protection - must wait at least 1 block after deposit
         uint256 requiredBlock = lastDepositBlock[owner_] + withdrawDelayBlocks;
         if (block.number < requiredBlock) {
             revert WithdrawTooSoon(block.number, requiredBlock);
         }
-        
+
         if (msg.sender != owner_) {
             _spendAllowance(owner_, msg.sender, shares);
         }
-        
+
         assets = previewRedeem(shares);
         if (assets == 0) revert ZeroAmount();
-        
+
         // SECURITY: Large withdrawals must be queued
         if (assets >= largeWithdrawalThreshold) {
             revert LargeWithdrawalMustBeQueued(assets, largeWithdrawalThreshold);
         }
-        
+
         _burn(owner_, shares);
-        
+
         // Ensure we have enough Creator Coin
         _ensureCoin(assets);
-        
-        coinBalance -= assets;
-        CREATOR_COIN.safeTransfer(receiver, assets);
-        
+
+        _pushCreatorCoinExact(receiver, assets);
+
+        _decreaseReportBaselineForPrincipalOutflow(assets);
+
         emit Withdraw(msg.sender, receiver, owner_, assets, shares);
     }
-    
+
     /**
      * @notice Withdraw exact Creator Coin amount
      * @dev SYNCHRONOUS - Transfers immediately for small amounts
@@ -819,40 +910,41 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         if (assets == 0) revert ZeroAmount();
         if (receiver == address(0)) revert ZeroAddress();
         _processProfitUnlock();
-        
+
         // SECURITY: Flash loan protection - must wait at least 1 block after deposit
         uint256 requiredBlock = lastDepositBlock[owner_] + withdrawDelayBlocks;
         if (block.number < requiredBlock) {
             revert WithdrawTooSoon(block.number, requiredBlock);
         }
-        
+
         shares = previewWithdraw(assets);
         if (shares == 0) revert ZeroShares();
-        
+
         // SECURITY: Large withdrawals must be queued
         if (assets >= largeWithdrawalThreshold) {
             revert LargeWithdrawalMustBeQueued(assets, largeWithdrawalThreshold);
         }
-        
+
         if (msg.sender != owner_) {
             _spendAllowance(owner_, msg.sender, shares);
         }
-        
+
         _burn(owner_, shares);
-        
+
         // Ensure we have enough Creator Coin
         _ensureCoin(assets);
-        
-        coinBalance -= assets;
-        CREATOR_COIN.safeTransfer(receiver, assets);
-        
+
+        _pushCreatorCoinExact(receiver, assets);
+
+        _decreaseReportBaselineForPrincipalOutflow(assets);
+
         emit Withdraw(msg.sender, receiver, owner_, assets, shares);
     }
-    
+
     // =================================
     // LARGE WITHDRAWAL QUEUE (MEV Protection)
     // =================================
-    
+
     /**
      * @notice Queue a large withdrawal
      * @dev Required for withdrawals >= largeWithdrawalThreshold
@@ -864,35 +956,35 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         if (shares == 0) revert ZeroShares();
         if (receiver == address(0)) revert ZeroAddress();
         _processProfitUnlock();
-        
+
         // SECURITY: Flash loan protection
         uint256 requiredBlock = lastDepositBlock[msg.sender] + withdrawDelayBlocks;
         if (block.number < requiredBlock) {
             revert WithdrawTooSoon(block.number, requiredBlock);
         }
-        
+
         uint256 assets = previewRedeem(shares);
         if (assets < largeWithdrawalThreshold) {
             // Small withdrawals don't need queue, use regular redeem
             revert InvalidAmount();
         }
-        
+
         // Transfer shares to vault (lock them)
         _transfer(msg.sender, address(this), shares);
         totalQueuedWithdrawalShares += shares;
-        
+
         // Set unlock block
         uint256 unlockBlock = block.number + largeWithdrawalDelayBlocks;
-        
+
         // If there's already a queued withdrawal, add to it
         QueuedWithdrawal storage queued = queuedWithdrawals[msg.sender];
         queued.shares += shares;
         queued.unlockBlock = unlockBlock;
         queued.receiver = receiver;
-        
+
         emit WithdrawalQueued(msg.sender, shares, unlockBlock);
     }
-    
+
     /**
      * @notice Claim a queued withdrawal after delay period
      * @dev Can only be called after unlockBlock has passed
@@ -900,83 +992,86 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     function claimQueuedWithdrawal() external nonReentrant returns (uint256 assets) {
         _processProfitUnlock();
         QueuedWithdrawal storage queued = queuedWithdrawals[msg.sender];
-        
+
         if (queued.shares == 0) revert NoQueuedWithdrawal();
         if (block.number < queued.unlockBlock) {
             revert WithdrawalNotUnlocked(block.number, queued.unlockBlock);
         }
-        
+
         uint256 shares = queued.shares;
         address receiver = queued.receiver;
-        
+
         // Clear the queued withdrawal
         delete queuedWithdrawals[msg.sender];
-        
+
         // Calculate assets
         assets = previewRedeem(shares);
-        
+
         // Burn the locked shares
         totalQueuedWithdrawalShares -= shares;
         _burn(address(this), shares);
-        
+
         // Ensure we have enough Creator Coin
         _ensureCoin(assets);
-        
+
         // Transfer
-        coinBalance -= assets;
-        CREATOR_COIN.safeTransfer(receiver, assets);
-        
+        _pushCreatorCoinExact(receiver, assets);
+
+        _decreaseReportBaselineForPrincipalOutflow(assets);
+
         emit WithdrawalClaimed(msg.sender, assets);
     }
-    
+
     /**
      * @notice Cancel a queued withdrawal and get shares back
      */
     function cancelQueuedWithdrawal() external nonReentrant returns (uint256 shares) {
         _processProfitUnlock();
         QueuedWithdrawal storage queued = queuedWithdrawals[msg.sender];
-        
+
         if (queued.shares == 0) revert NoQueuedWithdrawal();
-        
+
         shares = queued.shares;
-        
+
         // Clear the queued withdrawal
         delete queuedWithdrawals[msg.sender];
-        
+
         // Return shares to user
         totalQueuedWithdrawalShares -= shares;
         _transfer(address(this), msg.sender, shares);
-        
+
         emit WithdrawalCancelled(msg.sender, shares);
     }
-    
+
     /**
      * @notice Max deposit (standard ERC4626)
      */
     function maxDeposit(address receiver) public view override returns (uint256) {
         if (paused || isShutdown) return 0;
         if (whitelistEnabled && !whitelist[receiver]) return 0;
+        if (_firstStrategyValuationNotReady() != address(0)) return 0;
         uint256 currentSupply = totalSupply();
         if (currentSupply >= maxTotalSupply) return 0;
-        
+
         uint256 remainingShares = maxTotalSupply - currentSupply;
         uint256 supply = totalSupply();
         if (supply == 0) return remainingShares;
-        
+
         return (remainingShares * totalAssets()) / supply;
     }
-    
+
     /**
      * @notice Max mint (standard ERC4626)
      */
     function maxMint(address receiver) public view override returns (uint256) {
         if (paused || isShutdown) return 0;
         if (whitelistEnabled && !whitelist[receiver]) return 0;
+        if (_firstStrategyValuationNotReady() != address(0)) return 0;
         uint256 currentSupply = totalSupply();
         if (currentSupply >= maxTotalSupply) return 0;
         return maxTotalSupply - currentSupply;
     }
-    
+
     /**
      * @notice Max withdraw (standard ERC4626)
      */
@@ -986,7 +1081,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         if (userShares == 0) return 0;
         return previewRedeem(userShares);
     }
-    
+
     /**
      * @notice Max redeem (standard ERC4626)
      */
@@ -998,24 +1093,139 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // ENSURE COIN HELPER
     // =================================
-    
+
+    /**
+     * @notice Synchronize internal `coinBalance` to the real token balance.
+     * @dev `coinBalance` is used for operational decisions; we keep it strict and synced
+     *      to prevent share pricing / solvency issues with non-standard ERC-20 behavior.
+     */
+    function _syncCoinBalance() internal returns (uint256 actual) {
+        actual = CREATOR_COIN.balanceOf(address(this));
+        coinBalance = actual;
+    }
+
+    /**
+     * @notice Pull creator coin and require exact receipt.
+     * @dev Rejects fee-on-transfer / deflationary / rebasing tokens by enforcing
+     *      that the vault's balance increases by exactly `amount`.
+     */
+    function _pullCreatorCoinExact(address from, uint256 amount) internal returns (uint256 received) {
+        uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
+        CREATOR_COIN.safeTransferFrom(from, address(this), amount);
+        uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
+
+        received = afterBal - beforeBal;
+        if (received != amount) revert TransferAmountMismatch(amount, received);
+
+        // Keep internal accounting synchronized with the actual balance.
+        coinBalance = afterBal;
+    }
+
+    /**
+     * @notice Push creator coin out of vault and require exact vault-side debit.
+     * @dev Enforces that the vault's own balance decreases by exactly `amount`.
+     */
+    function _pushCreatorCoinExact(address to, uint256 amount) internal returns (uint256 spent) {
+        uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
+        CREATOR_COIN.safeTransfer(to, amount);
+        uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
+
+        spent = beforeBal - afterBal;
+        if (spent != amount) revert TransferAmountMismatch(amount, spent);
+
+        coinBalance = afterBal;
+    }
+
+    /**
+     * @notice Deploy creator coin into a strategy with strict accounting checks.
+     * @dev Requires both vault-side token debit and strategy reported `deposited`
+     *      amount to exactly equal `amount`.
+     */
+    function _depositIntoStrategyExact(address strategy, uint256 amount) internal returns (uint256 deposited) {
+        uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
+        CREATOR_COIN.forceApprove(strategy, amount);
+        deposited = IStrategy(strategy).deposit(amount);
+        uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
+
+        uint256 spent = beforeBal - afterBal;
+        if (spent != amount) revert TransferAmountMismatch(amount, spent);
+        if (deposited != amount) revert TransferAmountMismatch(amount, deposited);
+
+        coinBalance = afterBal;
+    }
+
+    /**
+     * @notice Withdraw from strategy and validate returned amount against balance delta.
+     */
+    function _withdrawFromStrategyMeasured(address strategy, uint256 amount) internal returns (uint256 withdrawn) {
+        uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
+        withdrawn = IStrategy(strategy).withdraw(amount);
+        uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
+
+        uint256 received = afterBal - beforeBal;
+        if (received != withdrawn) revert TransferAmountMismatch(withdrawn, received);
+
+        coinBalance = afterBal;
+    }
+
+    /**
+     * @notice Best-effort strategy withdrawal for user redemptions.
+     * @dev Never reverts on strategy failure; returns the measured amount received by the vault.
+     */
+    function _withdrawFromStrategyBestEffort(address strategy, uint256 amount) internal returns (uint256 withdrawn) {
+        if (amount == 0) return 0;
+
+        uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
+
+        try IStrategy(strategy).withdraw(amount) returns (uint256 reported) {
+            uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
+
+            // Defensive: a withdraw should never decrease the vault balance.
+            if (afterBal < beforeBal) {
+                _syncCoinBalance();
+                emit StrategyWithdrawFailed(strategy, amount, bytes("NEGATIVE_BALANCE_DELTA"));
+                return 0;
+            }
+
+            uint256 received = afterBal - beforeBal;
+
+            // Keep internal accounting synchronized with the actual balance.
+            coinBalance = afterBal;
+
+            // If the strategy return value doesn't match reality, emit and trust the balance delta.
+            if (received != reported) {
+                emit StrategyWithdrawFailed(
+                    strategy, amount, abi.encodeWithSelector(TransferAmountMismatch.selector, reported, received)
+                );
+            }
+
+            return received;
+        } catch (bytes memory err) {
+            _syncCoinBalance();
+            emit StrategyWithdrawFailed(strategy, amount, err);
+            return 0;
+        }
+    }
+
     /**
      * @notice Ensure vault has enough Creator Coin for redemptions
      * @dev Withdraws from strategies if needed
      */
     function _ensureCoin(uint256 coinNeeded) internal {
-        if (coinBalance >= coinNeeded) return;
-        
-        uint256 deficit = coinNeeded - coinBalance;
-        
+        uint256 available = _syncCoinBalance();
+        if (available >= coinNeeded) return;
+
+        uint256 deficit = coinNeeded - available;
+
         // Withdraw from strategies
         _withdrawFromStrategies(deficit);
-        
-        if (coinBalance < coinNeeded) {
+
+        available = _syncCoinBalance();
+        if (available < coinNeeded) {
             revert InsufficientBalance();
         }
     }
-    
+
     /**
      * @notice Check that price change is within acceptable bounds
      * @dev Prevents catastrophic single-tx price manipulation
@@ -1025,14 +1235,14 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      */
     function _checkPriceChange(uint256 priceBefore, uint256 priceAfter) internal pure {
         if (priceBefore == 0) return; // First deposit, no check needed
-        
+
         uint256 priceDiff;
         if (priceAfter > priceBefore) {
             priceDiff = priceAfter - priceBefore;
         } else {
             priceDiff = priceBefore - priceAfter;
         }
-        
+
         // Check if change exceeds MAX_PRICE_CHANGE_BPS (default 10%)
         uint256 maxAllowedChange = (priceBefore * MAX_PRICE_CHANGE_BPS) / MAX_BPS;
         if (priceDiff > maxAllowedChange) {
@@ -1043,7 +1253,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // STRATEGY MANAGEMENT
     // =================================
-    
+
     /**
      * @notice Add a new strategy
      * @param strategy Strategy address
@@ -1052,7 +1262,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     function addStrategy(address strategy, uint256 weight) external onlyManagement {
         addStrategy(strategy, weight, true);
     }
-    
+
     /**
      * @notice Add a new yield strategy with queue option
      * @dev Based on Yearn V3: add_strategy pattern
@@ -1070,42 +1280,41 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         if (!IStrategy(strategy).isActive()) revert StrategyNotActive();
         address strategyAsset = IStrategy(strategy).asset();
         if (strategyAsset != address(CREATOR_COIN)) revert StrategyAssetMismatch(address(CREATOR_COIN), strategyAsset);
-        
+
         activeStrategies[strategy] = true;
         strategyWeights[strategy] = weight;
         strategyList.push(strategy);
         totalStrategyWeight += weight;
-        
+
         // Yearn V3: Add to default queue if requested and there's space
         if (addToQueue && defaultQueue.length < MAX_QUEUE) {
             defaultQueue.push(strategy);
             emit UpdateDefaultQueue(defaultQueue);
         }
-        
+
         emit StrategyAdded(strategy, weight);
     }
-    
+
     /**
      * @notice Remove a strategy
      * @dev Withdraws all funds before removal
      */
     function removeStrategy(address strategy) external onlyManagement {
         if (!activeStrategies[strategy]) revert StrategyNotActive();
-        
+
         // Withdraw all funds from strategy
         uint256 currentDebt = strategyDebt[strategy];
         if (currentDebt > 0) {
-            uint256 withdrawn = IStrategy(strategy).withdraw(currentDebt);
-            coinBalance += withdrawn;
+            _withdrawFromStrategyMeasured(strategy, currentDebt);
             totalDebt -= currentDebt;
             strategyDebt[strategy] = 0;
             emit DebtUpdated(strategy, currentDebt, 0);
         }
-        
+
         activeStrategies[strategy] = false;
         totalStrategyWeight -= strategyWeights[strategy];
         strategyWeights[strategy] = 0;
-        
+
         // Remove from strategy list
         uint256 length = strategyList.length;
         for (uint256 i = 0; i < length; i++) {
@@ -1115,13 +1324,13 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
                 break;
             }
         }
-        
+
         // Yearn V3: Remove from default queue
         _removeFromQueue(strategy);
-        
+
         emit StrategyRemoved(strategy);
     }
-    
+
     /**
      * @notice Remove a strategy from the default queue
      * @dev Internal helper based on Yearn V3 pattern
@@ -1137,29 +1346,29 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
             }
         }
     }
-    
+
     /**
      * @notice Update strategy weight
      */
     function updateStrategyWeight(address strategy, uint256 newWeight) external onlyManagement {
         if (!activeStrategies[strategy]) revert StrategyNotActive();
         if (newWeight > 10000) revert InvalidWeight();
-        
+
         uint256 oldWeight = strategyWeights[strategy];
         uint256 newTotal = totalStrategyWeight - oldWeight + newWeight;
         if (newTotal > 10000) revert InvalidWeight();
-        
+
         strategyWeights[strategy] = newWeight;
         totalStrategyWeight = newTotal;
     }
-    
+
     /**
      * @notice Deploy idle funds to strategies
      */
     function deployToStrategies() external nonReentrant onlyKeepers {
         _deployToStrategies();
     }
-    
+
     /**
      * @notice Force deploy (management only)
      */
@@ -1167,93 +1376,91 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         if (totalStrategyWeight == 0) revert NoStrategies();
         _deployToStrategies();
     }
-    
+
     /**
      * @notice Internal deploy logic
      */
     function _deployToStrategies() internal {
         if (totalStrategyWeight == 0) return;
-        
+
+        // Keep coinBalance aligned to real idle balance before computing deployable amounts.
+        uint256 idleBalance = _syncCoinBalance();
+
         // Yearn V3: Use minimumTotalIdle instead of deploymentThreshold
         uint256 minIdle = minimumTotalIdle > deploymentThreshold ? minimumTotalIdle : deploymentThreshold;
-        uint256 deployable = coinBalance > minIdle 
-            ? coinBalance - minIdle 
-            : 0;
-        
+        uint256 deployable = idleBalance > minIdle ? idleBalance - minIdle : 0;
+
         if (deployable == 0) return;
-        
+
         uint256 length = strategyList.length;
         for (uint256 i = 0; i < length; i++) {
             address strategy = strategyList[i];
             if (activeStrategies[strategy] && strategyWeights[strategy] > 0) {
                 uint256 amount = (deployable * strategyWeights[strategy]) / totalStrategyWeight;
-                
+
                 if (amount > coinBalance) amount = coinBalance;
-                
+
                 if (amount > 0) {
                     uint256 currentDebt = strategyDebt[strategy];
-                    coinBalance -= amount;
-                    CREATOR_COIN.forceApprove(strategy, amount);
-                    uint256 deposited = IStrategy(strategy).deposit(amount);
-                    
+                    uint256 deposited = _depositIntoStrategyExact(strategy, amount);
+
                     // Yearn V3: Track strategy debt
                     uint256 newDebt = currentDebt + deposited;
                     strategyDebt[strategy] = newDebt;
                     totalDebt += deposited;
-                    
+
                     emit DebtUpdated(strategy, currentDebt, newDebt);
                     emit StrategyDeployed(strategy, deposited);
                 }
             }
         }
-        
+
         lastDeployment = block.timestamp;
     }
-    
+
     /**
      * @notice Withdraw from strategies
      */
     function _withdrawFromStrategies(uint256 amountNeeded) internal returns (uint256 totalWithdrawn) {
         uint256 remaining = amountNeeded;
-        
+
         // Yearn V3: Use default queue for withdrawal order
         address[] memory queue = defaultQueue.length > 0 ? defaultQueue : strategyList;
         uint256 length = queue.length;
-        
+
         for (uint256 i = 0; i < length && remaining > 0; i++) {
             address strategy = queue[i];
             if (activeStrategies[strategy]) {
                 uint256 currentDebt = strategyDebt[strategy];
-                uint256 strategyAssets = IStrategy(strategy).getTotalAssets();
-                
+                uint256 strategyAssets = _getStrategyAssetsSafe(strategy);
+
                 if (strategyAssets > 0) {
                     uint256 toWithdraw = remaining > strategyAssets ? strategyAssets : remaining;
-                    
+
                     // Yearn V3: Assess unrealized losses before withdrawal
                     uint256 unrealizedLoss = _assessUnrealisedLoss(strategy, currentDebt, toWithdraw);
                     if (unrealizedLoss > 0) {
                         emit UnrealisedLossAssessed(strategy, unrealizedLoss);
                     }
-                    
-                    uint256 withdrawn = IStrategy(strategy).withdraw(toWithdraw);
-                    
-                    coinBalance += withdrawn;
+
+                    uint256 withdrawn = _withdrawFromStrategyBestEffort(strategy, toWithdraw);
+                    if (withdrawn == 0) continue;
                     totalWithdrawn += withdrawn;
                     remaining = remaining > withdrawn ? remaining - withdrawn : 0;
-                    
+
                     // Yearn V3: Update debt tracking
                     uint256 debtReduction = withdrawn > currentDebt ? currentDebt : withdrawn;
                     uint256 newDebt = currentDebt - debtReduction;
                     strategyDebt[strategy] = newDebt;
                     totalDebt -= debtReduction;
-                    
+
                     emit DebtUpdated(strategy, currentDebt, newDebt);
                     emit StrategyWithdrawn(strategy, withdrawn);
                 }
             }
         }
     }
-    
+
     /**
      * @notice Assess unrealized losses for a strategy
      * @dev Based on Yearn V3: _assess_share_of_unrealised_losses pattern
@@ -1262,56 +1469,56 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @param assetsNeeded Amount being withdrawn
      * @return Loss share of unrealized losses
      */
-    function _assessUnrealisedLoss(
-        address strategy,
-        uint256 currentDebt,
-        uint256 assetsNeeded
-    ) internal view returns (uint256) {
-        uint256 strategyAssets = IStrategy(strategy).getTotalAssets();
-        
+    function _assessUnrealisedLoss(address strategy, uint256 currentDebt, uint256 assetsNeeded)
+        internal
+        view
+        returns (uint256)
+    {
+        uint256 strategyAssets = _getStrategyAssetsSafe(strategy);
+
         // If no losses, return 0
         if (strategyAssets >= currentDebt || currentDebt == 0) {
             return 0;
         }
-        
+
         // User takes proportional share of losses
         uint256 numerator = assetsNeeded * strategyAssets;
         uint256 lossShare = assetsNeeded - (numerator / currentDebt);
-        
+
         // Round up
         if (numerator % currentDebt != 0) {
             lossShare += 1;
         }
-        
+
         return lossShare;
     }
-    
+
     /**
      * @notice Auto-allocate idle funds to first strategy in queue
      * @dev Based on Yearn V3: auto_allocate pattern
      */
     function _autoAllocateToStrategy() internal {
         if (defaultQueue.length == 0) return;
-        
+
         address firstStrategy = defaultQueue[0];
         if (!activeStrategies[firstStrategy]) return;
-        
+
+        uint256 idleBalance = _syncCoinBalance();
+
         uint256 minIdle = minimumTotalIdle > deploymentThreshold ? minimumTotalIdle : deploymentThreshold;
-        if (coinBalance <= minIdle) return;
-        
-        uint256 toAllocate = coinBalance - minIdle;
+        if (idleBalance <= minIdle) return;
+
+        uint256 toAllocate = idleBalance - minIdle;
         if (toAllocate == 0) return;
-        
+
         uint256 currentDebt = strategyDebt[firstStrategy];
-        
-        coinBalance -= toAllocate;
-        CREATOR_COIN.forceApprove(firstStrategy, toAllocate);
-        uint256 deposited = IStrategy(firstStrategy).deposit(toAllocate);
-        
+
+        uint256 deposited = _depositIntoStrategyExact(firstStrategy, toAllocate);
+
         uint256 newDebt = currentDebt + deposited;
         strategyDebt[firstStrategy] = newDebt;
         totalDebt += deposited;
-        
+
         emit DebtUpdated(firstStrategy, currentDebt, newDebt);
         emit AutoAllocated(firstStrategy, deposited);
     }
@@ -1319,68 +1526,69 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // REPORT FUNCTION
     // =================================
-    
+
     /**
      * @notice Report profit/loss and charge fees
      * @dev Called periodically by keeper
      */
     function report() external nonReentrant onlyKeepers returns (uint256 profit, uint256 loss) {
         _processProfitUnlock();
+        _requireStrategyValuationsReady();
         uint256 currentTotalAssets = totalAssets();
         uint256 previousTotalAssets = totalAssetsAtLastReport;
-        
+
+        // Bootstrap baseline for legacy/uninitialized vaults to prevent principal-as-profit minting.
+        if (previousTotalAssets == 0) {
+            lastReport = uint96(block.timestamp);
+            totalAssetsAtLastReport = currentTotalAssets;
+            emit Reported(0, 0, 0, currentTotalAssets);
+            return (0, 0);
+        }
+
         if (currentTotalAssets > previousTotalAssets) {
             profit = currentTotalAssets - previousTotalAssets;
-            
+
             // Charge performance fee
             uint256 performanceFees = 0;
             if (performanceFee > 0 && profit > 0) {
                 performanceFees = (profit * performanceFee) / MAX_BPS;
-                
+
                 if (performanceFees > 0 && performanceFeeRecipient != address(0)) {
                     uint256 supply = totalSupply();
-                    uint256 feeShares = supply > 0 
-                        ? (performanceFees * supply) / currentTotalAssets 
-                        : performanceFees;
+                    uint256 feeShares = supply > 0 ? (performanceFees * supply) / currentTotalAssets : performanceFees;
                     _mint(performanceFeeRecipient, feeShares);
                 }
             }
-            
+
             // Lock remaining profit (gradual unlock prevents PPS manipulation)
             uint256 profitAfterFees = profit - performanceFees;
             if (profitAfterFees > 0 && profitMaxUnlockTime > 0) {
                 uint256 supply = totalSupply();
-                uint256 profitShares = supply > 0 
-                    ? (profitAfterFees * supply) / currentTotalAssets 
-                    : profitAfterFees;
-                
+                uint256 profitShares = supply > 0 ? (profitAfterFees * supply) / currentTotalAssets : profitAfterFees;
+
                 _mint(address(this), profitShares);
                 uint256 updatedLockedShares = totalLockedShares + profitShares;
                 totalLockedShares = updatedLockedShares;
-                
+
                 fullProfitUnlockDate = uint96(block.timestamp + profitMaxUnlockTime);
                 profitUnlockingRate = (updatedLockedShares * MAX_BPS_EXTENDED) / profitMaxUnlockTime;
                 lastProfitUnlockUpdate = uint96(block.timestamp);
             }
-            
+
             emit Reported(profit, 0, performanceFees, currentTotalAssets);
         } else {
             loss = previousTotalAssets - currentTotalAssets;
-            
+
             // Offset loss with locked shares
             if (loss > 0 && totalLockedShares > 0) {
                 uint256 supply = totalSupply();
-                uint256 lossShares = supply > 0 
-                    ? (loss * supply) / currentTotalAssets 
-                    : 0;
-                uint256 sharesToBurn = lossShares > totalLockedShares 
-                    ? totalLockedShares 
-                    : lossShares;
+                uint256 lossShares = supply > 0 ? (loss * supply) / currentTotalAssets : 0;
+                uint256 sharesToBurn = lossShares > totalLockedShares ? totalLockedShares : lossShares;
                 uint256 availableProfit = _availableProfitShares();
                 if (sharesToBurn > availableProfit) {
                     sharesToBurn = availableProfit;
                 }
-                
+
                 if (sharesToBurn > 0) {
                     _burn(address(this), sharesToBurn);
                     totalLockedShares -= sharesToBurn;
@@ -1390,19 +1598,20 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
                     }
                 }
             }
-            
+
             emit Reported(0, loss, 0, currentTotalAssets);
         }
-        
+
         lastReport = uint96(block.timestamp);
         totalAssetsAtLastReport = currentTotalAssets;
     }
-    
+
     /**
      * @notice Perform maintenance without full report
      */
     function tend() external nonReentrant onlyKeepers {
-        if (coinBalance > deploymentThreshold && totalStrategyWeight > 0) {
+        uint256 idleBalance = _syncCoinBalance();
+        if (idleBalance > deploymentThreshold && totalStrategyWeight > 0) {
             _deployToStrategies();
         }
     }
@@ -1410,7 +1619,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // GAUGE CONTROLLER
     // =================================
-    
+
     /**
      * @notice Burn shares to increase price (called by GaugeController)
      */
@@ -1422,14 +1631,14 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
 
         _burn(sender, shares);
         totalSharesBurned += shares;
-        
+
         emit SharesBurnedForPrice(sender, shares, pricePerShare());
     }
 
     // =================================
     // CAPITAL INJECTION
     // =================================
-    
+
     /**
      * @notice Inject capital without minting shares (increases PPS)
      * @dev Anyone can call (typically protocol treasury)
@@ -1437,24 +1646,23 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      */
     function injectCapital(uint256 amount) external nonReentrant whenNotPaused {
         if (amount == 0) revert ZeroAmount();
-        
+
         // Store price before
         uint256 priceBefore = pricePerShare();
-        
-        CREATOR_COIN.safeTransferFrom(msg.sender, address(this), amount);
-        coinBalance += amount;
-        
+
+        _pullCreatorCoinExact(msg.sender, amount);
+
         // SECURITY: Verify price change is within bounds
         uint256 priceAfter = pricePerShare();
         _checkPriceChange(priceBefore, priceAfter);
-        
+
         emit CapitalInjected(msg.sender, amount, priceAfter);
     }
 
     // =================================
     // YEARN V3 INSPIRED: QUEUE MANAGEMENT
     // =================================
-    
+
     /**
      * @notice Set the default withdrawal queue
      * @dev Based on Yearn V3: set_default_queue pattern
@@ -1462,16 +1670,16 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      */
     function setDefaultQueue(address[] calldata newQueue) external onlyManagement {
         if (newQueue.length > MAX_QUEUE) revert QueueTooLong(newQueue.length, MAX_QUEUE);
-        
+
         // Validate each strategy is active
         for (uint256 i = 0; i < newQueue.length; i++) {
             if (!activeStrategies[newQueue[i]]) revert StrategyNotActive();
         }
-        
+
         defaultQueue = newQueue;
         emit UpdateDefaultQueue(newQueue);
     }
-    
+
     /**
      * @notice Set whether to force use of default queue
      * @dev Based on Yearn V3: set_use_default_queue pattern
@@ -1480,7 +1688,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         useDefaultQueue = _useDefaultQueue;
         emit UpdateUseDefaultQueue(_useDefaultQueue);
     }
-    
+
     /**
      * @notice Set auto-allocate option
      * @dev Based on Yearn V3: set_auto_allocate pattern
@@ -1489,7 +1697,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         autoAllocate = _autoAllocate;
         emit UpdateAutoAllocate(_autoAllocate);
     }
-    
+
     /**
      * @notice Set minimum total idle
      * @dev Based on Yearn V3: set_minimum_total_idle pattern
@@ -1502,7 +1710,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // YEARN V3 INSPIRED: DEBT PURCHASING
     // =================================
-    
+
     /**
      * @notice Set debt purchaser address
      */
@@ -1510,7 +1718,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         debtPurchaser = _debtPurchaser;
         emit UpdateDebtPurchaser(_debtPurchaser);
     }
-    
+
     /**
      * @notice Buy bad debt from a strategy
      * @dev Based on Yearn V3: buy_debt pattern
@@ -1519,35 +1727,30 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      */
     function buyDebt(address strategy, uint256 amount) external nonReentrant onlyDebtPurchaser {
         if (!activeStrategies[strategy]) revert StrategyNotActive();
-        
+
         uint256 currentDebt = strategyDebt[strategy];
         if (currentDebt == 0) revert NothingToBuy();
         if (amount == 0) revert NothingToBuy();
-        
+
         uint256 _amount = amount > currentDebt ? currentDebt : amount;
-        
+
         // Buyer sends Creator Coin to vault
-        CREATOR_COIN.safeTransferFrom(msg.sender, address(this), _amount);
-        coinBalance += _amount;
-        
+        _pullCreatorCoinExact(msg.sender, _amount);
+
         // Reduce strategy debt
         uint256 newDebt = currentDebt - _amount;
         strategyDebt[strategy] = newDebt;
         totalDebt -= _amount;
-        
+
         emit DebtUpdated(strategy, currentDebt, newDebt);
         emit DebtPurchased(strategy, _amount, msg.sender);
     }
-    
+
     /**
      * @notice Get unrealized losses for a strategy
      * @dev Based on Yearn V3: assess_share_of_unrealised_losses pattern
      */
-    function assessUnrealisedLosses(address strategy, uint256 assetsNeeded) 
-        external 
-        view 
-        returns (uint256) 
-    {
+    function assessUnrealisedLosses(address strategy, uint256 assetsNeeded) external view returns (uint256) {
         uint256 currentDebt = strategyDebt[strategy];
         return _assessUnrealisedLoss(strategy, currentDebt, assetsNeeded);
     }
@@ -1555,37 +1758,44 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // EMERGENCY CONTROLS
     // =================================
-    
+
     function shutdownVault() external onlyEmergencyAuthorized {
         isShutdown = true;
         emit VaultShutdown();
     }
-    
+
     function emergencyWithdrawFromStrategies() external onlyEmergencyAuthorized {
         uint256 length = strategyList.length;
         for (uint256 i = 0; i < length; i++) {
             address strategy = strategyList[i];
             if (activeStrategies[strategy]) {
-                try IStrategy(strategy).emergencyWithdraw() returns (uint256 withdrawn) {
-                    coinBalance += withdrawn;
+                uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
+                try IStrategy(strategy).emergencyWithdraw() returns (uint256) {
+                    // In emergencies we prefer progress over strictness; still keep accounting synced.
+                    uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
+                    if (afterBal >= beforeBal) {
+                        coinBalance = afterBal;
+                    } else {
+                        _syncCoinBalance();
+                    }
                 } catch {}
             }
         }
     }
-    
+
     function emergencyWithdraw(uint256 amount, address to) external onlyEmergencyAuthorized {
         if (!isShutdown) revert VaultNotShutdown();
         if (to == address(0)) revert ZeroAddress();
-        
+
         if (amount > 0) {
             CREATOR_COIN.safeTransfer(to, amount);
         }
-        
+
         coinBalance = CREATOR_COIN.balanceOf(address(this));
-        
+
         emit EmergencyWithdraw(to, amount);
     }
-    
+
     function setPaused(bool _paused) external onlyOwner {
         paused = _paused;
         emit EmergencyPause(_paused);
@@ -1594,7 +1804,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
     // ADMIN FUNCTIONS
     // =================================
-    
+
     function setGaugeController(address _gaugeController) external onlyOwner {
         address old = gaugeController;
         gaugeController = _gaugeController;
@@ -1611,30 +1821,30 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         if (burnStream != address(0)) revert Unauthorized();
         burnStream = _burnStream;
     }
-    
+
     function setKeeper(address _keeper) external onlyManagement {
         if (_keeper == address(0)) revert ZeroAddress();
         keeper = _keeper;
         emit UpdateKeeper(_keeper);
     }
-    
+
     function setEmergencyAdmin(address _emergencyAdmin) external onlyManagement {
         if (_emergencyAdmin == address(0)) revert ZeroAddress();
         emergencyAdmin = _emergencyAdmin;
         emit UpdateEmergencyAdmin(_emergencyAdmin);
     }
-    
+
     function setWhitelistEnabled(bool _enabled) external onlyOwner {
         whitelistEnabled = _enabled;
         emit WhitelistEnabled(_enabled);
     }
-    
+
     function setWhitelist(address _account, bool _status) external onlyOwner {
         if (_account == address(0)) revert ZeroAddress();
         whitelist[_account] = _status;
         emit WhitelistUpdated(_account, _status);
     }
-    
+
     function setWhitelistBatch(address[] calldata _accounts, bool _status) external onlyOwner {
         for (uint256 i = 0; i < _accounts.length; i++) {
             if (_accounts[i] == address(0)) revert ZeroAddress();
@@ -1737,7 +1947,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      */
     function setRescueDelay(uint64 delay) external onlyOwner {
         if (pendingRescueOwner != address(0)) revert RescueAlreadyPending(pendingRescueOwner);
-        if (delay < MIN_RESCUE_DELAY || delay > MAX_RESCUE_DELAY) revert RescueDelayOutOfBounds(delay, MIN_RESCUE_DELAY, MAX_RESCUE_DELAY);
+        if (delay < MIN_RESCUE_DELAY || delay > MAX_RESCUE_DELAY) {
+            revert RescueDelayOutOfBounds(delay, MIN_RESCUE_DELAY, MAX_RESCUE_DELAY);
+        }
         rescueDelay = delay;
         emit RescueConfigured(protocolRescue, delay);
     }
@@ -1785,49 +1997,49 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         _transferOwnership(newOwner);
         emit RescueFinalized(oldOwner, newOwner);
     }
-    
+
     function setPerformanceFee(uint16 _performanceFee) external onlyManagement {
         if (_performanceFee > MAX_FEE) revert InvalidAmount();
         performanceFee = _performanceFee;
         emit UpdatePerformanceFee(_performanceFee);
     }
-    
+
     function setPerformanceFeeRecipient(address _performanceFeeRecipient) external onlyManagement {
         if (_performanceFeeRecipient == address(0)) revert ZeroAddress();
         performanceFeeRecipient = _performanceFeeRecipient;
         emit UpdatePerformanceFeeRecipient(_performanceFeeRecipient);
     }
-    
+
     function setProfitMaxUnlockTime(uint256 _profitMaxUnlockTime) external onlyManagement {
         if (_profitMaxUnlockTime > SECONDS_PER_YEAR) revert InvalidAmount();
         profitMaxUnlockTime = uint32(_profitMaxUnlockTime);
         emit UpdateProfitMaxUnlockTime(_profitMaxUnlockTime);
     }
-    
+
     function setPendingManagement(address _management) external onlyManagement {
         if (_management == address(0)) revert ZeroAddress();
         pendingManagement = _management;
         emit UpdatePendingManagement(_management);
     }
-    
+
     function acceptManagement() external {
         if (msg.sender != pendingManagement) revert Unauthorized();
         management = pendingManagement;
         pendingManagement = address(0);
         emit UpdateManagement(management);
     }
-    
+
     function setDeploymentParams(uint256 _threshold, uint256 _interval) external onlyOwner {
         deploymentThreshold = _threshold;
         minDeploymentInterval = _interval;
     }
-    
+
     function setMaxTotalSupply(uint256 _maxTotalSupply) external onlyOwner {
         uint256 current = totalSupply();
         if (_maxTotalSupply < current) revert MaxTotalSupplyBelowCurrent(_maxTotalSupply, current);
         maxTotalSupply = _maxTotalSupply;
     }
-    
+
     /**
      * @notice Configure flash loan protection parameters
      * @dev MEV/flash loan exploit mitigation
@@ -1840,27 +2052,30 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         uint256 _largeWithdrawalThreshold,
         uint256 _largeWithdrawalDelayBlocks
     ) external onlyOwner {
-        if (_withdrawDelayBlocks > 100) revert TooManyBlocks(_withdrawDelayBlocks, 100);
+        if (_withdrawDelayBlocks > 100) {
+            revert TooManyBlocks(_withdrawDelayBlocks, 100);
+        }
         if (_largeWithdrawalDelayBlocks > 1000) revert TooManyBlocks(_largeWithdrawalDelayBlocks, 1000);
-        
+
         withdrawDelayBlocks = _withdrawDelayBlocks;
         largeWithdrawalThreshold = _largeWithdrawalThreshold;
         largeWithdrawalDelayBlocks = _largeWithdrawalDelayBlocks;
     }
-    
+
     function syncBalances() external onlyManagement {
         uint256 actual = CREATOR_COIN.balanceOf(address(this));
         coinBalance = actual;
         emit BalancesSynced(actual);
     }
-    
+
     function rescueETH() external onlyOwner {
         uint256 balance = address(this).balance;
         if (balance > 0) {
-            payable(owner()).transfer(balance);
+            (bool success,) = payable(owner()).call{value: balance}("");
+            if (!success) revert ETHTransferFailed();
         }
     }
-    
+
     function rescueToken(address token, uint256 amount, address to) external onlyOwner {
         if (token == address(CREATOR_COIN)) {
             revert CannotRescueCreatorCoin();
@@ -1869,10 +2084,44 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         IERC20(token).safeTransfer(to, amount);
     }
 
+    /**
+     * @dev Track the latest share acquisition block for delay enforcement.
+     *      - Mint: receiver gets current block.
+     *      - Transfer: does NOT update cooldown state (prevents griefing via dust transfers).
+     *      - Burn: no update needed.
+     */
+    function _update(address from, address to, uint256 value) internal override {
+        // Enforce the withdrawal cooldown on share transfers out.
+        //
+        // Without this, removing transfer-based cooldown inheritance would allow
+        // `deposit -> transfer -> withdraw` to bypass the delay across addresses.
+        if (withdrawDelayBlocks != 0 && from != address(0) && to != address(0) && from != address(this)) {
+            uint256 requiredBlock = lastDepositBlock[from] + withdrawDelayBlocks;
+            if (block.number < requiredBlock) {
+                revert TransferTooSoon(block.number, requiredBlock);
+            }
+        }
+
+        super._update(from, to, value);
+
+        if (to == address(0)) {
+            return;
+        }
+
+        if (from == address(0)) {
+            // Do not track internal mints (eg profit locking shares minted to this vault),
+            // otherwise vault-internal transfers (eg queued withdrawal cancellations) could be blocked.
+            if (to != address(this)) {
+                lastDepositBlock[to] = block.number;
+            }
+            return;
+        }
+    }
+
     // =================================
     // VIEW FUNCTIONS
     // =================================
-    
+
     /**
      * @notice Get price per share (1e18 scale)
      */
@@ -1881,22 +2130,22 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         if (supply == 0) return 1e18;
         return (totalAssets() * 1e18) / supply;
     }
-    
+
     function decimals() public pure override returns (uint8) {
         return 18;
     }
-    
+
     /**
      * @notice Decimals offset for virtual shares (inflation attack protection)
      * @dev OpenZeppelin ERC4626 uses this to add "virtual" shares/assets
      *      An offset of 3 means 10^3 = 1000 virtual shares exist
      *      This makes the first-depositor inflation attack economically infeasible
-     * 
+     *
      * @custom:security CRITICAL for yTUSD-style attack prevention
      *      With offset of 3:
      *      - Attacker needs to donate 1000 tokens per 1 token stolen
      *      - Makes dust-balance manipulation unprofitable
-     * 
+     *
      * Reference: https://blog.openzeppelin.com/a-novel-defense-against-erc4626-inflation-attacks
      */
     function _decimalsOffset() internal pure override returns (uint8) {

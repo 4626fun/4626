@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ExternalLink, ChevronDown, ShieldCheck, Sparkles } from 'lucide-react'
 import { useAccount, usePublicClient } from 'wagmi'
@@ -47,7 +47,6 @@ export function IdentityHub() {
   const { wallets: privyWallets } = useWallets()
 
   const [menuOpen, setMenuOpen] = useState(false)
-  const [embeddedEoa, setEmbeddedEoa] = useState<string | null>(null)
 
   const canonicalCswAddress = useMemo(() => {
     const ws = Array.isArray(privyWallets) ? (privyWallets as any[]) : []
@@ -77,39 +76,33 @@ export function IdentityHub() {
     )
   }, [privyWallets])
 
-  // Best-effort: fetch the embedded EOA from the embedded wallet provider.
-  useEffect(() => {
-    let cancelled = false
-    if (!privyAuthed || !embeddedPrivyWallet) {
-      setEmbeddedEoa(null)
-      return
-    }
-    ;(async () => {
-      try {
-        const provider = await (embeddedPrivyWallet as any).getEthereumProvider?.()
-        if (!provider?.request) return
-        const accounts = (await provider.request({ method: 'eth_accounts' })) as string[] | null
-        const a0 = Array.isArray(accounts) ? accounts[0] : null
-        const addr = typeof a0 === 'string' && isAddress(a0) ? getAddress(a0) : null
-        if (!cancelled) setEmbeddedEoa(addr)
-      } catch {
-        if (!cancelled) setEmbeddedEoa(null)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [embeddedPrivyWallet, privyAuthed])
+  const embeddedWalletAddress = (() => {
+    const raw = typeof (embeddedPrivyWallet as any)?.address === 'string' ? String((embeddedPrivyWallet as any).address) : ''
+    return isAddress(raw) ? getAddress(raw) : null
+  })()
 
-  const effectiveAddress = useMemo(() => {
-    const a =
-      (typeof wagmiAddress === 'string' && isAddress(wagmiAddress) ? getAddress(wagmiAddress) : null) ||
-      (typeof siwe.authAddress === 'string' && isAddress(siwe.authAddress) ? getAddress(siwe.authAddress) : null) ||
-      (typeof farcasterAuth.session?.primaryAddress === 'string' && isAddress(farcasterAuth.session.primaryAddress)
-        ? getAddress(farcasterAuth.session.primaryAddress)
-        : null)
-    return a
-  }, [farcasterAuth.session?.primaryAddress, siwe.authAddress, wagmiAddress])
+  const embeddedEoaQuery = useQuery({
+    queryKey: ['privyEmbeddedEoa', privyAuthed ? '1' : '0', embeddedWalletAddress ?? 'none'],
+    enabled: privyAuthed && !!embeddedPrivyWallet,
+    queryFn: async () => {
+      const provider = await (embeddedPrivyWallet as any).getEthereumProvider?.()
+      if (!provider?.request) return null
+      const accounts = (await provider.request({ method: 'eth_accounts' })) as string[] | null
+      const a0 = Array.isArray(accounts) ? accounts[0] : null
+      const addr = typeof a0 === 'string' && isAddress(a0) ? getAddress(a0) : null
+      return addr
+    },
+    staleTime: 20_000,
+    retry: 0,
+  })
+  const embeddedEoa = privyAuthed && embeddedPrivyWallet ? (embeddedEoaQuery.data ?? null) : null
+
+  const effectiveAddress =
+    (typeof wagmiAddress === 'string' && isAddress(wagmiAddress) ? getAddress(wagmiAddress) : null) ||
+    (typeof siwe.authAddress === 'string' && isAddress(siwe.authAddress) ? getAddress(siwe.authAddress) : null) ||
+    (typeof farcasterAuth.session?.primaryAddress === 'string' && isAddress(farcasterAuth.session.primaryAddress)
+      ? getAddress(farcasterAuth.session.primaryAddress)
+      : null)
 
   const basenameQuery = useQuery({
     queryKey: ['basenameProfile', effectiveAddress],

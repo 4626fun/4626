@@ -38,13 +38,7 @@ contract CreatorCharmStrategyFactory is ICreatorCharmStrategyFactory {
     ) external returns (address strategy) {
         strategy = address(
             new CreatorCharmStrategy(
-                creatorVault,
-                underlyingToken,
-                quoteToken,
-                uniswapRouter,
-                charmVault,
-                v3Pool,
-                owner
+                creatorVault, underlyingToken, quoteToken, uniswapRouter, charmVault, v3Pool, owner
             )
         );
         CreatorCharmStrategy(strategy).initializeApprovals();
@@ -59,14 +53,6 @@ contract AjnaStrategyFactory is IAjnaStrategyFactory {
         address quoteToken,
         address owner
     ) external returns (address strategy) {
-        strategy = address(
-            new AjnaStrategy(
-                creatorVault,
-                underlyingToken,
-                ajnaPoolFactory,
-                quoteToken,
-                owner
-            )
-        );
+        strategy = address(new AjnaStrategy(creatorVault, underlyingToken, ajnaPoolFactory, quoteToken, owner));
     }
 }

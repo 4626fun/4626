@@ -25,6 +25,7 @@ contract CreatorOVaultReportTest is Test {
     address internal alice = makeAddr("alice");
     address internal bob = makeAddr("bob");
     address internal donor = makeAddr("donor");
+    address internal feeRecipient = makeAddr("feeRecipient");
 
     function setUp() public {
         creatorCoin = new MockCreatorCoinForReport();
@@ -52,6 +53,101 @@ contract CreatorOVaultReportTest is Test {
         vault.setProfitMaxUnlockTime(0);
         vault.report();
         vault.setProfitMaxUnlockTime(7 days);
+    }
+
+    function test_firstReportAfterInitialDeposit_doesNotMintUnbackedShares() public {
+        CreatorOVault freshVault = _newVaultForBaselineTests();
+        uint256 depositAmount = INITIAL_DEPOSIT;
+
+        creatorCoin.mint(alice, depositAmount);
+        vm.prank(alice);
+        creatorCoin.approve(address(freshVault), type(uint256).max);
+        vm.prank(alice);
+        freshVault.deposit(depositAmount, alice);
+
+        uint256 supplyBefore = freshVault.totalSupply();
+        uint256 feeSharesBefore = freshVault.balanceOf(feeRecipient);
+        uint256 lockedBefore = freshVault.totalLockedShares();
+
+        (uint256 profit, uint256 loss) = freshVault.report();
+
+        assertEq(profit, 0);
+        assertEq(loss, 0);
+        assertEq(freshVault.balanceOf(feeRecipient), feeSharesBefore);
+        assertEq(freshVault.totalLockedShares(), lockedBefore);
+        assertEq(freshVault.totalSupply(), supplyBefore);
+        assertEq(freshVault.totalAssetsAtLastReport(), freshVault.totalAssets());
+    }
+
+    function test_firstReport_bootstrapsUninitializedBaseline() public {
+        CreatorOVault freshVault = _newVaultForBaselineTests();
+        uint256 donatedAssets = 500_000e18;
+
+        creatorCoin.mint(address(freshVault), donatedAssets);
+        assertEq(freshVault.totalAssetsAtLastReport(), 0);
+
+        uint256 supplyBefore = freshVault.totalSupply();
+
+        (uint256 profit, uint256 loss) = freshVault.report();
+
+        assertEq(profit, 0);
+        assertEq(loss, 0);
+        assertEq(freshVault.totalSupply(), supplyBefore);
+        assertEq(freshVault.balanceOf(feeRecipient), 0);
+        assertEq(freshVault.totalAssetsAtLastReport(), freshVault.totalAssets());
+    }
+
+    function test_reportAfterDeposit_doesNotTreatUserPrincipalAsProfit() public {
+        vault.setPerformanceFee(1000);
+        vault.setPerformanceFeeRecipient(feeRecipient);
+
+        uint256 lockedBefore = vault.totalLockedShares();
+        uint256 feeSharesBefore = vault.balanceOf(feeRecipient);
+
+        vm.prank(alice);
+        vault.deposit(250_000e18, alice);
+
+        (uint256 profit, uint256 loss) = vault.report();
+
+        assertEq(profit, 0);
+        assertEq(loss, 0);
+        assertEq(vault.balanceOf(feeRecipient), feeSharesBefore);
+        assertEq(vault.totalLockedShares(), lockedBefore);
+    }
+
+    function test_reportAfterWithdraw_doesNotTreatUserPrincipalAsLoss() public {
+        uint256 lockedBefore = _lockProfit(PROFIT_ASSETS);
+
+        vm.roll(block.number + 3);
+        vm.prank(alice);
+        vault.withdraw(5e17, alice, alice);
+
+        (uint256 profit, uint256 loss) = vault.report();
+
+        assertEq(profit, 0);
+        assertEq(loss, 0);
+        assertEq(vault.totalLockedShares(), lockedBefore);
+    }
+
+    function test_reportAfterQueuedClaim_doesNotTreatUserPrincipalAsLoss() public {
+        uint256 lockedBefore = _lockProfit(PROFIT_ASSETS);
+
+        vm.roll(block.number + 3);
+        vm.prank(alice);
+        vault.queueWithdrawal(QUEUE_SHARES, alice);
+
+        uint256 baselineBeforeClaim = vault.totalAssetsAtLastReport();
+        vm.roll(block.number + vault.largeWithdrawalDelayBlocks() + 1);
+
+        vm.prank(alice);
+        uint256 claimedAssets = vault.claimQueuedWithdrawal();
+        assertEq(vault.totalAssetsAtLastReport(), baselineBeforeClaim - claimedAssets);
+
+        (uint256 profit, uint256 loss) = vault.report();
+
+        assertEq(profit, 0);
+        assertEq(loss, 0);
+        assertEq(vault.totalLockedShares(), lockedBefore);
     }
 
     function test_report_profitLocksSharesAndSetsUnlockParams() public {
@@ -143,5 +239,13 @@ contract CreatorOVaultReportTest is Test {
         vault.injectCapital(profitAssets);
         vault.report();
         locked = vault.totalLockedShares();
+    }
+
+    function _newVaultForBaselineTests() internal returns (CreatorOVault freshVault) {
+        freshVault = new CreatorOVault(address(creatorCoin), address(this), "Fresh OVault", "ovFRESH");
+        freshVault.setPerformanceFee(1000);
+        freshVault.setPerformanceFeeRecipient(feeRecipient);
+        freshVault.setProfitMaxUnlockTime(7 days);
+        freshVault.setFlashLoanProtection(0, 1e18, 2);
     }
 }

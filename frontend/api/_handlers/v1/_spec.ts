@@ -50,6 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '/v1/charm/strategy/{address}': { get: { summary: 'Charm strategy config + status', parameters: [{ name: 'address', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
       '/v1/agents/creators': { get: { summary: 'List creator XMTP agents', responses: { '200': { description: 'OK' } } } },
       '/v1/agents/creators/enable': { post: { summary: 'Enable/provision creator XMTP agent (auth required)', responses: { '200': { description: 'OK' } } } },
+      '/v1/agents/identity/verification': { get: { summary: 'Public ERC-8004 agent verification snapshot', responses: { '200': { description: 'OK' } } } },
 
       // Build-only endpoints (return unsigned tx calldata)
       '/v1/build/auction/submitBid': { post: { summary: 'Build CCA submitBid calldata', responses: { '200': { description: 'OK' } } } },

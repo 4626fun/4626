@@ -64,9 +64,20 @@ function report(uint256 gain, uint256 loss) external onlyKeeper;
 | Feature | Description |
 |---------|-------------|
 | **Virtual shares** | 1e3 offset prevents inflation attacks |
-| **Minimum deposit** | 50M tokens on first deposit |
+| **Minimum deposit** | 5M tokens on first deposit |
 | **Price limits** | 10% max change per transaction |
 | **Block delay** | Prevents flash loan attacks |
+| **Strict transfer accounting** | Reverts if vault does not receive the exact requested amount |
+
+## Token Compatibility (Important)
+
+`CreatorOVault` assumes the creator coin behaves like a standard ERC-20 where `transfer`/`transferFrom` move the exact amount requested.
+
+The vault will revert deposits/mints/capital injections/debt purchases if the vault's token balance increases by less than the requested amount. This intentionally rejects:
+
+- Fee-on-transfer / transfer-tax tokens
+- Deflationary tokens (burn-on-transfer)
+- Rebasing tokens (supply/balance changes not tied to transfers)
 
 ## Access Control
 

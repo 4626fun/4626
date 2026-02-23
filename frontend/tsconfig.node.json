@@ -6,6 +6,7 @@
     "lib": ["ES2020", "DOM"],
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "noEmit": true,
     "allowImportingTsExtensions": true,
     "allowSyntheticDefaultImports": true,
     "strict": true
@@ -20,6 +21,7 @@
     "server/dexscreener/**/*.ts",
     "server/farcaster/**/*.ts",
     "server/zora/**/*.ts",
+    "server/uniswap/**/*.ts",
     "server/keepr/**/*.ts",
     "server/ai/**/*.ts",
     "server/agent/**/*.ts",

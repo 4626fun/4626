@@ -7,6 +7,7 @@ import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
 import { apiFetch } from '@/lib/apiBase'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
+import { CANONICAL_EXPLORE_ROUTE, CANONICAL_SWAP_ROUTE, resolveLegacyRedirect } from '@/lib/routes/canonicalRoutes'
 import { AdminLayout } from './components/AdminLayout'
 import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
@@ -450,8 +451,8 @@ function NotFoundPage() {
         hint: 'This route requires accepted app access.',
       }
     }
-    const exploreHref = access.hostMode === 'marketing' ? APP_ORIGIN + '/explore/creators' : withReason('/explore/creators', 'not-found')
-    return { href: exploreHref, label: 'Go To Explore', hint: 'Your session is valid. Continue to the canonical landing route.' }
+    const tradeHref = access.hostMode === 'marketing' ? APP_ORIGIN + '/swap' : withReason('/swap', 'not-found')
+    return { href: tradeHref, label: 'Go To Trade', hint: 'Your session is valid. Continue to the canonical app landing route.' }
   }, [access.accepted, access.sessionValid, access.hostMode])
 
   return (
@@ -510,7 +511,7 @@ function App() {
                 </MarketingOnlyRoute>
               }
             />
-            <Route path="/home" element={<Navigate to={withReason('/', 'legacy-route')} replace />} />
+            <Route path="/home" element={<Navigate to={withReason(resolveLegacyRedirect('/home') ?? CANONICAL_SWAP_ROUTE, 'legacy-route')} replace />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
 
             {/* Session-gated routes */}
@@ -529,6 +530,7 @@ function App() {
                 <Route path="/explore/content/:chain/pool/:poolIdOrPoolKeyHash" element={<ExploreContentPoolAlias />} />
                 <Route path="/explore/tokens" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
                 <Route path="/explore/pools" element={<Navigate to={withReason('/explore/content', 'legacy-route')} replace />} />
+                <Route path="/trade" element={<Navigate to={withReason(resolveLegacyRedirect('/trade') ?? CANONICAL_SWAP_ROUTE, 'legacy-route')} replace />} />
                 <Route path="/swap" element={<Swap />} />
                 <Route path="/positions" element={<Positions />} />
                 <Route path="/portfolio" element={<Portfolio />} />
@@ -551,7 +553,7 @@ function App() {
                 <Route path="/auction/bid/:address" element={<AuctionBid />} />
                 <Route path="/complete-auction" element={<CompleteAuction />} />
                 <Route path="/complete-auction/:strategy" element={<CompleteAuction />} />
-                <Route path="/dashboard" element={<Navigate to={withReason('/explore/creators', 'legacy-route')} replace />} />
+                <Route path="/dashboard" element={<Navigate to={withReason(resolveLegacyRedirect('/dashboard') ?? CANONICAL_EXPLORE_ROUTE, 'legacy-route')} replace />} />
                 <Route path="/vault/:address" element={<Vault />} />
                 <Route path="/agents" element={<AgentDirectory />} />
                 <Route path="/agents/register" element={<AgentRegister />} />
