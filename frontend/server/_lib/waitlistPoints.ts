@@ -110,7 +110,9 @@ export async function awardWaitlistPoints(params: {
   await db.sql`
     INSERT INTO points (signup_id, source, source_id, amount, created_at)
     VALUES (${signupId}, ${source}, ${sourceId}, ${amount}, NOW())
-    ON CONFLICT (signup_id, source, source_id) DO NOTHING;
+    -- `points_unique_source` is a partial unique index in some envs, so a column-targeted
+    -- ON CONFLICT can throw "no unique or exclusion constraint..." in Postgres.
+    ON CONFLICT DO NOTHING;
   `
 }
 

@@ -269,7 +269,7 @@ export default async function handler(req: any, res: any) {
       const ins = await db.sql`
         INSERT INTO points (signup_id, source, source_id, amount, created_at)
         VALUES (${signupId}, 'social_x', 'x', ${WAITLIST_POINTS.x}, NOW())
-        ON CONFLICT (signup_id, source, source_id) DO NOTHING
+        ON CONFLICT DO NOTHING
         RETURNING id;
       `
       awarded = Boolean(ins?.rows?.[0]?.id)
@@ -287,13 +287,19 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<VerifyXResponse>)
   }
 
-  const pointInsert = await db.sql`
-    INSERT INTO points (signup_id, source, source_id, amount, created_at)
-    VALUES (${signupId}, 'social_x', 'x', ${WAITLIST_POINTS.x}, NOW())
-    ON CONFLICT (signup_id, source, source_id) DO NOTHING
-    RETURNING id;
-  `
-  const awarded = Boolean(pointInsert?.rows?.[0]?.id)
+  let awarded = false
+  try {
+    const pointInsert = await db.sql`
+      INSERT INTO points (signup_id, source, source_id, amount, created_at)
+      VALUES (${signupId}, 'social_x', 'x', ${WAITLIST_POINTS.x}, NOW())
+      ON CONFLICT DO NOTHING
+      RETURNING id;
+    `
+    awarded = Boolean(pointInsert?.rows?.[0]?.id)
+  } catch {
+    // Best-effort: don't block verification on points ledger issues.
+    awarded = false
+  }
 
   const updated = await db.sql`
     UPDATE profiles
