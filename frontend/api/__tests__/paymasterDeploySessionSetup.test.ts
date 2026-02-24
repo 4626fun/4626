@@ -105,7 +105,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     readRequestPrincipalMock.mockReturnValue(sessionAddress)
     getActiveDeploySessionMock.mockResolvedValue({ sessionOwner })
     getApiContractsMock.mockReturnValue({
-      creatorVaultBatcher: '0x4184D9118ec31061cEDd6041B6bD676ac19F29a5',
+      creatorVaultBatcher: '0xB87CBb646dD14F520078F11196f79BF815F18c84',
       vaultActivationBatcher: '0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB',
       permit2: '0x000000000022D473030F116dDEE9F6B43aC78BA3',
       universalCreate2DeployerFromStore: '0x74183076C7D33346880A5bf0e263B761FB4d38BA',

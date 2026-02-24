@@ -5,14 +5,14 @@ Scope: CreatorVault deploy stack and related infra used by this repo.
 
 ## Sources
 
-1. Live onchain batcher (phased deployer): `0x4184D9118ec31061cEDd6041B6bD676ac19F29a5`
+1. Live onchain batcher (phased deployer): `0xB87CBb646dD14F520078F11196f79BF815F18c84`
 2. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
 3. Deployment manifests: `deployments/base/contracts/**/*.json`
 4. Local env snapshot: `.env`
 
 ## Live Onchain (Authoritative For Current Deploy Path)
 
-Queried from `CreatorVaultDeployer` at `0x4184D9118ec31061cEDd6041B6bD676ac19F29a5`:
+Queried from `CreatorVaultDeployer` at `0xB87CBb646dD14F520078F11196f79BF815F18c84`:
 
 | Contract / Field | Address |
 |---|---|
@@ -44,7 +44,7 @@ From `frontend/src/config/contracts.defaults.ts`:
 | `lotteryManager` | `0x77705A2f173dd52F28300447506Dc35086c34626` |
 | `vrfConsumer` | `0x9F85d8EEe5d2b8dC1E99b598B9c2B084934d0304` |
 | `vaultActivationBatcher` | `0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB` |
-| `creatorVaultBatcher` | `0x4184D9118ec31061cEDd6041B6bD676ac19F29a5` |
+| `creatorVaultBatcher` | `0xB87CBb646dD14F520078F11196f79BF815F18c84` |
 | `solanaBridgeAdapter` | `0x2414b595c4f18532A5836B6e2E6d536832c572e8` |
 | `universalBytecodeStore` | `0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13` |
 | `universalCreate2DeployerFromStore` | `0x74183076C7D33346880A5bf0e263B761FB4d38BA` |
