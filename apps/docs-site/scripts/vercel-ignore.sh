@@ -36,6 +36,24 @@ while IFS= read -r path; do
     "$target_prefix"*)
       exit 1
       ;;
+    docs/*|docs/*/*|docs/*/*/*|docs/*/*/*/*|docs/*/*/*/*/*)
+      exit 1
+      ;;
+    cre/*|cre/*/*|cre/*/*/*|cre/*/*/*/*|cre/*/*/*/*/*)
+      exit 1
+      ;;
+    frontend/docs/*|frontend/docs/*/*|frontend/docs/*/*/*|frontend/docs/*/*/*/*)
+      exit 1
+      ;;
+    frontend/README.md)
+      exit 1
+      ;;
+    frontend/public/brand/*|frontend/public/brand/*/*|frontend/public/brand/*/*/*)
+      exit 1
+      ;;
+    docs/_generated/*|docs/_generated/*/*|docs/_generated/*/*/*|docs/_generated/*/*/*/*)
+      exit 1
+      ;;
   esac
 done <<EOF
 $changed

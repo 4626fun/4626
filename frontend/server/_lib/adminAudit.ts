@@ -21,6 +21,13 @@ export async function ensureAdminAuditSchema(db: Db): Promise<void> {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `
+    // Backfill/migrate older tables that were created without newer columns.
+    // `IF NOT EXISTS` is supported on modern Postgres versions; if it throws, we ignore.
+    try {
+      await db.sql`ALTER TABLE admin_logs ADD COLUMN IF NOT EXISTS ip_hash TEXT NULL;`
+    } catch {
+      // ignore (older Postgres or restricted perms)
+    }
     await db.sql`CREATE INDEX IF NOT EXISTS admin_logs_admin_idx ON admin_logs (admin_address, created_at DESC);`
     await db.sql`CREATE INDEX IF NOT EXISTS admin_logs_action_idx ON admin_logs (action, created_at DESC);`
     await db.sql`CREATE INDEX IF NOT EXISTS admin_logs_target_idx ON admin_logs (target_type, target_id);`
