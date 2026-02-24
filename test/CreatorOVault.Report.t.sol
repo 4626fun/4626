@@ -5,6 +5,9 @@ import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import "../contracts/vault/CreatorOVault.sol";
+import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVaultAdminModule.sol";
+import {CreatorOVaultCoreModule} from "../contracts/vault/modules/CreatorOVaultCoreModule.sol";
+import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorOVaultStrategiesModule.sol";
 
 contract MockCreatorCoinForReport is ERC20 {
     constructor() ERC20("Creator Coin", "CR8R") {}
@@ -22,6 +25,10 @@ contract CreatorOVaultReportTest is Test {
     MockCreatorCoinForReport internal creatorCoin;
     CreatorOVault internal vault;
 
+    address internal coreModule;
+    address internal strategiesModule;
+    address internal adminModule;
+
     address internal alice = makeAddr("alice");
     address internal bob = makeAddr("bob");
     address internal donor = makeAddr("donor");
@@ -30,6 +37,11 @@ contract CreatorOVaultReportTest is Test {
     function setUp() public {
         creatorCoin = new MockCreatorCoinForReport();
         vault = new CreatorOVault(address(creatorCoin), address(this), "Creator OVault", "ovCR8R");
+
+        coreModule = address(new CreatorOVaultCoreModule());
+        strategiesModule = address(new CreatorOVaultStrategiesModule());
+        adminModule = address(new CreatorOVaultAdminModule());
+        vault.setModulesOnce(coreModule, strategiesModule, adminModule);
 
         vault.setPerformanceFee(0);
         vault.setProfitMaxUnlockTime(7 days);
@@ -243,6 +255,7 @@ contract CreatorOVaultReportTest is Test {
 
     function _newVaultForBaselineTests() internal returns (CreatorOVault freshVault) {
         freshVault = new CreatorOVault(address(creatorCoin), address(this), "Fresh OVault", "ovFRESH");
+        freshVault.setModulesOnce(coreModule, strategiesModule, adminModule);
         freshVault.setPerformanceFee(1000);
         freshVault.setPerformanceFeeRecipient(feeRecipient);
         freshVault.setProfitMaxUnlockTime(7 days);

@@ -48,9 +48,9 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
+import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
 import {ICreatorOracle} from "../../interfaces/ICreatorOracle.sol";
 
 // ================================
@@ -114,21 +114,21 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     uint16 public constant MSG_TYPE_LOTTERY_ENTRY = 3;
     uint16 public constant MSG_TYPE_WINNER_CALLBACK = 4;
 
-    uint128 public constant DEFAULT_GAS_LIMIT = 200_000;
-    uint128 public constant DEFAULT_MSG_VALUE = 0;
-    uint128 public constant DEFAULT_CALLBACK_GAS_LIMIT = 100_000;
-    uint256 public constant DEFAULT_SPONSOR_EPOCH_DURATION = 1 hours;
-    uint256 public constant DEFAULT_VRF_SPONSOR_MAX_FEE = 0.01 ether;
-    uint256 public constant DEFAULT_VRF_SPONSOR_BUDGET = 0.25 ether;
-    uint256 public constant DEFAULT_CALLBACK_SPONSOR_MAX_FEE = 0.01 ether;
-    uint256 public constant DEFAULT_CALLBACK_SPONSOR_BUDGET = 0.1 ether;
+    uint128 internal constant DEFAULT_GAS_LIMIT = 200_000;
+    uint128 internal constant DEFAULT_MSG_VALUE = 0;
+    uint128 internal constant DEFAULT_CALLBACK_GAS_LIMIT = 100_000;
+    uint256 internal constant DEFAULT_SPONSOR_EPOCH_DURATION = 1 hours;
+    uint256 internal constant DEFAULT_VRF_SPONSOR_MAX_FEE = 0.01 ether;
+    uint256 internal constant DEFAULT_VRF_SPONSOR_BUDGET = 0.25 ether;
+    uint256 internal constant DEFAULT_CALLBACK_SPONSOR_MAX_FEE = 0.01 ether;
+    uint256 internal constant DEFAULT_CALLBACK_SPONSOR_BUDGET = 0.1 ether;
 
     // Safety defaults: sponsorship is opt-in and bounded.
-    uint256 public constant DEFAULT_SPONSORED_VRF_MIN_SWAP_USD = 10_000_000; // $10 (6 decimals)
-    uint32 public constant DEFAULT_VRF_MAX_SPONSORED_PER_BUYER_PER_EPOCH = 2;
-    uint32 public constant DEFAULT_VRF_MAX_SPONSORED_PER_ORIGIN_PER_EPOCH = 10;
-    uint32 public constant DEFAULT_CALLBACK_MAX_SPONSORED_PER_BUYER_PER_EPOCH = 1;
-    uint32 public constant DEFAULT_CALLBACK_MAX_SPONSORED_PER_ORIGIN_PER_EPOCH = 10;
+    uint256 internal constant DEFAULT_SPONSORED_VRF_MIN_SWAP_USD = 10_000_000; // $10 (6 decimals)
+    uint32 internal constant DEFAULT_VRF_MAX_SPONSORED_PER_BUYER_PER_EPOCH = 2;
+    uint32 internal constant DEFAULT_VRF_MAX_SPONSORED_PER_ORIGIN_PER_EPOCH = 10;
+    uint32 internal constant DEFAULT_CALLBACK_MAX_SPONSORED_PER_BUYER_PER_EPOCH = 1;
+    uint32 internal constant DEFAULT_CALLBACK_MAX_SPONSORED_PER_ORIGIN_PER_EPOCH = 10;
 
     /// @notice Maximum boost for ve4626 lockers (2.5x = 25000 bps)
     uint256 public constant MAX_VE_BOOST = 25000;
@@ -632,7 +632,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                 // forge-lint: disable-next-line(unsafe-typecast)
                 uint256 currentPrice = uint256(priceUSD);
                 uint256 diff = currentPrice > lastPrice ? currentPrice - lastPrice : lastPrice - currentPrice;
-                uint256 deviationBps = Math.mulDiv(diff, BASIS_POINTS, lastPrice);
+                uint256 deviationBps = FullMath.mulDiv(diff, BASIS_POINTS, lastPrice);
                 if (deviationBps > maxDeviationBps) return (0, 0, 0);
             }
         }
@@ -641,9 +641,9 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         priceUSD1e18 = uint256(priceUSD);
         oracleTimestamp = timestamp;
 
-        uint256 usd1e18 = Math.mulDiv(amount, priceUSD1e18, 1e18);
+        uint256 usd1e18 = FullMath.mulDiv(amount, priceUSD1e18, 1e18);
         if (lotteryConfig.usdMultiplierBps > 0) {
-            usd1e18 = Math.mulDiv(usd1e18, lotteryConfig.usdMultiplierBps, BASIS_POINTS);
+            usd1e18 = FullMath.mulDiv(usd1e18, lotteryConfig.usdMultiplierBps, BASIS_POINTS);
         }
         usd1e6 = usd1e18 / 1e12;
     }

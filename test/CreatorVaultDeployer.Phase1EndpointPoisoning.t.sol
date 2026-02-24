@@ -41,6 +41,8 @@ contract MockVault {
     }
 
     function setWhitelist(address, bool) external {}
+
+    function setModulesOnce(address, address, address) external {}
 }
 
 contract MockWrapper {
@@ -204,7 +206,10 @@ contract CreatorVaultDeployerPhase1EndpointPoisoningTest is Test {
             address(0x1007),
             address(0x1008),
             address(0x1009),
-            address(0x1010)
+            address(0x1010),
+            address(0x2001),
+            address(0x2002),
+            address(0x2003)
         );
     }
 

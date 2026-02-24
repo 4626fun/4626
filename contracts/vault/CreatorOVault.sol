@@ -304,6 +304,18 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     address public debtPurchaser;
 
     // =================================
+    // BYTECODE SIZE: MODULE DISPATCH
+    // =================================
+    //
+    // The vault's runtime bytecode exceeds EIP-170 on Base. We keep behavior the
+    // same but move large logic into delegatecall modules. Module addresses are
+    // set once post-deploy (by the vault owner, which is the batcher during
+    // deploy phases).
+    address internal _coreModule;
+    address internal _strategiesModule;
+    address internal _adminModule;
+
+    // =================================
     // EVENTS
     // =================================
 
@@ -436,6 +448,11 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     error TransferAmountMismatch(uint256 expected, uint256 actual);
     error ETHTransferFailed();
 
+    // Module dispatch errors
+    error ModulesNotSet();
+    error ModulesAlreadySet();
+    error InvalidModuleAddress();
+
     // =================================
     // MODIFIERS
     // =================================
@@ -525,6 +542,85 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         lastDeployment = block.timestamp;
         lastReport = uint96(block.timestamp);
         lastProfitUnlockUpdate = uint96(block.timestamp);
+    }
+
+    // =================================
+    // MODULE INITIALIZATION
+    // =================================
+
+    event ModulesSet(address indexed coreModule, address indexed strategiesModule, address indexed adminModule);
+
+    function setModulesOnce(address coreModule, address strategiesModule, address adminModule) external onlyOwner {
+        if (_coreModule != address(0) || _strategiesModule != address(0) || _adminModule != address(0)) {
+            revert ModulesAlreadySet();
+        }
+        if (coreModule == address(0) || strategiesModule == address(0) || adminModule == address(0)) {
+            revert ZeroAddress();
+        }
+        address self = address(this);
+        if (coreModule == self || strategiesModule == self || adminModule == self) {
+            revert InvalidModuleAddress();
+        }
+        if (coreModule == strategiesModule || coreModule == adminModule || strategiesModule == adminModule) {
+            revert InvalidModuleAddress();
+        }
+        if (coreModule.code.length == 0 || strategiesModule.code.length == 0 || adminModule.code.length == 0) {
+            revert InvalidModuleAddress();
+        }
+
+        _coreModule = coreModule;
+        _strategiesModule = strategiesModule;
+        _adminModule = adminModule;
+
+        emit ModulesSet(coreModule, strategiesModule, adminModule);
+    }
+
+    function _requireModulesSet() internal view {
+        if (_coreModule == address(0) || _strategiesModule == address(0) || _adminModule == address(0)) {
+            revert ModulesNotSet();
+        }
+    }
+
+    function _delegate(address module) internal {
+        if (module == address(0)) revert ModulesNotSet();
+        assembly {
+            calldatacopy(0, 0, calldatasize())
+            let result := delegatecall(gas(), module, 0, calldatasize(), 0, 0)
+            returndatacopy(0, 0, returndatasize())
+            switch result
+            case 0 { revert(0, returndatasize()) }
+            default { return(0, returndatasize()) }
+        }
+    }
+
+    /// @dev Delegatecall helper that returns normally so modifiers can clean up.
+    ///      Do NOT use `_delegate()` from a function with a modifier that has an epilogue
+    ///      (e.g. OZ `nonReentrant`), since `_delegate()` uses an assembly `return`.
+    function _delegateAndReturn(address module) internal returns (bytes memory ret) {
+        if (module == address(0)) revert ModulesNotSet();
+        (bool ok, bytes memory data) = module.delegatecall(msg.data);
+        if (!ok) {
+            assembly {
+                revert(add(data, 0x20), mload(data))
+            }
+        }
+        return data;
+    }
+
+    // Module-call helpers: callable only via self-call.
+    function __moduleUpdate(address from, address to, uint256 value) external {
+        if (msg.sender != address(this)) revert Unauthorized();
+        _update(from, to, value);
+    }
+
+    function __moduleSpendAllowance(address owner_, address spender, uint256 value) external {
+        if (msg.sender != address(this)) revert Unauthorized();
+        _spendAllowance(owner_, spender, value);
+    }
+
+    function __moduleTransferOwnership(address newOwner) external {
+        if (msg.sender != address(this)) revert Unauthorized();
+        _transferOwnership(newOwner);
     }
 
     // =================================
@@ -746,51 +842,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         onlyWhitelisted
         returns (uint256 shares)
     {
-        if (assets == 0) revert ZeroAmount();
-        if (receiver == address(0)) revert ZeroAddress();
-        _processProfitUnlock();
-
-        // SECURITY: First deposit must meet minimum to prevent dust manipulation
-        if (totalSupply() == 0 && assets < MINIMUM_FIRST_DEPOSIT) {
-            revert FirstDepositTooSmall(assets, MINIMUM_FIRST_DEPOSIT);
-        }
-
-        // Store price before for sanity check (only if not first deposit)
-        bool isFirstDeposit = totalSupply() == 0;
-        uint256 priceBefore = isFirstDeposit ? 0 : pricePerShare();
-
-        // SECURITY: Prevent share dilution when any strategy valuation is unhealthy.
-        _requireStrategyValuationsReady();
-
-        shares = previewDeposit(assets);
-        if (shares == 0) revert ZeroShares();
-        if (totalSupply() + shares > maxTotalSupply) revert InvalidAmount();
-
-        // SECURITY: Check for inflation attack - shares should never be extremely larger than assets
-        if (!isFirstDeposit && shares > assets * 10_000) {
-            revert InflationAttackDetected(assets, shares);
-        }
-
-        // Pull Creator Coin
-        _pullCreatorCoinExact(msg.sender, assets);
-
-        // Mint shares
-        _mint(receiver, shares);
-
-        // SECURITY: Verify price didn't change dramatically (prevents manipulation)
-        if (!isFirstDeposit) {
-            uint256 priceAfter = pricePerShare();
-            _checkPriceChange(priceBefore, priceAfter);
-        }
-
-        _increaseReportBaselineForPrincipalInflow(assets);
-
-        emit Deposit(msg.sender, receiver, assets, shares);
-
-        // Yearn V3: Auto-allocate to first strategy if enabled
-        if (autoAllocate && defaultQueue.length > 0) {
-            _autoAllocateToStrategy();
-        }
+        bytes memory ret = _delegateAndReturn(_coreModule);
+        shares = abi.decode(ret, (uint256));
     }
 
     /**
@@ -807,46 +860,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         onlyWhitelisted
         returns (uint256 assets)
     {
-        if (shares == 0) revert ZeroShares();
-        if (receiver == address(0)) revert ZeroAddress();
-        _processProfitUnlock();
-
-        // Store price before for sanity check (only if not first deposit)
-        bool isFirstDeposit = totalSupply() == 0;
-        uint256 priceBefore = isFirstDeposit ? 0 : pricePerShare();
-
-        // SECURITY: Prevent share dilution when any strategy valuation is unhealthy.
-        _requireStrategyValuationsReady();
-
-        assets = previewMint(shares);
-        if (assets == 0) revert ZeroAmount();
-        if (totalSupply() + shares > maxTotalSupply) revert InvalidAmount();
-
-        // SECURITY: First deposit must meet minimum
-        if (isFirstDeposit && assets < MINIMUM_FIRST_DEPOSIT) {
-            revert FirstDepositTooSmall(assets, MINIMUM_FIRST_DEPOSIT);
-        }
-
-        // SECURITY: Check for inflation attack
-        if (!isFirstDeposit && shares > assets * 10_000) {
-            revert InflationAttackDetected(assets, shares);
-        }
-
-        // Pull Creator Coin
-        _pullCreatorCoinExact(msg.sender, assets);
-
-        // Mint shares
-        _mint(receiver, shares);
-
-        // SECURITY: Verify price stability (skip for first deposit)
-        if (!isFirstDeposit) {
-            uint256 priceAfter = pricePerShare();
-            _checkPriceChange(priceBefore, priceAfter);
-        }
-
-        _increaseReportBaselineForPrincipalInflow(assets);
-
-        emit Deposit(msg.sender, receiver, assets, shares);
+        bytes memory ret = _delegateAndReturn(_coreModule);
+        assets = abi.decode(ret, (uint256));
     }
 
     /**
@@ -861,38 +876,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         nonReentrant
         returns (uint256 assets)
     {
-        if (shares == 0) revert ZeroShares();
-        if (receiver == address(0)) revert ZeroAddress();
-        _processProfitUnlock();
-
-        // SECURITY: Flash loan protection - must wait at least 1 block after deposit
-        uint256 requiredBlock = lastDepositBlock[owner_] + withdrawDelayBlocks;
-        if (block.number < requiredBlock) {
-            revert WithdrawTooSoon(block.number, requiredBlock);
-        }
-
-        if (msg.sender != owner_) {
-            _spendAllowance(owner_, msg.sender, shares);
-        }
-
-        assets = previewRedeem(shares);
-        if (assets == 0) revert ZeroAmount();
-
-        // SECURITY: Large withdrawals must be queued
-        if (assets >= largeWithdrawalThreshold) {
-            revert LargeWithdrawalMustBeQueued(assets, largeWithdrawalThreshold);
-        }
-
-        _burn(owner_, shares);
-
-        // Ensure we have enough Creator Coin
-        _ensureCoin(assets);
-
-        _pushCreatorCoinExact(receiver, assets);
-
-        _decreaseReportBaselineForPrincipalOutflow(assets);
-
-        emit Withdraw(msg.sender, receiver, owner_, assets, shares);
+        bytes memory ret = _delegateAndReturn(_coreModule);
+        assets = abi.decode(ret, (uint256));
     }
 
     /**
@@ -907,38 +892,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         nonReentrant
         returns (uint256 shares)
     {
-        if (assets == 0) revert ZeroAmount();
-        if (receiver == address(0)) revert ZeroAddress();
-        _processProfitUnlock();
-
-        // SECURITY: Flash loan protection - must wait at least 1 block after deposit
-        uint256 requiredBlock = lastDepositBlock[owner_] + withdrawDelayBlocks;
-        if (block.number < requiredBlock) {
-            revert WithdrawTooSoon(block.number, requiredBlock);
-        }
-
-        shares = previewWithdraw(assets);
-        if (shares == 0) revert ZeroShares();
-
-        // SECURITY: Large withdrawals must be queued
-        if (assets >= largeWithdrawalThreshold) {
-            revert LargeWithdrawalMustBeQueued(assets, largeWithdrawalThreshold);
-        }
-
-        if (msg.sender != owner_) {
-            _spendAllowance(owner_, msg.sender, shares);
-        }
-
-        _burn(owner_, shares);
-
-        // Ensure we have enough Creator Coin
-        _ensureCoin(assets);
-
-        _pushCreatorCoinExact(receiver, assets);
-
-        _decreaseReportBaselineForPrincipalOutflow(assets);
-
-        emit Withdraw(msg.sender, receiver, owner_, assets, shares);
+        bytes memory ret = _delegateAndReturn(_coreModule);
+        shares = abi.decode(ret, (uint256));
     }
 
     // =================================
@@ -953,36 +908,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @param receiver Address to receive Creator Coin when claimed
      */
     function queueWithdrawal(uint256 shares, address receiver) external nonReentrant {
-        if (shares == 0) revert ZeroShares();
-        if (receiver == address(0)) revert ZeroAddress();
-        _processProfitUnlock();
-
-        // SECURITY: Flash loan protection
-        uint256 requiredBlock = lastDepositBlock[msg.sender] + withdrawDelayBlocks;
-        if (block.number < requiredBlock) {
-            revert WithdrawTooSoon(block.number, requiredBlock);
-        }
-
-        uint256 assets = previewRedeem(shares);
-        if (assets < largeWithdrawalThreshold) {
-            // Small withdrawals don't need queue, use regular redeem
-            revert InvalidAmount();
-        }
-
-        // Transfer shares to vault (lock them)
-        _transfer(msg.sender, address(this), shares);
-        totalQueuedWithdrawalShares += shares;
-
-        // Set unlock block
-        uint256 unlockBlock = block.number + largeWithdrawalDelayBlocks;
-
-        // If there's already a queued withdrawal, add to it
-        QueuedWithdrawal storage queued = queuedWithdrawals[msg.sender];
-        queued.shares += shares;
-        queued.unlockBlock = unlockBlock;
-        queued.receiver = receiver;
-
-        emit WithdrawalQueued(msg.sender, shares, unlockBlock);
+        _delegateAndReturn(_coreModule);
     }
 
     /**
@@ -990,57 +916,16 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @dev Can only be called after unlockBlock has passed
      */
     function claimQueuedWithdrawal() external nonReentrant returns (uint256 assets) {
-        _processProfitUnlock();
-        QueuedWithdrawal storage queued = queuedWithdrawals[msg.sender];
-
-        if (queued.shares == 0) revert NoQueuedWithdrawal();
-        if (block.number < queued.unlockBlock) {
-            revert WithdrawalNotUnlocked(block.number, queued.unlockBlock);
-        }
-
-        uint256 shares = queued.shares;
-        address receiver = queued.receiver;
-
-        // Clear the queued withdrawal
-        delete queuedWithdrawals[msg.sender];
-
-        // Calculate assets
-        assets = previewRedeem(shares);
-
-        // Burn the locked shares
-        totalQueuedWithdrawalShares -= shares;
-        _burn(address(this), shares);
-
-        // Ensure we have enough Creator Coin
-        _ensureCoin(assets);
-
-        // Transfer
-        _pushCreatorCoinExact(receiver, assets);
-
-        _decreaseReportBaselineForPrincipalOutflow(assets);
-
-        emit WithdrawalClaimed(msg.sender, assets);
+        bytes memory ret = _delegateAndReturn(_coreModule);
+        assets = abi.decode(ret, (uint256));
     }
 
     /**
      * @notice Cancel a queued withdrawal and get shares back
      */
     function cancelQueuedWithdrawal() external nonReentrant returns (uint256 shares) {
-        _processProfitUnlock();
-        QueuedWithdrawal storage queued = queuedWithdrawals[msg.sender];
-
-        if (queued.shares == 0) revert NoQueuedWithdrawal();
-
-        shares = queued.shares;
-
-        // Clear the queued withdrawal
-        delete queuedWithdrawals[msg.sender];
-
-        // Return shares to user
-        totalQueuedWithdrawalShares -= shares;
-        _transfer(address(this), msg.sender, shares);
-
-        emit WithdrawalCancelled(msg.sender, shares);
+        bytes memory ret = _delegateAndReturn(_coreModule);
+        shares = abi.decode(ret, (uint256));
     }
 
     /**
@@ -1260,7 +1145,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @param weight Allocation weight (basis points, total <= 10000)
      */
     function addStrategy(address strategy, uint256 weight) external onlyManagement {
-        addStrategy(strategy, weight, true);
+        _delegate(_strategiesModule);
     }
 
     /**
@@ -1271,28 +1156,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @param addToQueue Whether to add to default withdrawal queue
      */
     function addStrategy(address strategy, uint256 weight, bool addToQueue) public onlyManagement {
-        if (strategy == address(0)) revert ZeroAddress();
-        if (activeStrategies[strategy]) revert StrategyAlreadyActive();
-        if (strategyList.length >= MAX_STRATEGIES) revert MaxStrategiesReached();
-        if (weight == 0 || weight > 10000) revert InvalidWeight();
-        if (totalStrategyWeight + weight > 10000) revert InvalidWeight();
-
-        if (!IStrategy(strategy).isActive()) revert StrategyNotActive();
-        address strategyAsset = IStrategy(strategy).asset();
-        if (strategyAsset != address(CREATOR_COIN)) revert StrategyAssetMismatch(address(CREATOR_COIN), strategyAsset);
-
-        activeStrategies[strategy] = true;
-        strategyWeights[strategy] = weight;
-        strategyList.push(strategy);
-        totalStrategyWeight += weight;
-
-        // Yearn V3: Add to default queue if requested and there's space
-        if (addToQueue && defaultQueue.length < MAX_QUEUE) {
-            defaultQueue.push(strategy);
-            emit UpdateDefaultQueue(defaultQueue);
-        }
-
-        emit StrategyAdded(strategy, weight);
+        _delegate(_strategiesModule);
     }
 
     /**
@@ -1300,35 +1164,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @dev Withdraws all funds before removal
      */
     function removeStrategy(address strategy) external onlyManagement {
-        if (!activeStrategies[strategy]) revert StrategyNotActive();
-
-        // Withdraw all funds from strategy
-        uint256 currentDebt = strategyDebt[strategy];
-        if (currentDebt > 0) {
-            _withdrawFromStrategyMeasured(strategy, currentDebt);
-            totalDebt -= currentDebt;
-            strategyDebt[strategy] = 0;
-            emit DebtUpdated(strategy, currentDebt, 0);
-        }
-
-        activeStrategies[strategy] = false;
-        totalStrategyWeight -= strategyWeights[strategy];
-        strategyWeights[strategy] = 0;
-
-        // Remove from strategy list
-        uint256 length = strategyList.length;
-        for (uint256 i = 0; i < length; i++) {
-            if (strategyList[i] == strategy) {
-                strategyList[i] = strategyList[length - 1];
-                strategyList.pop();
-                break;
-            }
-        }
-
-        // Yearn V3: Remove from default queue
-        _removeFromQueue(strategy);
-
-        emit StrategyRemoved(strategy);
+        _delegate(_strategiesModule);
     }
 
     /**
@@ -1351,30 +1187,21 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @notice Update strategy weight
      */
     function updateStrategyWeight(address strategy, uint256 newWeight) external onlyManagement {
-        if (!activeStrategies[strategy]) revert StrategyNotActive();
-        if (newWeight > 10000) revert InvalidWeight();
-
-        uint256 oldWeight = strategyWeights[strategy];
-        uint256 newTotal = totalStrategyWeight - oldWeight + newWeight;
-        if (newTotal > 10000) revert InvalidWeight();
-
-        strategyWeights[strategy] = newWeight;
-        totalStrategyWeight = newTotal;
+        _delegate(_strategiesModule);
     }
 
     /**
      * @notice Deploy idle funds to strategies
      */
     function deployToStrategies() external nonReentrant onlyKeepers {
-        _deployToStrategies();
+        _delegateAndReturn(_strategiesModule);
     }
 
     /**
      * @notice Force deploy (management only)
      */
     function forceDeployToStrategies() external nonReentrant onlyManagement {
-        if (totalStrategyWeight == 0) revert NoStrategies();
-        _deployToStrategies();
+        _delegateAndReturn(_strategiesModule);
     }
 
     /**
@@ -1532,88 +1359,15 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @dev Called periodically by keeper
      */
     function report() external nonReentrant onlyKeepers returns (uint256 profit, uint256 loss) {
-        _processProfitUnlock();
-        _requireStrategyValuationsReady();
-        uint256 currentTotalAssets = totalAssets();
-        uint256 previousTotalAssets = totalAssetsAtLastReport;
-
-        // Bootstrap baseline for legacy/uninitialized vaults to prevent principal-as-profit minting.
-        if (previousTotalAssets == 0) {
-            lastReport = uint96(block.timestamp);
-            totalAssetsAtLastReport = currentTotalAssets;
-            emit Reported(0, 0, 0, currentTotalAssets);
-            return (0, 0);
-        }
-
-        if (currentTotalAssets > previousTotalAssets) {
-            profit = currentTotalAssets - previousTotalAssets;
-
-            // Charge performance fee
-            uint256 performanceFees = 0;
-            if (performanceFee > 0 && profit > 0) {
-                performanceFees = (profit * performanceFee) / MAX_BPS;
-
-                if (performanceFees > 0 && performanceFeeRecipient != address(0)) {
-                    uint256 supply = totalSupply();
-                    uint256 feeShares = supply > 0 ? (performanceFees * supply) / currentTotalAssets : performanceFees;
-                    _mint(performanceFeeRecipient, feeShares);
-                }
-            }
-
-            // Lock remaining profit (gradual unlock prevents PPS manipulation)
-            uint256 profitAfterFees = profit - performanceFees;
-            if (profitAfterFees > 0 && profitMaxUnlockTime > 0) {
-                uint256 supply = totalSupply();
-                uint256 profitShares = supply > 0 ? (profitAfterFees * supply) / currentTotalAssets : profitAfterFees;
-
-                _mint(address(this), profitShares);
-                uint256 updatedLockedShares = totalLockedShares + profitShares;
-                totalLockedShares = updatedLockedShares;
-
-                fullProfitUnlockDate = uint96(block.timestamp + profitMaxUnlockTime);
-                profitUnlockingRate = (updatedLockedShares * MAX_BPS_EXTENDED) / profitMaxUnlockTime;
-                lastProfitUnlockUpdate = uint96(block.timestamp);
-            }
-
-            emit Reported(profit, 0, performanceFees, currentTotalAssets);
-        } else {
-            loss = previousTotalAssets - currentTotalAssets;
-
-            // Offset loss with locked shares
-            if (loss > 0 && totalLockedShares > 0) {
-                uint256 supply = totalSupply();
-                uint256 lossShares = supply > 0 ? (loss * supply) / currentTotalAssets : 0;
-                uint256 sharesToBurn = lossShares > totalLockedShares ? totalLockedShares : lossShares;
-                uint256 availableProfit = _availableProfitShares();
-                if (sharesToBurn > availableProfit) {
-                    sharesToBurn = availableProfit;
-                }
-
-                if (sharesToBurn > 0) {
-                    _burn(address(this), sharesToBurn);
-                    totalLockedShares -= sharesToBurn;
-                    if (totalLockedShares == 0) {
-                        profitUnlockingRate = 0;
-                        fullProfitUnlockDate = 0;
-                    }
-                }
-            }
-
-            emit Reported(0, loss, 0, currentTotalAssets);
-        }
-
-        lastReport = uint96(block.timestamp);
-        totalAssetsAtLastReport = currentTotalAssets;
+        bytes memory ret = _delegateAndReturn(_coreModule);
+        (profit, loss) = abi.decode(ret, (uint256, uint256));
     }
 
     /**
      * @notice Perform maintenance without full report
      */
     function tend() external nonReentrant onlyKeepers {
-        uint256 idleBalance = _syncCoinBalance();
-        if (idleBalance > deploymentThreshold && totalStrategyWeight > 0) {
-            _deployToStrategies();
-        }
+        _delegateAndReturn(_strategiesModule);
     }
 
     // =================================
@@ -1624,15 +1378,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @notice Burn shares to increase price (called by GaugeController)
      */
     function burnSharesForPriceIncrease(uint256 shares) external {
-        if (shares == 0) revert ZeroAmount();
-
-        address sender = msg.sender;
-        if (sender != gaugeController && sender != burnStream) revert OnlyGaugeController();
-
-        _burn(sender, shares);
-        totalSharesBurned += shares;
-
-        emit SharesBurnedForPrice(sender, shares, pricePerShare());
+        _delegate(_coreModule);
     }
 
     // =================================
@@ -1645,18 +1391,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @custom:security Price change check prevents dramatic manipulation
      */
     function injectCapital(uint256 amount) external nonReentrant whenNotPaused {
-        if (amount == 0) revert ZeroAmount();
-
-        // Store price before
-        uint256 priceBefore = pricePerShare();
-
-        _pullCreatorCoinExact(msg.sender, amount);
-
-        // SECURITY: Verify price change is within bounds
-        uint256 priceAfter = pricePerShare();
-        _checkPriceChange(priceBefore, priceAfter);
-
-        emit CapitalInjected(msg.sender, amount, priceAfter);
+        _delegateAndReturn(_coreModule);
     }
 
     // =================================
@@ -1669,15 +1404,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @param newQueue Ordered array of strategies for withdrawals
      */
     function setDefaultQueue(address[] calldata newQueue) external onlyManagement {
-        if (newQueue.length > MAX_QUEUE) revert QueueTooLong(newQueue.length, MAX_QUEUE);
-
-        // Validate each strategy is active
-        for (uint256 i = 0; i < newQueue.length; i++) {
-            if (!activeStrategies[newQueue[i]]) revert StrategyNotActive();
-        }
-
-        defaultQueue = newQueue;
-        emit UpdateDefaultQueue(newQueue);
+        _delegate(_strategiesModule);
     }
 
     /**
@@ -1685,8 +1412,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @dev Based on Yearn V3: set_use_default_queue pattern
      */
     function setUseDefaultQueue(bool _useDefaultQueue) external onlyManagement {
-        useDefaultQueue = _useDefaultQueue;
-        emit UpdateUseDefaultQueue(_useDefaultQueue);
+        _delegate(_strategiesModule);
     }
 
     /**
@@ -1694,8 +1420,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @dev Based on Yearn V3: set_auto_allocate pattern
      */
     function setAutoAllocate(bool _autoAllocate) external onlyManagement {
-        autoAllocate = _autoAllocate;
-        emit UpdateAutoAllocate(_autoAllocate);
+        _delegate(_strategiesModule);
     }
 
     /**
@@ -1703,8 +1428,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @dev Based on Yearn V3: set_minimum_total_idle pattern
      */
     function setMinimumTotalIdle(uint256 _minimumTotalIdle) external onlyManagement {
-        minimumTotalIdle = _minimumTotalIdle;
-        emit UpdateMinimumTotalIdle(_minimumTotalIdle);
+        _delegate(_strategiesModule);
     }
 
     // =================================
@@ -1715,8 +1439,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @notice Set debt purchaser address
      */
     function setDebtPurchaser(address _debtPurchaser) external onlyOwner {
-        debtPurchaser = _debtPurchaser;
-        emit UpdateDebtPurchaser(_debtPurchaser);
+        _delegate(_strategiesModule);
     }
 
     /**
@@ -1726,24 +1449,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @param amount Amount of debt to purchase
      */
     function buyDebt(address strategy, uint256 amount) external nonReentrant onlyDebtPurchaser {
-        if (!activeStrategies[strategy]) revert StrategyNotActive();
-
-        uint256 currentDebt = strategyDebt[strategy];
-        if (currentDebt == 0) revert NothingToBuy();
-        if (amount == 0) revert NothingToBuy();
-
-        uint256 _amount = amount > currentDebt ? currentDebt : amount;
-
-        // Buyer sends Creator Coin to vault
-        _pullCreatorCoinExact(msg.sender, _amount);
-
-        // Reduce strategy debt
-        uint256 newDebt = currentDebt - _amount;
-        strategyDebt[strategy] = newDebt;
-        totalDebt -= _amount;
-
-        emit DebtUpdated(strategy, currentDebt, newDebt);
-        emit DebtPurchased(strategy, _amount, msg.sender);
+        _delegateAndReturn(_strategiesModule);
     }
 
     /**
@@ -1760,45 +1466,19 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
 
     function shutdownVault() external onlyEmergencyAuthorized {
-        isShutdown = true;
-        emit VaultShutdown();
+        _delegate(_adminModule);
     }
 
     function emergencyWithdrawFromStrategies() external onlyEmergencyAuthorized {
-        uint256 length = strategyList.length;
-        for (uint256 i = 0; i < length; i++) {
-            address strategy = strategyList[i];
-            if (activeStrategies[strategy]) {
-                uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
-                try IStrategy(strategy).emergencyWithdraw() returns (uint256) {
-                    // In emergencies we prefer progress over strictness; still keep accounting synced.
-                    uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
-                    if (afterBal >= beforeBal) {
-                        coinBalance = afterBal;
-                    } else {
-                        _syncCoinBalance();
-                    }
-                } catch {}
-            }
-        }
+        _delegate(_adminModule);
     }
 
     function emergencyWithdraw(uint256 amount, address to) external onlyEmergencyAuthorized {
-        if (!isShutdown) revert VaultNotShutdown();
-        if (to == address(0)) revert ZeroAddress();
-
-        if (amount > 0) {
-            CREATOR_COIN.safeTransfer(to, amount);
-        }
-
-        coinBalance = CREATOR_COIN.balanceOf(address(this));
-
-        emit EmergencyWithdraw(to, amount);
+        _delegate(_adminModule);
     }
 
     function setPaused(bool _paused) external onlyOwner {
-        paused = _paused;
-        emit EmergencyPause(_paused);
+        _delegate(_adminModule);
     }
 
     // =================================
@@ -1806,9 +1486,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     // =================================
 
     function setGaugeController(address _gaugeController) external onlyOwner {
-        address old = gaugeController;
-        gaugeController = _gaugeController;
-        emit UpdateGaugeController(old, _gaugeController);
+        _delegate(_adminModule);
     }
 
     /**
@@ -1817,40 +1495,27 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      *      Once set, vault shares minted to the burn stream cannot be withdrawn — only burned.
      */
     function setBurnStream(address _burnStream) external onlyOwner {
-        if (_burnStream == address(0)) revert ZeroAddress();
-        if (burnStream != address(0)) revert Unauthorized();
-        burnStream = _burnStream;
+        _delegate(_adminModule);
     }
 
     function setKeeper(address _keeper) external onlyManagement {
-        if (_keeper == address(0)) revert ZeroAddress();
-        keeper = _keeper;
-        emit UpdateKeeper(_keeper);
+        _delegate(_adminModule);
     }
 
     function setEmergencyAdmin(address _emergencyAdmin) external onlyManagement {
-        if (_emergencyAdmin == address(0)) revert ZeroAddress();
-        emergencyAdmin = _emergencyAdmin;
-        emit UpdateEmergencyAdmin(_emergencyAdmin);
+        _delegate(_adminModule);
     }
 
     function setWhitelistEnabled(bool _enabled) external onlyOwner {
-        whitelistEnabled = _enabled;
-        emit WhitelistEnabled(_enabled);
+        _delegate(_adminModule);
     }
 
     function setWhitelist(address _account, bool _status) external onlyOwner {
-        if (_account == address(0)) revert ZeroAddress();
-        whitelist[_account] = _status;
-        emit WhitelistUpdated(_account, _status);
+        _delegate(_adminModule);
     }
 
     function setWhitelistBatch(address[] calldata _accounts, bool _status) external onlyOwner {
-        for (uint256 i = 0; i < _accounts.length; i++) {
-            if (_accounts[i] == address(0)) revert ZeroAddress();
-            whitelist[_accounts[i]] = _status;
-            emit WhitelistUpdated(_accounts[i], _status);
-        }
+        _delegate(_adminModule);
     }
 
     // =================================
@@ -1936,9 +1601,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @dev Configuration changes are blocked while a rescue is pending; cancel first.
      */
     function setProtocolRescue(address rescue) external onlyOwner {
-        if (pendingRescueOwner != address(0)) revert RescueAlreadyPending(pendingRescueOwner);
-        protocolRescue = rescue;
-        emit RescueConfigured(rescue, rescueDelay);
+        _delegate(_adminModule);
     }
 
     /**
@@ -1946,12 +1609,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @dev Configuration changes are blocked while a rescue is pending; cancel first.
      */
     function setRescueDelay(uint64 delay) external onlyOwner {
-        if (pendingRescueOwner != address(0)) revert RescueAlreadyPending(pendingRescueOwner);
-        if (delay < MIN_RESCUE_DELAY || delay > MAX_RESCUE_DELAY) {
-            revert RescueDelayOutOfBounds(delay, MIN_RESCUE_DELAY, MAX_RESCUE_DELAY);
-        }
-        rescueDelay = delay;
-        emit RescueConfigured(protocolRescue, delay);
+        _delegate(_adminModule);
     }
 
     /**
@@ -1959,85 +1617,49 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @dev Only callable by `protocolRescue`. The current owner can cancel before finalization.
      */
     function initiateOwnershipRescue(address newOwner) external onlyProtocolRescue {
-        if (pendingRescueOwner != address(0)) revert RescueAlreadyPending(pendingRescueOwner);
-        if (newOwner == address(0) || newOwner == owner()) revert InvalidRescueOwner(newOwner);
-
-        pendingRescueOwner = newOwner;
-        uint64 unlockTime = uint64(block.timestamp) + rescueDelay;
-        rescueUnlockTime = unlockTime;
-
-        emit RescueInitiated(owner(), newOwner, unlockTime);
+        _delegate(_adminModule);
     }
 
     /**
      * @notice Cancel a pending ownership rescue.
      */
     function cancelOwnershipRescue() external onlyOwner {
-        if (pendingRescueOwner == address(0)) revert RescueNotPending();
-        pendingRescueOwner = address(0);
-        rescueUnlockTime = 0;
-        emit RescueCancelled(owner());
+        _delegate(_adminModule);
     }
 
     /**
      * @notice Finalize a pending ownership rescue after the timelock.
      */
     function finalizeOwnershipRescue() external onlyProtocolRescue {
-        address newOwner = pendingRescueOwner;
-        if (newOwner == address(0)) revert RescueNotPending();
-
-        uint64 unlockTime = rescueUnlockTime;
-        if (block.timestamp < unlockTime) revert RescueTooEarly(unlockTime);
-
-        address oldOwner = owner();
-
-        pendingRescueOwner = address(0);
-        rescueUnlockTime = 0;
-
-        _transferOwnership(newOwner);
-        emit RescueFinalized(oldOwner, newOwner);
+        _delegate(_adminModule);
     }
 
     function setPerformanceFee(uint16 _performanceFee) external onlyManagement {
-        if (_performanceFee > MAX_FEE) revert InvalidAmount();
-        performanceFee = _performanceFee;
-        emit UpdatePerformanceFee(_performanceFee);
+        _delegate(_adminModule);
     }
 
     function setPerformanceFeeRecipient(address _performanceFeeRecipient) external onlyManagement {
-        if (_performanceFeeRecipient == address(0)) revert ZeroAddress();
-        performanceFeeRecipient = _performanceFeeRecipient;
-        emit UpdatePerformanceFeeRecipient(_performanceFeeRecipient);
+        _delegate(_adminModule);
     }
 
     function setProfitMaxUnlockTime(uint256 _profitMaxUnlockTime) external onlyManagement {
-        if (_profitMaxUnlockTime > SECONDS_PER_YEAR) revert InvalidAmount();
-        profitMaxUnlockTime = uint32(_profitMaxUnlockTime);
-        emit UpdateProfitMaxUnlockTime(_profitMaxUnlockTime);
+        _delegate(_adminModule);
     }
 
     function setPendingManagement(address _management) external onlyManagement {
-        if (_management == address(0)) revert ZeroAddress();
-        pendingManagement = _management;
-        emit UpdatePendingManagement(_management);
+        _delegate(_adminModule);
     }
 
     function acceptManagement() external {
-        if (msg.sender != pendingManagement) revert Unauthorized();
-        management = pendingManagement;
-        pendingManagement = address(0);
-        emit UpdateManagement(management);
+        _delegate(_adminModule);
     }
 
     function setDeploymentParams(uint256 _threshold, uint256 _interval) external onlyOwner {
-        deploymentThreshold = _threshold;
-        minDeploymentInterval = _interval;
+        _delegate(_adminModule);
     }
 
     function setMaxTotalSupply(uint256 _maxTotalSupply) external onlyOwner {
-        uint256 current = totalSupply();
-        if (_maxTotalSupply < current) revert MaxTotalSupplyBelowCurrent(_maxTotalSupply, current);
-        maxTotalSupply = _maxTotalSupply;
+        _delegate(_adminModule);
     }
 
     /**
@@ -2052,36 +1674,19 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         uint256 _largeWithdrawalThreshold,
         uint256 _largeWithdrawalDelayBlocks
     ) external onlyOwner {
-        if (_withdrawDelayBlocks > 100) {
-            revert TooManyBlocks(_withdrawDelayBlocks, 100);
-        }
-        if (_largeWithdrawalDelayBlocks > 1000) revert TooManyBlocks(_largeWithdrawalDelayBlocks, 1000);
-
-        withdrawDelayBlocks = _withdrawDelayBlocks;
-        largeWithdrawalThreshold = _largeWithdrawalThreshold;
-        largeWithdrawalDelayBlocks = _largeWithdrawalDelayBlocks;
+        _delegate(_adminModule);
     }
 
     function syncBalances() external onlyManagement {
-        uint256 actual = CREATOR_COIN.balanceOf(address(this));
-        coinBalance = actual;
-        emit BalancesSynced(actual);
+        _delegate(_adminModule);
     }
 
     function rescueETH() external onlyOwner {
-        uint256 balance = address(this).balance;
-        if (balance > 0) {
-            (bool success,) = payable(owner()).call{value: balance}("");
-            if (!success) revert ETHTransferFailed();
-        }
+        _delegate(_adminModule);
     }
 
     function rescueToken(address token, uint256 amount, address to) external onlyOwner {
-        if (token == address(CREATOR_COIN)) {
-            revert CannotRescueCreatorCoin();
-        }
-        if (to == address(0)) revert ZeroAddress();
-        IERC20(token).safeTransfer(to, amount);
+        _delegate(_adminModule);
     }
 
     /**

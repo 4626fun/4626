@@ -9,6 +9,7 @@ pragma solidity ^0.8.20;
  */
 interface ICreatorOVault {
     function deposit(uint256 assets, address receiver) external returns (uint256 shares);
+    function setModulesOnce(address coreModule, address strategiesModule, address adminModule) external;
     function setGaugeController(address _controller) external;
     function setWhitelist(address _account, bool _status) external;
     function setProtocolRescue(address rescue) external;

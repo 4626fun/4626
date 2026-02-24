@@ -6,6 +6,9 @@ import "forge-std/Script.sol";
 import "../contracts/helpers/batchers/CreatorVaultDeployer.sol";
 import "../contracts/helpers/infra/UniversalBytecodeStoreV2.sol";
 import "../contracts/factories/UniversalCreate2DeployerFromStore.sol";
+import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVaultAdminModule.sol";
+import {CreatorOVaultCoreModule} from "../contracts/vault/modules/CreatorOVaultCoreModule.sol";
+import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorOVaultStrategiesModule.sol";
 
 /// @notice Deploys the phased CreatorVault deployer (Phases 1–3) on Base mainnet.
 ///
@@ -42,6 +45,11 @@ contract DeployBaseMainnetDeployer is Script {
     // Reuse v2 infra salts (store + deployer).
     bytes32 constant STORE_SALT_V2 = keccak256("CreatorVault:UniversalBytecodeStore:v2");
     bytes32 constant DEPLOYER_SALT_V2 = keccak256("CreatorVault:UniversalCreate2DeployerFromStore:v2");
+
+    // CreatorOVault module salts (shared logic contracts; no constructor args).
+    bytes32 constant VAULT_CORE_MODULE_SALT = keccak256("CreatorVault:CreatorOVaultCoreModule:v1");
+    bytes32 constant VAULT_STRATEGIES_MODULE_SALT = keccak256("CreatorVault:CreatorOVaultStrategiesModule:v1");
+    bytes32 constant VAULT_ADMIN_MODULE_SALT = keccak256("CreatorVault:CreatorOVaultAdminModule:v1");
 
     // Deployer salt (constructor args are chain-specific ⇒ address is chain-specific).
     bytes32 constant DEPLOYER_SALT = keccak256("CreatorVault:CreatorVaultDeployer:v4");
@@ -116,6 +124,20 @@ contract DeployBaseMainnetDeployer is Script {
         console2.log("UniversalBytecodeStoreV2 (predicted):", storeAddr);
         console2.log("UniversalCreate2DeployerFromStoreV2 (predicted):", create2DeployerAddr);
 
+        // Predict deterministic addresses for shared CreatorOVault modules.
+        bytes memory coreModuleInit = type(CreatorOVaultCoreModule).creationCode;
+        bytes memory strategiesModuleInit = type(CreatorOVaultStrategiesModule).creationCode;
+        bytes memory adminModuleInit = type(CreatorOVaultAdminModule).creationCode;
+
+        address coreModuleAddr = _create2(CREATE2_FACTORY_ADDR, VAULT_CORE_MODULE_SALT, keccak256(coreModuleInit));
+        address strategiesModuleAddr =
+            _create2(CREATE2_FACTORY_ADDR, VAULT_STRATEGIES_MODULE_SALT, keccak256(strategiesModuleInit));
+        address adminModuleAddr = _create2(CREATE2_FACTORY_ADDR, VAULT_ADMIN_MODULE_SALT, keccak256(adminModuleInit));
+
+        console2.log("CreatorOVaultCoreModule (predicted):", coreModuleAddr);
+        console2.log("CreatorOVaultStrategiesModule (predicted):", strategiesModuleAddr);
+        console2.log("CreatorOVaultAdminModule (predicted):", adminModuleAddr);
+
         // Predict deterministic address for the phased deployer.
         bytes memory deployerArgs = abi.encode(
             cfg.registry,
@@ -131,7 +153,10 @@ contract DeployBaseMainnetDeployer is Script {
             cfg.usdc,
             cfg.uniswapV3Factory,
             cfg.uniswapRouter,
-            cfg.ajnaFactory
+            cfg.ajnaFactory,
+            coreModuleAddr,
+            strategiesModuleAddr,
+            adminModuleAddr
         );
         bytes memory deployerInit = abi.encodePacked(type(CreatorVaultDeployer).creationCode, deployerArgs);
         address deployerAddr = _create2(CREATE2_FACTORY_ADDR, DEPLOYER_SALT, keccak256(deployerInit));
@@ -151,6 +176,20 @@ contract DeployBaseMainnetDeployer is Script {
             require(ok, "DEPLOYER_V2 deploy failed");
         }
 
+        // Deploy shared vault modules (if missing).
+        if (coreModuleAddr.code.length == 0) {
+            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(VAULT_CORE_MODULE_SALT, coreModuleInit));
+            require(ok, "VAULT_CORE_MODULE deploy failed");
+        }
+        if (strategiesModuleAddr.code.length == 0) {
+            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(VAULT_STRATEGIES_MODULE_SALT, strategiesModuleInit));
+            require(ok, "VAULT_STRATEGIES_MODULE deploy failed");
+        }
+        if (adminModuleAddr.code.length == 0) {
+            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(VAULT_ADMIN_MODULE_SALT, adminModuleInit));
+            require(ok, "VAULT_ADMIN_MODULE deploy failed");
+        }
+
         // Deploy phased deployer (if missing).
         if (deployerAddr.code.length == 0) {
             (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(DEPLOYER_SALT, deployerInit));
@@ -168,6 +207,9 @@ contract DeployBaseMainnetDeployer is Script {
         require(address(deployer.uniswapV3Factory()) == cfg.uniswapV3Factory, "Deployer V3 factory mismatch");
         require(address(deployer.uniswapRouter()) == cfg.uniswapRouter, "Deployer router mismatch");
         require(address(deployer.ajnaFactory()) == cfg.ajnaFactory, "Deployer Ajna factory mismatch");
+        require(deployer.vaultCoreModule() == coreModuleAddr, "Deployer core module mismatch");
+        require(deployer.vaultStrategiesModule() == strategiesModuleAddr, "Deployer strategies module mismatch");
+        require(deployer.vaultAdminModule() == adminModuleAddr, "Deployer admin module mismatch");
         console2.log("CreatorVaultDeployer:", address(deployer));
 
         // Optional: configure the 20% Solana allocation path on the batcher.

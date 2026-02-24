@@ -15,6 +15,9 @@ import {CreatorVRFConsumerV2_5} from "../contracts/services/lottery/vrf/CreatorV
 // Per-Creator Contracts (deployed by DeployCreatorVault)
 import {CreatorOVault} from "../contracts/vault/CreatorOVault.sol";
 import {CreatorOVaultWrapper} from "../contracts/vault/CreatorOVaultWrapper.sol";
+import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVaultAdminModule.sol";
+import {CreatorOVaultCoreModule} from "../contracts/vault/modules/CreatorOVaultCoreModule.sol";
+import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorOVaultStrategiesModule.sol";
 import {CreatorShareOFT} from "../contracts/services/messaging/CreatorShareOFT.sol";
 import {CreatorGaugeController} from "../contracts/governance/CreatorGaugeController.sol";
 import {CCALaunchStrategy} from "../contracts/vault/strategies/CCALaunchStrategy.sol";
@@ -395,6 +398,16 @@ contract DeployCreatorVault is Script {
         console.log("\n[1/6] Deploying CreatorOVault...");
         CreatorOVault vault = new CreatorOVault(creatorCoin, deployer, vaultName, vaultSymbol);
         console.log("       Address:", address(vault));
+
+        // 1b. Deploy vault delegatecall modules + set once
+        console.log("\n[1b/6] Deploying CreatorOVault modules...");
+        CreatorOVaultCoreModule coreModule = new CreatorOVaultCoreModule();
+        CreatorOVaultStrategiesModule strategiesModule = new CreatorOVaultStrategiesModule();
+        CreatorOVaultAdminModule adminModule = new CreatorOVaultAdminModule();
+        vault.setModulesOnce(address(coreModule), address(strategiesModule), address(adminModule));
+        console.log("       CoreModule:", address(coreModule));
+        console.log("       StrategiesModule:", address(strategiesModule));
+        console.log("       AdminModule:", address(adminModule));
 
         // 2. Deploy Wrapper
         console.log("\n[2/6] Deploying CreatorOVaultWrapper...");
