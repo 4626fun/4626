@@ -9,6 +9,7 @@ import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinba
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { decryptWithSecret, getDeploySessionById, signDeployToken, transitionDeploySession, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
+import { buildUserOpErrorDebug } from '../../../../server/_lib/userOpRevertDebug.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
@@ -90,6 +91,17 @@ function getBundlerEndpoint(origin: string): { url: string; viaProxy: boolean } 
   }
 
   return { url: `${origin}/api/paymaster`, viaProxy: true }
+}
+
+function isOnchainRevertLike(message: string): boolean {
+  const m = String(message || '').toLowerCase()
+  return (
+    m.includes('execution reverted') ||
+    m.includes('user operation execution failed') ||
+    m.includes('useroperationexecutionerror') ||
+    m.includes('aa23 reverted') ||
+    m.includes('aa33 reverted')
+  )
 }
 
 const COINBASE_SMART_WALLET_OWNERS_ABI = [
@@ -600,12 +612,19 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err ?? 'send_userop_failed')
+      const debug = buildUserOpErrorDebug({
+        err,
+        sessionId: rec.id,
+        stage: toStep,
+        calls: fullCalls,
+      })
       await updateDeploySession({
         id: rec.id,
         step: toStep as any,
         lastUserOpHash: null,
         lastTxHash: null,
         lastError: `${toStep}_send_failed:${msg}`,
+        payloadPatch: { lastErrorDebug: debug },
       })
       throw err
     }
@@ -696,11 +715,18 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err ?? 'send_userop_failed')
+      const debug = buildUserOpErrorDebug({
+        err,
+        sessionId: rec.id,
+        stage: sentStep,
+        calls: fullCalls,
+      })
       await updateDeploySession({
         id: rec.id,
         lastUserOpHash: null,
         lastTxHash: null,
         lastError: `${sentStep}_send_failed:${msg}`,
+        payloadPatch: { lastErrorDebug: debug },
       })
       throw err
     }
@@ -1048,9 +1074,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<null>)
     }
     try {
+      let serializedErr = ''
+      try {
+        serializedErr = JSON.stringify(err)
+      } catch {
+        serializedErr = ''
+      }
+      const advanceDebug = buildUserOpErrorDebug({
+        err,
+        sessionId: rec.id,
+        stage: rec.step,
+        calls: null,
+      })
+      const revertLike =
+        isOnchainRevertLike(errMsg) ||
+        isOnchainRevertLike(serializedErr) ||
+        Boolean(advanceDebug.revertData || advanceDebug.selector)
       await updateDeploySession({
         id: rec.id,
         lastError: errMsg,
+        ...(revertLike ? { payloadPatch: { lastErrorDebug: advanceDebug } } : {}),
       })
       rec = (await getDeploySessionById(sessionId)) ?? rec
     } catch {

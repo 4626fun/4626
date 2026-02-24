@@ -494,4 +494,82 @@ describe('deploy session optimistic concurrency', () => {
     expect(res.body?.data?.step).toBe('completed')
     expect(sendUserOperationMock).not.toHaveBeenCalled()
   })
+
+  it('persists server-side revert debug on continue reverts (no debug blob leaked)', async () => {
+    const rec = {
+      ...makeDeploySession('created'),
+      payload: {
+        phase2Calls: [],
+        phase2FinalizeCalls: [makeCall('0xcalltarget', '0x12345678')],
+        phase3Calls: [],
+      },
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const e: any = new Error('Execution reverted for an unknown reason.')
+    e.cause = { cause: { data: '0x1375159e00000000' }, metaMessages: ['UserOperationExecutionError'] }
+    sendUserOperationMock.mockRejectedValueOnce(e)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(String(res.body?.error ?? '')).toContain('Deploy execution reverted:')
+    expect(String(res.body?.error ?? '')).toContain('InvalidCodeId()')
+    expect(JSON.stringify(res.body ?? {})).not.toContain('lastErrorDebug')
+
+    expect(updateDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'sess_1',
+        step: 'failed',
+        payloadPatch: expect.objectContaining({
+          lastErrorDebug: expect.objectContaining({
+            selector: '0x1375159e',
+            errorName: 'InvalidCodeId()',
+          }),
+        }),
+      }),
+    )
+  })
+
+  it('persists server-side revert debug on status send failures (no debug blob leaked)', async () => {
+    // Starting the next stage (`phase3_sent`) will attempt `sendUserOperation(...)`.
+    const rec = {
+      ...makeDeploySession('phase2_confirmed'),
+      payload: {
+        phase2Calls: [],
+        phase3Calls: [makeCall('0xphase3target', '0x12345678')],
+        phase4Calls: [],
+      },
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const e: any = new Error('UserOperationExecutionError: AA23 reverted')
+    e.cause = { cause: { data: '0x1375159e00000000' }, metaMessages: ['AA23 reverted'] }
+    sendUserOperationMock.mockRejectedValueOnce(e)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    // Status endpoint best-effort returns current state even if advance fails.
+    expect(res.statusCode).toBe(200)
+    expect(JSON.stringify(res.body ?? {})).not.toContain('lastErrorDebug')
+
+    expect(updateDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'sess_1',
+        step: 'phase3_sent',
+        payloadPatch: expect.objectContaining({
+          lastErrorDebug: expect.objectContaining({
+            selector: '0x1375159e',
+            errorName: 'InvalidCodeId()',
+          }),
+        }),
+      }),
+    )
+  })
 })

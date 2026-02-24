@@ -11,6 +11,7 @@ import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../se
 import { logger } from '../../../../server/_lib/logger.js'
 import { decryptWithSecret, getDeploySessionById, signDeployToken, transitionDeploySession, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
+import { buildUserOpErrorDebug } from '../../../../server/_lib/userOpRevertDebug.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
@@ -205,6 +206,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const rec = await getDeploySessionById(sessionId)
   if (!rec) return res.status(404).json({ success: false, error: 'Not found' } satisfies ApiEnvelope<null>)
+
+  // Best-effort stage context for server-side revert debugging (persisted to DB payload only).
+  let attemptedStage: string | null = null
+  let attemptedCalls: Array<{ to: Address; value: bigint; data: Hex }> | null = null
 
   // Check session expiration
   if (Date.parse(rec.expiresAt) <= Date.now()) {
@@ -423,6 +428,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!transitioned) {
         return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
       }
+      attemptedStage = toStep
+      attemptedCalls = calls
       const lastUserOpHash = await sendUserOperation(bundlerClient, {
         account,
         calls,
@@ -569,9 +576,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch {
       serializedErr = ''
     }
+    const debug = buildUserOpErrorDebug({
+      err,
+      sessionId: rec.id,
+      stage: attemptedStage,
+      calls: attemptedCalls,
+    })
+    const revertLike =
+      isOnchainRevertLike(msg) || isOnchainRevertLike(serializedErr) || Boolean(debug.revertData || debug.selector)
     const persistFailure = async () => {
       try {
-        await updateDeploySession({ id: rec.id, step: 'failed', lastError: pretty })
+        await updateDeploySession({
+          id: rec.id,
+          step: 'failed',
+          lastError: pretty,
+          ...(revertLike ? { payloadPatch: { lastErrorDebug: debug } } : {}),
+        })
       } catch {
         // ignore
       }
@@ -602,12 +622,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           'Deploy bundler/paymaster is not configured for this Vercel deployment. Set CDP_PAYMASTER_URL (or CDP_PAYMASTER_AND_BUNDLER_URL) to the Coinbase RPC endpoint; do not rely on same-origin /api/paymaster for server-side deploy-session calls.',
       } satisfies ApiEnvelope<null>)
     }
-    if (isOnchainRevertLike(msg) || isOnchainRevertLike(serializedErr)) {
+    if (revertLike) {
       logger.warn('deploy session continue reverted', pretty)
       await persistFailure()
       return res.status(409).json({
         success: false,
-        error: `Deploy execution reverted: ${pretty}`,
+        error: `Deploy execution reverted: ${pretty}${debug.errorName ? ` (${debug.errorName})` : ''}`,
       } satisfies ApiEnvelope<null>)
     }
     logger.error('deploy session continue failed', pretty)
