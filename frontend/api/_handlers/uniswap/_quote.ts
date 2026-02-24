@@ -5,6 +5,14 @@ import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../..
 import { isObject, readJsonObjectBody, toCleanErrorMessage, uniswapTradeFetch } from '../../../server/uniswap/trading.js'
 import { validateAddressField, validateChainIdField, validateIntegerAmountField } from '../../../server/uniswap/guards.js'
 
+function isErc20EthEnabledHeader(req: VercelRequest): boolean {
+  const raw = req.headers['x-erc20eth-enabled']
+  const v = Array.isArray(raw) ? raw[0] : raw
+  if (typeof v !== 'string') return false
+  const lc = v.trim().toLowerCase()
+  return lc === 'true' || lc === '1'
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -53,11 +61,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   delete payload.xChainedActionsEnabled
   delete payload.chainedActionsEnabled
 
+  const headers: Record<string, string> = {}
+  if (chainedActionsEnabled) headers['x-chained-actions-enabled'] = 'true'
+  if (isErc20EthEnabledHeader(req)) headers['x-erc20eth-enabled'] = 'true'
+
   const upstream = await uniswapTradeFetch({
     path: '/quote',
     method: 'POST',
     body: payload,
-    headers: chainedActionsEnabled ? { 'x-chained-actions-enabled': 'true' } : undefined,
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
   })
 
   if (upstream.status >= 400) {

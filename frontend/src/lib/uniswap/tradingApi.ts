@@ -20,6 +20,8 @@ export type CreateSwapRequest = components['schemas']['CreateSwapRequest']
 export type CreateSwapResponse = components['schemas']['CreateSwapResponse']
 export type OrderRequest = components['schemas']['OrderRequest']
 export type OrderResponse = components['schemas']['OrderResponse']
+export type WalletCheckDelegationRequestBody = components['schemas']['WalletCheckDelegationRequestBody']
+export type WalletCheckDelegationResponseBody = components['schemas']['WalletCheckDelegationResponseBody']
 
 export type TradeQuoteRequest = QuoteRequest & {
   // Local-only: used for caching + execution-mode attribution. Stripped before forwarding upstream.
@@ -298,6 +300,12 @@ export function toUserOpCallsFrom5792(batch: Record<string, unknown>): UserOpCal
 
 export async function buildSwap7702(body: Record<string, unknown>): Promise<Record<string, unknown>> {
   return post<Record<string, unknown>>('/api/uniswap/swap7702', body)
+}
+
+export async function fetchDelegationStatus(
+  body: WalletCheckDelegationRequestBody,
+): Promise<WalletCheckDelegationResponseBody & Record<string, unknown>> {
+  return post<WalletCheckDelegationResponseBody & Record<string, unknown>>('/api/uniswap/checkDelegation', body as any)
 }
 
 export async function createCrossChainPlan(body: Record<string, unknown>): Promise<Record<string, unknown>> {

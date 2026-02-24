@@ -4,12 +4,14 @@ import { handleOptions, setCors, setNoStore } from '../../../server/auth/_shared
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import { isObject, readJsonObjectBody, toCleanErrorMessage, uniswapTradeFetch } from '../../../server/uniswap/trading.js'
 
-function isErc20EthEnabledHeader(req: VercelRequest): boolean {
-  const raw = req.headers['x-erc20eth-enabled']
-  const v = Array.isArray(raw) ? raw[0] : raw
-  if (typeof v !== 'string') return false
-  const lc = v.trim().toLowerCase()
-  return lc === 'true' || lc === '1'
+function isChainIdArray(value: unknown): value is number[] {
+  if (!Array.isArray(value) || value.length === 0) return false
+  return value.every((x) => Number.isInteger(Number(x)))
+}
+
+function isAddressArray(value: unknown): value is string[] {
+  if (!Array.isArray(value) || value.length === 0) return false
+  return value.every((x) => typeof x === 'string' && x.trim().startsWith('0x'))
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -22,7 +24,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const clientIp = getClientIp(req)
-  const rate = checkRateLimit(rateLimitKey('uniswap-swap-7702', clientIp), RATE_LIMITS.general)
+  const rate = checkRateLimit(rateLimitKey('uniswap-check-delegation', clientIp), RATE_LIMITS.general)
   if (!rate.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
@@ -30,41 +32,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = await readJsonObjectBody(req)
   if (!body) return res.status(400).json({ success: false, error: 'Invalid JSON body' })
-  if (typeof body.smartContractDelegationAddress !== 'string' || !body.smartContractDelegationAddress.trim()) {
-    return res.status(400).json({ success: false, error: 'Missing required field: smartContractDelegationAddress' })
+
+  if (!('chainIds' in body) || !isChainIdArray(body.chainIds)) {
+    return res.status(400).json({ success: false, error: 'Missing required field: chainIds' })
+  }
+  if ('walletAddresses' in body && body.walletAddresses !== undefined && !isAddressArray(body.walletAddresses)) {
+    return res.status(400).json({ success: false, error: 'Invalid walletAddresses: expected address array' })
   }
 
-  const hasQuote =
-    isObject(body.classicQuote) ||
-    isObject(body.wrapUnwrapQuote) ||
-    isObject(body.bridgeQuote) ||
-    isObject(body.priorityQuote)
-  if (!hasQuote) {
-    return res.status(400).json({
-      success: false,
-      error: 'Missing one of classicQuote, wrapUnwrapQuote, bridgeQuote, or priorityQuote',
-    })
-  }
-
-  const headers = isErc20EthEnabledHeader(req) ? { 'x-erc20eth-enabled': 'true' } : undefined
   const upstream = await uniswapTradeFetch({
-    path: '/swap_7702',
+    path: '/wallet/check_delegation',
     method: 'POST',
     body,
-    headers,
   })
 
   if (upstream.status >= 400) {
     return res.status(upstream.status).json({
       success: false,
-      error: toCleanErrorMessage(upstream.payload, 'Failed to build Uniswap EIP-7702 swap transaction'),
+      error: toCleanErrorMessage(upstream.payload, 'Failed to check Uniswap wallet delegation'),
       details: upstream.payload,
     })
   }
 
   if (!isObject(upstream.payload)) {
-    return res.status(502).json({ success: false, error: 'Invalid swap_7702 response from Uniswap API' })
+    return res.status(502).json({ success: false, error: 'Invalid check_delegation response from Uniswap API' })
   }
 
   return res.status(200).json({ success: true, data: upstream.payload })
 }
+

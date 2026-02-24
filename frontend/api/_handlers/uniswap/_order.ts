@@ -4,6 +4,14 @@ import { handleOptions, setCors, setNoStore } from '../../../server/auth/_shared
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import { isObject, readJsonObjectBody, toCleanErrorMessage, uniswapTradeFetch } from '../../../server/uniswap/trading.js'
 
+function isErc20EthEnabledHeader(req: VercelRequest): boolean {
+  const raw = req.headers['x-erc20eth-enabled']
+  const v = Array.isArray(raw) ? raw[0] : raw
+  if (typeof v !== 'string') return false
+  const lc = v.trim().toLowerCase()
+  return lc === 'true' || lc === '1'
+}
+
 export function validateOrderResponsePayload(payload: unknown): string | null {
   if (!isObject(payload)) return 'Invalid order response from Uniswap API'
   if (typeof payload.requestId !== 'string' || !payload.requestId.trim()) {
@@ -43,10 +51,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Missing required field: quote' })
   }
 
+  const headers = isErc20EthEnabledHeader(req) ? { 'x-erc20eth-enabled': 'true' } : undefined
   const upstream = await uniswapTradeFetch({
     path: '/order',
     method: 'POST',
     body,
+    headers,
   })
 
   if (upstream.status >= 400) {
