@@ -5,7 +5,7 @@ import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { CONTRACTS } from '@/config/contracts'
 import { normalizeUniswapError } from '@/lib/uniswap/error'
-import { areEquivalentSwapTokens, BASE_CHAIN_ID, getNestedAmountOut } from '@/lib/uniswap/swapUtils'
+import { areEquivalentSwapTokens, BASE_CHAIN_ID, getNestedAmountOut, NATIVE_TOKEN_ADDRESS } from '@/lib/uniswap/swapUtils'
 import {
   assertValidSwapTransaction,
   buildSwap,
@@ -234,6 +234,9 @@ export function useSwapExecution(params: {
         swapper: params.executionAddress,
         slippageTolerance: params.parsedSlippage,
         routingPreference: 'BEST_PRICE',
+        // Avoid the Permit2 typed-data using a max uint160 allowance.
+        // For ERC20 inputs, this makes Permit2 ask for exactly the swap amount.
+        permitAmount: 'EXACT',
         walletModeKey: params.executionMode,
       })
       if (runId !== quoteRunRef.current) return
@@ -281,6 +284,14 @@ export function useSwapExecution(params: {
 
   const handleCheckApproval = useCallback(async () => {
     if (!params.executionAddress || !isReady) return
+    // Native ETH does not require ERC20 approvals (Permit2/allowance).
+    // Uniswap Trading API will embed the amount in `tx.value` for native input.
+    if (params.tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS) {
+      setError('')
+      setApprovalData({ approval: null, cancel: null })
+      setStatus('No token approval required for ETH')
+      return
+    }
     setBusy('approval')
     setError('')
     setStatus('')
@@ -348,6 +359,19 @@ export function useSwapExecution(params: {
       if (runId !== quoteRunRef.current) return
       const amount = parseUnits(parsableAmount, tokenInDecimals).toString()
 
+      const approvalPromise =
+        params.tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
+          ? Promise.resolve({ approval: null, cancel: null } as any)
+          : checkTradeApproval({
+              walletAddress: params.executionAddress,
+              token: params.tokenIn,
+              amount,
+              chainId: BASE_CHAIN_ID,
+              tokenOut: params.tokenOut,
+              tokenOutChainId: BASE_CHAIN_ID,
+              includeGasInfo: true,
+            })
+
       const [nextQuote, nextApproval] = await Promise.all([
         fetchTradeQuote({
           tokenIn: params.tokenIn,
@@ -359,17 +383,10 @@ export function useSwapExecution(params: {
           swapper: params.executionAddress,
           slippageTolerance: params.parsedSlippage,
           routingPreference: 'BEST_PRICE',
+          permitAmount: 'EXACT',
           walletModeKey: params.executionMode,
         }),
-        checkTradeApproval({
-          walletAddress: params.executionAddress,
-          token: params.tokenIn,
-          amount,
-          chainId: BASE_CHAIN_ID,
-          tokenOut: params.tokenOut,
-          tokenOutChainId: BASE_CHAIN_ID,
-          includeGasInfo: true,
-        }),
+        approvalPromise,
       ])
       if (runId !== quoteRunRef.current) return
       setQuote(nextQuote)

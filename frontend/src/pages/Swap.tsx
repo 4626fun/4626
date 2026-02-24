@@ -34,13 +34,16 @@ import {
 } from '@/lib/uniswap/walletMode'
 import {
   BASE_CHAIN_ID,
+  NATIVE_TOKEN_ADDRESS,
   buildTokenOptions,
   trustWalletBaseLogo,
   type TokenOption,
 } from '@/lib/uniswap/swapUtils'
 
 const CORE_TOKENS: TokenOption[] = [
-  { symbol: 'ETH', name: 'Ethereum', address: CONTRACTS.weth, group: 'core', logoUrl: trustWalletBaseLogo(CONTRACTS.weth) },
+  // Represent ETH as native for Uniswap Trading API + wagmi balances.
+  // Keep the logo pointed at WETH so TrustWallet assets load reliably on Base.
+  { symbol: 'ETH', name: 'Ethereum', address: NATIVE_TOKEN_ADDRESS, group: 'core', logoUrl: trustWalletBaseLogo(CONTRACTS.weth) },
   { symbol: 'USDC', name: 'USD Coin', address: CONTRACTS.usdc, group: 'core', logoUrl: trustWalletBaseLogo(CONTRACTS.usdc) },
   { symbol: 'BTC', name: 'Coinbase Wrapped BTC', address: '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf', group: 'core', logoUrl: trustWalletBaseLogo('0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf') },
   { symbol: 'USDT', name: 'Tether USD', address: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2', group: 'core', logoUrl: trustWalletBaseLogo('0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2') },
@@ -169,7 +172,7 @@ export function Swap() {
     parsedDeadlineMinutes,
     switchTokens,
   } = useSwapState({
-    initialTokenIn: CONTRACTS.weth,
+    initialTokenIn: NATIVE_TOKEN_ADDRESS,
     initialTokenOut: CONTRACTS.usdc,
   })
 
@@ -297,8 +300,8 @@ export function Swap() {
   const tokenOutSymbol = tokenOutDisplay.symbol
 
   // ─── Token balances ───────────────────────────────────────────────────────
-  const isTokenInNative = tokenIn.toLowerCase() === CONTRACTS.weth.toLowerCase()
-  const isTokenOutNative = tokenOut.toLowerCase() === CONTRACTS.weth.toLowerCase()
+  const isTokenInNative = tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
+  const isTokenOutNative = tokenOut.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
   const { data: tokenInBalData } = useBalance({
     address: executionAddress ?? undefined,
     token: isTokenInNative ? undefined : (tokenIn as `0x${string}`),
@@ -440,10 +443,12 @@ export function Swap() {
     if (!canonicalAddress) return
     setLpBusy('lpQuote'); setLpError(''); setLpStatus('')
     try {
+      const t0 = tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS ? CONTRACTS.weth : tokenIn
+      const t1 = tokenOut.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS ? CONTRACTS.weth : tokenOut
       await quoteCreatePosition({
         chainId: BASE_CHAIN_ID,
         walletAddress: canonicalAddress,
-        token0: tokenIn, token1: tokenOut,
+        token0: t0, token1: t1,
         amount0: lpAmountA, amount1: lpAmountB,
         feeTier: Number(lpFeeTier),
         lowerTick: lpMode === 'advanced' && lpLowerTick.trim() ? Number(lpLowerTick) : undefined,
@@ -459,10 +464,12 @@ export function Swap() {
     if (!canonicalAddress) return
     setLpBusy('lpCreate'); setLpError(''); setLpStatus('')
     try {
+      const t0 = tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS ? CONTRACTS.weth : tokenIn
+      const t1 = tokenOut.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS ? CONTRACTS.weth : tokenOut
       const data = await createPosition({
         chainId: BASE_CHAIN_ID,
         walletAddress: canonicalAddress,
-        token0: tokenIn, token1: tokenOut,
+        token0: t0, token1: t1,
         amount0: lpAmountA, amount1: lpAmountB,
         feeTier: Number(lpFeeTier),
         lowerTick: lpMode === 'advanced' && lpLowerTick.trim() ? Number(lpLowerTick) : undefined,
