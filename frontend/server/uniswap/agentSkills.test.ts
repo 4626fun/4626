@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./trading.js', () => ({
   isObject: (v: unknown) => Boolean(v) && typeof v === 'object' && !Array.isArray(v),
-  toCleanErrorMessage: (v: unknown, fallback: string) => (typeof v === 'string' && v ? v : fallback),
+  toCleanErrorMessage: (v: unknown, fallback: string) => {
+    if (typeof v === 'string' && v) return v
+    if (v && typeof v === 'object' && !Array.isArray(v) && typeof (v as any).detail === 'string' && (v as any).detail) {
+      return String((v as any).detail)
+    }
+    return fallback
+  },
   uniswapTradeFetch: vi.fn(async () => ({ status: 200, payload: { ok: true } })),
 }))
 
