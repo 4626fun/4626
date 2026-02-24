@@ -17,7 +17,10 @@ cd "$ROOT_DIR"
 echo "Generating deploy bytecode → frontend/src/deploy/bytecode.generated.ts"
 
 # Ensure artifacts are up to date.
-forge build >/dev/null
+#
+# We only need contract creation bytecode for deployments. Tests/scripts can be out-of-sync
+# (e.g. constructor arg changes) and shouldn't block regenerating frontend deploy bytecode.
+forge build --skip test --skip script >/dev/null
 
 bytecode() {
   # Prints creation bytecode without the leading "0x" (we add it in TS as `'0x' + '...'`
