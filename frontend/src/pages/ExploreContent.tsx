@@ -119,14 +119,14 @@ export function ExploreContent() {
   }
 
   return (
-    <div className="relative pb-0 min-h-screen">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
+    <div className="relative min-h-screen pt-1 sm:pt-2">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-2 sm:pt-4 pb-4 sm:pb-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="mb-5 sm:mb-8"
+          className="mb-4 sm:mb-6"
         >
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-medium text-white mb-1 sm:mb-2">
             Top Content on Base
