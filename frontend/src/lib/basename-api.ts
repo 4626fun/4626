@@ -1,8 +1,8 @@
 // Basenames integration using OnchainKit
 // Docs: https://docs.base.org/base-account/basenames/basenames-onchainkit-tutorial
 
-import { createPublicClient, http } from 'viem'
-import { base, baseSepolia } from 'viem/chains'
+import { createPublicClient, http, toCoinType } from 'viem'
+import { base, baseSepolia, mainnet } from 'viem/chains'
 import { normalize } from 'viem/ens'
 import { logger } from './logger'
 
@@ -26,25 +26,27 @@ export async function getBasename(
   chainId: number = base.id
 ): Promise<string | null> {
   try {
-    const chain = chainId === baseSepolia.id ? baseSepolia : base
-
+    // Basenames are resolved via ENSIP-19 reverse resolution on Ethereum mainnet,
+    // using Base chain coinType + CCIP gateways.
+    //
+    // This works in browsers without requiring Base L2 ENS universal resolver config.
     const client = createPublicClient({
-      chain,
+      chain: mainnet,
       transport: http(),
     })
 
-    // Get the primary name for this address
     const name = await client.getEnsName({
       address: address as `0x${string}`,
+      coinType: toCoinType(chainId === baseSepolia.id ? baseSepolia.id : base.id),
+      gatewayUrls: ['https://ccip.ens.xyz'],
     })
 
+    if (!name) return null
+    // Guardrail: ENSIP-19 can resolve non-Basenames depending on user config.
+    // For 4626 identity UI, only treat *.base.eth as a Basename.
+    if (!name.toLowerCase().endsWith('.base.eth')) return null
     return name
   } catch (error) {
-    // viem throws before any RPC call if the chain config doesn't define the ENS Universal Resolver.
-    // Base (chainId 8453) currently doesn't in viem, so treat this as "no basename" instead of
-    // spamming production logs.
-    const msg = error instanceof Error ? error.message : String(error ?? '')
-    if (msg.includes('does not support contract "ensUniversalResolver"')) return null
     logger.error('Failed to fetch Basename', error)
     return null
   }
@@ -64,9 +66,8 @@ export async function getBasenameProfile(
       return { name: null }
     }
 
-    const chain = chainId === baseSepolia.id ? baseSepolia : base
     const client = createPublicClient({
-      chain,
+      chain: mainnet,
       transport: http(),
     })
 
@@ -95,8 +96,6 @@ export async function getBasenameProfile(
       url,
     }
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error ?? '')
-    if (msg.includes('does not support contract "ensUniversalResolver"')) return { name: null }
     logger.error('Failed to fetch Basename profile', error)
     return { name: null }
   }

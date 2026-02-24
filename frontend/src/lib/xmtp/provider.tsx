@@ -16,8 +16,9 @@ import {
 } from 'react'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { APP_ORIGIN } from '@/lib/host'
-import { getBasename } from '@/lib/basename-api'
 import { apiFetch } from '@/lib/apiBase'
+import { getBasenameName } from '@/lib/xmtp/socialIdentity'
+import { CANONICAL_SCW_CHAIN_ID, decideXmtpSignerType, resolveXmtpChainId } from '@/lib/xmtp/signerUtils'
 import {
   Client,
   Opfs,
@@ -139,7 +140,6 @@ const XMTP_ENV: 'production' | 'dev' | 'local' =
     : 'production'
 const XMTP_APP_VERSION = '4626.fun-web'
 const ENC_KEY_HEX_RE = /^0x[0-9a-fA-F]{64}$/
-const CANONICAL_SCW_CHAIN_ID = 8453 // Base mainnet
 
 function encKeyStorageKey(address: string): string {
   return `cv:xmtp:encKey:${XMTP_ENV}:${address.toLowerCase()}`
@@ -267,16 +267,6 @@ function normalizeEvmAddress(value: unknown): string | null {
   const raw = value.trim()
   if (!raw || !isAddress(raw)) return null
   return getAddress(raw).toLowerCase()
-}
-
-function resolveXmtpChainId(walletChainId: number | null | undefined): number {
-  // XMTP SCW identities are registered against a specific EVM chain.
-  // Some wallets briefly report chain id `0` during hydration/reconnect;
-  // treat non-positive/non-finite values as unknown and default to Base.
-  if (typeof walletChainId !== 'number' || !Number.isFinite(walletChainId) || walletChainId <= 0) {
-    return 8453
-  }
-  return Math.floor(walletChainId)
 }
 
 function pickCanonicalSmartWalletAddress(row: WaitlistMeData | null): string | null {
@@ -478,7 +468,7 @@ function showNotification(title: string, body: string) {
 // ---------------------------------------------------------------------------
 
 export function XmtpChatProvider({ children }: { children: ReactNode }) {
-  const { address, isConnected } = useAccount()
+  const { address, isConnected, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
 
@@ -537,7 +527,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       conversationsRef.current = []
   }
 
-  // ------- resolve address → display name (Basename / ENS / truncated) -------
+  // ------- resolve address → display name (Basename / truncated) -------
   const nameCache = useRef<Map<string, string>>(new Map())
 
   const resolveDisplayName = useCallback(async (address: string): Promise<string> => {
@@ -545,16 +535,11 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     const cached = nameCache.current.get(lower)
     if (cached) return cached
 
-    try {
-      const basename = await getBasename(address)
-      if (basename) {
-        // Strip .base.eth / .eth suffix for a cleaner display name
-        const short = basename.replace(/\.base\.eth$|\.eth$/, '')
-        nameCache.current.set(lower, short)
-        return short
-      }
-    } catch {
-      // Basename resolution failed — fall through to truncated address
+    const basename = await getBasenameName(address).catch(() => null)
+    if (basename) {
+      const short = basename.replace(/\.base\.eth$/i, '')
+      nameCache.current.set(lower, short)
+      return short
     }
 
     const truncated = truncateAddress(address)
@@ -917,41 +902,41 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
       setStatus('connecting')
 
-      // Detect whether the XMTP identity is a smart contract wallet (SCW).
       const walletChainId = resolveXmtpChainId(walletClient.chain?.id)
       const storedSignerType = readStoredSignerType(xmtpIdentityAddress)
 
-      let isSmartWallet = Boolean(resolved.isCanonicalSmartWallet || storedSignerType === 'SCW')
-      if (!isSmartWallet && publicClient) {
+      let hasContractCode: boolean | null = null
+      if (publicClient) {
         try {
           const code = await publicClient.getCode({ address: xmtpIdentityAddress as `0x${string}` })
-          isSmartWallet = typeof code === 'string' && code !== '0x' && code.length > 2
-          if (isSmartWallet) writeStoredSignerType(xmtpIdentityAddress, 'SCW')
+          hasContractCode = typeof code === 'string' ? (code !== '0x' && code.length > 2) : null
         } catch {
-          // Preserve previous fallback behavior on RPC failures:
-          // if we're connected to Base, assume SCW.
-          isSmartWallet = walletChainId === CANONICAL_SCW_CHAIN_ID
+          hasContractCode = null
         }
-      } else if (!isSmartWallet && !publicClient) {
-        isSmartWallet = walletChainId === CANONICAL_SCW_CHAIN_ID
       }
 
-      // Critical: XMTP identity updates must keep a consistent SCW chainId.
-      // For canonical CSW identities we always sign as Base (8453), even if the
-      // wallet is currently connected to another chain.
-      const scwChainId = resolved.isCanonicalSmartWallet ? CANONICAL_SCW_CHAIN_ID : walletChainId
+      const signerDecision = decideXmtpSignerType({
+        isCanonicalSmartWallet: resolved.isCanonicalSmartWallet,
+        storedSignerType,
+        connector,
+        hasContractCode,
+        walletChainId,
+      })
+
+      if (signerDecision.signerType === 'SCW') writeStoredSignerType(xmtpIdentityAddress, 'SCW')
+      else writeStoredSignerType(xmtpIdentityAddress, 'EOA')
 
       const signMessageFn = async (message: string) => {
         const s = await walletClient.signMessage({ message })
         return hexToBytes(s)
       }
 
-      const signer: Signer = isSmartWallet
+      const signer: Signer = signerDecision.signerType === 'SCW'
         ? {
             type: 'SCW',
             getIdentifier: () => ({ identifier: xmtpIdentityAddress as `0x${string}`, identifierKind: IdentifierKind.Ethereum }),
             signMessage: signMessageFn,
-            getChainId: () => BigInt(scwChainId),
+            getChainId: () => BigInt(signerDecision.scwChainId),
           }
         : {
             type: 'EOA',
@@ -1016,7 +1001,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     } finally {
       connectInFlightRef.current = false
     }
-  }, [address, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary])
+  }, [address, connector, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary])
 
   const resetInstallations = useCallback(async () => {
     if (!address || !walletClient) throw new Error('Connect wallet first.')
@@ -1037,20 +1022,24 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
     // Use the same signer shape we use for normal Client.create.
     const storedSignerType = readStoredSignerType(address)
-    let isSmartWallet = storedSignerType === 'SCW'
+    let hasContractCode: boolean | null = null
     if (publicClient) {
       try {
         const code = await publicClient.getCode({ address })
-        isSmartWallet = isSmartWallet || (typeof code === 'string' && code !== '0x' && code.length > 2)
-        if (typeof code === 'string' && code !== '0x' && code.length > 2) writeStoredSignerType(address, 'SCW')
+        hasContractCode = typeof code === 'string' ? (code !== '0x' && code.length > 2) : null
       } catch {
-        isSmartWallet = isSmartWallet || (walletChainId === CANONICAL_SCW_CHAIN_ID)
+        hasContractCode = null
       }
-    } else {
-      isSmartWallet = isSmartWallet || (walletChainId === CANONICAL_SCW_CHAIN_ID)
     }
+    const signerDecision = decideXmtpSignerType({
+      isCanonicalSmartWallet: true,
+      storedSignerType,
+      connector,
+      hasContractCode,
+      walletChainId,
+    })
 
-    const signer: Signer = isSmartWallet
+    const signer: Signer = signerDecision.signerType === 'SCW'
       ? {
           type: 'SCW',
           getIdentifier: () => ({
