@@ -31,8 +31,22 @@ export async function readJsonObjectBody(req: VercelRequest): Promise<JsonObject
 export function toCleanErrorMessage(value: unknown, fallback = 'Uniswap request failed'): string {
   if (typeof value === 'string' && value.trim()) return value.trim().slice(0, 400)
   if (isObject(value)) {
-    const message = typeof value.message === 'string' ? value.message : typeof value.error === 'string' ? value.error : ''
+    // Uniswap Trading API error shape (OpenAPI):
+    // - { errorCode: string, detail?: string }
+    // Our internal handlers also sometimes return { message } or { error }.
+    const detail = typeof (value as any).detail === 'string' ? String((value as any).detail) : ''
+    if (detail.trim()) return detail.trim().slice(0, 400)
+
+    const message =
+      typeof (value as any).message === 'string'
+        ? String((value as any).message)
+        : typeof (value as any).error === 'string'
+          ? String((value as any).error)
+          : ''
     if (message.trim()) return message.trim().slice(0, 400)
+
+    const code = typeof (value as any).errorCode === 'string' ? String((value as any).errorCode) : ''
+    if (code.trim()) return code.trim().slice(0, 120)
   }
   return fallback
 }
