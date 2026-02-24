@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { createPublicClient, http } from 'viem'
 import { mainnet } from 'viem/chains'
 import { getBasenameProfile, formatBasename } from '@/lib/basename-api'
+import { apiFetch } from '@/lib/apiBase'
 
 export type IdentitySource = 'farcaster' | 'lens' | 'ens' | 'basename' | 'address'
 
@@ -72,40 +73,24 @@ type LensUser = {
 }
 
 async function fetchFarcasterUser(address: string): Promise<FarcasterUser | null> {
-  const neynarKey = (import.meta.env.VITE_NEYNAR_API_KEY as string | undefined) ?? ''
-  if (!neynarKey) return null
+  // Prefer our server-side resolver so we don't require a client-exposed Neynar key.
+  // This also allows environments like desktop web to resolve avatars consistently.
+  const res = await apiFetch(`/api/social/farcaster?address=${encodeURIComponent(address)}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  }).catch(() => null)
+  if (!res || !res.ok) return null
 
-  const res = await fetch(
-    `https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${address}`,
-    { headers: { api_key: neynarKey } },
-  )
-  if (!res.ok) return null
+  const json = (await res.json().catch(() => null)) as any
+  const profile = json?.success === true ? json?.data : null
+  if (!profile) return null
 
-  const data = (await res.json().catch(() => null)) as Record<string, unknown> | null
-  if (!data) return null
+  const username = typeof profile?.username === 'string' && profile.username.trim() ? profile.username.trim() : null
+  const displayNameRaw = typeof profile?.displayName === 'string' ? profile.displayName.trim() : ''
+  const displayName = displayNameRaw || (username ? `@${username}` : truncate(address))
+  const avatar = typeof profile?.avatar === 'string' && profile.avatar.trim() ? profile.avatar.trim() : null
 
-  const direct = data[address.toLowerCase()]
-  const rows = Array.isArray(direct)
-    ? direct
-    : Object.values(data).find((value) => Array.isArray(value))
-  const user = Array.isArray(rows) ? (rows[0] as Record<string, unknown> | undefined) : undefined
-  const username = typeof user?.username === 'string' ? user.username : null
-  if (!username) return null
-
-  const displayName =
-    (typeof user?.display_name === 'string' && user.display_name.trim()) ||
-    `@${username}`
-  const avatar =
-    (typeof user?.pfp_url === 'string' && user.pfp_url) ||
-    (typeof (user?.pfp as Record<string, unknown> | undefined)?.url === 'string'
-      ? String((user?.pfp as Record<string, unknown>).url)
-      : null)
-
-  return {
-    displayName,
-    username,
-    avatar,
-  }
+  return { displayName, username, avatar }
 }
 
 // ---------------------------------------------------------------------------
