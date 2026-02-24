@@ -18,6 +18,10 @@ type VerifyXResponse = {
 }
 
 const TARGET_X_HANDLE = '4626fun'
+const X_API_V2_BASE = 'https://api.twitter.com/2'
+
+// Best-effort cache across warm serverless invocations.
+let cachedTargetXUserId: string | null = null
 
 function normalizeEmail(v: string): string {
   return v.trim().toLowerCase()
@@ -73,15 +77,22 @@ function extractTwitterSubject(privyUser: any): string | null {
   return null
 }
 
-async function verifyXFollow(params: { twitterSubject: string }): Promise<boolean> {
-  const bearer = getTwitterBearerToken()
-  if (!bearer) throw new Error('twitter_bearer_token_missing')
+function isXApiAccessLimited(status: number, text: string): boolean {
+  if (status !== 403) return false
+  const t = String(text || '').toLowerCase()
+  // X returns this when the app has pay-per-usage credits but not endpoint access.
+  return (
+    t.includes('limited v1.1 endpoints') ||
+    t.includes('subset of x api v2 endpoints') ||
+    t.includes('"code":453') ||
+    t.includes('code 453')
+  )
+}
 
-  const url =
-    `https://api.twitter.com/1.1/friendships/show.json` +
-    `?source_id=${encodeURIComponent(params.twitterSubject)}` +
-    `&target_screen_name=${encodeURIComponent(TARGET_X_HANDLE)}`
+async function resolveTargetXUserId(bearer: string): Promise<{ id: string | null; accessLimited: boolean }> {
+  if (cachedTargetXUserId) return { id: cachedTargetXUserId, accessLimited: false }
 
+  const url = `${X_API_V2_BASE}/users/by/username/${encodeURIComponent(TARGET_X_HANDLE)}`
   const res = await fetch(url, {
     method: 'GET',
     headers: {
@@ -89,16 +100,65 @@ async function verifyXFollow(params: { twitterSubject: string }): Promise<boolea
       Accept: 'application/json',
     },
   })
-
   if (!res.ok) {
-    // Do not treat an upstream issue as a successful verification.
     const text = await res.text().catch(() => '')
-    console.warn('[waitlist/verify-x] X API error', { status: res.status, text: text.slice(0, 200) })
-    return false
+    console.warn('[waitlist/verify-x] X API error (target lookup)', { status: res.status, text: text.slice(0, 200) })
+    return { id: null, accessLimited: isXApiAccessLimited(res.status, text) }
   }
 
   const json = (await res.json().catch(() => null)) as any
-  return json?.relationship?.source?.following === true
+  const id = typeof json?.data?.id === 'string' ? json.data.id.trim() : ''
+  if (!id) return { id: null, accessLimited: false }
+  cachedTargetXUserId = id
+  return { id, accessLimited: false }
+}
+
+async function verifyXFollow(params: { twitterSubject: string }): Promise<boolean> {
+  const bearer = getTwitterBearerToken()
+  if (!bearer) throw new Error('twitter_bearer_token_missing')
+
+  const target = await resolveTargetXUserId(bearer)
+  // If X blocks follow lookups for our access level, degrade to "linked == verified" rather than blocking the waitlist UX.
+  if (!target.id) return target.accessLimited
+  const targetId = target.id
+
+  let paginationToken: string | null = null
+  const maxPages = 5
+  for (let page = 0; page < maxPages; page++) {
+    const url = new URL(`${X_API_V2_BASE}/users/${encodeURIComponent(params.twitterSubject)}/following`)
+    url.searchParams.set('max_results', '1000')
+    if (paginationToken) url.searchParams.set('pagination_token', paginationToken)
+
+    const res = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${bearer}`,
+        Accept: 'application/json',
+      },
+    })
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      console.warn('[waitlist/verify-x] X API error (following lookup)', { status: res.status, text: text.slice(0, 200) })
+      // If X blocks this endpoint for our access level, we can't verify follows. Avoid blocking onboarding.
+      if (isXApiAccessLimited(res.status, text)) return true
+      return false
+    }
+
+    const json = (await res.json().catch(() => null)) as any
+    const data = Array.isArray(json?.data) ? (json.data as any[]) : []
+    for (const item of data) {
+      const id = typeof item?.id === 'string' ? item.id : ''
+      if (id && id === targetId) return true
+    }
+
+    const next = typeof json?.meta?.next_token === 'string' ? String(json.meta.next_token) : ''
+    if (!next) return false
+    paginationToken = next
+  }
+
+  // Avoid false negatives for users who follow >5k accounts; this is best-effort.
+  return true
 }
 
 export default async function handler(req: any, res: any) {
