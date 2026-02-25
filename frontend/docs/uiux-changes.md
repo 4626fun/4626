@@ -81,6 +81,45 @@
 
 ---
 
+## Phase 4: Screen-by-Screen Polish
+
+### Layout (P1 — cross-app a11y)
+
+| Change | Why it's better |
+|--------|-----------------|
+| Added skip-to-content link | Keyboard users can skip past the nav bar directly to page content. Hidden until focused. |
+| Added `id="main-content"` to `<main>` | Target for skip-to-content link. |
+| Mobile nav: `aria-label="Mobile navigation"` | Screen readers identify the nav region. |
+| Mobile nav links: `aria-label`, `aria-current="page"` | Screen readers announce the active page and link purpose. |
+| Icons: `aria-hidden="true"` | Decorative icons are hidden from screen readers. |
+| Loading spinner: `role="status"` | Screen readers announce loading state. |
+
+### Swap (P2)
+
+| Change | Why it's better |
+|--------|-----------------|
+| LP status/error → `<Alert>` component | Consistent styling with role="alert" for screen reader announcement. |
+| Empty positions → icon + guidance text | "No active positions" + "Add liquidity above to start earning fees" is more actionable than plain text. |
+| Settings button → `aria-label="Swap settings"` | Previously icon-only with `title` (not announced by all screen readers). |
+
+### Portfolio (P2)
+
+| Change | Why it's better |
+|--------|-----------------|
+| Token loading → Skeleton placeholders | Smooth visual placeholder instead of "Loading balances…" text. Prevents layout shift. |
+| Disconnected state → icon + "Connect a wallet" | Centered empty state with Wallet icon is more visible and actionable. |
+| "Coming soon" tabs → contextual text | e.g. "For now, use Explore → Transactions" gives users an alternative action. |
+
+### Account (P2)
+
+| Change | Why it's better |
+|--------|-----------------|
+| Error/success → `<Alert>` component | Consistent feedback with icon + role="alert". |
+| Loading → Skeleton placeholders | Preserves layout shape during load. More polished than plain text. |
+| Sign-in required → centered with icon | Focused layout with Wallet icon, better heading hierarchy, clearer CTA. |
+
+---
+
 ## Follow-ups (not in this PR)
 
 - **P1-2**: Apply `useReducedMotion()` in all Framer Motion components
