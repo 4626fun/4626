@@ -181,6 +181,36 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
   },
 ] as const
 
+const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
+  {
+    type: 'function',
+    name: 'finalizePhase2',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
 function asOwnerBytes(owner: Address): Hex {
   return encodeAbiParameters([{ type: 'address' }], [owner]) as Hex
 }
@@ -250,17 +280,17 @@ function inferRequestOrigin(req: VercelRequest): string | null {
 }
 
 function extractShareOftFromFinalizeCall(data: Hex): Address | null {
-  try {
-    const decoded = decodeFunctionData({
-      abi: CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI,
-      data,
-    })
-    const params = (decoded.args?.[0] ?? null) as { shareOFT?: string } | null
-    if (!params?.shareOFT || !isAddress(params.shareOFT)) return null
-    return getAddress(params.shareOFT as Address)
-  } catch {
-    return null
+  for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
+    try {
+      const decoded = decodeFunctionData({ abi, data })
+      const params = (decoded.args?.[0] ?? null) as { shareOFT?: string } | null
+      if (!params?.shareOFT || !isAddress(params.shareOFT)) continue
+      return getAddress(params.shareOFT as Address)
+    } catch {
+      continue
+    }
   }
+  return null
 }
 
 async function ensureSolanaRouteReadyForPhase2(params: {

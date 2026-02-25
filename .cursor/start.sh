@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
+# Session startup: refresh dependencies after pulling latest changes.
+# Runs before every cloud agent session (must be idempotent & fast).
 set -euo pipefail
 
-cd "$(git rev-parse --show-toplevel)"
+export PATH="$HOME/.foundry/bin:$PATH"
 
-if command -v docker >/dev/null 2>&1; then
-  echo "==> Starting Docker service (if available)"
-  sudo service docker start || true
-fi
+# Refresh submodules (fast no-op when already current)
+git submodule update --init --recursive
 
-echo "==> start complete"
+# Refresh JS dependencies
+pnpm install --frozen-lockfile
+pnpm -C frontend install --frozen-lockfile
+cd cre && npm ci && cd ..

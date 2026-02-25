@@ -1,30 +1,27 @@
 #!/usr/bin/env bash
+# One-time environment setup for CreatorVault cloud agents.
+# Run once when provisioning a new sandbox or after a clean wipe.
 set -euo pipefail
 
-cd "$(git rev-parse --show-toplevel)"
-
-echo "==> Installing dependencies for project-4626"
-
-if ! command -v pnpm >/dev/null 2>&1 && command -v corepack >/dev/null 2>&1; then
-  echo "==> Enabling corepack for pnpm"
-  corepack enable
+# ── Foundry (Solidity toolchain) ──────────────────────────────────────────────
+if ! command -v forge &>/dev/null; then
+  curl -L https://foundry.paradigm.xyz | bash
+  export PATH="$HOME/.foundry/bin:$PATH"
+  foundryup
 fi
 
-if ! command -v pnpm >/dev/null 2>&1; then
-  echo "ERROR: pnpm is required for root/frontend/docs installs." >&2
-  exit 1
-fi
+# ── Git submodules (required for forge build / test) ──────────────────────────
+git submodule update --init --recursive
 
-echo "==> Installing root dependencies"
-pnpm install --frozen-lockfile || pnpm install
+# ── Root dependencies (Solidity: OpenZeppelin, LayerZero, Uniswap) ────────────
+pnpm install --frozen-lockfile
 
-echo "==> Installing frontend dependencies"
-pnpm -C frontend install --frozen-lockfile || pnpm -C frontend install
+# ── Frontend dependencies (Vite + React + Vercel API) ─────────────────────────
+pnpm -C frontend install --frozen-lockfile
 
-echo "==> Installing docs dependencies"
-pnpm -C apps/docs-site install --frozen-lockfile || pnpm -C apps/docs-site install
+# ── CRE automation dependencies (keeper bots) ────────────────────────────────
+cd cre && npm ci && cd ..
 
-echo "==> Installing CRE dependencies"
-npm --prefix cre ci || npm --prefix cre install
-
-echo "==> install complete"
+# ── Env files (copy examples if missing — never overwrite existing) ───────────
+[ -f .env ]          || cp .env.example .env
+[ -f frontend/.env ] || cp frontend/.env.example frontend/.env
