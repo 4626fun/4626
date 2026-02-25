@@ -25,8 +25,8 @@ import {
   getMintLen,
 } from '@solana/spl-token';
 import { PublicKey } from '@solana/web3.js';
-import { loadKeeperKeypair } from '../../utils/solana.js';
-import { CHAINS, requireEnv } from '../../config.js';
+import { loadKeeperKeypair } from '../../../utils/solana.js';
+import { CHAINS } from '../../../config.js';
 
 const rpcUrl = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
 const connection = new Connection(rpcUrl, 'confirmed');

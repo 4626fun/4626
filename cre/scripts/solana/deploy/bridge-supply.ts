@@ -21,7 +21,7 @@
 import { createPublicClient, createWalletClient, http, parseAbi, getAddress, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { base } from 'viem/chains';
-import { requireEnv } from '../../config.js';
+import { requireEnv } from '../../../config.js';
 
 const rpcUrl = requireEnv('BASE_RPC_URL');
 const pk = `0x${requireEnv('CRE_ETH_PRIVATE_KEY')}` as Hex;

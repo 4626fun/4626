@@ -16,8 +16,8 @@
 
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { CHAINS, requireEnv } from '../../config.js';
-import { loadKeeperKeypair } from '../../utils/solana.js';
+import { CHAINS, requireEnv } from '../../../config.js';
+import { loadKeeperKeypair } from '../../../utils/solana.js';
 
 const rpcUrl = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
 const programId = CHAINS.solana.programId;

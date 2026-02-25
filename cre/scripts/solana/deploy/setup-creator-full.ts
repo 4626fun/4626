@@ -39,8 +39,8 @@ import {
   getMintLen,
 } from '@solana/spl-token';
 import { Program, AnchorProvider, Wallet, BN } from '@coral-xyz/anchor';
-import { loadKeeperKeypair } from '../../utils/solana.js';
-import { CHAINS } from '../../config.js';
+import { loadKeeperKeypair } from '../../../utils/solana.js';
+import { CHAINS } from '../../../config.js';
 
 import idl from '../../../../target/idl/creator_share_hook.json' with { type: 'json' };
 
