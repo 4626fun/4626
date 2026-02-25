@@ -297,7 +297,7 @@ export function CcaAuctionPanel({
   return (
     <div className="card p-0 overflow-hidden">
       {/* Hero Header */}
-      <div className="relative bg-gradient-to-br from-cyan-950/20 via-black/40 to-black/40 border-b border-white/5 p-6 sm:p-8">
+      <div className="relative bg-linear-to-br from-cyan-950/20 via-black/40 to-black/40 border-b border-white/5 p-6 sm:p-8">
         {/* Animated background particles for live auctions */}
         {isActive && (
           <div className="absolute inset-0 overflow-hidden opacity-20">
@@ -383,7 +383,7 @@ export function CcaAuctionPanel({
           <div className="flex flex-wrap gap-2">
             <Link 
               to="/auction-demo"
-              className="btn-primary text-sm whitespace-nowrap hover:scale-105 transition-transform"
+              className="btn-primary btn-compact btn-no-icon text-sm whitespace-nowrap hover:scale-105 transition-transform"
             >
               View Demo
             </Link>
@@ -496,7 +496,7 @@ export function CcaAuctionPanel({
       <div className="p-6 sm:p-8">
         {!isConnected ? (
           <motion.div 
-            className="bg-gradient-to-br from-cyan-950/10 to-black/40 border border-cyan-500/20 rounded-xl p-8"
+            className="bg-linear-to-br from-cyan-950/10 to-black/40 border border-cyan-500/20 rounded-xl p-8"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
@@ -552,7 +552,7 @@ export function CcaAuctionPanel({
             {/* Active bidding interface */}
             {hasAuction && isActive && isEthAuction && (
               <motion.div 
-                className="bg-gradient-to-br from-black/60 to-black/40 border border-white/10 rounded-xl overflow-hidden"
+                className="bg-linear-to-br from-black/60 to-black/40 border border-white/10 rounded-xl overflow-hidden"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
@@ -821,7 +821,7 @@ export function CcaAuctionPanel({
             {/* Graduated state */}
             {hasAuction && isGraduated && (
               <motion.div 
-                className="bg-gradient-to-br from-green-950/20 to-black/40 border border-green-500/30 rounded-xl p-6"
+                className="bg-linear-to-br from-green-950/20 to-black/40 border border-green-500/30 rounded-xl p-6"
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
               >

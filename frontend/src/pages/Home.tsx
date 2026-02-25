@@ -30,6 +30,8 @@ export function Home() {
   const showJoinWaitlistCta = hostMode === 'marketing'
   const showExploreCreatorsCta = hostMode === 'app'
   const showDeployVaultCta = hostMode === 'app'
+  const heroCtaClass =
+    'btn-primary inline-flex items-center justify-center min-h-[52px] px-6 py-3.5 text-[15px]'
 
   // Keep the waitlist modal open across full-page OAuth redirects (e.g. Privy <-> X).
   // We intentionally avoid encoding this state in query params, since OAuth redirect URLs
@@ -151,8 +153,9 @@ export function Home() {
               transition={{ duration: 0.8, delay: 1.12 }}
               className="pt-4 sm:pt-6"
             >
-              <Link to="/#waitlist" className="btn-accent inline-block">
-                Join waitlist <ArrowRight className="w-4 h-4 inline ml-2" />
+              <Link to="/#waitlist" className={heroCtaClass}>
+                Join waitlist
+                <ArrowRight className="w-4 h-4" />
               </Link>
             </motion.div>
           ) : null}
@@ -163,8 +166,9 @@ export function Home() {
               transition={{ duration: 0.8, delay: 1.12 }}
               className="pt-4 sm:pt-6"
             >
-              <Link to="/explore/creators" className="btn-accent inline-block">
-                Explore Creators <ArrowRight className="w-4 h-4 inline ml-2" />
+              <Link to="/explore/creators" className={heroCtaClass}>
+                Explore Creators
+                <ArrowRight className="w-4 h-4" />
               </Link>
             </motion.div>
           ) : null}
@@ -211,8 +215,9 @@ export function Home() {
               </div>
               {showDeployVaultCta ? (
                 <div>
-                  <Link to="/deploy" className="btn-accent inline-block">
-                    Deploy Vault <ArrowRight className="w-4 h-4 inline ml-2" />
+                  <Link to="/deploy" className={heroCtaClass}>
+                    Deploy Vault
+                    <ArrowRight className="w-4 h-4" />
                   </Link>
                 </div>
               ) : null}
@@ -334,7 +339,7 @@ export function Home() {
               Minimum deposit → Uniswap CCA → vault strategies.
             </p>
             <div>
-              <Link to="/faq/how-it-works" className="btn-primary inline-block">
+              <Link to="/faq/how-it-works" className="btn-primary inline-flex items-center">
                 How it works <ArrowRight className="w-4 h-4 inline ml-2" />
               </Link>
             </div>

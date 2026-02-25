@@ -103,11 +103,13 @@ export default async function handler(req: any, res: any) {
     `
   }
   const row = me?.rows?.[0] ?? null
-  const signupId = typeof row?.id === 'number' ? (row.id as number) : null
+  const signupIdRaw = typeof row?.id === 'number' ? row.id : row?.id ? Number(row.id) : null
+  const signupId = typeof signupIdRaw === 'number' && Number.isFinite(signupIdRaw) ? Math.floor(signupIdRaw) : null
   if (!signupId) {
     return res.status(200).json({ success: true, data: null } satisfies ApiEnvelope<WaitlistPositionResponse | null>)
   }
 
+  const resolvedEmail = typeof row?.email === 'string' ? normalizeEmail(String(row.email)) : email
   const profileCompletedAt = row?.profile_completed_at ? String(row.profile_completed_at) : null
   const referralCode = typeof row?.referral_code === 'string' ? String(row.referral_code) : null
   const borderTier = safeInt(row?.border_tier)
@@ -227,7 +229,7 @@ export default async function handler(req: any, res: any) {
     typeof inviteRank === 'number' && inviteRank > 0 && totalCount > 0 ? Math.min(100, Math.max(1, Math.round((inviteRank / totalCount) * 100))) : null
 
   const data: WaitlistPositionResponse = {
-    email,
+    email: resolvedEmail,
     signupId,
     profileCompletedAt,
     referralCode,

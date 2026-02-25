@@ -191,7 +191,7 @@ export function IdentityHub() {
       <button
         type="button"
         onClick={() => setMenuOpen((v) => !v)}
-        className="btn-primary flex items-center gap-3"
+        className="btn-primary btn-no-icon flex items-center gap-3"
         title={mini.isBaseApp ? 'Running in Base App' : undefined}
       >
         {avatarUrl ? (

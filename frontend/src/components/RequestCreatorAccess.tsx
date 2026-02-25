@@ -175,7 +175,7 @@ export function RequestCreatorAccess({ coin }: { coin?: string | null }) {
         type="button"
         onClick={() => requestMutation.mutate()}
         disabled={requestMutation.isPending || statusQuery.isFetching}
-        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg btn-accent px-5 py-3 text-sm"
+        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg btn-accent btn-no-icon px-5 py-3 text-sm"
       >
         {requestMutation.isPending ? 'Requesting…' : 'Request access'}
       </button>

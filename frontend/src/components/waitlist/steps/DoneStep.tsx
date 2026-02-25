@@ -632,11 +632,13 @@ export const DoneStep = memo(function DoneStep({
                     onClick={() => void handleSignInForX()}
                     disabled={xSignInBusy}
                     className={[
-                      'w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-white/8 bg-white/3 text-white text-[14px] font-medium transition-all duration-200 active:scale-[0.99]',
-                      xSignInBusy ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/6 cursor-pointer',
+                      'btn-primary w-full min-h-[48px] px-4 py-3 text-[14px]',
+                      xSignInBusy ? 'btn-no-icon' : '',
                     ].join(' ')}
                   >
-                    {xSignInBusy ? <Loader2 className="w-4 h-4 animate-spin text-zinc-300" /> : null}
+                    {xSignInBusy ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-zinc-200" />
+                    ) : null}
                     {xSignInBusy ? 'Opening sign in…' : 'Sign in to connect X'}
                   </button>
                   <div className="text-[12px] text-zinc-500">After signing in, connect X and click Verify.</div>
@@ -653,11 +655,13 @@ export const DoneStep = memo(function DoneStep({
                     onClick={handleConnectX}
                     disabled={xLinkBusy}
                     className={[
-                      'w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-white/8 bg-white/3 text-white text-[14px] font-medium transition-all duration-200 active:scale-[0.99]',
-                      xLinkBusy ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/6 cursor-pointer',
+                      'btn-primary w-full min-h-[48px] px-4 py-3 text-[14px]',
+                      xLinkBusy ? 'btn-no-icon' : '',
                     ].join(' ')}
                   >
-                    {xLinkBusy ? <Loader2 className="w-4 h-4 animate-spin text-zinc-300" /> : null}
+                    {xLinkBusy ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-zinc-200" />
+                    ) : null}
                     {xLinkBusy ? 'Connecting X…' : 'Connect X'}
                   </button>
                   {xLinkError ? (
@@ -682,11 +686,13 @@ export const DoneStep = memo(function DoneStep({
                       onClick={() => void handleVerifyX()}
                       disabled={xVerifyBusy}
                       className={[
-                        'w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-[#0052FF] text-white text-[13px] font-semibold transition-all duration-200 active:scale-[0.99]',
-                        xVerifyBusy ? 'opacity-60 cursor-not-allowed' : 'hover:bg-[#1a66ff] cursor-pointer',
+                        'btn-primary btn-compact w-full rounded-xl px-3 py-2.5 text-[13px]',
+                        xVerifyBusy ? 'btn-no-icon' : '',
                       ].join(' ')}
                     >
-                      {xVerifyBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      {xVerifyBusy ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : null}
                       {xVerifyBusy ? 'Verifying…' : 'Verify'}
                     </button>
                   </div>
@@ -726,13 +732,13 @@ export const DoneStep = memo(function DoneStep({
                 disabled={primaryCta.disabled}
                 onClick={handleDeployClick}
                 className={[
-                  'w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl bg-[#0052FF] text-white text-[15px] font-semibold transition-all duration-200 active:scale-[0.99]',
-                  primaryCta.disabled
-                    ? 'opacity-60 cursor-not-allowed'
-                    : 'hover:bg-[#1a66ff] cursor-pointer shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_8px_32px_-8px_rgba(0,82,255,0.5)]',
+                  'btn-primary w-full px-4 py-3.5 text-[15px]',
+                  primaryCta.busy ? 'btn-no-icon' : '',
                 ].join(' ')}
               >
-                {primaryCta.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {primaryCta.busy ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : null}
                 {primaryCta.busy ? primaryCta.busyLabel ?? primaryCta.label : primaryCta.label}
                 <ArrowRight className="w-4 h-4" />
               </button>

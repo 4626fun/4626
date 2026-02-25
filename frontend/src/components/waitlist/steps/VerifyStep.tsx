@@ -18,7 +18,6 @@ import type { WaitlistState } from '../waitlistTypes'
 
 // Base brand motion: cubic-bezier(0.4, 0, 0.2, 1), 120-240ms for snappy UI
 const baseEase = [0.4, 0, 0.2, 1] as const
-const BASE_SQUARE_WHITE = '/base/1_Base%20Brand%20Assets/The%20Square/Base_square_white.svg'
 const fadeUp = {
   initial: { opacity: 0, y: 12 },
   animate: { opacity: 1, y: 0 },
@@ -310,7 +309,7 @@ export const VerifyStep = memo(function VerifyStep({
           <motion.div {...scaleIn}>
             <button
               type="button"
-              className="w-full flex items-center justify-center gap-2 min-h-[56px] rounded-2xl bg-[#0052FF] text-white font-semibold text-[15px] px-6 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_8px_32px_-8px_rgba(0,82,255,0.5)] transition-all duration-200 ease-out hover:bg-[#1a66ff] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.15),0_12px_40px_-8px_rgba(0,82,255,0.6)] active:scale-[0.99]"
+              className="btn-primary w-full min-h-[56px] px-6 py-4 text-[15px]"
               onClick={onSubmit}
             >
               Continue
@@ -348,15 +347,12 @@ export const VerifyStep = memo(function VerifyStep({
         <motion.div {...scaleIn} className="space-y-4">
           <button
             type="button"
-            className="group relative w-full overflow-hidden flex items-center justify-between gap-3 min-h-[56px] rounded-2xl bg-[#0052FF] text-white font-semibold text-[15px] px-5 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_8px_32px_-8px_rgba(0,82,255,0.5)] transition-all duration-200 ease-out hover:bg-[#1a66ff] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.15),0_12px_40px_-8px_rgba(0,82,255,0.6)] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+            className="btn-primary group relative w-full min-h-[56px] justify-center px-5 py-4 pr-12 text-[15px] disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={!canContinue}
             onClick={onPrivyContinue}
           >
-            <span className="relative flex items-center gap-3">
-              <img src={BASE_SQUARE_WHITE} alt="" className="w-4 h-4" aria-hidden="true" />
-              Sign up
-            </span>
-            <ChevronRight className="relative w-4 h-4 opacity-80" />
+            <span className="relative">Sign up</span>
+            <ChevronRight className="absolute right-5 w-4 h-4 opacity-80" />
           </button>
 
           <p className="text-[13px] text-zinc-500">We'll continue automatically.</p>
@@ -699,7 +695,10 @@ export const VerifyStep = memo(function VerifyStep({
           </div>
           <button
             type="button"
-            className="w-full flex items-center justify-center gap-2 min-h-[56px] rounded-2xl bg-[#0052FF] text-white font-semibold text-[15px] px-6 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_8px_32px_-8px_rgba(0,82,255,0.5)] transition-all duration-200 ease-out hover:bg-[#1a66ff] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.15),0_12px_40px_-8px_rgba(0,82,255,0.6)] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+            className={[
+              'btn-primary w-full min-h-[56px] px-6 py-4 text-[15px] disabled:opacity-50 disabled:cursor-not-allowed',
+              busy ? 'btn-no-icon' : '',
+            ].join(' ')}
             disabled={busy || !canSubmit}
             onClick={onSubmit}
           >
@@ -709,7 +708,9 @@ export const VerifyStep = memo(function VerifyStep({
                 Joining…
               </>
             ) : (
-              'Join Waitlist'
+              <>
+                Join Waitlist
+              </>
             )}
           </button>
         </motion.div>

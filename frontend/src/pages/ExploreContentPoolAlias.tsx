@@ -46,10 +46,10 @@ export function ExploreContentPoolAlias() {
               For now, use the canonical market URL by content coin address.
             </div>
             <div className="mt-8 flex flex-col sm:flex-row gap-3">
-              <Link to="/explore/content" className="btn-accent inline-flex items-center justify-center rounded-full px-5 py-3 text-xs">
+              <Link to="/explore/content" className="btn-accent btn-compact inline-flex items-center justify-center rounded-full text-xs">
                 Browse content markets
               </Link>
-              <Link to="/explore/creators" className="btn-primary inline-flex items-center justify-center rounded-full px-5 py-3 text-xs">
+              <Link to="/explore/creators" className="btn-primary btn-compact inline-flex items-center justify-center rounded-full text-xs">
                 Browse creators
               </Link>
             </div>

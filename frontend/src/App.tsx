@@ -466,9 +466,9 @@ function NotFoundPage() {
             <div className="text-xs text-zinc-500">{appCta.hint}</div>
             <div className="flex flex-wrap gap-3">
               {(appCta.href.startsWith('http://') || appCta.href.startsWith('https://')) ? (
-                <a className="btn-accent inline-flex" href={appCta.href}>{appCta.label}</a>
+                <a className="btn-accent btn-no-icon inline-flex" href={appCta.href}>{appCta.label}</a>
               ) : (
-                <Link className="btn-accent inline-flex" to={appCta.href}>{appCta.label}</Link>
+                <Link className="btn-accent btn-no-icon inline-flex" to={appCta.href}>{appCta.label}</Link>
               )}
             </div>
           </div>

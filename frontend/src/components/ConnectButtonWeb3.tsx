@@ -49,7 +49,7 @@ export function ConnectButtonWeb3() {
       <div className="relative">
         <button
           onClick={() => setShowMenu(!showMenu)}
-          className="btn-primary flex items-center gap-3"
+          className="btn-primary btn-no-icon flex items-center gap-3"
         >
           <div className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
           <span className="mono text-sm">{formatAddress(address)}</span>
@@ -147,7 +147,7 @@ export function ConnectButtonWeb3() {
             if (!signed) setShowOptions(true)
           })()
         }}
-        className="btn-accent disabled:opacity-50 flex items-center gap-2"
+        className="btn-accent btn-no-icon disabled:opacity-50 flex items-center gap-2"
       >
         <Wallet className="w-4 h-4" />
         <span className="label">{isPending || auth.busy ? 'Connecting…' : 'Connect'}</span>

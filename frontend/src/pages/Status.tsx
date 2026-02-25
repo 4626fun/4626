@@ -671,7 +671,7 @@ export function Status() {
               <button
                 type="button"
                 onClick={onRun}
-                className="btn-accent rounded-lg px-5 py-3 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-accent btn-no-icon rounded-lg px-5 py-3 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!vaultInputAddress || vaultQuery.isFetching}
                 title={!vaultInputAddress ? 'Enter a valid vault address' : 'Run checks'}
               >
@@ -782,7 +782,7 @@ export function Status() {
                                 setFixingId(null)
                               }
                             }}
-                            className="btn-accent px-4 py-2 text-xs rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                            className="btn-accent btn-compact btn-no-icon px-4 py-2 text-xs rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                           >
                             {isBusy || txReceipt.isLoading ? 'Fixing…' : 'Fix'}
                           </button>

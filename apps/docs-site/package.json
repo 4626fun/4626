@@ -1,6 +1,6 @@
 {
   "name": "creatorvault-docs-site",
-  "version": "0.0.0",
+  "version": "1.3.4",
   "private": true,
   "scripts": {
     "generate:contracts": "cd ../.. && ([ \"$DOCS_SKIP_FORGE\" = \"1\" ] && echo 'Skipping forge doc (DOCS_SKIP_FORGE=1)' || (command -v forge >/dev/null && forge doc || echo 'Skipping forge doc (not installed)'))",

@@ -387,7 +387,7 @@ export function CreatorEarnings() {
                 />
                 <button
                   onClick={load}
-                  className="btn-primary px-6"
+                  className="btn-primary btn-compact btn-no-icon px-6"
                   disabled={!input.trim()}
                 >
                   Load
@@ -428,7 +428,7 @@ export function CreatorEarnings() {
                             loading="lazy"
                           />
                         ) : (
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-primary/20 to-brand-accent/20 border border-zinc-800 flex items-center justify-center text-xs font-medium text-brand-accent">
+                          <div className="w-10 h-10 rounded-full bg-linear-to-br from-brand-primary/20 to-brand-accent/20 border border-zinc-800 flex items-center justify-center text-xs font-medium text-brand-accent">
                             {(profile as any)?.handle
                               ? String((profile as any).handle).slice(0, 2).toUpperCase()
                               : String(activeIdentifier).startsWith('0x')
@@ -454,7 +454,7 @@ export function CreatorEarnings() {
                       </div>
                     </div>
 
-                    <div className="text-right flex-shrink-0 space-y-3">
+                    <div className="text-right shrink-0 space-y-3">
                       <div>
                       <div className="text-xs text-zinc-600">Claimable now</div>
                       <div className="value mono text-2xl text-cyan-400">{totalClaimableEthDisplay}</div>
@@ -625,7 +625,7 @@ export function CreatorEarnings() {
                               ) : null}
                             </div>
 
-                            <div className="flex flex-col sm:items-end gap-2 flex-shrink-0">
+                            <div className="flex flex-col sm:items-end gap-2 shrink-0">
                               <div className="text-right">
                                 <div className="text-xs text-zinc-600">Creator earnings</div>
                                 <div className="text-sm font-mono text-zinc-200">{earningsText}</div>

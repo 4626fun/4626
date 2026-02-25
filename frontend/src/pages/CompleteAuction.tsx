@@ -379,7 +379,7 @@ export function CompleteAuction() {
                   <button
                     onClick={handleSweepCurrency}
                     disabled={isSweeping || isSweepConfirming}
-                    className="btn-primary mt-4 flex items-center gap-2"
+                    className="btn-primary btn-no-icon mt-4 flex items-center gap-2"
                   >
                     {isSweeping || isSweepConfirming ? (
                       <>
@@ -455,7 +455,7 @@ export function CompleteAuction() {
                   <button
                     onClick={handleConfigureTaxHook}
                     disabled={isConfiguring || isConfigConfirming}
-                    className="btn-primary mt-4 flex items-center gap-2"
+                    className="btn-primary btn-no-icon mt-4 flex items-center gap-2"
                   >
                     {isConfiguring || isConfigConfirming ? (
                       <>
@@ -525,7 +525,7 @@ export function CompleteAuction() {
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button
                 onClick={() => navigate(`/vault/${vaultAddress ?? AKITA.vault}`)}
-                className="btn-primary flex items-center justify-center gap-2"
+                className="btn-primary btn-no-icon flex items-center justify-center gap-2"
               >
                 View Vault
                 <ArrowRight className="w-4 h-4" />
