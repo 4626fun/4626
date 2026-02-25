@@ -120,12 +120,39 @@
 
 ---
 
+## Phase 5: Deep Pass (P0/P1/P2 follow-ups)
+
+### P0 — Waitlist review panel + DoneStep stepper
+
+| Change | Why it's better |
+|--------|-----------------|
+| "Review before joining" summary panel above submit button | Users see wallet, creator coin, and ownership status at a glance before committing. Reduces accidental submissions. |
+| DoneStep shows completed StepIndicator (all 3 steps green) | Reinforces accomplishment and closes the loop on the 3-step flow. |
+| DoneStep X verification errors use Alert component | Consistent feedback with screen reader announcement. |
+
+### P1 — Reduced motion + Swap modal a11y
+
+| Change | Why it's better |
+|--------|-----------------|
+| WaitlistFlow step transitions respect `useReducedMotion` | Users with motion sensitivity see instant transitions. |
+| SwapConfirmModal: focus trap + role=dialog + aria-modal + reduced motion | Tab key stays inside the modal. Screen readers announce dialog context. Animations skip for reduced motion. |
+| SwapSettingsSheet: focus trap + role=dialog + aria-modal + Escape close | Same a11y treatment as confirm modal. |
+
+### P2 — Vault, Portfolio, Account deep polish
+
+| Change | Why it's better |
+|--------|-----------------|
+| Vault: Skeleton loading while resolving from onchain registry | No blank page during load. Visual continuity. |
+| Vault: Empty auction panel explains what CCA is | Non-crypto users understand why the panel is empty and what it's for. |
+| Portfolio: Horizontal scrollable token table on mobile | Table doesn't squish — users can scroll sideways with min-width constraint. |
+| Portfolio: ARIA table roles | Screen readers announce table structure. |
+| Account: ConfirmDialog before revoke-owner action | Destructive blockchain action requires explicit confirmation. Dialog explains permanence. |
+
+---
+
 ## Follow-ups (not in this PR)
 
-- **P1-2**: Apply `useReducedMotion()` in all Framer Motion components
-- **P1-3**: Typography scale standardization pass
-- **P2-1**: Swap screen empty state and token selector keyboard nav
-- **P2-2**: Vault screen loading skeletons and inline tooltips
-- **P2-3**: Portfolio empty state and responsive tables
-- **P2-4**: Account settings grouping and destructive action confirmation
-- **Visual testing**: The waitlist modal renders on the marketing domain (`4626.fun`), which redirects from localhost. Visual testing requires deploying to a preview environment or configuring env vars to keep users on localhost.
+- **Button component adoption**: Migrate existing `btn-primary` + inline spinner patterns to `<Button loading>` across all screens. Low risk, high churn — best as a focused follow-up.
+- **Token selector keyboard nav**: Swap token list is scrollable but not keyboard-navigable with arrow keys.
+- **Account section collapsing**: Group Email / Wallets / Creator Profile / Access into collapsible panels for long-scroll reduction.
+- **Full typography audit**: Complete migration of remaining `text-[Npx]` to standard Tailwind scale across all 50+ components.
