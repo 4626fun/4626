@@ -23,7 +23,7 @@ import {
   quoteCreatePosition,
   removeLiquidity,
 } from '@/lib/uniswap/liquidityApi'
-import { isUniswapXRouting, pickQuote } from '@/lib/uniswap/tradingApi'
+import { fetchZQuoteComparison, isUniswapXRouting, pickQuote } from '@/lib/uniswap/tradingApi'
 import {
   getDefaultWalletMode,
   getExecutionContext,
@@ -36,18 +36,54 @@ import {
   BASE_CHAIN_ID,
   NATIVE_TOKEN_ADDRESS,
   buildTokenOptions,
-  trustWalletBaseLogo,
+  tokenLogoFallbacks,
+  uniswapBaseLogo,
   type TokenOption,
 } from '@/lib/uniswap/swapUtils'
 
 const CORE_TOKENS: TokenOption[] = [
   // Represent ETH as native for Uniswap Trading API + wagmi balances.
-  // Keep the logo pointed at WETH so TrustWallet assets load reliably on Base.
-  { symbol: 'ETH', name: 'Ethereum', address: NATIVE_TOKEN_ADDRESS, group: 'core', logoUrl: trustWalletBaseLogo(CONTRACTS.weth) },
-  { symbol: 'USDC', name: 'USD Coin', address: CONTRACTS.usdc, group: 'core', logoUrl: trustWalletBaseLogo(CONTRACTS.usdc) },
-  { symbol: 'BTC', name: 'Coinbase Wrapped BTC', address: '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf', group: 'core', logoUrl: trustWalletBaseLogo('0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf') },
-  { symbol: 'USDT', name: 'Tether USD', address: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2', group: 'core', logoUrl: trustWalletBaseLogo('0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2') },
-  { symbol: 'ZORA', name: 'Zora', address: CONTRACTS.zora, group: 'core', logoUrl: trustWalletBaseLogo(CONTRACTS.zora) },
+  // Keep ETH logo mapped to WETH assets while preserving native address execution.
+  {
+    symbol: 'ETH',
+    name: 'Ethereum',
+    address: NATIVE_TOKEN_ADDRESS,
+    group: 'core',
+    logoUrl: uniswapBaseLogo(CONTRACTS.weth),
+    logoUrls: tokenLogoFallbacks(CONTRACTS.weth),
+  },
+  {
+    symbol: 'USDC',
+    name: 'USD Coin',
+    address: CONTRACTS.usdc,
+    group: 'core',
+    logoUrl: uniswapBaseLogo(CONTRACTS.usdc),
+    logoUrls: tokenLogoFallbacks(CONTRACTS.usdc),
+  },
+  {
+    symbol: 'BTC',
+    name: 'Coinbase Wrapped BTC',
+    address: '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf',
+    group: 'core',
+    logoUrl: uniswapBaseLogo('0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf'),
+    logoUrls: tokenLogoFallbacks('0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf'),
+  },
+  {
+    symbol: 'USDT',
+    name: 'Tether USD',
+    address: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
+    group: 'core',
+    logoUrl: uniswapBaseLogo('0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2'),
+    logoUrls: tokenLogoFallbacks('0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2'),
+  },
+  {
+    symbol: 'ZORA',
+    name: 'Zora',
+    address: CONTRACTS.zora,
+    group: 'core',
+    logoUrl: uniswapBaseLogo(CONTRACTS.zora),
+    logoUrls: tokenLogoFallbacks(CONTRACTS.zora),
+  },
 ]
 
 type QuoteShape = Record<string, unknown>
@@ -175,6 +211,13 @@ export function Swap() {
     initialTokenIn: NATIVE_TOKEN_ADDRESS,
     initialTokenOut: CONTRACTS.usdc,
   })
+  const [compareRoutesEnabled, setCompareRoutesEnabled] = useState(false)
+  const [compareRoutesLoading, setCompareRoutesLoading] = useState(false)
+  const [compareRoutesAvailable, setCompareRoutesAvailable] = useState(false)
+  const [compareRoutesReason, setCompareRoutesReason] = useState<string | null>(null)
+  const [compareRoutesChainName, setCompareRoutesChainName] = useState<string | null>('Base')
+  const [compareRoutesChainId, setCompareRoutesChainId] = useState<number | null>(BASE_CHAIN_ID)
+  const [compareZquoteOutUnits, setCompareZquoteOutUnits] = useState<string>('')
 
   const [walletCapabilities, setWalletCapabilities] = useState<{
     supports5792: boolean
@@ -393,6 +436,12 @@ export function Swap() {
     return `$${numeric.toFixed(2)}`
   }, [selectedQuote, quote])
 
+  const compareUniswapOutUnits = useMemo(() => {
+    const n = Number(estimatedOut)
+    if (!Number.isFinite(n) || n <= 0) return ''
+    return estimatedOut
+  }, [estimatedOut])
+
   const handleSwitchTokens = useCallback(() => {
     switchTokens()
     resetTradeState()
@@ -428,6 +477,63 @@ export function Swap() {
     return () => window.clearTimeout(timer)
     // `busy` intentionally omitted — use busyRef to check at call-time.
   }, [tokenIn, tokenOut, amountInUnits, parsedSlippage, executionReady, isReady, handleQuote])
+
+  // Experimental comparison only; execution route remains Uniswap Trading API.
+  useEffect(() => {
+    if (!compareRoutesEnabled || !executionReady || !isReady) {
+      setCompareRoutesLoading(false)
+      setCompareRoutesAvailable(false)
+      setCompareRoutesReason(null)
+      setCompareRoutesChainName('Base')
+      setCompareRoutesChainId(BASE_CHAIN_ID)
+      setCompareZquoteOutUnits('')
+      return
+    }
+
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      if (cancelled) return
+      setCompareRoutesLoading(true)
+      setCompareRoutesReason(null)
+      void fetchZQuoteComparison({
+        tokenIn,
+        tokenOut,
+        amountInUnits,
+      })
+        .then((data) => {
+          if (cancelled) return
+          setCompareRoutesAvailable(Boolean(data.available))
+          setCompareRoutesReason(data.reason ? String(data.reason) : null)
+          setCompareRoutesChainName(
+            typeof data.chainName === 'string' && data.chainName.trim() ? data.chainName : 'Base',
+          )
+          setCompareRoutesChainId(
+            typeof data.chainId === 'number' && Number.isFinite(data.chainId) ? data.chainId : BASE_CHAIN_ID,
+          )
+          setCompareZquoteOutUnits(
+            typeof data.amountOutUnits === 'string' ? data.amountOutUnits : '',
+          )
+        })
+        .catch((error: unknown) => {
+          if (cancelled) return
+          setCompareRoutesAvailable(false)
+          setCompareRoutesReason(
+            error instanceof Error ? error.message : 'Unable to compare routes',
+          )
+          setCompareRoutesChainName('Base')
+          setCompareRoutesChainId(BASE_CHAIN_ID)
+          setCompareZquoteOutUnits('')
+        })
+        .finally(() => {
+          if (!cancelled) setCompareRoutesLoading(false)
+        })
+    }, 450)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [compareRoutesEnabled, executionReady, isReady, tokenIn, tokenOut, amountInUnits])
 
   // Wallet capabilities
   useEffect(() => {
@@ -534,16 +640,26 @@ export function Swap() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="relative pb-[calc(env(safe-area-inset-bottom)+9rem)] md:pb-0">
-      <section className="cinematic-section">
-        <div className="mx-auto max-w-md px-4 sm:px-6">
+    <div className="relative overflow-hidden pb-[calc(env(safe-area-inset-bottom)+9rem)] md:pb-0">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute inset-0 bg-[radial-gradient(140%_90%_at_50%_0%,rgba(0,82,255,0.18),transparent_52%),radial-gradient(120%_80%_at_80%_100%,rgba(16,185,129,0.08),transparent_55%)]" />
+        <div className="absolute -left-32 top-[10%] h-72 w-72 rounded-full bg-[#0052ff]/12 blur-3xl" />
+        <div className="absolute -right-24 top-[35%] h-64 w-64 rounded-full bg-fuchsia-500/10 blur-3xl" />
+        <div className="absolute -bottom-32 left-[35%] h-72 w-72 rounded-full bg-cyan-400/8 blur-3xl" />
+      </div>
+      <section className="cinematic-section no-divider-top no-divider-bottom py-12 sm:py-16">
+        <div className="relative mx-auto max-w-116 px-4 sm:px-6">
           <motion.div
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
+            <div className="mb-5 text-center">
+              <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Trade on Base</div>
+              <h1 className="mt-1 text-[2rem] font-semibold tracking-tight text-white">Swap anytime, anywhere.</h1>
+            </div>
             {/* ─── Trade card ──────────────────────────────────────── */}
-            <div className="rounded-[28px] border border-white/8 bg-black/50 p-5 shadow-[0_24px_80px_-28px_rgba(0,0,0,0.95)] backdrop-blur-2xl">
+            <div className="rounded-[30px] border border-white/12 bg-[#0a0d14]/90 p-4 shadow-[0_24px_90px_-24px_rgba(0,0,0,0.92),0_0_0_1px_rgba(255,255,255,0.03)] backdrop-blur-2xl sm:p-5">
 
               {activePanel === 'swap' ? (
                 <SwapPanel
@@ -581,6 +697,14 @@ export function Swap() {
                   gasEstimateLabel={gasEstimateLabel}
                   routeSummary={routeSummary}
                   isOrderRoute={isOrderRoute}
+                  compareRoutesEnabled={compareRoutesEnabled}
+                  compareRoutesLoading={compareRoutesLoading}
+                  compareRoutesAvailable={compareRoutesAvailable}
+                  compareRoutesReason={compareRoutesReason}
+                  compareRoutesChainName={compareRoutesChainName}
+                  compareRoutesChainId={compareRoutesChainId}
+                  compareUniswapOutUnits={compareUniswapOutUnits}
+                  compareZquoteOutUnits={compareZquoteOutUnits}
                   permitSignatureRequired={permitSignatureRequired}
                   permitSignaturePending={permitSignaturePending}
                   permitSignatureReady={permitSignatureReady}
@@ -648,7 +772,7 @@ export function Swap() {
             </div>
 
             {/* ─── Footer note (replaces Supported Assets side panel) ── */}
-            <div className="mt-3 px-1 text-center text-[11px] text-zinc-700">
+            <div className="mt-4 px-1 text-center text-[11px] text-zinc-500">
               ETH · USDC · BTC · USDT · ZORA + creator/share tokens · Powered by Uniswap on Base
             </div>
           </motion.div>
@@ -661,9 +785,11 @@ export function Swap() {
         busy={busy !== null}
         slippagePct={slippagePct}
         deadlineMinutes={deadlineMinutes}
+        compareRoutesEnabled={compareRoutesEnabled}
         onClose={() => setShowAdvanced(false)}
         onSetSlippagePct={setSlippagePct}
         onSetDeadlineMinutes={setDeadlineMinutes}
+        onSetCompareRoutesEnabled={setCompareRoutesEnabled}
       />
 
       <SwapConfirmModal
@@ -677,6 +803,8 @@ export function Swap() {
         tokenOutSymbol={tokenOutSymbol}
         tokenInLogoUrl={tokenInDisplay.logoUrl}
         tokenOutLogoUrl={tokenOutDisplay.logoUrl}
+        tokenInLogoUrls={tokenInDisplay.logoUrls}
+        tokenOutLogoUrls={tokenOutDisplay.logoUrls}
         amountInUnits={amountInUnits}
         estimatedOut={estimatedOut}
         parsedSlippage={parsedSlippage}

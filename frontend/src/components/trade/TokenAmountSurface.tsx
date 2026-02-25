@@ -34,11 +34,11 @@ export function TokenAmountSurface(props: TokenAmountSurfaceProps) {
   return (
     <>
       <div
-        className={`rounded-2xl border border-white/8 bg-vault-card/60 px-4 pt-3 pb-3 backdrop-blur-sm ${props.className ?? ''}`}
+        className={`rounded-2xl border border-white/10 bg-[#111722]/88 px-4 pt-3.5 pb-3.5 backdrop-blur-xl ${props.className ?? ''}`}
       >
         {/* Header row */}
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">
+          <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-zinc-500">
             {props.label}
           </span>
           <div className="flex items-center gap-2">
@@ -47,25 +47,25 @@ export function TokenAmountSurface(props: TokenAmountSurfaceProps) {
                 type="button"
                 onClick={props.onMax}
                 whileTap={{ scale: 0.94 }}
-                className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 transition hover:bg-white/10 hover:text-zinc-200"
+                className="rounded-full border border-white/10 bg-white/6 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-300 transition hover:bg-white/10 hover:text-zinc-100"
               >
                 Max
               </motion.button>
             )}
-            <span className="text-[11px] text-zinc-600 tabular-nums">
+            <span className="text-[11px] text-zinc-500 tabular-nums">
               {props.balanceLabel ?? 'Balance --'}
             </span>
           </div>
         </div>
 
         {/* Amount + token selector row */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           {props.readOnlyAmount ? (
             <div
               className={`flex-1 min-h-[52px] flex items-center font-semibold tabular-nums leading-none ${
                 props.amount
-                  ? 'text-4xl text-white'
-                  : 'text-4xl text-zinc-600'
+                  ? 'text-[2.45rem] text-white'
+                  : 'text-[2.45rem] text-zinc-600'
               }`}
             >
               {props.isLoading ? (
@@ -78,7 +78,7 @@ export function TokenAmountSurface(props: TokenAmountSurfaceProps) {
             <input
               inputMode="decimal"
               autoComplete="off"
-              className="flex-1 min-h-[52px] w-full bg-transparent text-4xl font-semibold leading-none text-white outline-none placeholder:text-zinc-600 tabular-nums"
+              className="flex-1 min-h-[52px] w-full bg-transparent text-[2.45rem] font-semibold leading-none text-white outline-none placeholder:text-zinc-600 tabular-nums"
               value={props.amount}
               onChange={(e) => props.onAmountChange?.(e.target.value)}
               placeholder={props.amountPlaceholder ?? '0.0'}
@@ -92,7 +92,7 @@ export function TokenAmountSurface(props: TokenAmountSurfaceProps) {
         </div>
 
         {/* Footer row: fiat estimate */}
-        <div className="mt-1.5 text-[11px] text-zinc-600 tabular-nums">
+        <div className="mt-1.5 text-[11px] text-zinc-500 tabular-nums">
           {props.isLoading ? (
             <div className="inline-block h-3.5 w-20 animate-pulse rounded bg-white/8" />
           ) : (

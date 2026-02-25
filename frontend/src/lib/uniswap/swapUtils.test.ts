@@ -9,8 +9,12 @@ import {
   sanitizeDecimalInput,
   sanitizeIntegerInput,
   shareTokenLogo,
+  tokenLogoFallbacks,
   shortAddress,
+  trustWalletBaseLogo,
   type TokenOption,
+  uniswapBaseLogo,
+  z0r0zBaseLogo,
 } from './swapUtils'
 
 const CORE_TOKENS: TokenOption[] = [
@@ -104,6 +108,35 @@ describe('swapUtils token identity', () => {
     expect(areEquivalentSwapTokens(NATIVE_TOKEN_ADDRESS, weth, weth)).toBe(true)
     expect(areEquivalentSwapTokens(weth, NATIVE_TOKEN_ADDRESS, weth)).toBe(true)
     expect(areEquivalentSwapTokens(weth, '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', weth)).toBe(false)
+  })
+
+  it('builds deterministic base token logo fallback chain', () => {
+    const usdc = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'
+    expect(tokenLogoFallbacks(usdc)).toEqual([
+      uniswapBaseLogo(usdc),
+      trustWalletBaseLogo(usdc),
+      z0r0zBaseLogo(usdc),
+    ])
+  })
+
+  it('includes logo fallback list in resolved token display', () => {
+    const usdc = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'
+    const out = resolveTokenDisplay({
+      option: {
+        symbol: 'USDC',
+        name: 'USD Coin',
+        address: usdc,
+        group: 'core',
+        logoUrl: trustWalletBaseLogo(usdc),
+      },
+      address: usdc,
+      onchain: null,
+      imageUrl: null,
+    })
+    expect(out.logoUrl).toBe(trustWalletBaseLogo(usdc))
+    expect(out.logoUrls?.[0]).toBe(trustWalletBaseLogo(usdc))
+    expect(out.logoUrls).toContain(uniswapBaseLogo(usdc))
+    expect(out.logoUrls).toContain(z0r0zBaseLogo(usdc))
   })
 })
 

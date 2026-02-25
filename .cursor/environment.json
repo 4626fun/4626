@@ -1,0 +1,27 @@
+{
+  "name": "project-4626",
+  "install": ".cursor/install.sh",
+  "start": ".cursor/start.sh",
+  "ports": [
+    {
+      "name": "frontend",
+      "port": 5173
+    },
+    {
+      "name": "docs",
+      "port": 3000
+    }
+  ],
+  "terminals": [
+    {
+      "name": "Frontend Dev Server",
+      "command": "cd frontend && pnpm dev",
+      "description": "Primary Vite app on port 5173."
+    },
+    {
+      "name": "CRE Unified Runner",
+      "command": "cd cre && npm run start",
+      "description": "Runs the unified CRE workflow runner."
+    }
+  ]
+}

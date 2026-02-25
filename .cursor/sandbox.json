@@ -1,0 +1,26 @@
+{
+  "networkPolicy": {
+    "default": "deny",
+    "allow": [
+      "registry.npmjs.org",
+      "registry.yarnpkg.com",
+      "pypi.org",
+      "files.pythonhosted.org",
+      "ghcr.io",
+      "*.docker.io",
+      "mainnet.base.org",
+      "base.llamarpc.com",
+      "base-mainnet.public.blastapi.io",
+      "base.meowrpc.com",
+      "api.neynar.com",
+      "auth.privy.io",
+      "pro-openapi.debank.com",
+      "api.dexscreener.com",
+      "api.farcaster.xyz",
+      "relay.farcaster.xyz",
+      "gateway.thegraph.com",
+      "api.talentprotocol.com",
+      "api.developer.coinbase.com"
+    ]
+  }
+}
