@@ -10,6 +10,7 @@ import { SwapConfirmModal } from '@/components/trade/SwapConfirmModal'
 import { SwapPanel } from '@/components/trade/SwapPanel'
 import { SwapSettingsSheet } from '@/components/trade/SwapSettingsSheet'
 import { TransactionLifecycle } from '@/components/trade/TransactionLifecycle'
+import { Alert } from '@/components/ui/Alert'
 import { CONTRACTS } from '@/config/contracts'
 import { useCanonicalWallet } from '@/hooks/useCanonicalWallet'
 import { useSwapExecution } from '@/hooks/useSwapExecution'
@@ -883,9 +884,9 @@ function LiquidityPanel(props: {
           type="button"
           onClick={props.onOpenSettings}
           className="rounded-full border border-white/12 bg-white/4 p-2 text-zinc-400 transition hover:bg-white/8 hover:text-zinc-200"
-          title="Settings"
+          aria-label="Swap settings"
         >
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.5}>
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
             <circle cx="8" cy="8" r="2" /><path d="M8 2v1M8 13v1M2 8H1m13 0h1M4.05 4.05l-.71-.71m9.32 9.32-.71-.71M4.05 11.95l-.71.71m9.32-9.32-.71.71" />
           </svg>
         </button>
@@ -1004,10 +1005,10 @@ function LiquidityPanel(props: {
         </div>
 
         {props.lpStatus && (
-          <div className="mt-2 text-xs text-emerald-400">{props.lpStatus}</div>
+          <div className="mt-2"><Alert variant="success">{props.lpStatus}</Alert></div>
         )}
         {props.lpError && (
-          <div className="mt-2 text-xs text-rose-400">{props.lpError}</div>
+          <div className="mt-2"><Alert variant="error">{props.lpError}</Alert></div>
         )}
       </div>
 
@@ -1038,14 +1039,14 @@ function LiquidityPanel(props: {
         )}
 
         {props.positionsError && !props.positionsLoading && (
-          <div className="rounded-xl border border-rose-400/20 bg-rose-500/8 px-3 py-2 text-xs text-rose-400">
-            {props.positionsError}
-          </div>
+          <Alert variant="error">{props.positionsError}</Alert>
         )}
 
         {!props.positionsLoading && !props.positionsError && props.positions.length === 0 && (
-          <div className="rounded-2xl border border-white/6 bg-white/3 px-4 py-6 text-center text-sm text-zinc-600">
-            No active positions
+          <div className="rounded-2xl border border-white/6 bg-white/3 px-4 py-6 text-center">
+            <Droplets className="mx-auto h-8 w-8 text-zinc-700 mb-2" aria-hidden="true" />
+            <div className="text-sm text-zinc-500">No active liquidity positions</div>
+            <div className="mt-1 text-xs text-zinc-600">Add liquidity above to start earning fees.</div>
           </div>
         )}
 

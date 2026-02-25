@@ -105,13 +105,21 @@ export function Layout() {
         </div>
       ) : null}
 
+      {/* Skip to content link */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[200] focus:rounded-lg focus:bg-brand-primary focus:px-4 focus:py-2 focus:text-white focus:text-sm focus:font-medium"
+      >
+        Skip to content
+      </a>
+
       {/* Main */}
-      <main className={`flex-1 ${shouldOverlayMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
+      <main id="main-content" className={`flex-1 ${shouldOverlayMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
         <Suspense
           fallback={
             <div className="max-w-7xl mx-auto px-6 py-12">
-              <div className="flex items-center gap-3 text-xs font-mono uppercase tracking-[0.2em] text-vault-subtext">
-                <div className="h-5 w-5 rounded-full border-2 border-vault-border border-t-brand-primary animate-spin" />
+              <div className="flex items-center gap-3 text-xs font-mono uppercase tracking-[0.2em] text-vault-subtext" role="status">
+                <div className="h-5 w-5 rounded-full border-2 border-vault-border border-t-brand-primary animate-spin" aria-hidden="true" />
                 Loading…
               </div>
             </div>
@@ -126,11 +134,12 @@ export function Layout() {
 
       {/* Mobile Nav - Minimal */}
       <nav
+        aria-label="Mobile navigation"
         className={`md:hidden fixed bottom-0 left-0 right-0 z-70 border-t border-vault-border/60 bg-vault-bg/80 backdrop-blur-xl ${
           isMobileChatOverlayActive ? 'hidden' : ''
         }`}
       >
-        <div className="flex items-center justify-around py-4 px-6">
+        <div className="flex items-center justify-around py-4 px-6" role="list">
           {items.map((item) => {
             const { path, icon: Icon, label } = item
             const isActive = isActiveLink(location, item)
@@ -138,9 +147,13 @@ export function Layout() {
               <Link
                 key={path}
                 to={path}
+                aria-label={label}
+                aria-current={isActive ? 'page' : undefined}
                 className="flex flex-col items-center justify-center gap-2 group min-h-11 min-w-[56px] px-2"
+                role="listitem"
               >
                 <Icon
+                  aria-hidden="true"
                   className={`w-5 h-5 transition-colors ${
                     isActive ? 'text-vault-text' : 'text-vault-subtext group-hover:text-vault-text'
                   }`}

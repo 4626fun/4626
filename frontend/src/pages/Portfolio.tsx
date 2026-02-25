@@ -7,6 +7,8 @@ import { useParams } from 'react-router-dom'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
+import { Alert } from '@/components/ui/Alert'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { fetchDebankTokenList, type DebankToken, type DebankTokenList } from '@/lib/debank/client'
 import { isLensGroveEnabled } from '@/lib/flags'
 import { resolveLensUri, uploadImmutableBlob, type GroveUploadResult } from '@/lib/lens/grove'
@@ -368,9 +370,29 @@ export function Portfolio() {
 
   function TokensTable(props: { items: Holding[]; emptyLabel: string }) {
     const { items, emptyLabel } = props
-    if (tokenMeta.isLoading) return <div className="p-4 text-[12px] text-zinc-600">Loading balances…</div>
-    if (!effectiveAddress) return <div className="p-4 text-[12px] text-zinc-600">Connect a wallet to view balances.</div>
-    if (items.length === 0) return <div className="p-4 text-[12px] text-zinc-600">{emptyLabel}</div>
+    if (tokenMeta.isLoading) return (
+      <div className="p-4 space-y-3">
+        {[1, 2, 3].map(i => (
+          <div key={i} className="flex items-center gap-3">
+            <Skeleton className="h-7 w-7 rounded-full" />
+            <div className="flex-1 space-y-1.5">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-2.5 w-16" />
+            </div>
+            <Skeleton className="h-3 w-14" />
+          </div>
+        ))}
+      </div>
+    )
+    if (!effectiveAddress) return (
+      <div className="p-6 text-center">
+        <Wallet className="mx-auto h-8 w-8 text-zinc-700 mb-2" />
+        <div className="text-sm text-zinc-500">Connect a wallet to view balances</div>
+      </div>
+    )
+    if (items.length === 0) return (
+      <div className="p-6 text-center text-sm text-zinc-600">{emptyLabel}</div>
+    )
 
     return (
       <div className="divide-y divide-zinc-800/70">
@@ -809,8 +831,13 @@ export function Portfolio() {
         ) : null}
 
         {tab !== 'overview' ? (
-          <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/40 p-6 text-[12px] text-zinc-600">
-            {tab === 'tokens' ? 'Token list coming next.' : tab === 'nfts' ? 'NFTs view coming next.' : 'Activity view coming next.'}
+          <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/40 p-8 text-center">
+            <div className="text-sm text-zinc-500">
+              {tab === 'tokens' ? 'Detailed token list' : tab === 'nfts' ? 'NFT gallery' : 'Transaction activity'} — coming soon.
+            </div>
+            <div className="mt-2 text-xs text-zinc-600">
+              {tab === 'activity' ? 'For now, use Explore → Transactions for on-chain activity.' : 'Check back soon for updates.'}
+            </div>
           </div>
         ) : null}
       </div>

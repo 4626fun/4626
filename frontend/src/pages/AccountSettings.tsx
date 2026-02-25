@@ -8,6 +8,8 @@ import { useExportWallet, usePrivy } from '@privy-io/react-auth'
 
 import { apiFetch } from '@/lib/apiBase'
 import { getMarketingBaseUrl } from '@/lib/host'
+import { Alert } from '@/components/ui/Alert'
+import { Skeleton, SkeletonText } from '@/components/ui/Skeleton'
 import { isPrivyClientEnabled } from '@/lib/flags'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { getFarcasterUserByAddress, getFarcasterUserByFid } from '@/lib/neynar-api'
@@ -1007,8 +1009,23 @@ export function AccountSettings() {
 
   if (!auth.sessionHydrated || loading) {
     return (
-      <div className="max-w-4xl mx-auto px-6 py-12">
-        <div className="card rounded-xl p-8 text-zinc-300">Loading account…</div>
+      <div className="max-w-4xl mx-auto px-6 py-12 space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-7 w-64" />
+          </div>
+          <Skeleton className="h-10 w-24 rounded-xl" />
+        </div>
+        <div className="card rounded-xl p-6 space-y-4">
+          <Skeleton className="h-5 w-20" />
+          <SkeletonText lines={2} />
+          <Skeleton className="h-10 w-full rounded-lg" />
+        </div>
+        <div className="card rounded-xl p-6 space-y-4">
+          <Skeleton className="h-5 w-40" />
+          <SkeletonText lines={3} />
+        </div>
       </div>
     )
   }
@@ -1016,9 +1033,14 @@ export function AccountSettings() {
   if (!auth.isSignedIn) {
     return (
       <div className="max-w-4xl mx-auto px-6 py-12">
-        <div className="card rounded-xl p-8 space-y-4">
-          <div className="text-xl text-white">Sign in required</div>
-          <div className="text-sm text-zinc-400">Connect wallet and complete Sign in to manage your email and connected accounts.</div>
+        <div className="card rounded-xl p-8 space-y-5 text-center">
+          <Wallet className="mx-auto h-10 w-10 text-zinc-600" aria-hidden="true" />
+          <div>
+            <h1 className="text-xl text-white font-semibold">Sign in to continue</h1>
+            <p className="mt-2 text-sm text-zinc-400 max-w-md mx-auto">
+              Connect your wallet and sign in to manage your email, connected accounts, and creator profile.
+            </p>
+          </div>
           <button
             type="button"
             onClick={() => {
@@ -1057,10 +1079,8 @@ export function AccountSettings() {
         </button>
       </div>
 
-      {error ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div> : null}
-      {success ? (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{success}</div>
-      ) : null}
+      {error ? <Alert variant="error">{error}</Alert> : null}
+      {success ? <Alert variant="success">{success}</Alert> : null}
 
       <section className="card rounded-xl p-6 space-y-4">
         <div className="flex items-center gap-2 text-white">
