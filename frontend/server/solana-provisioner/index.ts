@@ -761,6 +761,157 @@ async function handleBuildMeteoraIxs(req: IncomingMessage, res: ServerResponse):
   }
 }
 
+type SetupCreatorBody = {
+  hubCreatorCoin?: string
+  hubShareOft?: string
+  keeperPubkey?: string
+  feeBps?: number
+  decimals?: number
+  ammPrograms?: string[]
+  flushThreshold?: string
+  lotteryEnabled?: boolean
+}
+
+async function handleSetupCreator(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const secret = String(process.env.PROVISIONER_BEARER_TOKEN ?? '').trim()
+  if (!secret) {
+    return json(res, 503, { success: false, error: 'PROVISIONER_BEARER_TOKEN is not configured.' })
+  }
+  if (!authOk(req, secret)) {
+    return json(res, 401, { success: false, error: 'Unauthorized' })
+  }
+
+  const repoRoot = String(process.env.CRE_REPO_ROOT ?? '').trim()
+    || String(process.env.REPO_ROOT ?? '').trim()
+  const creDir = repoRoot ? `${repoRoot}/cre` : ''
+  if (!creDir || !existsSync(creDir)) {
+    return json(res, 503, {
+      success: false,
+      error: 'CRE_REPO_ROOT (or REPO_ROOT) is not configured or cre/ directory not found.',
+    })
+  }
+
+  let body: SetupCreatorBody
+  try {
+    const raw = await readBody(req)
+    body = (raw ? JSON.parse(raw) : {}) as SetupCreatorBody
+  } catch {
+    return json(res, 400, { success: false, error: 'Invalid JSON body.' })
+  }
+
+  const hubCreatorCoin = String(body?.hubCreatorCoin ?? '').trim()
+  const hubShareOft = String(body?.hubShareOft ?? '').trim()
+  if (!hubCreatorCoin || !hubShareOft) {
+    return json(res, 400, { success: false, error: 'hubCreatorCoin and hubShareOft are required.' })
+  }
+
+  const args = [
+    'scripts/solana/deploy/setup-creator-full.ts',
+    '--hub-creator-coin', hubCreatorCoin,
+    '--hub-share-oft', hubShareOft,
+  ]
+  if (body?.keeperPubkey) args.push('--keeper-pubkey', body.keeperPubkey)
+  if (body?.feeBps !== undefined) args.push('--fee-bps', String(body.feeBps))
+  if (body?.decimals !== undefined) args.push('--decimals', String(body.decimals))
+  if (body?.ammPrograms?.length) args.push('--amm-programs', body.ammPrograms.join(','))
+  if (body?.flushThreshold) args.push('--flush-threshold', body.flushThreshold)
+  if (body?.lotteryEnabled === false) args.push('--lottery-disabled')
+
+  try {
+    const { stdout, stderr } = await execFileAsync('tsx', args, {
+      cwd: creDir,
+      timeout: 5 * 60_000,
+      maxBuffer: 4 * 1024 * 1024,
+      env: { ...process.env },
+    })
+    if (stderr) process.stderr.write(stderr)
+
+    const output = (stdout ?? '').trim()
+    let result: unknown
+    try {
+      result = JSON.parse(output)
+    } catch {
+      return json(res, 500, {
+        success: false,
+        error: `setup-creator-full did not produce valid JSON. Output: ${output.slice(-1200)}`,
+      })
+    }
+
+    return json(res, 200, result)
+  } catch (error) {
+    const message = toErrorText(error)
+    return json(res, 500, {
+      success: false,
+      error: `setup-creator-full failed: ${message}`,
+    })
+  }
+}
+
+type CreatePoolBody = {
+  tokenMintX?: string
+  tokenMintY?: string
+  binStep?: number
+  activeId?: number
+  baseFactor?: number
+}
+
+async function handleCreatePool(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const secret = String(process.env.PROVISIONER_BEARER_TOKEN ?? '').trim()
+  if (!secret) {
+    return json(res, 503, { success: false, error: 'PROVISIONER_BEARER_TOKEN is not configured.' })
+  }
+  if (!authOk(req, secret)) {
+    return json(res, 401, { success: false, error: 'Unauthorized' })
+  }
+
+  const repoRoot = String(process.env.CRE_REPO_ROOT ?? '').trim()
+    || String(process.env.REPO_ROOT ?? '').trim()
+  const creDir = repoRoot ? `${repoRoot}/cre` : ''
+  if (!creDir || !existsSync(creDir)) {
+    return json(res, 503, {
+      success: false,
+      error: 'CRE_REPO_ROOT (or REPO_ROOT) is not configured or cre/ directory not found.',
+    })
+  }
+
+  let body: CreatePoolBody
+  try {
+    const raw = await readBody(req)
+    body = (raw ? JSON.parse(raw) : {}) as CreatePoolBody
+  } catch {
+    return json(res, 400, { success: false, error: 'Invalid JSON body.' })
+  }
+
+  const tokenMintX = String(body?.tokenMintX ?? '').trim()
+  const tokenMintY = String(body?.tokenMintY ?? '').trim()
+  if (!tokenMintX || !tokenMintY) {
+    return json(res, 400, { success: false, error: 'tokenMintX and tokenMintY are required.' })
+  }
+
+  const env = {
+    ...process.env,
+    TOKEN_MINT_X: tokenMintX,
+    TOKEN_MINT_Y: tokenMintY,
+    BIN_STEP: String(body?.binStep ?? 25),
+    ACTIVE_ID: String(body?.activeId ?? 0),
+    BASE_FACTOR: String(body?.baseFactor ?? 10000),
+  }
+
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      'tsx',
+      ['scripts/solana/launch/create-dlmm-pool.ts'],
+      { cwd: creDir, timeout: 5 * 60_000, maxBuffer: 4 * 1024 * 1024, env },
+    )
+    if (stderr) process.stderr.write(stderr)
+    const output = `${stdout ?? ''}\n${stderr ?? ''}`
+    return json(res, 200, { success: true, output: output.trim() })
+  } catch (error) {
+    const message = toErrorText(error)
+    return json(res, 500, { success: false, error: `create-dlmm-pool failed: ${message}` })
+  }
+}
+
 async function main(): Promise<void> {
   const host = String(process.env.PROVISIONER_HOST ?? '0.0.0.0').trim() || '0.0.0.0'
   const port = Number(process.env.PROVISIONER_PORT ?? 8788)
@@ -770,6 +921,8 @@ async function main(): Promise<void> {
     if (method === 'GET' && url.pathname === '/healthz') return handleHealth(res)
     if (method === 'POST' && url.pathname === '/provision') return handleProvision(req, res)
     if (method === 'POST' && url.pathname === '/meteora-ixs') return handleBuildMeteoraIxs(req, res)
+    if (method === 'POST' && url.pathname === '/setup-creator') return handleSetupCreator(req, res)
+    if (method === 'POST' && url.pathname === '/create-pool') return handleCreatePool(req, res)
     return json(res, 404, { success: false, error: 'Not found' })
   })
 
