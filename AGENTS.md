@@ -46,6 +46,7 @@ The `creator-share-hook` Anchor program lives at `programs/creator-share-hook/`.
 | Upgrade authority | `7Qi3WW7q4kmqXcMBca76b3WjNMdRmjjjrpG5FTc8htxY` (from `SOLANA_PRIVATE_KEY` secret) |
 | ProgramData | `DojrYy5obEk2w9ZMpX1bLFHU4rrZqYQsZJZaXFxFGKFU` |
 | Binary | `programs/creator-share-hook/target/deploy/creator_share_hook.so` |
+| Data capacity | 372,488 bytes (extended with 80KB headroom beyond current 345KB binary) |
 | Anchor.toml cluster | `mainnet` (see `[provider]` section) |
 
 **Upgrade procedure:**
