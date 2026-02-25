@@ -602,10 +602,10 @@ export const DoneStep = memo(function DoneStep({
               <>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[11px] uppercase tracking-wider text-zinc-600">Verification</div>
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-300">Verification</div>
                   <div className="text-[14px] text-white font-medium mt-1">Unlock your next border</div>
-                  <div className="text-[12px] text-zinc-500 mt-1 leading-relaxed">
-                    Follow <span className="text-zinc-200">@4626fun</span> on X to complete verification and unlock your next border.
+                  <div className="text-[12px] text-zinc-200 mt-1 leading-relaxed">
+                    Follow <span className="text-zinc-100">@4626fun</span> on X to complete verification and unlock your next border.
                   </div>
                 </div>
                 <div
@@ -613,7 +613,7 @@ export const DoneStep = memo(function DoneStep({
                     'shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border',
                     borderTier >= 1
                       ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
-                      : 'border-white/10 bg-black/20 text-zinc-500',
+                      : 'border-white/10 bg-black/20 text-zinc-300',
                   ].join(' ')}
                 >
                   Tier {borderTier}
@@ -690,7 +690,7 @@ export const DoneStep = memo(function DoneStep({
                       {xVerifyBusy ? 'Verifying…' : 'Verify'}
                     </button>
                   </div>
-                  <div className="text-[11px] text-zinc-600">
+                  <div className="text-[11px] text-zinc-300">
                     Connected{privyTwitter.username ? ` as @${privyTwitter.username}` : ''}.
                   </div>
                   {xVerifyError ? (
