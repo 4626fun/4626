@@ -41,7 +41,7 @@ export function TokenSelectorPill(props: {
       onClick={props.onClick}
       disabled={props.disabled}
       whileTap={{ scale: 0.96 }}
-      className="inline-flex items-center gap-1.5 rounded-xl border border-white/14 bg-[#1a2230] px-2.5 py-1.5 text-sm font-semibold text-white transition hover:bg-[#212c3e] disabled:opacity-60 shrink-0"
+      className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-white/8 bg-[#1a2230] px-2 py-1 text-[13px] font-semibold text-white transition hover:bg-[#212c3e] disabled:opacity-60"
     >
       <TokenAvatar symbol={props.display.symbol} logoUrl={props.display.logoUrl} logoUrls={props.display.logoUrls} />
       <span>{props.display.symbol}</span>

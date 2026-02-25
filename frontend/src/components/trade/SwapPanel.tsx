@@ -1,12 +1,11 @@
 import { motion } from 'framer-motion'
-import { Settings, Zap } from 'lucide-react'
+import { Settings } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { ConnectButtonWeb3 } from '@/components/ConnectButtonWeb3'
 import { FlipButton } from '@/components/trade/FlipButton'
 import { InfoStrip } from '@/components/trade/InfoStrip'
 import { RouteCompareCard } from '@/components/trade/RouteCompareCard'
-import { RouteViz } from '@/components/trade/RouteViz'
 import { TokenAmountSurface } from '@/components/trade/TokenAmountSurface'
 import { WalletModeToggle } from '@/components/trade/WalletModeToggle'
 import type { WalletMode } from '@/lib/uniswap/walletMode'
@@ -92,18 +91,18 @@ export function SwapPanel(props: {
   return (
     <>
       {/* ─── Execution Bar ─────────────────────────────────────────────── */}
-      <div className="mb-4 space-y-2">
-        <div className="flex items-center gap-2">
+      <div className="mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           {/* Swap / Liquidity segmented control */}
-          <div className="inline-flex rounded-xl border border-white/12 bg-[#121722] p-1 text-xs">
+          <div className="inline-flex rounded-xl border border-white/10 bg-[#121722] p-0.5 text-[11px]">
             {(['swap', 'liquidity'] as const).map((panel) => (
               <button
                 key={panel}
                 type="button"
                 onClick={() => props.onSetActivePanel(panel)}
-                className={`min-h-8 rounded-lg px-3 py-1.5 transition-colors capitalize ${
+                className={`min-h-8 rounded-lg px-2.5 py-1 transition-colors capitalize ${
                   props.activePanel === panel
-                    ? 'bg-white/12 text-white font-semibold'
+                    ? 'bg-white/10 text-white font-semibold'
                     : 'text-zinc-500 hover:text-zinc-300'
                 }`}
               >
@@ -112,55 +111,32 @@ export function SwapPanel(props: {
             ))}
           </div>
 
-          {/* Route chip — tapping opens the settings sheet */}
-          <button
-            type="button"
-            onClick={props.onOpenSettings}
-            className="inline-flex items-center gap-1 rounded-xl border border-white/10 bg-[#0f131c] px-2.5 py-1.5 text-[11px] text-zinc-300 transition hover:bg-[#141a27] hover:text-white"
-            title="Routing details"
-          >
-            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-zinc-300">
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-400" />
-              Base
-            </span>
-            <Zap className="h-3 w-3 text-brand-400" />
-            <RouteViz routeSummary={props.routeSummary} compact />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Wallet mode toggle (compact) */}
+            <WalletModeToggle
+              mode={props.executionMode}
+              preferredMode={props.preferredMode}
+              executionAddress={props.executionAddress}
+              busy={props.busy !== null}
+              canonicalAvailable={props.canonicalAvailable}
+              canonicalConfigured={props.canonicalConfigured}
+              eoaAvailable={props.eoaAvailable}
+              fallbackActive={props.executionFallbackActive}
+              onChange={props.onSetExecutionMode}
+              onEnableCanonical={props.onEnableCanonical}
+              compact
+            />
 
-          <div className="flex-1" />
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Settings */}
-          <button
-            type="button"
-            onClick={props.onOpenSettings}
-            className="rounded-xl border border-white/12 bg-[#121722] p-2 text-zinc-400 transition hover:bg-[#171d2a] hover:text-zinc-200"
-            title="Trade settings"
-            aria-label="Open trade settings"
-          >
-            <Settings className="h-3.5 w-3.5" />
-          </button>
-
-          {/* Wallet mode toggle (compact) */}
-          <WalletModeToggle
-            mode={props.executionMode}
-            preferredMode={props.preferredMode}
-            executionAddress={props.executionAddress}
-            busy={props.busy !== null}
-            canonicalAvailable={props.canonicalAvailable}
-            canonicalConfigured={props.canonicalConfigured}
-            eoaAvailable={props.eoaAvailable}
-            fallbackActive={props.executionFallbackActive}
-            onChange={props.onSetExecutionMode}
-            onEnableCanonical={props.onEnableCanonical}
-            compact
-          />
-
-          <div className="flex-1" />
-          <div className="text-[11px] text-zinc-500">Hide IP</div>
-          <div className="h-5 w-9 rounded-full border border-white/12 bg-white/6 p-0.5">
-            <div className="h-4 w-4 rounded-full bg-white/80" />
+            {/* Settings */}
+            <button
+              type="button"
+              onClick={props.onOpenSettings}
+              className="rounded-xl border border-white/10 bg-[#121722] p-1.5 text-zinc-400 transition hover:bg-[#171d2a] hover:text-zinc-200"
+              title="Trade settings"
+              aria-label="Open trade settings"
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
       </div>
@@ -168,7 +144,7 @@ export function SwapPanel(props: {
       {props.activePanel === 'swap' ? (
         <>
           {/* ─── Token surfaces ──────────────────────────────────────────── */}
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <TokenAmountSurface
               label="You pay"
               amount={props.amountInUnits}
@@ -186,7 +162,7 @@ export function SwapPanel(props: {
             />
 
             {/* Flip button overlapping the two surfaces */}
-            <div className="-my-4 flex justify-center relative z-20">
+            <div className="-my-3.5 relative z-20 flex justify-center">
               <FlipButton onClick={props.onSwitchTokens} disabled={props.busy !== null} />
             </div>
 
@@ -208,7 +184,7 @@ export function SwapPanel(props: {
 
           {/* ─── Info strip ──────────────────────────────────────────────── */}
           {showInfoStrip && (
-            <div className="mt-3">
+            <div className="mt-2">
               <InfoStrip
                 tokenInSymbol={props.tokenInSymbol}
                 tokenOutSymbol={props.tokenOutSymbol}
@@ -295,14 +271,14 @@ export function SwapPanel(props: {
 
           {/* ─── Not connected ───────────────────────────────────────────── */}
           {!props.isConnected && (
-            <div className="mt-3">
+            <div className="mt-2">
               <ConnectButtonWeb3 />
             </div>
           )}
 
           {/* ─── Execution not ready ─────────────────────────────────────── */}
           {props.isConnected && !props.executionReady && (
-            <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+            <div className="mt-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
               {props.executionMode === 'canonical'
                 ? 'Set up your Smart Wallet to trade with enhanced security.'
                 : 'Your wallet is not ready to submit transactions.'}
@@ -316,14 +292,14 @@ export function SwapPanel(props: {
           <div className="h-36 md:hidden" />
 
           {/* ─── Sticky CTA ──────────────────────────────────────────────── */}
-          <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.35rem)] z-60 px-4 md:static md:inset-auto md:bottom-auto md:z-auto md:mt-4 md:px-0">
-            <div className="pointer-events-auto rounded-2xl border border-white/10 bg-[#0f141e]/95 p-2 shadow-[0_-8px_24px_-6px_rgba(0,0,0,0.72)] backdrop-blur-xl md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-0">
+          <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.35rem)] z-60 px-3 md:static md:inset-auto md:bottom-auto md:z-auto md:mt-3 md:px-0">
+            <div className="pointer-events-auto rounded-2xl border border-white/8 bg-[#0f141e]/95 p-1.5 shadow-[0_-8px_24px_-6px_rgba(0,0,0,0.72)] backdrop-blur-xl md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-0">
               <motion.button
                 type="button"
                 onClick={props.onReviewTrade}
                 disabled={reviewDisabled}
                 whileTap={reviewDisabled ? {} : { scale: 0.985 }}
-                className="min-h-12 w-full rounded-xl bg-brand-primary px-4 py-3 text-base font-semibold text-white shadow-[0_8px_30px_-10px_rgba(0,82,255,0.6)] transition hover:bg-brand-hover disabled:opacity-50 disabled:shadow-none"
+                className="min-h-11 w-full rounded-xl bg-brand-primary px-4 py-2.5 text-[15px] font-semibold text-white shadow-[0_8px_30px_-10px_rgba(0,82,255,0.6)] transition hover:bg-brand-hover disabled:opacity-50 disabled:shadow-none"
               >
                 {props.busy === 'review' ? 'Reviewing…' : props.isOrderRoute ? 'Review order' : 'Review swap'}
               </motion.button>

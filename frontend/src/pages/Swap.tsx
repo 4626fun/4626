@@ -640,26 +640,16 @@ export function Swap() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="relative overflow-hidden pb-[calc(env(safe-area-inset-bottom)+9rem)] md:pb-0">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-[radial-gradient(140%_90%_at_50%_0%,rgba(0,82,255,0.18),transparent_52%),radial-gradient(120%_80%_at_80%_100%,rgba(16,185,129,0.08),transparent_55%)]" />
-        <div className="absolute -left-32 top-[10%] h-72 w-72 rounded-full bg-[#0052ff]/12 blur-3xl" />
-        <div className="absolute -right-24 top-[35%] h-64 w-64 rounded-full bg-fuchsia-500/10 blur-3xl" />
-        <div className="absolute -bottom-32 left-[35%] h-72 w-72 rounded-full bg-cyan-400/8 blur-3xl" />
-      </div>
-      <section className="cinematic-section no-divider-top no-divider-bottom py-12 sm:py-16">
-        <div className="relative mx-auto max-w-116 px-4 sm:px-6">
+    <div className="pb-[calc(env(safe-area-inset-bottom)+9rem)] md:pb-0">
+      <section className="py-8 sm:py-10">
+        <div className="mx-auto max-w-116 px-3 sm:px-6">
           <motion.div
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <div className="mb-5 text-center">
-              <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Trade on Base</div>
-              <h1 className="mt-1 text-[2rem] font-semibold tracking-tight text-white">Swap anytime, anywhere.</h1>
-            </div>
             {/* ─── Trade card ──────────────────────────────────────── */}
-            <div className="rounded-[30px] border border-white/12 bg-[#0a0d14]/90 p-4 shadow-[0_24px_90px_-24px_rgba(0,0,0,0.92),0_0_0_1px_rgba(255,255,255,0.03)] backdrop-blur-2xl sm:p-5">
+            <div className="rounded-3xl border border-white/8 bg-[#0d111a] p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.78)] sm:p-5">
 
               {activePanel === 'swap' ? (
                 <SwapPanel
@@ -769,11 +759,6 @@ export function Swap() {
                   onOpenSettings={() => setShowAdvanced(true)}
                 />
               )}
-            </div>
-
-            {/* ─── Footer note (replaces Supported Assets side panel) ── */}
-            <div className="mt-4 px-1 text-center text-[11px] text-zinc-500">
-              ETH · USDC · BTC · USDT · ZORA + creator/share tokens · Powered by Uniswap on Base
             </div>
           </motion.div>
         </div>
