@@ -42,6 +42,69 @@ export function tokenLogoFallbacks(address: string): string[] {
   ]
 }
 
+const CHAIN_NAME_MAP: Record<number, string> = {
+  1: 'ethereum',
+  8453: 'base',
+  42161: 'arbitrum',
+  10: 'optimism',
+  137: 'polygon',
+}
+
+export function uniswapChainLogo(address: string, chainId: number): string {
+  const chain = CHAIN_NAME_MAP[chainId] ?? 'base'
+  return `https://raw.githubusercontent.com/Uniswap/assets/master/blockchains/${chain}/assets/${getAddress(address)}/logo.png`
+}
+
+export function tokenLogoFallbacksForChain(address: string, chainId: number): string[] {
+  const chain = CHAIN_NAME_MAP[chainId] ?? 'base'
+  const normalized = getAddress(address)
+  return [
+    `https://raw.githubusercontent.com/Uniswap/assets/master/blockchains/${chain}/assets/${normalized}/logo.png`,
+    `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chain}/assets/${normalized}/logo.png`,
+  ]
+}
+
+export type ChainTokenConfig = {
+  chainId: number
+  nativeSymbol: string
+  nativeName: string
+  weth: string
+  usdc: string
+}
+
+export function getCoreTokensForChain(config: ChainTokenConfig): TokenOption[] {
+  const { chainId, nativeSymbol, nativeName, weth, usdc } = config
+  const tokens: TokenOption[] = [
+    {
+      symbol: nativeSymbol,
+      name: nativeName,
+      address: NATIVE_TOKEN_ADDRESS,
+      group: 'core',
+      logoUrl: uniswapChainLogo(weth, chainId),
+      logoUrls: tokenLogoFallbacksForChain(weth, chainId),
+    },
+    {
+      symbol: 'USDC',
+      name: 'USD Coin',
+      address: usdc,
+      group: 'core',
+      logoUrl: uniswapChainLogo(usdc, chainId),
+      logoUrls: tokenLogoFallbacksForChain(usdc, chainId),
+    },
+  ]
+  if (weth !== NATIVE_TOKEN_ADDRESS) {
+    tokens.push({
+      symbol: 'WETH',
+      name: 'Wrapped Ether',
+      address: weth,
+      group: 'core',
+      logoUrl: uniswapChainLogo(weth, chainId),
+      logoUrls: tokenLogoFallbacksForChain(weth, chainId),
+    })
+  }
+  return tokens
+}
+
 export function shareTokenLogo(address: string, chainId = BASE_CHAIN_ID): string {
   return `/api/token/image?address=${getAddress(address)}&chain=${chainId}&size=128`
 }

@@ -4,13 +4,15 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress } from 'viem'
-import { useAccount, useBalance, usePublicClient, useWalletClient } from 'wagmi'
+import { useAccount, useBalance, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 
+import { ChainSelector } from '@/components/trade/ChainSelector'
 import { SwapConfirmModal } from '@/components/trade/SwapConfirmModal'
 import { SwapPanel } from '@/components/trade/SwapPanel'
 import { SwapSettingsSheet } from '@/components/trade/SwapSettingsSheet'
 import { TransactionLifecycle } from '@/components/trade/TransactionLifecycle'
 import { Alert } from '@/components/ui/Alert'
+import { DEFAULT_CHAIN_ID, type SupportedChainId, getChainMeta } from '@/config/chains'
 import { CONTRACTS } from '@/config/contracts'
 import { useCanonicalWallet } from '@/hooks/useCanonicalWallet'
 import { useSwapExecution } from '@/hooks/useSwapExecution'
@@ -37,6 +39,7 @@ import {
   BASE_CHAIN_ID,
   NATIVE_TOKEN_ADDRESS,
   buildTokenOptions,
+  getCoreTokensForChain,
   tokenLogoFallbacks,
   uniswapBaseLogo,
   type TokenOption,
@@ -186,9 +189,13 @@ function LpPositionCard(props: {
 
 export function Swap() {
   const [searchParams] = useSearchParams()
-  const { address, isConnected } = useAccount()
+  const { address, isConnected, chainId: walletChainId } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
+  const { switchChainAsync } = useSwitchChain()
+  const [swapChainId, setSwapChainId] = useState<SupportedChainId>(DEFAULT_CHAIN_ID)
+  const chainMeta = getChainMeta(swapChainId)
+  const chainMismatch = isConnected && walletChainId != null && walletChainId !== swapChainId
 
   const {
     tokenIn,
@@ -311,21 +318,34 @@ export function Swap() {
     writePreferredWalletMode(preferredExecutionMode)
   }, [preferredExecutionMode])
 
-  // ─── Token options ────────────────────────────────────────────────────────
+  // ─── Token options (chain-aware) ─────────────────────────────────────────
+  const dynamicCoreTokens = useMemo(() => {
+    if (swapChainId === BASE_CHAIN_ID) return CORE_TOKENS
+    const meta = getChainMeta(swapChainId)
+    if (!meta) return CORE_TOKENS
+    return getCoreTokensForChain({
+      chainId: meta.id,
+      nativeSymbol: meta.nativeCurrency.symbol,
+      nativeName: meta.nativeCurrency.name,
+      weth: meta.weth,
+      usdc: meta.usdc,
+    })
+  }, [swapChainId])
+
   const tokenOptions = useMemo<TokenOption[]>(() => {
     const creatorCoin = (searchParams.get('token') ?? '').trim()
     const shareCoin = (searchParams.get('share') ?? searchParams.get('shareToken') ?? '').trim()
     const shareSymbolParam = (searchParams.get('shareSymbol') ?? searchParams.get('shareTokenSymbol') ?? '').trim()
     const shareNameParam = (searchParams.get('shareName') ?? searchParams.get('shareTokenName') ?? '').trim()
     return buildTokenOptions({
-      coreTokens: CORE_TOKENS,
-      creatorCoin,
-      shareCoin,
+      coreTokens: dynamicCoreTokens,
+      creatorCoin: swapChainId === BASE_CHAIN_ID ? creatorCoin : '',
+      shareCoin: swapChainId === BASE_CHAIN_ID ? shareCoin : '',
       shareSymbol: shareSymbolParam,
       shareName: shareNameParam,
-      chainId: BASE_CHAIN_ID,
+      chainId: swapChainId,
     })
-  }, [searchParams])
+  }, [searchParams, dynamicCoreTokens, swapChainId])
 
   const tokenInOption = useMemo(
     () => tokenOptions.find((opt) => opt.address.toLowerCase() === tokenIn.toLowerCase()) ?? null,
@@ -349,13 +369,13 @@ export function Swap() {
   const { data: tokenInBalData } = useBalance({
     address: executionAddress ?? undefined,
     token: isTokenInNative ? undefined : (tokenIn as `0x${string}`),
-    chainId: BASE_CHAIN_ID,
+    chainId: swapChainId,
     query: { enabled: Boolean(executionAddress) && isAddress(tokenIn) },
   })
   const { data: tokenOutBalData } = useBalance({
     address: executionAddress ?? undefined,
     token: isTokenOutNative ? undefined : (tokenOut as `0x${string}`),
-    chainId: BASE_CHAIN_ID,
+    chainId: swapChainId,
     query: { enabled: Boolean(executionAddress) && isAddress(tokenOut) },
   })
   const tokenInBalanceLabel = fmtBal(tokenInBalData)
@@ -656,9 +676,44 @@ export function Swap() {
             transition={{ duration: 0.3 }}
           >
             <div className="mb-5 text-center">
-              <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Trade on Base</div>
+              <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Trade on {chainMeta?.name ?? 'Base'}</div>
               <h1 className="mt-1 text-[2rem] font-semibold tracking-tight text-white">Swap anytime, anywhere.</h1>
             </div>
+            {/* ─── Chain selector + mismatch banner ─────────────────── */}
+            <div className="mb-3 flex items-center justify-between">
+              <ChainSelector
+                selectedChainId={swapChainId}
+                walletChainId={walletChainId}
+                onSelect={(nextChainId) => {
+                  setSwapChainId(nextChainId)
+                  resetTradeState()
+                  if (isConnected && walletChainId !== nextChainId && switchChainAsync) {
+                    void switchChainAsync({ chainId: nextChainId }).catch(() => {})
+                  }
+                }}
+              />
+              {swapChainId !== BASE_CHAIN_ID ? (
+                <div className="text-[10px] text-zinc-500">Creator tokens on Base only</div>
+              ) : null}
+            </div>
+
+            {chainMismatch ? (
+              <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 flex items-center justify-between gap-3">
+                <div className="text-xs text-amber-200">
+                  Your wallet is on {walletChainId ? getChainMeta(walletChainId)?.name ?? `chain ${walletChainId}` : 'a different network'}. Switch to {chainMeta?.name ?? 'the selected network'} to trade.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (switchChainAsync) void switchChainAsync({ chainId: swapChainId }).catch(() => {})
+                  }}
+                  className="shrink-0 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-500/20 transition"
+                >
+                  Switch
+                </button>
+              </div>
+            ) : null}
+
             {/* ─── Trade card ──────────────────────────────────────── */}
             <div className="rounded-[30px] border border-white/12 bg-[#0a0d14]/90 p-4 shadow-[0_24px_90px_-24px_rgba(0,0,0,0.92),0_0_0_1px_rgba(255,255,255,0.03)] backdrop-blur-2xl sm:p-5">
 
@@ -774,7 +829,9 @@ export function Swap() {
 
             {/* ─── Footer note (replaces Supported Assets side panel) ── */}
             <div className="mt-4 px-1 text-center text-[11px] text-zinc-500">
-              ETH · USDC · BTC · USDT · ZORA + creator/share tokens · Powered by Uniswap on Base
+              {swapChainId === BASE_CHAIN_ID
+                ? 'ETH · USDC · BTC · USDT · ZORA + creator/share tokens · Powered by Uniswap on Base'
+                : `ETH · USDC · WETH + more · Powered by Uniswap on ${chainMeta?.name ?? 'selected chain'}`}
             </div>
           </motion.div>
         </div>
