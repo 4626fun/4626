@@ -15,6 +15,8 @@ import {
   X,
 } from 'lucide-react'
 import type { WaitlistState } from '../waitlistTypes'
+import { StepIndicator } from '@/components/ui/StepIndicator'
+import { Alert } from '@/components/ui/Alert'
 
 // Base brand motion: cubic-bezier(0.4, 0, 0.2, 1), 120-240ms for snappy UI
 const baseEase = [0.4, 0, 0.2, 1] as const
@@ -155,14 +157,27 @@ export const VerifyStep = memo(function VerifyStep({
   const payoutRecipient = useMemo(() => creatorCoin?.payoutRecipient ?? null, [creatorCoin?.payoutRecipient])
   const canonicalSmartWallet = useMemo(() => creatorCoin?.canonicalSmartWallet ?? null, [creatorCoin?.canonicalSmartWallet])
   const ownershipGateActive = Boolean(hasCreatorCoin && ownershipEvidenceAvailable)
-  const headerTitle = !hasVerification ? 'Verify wallet' : showSubmitButton ? 'Join the waitlist' : 'Checking ownership'
+  const headerTitle = !hasVerification ? 'Get started' : showSubmitButton ? 'Review and join' : 'Setting up'
   const headerSubtitle = !hasVerification
-    ? ''
+    ? 'Create your account in one tap.'
     : showSubmitButton
       ? ownershipGateActive && !walletOwnershipValid
-        ? 'Connect a payout recipient or owner wallet to continue.'
-        : 'Ownership verified. Join the waitlist for early access updates.'
-      : 'One moment…'
+        ? 'Connect the wallet linked to your creator profile to continue.'
+        : 'Everything looks good. Review your details and join the waitlist.'
+      : 'Verifying your profile…'
+
+  const stepperSteps = useMemo(() => {
+    const connectStatus = hasVerification ? 'complete' as const : 'active' as const
+    const verifyStatus = !hasVerification
+      ? 'pending' as const
+      : (hasCreatorCoin || creatorCoinDeclaredMissing) ? 'complete' as const : 'active' as const
+    const joinStatus = showSubmitButton ? 'active' as const : 'pending' as const
+    return [
+      { label: 'Connect', status: connectStatus },
+      { label: 'Verify', status: verifyStatus },
+      { label: 'Join', status: joinStatus },
+    ]
+  }, [hasVerification, hasCreatorCoin, creatorCoinDeclaredMissing, showSubmitButton])
   const [showTrouble, setShowTrouble] = useState(false)
   const canContinue = !privyVerifyBusy && !busy
   const showPrivyError = Boolean(privyVerifyError) || Boolean(siwfError)
@@ -213,12 +228,13 @@ export const VerifyStep = memo(function VerifyStep({
 
     return (
       <motion.div key="verify-simple" {...fadeUp} className="space-y-6 sm:space-y-7">
+        <StepIndicator steps={stepperSteps} className="mb-2" />
         <motion.div {...scaleIn} className="space-y-3">
-          <h1 className="font-doto text-[26px] sm:text-[32px] font-bold tracking-tight text-white leading-[1.08]">
+          <h1 className="font-doto text-2xl sm:text-3xl font-bold tracking-tight text-white leading-[1.08]">
             Setting up your account
           </h1>
-          <p className="max-w-[48ch] text-[14px] text-zinc-500 leading-relaxed">
-            We handle wallet verification and backend setup for you.
+          <p className="max-w-[48ch] text-sm text-zinc-500 leading-relaxed">
+            We handle wallet verification and setup for you automatically.
           </p>
         </motion.div>
 
@@ -285,24 +301,27 @@ export const VerifyStep = memo(function VerifyStep({
         </motion.div>
 
         {submitError ? (
-          <motion.div {...fadeUp} className="rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-[12px] text-red-200/90">
-            {submitError}
+          <motion.div {...fadeUp}>
+            <Alert variant="error">{submitError}</Alert>
           </motion.div>
         ) : null}
 
         <motion.div {...fadeUp} className={`${panelClass} p-4 space-y-2.5`}>
-          <label className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+          <label htmlFor="waitlist-email-simple" className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
             Email <span className="text-zinc-700">(optional)</span>
           </label>
           <input
+            id="waitlist-email-simple"
             type="email"
             value={emailValue}
             onChange={(e) => onEmailChange(e.target.value)}
             placeholder="you@example.com"
+            aria-invalid={emailError ? true : undefined}
+            aria-describedby={emailError ? 'email-error-simple' : 'email-hint-simple'}
             className="w-full rounded-xl border border-white/10 bg-white/3 px-3 py-2.5 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-[#0052FF]/50"
           />
-          <div className="text-[11px] text-zinc-600">Leave blank to continue wallet-first. You can add a recovery email later.</div>
-          {emailError ? <div className="text-[11px] text-amber-300">{emailError}</div> : null}
+          <div id="email-hint-simple" className="text-[11px] text-zinc-600">Optional. You can add a recovery email later.</div>
+          {emailError ? <div id="email-error-simple" role="alert" className="text-[11px] text-amber-300">{emailError}</div> : null}
         </motion.div>
 
         {!busy && canSubmit ? (
@@ -326,13 +345,16 @@ export const VerifyStep = memo(function VerifyStep({
       {...fadeUp}
       className="space-y-6 sm:space-y-7"
     >
+      {/* Progress stepper */}
+      <StepIndicator steps={stepperSteps} className="mb-2" />
+
       {/* Header */}
       <motion.div {...scaleIn} className="space-y-3">
-        <h1 className="font-doto text-[26px] sm:text-[32px] font-bold tracking-tight text-white leading-[1.08]">
+        <h1 className="font-doto text-2xl sm:text-3xl font-bold tracking-tight text-white leading-[1.08]">
           {headerTitle}
         </h1>
         {headerSubtitle ? (
-          <p className="max-w-[48ch] text-[14px] text-zinc-500 leading-relaxed">{headerSubtitle}</p>
+          <p className="max-w-[48ch] text-sm text-zinc-500 leading-relaxed">{headerSubtitle}</p>
         ) : null}
         {hasVerification ? (
           <div className="inline-flex items-center gap-2 rounded-full border border-[#0052FF]/20 bg-[#0052FF]/5 px-3 py-1.5 text-[11px] font-medium text-[#8AB5FF]">
@@ -401,19 +423,15 @@ export const VerifyStep = memo(function VerifyStep({
           </div>
 
           {showPrivyError ? (
-            <motion.div
-              {...fadeUp}
-              className="rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-[13px] text-red-200/90"
-            >
-              {siwfError || privyVerifyError}
+            <motion.div {...fadeUp}>
+              <Alert variant="error">{siwfError || privyVerifyError}</Alert>
             </motion.div>
           ) : null}
 
-          <motion.div
-            {...fadeUp}
-            className="rounded-2xl border border-[#0052FF]/20 bg-[#0052FF]/6 px-4 py-3 text-[12px] leading-relaxed text-zinc-300"
-          >
-            <span className="text-[#8AB5FF] font-medium">Zora sync:</span> We only check your Zora profile to prefill this step. No transaction is sent.
+          <motion.div {...fadeUp}>
+            <Alert variant="info">
+              <span className="font-medium">Zora sync:</span> We only check your Zora profile to prefill this step. No transaction is sent.
+            </Alert>
           </motion.div>
         </motion.div>
       ) : null}
@@ -604,9 +622,9 @@ export const VerifyStep = memo(function VerifyStep({
                   <div className="flex items-center gap-3">
                     <ShieldCheck className="h-5 w-5 text-emerald-400 shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <div className="text-[13px] text-emerald-200 font-medium">Smart wallet ownership verified</div>
+                      <div className="text-[13px] text-emerald-200 font-medium">Wallet ownership verified</div>
                       <div className="text-[11px] text-zinc-500 mt-0.5">
-                        ERC-1271 signature confirmed on Base
+                        Your smart wallet has been confirmed on Base.
                       </div>
                     </div>
                     <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
@@ -654,17 +672,18 @@ export const VerifyStep = memo(function VerifyStep({
             ) : null}
 
             {cswMismatch ? (
-              <motion.div variants={staggerItem} className="rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-[12px] text-amber-200/90">
-                Base app smart wallet differs from Zora canonical wallet. Connect the owner wallet you control.
+              <motion.div variants={staggerItem}>
+                <Alert variant="warning">
+                  The connected wallet doesn't match your Zora creator profile. Try connecting the wallet you use on Zora.
+                </Alert>
               </motion.div>
             ) : null}
 
             {ownershipError ? (
-              <motion.div variants={staggerItem} className="rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-[12px] text-amber-200/90">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                  <div>{ownershipError}</div>
-                </div>
+              <motion.div variants={staggerItem}>
+                <Alert variant="warning">
+                  Connect the wallet linked to your creator profile to continue.
+                </Alert>
               </motion.div>
             ) : null}
             {creatorCoinDeclaredMissing ? (
@@ -680,18 +699,21 @@ export const VerifyStep = memo(function VerifyStep({
       {showSubmitButton ? (
         <motion.div {...scaleIn} className="pt-2 space-y-3">
           <div className={`${panelClass} p-4 space-y-2.5`}>
-            <label className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+            <label htmlFor="waitlist-email" className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
               Email <span className="text-zinc-700">(optional)</span>
             </label>
             <input
+              id="waitlist-email"
               type="email"
               value={emailValue}
               onChange={(e) => onEmailChange(e.target.value)}
               placeholder="you@example.com"
+              aria-invalid={emailError ? true : undefined}
+              aria-describedby={emailError ? 'email-error' : 'email-hint'}
               className="w-full rounded-xl border border-white/10 bg-white/3 px-3 py-2.5 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-[#0052FF]/50"
             />
-            <div className="text-[11px] text-zinc-600">Leave blank to continue wallet-first. You can add a recovery email later.</div>
-            {emailError ? <div className="text-[11px] text-amber-300">{emailError}</div> : null}
+            <div id="email-hint" className="text-[11px] text-zinc-600">Optional. You can add a recovery email later.</div>
+            {emailError ? <div id="email-error" role="alert" className="text-[11px] text-amber-300">{emailError}</div> : null}
           </div>
           <button
             type="button"
@@ -704,7 +726,7 @@ export const VerifyStep = memo(function VerifyStep({
           >
             {busy ? (
               <>
-                <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" aria-hidden="true" />
                 Joining…
               </>
             ) : (
@@ -713,13 +735,16 @@ export const VerifyStep = memo(function VerifyStep({
               </>
             )}
           </button>
+          {submitError ? (
+            <Alert variant="error">{submitError}</Alert>
+          ) : null}
         </motion.div>
       ) : null}
 
       {!showPrivy ? (
-        <div className="rounded-2xl border border-white/6 bg-white/2 px-4 py-3 text-center text-[13px] text-zinc-500">
-          Wallet login unavailable
-        </div>
+        <Alert variant="warning">
+          Wallet sign-in is loading. If this persists, try refreshing the page or switching browsers.
+        </Alert>
       ) : null}
     </motion.div>
   )
