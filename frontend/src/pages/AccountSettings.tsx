@@ -9,6 +9,7 @@ import { useExportWallet, usePrivy } from '@privy-io/react-auth'
 import { apiFetch } from '@/lib/apiBase'
 import { getMarketingBaseUrl } from '@/lib/host'
 import { Alert } from '@/components/ui/Alert'
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Skeleton, SkeletonText } from '@/components/ui/Skeleton'
 import { isPrivyClientEnabled } from '@/lib/flags'
@@ -1084,11 +1085,7 @@ export function AccountSettings() {
       {error ? <Alert variant="error">{error}</Alert> : null}
       {success ? <Alert variant="success">{success}</Alert> : null}
 
-      <section className="card rounded-xl p-6 space-y-4">
-        <div className="flex items-center gap-2 text-white">
-          <Mail className="w-4 h-4" />
-          <h2 className="text-lg">Email</h2>
-        </div>
+      <CollapsibleSection title="Email" icon={<Mail className="w-4 h-4" />}>
         <p className="text-sm text-zinc-400">Use a real email for updates and account recovery.</p>
         <div className="space-y-2">
           <label htmlFor="account-email" className="text-xs uppercase tracking-[0.16em] text-zinc-500">
@@ -1116,13 +1113,9 @@ export function AccountSettings() {
             Current: {profile?.email ? profile.email : 'Not set'}
           </span>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section className="card rounded-xl p-6 space-y-4">
-        <div className="flex items-center gap-2 text-white">
-          <Wallet className="w-4 h-4" />
-          <h2 className="text-lg">Connected Accounts</h2>
-        </div>
+      <CollapsibleSection title="Connected Accounts" icon={<Wallet className="w-4 h-4" />} badge={knownAddressesWithOwners.length || null}>
         <p className="text-sm text-zinc-400">Wallets and linked accounts associated with your profile.</p>
 
         {canonicalSmartWalletAddress ? (
@@ -1312,13 +1305,9 @@ export function AccountSettings() {
             No connected accounts found for this profile yet.
           </div>
         )}
-      </section>
+      </CollapsibleSection>
 
-      <section className="card rounded-xl p-6 space-y-4">
-        <div className="flex items-center gap-2 text-white">
-          <ShieldCheck className="w-4 h-4" />
-          <h2 className="text-lg">Creator Profile</h2>
-        </div>
+      <CollapsibleSection title="Creator Profile" icon={<ShieldCheck className="w-4 h-4" />}>
         <p className="text-sm text-zinc-400">Creator coin, public profile stats, and associated identities.</p>
 
         {creatorCoinAddress ? (
@@ -1407,13 +1396,9 @@ export function AccountSettings() {
           </div>
           {exportMessage ? <div className="text-xs text-zinc-400">{exportMessage}</div> : null}
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section className="card rounded-xl p-6 space-y-2">
-        <div className="flex items-center gap-2 text-white">
-          <ShieldCheck className="w-4 h-4" />
-          <h2 className="text-lg">Access</h2>
-        </div>
+      <CollapsibleSection title="Access" icon={<ShieldCheck className="w-4 h-4" />} defaultOpen={false}>
         <div className="text-sm text-zinc-400">
           App access status: <span className="text-zinc-200">{humanizeToken(profile?.appAccessStatus) ?? 'Unknown'}</span>
         </div>
@@ -1431,7 +1416,7 @@ export function AccountSettings() {
             Changes saved
           </div>
         ) : null}
-      </section>
+      </CollapsibleSection>
 
       <ConfirmDialog
         open={revokeConfirmOwner !== null}

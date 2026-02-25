@@ -578,7 +578,7 @@ export const DoneStep = memo(function DoneStep({
             </div>
 
             <div>
-              <h1 className="font-doto text-[26px] sm:text-[30px] font-bold text-white tracking-tight">
+              <h1 className="font-doto text-2xl sm:text-3xl font-bold text-white tracking-tight">
                 You're on the waitlist!
               </h1>
               {rankDelta > 0 ? (

@@ -710,7 +710,7 @@ export function Portfolio() {
                 <div className="p-5">
                   <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-600">Creator + content coins</div>
                   <div className="mt-2 flex items-baseline gap-3">
-                    <div className="text-[34px] font-light tracking-tight text-white tabular-nums">{formatUsd(creatorContentUsd)}</div>
+                    <div className="text-3xl sm:text-4xl font-light tracking-tight text-white tabular-nums">{formatUsd(creatorContentUsd)}</div>
                     <div className="text-[12px] text-rose-300 tabular-nums">—</div>
                   </div>
                 </div>

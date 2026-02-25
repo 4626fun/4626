@@ -1878,7 +1878,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       <div className={innerWrapClass}>
         {variant === 'page' ? null : (
           <div className="mb-6">
-            <div className="font-doto text-[38px] sm:text-[44px] font-bold tracking-tight text-white leading-[1.05]">
+            <div className="font-doto text-4xl sm:text-5xl font-bold tracking-tight text-white leading-[1.05]">
               Waitlist
             </div>
           </div>
