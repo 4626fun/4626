@@ -418,6 +418,7 @@ export function Swap() {
     amountInUnits,
     parsedSlippage,
     parsedDeadlineMinutes,
+    chainId: swapChainId,
   })
 
   const selectedQuote = useMemo<QuoteShape | null>(() => {
