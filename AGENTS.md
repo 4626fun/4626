@@ -60,3 +60,49 @@ The `creator-share-hook` Anchor program lives at `programs/creator-share-hook/`.
 - `SOLANA_PRIVATE_KEY` is a **base58-encoded** secret key, not a JSON array. Convert before use with Solana CLI (the CLI expects `[u8; 64]` JSON array format).
 - The program keypair at `target/deploy/creator_share_hook-keypair.json` does **not** match the deployed program ID — do not pass it as `--program-id`. The deployed program ID is hardcoded in `declare_id!()` in `src/lib.rs`.
 - Solana CLI 3.x is installed at `~/.local/share/solana/install/active_release/bin/solana`; Anchor CLI 0.31.1 is at `/usr/local/cargo/bin/anchor`.
+- The Anchor IDL is at `target/idl/creator_share_hook.json`. Regenerate with `cd programs/creator-share-hook && anchor idl build > ../../target/idl/creator_share_hook.json`.
+
+### Solana integration: per-creator setup
+
+The Solana route provisioner (`frontend/server/solana-provisioner/`) handles the full Solana-side setup via HTTP endpoints:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /provision` | Creates bridge route via `wrap-token` CLI (does **not** set Transfer Hook) |
+| `POST /setup-creator` | Creates Token-2022 mint with Transfer Hook + TransferFeeConfig, initializes PDAs |
+| `POST /create-pool` | Creates Meteora DLMM pool for the creator's share token |
+| `POST /meteora-ixs` | Builds Meteora Alpha Vault deposit instructions |
+
+**Full per-creator Solana setup sequence:**
+1. `POST /provision` — creates bridge-wrapped SPL token + route
+2. `POST /setup-creator` — creates Token-2022 mint with Transfer Hook, inits CreatorConfig/PendingEntries/WinnerRecord PDAs
+3. `POST /create-pool` — creates Meteora DLMM trading pool
+4. Register Meteora vault config in DB or `METEORA_CREATOR_ALPHA_VAULT_MAP_JSON` env
+
+**Meteora vault config** is resolved via `frontend/server/_lib/meteoraAlphaVaultConfig.ts`:
+- Priority 1: DB table `creator_meteora_alpha_vaults` (auto-created on first query)
+- Priority 2: `METEORA_CREATOR_ALPHA_VAULT_MAP_JSON` env var (JSON map keyed by creator token address)
+
+### CRE keeper bots
+
+Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && npm ci`.
+
+**Solana-specific workflows:**
+- `keepr-solana-entry-relay` — drains lottery entries from Solana → relays to Base (every 30s)
+- `keepr-solana-fee-flush` — harvests Solana fees → bridges to Base gauge (every 5min)
+- `keepr-solana-winner-relay` — relays Base lottery wins → records on Solana
+- `keepr-solana-price-monitor` — monitors Solana vs Base price deviation
+
+**Start:** `cd cre && tsx runner.ts` (runs all workflows). Dry-run: `DRY_RUN=true tsx runner.ts`.
+
+**Required secrets** (see `cre/secrets.example.env`):
+- `KEEPR_PRIVATE_KEY` — Base signer (EOA or ERC-4337 owner)
+- `SOLANA_KEEPER_KEYPAIR` — Solana payer/authority (base58)
+- `SOLANA_RPC_URL`, `BASE_RPC_URL` — RPC endpoints
+- `SOLANA_BRIDGE_ADAPTER` — Base bridge adapter address
+- `SOLANA_CREATOR_MINTS` — comma-separated Solana mints to monitor
+- `SOLANA_SHARE_OFT_MAPPING` — JSON: Solana mint → Base ShareOFT
+- `SOLANA_CREATOR_COIN_TO_MINT_MAPPING` — JSON: Base creator coin → Solana mint
+- `SOLANA_TWIN_TO_PUBKEY_MAPPING` — JSON: Base Twin contract → Solana pubkey
+
+**CRE has pre-existing TS errors** (4 errors in actions/utils); runtime is unaffected since `tsx` skips type checks.
