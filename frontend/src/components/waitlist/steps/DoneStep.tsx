@@ -40,6 +40,7 @@ function useSafePrivyHook(enabled: boolean) {
         authenticated: false,
         user: null,
         getAccessToken: async () => null,
+        login: async () => null,
       } as any
     }
     return value
@@ -49,6 +50,7 @@ function useSafePrivyHook(enabled: boolean) {
       authenticated: false,
       user: null,
       getAccessToken: async () => null,
+      login: async () => null,
     } as any
   }
 }
@@ -358,12 +360,13 @@ export const DoneStep = memo(function DoneStep({
   const privyStatus = usePrivyClientStatus()
   const showPrivy = isPrivyClientEnabled()
   const privyHooksEnabled = showPrivy && privyStatus === 'ready'
-  const { authenticated: privyAuthed, user: privyUser, getAccessToken } = useSafePrivyHook(privyHooksEnabled)
+  const { authenticated: privyAuthed, user: privyUser, getAccessToken, login } = useSafePrivyHook(privyHooksEnabled)
   const privyTwitter = useMemo(() => extractPrivyTwitter(privyUser), [privyUser])
   const twitterConnected = Boolean(privyTwitter.subject)
 
   const [xLinkBusy, setXLinkBusy] = useState(false)
   const [xLinkError, setXLinkError] = useState<string | null>(null)
+  const [xSignInBusy, setXSignInBusy] = useState(false)
   const [xVerifyBusy, setXVerifyBusy] = useState(false)
   const [xVerifyError, setXVerifyError] = useState<string | null>(null)
 
@@ -407,6 +410,23 @@ export const DoneStep = memo(function DoneStep({
       setXLinkError(e?.message ? String(e.message) : 'Failed to connect X.')
     }
   }, [linkTwitter, privyAuthed, xLinkBusy])
+
+  const handleSignInForX = useCallback(async () => {
+    if (xSignInBusy) return
+    setXLinkError(null)
+    setXSignInBusy(true)
+    try {
+      await Promise.resolve(login?.())
+    } catch (e: any) {
+      setXLinkError(
+        e?.message
+          ? String(e.message)
+          : 'Sign-in did not complete. Try again, then connect X.',
+      )
+    } finally {
+      setXSignInBusy(false)
+    }
+  }, [login, xSignInBusy])
 
   const handleVerifyX = useCallback(async () => {
     if (xVerifyBusy) return
@@ -567,11 +587,19 @@ export const DoneStep = memo(function DoneStep({
           <PreprovisionStatus onData={setPreprovData} />
 
           {/* X follow verification (unlocks next border tier) */}
-          {showPrivy ? (
-            <motion.div
-              {...fadeUp}
-              className="rounded-2xl border border-white/6 bg-white/2 p-4 space-y-3"
-            >
+          <motion.div
+            {...fadeUp}
+            className="rounded-2xl border border-white/6 bg-white/2 p-4 space-y-3"
+          >
+            {!showPrivy ? (
+              <>
+                <div className="text-[11px] uppercase tracking-wider text-zinc-600">Verification</div>
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[12px] text-amber-200/90 leading-relaxed">
+                  X verification is temporarily unavailable in this environment. You can keep sharing your referral link now and try verification again later.
+                </div>
+              </>
+            ) : (
+              <>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-[11px] uppercase tracking-wider text-zinc-300">Verification</div>
@@ -598,7 +626,26 @@ export const DoneStep = memo(function DoneStep({
                   X verified. Border unlocked.
                 </div>
               ) : !privyAuthed ? (
-                <div className="text-[12px] text-zinc-300">Sign in to connect X.</div>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleSignInForX()}
+                    disabled={xSignInBusy}
+                    className={[
+                      'w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-white/8 bg-white/3 text-white text-[14px] font-medium transition-all duration-200 active:scale-[0.99]',
+                      xSignInBusy ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/6 cursor-pointer',
+                    ].join(' ')}
+                  >
+                    {xSignInBusy ? <Loader2 className="w-4 h-4 animate-spin text-zinc-300" /> : null}
+                    {xSignInBusy ? 'Opening sign in…' : 'Sign in to connect X'}
+                  </button>
+                  <div className="text-[12px] text-zinc-500">After signing in, connect X and click Verify.</div>
+                  {xLinkError ? (
+                    <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2 text-[12px] text-red-200/90">
+                      {xLinkError}
+                    </div>
+                  ) : null}
+                </div>
               ) : !twitterConnected ? (
                 <div className="space-y-2">
                   <button
@@ -653,8 +700,9 @@ export const DoneStep = memo(function DoneStep({
                   ) : null}
                 </div>
               )}
-            </motion.div>
-          ) : null}
+              </>
+            )}
+          </motion.div>
 
           {/* Launch Creator Coin — shown when the user has no existing Creator Coin */}
           {shouldShowLaunchCoinCard ? (
