@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { erc20Abi, formatUnits, isAddress, parseUnits } from 'viem'
+import { encodeFunctionData, erc20Abi, formatUnits, isAddress, parseUnits } from 'viem'
 
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
@@ -24,6 +24,26 @@ import {
 import type { TxLifecycleState } from '@/components/trade/TransactionLifecycle'
 
 const QUOTE_TTL_MS = 30_000
+
+const COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI = [
+  {
+    type: 'function',
+    name: 'executeBatch',
+    stateMutability: 'payable',
+    inputs: [
+      {
+        name: 'calls',
+        type: 'tuple[]',
+        components: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
 
 function asBigInt(v: unknown): bigint {
   if (typeof v === 'bigint') return v
@@ -469,21 +489,71 @@ export function useSwapExecution(params: {
     if (!params.canonicalAddress || !params.signerAddress || !params.walletClient || !params.publicClient) {
       throw new Error('Canonical smart wallet or owner signer is not ready')
     }
+    const isSelfConnect = params.canonicalAddress.toLowerCase() === params.signerAddress.toLowerCase()
+    if (isSelfConnect) {
+      const wallet = params.walletClient as any
+      const executeBatchData = encodeFunctionData({
+        abi: COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI,
+        functionName: 'executeBatch',
+        args: [
+          executeParams.calls.map((call) => ({
+            target: call.to,
+            value: call.value ?? 0n,
+            data: call.data ?? '0x',
+          })),
+        ],
+      })
+
+      const txHashRaw =
+        typeof wallet?.sendTransaction === 'function'
+          ? await wallet.sendTransaction({
+              account: params.signerAddress,
+              to: params.canonicalAddress,
+              value: 0n,
+              data: executeBatchData,
+            })
+          : await wallet.request({
+              method: 'eth_sendTransaction',
+              params: [
+                {
+                  from: params.signerAddress,
+                  to: params.canonicalAddress,
+                  value: '0x0',
+                  data: executeBatchData,
+                },
+              ],
+            })
+
+      const txHash = String(txHashRaw ?? '').trim()
+      if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
+        throw new Error('Canonical self-connect execution returned an invalid transaction hash.')
+      }
+      setTxHash(txHash)
+      setTxState('pending')
+      setStatus(`${executeParams.successLabel} via connected CSW: ${txHash}`)
+      return
+    }
+
     const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
     const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-    const result = await sendCoinbaseSmartWalletUserOperation({
-      publicClient: params.publicClient as any,
-      walletClient: params.walletClient as any,
-      bundlerUrl,
-      smartWallet: params.canonicalAddress,
-      ownerAddress: params.signerAddress,
-      calls: executeParams.calls,
-      version: '1',
-    })
-    setTxHash(result.transactionHash)
-    setTxState('pending')
-    setStatus(`${executeParams.successLabel}: ${result.transactionHash}`)
-  }, [params.canonicalAddress, params.signerAddress, params.walletClient, params.publicClient])
+    try {
+      const result = await sendCoinbaseSmartWalletUserOperation({
+        publicClient: params.publicClient as any,
+        walletClient: params.walletClient as any,
+        bundlerUrl,
+        smartWallet: params.canonicalAddress,
+        ownerAddress: params.signerAddress,
+        calls: executeParams.calls,
+        version: '1',
+      })
+      setTxHash(result.transactionHash)
+      setTxState('pending')
+      setStatus(`${executeParams.successLabel}: ${result.transactionHash}`)
+    } catch (error) {
+      const reason = getErrorMessage(error, 'Canonical ERC-4337 execution failed')
+      throw new Error(`Canonical ERC-4337 execution failed with connected owner wallet (${params.signerAddress}): ${reason}`)
+    }
+  }, [getErrorMessage, params.canonicalAddress, params.signerAddress, params.walletClient, params.publicClient])
 
   const executeViaEoa = useCallback(async (executeParams: {
     tx: TransactionRequest
@@ -707,4 +777,3 @@ export function useSwapExecution(params: {
     resetTradeState,
   }
 }
-
