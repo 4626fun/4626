@@ -61,7 +61,7 @@ describe('deploy registerShareOft handler', () => {
     vi.clearAllMocks()
     readDeployAuthMock.mockReturnValue({ address: '0x1111111111111111111111111111111111111111' })
     getApiContractsMock.mockReturnValue({
-      creatorVaultBatcher: '0x4184D9118ec31061cEDd6041B6bD676ac19F29a5',
+      creatorVaultBatcher: '0xB87CBb646dD14F520078F11196f79BF815F18c84',
     })
     resolveMeteoraConfigMock.mockResolvedValue(null)
   })

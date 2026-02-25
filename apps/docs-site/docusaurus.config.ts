@@ -1,6 +1,7 @@
 import {themes as prismThemes} from 'prism-react-renderer';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import {redirects} from './redirects';
 
 const config: Config = {
   title: '4626.fun Docs',
@@ -28,6 +29,15 @@ const config: Config = {
   },
 
   themes: ['@docusaurus/theme-mermaid'],
+
+  plugins: [
+    [
+      '@docusaurus/plugin-client-redirects',
+      {
+        redirects,
+      },
+    ],
+  ],
 
   presets: [
     [
@@ -74,8 +84,8 @@ const config: Config = {
           title: 'Docs',
           items: [
             {
-              label: 'Overview',
-              to: '/overview',
+              label: 'Four Compressions',
+              to: '/compressions',
             },
             {
               label: 'Contracts',

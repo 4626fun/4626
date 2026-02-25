@@ -79,6 +79,11 @@ const BATCHER_PHASE1_CORE_SELECTOR = '1331378b'
 const BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR = '4154f24e'
 const BATCHER_PHASE1_FINALIZE_SELECTOR = 'a98ec9d8'
 const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = '3bc09a8b'
+// `CreatorVaultDeployer` v4+ exposes these immutables as getters. We use this as a
+// compatibility gate to avoid legacy batchers that deploy module-uninitialized vaults.
+const BATCHER_VAULT_CORE_MODULE_SELECTOR = '22c40b75'
+const BATCHER_VAULT_STRATEGIES_MODULE_SELECTOR = '3283d513'
+const BATCHER_VAULT_ADMIN_MODULE_SELECTOR = '822f9d9b'
 const NO_EOA_STRICT_BLOCKER = 'No-EOA deploy is only available for preconfigured Privy-owner wallets.'
 const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
   {
@@ -3206,6 +3211,31 @@ function DeployVaultBatcher({
         return batcherBytecode.toLowerCase().includes(phase1Topic)
       })()
       const batcherBytecodeLower = (batcherBytecode ?? '0x').toLowerCase()
+      const supportsVaultModuleGetters = (() => {
+        if (!batcherBytecode || batcherBytecode === '0x') return false
+        return (
+          batcherBytecodeLower.includes(BATCHER_VAULT_CORE_MODULE_SELECTOR) &&
+          batcherBytecodeLower.includes(BATCHER_VAULT_STRATEGIES_MODULE_SELECTOR) &&
+          batcherBytecodeLower.includes(BATCHER_VAULT_ADMIN_MODULE_SELECTOR)
+        )
+      })()
+      if (isTwoStepBatcher && !supportsVaultModuleGetters) {
+        logger.warn('[DeployVault] legacy_batcher_blocked', {
+          deploy_mode: strictNoEoaEnforced ? 'no_eoa_strict' : 'default',
+          batcher: batcherAddress,
+          reason: 'missing_vault_module_getters',
+          selectors: {
+            coreModule: batcherBytecodeLower.includes(BATCHER_VAULT_CORE_MODULE_SELECTOR),
+            strategiesModule: batcherBytecodeLower.includes(BATCHER_VAULT_STRATEGIES_MODULE_SELECTOR),
+            adminModule: batcherBytecodeLower.includes(BATCHER_VAULT_ADMIN_MODULE_SELECTOR),
+          },
+        })
+        throw new Error(
+          `Legacy CreatorVaultDeployer active on this deployment (${batcherAddress}). ` +
+            'This version cannot initialize CreatorOVault modules and will stall at Phase 1 finalize. ' +
+            'Update `VITE_CREATOR_VAULT_BATCHER` (and server `CREATOR_VAULT_BATCHER`) to the current batcher.',
+        )
+      }
       const supportsSplitPhase1 = (() => {
         if (!batcherBytecode || batcherBytecode === '0x') return false
         return (

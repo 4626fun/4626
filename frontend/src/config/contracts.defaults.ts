@@ -37,7 +37,7 @@ export const BASE_DEFAULTS = {
   vaultActivationBatcher: addr('d17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB'),
   // v2-infra CreatorVaultBatcher (deterministic, deployed via CREATE2 factory)
   // NOTE: This is the phased `CreatorVaultDeployer` (Phases 1–3).
-  creatorVaultBatcher: addr('4184D9118ec31061cEDd6041B6bD676ac19F29a5'),
+  creatorVaultBatcher: addr('B87CBb646dD14F520078F11196f79BF815F18c84'),
 
   // Treasury
   protocolTreasury: addr('7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3'),

@@ -31,7 +31,7 @@ interface ICreatorLotteryManagerAuth {
  * - AUTHORIZE_ADAPTER_ON_LOTTERY=1|0 (default 1)
  */
 contract ConfigureCreatorVaultDeployerSolana is Script {
-    address constant DEFAULT_CREATOR_VAULT_BATCHER = 0x4184D9118ec31061cEDd6041B6bD676ac19F29a5;
+    address constant DEFAULT_CREATOR_VAULT_BATCHER = 0xB87CBb646dD14F520078F11196f79BF815F18c84;
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");

@@ -53,6 +53,33 @@ contract SeedUniversalBytecodeStore is Script {
 
         vm.startBroadcast(pk);
         uint256 i = 0;
+        // Shared CreatorOVault delegatecall modules.
+        // These are deployed as standalone CREATE2 contracts (not via the store),
+        // but we keep their creation code in the bytecode store for completeness/debugging.
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(
+                store,
+                vm.getCode("out/CreatorOVaultCoreModule.sol/CreatorOVaultCoreModule.json"),
+                "CreatorOVaultCoreModule",
+                supportsChunking
+            );
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(
+                store,
+                vm.getCode("out/CreatorOVaultStrategiesModule.sol/CreatorOVaultStrategiesModule.json"),
+                "CreatorOVaultStrategiesModule",
+                supportsChunking
+            );
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(
+                store,
+                vm.getCode("out/CreatorOVaultAdminModule.sol/CreatorOVaultAdminModule.json"),
+                "CreatorOVaultAdminModule",
+                supportsChunking
+            );
+        }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(
                 store,

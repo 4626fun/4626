@@ -6,9 +6,17 @@ slug: /
 
 # CreatorVault
 
-**Zora coin + Smart Wallet + Farcaster identity + Base groupchats = the creator economy OS on Base.**
+**A creator economy that behaves like a system.**
 
-CreatorVault is the **Base-native creator finance layer** that turns **Zora Creator Coins (Coinbase Creator Coins)** into composable, onchain "creator economies" with FriendTech-like loops: discover → take action → share → engage.
+CreatorVault is the Base-native creator finance layer that turns Zora Creator Coins (Coinbase Creator Coins) into composable, onchain creator economies. The docs are organized around two ideas:
+
+- **Four compressions**: the system reduces distance across deployment, geography (multichain), distribution (launch), and engagement (game loop).
+- **Three primitives**: account, market, and game loop are the core boundaries you integrate and audit.
+
+Start here:
+
+- **[Four Compressions](/compressions)** (recommended first read)
+- **[Three Primitives](/primitives)** (how the system fits together)
 
 ## What is CreatorVault?
 
@@ -33,12 +41,13 @@ In one click, creators deploy institutional-grade **ERC-4626 vault** infrastruct
 
 ## Quick Links
 
-- [Getting Started](/getting-started) - Installation and deployment guide
-- [Architecture](/architecture) - How CreatorVault works under the hood
+- [Getting Started](/getting-started) - Install and deploy
+- [Architecture](/architecture) - System architecture deep dive
 - [Tokenomics](/tokenomics) - Fee structure and lottery mechanics
-- [Security](/security) - Security features and audits
-- [Lens Integration](/lens) - Lens + Grove Phase 1 guidance for this repo
+- [Security](/security) - Threat surfaces and mitigations
+- [Contracts](/contracts) - What's deployed onchain
 - [API Reference](/api) - Auto-generated contract and frontend documentation
+- [Lens Integration](/lens) - Lens + Grove Phase 1 guidance for this repo
 - [Terms of Service](/terms)
 - [Privacy Policy](/privacy)
 

@@ -81,7 +81,7 @@ export function ExploreCreators() {
   const currentTimeFilter = searchParams.get('time') || '1d'
   const currentSort = searchParams.get('sort') || 'volume'
 
-  const listType = SORT_TO_LIST_TYPE[currentSort] || 'TOP_VOLUME_24H'
+  const listType = SORT_TO_LIST_TYPE[currentSort] || 'TOP_VOLUME_CREATORS_24H'
   
   // Fetch migrated coins for accurate fee detection
   const { migratedCoins } = useMigratedCoins()
@@ -166,7 +166,7 @@ export function ExploreCreators() {
   const exactMetrics = metricsQuery.data?.exact === true
   const syncStatus = metricsQuery.data?.syncStatus ?? 'running'
   const syncMeta = metricsQuery.data?.sync ?? null
-  const metricsTotals = exactMetrics ? metricsQuery.data?.totals ?? null : null
+  const metricsTotals = metricsQuery.data?.totals ?? null
   const creatorsTotalDisplay = metricsTotals?.creatorsTotal ?? null
   const creatorsNew24hDisplay = metricsTotals?.creatorsNew24h ?? null
   const marketCapDisplay = metricsTotals?.creatorCoinsMarketCapUsd ?? null
@@ -284,14 +284,14 @@ export function ExploreCreators() {
     'inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-zinc-900/75 backdrop-blur-md text-zinc-100 shadow-[0_10px_24px_-16px_rgba(0,0,0,0.95)] transition-all duration-200 hover:-translate-y-[1px] hover:border-white/35 hover:bg-zinc-800/85 hover:text-white hover:shadow-[0_14px_26px_-14px_rgba(0,0,0,0.95)] active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30'
 
   return (
-    <div className="relative pb-0 min-h-screen">
-      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 py-4 sm:py-8">
+    <div className="relative min-h-screen pt-1 sm:pt-2">
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 pt-2 sm:pt-4 pb-4 sm:pb-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="mb-5 sm:mb-8"
+          className="mb-4 sm:mb-6"
         >
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-medium text-white mb-1 sm:mb-2">
             Top Creators on Base
@@ -308,8 +308,8 @@ export function ExploreCreators() {
                 {creatorsTotalDisplay?.toLocaleString() ?? '—'}
               </div>
               <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
-                {exactMetrics && creatorsNew24hDisplay != null
-                  ? `+${creatorsNew24hDisplay.toLocaleString()} today`
+                {creatorsNew24hDisplay != null
+                  ? `${exactMetrics ? '+' : '≈+'}${creatorsNew24hDisplay.toLocaleString()} today`
                   : syncingLabel}
               </div>
             </div>
@@ -320,7 +320,7 @@ export function ExploreCreators() {
                 {formatCompactUsd(marketCapDisplay)}
               </div>
               <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
-                {exactMetrics ? 'All creators' : syncingLabel}
+                {exactMetrics ? 'All creators' : 'Estimated while canonical sync runs'}
               </div>
             </div>
 
@@ -330,7 +330,7 @@ export function ExploreCreators() {
                 {formatCompactUsd(volume24hDisplay)}
               </div>
               <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
-                {exactMetrics ? 'Across creator coins' : syncingLabel}
+                {exactMetrics ? 'Across creator coins' : 'Estimated while canonical sync runs'}
               </div>
             </div>
 
@@ -340,7 +340,7 @@ export function ExploreCreators() {
                 {formatCompactUsd(fees24hDisplay)}
               </div>
               <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
-                {exactMetrics ? 'Trading fees (global 24H)' : syncingLabel}
+                {exactMetrics ? 'Trading fees (global 24H)' : 'Estimated while canonical sync runs'}
               </div>
             </div>
           </div>
@@ -524,4 +524,3 @@ export function ExploreCreators() {
     </div>
   )
 }
-
