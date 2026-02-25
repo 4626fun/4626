@@ -395,12 +395,13 @@ export function Portfolio() {
     )
 
     return (
-      <div className="divide-y divide-zinc-800/70">
-        <div className="px-4 py-2.5 grid grid-cols-[minmax(0,1fr)_92px_92px_104px] gap-3 text-[11px] text-zinc-600">
-          <div>Token</div>
-          <div className="text-right">Price</div>
-          <div className="text-right">Balance</div>
-          <div className="text-right">Value</div>
+      <div className="overflow-x-auto" role="table" aria-label="Token holdings">
+        <div className="min-w-[480px] divide-y divide-zinc-800/70">
+        <div className="px-4 py-2.5 grid grid-cols-[minmax(0,1fr)_92px_92px_104px] gap-3 text-[11px] text-zinc-600" role="row">
+          <div role="columnheader">Token</div>
+          <div className="text-right" role="columnheader">Price</div>
+          <div className="text-right" role="columnheader">Balance</div>
+          <div className="text-right" role="columnheader">Value</div>
         </div>
         {items.map((h) => {
           const t = h.token
@@ -436,6 +437,7 @@ export function Portfolio() {
             </div>
           )
         })}
+      </div>
       </div>
     )
   }

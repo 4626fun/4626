@@ -9,6 +9,7 @@ import { useExportWallet, usePrivy } from '@privy-io/react-auth'
 import { apiFetch } from '@/lib/apiBase'
 import { getMarketingBaseUrl } from '@/lib/host'
 import { Alert } from '@/components/ui/Alert'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Skeleton, SkeletonText } from '@/components/ui/Skeleton'
 import { isPrivyClientEnabled } from '@/lib/flags'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
@@ -317,6 +318,7 @@ export function AccountSettings() {
   const [ownersActionMessage, setOwnersActionMessage] = useState<string | null>(null)
   const [ownersActionError, setOwnersActionError] = useState<string | null>(null)
   const [revokeBusyIndex, setRevokeBusyIndex] = useState<number | null>(null)
+  const [revokeConfirmOwner, setRevokeConfirmOwner] = useState<SmartWalletOwner | null>(null)
   const [selectedCanonicalSolanaWallet, setSelectedCanonicalSolanaWallet] = useState('')
   const [solanaWalletActionBusy, setSolanaWalletActionBusy] = useState(false)
 
@@ -1271,7 +1273,7 @@ export function AccountSettings() {
                             <button
                               key={`revoke:${item.address.toLowerCase()}:${slot.index}`}
                               type="button"
-                              onClick={() => void onRevokeOwner(slot)}
+                              onClick={() => setRevokeConfirmOwner(slot)}
                               disabled={disableRevoke}
                               className="inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] text-red-200 disabled:opacity-40"
                               title={
@@ -1430,6 +1432,22 @@ export function AccountSettings() {
           </div>
         ) : null}
       </section>
+
+      <ConfirmDialog
+        open={revokeConfirmOwner !== null}
+        title="Revoke owner"
+        description={`This will permanently remove owner slot #${revokeConfirmOwner?.index ?? '?'} from the smart wallet. This action requires a blockchain transaction and cannot be undone.`}
+        confirmLabel="Revoke owner"
+        variant="danger"
+        busy={revokeBusyIndex !== null}
+        onConfirm={() => {
+          if (revokeConfirmOwner) {
+            void onRevokeOwner(revokeConfirmOwner)
+            setRevokeConfirmOwner(null)
+          }
+        }}
+        onCancel={() => setRevokeConfirmOwner(null)}
+      />
     </div>
   )
 }
