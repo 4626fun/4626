@@ -1,6 +1,6 @@
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { ArrowDown, X } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { RouteViz } from '@/components/trade/RouteViz'
 
 type ConfirmIntent = 'approval' | 'swap' | 'order'
@@ -88,6 +88,26 @@ export function SwapConfirmModal(props: {
   onCancel: () => void
   onConfirm: () => void
 }) {
+  const prefersReduced = useReducedMotion()
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!props.intent) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !props.busy) props.onCancel()
+      if (e.key === 'Tab' && dialogRef.current) {
+        const sel = 'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(sel))
+        if (focusable.length === 0) { e.preventDefault(); return }
+        const first = focusable[0]!, last = focusable[focusable.length - 1]!
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [props.intent, props.busy, props.onCancel])
+
   if (!props.intent) return null
 
   const minReceived = (() => {
@@ -117,18 +137,23 @@ export function SwapConfirmModal(props: {
     <AnimatePresence>
       <div className="fixed inset-0 z-95">
         <motion.div
-          initial={{ opacity: 0 }}
+          initial={prefersReduced ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+          exit={prefersReduced ? undefined : { opacity: 0 }}
           transition={{ duration: 0.15 }}
           className="absolute inset-0 bg-black/75 backdrop-blur-sm"
           onClick={props.busy ? undefined : props.onCancel}
+          aria-hidden="true"
         />
         <motion.div
-          initial={{ y: '100%' }}
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={props.intent === 'approval' ? 'Approve token' : props.intent === 'order' ? 'Review order' : 'Review trade'}
+          initial={prefersReduced ? false : { y: '100%' }}
           animate={{ y: 0 }}
-          exit={{ y: '100%' }}
-          transition={{ type: 'spring', damping: 32, stiffness: 300 }}
+          exit={prefersReduced ? undefined : { y: '100%' }}
+          transition={prefersReduced ? { duration: 0 } : { type: 'spring', damping: 32, stiffness: 300 }}
           className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-lg rounded-t-3xl border border-white/10 bg-[#0d0d0d] shadow-[0_-30px_80px_-20px_rgba(0,0,0,0.95)] pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:pb-5"
         >
           {/* Handle (mobile only) */}

@@ -11,6 +11,8 @@ import { getAppBaseUrl } from '@/lib/host'
 import { isPrivyClientEnabled } from '@/lib/flags'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { classifyPreprovisionResponse } from '../preprovisionStatus'
+import { StepIndicator } from '@/components/ui/StepIndicator'
+import { Alert } from '@/components/ui/Alert'
 
 const baseEase = [0.4, 0, 0.2, 1] as const
 const fadeUp = {
@@ -549,6 +551,16 @@ export const DoneStep = memo(function DoneStep({
             <div className="absolute inset-0 bg-[#0a0a0b]/40" />
           </div>
 
+          {/* Completed stepper */}
+          <StepIndicator
+            steps={[
+              { label: 'Connect', status: 'complete' },
+              { label: 'Verify', status: 'complete' },
+              { label: 'Join', status: 'complete' },
+            ]}
+            className="mb-2"
+          />
+
           {/* Success Header */}
           <motion.div {...scaleIn} className="text-center space-y-4">
             <div className="flex justify-center">
@@ -642,11 +654,7 @@ export const DoneStep = memo(function DoneStep({
                     {xSignInBusy ? 'Opening sign in…' : 'Sign in to connect X'}
                   </button>
                   <div className="text-[12px] text-zinc-500">After signing in, connect X and click Verify.</div>
-                  {xLinkError ? (
-                    <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2 text-[12px] text-red-200/90">
-                      {xLinkError}
-                    </div>
-                  ) : null}
+                  {xLinkError ? <Alert variant="error">{xLinkError}</Alert> : null}
                 </div>
               ) : !twitterConnected ? (
                 <div className="space-y-2">
@@ -664,11 +672,7 @@ export const DoneStep = memo(function DoneStep({
                     ) : null}
                     {xLinkBusy ? 'Connecting X…' : 'Connect X'}
                   </button>
-                  {xLinkError ? (
-                    <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2 text-[12px] text-red-200/90">
-                      {xLinkError}
-                    </div>
-                  ) : null}
+                  {xLinkError ? <Alert variant="error">{xLinkError}</Alert> : null}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -699,11 +703,7 @@ export const DoneStep = memo(function DoneStep({
                   <div className="text-[11px] text-zinc-300">
                     Connected{privyTwitter.username ? ` as @${privyTwitter.username}` : ''}.
                   </div>
-                  {xVerifyError ? (
-                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[12px] text-amber-200/90">
-                      {xVerifyError}
-                    </div>
-                  ) : null}
+                  {xVerifyError ? <Alert variant="warning">{xVerifyError}</Alert> : null}
                 </div>
               )}
               </>

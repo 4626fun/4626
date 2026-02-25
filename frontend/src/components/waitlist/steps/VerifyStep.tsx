@@ -377,7 +377,7 @@ export const VerifyStep = memo(function VerifyStep({
             <ChevronRight className="absolute right-5 w-4 h-4 opacity-80" />
           </button>
 
-          <p className="text-[13px] text-zinc-500">We'll continue automatically.</p>
+          <p className="text-sm text-zinc-500">We'll continue automatically.</p>
 
           {showSiwf ? (
             <button
@@ -695,9 +695,38 @@ export const VerifyStep = memo(function VerifyStep({
         </motion.div>
       ) : null}
 
-      {/* Submit button */}
+      {/* Review & submit */}
       {showSubmitButton ? (
         <motion.div {...scaleIn} className="pt-2 space-y-3">
+          {/* Review summary */}
+          <div className={`${panelClass} p-4 space-y-2`}>
+            <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 flex items-center gap-1.5">
+              <CheckCircle2 className="h-3 w-3 text-emerald-400" aria-hidden="true" />
+              Review before joining
+            </div>
+            <div className={`${microPanelClass} px-3 py-2 flex items-center justify-between gap-3`}>
+              <span className="text-xs text-zinc-500">Wallet</span>
+              <span className="text-xs font-mono text-zinc-200">{connectedWalletShort}</span>
+            </div>
+            {hasCreatorCoin ? (
+              <div className={`${microPanelClass} px-3 py-2 flex items-center justify-between gap-3`}>
+                <span className="text-xs text-zinc-500">Creator coin</span>
+                <span className="text-xs text-zinc-200">{creatorCoin?.symbol || 'Detected'}</span>
+              </div>
+            ) : (
+              <div className={`${microPanelClass} px-3 py-2 flex items-center justify-between gap-3`}>
+                <span className="text-xs text-zinc-500">Creator coin</span>
+                <span className="text-xs text-zinc-400">Not detected — you can add one later</span>
+              </div>
+            )}
+            {walletOwnershipValid ? (
+              <div className={`${microPanelClass} px-3 py-2 flex items-center justify-between gap-3`}>
+                <span className="text-xs text-zinc-500">Ownership</span>
+                <span className="text-xs text-emerald-400">Verified</span>
+              </div>
+            ) : null}
+          </div>
+
           <div className={`${panelClass} p-4 space-y-2.5`}>
             <label htmlFor="waitlist-email" className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
               Email <span className="text-zinc-700">(optional)</span>

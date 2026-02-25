@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 
 export function SwapSettingsSheet(props: {
@@ -11,6 +12,25 @@ export function SwapSettingsSheet(props: {
   onSetDeadlineMinutes: (next: string) => void
   onSetCompareRoutesEnabled: (next: boolean) => void
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!props.open) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') props.onClose()
+      if (e.key === 'Tab' && dialogRef.current) {
+        const sel = 'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(sel))
+        if (focusable.length === 0) { e.preventDefault(); return }
+        const first = focusable[0]!, last = focusable[focusable.length - 1]!
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [props.open, props.onClose])
+
   if (!props.open) return null
 
   const slippagePresets = ['0.02', '0.1', '0.5', '1']
@@ -23,7 +43,7 @@ export function SwapSettingsSheet(props: {
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         onClick={props.onClose}
       />
-      <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-xl rounded-t-3xl border border-white/10 bg-[#0e1219]/95 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 shadow-[0_-30px_80px_-35px_rgba(0,0,0,0.9)] backdrop-blur-2xl sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:pb-4">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Trade settings" className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-xl rounded-t-3xl border border-white/10 bg-[#0e1219]/95 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 shadow-[0_-30px_80px_-35px_rgba(0,0,0,0.9)] backdrop-blur-2xl sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:pb-4">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-400">Trade settings</div>
           <button

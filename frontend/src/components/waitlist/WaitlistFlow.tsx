@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { getAppBaseUrl, getWaitlistReferralBaseUrl } from '@/lib/host'
@@ -474,6 +474,7 @@ function waitlistReducer(state: WaitlistState, action: WaitlistAction): Waitlist
 export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   const variant: Variant = props.variant ?? 'page'
   const sectionId = props.sectionId ?? 'waitlist'
+  const prefersReducedMotion = useReducedMotion()
 
   const location = useLocation()
   const navigate = useNavigate()
@@ -1897,10 +1898,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
               {step === 'verify' ? (
                 <motion.div
                   key="step:verify"
-                  initial={{ opacity: 0, y: 14 }}
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 14 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: BASE_MOTION_MS + 0.06, ease: BASE_EASE }}
+                  exit={prefersReducedMotion ? undefined : { opacity: 0, y: -10 }}
+                  transition={prefersReducedMotion ? { duration: 0 } : { duration: BASE_MOTION_MS + 0.06, ease: BASE_EASE }}
                 >
                   <VerifyStep
                     verifiedWallet={verifiedWallet}
@@ -1942,10 +1943,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
               {step === 'done' ? (
                 <motion.div
                   key="step:done"
-                  initial={{ opacity: 0, y: 14 }}
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 14 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: BASE_MOTION_MS + 0.06, ease: BASE_EASE }}
+                  exit={prefersReducedMotion ? undefined : { opacity: 0, y: -10 }}
+                  transition={prefersReducedMotion ? { duration: 0 } : { duration: BASE_MOTION_MS + 0.06, ease: BASE_EASE }}
                 >
                   <DoneStep
                     doneEmail={doneEmail}
