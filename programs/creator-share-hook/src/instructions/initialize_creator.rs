@@ -42,7 +42,7 @@ pub struct InitializeCreator<'info> {
     )]
     pub creator_config: Box<Account<'info, CreatorConfig>>,
 
-    /// PendingEntries PDA — initialized here.
+    /// PendingEntries PDA — initialized here (zero-copy).
     #[account(
         init,
         payer = authority,
@@ -50,7 +50,7 @@ pub struct InitializeCreator<'info> {
         seeds = [PENDING_ENTRIES_SEED, creator_mint.key().as_ref()],
         bump,
     )]
-    pub pending_entries: Box<Account<'info, PendingEntries>>,
+    pub pending_entries: AccountLoader<'info, PendingEntries>,
 
     /// WinnerRecord PDA — initialized here.
     #[account(
@@ -91,13 +91,14 @@ pub fn handler(ctx: Context<InitializeCreator>, params: InitializeCreatorParams)
         config.known_amm_programs[i] = *amm;
     }
 
-    // Initialize PendingEntries.
-    let entries = &mut ctx.accounts.pending_entries;
+    // Initialize PendingEntries (zero-copy).
+    let mut entries = ctx.accounts.pending_entries.load_init()?;
     entries.creator_mint = ctx.accounts.creator_mint.key();
     entries.head = 0;
     entries.count = 0;
     entries.overflow_count = 0;
     entries.bump = ctx.bumps.pending_entries;
+    entries._padding = [0u8; 7];
 
     // Initialize WinnerRecord.
     let winner = &mut ctx.accounts.winner_record;

@@ -150,37 +150,9 @@ export type CreatorShareHook = {
         {
           "name": "pendingEntries",
           "docs": [
-            "PendingEntries PDA — mutable to drain entries."
+            "PendingEntries PDA — zero-copy, mutable to drain entries."
           ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  101,
-                  110,
-                  100,
-                  105,
-                  110,
-                  103,
-                  95,
-                  101,
-                  110,
-                  116,
-                  114,
-                  105,
-                  101,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "creatorMint"
-              }
-            ]
-          }
+          "writable": true
         }
       ],
       "args": []
@@ -335,7 +307,7 @@ export type CreatorShareHook = {
         {
           "name": "pendingEntries",
           "docs": [
-            "PendingEntries PDA — initialized here."
+            "PendingEntries PDA — initialized here (zero-copy)."
           ],
           "writable": true,
           "pda": {
@@ -925,37 +897,9 @@ export type CreatorShareHook = {
         {
           "name": "pendingEntries",
           "docs": [
-            "PendingEntries PDA — writable to record buy entries."
+            "PendingEntries PDA — zero-copy, writable to record buy entries."
           ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  101,
-                  110,
-                  100,
-                  105,
-                  110,
-                  103,
-                  95,
-                  101,
-                  110,
-                  116,
-                  114,
-                  105,
-                  101,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint"
-              }
-            ]
-          }
+          "writable": true
         }
       ],
       "args": [
@@ -1502,8 +1446,15 @@ export type CreatorShareHook = {
     {
       "name": "lotteryEntry",
       "docs": [
-        "A single lottery entry recorded by the Transfer Hook on a buy."
+        "A single lottery entry recorded by the Transfer Hook on a buy.",
+        "",
+        "Uses `#[zero_copy]` so it can live inside the zero-copy `PendingEntries` account",
+        "without blowing the SBF stack limit during deserialization."
       ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
       "type": {
         "kind": "struct",
         "fields": [
@@ -1569,9 +1520,17 @@ export type CreatorShareHook = {
         "",
         "Seeds: `[PENDING_ENTRIES_SEED, creator_mint.key()]`",
         "",
+        "Uses zero-copy deserialization (`AccountLoader`) to avoid placing the",
+        "12KB buffer on the SBF stack. The runtime memory-maps the account data",
+        "directly, keeping stack usage minimal.",
+        "",
         "The keeper drains this buffer periodically and relays entries to Base.",
         "Overflow policy: drop-oldest (head advances, oldest overwritten)."
       ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
       "type": {
         "kind": "struct",
         "fields": [
@@ -1610,6 +1569,18 @@ export type CreatorShareHook = {
               "Bump seed for PDA derivation."
             ],
             "type": "u8"
+          },
+          {
+            "name": "padding",
+            "docs": [
+              "Alignment padding (zero-copy requires C-repr alignment)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                7
+              ]
+            }
           },
           {
             "name": "entries",

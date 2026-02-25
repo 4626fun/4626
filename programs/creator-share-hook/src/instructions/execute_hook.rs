@@ -50,45 +50,29 @@ pub struct TransferHook<'info> {
     )]
     pub creator_config: Box<Account<'info, CreatorConfig>>,
 
-    /// PendingEntries PDA — writable to record buy entries.
-    #[account(
-        mut,
-        seeds = [PENDING_ENTRIES_SEED, mint.key().as_ref()],
-        bump = pending_entries.bump,
-    )]
-    pub pending_entries: Box<Account<'info, PendingEntries>>,
+    /// PendingEntries PDA — zero-copy, writable to record buy entries.
+    #[account(mut)]
+    pub pending_entries: AccountLoader<'info, PendingEntries>,
 }
 
 pub fn handler(ctx: Context<TransferHook>, amount: u64) -> Result<()> {
     let config = &ctx.accounts.creator_config;
 
-    // If lottery is disabled, exit early. The hook still "executes" (which
-    // is required by the runtime) but doesn't record anything.
     if !config.lottery_enabled {
         return Ok(());
     }
 
-    // Detect if this is a "buy" by checking the source token account owner.
-    // A buy = tokens flowing from an AMM pool to a user wallet.
-    //
-    // We deserialize the source token account to get its owner.
     let source_data = ctx.accounts.source_token_account.try_borrow_data()?;
 
-    // Token-2022 account layout: owner is at bytes 32..64
     if source_data.len() < 64 {
-        // Not a valid token account — skip silently.
         return Ok(());
     }
     let source_owner = Pubkey::try_from(&source_data[32..64]).unwrap_or_default();
 
-    // Check if source owner is a known AMM program.
     if !config.is_known_amm(&source_owner) {
-        // Not a buy (could be a sell, wallet-to-wallet, or LP operation).
         return Ok(());
     }
 
-    // This is a buy! Record the lottery entry.
-    // Buyer = destination token account owner.
     let dest_data = ctx.accounts.destination_token_account.try_borrow_data()?;
     if dest_data.len() < 64 {
         return Ok(());
@@ -102,7 +86,7 @@ pub fn handler(ctx: Context<TransferHook>, amount: u64) -> Result<()> {
         slot: clock.slot,
     };
 
-    let pending = &mut ctx.accounts.pending_entries;
+    let mut pending = ctx.accounts.pending_entries.load_mut()?;
     let overflowed = pending.push(entry);
 
     if overflowed {

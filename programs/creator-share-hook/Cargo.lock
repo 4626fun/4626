@@ -985,6 +985,7 @@ dependencies = [
  "anchor-client",
  "anchor-lang",
  "anchor-spl",
+ "bytemuck",
  "spl-tlv-account-resolution 0.8.1",
  "spl-token-2022 6.0.0",
  "spl-transfer-hook-interface 0.8.2",
