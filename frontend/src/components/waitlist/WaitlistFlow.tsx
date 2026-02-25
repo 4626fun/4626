@@ -1869,17 +1869,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
             hasUpgradedBorder ? 'border-[#0052FF]/25' : 'border-white/[0.06]'
           } bg-[#0d0d0f]/95 backdrop-blur-xl p-6 sm:p-8`
 
-  const progressSteps = [
-    { key: 'connect', label: 'Connect', done: step === 'done' || Boolean(verifiedWallet) || Boolean(siwfFid) },
-    {
-      key: 'reserve',
-      label: 'Reserve Spot',
-      done: step === 'done' || (step === 'verify' && canSubmit),
-    },
-    { key: 'boost', label: 'Boost Rank', done: step === 'done' },
-    { key: 'deploy', label: 'Deploy', done: deployAccessState === 'ready' },
-  ]
-
   return (
     <section id={variant === 'embedded' ? sectionId : undefined} className={containerClass}>
       {variant === 'page' ? (
@@ -1902,18 +1891,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
             ].join(' ')}
           />
           <div className="relative z-10">
-          <div className="mb-5">
-            <div className="grid grid-cols-4 gap-2">
-              {progressSteps.map((item) => (
-                <div key={item.key} className="space-y-1">
-                  <div className={`h-1.5 rounded-full ${item.done ? 'bg-[#0052FF]' : 'bg-white/10'}`} />
-                  <div className={`text-[10px] uppercase tracking-[0.14em] ${item.done ? 'text-zinc-300' : 'text-zinc-600'}`}>
-                    {item.label}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
           {/* Step transition: smooth layout */}
           <div className="relative">
             <AnimatePresence mode="wait">
