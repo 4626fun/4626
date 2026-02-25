@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, ArrowRight, Copy, Bot, Coins, User, Loader2, Share2, Trophy } from 'lucide-react'
+import { CheckCircle2, ArrowRight, Copy, Bot, Coins, User, Loader2, Share2, Trophy, ExternalLink, Wallet } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useLinkAccount, usePrivy } from '@privy-io/react-auth'
 import { WaitlistDoneCelebrationBackground } from '../WaitlistDoneCelebrationBackground'
@@ -135,6 +135,67 @@ type DoneStepProps = {
 function truncAddr(addr: string): string {
   if (addr.length < 12) return addr
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`
+}
+
+function normalizeEvmAddress(value: string | null | undefined): string | null {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (!/^0x[a-fA-F0-9]{40}$/.test(raw)) return null
+  return raw
+}
+
+function WalletSnapshotCard(props: {
+  connectedOwnerAddress: string | null
+  canonicalSmartWalletAddress: string | null
+}) {
+  const connectedOwnerAddress = normalizeEvmAddress(props.connectedOwnerAddress)
+  const canonicalSmartWalletAddress = normalizeEvmAddress(props.canonicalSmartWalletAddress)
+  const appAccountUrl = `${getAppBaseUrl()}/account`
+  return (
+    <motion.div {...fadeUp} className="rounded-2xl border border-white/8 bg-white/2 p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="inline-flex items-center gap-2">
+          <Wallet className="w-4 h-4 text-[#0052FF]" />
+          <span className="text-[11px] uppercase tracking-[0.16em] text-zinc-400">Wallet Snapshot</span>
+        </div>
+        <span className="rounded-full border border-[#0052FF]/25 bg-[#0052FF]/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[#6f9dff]">
+          Account Ready
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-2.5">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">◉ Connected Owner Wallet</div>
+          <div className="mt-1 font-mono text-[12px] text-zinc-300 break-all">
+            {connectedOwnerAddress ?? 'Not connected yet'}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-[#0052FF]/20 bg-[#0052FF]/7 px-3 py-2.5">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-[#87abff]">⬢ Canonical Smart Wallet (Zora)</div>
+          <div className="mt-1 font-mono text-[12px] text-white break-all">
+            {canonicalSmartWalletAddress ?? 'Detecting smart wallet...'}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <a
+          href="/account"
+          className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/3 px-3 py-2 text-[12px] text-zinc-200 hover:bg-white/6 transition-colors"
+        >
+          View Account
+          <ExternalLink className="w-3 h-3" />
+        </a>
+        <a
+          href={appAccountUrl}
+          className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#0052FF]/20 bg-[#0052FF]/10 px-3 py-2 text-[12px] text-[#9ebaff] hover:bg-[#0052FF]/15 transition-colors"
+        >
+          Open App Account
+          <ExternalLink className="w-3 h-3" />
+        </a>
+      </div>
+    </motion.div>
+  )
 }
 
 function AdminDeployLink() {
@@ -585,6 +646,11 @@ export const DoneStep = memo(function DoneStep({
 
           {/* Pre-provisioning status */}
           <PreprovisionStatus onData={setPreprovData} />
+
+          <WalletSnapshotCard
+            connectedOwnerAddress={ownerAddress ?? null}
+            canonicalSmartWalletAddress={smartWalletAddress ?? null}
+          />
 
           {/* X follow verification (unlocks next border tier) */}
           <motion.div

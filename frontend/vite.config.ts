@@ -51,7 +51,22 @@ function makeVercelCompatReq(req: IncomingMessage, body?: string): any {
   const r: any = req as any
   r.query = query
   r.cookies = {}
-  r.body = body
+  // Local API handlers expect `req.body` to already be an object (Vercel behavior).
+  // Parse JSON here because the stream is consumed by the middleware before handler code runs.
+  let parsedBody: unknown = undefined
+  if (typeof body === 'string' && body.length > 0) {
+    const ct = String(req.headers['content-type'] ?? '').toLowerCase()
+    if (ct.includes('application/json')) {
+      try {
+        parsedBody = JSON.parse(body)
+      } catch {
+        parsedBody = undefined
+      }
+    } else {
+      parsedBody = body
+    }
+  }
+  r.body = parsedBody
   return r
 }
 

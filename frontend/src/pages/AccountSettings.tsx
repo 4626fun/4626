@@ -7,7 +7,7 @@ import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wa
 import { useExportWallet, usePrivy } from '@privy-io/react-auth'
 
 import { apiFetch } from '@/lib/apiBase'
-import { getMarketingBaseUrl } from '@/lib/host'
+import { APP_ORIGIN, getAppBaseUrl, getMarketingBaseUrl } from '@/lib/host'
 import { isPrivyClientEnabled } from '@/lib/flags'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { getFarcasterUserByAddress, getFarcasterUserByFid } from '@/lib/neynar-api'
@@ -1005,9 +1005,37 @@ export function AccountSettings() {
     zoraProfile?.socialAccounts,
   ])
 
+  const accountSurfaceUrl = useMemo(() => `${getAppBaseUrl()}/account`, [])
+  const appAccountUrl = useMemo(() => `${APP_ORIGIN}/account`, [])
+
+  const accessTone = useMemo(() => {
+    const status = String(profile?.appAccessStatus ?? '').toLowerCase()
+    if (status.includes('allow') || status.includes('approved')) {
+      return {
+        chip: 'border-emerald-400/35 bg-emerald-500/12 text-emerald-200',
+        dot: 'bg-emerald-400',
+        label: 'Approved',
+      }
+    }
+    if (status.includes('wait') || status.includes('pending')) {
+      return {
+        chip: 'border-amber-400/35 bg-amber-500/12 text-amber-200',
+        dot: 'bg-amber-400',
+        label: 'Pending',
+      }
+    }
+    return {
+      chip: 'border-zinc-500/35 bg-zinc-500/10 text-zinc-300',
+      dot: 'bg-zinc-500',
+      label: humanizeToken(profile?.appAccessStatus) ?? 'Unknown',
+    }
+  }, [profile?.appAccessStatus])
+
+  const topKnownAddress = knownAddressesWithOwners[0]?.address ?? null
+
   if (!auth.sessionHydrated || loading) {
     return (
-      <div className="max-w-4xl mx-auto px-6 py-12">
+      <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
         <div className="card rounded-xl p-8 text-zinc-300">Loading account…</div>
       </div>
     )
@@ -1015,7 +1043,7 @@ export function AccountSettings() {
 
   if (!auth.isSignedIn) {
     return (
-      <div className="max-w-4xl mx-auto px-6 py-12">
+      <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
         <div className="card rounded-xl p-8 space-y-4">
           <div className="text-xl text-white">Sign in required</div>
           <div className="text-sm text-zinc-400">Connect wallet and complete Sign in to manage your email and connected accounts.</div>
@@ -1025,12 +1053,15 @@ export function AccountSettings() {
               void auth.signIn()
             }}
             disabled={auth.busy}
-            className="btn-accent disabled:opacity-60"
+            className="btn-accent min-h-11 disabled:opacity-60"
           >
             {auth.busy ? 'Signing in…' : 'Sign in'}
           </button>
           <div>
-            <a href={`${getMarketingBaseUrl()}/#waitlist`} className="text-sm text-zinc-400 hover:text-zinc-200">
+            <a
+              href={`${getMarketingBaseUrl()}/#waitlist`}
+              className="inline-flex min-h-10 items-center text-sm text-zinc-400 hover:text-zinc-200"
+            >
               Back to waitlist
             </a>
           </div>
@@ -1040,34 +1071,81 @@ export function AccountSettings() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-10 space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Account</div>
-          <h1 className="text-2xl text-white">Email and Connected Accounts</h1>
-        </div>
-        <button
-          type="button"
-          onClick={() => void loadProfile()}
-          className="btn-secondary inline-flex items-center gap-2"
-          disabled={loading}
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
+    <div className="relative mx-auto max-w-6xl space-y-5 px-3 py-6 sm:space-y-6 sm:px-6 sm:py-10">
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute inset-0 bg-[radial-gradient(120%_90%_at_50%_0%,rgba(0,82,255,0.12),transparent_58%)]" />
       </div>
+
+      <section className="card space-y-3 rounded-2xl border border-white/12 bg-[#0b0f18]/85 p-4 sm:space-y-4 sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Account</div>
+            <h1 className="mt-1 text-[1.6rem] sm:text-[1.9rem] font-semibold text-white">Identity Control Plane</h1>
+            <p className="mt-1 text-[13px] text-zinc-400 sm:text-sm">Wallet architecture, creator profile, and operational controls.</p>
+          </div>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <a
+              href={accountSurfaceUrl}
+              className="btn-secondary inline-flex min-h-11 w-full items-center justify-center gap-1.5 sm:w-auto"
+            >
+              Account URL
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+            <a
+              href={appAccountUrl}
+              className="btn-secondary inline-flex min-h-11 w-full items-center justify-center gap-1.5 sm:w-auto"
+            >
+              App Account
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+            <button
+              type="button"
+              onClick={() => void loadProfile()}
+              className="btn-secondary inline-flex min-h-11 w-full items-center justify-center gap-2 sm:w-auto"
+              disabled={loading}
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
+          <div className="rounded-xl border border-white/10 bg-white/4 px-3 py-2.5 sm:py-3">
+            <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">◉ Connected Owner</div>
+            <div className="mt-1 break-all font-mono text-[11px] text-zinc-100 sm:text-[12px]">{connectedAddress ?? 'Not connected'}</div>
+          </div>
+          <div className="rounded-xl border border-[#0052FF]/20 bg-[#0052FF]/10 px-3 py-2.5 sm:py-3">
+            <div className="text-[10px] uppercase tracking-[0.12em] text-[#8fb1ff]">⬢ Canonical CSW</div>
+            <div className="mt-1 break-all font-mono text-[11px] text-white sm:text-[12px]">{canonicalSmartWalletAddress ?? 'Not detected'}</div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/4 px-3 py-2.5 sm:py-3">
+            <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">◈ Creator Coin</div>
+            <div className="mt-1 text-[12px] text-zinc-100 sm:text-[13px]">{creatorCoinAddress ? creatorCoinDisplaySymbol : 'Not detected'}</div>
+            {creatorCoinAddress ? <div className="truncate font-mono text-[10px] text-zinc-400 sm:text-[11px]">{creatorCoinAddress}</div> : null}
+          </div>
+          <div className={`rounded-xl border px-3 py-2.5 sm:py-3 ${accessTone.chip}`}>
+            <div className="text-[10px] uppercase tracking-[0.12em]">Access</div>
+            <div className="mt-1 inline-flex items-center gap-1.5 text-[12px] sm:text-[13px]">
+              <span className={`h-1.5 w-1.5 rounded-full ${accessTone.dot}`} />
+              {accessTone.label}
+            </div>
+          </div>
+        </div>
+      </section>
 
       {error ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div> : null}
       {success ? (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{success}</div>
       ) : null}
 
-      <section className="card rounded-xl p-6 space-y-4">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-[1.25fr_1fr]">
+      <section className="card rounded-xl p-4 space-y-4 sm:p-6">
         <div className="flex items-center gap-2 text-white">
           <Mail className="w-4 h-4" />
-          <h2 className="text-lg">Email</h2>
+          <h2 className="text-base sm:text-lg">Email</h2>
         </div>
-        <p className="text-sm text-zinc-400">Use a real email for updates and account recovery.</p>
+        <p className="text-[13px] text-zinc-400 sm:text-sm">Use a real email for updates and account recovery.</p>
         <div className="space-y-2">
           <label htmlFor="account-email" className="text-xs uppercase tracking-[0.16em] text-zinc-500">
             Email Address
@@ -1078,15 +1156,15 @@ export function AccountSettings() {
             value={emailDraft}
             onChange={(e) => setEmailDraft(e.target.value)}
             placeholder="you@example.com"
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none focus:border-brand-primary"
+            className="min-h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none focus:border-brand-primary"
           />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
           <button
             type="button"
             onClick={() => void onSaveEmail()}
             disabled={!canSaveEmail || saving}
-            className="btn-accent disabled:opacity-50"
+            className="btn-accent min-h-11 w-full justify-center disabled:opacity-50 sm:w-auto"
           >
             {saving ? 'Saving…' : 'Update Email'}
           </button>
@@ -1096,19 +1174,23 @@ export function AccountSettings() {
         </div>
       </section>
 
-      <section className="card rounded-xl p-6 space-y-4">
+      <section className="card rounded-xl p-4 space-y-4 sm:p-6">
         <div className="flex items-center gap-2 text-white">
           <Wallet className="w-4 h-4" />
-          <h2 className="text-lg">Connected Accounts</h2>
+          <h2 className="text-base sm:text-lg">Connected Accounts</h2>
         </div>
-        <p className="text-sm text-zinc-400">Wallets and linked accounts associated with your profile.</p>
+        <p className="text-[13px] text-zinc-400 sm:text-sm">Wallets and linked accounts associated with your profile.</p>
 
         {canonicalSmartWalletAddress ? (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 space-y-2">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-              <span>Canonical Smart Wallet from Zora: <span className="font-mono text-zinc-300">{canonicalSmartWalletAddress}</span></span>
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2.5 space-y-2 sm:p-3">
+            <div className="flex flex-col items-start gap-1.5 text-xs text-zinc-500 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+              <span className="w-full">
+                Canonical Smart Wallet from Zora: <span className="break-all font-mono text-zinc-300">{canonicalSmartWalletAddress}</span>
+              </span>
               {connectedAddress ? (
-                <span>Connected owner EOA: <span className="font-mono text-zinc-300">{connectedAddress}</span></span>
+                <span className="w-full">
+                  Connected owner EOA: <span className="break-all font-mono text-zinc-300">{connectedAddress}</span>
+                </span>
               ) : (
                 <span>Connect an owner EOA to revoke owner slots.</span>
               )}
@@ -1137,7 +1219,7 @@ export function AccountSettings() {
           </div>
         ) : null}
 
-        <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 space-y-3">
+        <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2.5 space-y-3 sm:p-3">
           <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Solana Wallet Roles</div>
           <div className="space-y-2 text-sm text-zinc-300">
             <div>
@@ -1166,7 +1248,7 @@ export function AccountSettings() {
                   id="canonical-solana-wallet"
                   value={selectedCanonicalSolanaWallet}
                   onChange={(e) => setSelectedCanonicalSolanaWallet(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none focus:border-brand-primary"
+                  className="min-h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none focus:border-brand-primary"
                 >
                   {linkedSolanaWallets.map((wallet) => (
                     <option key={`solana-option:${wallet.address}`} value={wallet.address}>
@@ -1178,7 +1260,7 @@ export function AccountSettings() {
                   type="button"
                   onClick={() => void onSetCanonicalSolanaWallet()}
                   disabled={!canSetCanonicalSolanaWallet}
-                  className="btn-secondary disabled:opacity-50"
+                  className="btn-secondary min-h-11 w-full justify-center disabled:opacity-50 sm:w-auto"
                 >
                   {solanaWalletActionBusy ? 'Updating…' : 'Set Canonical'}
                 </button>
@@ -1192,19 +1274,19 @@ export function AccountSettings() {
         </div>
 
         {knownAddressesWithOwners.length > 0 ? (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 space-y-3 sm:p-4">
             <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Known Addresses & Owner Slots</div>
             <div className="space-y-2">
               {knownAddressesWithOwners.map((item) => (
                 <div key={`known:${item.address.toLowerCase()}`} className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2.5">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div className="font-mono text-xs sm:text-sm text-zinc-100 break-all">{item.address}</div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <a
                         href={`https://basescan.org/address/${item.address}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1 rounded-md border border-zinc-700 px-2 py-1 text-[10px] text-zinc-300 hover:text-zinc-100"
+                        className="inline-flex min-h-9 items-center gap-1 rounded-md border border-zinc-700 px-2.5 py-1 text-[10px] text-zinc-300 hover:text-zinc-100"
                       >
                         BaseScan
                         <ExternalLink className="w-3 h-3" />
@@ -1212,7 +1294,7 @@ export function AccountSettings() {
                       <button
                         type="button"
                         onClick={() => onCopyAddress(item.address)}
-                        className="inline-flex items-center gap-1 rounded-md border border-zinc-700 px-2 py-1 text-[10px] text-zinc-300 hover:text-zinc-100"
+                        className="inline-flex min-h-9 items-center gap-1 rounded-md border border-zinc-700 px-2.5 py-1 text-[10px] text-zinc-300 hover:text-zinc-100"
                       >
                         {copiedAddress === item.address.toLowerCase() ? 'Copied' : 'Copy'}
                         <Copy className="w-3 h-3" />
@@ -1253,7 +1335,7 @@ export function AccountSettings() {
                               type="button"
                               onClick={() => void onRevokeOwner(slot)}
                               disabled={disableRevoke}
-                              className="inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] text-red-200 disabled:opacity-40"
+                              className="inline-flex min-h-9 items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[10px] text-red-200 disabled:opacity-40"
                               title={
                                 !connectedAddressIsOwner
                                   ? 'Connected wallet is not an owner'
@@ -1279,7 +1361,7 @@ export function AccountSettings() {
         ) : null}
 
         {profile?.connectedAccounts?.length ? (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 space-y-2">
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 space-y-2 sm:p-4">
             <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Sync Summary</div>
             <div className="text-sm text-zinc-300">
               {knownAddressesWithOwners.length} unique addresses from {profile.connectedAccounts.length} synced records.
@@ -1291,17 +1373,18 @@ export function AccountSettings() {
           </div>
         )}
       </section>
+      </div>
 
-      <section className="card rounded-xl p-6 space-y-4">
+      <section className="card rounded-xl p-4 space-y-4 sm:p-6">
         <div className="flex items-center gap-2 text-white">
           <ShieldCheck className="w-4 h-4" />
-          <h2 className="text-lg">Creator Profile</h2>
+          <h2 className="text-base sm:text-lg">Creator Profile</h2>
         </div>
-        <p className="text-sm text-zinc-400">Creator coin, public profile stats, and associated identities.</p>
+        <p className="text-[13px] text-zinc-400 sm:text-sm">Creator coin, public profile stats, and associated identities.</p>
 
         {creatorCoinAddress ? (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-4 py-4 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-3 space-y-3 sm:px-4 sm:py-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
               <div>
                 <div className="text-sm text-zinc-100">{creatorCoinDisplaySymbol}</div>
                 <div className="font-mono text-xs text-zinc-400 break-all">{creatorCoinAddress}</div>
@@ -1310,13 +1393,13 @@ export function AccountSettings() {
                 href={`https://zora.co/coin/base:${creatorCoinAddress}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 rounded-md border border-zinc-700 px-2 py-1 text-[10px] text-zinc-300 hover:text-zinc-100"
+                className="inline-flex min-h-9 items-center gap-1 rounded-md border border-zinc-700 px-2.5 py-1 text-[10px] text-zinc-300 hover:text-zinc-100"
               >
                 View on Zora
                 <ExternalLink className="w-3 h-3" />
               </a>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <div className="rounded-md border border-zinc-800 bg-black/30 px-2 py-2">
                 <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Market Cap</div>
                 <div className="mt-1 text-sm text-zinc-100">{formatUsdCompact(creatorCoinStats.marketCap)}</div>
@@ -1338,14 +1421,19 @@ export function AccountSettings() {
         )}
 
         {associatedAccounts.length > 0 ? (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 space-y-2">
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 space-y-2 sm:p-4">
             <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Associated Accounts</div>
             <div className="space-y-2">
               {associatedAccounts.map((item) => (
-                <div key={`${item.label}:${item.value}`} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-zinc-800 bg-zinc-950/60 px-3 py-2">
+                <div key={`${item.label}:${item.value}`} className="flex flex-col items-start gap-2 rounded-md border border-zinc-800 bg-zinc-950/60 px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                   <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">{item.label}</div>
                   {item.href ? (
-                    <a href={item.href} target="_blank" rel="noreferrer" className={`text-sm text-zinc-200 hover:text-white ${item.mono ? 'font-mono' : ''}`}>
+                    <a
+                      href={item.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={`text-sm text-zinc-200 hover:text-white ${item.mono ? 'break-all font-mono' : 'wrap-break-word'}`}
+                    >
                       {item.value}
                     </a>
                   ) : (
@@ -1361,7 +1449,7 @@ export function AccountSettings() {
           </div>
         )}
 
-        <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-4 py-3 space-y-2">
+        <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-3 space-y-2 sm:px-4">
           <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Embedded Wallet Export</div>
           <div className="text-sm text-zinc-300">
             {embeddedExportAddress ? (
@@ -1372,12 +1460,12 @@ export function AccountSettings() {
               'No embedded wallet detected for this account yet.'
             )}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
             <button
               type="button"
               onClick={() => void onExportEmbeddedWallet()}
               disabled={!embeddedExportAddress || exportBusy || !privyEnabled}
-              className="btn-secondary disabled:opacity-50"
+              className="btn-secondary min-h-11 w-full justify-center disabled:opacity-50 sm:w-auto"
             >
               {exportBusy ? 'Opening export…' : 'Export Embedded Wallet'}
             </button>
@@ -1387,10 +1475,10 @@ export function AccountSettings() {
         </div>
       </section>
 
-      <section className="card rounded-xl p-6 space-y-2">
+      <section className="card rounded-xl p-4 space-y-2.5 sm:p-6">
         <div className="flex items-center gap-2 text-white">
           <ShieldCheck className="w-4 h-4" />
-          <h2 className="text-lg">Access</h2>
+          <h2 className="text-base sm:text-lg">Access</h2>
         </div>
         <div className="text-sm text-zinc-400">
           App access status: <span className="text-zinc-200">{humanizeToken(profile?.appAccessStatus) ?? 'Unknown'}</span>
@@ -1400,7 +1488,7 @@ export function AccountSettings() {
         </div>
         {profile?.privyUserId ? (
           <div className="text-sm text-zinc-400">
-            Privy user: <span className="font-mono text-zinc-300">{profile.privyUserId}</span>
+            Privy user: <span className="break-all font-mono text-zinc-300">{profile.privyUserId}</span>
           </div>
         ) : null}
         {success ? (
@@ -1410,6 +1498,12 @@ export function AccountSettings() {
           </div>
         ) : null}
       </section>
+
+      {topKnownAddress ? (
+        <div className="text-xs text-zinc-500">
+          Primary wallet fingerprint: <span className="break-all font-mono text-zinc-300">{topKnownAddress}</span>
+        </div>
+      ) : null}
     </div>
   )
 }
