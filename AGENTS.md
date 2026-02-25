@@ -38,7 +38,7 @@ Standard commands are documented in `frontend/package.json` scripts:
 
 ### Solana program deployment
 
-The `creator-share-hook` Anchor program lives at `programs/creator-share-hook/`. It is already deployed to Solana **mainnet**.
+The `creator-share-hook` Anchor program lives at `programs/creator-share-hook/`. It is deployed to Solana **mainnet**.
 
 | Detail | Value |
 |--------|-------|
@@ -61,6 +61,24 @@ The `creator-share-hook` Anchor program lives at `programs/creator-share-hook/`.
 - The program keypair at `target/deploy/creator_share_hook-keypair.json` does **not** match the deployed program ID — do not pass it as `--program-id`. The deployed program ID is hardcoded in `declare_id!()` in `src/lib.rs`.
 - Solana CLI 3.x is installed at `~/.local/share/solana/install/active_release/bin/solana`; Anchor CLI 0.31.1 is at `/usr/local/cargo/bin/anchor`.
 - The Anchor IDL is at `target/idl/creator_share_hook.json`. Regenerate with `cd programs/creator-share-hook && anchor idl build > ../../target/idl/creator_share_hook.json`.
+
+### Solana bridge on-chain config (Base mainnet)
+
+The `CreatorVaultDeployer` batcher is configured for Solana bridging:
+
+| Contract | Config | Value |
+|----------|--------|-------|
+| Batcher (`0xB87CBb...c84`) | `solanaBridgeAdapter` | `0x2414b595c4f18532A5836B6e2E6d536832c572e8` |
+| | `solanaDestination` | `0x5f38e34e...d4d1` |
+| SolanaBridgeAdapter (`0x2414b5...e8`) | `owner` | `0xB05Cf0...FdD` (= `PRIVATE_KEY` secret) |
+| Protocol treasury (Safe 1-of-2) | address | `0x7d429e...f2d3` |
+| | owners | `0xB05Cf0...` (`PRIVATE_KEY`), `0x2C1Af6B...` |
+
+**Key access:** `PRIVATE_KEY` secret is owner of both the adapter and the treasury Safe. To call `setSolanaConfig` on the batcher, execute via the Safe (threshold=1, so single-owner signature suffices). See git history for the `cast send` pattern used.
+
+**Deploy fallback:** If `solanaBridgeAdapter` or `solanaDestination` is zero, the 20% Solana allocation silently falls back to creator vesting. No revert.
+
+**When Solana IS enabled** (current state), Phase 2 Finalize **requires** `meteoraAlphaVault != bytes32(0)` and `solanaIxs.length > 0` — otherwise it reverts. The Meteora Alpha Vault must be pre-created on Solana per creator.
 
 ### Solana integration: per-creator setup
 
