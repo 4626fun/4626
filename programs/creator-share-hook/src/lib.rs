@@ -40,7 +40,7 @@ pub mod creator_share_hook {
     /// Keeper-only: harvest withheld fees via Token-2022 CPI.
     /// Fees are collected to a designated account for bridging to Base.
     pub fn flush_fees<'info>(
-        ctx: Context<'_, '_, '_, 'info, FlushFees<'info>>,
+        ctx: Context<'_, '_, 'info, 'info, FlushFees<'info>>,
     ) -> Result<()> {
         instructions::flush_fees::handler(ctx)
     }
