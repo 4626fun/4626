@@ -25,6 +25,7 @@ import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAg
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 import { buildDeployPermissionGrant } from '../../../../server/_lib/erc7712Permissions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
+import { resolveCoinParties } from '../../../../server/_lib/coinParties.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -231,45 +232,103 @@ async function isOnchainSmartWalletOwner(params: { smartWallet: Address; ownerAd
   }
 }
 
+type CreatorAllowlistMatch = 'allowlist' | 'creator_wallets' | 'profiles_approved' | 'none'
+
+type CreatorAllowlistCheck = {
+  allowed: boolean
+  matchedBy: CreatorAllowlistMatch
+  checkedAddresses: string[]
+}
+
+function normalizeAllowlistAddresses(input: Array<Address | string | null | undefined>): Address[] {
+  const out = new Set<string>()
+  for (const raw of input) {
+    if (!raw || typeof raw !== 'string') continue
+    if (!isAddress(raw)) continue
+    out.add(getAddress(raw).toLowerCase())
+  }
+  return Array.from(out).map((v) => getAddress(v as Address))
+}
+
+function buildSupabaseOrFilters(fields: string[], addresses: string[]): string {
+  return addresses.flatMap((addr) => fields.map((field) => `${field}.ilike.${addr}`)).join(',')
+}
+
+async function resolveAllowlistAddresses(params: {
+  sessionAddress: Address
+  smartWallet: Address
+  creatorToken: Address
+}): Promise<Address[]> {
+  const base = normalizeAllowlistAddresses([params.sessionAddress, params.smartWallet])
+  try {
+    const parties = await resolveCoinParties(params.creatorToken as `0x${string}`)
+    const combined = normalizeAllowlistAddresses([
+      params.sessionAddress,
+      params.smartWallet,
+      parties.creator,
+      parties.payoutRecipient,
+    ])
+    return combined.length > 0 ? combined : base
+  } catch {
+    return base
+  }
+}
+
 /**
- * Check if an address is on the creator allowlist.
- * Checks: direct allowlist, CSW ownership, linked wallets, and approved profiles.
+ * Check if the deploy actor is allowed to create a deploy session.
+ *
+ * Keep this aligned with `/api/creator-allowlist` so UI gate + deploy-session gate
+ * evaluate the same address set:
+ * - authenticated session wallet
+ * - canonical smart wallet sender
+ * - creator/payoutRecipient resolved from creatorToken
  */
-async function checkCreatorAllowlist(address: Address, smartWallet: Address): Promise<boolean> {
-  const addr = address.toLowerCase()
-  const csw = smartWallet.toLowerCase()
+async function checkCreatorAllowlist(params: {
+  sessionAddress: Address
+  smartWallet: Address
+  creatorToken: Address
+}): Promise<CreatorAllowlistCheck> {
+  const addressesToCheck = await resolveAllowlistAddresses(params)
+  const addressFilters = addressesToCheck.map((a) => a.toLowerCase())
+
+  if (addressFilters.length === 0) {
+    return { allowed: false, matchedBy: 'none', checkedAddresses: [] }
+  }
 
   // Try Supabase first
   if (isSupabaseAdminConfigured()) {
     const supabase = getSupabaseAdmin()
     try {
-      // Check direct allowlist entry
-      const { data: allowlistData } = await supabase
+      const allowlistRes = await supabase
         .from('allowlist')
         .select('id')
-        .or(`address.ilike.${addr},csw_address.ilike.${csw}`)
+        .or(buildSupabaseOrFilters(['address', 'csw_address'], addressFilters))
         .is('revoked_at', null)
         .limit(1)
-      if (allowlistData && allowlistData.length > 0) return true
+      if (!allowlistRes.error && Array.isArray(allowlistRes.data) && allowlistRes.data.length > 0) {
+        return { allowed: true, matchedBy: 'allowlist', checkedAddresses: addressFilters }
+      }
 
-      // Check creator_wallets table
-      const { data: walletData } = await supabase
+      const walletRes = await supabase
         .from('creator_wallets')
         .select('id')
-        .or(`wallet_address.ilike.${addr},wallet_address.ilike.${csw}`)
+        .or(buildSupabaseOrFilters(['wallet_address'], addressFilters))
         .limit(1)
-      if (walletData && walletData.length > 0) return true
+      if (!walletRes.error && Array.isArray(walletRes.data) && walletRes.data.length > 0) {
+        return { allowed: true, matchedBy: 'creator_wallets', checkedAddresses: addressFilters }
+      }
 
-      // Check approved profiles
-      const { data: profileData } = await supabase
+      const profileRes = await supabase
         .from('profiles')
         .select('id')
-        .or(`primary_wallet.ilike.${addr},embedded_wallet.ilike.${addr},csw_address.ilike.${csw}`)
+        .or(buildSupabaseOrFilters(['primary_wallet', 'embedded_wallet', 'csw_address'], addressFilters))
         .eq('app_access_status', 'approved')
         .limit(1)
-      if (profileData && profileData.length > 0) return true
+      if (!profileRes.error && Array.isArray(profileRes.data) && profileRes.data.length > 0) {
+        return { allowed: true, matchedBy: 'profiles_approved', checkedAddresses: addressFilters }
+      }
 
-      return false
+      return { allowed: false, matchedBy: 'none', checkedAddresses: addressFilters }
     } catch {
       // Fall through to Postgres
     }
@@ -277,20 +336,49 @@ async function checkCreatorAllowlist(address: Address, smartWallet: Address): Pr
 
   // Fallback to Postgres
   const db = await getDb()
-  if (!db?.query) return false
+  if (!db?.query) return { allowed: false, matchedBy: 'none', checkedAddresses: addressFilters }
 
   try {
-    const result = await db.query(`
-      SELECT 1 FROM allowlist WHERE (LOWER(address) = $1 OR LOWER(csw_address) = $2) AND revoked_at IS NULL
-      UNION ALL
-      SELECT 1 FROM creator_wallets WHERE LOWER(wallet_address) = $1 OR LOWER(wallet_address) = $2
-      UNION ALL
-      SELECT 1 FROM profiles WHERE (LOWER(primary_wallet) = $1 OR LOWER(embedded_wallet) = $1 OR LOWER(csw_address) = $2) AND app_access_status = 'approved'
-      LIMIT 1;
-    `, [addr, csw])
-    return result.rows && result.rows.length > 0
+    const allowlisted = await db.query(
+      `SELECT 1
+       FROM allowlist
+       WHERE (LOWER(address) = ANY($1) OR LOWER(csw_address) = ANY($1))
+         AND revoked_at IS NULL
+       LIMIT 1;`,
+      [addressFilters],
+    )
+    if (Array.isArray(allowlisted.rows) && allowlisted.rows.length > 0) {
+      return { allowed: true, matchedBy: 'allowlist', checkedAddresses: addressFilters }
+    }
+
+    const linked = await db.query(
+      `SELECT 1
+       FROM creator_wallets
+       WHERE LOWER(wallet_address) = ANY($1)
+       LIMIT 1;`,
+      [addressFilters],
+    )
+    if (Array.isArray(linked.rows) && linked.rows.length > 0) {
+      return { allowed: true, matchedBy: 'creator_wallets', checkedAddresses: addressFilters }
+    }
+
+    const approved = await db.query(
+      `SELECT 1
+       FROM profiles
+       WHERE (LOWER(primary_wallet) = ANY($1)
+         OR LOWER(embedded_wallet) = ANY($1)
+         OR LOWER(csw_address) = ANY($1))
+         AND COALESCE(app_access_status, 'pending') = 'approved'
+       LIMIT 1;`,
+      [addressFilters],
+    )
+    if (Array.isArray(approved.rows) && approved.rows.length > 0) {
+      return { allowed: true, matchedBy: 'profiles_approved', checkedAddresses: addressFilters }
+    }
+
+    return { allowed: false, matchedBy: 'none', checkedAddresses: addressFilters }
   } catch {
-    return false
+    return { allowed: false, matchedBy: 'none', checkedAddresses: addressFilters }
   }
 }
 
@@ -485,10 +573,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<null>)
     }
 
-    // Check creator allowlist before creating session
-    const isAllowlisted = await checkCreatorAllowlist(sessionAddress, smartWallet)
-    if (!isAllowlisted) {
-      return res.status(403).json({ success: false, error: 'Creator access required. Please apply for access first.' } satisfies ApiEnvelope<null>)
+    // Check creator access before creating session.
+    const allowlistCheck = await checkCreatorAllowlist({
+      sessionAddress,
+      smartWallet,
+      creatorToken,
+    })
+    if (!allowlistCheck.allowed) {
+      console.warn('[deploy/session/create] creator_access_denied', {
+        sessionAddress: sessionAddress.toLowerCase(),
+        smartWallet: smartWallet.toLowerCase(),
+        creatorToken: creatorToken.toLowerCase(),
+        checkedAddresses: allowlistCheck.checkedAddresses,
+      })
+      const checked = allowlistCheck.checkedAddresses.length > 0 ? allowlistCheck.checkedAddresses.join(', ') : 'none'
+      return res.status(403).json({
+        success: false,
+        error:
+          `Creator access required. Active session wallet ${sessionAddress} is not approved for this deploy. ` +
+          `Checked addresses: ${checked}. Sign out/in with your approved wallet, or ask admin to approve your session wallet/canonical smart wallet.`,
+      } satisfies ApiEnvelope<null>)
     }
 
     if (preflightOnly) {

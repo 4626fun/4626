@@ -13,6 +13,7 @@ const {
   getOrCreateCreatorAgentWalletMock,
   generatePrivateKeyMock,
   privateKeyToAccountMock,
+  resolveCoinPartiesMock,
 } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async (req: any) => req.body),
   readSessionFromRequestMock: vi.fn(() => ({ address: '0x0000000000000000000000000000000000000001' })),
@@ -29,6 +30,7 @@ const {
     address: '0x00000000000000000000000000000000000000aa',
     privateKey: ('0x' + '11'.repeat(32)) as `0x${string}`,
   })),
+  resolveCoinPartiesMock: vi.fn(async () => ({ creator: null, payoutRecipient: null })),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -70,6 +72,11 @@ vi.mock('../../server/_lib/creatorAgentWallets.js', () => ({
 vi.mock('../../server/_lib/origin.js', () => ({
   getCanonicalOrigin: vi.fn(() => 'https://4626-test-akita-llc.vercel.app'),
 }))
+
+vi.mock('../../server/_lib/coinParties.js', () => ({
+  resolveCoinParties: resolveCoinPartiesMock,
+}))
+
 vi.mock('viem/accounts', () => ({
   generatePrivateKey: generatePrivateKeyMock,
   privateKeyToAccount: privateKeyToAccountMock,
@@ -122,6 +129,7 @@ function makeCanonicalDb() {
 describe('deploy session ownership guardrails', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resolveCoinPartiesMock.mockResolvedValue({ creator: null, payoutRecipient: null })
   })
 
   it('returns 403 when canonical smart wallet mapping is missing', async () => {
@@ -156,6 +164,44 @@ describe('deploy session ownership guardrails', () => {
     expect(insertArgs.payload?.erc7712Grant?.version).toBe('erc7712-v1')
     expect((insertArgs.payload?.erc7712Grant?.allowedTargets ?? []).map((v: string) => v.toLowerCase())).toContain('0x0000000000000000000000000000000000000010')
     expect(insertArgs.payload?.persistSessionOwner).toBe(true)
+  })
+
+  it('creates session when creator/payout recipient is allowlisted via creatorToken resolution', async () => {
+    resolveCoinPartiesMock.mockResolvedValueOnce({
+      creator: null,
+      payoutRecipient: '0x00000000000000000000000000000000000000aa',
+    } as any)
+    const db = makeCanonicalDb()
+    ;(db.query as any).mockImplementation(async (sql: string, params: any[]) => {
+      const text = String(sql).toLowerCase()
+      const addressFilters = Array.isArray(params?.[0]) ? (params[0] as string[]) : []
+      if (text.includes('from allowlist')) {
+        return { rows: addressFilters.includes('0x00000000000000000000000000000000000000aa') ? [{}] : [] }
+      }
+      return { rows: [] }
+    })
+    getDbMock.mockResolvedValue(db)
+
+    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns actionable creator access error when allowlist checks fail', async () => {
+    const db = makeCanonicalDb()
+    ;(db.query as any).mockResolvedValue({ rows: [] })
+    getDbMock.mockResolvedValue(db)
+
+    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(String(res.body?.error ?? '')).toContain('Active session wallet')
+    expect(String(res.body?.error ?? '')).toContain('Checked addresses:')
   })
 
   it('falls back to local session owner key when agent wallet id is missing', async () => {
