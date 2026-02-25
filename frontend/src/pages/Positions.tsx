@@ -20,7 +20,7 @@ export function Positions() {
               For now, manage a vault directly from its page.
             </div>
             <div className="mt-8 flex flex-col sm:flex-row gap-3">
-              <Link to="/explore/creators" className="btn-accent inline-flex items-center justify-center rounded-full px-5 py-3 text-xs">
+              <Link to="/explore/creators" className="btn-accent btn-compact inline-flex items-center justify-center rounded-full text-xs">
                 Explore creators
               </Link>
             </div>

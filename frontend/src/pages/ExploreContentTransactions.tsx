@@ -329,7 +329,7 @@ export function ExploreContentTransactions() {
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
               <Link
                 to={`/explore/content/base/${contentCoinAddress}`}
-                className="btn-primary inline-flex items-center justify-center rounded-full px-5 py-3 text-xs"
+                className="btn-primary btn-compact inline-flex items-center justify-center rounded-full text-xs"
               >
                 Back to market
               </Link>

@@ -109,7 +109,7 @@ export function Leaderboard() {
             </div>
             {subtitle ? <div className="text-[11px] text-zinc-700 mt-2">{subtitle}</div> : null}
           </div>
-          <a className="btn-accent h-fit" href="/#waitlist">
+          <a className="btn-accent btn-compact h-fit inline-flex items-center" href="/#waitlist">
             Invite friends
           </a>
         </div>

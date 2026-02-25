@@ -36,11 +36,11 @@ function Chip(props: {
       onClick={props.onClick}
       className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition ${
         props.stale
-          ? 'border-amber-400/30 bg-amber-500/8 text-amber-300 hover:bg-amber-500/15'
-          : 'border-white/10 bg-white/4 text-zinc-400 hover:bg-white/8 hover:text-zinc-200'
+          ? 'border-amber-400/35 bg-amber-500/12 text-amber-300 hover:bg-amber-500/18'
+          : 'border-white/12 bg-[#111a27] text-zinc-300 hover:bg-[#162234] hover:text-zinc-100'
       }`}
     >
-      <span className="text-zinc-600">{props.label}:</span>
+      <span className="text-zinc-500">{props.label}:</span>
       <span className="font-medium tabular-nums">{props.value}</span>
     </button>
   )

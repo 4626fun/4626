@@ -362,7 +362,7 @@ export function Vault() {
               <h1 className="headline text-3xl sm:text-5xl mt-4">Invalid vault address</h1>
               <p className="text-zinc-600 text-sm font-light mt-4">Check the URL and try again.</p>
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
-                <Link to="/explore/creators" className="btn-accent inline-flex items-center justify-center rounded-full px-5 py-3 text-xs">
+                <Link to="/explore/creators" className="btn-accent btn-compact inline-flex items-center justify-center rounded-full text-xs">
                   Back to Explore
                 </Link>
               </div>
@@ -390,14 +390,14 @@ export function Vault() {
               </p>
               <div className="mt-3 text-[11px] font-mono text-zinc-600 break-all">{addressParam}</div>
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
-                <Link to="/explore/creators" className="btn-accent inline-flex items-center justify-center rounded-full px-5 py-3 text-xs">
+                <Link to="/explore/creators" className="btn-accent btn-compact inline-flex items-center justify-center rounded-full text-xs">
                   Back to Explore
                 </Link>
                 <a
                   href={`https://basescan.org/address/${addressParam}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="btn-primary inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-xs"
+                  className="btn-primary btn-compact inline-flex items-center justify-center gap-2 rounded-full text-xs"
                 >
                   View on Basescan <ExternalLink className="w-3 h-3" />
                 </a>
@@ -508,7 +508,7 @@ export function Vault() {
                       href={`https://basescan.org/address/${wrapperAddress}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="btn-primary inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-xs"
+                      className="btn-primary btn-compact inline-flex items-center justify-center gap-2 rounded-full text-xs"
                     >
                       View wrapper <ExternalLink className="w-3 h-3" />
                     </a>
@@ -516,7 +516,7 @@ export function Vault() {
                   {vaultAddress ? (
                     <Link
                       to={`/status?vault=${encodeURIComponent(vaultAddress)}`}
-                      className="btn-primary inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-xs"
+                      className="btn-primary btn-compact inline-flex items-center justify-center gap-2 rounded-full text-xs"
                       title="Verification checks"
                     >
                       Status checks <ShieldCheck className="w-3 h-3 text-emerald-300" />
@@ -525,14 +525,14 @@ export function Vault() {
                   {canManageVault ? (
                     <a
                       href="#manage"
-                      className="inline-flex items-center justify-center gap-2 rounded-full btn-accent px-5 py-3 text-xs text-center"
+                      className="inline-flex items-center justify-center gap-2 rounded-full btn-accent btn-compact text-xs text-center"
                     >
                       Manage position
                     </a>
                   ) : (
                     <a
                       href="#auction"
-                      className="inline-flex items-center justify-center gap-2 rounded-full btn-accent px-5 py-3 text-xs text-center"
+                      className="inline-flex items-center justify-center gap-2 rounded-full btn-accent btn-compact text-xs text-center"
                     >
                       Auction panel
                     </a>

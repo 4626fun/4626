@@ -59,7 +59,7 @@ function FaqAccordionItem({
     <div
       id={`faq-${item.id}`}
       className={`relative ${
-        isOpen ? 'bg-white/[0.02]' : 'hover:bg-white/[0.015]'
+        isOpen ? 'bg-white/2' : 'hover:bg-white/1.5'
       } transition-colors`}
     >
       <button
@@ -736,14 +736,14 @@ export function Faq() {
               <div className={`${surface} ${surfaceInteractive} p-5`}>
                 <span className="label">Start here</span>
                 <div className="mt-4 space-y-2">
-                  <Link to="/faq/how-it-works" className="flex items-center justify-between gap-4 rounded-xl px-3 py-3 hover:bg-white/[0.03] transition-colors">
+                  <Link to="/faq/how-it-works" className="flex items-center justify-between gap-4 rounded-xl px-3 py-3 hover:bg-white/3 transition-colors">
                     <div className="space-y-1">
                       <div className="text-white font-light">How it works</div>
                       <div className="text-xs text-zinc-600 font-light">Deposit → {SHARE_TOKEN} → earn → redeem</div>
                     </div>
                     <ArrowRight className="w-4 h-4 text-zinc-600" />
                   </Link>
-                  <Link to="/status" className="flex items-center justify-between gap-4 rounded-xl px-3 py-3 hover:bg-white/[0.03] transition-colors">
+                  <Link to="/status" className="flex items-center justify-between gap-4 rounded-xl px-3 py-3 hover:bg-white/3 transition-colors">
                     <div className="space-y-1">
                       <div className="text-white font-light">Status & fixes</div>
                       <div className="text-xs text-zinc-600 font-light">Wiring checks + owner-only fix actions</div>
@@ -774,7 +774,7 @@ export function Faq() {
                       <button
                         type="button"
                         onClick={() => applyQuery('')}
-                        className="p-1 rounded-md hover:bg-white/[0.04] text-zinc-500 hover:text-zinc-300 transition-colors"
+                        className="p-1 rounded-md hover:bg-white/4 text-zinc-500 hover:text-zinc-300 transition-colors"
                         aria-label="Clear search"
                       >
                         <X className="w-4 h-4" />
@@ -799,7 +799,7 @@ export function Faq() {
                           key={t}
                           type="button"
                           onClick={() => applyQuery(t)}
-                          className="text-[11px] px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/5 text-zinc-400 hover:text-white hover:border-white/10 transition"
+                          className="text-[11px] px-3 py-1.5 rounded-full bg-white/3 border border-white/5 text-zinc-400 hover:text-white hover:border-white/10 transition"
                         >
                           {t}
                         </button>
@@ -838,7 +838,7 @@ export function Faq() {
                       key={s.id}
                       href={`#faq-section-${s.id}`}
                       className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 transition-colors ${
-                        effectiveActiveSection === s.id ? 'bg-white/[0.04] text-white' : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.02]'
+                        effectiveActiveSection === s.id ? 'bg-white/4 text-white' : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/2'
                       }`}
                     >
                       <span className="text-sm font-light">{s.title}</span>
@@ -916,8 +916,8 @@ export function Faq() {
             <h2 className="headline text-4xl sm:text-5xl lg:text-6xl mb-8">
               Ready to start earning?
             </h2>
-            <Link to="/#waitlist" className="btn-accent inline-block">
-              Join waitlist <ArrowRight className="w-4 h-4 inline ml-2" />
+            <Link to="/#waitlist" className="btn-accent inline-flex items-center">
+              Join waitlist <ArrowRight className="w-4 h-4 ml-2" />
             </Link>
           </motion.div>
         </div>

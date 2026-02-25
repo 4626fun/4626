@@ -286,7 +286,7 @@ function DetailPanel({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="btn-accent text-xs px-3 py-1.5 sm:px-4 sm:py-2"
+              className="btn-accent btn-compact btn-no-icon text-xs px-3 py-1.5 sm:px-4 sm:py-2"
               disabled={decisionBusy}
               onClick={onApprove}
             >
@@ -294,7 +294,7 @@ function DetailPanel({
             </button>
             <button
               type="button"
-              className="btn-secondary text-xs px-3 py-1.5 sm:px-4 sm:py-2"
+              className="btn-secondary btn-compact text-xs px-3 py-1.5 sm:px-4 sm:py-2"
               disabled={decisionBusy}
               onClick={onDeny}
             >

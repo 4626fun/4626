@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowDown, X } from 'lucide-react'
+import { useState } from 'react'
 import { RouteViz } from '@/components/trade/RouteViz'
 
 type ConfirmIntent = 'approval' | 'swap' | 'order'
@@ -9,20 +10,26 @@ function TokenRow(props: {
   amount: string
   fiat?: string | null
   logoUrl?: string | null
+  logoUrls?: string[]
   label?: string
 }) {
-  const [logoErr, setLogoErr] = useState(false)
-  const showLogo = Boolean(props.logoUrl) && !logoErr
+  const candidates = [
+    props.logoUrl,
+    ...(props.logoUrls ?? []),
+  ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+  const uniqueCandidates = Array.from(new Set(candidates))
+  const [idx, setIdx] = useState(0)
+  const current = uniqueCandidates[idx] ?? null
 
   return (
     <div className="flex items-center gap-3">
-      {showLogo ? (
+      {current ? (
         <img
-          src={props.logoUrl ?? undefined}
+          src={current}
           alt={props.symbol}
           className="h-10 w-10 rounded-full object-cover border border-white/10 bg-black/30 shrink-0"
           loading="lazy"
-          onError={() => setLogoErr(true)}
+          onError={() => setIdx((prev) => prev + 1)}
         />
       ) : (
         <div className="h-10 w-10 rounded-full border border-white/10 bg-zinc-800 text-sm font-semibold text-zinc-100 flex items-center justify-center shrink-0">
@@ -43,8 +50,6 @@ function TokenRow(props: {
     </div>
   )
 }
-
-import { useState } from 'react'
 
 function DataRow(props: { label: string; value: React.ReactNode; tone?: 'warn' | 'ok' | 'default' }) {
   const valueCx =
@@ -68,6 +73,8 @@ export function SwapConfirmModal(props: {
   tokenOutSymbol: string
   tokenInLogoUrl?: string | null
   tokenOutLogoUrl?: string | null
+  tokenInLogoUrls?: string[]
+  tokenOutLogoUrls?: string[]
   amountInUnits: string
   estimatedOut: string
   parsedSlippage?: number
@@ -150,6 +157,7 @@ export function SwapConfirmModal(props: {
                 symbol={props.tokenInSymbol}
                 amount={props.amountInUnits}
                 logoUrl={props.tokenInLogoUrl}
+                logoUrls={props.tokenInLogoUrls}
                 label="You pay"
               />
               <div className="flex justify-center py-1">
@@ -161,6 +169,7 @@ export function SwapConfirmModal(props: {
                 symbol={props.tokenOutSymbol}
                 amount={props.estimatedOut}
                 logoUrl={props.tokenOutLogoUrl}
+                logoUrls={props.tokenOutLogoUrls}
                 label="You receive"
               />
             </div>

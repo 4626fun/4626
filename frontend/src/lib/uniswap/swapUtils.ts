@@ -11,16 +11,35 @@ export type TokenOption = {
   address: string
   group: TokenGroup
   logoUrl?: string
+  logoUrls?: string[]
 }
 
 export type TokenDisplay = {
   symbol: string
   name: string
   logoUrl: string | null
+  logoUrls?: string[]
+}
+
+export function uniswapBaseLogo(address: string): string {
+  return `https://raw.githubusercontent.com/Uniswap/assets/master/blockchains/base/assets/${getAddress(address)}/logo.png`
 }
 
 export function trustWalletBaseLogo(address: string): string {
   return `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/assets/${getAddress(address)}/logo.png`
+}
+
+export function z0r0zBaseLogo(address: string): string {
+  return `https://raw.githubusercontent.com/z0r0z/assets/master/blockchains/base/assets/${getAddress(address)}/logo.png`
+}
+
+export function tokenLogoFallbacks(address: string): string[] {
+  const normalized = getAddress(address)
+  return [
+    uniswapBaseLogo(normalized),
+    trustWalletBaseLogo(normalized),
+    z0r0zBaseLogo(normalized),
+  ]
 }
 
 export function shareTokenLogo(address: string, chainId = BASE_CHAIN_ID): string {
@@ -169,7 +188,17 @@ export function resolveTokenDisplay(params: {
   const name = isCore
     ? (params.option?.name ?? params.option?.symbol ?? shortAddress(params.address))
     : (params.onchain?.name?.trim() || params.option?.name || params.option?.symbol || shortAddress(params.address))
-  const logoUrl = params.option?.logoUrl || params.imageUrl || null
-  return { symbol, name, logoUrl }
+
+  const fallbackUrls = isAddress(params.address) ? tokenLogoFallbacks(params.address) : []
+  const logoCandidates = [
+    params.option?.logoUrl,
+    ...(params.option?.logoUrls ?? []),
+    params.imageUrl,
+    ...fallbackUrls,
+  ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+  const uniqueLogoCandidates = Array.from(new Set(logoCandidates))
+  const logoUrl = uniqueLogoCandidates[0] ?? null
+
+  return { symbol, name, logoUrl, logoUrls: uniqueLogoCandidates }
 }
 

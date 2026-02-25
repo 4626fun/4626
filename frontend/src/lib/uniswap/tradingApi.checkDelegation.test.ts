@@ -4,7 +4,7 @@ import { fetchDelegationStatus } from './tradingApi'
 
 describe('fetchDelegationStatus', () => {
   it('POSTs to /api/uniswap/checkDelegation', async () => {
-    const fetchMock = vi.fn(async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
       return {
         ok: true,
         status: 200,

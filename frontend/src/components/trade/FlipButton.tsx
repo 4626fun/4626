@@ -16,8 +16,8 @@ export function FlipButton(props: { onClick: () => void; disabled?: boolean }) {
       onClick={handleClick}
       disabled={props.disabled}
       whileTap={{ scale: 0.88 }}
-      whileHover={{ boxShadow: '0 0 0 4px rgba(0, 82, 255, 0.12)' }}
-      className="relative z-10 rounded-full border border-white/15 bg-[#0f0f0f] p-3 text-zinc-300 shadow-[0_8px_32px_-10px_rgba(0,0,0,0.9)] transition-colors hover:border-white/25 hover:text-white disabled:opacity-50"
+      whileHover={{ boxShadow: '0 0 0 4px rgba(0, 82, 255, 0.16)' }}
+      className="relative z-10 rounded-xl border border-white/18 bg-[#0f141f] p-3 text-zinc-300 shadow-[0_8px_28px_-10px_rgba(0,0,0,0.9)] transition-colors hover:border-white/25 hover:text-white disabled:opacity-50"
       title="Switch tokens"
       aria-label="Switch token direction"
     >

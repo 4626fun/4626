@@ -337,7 +337,7 @@ export function DeploymentSuccess({ deployment, shareSymbol }: DeploymentSuccess
         </Link>
         <Link
           to="/portfolio"
-          className="btn-primary rounded-xl py-3 text-center text-sm font-medium"
+          className="btn-secondary rounded-xl py-3 text-center text-sm font-medium"
         >
           Go to Portfolio
         </Link>
