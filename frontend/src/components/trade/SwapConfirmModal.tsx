@@ -2,6 +2,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { ArrowDown, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RouteViz } from '@/components/trade/RouteViz'
+import { TokenLogo } from '@/components/ui/TokenLogo'
 
 type ConfirmIntent = 'approval' | 'swap' | 'order'
 
@@ -13,29 +14,9 @@ function TokenRow(props: {
   logoUrls?: string[]
   label?: string
 }) {
-  const candidates = [
-    props.logoUrl,
-    ...(props.logoUrls ?? []),
-  ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-  const uniqueCandidates = Array.from(new Set(candidates))
-  const [idx, setIdx] = useState(0)
-  const current = uniqueCandidates[idx] ?? null
-
   return (
     <div className="flex items-center gap-3">
-      {current ? (
-        <img
-          src={current}
-          alt={props.symbol}
-          className="h-10 w-10 rounded-full object-cover border border-white/10 bg-black/30 shrink-0"
-          loading="lazy"
-          onError={() => setIdx((prev) => prev + 1)}
-        />
-      ) : (
-        <div className="h-10 w-10 rounded-full border border-white/10 bg-zinc-800 text-sm font-semibold text-zinc-100 flex items-center justify-center shrink-0">
-          {props.symbol.slice(0, 2).toUpperCase()}
-        </div>
-      )}
+      <TokenLogo symbol={props.symbol} logoUrl={props.logoUrl} logoUrls={props.logoUrls} size="lg" />
       <div className="flex-1 min-w-0">
         {props.label && (
           <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-600 mb-0.5">{props.label}</div>

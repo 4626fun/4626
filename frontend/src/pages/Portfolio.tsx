@@ -9,6 +9,7 @@ import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
 import { Alert } from '@/components/ui/Alert'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { TokenLogo } from '@/components/ui/TokenLogo'
 import { fetchDebankTokenList, type DebankToken, type DebankTokenList } from '@/lib/debank/client'
 import { isLensGroveEnabled } from '@/lib/flags'
 import { resolveLensUri, uploadImmutableBlob, type GroveUploadResult } from '@/lib/lens/grove'
@@ -410,11 +411,7 @@ export function Portfolio() {
           return (
             <div key={`${h.coinType}:${t.id}`} className="px-4 py-3 grid grid-cols-[minmax(0,1fr)_92px_92px_104px] gap-3 items-center">
               <div className="min-w-0 flex items-center gap-3">
-                {t.logoUrl ? (
-                  <img src={t.logoUrl} alt="" className="w-7 h-7 rounded-full border border-white/10" />
-                ) : (
-                  <div className="w-7 h-7 rounded-full bg-white/5 border border-white/10" />
-                )}
+                <TokenLogo symbol={name} logoUrl={t.logoUrl} size="md" />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 min-w-0">
                     <div className="text-[12px] text-white truncate">{name}</div>
