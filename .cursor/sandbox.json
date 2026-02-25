@@ -1,26 +1,37 @@
 {
-  "networkPolicy": {
-    "default": "deny",
-    "allow": [
-      "registry.npmjs.org",
-      "registry.yarnpkg.com",
-      "pypi.org",
-      "files.pythonhosted.org",
-      "ghcr.io",
-      "*.docker.io",
-      "mainnet.base.org",
-      "base.llamarpc.com",
-      "base-mainnet.public.blastapi.io",
-      "base.meowrpc.com",
-      "api.neynar.com",
-      "auth.privy.io",
-      "pro-openapi.debank.com",
-      "api.dexscreener.com",
-      "api.farcaster.xyz",
-      "relay.farcaster.xyz",
-      "gateway.thegraph.com",
-      "api.talentprotocol.com",
-      "api.developer.coinbase.com"
-    ]
+  "$schema": "https://cursor.com/schemas/sandbox.json",
+  "name": "creatorvault-dev",
+  "description": "CreatorVault (4626.fun) — Vite frontend + Foundry contracts + CRE keepers",
+  "services": {
+    "frontend": {
+      "command": "cd frontend && pnpm dev",
+      "port": 5173,
+      "readyPattern": "ready in",
+      "healthCheck": "http://localhost:5173/"
+    },
+    "cre": {
+      "command": "cd cre && npm run start",
+      "port": 3000,
+      "optional": true
+    }
+  },
+  "tools": {
+    "forge": {
+      "description": "Foundry — Solidity build/test",
+      "commands": {
+        "build": "forge build",
+        "test": "forge test",
+        "lint": "forge lint"
+      }
+    },
+    "frontend": {
+      "description": "Vite SPA — lint/typecheck/test",
+      "commands": {
+        "lint": "pnpm -C frontend lint",
+        "typecheck": "pnpm -C frontend typecheck",
+        "test": "pnpm -C frontend test",
+        "build": "pnpm -C frontend build"
+      }
+    }
   }
 }
