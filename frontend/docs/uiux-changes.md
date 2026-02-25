@@ -150,9 +150,53 @@
 
 ---
 
+## Phase 6: TokenLogo, Keyboard Nav, Collapsible Sections, Typography
+
+### TokenLogo (new shared component — `ui/TokenLogo.tsx`)
+
+| Feature | Detail |
+|---------|--------|
+| Multi-source fallback | Tries `logoUrl`, then each `logoUrls` entry in sequence |
+| Error recovery | Cycles all candidates before showing symbol-initial fallback |
+| Loading skeleton | Colored pulse placeholder (hue from symbol hash) while image loads |
+| Deterministic colors | Same token always gets the same fallback background |
+| 5 sizes | xs (20px), sm (24px), md (32px), lg (40px), xl (48px) |
+| Memoized | `React.memo` prevents re-renders |
+| Adopted in | `TokenIdentityDisplay`, `TokenSelectorSheet`, `SwapConfirmModal`, `Portfolio` |
+
+### Token selector keyboard navigation
+
+| Change | Detail |
+|--------|--------|
+| Arrow Up/Down | Navigates through filtered token list |
+| Enter | Selects the focused token |
+| Escape | Closes the sheet |
+| aria-activedescendant | Tracks focused item for screen readers |
+| Visual focus | Focused row gets `brand-primary/8` background highlight |
+| Auto-scroll | Focused item scrolls into view |
+| ARIA roles | `role=listbox` on container, `role=option` on each token row |
+
+### Account collapsible sections
+
+| Change | Detail |
+|--------|--------|
+| `CollapsibleSection` component | Expand/collapse with `aria-expanded`, animated height, reduced motion support |
+| Email section | Collapsible (default open) |
+| Connected Accounts | Collapsible with address count badge |
+| Creator Profile | Collapsible (default open) |
+| Access | Collapsible (default collapsed — least commonly used) |
+
+### Typography standardization
+
+| Before | After | Files |
+|--------|-------|-------|
+| `text-[26px]/text-[30px]` | `text-2xl/text-3xl` | DoneStep |
+| `text-[38px]/text-[44px]` | `text-4xl/text-5xl` | WaitlistFlow |
+| `text-[34px]` | `text-3xl sm:text-4xl` | Portfolio |
+
+---
+
 ## Follow-ups (not in this PR)
 
-- **Button component adoption**: Migrate existing `btn-primary` + inline spinner patterns to `<Button loading>` across all screens. Low risk, high churn — best as a focused follow-up.
-- **Token selector keyboard nav**: Swap token list is scrollable but not keyboard-navigable with arrow keys.
-- **Account section collapsing**: Group Email / Wallets / Creator Profile / Access into collapsible panels for long-scroll reduction.
-- **Full typography audit**: Complete migration of remaining `text-[Npx]` to standard Tailwind scale across all 50+ components.
+- **Button component adoption**: Migrate remaining `btn-primary` + inline spinner patterns to `<Button loading>` across all screens.
+- **Full typography audit**: ~40 remaining `text-[Npx]` instances in secondary components. Low-risk, best as a separate pass.
