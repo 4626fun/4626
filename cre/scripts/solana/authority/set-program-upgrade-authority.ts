@@ -14,7 +14,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { CHAINS, requireEnv } from '../../config.js';
+import { CHAINS, requireEnv } from '../../../config.js';
 
 const rpcUrl = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
 const programId = CHAINS.solana.programId;

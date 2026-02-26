@@ -20,8 +20,8 @@
 import { Connection, PublicKey, Keypair, sendAndConfirmTransaction } from '@solana/web3.js';
 import AlphaVault from '@meteora-ag/alpha-vault';
 import { BN } from '@coral-xyz/anchor';
-import { loadKeeperKeypair } from '../../utils/solana.js';
-import { requireEnv } from '../../config.js';
+import { loadKeeperKeypair } from '../../../utils/solana.js';
+import { requireEnv } from '../../../config.js';
 
 const rpcUrl = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
 const connection = new Connection(rpcUrl, 'confirmed');

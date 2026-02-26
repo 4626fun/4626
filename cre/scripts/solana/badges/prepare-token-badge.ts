@@ -24,8 +24,8 @@ import {
   TOKEN_2022_PROGRAM_ID,
   createInitializeMetadataPointerInstruction,
 } from '@solana/spl-token';
-import { loadKeeperKeypair } from '../../utils/solana.js';
-import { requireEnv } from '../../config.js';
+import { loadKeeperKeypair } from '../../../utils/solana.js';
+import { requireEnv } from '../../../config.js';
 
 const rpcUrl = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
 const connection = new Connection(rpcUrl, 'confirmed');

@@ -616,6 +616,78 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
       })
     }
 
+    // ── Post-provision: DLMM pool + Alpha Vault (opt-in) ──────────────
+    // When SOLANA_AUTO_POOL=1 and CRE scripts are available, automatically
+    // create a Meteora DLMM pool and Alpha Vault for the newly created mint.
+    // This eliminates the chicken-and-egg problem where Phase 2 Finalize
+    // needs a Meteora vault but the mint doesn't exist until wrap-token runs.
+    let poolResult: { signature?: string; error?: string } | null = null
+    let vaultResult: { vault?: string; signature?: string; error?: string } | null = null
+
+    if (envBool('SOLANA_AUTO_POOL', false)) {
+      const repoRoot = String(process.env.CRE_REPO_ROOT ?? process.env.REPO_ROOT ?? '').trim()
+      const creDir = repoRoot ? `${repoRoot}/cre` : ''
+      const quoteMint = String(process.env.SOLANA_POOL_QUOTE_MINT ?? 'So11111111111111111111111111111111111111112').trim()
+      const binStep = String(process.env.SOLANA_POOL_BIN_STEP ?? '25').trim()
+      const poolFeeBps = String(process.env.SOLANA_POOL_FEE_BPS ?? '100').trim()
+
+      if (creDir && existsSync(creDir)) {
+        // Step 1: Create DLMM pool
+        try {
+          process.stderr.write(`[solana-provisioner] Creating DLMM pool for ${mintPubkey}...\n`)
+          const poolEnv = {
+            ...process.env,
+            TOKEN_MINT_X: mintPubkey,
+            TOKEN_MINT_Y: quoteMint,
+            BIN_STEP: binStep,
+            ACTIVE_ID: '0',
+            FEE_BPS: poolFeeBps,
+          }
+          const { stdout: poolOut, stderr: poolErr } = await execFileAsync(
+            'node',
+            [`${creDir}/_create-pool.cjs`],
+            { cwd: creDir, timeout: 3 * 60_000, maxBuffer: 4 * 1024 * 1024, env: poolEnv },
+          )
+          if (poolErr) process.stderr.write(poolErr)
+          const sigMatch = (poolOut ?? '').match(/Signature:\s*(\S+)/)
+          poolResult = { signature: sigMatch?.[1] ?? undefined }
+          process.stderr.write(`[solana-provisioner] DLMM pool created: ${sigMatch?.[1] ?? 'unknown'}\n`)
+        } catch (error) {
+          const errMsg = error instanceof Error ? error.message : String(error)
+          poolResult = { error: errMsg }
+          process.stderr.write(`[solana-provisioner] DLMM pool creation failed (non-fatal): ${errMsg}\n`)
+        }
+
+        // Step 2: Create Alpha Vault (only if pool succeeded)
+        if (poolResult && !poolResult.error) {
+          try {
+            process.stderr.write(`[solana-provisioner] Creating Alpha Vault for ${mintPubkey}...\n`)
+            const vaultEnv = {
+              ...process.env,
+              TOKEN_MINT: mintPubkey,
+              // DLMM_POOL will be auto-derived by the script from the mint pair
+            }
+            const { stdout: vaultOut, stderr: vaultErr } = await execFileAsync(
+              'node',
+              [`${creDir}/_create-vault.cjs`],
+              { cwd: creDir, timeout: 3 * 60_000, maxBuffer: 4 * 1024 * 1024, env: vaultEnv },
+            )
+            if (vaultErr) process.stderr.write(vaultErr)
+            const vaultMatch = (vaultOut ?? '').match(/Vault:\s*(\S+)/)
+            const vaultSigMatch = (vaultOut ?? '').match(/Signature:\s*(\S+)/)
+            vaultResult = { vault: vaultMatch?.[1], signature: vaultSigMatch?.[1] }
+            process.stderr.write(`[solana-provisioner] Alpha Vault created: ${vaultMatch?.[1] ?? 'unknown'}\n`)
+          } catch (error) {
+            const errMsg = error instanceof Error ? error.message : String(error)
+            vaultResult = { error: errMsg }
+            process.stderr.write(`[solana-provisioner] Alpha Vault creation failed (non-fatal): ${errMsg}\n`)
+          }
+        }
+      } else {
+        process.stderr.write(`[solana-provisioner] SOLANA_AUTO_POOL=1 but CRE_REPO_ROOT not configured; skipping pool/vault\n`)
+      }
+    }
+
     return json(res, 200, {
       success: true,
       mintBytes32,
@@ -626,6 +698,8 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
         runner,
         tokenSymbol: tokenSymbolUsed,
         routeScalar: scalar.toString(),
+        pool: poolResult,
+        alphaVault: vaultResult,
       },
     })
   } catch (error) {
@@ -761,6 +835,157 @@ async function handleBuildMeteoraIxs(req: IncomingMessage, res: ServerResponse):
   }
 }
 
+type SetupCreatorBody = {
+  hubCreatorCoin?: string
+  hubShareOft?: string
+  keeperPubkey?: string
+  feeBps?: number
+  decimals?: number
+  ammPrograms?: string[]
+  flushThreshold?: string
+  lotteryEnabled?: boolean
+}
+
+async function handleSetupCreator(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const secret = String(process.env.PROVISIONER_BEARER_TOKEN ?? '').trim()
+  if (!secret) {
+    return json(res, 503, { success: false, error: 'PROVISIONER_BEARER_TOKEN is not configured.' })
+  }
+  if (!authOk(req, secret)) {
+    return json(res, 401, { success: false, error: 'Unauthorized' })
+  }
+
+  const repoRoot = String(process.env.CRE_REPO_ROOT ?? '').trim()
+    || String(process.env.REPO_ROOT ?? '').trim()
+  const creDir = repoRoot ? `${repoRoot}/cre` : ''
+  if (!creDir || !existsSync(creDir)) {
+    return json(res, 503, {
+      success: false,
+      error: 'CRE_REPO_ROOT (or REPO_ROOT) is not configured or cre/ directory not found.',
+    })
+  }
+
+  let body: SetupCreatorBody
+  try {
+    const raw = await readBody(req)
+    body = (raw ? JSON.parse(raw) : {}) as SetupCreatorBody
+  } catch {
+    return json(res, 400, { success: false, error: 'Invalid JSON body.' })
+  }
+
+  const hubCreatorCoin = String(body?.hubCreatorCoin ?? '').trim()
+  const hubShareOft = String(body?.hubShareOft ?? '').trim()
+  if (!hubCreatorCoin || !hubShareOft) {
+    return json(res, 400, { success: false, error: 'hubCreatorCoin and hubShareOft are required.' })
+  }
+
+  const args = [
+    'scripts/solana/deploy/setup-creator-full.ts',
+    '--hub-creator-coin', hubCreatorCoin,
+    '--hub-share-oft', hubShareOft,
+  ]
+  if (body?.keeperPubkey) args.push('--keeper-pubkey', body.keeperPubkey)
+  if (body?.feeBps !== undefined) args.push('--fee-bps', String(body.feeBps))
+  if (body?.decimals !== undefined) args.push('--decimals', String(body.decimals))
+  if (body?.ammPrograms?.length) args.push('--amm-programs', body.ammPrograms.join(','))
+  if (body?.flushThreshold) args.push('--flush-threshold', body.flushThreshold)
+  if (body?.lotteryEnabled === false) args.push('--lottery-disabled')
+
+  try {
+    const { stdout, stderr } = await execFileAsync('tsx', args, {
+      cwd: creDir,
+      timeout: 5 * 60_000,
+      maxBuffer: 4 * 1024 * 1024,
+      env: { ...process.env },
+    })
+    if (stderr) process.stderr.write(stderr)
+
+    const output = (stdout ?? '').trim()
+    let result: unknown
+    try {
+      result = JSON.parse(output)
+    } catch {
+      return json(res, 500, {
+        success: false,
+        error: `setup-creator-full did not produce valid JSON. Output: ${output.slice(-1200)}`,
+      })
+    }
+
+    return json(res, 200, result)
+  } catch (error) {
+    const message = toErrorText(error)
+    return json(res, 500, {
+      success: false,
+      error: `setup-creator-full failed: ${message}`,
+    })
+  }
+}
+
+type CreatePoolBody = {
+  tokenMintX?: string
+  tokenMintY?: string
+  binStep?: number
+  activeId?: number
+  baseFactor?: number
+}
+
+async function handleCreatePool(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const secret = String(process.env.PROVISIONER_BEARER_TOKEN ?? '').trim()
+  if (!secret) {
+    return json(res, 503, { success: false, error: 'PROVISIONER_BEARER_TOKEN is not configured.' })
+  }
+  if (!authOk(req, secret)) {
+    return json(res, 401, { success: false, error: 'Unauthorized' })
+  }
+
+  const repoRoot = String(process.env.CRE_REPO_ROOT ?? '').trim()
+    || String(process.env.REPO_ROOT ?? '').trim()
+  const creDir = repoRoot ? `${repoRoot}/cre` : ''
+  if (!creDir || !existsSync(creDir)) {
+    return json(res, 503, {
+      success: false,
+      error: 'CRE_REPO_ROOT (or REPO_ROOT) is not configured or cre/ directory not found.',
+    })
+  }
+
+  let body: CreatePoolBody
+  try {
+    const raw = await readBody(req)
+    body = (raw ? JSON.parse(raw) : {}) as CreatePoolBody
+  } catch {
+    return json(res, 400, { success: false, error: 'Invalid JSON body.' })
+  }
+
+  const tokenMintX = String(body?.tokenMintX ?? '').trim()
+  const tokenMintY = String(body?.tokenMintY ?? '').trim()
+  if (!tokenMintX || !tokenMintY) {
+    return json(res, 400, { success: false, error: 'tokenMintX and tokenMintY are required.' })
+  }
+
+  const env = {
+    ...process.env,
+    TOKEN_MINT_X: tokenMintX,
+    TOKEN_MINT_Y: tokenMintY,
+    BIN_STEP: String(body?.binStep ?? 25),
+    ACTIVE_ID: String(body?.activeId ?? 0),
+    BASE_FACTOR: String(body?.baseFactor ?? 10000),
+  }
+
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      'tsx',
+      ['scripts/solana/launch/create-dlmm-pool.ts'],
+      { cwd: creDir, timeout: 5 * 60_000, maxBuffer: 4 * 1024 * 1024, env },
+    )
+    if (stderr) process.stderr.write(stderr)
+    const output = `${stdout ?? ''}\n${stderr ?? ''}`
+    return json(res, 200, { success: true, output: output.trim() })
+  } catch (error) {
+    const message = toErrorText(error)
+    return json(res, 500, { success: false, error: `create-dlmm-pool failed: ${message}` })
+  }
+}
+
 async function main(): Promise<void> {
   const host = String(process.env.PROVISIONER_HOST ?? '0.0.0.0').trim() || '0.0.0.0'
   const port = Number(process.env.PROVISIONER_PORT ?? 8788)
@@ -770,6 +995,8 @@ async function main(): Promise<void> {
     if (method === 'GET' && url.pathname === '/healthz') return handleHealth(res)
     if (method === 'POST' && url.pathname === '/provision') return handleProvision(req, res)
     if (method === 'POST' && url.pathname === '/meteora-ixs') return handleBuildMeteoraIxs(req, res)
+    if (method === 'POST' && url.pathname === '/setup-creator') return handleSetupCreator(req, res)
+    if (method === 'POST' && url.pathname === '/create-pool') return handleCreatePool(req, res)
     return json(res, 404, { success: false, error: 'Not found' })
   })
 
