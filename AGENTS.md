@@ -89,7 +89,8 @@ The Solana route provisioner runs on a Vultr VPS at `provisioner.4626.fun` (IP: 
 - **Env:** `/opt/creatorvault/provisioner.env`
 - **Repo:** `/opt/creatorvault` (branch: `cursor/development-environment-setup-365b`)
 - **Nginx:** reverse proxy 80/443 → 8788, Let's Encrypt cert (auto-renew)
-- **Remaining:** `SOLANA_BRIDGE_CLI_DIR` must be set to the Base bridge CLI path. Copy the CLI from your local machine: `scp -r /home/akitav2/projects/tools/base-bridge/scripts root@45.63.52.50:/opt/base-bridge-scripts/` then update `/opt/creatorvault/provisioner.env` with `SOLANA_BRIDGE_CLI_DIR=/opt/base-bridge-scripts`.
+- **Bridge CLI:** installed at `/opt/base-bridge/scripts` on the VM. Provisioner healthz reports `ok:true, cliExists:true`.
+- **Auto-pool:** `SOLANA_AUTO_POOL=1` is set — provisioner auto-creates DLMM pool + Alpha Vault after `wrap-token`.
 
 ### Solana integration: per-creator setup
 
