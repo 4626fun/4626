@@ -67,11 +67,11 @@ export function ConnectButtonWeb3() {
                 href={`https://basescan.org/address/${address}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block w-full py-3 px-4 hover:bg-zinc-950 transition-colors"
+                className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
               >
                 <span className="label block">View on Basescan</span>
               </a>
-              <div className="h-px bg-zinc-900 my-2" />
+              <div className="h-px bg-white/8 my-2" />
               {!auth.isSignedIn ? (
                 <button
                   type="button"
@@ -80,7 +80,7 @@ export function ConnectButtonWeb3() {
                     setShowMenu(false)
                   }}
                   disabled={auth.busy}
-                  className="w-full text-left py-3 px-4 hover:bg-zinc-950 transition-colors disabled:opacity-60"
+                  className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-60"
                 >
                   <span className="label block">{auth.busy ? 'Signing in…' : 'Sign in'}</span>
                   <span className="text-[11px] text-zinc-600 block mt-1">No transaction.</span>
@@ -95,7 +95,7 @@ export function ConnectButtonWeb3() {
                 <Link
                   to="/account"
                   onClick={() => setShowMenu(false)}
-                  className="block w-full py-3 px-4 hover:bg-zinc-950 transition-colors"
+                  className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
                 >
                   <span className="label block text-zinc-300">Account settings</span>
                 </Link>
@@ -108,19 +108,19 @@ export function ConnectButtonWeb3() {
                     setShowMenu(false)
                   }}
                   disabled={auth.busy}
-                  className="w-full text-left py-3 px-4 hover:bg-zinc-950 transition-colors disabled:opacity-60"
+                  className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-60"
                 >
                   <span className="label block text-zinc-300">{auth.busy ? 'Signing out…' : 'Sign out'}</span>
                 </button>
               ) : null}
               {auth.error ? <div className="px-4 text-[11px] text-red-400/90">{auth.error}</div> : null}
-              <div className="h-px bg-zinc-900 my-2" />
+              <div className="h-px bg-white/8 my-2" />
               <button
                 onClick={() => {
                   disconnect()
                   setShowMenu(false)
                 }}
-                className="w-full text-left py-3 px-4 hover:bg-zinc-950 transition-colors"
+                className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors"
               >
                 <span className="label block text-zinc-600">Disconnect</span>
               </button>
@@ -173,7 +173,7 @@ export function ConnectButtonWeb3() {
               <button
                 type="button"
                 disabled={auth.busy}
-                className="w-full text-left py-3 px-4 hover:bg-zinc-950 transition-colors disabled:opacity-50"
+                className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-50"
                 onClick={() => {
                   setShowOptions(false)
                   void auth.signIn({ method: 'zora' })
@@ -187,7 +187,7 @@ export function ConnectButtonWeb3() {
               <button
                 type="button"
                 disabled={auth.busy}
-                className="w-full text-left py-3 px-4 hover:bg-zinc-950 transition-colors disabled:opacity-50"
+                className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-50"
                 onClick={() => {
                   setShowOptions(false)
                   void auth.signIn({ method: 'privy' })
@@ -202,7 +202,7 @@ export function ConnectButtonWeb3() {
                 key={connector.uid}
                 type="button"
                 disabled={isPending || auth.busy}
-                className="w-full text-left py-3 px-4 hover:bg-zinc-950 transition-colors disabled:opacity-50"
+                className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-50"
                 onClick={() => {
                   connect({ connector })
                   setShowOptions(false)

@@ -97,7 +97,7 @@ export function Layout() {
       {showAccountMode ? <AccountModeIndicator /> : null}
       {resolvedSubdomain.data?.record ? (
         <div className="border-b border-vault-border/60 bg-black/50">
-          <div className="max-w-7xl mx-auto px-6 py-2 text-[11px] uppercase tracking-[0.14em] text-vault-subtext flex items-center justify-between gap-2">
+          <div className="max-w-7xl mx-auto px-6 py-2 text-[11px] font-medium text-vault-subtext flex items-center justify-between gap-2">
             <span>
               Agent subdomain: <span className="text-vault-text">{resolvedSubdomain.data.record.fullName}</span>
             </span>
@@ -121,7 +121,7 @@ export function Layout() {
         <Suspense
           fallback={
             <div className="max-w-7xl mx-auto px-6 py-12">
-              <div className="flex items-center gap-3 text-xs font-mono uppercase tracking-[0.2em] text-vault-subtext" role="status">
+              <div className="flex items-center gap-3 text-xs font-medium text-vault-subtext" role="status">
                 <div className="h-5 w-5 rounded-full border-2 border-vault-border border-t-brand-primary animate-spin" aria-hidden="true" />
                 Loading…
               </div>

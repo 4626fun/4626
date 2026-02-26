@@ -214,7 +214,7 @@ export function IdentityHub() {
           <div className="absolute right-0 top-full mt-4 w-[320px] card p-4 z-50 space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-600">Identity</div>
+                <div className="text-[11px] font-medium text-zinc-500">Identity</div>
                 <div className="text-sm text-white truncate">{displayName}</div>
                 {effectiveAddress ? (
                   <div className="text-[11px] text-zinc-600 font-mono truncate">{shortAddress(effectiveAddress)}</div>
@@ -241,7 +241,7 @@ export function IdentityHub() {
 
             {/* Aggregated links (client-agnostic) */}
             <div className="rounded-xl border border-white/10 bg-black/30 p-3 space-y-2">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-600">Links</div>
+              <div className="text-[11px] font-medium text-zinc-500">Links</div>
               <div className="grid grid-cols-3 gap-2">
                 <a
                   href={mini.username ? `https://farcaster.xyz/${mini.username}` : 'https://farcaster.xyz/4626'}
@@ -278,7 +278,7 @@ export function IdentityHub() {
             {effectiveAddress ? (
               <div className="rounded-xl border border-white/10 bg-black/30 p-3 space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-600">Reputation</div>
+                  <div className="text-[11px] font-medium text-zinc-500">Reputation</div>
                   <div className="text-[11px] text-zinc-600">
                     {reputationQuery.isLoading ? 'Loading…' : reputationQuery.data ? `${reputationQuery.data.aggregated.totalScore}/100` : '—'}
                   </div>

@@ -20,7 +20,7 @@ export function MarketingLayout() {
         <Suspense
           fallback={
             <div className="max-w-7xl mx-auto px-6 py-12">
-              <div className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-600">Loading…</div>
+              <div className="text-xs font-medium text-zinc-600">Loading…</div>
             </div>
           }
         >

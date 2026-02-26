@@ -224,7 +224,7 @@ export function TokenRow({
 
   // Sticky identity cells: reduce “overlay” feel with a subtle divider + softer bg.
   const stickyCellClass =
-    'sticky bg-zinc-950/70 backdrop-blur-sm group-hover:bg-zinc-900/40 border-r border-zinc-800/60'
+    'sticky bg-vault-bg/70 backdrop-blur-sm group-hover:bg-white/4 border-r border-white/8'
 
   const canToggleFees = typeof onToggleFees === 'function'
 
@@ -288,7 +288,7 @@ export function TokenRow({
     <>
       <Link
         to={detailPath}
-        className="group grid items-center text-xs hover:bg-zinc-800/30 transition-colors cursor-pointer min-w-max"
+        className="group grid items-center text-xs hover:bg-white/4 transition-colors cursor-pointer min-w-max"
         style={{ gridTemplateColumns }}
       >
         {/* Rank */}
@@ -382,7 +382,7 @@ export function TokenRow({
         </span>
       </Link>
       {isExpanded ? (
-        <div className="text-[11px] text-zinc-400 border-b border-zinc-800/50 bg-zinc-950/40 min-w-max">
+        <div className="text-[11px] text-zinc-400 border-b border-white/8 bg-vault-bg/40 min-w-max">
           <div className="grid" style={{ gridTemplateColumns }}>
             <div
               className="px-3 py-3"
@@ -418,8 +418,8 @@ export function TokenRow({
               </div>
             </div>
           </div>
-          <div className="mt-3 border-t border-zinc-800/60 pt-3 px-3 pb-3">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">CSW owners</div>
+          <div className="mt-3 border-t border-white/8 pt-3 px-3 pb-3">
+            <div className="text-[10px] font-medium text-zinc-500">CSW owners</div>
             {cswCandidates.length === 0 ? (
               <div className="text-zinc-500">No creator or payout address available.</div>
             ) : cswOwners.status === 'loading' ? (
@@ -454,11 +454,11 @@ export function TokenTableHeader({ timeframe = '1d', collapseIdentity = false, c
   const stickyLeft = getStickyLeftMap(columns)
   const groupSpans = buildGroupSpans(columns)
 
-  const stickyHeaderCellClass = 'sticky z-50 bg-zinc-950 border-r border-zinc-800/60'
-  const stickyGroupClass = 'sticky z-40 bg-zinc-950 border-r border-zinc-800/60'
+  const stickyHeaderCellClass = 'sticky z-50 bg-vault-bg border-r border-white/8'
+  const stickyGroupClass = 'sticky z-40 bg-vault-bg border-r border-white/8'
 
   return (
-    <div className="bg-zinc-950 border-b border-zinc-800">
+    <div className="bg-vault-bg border-b border-white/8">
       {/* Group labels */}
       <div className="grid" style={{ gridTemplateColumns }}>
         {groupSpans.map((g) => {
@@ -469,7 +469,7 @@ export function TokenTableHeader({ timeframe = '1d', collapseIdentity = false, c
           return (
             <div
               key={g.id}
-              className={`px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-zinc-600 border-b border-zinc-800/60 ${alignClass} ${
+              className={`px-3 py-2 text-[10px] font-medium text-zinc-600 border-b border-white/8 ${alignClass} ${
                 hasSticky ? stickyGroupClass : ''
               } ${g.id === 'identity' ? 'explore-sticky-identity-group-header' : ''}`}
               style={{
@@ -484,7 +484,7 @@ export function TokenTableHeader({ timeframe = '1d', collapseIdentity = false, c
       </div>
 
       {/* Column labels */}
-      <div className="grid text-[10px] text-zinc-500 uppercase tracking-wider" style={{ gridTemplateColumns }}>
+      <div className="grid text-[10px] text-zinc-500 font-medium" style={{ gridTemplateColumns }}>
         {columns.map((c) => {
           const isSticky = Boolean(c.sticky)
           const left = isSticky ? stickyLeft[c.id] : undefined
@@ -553,19 +553,19 @@ export function TokenRowSkeleton({ collapseIdentity = false }: { collapseIdentit
   const columns = getExploreColumns({ variant: 'creators', timeframe: '1d', collapseIdentity })
   const gridTemplateColumns = getGridTemplateColumns(columns)
   const stickyLeft = getStickyLeftMap(columns)
-  const stickyCellClass = 'sticky z-10 bg-zinc-900/70 backdrop-blur-sm'
+  const stickyCellClass = 'sticky z-10 bg-vault-card/70 backdrop-blur-sm'
 
   return (
     <div className="grid items-center min-w-max" style={{ gridTemplateColumns }}>
       <div className={`${stickyCellClass} px-3 py-2`} style={{ left: stickyLeft.rank }}>
-        <div className="h-3 w-6 bg-zinc-800 rounded animate-pulse ml-auto" />
+        <div className="h-3 w-6 bg-white/8 rounded animate-pulse ml-auto" />
       </div>
       <div className={`${stickyCellClass} explore-sticky-name-cell px-3 py-2 shadow-[6px_0_16px_-12px_rgba(0,0,0,0.9)]`} style={{ left: stickyLeft.name }}>
         <div className="flex items-center gap-2 justify-start">
           <div className="w-7 h-7 rounded-full bg-zinc-800 animate-pulse" />
           <div className="space-y-1 explore-token-name">
-            <div className="h-3 w-24 bg-zinc-800 rounded animate-pulse" />
-            <div className="h-2 w-12 bg-zinc-800 rounded animate-pulse" />
+            <div className="h-3 w-24 bg-white/8 rounded animate-pulse" />
+            <div className="h-2 w-12 bg-white/8 rounded animate-pulse" />
           </div>
         </div>
       </div>
@@ -574,7 +574,7 @@ export function TokenRowSkeleton({ collapseIdentity = false }: { collapseIdentit
         .filter((c) => c.id !== 'rank' && c.id !== 'name')
         .map((c) => (
           <div key={c.id} className="px-3 py-2">
-            <div className={`h-3 bg-zinc-800 rounded animate-pulse ${c.align === 'right' ? 'ml-auto' : ''}`} style={{ width: c.widthPx > 100 ? 56 : 40 }} />
+            <div className={`h-3 bg-white/8 rounded animate-pulse ${c.align === 'right' ? 'ml-auto' : ''}`} style={{ width: c.widthPx > 100 ? 56 : 40 }} />
           </div>
         ))}
     </div>

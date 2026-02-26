@@ -181,7 +181,7 @@ export function AdminLayout() {
                     : 'border-white/10 bg-black/20 text-zinc-400 hover:text-zinc-200 hover:border-white/20'
                 }`}
               >
-                <div className="text-[10px] uppercase tracking-[0.24em]">{tab.label}</div>
+                <div className="text-[11px] font-medium">{tab.label}</div>
                 <div className="text-xs text-zinc-500 mt-1">{tab.description}</div>
               </Link>
             )

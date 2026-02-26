@@ -89,8 +89,8 @@ export function ExploreSubnav({
                 aria-current={active ? 'page' : undefined}
                 className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[13px] sm:text-sm font-medium transition-colors whitespace-nowrap ${
                   active
-                    ? 'bg-zinc-800 text-white'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
+                    ? 'bg-white/10 text-white'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/6'
                 }`}
               >
                 {tab.label}
@@ -107,14 +107,14 @@ export function ExploreSubnav({
             <input
               type="text"
               placeholder={searchPlaceholder}
-              className="w-full sm:w-[260px] h-9 sm:h-10 pl-9 sm:pl-10 pr-4 bg-zinc-900 border border-zinc-800 rounded-full text-[13px] sm:text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-700 transition-colors"
+              className="w-full sm:w-[260px] h-9 sm:h-10 pl-9 sm:pl-10 pr-4 bg-vault-card/60 border border-white/8 rounded-full text-[13px] sm:text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-white/20 transition-colors"
               aria-label="Search"
               onChange={(e) => onSearch?.(e.target.value)}
             />
           </div>
 
           {/* Time filter pills */}
-          <div className="w-fit self-start sm:self-auto flex items-center gap-0.5 sm:gap-1 h-8 sm:h-9 bg-zinc-900 border border-zinc-800 rounded-full p-0.5">
+          <div className="w-fit self-start sm:self-auto flex items-center gap-0.5 sm:gap-1 h-8 sm:h-9 bg-vault-card/60 border border-white/8 rounded-full p-0.5">
             {TIME_FILTERS.map((filter) => {
               const active = currentTimeFilter === filter.value
               const isAvailable = filter.value === '1d' || uniswapAvailable
@@ -128,7 +128,7 @@ export function ExploreSubnav({
                   title={disabled ? 'Requires THEGRAPH_API_KEY - Uniswap V4 historical data' : `View ${filter.label} data`}
                   className={`h-6 sm:h-7 px-2 sm:px-2.5 rounded-full text-[10px] sm:text-[11px] font-medium leading-none transition-colors ${
                     active
-                      ? 'bg-zinc-700 text-white'
+                      ? 'bg-white/12 text-white'
                       : disabled
                         ? 'text-zinc-600 cursor-not-allowed'
                         : 'text-zinc-400 hover:text-white'
@@ -154,8 +154,8 @@ export function ExploreSubnav({
               onClick={() => handleSortClick(option.value)}
               className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-medium transition-colors whitespace-nowrap active:scale-[0.97] ${
                 active
-                  ? 'bg-zinc-800 text-white'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
+                  ? 'bg-white/10 text-white'
+                  : 'text-zinc-400 hover:text-white hover:bg-white/6'
               }`}
             >
               {option.label}

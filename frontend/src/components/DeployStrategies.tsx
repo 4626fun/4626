@@ -5,6 +5,7 @@ import { encodeFunctionData, erc20Abi, getContractAddress, isAddress, parseUnits
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { CONTRACTS } from '@/config/contracts'
 import { logger } from '@/lib/logger'
+import { Alert } from '@/components/ui/Alert'
 
 interface DeployStrategiesProps {
   vaultAddress: `0x${string}`
@@ -235,119 +236,86 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
     }
   }
 
+  const fieldClass = 'mt-1 w-full bg-black/40 border border-white/8 rounded-lg px-3 py-2 font-mono text-xs text-white focus:outline-none focus:border-brand-primary/50 transition-colors'
+  const labelClass = 'text-[11px] font-medium text-zinc-500'
+
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-xl font-bold mb-2">Deploy Yield Strategies</h3>
-        <p className="text-sm text-gray-400">
+        <h3 className="text-xl font-semibold text-white mb-1">Deploy Yield Strategies</h3>
+        <p className="text-sm text-zinc-500">
           Deploys Charm + Ajna strategies and configures vault allocations (requires vault management permissions).
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-gray-900/60 border border-white/10 rounded-lg p-4 space-y-3">
-          <div className="text-xs text-gray-400 uppercase tracking-wider">Contracts</div>
-          <div className="space-y-2 text-sm">
+        <div className="rounded-2xl border border-white/8 bg-white/2 p-4 space-y-3">
+          <div className="text-[11px] font-medium text-zinc-500">Contracts</div>
+          <div className="space-y-3 text-sm">
             <div>
-              <div className="text-gray-400">StrategyDeploymentBatcher</div>
+              <div className={labelClass}>StrategyDeploymentBatcher</div>
               <input
                 value={batcherAddress}
                 onChange={(e) => setBatcherAddress(e.target.value)}
                 placeholder="0x..."
-                className="mt-1 w-full bg-black/40 border border-white/10 rounded px-3 py-2 font-mono text-xs"
+                className={fieldClass}
               />
               {!CONTRACTS.strategyDeploymentBatcher && (
-                <div className="mt-1 text-xs text-amber-400">
-                  Missing `VITE_STRATEGY_DEPLOYMENT_BATCHER`. Set it in Vercel envs for production.
+                <div className="mt-1 text-[11px] text-amber-400">
+                  Missing VITE_STRATEGY_DEPLOYMENT_BATCHER — set in Vercel envs for production.
                 </div>
               )}
             </div>
             <div>
-              <div className="text-gray-400">Quote token (default USDC)</div>
-              <input
-                value={quoteToken}
-                onChange={(e) => setQuoteToken(e.target.value)}
-                className="mt-1 w-full bg-black/40 border border-white/10 rounded px-3 py-2 font-mono text-xs"
-              />
+              <div className={labelClass}>Quote token (default USDC)</div>
+              <input value={quoteToken} onChange={(e) => setQuoteToken(e.target.value)} className={fieldClass} />
             </div>
             <div>
-              <div className="text-gray-400">Ajna ERC20 factory</div>
-              <input
-                value={ajnaFactory}
-                onChange={(e) => setAjnaFactory(e.target.value)}
-                className="mt-1 w-full bg-black/40 border border-white/10 rounded px-3 py-2 font-mono text-xs"
-              />
+              <div className={labelClass}>Ajna ERC20 factory</div>
+              <input value={ajnaFactory} onChange={(e) => setAjnaFactory(e.target.value)} className={fieldClass} />
             </div>
           </div>
         </div>
 
-        <div className="bg-gray-900/60 border border-white/10 rounded-lg p-4 space-y-3">
-          <div className="text-xs text-gray-400 uppercase tracking-wider">Parameters</div>
-          <div className="space-y-2 text-sm">
+        <div className="rounded-2xl border border-white/8 bg-white/2 p-4 space-y-3">
+          <div className="text-[11px] font-medium text-zinc-500">Parameters</div>
+          <div className="space-y-3 text-sm">
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <div className="text-gray-400">Charm weight (bps)</div>
-                <input
-                  value={charmWeightBps}
-                  onChange={(e) => setCharmWeightBps(Number(e.target.value))}
-                  className="mt-1 w-full bg-black/40 border border-white/10 rounded px-3 py-2 font-mono text-xs"
-                />
+                <div className={labelClass}>Charm weight (bps)</div>
+                <input value={charmWeightBps} onChange={(e) => setCharmWeightBps(Number(e.target.value))} className={fieldClass} />
               </div>
               <div>
-                <div className="text-gray-400">Ajna weight (bps)</div>
-                <input
-                  value={ajnaWeightBps}
-                  onChange={(e) => setAjnaWeightBps(Number(e.target.value))}
-                  className="mt-1 w-full bg-black/40 border border-white/10 rounded px-3 py-2 font-mono text-xs"
-                />
+                <div className={labelClass}>Ajna weight (bps)</div>
+                <input value={ajnaWeightBps} onChange={(e) => setAjnaWeightBps(Number(e.target.value))} className={fieldClass} />
               </div>
             </div>
 
             <div>
-              <div className="text-gray-400">Minimum idle (underlying tokens)</div>
-              <input
-                value={minimumIdle}
-                onChange={(e) => setMinimumIdle(e.target.value)}
-                className="mt-1 w-full bg-black/40 border border-white/10 rounded px-3 py-2 font-mono text-xs"
-              />
-              <div className="mt-1 text-xs text-gray-500">Parsed with {tokenDecimals} decimals.</div>
+              <div className={labelClass}>Minimum idle (underlying tokens)</div>
+              <input value={minimumIdle} onChange={(e) => setMinimumIdle(e.target.value)} className={fieldClass} />
+              <div className="mt-1 text-[11px] text-zinc-600">Parsed with {tokenDecimals} decimals.</div>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <div className="text-gray-400">V3 fee tier</div>
-                <input
-                  value={v3FeeTier}
-                  onChange={(e) => setV3FeeTier(Number(e.target.value))}
-                  className="mt-1 w-full bg-black/40 border border-white/10 rounded px-3 py-2 font-mono text-xs"
-                />
+                <div className={labelClass}>V3 fee tier</div>
+                <input value={v3FeeTier} onChange={(e) => setV3FeeTier(Number(e.target.value))} className={fieldClass} />
               </div>
               <div>
-                <div className="text-gray-400">initialSqrtPriceX96</div>
-                <input
-                  value={initialSqrtPriceX96}
-                  onChange={(e) => setInitialSqrtPriceX96(e.target.value)}
-                  className="mt-1 w-full bg-black/40 border border-white/10 rounded px-3 py-2 font-mono text-xs"
-                />
+                <div className={labelClass}>initialSqrtPriceX96</div>
+                <input value={initialSqrtPriceX96} onChange={(e) => setInitialSqrtPriceX96(e.target.value)} className={fieldClass} />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <div className="text-gray-400">Charm vault name</div>
-                <input
-                  value={charmVaultName}
-                  onChange={(e) => setCharmVaultName(e.target.value)}
-                  className="mt-1 w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-xs"
-                />
+                <div className={labelClass}>Charm vault name</div>
+                <input value={charmVaultName} onChange={(e) => setCharmVaultName(e.target.value)} className={fieldClass} />
               </div>
               <div>
-                <div className="text-gray-400">Charm vault symbol</div>
-                <input
-                  value={charmVaultSymbol}
-                  onChange={(e) => setCharmVaultSymbol(e.target.value)}
-                  className="mt-1 w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-xs"
-                />
+                <div className={labelClass}>Charm vault symbol</div>
+                <input value={charmVaultSymbol} onChange={(e) => setCharmVaultSymbol(e.target.value)} className={fieldClass} />
               </div>
             </div>
           </div>
@@ -355,52 +323,52 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
       </div>
 
       {predicted && (
-        <div className="bg-gray-900/60 border border-white/10 rounded-lg p-4">
-          <div className="text-xs text-gray-400 uppercase tracking-wider mb-2">Predicted addresses (next deployment)</div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 font-mono text-xs">
+        <div className="rounded-2xl border border-white/8 bg-white/2 p-4 space-y-3">
+          <div className="text-[11px] font-medium text-zinc-500">Predicted addresses (next deployment)</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 font-mono text-xs">
             <div>
-              <div className="text-gray-400">Charm vault</div>
-              <div className="break-all">{predicted.charmVault}</div>
+              <div className="text-zinc-500 mb-1">Charm vault</div>
+              <div className="text-zinc-300 break-all">{predicted.charmVault}</div>
             </div>
             <div>
-              <div className="text-gray-400">Charm strategy</div>
-              <div className="break-all">{predicted.creatorCharmStrategy}</div>
+              <div className="text-zinc-500 mb-1">Charm strategy</div>
+              <div className="text-zinc-300 break-all">{predicted.creatorCharmStrategy}</div>
             </div>
             <div>
-              <div className="text-gray-400">Ajna strategy</div>
-              <div className="break-all">{predicted.ajnaStrategy}</div>
+              <div className="text-zinc-500 mb-1">Ajna strategy</div>
+              <div className="text-zinc-300 break-all">{predicted.ajnaStrategy}</div>
             </div>
           </div>
-          <div className="mt-2 text-xs text-gray-500">Batcher nonce used: {predicted.nonce.toString()}</div>
+          <div className="text-[11px] text-zinc-600">Batcher nonce used: {predicted.nonce.toString()}</div>
         </div>
       )}
 
-      {error && <div className="bg-red-500/10 border border-red-500/20 text-red-300 rounded p-3 text-sm">{error}</div>}
+      {error && <Alert variant="error">{error}</Alert>}
 
       <button
         onClick={deployAndConfigure}
         disabled={!canSubmit || isSubmitting}
-        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+        className="btn-primary w-full py-3 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isSubmitting ? 'Submitting…' : 'Deploy + Configure Strategies'}
       </button>
 
       {bundleId && (
-        <div className="text-xs text-gray-400">
-          Bundle/tx id: <span className="font-mono break-all">{bundleId}</span>
+        <div className="text-[11px] text-zinc-500">
+          Bundle/tx: <span className="font-mono text-zinc-400 break-all">{bundleId}</span>
         </div>
       )}
 
-      <div className="text-xs text-gray-500 space-y-1">
+      <div className="text-[11px] text-zinc-600 space-y-1">
         {hasPrivySmartWallet ? (
           <>
-            <p>• Using Privy Smart Wallet - all operations batched into single transaction (one approval).</p>
+            <p>• Using Privy Smart Wallet — all calls batched into one transaction (one approval).</p>
             <p>• ERC-4337 Account Abstraction with gas sponsorship.</p>
           </>
         ) : isSmartWallet ? (
           <p>• Coinbase Smart Wallet detected.</p>
         ) : (
-          <p>• EOA wallet - operations will run sequentially (multiple approvals).</p>
+          <p>• EOA wallet — operations will run sequentially (multiple approvals).</p>
         )}
       </div>
     </div>
