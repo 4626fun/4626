@@ -28,8 +28,9 @@ WORKDIR /app
 # --------------------------------------------------------------------------
 FROM base AS deps
 
-# Copy package manifests only (cache layer)
+# Copy package manifests + patch files (referenced by pnpm.patchedDependencies)
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
+COPY patches/ ./patches/
 
 # Install ALL deps (tsx, @elizaos/core are in devDependencies).
 # Use --ignore-scripts first to avoid OOM from parallel native builds,
