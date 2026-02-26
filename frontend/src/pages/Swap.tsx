@@ -14,11 +14,9 @@ import { TransactionLifecycle } from '@/components/trade/TransactionLifecycle'
 import { Alert } from '@/components/ui/Alert'
 import { DEFAULT_CHAIN_ID, type SupportedChainId, getChainMeta } from '@/config/chains'
 import { CONTRACTS } from '@/config/contracts'
-import { useCanonicalWallet } from '@/hooks/useCanonicalWallet'
 import { useSwapExecution } from '@/hooks/useSwapExecution'
 import { useSwapState } from '@/hooks/useSwapState'
 import { useTokenIdentity } from '@/hooks/useTokenIdentity'
-import { detectUniswapWalletCapabilities } from '@/lib/uniswap/capabilities'
 import {
   claimLiquidityFees,
   createPosition,
@@ -27,14 +25,7 @@ import {
   removeLiquidity,
 } from '@/lib/uniswap/liquidityApi'
 import { fetchZQuoteComparison, isUniswapXRouting, pickQuote } from '@/lib/uniswap/tradingApi'
-import {
-  getDefaultWalletMode,
-  getExecutionContext,
-  isCSWAvailable,
-  readPreferredWalletMode,
-  writePreferredWalletMode,
-  type WalletMode,
-} from '@/lib/uniswap/walletMode'
+import { type WalletMode } from '@/lib/uniswap/walletMode'
 import {
   BASE_CHAIN_ID,
   NATIVE_TOKEN_ADDRESS,
@@ -44,6 +35,7 @@ import {
   uniswapBaseLogo,
   type TokenOption,
 } from '@/lib/uniswap/swapUtils'
+import { useAccountContext } from '@/wallet/accountContext'
 
 const CORE_TOKENS: TokenOption[] = [
   // Represent ETH as native for Uniswap Trading API + wagmi balances.
@@ -227,11 +219,6 @@ export function Swap() {
   const [compareRoutesChainId, setCompareRoutesChainId] = useState<number | null>(BASE_CHAIN_ID)
   const [compareZquoteOutUnits, setCompareZquoteOutUnits] = useState<string>('')
 
-  const [walletCapabilities, setWalletCapabilities] = useState<{
-    supports5792: boolean
-    supports7702: boolean
-  }>({ supports5792: false, supports7702: false })
-
   // ─── LP state ─────────────────────────────────────────────────────────────
   const [lpBusy, setLpBusy] = useState<string | null>(null)
   const [lpMode, setLpMode] = useState<'simple' | 'advanced'>('simple')
@@ -250,73 +237,32 @@ export function Swap() {
     if (isAddress(qToken)) setTokenOut(getAddress(qToken))
   }, [searchParams, setTokenOut])
 
-  // ─── Canonical wallet ─────────────────────────────────────────────────────
-  const {
-    canonicalAddress,
-    signerAddress,
-    identityReady,
-  } = useCanonicalWallet({
-    address,
-    publicClient,
-    walletReady: Boolean(walletClient),
-  })
+  const accountContext = useAccountContext()
+  const canonicalAddress = accountContext.cswAddress ?? null
+  const signerAddress = accountContext.signerAddress ?? null
+  const identityReady = Boolean(
+    canonicalAddress &&
+      walletClient &&
+      publicClient &&
+      (accountContext.signerType === 'SMART_WALLET' || accountContext.eoaIsOwnerOfCsw === true),
+  )
 
   // Whether the system has a canonical CSW address on file for this user.
   // When false (null DB row), "Smart Wallet" mode is unavailable AND linking
   // requires account registration — not just the ownership check failure.
   const canonicalConfigured = canonicalAddress !== null
-
-  const canonicalReady = identityReady
   const eoaReady = Boolean(signerAddress && walletClient && publicClient)
-
-  const [preferredExecutionMode, setPreferredExecutionMode] = useState<WalletMode>(() =>
-    readPreferredWalletMode(),
-  )
-
-  const executionMode = useMemo<WalletMode>(
-    () =>
-      getDefaultWalletMode({
-        preferredMode: preferredExecutionMode,
-        canonicalReady,
-        eoaReady,
-      }),
-    [preferredExecutionMode, canonicalReady, eoaReady],
-  )
-
-  const executionContext = useMemo(
-    () =>
-      getExecutionContext(executionMode, {
-        canonicalAddress,
-        signerAddress,
-        canonicalReady,
-        eoaReady,
-        supports5792: walletCapabilities.supports5792,
-        supports7702: walletCapabilities.supports7702,
-      }),
-    [
-      executionMode,
-      canonicalAddress,
-      signerAddress,
-      canonicalReady,
-      eoaReady,
-      walletCapabilities.supports5792,
-      walletCapabilities.supports7702,
-    ],
-  )
-
-  const executionAddress = executionContext.address
-  const executionReady = executionContext.ready
+  const preferredExecutionMode: WalletMode =
+    accountContext.preferredMode === 'SMART_WALLET' ? 'canonical' : 'eoa'
+  const executionMode: WalletMode =
+    accountContext.activeAccountType === 'SMART_WALLET' ? 'canonical' : 'eoa'
+  const executionAddress = accountContext.activeAccount ?? null
+  const executionReady = Boolean(executionAddress && walletClient && publicClient)
   const executionFallbackActive = executionMode !== preferredExecutionMode
-  const canonicalAvailable = isCSWAvailable({
-    canonicalAddress,
-    signerAddress,
-    canonicalReady,
-    eoaReady,
-  })
-
-  useEffect(() => {
-    writePreferredWalletMode(preferredExecutionMode)
-  }, [preferredExecutionMode])
+  const canonicalAvailable = Boolean(
+    canonicalAddress &&
+      (accountContext.signerType === 'SMART_WALLET' || accountContext.eoaIsOwnerOfCsw === true),
+  )
 
   // ─── Token options (chain-aware) ─────────────────────────────────────────
   const dynamicCoreTokens = useMemo(() => {
@@ -469,9 +415,12 @@ export function Swap() {
     resetTradeState()
   }, [switchTokens, resetTradeState])
 
-  const handleSetExecutionMode = useCallback((nextMode: WalletMode) => {
-    setPreferredExecutionMode(nextMode)
-  }, [])
+  const handleSetExecutionMode = useCallback(
+    (nextMode: WalletMode) => {
+      accountContext.actions.setPreferredMode(nextMode === 'canonical' ? 'SMART_WALLET' : 'EOA')
+    },
+    [accountContext.actions],
+  )
 
   const handleEnableCanonical = useCallback(() => {
     window.location.assign('/account')
@@ -556,15 +505,6 @@ export function Swap() {
       window.clearTimeout(timer)
     }
   }, [compareRoutesEnabled, executionReady, isReady, tokenIn, tokenOut, amountInUnits])
-
-  // Wallet capabilities
-  useEffect(() => {
-    let cancelled = false
-    void detectUniswapWalletCapabilities(walletClient).then((caps) => {
-      if (!cancelled) setWalletCapabilities(caps)
-    })
-    return () => { cancelled = true }
-  }, [walletClient])
 
   // ─── LP handlers ──────────────────────────────────────────────────────────
   async function handleLpQuote() {

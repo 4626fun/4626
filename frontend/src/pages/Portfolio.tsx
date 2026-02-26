@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAccount } from 'wagmi'
-import { ArrowDownLeft, ArrowUpRight, MoreHorizontal, Plus } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, MoreHorizontal, Plus, Wallet } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
-import { Alert } from '@/components/ui/Alert'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { TokenLogo } from '@/components/ui/TokenLogo'
+import { useAccountContext } from '@/wallet/accountContext'
 import { fetchDebankTokenList, type DebankToken, type DebankTokenList } from '@/lib/debank/client'
 import { isLensGroveEnabled } from '@/lib/flags'
 import { resolveLensUri, uploadImmutableBlob, type GroveUploadResult } from '@/lib/lens/grove'
@@ -155,15 +155,24 @@ export function Portfolio() {
   const params = useParams<{ address?: string }>()
   const { address: wagmiAddress } = useAccount()
   const siwe = useSiweAuth()
+  const accountContext = useAccountContext()
   const queryClient = useQueryClient()
   const routeAddress = typeof params.address === 'string' ? params.address.trim() : ''
   const publicAddress = routeAddress && isEvmAddress(routeAddress) ? routeAddress.toLowerCase() : null
   const isPublicMode = Boolean(publicAddress)
+  const connectedSignerAddress = useMemo(() => {
+    const raw = String(accountContext.signerAddress || wagmiAddress || '').trim()
+    return isEvmAddress(raw) ? raw.toLowerCase() : null
+  }, [accountContext.signerAddress, wagmiAddress])
+  const actingAccountAddress = useMemo(() => {
+    const raw = String(accountContext.activeAccount || '').trim()
+    return isEvmAddress(raw) ? raw.toLowerCase() : null
+  }, [accountContext.activeAccount])
   const effectiveAddress = useMemo(() => {
     if (publicAddress) return publicAddress
-    const a = (wagmiAddress || siwe.authAddress || '').trim()
+    const a = (actingAccountAddress || connectedSignerAddress || siwe.authAddress || '').trim()
     return isEvmAddress(a) ? a.toLowerCase() : null
-  }, [publicAddress, siwe.authAddress, wagmiAddress])
+  }, [actingAccountAddress, connectedSignerAddress, publicAddress, siwe.authAddress])
 
   const [tab, setTab] = useState<'overview' | 'tokens' | 'nfts' | 'activity'>('overview')
   const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y'>('1D')
@@ -494,8 +503,19 @@ export function Portfolio() {
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-3 text-[12px] text-zinc-300">
                 <div className="rounded-xl border border-zinc-800/80 bg-black/30 p-3">
-                  <div className="text-[10px] text-zinc-500 uppercase tracking-[0.14em]">Connected wallet</div>
-                  <div className="mt-1 font-mono text-zinc-200">{effectiveAddress ? shortAddr(effectiveAddress) : '—'}</div>
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-[0.14em]">Account mode</div>
+                  <div className="mt-1 text-[11px] text-zinc-500">
+                    Connected signer:{' '}
+                    <span className="font-mono text-zinc-200">
+                      {connectedSignerAddress ? shortAddr(connectedSignerAddress) : '—'}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-[11px] text-zinc-500">
+                    Acting account:{' '}
+                    <span className="font-mono text-zinc-200">
+                      {effectiveAddress ? shortAddr(effectiveAddress) : '—'}
+                    </span>
+                  </div>
                   <div className="text-[10px] text-zinc-600 mt-1">
                     SIWE: {siwe.authAddress ? shortAddr(siwe.authAddress) : 'Not signed in'}
                   </div>

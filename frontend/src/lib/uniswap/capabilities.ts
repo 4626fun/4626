@@ -1,4 +1,5 @@
 import type { WalletClient } from 'viem'
+import { probeWalletCapabilities } from '@/wallet/accountContext/getCapabilities'
 
 export type UniswapWalletCapabilities = {
   supports5792: boolean
@@ -6,22 +7,12 @@ export type UniswapWalletCapabilities = {
 }
 
 export async function detectUniswapWalletCapabilities(walletClient: WalletClient | undefined): Promise<UniswapWalletCapabilities> {
-  if (!walletClient) return { supports5792: false, supports7702: false }
-
-  const request = (walletClient as any)?.request as ((args: { method: string; params?: unknown[] }) => Promise<unknown>) | undefined
-  if (!request) return { supports5792: false, supports7702: false }
-
-  let supports5792 = false
-  let supports7702 = false
-
-  try {
-    const caps = await request({ method: 'wallet_getCapabilities' }).catch(() => null)
-    const text = JSON.stringify(caps ?? {}).toLowerCase()
-    supports5792 = text.includes('wallet_sendcalls') || text.includes('5792')
-    supports7702 = text.includes('7702')
-  } catch {
-    // no-op: fallback capabilities remain false
-  }
+  const caps = await probeWalletCapabilities({
+    walletClient,
+    chainIdHex: null,
+  })
+  const supports5792 = caps.supports5792
+  const supports7702 = false
 
   return { supports5792, supports7702 }
 }
