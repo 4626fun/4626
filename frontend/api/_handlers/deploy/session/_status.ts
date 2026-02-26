@@ -341,10 +341,14 @@ async function ensureSolanaRouteReadyForPhase2(params: {
     .catch(() => null)
   if (registered === true) return
 
-  // Prefer the incoming request host so auth cookies/session match.
-  const requestOrigin = inferRequestOrigin(params.req)
+  // Prefer the canonical app origin for internal API calls (avoids Vercel preview auth gates).
+  // Fall back to the request origin only if it's the production domain.
   const canonicalOrigin = getCanonicalOrigin(params.req)
-  const candidateOrigins = [requestOrigin, canonicalOrigin].filter((o): o is string => Boolean(o))
+  const requestOrigin = inferRequestOrigin(params.req)
+  const isPreviewOrigin = requestOrigin && /\.vercel\.app$/i.test(new URL(requestOrigin).hostname)
+  const candidateOrigins = isPreviewOrigin
+    ? [canonicalOrigin].filter((o): o is string => Boolean(o))
+    : [requestOrigin, canonicalOrigin].filter((o): o is string => Boolean(o))
   const cookie = headerValue(params.req.headers.cookie as string | string[] | undefined)
   const authz = headerValue(params.req.headers.authorization as string | string[] | undefined)
   let lastFailure: string | null = null
