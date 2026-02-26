@@ -20,7 +20,7 @@ export function deriveAccountUiFlags(params: {
     paymasterAvailable: isSmartActive && params.capabilities.paymasterService,
     canUseSmartWalletMode: params.canUseSmartWalletMode,
     shouldPromptToLinkOwner:
-      params.signerType === 'EOA' && (!params.cswAddress || params.eoaIsOwnerOfCsw === false),
+      params.signerType === 'EOA' && Boolean(params.cswAddress) && params.eoaIsOwnerOfCsw === false,
     shouldShowNetworkMismatch:
       params.signerType === 'EOA' && Boolean(params.cswAddress) && params.chainId !== expectedChainId,
   }

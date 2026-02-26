@@ -27,7 +27,7 @@ describe('deriveAccountUiFlags', () => {
     })
   })
 
-  it('prompts EOA users to link when CSW missing or not owner', () => {
+  it('prompts EOA users to link only when CSW is known and ownership is false', () => {
     const missingCsw = deriveAccountUiFlags({
       activeAccountType: 'EOA',
       signerType: 'EOA',
@@ -55,7 +55,7 @@ describe('deriveAccountUiFlags', () => {
       },
     })
 
-    expect(missingCsw.shouldPromptToLinkOwner).toBe(true)
+    expect(missingCsw.shouldPromptToLinkOwner).toBe(false)
     expect(notOwner.shouldPromptToLinkOwner).toBe(true)
   })
 

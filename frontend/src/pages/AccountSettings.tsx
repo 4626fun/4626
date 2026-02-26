@@ -1018,6 +1018,9 @@ export function AccountSettings() {
     zoraProfile?.socialAccounts,
   ])
 
+  const accountSurfaceUrl = useMemo(() => `${getAppBaseUrl()}/account`, [])
+  const appAccountUrl = useMemo(() => `${APP_ORIGIN}/account`, [])
+
   const accessTone = useMemo(() => {
     const status = String(profile?.appAccessStatus ?? '').toLowerCase()
     if (status.includes('allow') || status.includes('approved')) {
