@@ -80,22 +80,34 @@ The `CreatorVaultDeployer` batcher is configured for Solana bridging:
 
 **When Solana IS enabled** (current state), Phase 2 Finalize **requires** `meteoraAlphaVault != bytes32(0)` and `solanaIxs.length > 0` — otherwise it reverts. The Meteora Alpha Vault must be pre-created on Solana per creator.
 
+### Provisioner VM (Vultr)
+
+The Solana route provisioner runs on a Vultr VPS at `provisioner.4626.fun` (IP: `45.63.52.50`).
+
+- **SSH:** `ssh root@45.63.52.50`
+- **Service:** `systemctl {status|restart} solana-provisioner`
+- **Env:** `/opt/creatorvault/provisioner.env`
+- **Repo:** `/opt/creatorvault` (branch: `cursor/development-environment-setup-365b`)
+- **Nginx:** reverse proxy 80/443 → 8788, Let's Encrypt cert (auto-renew)
+- **Remaining:** `SOLANA_BRIDGE_CLI_DIR` must be set to the Base bridge CLI path. Copy the CLI from your local machine: `scp -r /home/akitav2/projects/tools/base-bridge/scripts root@45.63.52.50:/opt/base-bridge-scripts/` then update `/opt/creatorvault/provisioner.env` with `SOLANA_BRIDGE_CLI_DIR=/opt/base-bridge-scripts`.
+
 ### Solana integration: per-creator setup
 
 The Solana route provisioner (`frontend/server/solana-provisioner/`) handles the full Solana-side setup via HTTP endpoints:
 
 | Endpoint | Purpose |
 |----------|---------|
-| `POST /provision` | Creates bridge route via `wrap-token` CLI (does **not** set Transfer Hook) |
+| `POST /provision` | Creates bridge route via `wrap-token` CLI; with `SOLANA_AUTO_POOL=1`, also creates DLMM pool + Alpha Vault |
 | `POST /setup-creator` | Creates Token-2022 mint with Transfer Hook + TransferFeeConfig, initializes PDAs |
 | `POST /create-pool` | Creates Meteora DLMM pool for the creator's share token |
 | `POST /meteora-ixs` | Builds Meteora Alpha Vault deposit instructions |
 
-**Full per-creator Solana setup sequence:**
-1. `POST /provision` — creates bridge-wrapped SPL token + route
-2. `POST /setup-creator` — creates Token-2022 mint with Transfer Hook, inits CreatorConfig/PendingEntries/WinnerRecord PDAs
-3. `POST /create-pool` — creates Meteora DLMM trading pool
-4. Register Meteora vault config in DB or `METEORA_CREATOR_ALPHA_VAULT_MAP_JSON` env
+**Single-token architecture:** Meteora DLMM rejects Token-2022 mints with TransferHook extension (`UnsupportedMintExtension`). The deploy uses only the bridge-wrapped standard SPL token (created by `wrap-token`) for DLMM pools, Alpha Vault deposits, and trading. Transfer Hook functionality (lottery entries, fees) requires a separate Token-2022 mint if needed.
+
+**Full per-creator Solana setup sequence (with `SOLANA_AUTO_POOL=1`):**
+1. `POST /provision` — creates bridge-wrapped SPL token + route, then auto-creates DLMM pool + Alpha Vault
+2. (Optional) `POST /setup-creator` — creates Token-2022 mint with Transfer Hook, inits CreatorConfig/PendingEntries/WinnerRecord PDAs
+3. Register Meteora vault config in DB or `METEORA_CREATOR_ALPHA_VAULT_MAP_JSON` env
 
 **Meteora vault config** is resolved via `frontend/server/_lib/meteoraAlphaVaultConfig.ts`:
 - Priority 1: DB table `creator_meteora_alpha_vaults` (auto-created on first query)
