@@ -11,7 +11,7 @@ type WaitlistModalProps = {
 
 export function WaitlistModal({ open, onClose }: WaitlistModalProps) {
   return (
-    <Modal open={open} onClose={onClose}>
+    <Modal open={open} onClose={onClose} title="Waitlist" maxWidth="sm:max-w-[440px]">
       <Suspense
         fallback={
           <div className="space-y-4">

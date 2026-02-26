@@ -1860,14 +1860,12 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   const cardWrapClass =
     variant === 'page'
       ? `relative overflow-hidden rounded-3xl border ${
-          hasUpgradedBorder ? 'border-[#0052FF]/25' : 'border-white/[0.06]'
+          hasUpgradedBorder ? 'border-brand-primary/25' : 'border-white/[0.06]'
         } bg-[#0d0d0f]/95 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_24px_80px_-24px_rgba(0,0,0,0.6)] p-6 sm:p-8`
       : variant === 'modal'
-        ? `relative overflow-hidden rounded-3xl border ${
-            hasUpgradedBorder ? 'border-[#0052FF]/28' : 'border-white/[0.08]'
-          } bg-[#0d0d0f]/95 backdrop-blur-xl shadow-[0_20px_80px_-30px_rgba(0,0,0,0.75)] p-5 sm:p-6`
+        ? 'relative overflow-hidden'
         : `relative overflow-hidden rounded-3xl border ${
-            hasUpgradedBorder ? 'border-[#0052FF]/25' : 'border-white/[0.06]'
+            hasUpgradedBorder ? 'border-brand-primary/25' : 'border-white/[0.06]'
           } bg-[#0d0d0f]/95 backdrop-blur-xl p-6 sm:p-8`
 
   return (
@@ -1876,7 +1874,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(0,82,255,0.08),transparent)]" />
       ) : null}
       <div className={innerWrapClass}>
-        {variant === 'page' ? null : (
+        {variant === 'page' || variant === 'modal' ? null : (
           <div className="mb-6">
             <div className="font-doto text-4xl sm:text-5xl font-bold tracking-tight text-white leading-[1.05]">
               Waitlist
@@ -1885,12 +1883,14 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         )}
 
         <motion.div className={cardWrapClass}>
-          <div
-            className={[
-              'pointer-events-none absolute inset-0 rounded-3xl ring-1 ring-inset',
-              hasUpgradedBorder ? 'ring-[#0052FF]/20' : 'ring-white/4',
-            ].join(' ')}
-          />
+          {variant !== 'modal' && (
+            <div
+              className={[
+                'pointer-events-none absolute inset-0 rounded-3xl ring-1 ring-inset',
+                hasUpgradedBorder ? 'ring-brand-primary/20' : 'ring-white/4',
+              ].join(' ')}
+            />
+          )}
           <div className="relative z-10">
           {/* Step transition: smooth layout */}
           <div className="relative">

@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, ArrowRight, Copy, Bot, Coins, User, Loader2, Share2, Trophy, ExternalLink, Wallet } from 'lucide-react'
+import { CheckCircle2, ArrowRight, Copy, Loader2, Share2, Trophy, ExternalLink, Wallet, ChevronDown } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useLinkAccount, usePrivy } from '@privy-io/react-auth'
 import { WaitlistDoneCelebrationBackground } from '../WaitlistDoneCelebrationBackground'
@@ -191,33 +191,58 @@ function WalletSnapshotCard(props: {
   connectedOwnerAddress: string | null
   canonicalSmartWalletAddress: string | null
 }) {
+  const [expanded, setExpanded] = useState(false)
   const connectedOwnerAddress = normalizeEvmAddress(props.connectedOwnerAddress)
   const canonicalSmartWalletAddress = normalizeEvmAddress(props.canonicalSmartWalletAddress)
   const appAccountUrl = `${getAppBaseUrl()}/account`
   return (
-    <motion.div {...fadeUp} className="rounded-2xl border border-white/8 bg-white/2 p-4 space-y-3">
-      <div className="flex items-center justify-between gap-2">
+    <motion.div {...fadeUp} className="rounded-2xl border border-white/8 bg-white/2 overflow-hidden">
+      {/* Header row — always visible */}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center justify-between gap-2 p-4 hover:bg-white/3 transition-colors"
+      >
         <div className="inline-flex items-center gap-1.5">
           <Wallet className="w-3.5 h-3.5 text-brand-primary" />
-          <span className="text-[11px] font-medium text-zinc-400">Wallet</span>
+          <span className="text-[13px] font-medium text-zinc-200">Wallet</span>
         </div>
-        <span className="rounded-full border border-brand-primary/25 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
-          Account ready
-        </span>
-      </div>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full border border-brand-primary/25 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
+            Account ready
+          </span>
+          <ChevronDown
+            className={['w-3.5 h-3.5 text-zinc-500 transition-transform duration-200', expanded ? 'rotate-180' : ''].join(' ')}
+          />
+        </div>
+      </button>
 
-      <div className="space-y-1.5">
-        <AddrRow label="Owner wallet" address={connectedOwnerAddress} />
-        <AddrRow label="Smart wallet" address={canonicalSmartWalletAddress} accent />
-      </div>
-
-      <a
-        href={appAccountUrl}
-        className="flex items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-white/3 px-3 py-2 text-[12px] font-medium text-zinc-300 hover:bg-white/6 hover:text-white transition-colors"
-      >
-        Open account
-        <ExternalLink className="w-3 h-3" />
-      </a>
+      {/* Expandable details */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 space-y-2 border-t border-white/6 pt-3">
+              <div className="space-y-1.5">
+                <AddrRow label="Owner wallet" address={connectedOwnerAddress} />
+                <AddrRow label="Smart wallet" address={canonicalSmartWalletAddress} accent />
+              </div>
+              <a
+                href={appAccountUrl}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-white/3 px-3 py-2 text-[12px] font-medium text-zinc-300 hover:bg-white/6 hover:text-white transition-colors"
+              >
+                Open account
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }
@@ -242,7 +267,6 @@ function AdminDeployLink() {
 
 function PreprovisionStatus({ onData }: { onData?: (data: PreprovData | null) => void }) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
-  const [data, setData] = useState<PreprovData | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -254,9 +278,7 @@ function PreprovisionStatus({ onData }: { onData?: (data: PreprovData | null) =>
         const uiStatus = classifyPreprovisionResponse({ httpStatus: res.status, json })
         if (!cancelled) {
           if (uiStatus === 'done' && json?.data) {
-            const next = json.data as PreprovData
-            setData(next)
-            onData?.(next)
+            onData?.(json.data as PreprovData)
           }
           setStatus(uiStatus)
         }
@@ -268,62 +290,13 @@ function PreprovisionStatus({ onData }: { onData?: (data: PreprovData | null) =>
     return () => { cancelled = true }
   }, [onData])
 
-  if (status === 'idle') return null
+  // When done or errored, don't show a card — WalletSnapshotCard already surfaces "Account ready"
+  if (status === 'idle' || status === 'done' || status === 'error') return null
 
   return (
-    <motion.div
-      {...fadeUp}
-      className="rounded-2xl border border-white/6 bg-white/2 p-4 space-y-2"
-    >
-      <div className="text-[11px] font-medium text-zinc-500 flex items-center gap-2">
-        {status === 'loading' ? (
-          <>
-            <Loader2 className="w-3 h-3 animate-spin text-indigo-400 shrink-0" />
-            <span>Preparing your account...</span>
-          </>
-        ) : status === 'error' ? (
-          'Account prep will retry later'
-        ) : (
-          <>
-            <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-            <span>Account pre-configured</span>
-          </>
-        )}
-      </div>
-
-      {status === 'done' && data && (
-        <div className="space-y-1.5">
-          {data.serverWalletAddress && (
-            <div className="flex items-center gap-2 text-[11px] min-w-0">
-              <Bot className="w-3 h-3 text-zinc-600 shrink-0" />
-              <span className="text-zinc-500 shrink-0">Agent signer</span>
-              <span className="text-zinc-600 font-mono truncate text-right">{truncAddr(data.serverWalletAddress)}</span>
-            </div>
-          )}
-          {data.coinSymbol && data.coinAddress && (
-            <div className="flex items-center gap-2 text-[11px] min-w-0">
-              <Coins className="w-3 h-3 text-zinc-600 shrink-0" />
-              <span className="text-zinc-500 shrink-0">Creator coin</span>
-              <span className="text-zinc-600 font-mono truncate text-right">${data.coinSymbol}</span>
-            </div>
-          )}
-          {(data.farcasterUsername || data.zoraHandle) && (
-            <div className="flex items-center gap-2 text-[11px] min-w-0">
-              <User className="w-3 h-3 text-zinc-600 shrink-0" />
-              <span className="text-zinc-500 shrink-0">Identity</span>
-              <span className="text-zinc-600 truncate text-right">
-                {[
-                  data.farcasterUsername ? `@${data.farcasterUsername}` : null,
-                  data.zoraHandle ? `${data.zoraHandle}` : null,
-                ].filter(Boolean).join(' / ')}
-              </span>
-            </div>
-          )}
-          <div className="text-[10px] text-zinc-700 pt-1">
-            When approved, you'll just need one transaction to activate your agent.
-          </div>
-        </div>
-      )}
+    <motion.div {...fadeUp} className="flex items-center gap-2 px-1 text-[12px] text-zinc-500">
+      <Loader2 className="w-3 h-3 animate-spin text-indigo-400 shrink-0" />
+      <span>Setting up your account…</span>
     </motion.div>
   )
 }
@@ -372,7 +345,7 @@ function WaitlistedCta({
         <div className="text-[14px] text-amber-200/95 font-medium">
           {rank ? `You're #${rank} on the waitlist` : "You're on the waitlist"}
         </div>
-        <div className="text-[12px] text-zinc-500">
+        <div className="text-[12px] text-zinc-400">
           Share your link to move up. We approve in batches.
         </div>
         {nextBand ? (
@@ -628,10 +601,10 @@ export const DoneStep = memo(function DoneStep({
           transition={{ duration: 0.24, ease: baseEase }}
           className="relative overflow-hidden space-y-6 sm:space-y-7"
         >
-          {/* Celebration background */}
+          {/* Celebration background — dark overlay keeps text readable */}
           <div className="absolute inset-0 -z-10">
             <WaitlistDoneCelebrationBackground className="absolute inset-0" />
-            <div className="absolute inset-0 bg-[#0a0a0b]/40" />
+            <div className="absolute inset-0 bg-[#0a0a0b]/70" />
           </div>
 
           {/* Completed stepper */}
@@ -652,17 +625,17 @@ export const DoneStep = memo(function DoneStep({
                   <CheckCircle2 className="w-8 h-8 sm:w-9 sm:h-9 text-brand-primary" />
                 </div>
                 <motion.div
-                  className="absolute inset-0 rounded-2xl border-2 border-brand-primary/20"
-                  initial={{ scale: 1, opacity: 0.6 }}
-                  animate={{ scale: 1.4, opacity: 0 }}
-                  transition={{ duration: 1.2, repeat: Infinity, ease: 'easeOut' }}
+                  className="absolute inset-0 rounded-2xl border border-brand-primary/15"
+                  initial={{ scale: 1, opacity: 0.5 }}
+                  animate={{ scale: 1.5, opacity: 0 }}
+                  transition={{ duration: 1.6, repeat: Infinity, ease: 'easeOut' }}
                 />
               </div>
             </div>
 
             <div>
-              <h1 className="font-doto text-2xl sm:text-3xl font-bold text-white tracking-tight">
-                You're on the waitlist!
+              <h1 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
+                You're on the waitlist
               </h1>
               {rankDelta > 0 ? (
                 <div className="mt-2 inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-200">
@@ -670,10 +643,10 @@ export const DoneStep = memo(function DoneStep({
                 </div>
               ) : null}
               {displayEmail && (
-                <p className="text-[13px] sm:text-[14px] text-zinc-500 mt-1.5 truncate px-2">{displayEmail}</p>
+                <p className="text-[13px] sm:text-[14px] text-zinc-300 mt-1.5 truncate px-2">{displayEmail}</p>
               )}
-              <p className="text-[12px] sm:text-[13px] text-zinc-600 mt-2 max-w-[36ch] mx-auto">
-                We'll notify you when it's your turn. Share your link to move up.
+              <p className="text-[13px] text-zinc-400 mt-1.5 max-w-[36ch] mx-auto">
+                We'll notify you when it's your turn.
               </p>
             </div>
           </motion.div>
@@ -686,62 +659,44 @@ export const DoneStep = memo(function DoneStep({
             canonicalSmartWalletAddress={smartWalletAddress ?? null}
           />
 
-          {/* X follow verification (unlocks next border tier) */}
-          <motion.div
-            {...fadeUp}
-            className="rounded-2xl border border-white/6 bg-white/2 p-4 space-y-3"
-          >
-            {!showPrivy ? (
-              <>
-                <div className="text-[11px] font-medium text-zinc-500">Verification</div>
-                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[12px] text-amber-200/90 leading-relaxed">
-                  X verification is temporarily unavailable in this environment. You can keep sharing your referral link now and try verification again later.
-                </div>
-              </>
-            ) : (
-              <>
+          {/* X verification — compact when done, full card when pending */}
+          {borderTier >= 1 ? (
+            <motion.div {...fadeUp} className="flex items-center gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-500/6 px-4 py-3 text-[13px] text-emerald-200">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>X verified — border unlocked</span>
+              <span className="ml-auto shrink-0 px-2 py-0.5 rounded-full border border-emerald-400/25 bg-emerald-500/10 text-[10px] font-medium text-emerald-200">
+                Tier {borderTier}
+              </span>
+            </motion.div>
+          ) : showPrivy ? (
+            <motion.div
+              {...fadeUp}
+              className="rounded-2xl border border-white/8 bg-white/2 p-4 space-y-3"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[11px] font-medium text-zinc-500">Verification</div>
-                  <div className="text-[14px] text-white font-medium mt-1">Unlock your next border</div>
-                  <div className="text-[12px] text-zinc-200 mt-1 leading-relaxed">
-                    Follow <span className="text-zinc-100">@4626fun</span> on X to complete verification and unlock your next border.
+                  <div className="text-[14px] text-white font-medium">Unlock your next border</div>
+                  <div className="text-[12px] text-zinc-400 mt-1 leading-relaxed">
+                    Follow <span className="text-zinc-200">@4626fun</span> on X to verify and unlock your next border.
                   </div>
                 </div>
-                <div
-                  className={[
-                    'shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border',
-                    borderTier >= 1
-                      ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
-                      : 'border-white/10 bg-black/20 text-zinc-300',
-                  ].join(' ')}
-                >
+                <div className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border border-white/10 bg-black/20 text-zinc-400">
                   Tier {borderTier}
                 </div>
               </div>
 
-              {borderTier >= 1 ? (
-                <div className="flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-500/5 px-3 py-2 text-[12px] text-emerald-200">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  X verified. Border unlocked.
-                </div>
-              ) : !privyAuthed ? (
+              {!privyAuthed ? (
                 <div className="space-y-2">
                   <button
                     type="button"
                     onClick={() => void handleSignInForX()}
                     disabled={xSignInBusy}
-                    className={[
-                      'btn-primary w-full min-h-[48px] px-4 py-3 text-[14px]',
-                      xSignInBusy ? 'btn-no-icon' : '',
-                    ].join(' ')}
+                    className={['btn-primary w-full px-4 py-3 text-[14px]', xSignInBusy ? 'btn-no-icon' : ''].join(' ')}
                   >
-                    {xSignInBusy ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-zinc-200" />
-                    ) : null}
-                    {xSignInBusy ? 'Opening sign in…' : 'Sign in to connect X'}
+                    {xSignInBusy ? <Loader2 className="w-4 h-4 animate-spin text-zinc-200" /> : null}
+                    {xSignInBusy ? 'Opening…' : 'Sign in to connect X'}
                   </button>
-                  <div className="text-[12px] text-zinc-500">After signing in, connect X and click Verify.</div>
+                  <div className="text-[12px] text-zinc-400">Connect X after signing in, then click Verify.</div>
                   {xLinkError ? <Alert variant="error">{xLinkError}</Alert> : null}
                 </div>
               ) : !twitterConnected ? (
@@ -750,15 +705,10 @@ export const DoneStep = memo(function DoneStep({
                     type="button"
                     onClick={handleConnectX}
                     disabled={xLinkBusy}
-                    className={[
-                      'btn-primary w-full min-h-[48px] px-4 py-3 text-[14px]',
-                      xLinkBusy ? 'btn-no-icon' : '',
-                    ].join(' ')}
+                    className={['btn-primary w-full px-4 py-3 text-[14px]', xLinkBusy ? 'btn-no-icon' : ''].join(' ')}
                   >
-                    {xLinkBusy ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-zinc-200" />
-                    ) : null}
-                    {xLinkBusy ? 'Connecting X…' : 'Connect X'}
+                    {xLinkBusy ? <Loader2 className="w-4 h-4 animate-spin text-zinc-200" /> : null}
+                    {xLinkBusy ? 'Connecting…' : 'Connect X'}
                   </button>
                   {xLinkError ? <Alert variant="error">{xLinkError}</Alert> : null}
                 </div>
@@ -769,7 +719,7 @@ export const DoneStep = memo(function DoneStep({
                       href="https://x.com/4626fun"
                       target="_blank"
                       rel="noreferrer"
-                      className="w-full text-center px-3 py-2.5 rounded-xl border border-white/8 bg-white/2 text-zinc-200 text-[13px] hover:bg-white/5"
+                      className="w-full text-center px-3 py-2.5 rounded-xl border border-white/8 bg-white/2 text-zinc-200 text-[13px] hover:bg-white/5 transition-colors"
                     >
                       Follow @4626fun
                     </a>
@@ -777,26 +727,20 @@ export const DoneStep = memo(function DoneStep({
                       type="button"
                       onClick={() => void handleVerifyX()}
                       disabled={xVerifyBusy}
-                      className={[
-                        'btn-primary btn-compact w-full rounded-xl px-3 py-2.5 text-[13px]',
-                        xVerifyBusy ? 'btn-no-icon' : '',
-                      ].join(' ')}
+                      className={['btn-primary btn-compact w-full rounded-xl px-3 py-2.5 text-[13px]', xVerifyBusy ? 'btn-no-icon' : ''].join(' ')}
                     >
-                      {xVerifyBusy ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : null}
+                      {xVerifyBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                       {xVerifyBusy ? 'Verifying…' : 'Verify'}
                     </button>
                   </div>
-                  <div className="text-[11px] text-zinc-300">
-                    Connected{privyTwitter.username ? ` as @${privyTwitter.username}` : ''}.
-                  </div>
+                  {privyTwitter.username && (
+                    <div className="text-[11px] text-zinc-400">Connected as @{privyTwitter.username}</div>
+                  )}
                   {xVerifyError ? <Alert variant="warning">{xVerifyError}</Alert> : null}
                 </div>
               )}
-              </>
-            )}
-          </motion.div>
+            </motion.div>
+          ) : null}
 
           {/* Launch Creator Coin — shown when the user has no existing Creator Coin */}
           {shouldShowLaunchCoinCard ? (
@@ -840,11 +784,11 @@ export const DoneStep = memo(function DoneStep({
 
           {/* Quick Referral Link */}
           {referralCode && (
-            <motion.div {...fadeUp} className="rounded-2xl border border-white/6 bg-white/2 p-4">
+            <motion.div {...fadeUp} className="rounded-2xl border border-white/8 bg-white/2 p-4">
               <div className="flex items-center gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="text-[12px] text-zinc-500 mb-1">Share with friends</div>
-                  <div className="font-mono text-[12px] sm:text-[13px] text-zinc-400 truncate">
+                  <div className="text-[11px] font-medium text-zinc-400 mb-1">Share with friends</div>
+                  <div className="font-mono text-[12px] sm:text-[13px] text-zinc-300 truncate">
                     {referralLink}
                   </div>
                 </div>
