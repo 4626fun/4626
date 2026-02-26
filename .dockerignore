@@ -22,7 +22,7 @@ cre/
 contracts/
 script/
 test/
-patches/
+# patches/ is needed by pnpm install (patchedDependencies)
 
 # Node modules everywhere (rebuilt inside Docker)
 **/node_modules/
