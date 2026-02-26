@@ -5,6 +5,7 @@ import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { getHostMode } from '@/lib/host'
 import { useEffect, useMemo } from 'react'
 import { WaitlistModal } from '@/components/waitlist/WaitlistModal'
+import { PageMeta } from '@/components/seo/PageMeta'
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
 const WAITLIST_STICKY_OPEN_KEY = 'cv:waitlist:sticky_open'
@@ -100,6 +101,11 @@ export function Home() {
 
   return (
     <div className="relative">
+      <PageMeta
+        title="Creator Vaults"
+        description="Deposit creator coins into vaults on Base. Earn from trading fees. Everyone earns together."
+        canonicalPath="/"
+      />
       {/* Subtle particle atmosphere */}
       <div className="particles">
         <div className="absolute top-1/4 left-1/3 w-px h-px bg-brand-primary rounded-full" style={{ animation: 'particle-float 8s ease-in-out infinite' }} />

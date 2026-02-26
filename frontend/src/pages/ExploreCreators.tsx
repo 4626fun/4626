@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
+import { PageMeta, META } from '@/components/seo/PageMeta'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
@@ -285,6 +286,7 @@ export function ExploreCreators() {
 
   return (
     <div className="relative min-h-screen pt-1 sm:pt-2">
+      <PageMeta title={META.explore.title} description={META.explore.description} canonicalPath="/explore" />
       <div className="max-w-[1400px] mx-auto px-3 sm:px-6 pt-2 sm:pt-4 pb-4 sm:pb-8">
         {/* Header */}
         <motion.div

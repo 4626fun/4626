@@ -3,6 +3,7 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import { getAddress, isAddress } from 'viem'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
+import { PageMeta } from '@/components/seo/PageMeta'
 
 function isSupportedChain(chain: string): boolean {
   return chain.toLowerCase() === 'base'
@@ -20,6 +21,7 @@ export function ExploreCreatorTransactions() {
 
   return (
     <div className="relative pb-24 md:pb-0">
+      <PageMeta title="Creator Transactions" description="View on-chain transactions for this creator coin on CreatorVault." canonicalPath={`/explore/transactions/${String(params.chain ?? '')}/${String(params.tokenAddress ?? '')}`} />
       <section className="cinematic-section">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <motion.div

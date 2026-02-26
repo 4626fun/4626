@@ -6,6 +6,7 @@ import { TokenImage } from '@/components/TokenImage'
 import { AKITA } from '@/config/contracts'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
+import { PageMeta } from '@/components/seo/PageMeta'
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
 
@@ -21,6 +22,7 @@ export function FaqHowItWorks() {
 
   return (
     <div className="relative">
+      <PageMeta title="How It Works" description="Learn how CreatorVault works — deposit creator coins, earn from fees, and withdraw anytime." canonicalPath="/faq/how-it-works" />
       <section className="cinematic-section">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="mb-10">

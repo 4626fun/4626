@@ -55,6 +55,7 @@ import {
   ERC4337_ENTRYPOINT_V06,
   assertEntryPointV06,
 } from '@/lib/aa/coinbaseErc4337'
+import { PageMeta, META } from '@/components/seo/PageMeta'
 
 const MIN_FIRST_DEPOSIT = 5_000_000n * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
@@ -7049,6 +7050,7 @@ function DeployVaultMain() {
 
   return (
     <div className="relative">
+      <PageMeta title={META.deploy.title} description={META.deploy.description} canonicalPath="/deploy" />
       <section className="cinematic-section">
         <div className="max-w-3xl mx-auto px-6">
           <div className="space-y-8">

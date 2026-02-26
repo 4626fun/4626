@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, ChevronDown, Search, ShieldCheck, X } from 'lucide-react'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
+import { PageMeta } from '@/components/seo/PageMeta'
 
 type FaqItem = {
   id: string
@@ -712,6 +713,7 @@ export function Faq() {
 
   return (
     <div className="relative">
+      <PageMeta title="FAQ" description="Frequently asked questions about CreatorVault — vaults, creator coins, fees, and getting started." canonicalPath="/faq" />
       <section className="cinematic-section">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <motion.div

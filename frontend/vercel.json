@@ -69,62 +69,102 @@
     },
     {
       "src": "/explore/(.*)",
-      "headers": { "x-robots-tag": "noindex, nofollow" },
+      "headers": { "x-robots-tag": "noindex, follow" },
       "continue": true
     },
     {
       "src": "/swap",
-      "headers": { "x-robots-tag": "noindex, nofollow" },
+      "headers": { "x-robots-tag": "noindex, follow" },
       "continue": true
     },
     {
       "src": "/trade",
-      "headers": { "x-robots-tag": "noindex, nofollow" },
+      "headers": { "x-robots-tag": "noindex, follow" },
       "continue": true
     },
     {
       "src": "/positions",
-      "headers": { "x-robots-tag": "noindex, nofollow" },
+      "headers": { "x-robots-tag": "noindex, follow" },
       "continue": true
     },
     {
       "src": "/portfolio",
-      "headers": { "x-robots-tag": "noindex, nofollow" },
+      "headers": { "x-robots-tag": "noindex, follow" },
+      "continue": true
+    },
+    {
+      "src": "/vault/(.*)",
+      "headers": { "x-robots-tag": "noindex, follow" },
+      "continue": true
+    },
+    {
+      "src": "/deploy",
+      "headers": { "x-robots-tag": "noindex, follow" },
+      "continue": true
+    },
+    {
+      "src": "/leaderboard",
+      "headers": { "x-robots-tag": "noindex, follow" },
+      "continue": true
+    },
+    {
+      "src": "/waitlist(.*)",
+      "headers": { "x-robots-tag": "noindex, follow" },
+      "continue": true
+    },
+    {
+      "src": "/profile/(.*)",
+      "headers": { "x-robots-tag": "noindex, follow" },
+      "continue": true
+    },
+    {
+      "src": "/account",
+      "headers": { "x-robots-tag": "noindex, follow" },
+      "continue": true
+    },
+    {
+      "src": "/faq(.*)",
+      "headers": { "x-robots-tag": "noindex, follow" },
+      "continue": true
+    },
+    {
+      "src": "/auction/(.*)",
+      "headers": { "x-robots-tag": "noindex, follow" },
+      "continue": true
+    },
+    {
+      "src": "/gauge(.*)",
+      "headers": { "x-robots-tag": "noindex, follow" },
+      "continue": true
+    },
+    {
+      "src": "/earnings(.*)",
+      "headers": { "x-robots-tag": "noindex, follow" },
+      "continue": true
+    },
+    {
+      "src": "/coin/(.*)",
+      "headers": { "x-robots-tag": "noindex, follow" },
       "continue": true
     },
     {
       "src": "/status",
-      "headers": { "x-robots-tag": "noindex, nofollow" },
+      "headers": { "x-robots-tag": "noindex, follow" },
       "continue": true
     },
     {
       "src": "/dashboard",
-      "headers": { "x-robots-tag": "noindex, nofollow" },
+      "headers": { "x-robots-tag": "noindex, follow" },
       "continue": true
     },
     {
-      "src": "/agents",
-      "headers": { "x-robots-tag": "noindex, nofollow" },
+      "src": "/agents(.*)",
+      "headers": { "x-robots-tag": "noindex, follow" },
       "continue": true
     },
     {
-      "src": "/agents/register",
-      "headers": { "x-robots-tag": "noindex, nofollow" },
-      "continue": true
-    },
-    {
-      "src": "/agents/uri-service",
-      "headers": { "x-robots-tag": "noindex, nofollow" },
-      "continue": true
-    },
-    {
-      "src": "/admin",
-      "headers": { "x-robots-tag": "noindex, nofollow" },
-      "continue": true
-    },
-    {
-      "src": "/admin/(.*)",
-      "headers": { "x-robots-tag": "noindex, nofollow" },
+      "src": "/admin(.*)",
+      "headers": { "x-robots-tag": "noindex, follow" },
       "continue": true
     },
     {

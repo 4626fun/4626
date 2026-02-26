@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ExternalLink, ArrowLeft, Copy, Check, Share2, Globe, Users, Coins, TrendingUp, Calendar } from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
+import { PageMeta } from '@/components/seo/PageMeta'
 import { getAddress, isAddress } from 'viem'
 import { useQuery } from '@tanstack/react-query'
 
@@ -394,6 +395,11 @@ export function ExploreCreatorDetail() {
 
   return (
     <div className="relative min-h-screen bg-black">
+      <PageMeta
+        title={displayName !== 'Creator' ? `${displayName} (${symbol})` : 'Creator Detail'}
+        description={`Explore ${displayName}'s creator coin ${symbol} — view vault, trades, and activity on CreatorVault.`}
+        canonicalPath={`/explore/${chain}/${tokenAddressRaw}`}
+      />
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
         {/* Back navigation */}
         <motion.div

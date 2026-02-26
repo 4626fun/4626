@@ -7,7 +7,7 @@ import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wa
 import { useExportWallet, usePrivy } from '@privy-io/react-auth'
 
 import { apiFetch } from '@/lib/apiBase'
-import { APP_ORIGIN, getAppBaseUrl, getMarketingBaseUrl } from '@/lib/host'
+import { getAppBaseUrl, getMarketingBaseUrl } from '@/lib/host'
 import { isPrivyClientEnabled } from '@/lib/flags'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { getFarcasterUserByAddress, getFarcasterUserByFid } from '@/lib/neynar-api'
@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
+import { PageMeta } from '@/components/seo/PageMeta'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -572,6 +573,12 @@ export function AccountSettings() {
     return getAddress(connectedAddressRaw)
   }, [connectedAddressRaw])
 
+  const accountSurfaceUrl = connectedAddress
+    ? `${getAppBaseUrl()}/portfolio/${connectedAddress}`
+    : `${getAppBaseUrl()}/portfolio`
+
+  const appAccountUrl = `${getAppBaseUrl()}/account`
+
   const smartWalletOwnersQuery = useQuery({
     queryKey: ['smartWalletOwners', canonicalSmartWalletAddress ?? 'none'],
     enabled: Boolean(canonicalSmartWalletAddress),
@@ -1093,6 +1100,7 @@ export function AccountSettings() {
 
   return (
     <div className="relative mx-auto max-w-6xl space-y-5 px-3 py-6 sm:space-y-6 sm:px-6 sm:py-10">
+      <PageMeta title="Account" description="Manage your connected wallet, smart account mode, and CreatorVault settings." canonicalPath="/account" />
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute inset-0 bg-[radial-gradient(120%_90%_at_50%_0%,rgba(0,82,255,0.12),transparent_58%)]" />
       </div>

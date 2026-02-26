@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert } from '@/components/ui/Alert'
 import { apiFetch } from '@/lib/apiBase'
+import { PageMeta } from '@/components/seo/PageMeta'
 
 type PointsType = 'invite' | 'total' | 'agent'
 
@@ -100,6 +101,7 @@ export function Leaderboard() {
 
   return (
     <section className="relative overflow-hidden bg-vault-bg text-white min-h-[calc(100vh-0px)]">
+      <PageMeta title="Leaderboard" description="See the top creators and contributors on CreatorVault ranked by invite, agent, and total points." canonicalPath="/leaderboard" />
       <div className="relative max-w-3xl mx-auto px-6 py-12">
         <div className="flex items-start justify-between gap-4">
           <div>
