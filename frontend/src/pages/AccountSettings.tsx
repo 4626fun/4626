@@ -16,6 +16,7 @@ import { isPrivyClientEnabled } from '@/lib/flags'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { getFarcasterUserByAddress, getFarcasterUserByFid } from '@/lib/neynar-api'
 import { useZoraCoin, useZoraProfile } from '@/lib/zora/hooks'
+import { useAccountContext } from '@/wallet/accountContext'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -300,6 +301,7 @@ function useSafePrivyUserHook(enabled: boolean): { user: any | null } {
 
 export function AccountSettings() {
   const auth = useSiweAuth()
+  const accountContext = useAccountContext()
   const { address: connectedAddressRaw, chainId } = useAccount()
   const { data: walletClient } = useWalletClient({ chainId: base.id })
   const publicClient = usePublicClient({ chainId: base.id })
@@ -570,6 +572,17 @@ export function AccountSettings() {
     if (!isEvmAddress(connectedAddressRaw)) return null
     return getAddress(connectedAddressRaw)
   }, [connectedAddressRaw])
+  const connectedSignerLabel = useMemo(() => {
+    if (!accountContext.signerAddress) return 'Not connected'
+    const prefix = accountContext.signerType === 'SMART_WALLET' ? 'Smart Wallet' : 'EOA'
+    return `${prefix} ${accountContext.signerAddress}`
+  }, [accountContext.signerAddress, accountContext.signerType])
+  const actingAccountLabel = useMemo(() => {
+    if (!accountContext.activeAccount) return 'Unavailable'
+    const prefix = accountContext.activeAccountType === 'SMART_WALLET' ? 'Smart Wallet' : 'EOA'
+    return `${prefix} ${accountContext.activeAccount}`
+  }, [accountContext.activeAccount, accountContext.activeAccountType])
+  const preferredModeLabel = accountContext.preferredMode === 'SMART_WALLET' ? 'Smart Wallet' : 'EOA'
 
   const smartWalletOwnersQuery = useQuery({
     queryKey: ['smartWalletOwners', canonicalSmartWalletAddress ?? 'none'],
@@ -1103,6 +1116,44 @@ export function AccountSettings() {
 
       {error ? <Alert variant="error">{error}</Alert> : null}
       {success ? <Alert variant="success">{success}</Alert> : null}
+
+      <CollapsibleSection title="Account Mode" icon={<ShieldCheck className="w-4 h-4" />}>
+        <p className="text-sm text-zinc-400">See exactly which signer is connected and which account the app is acting as.</p>
+        <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-xs text-zinc-400">
+          <div>
+            Connected signer:{' '}
+            <span className="break-all font-mono text-zinc-200">{connectedSignerLabel}</span>
+          </div>
+          <div>
+            Acting account:{' '}
+            <span className="break-all font-mono text-zinc-200">{actingAccountLabel}</span>
+          </div>
+          <div>
+            Preferred mode:{' '}
+            <span className="text-zinc-200">{preferredModeLabel}</span>
+          </div>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <span
+              className={`rounded-full border px-2 py-0.5 ${
+                accountContext.uiFlags.paymasterAvailable
+                  ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
+                  : 'border-zinc-700 bg-black/30 text-zinc-500'
+              }`}
+            >
+              {accountContext.uiFlags.paymasterAvailable ? 'Paymaster available' : 'Paymaster unavailable'}
+            </span>
+            <span
+              className={`rounded-full border px-2 py-0.5 ${
+                accountContext.uiFlags.aaAvailable
+                  ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
+                  : 'border-zinc-700 bg-black/30 text-zinc-500'
+              }`}
+            >
+              {accountContext.uiFlags.aaAvailable ? 'AA ready' : 'Limited mode'}
+            </span>
+          </div>
+        </div>
+      </CollapsibleSection>
 
       <CollapsibleSection title="Email" icon={<Mail className="w-4 h-4" />}>
         <p className="text-sm text-zinc-400">Use a real email for updates and account recovery.</p>

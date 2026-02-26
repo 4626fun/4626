@@ -12,6 +12,7 @@ import { AdminLayout } from './components/AdminLayout'
 import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
 import { getHostMode, getMarketingBaseUrl, APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/host'
+import { AccountContextProvider } from '@/wallet/accountContext'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type CreatorAllowlistMode = 'disabled' | 'enforced'
@@ -481,16 +482,17 @@ function NotFoundPage() {
 function App() {
   return (
     <AccessStateProvider>
-      <Routes>
-        <Route
-          element={
-            <>
-              <HostGuard />
-              <Outlet />
-            </>
-          }
-        >
-          <Route element={<Layout />}>
+      <AccountContextProvider>
+        <Routes>
+          <Route
+            element={
+              <>
+                <HostGuard />
+                <Outlet />
+              </>
+            }
+          >
+            <Route element={<Layout />}>
             {/* Public routes (no session required) */}
             <Route path="/" element={<Home />} />
             <Route path="/404" element={<NotFoundPage />} />
@@ -595,10 +597,11 @@ function App() {
                 <Route path="/miniapp" element={<Navigate to={withReason('/admin/ops', 'legacy-route')} replace />} />
               </Route>
             </Route>
+            </Route>
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
-          <Route path="*" element={<NotFoundPage />} />
-        </Route>
-      </Routes>
+        </Routes>
+      </AccountContextProvider>
     </AccessStateProvider>
   )
 }

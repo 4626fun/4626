@@ -137,6 +137,35 @@ async function verifyEip1271(params: { contract: `0x${string}`; message: string;
   return false
 }
 
+async function verifySmartWalletSignature(params: {
+  address: `0x${string}`
+  message: string
+  signature: `0x${string}`
+}): Promise<boolean> {
+  const { createPublicClient, http } = await import('viem')
+  const { base } = await import('viem/chains')
+
+  for (const url of getBaseRpcUrls()) {
+    try {
+      const client = createPublicClient({
+        chain: base,
+        transport: http(url, { timeout: 12_000 }),
+      })
+      const valid = await client.verifyMessage({
+        address: params.address,
+        message: params.message,
+        signature: params.signature,
+      })
+      if (valid) return true
+    } catch {
+      // Try next RPC endpoint.
+      continue
+    }
+  }
+
+  return false
+}
+
 export function setNoStore(res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store')
 }
@@ -525,6 +554,19 @@ export async function verifySiweSignature(params: { message: string; signature: 
     if (ok) return { address: addr }
   } catch {
     // fall through to EIP-1271 attempt
+  }
+
+  // Smart wallet path: verify against Base public client so signatures from
+  // EIP-1271 and ERC-6492 (counterfactual wrappers) can be accepted.
+  try {
+    const smartWalletValid = await verifySmartWalletSignature({
+      address: addr as `0x${string}`,
+      message: params.message,
+      signature: sig as `0x${string}`,
+    })
+    if (smartWalletValid) return { address: addr }
+  } catch {
+    // keep fallback below
   }
 
   // If this is a smart wallet, the signature is usually EIP-1271 (contract validation).

@@ -4,6 +4,7 @@ import { ArrowLeftRight, Droplets, LayoutDashboard, Mail, ShieldCheck, Wallet } 
 import { useQuery } from '@tanstack/react-query'
 import { VaultNavBar } from './brand/VaultNavBar'
 import { ChatWidget } from './chat/ChatWidget'
+import { AccountModeIndicator } from './account/AccountModeIndicator'
 import { isPublicSiteMode } from '@/lib/flags'
 import { getHostMode } from '@/lib/host'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
@@ -63,6 +64,7 @@ export function Layout() {
   const { isAdmin } = useAdminStatus()
   const [isMobileChatOverlayActive, setIsMobileChatOverlayActive] = useState(false)
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
+  const showAccountMode = hostMode !== 'marketing' && !publicMode
   const baseItems = publicMode || hostMode === 'marketing' ? navItemsPublic : navItems
   const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, adminNavItem] : baseItems
   const resolvedSubdomain = useQuery({
@@ -92,6 +94,7 @@ export function Layout() {
   return (
     <div className="min-h-screen flex flex-col bg-vault-bg">
       <VaultNavBar />
+      {showAccountMode ? <AccountModeIndicator /> : null}
       {resolvedSubdomain.data?.record ? (
         <div className="border-b border-vault-border/60 bg-black/50">
           <div className="max-w-7xl mx-auto px-6 py-2 text-[11px] uppercase tracking-[0.14em] text-vault-subtext flex items-center justify-between gap-2">

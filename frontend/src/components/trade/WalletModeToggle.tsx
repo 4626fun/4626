@@ -4,7 +4,7 @@ import { shortAddress } from '@/lib/uniswap/swapUtils'
 
 const LABELS: Record<WalletMode, string> = {
   canonical: 'Smart Wallet',
-  eoa: 'Connected',
+  eoa: 'EOA',
 }
 
 export function WalletModeToggle(props: {
