@@ -1,12 +1,6 @@
-import { useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { Zap } from 'lucide-react'
-import { useAccount, usePublicClient } from 'wagmi'
-import { useCanonicalWallet } from '@/hooks/useCanonicalWallet'
-import {
-  isCSWAvailable,
-  readPreferredWalletMode,
-} from '@/lib/uniswap/walletMode'
+import { useAccountContext } from '@/wallet/accountContext'
 import { cn } from '@/lib/utils'
 
 interface AccountModeIndicatorProps {
@@ -15,46 +9,26 @@ interface AccountModeIndicatorProps {
 }
 
 export function AccountModeIndicator({ compact = false, className }: AccountModeIndicatorProps) {
-  const { address, isConnected } = useAccount()
-  const publicClient = usePublicClient()
+  const account = useAccountContext()
+  const isConnected = Boolean(account.signerAddress)
+  const isSmartWalletMode = account.activeAccountType === 'SMART_WALLET'
+  const canSwitchToSmartWallet =
+    account.signerType === 'EOA' &&
+    account.eoaIsOwnerOfCsw === true &&
+    Boolean(account.cswAddress && account.signerAddress)
 
-  const { canonicalAddress, canOperateCanonical } = useCanonicalWallet({
-    address,
-    publicClient,
-    walletReady: isConnected,
-  })
-
-  const preferredMode = readPreferredWalletMode()
-
-  const isSmartWalletAvailable = isCSWAvailable({
-    canonicalAddress: canonicalAddress ?? null,
-    signerAddress: (address as `0x${string}`) ?? null,
-    canonicalReady: canOperateCanonical,
-    eoaReady: isConnected,
-  })
-
-  const getActingMode = useCallback(() => {
-    if (!isConnected) return null
-    if (preferredMode === 'canonical' && isSmartWalletAvailable) return 'canonical'
-    return 'eoa'
-  }, [isConnected, preferredMode, isSmartWalletAvailable])
-
-  const actingMode = getActingMode()
-
-  if (!isConnected || !actingMode) return null
-
-  const isCanonical = actingMode === 'canonical'
+  if (!isConnected) return null
 
   // ── Compact pill ─────────────────────────────────────────────────────────
   if (compact) {
     return (
       <Link
         to="/account"
-        title={isCanonical ? '1-click actions available — manage' : 'Using connected wallet — manage'}
+        title={isSmartWalletMode ? 'Smart Wallet mode active — manage' : 'EOA mode active — manage'}
         className={cn(
           'inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-medium transition-all duration-150',
           'hover:bg-white/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary',
-          isCanonical
+          isSmartWalletMode
             ? 'border-emerald-500/20 text-emerald-400/80 hover:border-emerald-500/30 hover:text-emerald-400'
             : 'border-white/8 text-zinc-500 hover:border-white/12 hover:text-zinc-400',
           className,
@@ -63,10 +37,10 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
         <span
           className={cn(
             'w-1.5 h-1.5 rounded-full shrink-0',
-            isCanonical ? 'bg-emerald-400' : 'bg-zinc-600',
+            isSmartWalletMode ? 'bg-emerald-400' : 'bg-zinc-600',
           )}
         />
-        {isCanonical ? (
+        {isSmartWalletMode ? (
           <>
             Smart Wallet
             <Zap className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
@@ -83,7 +57,7 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
     <div
       className={cn(
         'flex items-center gap-2.5 rounded-xl border px-3 py-2 text-xs',
-        isCanonical
+        isSmartWalletMode
           ? 'border-emerald-500/15 bg-emerald-400/[0.03] text-emerald-400/80'
           : 'border-white/6 bg-white/[0.02] text-zinc-400',
         className,
@@ -92,11 +66,11 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
       <span
         className={cn(
           'w-2 h-2 rounded-full shrink-0',
-          isCanonical ? 'bg-emerald-400' : 'bg-zinc-600',
+          isSmartWalletMode ? 'bg-emerald-400' : 'bg-zinc-600',
         )}
       />
       <span className="flex-1">
-        {isCanonical ? (
+        {isSmartWalletMode ? (
           <>
             <span className="text-vault-subtext">Acting as </span>
             <span className="font-medium text-emerald-400">Smart Wallet</span>
@@ -104,23 +78,36 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
         ) : (
           <>
             <span className="text-vault-subtext">Acting as </span>
-            <span className="font-medium text-zinc-300">connected wallet</span>
+            <span className="font-medium text-zinc-300">EOA</span>
           </>
         )}
       </span>
-      {isCanonical ? (
-        <span className="flex items-center gap-1 text-emerald-400/70">
-          <Zap className="w-3 h-3" aria-hidden="true" />
-          <span>1-click</span>
-        </span>
+      {isSmartWalletMode ? (
+        account.uiFlags.aaAvailable ? (
+          <span className="flex items-center gap-1 text-emerald-400/70">
+            <Zap className="w-3 h-3" aria-hidden="true" />
+            <span>1-click</span>
+          </span>
+        ) : (
+          <span className="text-[11px] text-zinc-500">Limited mode</span>
+        )
       ) : (
-        isSmartWalletAvailable && (
+        canSwitchToSmartWallet ? (
           <Link
             to="/account"
             className="text-brand-accent hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary rounded"
           >
             Switch →
           </Link>
+        ) : account.uiFlags.shouldPromptToLinkOwner ? (
+          <Link
+            to="/account"
+            className="text-brand-accent hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary rounded"
+          >
+            Unlock →
+          </Link>
+        ) : (
+          <span className="text-[11px] text-zinc-500">EOA mode</span>
         )
       )}
     </div>
