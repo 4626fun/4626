@@ -33,5 +33,29 @@ describe('xmtp signer utils', () => {
     expect(decision.signerType).toBe('SCW')
     expect(decision.scwChainId).toBe(CANONICAL_SCW_CHAIN_ID)
   })
+
+  it('forces Agent mode when modeOverride is SMART_WALLET', () => {
+    const decision = decideXmtpSignerType({
+      isCanonicalSmartWallet: false,
+      storedSignerType: null,
+      connector: null,
+      hasContractCode: false,
+      walletChainId: 1,
+      modeOverride: 'SMART_WALLET',
+    })
+    expect(decision).toEqual({ signerType: 'SCW', scwChainId: CANONICAL_SCW_CHAIN_ID })
+  })
+
+  it('forces User mode when modeOverride is EOA', () => {
+    const decision = decideXmtpSignerType({
+      isCanonicalSmartWallet: true,
+      storedSignerType: 'SCW',
+      connector: null,
+      hasContractCode: true,
+      walletChainId: CANONICAL_SCW_CHAIN_ID,
+      modeOverride: 'EOA',
+    })
+    expect(decision).toEqual({ signerType: 'EOA', scwChainId: CANONICAL_SCW_CHAIN_ID })
+  })
 })
 

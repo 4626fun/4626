@@ -24,7 +24,7 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
     return (
       <Link
         to="/account"
-        title={isSmartWalletMode ? 'Smart Wallet mode active — manage' : 'EOA mode active — manage'}
+        title={isSmartWalletMode ? 'Agent mode active — manage' : 'User mode active — manage'}
         className={cn(
           'inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-medium transition-all duration-150',
           'hover:bg-white/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary',
@@ -42,11 +42,11 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
         />
         {isSmartWalletMode ? (
           <>
-            Smart Wallet
+            Agent
             <Zap className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
           </>
         ) : (
-          'EOA'
+          'User'
         )}
       </Link>
     )
@@ -73,12 +73,12 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
         {isSmartWalletMode ? (
           <>
             <span className="text-vault-subtext">Acting as </span>
-            <span className="font-medium text-emerald-400">Smart Wallet</span>
+            <span className="font-medium text-emerald-400">Agent</span>
           </>
         ) : (
           <>
             <span className="text-vault-subtext">Acting as </span>
-            <span className="font-medium text-zinc-300">EOA</span>
+            <span className="font-medium text-zinc-300">User</span>
           </>
         )}
       </span>
@@ -107,7 +107,7 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
             Unlock →
           </Link>
         ) : (
-          <span className="text-[11px] text-zinc-500">EOA mode</span>
+          <span className="text-[11px] text-zinc-500">User</span>
         )
       )}
     </div>

@@ -18,16 +18,16 @@ export function AccountModeIndicator() {
 
   const connectedLabel =
     account.signerType === 'SMART_WALLET'
-      ? `Smart Wallet ${shortAddress(account.signerAddress)}`
+      ? `Agent ${shortAddress(account.signerAddress)}`
       : account.signerType === 'EOA'
-        ? `EOA ${shortAddress(account.signerAddress)}`
+        ? `User ${shortAddress(account.signerAddress)}`
         : 'Not connected'
 
   const actingLabel =
     account.activeAccountType === 'SMART_WALLET'
-      ? `Smart Wallet ${shortAddress(account.activeAccount)}`
+      ? `Agent ${shortAddress(account.activeAccount)}`
       : account.activeAccountType === 'EOA'
-        ? `EOA ${shortAddress(account.activeAccount)}`
+        ? `User ${shortAddress(account.activeAccount)}`
         : 'Unavailable'
 
   const showModeToggle =
@@ -70,17 +70,17 @@ export function AccountModeIndicator() {
             <div className="inline-flex rounded-full border border-white/10 bg-black/40 p-0.5">
               <button
                 type="button"
-                aria-label="Use EOA mode"
+                aria-label="Use User mode"
                 onClick={() => account.actions.setPreferredMode('EOA')}
                 className={`rounded-full px-2 py-0.5 transition ${
                   desiredMode === 'EOA' ? 'bg-white/12 text-white' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                EOA mode
+                User
               </button>
               <button
                 type="button"
-                aria-label="Use smart wallet mode"
+                aria-label="Use Agent mode"
                 onClick={() => account.actions.setPreferredMode('SMART_WALLET')}
                 className={`rounded-full px-2 py-0.5 transition ${
                   desiredMode === 'SMART_WALLET'
@@ -88,7 +88,7 @@ export function AccountModeIndicator() {
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                Smart Wallet mode
+                Agent
               </button>
             </div>
           ) : null}
@@ -98,7 +98,7 @@ export function AccountModeIndicator() {
               to="/account"
               className="rounded-full border border-brand-primary/35 bg-brand-primary/10 px-2 py-0.5 text-brand-300 hover:bg-brand-primary/20"
             >
-              Unlock Smart Wallet features
+              Unlock Agent features
             </Link>
           ) : null}
 
