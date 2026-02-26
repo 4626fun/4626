@@ -27,6 +27,7 @@ import { resolveCreatorVaultByAnyAddress } from '@/lib/onchain/creatorVaultResol
 import { OrbBorder } from '@/components/brand/OrbBorder'
 import { TokenOrb } from '@/components/brand/TokenOrb'
 import { SHARE_SYMBOL_PREFIX, toShareSymbol } from '@/lib/tokenSymbols'
+import { useAccountContext } from '@/wallet/accountContext'
 
 // ABIs
 const WRAPPER_ABI = [
@@ -182,8 +183,21 @@ export function Vault() {
   })
 
   const { address: userAddress, isConnected } = useAccount()
+  const accountContext = useAccountContext()
   const [activeTab, setActiveTab] = useState<TabType>('Deposit')
   const [amount, setAmount] = useState('')
+  const connectedSignerLabel = useMemo(
+    () =>
+      accountContext.signerAddress
+        ? `${accountContext.signerType === 'SMART_WALLET' ? 'Smart Wallet' : 'EOA'} ${accountContext.signerAddress.slice(0, 6)}…${accountContext.signerAddress.slice(-4)}`
+        : 'Not connected',
+    [accountContext.signerAddress, accountContext.signerType],
+  )
+  const actingAccountLabel = useMemo(() => {
+    if (!accountContext.activeAccount) return 'Unavailable'
+    const type = accountContext.activeAccountType === 'SMART_WALLET' ? 'Smart Wallet' : 'EOA'
+    return `${type} ${accountContext.activeAccount.slice(0, 6)}…${accountContext.activeAccount.slice(-4)}`
+  }, [accountContext.activeAccount, accountContext.activeAccountType])
 
   const tokenAddress = (resolved?.token ?? (akitaFallback ? (AKITA.token as Address) : null)) as Address | null
   const wrapperAddress = (resolved?.info.wrapper ?? (akitaFallback ? (AKITA.wrapper as Address) : null)) as Address | null
@@ -520,6 +534,14 @@ export function Vault() {
                     <p className="text-zinc-600 text-sm font-light mono mt-3">
                       {underlyingSymbol} → {shareSymbol}
                     </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px]">
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-400">
+                        Connected: {connectedSignerLabel}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-400">
+                        Acting as: {actingAccountLabel}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="shrink-0 hidden sm:flex flex-col items-end gap-3">
