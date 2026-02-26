@@ -354,7 +354,9 @@ export async function getDb(): Promise<DbPool | null> {
         // Keep idle connections short-lived on serverless / Supabase so each lambda
         // releases scarce session-mode clients quickly.
         const idleTimeoutMillis = parsePositiveInt(process.env.POSTGRES_POOL_IDLE_TIMEOUT_MS) ?? (useConservativeServerlessPool ? 1_000 : 5_000)
-        const connectionTimeoutMillis = parsePositiveInt(process.env.POSTGRES_POOL_CONNECT_TIMEOUT_MS) ?? (useConservativeServerlessPool ? 3_000 : 5_000)
+        const connectionTimeoutMillis =
+          parsePositiveInt(process.env.POSTGRES_POOL_CONNECT_TIMEOUT_MS) ??
+          (useConservativeServerlessPool ? 10_000 : 8_000)
         const maxUses = parsePositiveInt(process.env.POSTGRES_POOL_MAX_USES) ?? 7_500
         const pool = new Pool({
           connectionString: poolConnectionString,

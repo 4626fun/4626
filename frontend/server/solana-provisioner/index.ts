@@ -138,6 +138,13 @@ function parseMintPubkeyFromAlreadyExistsError(text: string): string | null {
   return match?.[1] ?? null
 }
 
+function parseMintPubkeyFromConstraintSeedsError(text: string): string | null {
+  const match = text.match(
+    /Program log:\s*Right:\s*[\s\S]{0,300}?Program log:\s*([1-9A-HJ-NP-Za-km-z]{32,44})/i,
+  )
+  return match?.[1] ?? null
+}
+
 function decodeBase58(value: string): Uint8Array {
   if (!value || typeof value !== 'string') throw new Error('Invalid base58 input')
   let num = 0n
@@ -272,6 +279,33 @@ function buildWrapTokenSymbolCandidates(raw: string, shareOft: Address): string[
     pushUnique(unicode)
     pushUnique(ascii)
   }
+  return out
+}
+
+function resolveProvisionerTokenSymbolCandidates(params: {
+  shareOft: Address
+  metadataSymbol: string | null
+  requestedPrimarySymbol: string | null
+  requestedFallbackSymbol: string | null
+}): string[] {
+  const primaryRaw =
+    String(params.requestedPrimarySymbol ?? '').trim() ||
+    String(params.metadataSymbol ?? '').trim() ||
+    String(params.requestedFallbackSymbol ?? '').trim()
+  const out = buildWrapTokenSymbolCandidates(primaryRaw, params.shareOft)
+  const pushUnique = (value: string): void => {
+    if (!value || out.includes(value)) return
+    out.push(value)
+  }
+  const appendRaw = (raw: string | null): void => {
+    const value = String(raw ?? '').trim()
+    if (!value) return
+    pushUnique(sanitizeWrapTokenSymbolUnicode(value, params.shareOft))
+    pushUnique(sanitizeWrapTokenSymbolAscii(value, params.shareOft))
+  }
+  // Always keep an explicit fallback candidate when caller provides one, even if
+  // mode is "unicode", so we can recover from seed/metadata constraints.
+  appendRaw(params.requestedFallbackSymbol)
   return out
 }
 
@@ -532,10 +566,14 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
     shareOftMetadata?.name ?? String(body?.tokenName ?? ''),
     shareOft,
   )
-  const tokenSymbolCandidates = buildWrapTokenSymbolCandidates(
-    shareOftMetadata?.symbol ?? String(body?.tokenSymbol ?? body?.tokenSymbolFallback ?? ''),
+  const tokenSymbolCandidates = resolveProvisionerTokenSymbolCandidates({
     shareOft,
-  )
+    metadataSymbol: shareOftMetadata?.symbol ?? null,
+    requestedPrimarySymbol:
+      typeof body?.tokenSymbol === 'string' ? body.tokenSymbol.trim() : null,
+    requestedFallbackSymbol:
+      typeof body?.tokenSymbolFallback === 'string' ? body.tokenSymbolFallback.trim() : null,
+  })
   const buildWrapArgs = (tokenSymbol: string): string[] => {
     const args = [
       'sol',
@@ -578,9 +616,10 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
         wrapError = error
         const message = error instanceof Error ? error.message : String(error)
         const hasFallback = i < tokenSymbolCandidates.length - 1
-        const shouldFallback = hasFallback && isLikelyUnicodeSymbolUnsupportedError(message)
+        const unicodeHint = isLikelyUnicodeSymbolUnsupportedError(message)
+        const shouldFallback = hasFallback && !isRunnerUnavailable(error)
         process.stderr.write(
-          `[solana-provisioner] wrap-token symbol candidate failed index=${i + 1}/${tokenSymbolCandidates.length} symbol=${candidate} fallback=${shouldFallback}: ${message}\n`,
+          `[solana-provisioner] wrap-token symbol candidate failed index=${i + 1}/${tokenSymbolCandidates.length} symbol=${candidate} fallback=${shouldFallback} unicodeHint=${unicodeHint}: ${message}\n`,
         )
         if (!shouldFallback) throw error
       }
@@ -707,7 +746,9 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
 
     // Idempotency: if wrap-token fails because mint account already exists,
     // recover by extracting the mint pubkey and verifying route scalar.
-    const existingMintPubkey = parseMintPubkeyFromAlreadyExistsError(message)
+    const existingMintPubkey =
+      parseMintPubkeyFromAlreadyExistsError(message) ||
+      parseMintPubkeyFromConstraintSeedsError(message)
     if (existingMintPubkey) {
       try {
         const mintBytes32 = solanaPubkeyToBytes32Hex(existingMintPubkey)
