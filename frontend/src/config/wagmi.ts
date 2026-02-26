@@ -1,7 +1,7 @@
 import { http, createConfig, fallback } from 'wagmi'
 import { Attribution } from 'ox/erc8021'
 import type { Hex } from 'viem'
-import { base } from 'wagmi/chains'
+import { base, mainnet, arbitrum, optimism, polygon } from 'wagmi/chains'
 import { coinbaseWallet, injected } from 'wagmi/connectors'
 
 /**
@@ -138,11 +138,15 @@ function buildConnectors() {
 const DATA_SUFFIX = resolveDataSuffix()
 
 export const wagmiConfig = createConfig({
-  chains: [base],
+  chains: [base, mainnet, arbitrum, optimism, polygon],
   connectors: buildConnectors(),
   ...(DATA_SUFFIX ? { dataSuffix: DATA_SUFFIX } : {}),
   transports: {
     [base.id]: BASE_READ_RPC_URLS.length > 0 ? fallback(BASE_READ_RPC_URLS.map((url) => http(url))) : http(),
+    [mainnet.id]: http(),
+    [arbitrum.id]: http(),
+    [optimism.id]: http(),
+    [polygon.id]: http(),
   },
 })
 

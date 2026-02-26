@@ -110,6 +110,8 @@ scripts/
 !apps/docs-site/scripts/**
 !frontend/scripts/
 !frontend/scripts/**
+!cre/scripts/
+!cre/scripts/**
 !scripts/solana/
 !scripts/solana/**
 scripts/solana/vanity-pool/available/*.json

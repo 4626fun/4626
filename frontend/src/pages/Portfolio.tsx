@@ -7,6 +7,9 @@ import { useParams } from 'react-router-dom'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
+import { Alert } from '@/components/ui/Alert'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { TokenLogo } from '@/components/ui/TokenLogo'
 import { fetchDebankTokenList, type DebankToken, type DebankTokenList } from '@/lib/debank/client'
 import { isLensGroveEnabled } from '@/lib/flags'
 import { resolveLensUri, uploadImmutableBlob, type GroveUploadResult } from '@/lib/lens/grove'
@@ -368,17 +371,38 @@ export function Portfolio() {
 
   function TokensTable(props: { items: Holding[]; emptyLabel: string }) {
     const { items, emptyLabel } = props
-    if (tokenMeta.isLoading) return <div className="p-4 text-[12px] text-zinc-600">Loading balances…</div>
-    if (!effectiveAddress) return <div className="p-4 text-[12px] text-zinc-600">Connect a wallet to view balances.</div>
-    if (items.length === 0) return <div className="p-4 text-[12px] text-zinc-600">{emptyLabel}</div>
+    if (tokenMeta.isLoading) return (
+      <div className="p-4 space-y-3">
+        {[1, 2, 3].map(i => (
+          <div key={i} className="flex items-center gap-3">
+            <Skeleton className="h-7 w-7 rounded-full" />
+            <div className="flex-1 space-y-1.5">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-2.5 w-16" />
+            </div>
+            <Skeleton className="h-3 w-14" />
+          </div>
+        ))}
+      </div>
+    )
+    if (!effectiveAddress) return (
+      <div className="p-6 text-center">
+        <Wallet className="mx-auto h-8 w-8 text-zinc-700 mb-2" />
+        <div className="text-sm text-zinc-500">Connect a wallet to view balances</div>
+      </div>
+    )
+    if (items.length === 0) return (
+      <div className="p-6 text-center text-sm text-zinc-600">{emptyLabel}</div>
+    )
 
     return (
-      <div className="divide-y divide-zinc-800/70">
-        <div className="px-4 py-2.5 grid grid-cols-[minmax(0,1fr)_92px_92px_104px] gap-3 text-[11px] text-zinc-600">
-          <div>Token</div>
-          <div className="text-right">Price</div>
-          <div className="text-right">Balance</div>
-          <div className="text-right">Value</div>
+      <div className="overflow-x-auto" role="table" aria-label="Token holdings">
+        <div className="min-w-[480px] divide-y divide-zinc-800/70">
+        <div className="px-4 py-2.5 grid grid-cols-[minmax(0,1fr)_92px_92px_104px] gap-3 text-[11px] text-zinc-600" role="row">
+          <div role="columnheader">Token</div>
+          <div className="text-right" role="columnheader">Price</div>
+          <div className="text-right" role="columnheader">Balance</div>
+          <div className="text-right" role="columnheader">Value</div>
         </div>
         {items.map((h) => {
           const t = h.token
@@ -387,11 +411,7 @@ export function Portfolio() {
           return (
             <div key={`${h.coinType}:${t.id}`} className="px-4 py-3 grid grid-cols-[minmax(0,1fr)_92px_92px_104px] gap-3 items-center">
               <div className="min-w-0 flex items-center gap-3">
-                {t.logoUrl ? (
-                  <img src={t.logoUrl} alt="" className="w-7 h-7 rounded-full border border-white/10" />
-                ) : (
-                  <div className="w-7 h-7 rounded-full bg-white/5 border border-white/10" />
-                )}
+                <TokenLogo symbol={name} logoUrl={t.logoUrl} size="md" />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 min-w-0">
                     <div className="text-[12px] text-white truncate">{name}</div>
@@ -414,6 +434,7 @@ export function Portfolio() {
             </div>
           )
         })}
+      </div>
       </div>
     )
   }
@@ -689,7 +710,7 @@ export function Portfolio() {
                 <div className="p-5">
                   <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-600">Creator + content coins</div>
                   <div className="mt-2 flex items-baseline gap-3">
-                    <div className="text-[34px] font-light tracking-tight text-white tabular-nums">{formatUsd(creatorContentUsd)}</div>
+                    <div className="text-3xl sm:text-4xl font-light tracking-tight text-white tabular-nums">{formatUsd(creatorContentUsd)}</div>
                     <div className="text-[12px] text-rose-300 tabular-nums">—</div>
                   </div>
                 </div>
@@ -809,8 +830,13 @@ export function Portfolio() {
         ) : null}
 
         {tab !== 'overview' ? (
-          <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/40 p-6 text-[12px] text-zinc-600">
-            {tab === 'tokens' ? 'Token list coming next.' : tab === 'nfts' ? 'NFTs view coming next.' : 'Activity view coming next.'}
+          <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/40 p-8 text-center">
+            <div className="text-sm text-zinc-500">
+              {tab === 'tokens' ? 'Detailed token list' : tab === 'nfts' ? 'NFT gallery' : 'Transaction activity'} — coming soon.
+            </div>
+            <div className="mt-2 text-xs text-zinc-600">
+              {tab === 'activity' ? 'For now, use Explore → Transactions for on-chain activity.' : 'Check back soon for updates.'}
+            </div>
           </div>
         ) : null}
       </div>

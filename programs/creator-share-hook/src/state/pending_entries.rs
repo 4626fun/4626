@@ -1,9 +1,15 @@
 use anchor_lang::prelude::*;
+use bytemuck::{Pod, Zeroable};
 
 use crate::constants::*;
 
 /// A single lottery entry recorded by the Transfer Hook on a buy.
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, Default)]
+///
+/// Uses `#[zero_copy]` so it can live inside the zero-copy `PendingEntries` account
+/// without blowing the SBF stack limit during deserialization.
+#[zero_copy]
+#[derive(Debug, Default)]
+#[repr(C)]
 pub struct LotteryEntry {
     /// The buyer's wallet pubkey (destination token account owner).
     pub buyer: Pubkey,
@@ -21,10 +27,15 @@ impl LotteryEntry {
 ///
 /// Seeds: `[PENDING_ENTRIES_SEED, creator_mint.key()]`
 ///
+/// Uses zero-copy deserialization (`AccountLoader`) to avoid placing the
+/// 12KB buffer on the SBF stack. The runtime memory-maps the account data
+/// directly, keeping stack usage minimal.
+///
 /// The keeper drains this buffer periodically and relays entries to Base.
 /// Overflow policy: drop-oldest (head advances, oldest overwritten).
-#[account]
+#[account(zero_copy)]
 #[derive(Debug)]
+#[repr(C)]
 pub struct PendingEntries {
     /// The creator mint this buffer belongs to.
     pub creator_mint: Pubkey,
@@ -42,15 +53,19 @@ pub struct PendingEntries {
     /// Bump seed for PDA derivation.
     pub bump: u8,
 
+    /// Alignment padding (zero-copy requires C-repr alignment).
+    pub _padding: [u8; 7],
+
     /// The ring buffer itself.
     pub entries: [LotteryEntry; MAX_PENDING_ENTRIES],
 }
 
 impl PendingEntries {
     /// Account discriminator (8) + fields.
-    /// 32 + 4 + 4 + 8 + 1 + (48 * 256) = 32 + 4 + 4 + 8 + 1 + 12288 = 12337
-    /// Total with discriminator: 8 + 12337 = 12345
-    pub const LEN: usize = 8 + 32 + 4 + 4 + 8 + 1 + (LotteryEntry::LEN * MAX_PENDING_ENTRIES);
+    /// 32 + 4 + 4 + 8 + 1 + 7(padding) + (48 * 256) = 32 + 4 + 4 + 8 + 1 + 7 + 12288 = 12344
+    /// Total with discriminator: 8 + 12344 = 12352
+    pub const LEN: usize =
+        8 + 32 + 4 + 4 + 8 + 1 + 7 + (LotteryEntry::LEN * MAX_PENDING_ENTRIES);
 
     /// Push a new entry into the ring buffer.
     /// If the buffer is full, the oldest entry is overwritten (drop-oldest).
@@ -63,40 +78,11 @@ impl PendingEntries {
 
         if was_full {
             self.overflow_count += 1;
-            // count stays at MAX — we overwrote the oldest
         } else {
             self.count += 1;
         }
 
         was_full
-    }
-
-    /// Drain all entries from the buffer, returning them as a Vec.
-    /// Resets head and count to 0. Preserves overflow_count.
-    pub fn drain_all(&mut self) -> Vec<LotteryEntry> {
-        let count = self.count as usize;
-        if count == 0 {
-            return Vec::new();
-        }
-
-        let max = MAX_PENDING_ENTRIES;
-        let head = self.head as usize;
-
-        // Calculate start index (oldest entry).
-        let start = if count < max { 0 } else { head };
-
-        let mut result = Vec::with_capacity(count);
-        for i in 0..count {
-            let idx = (start + i) % max;
-            result.push(self.entries[idx]);
-        }
-
-        // Reset the buffer.
-        self.head = 0;
-        self.count = 0;
-        // Note: we do NOT zero entries — they'll be overwritten on next push.
-
-        result
     }
 
     /// Returns true if the buffer has exceeded the emergency drain threshold.

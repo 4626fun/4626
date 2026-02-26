@@ -4,12 +4,15 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress } from 'viem'
-import { useAccount, useBalance, usePublicClient, useWalletClient } from 'wagmi'
+import { useAccount, useBalance, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 
+import { ChainSelector } from '@/components/trade/ChainSelector'
 import { SwapConfirmModal } from '@/components/trade/SwapConfirmModal'
 import { SwapPanel } from '@/components/trade/SwapPanel'
 import { SwapSettingsSheet } from '@/components/trade/SwapSettingsSheet'
 import { TransactionLifecycle } from '@/components/trade/TransactionLifecycle'
+import { Alert } from '@/components/ui/Alert'
+import { DEFAULT_CHAIN_ID, type SupportedChainId, getChainMeta } from '@/config/chains'
 import { CONTRACTS } from '@/config/contracts'
 import { useCanonicalWallet } from '@/hooks/useCanonicalWallet'
 import { useSwapExecution } from '@/hooks/useSwapExecution'
@@ -36,6 +39,7 @@ import {
   BASE_CHAIN_ID,
   NATIVE_TOKEN_ADDRESS,
   buildTokenOptions,
+  getCoreTokensForChain,
   tokenLogoFallbacks,
   uniswapBaseLogo,
   type TokenOption,
@@ -185,9 +189,13 @@ function LpPositionCard(props: {
 
 export function Swap() {
   const [searchParams] = useSearchParams()
-  const { address, isConnected } = useAccount()
+  const { address, isConnected, chainId: walletChainId } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
+  const { switchChainAsync } = useSwitchChain()
+  const [swapChainId, setSwapChainId] = useState<SupportedChainId>(DEFAULT_CHAIN_ID)
+  const chainMeta = getChainMeta(swapChainId)
+  const chainMismatch = isConnected && walletChainId != null && walletChainId !== swapChainId
 
   const {
     tokenIn,
@@ -310,21 +318,34 @@ export function Swap() {
     writePreferredWalletMode(preferredExecutionMode)
   }, [preferredExecutionMode])
 
-  // ─── Token options ────────────────────────────────────────────────────────
+  // ─── Token options (chain-aware) ─────────────────────────────────────────
+  const dynamicCoreTokens = useMemo(() => {
+    if (swapChainId === BASE_CHAIN_ID) return CORE_TOKENS
+    const meta = getChainMeta(swapChainId)
+    if (!meta) return CORE_TOKENS
+    return getCoreTokensForChain({
+      chainId: meta.id,
+      nativeSymbol: meta.nativeCurrency.symbol,
+      nativeName: meta.nativeCurrency.name,
+      weth: meta.weth,
+      usdc: meta.usdc,
+    })
+  }, [swapChainId])
+
   const tokenOptions = useMemo<TokenOption[]>(() => {
     const creatorCoin = (searchParams.get('token') ?? '').trim()
     const shareCoin = (searchParams.get('share') ?? searchParams.get('shareToken') ?? '').trim()
     const shareSymbolParam = (searchParams.get('shareSymbol') ?? searchParams.get('shareTokenSymbol') ?? '').trim()
     const shareNameParam = (searchParams.get('shareName') ?? searchParams.get('shareTokenName') ?? '').trim()
     return buildTokenOptions({
-      coreTokens: CORE_TOKENS,
-      creatorCoin,
-      shareCoin,
+      coreTokens: dynamicCoreTokens,
+      creatorCoin: swapChainId === BASE_CHAIN_ID ? creatorCoin : '',
+      shareCoin: swapChainId === BASE_CHAIN_ID ? shareCoin : '',
       shareSymbol: shareSymbolParam,
       shareName: shareNameParam,
-      chainId: BASE_CHAIN_ID,
+      chainId: swapChainId,
     })
-  }, [searchParams])
+  }, [searchParams, dynamicCoreTokens, swapChainId])
 
   const tokenInOption = useMemo(
     () => tokenOptions.find((opt) => opt.address.toLowerCase() === tokenIn.toLowerCase()) ?? null,
@@ -348,13 +369,13 @@ export function Swap() {
   const { data: tokenInBalData } = useBalance({
     address: executionAddress ?? undefined,
     token: isTokenInNative ? undefined : (tokenIn as `0x${string}`),
-    chainId: BASE_CHAIN_ID,
+    chainId: swapChainId,
     query: { enabled: Boolean(executionAddress) && isAddress(tokenIn) },
   })
   const { data: tokenOutBalData } = useBalance({
     address: executionAddress ?? undefined,
     token: isTokenOutNative ? undefined : (tokenOut as `0x${string}`),
-    chainId: BASE_CHAIN_ID,
+    chainId: swapChainId,
     query: { enabled: Boolean(executionAddress) && isAddress(tokenOut) },
   })
   const tokenInBalanceLabel = fmtBal(tokenInBalData)
@@ -397,6 +418,7 @@ export function Swap() {
     amountInUnits,
     parsedSlippage,
     parsedDeadlineMinutes,
+    chainId: swapChainId,
   })
 
   const selectedQuote = useMemo<QuoteShape | null>(() => {
@@ -648,6 +670,45 @@ export function Swap() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
+            <div className="mb-5 text-center">
+              <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Trade on {chainMeta?.name ?? 'Base'}</div>
+              <h1 className="mt-1 text-[2rem] font-semibold tracking-tight text-white">Swap anytime, anywhere.</h1>
+            </div>
+            {/* ─── Chain selector + mismatch banner ─────────────────── */}
+            <div className="mb-3 flex items-center justify-between">
+              <ChainSelector
+                selectedChainId={swapChainId}
+                walletChainId={walletChainId}
+                onSelect={(nextChainId) => {
+                  setSwapChainId(nextChainId)
+                  resetTradeState()
+                  if (isConnected && walletChainId !== nextChainId && switchChainAsync) {
+                    void switchChainAsync({ chainId: nextChainId }).catch(() => {})
+                  }
+                }}
+              />
+              {swapChainId !== BASE_CHAIN_ID ? (
+                <div className="text-[10px] text-zinc-500">Creator tokens on Base only</div>
+              ) : null}
+            </div>
+
+            {chainMismatch ? (
+              <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 flex items-center justify-between gap-3">
+                <div className="text-xs text-amber-200">
+                  Your wallet is on {walletChainId ? getChainMeta(walletChainId)?.name ?? `chain ${walletChainId}` : 'a different network'}. Switch to {chainMeta?.name ?? 'the selected network'} to trade.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (switchChainAsync) void switchChainAsync({ chainId: swapChainId }).catch(() => {})
+                  }}
+                  className="shrink-0 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-500/20 transition"
+                >
+                  Switch
+                </button>
+              </div>
+            ) : null}
+
             {/* ─── Trade card ──────────────────────────────────────── */}
             <div className="rounded-3xl border border-white/8 bg-[#0d111a] p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.78)] sm:p-5">
 
@@ -760,6 +821,13 @@ export function Swap() {
                 />
               )}
             </div>
+
+            {/* ─── Footer note (replaces Supported Assets side panel) ── */}
+            <div className="mt-4 px-1 text-center text-[11px] text-zinc-500">
+              {swapChainId === BASE_CHAIN_ID
+                ? 'ETH · USDC · BTC · USDT · ZORA + creator/share tokens · Powered by Uniswap on Base'
+                : `ETH · USDC · WETH + more · Powered by Uniswap on ${chainMeta?.name ?? 'selected chain'}`}
+            </div>
           </motion.div>
         </div>
       </section>
@@ -868,9 +936,9 @@ function LiquidityPanel(props: {
           type="button"
           onClick={props.onOpenSettings}
           className="rounded-full border border-white/12 bg-white/4 p-2 text-zinc-400 transition hover:bg-white/8 hover:text-zinc-200"
-          title="Settings"
+          aria-label="Swap settings"
         >
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.5}>
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
             <circle cx="8" cy="8" r="2" /><path d="M8 2v1M8 13v1M2 8H1m13 0h1M4.05 4.05l-.71-.71m9.32 9.32-.71-.71M4.05 11.95l-.71.71m9.32-9.32-.71.71" />
           </svg>
         </button>
@@ -989,10 +1057,10 @@ function LiquidityPanel(props: {
         </div>
 
         {props.lpStatus && (
-          <div className="mt-2 text-xs text-emerald-400">{props.lpStatus}</div>
+          <div className="mt-2"><Alert variant="success">{props.lpStatus}</Alert></div>
         )}
         {props.lpError && (
-          <div className="mt-2 text-xs text-rose-400">{props.lpError}</div>
+          <div className="mt-2"><Alert variant="error">{props.lpError}</Alert></div>
         )}
       </div>
 
@@ -1023,14 +1091,14 @@ function LiquidityPanel(props: {
         )}
 
         {props.positionsError && !props.positionsLoading && (
-          <div className="rounded-xl border border-rose-400/20 bg-rose-500/8 px-3 py-2 text-xs text-rose-400">
-            {props.positionsError}
-          </div>
+          <Alert variant="error">{props.positionsError}</Alert>
         )}
 
         {!props.positionsLoading && !props.positionsError && props.positions.length === 0 && (
-          <div className="rounded-2xl border border-white/6 bg-white/3 px-4 py-6 text-center text-sm text-zinc-600">
-            No active positions
+          <div className="rounded-2xl border border-white/6 bg-white/3 px-4 py-6 text-center">
+            <Droplets className="mx-auto h-8 w-8 text-zinc-700 mb-2" aria-hidden="true" />
+            <div className="text-sm text-zinc-500">No active liquidity positions</div>
+            <div className="mt-1 text-xs text-zinc-600">Add liquidity above to start earning fees.</div>
           </div>
         )}
 

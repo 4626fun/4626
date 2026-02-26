@@ -3430,18 +3430,24 @@ function DeployVaultBatcher({
           floorPriceQ96: floorPriceQ96Aligned,
         } as const
 
-        const meteoraPayload = await ensureShareOftRegisteredForSolanaBridge({
-          buildOnly: true,
-          expectedSolanaAmountBase: FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD ? expectedSolanaAmountBase : undefined,
-        })
+        let meteoraPayload: RegisterShareOftPayload | null = null
+        try {
+          meteoraPayload = await ensureShareOftRegisteredForSolanaBridge({
+            buildOnly: true,
+            expectedSolanaAmountBase: FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD ? expectedSolanaAmountBase : undefined,
+          })
+        } catch (meteoraErr) {
+          logger.warn('[DeployVault] Meteora payload build failed; Solana allocation will fall back to vesting or revert on-chain if Solana bridging is configured on the batcher', {
+            error: meteoraErr instanceof Error ? meteoraErr.message : String(meteoraErr),
+          })
+        }
         if (
           FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD &&
-          (!meteoraPayload || !meteoraPayload.meteoraAlphaVault || meteoraPayload.solanaIxs.length === 0)
+          meteoraPayload != null &&
+          (!meteoraPayload.meteoraAlphaVault || meteoraPayload.solanaIxs.length === 0)
         ) {
-          throw new Error(
-            'Solana auto-deposit is enabled, but Meteora payload is missing. ' +
-              'Check per-creator Meteora mapping and provisioner configuration.',
-          )
+          meteoraPayload = null
+          logger.warn('[DeployVault] Meteora payload incomplete (missing alphaVault or solanaIxs); cleared to zero fallback')
         }
 
         const phase2FinalizeParams = {

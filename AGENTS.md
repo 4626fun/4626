@@ -23,8 +23,8 @@ Optional components: XMTP Keepr Agent (`frontend/server/agent/eliza/`), CRE auto
 Standard commands are documented in `frontend/package.json` scripts:
 
 - `pnpm -C frontend lint` — ESLint (has 1 pre-existing warning; `--max-warnings 0` causes exit code 1)
-- `pnpm -C frontend typecheck` — TypeScript (has 3 pre-existing errors in `tradingApi.checkDelegation.test.ts`)
-- `pnpm -C frontend test` — Vitest (259 tests, all passing)
+- `pnpm -C frontend typecheck` — TypeScript (has 1 pre-existing error in `DeployVault.tsx` — `meteoraAlphaVault` type mismatch)
+- `pnpm -C frontend test` — Vitest (267 tests, all passing)
 - `forge test` — Foundry unit tests (72 tests, all passing)
 
 ### Non-obvious caveats
@@ -35,3 +35,4 @@ Standard commands are documented in `frontend/package.json` scripts:
 - **`.env` files**: Copy `.env.example` at root and `frontend/.env.example` for local dev. Most env vars are optional for basic frontend dev — the app runs without external service credentials but wallet/auth features require Privy, Supabase, etc.
 - **API routing**: Vercel API routes go through `frontend/api/[...path].ts` dispatching to `frontend/api/_handlers/_routes.ts`. New endpoints must be registered in the static route map (no dynamic imports).
 - **`pnpm.onlyBuiltDependencies`** is configured in `frontend/package.json` to avoid interactive `pnpm approve-builds` prompts.
+- **Waitlist/marketing page on localhost**: By default, `localhost` is treated as the "app" domain and redirects unauthenticated users to `4626.fun`. To test the waitlist/marketing page locally, set `VITE_HOST_MODE_OVERRIDE=marketing` and `VITE_MARKETING_ORIGIN=http://localhost:5173` in `frontend/.env`. This is already configured in the Cloud Agent `.env`.

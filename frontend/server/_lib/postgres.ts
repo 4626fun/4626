@@ -127,6 +127,7 @@ type DbPool = {
 }
 
 let cachedDb: DbPool | null = null
+let cachedRawPool: any = null
 let initError: string | null = null
 let initPromise: Promise<DbPool | null> | null = null
 let initErrorAtMs = 0
@@ -189,6 +190,54 @@ function shouldLogInitError(signature: string, throttleMs: number): boolean {
     return true
   }
   return false
+}
+
+function resetCachedPool(): void {
+  cachedDb = null
+  initPromise = null
+  initError = null
+  initRetryWindowMs = 0
+  const raw = cachedRawPool
+  cachedRawPool = null
+  if (raw && typeof raw.end === 'function') {
+    raw.end().catch(() => {})
+  }
+}
+
+const QUERY_RETRY_BASE_MS = 250
+
+function getQueryRetryCount(): number {
+  return parsePositiveInt(process.env.POSTGRES_QUERY_RETRY_COUNT) ?? 2
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function withSessionRetry<T>(
+  fn: () => Promise<T>,
+  dbRef: DbPool,
+  maxRetries: number,
+): Promise<T> {
+  let lastErr: unknown
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      if (!isSessionModeMaxClientsError(err)) throw err
+      if (attempt < maxRetries) {
+        const jitter = 0.5 + Math.random() * 0.5
+        const delayMs = QUERY_RETRY_BASE_MS * Math.pow(2, attempt) * jitter
+        console.warn(
+          `[postgres] MaxClientsInSessionMode on query; retrying (${attempt + 1}/${maxRetries}) after ${Math.round(delayMs)}ms`,
+        )
+        await sleep(delayMs)
+      }
+    }
+  }
+  if (cachedDb === dbRef) resetCachedPool()
+  throw lastErr
 }
 
 /**
@@ -316,28 +365,43 @@ export async function getDb(): Promise<DbPool | null> {
           maxUses,
           allowExitOnIdle: true,
         })
-        // Provide a minimal `sql` tagged template wrapper compatible with callsites.
+        cachedRawPool = pool
+        const queryRetries = getQueryRetryCount()
         const db: DbPool = {
           sql: async (strings: TemplateStringsArray, ...values: any[]) => {
-            // Convert a tagged template into a parameterized query: $1, $2, ...
             let text = ''
             for (let i = 0; i < strings.length; i++) {
               text += strings[i]
               if (i < values.length) text += `$${i + 1}`
             }
-            const res = await pool.query(text, values)
-            return { rows: res.rows ?? [] }
+            return withSessionRetry(
+              async () => {
+                const res = await pool.query(text, values)
+                return { rows: res.rows ?? [] }
+              },
+              db,
+              queryRetries,
+            )
           },
           query: async (text: string, params?: any[]) => {
-            const res = await pool.query(text, params)
-            return { rows: res.rows ?? [] }
+            return withSessionRetry(
+              async () => {
+                const res = await pool.query(text, params)
+                return { rows: res.rows ?? [] }
+              },
+              db,
+              queryRetries,
+            )
           },
         }
-        // Sanity check connectivity.
+        // Sanity check connectivity (retried via withSessionRetry above).
         await db.sql`SELECT 1;`
         cachedDb = db
         return cachedDb
       } catch (err) {
+        const rawPool = cachedRawPool
+        cachedRawPool = null
+        if (rawPool && typeof rawPool.end === 'function') rawPool.end().catch(() => {})
         const authLike = isDbAuthConfigError(err)
         const sessionModeSaturated = isSessionModeMaxClientsError(err)
         const retryWindow =

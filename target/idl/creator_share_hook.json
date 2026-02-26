@@ -1,0 +1,1740 @@
+{
+  "address": "EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU",
+  "metadata": {
+    "name": "creator_share_hook",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "CreatorVault Transfer Hook for Solana spoke — buy detection, lottery entry recording, fee harvesting, winner notification"
+  },
+  "instructions": [
+    {
+      "name": "add_amm_program",
+      "docs": [
+        "Add a known AMM program to the allowlist."
+      ],
+      "discriminator": [
+        132,
+        162,
+        30,
+        203,
+        13,
+        113,
+        189,
+        106
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The config authority (must sign)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "creator_mint",
+          "docs": [
+            "The Token-2022 mint (used for PDA derivation)."
+          ]
+        },
+        {
+          "name": "creator_config",
+          "docs": [
+            "CreatorConfig PDA — mutable for updates."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_mint"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "program_id",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "drain_entries",
+      "docs": [
+        "Keeper-only: read and clear PendingEntries for relay to Base.",
+        "Returns entries to the keeper for batch relay via SolanaBridgeAdapter."
+      ],
+      "discriminator": [
+        105,
+        69,
+        123,
+        16,
+        122,
+        215,
+        121,
+        77
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "docs": [
+            "The keeper authority (must match `creator_config.keeper_authority`)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "creator_config",
+          "docs": [
+            "CreatorConfig PDA — used to verify keeper authority."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator_mint",
+          "docs": [
+            "The Token-2022 mint (used for PDA derivation)."
+          ]
+        },
+        {
+          "name": "pending_entries",
+          "docs": [
+            "PendingEntries PDA — zero-copy, mutable to drain entries."
+          ],
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "flush_fees",
+      "docs": [
+        "Keeper-only: harvest withheld fees via Token-2022 CPI.",
+        "Fees are collected to a designated account for bridging to Base."
+      ],
+      "discriminator": [
+        64,
+        201,
+        33,
+        26,
+        252,
+        245,
+        24,
+        79
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "docs": [
+            "The keeper authority (must match `creator_config.keeper_authority`)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "creator_config",
+          "docs": [
+            "CreatorConfig PDA — used to verify keeper authority."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "The Token-2022 mint with TransferFeeConfig extension."
+          ],
+          "writable": true
+        },
+        {
+          "name": "fee_vault",
+          "docs": [
+            "The destination token account to receive harvested fees.",
+            "Typically owned by the keeper or a fee collection wallet."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token-2022 program."
+          ],
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_creator",
+      "docs": [
+        "Initialize a new creator mint configuration.",
+        "Creates CreatorConfig + PendingEntries PDAs for the given mint."
+      ],
+      "discriminator": [
+        29,
+        153,
+        44,
+        99,
+        52,
+        172,
+        81,
+        115
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The authority creating this config (must sign)."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "creator_mint",
+          "docs": [
+            "The Token-2022 mint for this creator's share token."
+          ]
+        },
+        {
+          "name": "creator_config",
+          "docs": [
+            "CreatorConfig PDA — initialized here."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending_entries",
+          "docs": [
+            "PendingEntries PDA — initialized here (zero-copy)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  105,
+                  101,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "winner_record",
+          "docs": [
+            "WinnerRecord PDA — initialized here."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  110,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "InitializeCreatorParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize_extra_account_meta_list",
+      "docs": [
+        "Initialize the extra account meta list required by the Transfer Hook interface.",
+        "Must be called once per mint before the hook can fire."
+      ],
+      "discriminator": [
+        92,
+        197,
+        174,
+        197,
+        41,
+        124,
+        19,
+        3
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Payer for the PDA account creation."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "The Token-2022 mint this hook is attached to."
+          ]
+        },
+        {
+          "name": "extra_account_meta_list",
+          "docs": [
+            "The extra-account-meta-list PDA."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  116,
+                  114,
+                  97,
+                  45,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator_config",
+          "docs": [
+            "CreatorConfig PDA — must already exist (passed as extra account)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending_entries",
+          "docs": [
+            "PendingEntries PDA — must already exist (passed as extra account)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  105,
+                  101,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "record_winner",
+      "docs": [
+        "Keeper-only: record a lottery winner on Solana.",
+        "Called by Keepr after a win is detected on Base."
+      ],
+      "discriminator": [
+        226,
+        137,
+        193,
+        48,
+        217,
+        3,
+        14,
+        171
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "docs": [
+            "The keeper authority (must match `creator_config.keeper_authority`)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "creator_config",
+          "docs": [
+            "CreatorConfig PDA — used to verify keeper authority."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator_mint",
+          "docs": [
+            "The Token-2022 mint (used for PDA derivation)."
+          ]
+        },
+        {
+          "name": "winner_record",
+          "docs": [
+            "WinnerRecord PDA — mutable to update with new winner."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  110,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_mint"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "winner",
+          "type": "pubkey"
+        },
+        {
+          "name": "shares_paid",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "remove_amm_program",
+      "docs": [
+        "Remove a known AMM program from the allowlist."
+      ],
+      "discriminator": [
+        79,
+        211,
+        59,
+        105,
+        233,
+        84,
+        46,
+        95
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The config authority (must sign)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "creator_mint",
+          "docs": [
+            "The Token-2022 mint (used for PDA derivation)."
+          ]
+        },
+        {
+          "name": "creator_config",
+          "docs": [
+            "CreatorConfig PDA — mutable for updates."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_mint"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "program_id",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "rotate_keeper",
+      "docs": [
+        "Rotate the keeper authority to a new pubkey."
+      ],
+      "discriminator": [
+        201,
+        88,
+        117,
+        249,
+        81,
+        101,
+        255,
+        55
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The config authority (must sign)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "creator_mint",
+          "docs": [
+            "The Token-2022 mint (used for PDA derivation)."
+          ]
+        },
+        {
+          "name": "creator_config",
+          "docs": [
+            "CreatorConfig PDA — mutable for updates."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_mint"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_keeper",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "transfer_hook",
+      "docs": [
+        "Transfer Hook execute — named with Anchor discriminator.",
+        "Also reachable via the SPL fallback below."
+      ],
+      "discriminator": [
+        220,
+        57,
+        220,
+        152,
+        126,
+        125,
+        97,
+        168
+      ],
+      "accounts": [
+        {
+          "name": "source_token_account",
+          "docs": [
+            "Source token account (tokens flow FROM here)."
+          ]
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "The Token-2022 mint."
+          ]
+        },
+        {
+          "name": "destination_token_account",
+          "docs": [
+            "Destination token account (tokens flow TO here)."
+          ]
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "Source authority (owner or delegate that signed the transfer)."
+          ]
+        },
+        {
+          "name": "extra_account_meta_list",
+          "docs": [
+            "Extra account meta list PDA (required by the interface)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  116,
+                  114,
+                  97,
+                  45,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator_config",
+          "docs": [
+            "CreatorConfig PDA — read-only for AMM detection."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending_entries",
+          "docs": [
+            "PendingEntries PDA — zero-copy, writable to record buy entries."
+          ],
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "update_config",
+      "docs": [
+        "Update CreatorConfig parameters (fee_bps, flush_threshold, etc.)."
+      ],
+      "discriminator": [
+        29,
+        158,
+        252,
+        191,
+        10,
+        83,
+        219,
+        99
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The config authority (must sign)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "creator_mint",
+          "docs": [
+            "The Token-2022 mint (used for PDA derivation)."
+          ]
+        },
+        {
+          "name": "creator_config",
+          "docs": [
+            "CreatorConfig PDA — mutable for updates."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_mint"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "UpdateConfigParams"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "CreatorConfig",
+      "discriminator": [
+        208,
+        169,
+        98,
+        27,
+        194,
+        199,
+        95,
+        86
+      ]
+    },
+    {
+      "name": "PendingEntries",
+      "discriminator": [
+        65,
+        37,
+        15,
+        183,
+        237,
+        99,
+        41,
+        109
+      ]
+    },
+    {
+      "name": "WinnerRecord",
+      "discriminator": [
+        248,
+        27,
+        49,
+        33,
+        45,
+        88,
+        210,
+        100
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "EntriesDrained",
+      "discriminator": [
+        15,
+        188,
+        213,
+        167,
+        201,
+        74,
+        123,
+        80
+      ]
+    },
+    {
+      "name": "EntryOverflow",
+      "discriminator": [
+        143,
+        68,
+        228,
+        65,
+        142,
+        11,
+        115,
+        120
+      ]
+    },
+    {
+      "name": "FeesFlushed",
+      "discriminator": [
+        236,
+        120,
+        206,
+        154,
+        209,
+        177,
+        19,
+        1
+      ]
+    },
+    {
+      "name": "KeeperRotated",
+      "discriminator": [
+        230,
+        110,
+        254,
+        107,
+        219,
+        25,
+        251,
+        115
+      ]
+    },
+    {
+      "name": "LotteryEntryRecorded",
+      "discriminator": [
+        145,
+        22,
+        143,
+        202,
+        131,
+        170,
+        102,
+        171
+      ]
+    },
+    {
+      "name": "WinnerNotified",
+      "discriminator": [
+        158,
+        105,
+        188,
+        131,
+        61,
+        241,
+        154,
+        28
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "UnauthorizedKeeper",
+      "msg": "Unauthorized: caller is not the keeper authority"
+    },
+    {
+      "code": 6001,
+      "name": "UnauthorizedAuthority",
+      "msg": "Unauthorized: caller is not the config authority"
+    },
+    {
+      "code": 6002,
+      "name": "AmmListFull",
+      "msg": "AMM program list is full (max 8)"
+    },
+    {
+      "code": 6003,
+      "name": "AmmNotFound",
+      "msg": "AMM program not found in allowlist"
+    },
+    {
+      "code": 6004,
+      "name": "AmmAlreadyExists",
+      "msg": "AMM program already in allowlist"
+    },
+    {
+      "code": 6005,
+      "name": "LotteryDisabled",
+      "msg": "Lottery is not enabled for this creator"
+    },
+    {
+      "code": 6006,
+      "name": "NoPendingEntries",
+      "msg": "No pending entries to drain"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidMint",
+      "msg": "Invalid mint — does not match config"
+    },
+    {
+      "code": 6008,
+      "name": "OverflowCounterMismatch",
+      "msg": "PendingEntries buffer overflow counter mismatch"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidFeeBps",
+      "msg": "Invalid fee BPS — must be <= 10000"
+    },
+    {
+      "code": 6010,
+      "name": "MetaListAlreadyInitialized",
+      "msg": "Extra account meta list already initialized"
+    }
+  ],
+  "types": [
+    {
+      "name": "CreatorConfig",
+      "docs": [
+        "Per-creator configuration PDA.",
+        "",
+        "Seeds: `[CREATOR_CONFIG_SEED, creator_mint.key()]`",
+        "",
+        "Stores fee parameters, keeper authority, known AMM programs for buy",
+        "detection, and lottery enablement flag."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator_mint",
+            "docs": [
+              "The SPL Token-2022 mint this config belongs to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "docs": [
+              "Authority that can update this config (typically deployer multisig)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "keeper_authority",
+            "docs": [
+              "Authorized keeper pubkey — the only signer allowed to call",
+              "`flush_fees`, `drain_entries`, and `record_winner`."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "hub_creator_coin",
+            "docs": [
+              "Hub Creator Coin address (Base) encoded as bytes32."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "hub_share_oft",
+            "docs": [
+              "Hub ShareOFT address (Base) encoded as bytes32."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "fee_bps",
+            "docs": [
+              "Fee in basis points (informational — actual fee is enforced by",
+              "TransferFeeConfig on the mint, not by this program)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "flush_threshold",
+            "docs": [
+              "Minimum fee amount (in token smallest units) before `flush_fees`",
+              "will execute. Set to 0 to flush on every call."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "lottery_enabled",
+            "docs": [
+              "Whether lottery entry recording is enabled.",
+              "When false, the hook still executes but does not write entries."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "amm_program_count",
+            "docs": [
+              "Number of known AMM programs currently stored."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "known_amm_programs",
+            "docs": [
+              "Known AMM program IDs for buy detection.",
+              "If the source token account owner matches any of these, the",
+              "transfer is classified as a \"buy\" and a lottery entry is recorded."
+            ],
+            "type": {
+              "array": [
+                "pubkey",
+                8
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA derivation."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "_reserved",
+            "docs": [
+              "Reserved space for future upgrades."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "EntriesDrained",
+      "docs": [
+        "Emitted when entries are drained by the keeper for relay to Base."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "count",
+            "type": "u32"
+          },
+          {
+            "name": "overflow_count",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EntryOverflow",
+      "docs": [
+        "Emitted when entries are dropped due to buffer overflow."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_overflow_count",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeesFlushed",
+      "docs": [
+        "Emitted when fees are flushed by the keeper."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InitializeCreatorParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "keeper_authority",
+            "docs": [
+              "The authorized keeper pubkey for this creator."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "hub_creator_coin",
+            "docs": [
+              "Hub Creator Coin address (Base) encoded as bytes32."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "hub_share_oft",
+            "docs": [
+              "Hub ShareOFT address (Base) encoded as bytes32."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "fee_bps",
+            "docs": [
+              "Fee in basis points (informational, enforced by TransferFeeConfig)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "flush_threshold",
+            "docs": [
+              "Minimum withheld fee amount before flush_fees will execute."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "lottery_enabled",
+            "docs": [
+              "Whether lottery entry recording is enabled."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "known_amm_programs",
+            "docs": [
+              "Initial known AMM programs for buy detection."
+            ],
+            "type": {
+              "vec": "pubkey"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "KeeperRotated",
+      "docs": [
+        "Emitted when the keeper authority is rotated."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_keeper",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_keeper",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LotteryEntry",
+      "docs": [
+        "A single lottery entry recorded by the Transfer Hook on a buy.",
+        "",
+        "Uses `#[zero_copy]` so it can live inside the zero-copy `PendingEntries` account",
+        "without blowing the SBF stack limit during deserialization."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "buyer",
+            "docs": [
+              "The buyer's wallet pubkey (destination token account owner)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Amount of tokens transferred (in mint's smallest denomination)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "docs": [
+              "Solana slot at which the buy occurred."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LotteryEntryRecorded",
+      "docs": [
+        "Emitted when a buy is detected and a lottery entry is recorded."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          },
+          {
+            "name": "buffer_count",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PendingEntries",
+      "docs": [
+        "Ring buffer of pending lottery entries for a creator mint.",
+        "",
+        "Seeds: `[PENDING_ENTRIES_SEED, creator_mint.key()]`",
+        "",
+        "Uses zero-copy deserialization (`AccountLoader`) to avoid placing the",
+        "12KB buffer on the SBF stack. The runtime memory-maps the account data",
+        "directly, keeping stack usage minimal.",
+        "",
+        "The keeper drains this buffer periodically and relays entries to Base.",
+        "Overflow policy: drop-oldest (head advances, oldest overwritten)."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator_mint",
+            "docs": [
+              "The creator mint this buffer belongs to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "head",
+            "docs": [
+              "Write pointer — next slot to write into."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "count",
+            "docs": [
+              "Number of entries currently in the buffer (0..=MAX_PENDING_ENTRIES)."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "overflow_count",
+            "docs": [
+              "Total number of entries dropped due to overflow.",
+              "Keepr monitors this counter between polls."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA derivation."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "docs": [
+              "Alignment padding (zero-copy requires C-repr alignment)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                7
+              ]
+            }
+          },
+          {
+            "name": "entries",
+            "docs": [
+              "The ring buffer itself."
+            ],
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "LotteryEntry"
+                  }
+                },
+                256
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateConfigParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "hub_creator_coin",
+            "docs": [
+              "New hub_creator_coin (None = keep current)."
+            ],
+            "type": {
+              "option": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          },
+          {
+            "name": "hub_share_oft",
+            "docs": [
+              "New hub_share_oft (None = keep current)."
+            ],
+            "type": {
+              "option": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          },
+          {
+            "name": "fee_bps",
+            "docs": [
+              "New fee_bps (None = keep current)."
+            ],
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "flush_threshold",
+            "docs": [
+              "New flush_threshold (None = keep current)."
+            ],
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "lottery_enabled",
+            "docs": [
+              "New lottery_enabled (None = keep current)."
+            ],
+            "type": {
+              "option": "bool"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "WinnerNotified",
+      "docs": [
+        "Emitted when a winner is recorded on Solana."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "shares_paid",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WinnerRecord",
+      "docs": [
+        "Latest lottery winner record for a creator mint.",
+        "",
+        "Seeds: `[WINNER_RECORD_SEED, creator_mint.key()]`",
+        "",
+        "Written by the keeper when a win is detected on Base.",
+        "Frontend subscribes to this PDA for \"You won!\" notifications."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator_mint",
+            "docs": [
+              "The creator mint this record belongs to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "winner",
+            "docs": [
+              "The winner's Solana wallet pubkey."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "shares_paid",
+            "docs": [
+              "Amount of vault shares paid to the winner (in Base token units)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Unix timestamp when the win was recorded on Solana."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA derivation."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -82,6 +82,7 @@ export function useSwapExecution(params: {
   amountInUnits: string
   parsedSlippage: number
   parsedDeadlineMinutes: number
+  chainId?: number
 }) {
   const [estimatedOut, setEstimatedOut] = useState<string>('')
   const [quote, setQuote] = useState<TradeQuoteResponse | null>(null)
@@ -113,6 +114,8 @@ export function useSwapExecution(params: {
     const message = normalized.message.trim()
     return message || fallback
   }, [])
+
+  const swapChainId = params.chainId ?? BASE_CHAIN_ID
 
   const tokensEquivalent = useMemo(
     () => areEquivalentSwapTokens(params.tokenIn, params.tokenOut, CONTRACTS.weth),
@@ -247,8 +250,8 @@ export function useSwapExecution(params: {
       const data = await fetchTradeQuote({
         tokenIn: params.tokenIn,
         tokenOut: params.tokenOut,
-        tokenInChainId: BASE_CHAIN_ID,
-        tokenOutChainId: BASE_CHAIN_ID,
+        tokenInChainId: swapChainId,
+        tokenOutChainId: swapChainId,
         type: 'EXACT_INPUT',
         amount,
         swapper: params.executionAddress,
@@ -324,9 +327,9 @@ export function useSwapExecution(params: {
         walletAddress: params.executionAddress,
         token: params.tokenIn,
         amount,
-        chainId: BASE_CHAIN_ID,
+        chainId: swapChainId,
         tokenOut: params.tokenOut,
-        tokenOutChainId: BASE_CHAIN_ID,
+        tokenOutChainId: swapChainId,
         includeGasInfo: true,
       })
       setApprovalData(data)
@@ -386,9 +389,9 @@ export function useSwapExecution(params: {
               walletAddress: params.executionAddress,
               token: params.tokenIn,
               amount,
-              chainId: BASE_CHAIN_ID,
+              chainId: swapChainId,
               tokenOut: params.tokenOut,
-              tokenOutChainId: BASE_CHAIN_ID,
+              tokenOutChainId: swapChainId,
               includeGasInfo: true,
             })
 
@@ -396,8 +399,8 @@ export function useSwapExecution(params: {
         fetchTradeQuote({
           tokenIn: params.tokenIn,
           tokenOut: params.tokenOut,
-          tokenInChainId: BASE_CHAIN_ID,
-          tokenOutChainId: BASE_CHAIN_ID,
+          tokenInChainId: swapChainId,
+          tokenOutChainId: swapChainId,
           type: 'EXACT_INPUT',
           amount,
           swapper: params.executionAddress,
@@ -611,7 +614,7 @@ export function useSwapExecution(params: {
             from: (tx.from as string) ?? params.signerAddress ?? '',
             data: tx.data as string,
             value: typeof tx.value === 'string' && tx.value.trim() ? tx.value : '0',
-            chainId: BASE_CHAIN_ID,
+            chainId: swapChainId,
             gasLimit: typeof tx.gasLimit === 'string' ? tx.gasLimit : undefined,
             maxFeePerGas: typeof tx.maxFeePerGas === 'string' ? tx.maxFeePerGas : undefined,
             maxPriorityFeePerGas:

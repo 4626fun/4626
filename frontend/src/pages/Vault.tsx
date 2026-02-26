@@ -17,6 +17,7 @@ import { AKITA, CONTRACTS } from '../config/contracts'
 import { ClaimPrizeToSolana } from '../components/ClaimPrizeToSolana'
 import { ConnectButton } from '../components/ConnectButton'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { useXmtp } from '@/lib/xmtp/provider'
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { CcaAuctionPanel } from '@/components/cca/CcaAuctionPanel'
@@ -409,6 +410,33 @@ export function Vault() {
     )
   }
 
+  if (resolveLoading && !resolved && !akitaFallback) {
+    return (
+      <div className="relative pb-24 md:pb-0">
+        <section className="cinematic-section">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6">
+            <div className="rounded-3xl border border-white/5 bg-[#080808]/50 backdrop-blur-2xl px-6 py-10 sm:p-10">
+              <div className="grid lg:grid-cols-[260px_minmax(0,1fr)] gap-8 items-center">
+                <div className="mx-auto lg:mx-0">
+                  <Skeleton className="w-56 h-56 sm:w-64 sm:h-64 rounded-full" />
+                </div>
+                <div className="space-y-4">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-10 w-64" />
+                  <Skeleton className="h-4 w-40" />
+                  <div className="flex gap-3 mt-6">
+                    <Skeleton className="h-9 w-32 rounded-full" />
+                    <Skeleton className="h-9 w-32 rounded-full" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    )
+  }
+
   const vaultMeta = META.vault(underlyingSymbol)
 
   return (
@@ -602,8 +630,12 @@ export function Vault() {
                 vaultAddress={vaultAddress}
               />
             ) : (
-              <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-6 text-sm text-zinc-600">
-                Auction panel is not available for this vault yet.
+              <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-6 text-center">
+                <Clock className="mx-auto h-8 w-8 text-zinc-700 mb-3" aria-hidden="true" />
+                <div className="text-sm text-zinc-500 font-medium">Auction not available</div>
+                <div className="mt-1 text-xs text-zinc-600">
+                  This vault doesn't have a CCA (Continuous Clearing Auction) strategy configured yet. Auctions let early supporters get share tokens before public trading begins.
+                </div>
               </div>
             )}
           </div>
