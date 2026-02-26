@@ -1,72 +1,70 @@
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
-import { Loader2 } from 'lucide-react'
+import { forwardRef, type ButtonHTMLAttributes } from 'react'
+import { cn } from '@/lib/utils'
+import { Spinner } from './Spinner'
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
-type ButtonSize = 'default' | 'compact' | 'lg'
-
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: ButtonVariant
-  size?: ButtonSize
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: 'primary' | 'secondary' | 'ghost' | 'destructive'
+  size?: 'sm' | 'md' | 'lg'
   loading?: boolean
-  icon?: ReactNode
-  hideBaseIcon?: boolean
-  children: ReactNode
 }
 
-const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'btn-primary',
-  secondary: 'btn-secondary',
+const variantClasses: Record<NonNullable<ButtonProps['variant']>, string> = {
+  primary:
+    'bg-brand-primary hover:bg-brand-hover text-white shadow-[0_0_20px_rgba(0,82,255,0.2)] hover:shadow-[0_0_28px_rgba(0,82,255,0.35)]',
+  secondary:
+    'bg-white/5 hover:bg-white/8 text-vault-text border border-white/8 hover:border-white/12',
   ghost:
-    'inline-flex items-center justify-center gap-2 rounded-xl bg-transparent text-zinc-400 hover:text-zinc-200 hover:bg-white/5 transition-all duration-200',
-  danger:
-    'inline-flex items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 text-red-200 hover:bg-red-500/20 transition-all duration-200',
+    'bg-transparent hover:bg-white/5 text-vault-subtext hover:text-vault-text border border-transparent hover:border-white/8',
+  destructive:
+    'bg-rose-500/8 hover:bg-rose-500/15 text-rose-400 border border-rose-500/15 hover:border-rose-500/25',
 }
 
-const sizeClasses: Record<ButtonSize, string> = {
-  default: '',
-  compact: 'btn-compact',
-  lg: 'min-h-[56px] px-6 py-4 text-[15px]',
+const sizeClasses: Record<NonNullable<ButtonProps['size']>, string> = {
+  sm: 'h-8 px-3 text-xs rounded-lg gap-1.5',
+  md: 'h-10 px-4 text-sm rounded-xl gap-2',
+  lg: 'h-11 px-5 text-[15px] rounded-xl gap-2',
 }
 
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  {
-    variant = 'primary',
-    size = 'default',
-    loading = false,
-    icon,
-    hideBaseIcon = false,
-    disabled,
-    className = '',
-    children,
-    ...rest
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  (
+    {
+      variant = 'primary',
+      size = 'md',
+      loading = false,
+      disabled,
+      className,
+      children,
+      ...props
+    },
+    ref,
+  ) => {
+    const isDisabled = disabled || loading
+
+    return (
+      <button
+        ref={ref}
+        disabled={isDisabled}
+        aria-busy={loading || undefined}
+        className={cn(
+          'inline-flex items-center justify-center font-medium transition-all duration-150',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-1 focus-visible:ring-offset-vault-bg',
+          'disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none',
+          variantClasses[variant],
+          sizeClasses[size],
+          className,
+        )}
+        {...props}
+      >
+        {loading && (
+          <Spinner
+            size={size === 'sm' ? 'sm' : 'md'}
+            className="shrink-0"
+          />
+        )}
+        {children}
+      </button>
+    )
   },
-  ref,
-) {
-  const isDisabled = disabled || loading
+)
 
-  const classes = [
-    variantClasses[variant],
-    sizeClasses[size],
-    hideBaseIcon || variant !== 'primary' ? 'btn-no-icon' : '',
-    loading ? 'btn-no-icon' : '',
-    className,
-  ]
-    .filter(Boolean)
-    .join(' ')
-
-  return (
-    <button ref={ref} className={classes} disabled={isDisabled} aria-busy={loading || undefined} {...rest}>
-      {loading ? (
-        <>
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          {children}
-        </>
-      ) : (
-        <>
-          {icon ? <span aria-hidden="true">{icon}</span> : null}
-          {children}
-        </>
-      )}
-    </button>
-  )
-})
+Button.displayName = 'Button'

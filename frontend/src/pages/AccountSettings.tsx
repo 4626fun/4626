@@ -7,16 +7,16 @@ import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wa
 import { useExportWallet, usePrivy } from '@privy-io/react-auth'
 
 import { apiFetch } from '@/lib/apiBase'
-import { getMarketingBaseUrl } from '@/lib/host'
-import { Alert } from '@/components/ui/Alert'
-import { CollapsibleSection } from '@/components/ui/CollapsibleSection'
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { Skeleton, SkeletonText } from '@/components/ui/Skeleton'
+import { APP_ORIGIN, getAppBaseUrl, getMarketingBaseUrl } from '@/lib/host'
 import { isPrivyClientEnabled } from '@/lib/flags'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { getFarcasterUserByAddress, getFarcasterUserByFid } from '@/lib/neynar-api'
 import { useZoraCoin, useZoraProfile } from '@/lib/zora/hooks'
-import { useAccountContext } from '@/wallet/accountContext'
+import { Alert } from '@/components/ui/Alert'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { Modal } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
+import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -301,7 +301,6 @@ function useSafePrivyUserHook(enabled: boolean): { user: any | null } {
 
 export function AccountSettings() {
   const auth = useSiweAuth()
-  const accountContext = useAccountContext()
   const { address: connectedAddressRaw, chainId } = useAccount()
   const { data: walletClient } = useWalletClient({ chainId: base.id })
   const publicClient = usePublicClient({ chainId: base.id })
@@ -572,17 +571,6 @@ export function AccountSettings() {
     if (!isEvmAddress(connectedAddressRaw)) return null
     return getAddress(connectedAddressRaw)
   }, [connectedAddressRaw])
-  const connectedSignerLabel = useMemo(() => {
-    if (!accountContext.signerAddress) return 'Not connected'
-    const prefix = accountContext.signerType === 'SMART_WALLET' ? 'Smart Wallet' : 'EOA'
-    return `${prefix} ${accountContext.signerAddress}`
-  }, [accountContext.signerAddress, accountContext.signerType])
-  const actingAccountLabel = useMemo(() => {
-    if (!accountContext.activeAccount) return 'Unavailable'
-    const prefix = accountContext.activeAccountType === 'SMART_WALLET' ? 'Smart Wallet' : 'EOA'
-    return `${prefix} ${accountContext.activeAccount}`
-  }, [accountContext.activeAccount, accountContext.activeAccountType])
-  const preferredModeLabel = accountContext.preferredMode === 'SMART_WALLET' ? 'Smart Wallet' : 'EOA'
 
   const smartWalletOwnersQuery = useQuery({
     queryKey: ['smartWalletOwners', canonicalSmartWalletAddress ?? 'none'],
@@ -1053,22 +1041,27 @@ export function AccountSettings() {
 
   if (!auth.sessionHydrated || loading) {
     return (
-      <div className="max-w-4xl mx-auto px-6 py-12 space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <Skeleton className="h-3 w-16" />
-            <Skeleton className="h-7 w-64" />
+      <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 space-y-5" aria-busy="true" aria-label="Loading account…">
+        <div className="card rounded-2xl p-6 space-y-4">
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-4 w-72" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-16 rounded-xl" />
+            ))}
           </div>
-          <Skeleton className="h-10 w-24 rounded-xl" />
         </div>
-        <div className="card rounded-xl p-6 space-y-4">
-          <Skeleton className="h-5 w-20" />
-          <SkeletonText lines={2} />
-          <Skeleton className="h-10 w-full rounded-lg" />
-        </div>
-        <div className="card rounded-xl p-6 space-y-4">
-          <Skeleton className="h-5 w-40" />
-          <SkeletonText lines={3} />
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <div className="card rounded-xl p-6 space-y-3">
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-11 w-full rounded-xl" />
+            <Skeleton className="h-9 w-28 rounded-xl" />
+          </div>
+          <div className="card rounded-xl p-6 space-y-3">
+            <Skeleton className="h-5 w-36" />
+            <Skeleton className="h-16 w-full rounded-xl" />
+            <Skeleton className="h-16 w-full rounded-xl" />
+          </div>
         </div>
       </div>
     )
@@ -1076,25 +1069,18 @@ export function AccountSettings() {
 
   if (!auth.isSignedIn) {
     return (
-      <div className="max-w-4xl mx-auto px-6 py-12">
-        <div className="card rounded-xl p-8 space-y-5 text-center">
-          <Wallet className="mx-auto h-10 w-10 text-zinc-600" aria-hidden="true" />
-          <div>
-            <h1 className="text-xl text-white font-semibold">Sign in to continue</h1>
-            <p className="mt-2 text-sm text-zinc-400 max-w-md mx-auto">
-              Connect your wallet and sign in to manage your email, connected accounts, and creator profile.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              void auth.signIn()
-            }}
-            disabled={auth.busy}
-            className="btn-accent min-h-11 disabled:opacity-60"
+      <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
+        <div className="card rounded-xl p-8 space-y-4">
+          <div className="text-xl text-white">Sign in required</div>
+          <div className="text-sm text-zinc-400">Connect wallet and complete Sign in to manage your email and connected accounts.</div>
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={() => void auth.signIn()}
+            loading={auth.busy}
           >
-            {auth.busy ? 'Signing in…' : 'Sign in'}
-          </button>
+            Sign in
+          </Button>
           <div>
             <a
               href={`${getMarketingBaseUrl()}/#waitlist`}
@@ -1114,51 +1100,109 @@ export function AccountSettings() {
         <div className="absolute inset-0 bg-[radial-gradient(120%_90%_at_50%_0%,rgba(0,82,255,0.12),transparent_58%)]" />
       </div>
 
-      {error ? <Alert variant="error">{error}</Alert> : null}
-      {success ? <Alert variant="success">{success}</Alert> : null}
-
-      <CollapsibleSection title="Account Mode" icon={<ShieldCheck className="w-4 h-4" />}>
-        <p className="text-sm text-zinc-400">See exactly which signer is connected and which account the app is acting as.</p>
-        <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 text-xs text-zinc-400">
+      {/* Account Mode Indicator — Hero */}
+      <div className="rounded-2xl border border-white/8 bg-white/2 p-4 sm:p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            Connected signer:{' '}
-            <span className="break-all font-mono text-zinc-200">{connectedSignerLabel}</span>
+            <div className="text-[10px] text-zinc-600 mb-2 font-medium tracking-[0.08em] uppercase">Execution context</div>
+            <AccountModeIndicator />
           </div>
-          <div>
-            Acting account:{' '}
-            <span className="break-all font-mono text-zinc-200">{actingAccountLabel}</span>
-          </div>
-          <div>
-            Preferred mode:{' '}
-            <span className="text-zinc-200">{preferredModeLabel}</span>
-          </div>
-          <div className="flex flex-wrap gap-2 pt-1">
-            <span
-              className={`rounded-full border px-2 py-0.5 ${
-                accountContext.uiFlags.paymasterAvailable
-                  ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
-                  : 'border-zinc-700 bg-black/30 text-zinc-500'
-              }`}
-            >
-              {accountContext.uiFlags.paymasterAvailable ? 'Paymaster available' : 'Paymaster unavailable'}
-            </span>
-            <span
-              className={`rounded-full border px-2 py-0.5 ${
-                accountContext.uiFlags.aaAvailable
-                  ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
-                  : 'border-zinc-700 bg-black/30 text-zinc-500'
-              }`}
-            >
-              {accountContext.uiFlags.aaAvailable ? 'AA ready' : 'Limited mode'}
-            </span>
+          <div className="text-[11px] text-zinc-600 sm:text-right">
+            {canonicalSmartWalletAddress ? (
+              <span>Smart Wallet: <span className="font-mono text-zinc-400">{canonicalSmartWalletAddress.slice(0, 6)}…{canonicalSmartWalletAddress.slice(-4)}</span></span>
+            ) : (
+              <span className="text-amber-500/70">No Smart Wallet linked</span>
+            )}
           </div>
         </div>
-      </CollapsibleSection>
+      </div>
 
-      <CollapsibleSection title="Email" icon={<Mail className="w-4 h-4" />}>
-        <p className="text-sm text-zinc-400">Use a real email for updates and account recovery.</p>
+      {/* CSW failure alert */}
+      {profile && !canonicalSmartWalletAddress && (
+        <Alert variant="warning" title="Smart Wallet not detected">
+          Your account does not have a linked Coinbase Smart Wallet. Some features (1-click swaps, bundled transactions) require one. Try reconnecting or contact support if this is unexpected.
+        </Alert>
+      )}
+
+      <section className="card space-y-3 rounded-2xl p-4 sm:space-y-4 sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="text-[10px] font-medium text-zinc-600">Account</div>
+            <h1 className="mt-1 text-[1.6rem] sm:text-[1.9rem] font-semibold text-white">Identity Control Plane</h1>
+            <p className="mt-1 text-[13px] text-zinc-400 sm:text-sm">Wallet architecture, creator profile, and operational controls.</p>
+          </div>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <a
+              href={accountSurfaceUrl}
+              className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-white/4 px-3.5 text-sm font-medium text-vault-text hover:bg-white/8 hover:text-white transition-colors sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+            >
+              Account URL
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+            <a
+              href={appAccountUrl}
+              className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-white/4 px-3.5 text-sm font-medium text-vault-text hover:bg-white/8 hover:text-white transition-colors sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+            >
+              App Account
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => void loadProfile()}
+              loading={loading}
+              className="w-full sm:w-auto"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Refresh
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
+          <div className="rounded-xl border border-white/10 bg-white/4 px-3 py-2.5 sm:py-3">
+            <div className="text-[10px] font-medium text-zinc-500">◉ Connected Owner</div>
+            <div className="mt-1 break-all font-mono text-[11px] text-zinc-100 sm:text-[12px]">{connectedAddress ?? 'Not connected'}</div>
+          </div>
+          <div className="rounded-xl border border-[#0052FF]/20 bg-[#0052FF]/10 px-3 py-2.5 sm:py-3">
+            <div className="text-[10px] font-medium text-[#8fb1ff]">⬢ Canonical CSW</div>
+            <div className="mt-1 break-all font-mono text-[11px] text-white sm:text-[12px]">{canonicalSmartWalletAddress ?? 'Not detected'}</div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/4 px-3 py-2.5 sm:py-3">
+            <div className="text-[10px] font-medium text-zinc-500">◈ Creator Coin</div>
+            <div className="mt-1 text-[12px] text-zinc-100 sm:text-[13px]">{creatorCoinAddress ? creatorCoinDisplaySymbol : 'Not detected'}</div>
+            {creatorCoinAddress ? <div className="truncate font-mono text-[10px] text-zinc-400 sm:text-[11px]">{creatorCoinAddress}</div> : null}
+          </div>
+          <div className={`rounded-xl border px-3 py-2.5 sm:py-3 ${accessTone.chip}`}>
+            <div className="text-[10px] font-medium">Access</div>
+            <div className="mt-1 inline-flex items-center gap-1.5 text-[12px] sm:text-[13px]">
+              <span className={`h-1.5 w-1.5 rounded-full ${accessTone.dot}`} />
+              {accessTone.label}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {error && (
+        <Alert variant="error" onDismiss={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+      {success && (
+        <Alert variant="success" onDismiss={() => setSuccess(null)}>
+          {success}
+        </Alert>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-[1.25fr_1fr]">
+      <section className="card rounded-xl p-4 space-y-4 sm:p-6">
+        <div className="flex items-center gap-2 text-white">
+          <Mail className="w-4 h-4" />
+          <h2 className="text-base sm:text-lg">Email</h2>
+        </div>
+        <p className="text-[13px] text-zinc-400 sm:text-sm">Use a real email for updates and account recovery.</p>
         <div className="space-y-2">
-          <label htmlFor="account-email" className="text-xs uppercase tracking-[0.16em] text-zinc-500">
+          <label htmlFor="account-email" className="text-[11px] font-medium text-zinc-500">
             Email Address
           </label>
           <input
@@ -1183,10 +1227,14 @@ export function AccountSettings() {
             Current: {profile?.email ? profile.email : 'Not set'}
           </span>
         </div>
-      </CollapsibleSection>
+      </section>
 
-      <CollapsibleSection title="Connected Accounts" icon={<Wallet className="w-4 h-4" />} badge={knownAddressesWithOwners.length || null}>
-        <p className="text-sm text-zinc-400">Wallets and linked accounts associated with your profile.</p>
+      <section className="card rounded-xl p-4 space-y-4 sm:p-6">
+        <div className="flex items-center gap-2 text-white">
+          <Wallet className="w-4 h-4" />
+          <h2 className="text-base sm:text-lg">Connected Accounts</h2>
+        </div>
+        <p className="text-[13px] text-zinc-400 sm:text-sm">Wallets and linked accounts associated with your profile.</p>
 
         {canonicalSmartWalletAddress ? (
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2.5 space-y-2 sm:p-3">
@@ -1227,7 +1275,7 @@ export function AccountSettings() {
         ) : null}
 
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2.5 space-y-3 sm:p-3">
-          <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Solana Wallet Roles</div>
+          <div className="text-[11px] font-medium text-zinc-500">Solana Wallet Roles</div>
           <div className="space-y-2 text-sm text-zinc-300">
             <div>
               Canonical Solana Wallet:{' '}
@@ -1247,7 +1295,7 @@ export function AccountSettings() {
           </div>
           {linkedSolanaWallets.length > 0 ? (
             <div className="space-y-2">
-              <label htmlFor="canonical-solana-wallet" className="text-xs uppercase tracking-[0.12em] text-zinc-500">
+              <label htmlFor="canonical-solana-wallet" className="text-[11px] font-medium text-zinc-500">
                 Set Canonical Solana Wallet
               </label>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -1282,7 +1330,7 @@ export function AccountSettings() {
 
         {knownAddressesWithOwners.length > 0 ? (
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 space-y-3 sm:p-4">
-            <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Known Addresses & Owner Slots</div>
+            <div className="text-[11px] font-medium text-zinc-500">Known Addresses & Owner Slots</div>
             <div className="space-y-2">
               {knownAddressesWithOwners.map((item) => (
                 <div key={`known:${item.address.toLowerCase()}`} className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2.5">
@@ -1310,7 +1358,7 @@ export function AccountSettings() {
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     {item.badges.map((badge) => (
-                      <span key={`${item.address}:${badge}`} className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-zinc-300">
+                      <span key={`${item.address}:${badge}`} className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] font-medium text-zinc-300">
                         {badge}
                       </span>
                     ))}
@@ -1321,7 +1369,7 @@ export function AccountSettings() {
                   ) : null}
                   {item.ownerSlots.length > 0 ? (
                     <div className="mt-2 space-y-2 rounded-md border border-zinc-800 bg-black/20 p-2">
-                      <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
+                      <div className="text-[11px] font-medium text-zinc-500">
                         Owner Slots: {item.ownerSlots.map((slot) => `#${slot.index}`).join(', ')}
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -1340,9 +1388,11 @@ export function AccountSettings() {
                             <button
                               key={`revoke:${item.address.toLowerCase()}:${slot.index}`}
                               type="button"
-                              onClick={() => setRevokeConfirmOwner(slot)}
+                              onClick={() => {
+                                if (!disableRevoke) setRevokeConfirmOwner(slot)
+                              }}
                               disabled={disableRevoke}
-                              className="inline-flex min-h-9 items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[10px] text-red-200 disabled:opacity-40"
+                              className="inline-flex min-h-9 items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[10px] text-red-200 disabled:opacity-40 hover:bg-red-500/20 transition-colors"
                               title={
                                 !connectedAddressIsOwner
                                   ? 'Connected wallet is not an owner'
@@ -1350,8 +1400,9 @@ export function AccountSettings() {
                                     ? 'Cannot revoke connected owner from this page'
                                     : addressOwnerCount <= 1
                                       ? 'Cannot revoke the last address owner'
-                                      : undefined
+                                      : `Revoke owner at index #${slot.index}`
                               }
+                              aria-label={`Revoke owner at slot #${slot.index}`}
                             >
                               {revokeBusyIndex === slot.index ? `Revoking #${slot.index}…` : `Revoke #${slot.index}`}
                               <Trash2 className="w-3 h-3" />
@@ -1369,7 +1420,7 @@ export function AccountSettings() {
 
         {profile?.connectedAccounts?.length ? (
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 space-y-2 sm:p-4">
-            <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Sync Summary</div>
+            <div className="text-[11px] font-medium text-zinc-500">Sync Summary</div>
             <div className="text-sm text-zinc-300">
               {knownAddressesWithOwners.length} unique addresses from {profile.connectedAccounts.length} synced records.
             </div>
@@ -1379,10 +1430,15 @@ export function AccountSettings() {
             No connected accounts found for this profile yet.
           </div>
         )}
-      </CollapsibleSection>
+      </section>
+      </div>
 
-      <CollapsibleSection title="Creator Profile" icon={<ShieldCheck className="w-4 h-4" />}>
-        <p className="text-sm text-zinc-400">Creator coin, public profile stats, and associated identities.</p>
+      <section className="card rounded-xl p-4 space-y-4 sm:p-6">
+        <div className="flex items-center gap-2 text-white">
+          <ShieldCheck className="w-4 h-4" />
+          <h2 className="text-base sm:text-lg">Creator Profile</h2>
+        </div>
+        <p className="text-[13px] text-zinc-400 sm:text-sm">Creator coin, public profile stats, and associated identities.</p>
 
         {creatorCoinAddress ? (
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-3 space-y-3 sm:px-4 sm:py-4">
@@ -1403,15 +1459,15 @@ export function AccountSettings() {
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <div className="rounded-md border border-zinc-800 bg-black/30 px-2 py-2">
-                <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Market Cap</div>
+                <div className="text-[10px] font-medium text-zinc-500">Market Cap</div>
                 <div className="mt-1 text-sm text-zinc-100">{formatUsdCompact(creatorCoinStats.marketCap)}</div>
               </div>
               <div className="rounded-md border border-zinc-800 bg-black/30 px-2 py-2">
-                <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">24h Volume</div>
+                <div className="text-[10px] font-medium text-zinc-500">24h Volume</div>
                 <div className="mt-1 text-sm text-zinc-100">{formatUsdCompact(creatorCoinStats.volume24h)}</div>
               </div>
               <div className="rounded-md border border-zinc-800 bg-black/30 px-2 py-2">
-                <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Holders</div>
+                <div className="text-[10px] font-medium text-zinc-500">Holders</div>
                 <div className="mt-1 text-sm text-zinc-100">{formatCountCompact(creatorCoinStats.holders)}</div>
               </div>
             </div>
@@ -1424,11 +1480,11 @@ export function AccountSettings() {
 
         {associatedAccounts.length > 0 ? (
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 space-y-2 sm:p-4">
-            <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Associated Accounts</div>
+            <div className="text-[11px] font-medium text-zinc-500">Associated Accounts</div>
             <div className="space-y-2">
               {associatedAccounts.map((item) => (
                 <div key={`${item.label}:${item.value}`} className="flex flex-col items-start gap-2 rounded-md border border-zinc-800 bg-zinc-950/60 px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                  <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">{item.label}</div>
+                  <div className="text-[11px] font-medium text-zinc-500">{item.label}</div>
                   {item.href ? (
                     <a
                       href={item.href}
@@ -1452,7 +1508,7 @@ export function AccountSettings() {
         )}
 
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-3 space-y-2 sm:px-4">
-          <div className="text-xs uppercase tracking-[0.14em] text-zinc-500">Embedded Wallet Export</div>
+          <div className="text-[11px] font-medium text-zinc-500">Embedded Wallet Export</div>
           <div className="text-sm text-zinc-300">
             {embeddedExportAddress ? (
               <>
@@ -1475,9 +1531,13 @@ export function AccountSettings() {
           </div>
           {exportMessage ? <div className="text-xs text-zinc-400">{exportMessage}</div> : null}
         </div>
-      </CollapsibleSection>
+      </section>
 
-      <CollapsibleSection title="Access" icon={<ShieldCheck className="w-4 h-4" />} defaultOpen={false}>
+      <section className="card rounded-xl p-4 space-y-2.5 sm:p-6">
+        <div className="flex items-center gap-2 text-white">
+          <ShieldCheck className="w-4 h-4" />
+          <h2 className="text-base sm:text-lg">Access</h2>
+        </div>
         <div className="text-sm text-zinc-400">
           App access status: <span className="text-zinc-200">{humanizeToken(profile?.appAccessStatus) ?? 'Unknown'}</span>
         </div>
@@ -1495,23 +1555,63 @@ export function AccountSettings() {
             Changes saved
           </div>
         ) : null}
-      </CollapsibleSection>
+      </section>
 
-      <ConfirmDialog
+      {topKnownAddress ? (
+        <div className="text-xs text-zinc-500">
+          Primary wallet fingerprint: <span className="break-all font-mono text-zinc-300">{topKnownAddress}</span>
+        </div>
+      ) : null}
+
+      {/* Revoke Owner Confirmation Modal */}
+      <Modal
         open={revokeConfirmOwner !== null}
-        title="Revoke owner"
-        description={`This will permanently remove owner slot #${revokeConfirmOwner?.index ?? '?'} from the smart wallet. This action requires a blockchain transaction and cannot be undone.`}
-        confirmLabel="Revoke owner"
-        variant="danger"
-        busy={revokeBusyIndex !== null}
-        onConfirm={() => {
-          if (revokeConfirmOwner) {
-            void onRevokeOwner(revokeConfirmOwner)
-            setRevokeConfirmOwner(null)
-          }
-        }}
-        onCancel={() => setRevokeConfirmOwner(null)}
-      />
+        onClose={() => setRevokeConfirmOwner(null)}
+        title="Revoke owner?"
+        description="Confirm owner revocation from smart wallet"
+      >
+        <div className="space-y-4">
+          <Alert variant="warning" title="This action is permanent">
+            Removing an owner cannot be undone from this page. You will need to re-add the owner manually if removed by mistake.
+          </Alert>
+          {revokeConfirmOwner && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 space-y-1">
+              <div className="text-xs text-zinc-500">Owner slot</div>
+              <div className="font-mono text-sm text-zinc-100">#{revokeConfirmOwner.index}</div>
+              {revokeConfirmOwner.ownerAddress && (
+                <>
+                  <div className="text-xs text-zinc-500 mt-2">Address</div>
+                  <div className="font-mono text-xs text-zinc-300 break-all">{revokeConfirmOwner.ownerAddress}</div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        <Modal.Footer>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setRevokeConfirmOwner(null)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            loading={revokeBusyIndex !== null}
+            onClick={() => {
+              if (revokeConfirmOwner) {
+                void onRevokeOwner(revokeConfirmOwner).finally(() => {
+                  setRevokeConfirmOwner(null)
+                })
+              }
+            }}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Revoke owner
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   )
 }

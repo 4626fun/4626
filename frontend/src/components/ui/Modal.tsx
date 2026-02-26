@@ -1,151 +1,173 @@
-import { useCallback, useEffect, useRef, type ReactNode } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import {
+  useEffect,
+  useRef,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from 'react'
+import { createPortal } from 'react-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { X } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface ModalProps {
   open: boolean
   onClose: () => void
   title?: string
+  description?: string
   children: ReactNode
-  maxWidth?: string
+  /** Extra classes for the dialog panel */
+  className?: string
+  /** Show close button in header */
+  showClose?: boolean
 }
 
-const EASE = [0.4, 0, 0.2, 1] as const
-
-function getFocusableElements(container: HTMLElement): HTMLElement[] {
-  const selector =
-    'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-  return Array.from(container.querySelectorAll<HTMLElement>(selector))
-}
-
-export function Modal({ open, onClose, title, children, maxWidth = 'max-w-[620px]' }: ModalProps) {
+export function Modal({
+  open,
+  onClose,
+  title,
+  description,
+  children,
+  className,
+  showClose = true,
+}: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<Element | null>(null)
-  const prefersReduced = useReducedMotion()
+  const titleId = title ? 'modal-title' : undefined
+  const descId = description ? 'modal-desc' : undefined
 
+  // Escape key closes
   useEffect(() => {
-    if (open) {
-      triggerRef.current = document.activeElement
-      const prevOverflow = document.body.style.overflow
-      document.body.style.overflow = 'hidden'
-      return () => {
-        document.body.style.overflow = prevOverflow
-      }
+    if (!open) return
+    const handler = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
     }
-  }, [open])
-
-  useEffect(() => {
-    if (!open) {
-      if (triggerRef.current instanceof HTMLElement) {
-        triggerRef.current.focus()
-        triggerRef.current = null
-      }
-      return
-    }
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-        return
-      }
-
-      if (e.key === 'Tab' && dialogRef.current) {
-        const focusable = getFocusableElements(dialogRef.current)
-        if (focusable.length === 0) {
-          e.preventDefault()
-          return
-        }
-        const first = focusable[0]
-        const last = focusable[focusable.length - 1]
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault()
-          last.focus()
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault()
-          first.focus()
-        }
-      }
-    }
-
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
   }, [open, onClose])
 
+  // Prevent body scroll while open
   useEffect(() => {
-    if (open && dialogRef.current) {
-      const timer = setTimeout(() => {
-        const focusable = getFocusableElements(dialogRef.current!)
-        if (focusable.length > 0) focusable[0].focus()
-      }, 50)
-      return () => clearTimeout(timer)
+    if (open) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
     }
   }, [open])
 
-  const motionProps = prefersReduced
-    ? {}
-    : {
-        initial: { opacity: 0, scale: 0.96, y: 8 },
-        animate: { opacity: 1, scale: 1, y: 0 },
-        exit: { opacity: 0, scale: 0.97, y: 8 },
-        transition: { duration: 0.2, ease: EASE },
+  // Focus trap
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Tab' || !dialogRef.current) return
+    const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (!first) return
+    if (e.shiftKey) {
+      if (document.activeElement === first) {
+        e.preventDefault()
+        last?.focus()
       }
-
-  const overlayMotion = prefersReduced
-    ? {}
-    : {
-        initial: { opacity: 0 },
-        animate: { opacity: 1 },
-        exit: { opacity: 0 },
-        transition: { duration: 0.15 },
+    } else {
+      if (document.activeElement === last) {
+        e.preventDefault()
+        first?.focus()
       }
+    }
+  }
 
-  const handleBackdropClick = useCallback(() => onClose(), [onClose])
+  const handleBackdropClick = (e: MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) onClose()
+  }
 
-  const titleId = title ? 'modal-title' : undefined
+  // Auto-focus first focusable element when opening
+  useEffect(() => {
+    if (!open || !dialogRef.current) return
+    const timer = setTimeout(() => {
+      const focusable = dialogRef.current?.querySelector<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )
+      focusable?.focus()
+    }, 50)
+    return () => clearTimeout(timer)
+  }, [open])
 
-  return (
+  return createPortal(
     <AnimatePresence>
-      {open ? (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-6">
-          <motion.button
-            type="button"
-            className="absolute inset-0 bg-black/75 backdrop-blur-sm border-0 cursor-default"
-            onClick={handleBackdropClick}
-            aria-label="Close dialog"
-            tabIndex={-1}
-            {...overlayMotion}
-          />
-
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
+          onClick={handleBackdropClick}
+          aria-hidden={!open}
+        >
           <motion.div
             ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            className={`relative z-10 w-full ${maxWidth} max-h-[92vh] overflow-y-auto rounded-3xl border border-white/[0.06] bg-[#0d0d0f]/95 backdrop-blur-2xl shadow-void`}
-            {...motionProps}
+            aria-describedby={descId}
+            onKeyDown={handleKeyDown}
+            initial={{ opacity: 0, scale: 0.97, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 8 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className={cn(
+              'w-full sm:max-w-md glass-card overflow-hidden',
+              'rounded-t-2xl sm:rounded-2xl',
+              className,
+            )}
+            onClick={(e) => e.stopPropagation()}
           >
-            <div className="sticky top-0 z-20 flex items-center justify-between p-4 sm:p-5">
-              {title ? (
-                <h2 id="modal-title" className="font-doto text-lg font-bold text-white">
-                  {title}
-                </h2>
-              ) : (
-                <div />
-              )}
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-xl border border-white/10 bg-black/40 p-2 text-zinc-400 hover:text-zinc-200 transition-colors"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="px-4 pb-6 sm:px-6 sm:pb-8">{children}</div>
+            {(title || showClose) && (
+              <div className="flex items-center justify-between px-5 pt-4 pb-3.5 border-b border-white/6">
+                {title && (
+                  <h2
+                    id={titleId}
+                    className="text-sm font-medium text-vault-text"
+                  >
+                    {title}
+                  </h2>
+                )}
+                {!title && <div />}
+                {showClose && (
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    aria-label="Close dialog"
+                    className="rounded-lg p-1 -mr-1 text-vault-subtext hover:text-vault-text hover:bg-white/6 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+            {description && (
+              <p id={descId} className="sr-only">
+                {description}
+              </p>
+            )}
+            <div className="p-5">{children}</div>
           </motion.div>
-        </div>
-      ) : null}
-    </AnimatePresence>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
+  )
+}
+
+/** Sticky footer inside a Modal */
+Modal.Footer = function ModalFooter({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-end gap-2 mt-5 pt-4 border-t border-white/6">
+      {children}
+    </div>
   )
 }

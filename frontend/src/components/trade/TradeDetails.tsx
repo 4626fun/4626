@@ -32,14 +32,15 @@ export function TradeDetails(props: TradeDetailsProps) {
   )
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/3 p-3">
+    <div className="rounded-2xl border border-white/8 bg-white/3 p-3">
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between text-left"
+        className="flex w-full items-center justify-between text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary rounded-lg"
+        aria-expanded={open}
       >
-        <div className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-400">Trade details</div>
-        <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <div className="text-xs font-medium text-zinc-500">Trade details</div>
+        <ChevronDown className={`h-3.5 w-3.5 text-zinc-500 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open ? (
         <div className="mt-3 space-y-2 text-xs text-zinc-300">

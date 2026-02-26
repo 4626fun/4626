@@ -1,5 +1,6 @@
 export type UniswapErrorCode =
   | 'INSUFFICIENT_FUNDS'
+  | 'INSUFFICIENT_GAS'
   | 'APPROVAL_REQUIRED'
   | 'QUOTE_EXPIRED'
   | 'CHAIN_MISMATCH'
@@ -18,45 +19,129 @@ export type NormalizedUniswapError = {
 
 const FALLBACK: NormalizedUniswapError = {
   code: 'UNKNOWN',
-  message: 'Something went wrong while talking to Uniswap. Please try again.',
+  message: 'Something went wrong. Check your balance and try again.',
   retryable: true,
 }
 
 export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
   const raw = typeof input === 'string'
     ? input
-    : (input && typeof input === 'object' && 'message' in input && typeof (input as any).message === 'string')
-      ? String((input as any).message)
+    : (input && typeof input === 'object' && 'message' in input && typeof (input as Record<string, unknown>).message === 'string')
+      ? String((input as Record<string, unknown>).message)
       : ''
   const msg = raw.toLowerCase()
 
   if (!msg.trim()) return FALLBACK
-  if (msg.includes('insufficient') || msg.includes('not enough balance')) {
-    return { code: 'INSUFFICIENT_FUNDS', message: 'Insufficient balance for this action.', retryable: false }
+
+  // Gas / ETH balance
+  if (msg.includes('insufficient funds for gas') || msg.includes('not enough eth') || msg.includes('out of gas')) {
+    return {
+      code: 'INSUFFICIENT_GAS',
+      message: 'Not enough ETH for gas. Add ETH to your wallet to continue.',
+      retryable: false,
+    }
   }
+
+  // Token balance
+  if (msg.includes('insufficient') || msg.includes('not enough balance') || msg.includes('exceeds balance')) {
+    return {
+      code: 'INSUFFICIENT_FUNDS',
+      message: 'Insufficient token balance. Reduce the amount or add more tokens.',
+      retryable: false,
+    }
+  }
+
+  // Approval / allowance
   if (msg.includes('approval') || msg.includes('allowance')) {
-    return { code: 'APPROVAL_REQUIRED', message: 'Approval is required before continuing.', retryable: true }
+    return {
+      code: 'APPROVAL_REQUIRED',
+      message: 'Token approval needed. Click Approve to continue.',
+      retryable: true,
+    }
   }
-  if (msg.includes('expired') || msg.includes('stale quote')) {
-    return { code: 'QUOTE_EXPIRED', message: 'Quote expired. Refresh and try again.', retryable: true }
+
+  // Quote expired
+  if (msg.includes('expired') || msg.includes('stale quote') || msg.includes('deadline')) {
+    return {
+      code: 'QUOTE_EXPIRED',
+      message: 'Quote expired — prices may have changed. Refresh and try again.',
+      retryable: true,
+    }
   }
-  if (msg.includes('chain') && msg.includes('mismatch')) {
-    return { code: 'CHAIN_MISMATCH', message: 'Wrong network selected. Please switch chain.', retryable: true }
+
+  // Wrong chain
+  if ((msg.includes('chain') && msg.includes('mismatch')) || msg.includes('wrong network') || msg.includes('chainid')) {
+    return {
+      code: 'CHAIN_MISMATCH',
+      message: 'Wrong network. Switch to Base to continue.',
+      retryable: true,
+    }
   }
-  if (msg.includes('slippage')) {
-    return { code: 'SLIPPAGE_EXCEEDED', message: 'Price moved beyond slippage tolerance.', retryable: true }
+
+  // Slippage
+  if (msg.includes('slippage') || msg.includes('price impact')) {
+    return {
+      code: 'SLIPPAGE_EXCEEDED',
+      message: 'Price moved beyond slippage tolerance. Try increasing slippage or reducing the amount.',
+      retryable: true,
+    }
   }
-  if (msg.includes('rate limit') || msg.includes('429')) {
-    return { code: 'RATE_LIMITED', message: 'Too many requests. Please wait and try again.', retryable: true }
+
+  // Rate limit
+  if (msg.includes('rate limit') || msg.includes('429') || msg.includes('too many requests')) {
+    return {
+      code: 'RATE_LIMITED',
+      message: 'Too many requests. Wait a moment and try again.',
+      retryable: true,
+    }
   }
-  if (msg.includes('rejected') || msg.includes('user denied') || msg.includes('action_rejected')) {
-    return { code: 'WALLET_REJECTED', message: 'Transaction was rejected in your wallet.', retryable: true }
+
+  // User rejected
+  if (
+    msg.includes('rejected') ||
+    msg.includes('user denied') ||
+    msg.includes('action_rejected') ||
+    msg.includes('user cancelled') ||
+    msg.includes('user canceled')
+  ) {
+    return {
+      code: 'WALLET_REJECTED',
+      message: 'Transaction cancelled.',
+      retryable: true,
+    }
   }
-  if (msg.includes('nonce too low') || msg.includes('replacement transaction underpriced')) {
-    return { code: 'NONCE_CONFLICT', message: 'Network nonce conflict. Please retry in a few seconds.', retryable: true }
+
+  // Nonce
+  if (msg.includes('nonce too low') || msg.includes('replacement transaction underpriced') || msg.includes('nonce conflict')) {
+    return {
+      code: 'NONCE_CONFLICT',
+      message: 'Transaction conflict. Wait a few seconds and try again.',
+      retryable: true,
+    }
   }
-  if (msg.includes('timeout') || msg.includes('network error') || msg.includes('failed to fetch')) {
-    return { code: 'NETWORK_TIMEOUT', message: 'Network timeout. Please check connection and retry.', retryable: true }
+
+  // Network / timeout
+  if (
+    msg.includes('timeout') ||
+    msg.includes('network error') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('econnrefused') ||
+    msg.includes('fetch error')
+  ) {
+    return {
+      code: 'NETWORK_TIMEOUT',
+      message: 'Network error. Check your connection and try again.',
+      retryable: true,
+    }
+  }
+
+  // Generic contract revert — strip hex noise
+  if (msg.includes('reverted') || msg.includes('execution reverted')) {
+    return {
+      code: 'UNKNOWN',
+      message: 'Transaction failed. Check your balance and try again.',
+      retryable: true,
+    }
   }
 
   return { ...FALLBACK, message: raw.slice(0, 220) }

@@ -41,7 +41,7 @@ export function RouteViz(props: {
   if (props.compact) {
     return (
       <div className={`inline-flex items-center gap-1 ${props.className ?? ''}`}>
-        <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] text-zinc-300 border border-white/10">
+        <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-zinc-300 border border-white/8">
           {nodes[0].label}
         </span>
         <svg width="16" height="6" viewBox="0 0 16 6" fill="none" aria-hidden>
@@ -53,7 +53,7 @@ export function RouteViz(props: {
             Smart routed
           </span>
         ) : (
-          <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] text-zinc-300 border border-white/10">
+          <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-zinc-300 border border-white/8">
             {nodes[nodes.length - 1].label}
           </span>
         )}
@@ -77,7 +77,7 @@ export function RouteViz(props: {
             className={`rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${
               node.type === 'chain'
                 ? 'border-brand-primary/25 bg-brand-primary/10 text-brand-300'
-                : 'border-white/10 bg-white/5 text-zinc-400'
+                : 'border-white/8 bg-white/4 text-zinc-400'
             }`}
           >
             {node.label}

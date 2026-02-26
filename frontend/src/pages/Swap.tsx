@@ -650,7 +650,7 @@ export function Swap() {
             ) : null}
 
             {/* ─── Trade card ──────────────────────────────────────── */}
-            <div className="rounded-3xl border border-white/8 bg-[#0d111a] p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.78)] sm:p-5">
+            <div className="rounded-3xl border border-white/8 bg-vault-card/70 p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.6)] backdrop-blur-xl sm:p-5">
 
               {activePanel === 'swap' ? (
                 <SwapPanel

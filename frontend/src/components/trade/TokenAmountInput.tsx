@@ -23,7 +23,7 @@ export function TokenAmountInput(props: TokenAmountInputProps) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">{props.label}</div>
+        <div className="text-[11px] font-medium text-zinc-500">{props.label}</div>
         <div className="text-[11px] text-zinc-500">{props.balanceLabel ?? 'Balance --'}</div>
       </div>
       <div className="grid grid-cols-[1fr_auto] items-end gap-3">
@@ -43,7 +43,7 @@ export function TokenAmountInput(props: TokenAmountInputProps) {
         <select
           value={props.token}
           onChange={(e) => props.onTokenChange(e.target.value)}
-          className="min-h-11 rounded-full border border-white/20 bg-black/30 px-3 py-2 text-sm font-medium text-white"
+          className="min-h-10 rounded-xl border border-white/8 bg-vault-card/60 px-3 py-2 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-brand-primary"
         >
           <optgroup label="Core tokens">
             {coreOptions.map((opt) => (

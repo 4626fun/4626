@@ -3,6 +3,7 @@ import { Settings } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { ConnectButtonWeb3 } from '@/components/ConnectButtonWeb3'
+import { Alert } from '@/components/ui/Alert'
 import { FlipButton } from '@/components/trade/FlipButton'
 import { InfoStrip } from '@/components/trade/InfoStrip'
 import { RouteCompareCard } from '@/components/trade/RouteCompareCard'
@@ -94,15 +95,15 @@ export function SwapPanel(props: {
       <div className="mb-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           {/* Swap / Liquidity segmented control */}
-          <div className="inline-flex rounded-xl border border-white/10 bg-[#121722] p-0.5 text-[11px]">
+          <div className="inline-flex rounded-xl border border-white/8 bg-vault-card/50 p-0.5 text-[11px]">
             {(['swap', 'liquidity'] as const).map((panel) => (
               <button
                 key={panel}
                 type="button"
                 onClick={() => props.onSetActivePanel(panel)}
-                className={`min-h-8 rounded-lg px-2.5 py-1 transition-colors capitalize ${
+                className={`min-h-8 rounded-lg px-3 py-1 transition-colors capitalize ${
                   props.activePanel === panel
-                    ? 'bg-white/10 text-white font-semibold'
+                    ? 'bg-white/10 text-white font-medium'
                     : 'text-zinc-500 hover:text-zinc-300'
                 }`}
               >
@@ -111,7 +112,7 @@ export function SwapPanel(props: {
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {/* Wallet mode toggle (compact) */}
             <WalletModeToggle
               mode={props.executionMode}
@@ -131,7 +132,7 @@ export function SwapPanel(props: {
             <button
               type="button"
               onClick={props.onOpenSettings}
-              className="rounded-xl border border-white/10 bg-[#121722] p-1.5 text-zinc-400 transition hover:bg-[#171d2a] hover:text-zinc-200"
+              className="rounded-xl border border-white/8 bg-vault-card/50 p-1.5 text-zinc-400 transition hover:bg-white/8 hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary"
               title="Trade settings"
               aria-label="Open trade settings"
             >
@@ -214,9 +215,9 @@ export function SwapPanel(props: {
 
           {/* ─── Inline notices (single priority notice shown at a time) ─── */}
           {props.tokensEquivalent && (
-            <div className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/8 px-3 py-2 text-xs text-rose-300">
+            <Alert variant="error" className="mt-3">
               Select two different tokens to get a quote.
-            </div>
+            </Alert>
           )}
 
           {!props.tokensEquivalent && (() => {
@@ -224,50 +225,61 @@ export function SwapPanel(props: {
             // 1. error  2. stale quote  3. permit signature  4. status
             if (props.error) {
               return (
-                <div className="mt-2 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+                <Alert variant="error" className="mt-2">
                   {props.error}
-                </div>
+                </Alert>
               )
             }
             if (props.quoteIsStale && props.executionReady) {
               return (
-                <motion.button
-                  type="button"
-                  onClick={props.onRefreshQuote}
-                  disabled={props.busy !== null}
-                  whileTap={{ scale: 0.97 }}
-                  className="mt-2 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300 transition hover:bg-amber-500/15 disabled:opacity-50"
+                <Alert
+                  variant="warning"
+                  className="mt-2"
+                  action={{ label: 'Refresh quote', onClick: props.onRefreshQuote }}
                 >
-                  Quote expired — refresh
-                </motion.button>
+                  Quote expired — prices may have changed.
+                </Alert>
               )
             }
             if (props.permitSignatureRequired) {
               return (
-                <div
-                  className={`mt-2 rounded-xl border px-3 py-2 text-xs ${
+                <Alert
+                  variant={props.permitSignaturePending ? 'warning' : props.permitSignatureReady ? 'success' : 'info'}
+                  className="mt-2"
+                  title={
                     props.permitSignaturePending
-                      ? 'border-amber-400/30 bg-amber-500/10 text-amber-300'
+                      ? 'Check your wallet'
                       : props.permitSignatureReady
-                        ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
-                        : 'border-blue-400/25 bg-blue-500/10 text-blue-300'
-                  }`}
+                        ? 'Approval captured'
+                        : 'One-time approval needed'
+                  }
                 >
                   {props.permitSignaturePending
-                    ? 'Check your wallet — signature required.'
+                    ? 'Sign the one-time token approval in your wallet. No gas required.'
                     : props.permitSignatureReady
                       ? props.isOrderRoute
-                        ? 'Signature captured. Ready to submit order.'
-                        : 'Signature captured. Ready to swap.'
-                      : 'A one-time signature is needed before submission.'}
-                </div>
+                        ? 'Ready to submit your order.'
+                        : 'Ready to swap.'
+                      : 'A one-time signature is needed to allow this token. No gas required.'}
+                </Alert>
               )
             }
             if (props.status) {
-              return <div className="mt-2 text-xs text-emerald-400">{props.status}</div>
+              return (
+                <Alert variant="success" className="mt-2">
+                  {props.status}
+                </Alert>
+              )
             }
             return null
           })()}
+
+          {/* ─── Fallback active notice ──────────────────────────────────── */}
+          {props.executionFallbackActive && (
+            <Alert variant="warning" className="mt-2" title="Smart Wallet unavailable">
+              Using your connected wallet instead. Switch to Smart Wallet mode for 1-click swaps.
+            </Alert>
+          )}
 
           {/* ─── Not connected ───────────────────────────────────────────── */}
           {!props.isConnected && (
@@ -278,11 +290,11 @@ export function SwapPanel(props: {
 
           {/* ─── Execution not ready ─────────────────────────────────────── */}
           {props.isConnected && !props.executionReady && (
-            <div className="mt-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+            <Alert variant="warning" className="mt-2" title="Wallet not ready">
               {props.executionMode === 'canonical'
-                ? 'Set up your Smart Wallet to trade with enhanced security.'
+                ? 'Set up your Smart Wallet to enable 1-click swaps.'
                 : 'Your wallet is not ready to submit transactions.'}
-            </div>
+            </Alert>
           )}
 
           {/* ─── TX lifecycle ────────────────────────────────────────────── */}
@@ -293,7 +305,7 @@ export function SwapPanel(props: {
 
           {/* ─── Sticky CTA ──────────────────────────────────────────────── */}
           <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.35rem)] z-60 px-3 md:static md:inset-auto md:bottom-auto md:z-auto md:mt-3 md:px-0">
-            <div className="pointer-events-auto rounded-2xl border border-white/8 bg-[#0f141e]/95 p-1.5 shadow-[0_-8px_24px_-6px_rgba(0,0,0,0.72)] backdrop-blur-xl md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-0">
+            <div className="pointer-events-auto rounded-2xl border border-white/8 bg-vault-bg/95 p-1.5 shadow-[0_-8px_24px_-6px_rgba(0,0,0,0.6)] backdrop-blur-xl md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-0">
               <motion.button
                 type="button"
                 onClick={props.onReviewTrade}

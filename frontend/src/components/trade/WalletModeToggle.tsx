@@ -27,7 +27,7 @@ export function WalletModeToggle(props: {
   return (
     <div className={props.compact ? 'flex items-center gap-2' : 'space-y-2'}>
       {/* Segmented pill toggle */}
-      <div className="inline-flex rounded-full border border-white/10 bg-black/40 p-0.5 text-[11px]">
+      <div className="inline-flex rounded-full border border-white/8 bg-vault-card/50 p-0.5 text-[11px]">
         {modes.map((m) => {
           const available = m === 'canonical' ? props.canonicalAvailable : props.eoaAvailable
           const active = props.mode === m
@@ -47,7 +47,7 @@ export function WalletModeToggle(props: {
               }}
               disabled={props.busy}
               whileTap={{ scale: 0.96 }}
-              className={`relative min-h-7 rounded-full px-2.5 py-0.5 transition-colors disabled:opacity-40 ${
+              className={`relative min-h-7 rounded-full px-2.5 py-0.5 transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary ${
                 active
                   ? 'bg-white/10 text-white font-medium'
                   : available
@@ -76,7 +76,7 @@ export function WalletModeToggle(props: {
           )}
           {props.fallbackActive && (
             <span className="rounded-full border border-amber-400/25 bg-amber-500/8 px-2 py-0.5 text-[10px] text-amber-300">
-              Fallback active
+              Smart Wallet unavailable
             </span>
           )}
           {props.mode === 'eoa' && !props.fallbackActive && (

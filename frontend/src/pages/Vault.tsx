@@ -1,24 +1,27 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useAccount, usePublicClient, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatUnits, getAddress, isAddress, parseUnits, erc20Abi, type Address } from 'viem'
 import { base } from 'viem/chains'
+import { toast } from 'sonner'
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
-  Loader2,
+  CheckCircle2,
   ExternalLink,
   Clock,
   ShieldCheck,
   MessageSquare,
 } from 'lucide-react'
+import { Alert } from '@/components/ui/Alert'
+import { Button } from '@/components/ui/Button'
+import { Skeleton } from '@/components/ui/Skeleton'
+import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
 import { AKITA, CONTRACTS } from '../config/contracts'
 import { ClaimPrizeToSolana } from '../components/ClaimPrizeToSolana'
 import { ConnectButton } from '../components/ConnectButton'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { Skeleton } from '@/components/ui/Skeleton'
-import { useXmtp } from '@/lib/xmtp/provider'
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { CcaAuctionPanel } from '@/components/cca/CcaAuctionPanel'
 import { useTokenMetadata } from '@/hooks/useTokenMetadata'
@@ -98,50 +101,28 @@ function TokenAvatar({
 }
 
 function VaultChatCard() {
-  const { status, connect } = useXmtp()
-  const isXmtpConnected = status === 'connected'
-  const isXmtpLoading = status === 'signing' || status === 'connecting'
-
-  const handleChat = async () => {
-    if (!isXmtpConnected) {
-      await connect()
-      return
-    }
-    // Open the agent directory or start a DM — for now we just connect
-    // and let the ChatWidget handle conversation discovery
-  }
-
   return (
-    <div className="card p-5 space-y-3">
-      <div className="flex items-center gap-2">
-        <MessageSquare className="w-4 h-4 text-brand-primary" />
-        <span className="label">Vault Chat</span>
+    <div className="card p-5 space-y-3 opacity-60">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="w-4 h-4 text-brand-primary" />
+          <span className="label">Vault Chat</span>
+        </div>
+        <span className="text-[10px] rounded-full border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-zinc-500">
+          Coming soon
+        </span>
       </div>
-      <p className="text-xs text-zinc-500 leading-relaxed">
-        Join the vault group chat to connect with the creator and other holders.
+      <p className="text-xs text-zinc-600 leading-relaxed">
+        Group chat for vault holders will be available here once messaging is live.
       </p>
       <button
         type="button"
-        onClick={handleChat}
-        disabled={isXmtpLoading}
-        className="w-full flex items-center justify-center gap-2 rounded-xl bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary text-xs font-medium py-2.5 transition-colors disabled:opacity-50"
+        disabled
+        aria-disabled="true"
+        className="w-full flex items-center justify-center gap-2 rounded-xl bg-white/4 text-zinc-600 text-xs font-medium py-2.5 cursor-not-allowed"
       >
-        {isXmtpLoading ? (
-          <>
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            {status === 'signing' ? 'Sign to enable…' : 'Connecting…'}
-          </>
-        ) : isXmtpConnected ? (
-          <>
-            <MessageSquare className="w-3.5 h-3.5" />
-            Open Chat
-          </>
-        ) : (
-          <>
-            <MessageSquare className="w-3.5 h-3.5" />
-            Enable Chat
-          </>
-        )}
+        <MessageSquare className="w-3.5 h-3.5" />
+        Chat not yet available
       </button>
     </div>
   )
@@ -182,6 +163,7 @@ export function Vault() {
     gcTime: 1000 * 60 * 60,
   })
 
+  const queryClient = useQueryClient()
   const { address: userAddress, isConnected } = useAccount()
   const accountContext = useAccountContext()
   const [activeTab, setActiveTab] = useState<TabType>('Deposit')
@@ -198,6 +180,8 @@ export function Vault() {
     const type = accountContext.activeAccountType === 'SMART_WALLET' ? 'Smart Wallet' : 'EOA'
     return `${type} ${accountContext.activeAccount.slice(0, 6)}…${accountContext.activeAccount.slice(-4)}`
   }, [accountContext.activeAccount, accountContext.activeAccountType])
+  const [vaultError, setVaultError] = useState<string | null>(null)
+  const [lastSuccess, setLastSuccess] = useState<string | null>(null)
 
   const tokenAddress = (resolved?.token ?? (akitaFallback ? (AKITA.token as Address) : null)) as Address | null
   const wrapperAddress = (resolved?.info.wrapper ?? (akitaFallback ? (AKITA.wrapper as Address) : null)) as Address | null
@@ -302,9 +286,32 @@ export function Vault() {
   const { writeContract: writeDeposit, data: depositHash } = useWriteContract()
   const { writeContract: writeWithdraw, data: withdrawHash } = useWriteContract()
 
-  const { isLoading: isApproving } = useWaitForTransactionReceipt({ hash: approveHash })
-  const { isLoading: isDepositing } = useWaitForTransactionReceipt({ hash: depositHash })
-  const { isLoading: isWithdrawing } = useWaitForTransactionReceipt({ hash: withdrawHash })
+  const { isLoading: isApproving, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveHash })
+  const { isLoading: isDepositing, isSuccess: depositSuccess } = useWaitForTransactionReceipt({ hash: depositHash })
+  const { isLoading: isWithdrawing, isSuccess: withdrawSuccess } = useWaitForTransactionReceipt({ hash: withdrawHash })
+
+  // Refresh balances and show success messages after confirmed transactions
+  useEffect(() => {
+    if (!approveSuccess) return
+    void queryClient.invalidateQueries()
+    toast.success('Token approval confirmed')
+  }, [approveSuccess, queryClient])
+
+  useEffect(() => {
+    if (!depositSuccess) return
+    void queryClient.invalidateQueries()
+    setLastSuccess(`Deposit confirmed — your ${shareSymbol} balance has been updated.`)
+    setAmount('')
+    toast.success('Deposit confirmed')
+  }, [depositSuccess, queryClient, shareSymbol])
+
+  useEffect(() => {
+    if (!withdrawSuccess) return
+    void queryClient.invalidateQueries()
+    setLastSuccess(`Withdrawal confirmed — your ${underlyingSymbol} balance has been updated.`)
+    setAmount('')
+    toast.success('Withdrawal confirmed')
+  }, [withdrawSuccess, queryClient, underlyingSymbol])
 
   const isAuctionActive = auctionStatus?.[1] || false
   const isGraduated = auctionStatus?.[2] || false
@@ -328,34 +335,93 @@ export function Vault() {
     })
   }
 
+  // Amount validation
+  const amountError = useMemo((): string | null => {
+    if (!amount) return null
+    const n = parseFloat(amount)
+    if (Number.isNaN(n) || n < 0) return 'Enter a valid amount'
+    if (n === 0) return 'Amount must be greater than zero'
+    if (activeTab === 'Deposit' && tokenBalance !== undefined) {
+      try {
+        const maxRaw = parseUnits(amount, creatorDecimals)
+        if (maxRaw > tokenBalance) return `Exceeds your ${underlyingSymbol} balance`
+      } catch { /* ignore parse error */ }
+    }
+    if (activeTab === 'Withdraw' && shareBalance !== undefined) {
+      try {
+        const maxRaw = parseUnits(amount, shareTokenDecimals)
+        if (maxRaw > shareBalance) return `Exceeds your ${shareSymbol} balance`
+      } catch { /* ignore parse error */ }
+    }
+    return null
+  }, [amount, activeTab, tokenBalance, shareBalance, creatorDecimals, shareTokenDecimals, underlyingSymbol, shareSymbol])
+
   const handleApprove = () => {
-    if (!amount || !tokenAddress || !wrapperAddress) return
-    writeApprove({
-      address: tokenAddress as `0x${string}`,
-      abi: erc20Abi,
-      functionName: 'approve',
-      args: [wrapperAddress as `0x${string}`, parseUnits(amount, creatorDecimals)],
-    })
+    if (!amount || !tokenAddress || !wrapperAddress || amountError) return
+    setVaultError(null)
+    writeApprove(
+      {
+        address: tokenAddress as `0x${string}`,
+        abi: erc20Abi,
+        functionName: 'approve',
+        args: [wrapperAddress as `0x${string}`, parseUnits(amount, creatorDecimals)],
+      },
+      {
+        onError: (err) => {
+          const msg = err?.message?.includes('rejected') || err?.message?.includes('denied')
+            ? 'Approval cancelled.'
+            : `Approval failed: ${err?.message?.slice(0, 80) ?? 'Unknown error'}`
+          setVaultError(msg)
+          toast.error(msg)
+        },
+      },
+    )
   }
 
   const handleDeposit = () => {
-    if (!amount || !tokenAddress || !wrapperAddress) return
-    writeDeposit({
-      address: wrapperAddress as `0x${string}`,
-      abi: WRAPPER_ABI,
-      functionName: 'deposit',
-      args: [parseUnits(amount, creatorDecimals)],
-    })
+    if (!amount || !tokenAddress || !wrapperAddress || amountError) return
+    setVaultError(null)
+    setLastSuccess(null)
+    writeDeposit(
+      {
+        address: wrapperAddress as `0x${string}`,
+        abi: WRAPPER_ABI,
+        functionName: 'deposit',
+        args: [parseUnits(amount, creatorDecimals)],
+      },
+      {
+        onError: (err) => {
+          const msg = err?.message?.includes('rejected') || err?.message?.includes('denied')
+            ? 'Transaction cancelled.'
+            : `Deposit failed: ${err?.message?.slice(0, 80) ?? 'Unknown error'}`
+          setVaultError(msg)
+          toast.error(msg)
+        },
+      },
+    )
   }
 
   const handleWithdraw = () => {
-    if (!amount || !wrapperAddress) return
-    writeWithdraw({
-      address: wrapperAddress as `0x${string}`,
-      abi: WRAPPER_ABI,
-      functionName: 'withdraw',
-      args: [parseUnits(amount, shareTokenDecimals)],
-    })
+    if (!amount || !wrapperAddress || amountError) return
+    setVaultError(null)
+    setLastSuccess(null)
+    writeWithdraw(
+      {
+        address: wrapperAddress as `0x${string}`,
+        abi: WRAPPER_ABI,
+        functionName: 'withdraw',
+        args: [parseUnits(amount, shareTokenDecimals)],
+      },
+      {
+        onError: (err) => {
+          const msg = err?.message?.includes('rejected') || err?.message?.includes('denied')
+            ? 'Transaction cancelled.'
+            : `Withdrawal failed: ${err?.message?.slice(0, 80) ?? 'Unknown error'}`
+          setVaultError(msg)
+          toast.error(msg)
+        },
+      },
+    )
   }
 
   const needsApproval =
@@ -372,7 +438,7 @@ export function Vault() {
       <div className="relative pb-24 md:pb-0">
         <section className="cinematic-section">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
-            <div className="rounded-3xl border border-white/5 bg-[#080808]/50 backdrop-blur-2xl px-6 py-10 sm:p-10">
+            <div className="rounded-3xl border border-white/5 bg-vault-bg/60 backdrop-blur-2xl px-6 py-10 sm:p-10">
               <span className="label">Vault</span>
               <h1 className="headline text-3xl sm:text-5xl mt-4">Invalid vault address</h1>
               <p className="text-zinc-600 text-sm font-light mt-4">Check the URL and try again.</p>
@@ -393,7 +459,7 @@ export function Vault() {
       <div className="relative pb-24 md:pb-0">
         <section className="cinematic-section">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
-            <div className="rounded-3xl border border-white/5 bg-[#080808]/50 backdrop-blur-2xl px-6 py-10 sm:p-10">
+            <div className="rounded-3xl border border-white/5 bg-vault-bg/60 backdrop-blur-2xl px-6 py-10 sm:p-10">
               <span className="label">Vault</span>
               <h1 className="headline text-3xl sm:text-5xl mt-4">
                 {showResolveError ? 'Could not load vault' : 'Vault not registered'}
@@ -472,7 +538,7 @@ export function Vault() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
-            className="relative overflow-hidden rounded-3xl border border-white/5 bg-[#080808]/50 backdrop-blur-2xl px-6 py-10 sm:p-10"
+            className="relative overflow-hidden rounded-3xl border border-white/5 bg-vault-bg/60 backdrop-blur-2xl px-6 py-10 sm:p-10"
           >
             {/* Atmosphere */}
             <motion.div
@@ -620,25 +686,33 @@ export function Vault() {
       <section className="cinematic-section bg-zinc-950/20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           {canManageVault ? (
-            <div className="rounded-2xl border border-white/5 bg-white/[0.03] overflow-hidden">
+            <div className="rounded-2xl border border-white/5 bg-white/3 overflow-hidden">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-white/5">
-                <div className="bg-[#080808]/70 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
+                <div className="bg-vault-bg/70 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
                   <span className="label">Total Supply</span>
                   <div className="value mono text-2xl sm:text-3xl">
-                    {totalShareSupply ? formatAmount(totalShareSupply, shareTokenDecimals) : '—'}
+                    {totalShareSupply !== undefined
+                      ? formatAmount(totalShareSupply, shareTokenDecimals)
+                      : <Skeleton className="h-8 w-24 mt-1" />}
                   </div>
                 </div>
-                <div className="bg-[#080808]/70 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
+                <div className="bg-vault-bg/70 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
                   <span className="label">APY</span>
-                  <div className="value mono text-2xl sm:text-3xl glow-cyan">—</div>
+                  <div className="value mono text-2xl sm:text-3xl text-zinc-600" title="Coming soon">
+                    —
+                  </div>
                 </div>
-                <div className="bg-[#080808]/70 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
+                <div className="bg-vault-bg/70 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
                   <span className="label">Global Jackpot</span>
-                  <div className="value mono text-2xl sm:text-3xl glow-brand">—</div>
+                  <div className="value mono text-2xl sm:text-3xl text-zinc-600" title="Coming soon">
+                    —
+                  </div>
                 </div>
-                <div className="bg-[#080808]/70 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
+                <div className="bg-vault-bg/70 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
                   <span className="label">Trade Fee</span>
-                  <div className="value mono text-2xl sm:text-3xl">—</div>
+                  <div className="value mono text-2xl sm:text-3xl text-zinc-600" title="Coming soon">
+                    —
+                  </div>
                 </div>
               </div>
             </div>
@@ -652,13 +726,9 @@ export function Vault() {
                 vaultAddress={vaultAddress}
               />
             ) : (
-              <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-6 text-center">
-                <Clock className="mx-auto h-8 w-8 text-zinc-700 mb-3" aria-hidden="true" />
-                <div className="text-sm text-zinc-500 font-medium">Auction not available</div>
-                <div className="mt-1 text-xs text-zinc-600">
-                  This vault doesn't have a CCA (Continuous Clearing Auction) strategy configured yet. Auctions let early supporters get share tokens before public trading begins.
-                </div>
-              </div>
+              <Alert variant="info" className="mt-2">
+                <span className="font-medium">Auction not yet active.</span> The CCA auction panel becomes available once the vault launches. Check back after the creator deploys their strategy.
+              </Alert>
             )}
           </div>
         </div>
@@ -718,8 +788,8 @@ export function Vault() {
                       type="button"
                       onClick={() => setActiveTab(tab)}
                       aria-pressed={active}
-                      className={`flex-1 h-10 rounded-full flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.18em] transition-colors ${
-                        active ? 'bg-zinc-900 text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'
+                      className={`flex-1 h-10 rounded-full flex items-center justify-center gap-2 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary ${
+                        active ? 'bg-white/8 text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'
                       }`}
                     >
                       <Icon className="w-4 h-4" />
@@ -729,14 +799,18 @@ export function Vault() {
                 })}
               </div>
 
+              {/* Account Mode Indicator */}
+              <AccountModeIndicator compact />
+
               {/* Amount Input */}
-              <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2">
                   <div>
-                    <span className="label block mb-2">Amount</span>
+                    <span className="label block mb-1">Amount</span>
                     <p className="text-zinc-600 text-xs font-light">Enter the amount to {activeTab.toLowerCase()}</p>
                   </div>
                   <button
+                    type="button"
                     onClick={() =>
                       setAmount(
                         activeTab === 'Deposit'
@@ -744,38 +818,79 @@ export function Vault() {
                           : formatUnits(shareBalance || 0n, shareTokenDecimals)
                       )
                     }
-                    className="label text-zinc-600 hover:text-cyan-400 transition-colors text-left sm:text-right"
+                    className="label text-zinc-600 hover:text-cyan-400 transition-colors text-left sm:text-right focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary rounded"
                   >
-                    Max: {activeTab === 'Deposit'
-                      ? formatAmount(tokenBalance || 0n, creatorDecimals)
-                      : formatAmount(shareBalance || 0n, shareTokenDecimals)}
+                    Max:{' '}
+                    {activeTab === 'Deposit'
+                      ? tokenBalance !== undefined
+                        ? formatAmount(tokenBalance, creatorDecimals)
+                        : '…'
+                      : shareBalance !== undefined
+                        ? formatAmount(shareBalance, shareTokenDecimals)
+                        : '…'}
                   </button>
                 </div>
                 
-                <div className="card p-5 sm:p-8">
+                <div className={`card p-5 sm:p-8 ${amountError ? 'border-rose-500/30' : ''}`}>
                   <input
                     type="text"
                     inputMode="decimal"
                     autoComplete="off"
+                    aria-label={`${activeTab} amount`}
+                    aria-invalid={amountError ? 'true' : undefined}
+                    aria-describedby={amountError ? 'amount-error' : undefined}
                     value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
+                    onChange={(e) => {
+                      setAmount(e.target.value)
+                      setVaultError(null)
+                      setLastSuccess(null)
+                    }}
                     placeholder="0.0"
-                    className="input-field w-full text-4xl sm:text-5xl font-light text-center"
+                    className="input-field w-full text-4xl sm:text-5xl font-light text-center bg-transparent border-0 outline-none focus:ring-0 placeholder:text-zinc-700"
                   />
-                  <div className="mt-4 text-center">
+                  <div className="mt-3 text-center">
                     <span className="label">{activeTab === 'Deposit' ? underlyingSymbol : shareSymbol}</span>
                   </div>
                 </div>
 
-                {amount && (
-                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 py-4 border-y border-zinc-900/50">
-                    <span className="label">You Will Receive</span>
+                {amountError && (
+                  <p id="amount-error" role="alert" className="text-xs text-rose-400">
+                    {amountError}
+                  </p>
+                )}
+
+                {amount && !amountError && (
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 py-3 border-y border-zinc-900/50">
+                    <span className="label">You will receive</span>
                     <div className="value mono text-lg sm:text-xl glow-cyan sm:text-right whitespace-nowrap">
                       {amount} {activeTab === 'Deposit' ? shareSymbol : underlyingSymbol}
                     </div>
                   </div>
                 )}
               </div>
+
+              {/* Transaction feedback */}
+              {vaultError && (
+                <Alert variant="error" onDismiss={() => setVaultError(null)}>
+                  {vaultError}
+                </Alert>
+              )}
+
+              {lastSuccess && (
+                <div className="flex items-start gap-3 rounded-xl border border-emerald-400/20 bg-emerald-400/5 px-3 py-3 text-sm text-emerald-300">
+                  <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-emerald-400" aria-hidden="true" />
+                  <div>
+                    <p>{lastSuccess}</p>
+                    <button
+                      type="button"
+                      onClick={() => setLastSuccess(null)}
+                      className="mt-1 text-xs text-emerald-400/70 hover:text-emerald-400 underline underline-offset-2 transition-colors"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Action Button */}
               {!isConnected ? (
@@ -784,46 +899,29 @@ export function Vault() {
                   <ConnectButton />
                 </div>
               ) : needsApproval ? (
-                <button
+                <Button
+                  variant="primary"
+                  size="lg"
                   onClick={handleApprove}
-                  disabled={isApproving || !amount}
-                  className="btn-accent w-full py-4 sm:py-5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  loading={isApproving}
+                  disabled={!amount || Boolean(amountError)}
+                  className="w-full flex-col h-auto py-4"
                 >
-                  {isApproving ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
-                      <span className="label">Approving Token...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="label">Approve {underlyingSymbol}</span>
-                      <span className="text-xs text-zinc-600 block mt-1">Step 1 of 2</span>
-                    </>
-                  )}
-                </button>
+                  <span>Approve {underlyingSymbol}</span>
+                  <span className="text-xs opacity-70 font-normal">Step 1 of 2 — no gas required</span>
+                </Button>
               ) : (
-                <button
+                <Button
+                  variant="primary"
+                  size="lg"
                   onClick={activeTab === 'Deposit' ? handleDeposit : handleWithdraw}
-                  disabled={
-                    (activeTab === 'Deposit' && isDepositing) ||
-                    (activeTab === 'Withdraw' && isWithdrawing) ||
-                    !amount
-                  }
-                  className="btn-accent w-full py-4 sm:py-5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  loading={activeTab === 'Deposit' ? isDepositing : isWithdrawing}
+                  disabled={!amount || Boolean(amountError)}
+                  className="w-full flex-col h-auto py-4"
                 >
-                  {((activeTab === 'Deposit' && isDepositing) ||
-                    (activeTab === 'Withdraw' && isWithdrawing)) ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
-                      <span className="label">Processing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="label">{activeTab}</span>
-                      <span className="text-xs text-zinc-600 block mt-1">Confirm transaction in wallet</span>
-                    </>
-                  )}
-                </button>
+                  <span>{activeTab}</span>
+                  <span className="text-xs opacity-70 font-normal">Confirm in your wallet</span>
+                </Button>
               )}
             </div>
 
@@ -833,10 +931,10 @@ export function Vault() {
               <VaultChatCard />
 
               <div>
-                <span className="label mb-6 block">Your Holdings</span>
+                <span className="label mb-4 block">Your Holdings</span>
                 
                 <div className="card p-5 sm:p-8">
-                  <div className="space-y-6">
+                  <div className="space-y-5">
                     <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 items-center">
                       <TokenAvatar image={heroImage} symbol={underlyingSymbol} badge={SHARE_SYMBOL_PREFIX} />
                       <div className="min-w-0">
@@ -844,10 +942,16 @@ export function Vault() {
                         <div className="text-sm text-zinc-200 mt-1 font-light truncate">{shareSymbol}</div>
                       </div>
                       <div className="text-right">
-                        <div className="font-mono text-xl sm:text-2xl text-zinc-200 tabular-nums glow-cyan">
-                          {formatAmount(shareBalance || 0n, shareTokenDecimals)}
-                        </div>
-                        <div className="text-[10px] text-zinc-700 mt-1">Balance</div>
+                        {shareBalance !== undefined ? (
+                          <>
+                            <div className="font-mono text-xl sm:text-2xl text-zinc-200 tabular-nums glow-cyan">
+                              {formatAmount(shareBalance, shareTokenDecimals)}
+                            </div>
+                            <div className="text-[10px] text-zinc-700 mt-1">Balance</div>
+                          </>
+                        ) : (
+                          <Skeleton className="h-7 w-20" />
+                        )}
                       </div>
                     </div>
 
@@ -860,10 +964,16 @@ export function Vault() {
                         <div className="text-sm text-zinc-200 mt-1 font-light truncate">{underlyingSymbol}</div>
                       </div>
                       <div className="text-right">
-                        <div className="font-mono text-lg sm:text-xl text-zinc-200 tabular-nums">
-                          {formatAmount(tokenBalance || 0n, creatorDecimals)}
-                        </div>
-                        <div className="text-[10px] text-zinc-700 mt-1">Balance</div>
+                        {tokenBalance !== undefined ? (
+                          <>
+                            <div className="font-mono text-lg sm:text-xl text-zinc-200 tabular-nums">
+                              {formatAmount(tokenBalance, creatorDecimals)}
+                            </div>
+                            <div className="text-[10px] text-zinc-700 mt-1">Balance</div>
+                          </>
+                        ) : (
+                          <Skeleton className="h-6 w-20" />
+                        )}
                       </div>
                     </div>
                   </div>

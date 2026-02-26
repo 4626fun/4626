@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
+import { Alert } from '@/components/ui/Alert'
+import { Button } from '@/components/ui/Button'
 
 export function SwapSettingsSheet(props: {
   open: boolean
@@ -12,101 +13,126 @@ export function SwapSettingsSheet(props: {
   onSetDeadlineMinutes: (next: string) => void
   onSetCompareRoutesEnabled: (next: boolean) => void
 }) {
-  const dialogRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!props.open) return
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') props.onClose()
-      if (e.key === 'Tab' && dialogRef.current) {
-        const sel = 'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])'
-        const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(sel))
-        if (focusable.length === 0) { e.preventDefault(); return }
-        const first = focusable[0]!, last = focusable[focusable.length - 1]!
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [props.open, props.onClose])
-
   if (!props.open) return null
 
   const slippagePresets = ['0.02', '0.1', '0.5', '1']
+  const slippageNum = parseFloat(props.slippagePct)
+  const slippageTooHigh = Number.isFinite(slippageNum) && slippageNum > 1
+  const slippageTooLow = Number.isFinite(slippageNum) && slippageNum > 0 && slippageNum < 0.05
 
   return (
     <div className="fixed inset-0 z-95">
       <button
         type="button"
         aria-label="Close trade settings"
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/70 backdrop-blur-[6px]"
         onClick={props.onClose}
       />
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Trade settings" className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-xl rounded-t-3xl border border-white/10 bg-[#0e1219]/95 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 shadow-[0_-30px_80px_-35px_rgba(0,0,0,0.9)] backdrop-blur-2xl sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:pb-4">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-400">Trade settings</div>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Trade settings"
+        className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-xl rounded-t-2xl border border-white/8 glass-card px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 shadow-[0_-20px_60px_-20px_rgba(0,0,0,0.8)] sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:pb-4"
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <div className="text-sm font-medium text-vault-text">Trade settings</div>
           <button
             type="button"
             onClick={props.onClose}
-            className="rounded-full border border-white/15 p-2 text-zinc-400 hover:text-zinc-200"
-            aria-label="Close settings sheet"
+            className="rounded-lg p-1 -mr-1 text-vault-subtext hover:text-vault-text hover:bg-white/6 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary"
+            aria-label="Close settings"
           >
-            <X className="h-4 w-4" />
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
-        <div className="space-y-3">
+
+        <div className="space-y-4">
+          {/* Slippage */}
           <div>
-            <label className="label">Slippage %</label>
-            <div className="mt-1 grid grid-cols-[1fr_auto] gap-2">
-              <input
-                inputMode="decimal"
-                className="min-h-11 w-full rounded-xl border border-zinc-700 bg-black/35 px-3 py-2 text-sm text-white"
-                value={props.slippagePct}
-                onChange={(e) => props.onSetSlippagePct(e.target.value)}
-                placeholder="0.5"
-              />
-              <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/4 p-1">
+            <label className="text-[11px] font-medium text-vault-subtext mb-1.5 block">Slippage tolerance</label>
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <div className="relative">
+                <input
+                  inputMode="decimal"
+                  id="slippage-input"
+                  aria-label="Slippage percentage"
+                  className="h-10 w-full rounded-xl border border-white/8 bg-white/4 px-3 pr-7 text-sm text-vault-text placeholder:text-vault-subtext focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-colors"
+                  value={props.slippagePct}
+                  onChange={(e) => props.onSetSlippagePct(e.target.value)}
+                  placeholder="0.5"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500 pointer-events-none">
+                  %
+                </span>
+              </div>
+              <div className="flex items-center gap-0.5 rounded-xl border border-white/8 bg-white/4 p-0.5">
                 {slippagePresets.map((value) => (
                   <button
                     key={value}
                     type="button"
                     onClick={() => props.onSetSlippagePct(value)}
-                    className={`rounded-md px-2 py-1 text-[11px] transition ${
+                    className={`min-h-8 rounded-lg px-2 py-1 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary ${
                       props.slippagePct === value
-                        ? 'bg-white/15 text-white'
+                        ? 'bg-white/15 text-white font-medium'
                         : 'text-zinc-400 hover:text-zinc-200'
                     }`}
                   >
-                    {value}
+                    {value}%
                   </button>
                 ))}
               </div>
             </div>
+            {slippageTooHigh && (
+              <Alert variant="warning" className="mt-2">
+                High slippage — you may receive significantly less than expected. Consider using 0.5% or lower.
+              </Alert>
+            )}
+            {slippageTooLow && (
+              <Alert variant="info" className="mt-2">
+                Very low slippage — your transaction may fail if the price moves at all.
+              </Alert>
+            )}
           </div>
+
+          {/* Deadline */}
           <div>
-            <label className="label">Deadline (minutes)</label>
-            <input
-              inputMode="numeric"
-              className="mt-1 min-h-11 w-full rounded-xl border border-zinc-700 bg-black/35 px-3 py-2 text-sm text-white"
-              value={props.deadlineMinutes}
-              onChange={(e) => props.onSetDeadlineMinutes(e.target.value)}
-              placeholder="15"
-            />
+            <label htmlFor="deadline-input" className="text-[11px] font-medium text-vault-subtext mb-1.5 block">
+              Transaction deadline
+            </label>
+            <div className="relative">
+                <input
+                  inputMode="numeric"
+                  id="deadline-input"
+                  aria-label="Deadline in minutes"
+                  className="h-10 w-full rounded-xl border border-white/8 bg-white/4 px-3 pr-16 text-sm text-vault-text placeholder:text-vault-subtext focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-colors"
+                  value={props.deadlineMinutes}
+                  onChange={(e) => props.onSetDeadlineMinutes(e.target.value)}
+                  placeholder="15"
+                />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500 pointer-events-none">
+                minutes
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-vault-subtext">
+              Transaction will revert if not confirmed within this time.
+            </p>
           </div>
-          <div className="rounded-xl border border-white/10 bg-black/25 px-3 py-2">
-            <label className="flex cursor-pointer items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-medium text-zinc-200">Compare routes (Uniswap vs zQuoter)</div>
-                <div className="text-[11px] text-zinc-500">
-                  Read-only experimental quote comparison. Execution stays on Uniswap.
+
+          {/* Compare routes toggle */}
+          <div className="rounded-xl border border-white/8 bg-white/3 px-3 py-3">
+            <label className="flex cursor-pointer items-start justify-between gap-3">
+              <div className="flex-1">
+                <div className="text-sm font-medium text-zinc-200">Compare routes</div>
+                <div className="text-[11px] text-zinc-500 mt-0.5">
+                  Experimental: compare Uniswap vs zQuoter quotes. Execution always uses Uniswap.
                 </div>
               </div>
               <button
                 type="button"
-                aria-pressed={props.compareRoutesEnabled}
+                role="switch"
+                aria-checked={props.compareRoutesEnabled}
                 onClick={() => props.onSetCompareRoutesEnabled(!props.compareRoutesEnabled)}
-                className={`h-6 w-11 rounded-full border p-0.5 transition ${
+                className={`mt-0.5 h-6 w-11 shrink-0 rounded-full border p-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${
                   props.compareRoutesEnabled
                     ? 'border-brand-primary/60 bg-brand-primary/25'
                     : 'border-white/15 bg-white/8'
@@ -120,14 +146,16 @@ export function SwapSettingsSheet(props: {
               </button>
             </label>
           </div>
-          <button
-            type="button"
+
+          <Button
+            variant="secondary"
+            size="md"
             onClick={props.onClose}
             disabled={props.busy}
-            className="mt-1 min-h-11 w-full rounded-2xl border border-white/20 bg-white/5 px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
+            className="w-full"
           >
             Done
-          </button>
+          </Button>
         </div>
       </div>
     </div>

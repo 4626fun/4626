@@ -1,31 +1,107 @@
 import { type ReactNode } from 'react'
-import { AlertTriangle, CheckCircle2, Info, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
-type AlertVariant = 'success' | 'warning' | 'error' | 'info'
+type AlertVariant = 'info' | 'warning' | 'error' | 'success'
+
+const variantConfig: Record<
+  AlertVariant,
+  { icon: typeof Info; containerClass: string; iconClass: string; textClass: string; titleClass: string }
+> = {
+  info: {
+    icon: Info,
+    containerClass: 'bg-white/[0.03] border-white/8 text-zinc-300',
+    iconClass: 'text-zinc-400',
+    textClass: 'text-zinc-400',
+    titleClass: 'text-zinc-300',
+  },
+  warning: {
+    icon: AlertTriangle,
+    containerClass: 'bg-amber-400/[0.04] border-amber-400/15 text-amber-200',
+    iconClass: 'text-amber-400',
+    textClass: 'text-amber-300/80',
+    titleClass: 'text-amber-300',
+  },
+  error: {
+    icon: XCircle,
+    containerClass: 'bg-rose-400/[0.04] border-rose-400/15 text-rose-200',
+    iconClass: 'text-rose-400',
+    textClass: 'text-rose-300/80',
+    titleClass: 'text-rose-300',
+  },
+  success: {
+    icon: CheckCircle2,
+    containerClass: 'bg-emerald-400/[0.04] border-emerald-400/15 text-emerald-200',
+    iconClass: 'text-emerald-400',
+    textClass: 'text-emerald-300/80',
+    titleClass: 'text-emerald-300',
+  },
+}
 
 interface AlertProps {
-  variant: AlertVariant
-  children: ReactNode
+  variant?: AlertVariant
+  title?: string
+  children?: ReactNode
+  action?: { label: string; onClick: () => void }
+  onDismiss?: () => void
   className?: string
 }
 
-const config: Record<AlertVariant, { border: string; bg: string; icon: typeof Info; iconColor: string }> = {
-  success: { border: 'border-emerald-500/20', bg: 'bg-emerald-500/5', icon: CheckCircle2, iconColor: 'text-emerald-400' },
-  warning: { border: 'border-amber-500/20', bg: 'bg-amber-500/5', icon: AlertTriangle, iconColor: 'text-amber-400' },
-  error: { border: 'border-red-500/20', bg: 'bg-red-500/5', icon: XCircle, iconColor: 'text-red-400' },
-  info: { border: 'border-[#0052FF]/20', bg: 'bg-[#0052FF]/6', icon: Info, iconColor: 'text-[#8AB5FF]' },
-}
-
-export function Alert({ variant, children, className = '' }: AlertProps) {
-  const { border, bg, icon: Icon, iconColor } = config[variant]
+export function Alert({
+  variant = 'info',
+  title,
+  children,
+  action,
+  onDismiss,
+  className,
+}: AlertProps) {
+  const config = variantConfig[variant]
+  const Icon = config.icon
 
   return (
     <div
-      role="alert"
-      className={`flex items-start gap-2.5 rounded-2xl border ${border} ${bg} px-4 py-3 text-[13px] leading-relaxed text-zinc-200 ${className}`}
+      role={variant === 'error' ? 'alert' : 'status'}
+      className={cn(
+        'flex gap-2.5 p-3 rounded-xl border text-sm',
+        config.containerClass,
+        className,
+      )}
     >
-      <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${iconColor}`} aria-hidden="true" />
-      <div className="min-w-0 flex-1">{children}</div>
+      <Icon className={cn('w-3.5 h-3.5 mt-0.5 shrink-0', config.iconClass)} aria-hidden="true" />
+      <div className="flex-1 min-w-0">
+        {title && (
+          <p className={cn('font-medium text-[11px] mb-1', config.titleClass)}>
+            {title}
+          </p>
+        )}
+        {children && (
+          <div className={cn('text-xs leading-relaxed', config.textClass)}>
+            {children}
+          </div>
+        )}
+        {action && (
+          <button
+            type="button"
+            onClick={action.onClick}
+            className={cn(
+              'mt-2 text-[11px] font-medium underline underline-offset-2 hover:no-underline transition-colors',
+              config.titleClass,
+            )}
+          >
+            {action.label}
+          </button>
+        )}
+      </div>
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          className="shrink-0 opacity-40 hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary rounded"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      )}
     </div>
   )
 }

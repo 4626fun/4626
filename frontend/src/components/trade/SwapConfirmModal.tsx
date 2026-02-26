@@ -1,8 +1,8 @@
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowDown, X } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
+import { Alert } from '@/components/ui/Alert'
 import { RouteViz } from '@/components/trade/RouteViz'
-import { TokenLogo } from '@/components/ui/TokenLogo'
 
 type ConfirmIntent = 'approval' | 'swap' | 'order'
 
@@ -14,12 +14,32 @@ function TokenRow(props: {
   logoUrls?: string[]
   label?: string
 }) {
+  const candidates = [
+    props.logoUrl,
+    ...(props.logoUrls ?? []),
+  ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+  const uniqueCandidates = Array.from(new Set(candidates))
+  const [idx, setIdx] = useState(0)
+  const current = uniqueCandidates[idx] ?? null
+
   return (
     <div className="flex items-center gap-3">
-      <TokenLogo symbol={props.symbol} logoUrl={props.logoUrl} logoUrls={props.logoUrls} size="lg" />
+      {current ? (
+        <img
+          src={current}
+          alt={props.symbol}
+          className="h-10 w-10 rounded-full object-cover border border-white/10 bg-black/30 shrink-0"
+          loading="lazy"
+          onError={() => setIdx((prev) => prev + 1)}
+        />
+      ) : (
+        <div className="h-10 w-10 rounded-full border border-white/10 bg-zinc-800 text-sm font-semibold text-zinc-100 flex items-center justify-center shrink-0">
+          {props.symbol.slice(0, 2).toUpperCase()}
+        </div>
+      )}
       <div className="flex-1 min-w-0">
         {props.label && (
-          <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-600 mb-0.5">{props.label}</div>
+          <div className="text-[10px] font-medium text-zinc-600 mb-0.5">{props.label}</div>
         )}
         <div className="text-xl font-semibold tabular-nums text-white truncate">
           {props.amount || '—'} <span className="text-base font-medium text-zinc-400">{props.symbol}</span>
@@ -69,26 +89,6 @@ export function SwapConfirmModal(props: {
   onCancel: () => void
   onConfirm: () => void
 }) {
-  const prefersReduced = useReducedMotion()
-  const dialogRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!props.intent) return
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !props.busy) props.onCancel()
-      if (e.key === 'Tab' && dialogRef.current) {
-        const sel = 'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])'
-        const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(sel))
-        if (focusable.length === 0) { e.preventDefault(); return }
-        const first = focusable[0]!, last = focusable[focusable.length - 1]!
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [props.intent, props.busy, props.onCancel])
-
   if (!props.intent) return null
 
   const minReceived = (() => {
@@ -118,27 +118,22 @@ export function SwapConfirmModal(props: {
     <AnimatePresence>
       <div className="fixed inset-0 z-95">
         <motion.div
-          initial={prefersReduced ? false : { opacity: 0 }}
+          initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          exit={prefersReduced ? undefined : { opacity: 0 }}
+          exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+          className="absolute inset-0 bg-black/70 backdrop-blur-[6px]"
           onClick={props.busy ? undefined : props.onCancel}
-          aria-hidden="true"
         />
         <motion.div
-          ref={dialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label={props.intent === 'approval' ? 'Approve token' : props.intent === 'order' ? 'Review order' : 'Review trade'}
-          initial={prefersReduced ? false : { y: '100%' }}
+          initial={{ y: '100%' }}
           animate={{ y: 0 }}
-          exit={prefersReduced ? undefined : { y: '100%' }}
-          transition={prefersReduced ? { duration: 0 } : { type: 'spring', damping: 32, stiffness: 300 }}
-          className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-lg rounded-t-3xl border border-white/10 bg-[#0d0d0d] shadow-[0_-30px_80px_-20px_rgba(0,0,0,0.95)] pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:pb-5"
+          exit={{ y: '100%' }}
+          transition={{ type: 'spring', damping: 32, stiffness: 300 }}
+          className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-lg rounded-t-2xl border border-white/8 glass-card shadow-[0_-20px_60px_-20px_rgba(0,0,0,0.8)] pb-[calc(env(safe-area-inset-bottom)+1.25rem)] sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:pb-5"
         >
           {/* Handle (mobile only) */}
-          <div className="mx-auto mt-3 h-1 w-10 rounded-full bg-white/12 sm:hidden" />
+          <div className="mx-auto mt-3 h-1 w-10 rounded-full bg-white/10 sm:hidden" />
 
           {/* Header */}
           <div className="flex items-center justify-between px-5 pt-4 pb-4">
@@ -149,10 +144,10 @@ export function SwapConfirmModal(props: {
               type="button"
               onClick={props.onCancel}
               disabled={props.busy !== null}
-              className="rounded-full border border-white/10 p-1.5 text-zinc-400 transition hover:text-white disabled:opacity-40"
+              className="rounded-lg border border-white/8 p-1 text-vault-subtext hover:text-vault-text hover:bg-white/6 transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary"
               aria-label="Cancel"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
 
@@ -167,7 +162,7 @@ export function SwapConfirmModal(props: {
                 label="You pay"
               />
               <div className="flex justify-center py-1">
-                <div className="rounded-full border border-white/10 bg-[#0d0d0d] p-1.5 text-zinc-600">
+                <div className="rounded-full border border-white/8 bg-white/4 p-1.5 text-zinc-600">
                   <ArrowDown className="h-3.5 w-3.5" />
                 </div>
               </div>
@@ -205,25 +200,24 @@ export function SwapConfirmModal(props: {
 
             {/* Inline notices */}
             {props.permitSignatureRequired && !props.permitSignatureReady && (
-              <div className={`mt-3 rounded-xl border px-3 py-2 text-xs ${
-                props.permitSignaturePending
-                  ? 'border-amber-400/30 bg-amber-500/8 text-amber-300'
-                  : 'border-blue-400/25 bg-blue-500/8 text-blue-300'
-              }`}>
+              <Alert
+                variant={props.permitSignaturePending ? 'warning' : 'info'}
+                className="mt-3"
+              >
                 {props.permitSignaturePending
                   ? 'Check your wallet — signature required.'
                   : 'A one-time signature is needed to proceed.'}
-              </div>
+              </Alert>
             )}
             {props.approvalRequired && (props.intent === 'swap' || props.intent === 'order') && (
-              <div className="mt-2 rounded-xl border border-amber-400/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-300">
+              <Alert variant="warning" className="mt-2">
                 Token approval needed — we'll submit it first, then continue.
-              </div>
+              </Alert>
             )}
             {props.quoteIsStale && (
-              <div className="mt-2 rounded-xl border border-amber-400/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-300">
+              <Alert variant="warning" className="mt-2">
                 Quote expired — confirming will refresh it automatically.
-              </div>
+              </Alert>
             )}
 
             {/* CTA */}

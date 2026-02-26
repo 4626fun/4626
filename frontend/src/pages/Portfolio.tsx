@@ -2,14 +2,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAccount } from 'wagmi'
-import { ArrowDownLeft, ArrowUpRight, MoreHorizontal, Plus, Wallet } from 'lucide-react'
-import { useParams } from 'react-router-dom'
+import { ArrowDownLeft, ArrowUpRight, BarChart3, MoreHorizontal, Plus, RefreshCw, Vault } from 'lucide-react'
+import { Link, useParams } from 'react-router-dom'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { apiFetch } from '@/lib/apiBase'
+import { Alert } from '@/components/ui/Alert'
+import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
+import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { TokenLogo } from '@/components/ui/TokenLogo'
-import { useAccountContext } from '@/wallet/accountContext'
+import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
+import { apiFetch } from '@/lib/apiBase'
 import { fetchDebankTokenList, type DebankToken, type DebankTokenList } from '@/lib/debank/client'
 import { isLensGroveEnabled } from '@/lib/flags'
 import { resolveLensUri, uploadImmutableBlob, type GroveUploadResult } from '@/lib/lens/grove'
@@ -107,12 +110,12 @@ function Sparkline({ series }: { series: number[] }) {
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[220px]">
       <defs>
         <linearGradient id="cvSparkFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#ff4d4d" stopOpacity="0.22" />
-          <stop offset="100%" stopColor="#ff4d4d" stopOpacity="0" />
+          <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="#3B82F6" stopOpacity="0" />
         </linearGradient>
       </defs>
       <path d={area} fill="url(#cvSparkFill)" />
-      <path d={d} fill="none" stroke="#ff4d4d" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      <path d={d} fill="none" stroke="#3B82F6" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   )
 }
@@ -155,24 +158,15 @@ export function Portfolio() {
   const params = useParams<{ address?: string }>()
   const { address: wagmiAddress } = useAccount()
   const siwe = useSiweAuth()
-  const accountContext = useAccountContext()
   const queryClient = useQueryClient()
   const routeAddress = typeof params.address === 'string' ? params.address.trim() : ''
   const publicAddress = routeAddress && isEvmAddress(routeAddress) ? routeAddress.toLowerCase() : null
   const isPublicMode = Boolean(publicAddress)
-  const connectedSignerAddress = useMemo(() => {
-    const raw = String(accountContext.signerAddress || wagmiAddress || '').trim()
-    return isEvmAddress(raw) ? raw.toLowerCase() : null
-  }, [accountContext.signerAddress, wagmiAddress])
-  const actingAccountAddress = useMemo(() => {
-    const raw = String(accountContext.activeAccount || '').trim()
-    return isEvmAddress(raw) ? raw.toLowerCase() : null
-  }, [accountContext.activeAccount])
   const effectiveAddress = useMemo(() => {
     if (publicAddress) return publicAddress
-    const a = (actingAccountAddress || connectedSignerAddress || siwe.authAddress || '').trim()
+    const a = (wagmiAddress || siwe.authAddress || '').trim()
     return isEvmAddress(a) ? a.toLowerCase() : null
-  }, [actingAccountAddress, connectedSignerAddress, publicAddress, siwe.authAddress])
+  }, [publicAddress, siwe.authAddress, wagmiAddress])
 
   const [tab, setTab] = useState<'overview' | 'tokens' | 'nfts' | 'activity'>('overview')
   const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y'>('1D')
@@ -380,71 +374,110 @@ export function Portfolio() {
 
   function TokensTable(props: { items: Holding[]; emptyLabel: string }) {
     const { items, emptyLabel } = props
-    if (tokenMeta.isLoading) return (
-      <div className="p-4 space-y-3">
-        {[1, 2, 3].map(i => (
-          <div key={i} className="flex items-center gap-3">
-            <Skeleton className="h-7 w-7 rounded-full" />
-            <div className="flex-1 space-y-1.5">
-              <Skeleton className="h-3 w-24" />
-              <Skeleton className="h-2.5 w-16" />
+
+    if (tokenMeta.isLoading) {
+      return (
+        <div className="p-4 space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center gap-3">
+              <Skeleton className="w-7 h-7 rounded-full shrink-0" />
+              <Skeleton className="h-4 flex-1" />
+              <Skeleton className="h-4 w-16 shrink-0" />
+              <Skeleton className="h-4 w-16 shrink-0" />
             </div>
-            <Skeleton className="h-3 w-14" />
-          </div>
-        ))}
-      </div>
-    )
-    if (!effectiveAddress) return (
-      <div className="p-6 text-center">
-        <Wallet className="mx-auto h-8 w-8 text-zinc-700 mb-2" />
-        <div className="text-sm text-zinc-500">Connect a wallet to view balances</div>
-      </div>
-    )
-    if (items.length === 0) return (
-      <div className="p-6 text-center text-sm text-zinc-600">{emptyLabel}</div>
-    )
+          ))}
+        </div>
+      )
+    }
+
+    if (!effectiveAddress) return <div className="p-4 text-[12px] text-zinc-600">Connect a wallet to view balances.</div>
+
+    if (items.length === 0) {
+      return (
+        <div className="p-4">
+          <p className="text-[12px] text-zinc-600">{emptyLabel}</p>
+        </div>
+      )
+    }
 
     return (
-      <div className="overflow-x-auto" role="table" aria-label="Token holdings">
-        <div className="min-w-[480px] divide-y divide-zinc-800/70">
-        <div className="px-4 py-2.5 grid grid-cols-[minmax(0,1fr)_92px_92px_104px] gap-3 text-[11px] text-zinc-600" role="row">
-          <div role="columnheader">Token</div>
-          <div className="text-right" role="columnheader">Price</div>
-          <div className="text-right" role="columnheader">Balance</div>
-          <div className="text-right" role="columnheader">Value</div>
-        </div>
-        {items.map((h) => {
-          const t = h.token
-          const name = t.symbol || t.name || h.coin.symbol || h.coin.name || t.id
-          const price = typeof t.price === 'number' ? t.price : null
-          return (
-            <div key={`${h.coinType}:${t.id}`} className="px-4 py-3 grid grid-cols-[minmax(0,1fr)_92px_92px_104px] gap-3 items-center">
-              <div className="min-w-0 flex items-center gap-3">
-                <TokenLogo symbol={name} logoUrl={t.logoUrl} size="md" />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="text-[12px] text-white truncate">{name}</div>
-                    <span
-                      className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] border ${
-                        h.coinType === 'CREATOR'
-                          ? 'border-indigo-500/25 bg-indigo-500/10 text-indigo-200'
-                          : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
-                      }`}
-                    >
-                      {h.coinType === 'CREATOR' ? 'Creator' : 'Content'}
-                    </span>
+      <>
+        {/* Desktop table layout */}
+        <div className="hidden sm:block divide-y divide-zinc-800/70">
+          <div className="px-4 py-2.5 grid grid-cols-[minmax(0,1fr)_92px_92px_104px] gap-3 text-[11px] text-zinc-600">
+            <div>Token</div>
+            <div className="text-right">Price</div>
+            <div className="text-right">Balance</div>
+            <div className="text-right">Value</div>
+          </div>
+          {items.map((h) => {
+            const t = h.token
+            const name = t.symbol || t.name || h.coin.symbol || h.coin.name || t.id
+            const price = typeof t.price === 'number' ? t.price : null
+            return (
+              <div key={`${h.coinType}:${t.id}`} className="px-4 py-3 grid grid-cols-[minmax(0,1fr)_92px_92px_104px] gap-3 items-center">
+                <div className="min-w-0 flex items-center gap-3">
+                  {t.logoUrl ? (
+                    <img src={t.logoUrl} alt="" className="w-7 h-7 rounded-full border border-white/10 shrink-0" />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-white/5 border border-white/10 shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="text-[12px] text-white truncate">{name}</div>
+                      <span
+                        className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] border ${
+                          h.coinType === 'CREATOR'
+                            ? 'border-indigo-500/25 bg-indigo-500/10 text-indigo-200'
+                            : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
+                        }`}
+                      >
+                        {h.coinType === 'CREATOR' ? 'Creator' : 'Content'}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-zinc-600 font-mono truncate">{shortAddr(String(t.id || ''))}</div>
                   </div>
-                  <div className="text-[11px] text-zinc-600 font-mono truncate">{shortAddr(String(t.id || ''))}</div>
+                </div>
+                <div className="text-[12px] text-zinc-200 tabular-nums text-right">{price != null ? formatUsd(price) : '—'}</div>
+                <div className="text-[12px] text-zinc-200 tabular-nums text-right">{formatAmount(t.amount)}</div>
+                <div className="text-[12px] text-zinc-200 tabular-nums text-right">{formatUsd(t.usdValue)}</div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Mobile stacked card layout */}
+        <div className="sm:hidden divide-y divide-zinc-800/70">
+          {items.map((h) => {
+            const t = h.token
+            const name = t.symbol || t.name || h.coin.symbol || h.coin.name || t.id
+            const price = typeof t.price === 'number' ? t.price : null
+            return (
+              <div key={`mobile:${h.coinType}:${t.id}`} className="px-4 py-3 flex items-center gap-3">
+                {t.logoUrl ? (
+                  <img src={t.logoUrl} alt="" className="w-8 h-8 rounded-full border border-white/10 shrink-0" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-[12px] text-white truncate">{name}</span>
+                    <Badge variant={h.coinType === 'CREATOR' ? 'canonical' : 'success'} size="xs">
+                      {h.coinType === 'CREATOR' ? 'Creator' : 'Content'}
+                    </Badge>
+                  </div>
+                  <div className="text-[11px] text-zinc-600 mt-0.5">
+                    {price != null ? formatUsd(price) : '—'} · {formatAmount(t.amount)}
+                  </div>
+                </div>
+                <div className="text-[13px] text-zinc-200 tabular-nums text-right shrink-0">
+                  {formatUsd(t.usdValue)}
                 </div>
               </div>
-              <div className="text-[12px] text-zinc-200 tabular-nums text-right">{price != null ? formatUsd(price) : '—'}</div>
-              <div className="text-[12px] text-zinc-200 tabular-nums text-right">{formatAmount(t.amount)}</div>
-              <div className="text-[12px] text-zinc-200 tabular-nums text-right">{formatUsd(t.usdValue)}</div>
-            </div>
-          )
-        })}
-      </div>
-      </div>
+            )
+          })}
+        </div>
+      </>
     )
   }
 
@@ -453,11 +486,12 @@ export function Portfolio() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
           {/* Header (Uniswap-style) */}
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3 min-w-0">
               <div className="rounded-full border border-zinc-800 bg-zinc-950/50 px-3 py-1.5 text-[12px] text-zinc-300 font-mono truncate">
                 {effectiveAddress ? shortAddr(effectiveAddress) : 'Connect wallet'}
               </div>
+              <AccountModeIndicator compact />
             </div>
             <div className="hidden sm:block w-full max-w-[440px]">
               <div className="rounded-full border border-zinc-800 bg-zinc-950/40 px-4 py-2 text-[12px] text-zinc-500">
@@ -465,6 +499,25 @@ export function Portfolio() {
               </div>
             </div>
           </div>
+
+          {/* Query error banners */}
+          {(portfolioQuery.isError || tokenListQuery.isError) && (
+            <div className="mt-4">
+              <Alert
+                variant="error"
+                title="Failed to load portfolio data"
+                action={{
+                  label: 'Retry',
+                  onClick: () => {
+                    if (portfolioQuery.isError) void portfolioQuery.refetch()
+                    if (tokenListQuery.isError) void tokenListQuery.refetch()
+                  },
+                }}
+              >
+                Could not fetch your balance data. Check your connection and try again.
+              </Alert>
+            </div>
+          )}
 
           {/* Tabs */}
           <div className="mt-6 flex items-center gap-3 text-[12px]">
@@ -503,25 +556,14 @@ export function Portfolio() {
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-3 text-[12px] text-zinc-300">
                 <div className="rounded-xl border border-zinc-800/80 bg-black/30 p-3">
-                  <div className="text-[10px] text-zinc-500 uppercase tracking-[0.14em]">Account mode</div>
-                  <div className="mt-1 text-[11px] text-zinc-500">
-                    Connected signer:{' '}
-                    <span className="font-mono text-zinc-200">
-                      {connectedSignerAddress ? shortAddr(connectedSignerAddress) : '—'}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-[11px] text-zinc-500">
-                    Acting account:{' '}
-                    <span className="font-mono text-zinc-200">
-                      {effectiveAddress ? shortAddr(effectiveAddress) : '—'}
-                    </span>
-                  </div>
+                  <div className="text-[10px] font-medium text-zinc-500">Connected wallet</div>
+                  <div className="mt-1 font-mono text-zinc-200">{effectiveAddress ? shortAddr(effectiveAddress) : '—'}</div>
                   <div className="text-[10px] text-zinc-600 mt-1">
                     SIWE: {siwe.authAddress ? shortAddr(siwe.authAddress) : 'Not signed in'}
                   </div>
                 </div>
                 <div className="rounded-xl border border-zinc-800/80 bg-black/30 p-3">
-                  <div className="text-[10px] text-zinc-500 uppercase tracking-[0.14em]">Profile</div>
+                  <div className="text-[10px] font-medium text-zinc-500">Profile</div>
                   {portfolioQuery.data?.profile ? (
                     <div className="mt-2 space-y-1 text-[11px]">
                       <div>
@@ -551,36 +593,36 @@ export function Portfolio() {
                   )}
                 </div>
                 <div className="rounded-xl border border-zinc-800/80 bg-black/30 p-3">
-                  <div className="text-[10px] text-zinc-500 uppercase tracking-[0.14em]">On-chain summary</div>
+                  <div className="text-[10px] font-medium text-zinc-500">On-chain summary</div>
                   <div className="mt-2 text-[11px]">
                     Total: <span className="text-zinc-200">{formatUsd(portfolioQuery.data?.onchainSummary?.totalUsdValue)}</span>
                   </div>
                   <div className="text-[10px] text-zinc-600 mt-1">As of {formatDateTime(portfolioQuery.data?.onchainSummary?.asOf ?? null)}</div>
                   {!isPublicMode ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void walletSyncMutation.mutateAsync()
-                      }}
-                      className="mt-3 rounded-lg border border-zinc-700 px-2 py-1 text-[10px] text-zinc-200 hover:bg-white/5 disabled:opacity-60"
-                      disabled={walletSyncMutation.isPending}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => void walletSyncMutation.mutateAsync()}
+                      loading={walletSyncMutation.isPending}
                     >
+                      <RefreshCw className="w-3 h-3" />
                       {walletSyncMutation.isPending ? 'Refreshing…' : 'Refresh wallets'}
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               </div>
 
               <div className="mt-3 rounded-xl border border-zinc-800/80 bg-black/30 p-3">
-                <div className="text-[10px] text-zinc-500 uppercase tracking-[0.14em] mb-2">Linked wallets</div>
+                <div className="text-[10px] font-medium text-zinc-500 mb-2">Linked wallets</div>
                 {portfolioQuery.data?.wallets?.length ? (
                   <div className="flex flex-wrap gap-2">
                     {portfolioQuery.data.wallets.map((wallet) => (
-                      <div key={wallet.address} className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-[10px] text-zinc-300">
-                        <span className="font-mono">{shortAddr(wallet.address)}</span>
-                        {wallet.isCanonicalSmartWallet ? <span className="ml-1 text-indigo-300">CSW</span> : null}
-                        {wallet.isEmbeddedEoa ? <span className="ml-1 text-emerald-300">Embedded</span> : null}
-                        {wallet.isPrimary ? <span className="ml-1 text-amber-300">Primary</span> : null}
+                      <div key={wallet.address} className="inline-flex items-center gap-1.5 rounded-lg border border-white/8 bg-white/4 px-2 py-1 text-[10px] text-zinc-400">
+                        <span className="font-mono text-zinc-300">{shortAddr(wallet.address)}</span>
+                        {wallet.isCanonicalSmartWallet && <Badge variant="canonical" size="xs">Smart</Badge>}
+                        {wallet.isEmbeddedEoa && <Badge variant="eoa" size="xs">EOA</Badge>}
+                        {wallet.isPrimary && <Badge variant="warning" size="xs">Primary</Badge>}
                       </div>
                     ))}
                   </div>
@@ -591,41 +633,37 @@ export function Portfolio() {
 
               {!isPublicMode ? (
                 <div className="mt-3 rounded-xl border border-zinc-800/80 bg-black/30 p-3">
-                  <div className="text-[10px] text-zinc-500 uppercase tracking-[0.14em] mb-2">Manual profile fields</div>
+                  <div className="text-[10px] font-medium text-zinc-500 mb-2">Manual profile fields</div>
                   <div className="grid gap-2 md:grid-cols-2">
-                    <input
-                      className="rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-[12px] text-zinc-200"
+                    <Input
                       placeholder="Display name"
                       value={editDisplayName}
                       onChange={(e) => setEditDisplayName(e.target.value)}
                     />
-                    <input
-                      className="rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-[12px] text-zinc-200"
+                    <Input
                       placeholder="Website"
                       value={editWebsite}
                       onChange={(e) => setEditWebsite(e.target.value)}
                     />
-                    <input
-                      className="rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-[12px] text-zinc-200"
+                    <Input
                       placeholder="Avatar URL"
                       value={editAvatarUrl}
                       onChange={(e) => setEditAvatarUrl(e.target.value)}
                     />
-                    <input
-                      className="rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-[12px] text-zinc-200"
+                    <Input
                       placeholder="Banner URL"
                       value={editBannerUrl}
                       onChange={(e) => setEditBannerUrl(e.target.value)}
                     />
-                    <input
-                      className="rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-[12px] text-zinc-400 font-mono"
+                    <Input
                       placeholder="Avatar Lens URI"
+                      className="font-mono"
                       value={editAvatarLensUri}
                       onChange={(e) => setEditAvatarLensUri(e.target.value)}
                     />
-                    <input
-                      className="rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-[12px] text-zinc-400 font-mono"
+                    <Input
                       placeholder="Banner Lens URI"
+                      className="font-mono"
                       value={editBannerLensUri}
                       onChange={(e) => setEditBannerLensUri(e.target.value)}
                     />
@@ -661,59 +699,69 @@ export function Portfolio() {
                   {lensEnabled ? (
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
                       <div className="rounded-lg border border-zinc-800 bg-black/30 p-3 space-y-2">
-                        <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Lens Grove avatar</div>
+                        <div className="text-[11px] font-medium text-zinc-500">Lens Grove avatar</div>
                         <input
                           type="file"
                           accept="image/*"
                           onChange={(e) => setAvatarUploadFile(e.target.files?.[0] ?? null)}
                           className="text-[11px] text-zinc-400"
                         />
-                        <button
-                          type="button"
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() => void handleLensUpload('avatar', avatarUploadFile)}
                           disabled={!avatarUploadFile || lensUploadBusy !== null}
-                          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-[11px] text-zinc-100 hover:bg-white/5 disabled:opacity-60"
+                          loading={lensUploadBusy === 'avatar'}
                         >
                           {lensUploadBusy === 'avatar' ? 'Uploading…' : 'Upload to Lens Grove'}
-                        </button>
+                        </Button>
                       </div>
                       <div className="rounded-lg border border-zinc-800 bg-black/30 p-3 space-y-2">
-                        <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Lens Grove banner</div>
+                        <div className="text-[11px] font-medium text-zinc-500">Lens Grove banner</div>
                         <input
                           type="file"
                           accept="image/*"
                           onChange={(e) => setBannerUploadFile(e.target.files?.[0] ?? null)}
                           className="text-[11px] text-zinc-400"
                         />
-                        <button
-                          type="button"
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() => void handleLensUpload('banner', bannerUploadFile)}
                           disabled={!bannerUploadFile || lensUploadBusy !== null}
-                          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-[11px] text-zinc-100 hover:bg-white/5 disabled:opacity-60"
+                          loading={lensUploadBusy === 'banner'}
                         >
                           {lensUploadBusy === 'banner' ? 'Uploading…' : 'Upload to Lens Grove'}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ) : null}
                   <textarea
-                    className="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-[12px] text-zinc-200 min-h-[84px]"
+                    className="mt-2 w-full rounded-xl border border-white/8 bg-white/4 px-3 py-2 text-sm text-vault-text placeholder:text-vault-subtext min-h-[84px] focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-colors"
                     placeholder="Bio"
                     value={editBio}
                     onChange={(e) => setEditBio(e.target.value)}
                   />
-                  {editError ? <div className="mt-2 text-[11px] text-rose-300">{editError}</div> : null}
-                  {lensUploadError ? <div className="mt-2 text-[11px] text-rose-300">{lensUploadError}</div> : null}
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      type="button"
+                  {editError && (
+                    <Alert variant="error" className="mt-2" onDismiss={() => setEditError(null)}>
+                      {editError}
+                    </Alert>
+                  )}
+                  {lensUploadError && (
+                    <Alert variant="error" className="mt-2">
+                      {lensUploadError}
+                    </Alert>
+                  )}
+                  <div className="mt-3 flex items-center gap-3">
+                    <Button
+                      variant="primary"
+                      size="sm"
                       onClick={() => patchMutation.mutate()}
-                      className="rounded-lg border border-zinc-700 px-3 py-1.5 text-[11px] text-zinc-100 hover:bg-white/5 disabled:opacity-60"
-                      disabled={patchMutation.isPending}
+                      loading={patchMutation.isPending}
                     >
-                      {patchMutation.isPending ? 'Saving…' : 'Save profile'}
-                    </button>
-                    <div className="text-[10px] text-zinc-500">Externally sourced fields are locked for edits.</div>
+                      Save profile
+                    </Button>
+                    <p className="text-[10px] text-zinc-600">Externally sourced fields are locked for edits.</p>
                   </div>
                 </div>
               ) : null}
@@ -728,10 +776,9 @@ export function Portfolio() {
                 className="lg:col-span-2 rounded-2xl border border-zinc-800 bg-zinc-950/40 overflow-hidden"
               >
                 <div className="p-5">
-                  <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-600">Creator + content coins</div>
+                  <div className="text-[11px] font-medium text-zinc-500">Creator + content coins</div>
                   <div className="mt-2 flex items-baseline gap-3">
-                    <div className="text-3xl sm:text-4xl font-light tracking-tight text-white tabular-nums">{formatUsd(creatorContentUsd)}</div>
-                    <div className="text-[12px] text-rose-300 tabular-nums">—</div>
+                    <div className="text-[34px] font-light tracking-tight text-white tabular-nums">{formatUsd(creatorContentUsd)}</div>
                   </div>
                 </div>
                 <div className="px-3">
@@ -746,13 +793,16 @@ export function Portfolio() {
                         onClick={() => setTimeframe(t)}
                         className={`rounded-full px-3 py-1.5 text-[11px] border ${
                           timeframe === t ? 'border-white/10 bg-white/6 text-white' : 'border-zinc-900 text-zinc-500 hover:text-zinc-200'
-                        } transition-colors`}
+                        } transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary`}
                       >
                         {t}
                       </button>
                     ))}
                   </div>
-                  <div className="text-[11px] text-zinc-600">
+                  <div className="flex items-center gap-2 text-[11px] text-zinc-600">
+                    <span title="Chart shows simulated price movement based on your current balance. Real historical data coming soon." className="rounded-full border border-zinc-800 bg-zinc-900/50 px-2 py-0.5 text-[10px] text-zinc-600 cursor-help">
+                      Simulated
+                    </span>
                     {tokenMeta.isLoading ? 'Loading…' : tokenListQuery.data ? 'Live balances' : '—'}
                   </div>
                 </div>
@@ -766,46 +816,26 @@ export function Portfolio() {
                 className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4"
               >
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    className="rounded-xl border border-zinc-800 bg-black/30 p-4 text-left hover:bg-white/4 transition-colors disabled:opacity-70"
-                    disabled
-                  >
-                    <div className="text-[12px] text-zinc-300 font-medium flex items-center gap-2">
-                      <ArrowUpRight className="w-4 h-4 text-zinc-500" />
-                      Send
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-xl border border-zinc-800 bg-black/30 p-4 text-left hover:bg-white/4 transition-colors disabled:opacity-70"
-                    disabled
-                  >
-                    <div className="text-[12px] text-zinc-300 font-medium flex items-center gap-2">
-                      <ArrowDownLeft className="w-4 h-4 text-zinc-500" />
-                      Receive
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-xl border border-zinc-800 bg-black/30 p-4 text-left hover:bg-white/4 transition-colors disabled:opacity-70"
-                    disabled
-                  >
-                    <div className="text-[12px] text-zinc-300 font-medium flex items-center gap-2">
-                      <Plus className="w-4 h-4 text-zinc-500" />
-                      Buy
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-xl border border-zinc-800 bg-black/30 p-4 text-left hover:bg-white/4 transition-colors disabled:opacity-70"
-                    disabled
-                  >
-                    <div className="text-[12px] text-zinc-300 font-medium flex items-center gap-2">
-                      <MoreHorizontal className="w-4 h-4 text-zinc-500" />
-                      More
-                    </div>
-                  </button>
+                  {[
+                    { label: 'Send', Icon: ArrowUpRight },
+                    { label: 'Receive', Icon: ArrowDownLeft },
+                    { label: 'Buy', Icon: Plus },
+                    { label: 'More', Icon: MoreHorizontal },
+                  ].map(({ label, Icon }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      title={`${label} — coming soon`}
+                      aria-label={`${label} (coming soon)`}
+                      className="rounded-xl border border-zinc-800/50 bg-black/20 p-4 text-left cursor-not-allowed opacity-50"
+                      disabled
+                    >
+                      <div className="text-[12px] text-zinc-500 font-medium flex items-center gap-2">
+                        <Icon className="w-4 h-4" aria-hidden="true" />
+                        {label}
+                      </div>
+                    </button>
+                  ))}
                 </div>
                 <div className="mt-4 rounded-xl border border-zinc-800 bg-black/30 p-4">
                   <div className="text-[11px] text-zinc-600">Swapped this week</div>
@@ -827,12 +857,38 @@ export function Portfolio() {
                   </div>
                   <div className="text-[11px] text-zinc-600">Base</div>
                 </div>
-                <div className="divide-y divide-zinc-800/70">
-                  <div className="px-4 py-3 text-[11px] uppercase tracking-[0.14em] text-zinc-600">Creator coins</div>
-                  <TokensTable items={creatorHoldings} emptyLabel="No creator coin balances found." />
-                  <div className="px-4 py-3 text-[11px] uppercase tracking-[0.14em] text-zinc-600">Content coins</div>
-                  <TokensTable items={contentHoldings} emptyLabel="No content coin balances found." />
-                </div>
+
+                {/* Empty state when no holdings and loading is done */}
+                {!tokenMeta.isLoading && effectiveAddress && holdings.length === 0 && (
+                  <div className="p-6 text-center">
+                    <p className="text-[12px] text-zinc-500 mb-4">No creator or content coin positions found.</p>
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                      <Link
+                        to="/swap"
+                        className="inline-flex items-center gap-2 rounded-full border border-brand-primary/30 bg-brand-primary/10 px-4 py-2 text-[12px] text-brand-accent hover:bg-brand-primary/20 transition-colors"
+                      >
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                        Get started with Swap
+                      </Link>
+                      <Link
+                        to="/explore/creators"
+                        className="inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-[12px] text-zinc-300 hover:bg-zinc-800/60 transition-colors"
+                      >
+                        <Vault className="w-3.5 h-3.5" />
+                        Explore creator vaults
+                      </Link>
+                    </div>
+                  </div>
+                )}
+
+                {holdings.length > 0 && (
+                  <div className="divide-y divide-zinc-800/70">
+                    <div className="px-4 py-3 text-[11px] font-medium text-zinc-500">Creator coins</div>
+                    <TokensTable items={creatorHoldings} emptyLabel="No creator coin balances found." />
+                    <div className="px-4 py-3 text-[11px] font-medium text-zinc-500">Content coins</div>
+                    <TokensTable items={contentHoldings} emptyLabel="No content coin balances found." />
+                  </div>
+                )}
               </div>
 
               {/* Activity */}
@@ -851,11 +907,40 @@ export function Portfolio() {
 
         {tab !== 'overview' ? (
           <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/40 p-8 text-center">
-            <div className="text-sm text-zinc-500">
-              {tab === 'tokens' ? 'Detailed token list' : tab === 'nfts' ? 'NFT gallery' : 'Transaction activity'} — coming soon.
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-zinc-800/50 mb-4">
+              {tab === 'tokens' ? (
+                <BarChart3 className="w-5 h-5 text-zinc-500" />
+              ) : tab === 'nfts' ? (
+                <Plus className="w-5 h-5 text-zinc-500" />
+              ) : (
+                <RefreshCw className="w-5 h-5 text-zinc-500" />
+              )}
             </div>
-            <div className="mt-2 text-xs text-zinc-600">
-              {tab === 'activity' ? 'For now, use Explore → Transactions for on-chain activity.' : 'Check back soon for updates.'}
+            <h3 className="text-[13px] font-medium text-zinc-300 mb-1">
+              {tab === 'tokens' ? 'Token list' : tab === 'nfts' ? 'NFTs' : 'Activity feed'} — coming soon
+            </h3>
+            <p className="text-[12px] text-zinc-600 mb-5">
+              {tab === 'tokens'
+                ? 'A detailed token list with full history is on the way.'
+                : tab === 'nfts'
+                  ? 'Your NFTs will appear here once this view is ready.'
+                  : 'Transaction history and activity feed are on the way.'}
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Link
+                to="/swap"
+                className="inline-flex items-center gap-2 rounded-full border border-brand-primary/30 bg-brand-primary/10 px-4 py-2 text-[12px] text-brand-accent hover:bg-brand-primary/20 transition-colors"
+              >
+                <ArrowUpRight className="w-3.5 h-3.5" />
+                Swap tokens
+              </Link>
+              <Link
+                to="/explore/creators"
+                className="inline-flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900/40 px-4 py-2 text-[12px] text-zinc-300 hover:bg-zinc-800/60 transition-colors"
+              >
+                <Vault className="w-3.5 h-3.5" />
+                Explore vaults
+              </Link>
             </div>
           </div>
         ) : null}
