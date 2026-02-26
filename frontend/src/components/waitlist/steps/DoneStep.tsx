@@ -145,6 +145,48 @@ function normalizeEvmAddress(value: string | null | undefined): string | null {
   return raw
 }
 
+function AddrRow({ label, address, accent }: { label: string; address: string | null; accent?: boolean }) {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = useCallback(() => {
+    if (!address) return
+    navigator.clipboard.writeText(address).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }, [address])
+
+  return (
+    <div className={[
+      'flex items-center justify-between gap-2 rounded-xl px-3 py-2.5',
+      accent
+        ? 'border border-brand-primary/20 bg-brand-primary/6'
+        : 'border border-white/8 bg-black/20',
+    ].join(' ')}>
+      <div className="min-w-0">
+        <div className={['text-[10px] font-medium mb-0.5', accent ? 'text-brand-300' : 'text-zinc-500'].join(' ')}>
+          {label}
+        </div>
+        <div className={['font-mono text-[12px] truncate', accent ? 'text-white' : 'text-zinc-300'].join(' ')}>
+          {address ? truncAddr(address) : <span className="text-zinc-600 italic">Not detected</span>}
+        </div>
+      </div>
+      {address && (
+        <button
+          type="button"
+          onClick={handleCopy}
+          title="Copy address"
+          className="shrink-0 p-1.5 rounded-lg border border-white/8 bg-white/3 hover:bg-white/8 transition-colors"
+        >
+          {copied
+            ? <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+            : <Copy className="w-3 h-3 text-zinc-500" />
+          }
+        </button>
+      )}
+    </div>
+  )
+}
+
 function WalletSnapshotCard(props: {
   connectedOwnerAddress: string | null
   canonicalSmartWalletAddress: string | null
@@ -155,47 +197,27 @@ function WalletSnapshotCard(props: {
   return (
     <motion.div {...fadeUp} className="rounded-2xl border border-white/8 bg-white/2 p-4 space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="inline-flex items-center gap-2">
-          <Wallet className="w-4 h-4 text-[#0052FF]" />
-          <span className="text-[11px] uppercase tracking-[0.16em] text-zinc-400">Wallet Snapshot</span>
+        <div className="inline-flex items-center gap-1.5">
+          <Wallet className="w-3.5 h-3.5 text-brand-primary" />
+          <span className="text-[11px] font-medium text-zinc-400">Wallet</span>
         </div>
-        <span className="rounded-full border border-[#0052FF]/25 bg-[#0052FF]/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[#6f9dff]">
-          Account Ready
+        <span className="rounded-full border border-brand-primary/25 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
+          Account ready
         </span>
       </div>
 
-      <div className="space-y-2">
-        <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-2.5">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">◉ Connected Owner Wallet</div>
-          <div className="mt-1 font-mono text-[12px] text-zinc-300 break-all">
-            {connectedOwnerAddress ?? 'Not connected yet'}
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-[#0052FF]/20 bg-[#0052FF]/7 px-3 py-2.5">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-[#87abff]">⬢ Canonical Smart Wallet (Zora)</div>
-          <div className="mt-1 font-mono text-[12px] text-white break-all">
-            {canonicalSmartWalletAddress ?? 'Detecting smart wallet...'}
-          </div>
-        </div>
+      <div className="space-y-1.5">
+        <AddrRow label="Owner wallet" address={connectedOwnerAddress} />
+        <AddrRow label="Smart wallet" address={canonicalSmartWalletAddress} accent />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <a
-          href="/account"
-          className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/3 px-3 py-2 text-[12px] text-zinc-200 hover:bg-white/6 transition-colors"
-        >
-          View Account
-          <ExternalLink className="w-3 h-3" />
-        </a>
-        <a
-          href={appAccountUrl}
-          className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#0052FF]/20 bg-[#0052FF]/10 px-3 py-2 text-[12px] text-[#9ebaff] hover:bg-[#0052FF]/15 transition-colors"
-        >
-          Open App Account
-          <ExternalLink className="w-3 h-3" />
-        </a>
-      </div>
+      <a
+        href={appAccountUrl}
+        className="flex items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-white/3 px-3 py-2 text-[12px] font-medium text-zinc-300 hover:bg-white/6 hover:text-white transition-colors"
+      >
+        Open account
+        <ExternalLink className="w-3 h-3" />
+      </a>
     </motion.div>
   )
 }
@@ -212,7 +234,7 @@ function AdminDeployLink() {
     }
   }, [deployPath, deployUrl, navigate])
   return (
-    <button type="button" onClick={handleClick} className="text-[#0052FF] hover:text-[#3373FF] transition-colors py-1">
+    <button type="button" onClick={handleClick} className="text-brand-primary hover:text-brand-400 transition-colors py-1">
       Deploy (Admin)
     </button>
   )
@@ -253,7 +275,7 @@ function PreprovisionStatus({ onData }: { onData?: (data: PreprovData | null) =>
       {...fadeUp}
       className="rounded-2xl border border-white/6 bg-white/2 p-4 space-y-2"
     >
-      <div className="text-[11px] uppercase tracking-wider text-zinc-600 flex items-center gap-2">
+      <div className="text-[11px] font-medium text-zinc-500 flex items-center gap-2">
         {status === 'loading' ? (
           <>
             <Loader2 className="w-3 h-3 animate-spin text-indigo-400 shrink-0" />
@@ -626,11 +648,11 @@ export const DoneStep = memo(function DoneStep({
           <motion.div {...scaleIn} className="text-center space-y-4">
             <div className="flex justify-center">
               <div className="relative">
-                <div className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl bg-[#0052FF]/15 border border-[#0052FF]/25 flex items-center justify-center">
-                  <CheckCircle2 className="w-8 h-8 sm:w-9 sm:h-9 text-[#0052FF]" />
+                <div className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl bg-brand-primary/15 border border-brand-primary/25 flex items-center justify-center">
+                  <CheckCircle2 className="w-8 h-8 sm:w-9 sm:h-9 text-brand-primary" />
                 </div>
                 <motion.div
-                  className="absolute inset-0 rounded-2xl border-2 border-[#0052FF]/20"
+                  className="absolute inset-0 rounded-2xl border-2 border-brand-primary/20"
                   initial={{ scale: 1, opacity: 0.6 }}
                   animate={{ scale: 1.4, opacity: 0 }}
                   transition={{ duration: 1.2, repeat: Infinity, ease: 'easeOut' }}
@@ -643,8 +665,8 @@ export const DoneStep = memo(function DoneStep({
                 You're on the waitlist!
               </h1>
               {rankDelta > 0 ? (
-                <div className="mt-2 inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-emerald-200">
-                  Moved up {rankDelta} spots
+                <div className="mt-2 inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-200">
+                  ↑ Moved up {rankDelta} spots
                 </div>
               ) : null}
               {displayEmail && (
@@ -671,7 +693,7 @@ export const DoneStep = memo(function DoneStep({
           >
             {!showPrivy ? (
               <>
-                <div className="text-[11px] uppercase tracking-wider text-zinc-600">Verification</div>
+                <div className="text-[11px] font-medium text-zinc-500">Verification</div>
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[12px] text-amber-200/90 leading-relaxed">
                   X verification is temporarily unavailable in this environment. You can keep sharing your referral link now and try verification again later.
                 </div>
@@ -680,7 +702,7 @@ export const DoneStep = memo(function DoneStep({
               <>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[11px] uppercase tracking-wider text-zinc-300">Verification</div>
+                  <div className="text-[11px] font-medium text-zinc-500">Verification</div>
                   <div className="text-[14px] text-white font-medium mt-1">Unlock your next border</div>
                   <div className="text-[12px] text-zinc-200 mt-1 leading-relaxed">
                     Follow <span className="text-zinc-100">@4626fun</span> on X to complete verification and unlock your next border.
