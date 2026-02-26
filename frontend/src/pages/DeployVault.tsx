@@ -3438,8 +3438,15 @@ function DeployVaultBatcher({
             expectedSolanaAmountBase: FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD ? expectedSolanaAmountBase : undefined,
           })
         } catch (meteoraErr) {
+          const message = meteoraErr instanceof Error ? meteoraErr.message : String(meteoraErr)
+          if (FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD) {
+            throw new Error(
+              `Solana auto-deposit payload build failed: ${message}. ` +
+                'Fix creator Meteora mapping before Phase 2 finalize.',
+            )
+          }
           logger.warn('[DeployVault] Meteora payload build failed; Solana allocation will fall back to vesting or revert on-chain if Solana bridging is configured on the batcher', {
-            error: meteoraErr instanceof Error ? meteoraErr.message : String(meteoraErr),
+            error: message,
           })
         }
         if (
@@ -3447,8 +3454,10 @@ function DeployVaultBatcher({
           meteoraPayload != null &&
           (!meteoraPayload.meteoraAlphaVault || meteoraPayload.solanaIxs.length === 0)
         ) {
-          meteoraPayload = null
-          logger.warn('[DeployVault] Meteora payload incomplete (missing alphaVault or solanaIxs); cleared to zero fallback')
+          throw new Error(
+            'Solana auto-deposit payload build failed: incomplete Meteora payload (missing alphaVault or solanaIxs). ' +
+              'Fix creator Meteora mapping before Phase 2 finalize.',
+          )
         }
 
         const phase2FinalizeParams = {
