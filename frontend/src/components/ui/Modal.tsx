@@ -20,6 +20,8 @@ interface ModalProps {
   className?: string
   /** Show close button in header */
   showClose?: boolean
+  /** Override the max-width Tailwind class (e.g. "max-w-lg") */
+  maxWidth?: string
 }
 
 export function Modal({
@@ -30,6 +32,7 @@ export function Modal({
   children,
   className,
   showClose = true,
+  maxWidth = 'sm:max-w-md',
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const titleId = title ? 'modal-title' : undefined
@@ -120,7 +123,7 @@ export function Modal({
             exit={{ opacity: 0, scale: 0.97, y: 8 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             className={cn(
-              'w-full sm:max-w-md glass-card overflow-hidden',
+              `w-full ${maxWidth} glass-card overflow-hidden`,
               'rounded-t-2xl sm:rounded-2xl',
               className,
             )}

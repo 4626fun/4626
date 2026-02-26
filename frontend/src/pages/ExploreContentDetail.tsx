@@ -176,9 +176,9 @@ function CopyButton({ text, className = '' }: { text: string; className?: string
 
 function StatRow({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
-    <div className="py-3 border-b border-zinc-800 last:border-0">
+    <div className="py-3 border-b border-white/8 last:border-0">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-zinc-500 uppercase tracking-[0.12em]">{label}</span>
+        <span className="text-xs text-zinc-500 font-medium">{label}</span>
         <span className="text-sm text-white font-medium tabular-nums">{value}</span>
       </div>
       {note ? <div className="text-[11px] text-zinc-600 mt-1">{note}</div> : null}
@@ -210,7 +210,7 @@ function MetricBarsChart({
   }
 
   return (
-    <div className="h-[320px] rounded-xl border border-zinc-800/80 bg-[#0b0b0e] p-4">
+    <div className="h-[320px] rounded-xl border border-white/8 bg-vault-bg p-4">
       <div className="h-full w-full flex items-end gap-[3px]">
         {values.length === 0 ? (
           <div className="w-full h-full flex items-center justify-center text-zinc-600 text-sm">No historical pool data</div>
@@ -256,10 +256,10 @@ function LinkRow({ href, label, value }: { href: string; label: string; value: s
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/40 hover:bg-zinc-800 transition-colors group"
+      className="flex items-center justify-between p-3 rounded-xl bg-white/4 hover:bg-white/8 transition-colors group"
     >
       <div className="min-w-0">
-        <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">{label}</div>
+        <div className="text-[11px] font-medium text-zinc-500">{label}</div>
         <div className="text-sm text-white truncate">{value}</div>
       </div>
       <ExternalLink className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />
@@ -399,7 +399,7 @@ export function ExploreContentDetail() {
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6">
           <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
-            <div className="mb-6 rounded-3xl border border-zinc-800/80 bg-zinc-900/40 overflow-hidden">
+            <div className="mb-6 rounded-3xl border border-white/8 bg-white/4 overflow-hidden">
               <div className="relative px-4 py-6 sm:px-7 sm:py-7">
                 {mediaUrl ? (
                   <>
@@ -416,7 +416,7 @@ export function ExploreContentDetail() {
 
                 <div className="relative">
                   <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-                    <span className="inline-flex items-center rounded-full border border-zinc-700/80 bg-zinc-900/75 px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-zinc-300">
+                    <span className="inline-flex items-center rounded-full border border-zinc-700/80 bg-vault-card/70 px-2.5 py-1 text-[11px] font-medium text-zinc-300">
                       Zora Content Coin
                     </span>
                     <a
@@ -433,7 +433,7 @@ export function ExploreContentDetail() {
                     {mediaUrl ? (
                       <img src={mediaUrl} alt={name} className="w-14 h-14 rounded-2xl object-cover border border-zinc-700/80 shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" />
                     ) : (
-                      <div className="w-14 h-14 rounded-2xl border border-zinc-700 bg-zinc-800/80 flex items-center justify-center text-sm text-zinc-300">
+                      <div className="w-14 h-14 rounded-2xl border border-zinc-700 bg-white/8 flex items-center justify-center text-sm text-zinc-300">
                         {symbol.slice(0, 2)}
                       </div>
                     )}
@@ -442,7 +442,7 @@ export function ExploreContentDetail() {
                       <div className="mt-1 flex items-center gap-2 text-sm text-zinc-300">
                         <span className="text-zinc-200">{symbol}</span>
                         <span className="text-zinc-600">•</span>
-                        <span className="inline-flex items-center rounded-full bg-zinc-800/80 px-2 py-0.5 text-xs text-zinc-300 border border-zinc-700/80">
+                        <span className="inline-flex items-center rounded-full bg-white/8 px-2 py-0.5 text-xs text-zinc-300 border border-zinc-700/80">
                           {creatorHandle ? `@${creatorHandle}` : 'Unknown creator'}
                         </span>
                       </div>
@@ -452,20 +452,20 @@ export function ExploreContentDetail() {
                   <p className="text-sm sm:text-[15px] text-zinc-300/95 leading-relaxed max-w-3xl">{description}</p>
 
                   <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                    <div className="rounded-2xl border border-zinc-700/60 bg-zinc-900/70 p-3">
-                      <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Market Cap</div>
+                    <div className="rounded-2xl border border-zinc-700/60 bg-vault-card/60/70 p-3">
+                      <div className="text-[11px] font-medium text-zinc-500">Market Cap</div>
                       <div className="text-[15px] text-white mt-1.5 tabular-nums">{formatUsd(marketCapUsd)}</div>
                     </div>
-                    <div className="rounded-2xl border border-zinc-700/60 bg-zinc-900/70 p-3">
-                      <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Holders</div>
+                    <div className="rounded-2xl border border-zinc-700/60 bg-vault-card/60/70 p-3">
+                      <div className="text-[11px] font-medium text-zinc-500">Holders</div>
                       <div className="text-[15px] text-white mt-1.5 tabular-nums">{formatCount(holdersCount)}</div>
                     </div>
-                    <div className="rounded-2xl border border-zinc-700/60 bg-zinc-900/70 p-3">
-                      <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Supply</div>
+                    <div className="rounded-2xl border border-zinc-700/60 bg-vault-card/60/70 p-3">
+                      <div className="text-[11px] font-medium text-zinc-500">Supply</div>
                       <div className="text-[15px] text-white mt-1.5 tabular-nums">{formatSupply(totalSupplyCount)}</div>
                     </div>
-                    <div className="rounded-2xl border border-zinc-700/60 bg-zinc-900/70 p-3">
-                      <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Created</div>
+                    <div className="rounded-2xl border border-zinc-700/60 bg-vault-card/60/70 p-3">
+                      <div className="text-[11px] font-medium text-zinc-500">Created</div>
                       <div className="text-[15px] text-white mt-1.5 tabular-nums">{createdLabel}</div>
                     </div>
                   </div>
@@ -474,7 +474,7 @@ export function ExploreContentDetail() {
             </div>
 
             <div className="mb-5">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500 mb-2">Pools</div>
+              <div className="text-[11px] font-medium text-zinc-500 mb-2">Pools</div>
 
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
@@ -517,7 +517,7 @@ export function ExploreContentDetail() {
                     href={primaryPool?.id ? `https://app.uniswap.org/explore/pools/base/${primaryPool.id}` : `https://app.uniswap.org/explore/tokens/base/${contentCoinAddress}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white bg-zinc-800 hover:bg-zinc-700 transition-colors flex-1 sm:flex-none"
+                    className="inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white bg-white/8 hover:bg-zinc-700 transition-colors flex-1 sm:flex-none"
                   >
                     Add liquidity <ExternalLink className="w-4 h-4" />
                   </a>
@@ -525,7 +525,7 @@ export function ExploreContentDetail() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-5">
+            <div className="rounded-2xl border border-white/8 bg-white/3 p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1">
                   {PERIODS.map((period) => (
@@ -536,7 +536,7 @@ export function ExploreContentDetail() {
                       className={`px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
                         selectedPeriod === period
                           ? 'bg-zinc-700 text-white'
-                          : 'text-zinc-500 hover:text-white hover:bg-zinc-800'
+                          : 'text-zinc-500 hover:text-white hover:bg-white/8'
                       }`}
                     >
                       {period}
@@ -553,7 +553,7 @@ export function ExploreContentDetail() {
                       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
                         selectedMetric === m.key
                           ? 'bg-zinc-700 text-white'
-                          : 'text-zinc-500 hover:text-white hover:bg-zinc-800'
+                          : 'text-zinc-500 hover:text-white hover:bg-white/8'
                       }`}
                     >
                       {m.icon}
@@ -564,7 +564,7 @@ export function ExploreContentDetail() {
               </div>
 
               {loading || historyLoading ? (
-                <div className="h-[320px] rounded-xl bg-zinc-800/40 animate-pulse" />
+                <div className="h-[320px] rounded-xl bg-white/4 animate-pulse" />
               ) : (
                 <MetricBarsChart points={points} metric={selectedMetric} />
               )}
@@ -576,8 +576,8 @@ export function ExploreContentDetail() {
               </div>
             </div>
 
-            <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/30 overflow-hidden">
-              <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+            <div className="mt-6 rounded-2xl border border-white/8 bg-white/3 overflow-hidden">
+              <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between">
                 <div>
                   <div className="text-sm text-white font-medium">Recent Activity</div>
                   <div className="text-xs text-zinc-500">Latest swaps from the primary pool</div>
@@ -592,8 +592,8 @@ export function ExploreContentDetail() {
 
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] text-sm">
-                  <thead className="bg-zinc-900/70">
-                    <tr className="text-left text-zinc-500 text-xs uppercase tracking-[0.12em]">
+                  <thead className="bg-vault-card/60/70">
+                    <tr className="text-left text-zinc-500 text-xs font-medium">
                       <th className="px-4 py-3">Time</th>
                       <th className="px-4 py-3">Type</th>
                       <th className="px-4 py-3 text-right">USD</th>
@@ -617,7 +617,7 @@ export function ExploreContentDetail() {
                       </tr>
                     ) : (
                       activityRows.map((row) => (
-                        <tr key={row.id} className="border-t border-zinc-800/70">
+                        <tr key={row.id} className="border-t border-white/8/70">
                           <td className="px-4 py-3 text-zinc-400">{formatTimestamp(row.timestamp)}</td>
                           <td className="px-4 py-3">
                             <span
@@ -668,9 +668,9 @@ export function ExploreContentDetail() {
             transition={{ duration: 0.35, delay: 0.06 }}
             className="space-y-4"
           >
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
+            <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
               <div className="flex items-center justify-between mb-3">
-                <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Pool Snapshot</div>
+                <div className="text-xs font-medium text-zinc-500">Pool Snapshot</div>
                 <button
                   type="button"
                   className="text-zinc-400 hover:text-white transition-colors"
@@ -698,8 +698,8 @@ export function ExploreContentDetail() {
               />
             </div>
 
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
-              <div className="text-xs uppercase tracking-[0.12em] text-zinc-500 mb-2">Stability</div>
+            <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
+              <div className="text-xs font-medium text-zinc-500 mb-2">Stability</div>
               <div className="text-sm text-zinc-400 leading-relaxed mb-3">
                 In low-liquidity markets, spot price can swing hard between CONTENT, CREATOR, ZORA, and ETH paths.
                 Liquidity variation is generally a better stability anchor.
@@ -708,8 +708,8 @@ export function ExploreContentDetail() {
               <StatRow label="Price Variance" value={priceCV == null ? '-' : `${priceCV.toFixed(2)}% CV`} />
             </div>
 
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
-              <div className="text-xs uppercase tracking-[0.12em] text-zinc-500 mb-3">Links</div>
+            <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
+              <div className="text-xs font-medium text-zinc-500 mb-3">Links</div>
               <div className="space-y-2">
                 <LinkRow href={`https://zora.co/coin/base:${contentCoinAddress}`} label="Zora" value={shortAddress(contentCoinAddress)} />
                 <LinkRow href={`https://basescan.org/token/${contentCoinAddress}`} label="Basescan" value={shortAddress(contentCoinAddress)} />
@@ -718,7 +718,7 @@ export function ExploreContentDetail() {
                 ) : null}
               </div>
 
-              <div className="mt-3 pt-3 border-t border-zinc-800">
+              <div className="mt-3 pt-3 border-t border-white/8">
                 <div className="text-xs text-zinc-500 mb-1">Token</div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-white font-medium">{name}</span>
@@ -730,11 +730,11 @@ export function ExploreContentDetail() {
             </div>
 
             {mediaUrl ? (
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 overflow-hidden">
+              <div className="rounded-2xl border border-white/8 bg-white/3 overflow-hidden">
                 <img src={mediaUrl} alt={name} className="w-full aspect-video object-cover" />
               </div>
             ) : (
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5">
+              <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
                 <div className="text-zinc-500 text-sm flex items-center gap-2">
                   <Link2 className="w-4 h-4" />
                   No media preview available.

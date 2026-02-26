@@ -281,7 +281,7 @@ export function ExploreCreators() {
   }
 
   const arrowButtonClass =
-    'inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-zinc-900/75 backdrop-blur-md text-zinc-100 shadow-[0_10px_24px_-16px_rgba(0,0,0,0.95)] transition-all duration-200 hover:-translate-y-[1px] hover:border-white/35 hover:bg-zinc-800/85 hover:text-white hover:shadow-[0_14px_26px_-14px_rgba(0,0,0,0.95)] active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30'
+    'inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-vault-card/70 backdrop-blur-md text-zinc-100 shadow-[0_10px_24px_-16px_rgba(0,0,0,0.95)] transition-all duration-200 hover:-translate-y-[1px] hover:border-white/15 hover:bg-white/10 hover:text-white hover:shadow-[0_14px_26px_-14px_rgba(0,0,0,0.95)] active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30'
 
   return (
     <div className="relative min-h-screen pt-1 sm:pt-2">
@@ -302,8 +302,8 @@ export function ExploreCreators() {
 
           {/* Metrics strip — compact 2x2 on mobile, 4-col on desktop */}
           <div className="mt-4 sm:mt-6 grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 px-3 sm:px-4 py-2.5 sm:py-3">
-              <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.16em] text-zinc-500">Creators</div>
+            <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 px-3 sm:px-4 py-2.5 sm:py-3">
+              <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">Creators</div>
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {creatorsTotalDisplay?.toLocaleString() ?? '—'}
               </div>
@@ -314,8 +314,8 @@ export function ExploreCreators() {
               </div>
             </div>
 
-            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 px-3 sm:px-4 py-2.5 sm:py-3">
-              <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.16em] text-zinc-500">TVL</div>
+            <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 px-3 sm:px-4 py-2.5 sm:py-3">
+              <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">TVL</div>
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {formatCompactUsd(marketCapDisplay)}
               </div>
@@ -324,8 +324,8 @@ export function ExploreCreators() {
               </div>
             </div>
 
-            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 px-3 sm:px-4 py-2.5 sm:py-3">
-              <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.16em] text-zinc-500">1D Vol</div>
+            <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 px-3 sm:px-4 py-2.5 sm:py-3">
+              <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Vol</div>
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {formatCompactUsd(volume24hDisplay)}
               </div>
@@ -334,8 +334,8 @@ export function ExploreCreators() {
               </div>
             </div>
 
-            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 px-3 sm:px-4 py-2.5 sm:py-3">
-              <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.16em] text-zinc-500">1D Fees</div>
+            <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 px-3 sm:px-4 py-2.5 sm:py-3">
+              <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Fees</div>
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {formatCompactUsd(fees24hDisplay)}
               </div>
@@ -374,10 +374,10 @@ export function ExploreCreators() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
-          className="relative rounded-2xl border border-zinc-800 bg-zinc-900/50 overflow-hidden"
+          className="relative rounded-2xl border border-white/8 bg-vault-card/40 overflow-hidden"
         >
           {/* Sticky header - outside horizontal scroll to preserve sticky behavior */}
-          <div className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
+          <div className="sticky top-0 z-50 border-b border-white/8 bg-vault-bg shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
             <div 
               className="overflow-x-auto scrollbar-hide" 
               id="explore-creators-header"
@@ -446,7 +446,7 @@ export function ExploreCreators() {
               e.currentTarget.dataset.scrolled = scrolled ? '1' : '0'
             }}
           >
-            <div className="min-w-max divide-y divide-zinc-800/50">
+            <div className="min-w-max divide-y divide-white/6">
               {isLoading ? (
                 // Loading skeletons
                 Array.from({ length: 10 }).map((_, i) => <TokenRowSkeleton key={i} collapseIdentity={collapseIdentity} />)
@@ -495,11 +495,11 @@ export function ExploreCreators() {
 
               {/* Load more button (fallback for scroll) */}
               {hasNextPage && !isFetchingNextPage && (
-                <div className="px-6 py-4 border-t border-zinc-800 flex justify-center">
+                <div className="px-6 py-4 border-t border-white/8 flex justify-center">
                   <button
                     type="button"
                     onClick={() => fetchNextPage()}
-                    className="px-6 py-2 rounded-full text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                    className="px-6 py-2 rounded-full text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/8 transition-colors"
                   >
                     Load more
                   </button>

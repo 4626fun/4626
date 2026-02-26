@@ -185,7 +185,7 @@ export function ExploreContentTransactions() {
             ) : null}
           </motion.div>
 
-          <div className="mb-8 rounded-3xl border border-zinc-800/80 bg-zinc-900/40 overflow-hidden">
+          <div className="mb-8 rounded-3xl border border-white/8 bg-white/4 overflow-hidden">
             <div className="relative p-5 sm:px-7 sm:py-7">
               {mediaUrl ? (
                 <>
@@ -198,7 +198,7 @@ export function ExploreContentTransactions() {
 
               <div className="relative">
                 <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-                  <span className="inline-flex items-center rounded-full border border-zinc-700 bg-zinc-900/80 px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-zinc-300">
+                  <span className="inline-flex items-center rounded-full border border-zinc-700 bg-vault-card/60/80 px-2.5 py-1 text-[11px] font-medium text-zinc-300">
                     Zora Content Coin
                   </span>
                   <a
@@ -215,7 +215,7 @@ export function ExploreContentTransactions() {
                   {mediaUrl ? (
                     <img src={mediaUrl} alt={name} className="w-14 h-14 rounded-2xl object-cover border border-zinc-700/80" />
                   ) : (
-                    <div className="w-14 h-14 rounded-2xl border border-zinc-700 bg-zinc-800/80 flex items-center justify-center text-sm text-zinc-300">
+                    <div className="w-14 h-14 rounded-2xl border border-zinc-700 bg-white/8 flex items-center justify-center text-sm text-zinc-300">
                       {symbol.slice(0, 2)}
                     </div>
                   )}
@@ -224,7 +224,7 @@ export function ExploreContentTransactions() {
                     <div className="mt-1 flex items-center gap-2 text-sm text-zinc-300">
                       <span className="text-zinc-200">{symbol}</span>
                       <span className="text-zinc-600">•</span>
-                      <span className="inline-flex items-center rounded-full bg-zinc-800/80 px-2 py-0.5 text-xs text-zinc-300 border border-zinc-700/80">
+                      <span className="inline-flex items-center rounded-full bg-white/8 px-2 py-0.5 text-xs text-zinc-300 border border-zinc-700/80">
                         {creatorHandle ? `@${creatorHandle}` : 'Unknown creator'}
                       </span>
                     </div>
@@ -234,16 +234,16 @@ export function ExploreContentTransactions() {
                 <p className="text-sm sm:text-[15px] text-zinc-300/95 leading-relaxed">{description}</p>
 
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  <div className="rounded-2xl border border-zinc-700/60 bg-zinc-900/70 p-3">
-                    <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Market Cap</div>
+                  <div className="rounded-2xl border border-zinc-700/60 bg-vault-card/60/70 p-3">
+                    <div className="text-[11px] font-medium text-zinc-500">Market Cap</div>
                     <div className="text-[15px] text-white mt-1.5 tabular-nums">{formatUsd(marketCapUsd)}</div>
                   </div>
-                  <div className="rounded-2xl border border-zinc-700/60 bg-zinc-900/70 p-3">
-                    <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Holders</div>
+                  <div className="rounded-2xl border border-zinc-700/60 bg-vault-card/60/70 p-3">
+                    <div className="text-[11px] font-medium text-zinc-500">Holders</div>
                     <div className="text-[15px] text-white mt-1.5 tabular-nums">{formatCount(holders)}</div>
                   </div>
-                  <div className="rounded-2xl border border-zinc-700/60 bg-zinc-900/70 p-3">
-                    <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Created</div>
+                  <div className="rounded-2xl border border-zinc-700/60 bg-vault-card/60/70 p-3">
+                    <div className="text-[11px] font-medium text-zinc-500">Created</div>
                     <div className="text-[15px] text-white mt-1.5 tabular-nums">{createdLabel}</div>
                   </div>
                 </div>
@@ -253,10 +253,10 @@ export function ExploreContentTransactions() {
 
           <ExploreSubnav searchPlaceholder="Filter transactions…" />
 
-          <div className="mt-10 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-6">
+          <div className="mt-10 rounded-2xl border border-white/8 bg-white/3 p-4 sm:p-6">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-sm">
-                <thead className="border-b border-zinc-800 text-left text-zinc-500 text-xs uppercase tracking-[0.12em]">
+                <thead className="border-b border-white/8 text-left text-zinc-500 text-xs font-medium">
                   <tr>
                     <th className="px-3 py-3">Time</th>
                     <th className="px-3 py-3">Type</th>
@@ -282,7 +282,7 @@ export function ExploreContentTransactions() {
                     </tr>
                   ) : (
                     rows.map((row) => (
-                      <tr key={row.id} className="border-b border-zinc-800/70">
+                      <tr key={row.id} className="border-b border-white/8/70">
                         <td className="px-3 py-3 text-zinc-400">{formatTimestamp(row.timestamp)}</td>
                         <td className="px-3 py-3">
                           <span

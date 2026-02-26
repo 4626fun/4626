@@ -193,7 +193,7 @@ export function Home() {
                 <br />
                 <span className="glow-brand">Vault</span>
               </h2>
-              <div className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-zinc-600">
+              <div className="inline-flex items-center gap-2 text-[10px] font-medium text-zinc-600">
                 <span>Powered by</span>
                 <img
                   src="/protocols/uniswap.svg"
@@ -231,7 +231,7 @@ export function Home() {
               className="space-y-0"
             >
               <div className="rounded-2xl border border-zinc-900/70 bg-black/30 backdrop-blur-sm p-4 sm:p-6">
-                <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-600">Default launch mechanics</div>
+                <div className="text-[10px] font-medium text-zinc-600">Default launch mechanics</div>
 
                 <div className="mt-4 sm:mt-6 space-y-0">
                   <div className="data-row">
@@ -283,7 +283,7 @@ export function Home() {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-3 gap-px bg-zinc-900">
+          <div className="grid grid-cols-3 gap-px bg-vault-card/60">
             <motion.div
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}

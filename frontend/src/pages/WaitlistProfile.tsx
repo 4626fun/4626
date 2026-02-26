@@ -271,7 +271,7 @@ export function WaitlistProfile() {
             </div>
           </div>
 
-          <div className="rounded-3xl bg-zinc-950/80 border border-zinc-800/50 backdrop-blur-xl p-6 space-y-6">
+          <div className="rounded-3xl bg-zinc-950/80 border border-white/6 backdrop-blur-xl p-6 space-y-6">
             <div className="text-center space-y-2">
               <h1 className="text-[24px] font-light text-white">Sign in to view your profile</h1>
               <p className="text-[14px] text-zinc-500">
@@ -282,7 +282,7 @@ export function WaitlistProfile() {
             <button
               type="button"
               disabled={siwe.busy}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#0052FF] text-white text-[14px] font-medium hover:bg-[#0047E1] transition-all duration-200"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-primary text-white text-[14px] font-medium hover:bg-[#0047E1] transition-all duration-200"
               onClick={() => void siwe.signIn({ method: 'zora' })}
             >
               {siwe.busy ? 'Opening Zora…' : 'Continue with Zora'}
@@ -326,7 +326,7 @@ export function WaitlistProfile() {
     return (
       <div className="min-h-[100svh] flex items-center justify-center px-4 py-12 bg-[#020202]">
         <div className="w-full max-w-[440px]">
-          <div className="rounded-3xl bg-zinc-950/80 border border-zinc-800/50 backdrop-blur-xl p-6 space-y-6">
+          <div className="rounded-3xl bg-zinc-950/80 border border-white/6 backdrop-blur-xl p-6 space-y-6">
             <div className="text-center space-y-2">
               <h1 className="text-[24px] font-light text-white">Join the waitlist first</h1>
               <p className="text-[14px] text-zinc-500">
@@ -336,7 +336,7 @@ export function WaitlistProfile() {
 
             <Link
               to="/"
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#0052FF] text-white text-[14px] font-medium hover:bg-[#0047E1] transition-all duration-200"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-primary text-white text-[14px] font-medium hover:bg-[#0047E1] transition-all duration-200"
             >
               Join Waitlist
             </Link>
@@ -388,10 +388,10 @@ export function WaitlistProfile() {
         </div>
 
         {/* Points Summary Card */}
-        <motion.div {...fadeUp} className="rounded-2xl bg-gradient-to-br from-[#0052FF]/10 to-transparent border border-[#0052FF]/20 p-5">
+        <motion.div {...fadeUp} className="rounded-2xl bg-gradient-to-br from-[#0052FF]/10 to-transparent border border-brand-primary/20 p-5">
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
-              <div className="text-[11px] uppercase tracking-[0.15em] text-[#0052FF] font-medium mb-1">
+              <div className="text-[11px] font-medium text-brand-primary font-medium mb-1">
                 Your Points
               </div>
               <div className="text-[40px] font-light text-white tabular-nums tracking-tight leading-none">
@@ -409,7 +409,7 @@ export function WaitlistProfile() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 pt-4 border-t border-zinc-800/50">
+          <div className="grid grid-cols-3 gap-3 pt-4 border-t border-white/6">
             <div className="text-center">
               <div className="text-[18px] font-light text-white tabular-nums">
                 {position?.referrals.qualifiedCount ?? 0}
@@ -423,7 +423,7 @@ export function WaitlistProfile() {
               <div className="text-[11px] text-zinc-500">From refs</div>
             </div>
             <div className="text-center">
-              <Link to="/leaderboard" className="text-[13px] text-[#0052FF] hover:text-[#3373FF] transition-colors">
+              <Link to="/leaderboard" className="text-[13px] text-brand-primary hover:text-[#3373FF] transition-colors">
                 Leaderboard →
               </Link>
             </div>
@@ -432,15 +432,15 @@ export function WaitlistProfile() {
 
         {/* CSW Linking - High Priority */}
         {!effectiveUserData.cswLinked ? (
-          <motion.div {...fadeUp} className="rounded-2xl border-2 border-[#0052FF]/40 bg-[#0052FF]/5 p-5 space-y-4">
+          <motion.div {...fadeUp} className="rounded-2xl border-2 border-brand-primary/40 bg-brand-primary/5 p-5 space-y-4">
             <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-[#0052FF]/10 flex items-center justify-center flex-shrink-0">
-                <Wallet className="w-6 h-6 text-[#0052FF]" />
+              <div className="w-12 h-12 rounded-xl bg-brand-primary/10 flex items-center justify-center flex-shrink-0">
+                <Wallet className="w-6 h-6 text-brand-primary" />
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-[15px] text-white font-medium">Link Coinbase Smart Wallet</span>
-                  <span className="px-2 py-0.5 rounded-full bg-[#0052FF]/20 text-[#0052FF] text-[11px] font-medium">
+                  <span className="px-2 py-0.5 rounded-full bg-brand-primary/20 text-brand-primary text-[11px] font-medium">
                     +{LINK_CSW_POINTS} pts
                   </span>
                 </div>
@@ -451,7 +451,7 @@ export function WaitlistProfile() {
             </div>
             <button
               type="button"
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#0052FF] text-white text-[14px] font-medium hover:bg-[#0047E1] transition-all duration-200 active:scale-[0.98] disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-primary text-white text-[14px] font-medium hover:bg-[#0047E1] transition-all duration-200 active:scale-[0.98] disabled:opacity-50"
               disabled={cswLinkBusy}
               onClick={handleLinkCsw}
             >
@@ -475,19 +475,19 @@ export function WaitlistProfile() {
 
         {/* Referral Section */}
         {referralLink && (
-          <motion.div {...fadeUp} className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 space-y-4">
+          <motion.div {...fadeUp} className="rounded-2xl border border-white/8 bg-white/3 p-5 space-y-4">
             <div className="flex items-center gap-3">
               <Users className="w-5 h-5 text-zinc-400" />
               <div className="text-[14px] text-white font-medium">Invite Friends</div>
             </div>
             
-            <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-black/40 px-3 py-2.5">
+            <div className="flex items-center gap-2 rounded-xl border border-white/8 bg-black/40 px-3 py-2.5">
               <span className="flex-1 font-mono text-[12px] text-zinc-400 truncate">
                 {referralLink}
               </span>
               <button
                 type="button"
-                className="p-1.5 rounded-lg hover:bg-zinc-800 transition-colors"
+                className="p-1.5 rounded-lg hover:bg-white/8 transition-colors"
                 onClick={handleCopyReferral}
               >
                 <Copy className="w-4 h-4 text-zinc-500" />
@@ -508,12 +508,12 @@ export function WaitlistProfile() {
 
         {/* Social Actions */}
         <motion.div {...fadeUp} className="space-y-3">
-          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.15em] text-zinc-600 font-medium">
+          <div className="flex items-center gap-2 text-[11px] font-medium text-zinc-600 font-medium">
             <Zap className="w-3.5 h-3.5" />
             Earn More Points
           </div>
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 overflow-hidden divide-y divide-zinc-800/50">
+          <div className="rounded-2xl border border-white/8 bg-white/3 overflow-hidden divide-y divide-white/8/50">
             {/* High Value Socials */}
             <SocialRow
               label="Follow on Feed"
@@ -563,11 +563,11 @@ export function WaitlistProfile() {
 
         {/* Bonus Actions */}
         <motion.div {...fadeUp} className="space-y-3">
-          <div className="text-[11px] uppercase tracking-[0.15em] text-zinc-600 font-medium">
+          <div className="text-[11px] font-medium text-zinc-600 font-medium">
             Bonus
           </div>
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 overflow-hidden divide-y divide-zinc-800/50">
+          <div className="rounded-2xl border border-white/8 bg-white/3 overflow-hidden divide-y divide-white/8/50">
             <SocialRow
               label="Star on GitHub"
               handle="4626fun"
@@ -600,8 +600,8 @@ export function WaitlistProfile() {
         </motion.div>
 
         {/* Points Breakdown */}
-        <motion.div {...fadeUp} className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
-          <div className="text-[11px] uppercase tracking-[0.15em] text-zinc-600 font-medium mb-3">
+        <motion.div {...fadeUp} className="rounded-2xl border border-white/8 bg-white/3 p-4">
+          <div className="text-[11px] font-medium text-zinc-600 font-medium mb-3">
             Points Breakdown
           </div>
           <div className="space-y-2 text-[13px]">
@@ -627,7 +627,7 @@ export function WaitlistProfile() {
               <span className="text-zinc-500">Bonus</span>
               <span className="text-zinc-300">+{position?.points.bonus ?? 0}</span>
             </div>
-            <div className="flex justify-between pt-2 border-t border-zinc-800">
+            <div className="flex justify-between pt-2 border-t border-white/8">
               <span className="text-white font-medium">Total</span>
               <span className="text-white font-medium">{position?.points.total ?? 0}</span>
             </div>
@@ -661,7 +661,7 @@ function SocialRow({
           className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
             done
               ? 'bg-emerald-500/10 border border-emerald-500/20'
-              : 'bg-zinc-800/50 border border-zinc-700'
+              : 'bg-white/5 border border-zinc-700'
           }`}
         >
           {done && <Check className="w-3.5 h-3.5 text-emerald-400" />}
@@ -670,7 +670,7 @@ function SocialRow({
           <div className="flex items-center gap-2">
             <span className="text-[14px] text-white">{label}</span>
             {verified && (
-              <span className="px-1.5 py-0.5 rounded text-[9px] bg-[#0052FF]/10 text-[#0052FF] font-medium">
+              <span className="px-1.5 py-0.5 rounded text-[9px] bg-brand-primary/10 text-brand-primary font-medium">
                 VERIFIED
               </span>
             )}
@@ -682,8 +682,8 @@ function SocialRow({
         type="button"
         className={`px-4 py-2 rounded-xl text-[13px] font-medium transition-all duration-200 ${
           done
-            ? 'bg-zinc-800/50 text-zinc-500 cursor-default'
-            : 'bg-[#0052FF] text-white hover:bg-[#0047E1] active:scale-[0.98]'
+            ? 'bg-white/5 text-zinc-500 cursor-default'
+            : 'bg-brand-primary text-white hover:bg-[#0047E1] active:scale-[0.98]'
         }`}
         onClick={() => !done && onAction()}
         disabled={done}

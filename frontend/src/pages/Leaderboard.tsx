@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Alert } from '@/components/ui/Alert'
 import { apiFetch } from '@/lib/apiBase'
 
 type PointsType = 'invite' | 'total' | 'agent'
@@ -102,7 +103,7 @@ export function Leaderboard() {
       <div className="relative max-w-3xl mx-auto px-6 py-12">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-600 mb-2">CreatorVaults</div>
+            <div className="text-[10px] font-medium text-zinc-600 mb-2">CreatorVaults</div>
             <div className="headline text-3xl sm:text-4xl leading-tight">Leaderboard</div>
             <div className="text-sm text-zinc-600 font-light mt-2">
               Points-based. Earn points by joining, inviting, social actions, Lens/Grove identity sync, and ERC-8004 agent reputation/feedback.
@@ -118,7 +119,7 @@ export function Leaderboard() {
           <button
             type="button"
             className={`rounded-full px-3 py-1 text-[12px] border ${
-              pointsType === 'invite' ? 'border-brand-primary/30 bg-brand-primary/10 text-zinc-200' : 'border-white/10 bg-black/30 text-zinc-600'
+              pointsType === 'invite' ? 'border-brand-primary/30 bg-brand-primary/10 text-zinc-200' : 'border-white/8 bg-vault-card/40 text-zinc-600'
             }`}
             onClick={() => setPointsType('invite')}
             disabled={busy}
@@ -128,7 +129,7 @@ export function Leaderboard() {
           <button
             type="button"
             className={`rounded-full px-3 py-1 text-[12px] border ${
-              pointsType === 'total' ? 'border-brand-primary/30 bg-brand-primary/10 text-zinc-200' : 'border-white/10 bg-black/30 text-zinc-600'
+              pointsType === 'total' ? 'border-brand-primary/30 bg-brand-primary/10 text-zinc-200' : 'border-white/8 bg-vault-card/40 text-zinc-600'
             }`}
             onClick={() => setPointsType('total')}
             disabled={busy}
@@ -138,7 +139,7 @@ export function Leaderboard() {
           <button
             type="button"
             className={`rounded-full px-3 py-1 text-[12px] border ${
-              pointsType === 'agent' ? 'border-brand-primary/30 bg-brand-primary/10 text-zinc-200' : 'border-white/10 bg-black/30 text-zinc-600'
+              pointsType === 'agent' ? 'border-brand-primary/30 bg-brand-primary/10 text-zinc-200' : 'border-white/8 bg-vault-card/40 text-zinc-600'
             }`}
             onClick={() => setPointsType('agent')}
             disabled={busy}
@@ -149,13 +150,13 @@ export function Leaderboard() {
         </div>
 
         {error ? (
-          <div className="mt-6 text-xs text-red-400" role="status" aria-live="polite">
+          <Alert variant="error" className="mt-6">
             {error}
-          </div>
+          </Alert>
         ) : null}
 
-        <div className="mt-6 rounded-xl border border-white/10 bg-black/30 overflow-hidden">
-          <div className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-white/10 text-[10px] uppercase tracking-[0.24em] text-zinc-700">
+        <div className="mt-6 rounded-xl border border-white/8 bg-vault-card/40 overflow-hidden">
+          <div className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-white/8 text-[10px] font-medium text-zinc-700">
             <div className="col-span-2">Rank</div>
             <div className="col-span-6">User</div>
             <div className="col-span-4 text-right">Points</div>
@@ -167,7 +168,7 @@ export function Leaderboard() {
                   key={`${r.rank}-${r.signupId}`}
                   className={[
                     'grid grid-cols-12 gap-2 px-4 py-3 border-b border-white/5',
-                    r.borderTier >= 1 ? 'bg-[#0052FF]/[0.035] border-l-2 border-l-[#0052FF]/30' : null,
+                    r.borderTier >= 1 ? 'bg-brand-primary/[0.035] border-l-2 border-l-[#0052FF]/30' : null,
                   ]
                     .filter(Boolean)
                     .join(' ')}
@@ -177,7 +178,7 @@ export function Leaderboard() {
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="font-mono truncate">{r.display}</div>
                       {r.borderTier >= 1 ? (
-                        <div className="shrink-0 inline-flex items-center rounded-full border border-[#0052FF]/30 bg-[#0052FF]/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#9bbcff]">
+                        <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
                           Tier {r.borderTier}
                         </div>
                       ) : null}

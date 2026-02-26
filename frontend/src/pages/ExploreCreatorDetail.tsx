@@ -51,7 +51,7 @@ function DexscreenerChart({ pairAddress, tokenAddress }: { pairAddress?: string;
     : `https://dexscreener.com/base/${tokenAddress}?embed=1&theme=dark&trades=0&info=0`
 
   return (
-    <div className="w-full rounded-xl overflow-hidden bg-zinc-900/50">
+    <div className="w-full rounded-xl overflow-hidden bg-vault-card/40">
       <div className="w-full min-h-[280px] sm:min-h-[360px] md:min-h-[420px] aspect-[4/3] sm:aspect-[16/9] md:aspect-[16/10]">
         <iframe
           src={embedUrl}
@@ -122,7 +122,7 @@ function CopyButton({ text, className = '' }: { text: string; className?: string
 
 function StatRow({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between py-3 border-b border-zinc-800 last:border-0">
+    <div className="flex items-center justify-between py-3 border-b border-white/8 last:border-0">
       <span className="text-sm text-zinc-400 flex items-center gap-2">
         {icon}
         {label}
@@ -161,7 +161,7 @@ function ContentCoinRow({ coin, rank }: { coin: ZoraCoin; rank: number }) {
   return (
     <Link
       to={`/explore/content/base/${address}`}
-      className="flex items-center gap-2.5 sm:gap-4 px-3 py-3 sm:p-4 hover:bg-zinc-800/50 transition-colors rounded-xl active:scale-[0.99]"
+      className="flex items-center gap-2.5 sm:gap-4 px-3 py-3 sm:p-4 hover:bg-white/5 transition-colors rounded-xl active:scale-[0.99]"
     >
       <span className="text-[11px] sm:text-xs text-zinc-600 w-5 sm:w-6 text-center flex-shrink-0">{rank}</span>
       
@@ -237,10 +237,10 @@ function SocialLinks({ profile }: { profile: ZoraProfile | null }) {
           href={link.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors group"
+          className="flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/8 transition-colors group"
         >
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-zinc-800/90 border border-zinc-700/70 flex items-center justify-center text-zinc-200">
+            <div className="w-9 h-9 rounded-xl bg-white/8/90 border border-zinc-700/70 flex items-center justify-center text-zinc-200">
               <span className="scale-95">{link.icon}</span>
             </div>
             <div className="min-w-0">
@@ -286,10 +286,10 @@ function ResourceLinks({ tokenAddress }: { tokenAddress: string }) {
           href={link.href}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-between p-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors group"
+          className="flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/8 transition-colors group"
         >
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-zinc-800/90 border border-zinc-700/70 flex items-center justify-center p-1.5 overflow-hidden">
+            <div className="w-9 h-9 rounded-xl bg-white/8/90 border border-zinc-700/70 flex items-center justify-center p-1.5 overflow-hidden">
               <img src={link.iconUrl} alt={link.name} className="w-full h-full object-contain" />
             </div>
             <span className="text-sm text-white truncate">{link.name}</span>
@@ -415,7 +415,7 @@ export function ExploreCreatorDetail() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-6 mb-4 sm:mb-6"
+          className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 p-4 sm:p-6 mb-4 sm:mb-6"
         >
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
             {/* Avatar & Name */}
@@ -470,30 +470,30 @@ export function ExploreCreatorDetail() {
             </div>
           </div>
 
-          <div className="mt-4 sm:mt-5 pt-4 border-t border-zinc-800/80 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="rounded-lg sm:rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
+          <div className="mt-4 sm:mt-5 pt-4 border-t border-white/8 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="rounded-lg sm:rounded-xl border border-white/8 bg-white/4 px-3 py-2.5">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Creator Coin</div>
+                  <div className="text-[11px] font-medium text-zinc-500">Creator Coin</div>
                   <div className="text-xs sm:text-sm text-zinc-300 font-mono truncate">{shortAddress(tokenAddress)}</div>
                 </div>
-                <CopyButton text={tokenAddress} className="p-2 rounded-lg hover:bg-zinc-800 shrink-0" />
+                <CopyButton text={tokenAddress} className="p-2 rounded-lg hover:bg-white/8 shrink-0" />
               </div>
             </div>
 
             {creatorAddress ? (
-              <div className="rounded-lg sm:rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
+              <div className="rounded-lg sm:rounded-xl border border-white/8 bg-white/4 px-3 py-2.5">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Creator Wallet</div>
+                    <div className="text-[11px] font-medium text-zinc-500">Creator Wallet</div>
                     <div className="text-xs sm:text-sm text-zinc-300 font-mono truncate">{shortAddress(creatorAddress)}</div>
                   </div>
-                  <CopyButton text={creatorAddress} className="p-2 rounded-lg hover:bg-zinc-800 shrink-0" />
+                  <CopyButton text={creatorAddress} className="p-2 rounded-lg hover:bg-white/8 shrink-0" />
                 </div>
               </div>
             ) : (
-              <div className="rounded-lg sm:rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
-                <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Creator Wallet</div>
+              <div className="rounded-lg sm:rounded-xl border border-white/8 bg-white/4 px-3 py-2.5">
+                <div className="text-[11px] font-medium text-zinc-500">Creator Wallet</div>
                 <div className="text-xs sm:text-sm text-zinc-500">Unavailable</div>
               </div>
             )}
@@ -510,14 +510,14 @@ export function ExploreCreatorDetail() {
             className="space-y-4 sm:space-y-6"
           >
             {/* Tab Navigation */}
-            <div className="flex items-center gap-1.5 sm:gap-2 border-b border-zinc-800 pb-2 overflow-x-auto scrollbar-hide">
+            <div className="flex items-center gap-1.5 sm:gap-2 border-b border-white/8 pb-2 overflow-x-auto scrollbar-hide">
               <button
                 type="button"
                 onClick={() => setActiveTab('chart')}
                 className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[13px] sm:text-sm font-medium transition-colors whitespace-nowrap active:scale-[0.97] ${
                   activeTab === 'chart'
-                    ? 'bg-zinc-800 text-white'
-                    : 'text-zinc-500 hover:text-white hover:bg-zinc-800/50'
+                    ? 'bg-white/8 text-white'
+                    : 'text-zinc-500 hover:text-white hover:bg-white/5'
                 }`}
               >
                 <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 inline mr-1.5 sm:mr-2" />
@@ -528,8 +528,8 @@ export function ExploreCreatorDetail() {
                 onClick={() => setActiveTab('coins')}
                 className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[13px] sm:text-sm font-medium transition-colors whitespace-nowrap active:scale-[0.97] ${
                   activeTab === 'coins'
-                    ? 'bg-zinc-800 text-white'
-                    : 'text-zinc-500 hover:text-white hover:bg-zinc-800/50'
+                    ? 'bg-white/8 text-white'
+                    : 'text-zinc-500 hover:text-white hover:bg-white/5'
                 }`}
               >
                 <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4 inline mr-1.5 sm:mr-2" />
@@ -539,8 +539,8 @@ export function ExploreCreatorDetail() {
 
             {/* Chart Tab */}
             {activeTab === 'chart' && (
-              <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 overflow-hidden">
-                <div className="px-3 py-3 sm:p-4 border-b border-zinc-800">
+              <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 overflow-hidden">
+                <div className="px-3 py-3 sm:p-4 border-b border-white/8">
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="text-white font-medium">{displayName}</span>
@@ -569,8 +569,8 @@ export function ExploreCreatorDetail() {
 
             {/* Content Coins Tab */}
             {activeTab === 'coins' && (
-              <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 overflow-hidden">
-                <div className="px-3 py-3 sm:p-4 border-b border-zinc-800">
+              <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 overflow-hidden">
+                <div className="px-3 py-3 sm:p-4 border-b border-white/8">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <h3 className="text-white font-medium">Content Coins by {displayName}</h3>
@@ -584,7 +584,7 @@ export function ExploreCreatorDetail() {
                           type="button"
                           onClick={() => setContentCoinsPage((p) => Math.max(1, p - 1))}
                           disabled={contentPage <= 1}
-                          className="px-3 py-1.5 rounded-full border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700 disabled:opacity-40 disabled:hover:text-zinc-400"
+                          className="px-3 py-1.5 rounded-full border border-white/8 text-zinc-400 hover:text-white hover:border-zinc-700 disabled:opacity-40 disabled:hover:text-zinc-400"
                         >
                           Prev
                         </button>
@@ -601,8 +601,8 @@ export function ExploreCreatorDetail() {
                                 onClick={() => setContentCoinsPage(item)}
                                 className={`min-w-[28px] px-2 py-1 rounded-md border text-[11px] ${
                                   item === contentPage
-                                    ? 'border-zinc-700 bg-zinc-800 text-white'
-                                    : 'border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                                    ? 'border-zinc-700 bg-white/8 text-white'
+                                    : 'border-white/8 text-zinc-400 hover:text-white hover:border-zinc-700'
                                 }`}
                                 aria-current={item === contentPage ? 'page' : undefined}
                               >
@@ -615,7 +615,7 @@ export function ExploreCreatorDetail() {
                           type="button"
                           onClick={() => setContentCoinsPage((p) => Math.min(totalContentPages, p + 1))}
                           disabled={contentPage >= totalContentPages}
-                          className="px-3 py-1.5 rounded-full border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700 disabled:opacity-40 disabled:hover:text-zinc-400"
+                          className="px-3 py-1.5 rounded-full border border-white/8 text-zinc-400 hover:text-white hover:border-zinc-700 disabled:opacity-40 disabled:hover:text-zinc-400"
                         >
                           Next
                         </button>
@@ -633,7 +633,7 @@ export function ExploreCreatorDetail() {
                     No content coins found for this creator.
                   </div>
                 ) : (
-                  <div className="divide-y divide-zinc-800/50">
+                  <div className="divide-y divide-white/6">
                     {pagedContentCoins.map((contentCoin, index) => (
                       <ContentCoinRow 
                         key={contentCoin.address || contentCoin.id || index} 
@@ -652,7 +652,7 @@ export function ExploreCreatorDetail() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-6"
+                className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 p-4 sm:p-6"
               >
                 <h3 className="text-sm font-medium text-zinc-400 mb-3">About {displayName}</h3>
                 <p className="text-sm text-zinc-300 leading-relaxed">{coin.description}</p>
@@ -668,7 +668,7 @@ export function ExploreCreatorDetail() {
             className="space-y-3 sm:space-y-4"
           >
             {/* Swap Card */}
-            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-5">
+            <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 p-4 sm:p-5">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   {avatarUrl ? (
@@ -704,25 +704,25 @@ export function ExploreCreatorDetail() {
             </div>
 
             {/* Social + Links Card */}
-            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-5">
+            <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 p-4 sm:p-5">
               <h3 className="text-sm font-medium text-zinc-400 mb-3">Social &amp; Links</h3>
               <div className="space-y-4">
                 <div>
-                  <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500 mb-2">Social</div>
+                  <div className="text-[11px] font-medium text-zinc-500 mb-2">Social</div>
                   <SocialLinks profile={profile} />
                   {!profile?.socialAccounts && (
                     <div className="text-sm text-zinc-600">No social accounts linked.</div>
                   )}
                 </div>
                 <div>
-                  <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500 mb-2">Links</div>
+                  <div className="text-[11px] font-medium text-zinc-500 mb-2">Links</div>
                   <ResourceLinks tokenAddress={tokenAddress} />
                 </div>
               </div>
             </div>
 
             {/* Stats Card */}
-            <div className="rounded-xl sm:rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-5">
+            <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/3 p-4 sm:p-5">
               <h3 className="text-sm font-medium text-zinc-400 mb-2">Creator Coin Stats</h3>
               <StatRow label="Market cap" value={marketCap} icon={<TrendingUp className="w-3 h-3" />} />
               <StatRow label="24H volume" value={volume24h} icon={<TrendingUp className="w-3 h-3" />} />

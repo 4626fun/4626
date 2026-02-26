@@ -663,7 +663,7 @@ class DeployVaultErrorBoundary extends Component<
       return (
         <div className="min-h-screen bg-black text-white">
           <section className="max-w-3xl mx-auto px-6 py-16">
-            <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500 mb-4">Deploy</div>
+            <div className="text-[10px] font-medium text-zinc-500 mb-4">Deploy</div>
             <div className="card rounded-xl p-8 space-y-4">
               <div className="text-lg font-medium text-red-400">Something went wrong</div>
               <div className="text-sm text-zinc-400 leading-relaxed">
@@ -709,7 +709,7 @@ export function DeployVault() {
     return (
       <div className="min-h-screen bg-black text-white">
         <section className="max-w-3xl mx-auto px-6 py-16">
-          <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500 mb-4">Deploy</div>
+          <div className="text-[10px] font-medium text-zinc-500 mb-4">Deploy</div>
           <div className="card rounded-xl p-8 space-y-3">
             <div className="text-lg font-medium">Authentication not configured</div>
             <div className="text-sm text-zinc-400 leading-relaxed">
@@ -3464,7 +3464,7 @@ function DeployVaultBatcher({
           requiredRaise: DEFAULT_REQUIRED_RAISE_WEI,
           floorPriceQ96: floorPriceQ96Aligned,
           auctionSteps,
-          meteoraAlphaVault: meteoraPayload?.meteoraAlphaVault ?? ZERO_BYTES32,
+          meteoraAlphaVault: (meteoraPayload?.meteoraAlphaVault ?? ZERO_BYTES32) as `0x${string}`,
           solanaIxs: meteoraPayload?.solanaIxs ?? [],
         } as const
 
@@ -5073,7 +5073,7 @@ function DeployVaultBatcher({
       ) : null}
 
       <div className="rounded-lg border border-white/5 bg-black/20 p-4 space-y-2">
-        <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Progress</div>
+        <div className="text-[10px] font-medium text-zinc-500">Progress</div>
         <div className="grid grid-cols-1 gap-2 text-[11px]">
           <div className="flex items-center justify-between gap-4">
             <div className={phase === 'phase1' ? 'text-zinc-100' : phase === 'idle' ? 'text-zinc-500' : 'text-zinc-300'}>
@@ -5157,7 +5157,7 @@ function DeployVaultBatcher({
       <details className="group rounded-lg border border-white/5 bg-black/20">
         <summary className="cursor-pointer select-none list-none px-4 py-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Deployment plan</div>
+            <div className="text-[11px] font-medium text-zinc-500">Deployment plan</div>
             <div className="text-[12px] text-zinc-200 truncate">Phases 1–4 · deterministic addresses</div>
           </div>
           <ChevronDown className="w-4 h-4 text-zinc-500 transition-transform group-open:rotate-180" />
@@ -5176,7 +5176,7 @@ function DeployVaultBatcher({
 
           <div className="rounded-md border border-white/5 bg-black/30 divide-y divide-white/5">
             <div className="py-3">
-              <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500 mb-2">Phase 1</div>
+              <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 1</div>
               <div className="space-y-2">
                 <AddressRow label="Vault" address={expected?.vault} />
                 <AddressRow label="Wrapper" address={expected?.wrapper} />
@@ -5185,7 +5185,7 @@ function DeployVaultBatcher({
             </div>
 
             <div className="py-3">
-              <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500 mb-2">Phase 2</div>
+              <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 2</div>
               <div className="space-y-2">
                 <AddressRow label="Gauge controller" address={expected?.gaugeController} />
                 <AddressRow label="CCA strategy" address={expected?.ccaStrategy} />
@@ -5207,7 +5207,7 @@ function DeployVaultBatcher({
             </div>
 
             <div className="py-3">
-              <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500 mb-2">Phase 3</div>
+              <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 3</div>
               <div className="text-[11px] text-zinc-600">
                 Strategy deployments + registrations (Charm CREATOR/USDC + Ajna).
               </div>
