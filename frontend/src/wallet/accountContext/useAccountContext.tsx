@@ -10,6 +10,7 @@ import { detectSignerType } from './detectSignerType'
 import { checkEoaOwnershipOfCsw } from './ownership'
 import { resolveActiveAccount } from './resolveActiveAccount'
 import { readPreferredAccountMode, writePreferredAccountMode } from './storage'
+import { deriveAccountUiFlags } from './deriveUiFlags'
 import type { AccountCapabilities, AccountModePreference, ResolvedAccountContext } from './types'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
@@ -181,17 +182,28 @@ export function AccountContextProvider(props: { children: ReactNode }) {
     ])
   }, [waitlistMeQuery, capabilitiesQuery, contractCodeQuery, ownerCheckQuery])
 
-  const uiFlags = useMemo(() => {
-    const isSmartActive = activeResolution.activeAccountType === 'SMART_WALLET'
-    const atomicReady = capabilities.atomicStatus === 'supported' || capabilities.atomicStatus === 'ready'
-    return {
-      aaAvailable: isSmartActive && (capabilities.paymasterService || atomicReady),
-      paymasterAvailable: isSmartActive && capabilities.paymasterService,
-      canUseSmartWalletMode: activeResolution.canUseSmartWalletMode,
-      shouldPromptToLinkOwner: signerType === 'EOA' && (!cswAddress || eoaIsOwnerOfCsw === false),
-      shouldShowNetworkMismatch: signerType === 'EOA' && Boolean(cswAddress) && chainIdValue !== BASE_CHAIN_ID,
-    }
-  }, [activeResolution.activeAccountType, activeResolution.canUseSmartWalletMode, capabilities, cswAddress, eoaIsOwnerOfCsw, signerType, chainIdValue])
+  const uiFlags = useMemo(
+    () =>
+      deriveAccountUiFlags({
+        activeAccountType: activeResolution.activeAccountType,
+        signerType,
+        cswAddress,
+        eoaIsOwnerOfCsw,
+        chainId: chainIdValue,
+        expectedCswChainId: BASE_CHAIN_ID,
+        canUseSmartWalletMode: activeResolution.canUseSmartWalletMode,
+        capabilities,
+      }),
+    [
+      activeResolution.activeAccountType,
+      activeResolution.canUseSmartWalletMode,
+      capabilities,
+      chainIdValue,
+      cswAddress,
+      eoaIsOwnerOfCsw,
+      signerType,
+    ],
+  )
 
   const value = useMemo<AccountContextValue>(
     () => ({
