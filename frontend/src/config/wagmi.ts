@@ -143,10 +143,10 @@ export const wagmiConfig = createConfig({
   ...(DATA_SUFFIX ? { dataSuffix: DATA_SUFFIX } : {}),
   transports: {
     [base.id]: BASE_READ_RPC_URLS.length > 0 ? fallback(BASE_READ_RPC_URLS.map((url) => http(url))) : http(),
-    [mainnet.id]: http(),
-    [arbitrum.id]: http(),
-    [optimism.id]: http(),
-    [polygon.id]: http(),
+    [mainnet.id]: fallback([http('https://eth.llamarpc.com'), http('https://rpc.ankr.com/eth'), http()]),
+    [arbitrum.id]: fallback([http('https://arbitrum.llamarpc.com'), http('https://rpc.ankr.com/arbitrum'), http()]),
+    [optimism.id]: fallback([http('https://optimism.llamarpc.com'), http('https://rpc.ankr.com/optimism'), http()]),
+    [polygon.id]: fallback([http('https://polygon.llamarpc.com'), http('https://rpc.ankr.com/polygon'), http()]),
   },
 })
 
