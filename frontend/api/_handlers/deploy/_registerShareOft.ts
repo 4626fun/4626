@@ -449,7 +449,15 @@ function isLikelyUnicodeSymbolUnsupportedError(message: string): boolean {
     lower.includes('invalid symbol') ||
     lower.includes('symbol is invalid') ||
     lower.includes('invalid metadata') ||
-    lower.includes('invalid character')
+    lower.includes('invalid character') ||
+    // ConstraintSeeds (#2006) fires when the Solana bridge program derives the
+    // mint PDA from ASCII-only bytes of the symbol but the client passed the
+    // PDA computed from the raw Unicode symbol (e.g. "■AKITA" vs "AKITA").
+    lower.includes('constraintseeds') ||
+    lower.includes('seeds constraint was violated') ||
+    lower.includes('a seeds constraint') ||
+    lower.includes('error code: constraintseeds') ||
+    lower.includes('error number: 2006')
   )
 }
 
@@ -719,7 +727,7 @@ async function tryProvisionDynamicRoute(params: {
   const provisionerUrls = readDynamicProvisionerUrls()
   const provisionerHealthUrls = readDynamicProvisionerHealthUrls(provisionerUrls)
 
-  const provisionViaRemote = async (): Promise<{ mintBytes32: Hex; runner: string }> => {
+  const provisionViaRemote = async (tokenSymbol: string = primaryTokenSymbol): Promise<{ mintBytes32: Hex; runner: string }> => {
     const retryAttempts = readProvisionerRetryAttempts()
     const retryDelayMs = readProvisionerRetryDelayMs()
     const requestTimeoutMs = readProvisionerRequestTimeoutMs()
@@ -743,7 +751,7 @@ async function tryProvisionDynamicRoute(params: {
           deployEnv,
           payerKp,
           tokenName,
-          tokenSymbol: primaryTokenSymbol,
+          tokenSymbol,
           tokenSymbolFallback: fallbackTokenSymbol,
           tokenNameSource,
           tokenSymbolSource,
@@ -763,7 +771,7 @@ async function tryProvisionDynamicRoute(params: {
                 deployEnv,
                 solanaDecimals: params.solanaDecimals,
                 tokenName,
-                tokenSymbol: primaryTokenSymbol,
+                tokenSymbol,
                 tokenSymbolFallback: fallbackTokenSymbol,
                 scalerExponent,
                 payerKp,
@@ -852,6 +860,26 @@ async function tryProvisionDynamicRoute(params: {
     )
   }
 
+  // Wraps provisionViaRemote with a single ASCII-symbol retry when the primary
+  // (unicode) symbol causes a ConstraintSeeds / metadata-rejection error.
+  const provisionViaRemoteWithFallback = async (): Promise<{ mintBytes32: Hex; runner: string }> => {
+    try {
+      return await provisionViaRemote(primaryTokenSymbol)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (fallbackTokenSymbol && isLikelyUnicodeSymbolUnsupportedError(message)) {
+        logger.warn('[deploy/registerShareOft] Remote provisioner unicode symbol attempt failed; retrying with ASCII fallback', {
+          shareOft: params.shareOft,
+          primaryTokenSymbol,
+          fallbackTokenSymbol,
+          error: message,
+        })
+        return provisionViaRemote(fallbackTokenSymbol)
+      }
+      throw error
+    }
+  }
+
   // Initialize to a sentinel so TS definite-assignment is satisfied; we validate
   // that provisioning replaced it before using it.
   let mintBytes32: Hex = ZERO_BYTES32
@@ -937,12 +965,12 @@ async function tryProvisionDynamicRoute(params: {
         localError,
         provisionerUrls,
       })
-      const remote = await provisionViaRemote()
+      const remote = await provisionViaRemoteWithFallback()
       mintBytes32 = remote.mintBytes32
       provisionRunner = remote.runner
     }
   } else if (provisionerUrls.length > 0) {
-    const remote = await provisionViaRemote()
+    const remote = await provisionViaRemoteWithFallback()
     mintBytes32 = remote.mintBytes32
     provisionRunner = remote.runner
   } else {
