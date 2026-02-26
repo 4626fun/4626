@@ -1,13 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, ArrowRight, Copy, Loader2, Share2, Trophy, ExternalLink, Wallet, ChevronDown } from 'lucide-react'
+import { CheckCircle2, ArrowRight, Copy, Loader2, Share2, Trophy, ExternalLink, Wallet } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useLinkAccount, usePrivy } from '@privy-io/react-auth'
-import { WaitlistDoneCelebrationBackground } from '../WaitlistDoneCelebrationBackground'
 import { LaunchCoinCard } from '../LaunchCoinCard'
 import type { WaitlistState } from '../waitlistTypes'
 import { apiFetch } from '@/lib/apiBase'
-import { getAppBaseUrl } from '@/lib/host'
 import { isPrivyClientEnabled } from '@/lib/flags'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { classifyPreprovisionResponse } from '../preprovisionStatus'
@@ -27,6 +25,26 @@ const scaleIn = {
   transition: { duration: 0.18, ease: baseEase },
 }
 
+/** Official X (formerly Twitter) logo */
+function XLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.747l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  )
+}
+
+/** Official Farcaster logo (the "F" monogram mark) */
+function FarcasterLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 1000 1000" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M257.778 155.556H742.222V844.444H671.111V528.889H670.414C662.554 441.677 589.258 373.333 500 373.333C410.742 373.333 337.446 441.677 329.586 528.889H328.889V844.444H257.778V155.556Z" />
+      <path d="M128.889 253.333L157.778 351.111H182.222V746.667C169.949 746.667 160 756.616 160 768.889V795.556H155.556C143.283 795.556 133.333 805.505 133.333 817.778V844.444H382.222V817.778C382.222 805.505 372.273 795.556 360 795.556H355.556V768.889C355.556 756.616 345.606 746.667 333.333 746.667H306.667V253.333H128.889Z" />
+      <path d="M844.444 253.333H666.667V746.667C654.394 746.667 644.444 756.616 644.444 768.889V795.556H640C627.727 795.556 617.778 805.505 617.778 817.778V844.444H866.667V817.778C866.667 805.505 856.717 795.556 844.444 795.556H840V768.889C840 756.616 830.051 746.667 817.778 746.667V351.111H842.222L871.111 253.333H844.444Z" />
+    </svg>
+  )
+}
+
 let warnedPrivyHookFailure = false
 function warnPrivyHookFailure(scope: string, error: unknown) {
   if (warnedPrivyHookFailure) return
@@ -38,22 +56,12 @@ function useSafePrivyHook(enabled: boolean) {
   try {
     const value = usePrivy() as any
     if (!enabled) {
-      return {
-        authenticated: false,
-        user: null,
-        getAccessToken: async () => null,
-        login: async () => null,
-      } as any
+      return { authenticated: false, user: null, getAccessToken: async () => null, login: async () => null } as any
     }
     return value
   } catch (error) {
     warnPrivyHookFailure('usePrivy', error)
-    return {
-      authenticated: false,
-      user: null,
-      getAccessToken: async () => null,
-      login: async () => null,
-    } as any
+    return { authenticated: false, user: null, getAccessToken: async () => null, login: async () => null } as any
   }
 }
 
@@ -71,15 +79,8 @@ function useSafeLinkAccountHook(callbacks: any, enabled: boolean) {
 function extractPrivyTwitter(user: any): { subject: string | null; username: string | null } {
   const subjectDirect = typeof user?.twitter?.subject === 'string' ? String(user.twitter.subject).trim() : ''
   const usernameDirect = typeof user?.twitter?.username === 'string' ? String(user.twitter.username).trim() : ''
-  if (subjectDirect) {
-    return { subject: subjectDirect, username: usernameDirect || null }
-  }
-
-  const linked = Array.isArray(user?.linked_accounts)
-    ? user.linked_accounts
-    : Array.isArray(user?.linkedAccounts)
-      ? user.linkedAccounts
-      : []
+  if (subjectDirect) return { subject: subjectDirect, username: usernameDirect || null }
+  const linked = Array.isArray(user?.linked_accounts) ? user.linked_accounts : Array.isArray(user?.linkedAccounts) ? user.linkedAccounts : []
   for (const acct of linked) {
     const t = typeof acct?.type === 'string' ? String(acct.type) : ''
     if (t !== 'twitter_oauth') continue
@@ -87,7 +88,6 @@ function extractPrivyTwitter(user: any): { subject: string | null; username: str
     const username = typeof acct?.username === 'string' ? String(acct.username).trim() : ''
     if (subject) return { subject, username: username || null }
   }
-
   return { subject: null, username: null }
 }
 
@@ -100,8 +100,13 @@ type PreprovData = {
   alreadyProvisioned?: boolean
 }
 
+type CreatorCoinSnap = {
+  address: string
+  symbol: string | null
+  imageUrl: string | null
+}
+
 type DoneStepProps = {
-  /** The canonical key used by waitlist APIs (may be synthetic). */
   doneEmail: string | null
   displayEmail: string | null
   isBypassAdmin: boolean
@@ -118,25 +123,21 @@ type DoneStepProps = {
         busyLabel?: string
       }
     | null
-  /** Current state of the deploy access check: checking, ready, or waitlist. */
   deployAccessState?: 'checking' | 'ready' | 'waitlist'
   onCopyReferral: () => void
   copyToast?: string | null
-  /** Whether the user has no Creator Coin and should see the coin creation card */
   creatorCoinMissing?: boolean
-  /** The user's CSW address for coin creation */
   smartWalletAddress?: string | null
-  /** The EOA owner address for signing the UserOp */
   ownerAddress?: string | null
-  /** Callback when a coin is successfully created */
   onCoinCreated?: (coinAddress: string, symbol: string) => void
-  /** Best-effort refresh of waitlist position after actions. */
   onRefreshPosition?: () => void | Promise<void>
+  /** Creator coin data to display in wallet card and hero */
+  creatorCoin?: CreatorCoinSnap | null
 }
 
 function truncAddr(addr: string): string {
   if (addr.length < 12) return addr
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
 function normalizeEvmAddress(value: string | null | undefined): string | null {
@@ -145,7 +146,13 @@ function normalizeEvmAddress(value: string | null | undefined): string | null {
   return raw
 }
 
-function AddrRow({ label, address, accent }: { label: string; address: string | null; accent?: boolean }) {
+/** Single-line address row: label | address | copy */
+function AddrRow({ label, address, accent, icon }: {
+  label: string
+  address: string | null
+  accent?: boolean
+  icon?: React.ReactNode
+}) {
   const [copied, setCopied] = useState(false)
   const handleCopy = useCallback(() => {
     if (!address) return
@@ -157,29 +164,26 @@ function AddrRow({ label, address, accent }: { label: string; address: string | 
 
   return (
     <div className={[
-      'flex items-center justify-between gap-2 rounded-xl px-3 py-2.5',
-      accent
-        ? 'border border-brand-primary/20 bg-brand-primary/6'
-        : 'border border-white/8 bg-black/20',
+      'flex items-center gap-2.5 rounded-xl px-3 py-2',
+      accent ? 'border border-brand-primary/20 bg-brand-primary/6' : 'border border-white/8 bg-black/15',
     ].join(' ')}>
-      <div className="min-w-0">
-        <div className={['text-[10px] font-medium mb-0.5', accent ? 'text-brand-300' : 'text-zinc-500'].join(' ')}>
-          {label}
-        </div>
-        <div className={['font-mono text-[12px] truncate', accent ? 'text-white' : 'text-zinc-300'].join(' ')}>
-          {address ? truncAddr(address) : <span className="text-zinc-600 italic">Not detected</span>}
-        </div>
-      </div>
+      {icon && <span className="shrink-0">{icon}</span>}
+      <span className={['text-[11px] font-medium shrink-0 w-[80px]', accent ? 'text-brand-300' : 'text-zinc-500'].join(' ')}>
+        {label}
+      </span>
+      <span className={['font-mono text-[12px] flex-1 truncate min-w-0', accent ? 'text-white' : 'text-zinc-200'].join(' ')}>
+        {address ? truncAddr(address) : <span className="text-zinc-600 not-italic">—</span>}
+      </span>
       {address && (
         <button
           type="button"
           onClick={handleCopy}
-          title="Copy address"
-          className="shrink-0 p-1.5 rounded-lg border border-white/8 bg-white/3 hover:bg-white/8 transition-colors"
+          title="Copy"
+          className="shrink-0 p-1 rounded-md hover:bg-white/8 transition-colors"
         >
           {copied
-            ? <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-            : <Copy className="w-3 h-3 text-zinc-500" />
+            ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            : <Copy className="w-3.5 h-3.5 text-zinc-500" />
           }
         </button>
       )}
@@ -190,78 +194,51 @@ function AddrRow({ label, address, accent }: { label: string; address: string | 
 function WalletSnapshotCard(props: {
   connectedOwnerAddress: string | null
   canonicalSmartWalletAddress: string | null
+  creatorCoin?: CreatorCoinSnap | null
 }) {
-  const [expanded, setExpanded] = useState(false)
   const connectedOwnerAddress = normalizeEvmAddress(props.connectedOwnerAddress)
   const canonicalSmartWalletAddress = normalizeEvmAddress(props.canonicalSmartWalletAddress)
-  const appAccountUrl = `${getAppBaseUrl()}/account`
+
   return (
     <motion.div {...fadeUp} className="rounded-2xl border border-white/8 bg-white/2 overflow-hidden">
-      {/* Header row — always visible */}
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center justify-between gap-2 p-4 hover:bg-white/3 transition-colors"
-      >
+      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-white/6">
         <div className="inline-flex items-center gap-1.5">
           <Wallet className="w-3.5 h-3.5 text-brand-primary" />
           <span className="text-[13px] font-medium text-zinc-200">Wallet</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full border border-brand-primary/25 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
-            Account ready
-          </span>
-          <ChevronDown
-            className={['w-3.5 h-3.5 text-zinc-500 transition-transform duration-200', expanded ? 'rotate-180' : ''].join(' ')}
+        <span className="rounded-full border border-brand-primary/25 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
+          Account ready
+        </span>
+      </div>
+
+      <div className="p-3 space-y-1.5">
+        <AddrRow label="Owner wallet" address={connectedOwnerAddress} />
+        <AddrRow label="Smart wallet" address={canonicalSmartWalletAddress} accent />
+        {props.creatorCoin && (
+          <AddrRow
+            label="Creator coin"
+            address={props.creatorCoin.address}
+            icon={
+              props.creatorCoin.imageUrl
+                ? <img src={props.creatorCoin.imageUrl} className="w-4 h-4 rounded-full object-cover" alt="" />
+                : <span className="w-4 h-4 rounded-full bg-brand-primary/20 flex items-center justify-center text-[8px] font-bold text-brand-300">$</span>
+            }
           />
-        </div>
-      </button>
-
-      {/* Expandable details */}
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-            className="overflow-hidden"
-          >
-            <div className="px-4 pb-4 space-y-2 border-t border-white/6 pt-3">
-              <div className="space-y-1.5">
-                <AddrRow label="Owner wallet" address={connectedOwnerAddress} />
-                <AddrRow label="Smart wallet" address={canonicalSmartWalletAddress} accent />
-              </div>
-              <a
-                href={appAccountUrl}
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-white/3 px-3 py-2 text-[12px] font-medium text-zinc-300 hover:bg-white/6 hover:text-white transition-colors"
-              >
-                Open account
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-          </motion.div>
         )}
-      </AnimatePresence>
-    </motion.div>
-  )
-}
+      </div>
 
-function AdminDeployLink() {
-  const navigate = useNavigate()
-  const deployPath = '/deploy?from=waitlist&autologin=1&auth=wallet'
-  const deployUrl = useMemo(() => `${getAppBaseUrl()}${deployPath}`, [])
-  const handleClick = useCallback(() => {
-    if (deployUrl.startsWith('http')) {
-      window.location.href = deployUrl
-    } else {
-      navigate(deployPath)
-    }
-  }, [deployPath, deployUrl, navigate])
-  return (
-    <button type="button" onClick={handleClick} className="text-brand-primary hover:text-brand-400 transition-colors py-1">
-      Deploy (Admin)
-    </button>
+      <div className="px-3 pb-3">
+        <a
+          href="https://4626.fun/account"
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-white/3 px-3 py-2 text-[12px] font-medium text-zinc-300 hover:bg-white/6 hover:text-white transition-colors"
+        >
+          Open account
+          <ExternalLink className="w-3 h-3" />
+        </a>
+      </div>
+    </motion.div>
   )
 }
 
@@ -277,9 +254,7 @@ function PreprovisionStatus({ onData }: { onData?: (data: PreprovData | null) =>
         const json = await res.json().catch(() => null)
         const uiStatus = classifyPreprovisionResponse({ httpStatus: res.status, json })
         if (!cancelled) {
-          if (uiStatus === 'done' && json?.data) {
-            onData?.(json.data as PreprovData)
-          }
+          if (uiStatus === 'done' && json?.data) onData?.(json.data as PreprovData)
           setStatus(uiStatus)
         }
       } catch {
@@ -290,7 +265,6 @@ function PreprovisionStatus({ onData }: { onData?: (data: PreprovData | null) =>
     return () => { cancelled = true }
   }, [onData])
 
-  // When done or errored, don't show a card — WalletSnapshotCard already surfaces "Account ready"
   if (status === 'idle' || status === 'done' || status === 'error') return null
 
   return (
@@ -301,13 +275,12 @@ function PreprovisionStatus({ onData }: { onData?: (data: PreprovData | null) =>
   )
 }
 
-/** Pulsing skeleton button shown while the allowlist check is in flight. */
 function CtaLoadingSkeleton() {
   return (
     <motion.div {...fadeUp}>
       <div className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl border border-white/6 bg-white/2">
         <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
-        <span className="text-[14px] sm:text-[15px] text-zinc-500 font-medium">Checking access...</span>
+        <span className="text-[14px] sm:text-[15px] text-zinc-500 font-medium">Checking access…</span>
       </div>
     </motion.div>
   )
@@ -317,9 +290,13 @@ function CtaLoadingSkeleton() {
 function WaitlistedCta({
   waitlistPosition,
   onCopyReferral,
+  referralLink,
+  copyToast,
 }: {
   waitlistPosition: WaitlistState['waitlistPosition']
   onCopyReferral: () => void
+  referralLink: string
+  copyToast?: string | null
 }) {
   const rank = waitlistPosition?.rank?.total
   const navigate = useNavigate()
@@ -331,53 +308,60 @@ function WaitlistedCta({
     return { target, remaining: Math.max(0, rank - target) }
   }, [rank])
 
-  const xShareHref = useMemo(() => {
-    return `https://x.com/intent/tweet?text=${encodeURIComponent('I just joined the 4626 waitlist. Move up with me:')}`
-  }, [])
-
-  const farcasterShareHref = useMemo(() => {
-    return `https://warpcast.com/~/compose?text=${encodeURIComponent('I just joined the 4626 waitlist. Move up with me:')}`
-  }, [])
+  const xShareHref = `https://x.com/intent/tweet?text=${encodeURIComponent('I just joined the 4626 waitlist. Move up with me:')}&url=${encodeURIComponent(referralLink)}`
+  const farcasterShareHref = `https://warpcast.com/~/compose?text=${encodeURIComponent('I just joined the 4626 waitlist. Move up with me: ' + referralLink)}`
 
   return (
-    <motion.div {...fadeUp} className="space-y-4">
-      <div className="rounded-2xl border border-amber-500/15 bg-amber-500/5 px-4 py-3.5 text-center space-y-1.5">
-        <div className="text-[14px] text-amber-200/95 font-medium">
-          {rank ? `You're #${rank} on the waitlist` : "You're on the waitlist"}
+    <motion.div {...fadeUp} className="space-y-3">
+      {rank ? (
+        <div className="rounded-2xl border border-amber-500/15 bg-amber-500/5 px-4 py-3 text-center space-y-1">
+          <div className="text-[14px] text-amber-200/95 font-medium">#{rank} on the waitlist</div>
+          {nextBand ? (
+            <div className="text-[11px] text-amber-200/70">{nextBand.remaining} invites to reach top {nextBand.target}</div>
+          ) : (
+            <div className="text-[12px] text-zinc-400">Share your link to move up faster</div>
+          )}
         </div>
-        <div className="text-[12px] text-zinc-400">
-          Share your link to move up. We approve in batches.
+      ) : null}
+
+      {/* Referral link with copy */}
+      <div className="rounded-2xl border border-white/8 bg-white/2 p-3">
+        <div className="flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] font-medium text-zinc-500 mb-0.5">Your referral link</div>
+            <div className="font-mono text-[12px] text-zinc-300 truncate">{referralLink}</div>
+          </div>
+          <button
+            type="button"
+            onClick={onCopyReferral}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/8 bg-white/3 text-[12px] font-medium text-zinc-200 hover:bg-white/6 transition-colors"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            Copy
+          </button>
         </div>
-        {nextBand ? (
-          <div className="text-[11px] text-amber-200/80">Only {nextBand.remaining} invites to reach top {nextBand.target}.</div>
-        ) : null}
+        {copyToast && <div className="text-[12px] text-emerald-400 mt-2">{copyToast}</div>}
       </div>
 
-      <button
-        type="button"
-        className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl border border-white/8 bg-white/3 text-white text-[14px] sm:text-[15px] font-medium transition-all duration-200 hover:bg-white/6 active:scale-[0.99] cursor-pointer"
-        onClick={onCopyReferral}
-      >
-        <Share2 className="w-4 h-4" />
-        Copy Referral Link
-      </button>
-
+      {/* Social share */}
       <div className="grid grid-cols-2 gap-2">
         <a
           href={xShareHref}
           target="_blank"
           rel="noreferrer"
-          className="w-full text-center px-3 py-2 rounded-xl border border-white/8 bg-white/2 text-zinc-300 text-[12px] hover:bg-white/5"
+          className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-white/8 bg-white/2 text-zinc-200 text-[13px] font-medium hover:bg-white/5 transition-colors"
         >
+          <XLogo className="w-3.5 h-3.5" />
           Share on X
         </a>
         <a
           href={farcasterShareHref}
           target="_blank"
           rel="noreferrer"
-          className="w-full text-center px-3 py-2 rounded-xl border border-white/8 bg-white/2 text-zinc-300 text-[12px] hover:bg-white/5"
+          className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-white/8 bg-white/2 text-zinc-200 text-[13px] font-medium hover:bg-white/5 transition-colors"
         >
-          Share on Farcaster
+          <FarcasterLogo className="w-3.5 h-3.5" />
+          Farcaster
         </a>
       </div>
 
@@ -396,7 +380,6 @@ function WaitlistedCta({
 export const DoneStep = memo(function DoneStep({
   doneEmail,
   displayEmail,
-  isBypassAdmin,
   waitlistPosition,
   referralCode,
   referralLink,
@@ -409,6 +392,7 @@ export const DoneStep = memo(function DoneStep({
   ownerAddress,
   onCoinCreated,
   onRefreshPosition,
+  creatorCoin,
 }: DoneStepProps) {
   const [exiting, setExiting] = useState(false)
   const [rankDelta, setRankDelta] = useState<number>(0)
@@ -430,24 +414,16 @@ export const DoneStep = memo(function DoneStep({
 
   const { linkTwitter } = useSafeLinkAccountHook(
     {
-      onSuccess: () => {
-        setXLinkBusy(false)
-        setXLinkError(null)
-      },
+      onSuccess: () => { setXLinkBusy(false); setXLinkError(null) },
       onError: (error: unknown) => {
         setXLinkBusy(false)
-        const raw =
-          error instanceof Error
-            ? error.message
-            : typeof (error as any)?.message === 'string'
-              ? String((error as any).message)
-              : String(error ?? '')
+        const raw = error instanceof Error ? error.message : typeof (error as any)?.message === 'string' ? String((error as any).message) : String(error ?? '')
         const lower = raw.toLowerCase()
-        if (lower.includes('already been linked to another user') || lower.includes('linked to another user')) {
-          setXLinkError('Authentication failed: This account has already been linked to another user.')
-        } else {
-          setXLinkError(raw || 'Failed to connect X.')
-        }
+        setXLinkError(
+          lower.includes('already been linked to another user') || lower.includes('linked to another user')
+            ? 'This X account is already linked to another user.'
+            : raw || 'Failed to connect X.'
+        )
       },
     },
     privyHooksEnabled,
@@ -456,14 +432,9 @@ export const DoneStep = memo(function DoneStep({
   const handleConnectX = useCallback(() => {
     if (xLinkBusy) return
     setXLinkError(null)
-    if (!privyAuthed) {
-      setXLinkError('Sign in again to connect X.')
-      return
-    }
+    if (!privyAuthed) { setXLinkError('Sign in again to connect X.'); return }
     setXLinkBusy(true)
-    try {
-      linkTwitter()
-    } catch (e: any) {
+    try { linkTwitter() } catch (e: any) {
       setXLinkBusy(false)
       setXLinkError(e?.message ? String(e.message) : 'Failed to connect X.')
     }
@@ -473,59 +444,34 @@ export const DoneStep = memo(function DoneStep({
     if (xSignInBusy) return
     setXLinkError(null)
     setXSignInBusy(true)
-    try {
-      await Promise.resolve(login?.())
-    } catch (e: any) {
-      setXLinkError(
-        e?.message
-          ? String(e.message)
-          : 'Sign-in did not complete. Try again, then connect X.',
-      )
-    } finally {
-      setXSignInBusy(false)
-    }
+    try { await Promise.resolve(login?.()) } catch (e: any) {
+      setXLinkError(e?.message ? String(e.message) : 'Sign-in did not complete. Try again.')
+    } finally { setXSignInBusy(false) }
   }, [login, xSignInBusy])
 
   const handleVerifyX = useCallback(async () => {
-    if (xVerifyBusy) return
-    if (borderTier >= 1) return
+    if (xVerifyBusy || borderTier >= 1) return
     setXVerifyBusy(true)
     setXVerifyError(null)
     try {
-      if (!doneEmail) throw new Error('Missing waitlist entry key. Refresh and try again.')
+      if (!doneEmail) throw new Error('Missing entry key. Refresh and try again.')
       if (!twitterConnected) throw new Error('Connect X first.')
       if (typeof getAccessToken !== 'function') throw new Error('Sign in again to verify.')
-
       const privyToken = await getAccessToken().catch(() => null)
       if (!privyToken) throw new Error('Sign in again to verify.')
-
       const res = await apiFetch('/api/waitlist/verify-x', {
         method: 'POST',
         withCredentials: true,
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          'x-privy-token': privyToken,
-        },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'x-privy-token': privyToken },
         body: JSON.stringify({ email: doneEmail }),
       })
       const json = await res.json().catch(() => null)
-      if (!res.ok || !json || json.success !== true) {
-        const msg = json?.error ?? `Verification failed (HTTP ${res.status})`
-        throw new Error(typeof msg === 'string' ? msg : 'Verification failed')
-      }
-
-      const verified = json?.data?.verified === true
-      if (!verified) {
-        throw new Error('Follow @4626fun on X, then click Verify.')
-      }
-
+      if (!res.ok || !json || json.success !== true) throw new Error(json?.error ?? `Verification failed (HTTP ${res.status})`)
+      if (json?.data?.verified !== true) throw new Error('Follow @4626fun on X first, then click Verify.')
       await Promise.resolve(onRefreshPosition?.())
     } catch (e: any) {
       setXVerifyError(e?.message ? String(e.message) : 'Verification failed')
-    } finally {
-      setXVerifyBusy(false)
-    }
+    } finally { setXVerifyBusy(false) }
   }, [borderTier, doneEmail, getAccessToken, onRefreshPosition, twitterConnected, xVerifyBusy])
 
   useEffect(() => {
@@ -533,41 +479,21 @@ export const DoneStep = memo(function DoneStep({
     if (typeof currentRank !== 'number' || !Number.isFinite(currentRank) || currentRank <= 0) return
     const key = `cv:waitlist:last-rank:${referralCode || 'anon'}`
     let cancelled = false
-    const applyRankDelta = (value: number) => {
-      // Avoid synchronous setState inside effect (lint + cascading renders).
-      void Promise.resolve().then(() => {
-        if (cancelled) return
-        setRankDelta(value)
-      })
-    }
+    const applyRankDelta = (value: number) => { void Promise.resolve().then(() => { if (!cancelled) setRankDelta(value) }) }
     try {
-      const prevRaw = window.localStorage.getItem(key)
-      const prev = prevRaw ? Number(prevRaw) : null
-      if (typeof prev === 'number' && Number.isFinite(prev) && prev > currentRank) {
-        applyRankDelta(prev - currentRank)
-      } else {
-        applyRankDelta(0)
-      }
+      const prev = window.localStorage.getItem(key)
+      const prevNum = prev ? Number(prev) : null
+      applyRankDelta(typeof prevNum === 'number' && Number.isFinite(prevNum) && prevNum > currentRank ? prevNum - currentRank : 0)
       window.localStorage.setItem(key, String(currentRank))
-    } catch {
-      applyRankDelta(0)
-    }
-    return () => {
-      cancelled = true
-    }
+    } catch { applyRankDelta(0) }
+    return () => { cancelled = true }
   }, [referralCode, waitlistPosition?.rank?.total])
 
   const handleDeployClick = useCallback(async () => {
     if (!primaryCta?.onClick) return
     setExiting(true)
-    // Let the exit animation play, then navigate
     await new Promise((r) => setTimeout(r, 280))
-    try {
-      await primaryCta.onClick()
-    } catch {
-      // If handoff fails, restore the Done state so the user can retry.
-      setExiting(false)
-    }
+    try { await primaryCta.onClick() } catch { setExiting(false) }
   }, [primaryCta])
 
   const coinSeed = useMemo(() => {
@@ -584,7 +510,6 @@ export const DoneStep = memo(function DoneStep({
 
   const smartWalletAddressForCoin = smartWalletAddress ?? null
   const ownerAddressForCoin = ownerAddress ?? null
-
   const canOneClickLaunchCoin = Boolean(coinSeed && coinSeed.trim().length >= 2 && coinSeedSymbolClean.length >= 2)
   const shouldShowLaunchCoinCard =
     Boolean(creatorCoinMissing && smartWalletAddressForCoin && ownerAddressForCoin) &&
@@ -599,14 +524,8 @@ export const DoneStep = memo(function DoneStep({
           {...fadeUp}
           exit={{ opacity: 0, scale: 0.96, y: -8 }}
           transition={{ duration: 0.24, ease: baseEase }}
-          className="relative overflow-hidden space-y-6 sm:space-y-7"
+          className="space-y-5"
         >
-          {/* Celebration background — dark overlay keeps text readable */}
-          <div className="absolute inset-0 -z-10">
-            <WaitlistDoneCelebrationBackground className="absolute inset-0" />
-            <div className="absolute inset-0 bg-[#0a0a0b]/70" />
-          </div>
-
           {/* Completed stepper */}
           <StepIndicator
             steps={[
@@ -614,70 +533,84 @@ export const DoneStep = memo(function DoneStep({
               { label: 'Verify', status: 'complete' },
               { label: 'Join', status: 'complete' },
             ]}
-            className="mb-2"
           />
 
           {/* Success Header */}
-          <motion.div {...scaleIn} className="text-center space-y-4">
+          <motion.div {...scaleIn} className="text-center space-y-3 pt-1">
             <div className="flex justify-center">
-              <div className="relative">
-                <div className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl bg-brand-primary/15 border border-brand-primary/25 flex items-center justify-center">
-                  <CheckCircle2 className="w-8 h-8 sm:w-9 sm:h-9 text-brand-primary" />
+              {creatorCoin?.imageUrl ? (
+                /* Creator coin logo replaces the check icon */
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-2xl overflow-hidden border border-white/12 shadow-lg">
+                    <img src={creatorCoin.imageUrl} className="w-full h-full object-cover" alt={creatorCoin.symbol ?? 'Creator coin'} />
+                  </div>
+                  <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-emerald-500 border-2 border-vault-bg flex items-center justify-center">
+                    <CheckCircle2 className="w-3 h-3 text-white" />
+                  </div>
                 </div>
-                <motion.div
-                  className="absolute inset-0 rounded-2xl border border-brand-primary/15"
-                  initial={{ scale: 1, opacity: 0.5 }}
-                  animate={{ scale: 1.5, opacity: 0 }}
-                  transition={{ duration: 1.6, repeat: Infinity, ease: 'easeOut' }}
-                />
-              </div>
+              ) : (
+                /* Fallback: simple check */
+                <div className="relative">
+                  <div className="w-14 h-14 rounded-2xl bg-white/6 border border-white/10 flex items-center justify-center">
+                    <CheckCircle2 className="w-7 h-7 text-white" />
+                  </div>
+                  <motion.div
+                    className="absolute inset-0 rounded-2xl border border-white/12"
+                    initial={{ scale: 1, opacity: 0.4 }}
+                    animate={{ scale: 1.6, opacity: 0 }}
+                    transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
+                  />
+                </div>
+              )}
             </div>
 
             <div>
-              <h1 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
+              <h1 className="text-2xl font-semibold text-white tracking-tight">
                 You're on the waitlist
               </h1>
-              {rankDelta > 0 ? (
-                <div className="mt-2 inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-200">
+              {rankDelta > 0 && (
+                <div className="mt-1.5 inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-0.5 text-[11px] font-medium text-emerald-200">
                   ↑ Moved up {rankDelta} spots
                 </div>
-              ) : null}
-              {displayEmail && (
-                <p className="text-[13px] sm:text-[14px] text-zinc-300 mt-1.5 truncate px-2">{displayEmail}</p>
               )}
-              <p className="text-[13px] text-zinc-400 mt-1.5 max-w-[36ch] mx-auto">
+              {displayEmail && (
+                <p className="text-[13px] text-zinc-300 mt-1.5 truncate px-2">{displayEmail}</p>
+              )}
+              <p className="text-[13px] text-zinc-400 mt-1 max-w-[38ch] mx-auto">
                 We'll notify you when it's your turn.
               </p>
             </div>
           </motion.div>
 
-          {/* Pre-provisioning status */}
+          {/* Pre-provisioning status (loading only) */}
           <PreprovisionStatus onData={setPreprovData} />
 
+          {/* Wallet snapshot */}
           <WalletSnapshotCard
             connectedOwnerAddress={ownerAddress ?? null}
             canonicalSmartWalletAddress={smartWalletAddress ?? null}
+            creatorCoin={creatorCoin}
           />
 
-          {/* X verification — compact when done, full card when pending */}
+          {/* X / social verification — earns a profile badge */}
           {borderTier >= 1 ? (
-            <motion.div {...fadeUp} className="flex items-center gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-500/6 px-4 py-3 text-[13px] text-emerald-200">
+            <motion.div {...fadeUp} className="flex items-center gap-2.5 rounded-2xl border border-emerald-400/20 bg-emerald-500/6 px-4 py-3">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>X verified — border unlocked</span>
-              <span className="ml-auto shrink-0 px-2 py-0.5 rounded-full border border-emerald-400/25 bg-emerald-500/10 text-[10px] font-medium text-emerald-200">
+              <div className="flex-1 min-w-0">
+                <span className="text-[13px] text-emerald-200 font-medium">Profile badge earned</span>
+                <p className="text-[11px] text-emerald-300/60 mt-0.5">Your creator profile now shows a verified badge</p>
+              </div>
+              <span className="shrink-0 px-2 py-0.5 rounded-full border border-emerald-400/25 bg-emerald-500/10 text-[10px] font-medium text-emerald-200">
                 Tier {borderTier}
               </span>
             </motion.div>
           ) : showPrivy ? (
-            <motion.div
-              {...fadeUp}
-              className="rounded-2xl border border-white/8 bg-white/2 p-4 space-y-3"
-            >
+            <motion.div {...fadeUp} className="rounded-2xl border border-white/8 bg-white/2 p-4 space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[14px] text-white font-medium">Unlock your next border</div>
-                  <div className="text-[12px] text-zinc-400 mt-1 leading-relaxed">
-                    Follow <span className="text-zinc-200">@4626fun</span> on X to verify and unlock your next border.
+                  <div className="text-[14px] text-white font-medium">Earn a profile badge</div>
+                  <div className="text-[12px] text-zinc-400 mt-0.5 leading-relaxed">
+                    Follow <span className="text-zinc-200">@4626fun</span> on X to unlock a verified badge on your creator profile.
                   </div>
                 </div>
                 <div className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border border-white/10 bg-black/20 text-zinc-400">
@@ -693,10 +626,10 @@ export const DoneStep = memo(function DoneStep({
                     disabled={xSignInBusy}
                     className={['btn-primary w-full px-4 py-3 text-[14px]', xSignInBusy ? 'btn-no-icon' : ''].join(' ')}
                   >
-                    {xSignInBusy ? <Loader2 className="w-4 h-4 animate-spin text-zinc-200" /> : null}
+                    {xSignInBusy ? <Loader2 className="w-4 h-4 animate-spin text-zinc-200" /> : <XLogo className="w-4 h-4" />}
                     {xSignInBusy ? 'Opening…' : 'Sign in to connect X'}
                   </button>
-                  <div className="text-[12px] text-zinc-400">Connect X after signing in, then click Verify.</div>
+                  <div className="text-[12px] text-zinc-400">After signing in, connect X and click Verify.</div>
                   {xLinkError ? <Alert variant="error">{xLinkError}</Alert> : null}
                 </div>
               ) : !twitterConnected ? (
@@ -707,7 +640,7 @@ export const DoneStep = memo(function DoneStep({
                     disabled={xLinkBusy}
                     className={['btn-primary w-full px-4 py-3 text-[14px]', xLinkBusy ? 'btn-no-icon' : ''].join(' ')}
                   >
-                    {xLinkBusy ? <Loader2 className="w-4 h-4 animate-spin text-zinc-200" /> : null}
+                    {xLinkBusy ? <Loader2 className="w-4 h-4 animate-spin text-zinc-200" /> : <XLogo className="w-4 h-4" />}
                     {xLinkBusy ? 'Connecting…' : 'Connect X'}
                   </button>
                   {xLinkError ? <Alert variant="error">{xLinkError}</Alert> : null}
@@ -719,8 +652,9 @@ export const DoneStep = memo(function DoneStep({
                       href="https://x.com/4626fun"
                       target="_blank"
                       rel="noreferrer"
-                      className="w-full text-center px-3 py-2.5 rounded-xl border border-white/8 bg-white/2 text-zinc-200 text-[13px] hover:bg-white/5 transition-colors"
+                      className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl border border-white/8 bg-white/2 text-zinc-200 text-[13px] hover:bg-white/5 transition-colors"
                     >
+                      <XLogo className="w-3.5 h-3.5" />
                       Follow @4626fun
                     </a>
                     <button
@@ -742,7 +676,7 @@ export const DoneStep = memo(function DoneStep({
             </motion.div>
           ) : null}
 
-          {/* Launch Creator Coin — shown when the user has no existing Creator Coin */}
+          {/* Launch Creator Coin */}
           {shouldShowLaunchCoinCard ? (
             <LaunchCoinCard
               mode="one-click"
@@ -754,64 +688,44 @@ export const DoneStep = memo(function DoneStep({
             />
           ) : null}
 
-          {/* CTA area: loading skeleton, deploy button, or waitlisted state */}
+          {/* CTA area */}
           {deployAccessState === 'checking' && !primaryCta ? (
             <CtaLoadingSkeleton />
           ) : primaryCta ? (
-            <motion.div {...fadeUp}>
+            <motion.div {...fadeUp} className="space-y-3">
               <button
                 type="button"
                 disabled={primaryCta.disabled}
                 onClick={handleDeployClick}
-                className={[
-                  'btn-primary w-full px-4 py-3.5 text-[15px]',
-                  primaryCta.busy ? 'btn-no-icon' : '',
-                ].join(' ')}
+                className={['btn-primary w-full px-4 py-3.5 text-[15px]', primaryCta.busy ? 'btn-no-icon' : ''].join(' ')}
               >
-                {primaryCta.busy ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : null}
+                {primaryCta.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 {primaryCta.busy ? primaryCta.busyLabel ?? primaryCta.label : primaryCta.label}
-                <ArrowRight className="w-4 h-4" />
+                {!primaryCta.busy && <ArrowRight className="w-4 h-4" />}
               </button>
+
+              {/* Compact share row for approved users */}
+              {referralCode && (
+                <div className="flex items-center gap-2 rounded-xl border border-white/6 bg-white/2 px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] text-zinc-500 mb-0.5">Share with friends</div>
+                    <div className="font-mono text-[11px] text-zinc-400 truncate">{referralLink}</div>
+                  </div>
+                  <button type="button" onClick={onCopyReferral} className="shrink-0 p-1.5 rounded-lg hover:bg-white/8 transition-colors">
+                    <Share2 className="w-3.5 h-3.5 text-zinc-400" />
+                  </button>
+                  {copyToast && <span className="text-[11px] text-emerald-400 shrink-0">{copyToast}</span>}
+                </div>
+              )}
             </motion.div>
           ) : deployAccessState === 'waitlist' ? (
             <WaitlistedCta
               waitlistPosition={waitlistPosition ?? null}
               onCopyReferral={onCopyReferral}
+              referralLink={referralLink}
+              copyToast={copyToast}
             />
           ) : null}
-
-          {/* Quick Referral Link */}
-          {referralCode && (
-            <motion.div {...fadeUp} className="rounded-2xl border border-white/8 bg-white/2 p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-medium text-zinc-400 mb-1">Share with friends</div>
-                  <div className="font-mono text-[12px] sm:text-[13px] text-zinc-300 truncate">
-                    {referralLink}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="p-2.5 rounded-xl border border-white/6 bg-white/2 hover:bg-white/2 transition-colors shrink-0"
-                  onClick={onCopyReferral}
-                >
-                  <Copy className="w-4 h-4 text-zinc-400" />
-                </button>
-              </div>
-              {copyToast && (
-                <div className="text-[12px] text-emerald-400 mt-2">{copyToast}</div>
-              )}
-            </motion.div>
-          )}
-
-          {/* Admin Link */}
-          {isBypassAdmin && (
-            <motion.div {...fadeUp} className="flex items-center justify-center text-[13px]">
-              <AdminDeployLink />
-            </motion.div>
-          )}
         </motion.div>
       ) : null}
     </AnimatePresence>

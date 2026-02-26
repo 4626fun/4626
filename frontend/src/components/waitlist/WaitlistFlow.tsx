@@ -1964,6 +1964,11 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     ownerAddress={connectedAddress || (siweAuthAddress ? siweAuthAddress.toLowerCase() : null)}
                     onCoinCreated={handleCoinCreated}
                     onRefreshPosition={doneEmail ? () => refreshPosition(doneEmail) : undefined}
+                    creatorCoin={creatorCoin ? {
+                      address: creatorCoin.address,
+                      symbol: creatorCoin.symbol,
+                      imageUrl: creatorCoin.imageUrl,
+                    } : null}
                   />
                 </motion.div>
               ) : null}
