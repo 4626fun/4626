@@ -236,6 +236,9 @@ export const VerifyStep = memo(function VerifyStep({
           <p className="max-w-[48ch] text-sm text-zinc-500 leading-relaxed">
             We handle wallet verification and setup for you automatically.
           </p>
+          <p className="max-w-[48ch] text-xs text-zinc-600 leading-relaxed">
+            After joining, the app header always shows your connected signer and acting account mode.
+          </p>
         </motion.div>
 
         <motion.div {...scaleIn} className={`${panelClass} p-4 space-y-3`}>
