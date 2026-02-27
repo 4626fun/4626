@@ -1,7 +1,7 @@
 import { Check, Search, X } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useDebounce } from 'usehooks-ts'
+import { useDebounceValue } from 'usehooks-ts'
 import { usePublicClient } from 'wagmi'
 import { erc20Abi, isAddress } from 'viem'
 
@@ -9,10 +9,9 @@ import { TokenAvatar } from '@/components/swap/TokenAvatar'
 import { Alert } from '@/components/ui/Alert'
 import { Modal } from '@/components/ui/Modal'
 import { Spinner } from '@/components/ui/Spinner'
-import { BASE_CHAIN_ID } from '@/config/chains'
 import { cn } from '@/lib/utils'
 import { useTokenMetadata } from '@/hooks/useTokenMetadata'
-import type { TokenDisplay, TokenOption } from '@/lib/uniswap/swapUtils'
+import { BASE_CHAIN_ID, type TokenDisplay, type TokenOption } from '@/lib/uniswap/swapUtils'
 
 export type SwapTokenOption = TokenOption & {
   sectionTag?: 'core' | 'creator' | 'content'
@@ -73,7 +72,7 @@ export function TokenSelectorModal({
   onClose,
   onSelect,
 }: TokenSelectorModalProps) {
-  const debouncedQuery = useDebounce(query, 250)
+  const [debouncedQuery] = useDebounceValue(query, 250)
   const trimmedQuery = debouncedQuery.trim()
   const isAddressSearch = isAddressLike(trimmedQuery)
 

@@ -324,7 +324,7 @@ export function Swap() {
   const swapTokenOptions = useMemo<SwapTokenOption[]>(() => {
     return allTokenOptions.map((option) => ({
       ...option,
-      verified: option.verified ?? option.group === 'core' || option.group === 'creator' || option.group === 'share',
+      verified: option.verified ?? (option.group === 'core' || option.group === 'creator' || option.group === 'share'),
       sectionTag:
         option.group === 'creator' ? 'creator' : option.group === 'share' ? 'content' : undefined,
     }))
