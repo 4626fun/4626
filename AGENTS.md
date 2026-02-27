@@ -22,9 +22,9 @@ Optional components: XMTP Keepr Agent (`frontend/server/agent/eliza/`), CRE auto
 
 Standard commands are documented in `frontend/package.json` scripts:
 
-- `pnpm -C frontend lint` — ESLint (has 1 pre-existing warning; `--max-warnings 0` causes exit code 1)
-- `pnpm -C frontend typecheck` — TypeScript (has 1 pre-existing error in `DeployVault.tsx` — `meteoraAlphaVault` type mismatch)
-- `pnpm -C frontend test` — Vitest (267 tests, all passing)
+- `pnpm -C frontend lint` — ESLint (has 6 pre-existing warnings in `useSwapExecution.ts`, `xmtp/provider.tsx`, `useAccountContext.tsx`; `--max-warnings 0` causes exit code 1)
+- `pnpm -C frontend typecheck` — TypeScript (has 9 pre-existing errors in `useSwapExecution.ts` — chain ID type mismatch)
+- `pnpm -C frontend test` — Vitest (288 tests; 3 pre-existing failures in `liquidityApi.test.ts` — stale assertion strings)
 - `forge test` — Foundry unit tests (72 tests, all passing)
 
 ### Non-obvious caveats
