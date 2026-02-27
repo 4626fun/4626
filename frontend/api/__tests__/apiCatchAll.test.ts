@@ -6,10 +6,11 @@ describe('api catch-all hardening', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
+    vi.doUnmock('../_handlers/_routes.js')
   })
 
   afterEach(() => {
-    vi.unmock('../_handlers/_routes.js')
+    vi.restoreAllMocks()
   })
 
   it('returns generic 500 response without stack details', async () => {

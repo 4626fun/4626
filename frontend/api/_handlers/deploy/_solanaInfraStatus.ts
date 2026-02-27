@@ -303,7 +303,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const blockers: string[] = []
   if (!batcherAddress) {
-    blockers.push('CreatorVaultDeployer is not configured on server.')
+    blockers.push('Deployment batcher (CreatorVaultDeployer) is not configured on server.')
   }
   if (solanaEnabledOnBatcher && adapterHasCode === false) {
     blockers.push('Batcher Solana adapter has no bytecode on Base.')

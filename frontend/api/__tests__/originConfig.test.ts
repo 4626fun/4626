@@ -26,13 +26,13 @@ describe('origin resolution', () => {
   it('falls back to CANONICAL_ORIGIN when APP_ORIGIN is unset', () => {
     restoreEnv = applyEnv({
       APP_ORIGIN: undefined,
-      CANONICAL_ORIGIN: 'https://creatorvault.fun',
+      CANONICAL_ORIGIN: 'https://4626.fun',
       VERCEL_URL: undefined,
       NODE_ENV: 'production',
       CORS_ALLOWED_ORIGINS: undefined,
     })
 
-    expect(getCanonicalOrigin()).toBe('https://creatorvault.fun')
+    expect(getCanonicalOrigin()).toBe('https://4626.fun')
   })
 
   it('allows local forwarded host in non-production when explicit origins are unset', () => {

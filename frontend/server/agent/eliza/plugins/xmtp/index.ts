@@ -54,7 +54,7 @@ export function getXmtpService(): XmtpService | null {
 }
 
 export const xmtpPlugin: Plugin = {
-  name: '@creatorvault/plugin-xmtp',
+  name: '@4626/plugin-xmtp',
   description: 'XMTP messaging connector for 4626 agents',
 
   async init(config: Record<string, string>, runtime: IAgentRuntime) {

@@ -351,7 +351,7 @@ const entityLabelsAction: Action = {
 // ---------------------------------------------------------------------------
 
 export const walletIntelPlugin: Plugin = {
-  name: '@creatorvault/plugin-wallet-intel',
+  name: '@4626/plugin-wallet-intel',
   description: 'Wallet intelligence tools — direct server-side calls for funder tracing, entity labels, portfolio, full reports.',
   actions: [walletIntelAction, funderTraceAction, portfolioAction, entityLabelsAction],
 }

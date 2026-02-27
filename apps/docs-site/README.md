@@ -1,6 +1,6 @@
-# CreatorVault Docs Site
+# 4626 Docs Site
 
-Docusaurus-based documentation site for CreatorVault.
+Docusaurus-based documentation site for 4626.
 
 ## Documentation Model
 
@@ -104,7 +104,7 @@ pnpm serve
 
 ## Brand Assets
 
-### CreatorVault brand
+### 4626 brand
 
 Brand assets are managed in `frontend/public/brand/` and automatically synced to `static/brand/` during build.
 

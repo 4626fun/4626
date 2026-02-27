@@ -3,7 +3,7 @@ description: One-tap waitlist onboarding with backend-first setup and strict UX 
 alwaysApply: true
 ---
 
-# Waitlist Onboarding Simplicity Rule (CreatorVault / 4626.fun)
+# Waitlist Onboarding Simplicity Rule (4626 / 4626.fun)
 
 - Scope: waitlist onboarding flows in `frontend/src/components/waitlist/**`, auth handshakes in `frontend/src/hooks/useSiweAuth.ts` and `frontend/api/_handlers/auth/**`, and waitlist setup endpoints in `frontend/api/_handlers/waitlist/**`.
 - Onboarding MUST be one-tap by default: the user should only need one clear primary action (`Sign Up`) to join.

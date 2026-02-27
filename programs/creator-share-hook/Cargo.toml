@@ -1,7 +1,7 @@
 [package]
 name = "creator-share-hook"
 version = "0.1.0"
-description = "CreatorVault Transfer Hook for Solana spoke — buy detection, lottery entry recording, fee harvesting, winner notification"
+description = "4626 Transfer Hook for Solana spoke — buy detection, lottery entry recording, fee harvesting, winner notification"
 edition = "2021"
 
 [lib]

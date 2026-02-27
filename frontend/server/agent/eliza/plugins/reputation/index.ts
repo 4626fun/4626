@@ -232,7 +232,7 @@ const feedbackReadAction: Action = {
 // ---------------------------------------------------------------------------
 
 export const reputationPlugin: Plugin = {
-  name: '@creatorvault/plugin-reputation',
+  name: '@4626/plugin-reputation',
   description: 'ERC-8004 reputation tools — direct server-side calls for reputation graphs and feedback reading.',
   actions: [reputationGraphAction, feedbackReadAction],
 }

@@ -9,7 +9,7 @@ import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
 import { SwapConfirmModal } from '@/components/trade/SwapConfirmModal'
 import { SwapSettingsSheet } from '@/components/trade/SwapSettingsSheet'
 import { Alert } from '@/components/ui/Alert'
-import { CreatorVaultsPanel } from '@/components/swap/CreatorVaultsPanel'
+import { VaultsPanel } from '@/components/swap/VaultsPanel'
 import { SwapCard } from '@/components/swap/SwapCard'
 import { SwapPageLayout } from '@/components/swap/SwapPageLayout'
 import { TokenSelectorModal, type SwapTokenOption } from '@/components/swap/TokenSelectorModal'
@@ -345,6 +345,13 @@ export function Swap() {
   const tokenOutDisplay = tokenOutIdentity.display
   const tokenInSymbol = tokenInDisplay.symbol
   const tokenOutSymbol = tokenOutDisplay.symbol
+  const registerTokenForIdentity = useCallback((option: SwapTokenOption) => {
+    setExtraTokenOptions((previous) => {
+      const normalized = option.address.toLowerCase()
+      if (previous.some((entry) => entry.address.toLowerCase() === normalized)) return previous
+      return [...previous, { ...option }]
+    })
+  }, [])
 
   useEffect(() => {
     const inputUnverified = tokenInOption?.verified === false
@@ -539,14 +546,6 @@ export function Swap() {
         } catch {}
       }
       return next
-    })
-  }, [])
-
-  const registerTokenForIdentity = useCallback((option: SwapTokenOption) => {
-    setExtraTokenOptions((previous) => {
-      const normalized = option.address.toLowerCase()
-      if (previous.some((entry) => entry.address.toLowerCase() === normalized)) return previous
-      return [...previous, { ...option }]
     })
   }, [])
 
@@ -872,7 +871,7 @@ export function Swap() {
             />
           )
         }
-        vaultPanel={activePanel === 'swap' ? <CreatorVaultsPanel chainId={swapChainId} /> : null}
+        vaultPanel={activePanel === 'swap' ? <VaultsPanel chainId={swapChainId} /> : null}
         selectedChainId={swapChainId}
         walletChainId={walletChainId}
         gasIndicatorLabel={gasEstimateLabel}

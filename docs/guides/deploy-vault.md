@@ -138,7 +138,7 @@ Acceptance checks:
 - paymaster accepts split selectors (no `batcher_selector_not_allowed`)
 - deploy-session path advances:
   - `created -> phase1_sent -> phase1_finalize_sent -> phase2_core_sent -> phase2_sent -> phase3_sent -> completed`
-- `/deploy` shows no bytecode infra blocker and no `CreatorVaultBatcher not configured`
+- `/deploy` shows no bytecode infra blocker and no `deployment batcher not configured`
 
 ### Important: Zora cross-app is read-only here
 

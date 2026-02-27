@@ -1,11 +1,11 @@
 ---
 name: deploy-vault-operator
-description: Operator runbook for CreatorVault 1-click deployment (deploy-session + temporary owner + server-continue phases). Use when asked to automate or operate deploys end-to-end with minimal manual steps.
+description: Operator runbook for 4626 1-click deployment (deploy-session + temporary owner + server-continue phases). Use when asked to automate or operate deploys end-to-end with minimal manual steps.
 ---
 
 # Deploy Vault Operator
 
-This skill is the canonical long-task workflow for 1-click CreatorVault deploys in this repo.
+This skill is the canonical long-task workflow for 1-click 4626 deploys in this repo.
 
 ## Goal
 

@@ -4,7 +4,7 @@
 
 ### Architecture overview
 
-CreatorVault (4626.fun) is a monorepo with two primary dev loops:
+4626 (4626.fun) is a monorepo with two primary dev loops:
 
 | Component | Directory | Toolchain | Dev command |
 |-----------|-----------|-----------|-------------|

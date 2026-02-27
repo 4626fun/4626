@@ -187,7 +187,7 @@ function getAllowedOrigins(): Set<string> {
   const cacheKey = `${vercelUrl}||${extra}`
 
   const g: any = globalThis as any
-  const cached: { key: string; value: Set<string> } | undefined = g.__creatorvault_allowed_origins_cache
+  const cached: { key: string; value: Set<string> } | undefined = g.__4626_allowed_origins_cache
   if (cached && cached.key === cacheKey) return cached.value
 
   const out = new Set<string>([
@@ -215,7 +215,7 @@ function getAllowedOrigins(): Set<string> {
     }
   }
 
-  g.__creatorvault_allowed_origins_cache = { key: cacheKey, value: out }
+  g.__4626_allowed_origins_cache = { key: cacheKey, value: out }
   return out
 }
 
@@ -383,8 +383,8 @@ function getSessionSecret(): string {
   if (typeof env === 'string' && env.trim().length >= 16) return env.trim()
 
   const g: any = globalThis as any
-  if (!g.__creatorvault_auth_secret) g.__creatorvault_auth_secret = randomBytes(32).toString('hex')
-  return String(g.__creatorvault_auth_secret)
+  if (!g.__4626_auth_secret) g.__4626_auth_secret = randomBytes(32).toString('hex')
+  return String(g.__4626_auth_secret)
 }
 
 export function makeSessionToken(params: { address: string; now?: number }): string {

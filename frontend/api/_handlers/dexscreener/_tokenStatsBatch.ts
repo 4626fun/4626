@@ -53,7 +53,7 @@ function rateLimitOk(req: VercelRequest): { ok: true } | { ok: false; retryAfter
   const now = Date.now()
 
   const g: any = globalThis as any
-  const buckets: Map<string, RateBucket> = (g.__creatorvault_dexscreener_rate_buckets ??= new Map())
+  const buckets: Map<string, RateBucket> = (g.__4626_dexscreener_rate_buckets ??= new Map())
 
   const bucket = buckets.get(key)
   if (!bucket || now >= bucket.resetAt) {

@@ -1127,7 +1127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!batcherRaw || !isAddress(batcherRaw)) {
     return res.status(503).json({
       success: false,
-      error: 'CreatorVaultDeployer is not configured on server.',
+      error: 'Deployment batcher (CreatorVaultDeployer) is not configured on server.',
     } satisfies ApiEnvelope<never>)
   }
   const batcher = getAddress(batcherRaw)
@@ -1165,7 +1165,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!solanaEnabled) {
       return res.status(409).json({
         success: false,
-        error: 'Solana bridge is not enabled on CreatorVaultDeployer (adapter/destination unset).',
+        error: 'Solana bridge is not enabled on deployment batcher (CreatorVaultDeployer) (adapter/destination unset).',
       } satisfies ApiEnvelope<never>)
     }
 

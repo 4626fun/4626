@@ -1,11 +1,11 @@
 ---
 name: farcaster-agent
-description: Farcaster social agent capabilities for CreatorVault - posting casts, frames, video galleries, and handling Farcaster-specific commands via the Keepr/XMTP agent stack. Use when the user mentions Farcaster, casts, frames, Warpcast, video galleries, social posting, or Neynar.
+description: Farcaster social agent capabilities for 4626 - posting casts, frames, video galleries, and handling Farcaster-specific commands via the Keepr/XMTP agent stack. Use when the user mentions Farcaster, casts, frames, Warpcast, video galleries, social posting, or Neynar.
 ---
 
 ## Overview
 
-This skill enables Farcaster social capabilities for the CreatorVault AI agent. It integrates with the existing Keepr/XMTP agent stack to:
+This skill enables Farcaster social capabilities for the 4626 AI agent. It integrates with the existing Keepr/XMTP agent stack to:
 
 1. Post casts (text, images, videos) to Farcaster
 2. Create and serve Farcaster Frames
@@ -263,7 +263,7 @@ if (raw.toLowerCase().startsWith('/fc') || raw.toLowerCase().startsWith('fc ')) 
 ## Testing
 
 1. **Profile Lookup**: `/fc profile vitalik.eth`
-2. **Cast Posting**: `/fc cast Hello from CreatorVault!`
+2. **Cast Posting**: `/fc cast Hello from 4626!`
 3. **Frame Validation**: `/fc frame https://4626.fun/api/frames/vault/0x...`
 4. **Gallery Generation**: `/fc gallery`
 

@@ -28,7 +28,7 @@ It combines ERC-4626 vaults, account abstraction, cross-chain OFT shares, and a 
 
 ## What This Repository Contains
 
-CreatorVault focuses on three outcomes:
+4626 focuses on three outcomes:
 
 - Launch creator vault infrastructure from a single user flow (`/deploy`).
 - Route creator coin activity into vault and incentive mechanics.
@@ -181,7 +181,7 @@ flowchart LR
 
 ### 4) Omnichain Share Topology (Base Hub)
 
-CreatorVault is Base-hub-first with omnichain share transport via LayerZero V2 OFT.
+4626 is Base-hub-first with omnichain share transport via LayerZero V2 OFT.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"Inter, ui-sans-serif, system-ui","fontSize":"13px","lineColor":"#64748B","primaryColor":"#FFFFFF","primaryTextColor":"#0F172A"}}}%%

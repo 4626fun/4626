@@ -1,7 +1,7 @@
 import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
 
 /**
- * Sidebar configuration for CreatorVault docs.
+ * Sidebar configuration for 4626 docs.
  * 
  * Structure follows reader intent:
  * - Overview: What is this?

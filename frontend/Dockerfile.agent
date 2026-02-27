@@ -1,5 +1,5 @@
 # --------------------------------------------------------------------------
-# CreatorVault XMTP Agent — Production Dockerfile
+# 4626 XMTP Agent — Production Dockerfile
 # --------------------------------------------------------------------------
 # Runs the Keepr XMTP agent as a persistent long-lived process.
 # Only includes the frontend/ workspace (no Solidity/Foundry deps).

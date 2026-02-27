@@ -165,7 +165,7 @@ const knowledgeAction: Action = {
 }
 
 export const knowledgePlugin: Plugin = {
-  name: '@creatorvault/plugin-knowledge',
+  name: '@4626/plugin-knowledge',
   description: 'Lightweight knowledge retrieval over local 4626 docs',
   actions: [knowledgeAction],
   providers: [

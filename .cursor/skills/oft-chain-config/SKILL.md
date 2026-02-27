@@ -1,6 +1,6 @@
 ---
 name: oft-chain-config
-description: Configure LayerZero V2 OFT cross-chain settings for CreatorVault (peers, endpoints, chain/EID mappings, and OFT deployment bootstrapping). Use when the user mentions LayerZero, OFT, setPeer, endpoint, EID, cross-chain send, or ShareOFT configuration across chains.
+description: Configure LayerZero V2 OFT cross-chain settings for 4626 (peers, endpoints, chain/EID mappings, and OFT deployment bootstrapping). Use when the user mentions LayerZero, OFT, setPeer, endpoint, EID, cross-chain send, or ShareOFT configuration across chains.
 ---
 
 ## Quick Start (most common)

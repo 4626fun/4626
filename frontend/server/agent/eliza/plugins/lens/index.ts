@@ -651,7 +651,7 @@ const lensAccountAction: Action = {
 // ---------------------------------------------------------------------------
 
 export const lensPlugin: Plugin = {
-  name: 'creatorvault-lens',
+  name: '4626-lens',
   description: 'Lens mapping, graph, feed, followers, account info, and ShareOFT metadata tools — direct server-side calls.',
   actions: [
     lensMappingAction,

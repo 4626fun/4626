@@ -22,7 +22,7 @@ const MAX_MEMORY_CACHE_ENTRIES = 3_000
 
 function getMemoryCache(): Map<string, CacheEntry> {
   const g: any = globalThis as any
-  const cache: Map<string, CacheEntry> = (g.__creatorvault_debank_token_list_cache ??= new Map())
+  const cache: Map<string, CacheEntry> = (g.__4626_debank_token_list_cache ??= new Map())
   if (cache.size > MAX_MEMORY_CACHE_ENTRIES) cache.clear()
   return cache
 }
@@ -58,7 +58,7 @@ function rateLimitOk(req: VercelRequest): { ok: true } | { ok: false; retryAfter
   const key = getClientKey(req)
   const now = Date.now()
   const g: any = globalThis as any
-  const buckets: Map<string, RateBucket> = (g.__creatorvault_debank_token_list_rate_buckets ??= new Map())
+  const buckets: Map<string, RateBucket> = (g.__4626_debank_token_list_rate_buckets ??= new Map())
 
   const bucket = buckets.get(key)
   if (!bucket || now >= bucket.resetAt) {

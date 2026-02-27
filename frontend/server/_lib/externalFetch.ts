@@ -49,7 +49,7 @@ function isHostAllowed(hostname: string, allowedHosts: readonly string[]): boole
 
 function getRejectCounter(): Map<string, number> {
   const g = globalThis as any
-  const key = '__creatorvault_external_fetch_reject_counts'
+  const key = '__4626_external_fetch_reject_counts'
   if (!g[key]) g[key] = new Map<string, number>()
   return g[key] as Map<string, number>
 }

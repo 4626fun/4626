@@ -192,7 +192,7 @@ const vaultInfoProvider: Provider = {
 // ---------------------------------------------------------------------------
 
 export const keeprPlugin: Plugin = {
-  name: '@creatorvault/plugin-keepr',
+  name: '@4626/plugin-keepr',
   description:
     '4626 Keepr commands — delegates to the production handleKeeprCommand() for vault status, send, lock/unlock, check, sync, Farcaster, and AI.',
 

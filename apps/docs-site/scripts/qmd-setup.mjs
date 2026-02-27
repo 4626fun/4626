@@ -52,7 +52,7 @@ console.log('[qmd-setup] Adding docs collection...');
 run(['collection', 'add', docsDir, '--name', 'cv-docs', '--mask', '**/*.md*'], { allowFail: true });
 
 console.log('[qmd-setup] Adding context hints...');
-run(['context', 'add', 'qmd://cv-docs', 'CreatorVault docs (manual and generated sources).'], {
+run(['context', 'add', 'qmd://cv-docs', '4626 docs (manual and generated sources).'], {
   allowFail: true,
 });
 run(
