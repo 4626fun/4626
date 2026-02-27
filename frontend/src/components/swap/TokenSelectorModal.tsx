@@ -282,7 +282,7 @@ export function TokenSelectorModal({
 
   useEffect(() => {
     if (activeIndex >= rows.length) setActiveIndex(0)
-  }, [rows.length])
+  }, [activeIndex, rows.length])
 
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {

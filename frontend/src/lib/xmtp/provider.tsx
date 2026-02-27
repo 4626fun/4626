@@ -1152,7 +1152,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       setError(msg)
       throw err
     }
-  }, [address, walletClient, installationLimitInboxId, publicClient, connect, xmtpModeOverride, resolveXmtpIdentityAddress])
+  }, [address, walletClient, installationLimitInboxId, publicClient, connect, connector, xmtpModeOverride, resolveXmtpIdentityAddress])
 
   // ------- disconnect -------
   const disconnect = useCallback(() => {

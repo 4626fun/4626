@@ -6,6 +6,7 @@ import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { CONTRACTS } from '@/config/contracts'
 import { normalizeUniswapError } from '@/lib/uniswap/error'
 import { areEquivalentSwapTokens, BASE_CHAIN_ID, getNestedAmountOut, NATIVE_TOKEN_ADDRESS } from '@/lib/uniswap/swapUtils'
+import type { components } from '@/lib/uniswap/generated/tradeApi'
 import {
   assertValidSwapTransaction,
   buildSwap,
@@ -115,7 +116,8 @@ export function useSwapExecution(params: {
     return message || fallback
   }, [])
 
-  const swapChainId = params.chainId ?? BASE_CHAIN_ID
+  type ChainId = components['schemas']['ChainId']
+  const swapChainId = (params.chainId ?? BASE_CHAIN_ID) as ChainId
 
   const tokensEquivalent = useMemo(
     () => areEquivalentSwapTokens(params.tokenIn, params.tokenOut, CONTRACTS.weth),
@@ -299,6 +301,7 @@ export function useSwapExecution(params: {
     params.parsedSlippage,
     params.tokenIn,
     params.tokenOut,
+    swapChainId,
     isReady,
     getTokenDecimals,
     getErrorMessage,
@@ -339,7 +342,7 @@ export function useSwapExecution(params: {
     } finally {
       setBusy(null)
     }
-  }, [params.executionAddress, params.tokenIn, params.tokenOut, params.amountInUnits, isReady, getTokenDecimals, getErrorMessage])
+  }, [params.executionAddress, params.tokenIn, params.tokenOut, params.amountInUnits, swapChainId, isReady, getTokenDecimals, getErrorMessage])
 
   const handleBuildSwap = useCallback(async () => {
     if (!quote) return
@@ -476,6 +479,7 @@ export function useSwapExecution(params: {
     params.parsedDeadlineMinutes,
     params.parsedSlippage,
     params.executionMode,
+    swapChainId,
     isReady,
     getTokenDecimals,
     getErrorMessage,
@@ -633,7 +637,7 @@ export function useSwapExecution(params: {
     } finally {
       setBusy(null)
     }
-  }, [approvalData, executeViaCanonical4337, executeViaEoa, getErrorMessage, params.executionMode, params.signerAddress])
+  }, [approvalData, executeViaCanonical4337, executeViaEoa, getErrorMessage, params.executionMode, params.signerAddress, swapChainId])
 
   const executeSwapNow = useCallback(async () => {
     if (!swapTx) return

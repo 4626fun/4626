@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Activity, AlertTriangle, Plus } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -43,17 +43,13 @@ export function CreatorVaultsPanel({ chainId, activeTabDefault = 'featured' }: {
     refetchInterval: 60_000,
   })
 
-  const featuredVaults = vaultsQuery.data ?? []
+  const featuredVaults = useMemo(() => vaultsQuery.data ?? [], [vaultsQuery.data])
   const userVaults = useMemo(() => {
     if (!currentAddress) return []
     return featuredVaults.slice(0, 6)
   }, [currentAddress, featuredVaults])
 
-  useEffect(() => {
-    if (tab === 'mine' && !currentAddress) {
-      setTab('featured')
-    }
-  }, [currentAddress, tab])
+  const effectiveTab = (tab === 'mine' && !currentAddress) ? 'featured' : tab
 
   if (vaultsQuery.isError) {
     return (
@@ -67,7 +63,7 @@ export function CreatorVaultsPanel({ chainId, activeTabDefault = 'featured' }: {
     )
   }
 
-  const list = tab === 'mine' ? userVaults : featuredVaults
+  const list = effectiveTab === 'mine' ? userVaults : featuredVaults
 
   return (
     <section className="rounded-2xl border border-white/10 bg-vault-card/70 p-3">
@@ -88,7 +84,7 @@ export function CreatorVaultsPanel({ chainId, activeTabDefault = 'featured' }: {
         <button
           type="button"
           onClick={() => setTab('featured')}
-          className={`rounded-full px-3 py-1.5 transition ${tab === 'featured' ? 'bg-white/15 text-white' : 'text-zinc-400'}`}
+          className={`rounded-full px-3 py-1.5 transition ${effectiveTab === 'featured' ? 'bg-white/15 text-white' : 'text-zinc-400'}`}
         >
           Featured Vaults
         </button>
@@ -96,7 +92,7 @@ export function CreatorVaultsPanel({ chainId, activeTabDefault = 'featured' }: {
           type="button"
           onClick={() => currentAddress && setTab('mine')}
           disabled={!currentAddress}
-          className={`rounded-full px-3 py-1.5 transition ${tab === 'mine' ? 'bg-white/15 text-white' : 'text-zinc-400'} disabled:opacity-50`}
+          className={`rounded-full px-3 py-1.5 transition ${effectiveTab === 'mine' ? 'bg-white/15 text-white' : 'text-zinc-400'} disabled:opacity-50`}
         >
           My Vaults
         </button>
@@ -108,7 +104,7 @@ export function CreatorVaultsPanel({ chainId, activeTabDefault = 'featured' }: {
         </div>
       ) : list.length === 0 ? (
         <div className="rounded-xl border border-white/8 bg-white/4 p-4 text-sm text-zinc-500">
-          {tab === 'mine'
+          {effectiveTab === 'mine'
             ? currentAddress
               ? 'No vault positions found for this wallet yet.'
               : 'Connect your wallet to see vaults tied to your creator profile.'
@@ -117,7 +113,7 @@ export function CreatorVaultsPanel({ chainId, activeTabDefault = 'featured' }: {
       ) : (
         <div className="space-y-2">
           {list.map((vault) => (
-            <VaultCard key={vault.vaultAddress} vault={vault} withMyVault={tab === 'mine'} />
+            <VaultCard key={vault.vaultAddress} vault={vault} withMyVault={effectiveTab === 'mine'} />
           ))}
         </div>
       )}
