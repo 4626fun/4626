@@ -4,7 +4,7 @@ import { shortAddress } from '@/lib/uniswap/swapUtils'
 
 const LABELS: Record<WalletMode, string> = {
   canonical: 'Smart Wallet',
-  eoa: 'EOA',
+  eoa: 'User Wallet',
 }
 
 export function WalletModeToggle(props: {
@@ -81,7 +81,7 @@ export function WalletModeToggle(props: {
           )}
           {props.mode === 'eoa' && !props.fallbackActive && (
             <span className="rounded-full border border-white/8 bg-white/4 px-2 py-0.5 text-[10px] text-zinc-500">
-              Standard mode
+              User Wallet mode
             </span>
           )}
         </div>

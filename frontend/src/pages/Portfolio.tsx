@@ -622,8 +622,8 @@ export function Portfolio() {
                     {portfolioQuery.data.wallets.map((wallet) => (
                       <div key={wallet.address} className="inline-flex items-center gap-1.5 rounded-lg border border-white/8 bg-white/4 px-2 py-1 text-[10px] text-zinc-400">
                         <span className="font-mono text-zinc-300">{shortAddr(wallet.address)}</span>
-                        {wallet.isCanonicalSmartWallet && <Badge variant="canonical" size="xs">Smart</Badge>}
-                        {wallet.isEmbeddedEoa && <Badge variant="eoa" size="xs">EOA</Badge>}
+                        {wallet.isCanonicalSmartWallet && <Badge variant="canonical" size="xs">Smart Wallet</Badge>}
+                        {wallet.isEmbeddedEoa && <Badge variant="eoa" size="xs">User Wallet</Badge>}
                         {wallet.isPrimary && <Badge variant="warning" size="xs">Primary</Badge>}
                       </div>
                     ))}

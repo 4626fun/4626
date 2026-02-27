@@ -10,6 +10,7 @@ import { MessageSquare, ChevronDown, Plus, Loader2, Wifi, WifiOff, X } from 'luc
 import { useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
 import { useIdentity } from '@/hooks/useIdentity'
 import { getAgentIdentity } from './agentIdentity'
+import { useAccountContext } from '@/wallet/accountContext'
 
 type Props = {
   expanded: boolean
@@ -132,6 +133,13 @@ function ConversationItem({
 
 export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'desktop' }: Props) {
   const { status, error, connect, conversations, resetInstallations, installationLimitInboxId } = useXmtp()
+  const accountContext = useAccountContext()
+  const hasWalletIdentity = Boolean(accountContext.signerAddress)
+  const xmtpModeLabel = accountContext.activeAccountType === 'SMART_WALLET' ? 'Smart Wallet' : 'User Wallet'
+  const xmtpModeHint =
+    accountContext.signerType === 'SMART_WALLET'
+      ? 'Connected as Smart Wallet'
+      : 'Connected as User Wallet'
 
   const totalUnread = useMemo(
     () => conversations.reduce((sum, c) => sum + c.unreadCount, 0),
@@ -245,12 +253,18 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
                   'Sign in to start chatting'
                 )}
               </div>
+              {hasWalletIdentity ? (
+                <div className="text-[11px] text-zinc-500">
+                  Messaging mode: <span className="text-zinc-200">{xmtpModeLabel}</span>
+                  <span className="block text-[10px] text-zinc-500">{xmtpModeHint}</span>
+                </div>
+              ) : null}
               <button
                 type="button"
                 onClick={connect}
                 className="px-4 py-2 rounded-lg bg-brand-primary/20 text-brand-primary text-sm font-medium hover:bg-brand-primary/30 transition-colors"
               >
-                Connect Messaging
+                {hasWalletIdentity ? `Connect Messaging (${xmtpModeLabel})` : 'Connect Messaging'}
               </button>
               {installationLimitInboxId ? (
                 <>

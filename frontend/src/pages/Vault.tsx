@@ -171,13 +171,13 @@ export function Vault() {
   const connectedSignerLabel = useMemo(
     () =>
       accountContext.signerAddress
-        ? `${accountContext.signerType === 'SMART_WALLET' ? 'Smart Wallet' : 'EOA'} ${accountContext.signerAddress.slice(0, 6)}…${accountContext.signerAddress.slice(-4)}`
+        ? `${accountContext.signerType === 'SMART_WALLET' ? 'Smart Wallet' : 'User Wallet'} ${accountContext.signerAddress.slice(0, 6)}…${accountContext.signerAddress.slice(-4)}`
         : 'Not connected',
     [accountContext.signerAddress, accountContext.signerType],
   )
   const actingAccountLabel = useMemo(() => {
     if (!accountContext.activeAccount) return 'Unavailable'
-    const type = accountContext.activeAccountType === 'SMART_WALLET' ? 'Smart Wallet' : 'EOA'
+    const type = accountContext.activeAccountType === 'SMART_WALLET' ? 'Smart Wallet' : 'User Wallet'
     return `${type} ${accountContext.activeAccount.slice(0, 6)}…${accountContext.activeAccount.slice(-4)}`
   }, [accountContext.activeAccount, accountContext.activeAccountType])
   const [vaultError, setVaultError] = useState<string | null>(null)

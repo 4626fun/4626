@@ -101,8 +101,9 @@ function formatRole(
   if (isCanonicalSmartWallet) labels.push('Canonical Smart Wallet from Zora')
   if (account.isCanonicalSolanaWallet) labels.push('Canonical Solana Wallet')
   if (account.isOperationalSolanaWallet) labels.push('Operational Solana Wallet')
-  if (walletType === 'smart_wallet' && primarySmartWalletLc && primarySmartWalletLc === addressLc) labels.push('Primary Smart Wallet')
-  if (account.isEmbeddedEoa) labels.push('Embedded EOA')
+  if (walletType === 'smart_wallet' && primarySmartWalletLc && primarySmartWalletLc === addressLc)
+    labels.push('Primary Smart Wallet')
+  if (account.isEmbeddedEoa) labels.push('User Wallet')
   if (!isCanonicalSmartWallet && walletType === 'smart_wallet') {
     labels.push(provider.includes('privy') ? 'Deploy Session Signer (Privy)' : 'App Smart Wallet')
   }
@@ -124,8 +125,8 @@ function humanizeToken(value: string | null | undefined): string | null {
 function formatWalletTypeLabel(value: string | null | undefined): string {
   const raw = typeof value === 'string' ? value.trim().toLowerCase() : ''
   if (raw === 'smart_wallet') return 'Smart Wallet'
-  if (raw === 'embedded_eoa') return 'Embedded EOA'
-  if (raw === 'external_eoa') return 'External EOA'
+  if (raw === 'embedded_eoa') return 'User Wallet'
+  if (raw === 'external_eoa') return 'User Wallet'
   return humanizeToken(value) ?? 'Wallet'
 }
 
@@ -162,7 +163,7 @@ function formatAccountSummary(account: ConnectedAccount): string {
   const providerRaw = typeof account.provider === 'string' ? account.provider.trim().toLowerCase() : ''
   const walletTypeRaw = typeof account.walletType === 'string' ? account.walletType.trim().toLowerCase() : ''
   if (walletTypeRaw === 'smart_wallet' && providerRaw.includes('privy')) {
-    return 'Privy Smart Wallet signer'
+    return 'Privy Agent signer'
   }
   const walletType = formatWalletTypeLabel(account.walletType)
   const chain = formatChainLabel(account.chain)
@@ -613,18 +614,18 @@ export function AccountSettings() {
   const ensureBaseChain = useCallback(async () => {
     if (chainId === base.id) return
     if (!switchChainAsync) {
-      throw new Error('Switch to Base in your wallet to manage smart wallet owners.')
+      throw new Error('Switch to Base in your wallet to manage Smart Wallet owners.')
     }
     await switchChainAsync({ chainId: base.id })
   }, [chainId, switchChainAsync])
 
   const onRevokeOwner = useCallback(async (owner: SmartWalletOwner) => {
     if (!canonicalSmartWalletAddress || !isEvmAddress(canonicalSmartWalletAddress)) {
-      setOwnersActionError('Missing canonical smart wallet address.')
+      setOwnersActionError('Missing canonical Smart Wallet address.')
       return
     }
     if (!connectedAddress) {
-      setOwnersActionError('Connect an owner EOA wallet to revoke an owner.')
+      setOwnersActionError('Connect an owner User wallet to revoke an owner.')
       return
     }
     if (!walletClient || !publicClient) {
@@ -737,8 +738,8 @@ export function AccountSettings() {
     upsert(canonicalSmartWalletAddress, 'Canonical Smart Wallet from Zora', 100, 'Coinbase Smart Wallet')
     upsert(primarySmartWalletAddress, 'Primary Smart Wallet', 98, 'Coinbase Smart Wallet')
     upsert(profile.primaryWallet, 'Primary Wallet', 80, 'External Wallet')
-    upsert(profile.primaryEmbeddedEoa, 'Primary Embedded EOA', 70, 'Privy Embedded')
-    upsert(profile.embeddedWallet, 'Embedded EOA', 68, 'Privy Embedded')
+    upsert(profile.primaryEmbeddedEoa, 'Primary User Wallet', 70, 'Privy Embedded')
+    upsert(profile.embeddedWallet, 'User Wallet', 68, 'Privy Embedded')
     if (
       isEvmAddress(profile.baseSubAccount) &&
       (!canonicalSmartWalletAddress || profile.baseSubAccount.toLowerCase() !== canonicalSmartWalletAddress.toLowerCase())
@@ -1114,7 +1115,10 @@ export function AccountSettings() {
           </div>
           <div className="text-[11px] text-zinc-600 sm:text-right">
             {canonicalSmartWalletAddress ? (
-              <span>Smart Wallet: <span className="font-mono text-zinc-400">{canonicalSmartWalletAddress.slice(0, 6)}…{canonicalSmartWalletAddress.slice(-4)}</span></span>
+              <span>
+                Smart Wallet:{' '}
+                <span className="font-mono text-zinc-400">{canonicalSmartWalletAddress.slice(0, 6)}…{canonicalSmartWalletAddress.slice(-4)}</span>
+              </span>
             ) : (
               <span className="text-amber-500/70">No Smart Wallet linked</span>
             )}
@@ -1245,18 +1249,19 @@ export function AccountSettings() {
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2.5 space-y-2 sm:p-3">
             <div className="flex flex-col items-start gap-1.5 text-xs text-zinc-500 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
               <span className="w-full">
-                Canonical Smart Wallet from Zora: <span className="break-all font-mono text-zinc-300">{canonicalSmartWalletAddress}</span>
+                Canonical Smart Wallet from Zora:{' '}
+                <span className="break-all font-mono text-zinc-300">{canonicalSmartWalletAddress}</span>
               </span>
               {connectedAddress ? (
                 <span className="w-full">
-                  Connected owner EOA: <span className="break-all font-mono text-zinc-300">{connectedAddress}</span>
+                  Connected owner: <span className="break-all font-mono text-zinc-300">{connectedAddress}</span>
                 </span>
               ) : (
-                <span>Connect an owner EOA to revoke owner slots.</span>
+                <span>Connect an owner to revoke owner slots.</span>
               )}
             </div>
             <div className="text-[11px] text-zinc-500">
-              Non-canonical Privy smart wallets are shown as deploy-session signers, not as the canonical smart wallet.
+              Non-canonical Privy smart wallets are shown as deploy-session signers, not as the canonical Smart Wallet.
             </div>
             {ownersActionMessage ? (
               <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
@@ -1517,7 +1522,7 @@ export function AccountSettings() {
           <div className="text-sm text-zinc-300">
             {embeddedExportAddress ? (
               <>
-                Export your Privy embedded EOA: <span className="font-mono text-zinc-200 break-all">{embeddedExportAddress}</span>
+                Export your Privy embedded User wallet: <span className="font-mono text-zinc-200 break-all">{embeddedExportAddress}</span>
               </>
             ) : (
               'No embedded wallet detected for this account yet.'
