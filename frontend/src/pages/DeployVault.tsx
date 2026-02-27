@@ -3437,32 +3437,24 @@ function DeployVaultBatcher({
             buildOnly: true,
             expectedSolanaAmountBase: FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD ? expectedSolanaAmountBase : undefined,
           })
-        } catch (meteoraErr) {
-          const message = meteoraErr instanceof Error ? meteoraErr.message : String(meteoraErr)
-          // A missing Meteora mapping is not fatal — the main deployment can
-          // proceed with ZERO_BYTES32 / empty solanaIxs and the operator runs
-          // the Solana deposit step independently after the vault is live.
-          const isMissingMapping = message.includes('Missing Meteora Alpha Vault mapping')
-          if (FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD && !isMissingMapping) {
-            throw new Error(
-              `Solana auto-deposit payload build failed: ${message}. ` +
-                'Fix creator Meteora mapping before Phase 2 finalize.',
-            )
+          // If the payload came back but is incomplete, downgrade to null so
+          // Phase 2 proceeds with ZERO_BYTES32 / empty solanaIxs.
+          if (
+            meteoraPayload != null &&
+            (!meteoraPayload.meteoraAlphaVault || meteoraPayload.solanaIxs.length === 0)
+          ) {
+            logger.warn('[DeployVault] Incomplete Meteora payload; skipping Solana auto-deposit', {
+              meteoraPayload,
+            })
+            meteoraPayload = null
           }
-          logger.warn('[DeployVault] Meteora payload build skipped; Solana deposit must be triggered separately', {
-            error: message,
-            isMissingMapping,
+        } catch (meteoraErr) {
+          // Any Solana-side failure is non-fatal for the main deployment.
+          // Phase 2 proceeds with ZERO_BYTES32 / empty solanaIxs; the operator
+          // triggers the Solana deposit step separately after the vault is live.
+          logger.warn('[DeployVault] Solana payload build skipped; Solana deposit must be triggered separately', {
+            error: meteoraErr instanceof Error ? meteoraErr.message : String(meteoraErr),
           })
-        }
-        if (
-          FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD &&
-          meteoraPayload != null &&
-          (!meteoraPayload.meteoraAlphaVault || meteoraPayload.solanaIxs.length === 0)
-        ) {
-          throw new Error(
-            'Solana auto-deposit payload build failed: incomplete Meteora payload (missing alphaVault or solanaIxs). ' +
-              'Fix creator Meteora mapping before Phase 2 finalize.',
-          )
         }
 
         const phase2FinalizeParams = {
@@ -4906,7 +4898,13 @@ function DeployVaultBatcher({
             expectedOracle: expected.oracle,
           })
         }
-        await ensureShareOftRegisteredForSolanaBridge()
+        try {
+          await ensureShareOftRegisteredForSolanaBridge()
+        } catch (solanaRegErr) {
+          logger.warn('[DeployVault] Solana ShareOFT registration failed; proceeding to Phase 2 finalize without Solana bridge route', {
+            error: solanaRegErr instanceof Error ? solanaRegErr.message : String(solanaRegErr),
+          })
+        }
         await sendPhaseCalls(phase2FinalizeCalls, 'phase2', { noSplit: true, segment: 'finalize' })
 
         // Phase 3: Strategies (optional)
