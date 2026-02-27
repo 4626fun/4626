@@ -50,6 +50,7 @@
     "@vercel/postgres": "^0.10.0",
     "@vitejs/plugin-react": "^5.1.3",
     "@wagmi/core": "^2.22.1",
+    "@web3icons/react": "^4.1.17",
     "@xmtp/agent-sdk": "^2.0.2",
     "@xmtp/browser-sdk": "^6.3.0",
     "@xmtp/content-type-primitives": "^3.0.1",

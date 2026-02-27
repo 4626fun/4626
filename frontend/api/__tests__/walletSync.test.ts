@@ -78,6 +78,17 @@ describe('wallet mapping + sync', () => {
     expect(classified.embeddedEoa?.address).toBe('0x00000000000000000000000000000000000000c1')
   })
 
+  it('detects Rabby as provider for external EOAs', () => {
+    const user = {
+      id: 'did:privy:rabby',
+      linkedAccounts: [
+        { type: 'wallet', address: '0x00000000000000000000000000000000000000b1', walletClientType: 'rabby' },
+      ],
+    }
+    const classified = classifyLinkedAccounts(user as any)
+    expect(classified.allWallets[0]?.provider).toBe('rabby')
+  })
+
   it('does not treat Privy-linked smart wallets as canonical', () => {
     const user = {
       id: 'did:privy:2b',

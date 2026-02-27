@@ -1,5 +1,11 @@
 export type WalletType = 'embedded_eoa' | 'external_eoa' | 'smart_wallet'
-export type WalletProvider = 'privy' | 'coinbase_wallet' | 'metamask' | 'walletconnect' | 'unknown'
+export type WalletProvider =
+  | 'privy'
+  | 'coinbase_wallet'
+  | 'metamask'
+  | 'rabby'
+  | 'walletconnect'
+  | 'unknown'
 
 export type MappedWallet = {
   address: string
@@ -57,6 +63,7 @@ function inferProvider(clientType: string): WalletProvider {
   if (!clientType) return 'unknown'
   if (clientType.includes('privy') || clientType.includes('embedded')) return 'privy'
   if (clientType.includes('coinbase')) return 'coinbase_wallet'
+  if (clientType.includes('rabby')) return 'rabby'
   if (clientType.includes('metamask')) return 'metamask'
   if (clientType.includes('walletconnect') || clientType.includes('wallet_connect') || clientType === 'wc') return 'walletconnect'
   return 'unknown'
