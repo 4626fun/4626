@@ -362,11 +362,11 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
       <div className="text-[11px] text-zinc-600 space-y-1">
         {hasPrivySmartWallet ? (
           <>
-            <p>• Using Agent wallet — all calls are batched into one transaction (one approval).</p>
+            <p>• Using Smart Wallet — all calls are batched into one transaction (one approval).</p>
             <p>• ERC-4337 Account Abstraction with gas sponsorship.</p>
           </>
         ) : isSmartWallet ? (
-          <p>• Agent wallet detected.</p>
+          <p>• Smart Wallet detected.</p>
         ) : (
           <p>• User wallet — operations will run sequentially (multiple approvals).</p>
         )}
