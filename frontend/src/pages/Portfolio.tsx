@@ -154,6 +154,19 @@ type PortfolioApiResponse = {
     totalUsdValue: number | null
     asOf: string | null
   }
+  onchainIdentity: {
+    source: 'ens' | 'basename'
+    address: string
+    ensName: string | null
+    basename: string | null
+    displayName: string | null
+    bio: string | null
+    avatarUrl: string | null
+    website: string | null
+    twitter: string | null
+    github: string | null
+    discord: string | null
+  } | null
 }
 
 export function Portfolio() {
@@ -770,7 +783,11 @@ export function Portfolio() {
                     >
                       Save profile
                     </Button>
-                    <p className="text-[10px] text-zinc-600">Externally sourced fields are locked for edits.</p>
+                    <p className="text-[10px] text-zinc-600">
+                      {portfolioQuery.data?.onchainIdentity
+                        ? `Auto-filled from ${portfolioQuery.data.onchainIdentity.source === 'ens' ? 'ENS' : 'Basename'} for ${shortAddr(portfolioQuery.data.onchainIdentity.address)}.`
+                        : 'No ENS/Basename profile detected yet.'}
+                    </p>
                   </div>
                 </div>
               ) : null}

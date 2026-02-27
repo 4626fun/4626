@@ -74,6 +74,9 @@ jobs:
           AUTH_SESSION_SECRET: test-auth-session-secret-123456
           DEPLOY_SESSION_SECRET: test-deploy-session-secret-123456
           DEPLOY_SESSION_TOKEN_HMAC_SECRET: test-deploy-hmac-secret-123456
+          APP_ORIGIN: ${{ env.APP_ORIGIN }}
+          MARKETING_ORIGIN: ${{ env.MARKETING_ORIGIN }}
+          # Legacy fallback for older handlers/scripts still reading CANONICAL_ORIGIN.
           CANONICAL_ORIGIN: ${{ env.MARKETING_ORIGIN }}
 
       - name: Verify production agent registration endpoint

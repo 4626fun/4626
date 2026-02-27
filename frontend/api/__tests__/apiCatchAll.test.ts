@@ -13,7 +13,7 @@ describe('api catch-all hardening', () => {
   })
 
   it('returns generic 500 response without stack details', async () => {
-    vi.mock('../_handlers/_routes.js', () => ({
+    vi.doMock('../_handlers/_routes.js', () => ({
       getApiHandler: vi.fn(async () => {
         throw new Error('db://sensitive-connection-string')
       }),

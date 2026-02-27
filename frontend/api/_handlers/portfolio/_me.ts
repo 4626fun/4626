@@ -7,6 +7,7 @@ import {
   setCors,
   setNoStore,
 } from '../../../server/auth/_shared.js'
+import { resolveOnchainIdentityProfile } from '../../../server/_lib/onchainIdentityProfile.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
@@ -49,6 +50,19 @@ type PortfolioMeResponse = {
     totalUsdValue: number | null
     asOf: string | null
   }
+  onchainIdentity: {
+    source: 'ens' | 'basename'
+    address: string
+    ensName: string | null
+    basename: string | null
+    displayName: string | null
+    bio: string | null
+    avatarUrl: string | null
+    website: string | null
+    twitter: string | null
+    github: string | null
+    discord: string | null
+  } | null
 }
 
 type PatchBody = {
@@ -88,6 +102,10 @@ function readStringQuery(req: VercelRequest, key: string): string | null {
 
 function asNullableString(value: unknown): string | null {
   return typeof value === 'string' ? value : null
+}
+
+function hasText(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > 0
 }
 
 function normalizeManualText(value: unknown, maxLen: number): string | null {
@@ -144,6 +162,24 @@ function mapWalletRows(rows: any[]): WalletItem[] {
     isEmbeddedEoa: Boolean(row.is_embedded_eoa),
     verifiedAt: row.verified_at ? new Date(row.verified_at).toISOString() : null,
   }))
+}
+
+function applyOnchainFieldFallback(
+  fields: ProfileFieldsMap,
+  key: string,
+  currentRowValue: unknown,
+  fallbackValue: string | null | undefined,
+  source: 'ens' | 'basename',
+) {
+  if (!hasText(fallbackValue)) return
+  if (hasText(currentRowValue)) return
+  if (fields[key]) return
+
+  fields[key] = {
+    value: String(fallbackValue).trim(),
+    source,
+    updated_at: new Date(0).toISOString(),
+  }
 }
 
 async function fetchOnchainSummary(address: string | null): Promise<{ totalUsdValue: number | null; asOf: string | null }> {
@@ -229,19 +265,58 @@ async function buildResponse(db: any, mode: 'self' | 'public', row: any): Promis
 
   const canonicalAddress = normalizeLower(row.primary_smart_wallet) || normalizeLower(row.csw_address) || null
   const onchainSummary = await fetchOnchainSummary(canonicalAddress)
+  const identityAddress =
+    canonicalAddress ||
+    normalizeLower(row.primary_wallet) ||
+    normalizeLower(row.primary_embedded_eoa) ||
+    normalizeLower(row.embedded_wallet) ||
+    null
+  const onchainIdentity = identityAddress ? await resolveOnchainIdentityProfile(identityAddress) : null
+  const effectiveProfileFields: ProfileFieldsMap = { ...profileFields }
+
+  if (onchainIdentity) {
+    applyOnchainFieldFallback(
+      effectiveProfileFields,
+      'display_name',
+      row.display_name,
+      onchainIdentity.displayName,
+      onchainIdentity.source,
+    )
+    applyOnchainFieldFallback(
+      effectiveProfileFields,
+      'bio',
+      row.bio,
+      onchainIdentity.bio,
+      onchainIdentity.source,
+    )
+    applyOnchainFieldFallback(
+      effectiveProfileFields,
+      'website',
+      row.website,
+      onchainIdentity.website,
+      onchainIdentity.source,
+    )
+    applyOnchainFieldFallback(
+      effectiveProfileFields,
+      'avatar_url',
+      row.avatar_url,
+      onchainIdentity.avatarUrl,
+      onchainIdentity.source,
+    )
+  }
 
   const profile: PortfolioProfile = {
     profileId,
     primarySmartWallet: asNullableString(row.primary_smart_wallet) ?? asNullableString(row.csw_address),
     primaryEmbeddedEoa: asNullableString(row.primary_embedded_eoa) ?? asNullableString(row.embedded_wallet),
-    displayName: getFieldValue(row, profileFields, 'displayName'),
-    bio: getFieldValue(row, profileFields, 'bio'),
-    website: getFieldValue(row, profileFields, 'website'),
-    avatarUrl: getFieldValue(row, profileFields, 'avatarUrl'),
-    bannerUrl: getFieldValue(row, profileFields, 'bannerUrl'),
-    avatarLensUri: getFieldValue(row, profileFields, 'avatarLensUri'),
-    bannerLensUri: getFieldValue(row, profileFields, 'bannerLensUri'),
-    profileFields,
+    displayName: getFieldValue(row, effectiveProfileFields, 'displayName'),
+    bio: getFieldValue(row, effectiveProfileFields, 'bio'),
+    website: getFieldValue(row, effectiveProfileFields, 'website'),
+    avatarUrl: getFieldValue(row, effectiveProfileFields, 'avatarUrl'),
+    bannerUrl: getFieldValue(row, effectiveProfileFields, 'bannerUrl'),
+    avatarLensUri: getFieldValue(row, effectiveProfileFields, 'avatarLensUri'),
+    bannerLensUri: getFieldValue(row, effectiveProfileFields, 'bannerLensUri'),
+    profileFields: effectiveProfileFields,
     appAccessStatus: asNullableString(row.app_access_status),
     updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
   }
@@ -251,6 +326,7 @@ async function buildResponse(db: any, mode: 'self' | 'public', row: any): Promis
     profile,
     wallets: mapWalletRows(Array.isArray(walletsResult.rows) ? walletsResult.rows : []),
     onchainSummary,
+    onchainIdentity,
   }
 }
 

@@ -38,7 +38,7 @@ Cleanup path:
 
 - `CDP_PAYMASTER_URL`
 - `AUTH_SESSION_SECRET`
-- `CANONICAL_ORIGIN`
+- `APP_ORIGIN` (`CANONICAL_ORIGIN` is supported as a legacy fallback)
 - `DATABASE_URL`
 - `DEPLOY_SESSION_SECRET`
 - `DEPLOY_SESSION_TOKEN_HMAC_SECRET`
@@ -58,7 +58,7 @@ Use the autopilot script:
 
 ```bash
 pnpm -C frontend run deploy:autopilot -- \
-  --origin https://4626.fun \
+  --origin https://app.4626.fun \
   --plan ./deploy-plan.json \
   --auth-bearer "$CV_AUTH_SESSION_TOKEN"
 ```

@@ -31,9 +31,19 @@ function getAllowedOriginsFromEnv(): Set<string> {
   return out
 }
 
+function getExplicitAppOrigin(): string | null {
+  // Preferred explicit runtime origin for app/API security flows.
+  const app = normalizeOrigin((process.env.APP_ORIGIN ?? '').trim())
+  if (app) return app
+
+  // Back-compat fallback for legacy naming.
+  const legacy = normalizeOrigin((process.env.CANONICAL_ORIGIN ?? '').trim())
+  if (legacy) return legacy
+  return null
+}
+
 export function getCanonicalOrigin(req?: VercelRequest): string {
-  const raw = (process.env.CANONICAL_ORIGIN ?? '').trim()
-  const explicit = normalizeOrigin(raw)
+  const explicit = getExplicitAppOrigin()
   if (explicit) return explicit
 
   const vercelUrl = (process.env.VERCEL_URL ?? '').trim()
@@ -53,5 +63,9 @@ export function getCanonicalOrigin(req?: VercelRequest): string {
   }
 
   throw new Error('missing_canonical_origin')
+}
+
+export function getCanonicalAppOrigin(req?: VercelRequest): string {
+  return getCanonicalOrigin(req)
 }
 
