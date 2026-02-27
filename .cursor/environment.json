@@ -18,7 +18,16 @@
       "port": 3000
     }
   ],
-  "ports": [5173, 3000],
+  "ports": [
+    {
+      "name": "frontend",
+      "port": 5173
+    },
+    {
+      "name": "cre",
+      "port": 3000
+    }
+  ],
   "install": ".cursor/install.sh",
   "start": ".cursor/start.sh"
 }
