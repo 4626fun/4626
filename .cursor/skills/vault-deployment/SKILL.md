@@ -66,9 +66,9 @@ There are multiple layers:
 - Payout routing:
   - `contracts/helpers/routers/PayoutRouter.sol`
 - “Required approvals” reminder:
-  - `docs/deployment/REQUIRED_APPROVALS_CHECKLIST.md`
-  - `docs/deployment/PRE_LAUNCH_VERIFICATION.md`
-  - `docs/deployment/CCA_DEPLOYMENT_VERIFICATION.md`
+  - `docs/guides/deploy-vault.md`
+  - `docs/current-contract-inventory.md`
+  - `AGENTS.md`
 
 ## Read-only Preflight (do before any state changes)
 
@@ -151,7 +151,7 @@ Use when Base code-deposit limits prevent “all-in-one” deploys, or when you 
 ## Approvals / One-time protocol actions
 
 The most common “gotcha” is approvals for launch/batchers. See:
-- `docs/deployment/REQUIRED_APPROVALS_CHECKLIST.md`
+- `docs/guides/deploy-vault.md`
 
 Common required approvals (high level):
 

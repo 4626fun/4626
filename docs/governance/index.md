@@ -5,11 +5,11 @@ sidebar_position: 6
 
 # Governance
 
-User-facing guide to CreatorVault governance.
+User-facing guide to 4626 governance.
 
 ## ve(3,3) System
 
-CreatorVault implements a ve(3,3) model for governance:
+4626 implements a ve(3,3) model for governance:
 
 - **ve4626** - Lock tokens for voting power
 - **Gauge Voting** - Direct probability budgets

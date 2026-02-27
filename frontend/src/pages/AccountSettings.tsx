@@ -1166,7 +1166,7 @@ export function AccountSettings() {
 
   return (
     <div className="relative mx-auto max-w-6xl space-y-5 px-3 py-6 sm:space-y-6 sm:px-6 sm:py-10">
-      <PageMeta title="Account" description="Manage your connected wallet, smart account mode, and CreatorVault settings." canonicalPath="/account" />
+      <PageMeta title="Account" description="Manage your connected wallet, smart account mode, and 4626 settings." canonicalPath="/account" />
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute inset-0 bg-[radial-gradient(120%_90%_at_50%_0%,rgba(0,82,255,0.12),transparent_58%)]" />
       </div>

@@ -355,7 +355,7 @@ export function ExploreContentDetail() {
   const name = coin?.name || 'Content Coin'
   const mediaUrl = toDisplayAssetUrl(coin?.mediaContent?.previewImage?.medium || coin?.mediaContent?.originalUri)
   const creatorHandle = coin?.creatorProfile?.handle
-  const description = coin?.description?.trim() || 'A content coin deployed on Zora and traded with CreatorVault liquidity routing.'
+  const description = coin?.description?.trim() || 'A content coin deployed on Zora and traded with 4626 liquidity routing.'
   const holdersCount = parseNumber(coin?.uniqueHolders)
   const totalSupplyCount = parseNumber(coin?.totalSupply)
   const marketCapUsd = parseNumber(coin?.marketCap)

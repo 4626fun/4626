@@ -227,10 +227,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <meta property="fc:frame:image" content="https://api.4626.fun/v1/frames/vault/${address}/image" />
   <meta property="fc:frame:button:1" content="View Vault" />
   <meta property="fc:frame:button:1:action" content="link" />
-  <meta property="fc:frame:button:1:target" content="https://4626.fun/vault/${address}" />
+  <meta property="fc:frame:button:1:target" content="https://app.4626.fun/vault/${address}" />
   <meta property="fc:frame:button:2" content="Buy Shares" />
   <meta property="fc:frame:button:2:action" content="link" />
-  <meta property="fc:frame:button:2:target" content="https://4626.fun/vault/${address}?action=buy" />
+  <meta property="fc:frame:button:2:target" content="https://app.4626.fun/vault/${address}?action=buy" />
   <meta property="og:title" content="${vaultData.name} Vault" />
   <meta property="og:image" content="https://api.4626.fun/v1/frames/vault/${address}/image" />
 </head>
@@ -264,7 +264,7 @@ if (raw.toLowerCase().startsWith('/fc') || raw.toLowerCase().startsWith('fc ')) 
 
 1. **Profile Lookup**: `/fc profile vitalik.eth`
 2. **Cast Posting**: `/fc cast Hello from CreatorVault!`
-3. **Frame Validation**: `/fc frame https://4626.fun/api/frames/vault/0x...`
+3. **Frame Validation**: `/fc frame https://app.4626.fun/api/frames/vault/0x...`
 4. **Gallery Generation**: `/fc gallery`
 
 ## Security Considerations

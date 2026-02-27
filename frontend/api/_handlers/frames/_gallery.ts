@@ -48,12 +48,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // For now, return a sample gallery
   const gallery: VideoGallery = {
     type: 'video_gallery',
-    title: 'CreatorVault Highlights',
+    title: '4626 Highlights',
     items: [
       {
         src: `${protocol}://${baseUrl}/videos/intro.mp4`,
         aspectRatio: '16:9',
-        caption: 'Welcome to CreatorVault',
+        caption: 'Welcome to 4626',
         autoplay: false,
         muted: true,
         loop: false,
@@ -103,7 +103,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <!-- Button 2: Share -->
   <meta property="fc:frame:button:2" content="Share" />
   <meta property="fc:frame:button:2:action" content="link" />
-  <meta property="fc:frame:button:2:target" content="https://warpcast.com/~/compose?text=Check%20out%20this%20gallery%20on%20CreatorVault&embeds[]=${encodeURIComponent(galleryUrl)}" />
+  <meta property="fc:frame:button:2:target" content="https://warpcast.com/~/compose?text=Check%20out%20this%20gallery%20on%204626&embeds[]=${encodeURIComponent(galleryUrl)}" />
   
   <!-- Open Graph -->
   <meta property="og:title" content="${gallery.title}" />

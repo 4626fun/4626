@@ -485,7 +485,7 @@ export function Portfolio() {
 
   return (
     <div className="relative pb-24 md:pb-0 min-h-screen">
-      <PageMeta title="Portfolio" description="View your token balances, vault positions, and on-chain activity on CreatorVault." canonicalPath="/portfolio" />
+      <PageMeta title="Portfolio" description="View your token balances, vault positions, and on-chain activity on 4626." canonicalPath="/portfolio" />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
           {/* Header (Uniswap-style) */}

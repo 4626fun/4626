@@ -6,10 +6,10 @@ export const REFERRAL_BADGES = [
 ] as const
 
 export const REFERRAL_TWEET_TEMPLATES = [
-  `CreatorVaults are going live on Base. Founding creators get early access.\nJoin the waitlist: {ref_link} @4626fun`,
+  `4626 is going live on Base. Founding creators get early access.\nJoin the waitlist: {ref_link} @4626fun`,
   `Early access is invite-only right now. If you’re a creator, you want in.\nWaitlist: {ref_link} @4626fun`,
   `4626 is picking founding creators from the waitlist leaderboard.\nIf you build onchain, don’t watch from the sidelines: {ref_link} @4626fun`,
-  `I’m trying to secure a founding CreatorVault spot. Invites that convert count.\nJoin through my link: {ref_link} @4626fun`,
+  `I’m trying to secure a founding 4626 spot. Invites that convert count.\nJoin through my link: {ref_link} @4626fun`,
   `Launch is coming. Founder slots are earned, not asked for.\nGet on the list: {ref_link} @4626fun`,
 ] as const
 

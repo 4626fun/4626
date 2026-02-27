@@ -208,7 +208,7 @@ async function generateGallery(groupId: string): Promise<FarcasterCommandResult>
       {
         src: 'https://4626.fun/videos/intro.mp4',
         aspectRatio: '16:9',
-        caption: 'Welcome to CreatorVault',
+        caption: 'Welcome to 4626',
         autoplay: false,
         muted: true,
         loop: false,

@@ -1,4 +1,4 @@
-# ERC-7712 Permission Plan for CreatorVault Agent Stack
+# ERC-7712 Permission Plan for 4626 Agent Stack
 
 This document proposes how to map ERC-7712-style delegated permissions onto the current deploy-session and agent architecture.
 

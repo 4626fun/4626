@@ -30,8 +30,8 @@ const SUPPORTED_ENDPOINT_PREFIXES = ['https://', 'http://', 'ipfs://', 'ar://', 
 
 const fallbackRegistration: RegistrationFile = {
   type: REGISTRATION_TYPE,
-  name: 'CreatorVault Agent',
-  description: 'Agent API for CreatorVault on Base. Reachable via XMTP messaging, REST API, and MCP tools. Provides vault management, wallet intelligence, ERC-8004 reputation queries, and keeper automation.',
+  name: '4626 Agent',
+  description: 'Agent API for 4626 on Base. Reachable via XMTP messaging, REST API, and MCP tools. Provides vault management, wallet intelligence, ERC-8004 reputation queries, and keeper automation.',
   image: 'https://4626.fun/miniapp-icon.png',
   services: [
     { name: 'web', endpoint: 'https://4626.fun' },
@@ -341,9 +341,9 @@ export function buildAgentRegistration(origin: string): {
     return { error: registryConfig.error, missing: registryConfig.missing }
   }
 
-  const name = (process.env.ERC8004_AGENT_NAME || '').trim() || base.name || 'CreatorVault Agent'
+  const name = (process.env.ERC8004_AGENT_NAME || '').trim() || base.name || '4626 Agent'
   const description =
-    (process.env.ERC8004_AGENT_DESCRIPTION || '').trim() || base.description || 'Agent API for CreatorVault on Base.'
+    (process.env.ERC8004_AGENT_DESCRIPTION || '').trim() || base.description || 'Agent API for 4626 on Base.'
   const imageRaw = (process.env.ERC8004_AGENT_IMAGE_URL || '').trim() || base.image || `${origin}/miniapp-icon.png`
 
   const servicesOverride = parseServicesFromEnv(process.env.ERC8004_AGENT_SERVICES_JSON || '')

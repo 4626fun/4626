@@ -60,9 +60,9 @@ function readKnowledgeDocs(): KnowledgeDoc[] {
 
   if (docs.length === 0) {
     docs.push({
-      title: 'CreatorVault Basics',
+      title: '4626 Basics',
       body:
-        'CreatorVault uses ERC-4626 vaults on Base. Keepr supports /keepr status, /cre commands, wallet intelligence, and reputation tools.',
+        '4626 uses ERC-4626 vaults on Base. Keepr supports /keepr status, /cre commands, wallet intelligence, and reputation tools.',
     })
   }
 
@@ -119,7 +119,7 @@ function topKnowledgeSnippets(query: string, limit = 3): Array<{ title: string; 
 
 const knowledgeAction: Action = {
   name: 'KNOWLEDGE_QUERY',
-  description: 'Query indexed CreatorVault docs and return concise snippets.',
+  description: 'Query indexed 4626 docs and return concise snippets.',
   similes: ['kb', 'knowledge', 'docs'],
   examples: [
     [
@@ -166,7 +166,7 @@ const knowledgeAction: Action = {
 
 export const knowledgePlugin: Plugin = {
   name: '@creatorvault/plugin-knowledge',
-  description: 'Lightweight knowledge retrieval over local CreatorVault docs',
+  description: 'Lightweight knowledge retrieval over local 4626 docs',
   actions: [knowledgeAction],
   providers: [
     {

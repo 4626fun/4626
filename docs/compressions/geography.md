@@ -6,7 +6,7 @@ slug: /compressions/geography
 
 # Geography Compression
 
-CreatorVault compresses geography by making vault positions portable: shares can trade and bridge across chains while preserving one mental model.
+4626 compresses geography by making vault positions portable: shares can trade and bridge across chains while preserving one mental model.
 
 ## Hub And Spoke
 

@@ -5,7 +5,7 @@ sidebar_position: 2
 
 # Glossary
 
-Key terms and definitions for CreatorVault.
+Key terms and definitions for 4626.
 
 ## A
 

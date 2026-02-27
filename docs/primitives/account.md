@@ -8,7 +8,7 @@ slug: /primitives/account
 
 The Account primitive is the execution surface: it determines how users authorize multi-step actions and how the system falls back when wallet capabilities are missing.
 
-CreatorVault is designed around:
+4626 is designed around:
 
 - **EIP-4337** smart accounts (account abstraction)
 - **EIP-5792** wallet call batching (`wallet_sendCalls`)

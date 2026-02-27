@@ -5,7 +5,7 @@ sidebar_position: 4
 
 # Tokenomics
 
-The 6.9% trading fee is the core incentive mechanism that powers CreatorVault's lottery and holder rewards.
+The 6.9% trading fee is the core incentive mechanism that powers 4626's lottery and holder rewards.
 
 ## Fee Structure
 

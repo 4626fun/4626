@@ -5,7 +5,7 @@ sidebar_position: 2
 
 # Automation
 
-Automated operations for CreatorVault.
+Automated operations for 4626.
 
 ## Guides
 

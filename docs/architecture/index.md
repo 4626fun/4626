@@ -5,7 +5,7 @@ sidebar_position: 3
 
 # Architecture
 
-CreatorVault's architecture is built for **provenance, identity, and execution**:
+4626's architecture is built for **provenance, identity, and execution**:
 
 - **Provenance (Zora)**: Creator Coins and Content Coins are the discovery layer and identity anchor
 - **Execution (Smart Wallet AA)**: Creators can deploy and operate vault infrastructure via EIP-4337/EIP-5792-style batching
@@ -13,7 +13,7 @@ CreatorVault's architecture is built for **provenance, identity, and execution**
 
 ## System Overview
 
-Onchain, CreatorVault consists of:
+Onchain, 4626 consists of:
 
 - **Shared infrastructure** (deployed once per chain, referenced via `CreatorRegistry`)
 - **Per-creator vault stack** (deployed per creator coin)

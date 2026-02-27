@@ -58,7 +58,7 @@ Use the autopilot script:
 
 ```bash
 pnpm -C frontend run deploy:autopilot -- \
-  --origin https://4626.fun \
+  --origin https://app.4626.fun \
   --plan ./deploy-plan.json \
   --auth-bearer "$CV_AUTH_SESSION_TOKEN"
 ```

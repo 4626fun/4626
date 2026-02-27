@@ -369,7 +369,7 @@ export function WaitlistProfile() {
 
   return (
     <div className="min-h-[100svh] px-4 py-8 bg-[#020202]">
-      <PageMeta title="Waitlist Profile" description="View your CreatorVault waitlist position, points, and referral rewards." canonicalPath="/waitlist/profile" />
+      <PageMeta title="Waitlist Profile" description="View your 4626 waitlist position, points, and referral rewards." canonicalPath="/waitlist/profile" />
       <div className="w-full max-w-[540px] mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">

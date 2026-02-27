@@ -115,7 +115,7 @@ export function ChatWindow({
       : conversationName
   const headerSubline =
     conversationType === 'dm' && dmPeerAddress
-      ? (agentIdentity ? 'CreatorVault assistant' : (dmIdentity.secondary ?? truncateAddress(dmPeerAddress)))
+      ? (agentIdentity ? '4626 assistant' : (dmIdentity.secondary ?? truncateAddress(dmPeerAddress)))
       : null
   const headerAvatar = conversationType === 'dm' ? (agentIdentity?.avatar ?? dmIdentity.avatar) : (conversationImageUrl ?? null)
   const headerInitials = initials(headerName)

@@ -8,7 +8,7 @@ slug: /primitives/market/vault
 
 The vault is the balance sheet of a creator economy.
 
-CreatorVault’s per-creator vault is ERC-4626 compliant and borrows patterns from Yearn V3 (strategy queues, profit unlocking).
+4626’s per-creator vault is ERC-4626 compliant and borrows patterns from Yearn V3 (strategy queues, profit unlocking).
 
 ## What It Does
 

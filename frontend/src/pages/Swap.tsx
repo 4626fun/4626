@@ -769,7 +769,7 @@ export function Swap() {
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <>
-      <PageMeta title="Swap" description="Swap tokens on Base using CreatorVault — best-price routing via Uniswap." canonicalPath="/swap" />
+      <PageMeta title="Swap" description="Swap tokens on Base using 4626 — best-price routing via Uniswap." canonicalPath="/swap" />
       <SwapPageLayout
         swapPanel={
           activePanel === 'swap' ? (
@@ -998,7 +998,7 @@ function LiquidityPanel(props: {
 }) {
   return (
     <div className="space-y-4">
-      <PageMeta title="Swap" description="Swap tokens on Base using CreatorVault — best-price routing via Uniswap." canonicalPath="/swap" />
+      <PageMeta title="Swap" description="Swap tokens on Base using 4626 — best-price routing via Uniswap." canonicalPath="/swap" />
       {/* ─── Execution bar (mirrors swap panel) ─── */}
       <div className="flex items-center gap-2">
         <div className="inline-flex rounded-full border border-white/12 bg-black/40 p-0.5 text-xs">

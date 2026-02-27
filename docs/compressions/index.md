@@ -6,7 +6,7 @@ slug: /compressions
 
 # Four Compressions
 
-CreatorVault is easiest to understand as a system that compresses distance:
+4626 is easiest to understand as a system that compresses distance:
 
 - **Deployment**: many contracts and roles become one creator action.
 - **Geography**: shares become portable without fragmenting semantics.

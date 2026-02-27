@@ -5,7 +5,7 @@ sidebar_position: 3
 
 # Domain Setup
 
-Configure custom domains for your CreatorVault deployment.
+Configure custom domains for your 4626 deployment.
 
 ## Vercel Setup
 

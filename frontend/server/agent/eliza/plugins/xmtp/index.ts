@@ -55,7 +55,7 @@ export function getXmtpService(): XmtpService | null {
 
 export const xmtpPlugin: Plugin = {
   name: '@creatorvault/plugin-xmtp',
-  description: 'XMTP messaging connector for CreatorVault agents',
+  description: 'XMTP messaging connector for 4626 agents',
 
   async init(config: Record<string, string>, runtime: IAgentRuntime) {
     const privateKey = runtime.getSetting('XMTP_AGENT_PRIVATE_KEY') ?? config.XMTP_AGENT_PRIVATE_KEY

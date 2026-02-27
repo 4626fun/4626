@@ -5,7 +5,7 @@ sidebar_position: 2
 
 # Deploy Vault
 
-Technical guide to deploying a CreatorVault.
+Technical guide to deploying a 4626.
 
 ## Via Web UI (Recommended)
 

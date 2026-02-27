@@ -5,12 +5,12 @@ sidebar_position: 7
 
 # Developer Guide
 
-This guide covers how to build on and contribute to CreatorVault.
+This guide covers how to build on and contribute to 4626.
 
 ## Project Structure
 
 ```
-CreatorVault/
+4626/
   contracts/                      # Solidity contracts
     core/                         # Platform core
       CreatorRegistry.sol

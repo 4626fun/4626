@@ -8,7 +8,7 @@ slug: /primitives/game-loop/lottery
 
 The lottery is the core engagement primitive: trading activity funds a pot, and winners are selected via VRF.
 
-In CreatorVault, this is a **Game Loop** boundary because it ties:
+In 4626, this is a **Game Loop** boundary because it ties:
 
 - fee routing (market activity)
 - randomness assumptions (VRF)

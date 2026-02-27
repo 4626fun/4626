@@ -133,7 +133,7 @@ const keeprCommandAction: Action = {
     ],
     [
       { name: 'user', content: { text: '/help' } },
-      { name: 'agent', content: { text: 'CreatorVault Commands\n...' } },
+      { name: 'agent', content: { text: '4626 Commands\n...' } },
     ],
   ],
 }
@@ -165,7 +165,7 @@ const vaultInfoProvider: Provider = {
     }
 
     const text = [
-      `This conversation is linked to CreatorVault "${vault.vaultAddress}" on chain ${vault.chainId}.`,
+      `This conversation is linked to 4626 vault "${vault.vaultAddress}" on chain ${vault.chainId}.`,
       `The vault owner is ${vault.canonicalOwnerAddress}.`,
       vault.gatingEnabled
         ? `Access gating is enabled (mode: ${vault.gatingMode}, min shares: ${vault.minShares ?? 'any'}).`
@@ -194,7 +194,7 @@ const vaultInfoProvider: Provider = {
 export const keeprPlugin: Plugin = {
   name: '@creatorvault/plugin-keepr',
   description:
-    'CreatorVault Keepr commands — delegates to the production handleKeeprCommand() for vault status, send, lock/unlock, check, sync, Farcaster, and AI.',
+    '4626 Keepr commands — delegates to the production handleKeeprCommand() for vault status, send, lock/unlock, check, sync, Farcaster, and AI.',
 
   actions: [keeprCommandAction],
   providers: [vaultInfoProvider],

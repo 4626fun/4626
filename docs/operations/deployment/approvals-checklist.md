@@ -5,7 +5,7 @@ sidebar_position: 3
 
 # Approvals Checklist
 
-Required token approvals for CreatorVault operations.
+Required token approvals for 4626 operations.
 
 ## Deployment Approvals
 

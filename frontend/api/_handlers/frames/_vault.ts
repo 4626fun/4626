@@ -59,21 +59,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <meta property="fc:frame:button:3:target" content="https://app.uniswap.org/swap?chain=base&outputCurrency=${address}" />
   
   <!-- Open Graph -->
-  <meta property="og:title" content="CreatorVault" />
+  <meta property="og:title" content="4626" />
   <meta property="og:description" content="View vault details and buy shares" />
   <meta property="og:image" content="${imageUrl}" />
   <meta property="og:url" content="${vaultUrl}" />
   
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="CreatorVault" />
+  <meta name="twitter:title" content="4626" />
   <meta name="twitter:description" content="View vault details and buy shares" />
   <meta name="twitter:image" content="${imageUrl}" />
   
-  <title>CreatorVault Frame</title>
+  <title>4626 Frame</title>
 </head>
 <body>
-  <h1>CreatorVault</h1>
+  <h1>4626</h1>
   <p>Vault: ${address}</p>
   <p><a href="${vaultUrl}">View Vault</a></p>
 </body>

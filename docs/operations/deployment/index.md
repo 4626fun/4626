@@ -5,7 +5,7 @@ sidebar_position: 1
 
 # Deployment Operations
 
-Guides for deploying CreatorVault infrastructure.
+Guides for deploying 4626 infrastructure.
 
 ## Guides
 

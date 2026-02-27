@@ -1,5 +1,5 @@
 /**
- * CreatorVault ElizaOS Agent — Unified Multi-Agent Runtime
+ * 4626 ElizaOS Agent — Unified Multi-Agent Runtime
  *
  * Primary long-lived agent process that:
  *   1. Loads creator agents from the DB (encrypted keys, CSW signers)
@@ -403,7 +403,7 @@ async function withRetry<T>(params: {
 const welcomedConversations = new Set<string>()
 
 const WELCOME_MESSAGE = [
-  `o henlo! I'm Keepr, your CreatorVault assistant.`,
+  `o henlo! I'm Keepr, your 4626 assistant.`,
   ``,
   `Start with one of these:`,
   ``,
@@ -1270,7 +1270,7 @@ async function main() {
   }
 
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-  console.log('  CreatorVault ElizaOS Agent (Unified)')
+  console.log('  4626 ElizaOS Agent (Unified)')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
   // Check DB persistence before creating any agent

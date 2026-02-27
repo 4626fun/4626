@@ -1,4 +1,4 @@
-# UI/UX Pages Audit — CreatorVault (4626.fun)
+# UI/UX Pages Audit — 4626 (4626.fun)
 
 > Audit date: 2026-02-26
 > Stack: Vite + React 19 + TypeScript, Tailwind CSS v4, framer-motion, lucide-react, wagmi/viem, Privy, @tanstack/react-query

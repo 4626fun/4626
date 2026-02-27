@@ -132,7 +132,7 @@ export function useXmtp() {
  * key. New installs use a random key (no wallet popup needed).
  */
 export const ENC_KEY_MESSAGE =
-  'Enable encrypted messaging on CreatorVault (4626.fun)\n\nThis signature encrypts your local message database.\nNo blockchain transaction will occur.'
+  'Enable encrypted messaging on 4626 (4626.fun)\n\nThis signature encrypts your local message database.\nNo blockchain transaction will occur.'
 
 const RAW_XMTP_ENV = String(import.meta.env.VITE_XMTP_ENV ?? '').trim().toLowerCase()
 const XMTP_ENV: 'production' | 'dev' | 'local' =

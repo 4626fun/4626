@@ -1,7 +1,7 @@
 {
   "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
-  "name": "CreatorVault Agent",
-  "description": "Agent API for CreatorVault on Base. Reachable via XMTP messaging, REST API, and MCP tools. Provides vault management, wallet intelligence, ERC-8004 reputation queries, and keeper automation.",
+  "name": "4626 Agent",
+  "description": "Agent API for 4626 on Base. Reachable via XMTP messaging, REST API, and MCP tools. Provides vault management, wallet intelligence, ERC-8004 reputation queries, and keeper automation.",
   "image": "https://4626.fun/miniapp-icon.png",
   "services": [
     {

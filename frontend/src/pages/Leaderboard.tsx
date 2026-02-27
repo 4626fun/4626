@@ -101,11 +101,11 @@ export function Leaderboard() {
 
   return (
     <section className="relative overflow-hidden bg-vault-bg text-white min-h-[calc(100vh-0px)]">
-      <PageMeta title="Leaderboard" description="See the top creators and contributors on CreatorVault ranked by invite, agent, and total points." canonicalPath="/leaderboard" />
+      <PageMeta title="Leaderboard" description="See the top creators and contributors on 4626 ranked by invite, agent, and total points." canonicalPath="/leaderboard" />
       <div className="relative max-w-3xl mx-auto px-6 py-12">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-[10px] font-medium text-zinc-600 mb-2">CreatorVaults</div>
+            <div className="text-[10px] font-medium text-zinc-600 mb-2">4626</div>
             <div className="headline text-3xl sm:text-4xl leading-tight">Leaderboard</div>
             <div className="text-sm text-zinc-600 font-light mt-2">
               Points-based. Earn points by joining, inviting, social actions, Lens/Grove identity sync, and ERC-8004 agent reputation/feedback.

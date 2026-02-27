@@ -1,4 +1,4 @@
-# UI/UX Improvement Plan — CreatorVault (4626.fun)
+# UI/UX Improvement Plan — 4626 (4626.fun)
 
 > Prioritized backlog for the UI/UX pass. See `uiux-audit.md` for the full issue list.
 

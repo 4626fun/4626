@@ -1,6 +1,6 @@
-# CreatorVault
+# 4626.fun
 
-CreatorVault is a Base-native protocol + app stack for launching creator-centered vault economies.
+4626.fun is a Base-native protocol + app stack for launching creator-centered vault economies.
 It combines ERC-4626 vaults, account abstraction, cross-chain OFT shares, and a fee-driven incentive layer for creator coins.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)

@@ -6,11 +6,11 @@ slug: /compressions/engagement
 
 # Engagement Compression
 
-CreatorVault compresses engagement by turning market activity into an onchain game loop.
+4626 compresses engagement by turning market activity into an onchain game loop.
 
 ## Trading Fee Lottery
 
-CreatorVault describes a 6.9% trading fee on DEX trades which funds a VRF-backed lottery. Each qualifying trade has an instant probability of winning, and winners are paid in vault shares.
+4626 describes a 6.9% trading fee on DEX trades which funds a VRF-backed lottery. Each qualifying trade has an instant probability of winning, and winners are paid in vault shares.
 
 ## Why This Matters
 

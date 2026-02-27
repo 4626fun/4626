@@ -8,7 +8,7 @@ slug: /privacy
 
 Last updated: February 6, 2026
 
-This Privacy Policy explains how CreatorVault ("we", "our", "us") collects, uses, and shares information when you use CreatorVault and 4626.fun (the "Service").
+This Privacy Policy explains how 4626 ("we", "our", "us") collects, uses, and shares information when you use 4626 and 4626.fun (the "Service").
 
 ## 1. Information We Collect
 

@@ -6,7 +6,7 @@
   },
   "frame": {
     "version": "1",
-    "name": "Creator Vaults",
+    "name": "4626.fun",
     "subtitle": "Creator coin vaults on Base",
     "description": "Deposit creator coins into vaults, track markets, and manage creator vault launches on Base.",
     "screenshotUrls": [
@@ -26,14 +26,14 @@
     "tags": ["creator-coins", "vaults", "base", "zora"],
     "heroImageUrl": "https://app.4626.fun/miniapp-hero.png",
     "tagline": "Vaults for creator coins.",
-    "ogTitle": "Creator Vaults",
+    "ogTitle": "4626.fun - Creator Vaults",
     "ogDescription": "Deposit creator coins into vaults. Earn from trading fees. Everyone earns together.",
     "ogImageUrl": "https://app.4626.fun/miniapp-hero.png",
     "noindex": false
   },
   "miniapp": {
     "version": "1",
-    "name": "Creator Vaults",
+    "name": "4626.fun",
     "subtitle": "Creator coin vaults on Base",
     "description": "Deposit creator coins into vaults, track markets, and manage creator vault launches on Base.",
     "screenshotUrls": [
@@ -64,7 +64,7 @@
     ],
     "heroImageUrl": "https://app.4626.fun/miniapp-hero.png",
     "tagline": "Vaults for creator coins.",
-    "ogTitle": "Creator Vaults",
+    "ogTitle": "4626.fun - Creator Vaults",
     "ogDescription": "Deposit creator coins into vaults. Earn from trading fees. Everyone earns together.",
     "ogImageUrl": "https://app.4626.fun/miniapp-hero.png",
     "noindex": false

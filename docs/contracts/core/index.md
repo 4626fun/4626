@@ -5,7 +5,7 @@ sidebar_position: 1
 
 # Core Contracts
 
-The foundational contracts that power CreatorVault.
+The foundational contracts that power 4626.
 
 ## Overview
 

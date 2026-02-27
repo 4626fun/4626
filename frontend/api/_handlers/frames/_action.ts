@@ -209,7 +209,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ? 'You are on the waitlist. We will notify you when access opens.'
     : inputEmail && isJoinWaitlistTap
       ? 'Could not auto-submit waitlist from frame. Open waitlist to finish.'
-      : 'CreatorVault — manage vaults and trade coins on Base'
+      : '4626 — manage vaults and trade coins on Base'
 
   const responseHtml = `<!DOCTYPE html>
 <html lang="en">
@@ -220,13 +220,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <meta property="fc:frame:button:1" content="${waitlistJoined ? '✅ Waitlist Joined' : 'Join Waitlist'}" />
   <meta property="fc:frame:button:1:action" content="link" />
   <meta property="fc:frame:button:1:target" content="${waitlistUrl}" />
-  <meta property="fc:frame:button:2" content="Open CreatorVault" />
+  <meta property="fc:frame:button:2" content="Open 4626" />
   <meta property="fc:frame:button:2:action" content="link" />
   <meta property="fc:frame:button:2:target" content="${appUrl}" />
   <meta property="fc:frame:button:3" content="Chat with Keepr" />
   <meta property="fc:frame:button:3:action" content="link" />
   <meta property="fc:frame:button:3:target" content="https://xmtp.chat/dm/${process.env.VITE_AGENT_XMTP_ADDRESS ?? ''}" />
-  <meta property="og:title" content="CreatorVault" />
+  <meta property="og:title" content="4626" />
   <meta property="og:image" content="${appUrl}/og-image.png" />
 </head>
 <body>

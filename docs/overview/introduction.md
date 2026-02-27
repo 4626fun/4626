@@ -3,7 +3,7 @@ title: Introduction
 sidebar_position: 1
 ---
 
-# Introduction to CreatorVault
+# Introduction to 4626
 
 This content has moved.
 

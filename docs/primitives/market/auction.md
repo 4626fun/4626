@@ -6,7 +6,7 @@ slug: /primitives/market/auction
 
 # Auction (CCA)
 
-CreatorVault uses a Uniswap CCA-style auction as the default launch/distribution mechanism for a new vault.
+4626 uses a Uniswap CCA-style auction as the default launch/distribution mechanism for a new vault.
 
 At a high level:
 

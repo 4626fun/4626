@@ -1,5 +1,5 @@
 [Unit]
-Description=CreatorVault Solana route provisioner
+Description=4626 Solana route provisioner
 After=network-online.target
 Wants=network-online.target
 

@@ -1,7 +1,7 @@
 # Current Contract Inventory (Base)
 
 Generated on: 2026-02-22  
-Scope: CreatorVault deploy stack and related infra used by this repo.
+Scope: 4626 deploy stack and related infra used by this repo.
 
 ## Sources
 

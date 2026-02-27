@@ -3601,7 +3601,7 @@ function DeployVaultBatcher({
           vault: expected.vault,
           version: deploymentVersion,
           initialSqrtPriceX96: marketV3InitialSqrtPriceX96 ?? fallbackV3InitialSqrtPriceX96,
-          charmVaultName: charmLabel ? `CreatorVault: ${charmLabel}/USDC` : 'CreatorVault: CREATOR/USDC',
+          charmVaultName: charmLabel ? `4626: ${charmLabel}/USDC` : '4626: CREATOR/USDC',
           charmVaultSymbol: charmLabel ? `CV-${charmLabel}-USDC` : 'CV-CREATOR-USDC',
           charmWeightBps,
           ajnaWeightBps,

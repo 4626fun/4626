@@ -8,7 +8,7 @@ sidebar_position: 8
 This repo does **not** currently ship full Lens social write/auth flows.
 
 What is implemented today is a practical **Phase 1** path:
-- Keep CreatorVault flows working with `https://` and `ipfs://` metadata URIs.
+- Keep 4626 flows working with `https://` and `ipfs://` metadata URIs.
 - Optionally use Lens Grove externally and persist Lens references for provenance.
 - Surface Lens identity as an optional social profile signal when available.
 

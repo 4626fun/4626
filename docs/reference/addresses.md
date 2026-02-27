@@ -5,7 +5,7 @@ sidebar_position: 1
 
 # Contract Addresses
 
-Deployed contract addresses for CreatorVault.
+Deployed contract addresses for 4626.
 
 ## Base (Hub Chain)
 

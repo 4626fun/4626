@@ -1,14 +1,14 @@
 ---
-title: CreatorVault
+title: 4626
 sidebar_position: 1
 slug: /
 ---
 
-# CreatorVault
+# 4626
 
 **A creator economy that behaves like a system.**
 
-CreatorVault is the Base-native creator finance layer that turns Zora Creator Coins (Coinbase Creator Coins) into composable, onchain creator economies. The docs are organized around two ideas:
+4626 is the Base-native creator finance layer that turns Zora Creator Coins (Coinbase Creator Coins) into composable, onchain creator economies. The docs are organized around two ideas:
 
 - **Four compressions**: the system reduces distance across deployment, geography (multichain), distribution (launch), and engagement (game loop).
 - **Three primitives**: account, market, and game loop are the core boundaries you integrate and audit.
@@ -18,7 +18,7 @@ Start here:
 - **[Four Compressions](/compressions)** (recommended first read)
 - **[Three Primitives](/primitives)** (how the system fits together)
 
-## What is CreatorVault?
+## What is 4626?
 
 In one click, creators deploy institutional-grade **ERC-4626 vault** infrastructure (Yearn V3 architecture) with:
 
@@ -62,7 +62,7 @@ In one click, creators deploy institutional-grade **ERC-4626 vault** infrastruct
 
 ## First Deployment: akita
 
-akita is the first Creator Coin to launch with CreatorVault:
+akita is the first Creator Coin to launch with 4626:
 
 | Item | Value |
 |------|-------|

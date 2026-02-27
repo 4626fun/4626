@@ -5,7 +5,7 @@ sidebar_position: 1
 
 # Launch Your Token
 
-Guide to launching a new creator token with CreatorVault.
+Guide to launching a new creator token with 4626.
 
 ## Prerequisites
 

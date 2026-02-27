@@ -145,7 +145,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
       // ---------------------------------------------------------------
       const metadata = {
         name: effectiveName,
-        description: description.trim() || `${effectiveName} Creator Coin on CreatorVault`,
+        description: description.trim() || `${effectiveName} Creator Coin on 4626`,
         ...(imageUri ? { image: imageUri } : {}),
         properties: {
           symbol: symbolClean,

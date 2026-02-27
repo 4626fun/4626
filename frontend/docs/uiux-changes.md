@@ -1,4 +1,4 @@
-# UI/UX Changes — CreatorVault (4626.fun)
+# UI/UX Changes — 4626 (4626.fun)
 
 > Changelog for the UI/UX improvement pass. Ordered by priority.
 

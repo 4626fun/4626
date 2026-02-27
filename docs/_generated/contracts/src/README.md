@@ -1,10 +1,10 @@
-# CreatorVault
+# 4626.fun
 
 **Zora coin + Smart Wallet + Farcaster identity + Base groupchats = the creator economy OS on Base.**
 
-CreatorVault is the **Base-native creator finance layer** that turns **Zora Creator Coins (Coinbase Creator Coins)** into composable, onchain “creator economies” with FriendTech-like loops: discover → take action → share → engage. In one click, creators deploy institutional-grade **ERC-4626 vault** infrastructure (Yearn V3 architecture) with cross-chain **LayerZero V2 OFT** shares, pluggable **yield strategies**, and a **6.9% trading-fee lottery** (on all DEX trades) powered by **Chainlink VRF** — launched via **Uniswap CCA** and executed through **EIP-4337** account abstraction (optimized for Coinbase Smart Wallet / AA). The app pairs this finance layer with an aggregator UX that uses **Farcaster identity** signals, and is designed to extend into **Base group chats** for community coordination and gating.
+4626.fun is the **Base-native creator finance layer** that turns **Zora Creator Coins (Coinbase Creator Coins)** into composable, onchain “creator economies” with FriendTech-like loops: discover → take action → share → engage. In one click, creators deploy institutional-grade **ERC-4626 vault** infrastructure (Yearn V3 architecture) with cross-chain **LayerZero V2 OFT** shares, pluggable **yield strategies**, and a **6.9% trading-fee lottery** (on all DEX trades) powered by **Chainlink VRF** — launched via **Uniswap CCA** and executed through **EIP-4337** account abstraction (optimized for Coinbase Smart Wallet / AA). The app pairs this finance layer with an aggregator UX that uses **Farcaster identity** signals, and is designed to extend into **Base group chats** for community coordination and gating.
 
-**Elevator pitch (one line):** CreatorVault unifies Zora coins, Smart Wallet AA execution, and Farcaster identity into a Base-native vault + incentive layer for creator economies.
+**Elevator pitch (one line):** 4626.fun unifies Zora coins, Smart Wallet AA execution, and Farcaster identity into a Base-native vault + incentive layer for creator economies.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.20-363636)](https://docs.soliditylang.org/)

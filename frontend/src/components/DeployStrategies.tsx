@@ -75,7 +75,7 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
 
   // Default: Q96 (price = 1 in raw token1/token0 terms). Only used if pool doesn't exist yet.
   const [initialSqrtPriceX96, setInitialSqrtPriceX96] = useState<string>('79228162514264337593543950336')
-  const [charmVaultName, setCharmVaultName] = useState<string>('CreatorVault: creator/USDC')
+  const [charmVaultName, setCharmVaultName] = useState<string>('4626: creator/USDC')
   const [charmVaultSymbol, setCharmVaultSymbol] = useState<string>('CV-creator-USDC')
 
   // Allocation weights are basis points (relative). Idle reserve is controlled by `minimumTotalIdle`.

@@ -128,7 +128,7 @@ export async function buildShareTokenMetadata({
     decimals: Number(decimals),
     description: description
       ? String(description)
-      : `${symbol} - CreatorVault Share Token representing ownership in a Creator Coin vault. Enables cross-chain transfers via LayerZero.`,
+      : `${symbol} - 4626 share token representing ownership in a creator coin vault. Enables cross-chain transfers via LayerZero.`,
     image: imageUrl,
     metadata_uri: metadataUrl,
     contract_uri: metadataUrl,

@@ -5,7 +5,7 @@ sidebar_position: 2
 
 # Full Automation Setup
 
-Complete automation for CreatorVault operations.
+Complete automation for 4626 operations.
 
 ## Components
 

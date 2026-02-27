@@ -5,7 +5,7 @@ sidebar_position: 1
 
 # BaseCreatorStrategy
 
-Base implementation for all CreatorVault yield strategies.
+Base implementation for all 4626 yield strategies.
 
 ## Purpose
 

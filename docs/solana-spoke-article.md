@@ -1,4 +1,4 @@
-# CreatorVault Goes Multichain: Solana as a Spoke Chain
+# 4626 Goes Multichain: Solana as a Spoke Chain
 
 ## The Problem
 
@@ -90,7 +90,7 @@ The existing Solana program at `EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU` wi
 
 ## What This Means
 
-Every creator who launches on CreatorVault gets native Solana liquidity automatically. No extra configuration. No second deployment. The 20% Solana allocation, the DLMM pool, the Alpha Vault, the fee relay, the lottery participation — it's all infrastructure-level. It just happens.
+Every creator who launches on 4626 gets native Solana liquidity automatically. No extra configuration. No second deployment. The 20% Solana allocation, the DLMM pool, the Alpha Vault, the fee relay, the lottery participation — it's all infrastructure-level. It just happens.
 
 Solana traders enter the same lottery as Base traders. The jackpot doesn't fragment. The fees don't scatter. One hub, multiple spokes, unified economics.
 
@@ -98,6 +98,6 @@ Base is the brain. Solana is the reach.
 
 ---
 
-*CreatorVault is building the infrastructure layer for creator token economies. Hub-and-spoke multichain, ERC-4337 smart wallets, Chainlink VRF lottery, and now native Solana liquidity.*
+*4626 is building the infrastructure layer for creator token economies. Hub-and-spoke multichain, ERC-4337 smart wallets, Chainlink VRF lottery, and now native Solana liquidity.*
 
-*Follow along: [creatorvault.fun](https://creatorvault.fun)*
+*Follow along: [4626.fun](https://4626.fun)*

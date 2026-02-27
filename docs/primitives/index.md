@@ -6,7 +6,7 @@ slug: /primitives
 
 # Three Primitives
 
-CreatorVault is built around three primitives that define the integration and security boundaries.
+4626 is built around three primitives that define the integration and security boundaries.
 
 ## Account
 

@@ -192,8 +192,6 @@ function getAllowedOrigins(): Set<string> {
 
   const out = new Set<string>([
     // Production
-    'https://creatorvault.fun',
-    'https://www.creatorvault.fun',
     'https://4626.fun',
     'https://www.4626.fun',
     'https://app.4626.fun',

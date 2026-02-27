@@ -5,7 +5,7 @@ sidebar_position: 2
 
 # Getting Started
 
-This guide will help you get CreatorVault up and running.
+This guide will help you get 4626 up and running.
 
 ## Prerequisites
 
@@ -46,7 +46,7 @@ The easiest way to deploy is through the web interface:
 
 ## Gas-Free Deployment (EIP-4337)
 
-CreatorVault supports 1-click, gas-free deployment via account abstraction.
+4626 supports 1-click, gas-free deployment via account abstraction.
 
 ### Powered By
 
@@ -95,6 +95,6 @@ pnpm dev
 
 ## Next Steps
 
-- [Architecture](/architecture) - Learn how CreatorVault works
+- [Architecture](/architecture) - Learn how 4626 works
 - [Tokenomics](/tokenomics) - Understand the fee structure and lottery
-- [Developer Guide](/developers) - Build on CreatorVault
+- [Developer Guide](/developers) - Build on 4626

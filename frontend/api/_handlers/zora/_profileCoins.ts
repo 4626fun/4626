@@ -22,7 +22,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const count = Math.min(Math.max(getNumberQuery(req, 'count') ?? 20, 1), 50)
   const after = getStringQuery(req, 'after') ?? undefined
 
-  // Default to Base-only coins for CreatorVault.
+  // Default to Base-only coins for 4626.
   const chainIds = [DEFAULT_CHAIN_ID]
 
   try {

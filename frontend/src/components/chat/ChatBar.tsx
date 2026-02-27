@@ -74,7 +74,7 @@ function ConversationItem({
       : convo.name
   const displaySecondary =
     convo.type === 'dm' && peerAddress
-      ? (agentIdentity ? 'CreatorVault assistant' : (identity.secondary ?? truncateAddress(peerAddress)))
+      ? (agentIdentity ? '4626 assistant' : (identity.secondary ?? truncateAddress(peerAddress)))
       : null
   const avatar = convo.type === 'dm'
     ? (agentIdentity?.avatar ?? identity.avatar)

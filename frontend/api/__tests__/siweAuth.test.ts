@@ -84,7 +84,7 @@ describe('siwe auth hardening', () => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
       AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
-      CANONICAL_ORIGIN: 'https://creatorvault.fun',
+      CANONICAL_ORIGIN: 'https://4626.fun',
     })
   })
 
@@ -99,7 +99,7 @@ describe('siwe auth hardening', () => {
 
     const nonceReq = createMockReq({
       method: 'GET',
-      headers: { host: 'creatorvault.fun', 'x-forwarded-proto': 'https' },
+      headers: { host: '4626.fun', 'x-forwarded-proto': 'https' },
     })
     const nonceRes = createMockRes()
     await nonceHandler(nonceReq, nonceRes)
@@ -110,9 +110,9 @@ describe('siwe auth hardening', () => {
     const nonceCookie = readSetCookies(nonceRes)[0]?.split(';')[0]
 
     const message = makeSiweMessage({
-      domain: 'creatorvault.fun',
+      domain: '4626.fun',
       address: account.address,
-      uri: 'https://creatorvault.fun',
+      uri: 'https://4626.fun',
       chainId: 8453,
       nonce,
       issuedAt: new Date().toISOString(),
@@ -121,7 +121,7 @@ describe('siwe auth hardening', () => {
 
     const firstReq = createMockReq({
       method: 'POST',
-      headers: { host: 'creatorvault.fun', cookie: nonceCookie },
+      headers: { host: '4626.fun', cookie: nonceCookie },
       body: { message, signature, nonceToken },
     })
     const firstRes = createMockRes()
@@ -132,7 +132,7 @@ describe('siwe auth hardening', () => {
 
     const replayReq = createMockReq({
       method: 'POST',
-      headers: { host: 'creatorvault.fun', cookie: nonceCookie },
+      headers: { host: '4626.fun', cookie: nonceCookie },
       body: { message, signature, nonceToken },
     })
     const replayRes = createMockRes()
@@ -150,9 +150,9 @@ describe('siwe auth hardening', () => {
     db.rows.set(nonce, { expiresAtMs: Date.now() + 15 * 60 * 1000, consumedAtMs: null })
 
     const message = makeSiweMessage({
-      domain: 'creatorvault.fun',
+      domain: '4626.fun',
       address: account.address,
-      uri: 'https://creatorvault.fun',
+      uri: 'https://4626.fun',
       chainId: 1,
       nonce,
       issuedAt: new Date().toISOString(),
@@ -161,7 +161,7 @@ describe('siwe auth hardening', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { host: 'creatorvault.fun', cookie: `cv_auth_nonce=${nonce}` },
+      headers: { host: '4626.fun', cookie: `cv_auth_nonce=${nonce}` },
       body: { message, signature, nonceToken: makeNonceToken({ nonce }) },
     })
     const res = createMockRes()
@@ -180,7 +180,7 @@ describe('siwe auth hardening', () => {
     db.rows.set(nonce, { expiresAtMs: Date.now() + 15 * 60 * 1000, consumedAtMs: null })
 
     const message = makeSiweMessage({
-      domain: 'creatorvault.fun',
+      domain: '4626.fun',
       address: account.address,
       uri: 'https://evil.test',
       chainId: 8453,
@@ -191,7 +191,7 @@ describe('siwe auth hardening', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { host: 'creatorvault.fun', cookie: `cv_auth_nonce=${nonce}` },
+      headers: { host: '4626.fun', cookie: `cv_auth_nonce=${nonce}` },
       body: { message, signature, nonceToken: makeNonceToken({ nonce }) },
     })
     const res = createMockRes()
@@ -210,9 +210,9 @@ describe('siwe auth hardening', () => {
     db.rows.set(nonce, { expiresAtMs: Date.now() - 60_000, consumedAtMs: null })
 
     const message = makeSiweMessage({
-      domain: 'creatorvault.fun',
+      domain: '4626.fun',
       address: account.address,
-      uri: 'https://creatorvault.fun',
+      uri: 'https://4626.fun',
       chainId: 8453,
       nonce,
       issuedAt: new Date().toISOString(),
@@ -221,7 +221,7 @@ describe('siwe auth hardening', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { host: 'creatorvault.fun', cookie: `cv_auth_nonce=${nonce}` },
+      headers: { host: '4626.fun', cookie: `cv_auth_nonce=${nonce}` },
       body: { message, signature, nonceToken: makeNonceToken({ nonce }) },
     })
     const res = createMockRes()
@@ -237,9 +237,9 @@ describe('siwe auth hardening', () => {
 
     const nonce = 'nonce-no-db'
     const message = makeSiweMessage({
-      domain: 'creatorvault.fun',
+      domain: '4626.fun',
       address: account.address,
-      uri: 'https://creatorvault.fun',
+      uri: 'https://4626.fun',
       chainId: 8453,
       nonce,
       issuedAt: new Date().toISOString(),
@@ -248,7 +248,7 @@ describe('siwe auth hardening', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { host: 'creatorvault.fun', cookie: `cv_auth_nonce=${nonce}` },
+      headers: { host: '4626.fun', cookie: `cv_auth_nonce=${nonce}` },
       body: { message, signature, nonceToken: makeNonceToken({ nonce }) },
     })
     const res = createMockRes()
