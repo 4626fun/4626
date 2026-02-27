@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
 import { apiFetch } from '@/lib/apiBase'
 import { fetchDebankTokenList, type DebankToken, type DebankTokenList } from '@/lib/debank/client'
@@ -621,6 +622,12 @@ export function Portfolio() {
                   <div className="flex flex-wrap gap-2">
                     {portfolioQuery.data.wallets.map((wallet) => (
                       <div key={wallet.address} className="inline-flex items-center gap-1.5 rounded-lg border border-white/8 bg-white/4 px-2 py-1 text-[10px] text-zinc-400">
+                        <WalletProviderIcon
+                          provider={wallet.provider}
+                          walletType={wallet.walletType}
+                          isCanonicalSmartWallet={wallet.isCanonicalSmartWallet}
+                          size={12}
+                        />
                         <span className="font-mono text-zinc-300">{shortAddr(wallet.address)}</span>
                         {wallet.isCanonicalSmartWallet && <Badge variant="canonical" size="xs">Smart Wallet</Badge>}
                         {wallet.isEmbeddedEoa && <Badge variant="eoa" size="xs">User Wallet</Badge>}

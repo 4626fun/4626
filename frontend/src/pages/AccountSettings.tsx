@@ -16,6 +16,7 @@ import { Alert } from '@/components/ui/Alert'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
+import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
 import { PageMeta } from '@/components/seo/PageMeta'
 
@@ -150,6 +151,7 @@ function inferProviderLabel(account: ConnectedAccount): string {
   ) {
     return 'Coinbase Smart Wallet'
   }
+  if (provider.includes('rabby')) return 'Rabby'
   if (provider.includes('metamask')) return 'MetaMask'
   if (provider.includes('walletconnect')) return 'WalletConnect'
   if (provider.includes('privy')) return 'Privy'
@@ -222,6 +224,9 @@ type KnownAddress = {
   address: string
   badges: string[]
   subtitle: string | null
+  provider: string | null
+  walletType: string | null
+  isCanonicalSmartWallet: boolean
   rank: number
   verifiedAt: string | null
 }
@@ -695,7 +700,16 @@ export function AccountSettings() {
 
   const knownAddresses = useMemo<KnownAddress[]>(() => {
     if (!profile) return []
-    type Draft = { address: string; badges: Set<string>; subtitle: string | null; rank: number; verifiedAt: string | null }
+    type Draft = {
+      address: string
+      badges: Set<string>
+      subtitle: string | null
+      provider: string | null
+      walletType: string | null
+      isCanonicalSmartWallet: boolean
+      rank: number
+      verifiedAt: string | null
+    }
     const map = new Map<string, Draft>()
     const upsert = (
       address: string | null | undefined,
@@ -703,6 +717,11 @@ export function AccountSettings() {
       rank: number,
       subtitle?: string | null,
       verifiedAt?: string | null,
+      opts?: {
+        provider?: string | null
+        walletType?: string | null
+        isCanonicalSmartWallet?: boolean
+      },
     ) => {
       if (!isEvmAddress(address)) return
       const normalized = address.toLowerCase()
@@ -712,6 +731,9 @@ export function AccountSettings() {
           address,
           badges: new Set([badge]),
           subtitle: subtitle ?? null,
+          provider: opts?.provider ?? null,
+          walletType: opts?.walletType ?? null,
+          isCanonicalSmartWallet: Boolean(opts?.isCanonicalSmartWallet),
           rank,
           verifiedAt: verifiedAt ?? null,
         })
@@ -721,9 +743,17 @@ export function AccountSettings() {
       if (rank > existing.rank) {
         existing.rank = rank
         existing.subtitle = subtitle ?? existing.subtitle
+        existing.provider = opts?.provider ?? existing.provider
+        existing.walletType = opts?.walletType ?? existing.walletType
       } else if (!existing.subtitle && subtitle) {
         existing.subtitle = subtitle
+      } else if (!existing.provider && opts?.provider) {
+        existing.provider = opts.provider
       }
+      if (!existing.walletType && opts?.walletType) {
+        existing.walletType = opts.walletType
+      }
+      existing.isCanonicalSmartWallet = existing.isCanonicalSmartWallet || Boolean(opts?.isCanonicalSmartWallet)
       if (!existing.verifiedAt && verifiedAt) {
         existing.verifiedAt = verifiedAt
       } else if (existing.verifiedAt && verifiedAt) {
@@ -735,16 +765,35 @@ export function AccountSettings() {
       }
     }
 
-    upsert(canonicalSmartWalletAddress, 'Canonical Smart Wallet from Zora', 100, 'Coinbase Smart Wallet')
-    upsert(primarySmartWalletAddress, 'Primary Smart Wallet', 98, 'Coinbase Smart Wallet')
-    upsert(profile.primaryWallet, 'Primary Wallet', 80, 'External Wallet')
-    upsert(profile.primaryEmbeddedEoa, 'Primary User Wallet', 70, 'Privy Embedded')
-    upsert(profile.embeddedWallet, 'User Wallet', 68, 'Privy Embedded')
+    upsert(canonicalSmartWalletAddress, 'Canonical Smart Wallet from Zora', 100, 'Coinbase Smart Wallet', null, {
+      provider: 'coinbase_wallet',
+      walletType: 'smart_wallet',
+      isCanonicalSmartWallet: true,
+    })
+    upsert(primarySmartWalletAddress, 'Primary Smart Wallet', 98, 'Coinbase Smart Wallet', null, {
+      provider: 'coinbase_wallet',
+      walletType: 'smart_wallet',
+      isCanonicalSmartWallet: true,
+    })
+    upsert(profile.primaryWallet, 'Primary Wallet', 80, 'External Wallet', null, {
+      walletType: 'external_eoa',
+    })
+    upsert(profile.primaryEmbeddedEoa, 'Primary User Wallet', 70, 'Privy Embedded', null, {
+      provider: 'privy',
+      walletType: 'embedded_eoa',
+    })
+    upsert(profile.embeddedWallet, 'User Wallet', 68, 'Privy Embedded', null, {
+      provider: 'privy',
+      walletType: 'embedded_eoa',
+    })
     if (
       isEvmAddress(profile.baseSubAccount) &&
       (!canonicalSmartWalletAddress || profile.baseSubAccount.toLowerCase() !== canonicalSmartWalletAddress.toLowerCase())
     ) {
-      upsert(profile.baseSubAccount, 'Linked Smart Wallet', 74, 'Coinbase Smart Wallet')
+      upsert(profile.baseSubAccount, 'Linked Smart Wallet', 74, 'Coinbase Smart Wallet', null, {
+        provider: 'coinbase_wallet',
+        walletType: 'smart_wallet',
+      })
     }
 
     for (const account of profile.connectedAccounts ?? []) {
@@ -761,9 +810,19 @@ export function AccountSettings() {
       )
       const baseRank = isCanonical ? 100 : isPrimarySmartWallet ? 98 : account.isPrimary ? 80 : account.isEmbeddedEoa ? 70 : 50
       if (roles.length === 0) {
-        upsert(account.address, 'Connected', baseRank, subtitle, account.verifiedAt)
+        upsert(account.address, 'Connected', baseRank, subtitle, account.verifiedAt, {
+          provider: account.provider,
+          walletType: account.walletType,
+          isCanonicalSmartWallet: account.isCanonicalSmartWallet,
+        })
       } else {
-        for (const role of roles) upsert(account.address, role, baseRank, subtitle, account.verifiedAt)
+        for (const role of roles) {
+          upsert(account.address, role, baseRank, subtitle, account.verifiedAt, {
+            provider: account.provider,
+            walletType: account.walletType,
+            isCanonicalSmartWallet: account.isCanonicalSmartWallet,
+          })
+        }
       }
     }
 
@@ -772,6 +831,9 @@ export function AccountSettings() {
         address: item.address,
         badges: Array.from(item.badges.values()),
         subtitle: item.subtitle,
+        provider: item.provider,
+        walletType: item.walletType,
+        isCanonicalSmartWallet: item.isCanonicalSmartWallet,
         rank: item.rank,
         verifiedAt: item.verifiedAt,
       }))
@@ -809,6 +871,9 @@ export function AccountSettings() {
         address: getAddress(address),
         badges: ['Smart Wallet Owner'],
         subtitle: 'Canonical Smart Wallet owner',
+        provider: null,
+        walletType: 'external_eoa',
+        isCanonicalSmartWallet: false,
         rank: 76,
         verifiedAt: null,
         ownerSlots,
@@ -1345,7 +1410,16 @@ export function AccountSettings() {
               {knownAddressesWithOwners.map((item) => (
                 <div key={`known:${item.address.toLowerCase()}`} className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2.5">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="font-mono text-xs sm:text-sm text-zinc-100 break-all">{item.address}</div>
+                    <div className="flex items-start gap-2">
+                      <WalletProviderIcon
+                        provider={item.provider}
+                        walletType={item.walletType}
+                        isCanonicalSmartWallet={item.isCanonicalSmartWallet}
+                        size={14}
+                        className="mt-0.5"
+                      />
+                      <div className="font-mono text-xs sm:text-sm text-zinc-100 break-all">{item.address}</div>
+                    </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <a
                         href={`https://basescan.org/address/${item.address}`}
