@@ -472,7 +472,11 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const { address, isConnected, connector } = useAccount()
   const accountContext = useAccountContext()
   const xmtpModeOverride: 'EOA' | 'SMART_WALLET' | null =
-    accountContext.preferredMode ?? (accountContext.signerType === 'SMART_WALLET' ? 'SMART_WALLET' : null)
+    accountContext.activeAccountType === 'SMART_WALLET'
+      ? 'SMART_WALLET'
+      : accountContext.activeAccountType === 'EOA'
+      ? 'EOA'
+      : accountContext.preferredMode ?? null
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
 

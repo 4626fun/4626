@@ -3,8 +3,8 @@ import type { WalletMode } from '@/lib/uniswap/walletMode'
 import { shortAddress } from '@/lib/uniswap/swapUtils'
 
 const LABELS: Record<WalletMode, string> = {
-  canonical: 'Agent',
-  eoa: 'User',
+  canonical: 'Smart Wallet',
+  eoa: 'User Wallet',
 }
 
 export function WalletModeToggle(props: {
@@ -76,12 +76,12 @@ export function WalletModeToggle(props: {
           )}
           {props.fallbackActive && (
             <span className="rounded-full border border-amber-400/25 bg-amber-500/8 px-2 py-0.5 text-[10px] text-amber-300">
-              Agent unavailable
+              Smart Wallet unavailable
             </span>
           )}
           {props.mode === 'eoa' && !props.fallbackActive && (
             <span className="rounded-full border border-white/8 bg-white/4 px-2 py-0.5 text-[10px] text-zinc-500">
-              Standard mode
+              User Wallet mode
             </span>
           )}
         </div>
@@ -95,7 +95,7 @@ export function WalletModeToggle(props: {
           whileTap={{ scale: 0.97 }}
           className="inline-flex items-center gap-1.5 rounded-full border border-brand-primary/30 bg-brand-primary/10 px-3 py-1.5 text-xs text-brand-300 transition hover:bg-brand-primary/20"
         >
-          Set up Agent →
+          Set up Smart Wallet →
         </motion.button>
       )}
     </div>

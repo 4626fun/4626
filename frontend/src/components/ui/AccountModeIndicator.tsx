@@ -20,11 +20,25 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
   if (!isConnected) return null
 
   // ── Compact pill ─────────────────────────────────────────────────────────
+  const isConnectedAsAgent = account.signerType === 'SMART_WALLET'
+  const activeIdentityHint =
+    isSmartWalletMode && isConnectedAsAgent
+      ? 'Connected with a Smart Wallet. Acting as Smart Wallet.'
+      : isSmartWalletMode && account.signerType === 'EOA'
+        ? 'Connected with a User Wallet, but acting as a linked Smart Wallet.'
+        : isConnectedAsAgent && account.activeAccountType !== 'SMART_WALLET'
+          ? 'Connected with Smart Wallet while acting as a User Wallet.'
+          : 'Acting as your connected User Wallet.'
+
   if (compact) {
     return (
       <Link
         to="/account"
-        title={isSmartWalletMode ? 'Agent mode active — manage' : 'User mode active — manage'}
+        title={
+          isSmartWalletMode
+            ? `Smart Wallet mode active — ${isConnectedAsAgent ? 'connected Smart Wallet' : 'linked Smart Wallet'}`
+            : 'User Wallet mode active — manage'
+        }
         className={cn(
           'inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-medium transition-all duration-150',
           'hover:bg-white/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary',
@@ -42,11 +56,11 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
         />
         {isSmartWalletMode ? (
           <>
-            Agent
+            Smart Wallet
             <Zap className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
           </>
         ) : (
-          'User'
+          'User Wallet'
         )}
       </Link>
     )
@@ -73,15 +87,16 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
         {isSmartWalletMode ? (
           <>
             <span className="text-vault-subtext">Acting as </span>
-            <span className="font-medium text-emerald-400">Agent</span>
+            <span className="font-medium text-emerald-400">Smart Wallet</span>
           </>
         ) : (
           <>
             <span className="text-vault-subtext">Acting as </span>
-            <span className="font-medium text-zinc-300">User</span>
+            <span className="font-medium text-zinc-300">User Wallet</span>
           </>
         )}
       </span>
+      <span className="hidden sm:block text-[10px] text-zinc-400">{activeIdentityHint}</span>
       {isSmartWalletMode ? (
         account.uiFlags.aaAvailable ? (
           <span className="flex items-center gap-1 text-emerald-400/70">
@@ -107,7 +122,7 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
             Unlock →
           </Link>
         ) : (
-          <span className="text-[11px] text-zinc-500">User</span>
+          <span className="text-[11px] text-zinc-500">User Wallet</span>
         )
       )}
     </div>

@@ -135,7 +135,11 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
   const { status, error, connect, conversations, resetInstallations, installationLimitInboxId } = useXmtp()
   const accountContext = useAccountContext()
   const hasWalletIdentity = Boolean(accountContext.signerAddress)
-  const xmtpModeLabel = accountContext.activeAccountType === 'SMART_WALLET' ? 'Agent' : 'User'
+  const xmtpModeLabel = accountContext.activeAccountType === 'SMART_WALLET' ? 'Smart Wallet' : 'User Wallet'
+  const xmtpModeHint =
+    accountContext.signerType === 'SMART_WALLET'
+      ? 'Connected as Smart Wallet'
+      : 'Connected as User Wallet'
 
   const totalUnread = useMemo(
     () => conversations.reduce((sum, c) => sum + c.unreadCount, 0),
@@ -252,6 +256,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
               {hasWalletIdentity ? (
                 <div className="text-[11px] text-zinc-500">
                   Messaging mode: <span className="text-zinc-200">{xmtpModeLabel}</span>
+                  <span className="block text-[10px] text-zinc-500">{xmtpModeHint}</span>
                 </div>
               ) : null}
               <button

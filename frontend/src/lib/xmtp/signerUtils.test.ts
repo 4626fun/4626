@@ -27,14 +27,37 @@ describe('xmtp signer utils', () => {
       isCanonicalSmartWallet: false,
       storedSignerType: 'SCW',
       connector: null,
-      hasContractCode: false,
+      hasContractCode: true,
       walletChainId: 1,
     })
     expect(decision.signerType).toBe('SCW')
     expect(decision.scwChainId).toBe(CANONICAL_SCW_CHAIN_ID)
   })
 
+  it('ignores stale SCW storage when resolved identity is known EOA', () => {
+    const decision = decideXmtpSignerType({
+      isCanonicalSmartWallet: false,
+      storedSignerType: 'SCW',
+      connector: null,
+      hasContractCode: false,
+      walletChainId: 1,
+    })
+    expect(decision).toEqual({ signerType: 'EOA', scwChainId: CANONICAL_SCW_CHAIN_ID })
+  })
+
   it('forces Agent mode when modeOverride is SMART_WALLET', () => {
+    const decision = decideXmtpSignerType({
+      isCanonicalSmartWallet: false,
+      storedSignerType: null,
+      connector: null,
+      hasContractCode: true,
+      walletChainId: 1,
+      modeOverride: 'SMART_WALLET',
+    })
+    expect(decision).toEqual({ signerType: 'SCW', scwChainId: CANONICAL_SCW_CHAIN_ID })
+  })
+
+  it('does not force Agent mode when SMART_WALLET override maps to EOA identity', () => {
     const decision = decideXmtpSignerType({
       isCanonicalSmartWallet: false,
       storedSignerType: null,
@@ -43,7 +66,7 @@ describe('xmtp signer utils', () => {
       walletChainId: 1,
       modeOverride: 'SMART_WALLET',
     })
-    expect(decision).toEqual({ signerType: 'SCW', scwChainId: CANONICAL_SCW_CHAIN_ID })
+    expect(decision).toEqual({ signerType: 'EOA', scwChainId: CANONICAL_SCW_CHAIN_ID })
   })
 
   it('forces User mode when modeOverride is EOA', () => {

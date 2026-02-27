@@ -276,8 +276,8 @@ export function SwapPanel(props: {
 
           {/* ─── Fallback active notice ──────────────────────────────────── */}
           {props.executionFallbackActive && (
-            <Alert variant="warning" className="mt-2" title="Agent unavailable">
-              Using your connected wallet instead. Switch to Agent mode for 1-click swaps.
+            <Alert variant="warning" className="mt-2" title="Smart Wallet unavailable">
+              Using your connected wallet instead. Switch to Smart Wallet mode for 1-click swaps.
             </Alert>
           )}
 
@@ -292,7 +292,7 @@ export function SwapPanel(props: {
           {props.isConnected && !props.executionReady && (
             <Alert variant="warning" className="mt-2" title="Wallet not ready">
               {props.executionMode === 'canonical'
-                ? 'Set up your Agent to enable 1-click swaps.'
+                ? 'Set up your Smart Wallet to enable 1-click swaps.'
                 : 'Your wallet is not ready to submit transactions.'}
             </Alert>
           )}
