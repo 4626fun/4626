@@ -18,6 +18,7 @@ import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { APP_ORIGIN } from '@/lib/host'
 import { apiFetch } from '@/lib/apiBase'
 import { getBasenameName } from '@/lib/xmtp/socialIdentity'
+import { useAccountContext } from '@/wallet/accountContext'
 import { CANONICAL_SCW_CHAIN_ID, decideXmtpSignerType, resolveXmtpChainId } from '@/lib/xmtp/signerUtils'
 import {
   Client,
@@ -469,6 +470,13 @@ function showNotification(title: string, body: string) {
 
 export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const { address, isConnected, connector } = useAccount()
+  const accountContext = useAccountContext()
+  const xmtpModeOverride: 'EOA' | 'SMART_WALLET' | null =
+    accountContext.activeAccountType === 'SMART_WALLET'
+      ? 'SMART_WALLET'
+      : accountContext.activeAccountType === 'EOA'
+      ? 'EOA'
+      : accountContext.preferredMode ?? null
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
 
@@ -595,15 +603,25 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   }, [resolveDisplayName])
 
   // ------- connect -------
-  const resolveXmtpIdentityAddress = useCallback(async (connectedAddress: string): Promise<{
+  const resolveXmtpIdentityAddress = useCallback(async (
+    connectedAddress: string,
+    modeOverride?: 'EOA' | 'SMART_WALLET' | null,
+  ): Promise<{
     identityAddress: string
     isCanonicalSmartWallet: boolean
   }> => {
     const connected = normalizeEvmAddress(connectedAddress)
     if (!connected) return { identityAddress: connectedAddress.toLowerCase(), isCanonicalSmartWallet: false }
 
-    const cached = resolvedIdentityByWalletRef.current.get(connected)
+    const cacheKey = `${connected}:${modeOverride ?? 'auto'}`
+    const cached = resolvedIdentityByWalletRef.current.get(cacheKey)
     if (cached) return cached
+
+    if (modeOverride === 'EOA') {
+      const resolved = { identityAddress: connected, isCanonicalSmartWallet: false }
+      resolvedIdentityByWalletRef.current.set(cacheKey, resolved)
+      return resolved
+    }
 
     let preferred = connected
     let isCanonicalSmartWallet = false
@@ -641,8 +659,12 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    if (!isCanonicalSmartWallet && modeOverride === 'SMART_WALLET') {
+      isCanonicalSmartWallet = false
+    }
+
     const resolved = { identityAddress: preferred, isCanonicalSmartWallet }
-    resolvedIdentityByWalletRef.current.set(connected, resolved)
+    resolvedIdentityByWalletRef.current.set(cacheKey, resolved)
     return resolved
   }, [publicClient])
 
@@ -675,7 +697,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     try {
       setError(null)
       setInstallationLimitInboxId(null)
-      const resolved = await resolveXmtpIdentityAddress(address)
+      const resolved = await resolveXmtpIdentityAddress(address, xmtpModeOverride)
       xmtpIdentityAddress = resolved.identityAddress
       console.log('[xmtp] Using identity for connect:', xmtpIdentityAddress)
 
@@ -921,6 +943,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         connector,
         hasContractCode,
         walletChainId,
+        modeOverride: xmtpModeOverride ?? undefined,
       })
 
       if (signerDecision.signerType === 'SCW') writeStoredSignerType(xmtpIdentityAddress, 'SCW')
@@ -1001,7 +1024,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     } finally {
       connectInFlightRef.current = false
     }
-  }, [address, connector, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary])
+  }, [address, connector, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary, xmtpModeOverride])
 
   const resetInstallations = useCallback(async () => {
     if (!address || !walletClient) throw new Error('Connect wallet first.')
@@ -1020,30 +1043,34 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       return hexToBytes(s)
     }
 
+    const resolved = await resolveXmtpIdentityAddress(address, xmtpModeOverride)
+    const xmtpIdentityAddress = resolved.identityAddress
+
     // Use the same signer shape we use for normal Client.create.
-    const storedSignerType = readStoredSignerType(address)
+    const storedSignerType = readStoredSignerType(xmtpIdentityAddress)
     let hasContractCode: boolean | null = null
     if (publicClient) {
       try {
-        const code = await publicClient.getCode({ address })
+        const code = await publicClient.getCode({ address: xmtpIdentityAddress as `0x${string}` })
         hasContractCode = typeof code === 'string' ? (code !== '0x' && code.length > 2) : null
       } catch {
         hasContractCode = null
       }
     }
     const signerDecision = decideXmtpSignerType({
-      isCanonicalSmartWallet: true,
+      isCanonicalSmartWallet: resolved.isCanonicalSmartWallet,
       storedSignerType,
       connector,
       hasContractCode,
       walletChainId,
+      modeOverride: xmtpModeOverride ?? undefined,
     })
 
     const signer: Signer = signerDecision.signerType === 'SCW'
       ? {
           type: 'SCW',
           getIdentifier: () => ({
-            identifier: address,
+            identifier: xmtpIdentityAddress,
             identifierKind: IdentifierKind.Ethereum,
           }),
           signMessage: signMessageFn,
@@ -1052,7 +1079,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       : {
           type: 'EOA',
           getIdentifier: () => ({
-            identifier: address,
+            identifier: xmtpIdentityAddress,
             identifierKind: IdentifierKind.Ethereum,
           }),
           signMessage: signMessageFn,
@@ -1065,11 +1092,11 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       const recoveryIdentityRaw = String(state?.recoveryIdentity ?? '').trim()
       const recoveryIdentity = recoveryIdentityRaw.toLowerCase()
       if (recoveryIdentity.startsWith('0x') && recoveryIdentity.length === 42) {
-        const connectedLower = address.toLowerCase()
-        if (recoveryIdentity !== connectedLower) {
+        const xmtpIdentityLower = xmtpIdentityAddress.toLowerCase()
+        if (recoveryIdentity !== xmtpIdentityLower) {
           throw new Error(
             `Only the recovery identity can revoke installations for this inbox. ` +
-              `Recovery is ${recoveryIdentityRaw}; connected wallet is ${address}.`,
+              `Recovery is ${recoveryIdentityRaw}; connected identity is ${xmtpIdentityAddress}.`,
           )
         }
       }
@@ -1125,7 +1152,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       setError(msg)
       throw err
     }
-  }, [address, walletClient, installationLimitInboxId, publicClient, connect])
+  }, [address, walletClient, installationLimitInboxId, publicClient, connect, xmtpModeOverride, resolveXmtpIdentityAddress])
 
   // ------- disconnect -------
   const disconnect = useCallback(() => {

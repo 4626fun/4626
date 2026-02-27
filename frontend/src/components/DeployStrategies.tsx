@@ -362,13 +362,13 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
       <div className="text-[11px] text-zinc-600 space-y-1">
         {hasPrivySmartWallet ? (
           <>
-            <p>• Using Privy Smart Wallet — all calls batched into one transaction (one approval).</p>
+            <p>• Using Agent wallet — all calls are batched into one transaction (one approval).</p>
             <p>• ERC-4337 Account Abstraction with gas sponsorship.</p>
           </>
         ) : isSmartWallet ? (
-          <p>• Coinbase Smart Wallet detected.</p>
+          <p>• Agent wallet detected.</p>
         ) : (
-          <p>• EOA wallet — operations will run sequentially (multiple approvals).</p>
+          <p>• User wallet — operations will run sequentially (multiple approvals).</p>
         )}
       </div>
     </div>

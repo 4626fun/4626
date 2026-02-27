@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress } from 'viem'
 import { useAccount, useBalance, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 
-import { ChainSelector } from '@/components/trade/ChainSelector'
+import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
 import { SwapConfirmModal } from '@/components/trade/SwapConfirmModal'
-import { SwapPanel } from '@/components/trade/SwapPanel'
 import { SwapSettingsSheet } from '@/components/trade/SwapSettingsSheet'
-import { TransactionLifecycle } from '@/components/trade/TransactionLifecycle'
 import { Alert } from '@/components/ui/Alert'
+import { CreatorVaultsPanel } from '@/components/swap/CreatorVaultsPanel'
+import { SwapCard } from '@/components/swap/SwapCard'
+import { SwapPageLayout } from '@/components/swap/SwapPageLayout'
+import { TokenSelectorModal, type SwapTokenOption } from '@/components/swap/TokenSelectorModal'
 import { DEFAULT_CHAIN_ID, type SupportedChainId, getChainMeta } from '@/config/chains'
 import { CONTRACTS } from '@/config/contracts'
 import { useSwapExecution } from '@/hooks/useSwapExecution'
@@ -219,6 +220,13 @@ export function Swap() {
   const [compareRoutesChainName, setCompareRoutesChainName] = useState<string | null>('Base')
   const [compareRoutesChainId, setCompareRoutesChainId] = useState<number | null>(BASE_CHAIN_ID)
   const [compareZquoteOutUnits, setCompareZquoteOutUnits] = useState<string>('')
+  const [tokenSelectorOpen, setTokenSelectorOpen] = useState(false)
+  const [tokenSelectorSide, setTokenSelectorSide] = useState<'input' | 'output'>('input')
+  const [tokenSelectorQuery, setTokenSelectorQuery] = useState('')
+  const [recentTokenAddresses, setRecentTokenAddresses] = useState<string[]>([])
+  const [extraTokenOptions, setExtraTokenOptions] = useState<SwapTokenOption[]>([])
+  const [unverifiedSelectionMode, setUnverifiedSelectionMode] = useState(false)
+  const [unverifiedTokenLabel, setUnverifiedTokenLabel] = useState<string | null>(null)
 
   // ─── LP state ─────────────────────────────────────────────────────────────
   const [lpBusy, setLpBusy] = useState<string | null>(null)
@@ -237,6 +245,21 @@ export function Swap() {
     const qToken = (searchParams.get('token') ?? '').trim()
     if (isAddress(qToken)) setTokenOut(getAddress(qToken))
   }, [searchParams, setTokenOut])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const raw = window.localStorage.getItem('swap.recentTokens')
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) return
+      const normalized = parsed
+        .map((value) => (typeof value === 'string' ? value.toLowerCase() : ''))
+        .filter((value) => isAddress(value))
+        .slice(0, 10)
+      setRecentTokenAddresses(Array.from(new Set(normalized)))
+    } catch {}
+  }, [])
 
   const accountContext = useAccountContext()
   const canonicalAddress = accountContext.cswAddress ?? null
@@ -294,13 +317,26 @@ export function Swap() {
     })
   }, [searchParams, dynamicCoreTokens, swapChainId])
 
+  const allTokenOptions = useMemo<SwapTokenOption[]>(() => {
+    return [...tokenOptions, ...extraTokenOptions]
+  }, [extraTokenOptions, tokenOptions])
+
+  const swapTokenOptions = useMemo<SwapTokenOption[]>(() => {
+    return allTokenOptions.map((option) => ({
+      ...option,
+      verified: option.verified ?? option.group === 'core' || option.group === 'creator' || option.group === 'share',
+      sectionTag:
+        option.group === 'creator' ? 'creator' : option.group === 'share' ? 'content' : undefined,
+    }))
+  }, [allTokenOptions])
+
   const tokenInOption = useMemo(
-    () => tokenOptions.find((opt) => opt.address.toLowerCase() === tokenIn.toLowerCase()) ?? null,
-    [tokenIn, tokenOptions],
+    () => swapTokenOptions.find((opt) => opt.address.toLowerCase() === tokenIn.toLowerCase()) ?? null,
+    [tokenIn, swapTokenOptions],
   )
   const tokenOutOption = useMemo(
-    () => tokenOptions.find((opt) => opt.address.toLowerCase() === tokenOut.toLowerCase()) ?? null,
-    [tokenOut, tokenOptions],
+    () => swapTokenOptions.find((opt) => opt.address.toLowerCase() === tokenOut.toLowerCase()) ?? null,
+    [tokenOut, swapTokenOptions],
   )
 
   const tokenInIdentity = useTokenIdentity({ address: tokenIn, option: tokenInOption })
@@ -309,6 +345,54 @@ export function Swap() {
   const tokenOutDisplay = tokenOutIdentity.display
   const tokenInSymbol = tokenInDisplay.symbol
   const tokenOutSymbol = tokenOutDisplay.symbol
+
+  useEffect(() => {
+    const inputUnverified = tokenInOption?.verified === false
+    const outputUnverified = tokenOutOption?.verified === false
+    if (!inputUnverified && !outputUnverified) {
+      setUnverifiedSelectionMode(false)
+      setUnverifiedTokenLabel(null)
+      return
+    }
+    const label = inputUnverified
+      ? tokenInDisplay.symbol
+      : outputUnverified
+        ? tokenOutDisplay.symbol
+        : null
+    if (!unverifiedSelectionMode) {
+      setUnverifiedTokenLabel(label)
+    }
+  }, [tokenInDisplay.symbol, tokenInOption?.verified, tokenOutDisplay.symbol, tokenOutOption?.verified, unverifiedSelectionMode])
+
+  useEffect(() => {
+    const address = tokenIn.toLowerCase()
+    if (isAddress(address) && !tokenInOption && !extraTokenOptions.some((option) => option.address.toLowerCase() === address)) {
+      registerTokenForIdentity({
+        symbol: tokenInSymbol,
+        name: tokenInSymbol,
+        address,
+        group: 'share',
+        verified: false,
+        decimals: 18,
+        logoUrls: [],
+      })
+    }
+  }, [extraTokenOptions, registerTokenForIdentity, tokenIn, tokenInOption, tokenInSymbol])
+
+  useEffect(() => {
+    const address = tokenOut.toLowerCase()
+    if (isAddress(address) && !tokenOutOption && !extraTokenOptions.some((option) => option.address.toLowerCase() === address)) {
+      registerTokenForIdentity({
+        symbol: tokenOutSymbol,
+        name: tokenOutSymbol,
+        address,
+        group: 'share',
+        verified: false,
+        decimals: 18,
+        logoUrls: [],
+      })
+    }
+  }, [extraTokenOptions, registerTokenForIdentity, tokenOut, tokenOutOption, tokenOutSymbol])
 
   // ─── Token balances ───────────────────────────────────────────────────────
   const isTokenInNative = tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
@@ -405,6 +489,28 @@ export function Swap() {
     return `$${numeric.toFixed(2)}`
   }, [selectedQuote, quote])
 
+  const lpFeeUsd = useMemo(() => {
+    const candidate = selectedQuote?.lpFee
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      return `$${candidate.toFixed(2)}`
+    }
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim()
+    }
+    return null
+  }, [selectedQuote])
+
+  const protocolFeeUsd = useMemo(() => {
+    const candidate = selectedQuote?.protocolFee
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      return `$${candidate.toFixed(2)}`
+    }
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim()
+    }
+    return null
+  }, [selectedQuote])
+
   const compareUniswapOutUnits = useMemo(() => {
     const n = Number(estimatedOut)
     if (!Number.isFinite(n) || n <= 0) return ''
@@ -415,6 +521,65 @@ export function Swap() {
     switchTokens()
     resetTradeState()
   }, [switchTokens, resetTradeState])
+
+  const openTokenSelector = useCallback((side: 'input' | 'output') => {
+    setTokenSelectorSide(side)
+    setTokenSelectorQuery('')
+    setTokenSelectorOpen(true)
+  }, [])
+
+  const persistRecentToken = useCallback((tokenAddress: string) => {
+    const normalized = tokenAddress.toLowerCase()
+    if (!isAddress(normalized)) return
+    setRecentTokenAddresses((previous) => {
+      const next = [normalized, ...previous.filter((candidate) => candidate !== normalized)].slice(0, 12)
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem('swap.recentTokens', JSON.stringify(next))
+        } catch {}
+      }
+      return next
+    })
+  }, [])
+
+  const registerTokenForIdentity = useCallback((option: SwapTokenOption) => {
+    setExtraTokenOptions((previous) => {
+      const normalized = option.address.toLowerCase()
+      if (previous.some((entry) => entry.address.toLowerCase() === normalized)) return previous
+      return [...previous, { ...option }]
+    })
+  }, [])
+
+  const onSelectToken = useCallback(
+    (option: SwapTokenOption) => {
+      const address = option.address
+      if (!isAddress(address)) return
+
+      if (!option.verified) {
+        registerTokenForIdentity(option)
+      }
+      if (tokenSelectorSide === 'input') {
+        setTokenIn(address)
+      } else {
+        setTokenOut(address)
+      }
+      if (!option.verified) {
+        setUnverifiedTokenLabel(option.symbol)
+        setUnverifiedSelectionMode(true)
+      } else {
+        setUnverifiedSelectionMode(false)
+        setUnverifiedTokenLabel(null)
+      }
+      persistRecentToken(address)
+      setTokenSelectorOpen(false)
+      resetTradeState()
+    },
+    [persistRecentToken, registerTokenForIdentity, resetTradeState, setTokenIn, setTokenOut, tokenSelectorSide],
+  )
+
+  const confirmUnverifiedSelection = useCallback(() => {
+    setUnverifiedSelectionMode(false)
+  }, [])
 
   const handleSetExecutionMode = useCallback(
     (nextMode: WalletMode) => {
@@ -603,175 +768,154 @@ export function Swap() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="pb-[calc(env(safe-area-inset-bottom)+9rem)] md:pb-0">
-      <section className="py-8 sm:py-10">
-        <div className="mx-auto max-w-116 px-3 sm:px-6">
-          <motion.div
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
+    <>
+      <PageMeta title="Swap" description="Swap tokens on Base using CreatorVault — best-price routing via Uniswap." canonicalPath="/swap" />
+      <SwapPageLayout
+        swapPanel={
+          activePanel === 'swap' ? (
+            <SwapCard
+              tokenInDisplay={tokenInDisplay}
+              tokenOutDisplay={tokenOutDisplay}
+              tokenInIdentityLoading={tokenInIdentity.isLoading}
+              tokenOutIdentityLoading={tokenOutIdentity.isLoading}
+              amountInUnits={amountInUnits}
+              estimatedOut={estimatedOut}
+              estimatedOutUsd={null}
+              tokenInSymbol={tokenInSymbol}
+              tokenOutSymbol={tokenOutSymbol}
+              tokenInBalanceLabel={tokenInBalanceLabel}
+              tokenOutBalanceLabel={tokenOutBalanceLabel}
+              tokenInAddress={tokenIn}
+              tokenOutAddress={tokenOut}
+              isConnected={isConnected}
+              isReady={isReady}
+              busy={busy}
+              status={status}
+              error={error}
+              quoteIsStale={quoteIsStale}
+              quoteUpdatedAt={quoteUpdatedAt ? new Date(quoteUpdatedAt).toLocaleTimeString() : null}
+              approvalRequired={approvalRequired}
+              routeSummary={routeSummary}
+              gasEstimateLabel={gasEstimateLabel}
+              priceImpactLabel={priceImpactLabel}
+              parsedSlippage={parsedSlippage}
+              lpFeeUsd={lpFeeUsd}
+              protocolFeeUsd={protocolFeeUsd}
+              slippagePct={slippagePct}
+              onOpenTokenSelector={openTokenSelector}
+              onAmountChange={setAmountInUnits}
+              onQuickPercent={(pct, tokenBalance) => {
+                if (!tokenInBalanceLabel || !tokenBalance) return
+                const total = Number(tokenBalance.replace(/,/g, ''))
+                if (!Number.isFinite(total)) return
+                const next = ((pct / 100) * total).toFixed(6)
+                setAmountInUnits(next)
+              }}
+              onSwitchTokens={handleSwitchTokens}
+              onReviewTrade={() => {
+                if (unverifiedSelectionMode) return
+                void handleReviewTrade()
+              }}
+              onRefreshQuote={() => void handleQuote()}
+              onSetSlippagePct={setSlippagePct}
+              onSetExecutionMode={handleSetExecutionMode}
+              onEnableCanonical={handleEnableCanonical}
+              onResetUnverified={() => {
+                setUnverifiedSelectionMode(false)
+                setUnverifiedTokenLabel(null)
+              }}
+              onConfirmUnverified={confirmUnverifiedSelection}
+              preferredMode={preferredExecutionMode}
+              executionMode={executionMode}
+              executionAddress={executionAddress}
+              canonicalAvailable={canonicalAvailable}
+              canonicalConfigured={canonicalConfigured}
+              eoaAvailable={eoaReady}
+              fallbackActive={executionFallbackActive}
+              needsUnverifiedConfirmation={unverifiedSelectionMode}
+              unverifiedTokenLabel={unverifiedTokenLabel}
+            />
+          ) : (
+            <LiquidityPanel
+              tokenInSymbol={tokenInSymbol}
+              tokenOutSymbol={tokenOutSymbol}
+              lpMode={lpMode}
+              lpFeeTier={lpFeeTier}
+              lpAmountA={lpAmountA}
+              lpAmountB={lpAmountB}
+              lpLowerTick={lpLowerTick}
+              lpUpperTick={lpUpperTick}
+              lpPositionId={lpPositionId}
+              lpStatus={lpStatus}
+              lpError={lpError}
+              lpBusy={lpBusy}
+              anyBusy={anyBusy}
+              identityReady={identityReady}
+              positions={positions}
+              positionsLoading={lpPositionsQuery.isLoading}
+              positionsError={lpPositionsQuery.isError ? 'Failed to load positions.' : null}
+              onSetLpMode={setLpMode}
+              onSetLpFeeTier={setLpFeeTier}
+              onSetLpAmountA={setLpAmountA}
+              onSetLpAmountB={setLpAmountB}
+              onSetLpLowerTick={setLpLowerTick}
+              onSetLpUpperTick={setLpUpperTick}
+              onSetLpPositionId={setLpPositionId}
+              onLpQuote={handleLpQuote}
+              onCreatePosition={handleCreatePosition}
+              onClaimFees={handleClaimFees}
+              onRemoveLiquidity={handleRemoveLiquidity}
+              onRefreshPositions={() => void lpPositionsQuery.refetch()}
+              activePanel={activePanel}
+              onSetActivePanel={setActivePanel}
+              onOpenSettings={() => setShowAdvanced(true)}
+            />
+          )
+        }
+        vaultPanel={activePanel === 'swap' ? <CreatorVaultsPanel chainId={swapChainId} /> : null}
+        selectedChainId={swapChainId}
+        walletChainId={walletChainId}
+        gasIndicatorLabel={gasEstimateLabel}
+        walletIndicator={<AccountModeIndicator compact />}
+        onSelectChain={(nextChainId) => {
+          setSwapChainId(nextChainId)
+          resetTradeState()
+          if (isConnected && walletChainId !== nextChainId && switchChainAsync) {
+            void switchChainAsync({ chainId: nextChainId }).catch(() => {})
+          }
+        }}
+        title="Swap"
+        subtitle="Token exchange with live quote intelligence."
+      />
+
+      {chainMismatch ? (
+        <div className="mx-auto mb-4 flex max-w-4xl items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
+          <div className="text-xs text-amber-200">
+            Your wallet is on {walletChainId ? getChainMeta(walletChainId)?.name ?? `chain ${walletChainId}` : 'a different network'}. Switch to {chainMeta?.name ?? 'the selected network'} to trade.
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (switchChainAsync) void switchChainAsync({ chainId: swapChainId }).catch(() => {})
+            }}
+            className="shrink-0 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-500/20 transition"
           >
-            <div className="mb-5 text-center">
-              <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Trade on {chainMeta?.name ?? 'Base'}</div>
-              <h1 className="mt-1 text-[2rem] font-semibold tracking-tight text-white">Swap anytime, anywhere.</h1>
-            </div>
-            {/* ─── Chain selector + mismatch banner ─────────────────── */}
-            <div className="mb-3 flex items-center justify-between">
-              <ChainSelector
-                selectedChainId={swapChainId}
-                walletChainId={walletChainId}
-                onSelect={(nextChainId) => {
-                  setSwapChainId(nextChainId)
-                  resetTradeState()
-                  if (isConnected && walletChainId !== nextChainId && switchChainAsync) {
-                    void switchChainAsync({ chainId: nextChainId }).catch(() => {})
-                  }
-                }}
-              />
-              {swapChainId !== BASE_CHAIN_ID ? (
-                <div className="text-[10px] text-zinc-500">Creator tokens on Base only</div>
-              ) : null}
-            </div>
-
-            {chainMismatch ? (
-              <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 flex items-center justify-between gap-3">
-                <div className="text-xs text-amber-200">
-                  Your wallet is on {walletChainId ? getChainMeta(walletChainId)?.name ?? `chain ${walletChainId}` : 'a different network'}. Switch to {chainMeta?.name ?? 'the selected network'} to trade.
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (switchChainAsync) void switchChainAsync({ chainId: swapChainId }).catch(() => {})
-                  }}
-                  className="shrink-0 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-500/20 transition"
-                >
-                  Switch
-                </button>
-              </div>
-            ) : null}
-
-            {/* ─── Trade card ──────────────────────────────────────── */}
-            <div className="rounded-3xl border border-white/8 bg-vault-card/70 p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.6)] backdrop-blur-xl sm:p-5">
-
-              {activePanel === 'swap' ? (
-                <SwapPanel
-                  tokenOptions={tokenOptions}
-                  tokenIn={tokenIn}
-                  tokenOut={tokenOut}
-                  tokenInDisplay={tokenInDisplay}
-                  tokenOutDisplay={tokenOutDisplay}
-                  tokenInIdentityLoading={tokenInIdentity.isLoading}
-                  tokenOutIdentityLoading={tokenOutIdentity.isLoading}
-                  amountInUnits={amountInUnits}
-                  estimatedOut={estimatedOut}
-                  tokenInSymbol={tokenInSymbol}
-                  tokenOutSymbol={tokenOutSymbol}
-                  tokenInBalanceLabel={tokenInBalanceLabel}
-                  tokenOutBalanceLabel={tokenOutBalanceLabel}
-                  isConnected={isConnected}
-                  executionMode={executionMode}
-                  preferredMode={preferredExecutionMode}
-                  executionAddress={executionAddress}
-                  executionReady={executionReady}
-                  canonicalAvailable={canonicalAvailable}
-                  canonicalConfigured={canonicalConfigured}
-                  eoaAvailable={eoaReady}
-                  executionFallbackActive={executionFallbackActive}
-                  parsedSlippage={parsedSlippage}
-                  isReady={isReady}
-                  busy={busy}
-                  quoteIsStale={quoteIsStale}
-                  quoteUpdatedAt={quoteUpdatedAt}
-                  status={status}
-                  error={error}
-                  tokensEquivalent={tokensEquivalent}
-                  priceImpactLabel={priceImpactLabel}
-                  gasEstimateLabel={gasEstimateLabel}
-                  routeSummary={routeSummary}
-                  isOrderRoute={isOrderRoute}
-                  compareRoutesEnabled={compareRoutesEnabled}
-                  compareRoutesLoading={compareRoutesLoading}
-                  compareRoutesAvailable={compareRoutesAvailable}
-                  compareRoutesReason={compareRoutesReason}
-                  compareRoutesChainName={compareRoutesChainName}
-                  compareRoutesChainId={compareRoutesChainId}
-                  compareUniswapOutUnits={compareUniswapOutUnits}
-                  compareZquoteOutUnits={compareZquoteOutUnits}
-                  permitSignatureRequired={permitSignatureRequired}
-                  permitSignaturePending={permitSignaturePending}
-                  permitSignatureReady={permitSignatureReady}
-                  activePanel={activePanel}
-                  lifecycle={
-                    // Only show the lifecycle widget when a tx is actually in-flight
-                    // or has completed. 'idle' and 'review' are pre-execution states
-                    // handled by the inline banners below.
-                    txState !== 'idle' && txState !== 'review' ? (
-                      <TransactionLifecycle
-                        state={txState}
-                        message={status || undefined}
-                        txHash={txHash}
-                      />
-                    ) : null
-                  }
-                  onSetTokenIn={setTokenIn}
-                  onSetTokenOut={setTokenOut}
-                  onSetAmountInUnits={setAmountInUnits}
-                  onSwitchTokens={handleSwitchTokens}
-                  onReviewTrade={() => void handleReviewTrade()}
-                  onRefreshQuote={() => void handleQuote()}
-                  onOpenSettings={() => setShowAdvanced(true)}
-                  onSetActivePanel={setActivePanel}
-                  onSetExecutionMode={handleSetExecutionMode}
-                  onEnableCanonical={handleEnableCanonical}
-                />
-              ) : (
-                /* ─── Liquidity panel ───────────────────────────────── */
-                <LiquidityPanel
-                  tokenInSymbol={tokenInSymbol}
-                  tokenOutSymbol={tokenOutSymbol}
-                  lpMode={lpMode}
-                  lpFeeTier={lpFeeTier}
-                  lpAmountA={lpAmountA}
-                  lpAmountB={lpAmountB}
-                  lpLowerTick={lpLowerTick}
-                  lpUpperTick={lpUpperTick}
-                  lpPositionId={lpPositionId}
-                  lpStatus={lpStatus}
-                  lpError={lpError}
-                  lpBusy={lpBusy}
-                  anyBusy={anyBusy}
-                  identityReady={identityReady}
-                  positions={positions}
-                  positionsLoading={lpPositionsQuery.isLoading}
-                  positionsError={lpPositionsQuery.isError ? 'Failed to load positions.' : null}
-                  onSetLpMode={setLpMode}
-                  onSetLpFeeTier={setLpFeeTier}
-                  onSetLpAmountA={setLpAmountA}
-                  onSetLpAmountB={setLpAmountB}
-                  onSetLpLowerTick={setLpLowerTick}
-                  onSetLpUpperTick={setLpUpperTick}
-                  onSetLpPositionId={setLpPositionId}
-                  onLpQuote={handleLpQuote}
-                  onCreatePosition={handleCreatePosition}
-                  onClaimFees={handleClaimFees}
-                  onRemoveLiquidity={handleRemoveLiquidity}
-                  onRefreshPositions={() => void lpPositionsQuery.refetch()}
-                  activePanel={activePanel}
-                  onSetActivePanel={setActivePanel}
-                  onOpenSettings={() => setShowAdvanced(true)}
-                />
-              )}
-            </div>
-
-            {/* ─── Footer note (replaces Supported Assets side panel) ── */}
-            <div className="mt-4 px-1 text-center text-[11px] text-zinc-500">
-              {swapChainId === BASE_CHAIN_ID
-                ? 'ETH · USDC · BTC · USDT · ZORA + creator/share tokens · Powered by Uniswap on Base'
-                : `ETH · USDC · WETH + more · Powered by Uniswap on ${chainMeta?.name ?? 'selected chain'}`}
-            </div>
-          </motion.div>
+            Switch
+          </button>
         </div>
-      </section>
+      ) : null}
+
+      <TokenSelectorModal
+        open={tokenSelectorOpen}
+        query={tokenSelectorQuery}
+        selectedToken={tokenSelectorSide === 'input' ? tokenIn : tokenOut}
+        tokenOptions={swapTokenOptions}
+        recentTokenAddresses={recentTokenAddresses}
+        chainId={swapChainId}
+        onQueryChange={setTokenSelectorQuery}
+        onClose={() => setTokenSelectorOpen(false)}
+        onSelect={onSelectToken}
+      />
 
       {/* ─── Sheets / Modals ────────────────────────────────────────────── */}
       <SwapSettingsSheet
@@ -812,7 +956,7 @@ export function Swap() {
         onCancel={closeConfirm}
         onConfirm={() => { void confirmAndExecute() }}
       />
-    </div>
+    </>
   )
 }
 

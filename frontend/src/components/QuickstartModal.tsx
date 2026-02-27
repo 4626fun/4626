@@ -322,8 +322,8 @@ export function QuickstartModal({ onClose }: { onClose: () => void }) {
                   label="Agent provisioned"
                   detail={
                     data.agentType === 'csw'
-                      ? `CSW: ${truncAddr(data.agentAddress)}`
-                      : `EOA: ${truncAddr(data.agentAddress)}`
+                      ? `Agent: ${truncAddr(data.agentAddress)}`
+                      : `User: ${truncAddr(data.agentAddress)}`
                   }
                 />
 
@@ -366,7 +366,7 @@ export function QuickstartModal({ onClose }: { onClose: () => void }) {
                     )}
                   </button>
                   <p className="text-[10px] text-zinc-600 text-center px-2">
-                    Adds a server signer as owner of your Smart Wallet so it can respond to messages.
+                    Adds a server signer as owner of your Agent wallet so it can respond to messages.
                   </p>
                 </div>
               )}

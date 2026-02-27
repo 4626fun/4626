@@ -34,12 +34,26 @@ export function decideXmtpSignerType(params: {
   hasContractCode: boolean | null
   /** Sanitized chain id of the connected wallet (defaults applied). */
   walletChainId: number
+  modeOverride?: 'EOA' | 'SMART_WALLET'
 }): { signerType: 'SCW' | 'EOA'; scwChainId: number } {
+  if (params.modeOverride === 'EOA') {
+    return { signerType: 'EOA', scwChainId: CANONICAL_SCW_CHAIN_ID }
+  }
+
+  const resolvedSmartWalletContract = params.isCanonicalSmartWallet || params.hasContractCode === true
+
+  if (params.modeOverride === 'SMART_WALLET') {
+    if (!resolvedSmartWalletContract) {
+      return { signerType: 'EOA', scwChainId: CANONICAL_SCW_CHAIN_ID }
+    }
+    return { signerType: 'SCW', scwChainId: CANONICAL_SCW_CHAIN_ID }
+  }
+
   if (params.isCanonicalSmartWallet) {
     return { signerType: 'SCW', scwChainId: CANONICAL_SCW_CHAIN_ID }
   }
 
-  if (params.storedSignerType === 'SCW') {
+  if (params.storedSignerType === 'SCW' && resolvedSmartWalletContract) {
     // If this identity was previously registered as SCW, keep it stable to
     // avoid XMTP "Wrong chain id" errors during identity updates.
     return { signerType: 'SCW', scwChainId: CANONICAL_SCW_CHAIN_ID }
