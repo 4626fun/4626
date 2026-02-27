@@ -163,7 +163,7 @@ function formatAccountSummary(account: ConnectedAccount): string {
   const providerRaw = typeof account.provider === 'string' ? account.provider.trim().toLowerCase() : ''
   const walletTypeRaw = typeof account.walletType === 'string' ? account.walletType.trim().toLowerCase() : ''
   if (walletTypeRaw === 'smart_wallet' && providerRaw.includes('privy')) {
-    return 'Privy Agent signer'
+    return 'Privy Smart Wallet signer'
   }
   const walletType = formatWalletTypeLabel(account.walletType)
   const chain = formatChainLabel(account.chain)
