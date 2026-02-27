@@ -2008,7 +2008,7 @@ function DeployVaultBatcher({
     if (lower.includes('market floor price not available')) {
       return 'Market floor price is still loading. Wait a moment and try again.'
     }
-    if (lower.includes('creatorvaultbatcher is not configured')) {
+    if (lower.includes('deployment batcher is not configured') || lower.includes('creatorvaultbatcher is not configured')) {
       return 'Deployment is not configured: missing `VITE_CREATOR_VAULT_BATCHER` / `CONTRACTS.creatorVaultBatcher`.'
     }
     return msg
@@ -2935,7 +2935,7 @@ function DeployVaultBatcher({
 
     try {
       await ensurePaymasterSession()
-      if (!batcherAddress) throw new Error('CreatorVaultBatcher is not configured. Set VITE_CREATOR_VAULT_BATCHER.')
+      if (!batcherAddress) throw new Error('Deployment batcher is not configured. Set VITE_CREATOR_VAULT_BATCHER.')
       if (!publicClient) throw new Error('Network client not ready')
       if (!expected || !expectedGauge || !expectedBurnStream || !expectedPayoutRouter || !expectedCreate2Deployer)
         throw new Error('Failed to compute expected deployment addresses')
@@ -3242,7 +3242,7 @@ function DeployVaultBatcher({
           },
         })
         throw new Error(
-          `Legacy CreatorVaultDeployer active on this deployment (${batcherAddress}). ` +
+          `Legacy deployment batcher (CreatorVaultDeployer) active on this deployment (${batcherAddress}). ` +
             'This version cannot initialize CreatorOVault modules and will stall at Phase 1 finalize. ' +
             'Update `VITE_CREATOR_VAULT_BATCHER` (and server `CREATOR_VAULT_BATCHER`) to the current batcher.',
         )
@@ -3285,7 +3285,7 @@ function DeployVaultBatcher({
             },
           })
           throw new Error(
-            `Legacy batcher active on this deployment (${batcherAddress}). Update to split Phase-1 CreatorVaultDeployer.`,
+            `Legacy batcher active on this deployment (${batcherAddress}). Update to split Phase-1 deployment batcher (CreatorVaultDeployer).`,
           )
         }
       }
@@ -3439,14 +3439,19 @@ function DeployVaultBatcher({
           })
         } catch (meteoraErr) {
           const message = meteoraErr instanceof Error ? meteoraErr.message : String(meteoraErr)
-          if (FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD) {
+          // A missing Meteora mapping is not fatal — the main deployment can
+          // proceed with ZERO_BYTES32 / empty solanaIxs and the operator runs
+          // the Solana deposit step independently after the vault is live.
+          const isMissingMapping = message.includes('Missing Meteora Alpha Vault mapping')
+          if (FINALIZE_PHASE2_SUPPORTS_METEORA_PAYLOAD && !isMissingMapping) {
             throw new Error(
               `Solana auto-deposit payload build failed: ${message}. ` +
                 'Fix creator Meteora mapping before Phase 2 finalize.',
             )
           }
-          logger.warn('[DeployVault] Meteora payload build failed; Solana allocation will fall back to vesting or revert on-chain if Solana bridging is configured on the batcher', {
+          logger.warn('[DeployVault] Meteora payload build skipped; Solana deposit must be triggered separately', {
             error: message,
+            isMissingMapping,
           })
         }
         if (
@@ -5730,7 +5735,7 @@ function DeployVaultMain() {
 
   // Smooth waitlist → deploy:
   // If we arrived with `autologin=1&from=waitlist`, prompt wallet login on app host
-  // and bridge into a CreatorVault session.
+  // and bridge into a 4626 session.
   useEffect(() => {
     if (!autoLogin || !fromWaitlist) return
     if (!privyReady) return
@@ -6705,7 +6710,7 @@ function DeployVaultMain() {
     if (bytecodeInfraQuery.isError) return (bytecodeInfraQuery.error as any)?.message || 'Deployment bytecode check failed.'
     if (!bytecodeInfraQuery.data) return 'Deployment bytecode check failed.'
     if (!bytecodeInfraQuery.data.storeSupportsChunking) {
-      return 'Deployment infra uses a v1 bytecode store (no chunking). Deploy the v2 bytecode store + v2 deployer + new CreatorVaultBatcher.'
+      return 'Deployment infra uses a v1 bytecode store (no chunking). Deploy the v2 bytecode store + v2 deployer + new deployment batcher.'
     }
     if (bytecodeInfraQuery.data.missing.length > 0) {
       return `Bytecode store is missing: ${bytecodeInfraQuery.data.missing.join(', ')}. Seed the v2 store, then retry.`
@@ -6909,7 +6914,7 @@ function DeployVaultMain() {
 
   const firstLaunchChecklist = [
     {
-      label: 'CreatorVaultBatcher configured',
+      label: 'Deployment batcher configured',
       ok: creatorVaultBatcherConfigured,
       hint: creatorVaultBatcherConfigured && creatorVaultBatcherAddress ? shortAddress(creatorVaultBatcherAddress) : 'missing',
     },
@@ -7017,7 +7022,7 @@ function DeployVaultMain() {
               : allowlistEnforced && !isAllowlistedCreator
                 ? 'Creator access required.'
                 : !creatorVaultBatcherConfigured
-                  ? 'Deployment not configured (missing CreatorVaultBatcher).'
+                  ? 'Deployment not configured (missing deployment batcher).'
                   : !isAuthorizedDeployerOrOperator
                     ? 'Connect the creator or payout recipient wallet.'
                     : !fundingGateOk
@@ -7584,7 +7589,7 @@ function DeployVaultMain() {
                   disabled
                   className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-600 text-sm cursor-not-allowed"
                 >
-                  Deployment is not configured (missing CreatorVaultBatcher address)
+                  Deployment is not configured (missing deployment batcher address)
                 </button>
               ) : tokenIsValid && zoraCoin && !walletHasMinDeposit ? (
                 <button
