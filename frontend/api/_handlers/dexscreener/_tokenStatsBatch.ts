@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { getStringQuery, handleOptions, isAddressLike, setCache, setCors } from '../../../server/dexscreener/_shared.js'
+import { fetchExternalJson } from '../../../server/_lib/externalFetch.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -90,15 +91,14 @@ function parseTokenList(raw: string): Array<{ address: string; addressLc: string
 }
 
 async function fetchJson<T>(url: string, timeoutMs: number): Promise<T> {
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), timeoutMs)
-  try {
-    const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl.signal })
-    if (!res.ok) throw new Error(`Dexscreener HTTP ${res.status}`)
-    return (await res.json()) as T
-  } finally {
-    clearTimeout(t)
-  }
+  const { data } = await fetchExternalJson<T>(url, {
+    label: 'dexscreener_token_stats_batch',
+    allowedHosts: ['api.dexscreener.com'],
+    headers: { Accept: 'application/json' },
+    timeoutMs,
+    maxResponseBytes: 1_000_000,
+  })
+  return data
 }
 
 async function mapWithLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {

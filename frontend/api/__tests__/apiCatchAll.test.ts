@@ -37,4 +37,21 @@ describe('api catch-all hardening', () => {
     expect(JSON.stringify(res.body)).not.toContain('db://sensitive-connection-string')
     errorSpy.mockRestore()
   })
+
+  it('returns stable envelope for unknown routes', async () => {
+    const mod = await import('../[...path].ts')
+    const handler = mod.default
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { path: 'does/not/exist' },
+      url: '/api/does/not/exist',
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(404)
+    expect(res.body).toEqual({ success: false, error: 'Not found' })
+  })
 })

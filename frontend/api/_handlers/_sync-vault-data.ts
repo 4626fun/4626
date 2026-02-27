@@ -126,8 +126,11 @@ async function fetchFromCharmGraphQL(vaultAddress: string, first: number = 100, 
 
 function readCronSecretHeader(req: VercelRequest): string {
   const raw = req.headers['x-cron-secret'];
-  if (Array.isArray(raw)) return String(raw[0] ?? '');
-  return typeof raw === 'string' ? raw : '';
+  if (Array.isArray(raw) && raw[0]) return String(raw[0]).trim();
+  if (typeof raw === 'string' && raw.trim()) return raw.trim();
+  const auth = String(req.headers.authorization ?? '').trim();
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  return m?.[1]?.trim() ?? '';
 }
 
 async function syncVaultSnapshots(vaultAddress: string) {
@@ -303,9 +306,14 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  // Verify cron secret from header only to avoid query-string secret leakage.
+  const configuredSecret = (process.env.CRON_SECRET ?? '').trim();
+  if (!configuredSecret) {
+    return res.status(503).json({ error: 'CRON_SECRET is not configured' });
+  }
+
+  // Verify cron secret from headers only to avoid query-string secret leakage.
   const cronSecret = readCronSecretHeader(req);
-  if (process.env.CRON_SECRET && cronSecret !== process.env.CRON_SECRET) {
+  if (cronSecret !== configuredSecret) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

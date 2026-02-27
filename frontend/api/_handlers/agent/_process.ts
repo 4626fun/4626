@@ -7,6 +7,7 @@
  *
  * Designed to be called by Vercel Cron (every 1 minute) or manually.
  * Requires: CRON_SECRET (to prevent unauthorized invocations).
+ * Auth is header-only: `Authorization: Bearer <CRON_SECRET>` (or `x-cron-secret`).
  *
  * vercel.json:
  *   { "crons": [{ "path": "/api/agent/process", "schedule": "* * * * *" }] }
@@ -80,17 +81,25 @@ export function mergeCheckpointMs(previousMs: number, candidateMs: number): numb
   return Math.max(previousMs, candidateMs)
 }
 
-function isAuthorized(req: VercelRequest): boolean {
-  // Vercel Cron sets the Authorization header with the CRON_SECRET
-  const cronSecret = (process.env.CRON_SECRET ?? '').trim()
-  if (!cronSecret) return false // Require CRON_SECRET to be configured
+export function readCronSecretFromHeaders(req: VercelRequest): string {
+  const cronHeader = req.headers['x-cron-secret']
+  if (Array.isArray(cronHeader) && cronHeader[0]) return String(cronHeader[0]).trim()
+  if (typeof cronHeader === 'string' && cronHeader.trim()) return cronHeader.trim()
 
   const authHeader = (req.headers.authorization ?? '').trim()
-  if (authHeader === `Bearer ${cronSecret}`) return true
+  const match = authHeader.match(/^Bearer\s+(.+)$/i)
+  if (match?.[1]) return match[1].trim()
+  return ''
+}
 
-  // Also check query param for manual testing
-  const querySecret = typeof req.query?.secret === 'string' ? req.query.secret : ''
-  return querySecret === cronSecret
+export function isAuthorized(req: VercelRequest): boolean {
+  // Vercel Cron sets the Authorization header with the CRON_SECRET.
+  const cronSecret = (process.env.CRON_SECRET ?? '').trim()
+  if (!cronSecret) return false // Require CRON_SECRET to be configured.
+
+  // Header-only auth: query-string secret transport is intentionally rejected.
+  const provided = readCronSecretFromHeaders(req)
+  return provided === cronSecret
 }
 
 function isCommandLike(text: string): boolean {
