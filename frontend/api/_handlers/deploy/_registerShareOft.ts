@@ -697,10 +697,17 @@ async function runWrapToken(cliDir: string, cliBinRaw: string, wrapArgs: string[
 
 async function tryProvisionDynamicRoute(params: {
   shareOft: Address
+  // When provided, wrap and register the Creator Coin on Solana instead of the
+  // ShareOFT receipt token. The Creator Coin has a clean ASCII symbol (e.g. "AKITA"
+  // vs "■AKITA"), avoids ConstraintSeeds issues, and is the primary tradeable token
+  // that Solana users actually want to hold.
+  bridgeToken?: Address
   solanaDecimals: number
   publicClient: any
 }): Promise<Hex | null> {
   if (!readDynamicSolanaRouteEnabled()) return null
+
+  const bridgeToken = params.bridgeToken ?? params.shareOft
 
   const cliDir = String(process.env.SOLANA_BRIDGE_CLI_DIR ?? '').trim()
   const cliBin = String(process.env.SOLANA_BRIDGE_CLI_BIN ?? 'auto').trim() || 'auto'
@@ -709,7 +716,7 @@ async function tryProvisionDynamicRoute(params: {
   const scalerExponent = parseDecimals(process.env.SOLANA_BRIDGE_SCALER_EXPONENT) ?? params.solanaDecimals
   const shareOftMetadata = await readShareOftMetadata({
     publicClient: params.publicClient,
-    shareOft: params.shareOft,
+    shareOft: bridgeToken,
   })
   if (!shareOftMetadata) {
     throw new Error(
@@ -719,7 +726,7 @@ async function tryProvisionDynamicRoute(params: {
   // Prefer canonical Unicode symbol, with deterministic ASCII fallback when needed.
   const { tokenName, tokenSymbolCandidates, tokenNameSource, tokenSymbolSource } = buildWrapTokenMetadata(
     shareOftMetadata,
-    params.shareOft,
+    bridgeToken,
   )
   const primaryTokenSymbol = tokenSymbolCandidates[0] ?? ''
   const fallbackTokenSymbol = tokenSymbolCandidates[1] ?? null
@@ -740,6 +747,7 @@ async function tryProvisionDynamicRoute(params: {
       let candidateError = 'Unknown remote provisioner error'
       for (let attempt = 1; attempt <= retryAttempts; attempt += 1) {
         logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (remote provisioner)', {
+          bridgeToken,
           shareOft: params.shareOft,
           provisionerUrl,
           provisionerHealthUrl: provisionerHealthUrl || null,
@@ -767,7 +775,7 @@ async function tryProvisionDynamicRoute(params: {
                 ...(provisionerSecret ? { Authorization: `Bearer ${provisionerSecret}` } : {}),
               },
               body: JSON.stringify({
-                shareOft: params.shareOft,
+                shareOft: bridgeToken,
                 deployEnv,
                 solanaDecimals: params.solanaDecimals,
                 tokenName,
@@ -829,6 +837,7 @@ async function tryProvisionDynamicRoute(params: {
           const willRetry = retryable && attempt < retryAttempts
           candidateError = message
           logger.warn('[deploy/registerShareOft] Remote provisioner candidate attempt failed', {
+            bridgeToken,
             shareOft: params.shareOft,
             provisionerUrl,
             candidateIndex: i + 1,
@@ -848,6 +857,7 @@ async function tryProvisionDynamicRoute(params: {
       }
       failures.push(`${provisionerUrl}: ${candidateError}`)
       logger.warn('[deploy/registerShareOft] Remote provisioner candidate failed', {
+        bridgeToken,
         shareOft: params.shareOft,
         provisionerUrl,
         candidateIndex: i + 1,
@@ -869,6 +879,7 @@ async function tryProvisionDynamicRoute(params: {
       const message = error instanceof Error ? error.message : String(error)
       if (fallbackTokenSymbol && isLikelyUnicodeSymbolUnsupportedError(message)) {
         logger.warn('[deploy/registerShareOft] Remote provisioner unicode symbol attempt failed; retrying with ASCII fallback', {
+          bridgeToken,
           shareOft: params.shareOft,
           primaryTokenSymbol,
           fallbackTokenSymbol,
@@ -894,7 +905,7 @@ async function tryProvisionDynamicRoute(params: {
         '--deploy-env',
         deployEnv,
         '--remote-token',
-        params.shareOft,
+        bridgeToken,
         '--decimals',
         String(params.solanaDecimals),
         '--name',
@@ -915,6 +926,7 @@ async function tryProvisionDynamicRoute(params: {
       for (let i = 0; i < tokenSymbolCandidates.length; i += 1) {
         const tokenSymbol = tokenSymbolCandidates[i]
         logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (local CLI)', {
+          bridgeToken,
           shareOft: params.shareOft,
           cliDir,
           deployEnv,
@@ -943,6 +955,7 @@ async function tryProvisionDynamicRoute(params: {
           const hasFallback = i < tokenSymbolCandidates.length - 1
           const shouldFallback = hasFallback && isLikelyUnicodeSymbolUnsupportedError(message)
           logger.warn('[deploy/registerShareOft] Local CLI symbol candidate failed', {
+            bridgeToken,
             shareOft: params.shareOft,
             tokenSymbol,
             tokenSymbolCandidate: `${i + 1}/${tokenSymbolCandidates.length}`,
@@ -959,6 +972,7 @@ async function tryProvisionDynamicRoute(params: {
         provisionerUrls.length > 0 && (isRunnerUnavailable(error) || localError.includes('No usable bridge CLI runner found'))
       if (!canFallbackToRemote) throw error
       logger.warn('[deploy/registerShareOft] Local dynamic route provisioning failed; falling back to remote provisioner', {
+        bridgeToken,
         shareOft: params.shareOft,
         cliDir,
         cliBin,
@@ -990,12 +1004,13 @@ async function tryProvisionDynamicRoute(params: {
         address: BASE_SOLANA_BRIDGE,
         abi: BASE_SOLANA_BRIDGE_ABI,
         functionName: 'scalars',
-        args: [params.shareOft, mintBytes32],
+        args: [bridgeToken, mintBytes32],
       })
       .then((v: unknown) => BigInt(v as bigint))
       .catch(() => 0n)
     if (scalar > 0n) {
       logger.info('[deploy/registerShareOft] Dynamic Solana route ready', {
+        bridgeToken,
         shareOft: params.shareOft,
         mintPubkey: mintedPubkey,
         mintBytes32,
@@ -1008,7 +1023,7 @@ async function tryProvisionDynamicRoute(params: {
   }
 
   throw new Error(
-    `Dynamic route provisioning completed, but bridge scalar was still 0 for share ${params.shareOft} and mint ${mintBytes32}.`,
+    `Dynamic route provisioning completed, but bridge scalar was still 0 for bridgeToken ${bridgeToken} and mint ${mintBytes32}.`,
   )
 }
 
@@ -1116,6 +1131,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const buildOnly = body?.buildOnly === true
   const creatorTokenRaw = typeof body?.creatorToken === 'string' ? body.creatorToken.trim() : ''
   const creatorToken = isAddress(creatorTokenRaw) ? getAddress(creatorTokenRaw) : null
+  // When a Creator Coin is provided, wrap and register IT on Solana instead of
+  // the ShareOFT receipt token. The Creator Coin has a clean ASCII symbol (e.g.
+  // "AKITA" vs "■AKITA"), avoids ConstraintSeeds issues, and is the primary
+  // tradeable brand token that Solana users actually want to hold.
+  const bridgeToken: Address = creatorToken ?? shareOft
   const expectedSolanaAmountBase = parseBigIntLike(body?.expectedSolanaAmount)
   const requestedShareDecimals = parseDecimals(body?.shareDecimals)
 
@@ -1182,7 +1202,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         address: adapter,
         abi: SOLANA_BRIDGE_ADAPTER_ABI,
         functionName: 'isRegistered',
-        args: [shareOft],
+        args: [bridgeToken],
       }),
       publicClient.readContract({
         address: adapter,
@@ -1214,7 +1234,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         requestedShareDecimals ??
         (await publicClient
           .readContract({
-            address: shareOft,
+            address: bridgeToken,
             abi: ERC20_METADATA_ABI,
             functionName: 'decimals',
           })
@@ -1301,13 +1321,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<RegisterShareOftResponse>)
     }
 
-    const shareCode = await publicClient.getBytecode({ address: shareOft }).catch(() => '0x' as Hex)
+    const shareCode = await publicClient.getBytecode({ address: bridgeToken }).catch(() => '0x' as Hex)
     if (!shareCode || shareCode === '0x') {
       return res.status(409).json({
         success: false,
         error:
-          `ShareOFT ${shareOft} has no bytecode yet. ` +
-          'Run phase1 finalize first, then retry Solana registration.',
+          `Bridge token ${bridgeToken} has no bytecode yet. ` +
+          (bridgeToken === shareOft
+            ? 'Run phase1 finalize first, then retry Solana registration.'
+            : 'Ensure the creator token is deployed on Base before Solana registration.'),
       } satisfies ApiEnvelope<never>)
     }
 
@@ -1353,7 +1375,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           address: BASE_SOLANA_BRIDGE,
           abi: BASE_SOLANA_BRIDGE_ABI,
           functionName: 'scalars',
-          args: [shareOft, mint],
+          args: [bridgeToken, mint],
         })
         .then((v) => BigInt(v as bigint))
         .catch(() => null)
@@ -1361,6 +1383,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       try {
         const dynamicMint = await tryProvisionDynamicRoute({
           shareOft,
+          bridgeToken,
           solanaDecimals,
           publicClient,
         })
@@ -1395,7 +1418,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let existingTokenForMint = await readExistingTokenForMint(solanaMint)
     if (
       existingTokenForMint.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
-      existingTokenForMint.toLowerCase() !== shareOft.toLowerCase()
+      existingTokenForMint.toLowerCase() !== bridgeToken.toLowerCase()
     ) {
       const switched = await trySwitchToDynamicMint()
       if (!switched) {
@@ -1409,7 +1432,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       existingTokenForMint = await readExistingTokenForMint(solanaMint)
       if (
         existingTokenForMint.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
-        existingTokenForMint.toLowerCase() !== shareOft.toLowerCase()
+        existingTokenForMint.toLowerCase() !== bridgeToken.toLowerCase()
       ) {
         return res.status(409).json({
           success: false,
@@ -1427,7 +1450,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         existingTokenForMint = await readExistingTokenForMint(solanaMint)
         if (
           existingTokenForMint.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
-          existingTokenForMint.toLowerCase() !== shareOft.toLowerCase()
+          existingTokenForMint.toLowerCase() !== bridgeToken.toLowerCase()
         ) {
           return res.status(409).json({
             success: false,
@@ -1442,8 +1465,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(409).json({
           success: false,
           error: appendDynamicProvisionDetail(
-            `Base Solana bridge route is not registered for ShareOFT ${shareOft} and mint ${solanaMint} ` +
-              '(WrappedSplRouteNotRegistered). Use a bridge-supported Solana mint for this ShareOFT, ' +
+            `Base Solana bridge route is not registered for bridge token ${bridgeToken} and mint ${solanaMint} ` +
+              '(WrappedSplRouteNotRegistered). Use a bridge-supported Solana mint for this token, ' +
               'or disable Solana bridging on the batcher before deploy. ' +
               'For automatic dynamic route creation, enable SOLANA_DYNAMIC_ROUTE_ENABLED=1 and set SOLANA_BRIDGE_CLI_DIR, or configure SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL.',
           ),
@@ -1461,14 +1484,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       address: adapter,
       abi: SOLANA_BRIDGE_ADAPTER_ABI,
       functionName: 'registerToken',
-      args: [shareOft, solanaMint, solanaDecimals],
+      args: [bridgeToken, solanaMint, solanaDecimals],
       account,
       chain: base,
     })
     await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })
 
-    logger.info('[deploy/registerShareOft] Registered ShareOFT for Solana bridge', {
+    logger.info('[deploy/registerShareOft] Registered bridge token for Solana bridge', {
       caller: auth.address,
+      bridgeToken,
       shareOft,
       batcher,
       adapter,
