@@ -8,6 +8,8 @@ on:
 
 env:
   FOUNDRY_PROFILE: ci
+  MARKETING_ORIGIN: https://4626.fun
+  APP_ORIGIN: https://app.4626.fun
 
 jobs:
   test:
@@ -72,13 +74,13 @@ jobs:
           AUTH_SESSION_SECRET: test-auth-session-secret-123456
           DEPLOY_SESSION_SECRET: test-deploy-session-secret-123456
           DEPLOY_SESSION_TOKEN_HMAC_SECRET: test-deploy-hmac-secret-123456
-          CANONICAL_ORIGIN: https://creatorvault.fun
+          CANONICAL_ORIGIN: ${{ env.MARKETING_ORIGIN }}
 
       - name: Verify production agent registration endpoint
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         run: pnpm --dir frontend check:agent-registration
         env:
-          AGENT_REGISTRATION_URL: https://4626.fun/.well-known/agent-registration.json
+          AGENT_REGISTRATION_URL: ${{ env.APP_ORIGIN }}/.well-known/agent-registration.json
           AGENT_REGISTRATION_EXPECTED_ID: '2205'
           AGENT_REGISTRATION_EXPECTED_REGISTRY: eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432
 
