@@ -117,11 +117,13 @@ export function AccountContextProvider(props: { children: ReactNode }) {
 
   const [preferredModeVersion, setPreferredModeVersion] = useState(0)
   const preferredMode = useMemo(
-    () =>
-      readPreferredAccountMode({
+    () => {
+      void preferredModeVersion
+      return readPreferredAccountMode({
         signerAddress,
         chainId: chainIdValue,
-      }),
+      })
+    },
     [chainIdValue, preferredModeVersion, signerAddress],
   )
 
