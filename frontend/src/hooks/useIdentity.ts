@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { createPublicClient, http } from 'viem'
+import { createPublicClient, fallback, http } from 'viem'
 import { mainnet } from 'viem/chains'
 import { getBasenameProfile, formatBasename } from '@/lib/basename-api'
 import { apiFetch } from '@/lib/apiBase'
@@ -35,7 +35,14 @@ type IdentityCacheEntry = Omit<IdentityResult, 'loading'>
 // ---------------------------------------------------------------------------
 const identityCache = new Map<string, IdentityCacheEntry>()
 const pendingLookups = new Map<string, Promise<IdentityCacheEntry>>()
-const ensClient = createPublicClient({ chain: mainnet, transport: http() })
+const ensClient = createPublicClient({
+  chain: mainnet,
+  transport: fallback([
+    http('https://eth.llamarpc.com'),
+    http('https://ethereum-rpc.publicnode.com'),
+    http('https://rpc.ankr.com/eth'),
+  ]),
+})
 
 function truncate(addr: string): string {
   if (!addr || addr.length <= 10) return addr || '?'
