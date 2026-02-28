@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { TransactionProvider } from 'ethereum-identity-kit'
 import { WagmiProvider } from 'wagmi'
 import { wagmiConfig } from '@/config/wagmi'
 
@@ -14,18 +15,14 @@ const queryClient = new QueryClient({
 })
 
 /**
- * Minimal Web3 Provider Stack
- * 
- * WagmiProvider → QueryClientProvider → children
- * 
- * No OnchainKit, no complex nesting.
+ * Shared Web3 provider stack for app + waitlist routes.
  */
 export function Web3Providers({ children }: { children: ReactNode }) {
   return (
-    <WagmiProvider config={wagmiConfig}>
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
-    </WagmiProvider>
+    <QueryClientProvider client={queryClient}>
+      <WagmiProvider config={wagmiConfig}>
+        <TransactionProvider>{children}</TransactionProvider>
+      </WagmiProvider>
+    </QueryClientProvider>
   )
 }

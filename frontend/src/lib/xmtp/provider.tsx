@@ -321,6 +321,11 @@ function isWrongChainIdError(message: string): boolean {
   return m.includes('wrong chain id') || (m.includes('initially added with') && m.includes('signing from 0'))
 }
 
+function isOpfsAccessHandleError(message: string): boolean {
+  const m = String(message || '').toLowerCase()
+  return m.includes('createsyncaccesshandle') || m.includes('nomodificationallowederror')
+}
+
 /**
  * Auto-revoke the single oldest XMTP installation to free exactly 1 slot.
  *
@@ -849,6 +854,28 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         } catch (buildErr) {
           const buildMsg = buildErr instanceof Error ? buildErr.message : String(buildErr)
           console.warn('[xmtp] Client.build failed with stored key:', buildMsg)
+
+          // If an OPFS DB exists, creating a new installation here causes churn.
+          // Avoid automatic create/revoke loops and surface a clear recovery hint.
+          if (isInstallationLimitError(buildMsg)) {
+            const limitInboxId = extractInstallationLimitInboxId(buildMsg)
+            if (limitInboxId) setInstallationLimitInboxId(limitInboxId)
+            setStatus('error')
+            setError(
+              'XMTP restore found an existing local database but could not reopen it before hitting the 10/10 installation cap. ' +
+              'Refusing to auto-create another installation. Close other 4626 chat tabs/windows and retry, or use Reset XMTP installations if needed.',
+            )
+            return
+          }
+
+          if (isOpfsAccessHandleError(buildMsg)) {
+            setStatus('error')
+            setError(
+              'XMTP local database is currently locked by another tab/window. Close other 4626 chat tabs and retry.',
+            )
+            return
+          }
+
           closeClientSafe(buildClient)
           buildClient = null
           closeClientSafe(clientRef.current)

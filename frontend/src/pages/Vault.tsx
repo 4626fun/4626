@@ -20,7 +20,6 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
 import { AKITA, CONTRACTS } from '../config/contracts'
 import { ClaimPrizeToSolana } from '../components/ClaimPrizeToSolana'
-import { ConnectButton } from '../components/ConnectButton'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { CcaAuctionPanel } from '@/components/cca/CcaAuctionPanel'
@@ -893,12 +892,7 @@ export function Vault() {
               )}
 
               {/* Action Button */}
-              {!isConnected ? (
-                <div className="space-y-4">
-                  <span className="label block">Connect Required</span>
-                  <ConnectButton />
-                </div>
-              ) : needsApproval ? (
+              {needsApproval ? (
                 <Button
                   variant="primary"
                   size="lg"

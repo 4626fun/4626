@@ -1,7 +1,7 @@
 // Basenames integration using OnchainKit
 // Docs: https://docs.base.org/base-account/basenames/basenames-onchainkit-tutorial
 
-import { createPublicClient, http, toCoinType } from 'viem'
+import { createPublicClient, fallback, http, toCoinType } from 'viem'
 import { base, baseSepolia, mainnet } from 'viem/chains'
 import { normalize } from 'viem/ens'
 import { logger } from './logger'
@@ -18,6 +18,19 @@ export interface BasenameInfo {
   url?: string | null
 }
 
+function createMainnetReadClient() {
+  // Avoid viem's default public endpoint selection in browsers (can pick
+  // providers without permissive CORS, e.g. eth.merkle.io).
+  return createPublicClient({
+    chain: mainnet,
+    transport: fallback([
+      http('https://eth.llamarpc.com'),
+      http('https://ethereum-rpc.publicnode.com'),
+      http('https://rpc.ankr.com/eth'),
+    ]),
+  })
+}
+
 /**
  * Get Basename for an address
  */
@@ -30,10 +43,7 @@ export async function getBasename(
     // using Base chain coinType + CCIP gateways.
     //
     // This works in browsers without requiring Base L2 ENS universal resolver config.
-    const client = createPublicClient({
-      chain: mainnet,
-      transport: http(),
-    })
+    const client = createMainnetReadClient()
 
     const name = await client.getEnsName({
       address: address as `0x${string}`,
@@ -66,10 +76,7 @@ export async function getBasenameProfile(
       return { name: null }
     }
 
-    const client = createPublicClient({
-      chain: mainnet,
-      transport: http(),
-    })
+    const client = createMainnetReadClient()
 
     // Fetch ENS text records in parallel
     const [avatar, displayName, description, twitter, github, discord, email, url] = 
