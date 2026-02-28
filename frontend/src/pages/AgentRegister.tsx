@@ -822,24 +822,6 @@ export function AgentRegister() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {!isConnected && privyReady && !privyAuthenticated ? (
-            <>
-              <button
-                type="button"
-                onClick={() => privyLogin()}
-                className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white hover:bg-brand-primary/90"
-              >
-                Sign in with Privy
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowWalletConnect(true)}
-                className="text-xs text-zinc-500 hover:text-zinc-300"
-              >
-                Use external wallet instead
-              </button>
-            </>
-          ) : (
             <button
               type="button"
               onClick={() => void onRegister()}
@@ -849,9 +831,6 @@ export function AgentRegister() {
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {busy ? 'Registering…' : 'Register Agent'}
             </button>
-          )}
-          {!isConnected && privyAuthenticated ? <span className="text-xs text-zinc-500">Connect wallet to continue.</span> : null}
-          {!isConnected && !privyReady ? <span className="text-xs text-zinc-500">Loading…</span> : null}
           {isConnected && !canOperateCanonicalCsw ? (
             <span className="text-xs text-amber-300">Connect your canonical CSW or one of its owner wallets to register.</span>
           ) : null}

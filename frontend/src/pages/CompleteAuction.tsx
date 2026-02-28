@@ -17,13 +17,11 @@ import {
   Trophy,
   ArrowRight,
   ExternalLink,
-  Wallet,
   Clock,
   Target,
   Flame,
 } from 'lucide-react'
 import { CONTRACTS, AKITA } from '../config/contracts'
-import { ConnectButton } from '../components/ConnectButton'
 
 // CCA Strategy ABI
 const CCA_STRATEGY_ABI = [
@@ -257,27 +255,6 @@ export function CompleteAuction() {
   const isActive = auctionStatus?.[1]
   const isGraduated = auctionStatus?.[2]
   const currencyRaised = auctionStatus?.[4]
-
-  if (!isConnected) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-card p-8 max-w-md text-center space-y-6"
-        >
-          <div className="w-16 h-16 rounded-2xl bg-brand-500/10 flex items-center justify-center mx-auto">
-            <Wallet className="w-8 h-8 text-brand-500" />
-          </div>
-          <h2 className="font-display text-2xl font-bold">Sign In</h2>
-          <p className="text-surface-400">
-            Sign in to complete your auction
-          </p>
-          <ConnectButton />
-        </motion.div>
-      </div>
-    )
-  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-8 py-8">

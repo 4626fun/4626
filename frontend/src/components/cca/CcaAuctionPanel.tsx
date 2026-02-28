@@ -5,7 +5,6 @@ import type { Address } from 'viem'
 import { formatUnits, isAddress, parseEther, parseEventLogs } from 'viem'
 import { motion, AnimatePresence } from 'framer-motion'
 
-import { ConnectButton } from '@/components/ConnectButton'
 import {
   MAX_UINT128,
   Q96,
@@ -494,24 +493,6 @@ export function CcaAuctionPanel({
 
       {/* Bidding Interface */}
       <div className="p-6 sm:p-8">
-        {!isConnected ? (
-          <motion.div 
-            className="bg-linear-to-br from-cyan-950/10 to-black/40 border border-cyan-500/20 rounded-xl p-8"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
-              <div>
-                <h4 className="headline text-xl mb-2">Sign in to Participate</h4>
-                <p className="text-zinc-500 text-sm">
-                  Sign in to place bids and participate in price discovery.
-                </p>
-              </div>
-              <ConnectButton />
-            </div>
-          </motion.div>
-        ) : (
           <div className="space-y-6">
             {/* Pre-launch state */}
             {!hasAuction && (
@@ -844,7 +825,6 @@ export function CcaAuctionPanel({
               </motion.div>
             )}
           </div>
-        )}
       </div>
 
       {/* Technical Details Footer */}

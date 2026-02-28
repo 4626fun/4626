@@ -405,8 +405,6 @@ export function Portfolio() {
       )
     }
 
-    if (!effectiveAddress) return <div className="p-4 text-[12px] text-zinc-600">Sign in to view balances.</div>
-
     if (items.length === 0) {
       return (
         <div className="p-4">

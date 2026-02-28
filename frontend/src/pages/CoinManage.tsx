@@ -6,7 +6,6 @@ import { isAddress, type Address } from 'viem'
 import { base } from 'wagmi/chains'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 
-import { ConnectButton } from '@/components/ConnectButton'
 import { isLensGroveEnabled } from '@/lib/flags'
 import { fetchLensJson, resolveLensUri, uploadImmutableBlob, uploadImmutableJson } from '@/lib/lens/grove'
 import { useZoraCoin } from '@/lib/zora/hooks'
@@ -260,11 +259,6 @@ export function CoinManage() {
             {!coinAddress ? (
               <div className="card p-8 text-sm text-zinc-600">
                 Invalid coin address in URL.
-              </div>
-            ) : !isConnected ? (
-              <div className="card p-8 space-y-4">
-                <div className="label">Sign in required</div>
-                <ConnectButton />
               </div>
             ) : (
               <div className="space-y-8">
