@@ -6,7 +6,6 @@ import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagm
 import { base } from 'wagmi/chains'
 import { CheckCircle, XCircle, AlertTriangle, Loader2, ExternalLink, ShieldCheck, Wrench } from 'lucide-react'
 import { AKITA, CONTRACTS } from '@/config/contracts'
-import { ConnectButton } from '@/components/ConnectButton'
 
 type CheckStatus = 'pass' | 'fail' | 'warn' | 'info'
 
@@ -728,14 +727,7 @@ export function Status() {
                   <div className="text-[10px] text-zinc-600">Creator-only</div>
                 </div>
 
-                {!isConnected ? (
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="text-xs text-zinc-600">
-                      Connect your wallet to apply fixes.
-                    </div>
-                    <ConnectButton />
-                  </div>
-                ) : !isBase ? (
+                {!isBase ? (
                   <div className="text-xs text-zinc-600">
                     Switch to Base to apply fixes.
                   </div>

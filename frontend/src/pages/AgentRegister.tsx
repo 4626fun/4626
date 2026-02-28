@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useWallets } from '@privy-io/react-auth'
+import { usePrivy, useWallets } from '@privy-io/react-auth'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { Bot, CheckCircle2, ExternalLink, Loader2, Shield, Sparkles, Zap } from 'lucide-react'
@@ -189,6 +189,17 @@ function isUserRejectedError(error: unknown): boolean {
   )
 }
 
+function isSupportedAgentUriScheme(value: string): boolean {
+  const uri = value.trim().toLowerCase()
+  return (
+    uri.startsWith('https://') ||
+    uri.startsWith('http://') ||
+    uri.startsWith('ipfs://') ||
+    uri.startsWith('ar://') ||
+    uri.startsWith('data:')
+  )
+}
+
 export function AgentRegister() {
   const [agentUri, setAgentUri] = useState('')
   const [busy, setBusy] = useState(false)
@@ -206,6 +217,8 @@ export function AgentRegister() {
   const { address: connectedAddress, chainId, isConnected, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
   const { wallets: privyWallets } = useWallets()
+  const { ready: privyReady, authenticated: privyAuthenticated, login: privyLogin } = usePrivy()
+  const [showWalletConnect, setShowWalletConnect] = useState(false)
   const basePublicClient = usePublicClient({ chainId: base.id })
   const fallbackPublicClient = usePublicClient()
   const publicClient = basePublicClient ?? fallbackPublicClient
@@ -439,6 +452,9 @@ export function AgentRegister() {
     },
     onSuccess: (data) => {
       setPublishData(data)
+      if (data.grove?.gatewayUrl) {
+        setAgentUri(data.grove.gatewayUrl)
+      }
       if (data.grove?.lensUri) {
         setStackStatus(`Published to Lens Grove: ${data.grove.lensUri}`)
       } else {
@@ -499,6 +515,10 @@ export function AgentRegister() {
     }
     const uri = agentUri.trim()
     if (!uri) return
+    if (!isSupportedAgentUriScheme(uri)) {
+      setError('Agent URI must use https://, http://, ipfs://, ar://, or data:. If using Grove, use gatewayUrl (not lens://).')
+      return
+    }
 
     setBusy(true)
     setError(null)
@@ -820,16 +840,15 @@ export function AgentRegister() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => void onRegister()}
-            disabled={!canSubmit}
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-primary/15 px-3 py-2 text-sm font-medium text-brand-primary hover:bg-brand-primary/20 disabled:opacity-50"
-          >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {busy ? 'Registering…' : 'Register Agent'}
-          </button>
-          {!isConnected ? <span className="text-xs text-zinc-500">Connect wallet to continue.</span> : null}
+            <button
+              type="button"
+              onClick={() => void onRegister()}
+              disabled={!canSubmit}
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-primary/15 px-3 py-2 text-sm font-medium text-brand-primary hover:bg-brand-primary/20 disabled:opacity-50"
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {busy ? 'Registering…' : 'Register Agent'}
+            </button>
           {isConnected && !canOperateCanonicalCsw ? (
             <span className="text-xs text-amber-300">Connect your canonical CSW or one of its owner wallets to register.</span>
           ) : null}
@@ -1000,4 +1019,3 @@ export function AgentRegister() {
     </div>
   )
 }
-
