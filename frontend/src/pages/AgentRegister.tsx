@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useWallets } from '@privy-io/react-auth'
+import { usePrivy, useWallets } from '@privy-io/react-auth'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { Bot, CheckCircle2, ExternalLink, Loader2, Shield, Sparkles, Zap } from 'lucide-react'
@@ -206,6 +206,8 @@ export function AgentRegister() {
   const { address: connectedAddress, chainId, isConnected, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
   const { wallets: privyWallets } = useWallets()
+  const { ready: privyReady, authenticated: privyAuthenticated, login: privyLogin } = usePrivy()
+  const [showWalletConnect, setShowWalletConnect] = useState(false)
   const basePublicClient = usePublicClient({ chainId: base.id })
   const fallbackPublicClient = usePublicClient()
   const publicClient = basePublicClient ?? fallbackPublicClient
@@ -820,16 +822,36 @@ export function AgentRegister() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => void onRegister()}
-            disabled={!canSubmit}
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-primary/15 px-3 py-2 text-sm font-medium text-brand-primary hover:bg-brand-primary/20 disabled:opacity-50"
-          >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {busy ? 'Registering…' : 'Register Agent'}
-          </button>
-          {!isConnected ? <span className="text-xs text-zinc-500">Connect wallet to continue.</span> : null}
+          {!isConnected && privyReady && !privyAuthenticated ? (
+            <>
+              <button
+                type="button"
+                onClick={() => privyLogin()}
+                className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white hover:bg-brand-primary/90"
+              >
+                Sign in with Privy
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowWalletConnect(true)}
+                className="text-xs text-zinc-500 hover:text-zinc-300"
+              >
+                Use external wallet instead
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void onRegister()}
+              disabled={!canSubmit}
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-primary/15 px-3 py-2 text-sm font-medium text-brand-primary hover:bg-brand-primary/20 disabled:opacity-50"
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {busy ? 'Registering…' : 'Register Agent'}
+            </button>
+          )}
+          {!isConnected && privyAuthenticated ? <span className="text-xs text-zinc-500">Connect wallet to continue.</span> : null}
+          {!isConnected && !privyReady ? <span className="text-xs text-zinc-500">Loading…</span> : null}
           {isConnected && !canOperateCanonicalCsw ? (
             <span className="text-xs text-amber-300">Connect your canonical CSW or one of its owner wallets to register.</span>
           ) : null}
