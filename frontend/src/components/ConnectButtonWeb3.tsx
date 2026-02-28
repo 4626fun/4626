@@ -4,6 +4,7 @@ import { Wallet, ChevronDown } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import { usePrivy } from '@privy-io/react-auth'
 
 /**
  * Simple Connect Button
@@ -17,6 +18,7 @@ export function ConnectButtonWeb3() {
   const auth = useSiweAuth()
   const privyStatus = usePrivyClientStatus()
   const prefersPrivyWalletLogin = privyStatus === 'ready'
+  const { ready: privyReady, authenticated: privyAuthenticated } = usePrivy()
   const [showMenu, setShowMenu] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
 
@@ -139,10 +141,17 @@ export function ConnectButtonWeb3() {
         disabled={isPending || auth.busy}
         onClick={() => {
           if (prefersPrivyWalletLogin) {
-            void (async () => {
-              const signed = await auth.signIn({ method: 'zora' })
-              if (!signed) setShowOptions(true)
-            })()
+            if (privyReady && privyAuthenticated) {
+              void (async () => {
+                const signed = await auth.signIn({ method: 'auto' })
+                if (!signed) setShowOptions(true)
+              })()
+            } else {
+              void (async () => {
+                const signed = await auth.signIn({ method: 'zora' })
+                if (!signed) setShowOptions(true)
+              })()
+            }
           } else {
             setShowOptions(!showOptions)
           }
