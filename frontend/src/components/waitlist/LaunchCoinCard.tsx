@@ -39,6 +39,8 @@ type LaunchCoinCardProps = {
   defaultSymbol?: string | null
   /** The user's Coinbase Smart Wallet address (coin creator) */
   smartWalletAddress: string | null
+  /** Optional owner address hint to prioritize the correct Privy embedded signer */
+  preferredOwnerAddress?: string | null
   /** Callback when coin is successfully created */
   onCoinCreated?: (coinAddress: string, symbol: string) => void
 }
@@ -52,10 +54,12 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
   defaultName,
   defaultSymbol,
   smartWalletAddress,
+  preferredOwnerAddress,
   onCoinCreated,
 }: LaunchCoinCardProps) {
   const { ready: canExecuteWithCsw, execute, signerType } = usePrivyCswExecute({
     smartWallet: smartWalletAddress,
+    preferredOwnerAddress,
   })
 
   // Form state
