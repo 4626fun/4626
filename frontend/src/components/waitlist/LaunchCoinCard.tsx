@@ -1,16 +1,14 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Coins, Loader2, CheckCircle2, Upload, AlertCircle } from 'lucide-react'
-import { usePublicClient, useWalletClient } from 'wagmi'
 import { base } from 'wagmi/chains'
 import type { Address, Hex } from 'viem'
 import { isAddress, getAddress } from 'viem'
 
 import { uploadImmutableBlob, uploadImmutableJson } from '@/lib/lens/grove'
-import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
-import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { logger } from '@/lib/logger'
 import { getZoraPlatformReferrerAddress } from '@/lib/zora/referrals'
+import { usePrivyCswExecute } from '@/hooks/usePrivyCswExecute'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -41,8 +39,6 @@ type LaunchCoinCardProps = {
   defaultSymbol?: string | null
   /** The user's Coinbase Smart Wallet address (coin creator) */
   smartWalletAddress: string | null
-  /** The EOA owner address that will sign the UserOp */
-  ownerAddress: string | null
   /** Callback when coin is successfully created */
   onCoinCreated?: (coinAddress: string, symbol: string) => void
 }
@@ -56,11 +52,11 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
   defaultName,
   defaultSymbol,
   smartWalletAddress,
-  ownerAddress,
   onCoinCreated,
 }: LaunchCoinCardProps) {
-  const publicClient = usePublicClient({ chainId: base.id })
-  const { data: walletClient } = useWalletClient({ chainId: base.id })
+  const { ready: canExecuteWithCsw, execute, signerType } = usePrivyCswExecute({
+    smartWallet: smartWalletAddress,
+  })
 
   // Form state
   const [name, setName] = useState('')
@@ -94,9 +90,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
     symbolClean.length >= 2 &&
     step === 'form' &&
     !!smartWalletAddress &&
-    !!ownerAddress &&
-    !!publicClient &&
-    !!walletClient
+    canExecuteWithCsw
 
   // Image handling
   const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -119,9 +113,8 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
 
   // Main creation flow
   const handleCreate = useCallback(async () => {
-    if (!canSubmit || !publicClient || !walletClient) return
+    if (!canSubmit) return
     if (!smartWalletAddress || !isAddress(smartWalletAddress)) return
-    if (!ownerAddress || !isAddress(ownerAddress)) return
 
     setError(null)
 
@@ -186,11 +179,6 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
       setStep('signing')
       setStatusText('Sign the transaction in your wallet...')
 
-      const paymasterUrl = resolveCdpPaymasterUrl(
-        import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined,
-      )
-      const bundlerUrl = paymasterUrl || '/api/paymaster'
-
       // Map Zora SDK calls to UserOp calls
       const calls = callResult.calls.map((c) => ({
         to: c.to as Address,
@@ -199,17 +187,13 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
       }))
 
       setStep('confirming')
-      setStatusText('Confirming on Base...')
+      setStatusText(
+        signerType === 'privy-embedded'
+          ? 'Submitting with Privy embedded signer...'
+          : 'Confirming on Base...',
+      )
 
-      const result = await sendCoinbaseSmartWalletUserOperation({
-        publicClient: publicClient as any,
-        walletClient: walletClient as any,
-        bundlerUrl,
-        smartWallet: getAddress(smartWalletAddress) as Address,
-        ownerAddress: getAddress(ownerAddress) as Address,
-        calls,
-        version: '1',
-      })
+      const result = await execute(calls)
 
       // ---------------------------------------------------------------
       // Step 5: Success
@@ -245,11 +229,10 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
     effectiveName,
     imageFile,
     onCoinCreated,
-    ownerAddress,
-    publicClient,
+    execute,
+    signerType,
     smartWalletAddress,
     symbolClean,
-    walletClient,
   ])
 
   // Reset to form

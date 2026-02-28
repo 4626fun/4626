@@ -7519,7 +7519,6 @@ function DeployVaultMain() {
                       {canCreateCoinInApp && canonicalIdentityIsContract ? (
                         <LaunchCoinCard
                           smartWalletAddress={canonicalIdentityAddress}
-                          ownerAddress={connectedWalletAddress}
                           onCoinCreated={(coinAddress) => setCreatorToken(coinAddress)}
                         />
                       ) : (
