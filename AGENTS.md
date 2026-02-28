@@ -36,6 +36,10 @@ Standard commands are documented in `frontend/package.json` scripts:
 - **API routing**: Vercel API routes go through `frontend/api/[...path].ts` dispatching to `frontend/api/_handlers/_routes.ts`. New endpoints must be registered in the static route map (no dynamic imports).
 - **`pnpm.onlyBuiltDependencies`** is configured in `frontend/package.json` to avoid interactive `pnpm approve-builds` prompts.
 - **Waitlist/marketing page on localhost**: By default, `localhost` is treated as the "app" domain and redirects unauthenticated users to `4626.fun`. To test the waitlist/marketing page locally, set `VITE_HOST_MODE_OVERRIDE=marketing` and `VITE_MARKETING_ORIGIN=http://localhost:5173` in `frontend/.env`. This is already configured in the Cloud Agent `.env`.
+- **AdminOps page on localhost**: The `/admin/ops` route requires authentication and admin privileges. To access locally: (1) set `VITE_HOST_MODE_OVERRIDE=app`, (2) set `VITE_ADMIN_BYPASS_ADDRESSES=<your-wallet>`. Without these, the route redirects to the production waitlist.
+- **Privy embedded wallet**: To enable Privy login (for embedded wallet signing on AdminOps), set `VITE_PRIVY_ENABLED=1`, `VITE_PRIVY_APP_ID`, `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, and `VITE_PRIVY_ALLOWED_ORIGINS=http://localhost:5173`. The origin must also be allowlisted in the [Privy Dashboard](https://dashboard.privy.io/) → Settings → Allowed Origins.
+- **ERC-4337 UserOp signing with non-Coinbase wallets**: Wallets like Rabby block `eth_sign`. The `coinbaseErc4337.ts` module now auto-retries with EIP-712 `signTypedData` using the CSW domain, which produces the same signature and is supported by all wallets. No manual config needed.
+- **ERC-8004 agentURI on-chain**: The on-chain `agentURI` must use a validator-compatible scheme (`https://`, `ipfs://`, `ar://`, `data:`). Do NOT use `lens://` URIs from Grove — use the `gatewayUrl` (`https://api.grove.storage/...`) instead. The canonical endpoint is `https://4626.fun/.well-known/agent-registration.json`.
 
 ### Solana program deployment
 
