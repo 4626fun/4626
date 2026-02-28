@@ -234,4 +234,66 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         vm.expectRevert(DeploymentBatcher.InvalidCodeId.selector);
         batcher.deployPhase3Strategies(params, codeIds);
     }
+
+    function test_deployPhase3Strategies_revertsWhenAjnaWeightIsZero() public {
+        DeploymentBatcher.Phase3Params memory params = DeploymentBatcher.Phase3Params({
+            creatorToken: creatorToken,
+            owner: address(this),
+            vault: address(vault),
+            version: "v1",
+            initialSqrtPriceX96: 0,
+            charmVaultName: "Charm Vault",
+            charmVaultSymbol: "CHRM",
+            charmWeightBps: 6_000,
+            ajnaWeightBps: 0,
+            solanaWeightBps: 1_000,
+            solanaKeeper: solanaKeeper,
+            solanaMaxNavAge: 3600,
+            solanaMaxNavDeltaBpsPerUpdate: 500,
+            solanaMinBaseLiquidityBps: 1_000,
+            solanaBridgeAddress: solanaBridge,
+            enableAutoAllocate: false
+        });
+
+        DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
+            charmAlphaVaultDeploy: CHARM_ALPHA_CODE_ID,
+            creatorCharmStrategy: CREATOR_CHARM_STRATEGY_CODE_ID,
+            ajnaStrategy: AJNA_STRATEGY_CODE_ID,
+            solanaStrategy: SOLANA_STRATEGY_CODE_ID
+        });
+
+        vm.expectRevert(DeploymentBatcher.InvalidWeight.selector);
+        batcher.deployPhase3Strategies(params, codeIds);
+    }
+
+    function test_deployPhase3Strategies_revertsWhenSolanaWeightIsZero() public {
+        DeploymentBatcher.Phase3Params memory params = DeploymentBatcher.Phase3Params({
+            creatorToken: creatorToken,
+            owner: address(this),
+            vault: address(vault),
+            version: "v1",
+            initialSqrtPriceX96: 0,
+            charmVaultName: "Charm Vault",
+            charmVaultSymbol: "CHRM",
+            charmWeightBps: 6_000,
+            ajnaWeightBps: 3_000,
+            solanaWeightBps: 0,
+            solanaKeeper: solanaKeeper,
+            solanaMaxNavAge: 3600,
+            solanaMaxNavDeltaBpsPerUpdate: 500,
+            solanaMinBaseLiquidityBps: 1_000,
+            solanaBridgeAddress: solanaBridge,
+            enableAutoAllocate: false
+        });
+
+        DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
+            charmAlphaVaultDeploy: CHARM_ALPHA_CODE_ID,
+            creatorCharmStrategy: CREATOR_CHARM_STRATEGY_CODE_ID,
+            ajnaStrategy: AJNA_STRATEGY_CODE_ID,
+            solanaStrategy: SOLANA_STRATEGY_CODE_ID
+        });
+
+        vm.expectRevert(DeploymentBatcher.InvalidWeight.selector);
+        batcher.deployPhase3Strategies(params, codeIds);
+    }
 }
