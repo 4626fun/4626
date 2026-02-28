@@ -833,6 +833,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       const dbExists = await hasOpfsDatabase()
 
       if (dbExists) {
+        let restoreFailureMessage: string | null = null
+        let restoreFailureKind: 'installation_limit' | 'opfs_lock' | null = null
+
         // Attempt 1: try with the stored encryption key
         try {
           console.log('[xmtp] OPFS database found — attempting Client.build restore…')
@@ -854,28 +857,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         } catch (buildErr) {
           const buildMsg = buildErr instanceof Error ? buildErr.message : String(buildErr)
           console.warn('[xmtp] Client.build failed with stored key:', buildMsg)
-
-          // If an OPFS DB exists, creating a new installation here causes churn.
-          // Avoid automatic create/revoke loops and surface a clear recovery hint.
-          if (isInstallationLimitError(buildMsg)) {
-            const limitInboxId = extractInstallationLimitInboxId(buildMsg)
-            if (limitInboxId) setInstallationLimitInboxId(limitInboxId)
-            setStatus('error')
-            setError(
-              'XMTP restore found an existing local database but could not reopen it before hitting the 10/10 installation cap. ' +
-              'Refusing to auto-create another installation. Close other 4626 chat tabs/windows and retry, or use Reset XMTP installations if needed.',
-            )
-            return
-          }
-
-          if (isOpfsAccessHandleError(buildMsg)) {
-            setStatus('error')
-            setError(
-              'XMTP local database is currently locked by another tab/window. Close other 4626 chat tabs and retry.',
-            )
-            return
-          }
-
+          restoreFailureMessage = buildMsg
+          if (isInstallationLimitError(buildMsg)) restoreFailureKind = 'installation_limit'
+          else if (isOpfsAccessHandleError(buildMsg)) restoreFailureKind = 'opfs_lock'
           closeClientSafe(buildClient)
           buildClient = null
           closeClientSafe(clientRef.current)
@@ -892,6 +876,8 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
             buildClient = await Client.build(identifier, { ...baseOptions })
             if (buildClient?.inboxId) {
               buildSucceeded = true
+              restoreFailureMessage = null
+              restoreFailureKind = null
               console.log(
                 '[xmtp] Client.build succeeded (no key) — reusing installation',
                 buildClient.installationId,
@@ -901,13 +887,48 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
               buildClient = null
             }
           } catch (buildErr2) {
+            const buildMsg2 = buildErr2 instanceof Error ? buildErr2.message : String(buildErr2)
             console.warn('[xmtp] Client.build without key also failed:', buildErr2)
+            restoreFailureMessage = buildMsg2
+            if (isInstallationLimitError(buildMsg2)) restoreFailureKind = 'installation_limit'
+            else if (isOpfsAccessHandleError(buildMsg2)) restoreFailureKind = 'opfs_lock'
             closeClientSafe(buildClient)
             buildClient = null
             closeClientSafe(clientRef.current)
             clientRef.current = null
             await new Promise((r) => setTimeout(r, 200))
           }
+        }
+
+        // If an OPFS DB already exists, never auto-create a new installation.
+        // This guarantees we reuse an existing installation or fail explicitly
+        // instead of churning through new registrations/revocations.
+        if (!buildSucceeded) {
+          if (restoreFailureKind === 'installation_limit') {
+            const limitInboxId = extractInstallationLimitInboxId(restoreFailureMessage ?? '')
+            if (limitInboxId) setInstallationLimitInboxId(limitInboxId)
+            setStatus('error')
+            setError(
+              'XMTP restore found an existing local database but could not reopen it before hitting the 10/10 installation cap. ' +
+              'Refusing to auto-create another installation. Close other 4626 chat tabs/windows and retry, or use Reset XMTP installations if needed.',
+            )
+            return
+          }
+
+          if (restoreFailureKind === 'opfs_lock') {
+            setStatus('error')
+            setError(
+              'XMTP local database is currently locked by another tab/window. Close other 4626 chat tabs and retry.',
+            )
+            return
+          }
+
+          setStatus('error')
+          setError(
+            'XMTP found an existing local database but could not restore the previous installation. ' +
+            'Refusing to create a new installation to avoid churn. Retry after closing other tabs/windows.',
+          )
+          return
         }
       } else {
         console.log('[xmtp] No OPFS database found — first use, will create new installation')
@@ -999,7 +1020,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       }
       const signer: Signer = signerDecision.signerType === 'SCW' ? scwSigner : eoaSigner
 
-      console.log('[xmtp] Client.build unavailable — falling through to Client.create (will require wallet signature)')
+      console.log('[xmtp] No reusable local installation found — falling through to Client.create (will require wallet signature)')
 
       // Helper: attempt Client.create, auto-revoking stale installations on 10/10.
       const tryCreate = async (activeSigner: Signer, dbKey: Uint8Array): Promise<Client> => {
