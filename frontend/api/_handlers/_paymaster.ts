@@ -439,6 +439,16 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
+          { name: 'meteoraAlphaVault', type: 'bytes32' },
+          {
+            name: 'solanaIxs',
+            type: 'tuple[]',
+            components: [
+              { name: 'programId', type: 'bytes32' },
+              { name: 'serializedAccounts', type: 'bytes[]' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
         ],
       },
     ],
@@ -582,7 +592,7 @@ const SELECTOR_BATCHER_FINALIZE_PHASE1_WITH_SALT = '0x3bc09a8b'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH = '0x9abe5eca'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT = '0xe20fb0df'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_CORE = '0xf9344d88'
-const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xcafc9348'
+const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xbd4583fb'
 const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0x6e3f91b0'
 // launchDeferredAuction((address,address,address,string,uint256,uint128,bytes))
 const SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'
