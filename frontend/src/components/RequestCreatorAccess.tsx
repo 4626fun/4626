@@ -85,7 +85,7 @@ export function RequestCreatorAccess({ coin }: { coin?: string | null }) {
           Invite-only launch
         </div>
         <div className="text-xs text-zinc-600">
-          Connect your wallet to request creator access.
+          Sign in to request creator access.
         </div>
         <ConnectButton />
       </div>

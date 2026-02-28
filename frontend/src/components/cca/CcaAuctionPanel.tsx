@@ -503,9 +503,9 @@ export function CcaAuctionPanel({
           >
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
               <div>
-                <h4 className="headline text-xl mb-2">Connect to Participate</h4>
+                <h4 className="headline text-xl mb-2">Sign in to Participate</h4>
                 <p className="text-zinc-500 text-sm">
-                  Connect your wallet to place bids and participate in price discovery.
+                  Sign in to place bids and participate in price discovery.
                 </p>
               </div>
               <ConnectButton />

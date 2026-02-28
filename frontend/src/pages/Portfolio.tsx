@@ -405,7 +405,7 @@ export function Portfolio() {
       )
     }
 
-    if (!effectiveAddress) return <div className="p-4 text-[12px] text-zinc-600">Connect a wallet to view balances.</div>
+    if (!effectiveAddress) return <div className="p-4 text-[12px] text-zinc-600">Sign in to view balances.</div>
 
     if (items.length === 0) {
       return (
@@ -505,7 +505,7 @@ export function Portfolio() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3 min-w-0">
               <div className="rounded-full border border-zinc-800 bg-zinc-950/50 px-3 py-1.5 text-[12px] text-zinc-300 font-mono truncate">
-                {effectiveAddress ? shortAddr(effectiveAddress) : 'Connect wallet'}
+                {effectiveAddress ? shortAddr(effectiveAddress) : 'Sign in'}
               </div>
               <AccountModeIndicator compact />
             </div>

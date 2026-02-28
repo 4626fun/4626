@@ -263,7 +263,7 @@ export function CoinManage() {
               </div>
             ) : !isConnected ? (
               <div className="card p-8 space-y-4">
-                <div className="label">Connect required</div>
+                <div className="label">Sign in required</div>
                 <ConnectButton />
               </div>
             ) : (

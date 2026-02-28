@@ -731,7 +731,7 @@ export function Status() {
                 {!isConnected ? (
                   <div className="flex items-center justify-between gap-4">
                     <div className="text-xs text-zinc-600">
-                      Connect your wallet to apply fixes.
+                      Sign in to apply fixes.
                     </div>
                     <ConnectButton />
                   </div>

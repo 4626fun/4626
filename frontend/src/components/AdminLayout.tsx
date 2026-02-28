@@ -76,7 +76,7 @@ export function AdminLayout() {
               <ShieldCheck className="w-7 h-7 text-zinc-300" />
             </div>
             <div className="font-display text-xl text-white">Admin</div>
-            <div className="text-xs text-zinc-600">Connect or sign in to access admin tools.</div>
+            <div className="text-xs text-zinc-600">Sign in to access admin tools.</div>
             <div className="flex flex-col items-center gap-2">
               <ConnectButton variant="default" />
               <button
