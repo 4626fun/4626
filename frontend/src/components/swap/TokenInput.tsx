@@ -29,6 +29,7 @@ export function TokenInput({
   balanceLabel,
   readOnly = false,
   token,
+  tokenAddress,
   isLoadingToken,
   onAmountChange,
   onSelectToken,
