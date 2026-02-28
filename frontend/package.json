@@ -19,7 +19,10 @@
     "agent:start": "pnpm agent:eliza",
     "agent:eliza": "tsx --env-file=.env --env-file=../cre/.env server/agent/eliza/index.ts",
     "solana-provisioner:start": "if [ -f server/solana-provisioner/.env ]; then tsx --env-file=server/solana-provisioner/.env server/solana-provisioner/index.ts; else tsx server/solana-provisioner/index.ts; fi",
+    "solana-mint:mine": "tsx scripts/mine-solana-mint-vanity.ts",
     "subdomains:indexer": "tsx scripts/subdomain-indexer.ts",
+    "csw:link-owner": "tsx scripts/link-canonical-csw-owner.ts",
+    "csw:owner-link:backfill": "tsx scripts/csw-owner-link-backfill.ts",
     "check:agent-registration": "node scripts/check-agent-registration.mjs",
     "deploy:autopilot": "node scripts/deploy-autopilot.mjs",
     "skills:sync:cursor": "node scripts/sync-cursor-skills.mjs --prune"

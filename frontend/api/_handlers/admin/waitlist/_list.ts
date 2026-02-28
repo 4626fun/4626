@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../../server/auth/_shared.js'
 import { getDb, isDbConfigured } from '../../../../server/_lib/postgres.js'
 import { getSessionAddress, isAdminAddress } from '../../../../server/_lib/session.js'
+import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/supabaseAdmin.js'
 import { ensureWaitlistSchema } from '../../../../server/_lib/waitlistSchema.js'
 
 type WaitlistListItem = {
@@ -59,58 +60,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(403).json({ success: false, error: 'Admin only' } satisfies ApiEnvelope<never>)
   }
 
-  const db = isDbConfigured() ? await getDb() : null
-  if (!db) {
-    return res.status(500).json({ success: false, error: 'Database not configured' } satisfies ApiEnvelope<never>)
-  }
-
-  await ensureWaitlistSchema(db as any)
-
-  if (!db.query) {
-    return res.status(500).json({ success: false, error: 'Database driver missing query()' } satisfies ApiEnvelope<never>)
-  }
-
   const qRaw = typeof (req.query as any)?.q === 'string' ? String((req.query as any).q) : ''
   const q = qRaw.trim()
-  const where = q
-    ? `WHERE email ILIKE $1
-       OR primary_wallet ILIKE $1
-       OR solana_wallet ILIKE $1
-       OR referral_code ILIKE $1
-       OR embedded_wallet ILIKE $1
-       OR privy_user_id ILIKE $1`
-    : ''
-  const params = q ? [`%${q}%`] : []
 
-  const result = await db.query(
-    `SELECT
-       id,
-       email,
-       persona,
-       primary_wallet,
-       csw_address,
-       solana_wallet,
-       embedded_wallet,
-       embedded_wallet_chain,
-       embedded_wallet_client_type,
-       referral_code,
-       contact_preference,
-       app_access_status,
-       app_access_decided_at,
-       created_at,
-       updated_at,
-       preprovisioned_at,
-       preprov_farcaster_username,
-       preprov_zora_handle,
-       preprov_coin_symbol
-     FROM profiles
-     ${where}
-     ORDER BY created_at DESC
-     LIMIT 200;`,
-    params,
-  )
-
-  const items: WaitlistListItem[] = (result.rows ?? []).map((row: any) => ({
+  const mapItem = (row: any): WaitlistListItem => ({
     id: typeof row.id === 'number' ? row.id : Number(row.id),
     email: typeof row.email === 'string' ? row.email : String(row.email || ''),
     persona: typeof row.persona === 'string' ? row.persona : null,
@@ -130,7 +83,107 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     preprovFarcasterUsername: typeof row.preprov_farcaster_username === 'string' ? row.preprov_farcaster_username : null,
     preprovZoraHandle: typeof row.preprov_zora_handle === 'string' ? row.preprov_zora_handle : null,
     preprovCoinSymbol: typeof row.preprov_coin_symbol === 'string' ? row.preprov_coin_symbol : null,
-  }))
+  })
+
+  let items: WaitlistListItem[] = []
+
+  const db = isDbConfigured() ? await getDb() : null
+  if (db?.query) {
+    await ensureWaitlistSchema(db as any)
+    const where = q
+      ? `WHERE email ILIKE $1
+         OR primary_wallet ILIKE $1
+         OR solana_wallet ILIKE $1
+         OR referral_code ILIKE $1
+         OR embedded_wallet ILIKE $1
+         OR privy_user_id ILIKE $1`
+      : ''
+    const params = q ? [`%${q}%`] : []
+
+    const result = await db.query(
+      `SELECT
+         id,
+         email,
+         persona,
+         primary_wallet,
+         csw_address,
+         solana_wallet,
+         embedded_wallet,
+         embedded_wallet_chain,
+         embedded_wallet_client_type,
+         referral_code,
+         contact_preference,
+         app_access_status,
+         app_access_decided_at,
+         created_at,
+         updated_at,
+         preprovisioned_at,
+         preprov_farcaster_username,
+         preprov_zora_handle,
+         preprov_coin_symbol
+       FROM profiles
+       ${where}
+       ORDER BY created_at DESC
+       LIMIT 200;`,
+      params,
+    )
+    items = (result.rows ?? []).map(mapItem)
+  } else if (isSupabaseAdminConfigured()) {
+    const supabase = getSupabaseAdmin()
+    let query = supabase
+      .from('profiles')
+      .select(
+        [
+          'id',
+          'email',
+          'persona',
+          'primary_wallet',
+          'csw_address',
+          'solana_wallet',
+          'embedded_wallet',
+          'embedded_wallet_chain',
+          'embedded_wallet_client_type',
+          'referral_code',
+          'contact_preference',
+          'app_access_status',
+          'app_access_decided_at',
+          'created_at',
+          'updated_at',
+          'preprovisioned_at',
+          'preprov_farcaster_username',
+          'preprov_zora_handle',
+          'preprov_coin_symbol',
+        ].join(','),
+      )
+      .order('created_at', { ascending: false })
+      .limit(200)
+    if (q) {
+      const term = q.replace(/,/g, ' ')
+      query = query.or(
+        [
+          `email.ilike.%${term}%`,
+          `primary_wallet.ilike.%${term}%`,
+          `solana_wallet.ilike.%${term}%`,
+          `referral_code.ilike.%${term}%`,
+          `embedded_wallet.ilike.%${term}%`,
+          `privy_user_id.ilike.%${term}%`,
+        ].join(','),
+      )
+    }
+    const { data, error } = await query
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        error: `Supabase query failed: ${error.message}`,
+      } satisfies ApiEnvelope<never>)
+    }
+    items = (data ?? []).map(mapItem)
+  } else {
+    return res.status(500).json({
+      success: false,
+      error: 'Database not configured (set POSTGRES_URL/DATABASE_URL or Supabase admin env vars).',
+    } satisfies ApiEnvelope<never>)
+  }
 
   return res.status(200).json({
     success: true,
