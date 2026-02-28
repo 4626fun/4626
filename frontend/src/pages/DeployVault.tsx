@@ -75,7 +75,7 @@ const DEFAULT_AUCTION_PERCENT = 50
 // Strategy deployment targets (of total deposited creator tokens):
 // - 30% Charm
 // - 30% Ajna
-// - 30% reserved for external Solana flow (executed outside main deploy)
+// - 30% reserved for external Solana flow (Meteora DLMM + Alpha Vault; executed outside main deploy)
 // - 10% idle operational buffer
 const DEFAULT_CHARM_WEIGHT_BPS = 5_000n // 50% of deployable amount
 const DEFAULT_AJNA_WEIGHT_BPS = 5_000n // 50% of deployable amount

@@ -12,6 +12,8 @@ Point `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL` to this service's `/provision` endp
 For Meteora auto-deposit payloads, point `METEORA_IX_PROVISIONER_URL` to `/meteora-ixs`
 (or rely on automatic `/meteora-ixs` derivation from the dynamic-route URL).
 
+Default 4626 Solana stack is **Meteora DLMM + Alpha Vault**.
+
 ## Endpoints
 
 - `GET /healthz`
@@ -212,6 +214,7 @@ Optional but recommended:
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_DELAY_MS=1200`
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_TIMEOUT_MS=90000`
 - `SOLANA_BRIDGE_WRAP_SYMBOL_MODE=auto` (`auto` | `unicode` | `ascii`)
+- `PROVISIONER_MIN_PAYER_SOL=0.05` (health guardrail; `/healthz` reports payer readiness)
 
 In the provisioner runtime (`server/solana-provisioner/.env`), enable retry for transient Solana RPC simulation failures:
 
@@ -221,5 +224,9 @@ In the provisioner runtime (`server/solana-provisioner/.env`), enable retry for 
 ## Security notes
 
 - Always set `PROVISIONER_BEARER_TOKEN` to a long random value.
+- Keep bearer secret values synchronized:
+  - provisioner `PROVISIONER_BEARER_TOKEN`
+  - app `SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET`
+  - app `METEORA_IX_PROVISIONER_SECRET`
 - Restrict inbound access at network layer (allowlist app egress IPs / private network).
 - Do not expose shell access; this service only executes fixed CLI command paths with validated arguments.

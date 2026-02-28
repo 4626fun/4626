@@ -90,6 +90,16 @@ type SolanaInfraStatusResponse = {
   remoteProvisionerHealthProbeUrl: string | null
   remoteProvisionerReachable: boolean | null
   remoteProvisionerStatusCode: number | null
+  remoteProvisionerHealthOk: boolean | null
+  remoteProvisionerPayerConfigured: boolean | null
+  remoteProvisionerPayerPubkey: string | null
+  remoteProvisionerPayerBalanceSol: string | null
+  remoteProvisionerPayerMinSol: string | null
+  remoteProvisionerPayerHealthy: boolean | null
+  remoteProvisionerPayerError: string | null
+  meteoraProvisionerUrlConfigured: boolean
+  meteoraProvisionerSecretConfigured: boolean
+  internalRegistrationSecretConfigured: boolean
   readyForAutoRegistration: boolean
   blockers: string[]
 }
@@ -145,19 +155,71 @@ function deriveDynamicProvisioningMode(params: {
   return 'misconfigured'
 }
 
-async function probeProvisioner(url: string, secret: string): Promise<{ reachable: boolean; statusCode: number | null }> {
-  if (!url) return { reachable: false, statusCode: null }
+async function probeProvisioner(url: string, secret: string): Promise<{
+  reachable: boolean
+  statusCode: number | null
+  healthOk: boolean | null
+  payerConfigured: boolean | null
+  payerPubkey: string | null
+  payerBalanceSol: string | null
+  payerMinSol: string | null
+  payerHealthy: boolean | null
+  payerError: string | null
+}> {
+  if (!url) {
+    return {
+      reachable: false,
+      statusCode: null,
+      healthOk: null,
+      payerConfigured: null,
+      payerPubkey: null,
+      payerBalanceSol: null,
+      payerMinSol: null,
+      payerHealthy: null,
+      payerError: null,
+    }
+  }
   const ac = new AbortController()
   const timer = setTimeout(() => ac.abort(), 4_000)
   try {
     const res = await fetch(url, {
-      method: 'HEAD',
+      method: 'GET',
       headers: secret ? { Authorization: `Bearer ${secret}` } : {},
       signal: ac.signal,
     })
-    return { reachable: true, statusCode: res.status }
+    const raw = await res.text().catch(() => '')
+    let payload: Record<string, unknown> | null = null
+    try {
+      payload = raw ? (JSON.parse(raw) as Record<string, unknown>) : null
+    } catch {
+      payload = null
+    }
+    return {
+      reachable: true,
+      statusCode: res.status,
+      healthOk: typeof payload?.ok === 'boolean' ? payload.ok : null,
+      payerConfigured:
+        typeof payload?.payerConfigured === 'boolean' ? payload.payerConfigured : null,
+      payerPubkey: typeof payload?.payerPubkey === 'string' ? payload.payerPubkey : null,
+      payerBalanceSol:
+        typeof payload?.payerBalanceSol === 'string' ? payload.payerBalanceSol : null,
+      payerMinSol: typeof payload?.payerMinSol === 'string' ? payload.payerMinSol : null,
+      payerHealthy:
+        typeof payload?.payerHealthy === 'boolean' ? payload.payerHealthy : null,
+      payerError: typeof payload?.payerError === 'string' ? payload.payerError : null,
+    }
   } catch {
-    return { reachable: false, statusCode: null }
+    return {
+      reachable: false,
+      statusCode: null,
+      healthOk: null,
+      payerConfigured: null,
+      payerPubkey: null,
+      payerBalanceSol: null,
+      payerMinSol: null,
+      payerHealthy: null,
+      payerError: null,
+    }
   } finally {
     clearTimeout(timer)
   }
@@ -195,9 +257,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const remoteProvisionerUrl = String(process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL ?? '').trim()
   const remoteProvisionerSecret = String(process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET ?? '').trim()
   const remoteProvisionerHealthUrl = String(process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL ?? '').trim()
+  const meteoraProvisionerUrl = String(process.env.METEORA_IX_PROVISIONER_URL ?? '').trim()
+  const meteoraProvisionerSecret = String(process.env.METEORA_IX_PROVISIONER_SECRET ?? '').trim() || remoteProvisionerSecret
+  const internalRegistrationSecretConfigured = String(
+    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
+      process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
+      '',
+  ).trim().length > 0
   const remoteProvisionerUrlConfigured = !!remoteProvisionerUrl
   const remoteProvisionerSecretConfigured = !!remoteProvisionerSecret
   const remoteProvisionerHealthUrlConfigured = !!remoteProvisionerHealthUrl
+  const meteoraProvisionerUrlConfigured = !!meteoraProvisionerUrl || remoteProvisionerUrlConfigured
+  const meteoraProvisionerSecretConfigured = !!meteoraProvisionerSecret
 
   const signerPk = readRegistrationSignerPk()
   const signerConfigured = !!signerPk
@@ -296,9 +367,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         remoteProvisionerHealthUrlConfigured ? remoteProvisionerHealthUrl : remoteProvisionerUrl,
         remoteProvisionerSecret,
       )
-    : { reachable: false, statusCode: null as number | null }
+    : {
+        reachable: false,
+        statusCode: null as number | null,
+        healthOk: null as boolean | null,
+        payerConfigured: null as boolean | null,
+        payerPubkey: null as string | null,
+        payerBalanceSol: null as string | null,
+        payerMinSol: null as string | null,
+        payerHealthy: null as boolean | null,
+        payerError: null as string | null,
+      }
   const remoteProvisionerReachable = remoteProvisionerUrlConfigured ? provisionerProbe.reachable : null
   const remoteProvisionerStatusCode = remoteProvisionerUrlConfigured ? provisionerProbe.statusCode : null
+  const remoteProvisionerHealthOk = remoteProvisionerUrlConfigured ? provisionerProbe.healthOk : null
+  const remoteProvisionerPayerConfigured = remoteProvisionerUrlConfigured ? provisionerProbe.payerConfigured : null
+  const remoteProvisionerPayerPubkey = remoteProvisionerUrlConfigured ? provisionerProbe.payerPubkey : null
+  const remoteProvisionerPayerBalanceSol = remoteProvisionerUrlConfigured ? provisionerProbe.payerBalanceSol : null
+  const remoteProvisionerPayerMinSol = remoteProvisionerUrlConfigured ? provisionerProbe.payerMinSol : null
+  const remoteProvisionerPayerHealthy = remoteProvisionerUrlConfigured ? provisionerProbe.payerHealthy : null
+  const remoteProvisionerPayerError = remoteProvisionerUrlConfigured ? provisionerProbe.payerError : null
 
   const blockers: string[] = []
   if (!batcherAddress) {
@@ -321,6 +409,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (dynamicProvisioningMode === 'remote-provisioner' && remoteProvisionerReachable === false) {
     blockers.push('Remote Solana dynamic provisioner is unreachable from this runtime.')
   }
+  if (dynamicProvisioningMode === 'remote-provisioner' && !remoteProvisionerSecretConfigured) {
+    blockers.push('Remote Solana dynamic provisioner secret is missing (SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET).')
+  }
+  if (dynamicProvisioningMode === 'remote-provisioner' && remoteProvisionerHealthOk === false) {
+    blockers.push('Remote Solana provisioner health check failed (ok=false).')
+  }
+  if (dynamicProvisioningMode === 'remote-provisioner' && remoteProvisionerPayerHealthy === false) {
+    blockers.push('Remote Solana provisioner payer balance is below required minimum.')
+  }
+  if (meteoraProvisionerUrlConfigured && !meteoraProvisionerSecretConfigured) {
+    blockers.push('Meteora ix provisioner secret is missing (METEORA_IX_PROVISIONER_SECRET).')
+  }
   if (solanaEnabledOnBatcher && !defaultMintConfigured && !dynamicRouteEnabled) {
     blockers.push(
       'No default Solana mint configured and dynamic provisioning is disabled. Set SOLANA_DEFAULT_MINT_BYTES32 or enable dynamic provisioning.',
@@ -335,10 +435,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const hasRouteSource =
     (defaultMintConfigured && defaultMintRouteReady !== false) ||
     (dynamicRouteEnabled && dynamicProvisioningMode !== 'misconfigured')
+  const remoteProvisionerReady =
+    dynamicProvisioningMode !== 'remote-provisioner' ||
+    (remoteProvisionerSecretConfigured &&
+      remoteProvisionerReachable !== false &&
+      remoteProvisionerHealthOk !== false &&
+      remoteProvisionerPayerHealthy !== false)
+  const meteoraProvisionerReady = !meteoraProvisionerUrlConfigured || meteoraProvisionerSecretConfigured
   const signerReady = signerConfigured && signerMatchesAdapterOwner !== false
   const readyForAutoRegistration =
     !!batcherAddress &&
-    (!solanaEnabledOnBatcher || (adapterHasCode !== false && signerReady && hasRouteSource && blockers.length === 0))
+    (!solanaEnabledOnBatcher ||
+      (adapterHasCode !== false &&
+        signerReady &&
+        hasRouteSource &&
+        remoteProvisionerReady &&
+        meteoraProvisionerReady &&
+        blockers.length === 0))
 
   const data: SolanaInfraStatusResponse = {
     admin: getAddress(admin as Address),
@@ -369,6 +482,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : null,
     remoteProvisionerReachable,
     remoteProvisionerStatusCode,
+    remoteProvisionerHealthOk,
+    remoteProvisionerPayerConfigured,
+    remoteProvisionerPayerPubkey,
+    remoteProvisionerPayerBalanceSol,
+    remoteProvisionerPayerMinSol,
+    remoteProvisionerPayerHealthy,
+    remoteProvisionerPayerError,
+    meteoraProvisionerUrlConfigured,
+    meteoraProvisionerSecretConfigured,
+    internalRegistrationSecretConfigured,
     readyForAutoRegistration,
     blockers,
   }

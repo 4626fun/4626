@@ -241,12 +241,19 @@ function requestHeader(req: VercelRequest, key: string): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function readFirstNonEmptyEnv(keys: string[]): string {
+  for (const key of keys) {
+    const value = String(process.env[key] ?? '').trim()
+    if (value) return value
+  }
+  return ''
+}
+
 function readInternalSolanaRegistrationSecret(): string {
-  return String(
-    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
-      process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
-      '',
-  ).trim()
+  return readFirstNonEmptyEnv([
+    'DEPLOY_SOLANA_REGISTRATION_SECRET',
+    'SOLANA_REGISTRATION_INTERNAL_SECRET',
+  ])
 }
 
 function isInternalSolanaRegistrationAuthorized(req: VercelRequest): boolean {
@@ -303,11 +310,12 @@ function readDynamicProvisionerUrls(): string[] {
 }
 
 function readDynamicProvisionerSecret(): string {
-  return String(
-    process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET ??
-      process.env.SOLANA_BRIDGE_PROVISIONER_SECRET ??
-      '',
-  ).trim()
+  return readFirstNonEmptyEnv([
+    'SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET',
+    'SOLANA_BRIDGE_PROVISIONER_SECRET',
+    // Optional same-process fallback when app + provisioner share env.
+    'PROVISIONER_BEARER_TOKEN',
+  ])
 }
 
 function readDynamicProvisionerHealthUrl(provisionerUrl: string): string {
@@ -367,7 +375,13 @@ function readMeteoraProvisionerUrls(dynamicProvisionerUrls: string[]): string[] 
 }
 
 function readMeteoraProvisionerSecret(): string {
-  return String(process.env.METEORA_IX_PROVISIONER_SECRET ?? readDynamicProvisionerSecret()).trim()
+  return readFirstNonEmptyEnv([
+    'METEORA_IX_PROVISIONER_SECRET',
+    'SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET',
+    'SOLANA_BRIDGE_PROVISIONER_SECRET',
+    // Optional same-process fallback when app + provisioner share env.
+    'PROVISIONER_BEARER_TOKEN',
+  ])
 }
 
 async function readBridgeTokenMetadata(params: {
@@ -757,6 +771,11 @@ async function tryProvisionDynamicRoute(params: {
     const retryDelayMs = readProvisionerRetryDelayMs()
     const requestTimeoutMs = readProvisionerRequestTimeoutMs()
     const provisionerSecret = readDynamicProvisionerSecret()
+    if (!provisionerSecret) {
+      throw new Error(
+        'Remote provisioner secret is missing. Set SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET to match provisioner PROVISIONER_BEARER_TOKEN.',
+      )
+    }
     const failures: string[] = []
     for (let i = 0; i < provisionerUrls.length; i += 1) {
       const provisionerUrl = provisionerUrls[i]
@@ -1051,6 +1070,11 @@ async function buildMeteoraIxsViaProvisioner(params: {
   if (params.provisionerUrls.length === 0) {
     throw new Error('Meteora ix provisioner is not configured (METEORA_IX_PROVISIONER_URL[S]).')
   }
+  if (!params.provisionerSecret) {
+    throw new Error(
+      'Meteora ix provisioner secret is missing. Set METEORA_IX_PROVISIONER_SECRET (or SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET) to match provisioner PROVISIONER_BEARER_TOKEN.',
+    )
+  }
   const failures: string[] = []
   for (const url of params.provisionerUrls) {
     try {
@@ -1246,7 +1270,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!meteoraConfig) {
         return res.status(409).json({
           success: false,
-          error: `Missing Meteora Alpha Vault mapping for creator token ${creatorToken}.`,
+          error:
+            `Missing Meteora DLMM+Alpha Vault mapping for creator token ${creatorToken}. ` +
+            'Add creator mapping in creator_meteora_alpha_vaults or METEORA_CREATOR_ALPHA_VAULT_MAP_JSON.',
         } satisfies ApiEnvelope<never>)
       }
       const shareDecimals =
