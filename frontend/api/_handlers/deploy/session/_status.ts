@@ -24,6 +24,8 @@ const CONCURRENT_MODIFICATION = 'concurrent_modification'
 const STAGE_USEROP_HASH_PREFIX = 'stageUserOpHash_'
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
+const SOLANA_RESERVE_PERCENT_BPS = 3_000n
+const BPS_DENOMINATOR = 10_000n
 
 function stageUserOpHashKey(step: string): string {
   return `${STAGE_USEROP_HASH_PREFIX}${step}`
@@ -319,11 +321,31 @@ function dedupeOrigins(origins: string[]): string[] {
   return out
 }
 
-function extractFinalizeBridgeTokens(data: Hex): { creatorToken: Address | null } | null {
+function parseBigIntLike(value: unknown): bigint | null {
+  if (typeof value === 'bigint') return value >= 0n ? value : null
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return BigInt(Math.trunc(value))
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = BigInt(value.trim())
+      return parsed >= 0n ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function extractFinalizePhase2Info(data: Hex): {
+  creatorToken: Address | null
+  depositAmount: bigint | null
+} | null {
   for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
     try {
       const decoded = decodeFunctionData({ abi, data })
-      const params = (decoded.args?.[0] ?? null) as { creatorToken?: string } | null
+      const params = (decoded.args?.[0] ?? null) as {
+        creatorToken?: string
+        depositAmount?: bigint | string | number
+      } | null
       const creatorTokenCandidate = params?.creatorToken && isAddress(params.creatorToken)
         ? getAddress(params.creatorToken as Address)
         : null
@@ -332,7 +354,10 @@ function extractFinalizeBridgeTokens(data: Hex): { creatorToken: Address | null 
           ? creatorTokenCandidate
           : null
       if (!creatorToken) continue
-      return { creatorToken }
+      return {
+        creatorToken,
+        depositAmount: parseBigIntLike(params?.depositAmount),
+      }
     } catch {
       continue
     }
@@ -340,7 +365,7 @@ function extractFinalizeBridgeTokens(data: Hex): { creatorToken: Address | null 
   return null
 }
 
-async function ensureSolanaRouteReadyForPhase2(params: {
+async function ensureSolanaRouteReadyForPhase3(params: {
   req: VercelRequest
   publicClient: any
   phase2FinalizeCalls: Array<{ to: Address; value: bigint; data: Hex }>
@@ -349,9 +374,13 @@ async function ensureSolanaRouteReadyForPhase2(params: {
   if (!finalizeCall) return
 
   const batcherAddress = getAddress(finalizeCall.to)
-  const finalizeTokens = extractFinalizeBridgeTokens(finalizeCall.data)
-  if (!finalizeTokens?.creatorToken) return
-  const bridgeToken = finalizeTokens.creatorToken
+  const finalizeInfo = extractFinalizePhase2Info(finalizeCall.data)
+  if (!finalizeInfo?.creatorToken) return
+  const bridgeToken = finalizeInfo.creatorToken
+  const expectedSolanaAmount =
+    finalizeInfo.depositAmount && finalizeInfo.depositAmount > 0n
+      ? (finalizeInfo.depositAmount * SOLANA_RESERVE_PERCENT_BPS) / BPS_DENOMINATOR
+      : null
 
   const [adapterRaw, destinationRaw] = await Promise.all([
     params.publicClient
@@ -385,7 +414,6 @@ async function ensureSolanaRouteReadyForPhase2(params: {
     })
     .then((v: unknown) => Boolean(v))
     .catch(() => null)
-  if (registered === true) return
 
   // Prefer the canonical app origin for internal API calls (avoids Vercel preview auth gates).
   // Fall back to the request origin only if it's the production domain.
@@ -397,6 +425,16 @@ async function ensureSolanaRouteReadyForPhase2(params: {
     : [requestOrigin, canonicalOrigin].filter((o): o is string => Boolean(o))
   const configuredOrigins = readAdditionalSolanaRegistrationOrigins()
   const candidateOrigins = dedupeOrigins([...configuredOrigins, ...defaultOrigins])
+  if (candidateOrigins.length === 0) {
+    throw new Error(
+      'Solana preflight failed: no registration origin available. Configure CANONICAL_ORIGIN or DEPLOY_SOLANA_REGISTRATION_ORIGINS.',
+    )
+  }
+  if (!expectedSolanaAmount || expectedSolanaAmount <= 0n) {
+    throw new Error(
+      'Solana preflight failed: missing finalize deposit amount for reserve checks.',
+    )
+  }
   const cookie = headerValue(params.req.headers.cookie as string | string[] | undefined)
   const authz = headerValue(params.req.headers.authorization as string | string[] | undefined)
   const internalRegistrationSecret = String(
@@ -422,6 +460,9 @@ async function ensureSolanaRouteReadyForPhase2(params: {
         },
         body: JSON.stringify({
           bridgeToken,
+          creatorToken: bridgeToken,
+          expectedSolanaAmount: expectedSolanaAmount.toString(),
+          buildOnly: registered === true,
           batcherAddress,
         }),
       })
@@ -449,14 +490,15 @@ async function ensureSolanaRouteReadyForPhase2(params: {
       return { ok: false, failure: `${origin}${routePath}: request_failed` }
     }
   }
-  let lastFailure: string | null = null
+  const failures: string[] = []
   for (const origin of candidateOrigins) {
     const primary = await tryRegister(origin, '/api/deploy/registerSolanaBridgeToken')
     if (primary.ok) return
-    lastFailure = primary.failure
+    if (primary.failure) failures.push(primary.failure)
   }
-  if (lastFailure) return
-  return
+  throw new Error(
+    `Solana preflight failed: ${failures.join(' | ') || 'registerSolanaBridgeToken call failed.'}`,
+  )
 }
 
 async function getOwnerAccount(rec: any) {
@@ -737,6 +779,12 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
 
   const startNextAfterPhase2 = async (fromStep: string) => {
     if (hasPhase3) {
+      // Solana route/token registration is now treated as out-of-band strategy-stage prep.
+      await ensureSolanaRouteReadyForPhase3({
+        req,
+        publicClient,
+        phase2FinalizeCalls,
+      })
       await startStage(fromStep, 'phase3_sent', phase3Calls, !hasPhase4)
       return true
     }
@@ -887,11 +935,6 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       return
     }
     if (hasPhase2Finalize) {
-      await ensureSolanaRouteReadyForPhase2({
-        req,
-        publicClient,
-        phase2FinalizeCalls,
-      })
       await startStage('phase1_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
       return
     }
@@ -923,11 +966,6 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       return
     }
     if (hasPhase2Finalize) {
-      await ensureSolanaRouteReadyForPhase2({
-        req,
-        publicClient,
-        phase2FinalizeCalls,
-      })
       await startStage('phase1_finalize_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
       return
     }
@@ -954,11 +992,6 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
 
     if (hasPhase2Finalize) {
-      await ensureSolanaRouteReadyForPhase2({
-        req,
-        publicClient,
-        phase2FinalizeCalls,
-      })
       await startStage('phase2_core_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
       return
     }
@@ -1035,11 +1068,6 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       return
     }
     if (phase2FinalizeCalls.length > 0) {
-      await ensureSolanaRouteReadyForPhase2({
-        req,
-        publicClient,
-        phase2FinalizeCalls,
-      })
       await startStage('phase1_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
       return
     }
@@ -1063,11 +1091,6 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       return
     }
     if (phase2FinalizeCalls.length > 0) {
-      await ensureSolanaRouteReadyForPhase2({
-        req,
-        publicClient,
-        phase2FinalizeCalls,
-      })
       await startStage('phase1_finalize_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
       return
     }
@@ -1086,11 +1109,6 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
 
   if (step === 'phase2_core_confirmed') {
     if (hasPhase2Finalize) {
-      await ensureSolanaRouteReadyForPhase2({
-        req,
-        publicClient,
-        phase2FinalizeCalls,
-      })
       await startStage('phase2_core_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
       return
     }

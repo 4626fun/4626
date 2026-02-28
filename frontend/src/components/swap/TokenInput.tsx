@@ -81,6 +81,8 @@ export function TokenInput({
             token={{
               address: tokenAddress,
               symbol: token.symbol,
+              logoUrl: token.logoUrl ?? undefined,
+              logoUrls: token.logoUrls,
             }}
             symbol={token.symbol}
             size={30}

@@ -33,13 +33,12 @@ type SwapCardProps = {
   routeSummary: string | null
   gasEstimateLabel: string | null
   priceImpactLabel: string | null
-  parsedSlippage: string
   lpFeeUsd?: string | null
   protocolFeeUsd?: string | null
   slippagePct: string
   onOpenTokenSelector: (side: 'input' | 'output') => void
   onAmountChange: (value: string) => void
-  onQuickPercent: (pct: number, tokenBalance: string | null) => void
+  onQuickPercent: (pct: number, tokenBalance?: string | null) => void
   onSwitchTokens: () => void
   onReviewTrade: () => void
   onRefreshQuote: () => void
@@ -82,7 +81,6 @@ export function SwapCard(props: SwapCardProps) {
           fallbackActive={props.fallbackActive}
           onChange={props.onSetExecutionMode}
           onEnableCanonical={props.onEnableCanonical}
-          hideLabel
           compact
         />
       </div>
@@ -93,6 +91,7 @@ export function SwapCard(props: SwapCardProps) {
           amount={props.amountInUnits}
           token={props.tokenInDisplay}
           tokenAddress={props.tokenInAddress}
+          isLoadingToken={props.tokenInIdentityLoading}
           tokenIdentityLoading={props.tokenInIdentityLoading}
           readOnly={false}
           onAmountChange={props.onAmountChange}
@@ -113,7 +112,7 @@ export function SwapCard(props: SwapCardProps) {
             <ArrowDownUp className="h-4 w-4 text-zinc-200" />
             <span className="sr-only">Switch tokens</span>
           </motion.button>
-          <div className="h-px bg-gradient-to-r from-white/0 via-white/25 to-white/0" />
+          <div className="h-px bg-linear-to-r from-white/0 via-white/25 to-white/0" />
         </div>
 
         <TokenInput
@@ -123,6 +122,7 @@ export function SwapCard(props: SwapCardProps) {
           amountUsd={props.estimatedOutUsd || undefined}
           token={props.tokenOutDisplay}
           tokenAddress={props.tokenOutAddress}
+          isLoadingToken={props.tokenOutIdentityLoading}
           tokenIdentityLoading={props.tokenOutIdentityLoading}
           onAmountChange={() => {}}
           onSelectToken={() => props.onOpenTokenSelector('output')}
@@ -161,7 +161,7 @@ export function SwapCard(props: SwapCardProps) {
         {props.busy ? 'Preparing…' : props.needsUnverifiedConfirmation ? 'Confirm unverified token to swap' : 'Review swap'}
       </Button>
 
-      {props.error ? <Alert variant="destructive" className="mt-3">{props.error}</Alert> : null}
+      {props.error ? <Alert variant="error" className="mt-3">{props.error}</Alert> : null}
       {props.status && <div className="mt-2 text-xs text-zinc-500">{props.status}</div>}
       <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
         <span>Quote {props.quoteIsStale ? '(stale)' : '(fresh)'}</span>

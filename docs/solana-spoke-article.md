@@ -31,17 +31,12 @@ One lottery. One jackpot. One gauge controller. Two chains of traders feeding in
 
 ## The Fair Launch: Parallel Across Chains
 
-When a creator launches, their initial token deposit (5M minimum, 50M maximum) gets a fixed three-way split:
+When a creator launches, there are two fixed allocation layers:
 
-| Allocation | % | Destination |
-|-----------|---|-------------|
-| CCA Auction | 40% | Base — 7-day Uniswap Continuous Clearing Auction, graduates to a V4 pool |
-| Solana Liquidity | 20% | Solana — Meteora DLMM concentrated liquidity pool + Alpha Vault fair launch |
-| Creator Vesting | 40% | Base — 1-year linear vesting to the creator's canonical wallet |
+1. **Launch split (Phase 2, Base):** 50% CCA auction / 50% creator vesting.
+2. **Underlying vault target:** 30% Charm, 30% Ajna, 30% reserved for Solana execution, 10% idle buffer.
 
-Both launches run simultaneously. The CCA accepts bids on Base while the Alpha Vault accepts deposits on Solana (24-hour vesting, pro-rata allocation). When the CCA graduates on Day 7, Keepr triggers the Alpha Vault close and the DLMM pool goes live for open trading on Jupiter.
-
-The split is hardcoded in the deployment batcher. No governance vote, no per-creator override. This is intentional: Base remains the hub, Solana gets meaningful but secondary liquidity, and creators can't manipulate the allocation to dump on one chain.
+The Solana reserve is executed out-of-band through the Solana provisioner + Meteora path (DLMM + Alpha Vault), while Base remains the canonical control plane for deployment, ownership, and settlement.
 
 ### Why Meteora?
 

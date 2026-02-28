@@ -104,7 +104,7 @@ cast call 0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13 \
   --rpc-url "$BASE_RPC_URL"
 ```
 
-4. Optional Solana routing (required if you want the 20% Solana split to bridge instead of vesting fallback):
+4. Optional Solana routing (recommended for default Solana spoke flow):
 
 ```bash
 export PRIVATE_KEY=... # must be protocolTreasury for setSolanaConfig
@@ -121,6 +121,23 @@ forge script script/AuthorizeSolanaAdapter.s.sol:AuthorizeSolanaAdapter \
 
 Optional keeper setup (same script):
 - set `SOLANA_KEEPER_PUBKEY=0x<32-byte-solana-pubkey>` before running.
+
+### Default Meteora setup (Solana spoke)
+
+4626 defaults to **Meteora DLMM + Alpha Vault** for Solana-side launch/deposit flow.
+
+- Use dynamic route provisioning (`/provision`) to wrap/register the canonical creator token route.
+- Use Meteora ix payload provisioning (`/meteora-ixs`) to build Alpha Vault `deposit(max_amount)` calls.
+- Keep DBC and DAMM v1/v2 as optional, non-default paths.
+
+### Current allocation model
+
+There are two distinct allocations in the deploy flow:
+
+1. **Phase 2 launch split (Base):** 50% auction / 50% creator vesting.
+2. **Underlying vault deployment target:** 30% Charm, 30% Ajna, 30% reserved for Solana (executed out-of-band), 10% idle.
+
+The Solana reserve is intentionally handled outside the main deploy transaction path.
 
 Vercel cutover order:
 
@@ -139,6 +156,8 @@ Acceptance checks:
 - deploy-session path advances:
   - `created -> phase1_sent -> phase1_finalize_sent -> phase2_core_sent -> phase2_sent -> phase3_sent -> completed`
 - `/deploy` shows no bytecode infra blocker and no `deployment batcher not configured`
+- `/api/deploy/solanaInfraStatus` returns `readyForAutoRegistration=true` and empty `blockers` for Solana-enabled deploys
+- provisioner health (`/healthz`) reports `payerHealthy=true` with balance above `PROVISIONER_MIN_PAYER_SOL`
 
 ### Important: Zora cross-app is read-only here
 
@@ -156,12 +175,12 @@ Fix: add the EOA as an owner first (one-time). After that, deploys can use the 1
 
 ```solidity
 // Deploy using factory
-(address vault, address wrapper, address shareOFT) = factory.deployVault(
+(address vault, address wrapper, address shareToken) = factory.deployVault(
     creatorCoinAddress,     // Your Creator Coin
     "TOKEN Vault",          // Vault name
     "▢TOKEN",               // Vault symbol
-    "TOKEN Share",          // OFT name
-    "■TOKEN",               // OFT symbol
+    "TOKEN Share",          // bridge share token name
+    "TOKEN",                // bridge share token symbol
     "base",                 // Chain prefix
     msg.sender              // Revenue recipient
 );
@@ -169,25 +188,25 @@ Fix: add the EOA as an owner first (one-time). After that, deploys can use the 1
 
 ## Via Script
 
-```bash
-forge script script/DeployInfrastructure.s.sol:DeployVaultStack \
-  --rpc-url $BASE_RPC_URL \
-  --broadcast \
-  --verify
-```
+For production deploys, use the app deploy-session flow at `/deploy` (recommended path).
+Script entrypoints are maintenance-only and may lag behind current split/preflight behavior.
+
+### Solana routing
+
+Solana route provisioning and Meteora ix payload generation are out-of-band and are handled by the provisioner + deploy APIs. They are not part of `finalizePhase2`.
 
 ## Post-Deployment Configuration
 
 ### 1. Set DEX Pools
 
 ```solidity
-shareOFT.setAddressType(uniswapPool, OperationType.SwapOnly);
+shareToken.setAddressType(uniswapPool, OperationType.SwapOnly);
 ```
 
 ### 2. Configure GaugeController
 
 ```solidity
-shareOFT.setGaugeController(gaugeController);
+shareToken.setGaugeController(gaugeController);
 ```
 
 ### 3. Add Strategies (Optional)

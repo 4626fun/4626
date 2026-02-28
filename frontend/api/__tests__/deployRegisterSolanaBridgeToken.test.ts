@@ -305,7 +305,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         getBytecode: vi.fn(async () => '0x1234'),
         waitForTransactionReceipt: vi.fn(async () => ({ status: 'success' })),
       }
-      const writeContractMock = vi.fn(async () => '0x5fcb2a505cad6c7c8bb750b95db3a846df8f181f85759750f84d91b736283557')
+      const writeContractMock = vi.fn(async (_args: any) => '0x5fcb2a505cad6c7c8bb750b95db3a846df8f181f85759750f84d91b736283557')
       createPublicClientMock.mockReturnValue(mockPublicClient as any)
       createWalletClientMock.mockReturnValue({ writeContract: writeContractMock } as any)
       privateKeyToAccountMock.mockReturnValue({
@@ -374,7 +374,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         getBytecode: vi.fn(async () => '0x1234'),
         waitForTransactionReceipt: vi.fn(async () => ({ status: 'success' })),
       }
-      const writeContractMock = vi.fn(async () => '0x5fcb2a505cad6c7c8bb750b95db3a846df8f181f85759750f84d91b736283557')
+      const writeContractMock = vi.fn(async (_args: any) => '0x5fcb2a505cad6c7c8bb750b95db3a846df8f181f85759750f84d91b736283557')
       createPublicClientMock.mockReturnValue(mockPublicClient as any)
       createWalletClientMock.mockReturnValue({ writeContract: writeContractMock } as any)
       privateKeyToAccountMock.mockReturnValue({
@@ -576,7 +576,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         getBytecode: vi.fn(async () => '0x1234'),
         waitForTransactionReceipt: vi.fn(async () => ({ status: 'success' })),
       }
-      const writeContractMock = vi.fn(async () => '0x5fcb2a505cad6c7c8bb750b95db3a846df8f181f85759750f84d91b736283557')
+      const writeContractMock = vi.fn(async (_args: any) => '0x5fcb2a505cad6c7c8bb750b95db3a846df8f181f85759750f84d91b736283557')
       createPublicClientMock.mockReturnValue(mockPublicClient as any)
       createWalletClientMock.mockReturnValue({ writeContract: writeContractMock } as any)
       privateKeyToAccountMock.mockReturnValue({

@@ -682,6 +682,7 @@ export const DoneStep = memo(function DoneStep({
               defaultName={coinSeed}
               defaultSymbol={coinSeed}
               smartWalletAddress={smartWalletAddressForCoin}
+              preferredOwnerAddress={ownerAddress ?? null}
               onCoinCreated={onCoinCreated}
             />
           ) : null}
