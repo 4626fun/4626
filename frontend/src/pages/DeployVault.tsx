@@ -64,12 +64,12 @@ const BASE_SWAP_ROUTER = addr('2626664c2603336E57B271c5C0b26F421741e481')
 const BASE_WETH = addr('4200000000000000000000000000000000000006')
 const BASE_USDC = addr('833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')
 const BASE_CHAINLINK_ETH_USD = addr('71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70')
-const PAYOUT_ROUTER_SALT_TAG = 'CreatorVault:PayoutRouter' as const
-const BURN_STREAM_SALT_TAG = 'CreatorVault:VaultShareBurnStream' as const
+const PAYOUT_ROUTER_SALT_TAG = '4626:PayoutRouter' as const
+const BURN_STREAM_SALT_TAG = '4626:VaultShareBurnStream' as const
 
 // Uniswap CCA uses Q96 fixed-point prices + a compact step schedule.
 const DEFAULT_REQUIRED_RAISE_WEI = 100_000_000_000_000_000n // 0.1 ETH
-// Phase-2 split in CreatorVaultDeployer is 50% auction / 50% vesting.
+// Phase-2 split in the deployment batcher is 50% auction / 50% vesting.
 // Keep this as a boolean gate for deferred launch wiring.
 const DEFAULT_AUCTION_PERCENT = 50
 // Strategy deployment targets (of total deposited creator tokens):
@@ -90,7 +90,7 @@ const BATCHER_PHASE1_CORE_SELECTOR = '1331378b'
 const BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR = '4154f24e'
 const BATCHER_PHASE1_FINALIZE_SELECTOR = 'a98ec9d8'
 const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = '3bc09a8b'
-// `CreatorVaultDeployer` v4+ exposes these immutables as getters. We use this as a
+// The phased deployment batcher v4+ exposes these immutables as getters. We use this as a
 // compatibility gate to avoid legacy batchers that deploy module-uninitialized vaults.
 const BATCHER_VAULT_CORE_MODULE_SELECTOR = '22c40b75'
 const BATCHER_VAULT_STRATEGIES_MODULE_SELECTOR = '3283d513'
@@ -633,7 +633,7 @@ function deriveBaseSalt(params: { creatorToken: Address; owner: Address; chainId
       creatorToken,
       owner,
       BigInt(chainId),
-      `CreatorVault:deploy:${version}`,
+      `4626:deploy:${version}`,
     ]),
   )
 }
@@ -755,7 +755,7 @@ function deriveShareOftSalt(params: { owner: Address; shareSymbol: string; versi
 }
 
 function deriveOftBootstrapSalt(): Hex {
-  return keccak256(encodePacked(['string'], ['CreatorVault:OFTBootstrapRegistry:v1']))
+  return keccak256(encodePacked(['string'], ['4626:OFTBootstrapRegistry:v1']))
 }
 
 function predictCreate2Address(params: { create2Deployer: Address; salt: Hex; initCode: Hex }): Address {
@@ -1979,7 +1979,7 @@ function DeployVaultBatcher({
     if (lower.includes('market floor price not available')) {
       return 'Market floor price is still loading. Wait a moment and try again.'
     }
-    if (lower.includes('deployment batcher is not configured') || lower.includes('creatorvaultbatcher is not configured')) {
+    if (lower.includes('deployment batcher is not configured') || lower.includes('deploymentbatcher is not configured')) {
       return 'Deployment is not configured: missing `VITE_CREATOR_VAULT_BATCHER` / `CONTRACTS.creatorVaultBatcher`.'
     }
     return msg
@@ -2617,7 +2617,7 @@ function DeployVaultBatcher({
         initCode: DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex,
       })
 
-      // IMPORTANT: The onchain `CreatorVaultBatcher` uses *lowercase* symbols for salts + oracle wiring,
+      // IMPORTANT: The onchain deployment batcher uses *lowercase* symbols for salts + oracle wiring,
       // but uses *uppercase* symbols for ShareOFT metadata. We must mirror both to keep expected
       // addresses deterministic (especially for ShareOFT + gauge + oracle predictions).
       const shareSymbolLower = shareSymbol.toLowerCase()
@@ -2936,7 +2936,7 @@ function DeployVaultBatcher({
       const depositAmount = minFirstDeposit
       const minimumTotalIdle = (depositAmount * DEFAULT_MIN_IDLE_PERCENT_BPS) / 10_000n
       const auctionSteps = encodeUniswapCcaLinearSteps(DEFAULT_CCA_DURATION_BLOCKS)
-      // Safety: `CreatorVaultBatcher` tries to call `CreatorCoin.setPayoutRecipient(payoutRecipient)` when non-zero.
+      // Safety: The deployment batcher tries to call `CreatorCoin.setPayoutRecipient(payoutRecipient)` when non-zero.
       // Zora Creator Coins restrict `setPayoutRecipient` to the coin owner, so that internal call reverts (msg.sender=batcher).
       // We always pass `address(0)` to the batcher and, when needed, set payoutRecipient from the identity wallet separately.
       const payoutForDeploy = ZERO_ADDRESS as Address
@@ -3099,7 +3099,7 @@ function DeployVaultBatcher({
           },
         })
         throw new Error(
-          `Legacy deployment batcher (CreatorVaultDeployer) active on this deployment (${batcherAddress}). ` +
+          `Legacy deployment batcher active on this deployment (${batcherAddress}). ` +
             'This version cannot initialize CreatorOVault modules and will stall at Phase 1 finalize. ' +
             'Update `VITE_CREATOR_VAULT_BATCHER` (and server `CREATOR_VAULT_BATCHER`) to the current batcher.',
         )
@@ -3142,7 +3142,7 @@ function DeployVaultBatcher({
             },
           })
           throw new Error(
-            `Legacy batcher active on this deployment (${batcherAddress}). Update to split Phase-1 deployment batcher (CreatorVaultDeployer).`,
+            `Legacy batcher active on this deployment (${batcherAddress}). Update to split Phase-1 deployment batcher.`,
           )
         }
       }

@@ -65,7 +65,6 @@ vi.mock('viem', () => ({
     args: [
       {
         creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
-        shareOFT: '0xED0328dBA0c8BDc1B10a4B1F3a0103C446D64626',
       },
     ],
   })),
@@ -534,7 +533,6 @@ describe('deploy session optimistic concurrency', () => {
       expect(String(url)).toContain('/api/deploy/registerSolanaBridgeToken')
       const payload = JSON.parse(String(init?.body ?? '{}'))
       expect(String(payload.bridgeToken).toLowerCase()).toBe('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
-      expect(String(payload.shareOft).toLowerCase()).toBe('0xed0328dba0c8bdc1b10a4b1f3a0103c446d64626')
       expect(payload.creatorToken).toBeUndefined()
     } finally {
       ;(globalThis as any).fetch = originalFetch
@@ -600,7 +598,7 @@ describe('deploy session optimistic concurrency', () => {
     }
   })
 
-  it('status falls back to legacy registration path when canonical route is unavailable', async () => {
+  it('status does not call legacy registration route when canonical route is unavailable', async () => {
     const rec = {
       ...makeDeploySession('phase2_core_confirmed'),
       payload: JSON.stringify({
@@ -609,18 +607,11 @@ describe('deploy session optimistic concurrency', () => {
       }),
     }
     const originalFetch = globalThis.fetch
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-        text: async () => JSON.stringify({ success: false, error: 'Not found' }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        text: async () => JSON.stringify({ success: true, data: { registered: true } }),
-      }) as any
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      text: async () => JSON.stringify({ success: false, error: 'Not found' }),
+    }) as any
 
     try {
       ;(globalThis as any).fetch = fetchMock
@@ -655,9 +646,8 @@ describe('deploy session optimistic concurrency', () => {
       await statusHandler(req, res)
 
       expect(res.statusCode).toBe(200)
-      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
       expect(String((fetchMock.mock.calls as any[])[0]?.[0] ?? '')).toContain('/api/deploy/registerSolanaBridgeToken')
-      expect(String((fetchMock.mock.calls as any[])[1]?.[0] ?? '')).toContain('/api/deploy/registerShareOft')
     } finally {
       ;(globalThis as any).fetch = originalFetch
     }

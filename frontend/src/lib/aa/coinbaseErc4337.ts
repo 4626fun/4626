@@ -258,7 +258,7 @@ const KNOWN_ERROR_SELECTORS: Record<string, string> = {
   '0x4e487b71': 'Panic(uint256)',
   // Coinbase Smart Wallet errors
   '0x82b42900': 'Unauthorized()',
-  // CreatorVaultDeployer errors
+  // Deployment-batcher errors
   '0x30cd7471': 'NotOwner()',
   '0xd92e233d': 'ZeroAddress()',
   '0xb92e9c7a': 'InvalidPercent()',

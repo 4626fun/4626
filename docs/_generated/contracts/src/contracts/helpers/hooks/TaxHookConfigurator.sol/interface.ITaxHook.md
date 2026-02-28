@@ -1,13 +1,13 @@
 # ITaxHook
-[Git Source](https://github.com/creatorvault/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/helpers/hooks/TaxHookConfigurator.sol)
+[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/helpers/hooks/TaxHookConfigurator.sol)
 
 **Title:**
 TaxHookConfigurator
 
 **Author:**
-0xakita.eth (CreatorVault)
+0xakita.eth (4626)
 
-Helper to configure the existing V4 Tax Hook for CreatorVault
+Helper to configure the existing V4 Tax Hook for 4626
 
 Interface for the existing Tax Hook (poolId-keyed configuration)
 

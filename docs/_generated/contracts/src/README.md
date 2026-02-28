@@ -17,7 +17,7 @@
 
 ```json
 {
-  "name": "CreatorVault",
+  "name": "4626",
   "version": "1.0.0",
   "description": "Omnichain vault platform for creator coins with gas-free deployment, cross-chain OFT, pluggable yield strategies, and gamified lottery incentives",
   "key_features": [
@@ -45,7 +45,7 @@
     "Yearn V3 (vault architecture)"
   ],
   "chains": ["Base (hub)", "Ethereum", "Arbitrum", "BSC", "Avalanche", "Monad", "Sonic", "HyperEVM"],
-  "github": "https://github.com/wenakita/CreatorVault",
+  "github": "https://github.com/wenakita/4626",
   "first_deployment": "akita Creator Coin (Base: 0x5b674196812451b7cec024fe9d22d2c0b172fa75)"
 }
 ```
@@ -54,7 +54,7 @@
 
 ## Features
 
-**CreatorVault provides a complete vault-as-a-service platform for Creator Coins. Each feature is designed to maximize creator revenue and community engagement:**
+**4626 provides a complete vault-as-a-service platform for Creator Coins. Each feature is designed to maximize creator revenue and community engagement:**
 
 ### Core Features
 
@@ -93,13 +93,13 @@
 
 ## Architecture
 
-CreatorVault’s architecture is built for **provenance, identity, and execution**:
+4626’s architecture is built for **provenance, identity, and execution**:
 
 - **Provenance (Zora)**: Creator Coins and Content Coins are the discovery layer and identity anchor.
 - **Execution (Smart Wallet AA)**: creators can deploy and operate vault infrastructure via EIP-4337/EIP-5792-style batching.
 - **Social context (Farcaster → Base)**: Farcaster identity is used as a trust signal in the app, and Base group chats are the natural coordination surface.
 
-Onchain, CreatorVault consists of:
+Onchain, 4626 consists of:
 
 - **Shared infrastructure** (deployed once per chain, referenced via `CreatorRegistry`)
 - **Per-creator vault stack** (deployed per creator coin)
@@ -154,18 +154,18 @@ Onchain, CreatorVault consists of:
    - Maps Creator Coins -> (Vault, Wrapper, OFT, GaugeController, Lottery).
    - Stores chain configurations (LayerZero endpoints, DEX infrastructure).
 
-### Deployment Flow (CreatorVaultDeployer Phases 1–3 + Activation)
+### Deployment Flow (DeploymentBatcher Phases 1–3 + Activation)
 
 **User-facing goal**: one creator flow from `/deploy` (wallet/bundler may execute multiple transactions under the hood).
 
 ```
 User clicks "Deploy" -> wallet/bundler executes a phased sequence
 
-Phase 1 — deterministic deploy (CreatorVaultDeployer):
+Phase 1 — deterministic deploy (DeploymentBatcher):
 - deploy per-creator contracts (vault, wrapper, share OFT, gauge controller, oracle, CCA strategy, etc.)
 - register them in CreatorRegistry
 
-Phase 2 — configuration (CreatorVaultDeployer):
+Phase 2 — configuration (DeploymentBatcher):
 - wire roles + addresses (vault↔wrapper↔OFT, gauge controller config, oracle config, etc.)
 - set required approvals/launch permissions
 
@@ -272,7 +272,7 @@ This layer can be deployed and enabled after the core system is live.
 
 ## One-Click Gas-Free Deployment (EIP-4337)
 
-**CreatorVault supports 1-click, gas-free deployment via account abstraction:**
+**4626 supports 1-click, gas-free deployment via account abstraction:**
 
 ### Powered By
 
@@ -322,7 +322,7 @@ pnpm dev
 
 ## Supported Chains
 
-**CreatorVault uses LayerZero V2 for omnichain share tokens. All chains share the same OFT token:**
+**4626 uses LayerZero V2 for omnichain share tokens. All chains share the same OFT token:**
 
 | Network | Chain ID | LZ Endpoint ID | Status | Explorer |
 |---------|----------|----------------|--------|----------|
@@ -351,8 +351,8 @@ pnpm dev
 
 ```bash
 # Clone repository
-git clone https://github.com/wenakita/CreatorVault.git
-cd CreatorVault
+git clone https://github.com/wenakita/4626.git
+cd 4626
 
 # Install dependencies
 pnpm install
@@ -366,7 +366,7 @@ forge test -vvv
 
 ### Deploy a Vault (Web UI)
 
-1. Navigate to [erc4626.fun/deploy](https://erc4626.fun/deploy)
+1. Navigate to [4626.fun/deploy](https://4626.fun/deploy)
 2. Connect Coinbase Smart Wallet
 3. Enter your Creator Coin address (e.g., 0x5b67...75 for akita)
 4. Send 50,000,000 tokens to your smart wallet (for initial CCA deposit)
@@ -381,7 +381,7 @@ forge test -vvv
 ## Project Structure
 
 ```
-CreatorVault/
+4626/
   contracts/                      # Solidity contracts
     core/                         # Platform core
       CreatorRegistry.sol
@@ -428,7 +428,7 @@ CreatorVault/
 
 ## First Deployment: akita
 
-**akita is the first Creator Coin to launch with CreatorVault:**
+**akita is the first Creator Coin to launch with 4626:**
 
 | Item | Value |
 |------|-------|
@@ -438,13 +438,13 @@ CreatorVault/
 | **OFT Symbol** | ■AKITA |
 | **DEX Pair** | akita/ZORA (Uniswap V4, 3% fee tier) |
 | **Lottery Prize Pool** | Growing daily via 6.9% trading fees (buys + sells) |
-| **CCA Launch** | [View live auction](https://erc4626.fun/auction/demo) |
+| **CCA Launch** | [View live auction](https://4626.fun/auction/demo) |
 
 ---
 
 ## Security
 
-**CreatorVault inherits Yearn V3's battle-tested security model with additional safeguards:**
+**4626 inherits Yearn V3's battle-tested security model with additional safeguards:**
 
 ### Anti-Inflation Attack
 
@@ -484,8 +484,8 @@ CreatorVault/
 **Deploy a vault for your Creator Coin:**
 
 ```solidity
-// Via Factory (or use web UI at erc4626.fun/deploy)
-(address vault, address wrapper, address shareOFT) = factory.deployCreatorVault(
+// Via Factory (or use web UI at 4626.fun/deploy)
+(address vault, address wrapper, address shareOFT) = factory.deployVault(
     0x5b67...75,                       // Your Creator Coin address
     "TOKEN Vault",                     // Vault name
     "▢TOKEN",                         // Vault symbol
@@ -566,7 +566,7 @@ forge test -vvv
 forge test --match-test testVaultDeposit -vvv
 
 # Deploy to Base (example)
-forge script script/DeployCreatorVault.s.sol \
+forge script script/DeployVaultStack.s.sol \
   --rpc-url $BASE_RPC_URL \
   --broadcast \
   --verify
@@ -594,9 +594,9 @@ For the Vercel API surface, avoid “hidden” dynamic imports: add endpoints by
 
 ## Links
 
-- **Website**: [erc4626.fun](https://erc4626.fun)
-- **GitHub**: [github.com/wenakita/CreatorVault](https://github.com/wenakita/CreatorVault)
-- **Docs**: [docs.erc4626.fun](https://docs.erc4626.fun) *(coming soon)*
+- **Website**: [4626.fun](https://4626.fun)
+- **GitHub**: [github.com/wenakita/4626](https://github.com/wenakita/4626)
+- **Docs**: [docs.4626.fun](https://docs.4626.fun) *(coming soon)*
 - **Coinbase Creator Coins**: [Coinbase Ecosystem](https://www.coinbase.com)
 - **LayerZero**: [docs.layerzero.network](https://docs.layerzero.network)
 - **Uniswap CCA**: [cca.uniswap.org](https://cca.uniswap.org)
@@ -616,6 +616,6 @@ For the Vercel API surface, avoid “hidden” dynamic imports: add endpoints by
 
 ---
 
-**CreatorVault | Omnichain Vaults for Creator Coins | Powered by LayerZero V2 + Uniswap CCA**
+**4626 | Omnichain Vaults for Creator Coins | Powered by LayerZero V2 + Uniswap CCA**
 
 *Enabling any creator to launch institutional-grade vault infrastructure with zero gas fees, fair launch price discovery, and gamified community incentives - all in one click.*

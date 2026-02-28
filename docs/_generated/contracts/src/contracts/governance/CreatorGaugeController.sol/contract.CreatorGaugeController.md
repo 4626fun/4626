@@ -1,5 +1,5 @@
 # CreatorGaugeController
-[Git Source](https://github.com/creatorvault/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/governance/CreatorGaugeController.sol)
+[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/governance/CreatorGaugeController.sol)
 
 **Inherits:**
 Ownable, ReentrancyGuard
@@ -128,7 +128,7 @@ address public creatorTreasury
 
 
 ### protocolTreasury
-Protocol multisig (CreatorVault treasury)
+Protocol multisig (4626 treasury)
 
 
 ```solidity
@@ -359,7 +359,7 @@ constructor(address _shareOFT, address _creatorTreasury, address _protocolTreasu
 |----|----|-----------|
 |`_shareOFT`|`address`|The ShareOFT token address (e.g., ■AKITA)|
 |`_creatorTreasury`|`address`|Creator's treasury wallet|
-|`_protocolTreasury`|`address`|Protocol multisig (CreatorVault treasury)|
+|`_protocolTreasury`|`address`|Protocol multisig (4626 treasury)|
 |`_owner`|`address`|Owner (usually the creator)|
 
 

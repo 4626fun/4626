@@ -7,7 +7,7 @@ import {ICreatorRegistry} from "../interfaces/core/ICreatorRegistry.sol";
 /**
  * @title CreatorRegistry
  * @author 0xakita.eth
- * @notice Registry for CreatorVault deployments and configs.
+ * @notice Registry for 4626 deployments and configs.
  * @dev Used by factories, vaults, and OFTs to resolve ecosystem addresses.
  */
 contract CreatorRegistry is ICreatorRegistry, Ownable {
@@ -226,7 +226,7 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
     /**
      * @notice Set vault address for a Creator Coin
      */
-    function setCreatorVault(address _token, address _vault) external override onlyAuthorizedOrOwner {
+    function setVault(address _token, address _vault) external override onlyAuthorizedOrOwner {
         if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
         if (_vault == address(0)) revert ZeroAddress();
 

@@ -96,16 +96,16 @@ interface ICreatorOVaultStrategyManager {
 }
 
 /**
- * @title CreatorVaultDeployer
+ * @title DeploymentBatcher
  * @author 0xakita.eth
- * @notice Multi-transaction CreatorVault deployment orchestrator (Phases 1–3).
+ * @notice Multi-transaction 4626 deployment orchestrator (Phases 1–3).
  * @dev We can no longer deploy the full stack in one transaction on Base due to code-deposit gas limits.
  *      This contract splits deployment into multiple calls:
  *      - Phase 1: deploy vault + wrapper + shareOFT + minimal wiring (no token pulls / no auction)
  *      - Phase 2a: deploy gauge + CCA + oracle + wiring (no token pulls)
  *      - Phase 2b: deposit + vesting + ownership transfers (plus optional deferred auction)
  */
-contract CreatorVaultDeployer is ReentrancyGuard {
+contract DeploymentBatcher is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint24 public constant V3_FEE_TIER = 3000; // 0.3% CREATOR/USDC pool
@@ -517,7 +517,7 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         bytes32 wrapperSalt = _saltFor(baseSalt, "wrapper");
 
         // OFT bootstrap registry is chain-global + constructor-less => initCodeHash == codeId.
-        bytes32 oftBootstrapSalt = keccak256("CreatorVault:OFTBootstrapRegistry:v1");
+        bytes32 oftBootstrapSalt = keccak256("4626:OFTBootstrapRegistry:v1");
         out.oftBootstrapRegistry = create2Deployer.computeAddress(oftBootstrapSalt, codeIds.oftBootstrap);
         if (out.oftBootstrapRegistry.code.length == 0) {
             create2Deployer.deploy(oftBootstrapSalt, codeIds.oftBootstrap, bytes(""));
@@ -1067,7 +1067,7 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         view
         returns (bytes32)
     {
-        return keccak256(abi.encodePacked(creatorToken, owner, block.chainid, "CreatorVault:deploy:", version));
+        return keccak256(abi.encodePacked(creatorToken, owner, block.chainid, "4626:deploy:", version));
     }
 
     function _saltFor(bytes32 baseSalt, string memory label) internal pure returns (bytes32) {

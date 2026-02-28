@@ -50,7 +50,7 @@ contract SimulatePhase2Deployment is Script {
         string memory creatorSymbol = "AKITA";
 
         // Mirror frontend naming defaults
-        string memory vaultName = "CreatorVault: AKITA";
+        string memory vaultName = "4626: AKITA";
         string memory vaultSymbol = unicode"▢AKITA";
         string memory shareName = "Wrapped AKITA Share";
         string memory shareSymbol = unicode"■AKITA";

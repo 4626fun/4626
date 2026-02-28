@@ -1,5 +1,5 @@
 # StrategyDeploymentBatcher
-[Git Source](https://github.com/creatorvault/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/helpers/batchers/StrategyDeploymentBatcher.sol)
+[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/helpers/batchers/StrategyDeploymentBatcher.sol)
 
 **Inherits:**
 ReentrancyGuard
@@ -10,7 +10,7 @@ StrategyDeploymentBatcher
 **Author:**
 0xakita.eth
 
-Batches deployment and wiring of CreatorVault strategies.
+Batches deployment and wiring of 4626 strategies.
 
 Used by AA deployment flows to create pools, vaults, and adapters.
 
@@ -66,7 +66,7 @@ function batchDeployStrategies(
 |`v3FeeTier`|`uint24`|The Uniswap V3 fee tier (e.g., 3000 for 0.3%)|
 |`initialSqrtPriceX96`|`uint160`|Initial price for V3 pool (e.g., for 99/1 CREATOR/USDC)|
 |`owner`|`address`|The creator coin owner who will own all strategies (typically the creator)|
-|`vaultName`|`string`|Standard name for the Charm vault (e.g., "CreatorVault: akita/USDC")|
+|`vaultName`|`string`|Standard name for the Charm vault (e.g., "4626: akita/USDC")|
 |`vaultSymbol`|`string`|Standard symbol for the Charm vault (e.g., "CV-akita-USDC")|
 
 **Returns**

@@ -70,7 +70,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     readDeployAuthMock.mockReturnValueOnce(null)
     const req = createMockReq({
       method: 'POST',
-      body: { shareOft: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+      body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
     })
     const res = createMockRes()
 
@@ -110,7 +110,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       const req = createMockReq({
         method: 'POST',
         headers: { 'x-cv-solana-registration-secret': 'internal-secret' },
-        body: { shareOft: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+        body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
       })
       const res = createMockRes()
 
@@ -148,7 +148,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
 
     const req = createMockReq({
       method: 'POST',
-      body: { shareOft: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+      body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
     })
     const res = createMockRes()
     await handler(req, res)
@@ -218,7 +218,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       const req = createMockReq({
         method: 'POST',
         body: {
-          shareOft: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+          bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
           creatorToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
           expectedSolanaAmount: '1000000000000000000',
           buildOnly: true,
@@ -240,7 +240,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     }
   })
 
-  it('returns 409 when shareOft has no deployed bytecode yet', async () => {
+  it('returns 409 when bridge token has no deployed bytecode yet', async () => {
     const mockPublicClient = {
       readContract: vi.fn(async (args: any) => {
         switch (args.functionName) {
@@ -264,7 +264,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
 
     const req = createMockReq({
       method: 'POST',
-      body: { shareOft: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+      body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
     })
     const res = createMockRes()
     await handler(req, res)
@@ -314,7 +314,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
 
       const req = createMockReq({
         method: 'POST',
-        body: { shareOft: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+        body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
       })
       const res = createMockRes()
       await handler(req, res)
@@ -328,8 +328,8 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     }
   })
 
-  it('uses creatorToken as bridge token when creatorToken differs from shareOft', async () => {
-    const shareOft = '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba'
+  it('uses explicit bridgeToken when creatorToken differs', async () => {
+    const bridgeToken = '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba'
     const creatorToken = '0x5b674196812451B7cEC024FE9d22D2c0b172fa75'
     const restoreEnv = applyEnv({
       SOLANA_ADAPTER_OWNER_PRIVATE_KEY:
@@ -403,7 +403,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       const req = createMockReq({
         method: 'POST',
         body: {
-          shareOft,
+          bridgeToken,
           creatorToken,
           expectedSolanaAmount: '1000000000000000000',
         },
@@ -415,22 +415,22 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       expect(res.body?.success).toBe(true)
 
       const isRegisteredCall = readContractMock.mock.calls.find((call) => call[0]?.functionName === 'isRegistered')
-      expect(String(isRegisteredCall?.[0]?.args?.[0] ?? '').toLowerCase()).toBe(creatorToken.toLowerCase())
+      expect(String(isRegisteredCall?.[0]?.args?.[0] ?? '').toLowerCase()).toBe(bridgeToken.toLowerCase())
 
       const scalarCall = readContractMock.mock.calls.find((call) => call[0]?.functionName === 'scalars')
-      expect(String(scalarCall?.[0]?.args?.[0] ?? '').toLowerCase()).toBe(creatorToken.toLowerCase())
+      expect(String(scalarCall?.[0]?.args?.[0] ?? '').toLowerCase()).toBe(bridgeToken.toLowerCase())
 
       const writeArgs = writeContractMock.mock.calls[0]?.[0]
       expect(writeArgs?.functionName).toBe('registerToken')
-      expect(String(writeArgs?.args?.[0] ?? '').toLowerCase()).toBe(creatorToken.toLowerCase())
-      expect(String(writeArgs?.args?.[0] ?? '').toLowerCase()).not.toBe(shareOft.toLowerCase())
+      expect(String(writeArgs?.args?.[0] ?? '').toLowerCase()).toBe(bridgeToken.toLowerCase())
+      expect(String(writeArgs?.args?.[0] ?? '').toLowerCase()).not.toBe(creatorToken.toLowerCase())
     } finally {
       ;(globalThis as any).fetch = originalFetch
       restoreEnv()
     }
   })
 
-  it('returns 409 when base bridge route is missing for shareOft/mint pair', async () => {
+  it('returns 409 when base bridge route is missing for bridgeToken/mint pair', async () => {
     const restoreEnv = applyEnv({
       SOLANA_ADAPTER_OWNER_PRIVATE_KEY:
         '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -470,7 +470,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
 
       const req = createMockReq({
         method: 'POST',
-        body: { shareOft: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+        body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
       })
       const res = createMockRes()
       await handler(req, res)
@@ -522,7 +522,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
 
       const req = createMockReq({
         method: 'POST',
-        body: { shareOft: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+        body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
       })
       const res = createMockRes()
       await handler(req, res)
@@ -604,7 +604,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
 
       const req = createMockReq({
         method: 'POST',
-        body: { shareOft: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+        body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
       })
       const res = createMockRes()
       await handler(req, res)

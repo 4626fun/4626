@@ -45,7 +45,7 @@ Never include private keys or full `.env` contents in output.
 - Bootstrap endpoint registry: `contracts/helpers/infra/OFTBootstrapRegistry.sol`
 - Core registry (chain/EID mappings + endpoint lookup): `contracts/core/CreatorRegistry.sol`
 - Deployment tooling (CREATE2/bytecode infra): `script/DeployUniversalBytecodeInfra.s.sol`, `script/SimulateUniversalCreate2Factory.s.sol`
-- Deployer orchestration that sets endpoints before deployment: `contracts/helpers/batchers/CreatorVaultDeployer.sol`
+- Deployment-batcher orchestration that sets endpoints before deployment: `contracts/helpers/batchers/DeploymentBatcher.sol`
 
 ## Read-only Checks (before changes)
 

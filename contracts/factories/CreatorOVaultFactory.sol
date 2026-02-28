@@ -9,12 +9,12 @@ import {ICreatorRegistry} from "../interfaces/core/ICreatorRegistry.sol";
  * @author 0xakita.eth
  * @notice Registry for Creator Vault deployments (contracts deployed via script)
  *
- * @dev DEPRECATED: This factory is superseded by CreatorVaultDeployer (contracts/helpers/batchers/).
- *      CreatorVaultDeployer handles phased deployment (Phase 1-3) with CREATE2 deterministic
+ * @dev DEPRECATED: This factory is superseded by DeploymentBatcher (contracts/helpers/batchers/).
+ *      DeploymentBatcher handles phased deployment (Phase 1-3) with CREATE2 deterministic
  *      addresses, hub-centric architecture support, and remote chain OFT-only deployment.
  *
  *      This contract is kept for backwards compatibility with existing deployments.
- *      New deployments should use CreatorVaultDeployer exclusively.
+ *      New deployments should use DeploymentBatcher exclusively.
  *
  * @dev LEGACY DESIGN RATIONALE:
  *      Original factory exceeded EVM contract size limit (88KB > 24KB)
@@ -27,7 +27,7 @@ import {ICreatorRegistry} from "../interfaces/core/ICreatorRegistry.sol";
  *
  * @dev DEPLOYMENT FLOW (LEGACY):
  *      1. Deploy this factory (part of infrastructure)
- *      2. Run DeployCreatorVault.s.sol which:
+ *      2. Run DeployVaultStack script which:
  *         - Deploys all 6 contracts individually
  *         - Calls factory.registerDeployment() to store info
  *      3. Addresses stored here for lookup
@@ -208,7 +208,7 @@ contract CreatorOVaultFactory is Ownable {
         );
 
         // Set vault infrastructure addresses
-        registry.setCreatorVault(_creatorCoin, _vault);
+        registry.setVault(_creatorCoin, _vault);
         registry.setCreatorWrapper(_creatorCoin, _wrapper);
         registry.setCreatorShareOFT(_creatorCoin, _shareOFT);
         registry.setCreatorOracle(_creatorCoin, _oracle);

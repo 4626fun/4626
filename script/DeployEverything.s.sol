@@ -7,7 +7,7 @@ import "../contracts/helpers/batchers/VaultActivationBatcher.sol";
 
 /**
  * @title DeployEverything
- * @notice Deploys all required contracts for CreatorVault
+ * @notice Deploys all required contracts for 4626
  *
  * Usage:
  * forge script script/DeployEverything.s.sol:DeployEverything \

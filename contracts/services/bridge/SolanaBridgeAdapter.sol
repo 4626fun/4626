@@ -68,7 +68,7 @@ interface IUniswapV4Router {
 /**
  * @title SolanaBridgeAdapter
  * @author 0xakita.eth
- * @notice Bridge adapter for CreatorVault assets between Base and Solana.
+ * @notice Bridge adapter for 4626 assets between Base and Solana.
  * @dev Used to register bridge tokens and route bridge + lottery actions.
  */
 contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {

@@ -74,7 +74,7 @@ akita is the first Creator Coin to launch with 4626:
 
 ## Links
 
-- **Website**: [erc4626.fun](https://erc4626.fun)
+- **Website**: [4626.fun](https://4626.fun)
 - **GitHub**: [github.com/wenakita/4626](https://github.com/wenakita/4626)
 - **Coinbase Creator Coins**: [Coinbase Ecosystem](https://www.coinbase.com)
 - **LayerZero**: [docs.layerzero.network](https://docs.layerzero.network)

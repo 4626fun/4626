@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#                    CreatorVault Deployment Script
+#                    4626 Deployment Script
 # ═══════════════════════════════════════════════════════════════════════════════
 #
 # Usage:
@@ -83,7 +83,7 @@ check_prereqs() {
 
 # Deploy infrastructure
 deploy_infrastructure() {
-    echo -e "${GREEN}Deploying CreatorVault Infrastructure...${NC}"
+    echo -e "${GREEN}Deploying 4626 infrastructure...${NC}"
     echo ""
     
     forge script script/DeployInfrastructure.s.sol:DeployInfrastructure \
@@ -101,7 +101,7 @@ deploy_infrastructure() {
     echo "3. Deploy creator vaults"
 }
 
-# Deploy v2 bytecode store + deployer + CreatorVaultDeployer, then seed store
+# Deploy v2 bytecode store + deployer + DeploymentBatcher, then seed store
 deploy_infra_v2() {
     if [ -z "$BASE_RPC_URL" ]; then
         echo -e "${RED}Error: BASE_RPC_URL environment variable not set${NC}"
@@ -118,8 +118,8 @@ deploy_infra_v2() {
 
     if [ -n "${SOLANA_BRIDGE_ADAPTER:-}" ] && [ -n "${SOLANA_DESTINATION:-}" ]; then
         echo ""
-        echo -e "${GREEN}Configuring Solana routing on CreatorVaultDeployer...${NC}"
-        forge script script/ConfigureCreatorVaultDeployerSolana.s.sol:ConfigureCreatorVaultDeployerSolana \
+        echo -e "${GREEN}Configuring Solana routing on deployment batcher (DeploymentBatcher)...${NC}"
+        forge script script/ConfigureDeploymentBatcherSolana.s.sol:ConfigureDeploymentBatcherSolana \
             --rpc-url "$BASE_RPC_URL" \
             --broadcast
     else
@@ -161,16 +161,16 @@ deploy_vault() {
         exit 1
     fi
     
-    echo -e "${GREEN}Deploying Creator Vault for $token...${NC}"
+    echo -e "${GREEN}Deploying vault for $token...${NC}"
     echo ""
     
-    CREATOR_COIN_ADDRESS=$token forge script script/DeployInfrastructure.s.sol:DeployCreatorVault \
+    CREATOR_COIN_ADDRESS=$token forge script script/DeployInfrastructure.s.sol:DeployVaultStack \
         --rpc-url "$RPC_URL" \
         --broadcast \
         -vvvv
     
     echo ""
-    echo -e "${GREEN}✓ Creator Vault deployed successfully!${NC}"
+    echo -e "${GREEN}✓ Vault deployed successfully!${NC}"
 }
 
 # Deploy via ERC-4337

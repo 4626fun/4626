@@ -5,11 +5,12 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=creatorvault
-Group=creatorvault
-WorkingDirectory=/opt/creatorvault/frontend
-EnvironmentFile=/etc/creatorvault/solana-provisioner.env
-ExecStart=/usr/bin/env pnpm --dir /opt/creatorvault/frontend solana-provisioner:start
+User=app4626
+Group=app4626
+# install-systemd.sh rewrites these placeholders per host.
+WorkingDirectory=/opt/4626/frontend
+EnvironmentFile=/etc/4626/solana-provisioner.env
+ExecStart=/usr/bin/env pnpm --dir /opt/4626/frontend solana-provisioner:start
 Restart=always
 RestartSec=2
 TimeoutStopSec=15

@@ -23,7 +23,7 @@ import {V4LiquidityAmounts} from "../../../libraries/V4LiquidityAmounts.sol";
 
 /**
  * @title LimitOrderStrategy
- * @author 0xakita.eth (CreatorVault)
+ * @author 0xakita.eth (4626)
  * @notice Single-tick liquidity positions that act as limit orders
  *
  * @dev STRATEGY:

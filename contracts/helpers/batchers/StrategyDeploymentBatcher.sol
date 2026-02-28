@@ -33,7 +33,7 @@ interface ICharmFactory {
 /**
  * @title StrategyDeploymentBatcher
  * @author 0xakita.eth
- * @notice Batches deployment and wiring of CreatorVault strategies.
+ * @notice Batches deployment and wiring of 4626 strategies.
  * @dev Used by AA deployment flows to create pools, vaults, and adapters.
  */
 contract StrategyDeploymentBatcher is ReentrancyGuard {
@@ -79,7 +79,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
      * @param v3FeeTier The Uniswap V3 fee tier (e.g., 3000 for 0.3%)
      * @param initialSqrtPriceX96 Initial price for V3 pool (e.g., for 99/1 CREATOR/USDC)
      * @param owner The creator coin owner who will own all strategies (typically the creator)
-     * @param vaultName Standard name for the Charm vault (e.g., "CreatorVault: akita/USDC")
+     * @param vaultName Standard name for the Charm vault (e.g., "4626: akita/USDC")
      * @param vaultSymbol Standard symbol for the Charm vault (e.g., "CV-akita-USDC")
      * @return result All deployed contract addresses
      *

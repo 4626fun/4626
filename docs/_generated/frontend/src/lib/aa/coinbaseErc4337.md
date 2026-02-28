@@ -1,8 +1,8 @@
-[**creatorvault-miniapp**](../../../index.md)
+[**4626-miniapp**](../../../index.md)
 
 ***
 
-[creatorvault-miniapp](../../../index.md) / src/lib/aa/coinbaseErc4337
+[4626-miniapp](../../../index.md) / src/lib/aa/coinbaseErc4337
 
 # src/lib/aa/coinbaseErc4337
 

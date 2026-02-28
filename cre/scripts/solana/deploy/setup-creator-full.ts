@@ -8,7 +8,7 @@
  * Usage:
  *   tsx scripts/solana/deploy/setup-creator-full.ts \
  *     --hub-creator-coin 0x... \
- *     --hub-share-oft 0x... \
+ *     --hub-share-token 0x... \
  *     [--keeper-pubkey <base58>] \
  *     [--fee-bps 690] \
  *     [--decimals 9] \
@@ -50,7 +50,7 @@ import idl from '../../../../target/idl/creator_share_hook.json' with { type: 'j
 
 function parseArgs(): {
   hubCreatorCoin: string;
-  hubShareOft: string;
+  hubShareToken: string;
   keeperPubkey: string | null;
   feeBps: number;
   decimals: number;
@@ -60,7 +60,7 @@ function parseArgs(): {
 } {
   const args = process.argv.slice(2);
   let hubCreatorCoin = '';
-  let hubShareOft = '';
+  let hubShareToken = '';
   let keeperPubkey: string | null = null;
   let feeBps = 690;
   let decimals = 9;
@@ -73,8 +73,8 @@ function parseArgs(): {
       case '--hub-creator-coin':
         hubCreatorCoin = args[++i] ?? '';
         break;
-      case '--hub-share-oft':
-        hubShareOft = args[++i] ?? '';
+      case '--hub-share-token':
+        hubShareToken = args[++i] ?? '';
         break;
       case '--keeper-pubkey':
         keeperPubkey = args[++i] ?? null;
@@ -97,12 +97,21 @@ function parseArgs(): {
     }
   }
 
-  if (!hubCreatorCoin || !hubShareOft) {
-    process.stderr.write('error: --hub-creator-coin and --hub-share-oft are required\n');
+  if (!hubCreatorCoin || !hubShareToken) {
+    process.stderr.write('error: --hub-creator-coin and --hub-share-token are required\n');
     process.exit(1);
   }
 
-  return { hubCreatorCoin, hubShareOft, keeperPubkey, feeBps, decimals, ammPrograms, flushThreshold, lotteryEnabled };
+  return {
+    hubCreatorCoin,
+    hubShareToken,
+    keeperPubkey,
+    feeBps,
+    decimals,
+    ammPrograms,
+    flushThreshold,
+    lotteryEnabled,
+  };
 }
 
 function hexToBytes32(hex: string): number[] {
@@ -204,7 +213,7 @@ const initSig = await program.methods
   .initializeCreator({
     keeperAuthority: keeperPubkey,
     hubCreatorCoin: hexToBytes32(config.hubCreatorCoin),
-    hubShareOft: hexToBytes32(config.hubShareOft),
+    hubShareOft: hexToBytes32(config.hubShareToken),
     feeBps: config.feeBps,
     flushThreshold: new BN(config.flushThreshold),
     lotteryEnabled: config.lotteryEnabled,
@@ -265,7 +274,7 @@ const result = {
     winnerRecord: winnerRecordPda.toBase58(),
   },
   hubCreatorCoin: config.hubCreatorCoin,
-  hubShareOft: config.hubShareOft,
+  hubShareToken: config.hubShareToken,
   signatures,
 };
 

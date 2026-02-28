@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 /**
  * @title ICreatorRegistry
  * @author 0xakita.eth
- * @notice Registry interface for core CreatorVault addresses.
+ * @notice Registry interface for core 4626 addresses.
  * @dev Used by vaults, OFTs, and helpers to resolve ecosystem contracts.
  */
 interface ICreatorRegistry {
@@ -120,7 +120,7 @@ interface ICreatorRegistry {
     /**
      * @notice Set vault address for a Creator Coin
      */
-    function setCreatorVault(address _token, address _vault) external;
+    function setVault(address _token, address _vault) external;
 
     /**
      * @notice Set ShareOFT address for a Creator Coin

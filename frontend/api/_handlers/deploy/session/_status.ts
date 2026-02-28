@@ -155,7 +155,7 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
           { name: 'owner', type: 'address' },
           { name: 'vault', type: 'address' },
           { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
+          { name: 'shareToken', type: 'address' },
           { name: 'gaugeController', type: 'address' },
           { name: 'ccaStrategy', type: 'address' },
           { name: 'oracle', type: 'address' },
@@ -195,7 +195,7 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
           { name: 'owner', type: 'address' },
           { name: 'vault', type: 'address' },
           { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
+          { name: 'shareToken', type: 'address' },
           { name: 'gaugeController', type: 'address' },
           { name: 'ccaStrategy', type: 'address' },
           { name: 'oracle', type: 'address' },
@@ -319,19 +319,20 @@ function dedupeOrigins(origins: string[]): string[] {
   return out
 }
 
-function extractFinalizeBridgeTokens(data: Hex): { creatorToken: Address | null; shareOft: Address | null } | null {
+function extractFinalizeBridgeTokens(data: Hex): { creatorToken: Address | null } | null {
   for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
     try {
       const decoded = decodeFunctionData({ abi, data })
-      const params = (decoded.args?.[0] ?? null) as { creatorToken?: string; shareOFT?: string } | null
-      const creatorToken = params?.creatorToken && isAddress(params.creatorToken)
+      const params = (decoded.args?.[0] ?? null) as { creatorToken?: string } | null
+      const creatorTokenCandidate = params?.creatorToken && isAddress(params.creatorToken)
         ? getAddress(params.creatorToken as Address)
         : null
-      const shareOft = params?.shareOFT && isAddress(params.shareOFT)
-        ? getAddress(params.shareOFT as Address)
-        : null
-      if (!creatorToken && !shareOft) continue
-      return { creatorToken, shareOft }
+      const creatorToken =
+        creatorTokenCandidate && creatorTokenCandidate.toLowerCase() !== ZERO_ADDRESS.toLowerCase()
+          ? creatorTokenCandidate
+          : null
+      if (!creatorToken) continue
+      return { creatorToken }
     } catch {
       continue
     }
@@ -349,8 +350,8 @@ async function ensureSolanaRouteReadyForPhase2(params: {
 
   const batcherAddress = getAddress(finalizeCall.to)
   const finalizeTokens = extractFinalizeBridgeTokens(finalizeCall.data)
-  if (!finalizeTokens?.shareOft) return
-  const bridgeToken = finalizeTokens.creatorToken ?? finalizeTokens.shareOft
+  if (!finalizeTokens?.creatorToken) return
+  const bridgeToken = finalizeTokens.creatorToken
 
   const [adapterRaw, destinationRaw] = await Promise.all([
     params.publicClient
@@ -405,8 +406,8 @@ async function ensureSolanaRouteReadyForPhase2(params: {
   ).trim()
   const tryRegister = async (
     origin: string,
-    routePath: '/api/deploy/registerSolanaBridgeToken' | '/api/deploy/registerShareOft',
-  ): Promise<{ ok: boolean; shouldTryLegacy: boolean; failure: string | null }> => {
+    routePath: '/api/deploy/registerSolanaBridgeToken',
+  ): Promise<{ ok: boolean; failure: string | null }> => {
     try {
       const registerUrl = `${origin}${routePath}`
       const registerRes = await fetch(registerUrl, {
@@ -420,7 +421,6 @@ async function ensureSolanaRouteReadyForPhase2(params: {
             : {}),
         },
         body: JSON.stringify({
-          shareOft: finalizeTokens.shareOft,
           bridgeToken,
           batcherAddress,
         }),
@@ -433,7 +433,7 @@ async function ensureSolanaRouteReadyForPhase2(params: {
         registerJson = null
       }
       if (registerRes.ok && registerJson?.success) {
-        return { ok: true, shouldTryLegacy: false, failure: null }
+        return { ok: true, failure: null }
       }
       const detail =
         registerJson?.error
@@ -443,11 +443,10 @@ async function ensureSolanaRouteReadyForPhase2(params: {
             : `http_${registerRes.status}`
       return {
         ok: false,
-        shouldTryLegacy: registerRes.status === 404 || registerRes.status === 405,
         failure: `${origin}${routePath} (${registerRes.status}): ${detail}`,
       }
     } catch {
-      return { ok: false, shouldTryLegacy: false, failure: `${origin}${routePath}: request_failed` }
+      return { ok: false, failure: `${origin}${routePath}: request_failed` }
     }
   }
   let lastFailure: string | null = null
@@ -455,13 +454,6 @@ async function ensureSolanaRouteReadyForPhase2(params: {
     const primary = await tryRegister(origin, '/api/deploy/registerSolanaBridgeToken')
     if (primary.ok) return
     lastFailure = primary.failure
-    if (!primary.shouldTryLegacy) continue
-
-    const legacy = await tryRegister(origin, '/api/deploy/registerShareOft')
-    if (legacy.ok) return
-    if (legacy.failure) {
-      lastFailure = legacy.failure
-    }
   }
   if (lastFailure) return
   return

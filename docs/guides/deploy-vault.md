@@ -51,7 +51,7 @@ Production override safety:
 ### Split Phase-1 rollout (Base mainnet + Vercel)
 
 Current canonical Base defaults:
-- `CreatorVaultDeployer` (split Phase-1 batcher): `0xB87CBb646dD14F520078F11196f79BF815F18c84`
+- Deployment batcher (`DeploymentBatcher`, split Phase-1): `0xB87CBb646dD14F520078F11196f79BF815F18c84`
 - `UniversalBytecodeStoreV2`: `0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13`
 - `UniversalCreate2DeployerFromStoreV2`: `0x74183076C7D33346880A5bf0e263B761FB4d38BA`
 
@@ -156,7 +156,7 @@ Fix: add the EOA as an owner first (one-time). After that, deploys can use the 1
 
 ```solidity
 // Deploy using factory
-(address vault, address wrapper, address shareOFT) = factory.deployCreatorVault(
+(address vault, address wrapper, address shareOFT) = factory.deployVault(
     creatorCoinAddress,     // Your Creator Coin
     "TOKEN Vault",          // Vault name
     "▢TOKEN",               // Vault symbol
@@ -170,7 +170,7 @@ Fix: add the EOA as an owner first (one-time). After that, deploys can use the 1
 ## Via Script
 
 ```bash
-forge script script/DeployCreatorVault.s.sol \
+forge script script/DeployInfrastructure.s.sol:DeployVaultStack \
   --rpc-url $BASE_RPC_URL \
   --broadcast \
   --verify

@@ -15,7 +15,7 @@ Deployed contract addresses for 4626.
 |----------|---------|
 | CreatorRegistry | `TBD` |
 | CreatorLotteryManager | `TBD` |
-| CreatorVaultDeployer | `TBD` |
+| DeploymentBatcher | `TBD` |
 | VRFConsumer | `TBD` |
 
 ### First Deployment: akita

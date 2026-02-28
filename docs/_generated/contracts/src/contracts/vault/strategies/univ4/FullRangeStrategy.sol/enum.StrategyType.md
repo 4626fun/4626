@@ -1,11 +1,11 @@
 # StrategyType
-[Git Source](https://github.com/creatorvault/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/vault/strategies/univ4/FullRangeStrategy.sol)
+[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/vault/strategies/univ4/FullRangeStrategy.sol)
 
 **Title:**
 FullRangeStrategy
 
 **Author:**
-0xakita.eth (CreatorVault)
+0xakita.eth (4626)
 
 Provides full-range liquidity on Uniswap V4
 

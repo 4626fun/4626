@@ -77,8 +77,6 @@ type SolanaInfraStatusResponse = {
   defaultMintConfigured: boolean
   defaultMintBytes32: Hex | null
   defaultRouteBridgeToken: Address | null
-  // Backward-compatible alias for older dashboards/scripts.
-  defaultRouteShareOft: Address | null
   defaultMintMappedToken: Address | null
   defaultMintRouteScalar: string | null
   defaultMintRouteReady: boolean | null
@@ -106,11 +104,7 @@ function isBytes32Hex(value: unknown): value is Hex {
 }
 
 function readSolanaMintFromEnv(): Hex | null {
-  const candidates = [
-    process.env.SOLANA_DEFAULT_MINT_BYTES32,
-    process.env.SOLANA_MINT_BYTES32,
-    process.env.SOLANA_SHARE_OFT_DEFAULT_MINT,
-  ]
+  const candidates = [process.env.SOLANA_DEFAULT_MINT_BYTES32, process.env.SOLANA_MINT_BYTES32]
   for (const c of candidates) {
     const v = String(c ?? '').trim()
     if (isBytes32Hex(v) && v.toLowerCase() !== ZERO_BYTES32.toLowerCase()) return v as Hex
@@ -132,10 +126,7 @@ function readRegistrationSignerPk(): Hex | null {
 }
 
 function readDefaultRouteBridgeTokenFromEnv(): Address | null {
-  const candidates = [
-    process.env.SOLANA_DEFAULT_BRIDGE_TOKEN,
-    process.env.SOLANA_DEFAULT_SHARE_OFT,
-  ]
+  const candidates = [process.env.SOLANA_DEFAULT_BRIDGE_TOKEN]
   for (const c of candidates) {
     const v = String(c ?? '').trim()
     if (isAddress(v)) return getAddress(v)
@@ -311,7 +302,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const blockers: string[] = []
   if (!batcherAddress) {
-    blockers.push('Deployment batcher (CreatorVaultDeployer) is not configured on server.')
+    blockers.push('Deployment batcher (DeploymentBatcher) is not configured on server.')
   }
   if (solanaEnabledOnBatcher && adapterHasCode === false) {
     blockers.push('Batcher Solana adapter has no bytecode on Base.')
@@ -363,7 +354,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     defaultMintConfigured,
     defaultMintBytes32,
     defaultRouteBridgeToken,
-    defaultRouteShareOft: defaultRouteBridgeToken,
     defaultMintMappedToken,
     defaultMintRouteScalar,
     defaultMintRouteReady,

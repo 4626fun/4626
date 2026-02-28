@@ -61,7 +61,7 @@ flowchart LR
 
   subgraph Protocol["Protocol Plane (Base + Omnichain)"]
     Registry["CreatorRegistry"]
-    Deployer["CreatorVaultDeployer"]
+    Deployer["DeploymentBatcher"]
     Vault["CreatorOVault (ERC-4626)"]
     Wrapper["CreatorOVaultWrapper"]
     Share["CreatorShareOFT (LayerZero V2 OFT)"]

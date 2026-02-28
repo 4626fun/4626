@@ -226,7 +226,7 @@ contract SeedCreatorRegistry is Script {
 
         if (VAULT_BATCHER != address(0)) {
             registry.setAuthorizedFactory(VAULT_BATCHER, true);
-            console.log(unicode"   ✓ CreatorVaultBatcher authorized");
+            console.log(unicode"   ✓ DeploymentBatcher authorized");
         }
 
         if (VAULT_ACT_BATCHER != address(0)) {
@@ -258,7 +258,7 @@ contract SeedCreatorRegistry is Script {
         console.log(unicode"  ✓ Factories auth'd:   CreatorOVaultFactory, Batcher, ActivationBatcher");
         console.log("");
         console.log("   No creator-specific data was registered.");
-        console.log("   Creator tokens/vaults are registered per-deployment via DeployCreatorVault.");
+        console.log("   Creator tokens/vaults are registered per-deployment via DeployVaultStack.");
         console.log("");
     }
 

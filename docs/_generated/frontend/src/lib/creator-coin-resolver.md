@@ -1,8 +1,8 @@
-[**creatorvault-miniapp**](../../index.md)
+[**4626-miniapp**](../../index.md)
 
 ***
 
-[creatorvault-miniapp](../../index.md) / src/lib/creator-coin-resolver
+[4626-miniapp](../../index.md) / src/lib/creator-coin-resolver
 
 # src/lib/creator-coin-resolver
 

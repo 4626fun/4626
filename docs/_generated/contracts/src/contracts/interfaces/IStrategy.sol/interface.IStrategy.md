@@ -1,5 +1,5 @@
 # IStrategy
-[Git Source](https://github.com/creatorvault/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/interfaces/IStrategy.sol)
+[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/interfaces/IStrategy.sol)
 
 **Title:**
 IStrategy
@@ -7,7 +7,7 @@ IStrategy
 **Author:**
 0xakita.eth
 
-Interface for CreatorVault single-asset strategies.
+Interface for 4626 single-asset strategies.
 
 Implemented by strategies used by `CreatorOVault`.
 

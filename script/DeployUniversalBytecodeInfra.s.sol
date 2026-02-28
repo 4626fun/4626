@@ -23,8 +23,8 @@ contract DeployUniversalBytecodeInfra is Script {
     address constant UNIVERSAL_CREATE2_FACTORY = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
     // Chain-agnostic salts: same on every chain → same deployed addresses.
-    bytes32 constant STORE_SALT = keccak256("CreatorVault:UniversalBytecodeStore:v1");
-    bytes32 constant DEPLOYER_SALT = keccak256("CreatorVault:UniversalCreate2DeployerFromStore:v1");
+    bytes32 constant STORE_SALT = keccak256("4626:UniversalBytecodeStore:v1");
+    bytes32 constant DEPLOYER_SALT = keccak256("4626:UniversalCreate2DeployerFromStore:v1");
 
     function _computeCreate2(address deployer, bytes32 salt, bytes32 initCodeHash) internal pure returns (address) {
         return address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), deployer, salt, initCodeHash)))));

@@ -1,6 +1,6 @@
-# CreatorVault - Deployment Registry
+# 4626 - Deployment Registry
 
-> Multi-chain deployment documentation for the CreatorVault omnichain protocol.
+> Multi-chain deployment documentation for the 4626 omnichain protocol.
 
 ## 📁 Directory Structure
 

@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Script, console2} from "forge-std/Script.sol";
 
-interface ICreatorVaultDeployerSolanaConfig {
+interface IDeploymentBatcherSolanaConfig {
     function protocolTreasury() external view returns (address);
     function lotteryManager() external view returns (address);
     function solanaBridgeAdapter() external view returns (address);
@@ -17,8 +17,8 @@ interface ICreatorLotteryManagerAuth {
 }
 
 /**
- * @title ConfigureCreatorVaultDeployerSolana
- * @notice Configures Solana routing on CreatorVaultDeployer and (optionally) authorizes the adapter on LotteryManager.
+ * @title ConfigureDeploymentBatcherSolana
+ * @notice Configures Solana routing on the deployment batcher (`DeploymentBatcher`) and optionally authorizes the adapter on LotteryManager.
  *
  * Required env:
  * - PRIVATE_KEY
@@ -26,22 +26,22 @@ interface ICreatorLotteryManagerAuth {
  * - SOLANA_DESTINATION (bytes32 Solana pubkey)
  *
  * Optional env:
- * - CREATOR_VAULT_BATCHER (defaults to current Base phased deployer)
+ * - DEPLOYMENT_BATCHER (defaults to current Base phased deployer)
  * - LOTTERY_MANAGER (defaults to deployer.lotteryManager())
  * - AUTHORIZE_ADAPTER_ON_LOTTERY=1|0 (default 1)
  */
-contract ConfigureCreatorVaultDeployerSolana is Script {
-    address constant DEFAULT_CREATOR_VAULT_BATCHER = 0xB87CBb646dD14F520078F11196f79BF815F18c84;
+contract ConfigureDeploymentBatcherSolana is Script {
+    address constant DEFAULT_DEPLOYMENT_BATCHER = 0xB87CBb646dD14F520078F11196f79BF815F18c84;
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address broadcaster = vm.addr(pk);
 
-        address batcher = vm.envOr("CREATOR_VAULT_BATCHER", DEFAULT_CREATOR_VAULT_BATCHER);
+        address batcher = vm.envOr("DEPLOYMENT_BATCHER", DEFAULT_DEPLOYMENT_BATCHER);
         address adapter = vm.envAddress("SOLANA_BRIDGE_ADAPTER");
         bytes32 destination = vm.envBytes32("SOLANA_DESTINATION");
 
-        ICreatorVaultDeployerSolanaConfig deployer = ICreatorVaultDeployerSolanaConfig(batcher);
+        IDeploymentBatcherSolanaConfig deployer = IDeploymentBatcherSolanaConfig(batcher);
         address protocolTreasury = deployer.protocolTreasury();
         require(broadcaster == protocolTreasury, "broadcaster must equal protocolTreasury");
 
@@ -49,7 +49,7 @@ contract ConfigureCreatorVaultDeployerSolana is Script {
         bool authorizeOnLottery = vm.envOr("AUTHORIZE_ADAPTER_ON_LOTTERY", uint256(1)) == 1;
 
         console2.log("Broadcaster:", broadcaster);
-        console2.log("CreatorVaultDeployer:", batcher);
+        console2.log("Deployment batcher (DeploymentBatcher):", batcher);
         console2.log("ProtocolTreasury:", protocolTreasury);
         console2.log("SolanaBridgeAdapter:", adapter);
         console2.logBytes32(destination);

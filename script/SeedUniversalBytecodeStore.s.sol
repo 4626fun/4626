@@ -6,7 +6,7 @@ import "../contracts/helpers/infra/UniversalBytecodeStore.sol";
 
 /**
  * @dev Seed UniversalBytecodeStore with all creation codes used by the phased deploy flow
- * (`CreatorVaultDeployer`, Phases 1–3).
+ * (`DeploymentBatcher`, Phases 1–3).
  *
  * Run:
  *  forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore --rpc-url $BASE_RPC_URL --broadcast

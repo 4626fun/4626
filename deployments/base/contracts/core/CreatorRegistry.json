@@ -1390,7 +1390,7 @@
     },
     {
       "type": "function",
-      "name": "setCreatorVault",
+      "name": "setVault",
       "inputs": [
         {
           "name": "_token",

@@ -1,7 +1,7 @@
 /**
- * CreatorVault Deployment via ERC-4337 Account Abstraction
+ * 4626 Deployment via ERC-4337 Account Abstraction
  * 
- * This script shows how to deploy the entire Creator Vault infrastructure
+ * This script shows how to deploy the full 4626 vault infrastructure
  * in a single UserOperation using a Smart Account.
  * 
  * BENEFITS:
@@ -246,7 +246,7 @@ function buildDeploymentCalls(
 // =================================
 
 /**
- * Deploy CreatorVault infrastructure via ERC-4337
+ * Deploy 4626 vault infrastructure via ERC-4337
  * 
  * @param creatorCoin - The creator coin token address
  * @param options - Deployment options
@@ -547,7 +547,7 @@ async function main() {
     if (!creatorCoin) {
         console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
-║                    CreatorVault ERC-4337 Deployment                        ║
+║                       4626 ERC-4337 Deployment                             ║
 ╠════════════════════════════════════════════════════════════════════════════╣
 ║                                                                            ║
 ║  Usage:                                                                    ║
@@ -593,7 +593,7 @@ async function main() {
     
     console.log('');
     console.log('╔══════════════════════════════════════════════════╗');
-    console.log('║       CreatorVault ERC-4337 Deployment           ║');
+    console.log('║          4626 ERC-4337 Deployment                ║');
     console.log('╚══════════════════════════════════════════════════╝');
     console.log('');
     console.log(`  Creator Coin:     ${creatorCoin}`);

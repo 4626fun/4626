@@ -5,7 +5,7 @@ export function resolveCdpPaymasterUrl(paymaster: string | null | undefined): st
     return `${origin}/api/paymaster`
   }
   // Prefer same-origin proxy when the URL points at it.
-  // This avoids cross-domain SIWE/session issues when multiple domains (e.g. 4626.fun vs erc4626.fun)
+  // This avoids cross-domain SIWE/session issues when multiple domains (e.g. 4626.fun vs 4626.fun)
   // are used for the frontend, but the paymaster URL was configured as an absolute URL.
   const normalizePaymasterUrl = (value: string): string => {
     const v = value.trim()

@@ -5,7 +5,7 @@ pragma solidity ^0.8.20;
  * @title ChainlinkVRFIntegratorV2_5 - Cross-Chain VRF System
  * @author 0xakita.eth
  * @dev Spoke chain contract that receives random words requests and forwards them to Hub chain
- *      for Chainlink VRF 2.5 processing. Part of the CreatorVault cross-chain lottery
+ *      for Chainlink VRF 2.5 processing. Part of the 4626 cross-chain lottery
  *      and random words infrastructure.
  *
  * @notice Ready for future cross-chain VRF implementation

@@ -12,7 +12,7 @@ import {CreatorOVaultFactory} from "../contracts/factories/CreatorOVaultFactory.
 import {CreatorLotteryManager} from "../contracts/services/lottery/CreatorLotteryManager.sol";
 import {CreatorVRFConsumerV2_5} from "../contracts/services/lottery/vrf/CreatorVRFConsumerV2_5.sol";
 
-// Per-Creator Contracts (deployed by DeployCreatorVault)
+// Per-Creator Contracts (deployed by DeployVaultStack)
 import {CreatorOVault} from "../contracts/vault/CreatorOVault.sol";
 import {CreatorOVaultWrapper} from "../contracts/vault/CreatorOVaultWrapper.sol";
 import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVaultAdminModule.sol";
@@ -25,8 +25,8 @@ import {CreatorOracle} from "../contracts/services/oracles/CreatorOracle.sol";
 
 /**
  * @title DeployInfrastructure
- * @author 0xakita.eth (CreatorVault)
- * @notice Deploys ALL CreatorVault infrastructure contracts on Base
+ * @author 0xakita.eth (4626)
+ * @notice Deploys all 4626 infrastructure contracts on Base
  *
  * @dev DEPLOYMENT ORDER:
  *      ┌─────────────────────────────────────────────────────────────────┐
@@ -330,7 +330,7 @@ contract DeployInfrastructure is Script {
         console.log(unicode"║  3. Create & fund VRF subscription on Chainlink                ║");
         console.log(unicode"║  4. Deploy creator vaults:                                     ║");
         console.log(unicode"║     - Via AA: npx ts-node script/deploy-with-aa.ts --gasless   ║");
-        console.log(unicode"║     - Via EOA: forge script DeployCreatorVault                 ║");
+        console.log(unicode"║     - Via EOA: forge script DeployVaultStack                   ║");
         console.log(unicode"║                                                                ║");
         console.log(
             unicode"╚════════════════════════════════════════════════════════════════╝"
@@ -339,10 +339,10 @@ contract DeployInfrastructure is Script {
 }
 
 /**
- * @title DeployCreatorVault
+ * @title DeployVaultStack
  * @notice Deploy infrastructure for a specific Creator Coin (deploys contracts directly)
  * @dev Run with:
- *      CREATOR_COIN_ADDRESS=0x... forge script script/DeployInfrastructure.s.sol:DeployCreatorVault \
+ *      CREATOR_COIN_ADDRESS=0x... forge script script/DeployInfrastructure.s.sol:DeployVaultStack \
  *          --rpc-url base --broadcast -vvvv
  *
  * @dev DEPLOYS 6 CONTRACTS DIRECTLY:
@@ -353,7 +353,7 @@ contract DeployInfrastructure is Script {
  *      5. CCALaunchStrategy - Fair launch
  *      6. CreatorOracle - Price oracle
  */
-contract DeployCreatorVault is Script {
+contract DeployVaultStack is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);

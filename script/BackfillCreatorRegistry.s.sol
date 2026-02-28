@@ -74,10 +74,10 @@ contract BackfillCreatorRegistry is Script {
         ICreatorRegistry.CreatorCoinInfo memory info = registry.getCreatorCoin(creatorToken);
 
         if (info.vault != vault) {
-            registry.setCreatorVault(creatorToken, vault);
-            console2.log("setCreatorVault: wrote");
+            registry.setVault(creatorToken, vault);
+            console2.log("setVault: wrote");
         } else {
-            console2.log("setCreatorVault: already set");
+            console2.log("setVault: already set");
         }
 
         if (info.wrapper != wrapper) {

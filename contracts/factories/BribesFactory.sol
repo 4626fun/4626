@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 /**
  * @title BribesFactory
- * @author CreatorVault
+ * @author 4626
  * @notice Deterministically deploys (CREATE2) a BribeDepot per vault gauge.
  *
  * Vault address is treated as the gauge id.

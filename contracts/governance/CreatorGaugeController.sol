@@ -118,7 +118,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     /// @notice Creator's treasury wallet
     address public creatorTreasury;
 
-    /// @notice Protocol multisig (CreatorVault treasury)
+    /// @notice Protocol multisig (4626 treasury)
     address public protocolTreasury;
 
     /// @notice Swap fee tier for WETH → CreatorCoin
@@ -278,7 +278,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
      * @notice Create gauge controller for a Creator Coin vault
      * @param _shareOFT The ShareOFT token address (e.g., ■AKITA)
      * @param _creatorTreasury Creator's treasury wallet
-     * @param _protocolTreasury Protocol multisig (CreatorVault treasury)
+     * @param _protocolTreasury Protocol multisig (4626 treasury)
      * @param _owner Owner (usually the creator)
      */
     constructor(address _shareOFT, address _creatorTreasury, address _protocolTreasury, address _owner)

@@ -67,7 +67,7 @@ contract TestAADeployment is Script, Test {
             3000, // 0.3% fee
             initialSqrtPriceX96,
             tx.origin,
-            "CreatorVault: akita/USDC",
+            "4626: akita/USDC",
             "CV-akita-USDC"
         ) returns (
             StrategyDeploymentBatcher.DeploymentResult memory result

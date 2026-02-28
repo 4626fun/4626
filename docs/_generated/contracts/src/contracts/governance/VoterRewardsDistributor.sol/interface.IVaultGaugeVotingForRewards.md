@@ -1,5 +1,5 @@
 # IVaultGaugeVotingForRewards
-[Git Source](https://github.com/creatorvault/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/governance/VoterRewardsDistributor.sol)
+[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/governance/VoterRewardsDistributor.sol)
 
 **Title:**
 VoterRewardsDistributor
@@ -11,7 +11,7 @@ Distributes the "protocol" fee slice to ve4626 voters (ve(3,3) mechanics)
 
 Inspired by ve(3,3) systems where voters receive fees/bribes for voting on gauges.
 Conceptually similar to bribe/fee-distributor patterns used in b(3,3)/ve(3,3) stacks
-(e.g. Hermes V2) but simplified for CreatorVault.
+(e.g. Hermes V2) but simplified for 4626.
 How it works:
 - Each CreatorGaugeController sends its voter slice (currently 9.61%) to this contract.
 - The slice is recorded per (epoch, vault).

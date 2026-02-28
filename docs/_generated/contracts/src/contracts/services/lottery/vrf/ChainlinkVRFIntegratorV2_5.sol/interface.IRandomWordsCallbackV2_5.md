@@ -1,5 +1,5 @@
 # IRandomWordsCallbackV2_5
-[Git Source](https://github.com/creatorvault/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/services/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol)
+[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/services/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol)
 
 **Title:**
 ChainlinkVRFIntegratorV2_5 - Cross-Chain VRF System
@@ -10,7 +10,7 @@ ChainlinkVRFIntegratorV2_5 - Cross-Chain VRF System
 Ready for future cross-chain VRF implementation
 
 Spoke chain contract that receives random words requests and forwards them to Hub chain
-for Chainlink VRF 2.5 processing. Part of the CreatorVault cross-chain lottery
+for Chainlink VRF 2.5 processing. Part of the 4626 cross-chain lottery
 and random words infrastructure.
 
 Callback interface for VRF consumers

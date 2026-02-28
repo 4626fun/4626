@@ -55,7 +55,7 @@ contract TestAAStrategyDeploy is Script, Test {
             v3FeeTier,
             initialSqrtPriceX96,
             tx.origin,
-            "CreatorVault: creator/USDC",
+            "4626: creator/USDC",
             "CV-creator-USDC"
         ) returns (
             StrategyDeploymentBatcher.DeploymentResult memory result

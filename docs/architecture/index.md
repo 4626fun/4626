@@ -113,11 +113,11 @@ CreatorLotteryManager (prize pool)
 ```
 User clicks "Deploy" → wallet/bundler executes a phased sequence
 
-Phase 1 — Deterministic deploy (CreatorVaultDeployer):
+Phase 1 — Deterministic deploy (deployment batcher):
 - Deploy per-creator contracts (vault, wrapper, share OFT, gauge controller, oracle, CCA strategy)
 - Register them in CreatorRegistry
 
-Phase 2 — Configuration (CreatorVaultDeployer):
+Phase 2 — Configuration (deployment batcher):
 - Wire roles + addresses (vault↔wrapper↔OFT, gauge controller config, oracle config)
 - Set required approvals/launch permissions
 
