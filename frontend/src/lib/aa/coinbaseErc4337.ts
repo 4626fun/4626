@@ -1,11 +1,12 @@
 import type { Address, Hex } from 'viem'
-import { decodeAbiParameters, encodeAbiParameters, getAddress, http, isAddress } from 'viem'
+import { decodeAbiParameters, encodeAbiParameters, getAddress, hashTypedData, http, isAddress } from 'viem'
 import { toAccount } from 'viem/accounts'
 import { Attribution } from 'ox/erc8021'
 import {
   createBundlerClient,
   createPaymasterClient,
   entryPoint06Address,
+  getUserOperationHash,
   sendUserOperation,
   toCoinbaseSmartAccount,
   waitForUserOperationReceipt,
@@ -907,8 +908,7 @@ function createWalletBackedLocalAccount(params: {
           preferPersonalSignForAutoMode = true
           if (!allowSignMessageFallback) {
             throw new Error(
-              'eth_sign is required for this wallet owner, but your wallet blocked it. ' +
-              'Connect a wallet that supports eth_sign (for example Coinbase Wallet) and retry.'
+              'eth_sign is blocked by your wallet. Retrying with EIP-712 typed-data signing…'
             )
           }
           try {
@@ -1132,6 +1132,120 @@ export async function simulateSmartWalletCalls(params: {
   }
 }
 
+const CSW_EIP712_DOMAIN = {
+  name: 'Coinbase Smart Wallet',
+  version: '1',
+} as const
+
+const CSW_MESSAGE_TYPES = {
+  CoinbaseSmartWalletMessage: [{ name: 'hash', type: 'bytes32' }],
+} as const
+
+async function signUserOpViaTypedData(params: {
+  walletClient: WalletClientLike
+  ownerAddress: Address
+  smartWallet: Address
+  chainId: number
+  userOpHash: Hex
+}): Promise<Hex> {
+  const { walletClient, ownerAddress, smartWallet, chainId, userOpHash } = params
+  const domain = {
+    ...CSW_EIP712_DOMAIN,
+    chainId,
+    verifyingContract: smartWallet,
+  }
+
+  let rawSig: unknown
+  if (typeof walletClient.signTypedData === 'function') {
+    rawSig = await withTimeout(
+      walletClient.signTypedData({
+        account: ownerAddress,
+        domain,
+        types: CSW_MESSAGE_TYPES,
+        primaryType: 'CoinbaseSmartWalletMessage' as const,
+        message: { hash: userOpHash },
+      }),
+      SIGN_TIMEOUT_MS,
+      'signTypedData (CSW EIP-712)',
+    )
+  } else if (typeof walletClient.request === 'function') {
+    rawSig = await withTimeout(
+      walletClient.request({
+        method: 'eth_signTypedData_v4',
+        params: [
+          ownerAddress,
+          JSON.stringify({
+            domain,
+            types: CSW_MESSAGE_TYPES,
+            primaryType: 'CoinbaseSmartWalletMessage',
+            message: { hash: userOpHash },
+          }),
+        ],
+      }),
+      SIGN_TIMEOUT_MS,
+      'eth_signTypedData_v4 (CSW EIP-712)',
+    )
+  } else {
+    throw new Error('Wallet does not support signTypedData')
+  }
+  return ensureSignatureHex(rawSig, 'signTypedData (CSW EIP-712)')
+}
+
+function wrapAccountWithTypedDataSigning(params: {
+  account: any
+  walletClient: WalletClientLike
+  ownerAddress: Address
+  smartWallet: Address
+  ownerIndex: number
+  chainId: number
+  useTypedDataSigning: boolean
+}): any {
+  if (!params.useTypedDataSigning) return params.account
+  const { account, walletClient, ownerAddress, smartWallet, ownerIndex, chainId } = params
+
+  return {
+    ...account,
+    async signUserOperation(userOperation: any) {
+      const userOpHash = getUserOperationHash({
+        chainId,
+        entryPointAddress: ENTRYPOINT_V06,
+        entryPointVersion: '0.6',
+        userOperation: {
+          ...userOperation,
+          sender: smartWallet,
+        },
+      })
+
+      const signature = await signUserOpViaTypedData({
+        walletClient,
+        ownerAddress,
+        smartWallet,
+        chainId,
+        userOpHash,
+      })
+
+      if (AA_DEBUG) {
+        const expectedReplaySafe = hashTypedData({
+          domain: { ...CSW_EIP712_DOMAIN, chainId, verifyingContract: smartWallet },
+          types: CSW_MESSAGE_TYPES,
+          primaryType: 'CoinbaseSmartWalletMessage',
+          message: { hash: userOpHash },
+        })
+        logger.debug('[ERC-4337] signTypedData fallback', {
+          userOpHash,
+          expectedReplaySafe,
+          ...signatureMeta(signature),
+        })
+      }
+
+      return encodeAbiParameters(
+        [{ type: 'uint256' }, { type: 'bytes' }],
+        [BigInt(ownerIndex), signature],
+      ) as Hex
+    },
+  }
+}
+
 export async function sendCoinbaseSmartWalletUserOperation(params: {
   publicClient: PublicClientLike
   walletClient: WalletClientLike
@@ -1151,6 +1265,8 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   retryOnInvalidSignature?: boolean
   retryOnPrefund?: boolean
   retryWithLowGasContractSigner?: boolean
+  useTypedDataSigning?: boolean
+  retryWithTypedDataSigning?: boolean
 }): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
   const {
     publicClient,
@@ -1289,6 +1405,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     })
   }
   const usedSignMessageFallback = userOpSignMode === 'auto' && effectiveUserOpSignMode === 'signMessage'
+  const useTypedDataSigning = params.useTypedDataSigning ?? false
 
   // Create the owner account for signing
   const owner = createWalletBackedLocalAccount({ 
@@ -1299,12 +1416,22 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   })
   
   // Create the Coinbase Smart Account
-  const account = await toCoinbaseSmartAccount({
+  const baseAccount = await toCoinbaseSmartAccount({
     client: publicClient as any,
     address: smartWallet,
     owners: [owner],
     ownerIndex,
     version,
+  })
+
+  const account = wrapAccountWithTypedDataSigning({
+    account: baseAccount,
+    walletClient,
+    ownerAddress,
+    smartWallet,
+    ownerIndex,
+    chainId: (publicClient as any).chain?.id ?? 8453,
+    useTypedDataSigning,
   })
 
   // CDP can use separate endpoints for bundler + paymaster JSON-RPC methods.
@@ -1535,6 +1662,24 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       console.error('[ERC-4337] UserOp failed', logPayload)
     } catch {
       // ignore logging failures
+    }
+
+    const retryWithTypedData = params.retryWithTypedDataSigning ?? true
+    if (
+      retryWithTypedData &&
+      !useTypedDataSigning &&
+      !ownerIsContract &&
+      isEthSignBlocked(lastError)
+    ) {
+      logger.warn('[ERC-4337] eth_sign blocked by wallet; retrying with EIP-712 signTypedData', {
+        ownerAddress,
+        smartWallet,
+      })
+      return await sendCoinbaseSmartWalletUserOperation({
+        ...params,
+        useTypedDataSigning: true,
+        retryWithTypedDataSigning: false,
+      })
     }
 
     if (retryOnPrefund && skipPaymaster && isPrefundError) {

@@ -54,9 +54,10 @@ export function AgentUriService() {
           </div>
         </div>
 
-        <div className="text-xs text-zinc-600">
+        <div className="text-xs text-zinc-600 space-y-1">
           <div>
-            Method: <span className="font-mono text-zinc-300">POST</span>
+            Method: <span className="font-mono text-zinc-300">POST</span> or{" "}
+            <span className="font-mono text-zinc-300">GET</span>
           </div>
           <div>
             Body: <span className="font-mono text-zinc-300">{'{"store": true | false}'}</span> (default true)
@@ -64,6 +65,12 @@ export function AgentUriService() {
           <div>
             Response: <span className="font-mono text-zinc-300">registration</span> plus optional{" "}
             <span className="font-mono text-zinc-300">grove</span> details.
+          </div>
+          <div className="mt-2 text-amber-500/80">
+            Authentication required when <span className="font-mono text-zinc-300">store=true</span>.
+            Use a SIWE session cookie or SIWA receipt. Set{" "}
+            <span className="font-mono text-zinc-300">store=false</span> (or use{" "}
+            <span className="font-mono text-zinc-300">GET</span>) to read registration without Grove upload.
           </div>
         </div>
       </section>
