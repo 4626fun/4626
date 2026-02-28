@@ -201,6 +201,8 @@ In the app server env (Vercel or otherwise):
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET=<same as PROVISIONER_BEARER_TOKEN>`
 - `METEORA_IX_PROVISIONER_URL=https://<host>/meteora-ixs` (optional; defaults from dynamic route URL)
 - `METEORA_IX_PROVISIONER_SECRET=<same as PROVISIONER_BEARER_TOKEN>` (optional)
+- `DEPLOY_SOLANA_REGISTRATION_ORIGINS=https://4626.fun,https://<host-origin>` (optional for mixed Vercel + VM)
+- `DEPLOY_SOLANA_REGISTRATION_SECRET=<shared-internal-secret>` (optional machine-to-machine auth)
 
 Optional but recommended:
 

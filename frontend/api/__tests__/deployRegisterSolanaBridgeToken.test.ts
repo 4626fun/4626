@@ -80,6 +80,50 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     expect(res.body?.error).toContain('Not authenticated')
   })
 
+  it('allows internal secret auth when deploy session auth is unavailable', async () => {
+    const restoreEnv = applyEnv({
+      DEPLOY_SOLANA_REGISTRATION_SECRET: 'internal-secret',
+    })
+    try {
+      readDeployAuthMock.mockReturnValueOnce(null)
+      const mockPublicClient = {
+        readContract: vi.fn(async (args: any) => {
+          switch (args.functionName) {
+            case 'solanaBridgeAdapter':
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return true
+            case 'owner':
+              return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
+            case 'solanaMintToToken':
+              return '0x0000000000000000000000000000000000000000'
+            default:
+              throw new Error(`Unexpected read ${String(args.functionName)}`)
+          }
+        }),
+        getBytecode: vi.fn(async () => '0x1234'),
+      }
+      createPublicClientMock.mockReturnValue(mockPublicClient as any)
+
+      const req = createMockReq({
+        method: 'POST',
+        headers: { 'x-cv-solana-registration-secret': 'internal-secret' },
+        body: { shareOft: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.success).toBe(true)
+      expect(res.body?.data?.registered).toBe(true)
+    } finally {
+      restoreEnv()
+    }
+  })
+
   it('returns success when already registered', async () => {
     const mockPublicClient = {
       readContract: vi.fn(async (args: any) => {

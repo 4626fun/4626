@@ -279,6 +279,46 @@ function inferRequestOrigin(req: VercelRequest): string | null {
   }
 }
 
+function parseConfiguredOrigin(value: string): string | null {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  try {
+    return new URL(raw).origin
+  } catch {
+    return null
+  }
+}
+
+function readAdditionalSolanaRegistrationOrigins(): string[] {
+  const raw =
+    String(process.env.DEPLOY_SOLANA_REGISTRATION_ORIGINS ?? '').trim() ||
+    String(process.env.SOLANA_REGISTRATION_ORIGINS ?? '').trim()
+  if (!raw) return []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const entry of raw.split(/[,\s]+/)) {
+    const origin = parseConfiguredOrigin(entry)
+    if (!origin) continue
+    const key = origin.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(origin)
+  }
+  return out
+}
+
+function dedupeOrigins(origins: string[]): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const origin of origins) {
+    const key = origin.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(origin)
+  }
+  return out
+}
+
 function extractFinalizeBridgeTokens(data: Hex): { creatorToken: Address | null; shareOft: Address | null } | null {
   for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
     try {
@@ -351,25 +391,36 @@ async function ensureSolanaRouteReadyForPhase2(params: {
   const canonicalOrigin = getCanonicalOrigin(params.req)
   const requestOrigin = inferRequestOrigin(params.req)
   const isPreviewOrigin = requestOrigin && /\.vercel\.app$/i.test(new URL(requestOrigin).hostname)
-  const candidateOrigins = isPreviewOrigin
+  const defaultOrigins = isPreviewOrigin
     ? [canonicalOrigin].filter((o): o is string => Boolean(o))
     : [requestOrigin, canonicalOrigin].filter((o): o is string => Boolean(o))
+  const configuredOrigins = readAdditionalSolanaRegistrationOrigins()
+  const candidateOrigins = dedupeOrigins([...configuredOrigins, ...defaultOrigins])
   const cookie = headerValue(params.req.headers.cookie as string | string[] | undefined)
   const authz = headerValue(params.req.headers.authorization as string | string[] | undefined)
-  let lastFailure: string | null = null
-  for (const origin of candidateOrigins) {
+  const internalRegistrationSecret = String(
+    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
+      process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
+      '',
+  ).trim()
+  const tryRegister = async (
+    origin: string,
+    routePath: '/api/deploy/registerSolanaBridgeToken' | '/api/deploy/registerShareOft',
+  ): Promise<{ ok: boolean; shouldTryLegacy: boolean; failure: string | null }> => {
     try {
-      const registerUrl = `${origin}/api/deploy/registerSolanaBridgeToken`
+      const registerUrl = `${origin}${routePath}`
       const registerRes = await fetch(registerUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(cookie ? { Cookie: cookie } : {}),
           ...(authz ? { Authorization: authz } : {}),
+          ...(internalRegistrationSecret
+            ? { 'X-CV-Solana-Registration-Secret': internalRegistrationSecret }
+            : {}),
         },
         body: JSON.stringify({
           shareOft: finalizeTokens.shareOft,
-          creatorToken: finalizeTokens.creatorToken ?? undefined,
           bridgeToken,
           batcherAddress,
         }),
@@ -381,16 +432,35 @@ async function ensureSolanaRouteReadyForPhase2(params: {
       } catch {
         registerJson = null
       }
-      if (registerRes.ok && registerJson?.success) return
+      if (registerRes.ok && registerJson?.success) {
+        return { ok: true, shouldTryLegacy: false, failure: null }
+      }
       const detail =
         registerJson?.error
           ? String(registerJson.error)
           : rawBody
             ? rawBody.slice(0, 240)
             : `http_${registerRes.status}`
-      lastFailure = `${origin} (${registerRes.status}): ${detail}`
+      return {
+        ok: false,
+        shouldTryLegacy: registerRes.status === 404 || registerRes.status === 405,
+        failure: `${origin}${routePath} (${registerRes.status}): ${detail}`,
+      }
     } catch {
-      lastFailure = `${origin}: request_failed`
+      return { ok: false, shouldTryLegacy: false, failure: `${origin}${routePath}: request_failed` }
+    }
+  }
+  let lastFailure: string | null = null
+  for (const origin of candidateOrigins) {
+    const primary = await tryRegister(origin, '/api/deploy/registerSolanaBridgeToken')
+    if (primary.ok) return
+    lastFailure = primary.failure
+    if (!primary.shouldTryLegacy) continue
+
+    const legacy = await tryRegister(origin, '/api/deploy/registerShareOft')
+    if (legacy.ok) return
+    if (legacy.failure) {
+      lastFailure = legacy.failure
     }
   }
   if (lastFailure) return

@@ -241,6 +241,33 @@ function readRegistrationSignerPk(): Hex | null {
   return null
 }
 
+function requestHeader(req: VercelRequest, key: string): string {
+  const value = req.headers[key] as string | string[] | undefined
+  if (Array.isArray(value)) return String(value[0] ?? '').trim()
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function readInternalSolanaRegistrationSecret(): string {
+  return String(
+    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
+      process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
+      '',
+  ).trim()
+}
+
+function isInternalSolanaRegistrationAuthorized(req: VercelRequest): boolean {
+  const secret = readInternalSolanaRegistrationSecret()
+  if (!secret) return false
+  const headerSecret = requestHeader(req, 'x-cv-solana-registration-secret')
+  if (headerSecret && headerSecret === secret) return true
+  const authz = requestHeader(req, 'authorization')
+  if (authz.toLowerCase().startsWith('bearer ')) {
+    const token = authz.slice(7).trim()
+    if (token && token === secret) return true
+  }
+  return false
+}
+
 function readDynamicSolanaRouteEnabled(): boolean {
   const v = String(
     process.env.SOLANA_DYNAMIC_ROUTE_ENABLED ??
@@ -1120,9 +1147,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const auth = readDeployAuthFromRequest(req)
-  if (!auth?.address) {
+  const internalAuthorized = isInternalSolanaRegistrationAuthorized(req)
+  if (!auth?.address && !internalAuthorized) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<never>)
   }
+  const callerTag = auth?.address ?? 'internal:solana-registration-secret'
 
   const body = await readJsonBody<RegisterSolanaBridgeTokenRequest>(req)
   const shareOftRaw = typeof body?.shareOft === 'string' ? body.shareOft.trim() : ''
@@ -1403,7 +1432,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } catch (error) {
         dynamicProvisionError = error instanceof Error ? error.message : String(error)
         logger.warn('[deploy/registerSolanaBridgeToken] Dynamic Solana route provisioning failed', {
-          caller: auth.address,
+          caller: callerTag,
           shareOft,
           error: dynamicProvisionError,
         })
@@ -1500,7 +1529,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })
 
     logger.info('[deploy/registerSolanaBridgeToken] Registered bridge token for Solana bridge', {
-      caller: auth.address,
+      caller: callerTag,
       bridgeToken,
       shareOft,
       batcher,
@@ -1532,7 +1561,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     logger.warn('[deploy/registerSolanaBridgeToken] Registration failed', {
-      caller: auth.address,
+      caller: callerTag,
       bridgeToken,
       shareOft,
       batcher,
