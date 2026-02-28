@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { encodeFunctionData, getAddress, isAddress, type Address, type Hex } from 'viem'
+import { encodeFunctionData, getAddress, isAddress, toHex, type Address, type Hex } from 'viem'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { useWallets } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
@@ -71,6 +71,21 @@ function summarizeError(error: unknown): string {
   return String(error ?? '').slice(0, 300)
 }
 
+const BASE_CHAIN_ID_HEX = '0x2105'
+
+function ensureSignatureHex(value: unknown, context: string): Hex {
+  if (typeof value === 'string' && /^0x[0-9a-fA-F]+$/.test(value)) return value as Hex
+  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+  const direct = record?.signature ?? record?.sig
+  if (typeof direct === 'string' && /^0x[0-9a-fA-F]+$/.test(direct)) return direct as Hex
+  const nestedResult = record?.result
+  if (nestedResult && typeof nestedResult === 'object') {
+    const nestedSig = (nestedResult as Record<string, unknown>).signature
+    if (typeof nestedSig === 'string' && /^0x[0-9a-fA-F]+$/.test(nestedSig)) return nestedSig as Hex
+  }
+  throw new Error(`Invalid signature returned from ${context}`)
+}
+
 export type PrivyCswExecuteResult = {
   userOpHash: Hex
   transactionHash: Hex
@@ -95,9 +110,13 @@ export type PrivyCswExecuteState = {
  */
 export function usePrivyCswExecute(params: {
   smartWallet: string | null | undefined
+  preferredOwnerAddress?: string | null | undefined
 }): PrivyCswExecuteState {
   const smartWalletAddress = params.smartWallet && isAddress(params.smartWallet)
     ? getAddress(params.smartWallet as Address)
+    : null
+  const preferredOwnerAddress = params.preferredOwnerAddress && isAddress(params.preferredOwnerAddress)
+    ? getAddress(params.preferredOwnerAddress as Address)
     : null
 
   const { address: connectedAddress } = useAccount()
@@ -107,44 +126,76 @@ export function usePrivyCswExecute(params: {
   const publicClient = basePublicClient ?? fallbackPublicClient
   const { wallets: privyWallets } = useWallets()
 
-  const privyEmbeddedWallet = useMemo(() => {
+  const privyEmbeddedWallets = useMemo(() => {
     const wallets = Array.isArray(privyWallets) ? (privyWallets as any[]) : []
-    return wallets.find((w) => {
+    return wallets.filter((w) => {
       const wType = String(w?.wallet_client_type ?? w?.walletClientType ?? w?.connector_type ?? w?.type ?? '').trim().toLowerCase()
       if (!(wType === 'privy' || wType.includes('privy') || wType.includes('embedded'))) return false
       const addr = typeof w?.address === 'string' ? w.address.trim() : ''
       if (!addr || !isAddress(addr)) return false
       if (smartWalletAddress && addr.toLowerCase() === smartWalletAddress.toLowerCase()) return false
       return true
-    }) ?? null
+    })
   }, [privyWallets, smartWalletAddress])
 
-  const privyEoaAddress = useMemo(() => {
-    const addr = typeof (privyEmbeddedWallet as any)?.address === 'string'
-      ? String((privyEmbeddedWallet as any).address).trim()
-      : ''
-    if (!addr || !isAddress(addr)) return null
-    return getAddress(addr as Address)
-  }, [privyEmbeddedWallet])
+  const privyEmbeddedAddresses = useMemo(() => {
+    return privyEmbeddedWallets
+      .map((wallet: any) => {
+        const raw = typeof wallet?.address === 'string' ? String(wallet.address).trim() : ''
+        if (!raw || !isAddress(raw)) return null
+        return getAddress(raw as Address)
+      })
+      .filter((value): value is Address => Boolean(value))
+  }, [privyEmbeddedWallets])
+
+  const orderedPrivyCandidates = useMemo(() => {
+    const unique = new Set<string>()
+    const ordered: Address[] = []
+    const push = (value: Address | null) => {
+      if (!value) return
+      const key = value.toLowerCase()
+      if (unique.has(key)) return
+      unique.add(key)
+      ordered.push(value)
+    }
+    push(preferredOwnerAddress)
+    push(connectedAddress && isAddress(connectedAddress) ? getAddress(connectedAddress as Address) : null)
+    for (const candidate of privyEmbeddedAddresses) push(candidate)
+    return ordered
+  }, [connectedAddress, preferredOwnerAddress, privyEmbeddedAddresses])
 
   const privyIsOwnerQuery = useQuery({
-    queryKey: ['privy-csw-execute', 'owner-check', smartWalletAddress, privyEoaAddress],
-    enabled: Boolean(smartWalletAddress && privyEoaAddress && publicClient),
+    queryKey: ['privy-csw-execute', 'owner-check', smartWalletAddress, orderedPrivyCandidates],
+    enabled: Boolean(smartWalletAddress && orderedPrivyCandidates.length > 0 && publicClient),
     staleTime: 30_000,
     queryFn: async () => {
-      if (!smartWalletAddress || !privyEoaAddress || !publicClient) return false
-      try {
-        return (await publicClient.readContract({
-          address: smartWalletAddress,
-          abi: OWNER_CHECK_ABI,
-          functionName: 'isOwnerAddress',
-          args: [privyEoaAddress],
-        })) === true
-      } catch {
-        return false
+      if (!smartWalletAddress || orderedPrivyCandidates.length === 0 || !publicClient) return null
+      for (const candidate of orderedPrivyCandidates) {
+        try {
+          const isOwner = await publicClient.readContract({
+            address: smartWalletAddress,
+            abi: OWNER_CHECK_ABI,
+            functionName: 'isOwnerAddress',
+            args: [candidate],
+          })
+          if (isOwner === true) return candidate
+        } catch {
+          continue
+        }
       }
+      return null
     },
   })
+
+  const privyEoaAddress = privyIsOwnerQuery.data ?? null
+
+  const privyEmbeddedWallet = useMemo(() => {
+    if (!privyEoaAddress) return null
+    return privyEmbeddedWallets.find((wallet: any) => {
+      const raw = typeof wallet?.address === 'string' ? String(wallet.address).trim() : ''
+      return raw && isAddress(raw) && getAddress(raw as Address).toLowerCase() === privyEoaAddress.toLowerCase()
+    }) ?? null
+  }, [privyEmbeddedWallets, privyEoaAddress])
 
   const connectedIsOwnerQuery = useQuery({
     queryKey: ['privy-csw-execute', 'connected-owner-check', smartWalletAddress, connectedAddress],
@@ -166,7 +217,7 @@ export function usePrivyCswExecute(params: {
     },
   })
 
-  const privyCanSign = Boolean(privyEoaAddress && privyIsOwnerQuery.data === true && privyEmbeddedWallet)
+  const privyCanSign = Boolean(privyEoaAddress && privyEmbeddedWallet)
   const connectedCanSign = Boolean(connectedAddress && walletClient && connectedIsOwnerQuery.data === true)
 
   const signerType = privyCanSign ? 'privy-embedded' as const
@@ -191,6 +242,21 @@ export function usePrivyCswExecute(params: {
     return null
   }, [privyEmbeddedWallet])
 
+  const ensureProviderOnBase = useCallback(async (provider: any, label: string) => {
+    if (!provider?.request) return
+    const current = await provider.request({ method: 'eth_chainId' }).catch(() => null)
+    if (typeof current === 'string' && current.toLowerCase() !== BASE_CHAIN_ID_HEX) {
+      try {
+        await provider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: BASE_CHAIN_ID_HEX }],
+        })
+      } catch {
+        throw new Error(`Please switch ${label} to Base network to continue.`)
+      }
+    }
+  }, [])
+
   const execute = useCallback(async (
     calls: Array<{ to: Address; value?: bigint; data?: Hex }>,
   ): Promise<PrivyCswExecuteResult> => {
@@ -204,9 +270,50 @@ export function usePrivyCswExecute(params: {
     if (signerType === 'privy-embedded' && privyEoaAddress) {
       const provider = await getPrivyProvider()
       if (!provider?.request) throw new Error('Privy embedded wallet provider not available.')
+      await ensureProviderOnBase(provider, 'Privy embedded EOA')
 
       const embeddedWalletClient = {
-        request: async (args: { method: string; params?: any[] }) => provider.request(args),
+        request: async (args: { method: string; params?: any[] }) => {
+          if (args?.method === 'eth_sign') {
+            const p = Array.isArray(args.params) ? args.params : []
+            const hashCandidate = typeof p[1] === 'string' ? p[1] : ''
+            const isHash = /^0x[0-9a-fA-F]{64}$/.test(hashCandidate)
+            if (isHash) {
+              try {
+                const rawSig = await provider.request({
+                  method: 'secp256k1_sign',
+                  params: [hashCandidate],
+                })
+                return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.secp256k1_sign')
+              } catch (signErr) {
+                logger.warn('[usePrivyCswExecute] secp256k1_sign failed; falling back to eth_sign', {
+                  ownerAddress: privyEoaAddress,
+                  error: summarizeError(signErr),
+                })
+              }
+            }
+          }
+          return provider.request(args)
+        },
+        signMessage: async (args: { account: Address; message: any }) => {
+          const raw =
+            typeof args?.message === 'object' && args.message !== null && 'raw' in args.message
+              ? (args.message as any).raw
+              : args?.message
+          const msgHex = typeof raw === 'string' && raw.startsWith('0x') ? raw : toHex(String(raw ?? ''))
+          const rawSig = await provider.request({
+            method: 'personal_sign',
+            params: [msgHex, privyEoaAddress],
+          })
+          return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.personal_sign')
+        },
+        signTypedData: async (typedData: unknown) => {
+          const rawSig = await provider.request({
+            method: 'eth_signTypedData_v4',
+            params: [privyEoaAddress, JSON.stringify(typedData)],
+          })
+          return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.signTypedData')
+        },
       }
 
       try {
@@ -218,10 +325,12 @@ export function usePrivyCswExecute(params: {
           ownerAddress: privyEoaAddress,
           calls,
           version: '1',
-          userOpSignMode: 'auto',
-          allowEoaSignMessageFallback: true,
+          userOpSignMode: 'eth_sign',
+          ownerIsContract: false,
+          allowEoaSignMessageFallback: false,
           skipPaymaster: false,
           retryOnInvalidSignature: false,
+          retryWithLowGasContractSigner: false,
         })
       } catch (error: unknown) {
         if (isUserRejected(error)) throw error
@@ -305,7 +414,7 @@ export function usePrivyCswExecute(params: {
     }
 
     throw new Error('No valid signer available. Sign in via Privy to continue.')
-  }, [smartWalletAddress, publicClient, signerType, privyEoaAddress, connectedAddress, walletClient, getPrivyProvider])
+  }, [smartWalletAddress, publicClient, signerType, privyEoaAddress, connectedAddress, walletClient, getPrivyProvider, ensureProviderOnBase])
 
   return {
     ready,
