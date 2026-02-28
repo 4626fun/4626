@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAccount } from 'wagmi'
 import { ArrowDownLeft, ArrowUpRight, BarChart3, MoreHorizontal, Plus, RefreshCw, Vault } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
+import { ProfileCard } from 'ethereum-identity-kit'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { Alert } from '@/components/ui/Alert'
@@ -182,6 +183,7 @@ export function Portfolio() {
     const a = (wagmiAddress || siwe.authAddress || '').trim()
     return isEvmAddress(a) ? a.toLowerCase() : null
   }, [publicAddress, siwe.authAddress, wagmiAddress])
+  const identityLookupAddress = publicAddress ?? effectiveAddress
 
   const [tab, setTab] = useState<'overview' | 'tokens' | 'nfts' | 'activity'>('overview')
   const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y'>('1D')
@@ -548,6 +550,19 @@ export function Portfolio() {
               </button>
             ))}
           </div>
+
+          {identityLookupAddress ? (
+            <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
+              <div className="mb-3 text-[12px] text-white">Ethereum identity</div>
+              <ProfileCard
+                addressOrName={identityLookupAddress}
+                connectedAddress={wagmiAddress}
+                darkMode
+                showPoaps={false}
+                showFollowButton={false}
+              />
+            </div>
+          ) : null}
         </motion.div>
 
         {/* Overview */}

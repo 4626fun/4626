@@ -5,6 +5,7 @@ import { encodeFunctionData, getAddress, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 import { useExportWallet, usePrivy } from '@privy-io/react-auth'
+import { ProfileCard } from 'ethereum-identity-kit'
 
 import { apiFetch } from '@/lib/apiBase'
 import { getAppBaseUrl, getMarketingBaseUrl } from '@/lib/host'
@@ -578,6 +579,12 @@ export function AccountSettings() {
     if (!isEvmAddress(connectedAddressRaw)) return null
     return getAddress(connectedAddressRaw)
   }, [connectedAddressRaw])
+  const identityLookupAddress = useMemo(() => {
+    if (canonicalSmartWalletAddress && isEvmAddress(canonicalSmartWalletAddress)) return canonicalSmartWalletAddress
+    if (connectedAddress && isEvmAddress(connectedAddress)) return connectedAddress
+    if (isEvmAddress(profile?.primaryWallet)) return profile.primaryWallet
+    return null
+  }, [canonicalSmartWalletAddress, connectedAddress, profile?.primaryWallet])
 
   const accountSurfaceUrl = connectedAddress
     ? `${getAppBaseUrl()}/portfolio/${connectedAddress}`
@@ -1197,6 +1204,19 @@ export function AccountSettings() {
           Your account does not have a linked Coinbase Smart Wallet. Some features (1-click swaps, bundled transactions) require one. Try reconnecting or contact support if this is unexpected.
         </Alert>
       )}
+
+      {identityLookupAddress ? (
+        <section className="card rounded-2xl p-4 sm:p-6">
+          <div className="mb-3 text-[12px] text-zinc-300">Ethereum identity</div>
+          <ProfileCard
+            addressOrName={identityLookupAddress}
+            connectedAddress={connectedAddress ?? undefined}
+            darkMode
+            showPoaps={false}
+            showFollowButton={false}
+          />
+        </section>
+      ) : null}
 
       <section className="card space-y-3 rounded-2xl p-4 sm:space-y-4 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
