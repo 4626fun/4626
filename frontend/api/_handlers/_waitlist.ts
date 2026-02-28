@@ -432,6 +432,7 @@ export default async function handler(req: any, res: any) {
   let embeddedWallet: string | null = null
   let embeddedWalletChain: string | null = null
   let embeddedWalletClientType: string | null = null
+  const walletForDedup = primaryWallet.length > 0 ? primaryWallet : null
   const ipHash = hashForAttribution(getClientIp(req))
   const uaHash = hashForAttribution(getUserAgent(req))
 
@@ -475,7 +476,17 @@ export default async function handler(req: any, res: any) {
       try {
         const supabase = getSupabaseAdmin()
         const nowIso = new Date().toISOString()
-        const toProfileRow = (value: any): { id: number; email: string; referral_code: string | null; primary_wallet: string | null } | null => {
+        type SupabaseProfileRow = {
+          id: number
+          email: string
+          referral_code: string | null
+          primary_wallet: string | null
+          privy_user_id: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+
+        const toProfileRow = (value: any): SupabaseProfileRow | null => {
           if (!value || typeof value !== 'object') return null
           const id = Number((value as any).id)
           if (!Number.isFinite(id) || id <= 0) return null
@@ -485,21 +496,130 @@ export default async function handler(req: any, res: any) {
             email: rowEmail || email,
             referral_code: typeof (value as any).referral_code === 'string' ? String((value as any).referral_code) : null,
             primary_wallet: typeof (value as any).primary_wallet === 'string' ? String((value as any).primary_wallet) : null,
+            privy_user_id: typeof (value as any).privy_user_id === 'string' ? String((value as any).privy_user_id) : null,
+            created_at: typeof (value as any).created_at === 'string' ? String((value as any).created_at) : null,
+            updated_at: typeof (value as any).updated_at === 'string' ? String((value as any).updated_at) : null,
           }
         }
 
-        const { data: existingRaw, error: existingErr } = await supabase
-          .from('profiles')
-          .select('id,email,referral_code,primary_wallet')
-          .eq('email', email)
-          .maybeSingle()
-        if (existingErr) throw new Error(existingErr.message)
+        const rankProfileRow = (row: SupabaseProfileRow): number => {
+          const emailLc = normalizeEmail(row.email)
+          if (row.privy_user_id) return 0
+          if (emailLc.endsWith('@noemail.4626.fun') || emailLc.endsWith('@wallet.4626.fun')) return 3
+          if (emailLc.endsWith('@example.com')) return 2
+          return 1
+        }
+
+        const pickBestProfileRow = (rows: SupabaseProfileRow[]): SupabaseProfileRow | null => {
+          if (rows.length === 0) return null
+          const unique = new Map<number, SupabaseProfileRow>()
+          for (const row of rows) {
+            if (!unique.has(row.id)) unique.set(row.id, row)
+          }
+          return Array.from(unique.values()).sort((a, b) => {
+            const scoreDelta = rankProfileRow(a) - rankProfileRow(b)
+            if (scoreDelta !== 0) return scoreDelta
+            const aUpdated = a.updated_at ? Date.parse(a.updated_at) : 0
+            const bUpdated = b.updated_at ? Date.parse(b.updated_at) : 0
+            if (aUpdated !== bUpdated) return bUpdated - aUpdated
+            const aCreated = a.created_at ? Date.parse(a.created_at) : 0
+            const bCreated = b.created_at ? Date.parse(b.created_at) : 0
+            if (aCreated !== bCreated) return aCreated - bCreated
+            return a.id - b.id
+          })[0] ?? null
+        }
+
+        const fetchProfilesByIds = async (ids: number[]): Promise<SupabaseProfileRow[]> => {
+          if (ids.length === 0) return []
+          const uniqueIds = Array.from(new Set(ids.filter((id) => Number.isFinite(id) && id > 0)))
+          if (uniqueIds.length === 0) return []
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('id,email,referral_code,primary_wallet,privy_user_id,created_at,updated_at')
+            .in('id', uniqueIds)
+          if (error) throw new Error(error.message)
+          return (data ?? []).map(toProfileRow).filter((row): row is SupabaseProfileRow => Boolean(row))
+        }
+
+        const findByAddress = async (address: string): Promise<SupabaseProfileRow | null> => {
+          const candidates: SupabaseProfileRow[] = []
+
+          const { data: profileWalletRows, error: profileWalletError } = await supabase
+            .from('profile_wallets')
+            .select('profile_id')
+            .ilike('address', address)
+            .limit(20)
+          if (profileWalletError) throw new Error(profileWalletError.message)
+          const profileIds = (profileWalletRows ?? [])
+            .map((row: any) => Number(row?.profile_id))
+            .filter((id) => Number.isFinite(id) && id > 0)
+          candidates.push(...(await fetchProfilesByIds(profileIds)))
+
+          const legacyOr = [
+            `primary_wallet.ilike.${address}`,
+            `embedded_wallet.ilike.${address}`,
+            `primary_embedded_eoa.ilike.${address}`,
+            `csw_address.ilike.${address}`,
+            `primary_smart_wallet.ilike.${address}`,
+            `base_sub_account.ilike.${address}`,
+          ].join(',')
+          const { data: legacyRows, error: legacyError } = await supabase
+            .from('profiles')
+            .select('id,email,referral_code,primary_wallet,privy_user_id,created_at,updated_at')
+            .or(legacyOr)
+            .limit(50)
+          if (legacyError) throw new Error(legacyError.message)
+          for (const row of legacyRows ?? []) {
+            const mapped = toProfileRow(row)
+            if (mapped) candidates.push(mapped)
+          }
+
+          return pickBestProfileRow(candidates)
+        }
+
+        const embeddedForDedup = embeddedWallet || null
+        const dedupAddressSignals = Array.from(
+          new Set(
+            [walletForDedup, embeddedForDedup, cswAddress.length > 0 ? cswAddress : null, baseSubAccount.length > 0 ? baseSubAccount : null]
+              .filter((v): v is string => Boolean(v)),
+          ),
+        )
+
+        let existingByIdentity: SupabaseProfileRow | null = null
+        for (const signal of dedupAddressSignals) {
+          existingByIdentity = await findByAddress(signal)
+          if (existingByIdentity) break
+        }
+
+        if (!existingByIdentity && privyUserId) {
+          const { data: privyRows, error: privyError } = await supabase
+            .from('profiles')
+            .select('id,email,referral_code,primary_wallet,privy_user_id,created_at,updated_at')
+            .eq('privy_user_id', privyUserId)
+            .limit(10)
+          if (privyError) throw new Error(privyError.message)
+          const mapped = (privyRows ?? []).map(toProfileRow).filter((row): row is SupabaseProfileRow => Boolean(row))
+          existingByIdentity = pickBestProfileRow(mapped)
+        }
+
+        let existingRaw = existingByIdentity as any
+        if (!existingRaw) {
+          const { data: existingByEmail, error: existingErr } = await supabase
+            .from('profiles')
+            .select('id,email,referral_code,primary_wallet,privy_user_id,created_at,updated_at')
+            .eq('email', email)
+            .maybeSingle()
+          if (existingErr) throw new Error(existingErr.message)
+          existingRaw = existingByEmail
+        }
 
         let created = false
         let row = toProfileRow(existingRaw)
 
         if (row) {
           const patch: Record<string, unknown> = { updated_at: nowIso }
+          const nextEmail = shouldAdoptIncomingEmail(row.email, email) ? email : row.email
+          if (normalizeEmail(nextEmail) !== normalizeEmail(row.email)) patch.email = nextEmail
           if (primaryWallet.length > 0) patch.primary_wallet = primaryWallet
           if (solanaWallet.length > 0) {
             patch.solana_wallet = solanaWallet
@@ -524,7 +644,7 @@ export default async function handler(req: any, res: any) {
             .from('profiles')
             .update(patch)
             .eq('id', row.id)
-            .select('id,email,referral_code,primary_wallet')
+            .select('id,email,referral_code,primary_wallet,privy_user_id,created_at,updated_at')
             .single()
           if (updateErr) throw new Error(updateErr.message)
           row = toProfileRow(updatedRaw) ?? row
@@ -550,7 +670,7 @@ export default async function handler(req: any, res: any) {
           const { data: insertedRaw, error: insertErr } = await supabase
             .from('profiles')
             .insert(insertPayload)
-            .select('id,email,referral_code,primary_wallet')
+            .select('id,email,referral_code,primary_wallet,privy_user_id,created_at,updated_at')
             .single()
           if (insertErr) throw new Error(insertErr.message)
           row = toProfileRow(insertedRaw)
@@ -631,7 +751,6 @@ export default async function handler(req: any, res: any) {
   // with a different (usually synthetic) email. If so, adopt that profile by
   // updating its email to the real one, preventing duplicate rows.
   // ---------------------------------------------------------------------------
-  const walletForDedup = primaryWallet.length > 0 ? primaryWallet : null
   const privyForDedup = privyUserId || null
   const embeddedForDedup = embeddedWallet || null
   let adoptedExistingId: number | null = null

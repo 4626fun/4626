@@ -61,7 +61,31 @@ export async function resolveCanonicalSolanaWalletByPrincipalAddress(address: st
          FROM profile_wallets pw
          WHERE LOWER(pw.address) = ${principal}
        )
-    ORDER BY p.updated_at DESC NULLS LAST
+    ORDER BY
+      CASE
+        WHEN EXISTS (
+          SELECT 1
+          FROM profile_wallets pw
+          WHERE pw.profile_id = p.id
+            AND LOWER(pw.address) = ${principal}
+        ) THEN 0
+        ELSE 1
+      END ASC,
+      CASE
+        WHEN EXISTS (
+          SELECT 1
+          FROM profile_wallets pw
+          LEFT JOIN wallets w ON LOWER(w.address) = LOWER(pw.address)
+          WHERE pw.profile_id = p.id
+            AND pw.is_canonical_solana_wallet = true
+            AND (LOWER(COALESCE(w.chain, '')) = 'solana' OR w.chain IS NULL)
+        ) THEN 0
+        WHEN p.canonical_solana_wallet IS NOT NULL AND LENGTH(TRIM(p.canonical_solana_wallet)) > 0 THEN 0
+        WHEN p.solana_wallet IS NOT NULL AND LENGTH(TRIM(p.solana_wallet)) > 0 THEN 0
+        ELSE 1
+      END ASC,
+      p.updated_at DESC NULLS LAST,
+      p.id ASC
     LIMIT 1;
   `
   const profileIdRaw = profile?.rows?.[0]?.id

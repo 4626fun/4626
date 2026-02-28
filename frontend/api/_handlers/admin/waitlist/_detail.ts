@@ -5,6 +5,7 @@ import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../.
 import { getDb, isDbConfigured } from '../../../../server/_lib/postgres.js'
 import { getSessionAddress, isAdminAddress } from '../../../../server/_lib/session.js'
 import { normalizeReferralCode } from '../../../../server/_lib/referrals.js'
+import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/supabaseAdmin.js'
 import { ensureWaitlistSchema } from '../../../../server/_lib/waitlistSchema.js'
 
 const DEFAULT_BASE_RPCS = ['https://mainnet.base.org', 'https://base.llamarpc.com']
@@ -208,35 +209,74 @@ function extractVerificationSubjects(verifications: unknown): string[] {
 }
 
 async function fetchWalletGraph(db: any, profileId: number): Promise<WalletGraphItem[]> {
-  if (!db?.query) return []
-  const result = await db.query(
-    `SELECT
-       pw.address,
-       pw.is_primary,
-       pw.is_canonical_smart_wallet,
-       pw.is_embedded_eoa,
-       w.wallet_type,
-       w.provider,
-       w.chain
-     FROM profile_wallets pw
-     LEFT JOIN wallets w ON LOWER(w.address) = LOWER(pw.address)
-     WHERE pw.profile_id = $1
-     ORDER BY pw.is_primary DESC, pw.is_canonical_smart_wallet DESC, pw.updated_at DESC;`,
-    [profileId],
-  )
+  if (db?.query) {
+    const result = await db.query(
+      `SELECT
+         pw.address,
+         pw.is_primary,
+         pw.is_canonical_smart_wallet,
+         pw.is_embedded_eoa,
+         w.wallet_type,
+         w.provider,
+         w.chain
+       FROM profile_wallets pw
+       LEFT JOIN wallets w ON LOWER(w.address) = LOWER(pw.address)
+       WHERE pw.profile_id = $1
+       ORDER BY pw.is_primary DESC, pw.is_canonical_smart_wallet DESC, pw.updated_at DESC;`,
+      [profileId],
+    )
 
-  return (result.rows ?? [])
+    return (result.rows ?? [])
+      .map((row: any) => {
+        const address = normalizeAddress(row.address)
+        if (!address) return null
+        return {
+          address,
+          walletType: typeof row.wallet_type === 'string' ? row.wallet_type : null,
+          provider: typeof row.provider === 'string' ? row.provider : null,
+          chain: typeof row.chain === 'string' ? row.chain : null,
+          isPrimary: Boolean(row.is_primary),
+          isCanonicalSmartWallet: Boolean(row.is_canonical_smart_wallet),
+          isEmbeddedEoa: Boolean(row.is_embedded_eoa),
+        } satisfies WalletGraphItem
+      })
+      .filter(Boolean) as WalletGraphItem[]
+  }
+  if (!db?.from) return []
+
+  const { data: profileWalletRows, error: pwError } = await db
+    .from('profile_wallets')
+    .select('address,is_primary,is_canonical_smart_wallet,is_embedded_eoa,updated_at')
+    .eq('profile_id', profileId)
+    .order('is_primary', { ascending: false })
+    .order('is_canonical_smart_wallet', { ascending: false })
+    .order('updated_at', { ascending: false })
+  if (pwError) return []
+
+  const addresses = uniqueAddresses((profileWalletRows ?? []).map((row: any) => row?.address))
+  const walletMap = new Map<string, any>()
+  if (addresses.length > 0) {
+    const { data: walletRows } = await db.from('wallets').select('address,wallet_type,provider,chain').in('address', addresses)
+    for (const row of walletRows ?? []) {
+      const address = normalizeAddress((row as any)?.address)
+      if (!address) continue
+      walletMap.set(address, row)
+    }
+  }
+
+  return (profileWalletRows ?? [])
     .map((row: any) => {
-      const address = normalizeAddress(row.address)
+      const address = normalizeAddress(row?.address)
       if (!address) return null
+      const wallet = walletMap.get(address) ?? {}
       return {
         address,
-        walletType: typeof row.wallet_type === 'string' ? row.wallet_type : null,
-        provider: typeof row.provider === 'string' ? row.provider : null,
-        chain: typeof row.chain === 'string' ? row.chain : null,
-        isPrimary: Boolean(row.is_primary),
-        isCanonicalSmartWallet: Boolean(row.is_canonical_smart_wallet),
-        isEmbeddedEoa: Boolean(row.is_embedded_eoa),
+        walletType: typeof wallet.wallet_type === 'string' ? wallet.wallet_type : null,
+        provider: typeof wallet.provider === 'string' ? wallet.provider : null,
+        chain: typeof wallet.chain === 'string' ? wallet.chain : null,
+        isPrimary: Boolean(row?.is_primary),
+        isCanonicalSmartWallet: Boolean(row?.is_canonical_smart_wallet),
+        isEmbeddedEoa: Boolean(row?.is_embedded_eoa),
       } satisfies WalletGraphItem
     })
     .filter(Boolean) as WalletGraphItem[]
@@ -303,15 +343,25 @@ async function fetchSmartWalletOwners(smartWallet: string): Promise<string[]> {
 
 async function fetchPrimaryWalletMatches(db: any, addresses: string[]): Promise<Set<string>> {
   const out = new Set<string>()
-  if (!db?.query || addresses.length === 0) return out
-  const result = await db.query(
-    `SELECT LOWER(primary_wallet) AS primary_wallet
-     FROM profiles
-     WHERE LOWER(primary_wallet) = ANY($1);`,
-    [addresses],
-  )
-  for (const row of result.rows ?? []) {
-    const address = normalizeAddress(row.primary_wallet)
+  if (addresses.length === 0) return out
+  if (db?.query) {
+    const result = await db.query(
+      `SELECT LOWER(primary_wallet) AS primary_wallet
+       FROM profiles
+       WHERE LOWER(primary_wallet) = ANY($1);`,
+      [addresses],
+    )
+    for (const row of result.rows ?? []) {
+      const address = normalizeAddress(row.primary_wallet)
+      if (address) out.add(address)
+    }
+    return out
+  }
+  if (!db?.from) return out
+  const clauses = addresses.map((address) => `primary_wallet.ilike.${address}`)
+  const { data } = await db.from('profiles').select('primary_wallet').or(clauses.join(','))
+  for (const row of data ?? []) {
+    const address = normalizeAddress((row as any)?.primary_wallet)
     if (address) out.add(address)
   }
   return out
@@ -334,7 +384,7 @@ function pickPreferredOwner(params: {
 }
 
 async function resolveIdentity(params: {
-  db: any
+  dataSource: any
   row: any
   walletGraph: WalletGraphItem[]
   privyContext: PrivyWalletContext
@@ -343,7 +393,7 @@ async function resolveIdentity(params: {
   resolvedCswAddress: string | null
   resolvedCswOwners: string[]
 }> {
-  const { db, row, walletGraph, privyContext } = params
+  const { dataSource, row, walletGraph, privyContext } = params
   const verificationSubjects = extractVerificationSubjects(row.verifications)
 
   const candidateScores = new Map<string, number>()
@@ -380,7 +430,7 @@ async function resolveIdentity(params: {
   }
 
   const ownerUniverse = uniqueAddresses(snapshots.flatMap((snapshot) => snapshot.owners))
-  const ownerPrimaryMatches = await fetchPrimaryWalletMatches(db, ownerUniverse)
+  const ownerPrimaryMatches = await fetchPrimaryWalletMatches(dataSource, ownerUniverse)
   const embeddedWallet4626 =
     normalizeAddress(privyContext.embeddedWallet4626) ??
     normalizeAddress(row.primary_embedded_eoa) ??
@@ -448,45 +498,67 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const db = isDbConfigured() ? await getDb() : null
-  if (!db) {
-    return res.status(500).json({ success: false, error: 'Database not configured' } satisfies ApiEnvelope<never>)
+  const supabase = isSupabaseAdminConfigured() ? getSupabaseAdmin() : null
+  const dataSource = db?.query ? db : supabase
+  if (!dataSource) {
+    return res.status(500).json({
+      success: false,
+      error: 'Database not configured (set POSTGRES_URL/DATABASE_URL or Supabase admin env vars).',
+    } satisfies ApiEnvelope<never>)
   }
 
-  await ensureWaitlistSchema(db as any)
-
-  if (!db.query) {
-    return res.status(500).json({ success: false, error: 'Database driver missing query()' } satisfies ApiEnvelope<never>)
+  if (db?.query) {
+    await ensureWaitlistSchema(db as any)
   }
 
   let row: any | null = null
 
-  if (Number.isFinite(id)) {
-    const q = await db.query(
-      `SELECT *
-       FROM profiles
-       WHERE id = $1
-       LIMIT 1;`,
-      [Math.floor(id)],
-    )
-    row = q.rows?.[0] ?? null
-  } else if (email) {
-    const q = await db.query(
-      `SELECT *
-       FROM profiles
-       WHERE LOWER(email) = LOWER($1)
-       LIMIT 1;`,
-      [email],
-    )
-    row = q.rows?.[0] ?? null
-  } else if (referral) {
-    const q = await db.query(
-      `SELECT *
-       FROM profiles
-       WHERE referral_code = $1
-       LIMIT 1;`,
-      [referral],
-    )
-    row = q.rows?.[0] ?? null
+  if (db?.query) {
+    if (Number.isFinite(id)) {
+      const q = await db.query(
+        `SELECT *
+         FROM profiles
+         WHERE id = $1
+         LIMIT 1;`,
+        [Math.floor(id)],
+      )
+      row = q.rows?.[0] ?? null
+    } else if (email) {
+      const q = await db.query(
+        `SELECT *
+         FROM profiles
+         WHERE LOWER(email) = LOWER($1)
+         LIMIT 1;`,
+        [email],
+      )
+      row = q.rows?.[0] ?? null
+    } else if (referral) {
+      const q = await db.query(
+        `SELECT *
+         FROM profiles
+         WHERE referral_code = $1
+         LIMIT 1;`,
+        [referral],
+      )
+      row = q.rows?.[0] ?? null
+    }
+  } else if (supabase) {
+    let query = supabase.from('profiles').select('*').limit(1)
+    if (Number.isFinite(id)) {
+      query = query.eq('id', Math.floor(id))
+    } else if (email) {
+      query = query.ilike('email', email)
+    } else if (referral) {
+      query = query.eq('referral_code', referral)
+    }
+    const { data, error } = await query.maybeSingle()
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        error: `Supabase query failed: ${error.message}`,
+      } satisfies ApiEnvelope<never>)
+    }
+    row = data ?? null
   }
 
   if (!row) {
@@ -494,9 +566,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const profileId = typeof row.id === 'number' ? row.id : Number(row.id)
-  const walletGraph = await fetchWalletGraph(db, profileId)
+  const walletGraph = await fetchWalletGraph(dataSource, profileId)
   const privyContext = await fetchPrivyWalletContext(typeof row.privy_user_id === 'string' ? row.privy_user_id : null)
-  const resolvedIdentity = await resolveIdentity({ db, row, walletGraph, privyContext })
+  const resolvedIdentity = await resolveIdentity({ dataSource, row, walletGraph, privyContext })
 
   const detail: WaitlistDetail = {
     id: profileId,

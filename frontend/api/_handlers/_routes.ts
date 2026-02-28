@@ -226,6 +226,8 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'admin/waitlist/approve': () => import('./admin/waitlist/_approve.js'),
   'admin/waitlist/deny': () => import('./admin/waitlist/_deny.js'),
   'admin/waitlist/delete': () => import('./admin/waitlist/_delete.js'),
+  'admin/wallet/canonical-owner-link-status': () => import('./admin/wallet/_canonicalOwnerLinkStatus.js'),
+  'admin/wallet/duplicate-principals': () => import('./admin/wallet/_duplicatePrincipals.js'),
 }
 
 // Match v1/token/{address}/metadata or v1/token/{address}/image patterns

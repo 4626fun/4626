@@ -1,16 +1,17 @@
 import { ReactNode } from 'react'
 
 import { ChainSelector } from '@/components/trade/ChainSelector'
+import type { SupportedChainId } from '@/config/chains'
 
 type SwapPageLayoutProps = {
   children?: ReactNode
   swapPanel: ReactNode
   vaultPanel: ReactNode | null
-  selectedChainId: number
+  selectedChainId: SupportedChainId
   walletChainId?: number
   gasIndicatorLabel: string | null
   walletIndicator?: ReactNode
-  onSelectChain: (chainId: number) => void
+  onSelectChain: (chainId: SupportedChainId) => void
   title?: string
   subtitle?: string
 }

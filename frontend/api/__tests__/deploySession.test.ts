@@ -65,6 +65,7 @@ vi.mock('viem', () => ({
     args: [
       {
         creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+        depositAmount: '5000000000000000000000000',
       },
     ],
   })),
@@ -480,12 +481,12 @@ describe('deploy session optimistic concurrency', () => {
     )
   })
 
-  it('status uses canonical Solana bridge registration payload for phase2 finalize', async () => {
+  it('status uses canonical Solana preflight payload before phase3 strategies', async () => {
     const rec = {
-      ...makeDeploySession('phase2_core_confirmed'),
+      ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xB87CBb646dD14F520078F11196f79BF815F18c84')],
-        phase3Calls: [],
+        phase3Calls: [makeCall('0xphase3target')],
       }),
     }
     const originalFetch = globalThis.fetch
@@ -520,7 +521,7 @@ describe('deploy session optimistic concurrency', () => {
       })
       getDeploySessionByIdMock
         .mockResolvedValueOnce(rec)
-        .mockResolvedValueOnce({ ...rec, step: 'phase2_sent', lastUserOpHash: '0xuserop' })
+        .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastUserOpHash: '0xuserop' })
       transitionDeploySessionMock.mockResolvedValue(true)
 
       const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
@@ -533,18 +534,19 @@ describe('deploy session optimistic concurrency', () => {
       expect(String(url)).toContain('/api/deploy/registerSolanaBridgeToken')
       const payload = JSON.parse(String(init?.body ?? '{}'))
       expect(String(payload.bridgeToken).toLowerCase()).toBe('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
-      expect(payload.creatorToken).toBeUndefined()
+      expect(String(payload.creatorToken).toLowerCase()).toBe('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
+      expect(payload.expectedSolanaAmount).toBe('1500000000000000000000000')
     } finally {
       ;(globalThis as any).fetch = originalFetch
     }
   })
 
-  it('status forwards internal Solana registration secret when configured', async () => {
+  it('status forwards internal Solana registration secret when preparing phase3', async () => {
     const rec = {
-      ...makeDeploySession('phase2_core_confirmed'),
+      ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xB87CBb646dD14F520078F11196f79BF815F18c84')],
-        phase3Calls: [],
+        phase3Calls: [makeCall('0xphase3target')],
       }),
     }
     const previous = process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
@@ -581,7 +583,7 @@ describe('deploy session optimistic concurrency', () => {
       })
       getDeploySessionByIdMock
         .mockResolvedValueOnce(rec)
-        .mockResolvedValueOnce({ ...rec, step: 'phase2_sent', lastUserOpHash: '0xuserop' })
+        .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastUserOpHash: '0xuserop' })
       transitionDeploySessionMock.mockResolvedValue(true)
 
       const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
@@ -598,12 +600,12 @@ describe('deploy session optimistic concurrency', () => {
     }
   })
 
-  it('status does not call legacy registration route when canonical route is unavailable', async () => {
+  it('status blocks phase3 advancement when Solana preflight fails', async () => {
     const rec = {
-      ...makeDeploySession('phase2_core_confirmed'),
+      ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xB87CBb646dD14F520078F11196f79BF815F18c84')],
-        phase3Calls: [],
+        phase3Calls: [makeCall('0xphase3target')],
       }),
     }
     const originalFetch = globalThis.fetch
@@ -638,7 +640,7 @@ describe('deploy session optimistic concurrency', () => {
       })
       getDeploySessionByIdMock
         .mockResolvedValueOnce(rec)
-        .mockResolvedValueOnce({ ...rec, step: 'phase2_sent', lastUserOpHash: '0xuserop' })
+        .mockResolvedValueOnce({ ...rec, step: 'phase2_confirmed', lastError: 'Solana preflight failed' })
       transitionDeploySessionMock.mockResolvedValue(true)
 
       const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
@@ -648,6 +650,8 @@ describe('deploy session optimistic concurrency', () => {
       expect(res.statusCode).toBe(200)
       expect(fetchMock).toHaveBeenCalledTimes(1)
       expect(String((fetchMock.mock.calls as any[])[0]?.[0] ?? '')).toContain('/api/deploy/registerSolanaBridgeToken')
+      expect(transitionDeploySessionMock).not.toHaveBeenCalled()
+      expect(updateDeploySessionMock).toHaveBeenCalled()
     } finally {
       ;(globalThis as any).fetch = originalFetch
     }

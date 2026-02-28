@@ -10,7 +10,8 @@ import {
   type TokenOption,
 } from '@/lib/uniswap/swapUtils'
 
-export type TokenLogoSeed = Pick<TokenOption, 'address' | 'logoUrl' | 'logoUrls' | 'group'> & {
+export type TokenLogoSeed = Pick<TokenOption, 'address' | 'logoUrl' | 'logoUrls'> & {
+  group?: TokenOption['group']
   chainId?: number
   symbol?: string
 }
@@ -43,7 +44,9 @@ const knownTokenLogoSeedByChainAndAddress: Record<string, string> = {
 }
 
 function normalizeChainId(chainId: number | undefined): number {
-  return Number.isFinite(chainId) && chainId > 0 ? Math.trunc(chainId) : BASE_CHAIN_ID
+  return typeof chainId === 'number' && Number.isFinite(chainId) && chainId > 0
+    ? Math.trunc(chainId)
+    : BASE_CHAIN_ID
 }
 
 function normalizeAddress(address: string): string | null {
@@ -54,7 +57,7 @@ function normalizeAddress(address: string): string | null {
   }
 }
 
-function normalizeUrl(candidate: string | undefined): string | null {
+function normalizeUrl(candidate: string | null | undefined): string | null {
   if (!candidate || typeof candidate !== 'string') return null
   const value = candidate.trim()
   if (!value) return null

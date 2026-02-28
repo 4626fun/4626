@@ -10,6 +10,8 @@ export type TokenOption = {
   name: string
   address: string
   group: TokenGroup
+  chainId?: number
+  decimals?: number
   logoUrl?: string
   logoUrls?: string[]
 }

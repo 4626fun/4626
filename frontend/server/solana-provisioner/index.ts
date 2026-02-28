@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { promisify } from 'node:util'
 import { createHash, timingSafeEqual } from 'node:crypto'
 
+import { Connection, Keypair } from '@solana/web3.js'
 import { createPublicClient, http, isAddress, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
@@ -367,6 +368,144 @@ function authOk(req: IncomingMessage, secret: string): boolean {
   return timingSafeEqual(a, b)
 }
 
+function readFirstNonEmptyEnv(keys: string[]): { value: string; source: string | null } {
+  for (const key of keys) {
+    const value = String(process.env[key] ?? '').trim()
+    if (value) return { value, source: key }
+  }
+  return { value: '', source: null }
+}
+
+function readProvisionerBearerSecret(): { value: string; source: string | null } {
+  return readFirstNonEmptyEnv([
+    'PROVISIONER_BEARER_TOKEN',
+    'SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET',
+    'METEORA_IX_PROVISIONER_SECRET',
+    'DEPLOY_SOLANA_REGISTRATION_SECRET',
+  ])
+}
+
+function parseMinPayerSol(): number {
+  const raw = String(process.env.PROVISIONER_MIN_PAYER_SOL ?? '0.05').trim()
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed < 0) return 0.05
+  return parsed
+}
+
+function parseSecretKeyBytes(raw: string): Uint8Array | null {
+  const trimmed = raw.trim()
+  if (!trimmed.startsWith('[')) return null
+  try {
+    const parsed = JSON.parse(trimmed) as unknown
+    if (!Array.isArray(parsed) || parsed.length !== 64) return null
+    if (!parsed.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)) return null
+    return Uint8Array.from(parsed as number[])
+  } catch {
+    return null
+  }
+}
+
+function readSecretKeyFromFile(path: string): Uint8Array | null {
+  if (!path || !existsSync(path)) return null
+  try {
+    const raw = readFileSync(path, 'utf8')
+    return parseSecretKeyBytes(raw)
+  } catch {
+    return null
+  }
+}
+
+function resolveProvisionerPayerKeypair(): { keypair: Keypair | null; source: string } {
+  const payerRef = String(process.env.SOLANA_BRIDGE_PAYER_KP ?? 'config').trim() || 'config'
+  if (payerRef === 'config') {
+    const home = String(process.env.HOME ?? '').trim()
+    const keypairPath = home ? `${home}/.config/solana/id.json` : ''
+    const bytes = readSecretKeyFromFile(keypairPath)
+    if (!bytes) return { keypair: null, source: `config:${keypairPath || '<unknown>'}` }
+    try {
+      return { keypair: Keypair.fromSecretKey(bytes), source: `config:${keypairPath}` }
+    } catch {
+      return { keypair: null, source: `config:${keypairPath}` }
+    }
+  }
+  const inlineBytes = parseSecretKeyBytes(payerRef)
+  if (inlineBytes) {
+    try {
+      return { keypair: Keypair.fromSecretKey(inlineBytes), source: 'inline-secret-key' }
+    } catch {
+      return { keypair: null, source: 'inline-secret-key' }
+    }
+  }
+  const fileBytes = readSecretKeyFromFile(payerRef)
+  if (fileBytes) {
+    try {
+      return { keypair: Keypair.fromSecretKey(fileBytes), source: `file:${payerRef}` }
+    } catch {
+      return { keypair: null, source: `file:${payerRef}` }
+    }
+  }
+  return { keypair: null, source: `unresolved:${payerRef}` }
+}
+
+async function readProvisionerPayerHealth(): Promise<{
+  payerConfigured: boolean
+  payerSource: string
+  payerPubkey: string | null
+  payerBalanceLamports: string | null
+  payerBalanceSol: string | null
+  payerMinSol: string
+  payerHealthy: boolean
+  payerError: string | null
+}> {
+  const minSol = parseMinPayerSol()
+  const minLamports = BigInt(Math.ceil(minSol * 1_000_000_000))
+  const { keypair, source } = resolveProvisionerPayerKeypair()
+  if (!keypair) {
+    return {
+      payerConfigured: false,
+      payerSource: source,
+      payerPubkey: null,
+      payerBalanceLamports: null,
+      payerBalanceSol: null,
+      payerMinSol: minSol.toString(),
+      payerHealthy: false,
+      payerError: 'Unable to resolve SOLANA_BRIDGE_PAYER_KP keypair.',
+    }
+  }
+
+  const rpcUrl = String(process.env.SOLANA_RPC_URL ?? 'https://api.mainnet-beta.solana.com').trim()
+    || 'https://api.mainnet-beta.solana.com'
+  try {
+    const connection = new Connection(rpcUrl, 'confirmed')
+    const lamports = await connection.getBalance(keypair.publicKey, 'confirmed')
+    const balanceLamports = BigInt(lamports)
+    const wholeSol = balanceLamports / 1_000_000_000n
+    const fractionalLamports = balanceLamports % 1_000_000_000n
+    const balanceSol = `${wholeSol.toString()}.${fractionalLamports.toString().padStart(9, '0')}`
+    return {
+      payerConfigured: true,
+      payerSource: source,
+      payerPubkey: keypair.publicKey.toBase58(),
+      payerBalanceLamports: balanceLamports.toString(),
+      payerBalanceSol: balanceSol,
+      payerMinSol: minSol.toString(),
+      payerHealthy: balanceLamports >= minLamports,
+      payerError: null,
+    }
+  } catch (error) {
+    return {
+      payerConfigured: true,
+      payerSource: source,
+      payerPubkey: keypair.publicKey.toBase58(),
+      payerBalanceLamports: null,
+      payerBalanceSol: null,
+      payerMinSol: minSol.toString(),
+      payerHealthy: false,
+      payerError: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
 function buildWrapRunnerList(cliBinRaw: string, wrapArgs: string[], cliDir: string): WrapRunner[] {
   const normalized = cliBinRaw.trim().toLowerCase()
   const runners: WrapRunner[] = []
@@ -502,23 +641,35 @@ async function runWrapTokenWithRetry(
 async function handleHealth(res: ServerResponse): Promise<void> {
   const cliDir = String(process.env.SOLANA_BRIDGE_CLI_DIR ?? '').trim()
   const cliExists = !!cliDir && existsSync(cliDir)
-  const secretSet = String(process.env.PROVISIONER_BEARER_TOKEN ?? '').trim().length > 0
+  const provisionerSecret = readProvisionerBearerSecret()
+  const secretSet = provisionerSecret.value.length > 0
+  const payerHealth = await readProvisionerPayerHealth()
   json(res, 200, {
-    ok: cliExists && secretSet,
+    ok: cliExists && secretSet && payerHealth.payerHealthy,
     service: 'solana-route-provisioner',
     cliDir,
     cliExists,
     secretSet,
+    secretSource: provisionerSecret.source,
+    payerConfigured: payerHealth.payerConfigured,
+    payerSource: payerHealth.payerSource,
+    payerPubkey: payerHealth.payerPubkey,
+    payerBalanceLamports: payerHealth.payerBalanceLamports,
+    payerBalanceSol: payerHealth.payerBalanceSol,
+    payerMinSol: payerHealth.payerMinSol,
+    payerHealthy: payerHealth.payerHealthy,
+    payerError: payerHealth.payerError,
     baseRpcConfigured: String(process.env.BASE_RPC_URL ?? '').trim().length > 0,
+    solanaRpcConfigured: String(process.env.SOLANA_RPC_URL ?? '').trim().length > 0,
     deployEnvDefault: String(process.env.SOLANA_BRIDGE_DEPLOY_ENV ?? 'mainnet').trim() || 'mainnet',
     now: new Date().toISOString(),
   })
 }
 
 async function handleProvision(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const secret = String(process.env.PROVISIONER_BEARER_TOKEN ?? '').trim()
+  const secret = readProvisionerBearerSecret().value
   if (!secret) {
-    return json(res, 503, { success: false, error: 'PROVISIONER_BEARER_TOKEN is not configured.' })
+    return json(res, 503, { success: false, error: 'Provisioner bearer secret is not configured.' })
   }
   if (!authOk(req, secret)) {
     return json(res, 401, { success: false, error: 'Unauthorized' })
@@ -792,9 +943,9 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
 }
 
 async function handleBuildMeteoraIxs(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const secret = String(process.env.PROVISIONER_BEARER_TOKEN ?? '').trim()
+  const secret = readProvisionerBearerSecret().value
   if (!secret) {
-    return json(res, 503, { success: false, error: 'PROVISIONER_BEARER_TOKEN is not configured.' })
+    return json(res, 503, { success: false, error: 'Provisioner bearer secret is not configured.' })
   }
   if (!authOk(req, secret)) {
     return json(res, 401, { success: false, error: 'Unauthorized' })
@@ -888,9 +1039,9 @@ type SetupCreatorBody = {
 }
 
 async function handleSetupCreator(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const secret = String(process.env.PROVISIONER_BEARER_TOKEN ?? '').trim()
+  const secret = readProvisionerBearerSecret().value
   if (!secret) {
-    return json(res, 503, { success: false, error: 'PROVISIONER_BEARER_TOKEN is not configured.' })
+    return json(res, 503, { success: false, error: 'Provisioner bearer secret is not configured.' })
   }
   if (!authOk(req, secret)) {
     return json(res, 401, { success: false, error: 'Unauthorized' })
@@ -971,9 +1122,9 @@ type CreatePoolBody = {
 }
 
 async function handleCreatePool(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const secret = String(process.env.PROVISIONER_BEARER_TOKEN ?? '').trim()
+  const secret = readProvisionerBearerSecret().value
   if (!secret) {
-    return json(res, 503, { success: false, error: 'PROVISIONER_BEARER_TOKEN is not configured.' })
+    return json(res, 503, { success: false, error: 'Provisioner bearer secret is not configured.' })
   }
   if (!authOk(req, secret)) {
     return json(res, 401, { success: false, error: 'Unauthorized' })
