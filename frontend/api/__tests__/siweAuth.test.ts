@@ -121,7 +121,7 @@ describe('siwe auth hardening', () => {
 
     const firstReq = createMockReq({
       method: 'POST',
-      headers: { host: '4626.fun', cookie: nonceCookie },
+      headers: { host: '4626.fun', 'x-forwarded-proto': 'https', cookie: nonceCookie },
       body: { message, signature, nonceToken },
     })
     const firstRes = createMockRes()
@@ -132,7 +132,7 @@ describe('siwe auth hardening', () => {
 
     const replayReq = createMockReq({
       method: 'POST',
-      headers: { host: '4626.fun', cookie: nonceCookie },
+      headers: { host: '4626.fun', 'x-forwarded-proto': 'https', cookie: nonceCookie },
       body: { message, signature, nonceToken },
     })
     const replayRes = createMockRes()
@@ -161,7 +161,7 @@ describe('siwe auth hardening', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { host: '4626.fun', cookie: `cv_auth_nonce=${nonce}` },
+      headers: { host: '4626.fun', 'x-forwarded-proto': 'https', cookie: `cv_auth_nonce=${nonce}` },
       body: { message, signature, nonceToken: makeNonceToken({ nonce }) },
     })
     const res = createMockRes()
@@ -191,7 +191,7 @@ describe('siwe auth hardening', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { host: '4626.fun', cookie: `cv_auth_nonce=${nonce}` },
+      headers: { host: '4626.fun', 'x-forwarded-proto': 'https', cookie: `cv_auth_nonce=${nonce}` },
       body: { message, signature, nonceToken: makeNonceToken({ nonce }) },
     })
     const res = createMockRes()
@@ -221,7 +221,7 @@ describe('siwe auth hardening', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { host: '4626.fun', cookie: `cv_auth_nonce=${nonce}` },
+      headers: { host: '4626.fun', 'x-forwarded-proto': 'https', cookie: `cv_auth_nonce=${nonce}` },
       body: { message, signature, nonceToken: makeNonceToken({ nonce }) },
     })
     const res = createMockRes()
@@ -248,7 +248,7 @@ describe('siwe auth hardening', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { host: '4626.fun', cookie: `cv_auth_nonce=${nonce}` },
+      headers: { host: '4626.fun', 'x-forwarded-proto': 'https', cookie: `cv_auth_nonce=${nonce}` },
       body: { message, signature, nonceToken: makeNonceToken({ nonce }) },
     })
     const res = createMockRes()
