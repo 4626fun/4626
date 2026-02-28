@@ -25,7 +25,7 @@ import {
   quoteCreatePosition,
   removeLiquidity,
 } from '@/lib/uniswap/liquidityApi'
-import { fetchZQuoteComparison, isUniswapXRouting, pickQuote } from '@/lib/uniswap/tradingApi'
+import { fetchZQuoteComparison, pickQuote } from '@/lib/uniswap/tradingApi'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
 import {
   BASE_CHAIN_ID,
@@ -214,12 +214,6 @@ export function Swap() {
     initialTokenOut: CONTRACTS.usdc,
   })
   const [compareRoutesEnabled, setCompareRoutesEnabled] = useState(false)
-  const [compareRoutesLoading, setCompareRoutesLoading] = useState(false)
-  const [compareRoutesAvailable, setCompareRoutesAvailable] = useState(false)
-  const [compareRoutesReason, setCompareRoutesReason] = useState<string | null>(null)
-  const [compareRoutesChainName, setCompareRoutesChainName] = useState<string | null>('Base')
-  const [compareRoutesChainId, setCompareRoutesChainId] = useState<number | null>(BASE_CHAIN_ID)
-  const [compareZquoteOutUnits, setCompareZquoteOutUnits] = useState<string>('')
   const [tokenSelectorOpen, setTokenSelectorOpen] = useState(false)
   const [tokenSelectorSide, setTokenSelectorSide] = useState<'input' | 'output'>('input')
   const [tokenSelectorQuery, setTokenSelectorQuery] = useState('')
@@ -428,8 +422,6 @@ export function Swap() {
     error,
     confirmIntent,
     quoteUpdatedAt,
-    txState,
-    txHash,
     isReady,
     approvalRequired,
     quoteIsStale,
@@ -441,7 +433,6 @@ export function Swap() {
     closeConfirm,
     confirmAndExecute,
     resetTradeState,
-    tokensEquivalent,
   } = useSwapExecution({
     address,
     walletClient,
@@ -464,8 +455,6 @@ export function Swap() {
     const candidate = pickQuote(quote) ?? quote
     return candidate as QuoteShape
   }, [quote])
-
-  const isOrderRoute = useMemo(() => isUniswapXRouting(quote?.routing), [quote])
 
   const routeSummary = useMemo(() => {
     const routeCandidate =
@@ -517,12 +506,6 @@ export function Swap() {
     }
     return null
   }, [selectedQuote])
-
-  const compareUniswapOutUnits = useMemo(() => {
-    const n = Number(estimatedOut)
-    if (!Number.isFinite(n) || n <= 0) return ''
-    return estimatedOut
-  }, [estimatedOut])
 
   const handleSwitchTokens = useCallback(() => {
     switchTokens()
@@ -617,52 +600,18 @@ export function Swap() {
   // Experimental comparison only; execution route remains Uniswap Trading API.
   useEffect(() => {
     if (!compareRoutesEnabled || !executionReady || !isReady) {
-      setCompareRoutesLoading(false)
-      setCompareRoutesAvailable(false)
-      setCompareRoutesReason(null)
-      setCompareRoutesChainName('Base')
-      setCompareRoutesChainId(BASE_CHAIN_ID)
-      setCompareZquoteOutUnits('')
       return
     }
 
     let cancelled = false
     const timer = window.setTimeout(() => {
       if (cancelled) return
-      setCompareRoutesLoading(true)
-      setCompareRoutesReason(null)
       void fetchZQuoteComparison({
         tokenIn,
         tokenOut,
         amountInUnits,
       })
-        .then((data) => {
-          if (cancelled) return
-          setCompareRoutesAvailable(Boolean(data.available))
-          setCompareRoutesReason(data.reason ? String(data.reason) : null)
-          setCompareRoutesChainName(
-            typeof data.chainName === 'string' && data.chainName.trim() ? data.chainName : 'Base',
-          )
-          setCompareRoutesChainId(
-            typeof data.chainId === 'number' && Number.isFinite(data.chainId) ? data.chainId : BASE_CHAIN_ID,
-          )
-          setCompareZquoteOutUnits(
-            typeof data.amountOutUnits === 'string' ? data.amountOutUnits : '',
-          )
-        })
-        .catch((error: unknown) => {
-          if (cancelled) return
-          setCompareRoutesAvailable(false)
-          setCompareRoutesReason(
-            error instanceof Error ? error.message : 'Unable to compare routes',
-          )
-          setCompareRoutesChainName('Base')
-          setCompareRoutesChainId(BASE_CHAIN_ID)
-          setCompareZquoteOutUnits('')
-        })
-        .finally(() => {
-          if (!cancelled) setCompareRoutesLoading(false)
-        })
+        .catch(() => {})
     }, 450)
 
     return () => {
@@ -797,7 +746,6 @@ export function Swap() {
               routeSummary={routeSummary}
               gasEstimateLabel={gasEstimateLabel}
               priceImpactLabel={priceImpactLabel}
-              parsedSlippage={parsedSlippage}
               lpFeeUsd={lpFeeUsd}
               protocolFeeUsd={protocolFeeUsd}
               slippagePct={slippagePct}

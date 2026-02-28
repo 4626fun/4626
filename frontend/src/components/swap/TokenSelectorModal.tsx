@@ -11,6 +11,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Spinner } from '@/components/ui/Spinner'
 import { cn } from '@/lib/utils'
 import { useTokenMetadata } from '@/hooks/useTokenMetadata'
+import type { SupportedChainId } from '@/config/chains'
 import { BASE_CHAIN_ID, type TokenDisplay, type TokenOption } from '@/lib/uniswap/swapUtils'
 
 export type SwapTokenOption = TokenOption & {
@@ -24,6 +25,11 @@ type AddressMetadataCacheEntry = {
   decimals: number
   logoUrl?: string | null
 }
+type AddressCandidate = TokenDisplay & {
+  address: `0x${string}`
+  chainId: SupportedChainId
+  decimals: number
+}
 
 const ADDRESS_METADATA_CACHE_KEY = 'swap.addressMetadataCache.v1'
 
@@ -33,10 +39,19 @@ type TokenSelectorModalProps = {
   tokenOptions: SwapTokenOption[]
   selectedToken: string
   recentTokenAddresses: string[]
-  chainId?: number
+  chainId?: SupportedChainId
   onQueryChange: (value: string) => void
   onClose: () => void
   onSelect: (option: SwapTokenOption) => void
+}
+
+const SUPPORTED_CHAIN_IDS: SupportedChainId[] = [1, 10, 137, 42161, 8453]
+
+function toSupportedChainId(value: number | undefined, fallback: SupportedChainId): SupportedChainId {
+  const normalized = typeof value === 'number' ? Math.trunc(value) : Number.NaN
+  return SUPPORTED_CHAIN_IDS.includes(normalized as SupportedChainId)
+    ? (normalized as SupportedChainId)
+    : fallback
 }
 
 function tokenMatches(option: SwapTokenOption, query: string): boolean {
@@ -78,7 +93,7 @@ export function TokenSelectorModal({
 
   const [addressLookupError, setAddressLookupError] = useState<string | null>(null)
   const [needsUnverifiedConfirm, setNeedsUnverifiedConfirm] = useState<SwapTokenOption | null>(null)
-  const [addressCandidate, setAddressCandidate] = useState<TokenDisplay | null>(null)
+  const [addressCandidate, setAddressCandidate] = useState<AddressCandidate | null>(null)
   const [addressLookupLoading, setAddressLookupLoading] = useState(false)
   const [addressLookupAttempt, setAddressLookupAttempt] = useState(0)
   const [addressMetadataCache, setAddressMetadataCache] = useState<Record<string, AddressMetadataCacheEntry>>({})
@@ -90,7 +105,7 @@ export function TokenSelectorModal({
     chainId: chainId ?? undefined,
   })
   const isAddressSearchActive = isAddressSearch && Boolean(trimmedQuery)
-  const chainIdForLookup = chainId ?? BASE_CHAIN_ID
+  const chainIdForLookup = toSupportedChainId(chainId, BASE_CHAIN_ID as SupportedChainId)
   const tokenAddressMetadata = useTokenMetadata(
     isAddressSearchActive && trimmedQuery ? (trimmedQuery as `0x${string}`) : undefined,
   )
@@ -131,13 +146,14 @@ export function TokenSelectorModal({
       const cacheKey = `${chainIdForLookup}:${trimmedQuery.toLowerCase()}`
       const cached = addressMetadataCache[cacheKey]
       if (cached) {
+        const cachedChainId = toSupportedChainId(cached.chainId, chainIdForLookup)
         setAddressCandidate({
           address: trimmedQuery as `0x${string}`,
-          chainId: cached.chainId,
+          chainId: cachedChainId,
           symbol: cached.symbol,
           name: cached.name,
           decimals: cached.decimals,
-          logoUrl: cached.logoUrl ?? undefined,
+          logoUrl: cached.logoUrl ?? null,
           logoUrls: [],
         })
         setAddressLookupLoading(false)
@@ -178,7 +194,7 @@ export function TokenSelectorModal({
           symbol,
           name,
           decimals: Number.isFinite(decimals) ? decimals : 18,
-          logoUrl: tokenAddressMetadata.imageUrl ?? undefined,
+          logoUrl: tokenAddressMetadata.imageUrl ?? null,
           logoUrls: [],
         })
         const newEntry: AddressMetadataCacheEntry = {
@@ -243,7 +259,7 @@ export function TokenSelectorModal({
           chainId: chainIdForLookup,
           decimals: addressCandidate.decimals,
           verified: false,
-          logoUrl: addressCandidate.logoUrl,
+          logoUrl: addressCandidate.logoUrl ?? undefined,
           logoUrls: addressCandidate.logoUrls,
         },
         section: 'Address search',
@@ -378,7 +394,7 @@ export function TokenSelectorModal({
             ) : null}
             {addressLookupError ? (
               <div className="mt-2 space-y-2">
-                <Alert variant="destructive" className="text-left">
+                <Alert variant="error" className="text-left">
                   {addressLookupError}
                 </Alert>
                 <button
@@ -420,7 +436,7 @@ export function TokenSelectorModal({
                       : 'border-transparent text-zinc-200 hover:bg-white/5 hover:border-white/10',
                   )}
                 >
-                  <TokenAvatar token={{ address: option.address, chainId: option.chainId, logoUrl: option.logoUrl, logoUrls: option.logoUrls }} symbol={option.symbol} size={36} />
+                  <TokenAvatar token={{ address: option.address, logoUrl: option.logoUrl, logoUrls: option.logoUrls }} symbol={option.symbol} size={36} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <div className="text-sm font-medium truncate">{option.symbol}</div>
