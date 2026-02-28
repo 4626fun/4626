@@ -189,6 +189,17 @@ function isUserRejectedError(error: unknown): boolean {
   )
 }
 
+function isSupportedAgentUriScheme(value: string): boolean {
+  const uri = value.trim().toLowerCase()
+  return (
+    uri.startsWith('https://') ||
+    uri.startsWith('http://') ||
+    uri.startsWith('ipfs://') ||
+    uri.startsWith('ar://') ||
+    uri.startsWith('data:')
+  )
+}
+
 export function AgentRegister() {
   const [agentUri, setAgentUri] = useState('')
   const [busy, setBusy] = useState(false)
@@ -441,6 +452,9 @@ export function AgentRegister() {
     },
     onSuccess: (data) => {
       setPublishData(data)
+      if (data.grove?.gatewayUrl) {
+        setAgentUri(data.grove.gatewayUrl)
+      }
       if (data.grove?.lensUri) {
         setStackStatus(`Published to Lens Grove: ${data.grove.lensUri}`)
       } else {
@@ -501,6 +515,10 @@ export function AgentRegister() {
     }
     const uri = agentUri.trim()
     if (!uri) return
+    if (!isSupportedAgentUriScheme(uri)) {
+      setError('Agent URI must use https://, http://, ipfs://, ar://, or data:. If using Grove, use gatewayUrl (not lens://).')
+      return
+    }
 
     setBusy(true)
     setError(null)
@@ -1001,4 +1019,3 @@ export function AgentRegister() {
     </div>
   )
 }
-
