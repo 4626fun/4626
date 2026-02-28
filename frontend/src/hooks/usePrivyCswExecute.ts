@@ -95,9 +95,13 @@ export type PrivyCswExecuteState = {
  */
 export function usePrivyCswExecute(params: {
   smartWallet: string | null | undefined
+  preferredOwnerAddress?: string | null | undefined
 }): PrivyCswExecuteState {
   const smartWalletAddress = params.smartWallet && isAddress(params.smartWallet)
     ? getAddress(params.smartWallet as Address)
+    : null
+  const preferredOwnerAddress = params.preferredOwnerAddress && isAddress(params.preferredOwnerAddress)
+    ? getAddress(params.preferredOwnerAddress as Address)
     : null
 
   const { address: connectedAddress } = useAccount()
@@ -107,44 +111,76 @@ export function usePrivyCswExecute(params: {
   const publicClient = basePublicClient ?? fallbackPublicClient
   const { wallets: privyWallets } = useWallets()
 
-  const privyEmbeddedWallet = useMemo(() => {
+  const privyEmbeddedWallets = useMemo(() => {
     const wallets = Array.isArray(privyWallets) ? (privyWallets as any[]) : []
-    return wallets.find((w) => {
+    return wallets.filter((w) => {
       const wType = String(w?.wallet_client_type ?? w?.walletClientType ?? w?.connector_type ?? w?.type ?? '').trim().toLowerCase()
       if (!(wType === 'privy' || wType.includes('privy') || wType.includes('embedded'))) return false
       const addr = typeof w?.address === 'string' ? w.address.trim() : ''
       if (!addr || !isAddress(addr)) return false
       if (smartWalletAddress && addr.toLowerCase() === smartWalletAddress.toLowerCase()) return false
       return true
-    }) ?? null
+    })
   }, [privyWallets, smartWalletAddress])
 
-  const privyEoaAddress = useMemo(() => {
-    const addr = typeof (privyEmbeddedWallet as any)?.address === 'string'
-      ? String((privyEmbeddedWallet as any).address).trim()
-      : ''
-    if (!addr || !isAddress(addr)) return null
-    return getAddress(addr as Address)
-  }, [privyEmbeddedWallet])
+  const privyEmbeddedAddresses = useMemo(() => {
+    return privyEmbeddedWallets
+      .map((wallet: any) => {
+        const raw = typeof wallet?.address === 'string' ? String(wallet.address).trim() : ''
+        if (!raw || !isAddress(raw)) return null
+        return getAddress(raw as Address)
+      })
+      .filter((value): value is Address => Boolean(value))
+  }, [privyEmbeddedWallets])
+
+  const orderedPrivyCandidates = useMemo(() => {
+    const unique = new Set<string>()
+    const ordered: Address[] = []
+    const push = (value: Address | null) => {
+      if (!value) return
+      const key = value.toLowerCase()
+      if (unique.has(key)) return
+      unique.add(key)
+      ordered.push(value)
+    }
+    push(preferredOwnerAddress)
+    push(connectedAddress && isAddress(connectedAddress) ? getAddress(connectedAddress as Address) : null)
+    for (const candidate of privyEmbeddedAddresses) push(candidate)
+    return ordered
+  }, [connectedAddress, preferredOwnerAddress, privyEmbeddedAddresses])
 
   const privyIsOwnerQuery = useQuery({
-    queryKey: ['privy-csw-execute', 'owner-check', smartWalletAddress, privyEoaAddress],
-    enabled: Boolean(smartWalletAddress && privyEoaAddress && publicClient),
+    queryKey: ['privy-csw-execute', 'owner-check', smartWalletAddress, orderedPrivyCandidates],
+    enabled: Boolean(smartWalletAddress && orderedPrivyCandidates.length > 0 && publicClient),
     staleTime: 30_000,
     queryFn: async () => {
-      if (!smartWalletAddress || !privyEoaAddress || !publicClient) return false
-      try {
-        return (await publicClient.readContract({
-          address: smartWalletAddress,
-          abi: OWNER_CHECK_ABI,
-          functionName: 'isOwnerAddress',
-          args: [privyEoaAddress],
-        })) === true
-      } catch {
-        return false
+      if (!smartWalletAddress || orderedPrivyCandidates.length === 0 || !publicClient) return null
+      for (const candidate of orderedPrivyCandidates) {
+        try {
+          const isOwner = await publicClient.readContract({
+            address: smartWalletAddress,
+            abi: OWNER_CHECK_ABI,
+            functionName: 'isOwnerAddress',
+            args: [candidate],
+          })
+          if (isOwner === true) return candidate
+        } catch {
+          continue
+        }
       }
+      return null
     },
   })
+
+  const privyEoaAddress = privyIsOwnerQuery.data ?? null
+
+  const privyEmbeddedWallet = useMemo(() => {
+    if (!privyEoaAddress) return null
+    return privyEmbeddedWallets.find((wallet: any) => {
+      const raw = typeof wallet?.address === 'string' ? String(wallet.address).trim() : ''
+      return raw && isAddress(raw) && getAddress(raw as Address).toLowerCase() === privyEoaAddress.toLowerCase()
+    }) ?? null
+  }, [privyEmbeddedWallets, privyEoaAddress])
 
   const connectedIsOwnerQuery = useQuery({
     queryKey: ['privy-csw-execute', 'connected-owner-check', smartWalletAddress, connectedAddress],
@@ -166,7 +202,7 @@ export function usePrivyCswExecute(params: {
     },
   })
 
-  const privyCanSign = Boolean(privyEoaAddress && privyIsOwnerQuery.data === true && privyEmbeddedWallet)
+  const privyCanSign = Boolean(privyEoaAddress && privyEmbeddedWallet)
   const connectedCanSign = Boolean(connectedAddress && walletClient && connectedIsOwnerQuery.data === true)
 
   const signerType = privyCanSign ? 'privy-embedded' as const

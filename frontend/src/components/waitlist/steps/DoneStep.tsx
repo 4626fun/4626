@@ -509,10 +509,9 @@ export const DoneStep = memo(function DoneStep({
   }, [coinSeed])
 
   const smartWalletAddressForCoin = smartWalletAddress ?? null
-  const ownerAddressForCoin = ownerAddress ?? null
   const canOneClickLaunchCoin = Boolean(coinSeed && coinSeed.trim().length >= 2 && coinSeedSymbolClean.length >= 2)
   const shouldShowLaunchCoinCard =
-    Boolean(creatorCoinMissing && smartWalletAddressForCoin && ownerAddressForCoin) &&
+    Boolean(creatorCoinMissing && smartWalletAddressForCoin) &&
     canOneClickLaunchCoin &&
     !(preprovData?.coinAddress && preprovData?.coinSymbol)
 
@@ -683,7 +682,7 @@ export const DoneStep = memo(function DoneStep({
               defaultName={coinSeed}
               defaultSymbol={coinSeed}
               smartWalletAddress={smartWalletAddressForCoin}
-              ownerAddress={ownerAddressForCoin}
+              preferredOwnerAddress={ownerAddress ?? null}
               onCoinCreated={onCoinCreated}
             />
           ) : null}
