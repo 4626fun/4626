@@ -1,12 +1,12 @@
 # Solana Dynamic Route Provisioner
 
-Minimal external service for dynamic ShareOFT -> Solana route provisioning.
+Minimal external service for dynamic bridge-token -> Solana route provisioning.
 
 This service is designed for VM/container runtimes where the bridge CLI is available on disk.
 
 ## Why this exists
 
-`/api/deploy/registerShareOft` in the app can auto-register ShareOFTs, but on serverless runtimes it cannot execute local bridge CLI paths.
+`/api/deploy/registerSolanaBridgeToken` in the app can auto-register Solana bridge tokens, but on serverless runtimes it cannot execute local bridge CLI paths.
 
 Point `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL` to this service's `/provision` endpoint.
 For Meteora auto-deposit payloads, point `METEORA_IX_PROVISIONER_URL` to `/meteora-ixs`
@@ -205,7 +205,8 @@ In the app server env (Vercel or otherwise):
 Optional but recommended:
 
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL=https://<host>/healthz` (for your external monitoring)
-- `SOLANA_DEFAULT_SHARE_OFT=0x...` (enables scalar(route) validation in `/api/deploy/solanaInfraStatus`)
+- `SOLANA_DEFAULT_BRIDGE_TOKEN=0x...` (enables scalar(route) validation in `/api/deploy/solanaInfraStatus`)
+- `SOLANA_DEFAULT_SHARE_OFT=0x...` (legacy alias; still supported)
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_ATTEMPTS=3`
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_DELAY_MS=1200`
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_TIMEOUT_MS=90000`

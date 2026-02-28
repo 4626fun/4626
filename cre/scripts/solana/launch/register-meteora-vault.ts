@@ -1,6 +1,6 @@
 /**
  * Register (upsert) a Meteora Alpha Vault config into the `creator_meteora_alpha_vaults`
- * Supabase table so that the `registerShareOft` API can build the Phase 2 Meteora ix payload.
+ * Supabase table so that the `registerSolanaBridgeToken` API can build the Phase 2 Meteora ix payload.
  *
  * Run this AFTER you have:
  *   1. Wrapped the ERC-20 ShareOFT on Solana  (`solana:create-token-2022-mint` / `wrap-token`)

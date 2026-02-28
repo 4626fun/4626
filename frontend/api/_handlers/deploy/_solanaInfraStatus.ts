@@ -76,6 +76,8 @@ type SolanaInfraStatusResponse = {
   signerMatchesAdapterOwner: boolean | null
   defaultMintConfigured: boolean
   defaultMintBytes32: Hex | null
+  defaultRouteBridgeToken: Address | null
+  // Backward-compatible alias for older dashboards/scripts.
   defaultRouteShareOft: Address | null
   defaultMintMappedToken: Address | null
   defaultMintRouteScalar: string | null
@@ -129,10 +131,16 @@ function readRegistrationSignerPk(): Hex | null {
   return null
 }
 
-function readDefaultRouteShareOftFromEnv(): Address | null {
-  const v = String(process.env.SOLANA_DEFAULT_SHARE_OFT ?? '').trim()
-  if (!isAddress(v)) return null
-  return getAddress(v)
+function readDefaultRouteBridgeTokenFromEnv(): Address | null {
+  const candidates = [
+    process.env.SOLANA_DEFAULT_BRIDGE_TOKEN,
+    process.env.SOLANA_DEFAULT_SHARE_OFT,
+  ]
+  for (const c of candidates) {
+    const v = String(c ?? '').trim()
+    if (isAddress(v)) return getAddress(v)
+  }
+  return null
 }
 
 function deriveDynamicProvisioningMode(params: {
@@ -257,7 +265,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const defaultMintBytes32 = readSolanaMintFromEnv()
   const defaultMintConfigured = !!defaultMintBytes32
-  const defaultRouteShareOft = readDefaultRouteShareOftFromEnv()
+  const defaultRouteBridgeToken = readDefaultRouteBridgeTokenFromEnv()
   let defaultMintMappedToken: Address | null = null
   let defaultMintRouteScalar: string | null = null
   let defaultMintRouteReady: boolean | null = null
@@ -272,13 +280,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
       .then((v) => (typeof v === 'string' && isAddress(v) ? getAddress(v as Address) : ZERO_ADDRESS))
       .catch(() => ZERO_ADDRESS)
-    if (defaultRouteShareOft) {
+    if (defaultRouteBridgeToken) {
       const scalar = await publicClient
         .readContract({
           address: BASE_SOLANA_BRIDGE,
           abi: BASE_SOLANA_BRIDGE_ABI,
           functionName: 'scalars',
-          args: [defaultRouteShareOft, defaultMintBytes32],
+          args: [defaultRouteBridgeToken, defaultMintBytes32],
         })
         .then((v) => BigInt(v as bigint))
         .catch(() => null)
@@ -327,9 +335,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       'No default Solana mint configured and dynamic provisioning is disabled. Set SOLANA_DEFAULT_MINT_BYTES32 or enable dynamic provisioning.',
     )
   }
-  if (solanaEnabledOnBatcher && defaultRouteShareOft && defaultMintRouteReady === false && !dynamicRouteEnabled) {
+  if (solanaEnabledOnBatcher && defaultRouteBridgeToken && defaultMintRouteReady === false && !dynamicRouteEnabled) {
     blockers.push(
-      'Default Solana mint route is not active for SOLANA_DEFAULT_SHARE_OFT (scalar=0) and dynamic provisioning is disabled.',
+      'Default Solana mint route is not active for SOLANA_DEFAULT_BRIDGE_TOKEN (scalar=0) and dynamic provisioning is disabled.',
     )
   }
 
@@ -354,7 +362,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     signerMatchesAdapterOwner,
     defaultMintConfigured,
     defaultMintBytes32,
-    defaultRouteShareOft,
+    defaultRouteBridgeToken,
+    defaultRouteShareOft: defaultRouteBridgeToken,
     defaultMintMappedToken,
     defaultMintRouteScalar,
     defaultMintRouteReady,

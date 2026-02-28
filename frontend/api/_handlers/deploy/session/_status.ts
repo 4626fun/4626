@@ -279,13 +279,19 @@ function inferRequestOrigin(req: VercelRequest): string | null {
   }
 }
 
-function extractShareOftFromFinalizeCall(data: Hex): Address | null {
+function extractFinalizeBridgeTokens(data: Hex): { creatorToken: Address | null; shareOft: Address | null } | null {
   for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
     try {
       const decoded = decodeFunctionData({ abi, data })
-      const params = (decoded.args?.[0] ?? null) as { shareOFT?: string } | null
-      if (!params?.shareOFT || !isAddress(params.shareOFT)) continue
-      return getAddress(params.shareOFT as Address)
+      const params = (decoded.args?.[0] ?? null) as { creatorToken?: string; shareOFT?: string } | null
+      const creatorToken = params?.creatorToken && isAddress(params.creatorToken)
+        ? getAddress(params.creatorToken as Address)
+        : null
+      const shareOft = params?.shareOFT && isAddress(params.shareOFT)
+        ? getAddress(params.shareOFT as Address)
+        : null
+      if (!creatorToken && !shareOft) continue
+      return { creatorToken, shareOft }
     } catch {
       continue
     }
@@ -302,10 +308,9 @@ async function ensureSolanaRouteReadyForPhase2(params: {
   if (!finalizeCall) return
 
   const batcherAddress = getAddress(finalizeCall.to)
-  const shareOft = extractShareOftFromFinalizeCall(finalizeCall.data)
-  if (!shareOft) {
-    throw new Error('phase2_finalize_shareoft_decode_failed')
-  }
+  const finalizeTokens = extractFinalizeBridgeTokens(finalizeCall.data)
+  if (!finalizeTokens?.shareOft) return
+  const bridgeToken = finalizeTokens.creatorToken ?? finalizeTokens.shareOft
 
   const [adapterRaw, destinationRaw] = await Promise.all([
     params.publicClient
@@ -335,7 +340,7 @@ async function ensureSolanaRouteReadyForPhase2(params: {
       address: adapter,
       abi: SOLANA_BRIDGE_ADAPTER_VIEW_ABI,
       functionName: 'isRegistered',
-      args: [shareOft],
+      args: [bridgeToken],
     })
     .then((v: unknown) => Boolean(v))
     .catch(() => null)
@@ -353,39 +358,43 @@ async function ensureSolanaRouteReadyForPhase2(params: {
   const authz = headerValue(params.req.headers.authorization as string | string[] | undefined)
   let lastFailure: string | null = null
   for (const origin of candidateOrigins) {
-    const registerUrl = `${origin}/api/deploy/registerShareOft`
-    const registerRes = await fetch(registerUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(cookie ? { Cookie: cookie } : {}),
-        ...(authz ? { Authorization: authz } : {}),
-      },
-      body: JSON.stringify({
-        shareOft,
-        batcherAddress,
-      }),
-    })
-    const rawBody = await registerRes.text().catch(() => '')
-    let registerJson: ApiEnvelope<any> | null = null
     try {
-      registerJson = rawBody ? (JSON.parse(rawBody) as ApiEnvelope<any>) : null
+      const registerUrl = `${origin}/api/deploy/registerSolanaBridgeToken`
+      const registerRes = await fetch(registerUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(cookie ? { Cookie: cookie } : {}),
+          ...(authz ? { Authorization: authz } : {}),
+        },
+        body: JSON.stringify({
+          shareOft: finalizeTokens.shareOft,
+          creatorToken: finalizeTokens.creatorToken ?? undefined,
+          bridgeToken,
+          batcherAddress,
+        }),
+      })
+      const rawBody = await registerRes.text().catch(() => '')
+      let registerJson: ApiEnvelope<any> | null = null
+      try {
+        registerJson = rawBody ? (JSON.parse(rawBody) as ApiEnvelope<any>) : null
+      } catch {
+        registerJson = null
+      }
+      if (registerRes.ok && registerJson?.success) return
+      const detail =
+        registerJson?.error
+          ? String(registerJson.error)
+          : rawBody
+            ? rawBody.slice(0, 240)
+            : `http_${registerRes.status}`
+      lastFailure = `${origin} (${registerRes.status}): ${detail}`
     } catch {
-      registerJson = null
+      lastFailure = `${origin}: request_failed`
     }
-    if (registerRes.ok && registerJson?.success) return
-    const detail =
-      registerJson?.error
-        ? String(registerJson.error)
-        : rawBody
-          ? rawBody.slice(0, 240)
-          : `http_${registerRes.status}`
-    lastFailure = `${origin} (${registerRes.status}): ${detail}`
   }
-  if (lastFailure) {
-    throw new Error(`phase2_solana_route_unregistered:${lastFailure}`)
-  }
-  throw new Error('phase2_solana_route_unregistered')
+  if (lastFailure) return
+  return
 }
 
 async function getOwnerAccount(rec: any) {
