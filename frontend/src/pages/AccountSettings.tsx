@@ -1142,7 +1142,7 @@ export function AccountSettings() {
       <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
         <div className="card rounded-xl p-8 space-y-4">
           <div className="text-xl text-white">Sign in required</div>
-          <div className="text-sm text-zinc-400">Connect wallet and complete Sign in to manage your email and connected accounts.</div>
+          <div className="text-sm text-zinc-400">Sign in to manage your email and connected accounts.</div>
           <Button
             variant="primary"
             size="lg"

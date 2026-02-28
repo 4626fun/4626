@@ -895,7 +895,7 @@ export function Vault() {
               {/* Action Button */}
               {!isConnected ? (
                 <div className="space-y-4">
-                  <span className="label block">Connect Required</span>
+                  <span className="label block">Sign in required</span>
                   <ConnectButton />
                 </div>
               ) : needsApproval ? (

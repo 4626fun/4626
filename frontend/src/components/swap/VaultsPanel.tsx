@@ -107,7 +107,7 @@ export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainI
           {effectiveTab === 'mine'
             ? currentAddress
               ? 'No vault positions found for this wallet yet.'
-              : 'Connect your wallet to see vaults tied to your creator profile.'
+              : 'Sign in to see vaults tied to your creator profile.'
             : 'No featured vaults yet.'}
         </div>
       ) : (

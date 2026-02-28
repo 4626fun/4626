@@ -269,9 +269,9 @@ export function CompleteAuction() {
           <div className="w-16 h-16 rounded-2xl bg-brand-500/10 flex items-center justify-center mx-auto">
             <Wallet className="w-8 h-8 text-brand-500" />
           </div>
-          <h2 className="font-display text-2xl font-bold">Connect Your Wallet</h2>
+          <h2 className="font-display text-2xl font-bold">Sign In</h2>
           <p className="text-surface-400">
-            Connect your wallet to complete your auction
+            Sign in to complete your auction
           </p>
           <ConnectButton />
         </motion.div>
