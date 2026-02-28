@@ -154,6 +154,11 @@ contract SeedUniversalBytecodeStore is Script {
                 store, vm.getCode("out/AjnaStrategy.sol/AjnaStrategy.json"), "AjnaStrategy", supportsChunking
             );
         }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(
+                store, vm.getCode("out/SolanaStrategy.sol/SolanaStrategy.json"), "SolanaStrategy", supportsChunking
+            );
+        }
         vm.stopBroadcast();
     }
 

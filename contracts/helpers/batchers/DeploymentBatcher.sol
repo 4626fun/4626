@@ -244,6 +244,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         bytes32 charmAlphaVaultDeploy;
         bytes32 creatorCharmStrategy;
         bytes32 ajnaStrategy;
+        bytes32 solanaStrategy;
     }
 
     struct Phase3Params {
@@ -258,6 +259,12 @@ contract DeploymentBatcher is ReentrancyGuard {
         string charmVaultSymbol;
         uint256 charmWeightBps;
         uint256 ajnaWeightBps;
+        uint256 solanaWeightBps;
+        address solanaKeeper;
+        uint64 solanaMaxNavAge;
+        uint16 solanaMaxNavDeltaBpsPerUpdate;
+        uint16 solanaMinBaseLiquidityBps;
+        address solanaBridgeAddress;
         bool enableAutoAllocate;
     }
 
@@ -266,6 +273,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         address charmVault;
         address charmStrategy;
         address ajnaStrategy;
+        address solanaStrategy;
     }
 
     error ZeroAddress();
@@ -375,8 +383,10 @@ contract DeploymentBatcher is ReentrancyGuard {
         address charmVault,
         address charmStrategy,
         address ajnaStrategy,
+        address solanaStrategy,
         uint256 charmWeightBps,
-        uint256 ajnaWeightBps
+        uint256 ajnaWeightBps,
+        uint256 solanaWeightBps
     );
 
     event CreatorShareVestingDeployed(
@@ -909,12 +919,17 @@ contract DeploymentBatcher is ReentrancyGuard {
         }
         if (params.charmWeightBps == 0 || params.charmWeightBps > 10_000) revert InvalidWeight();
         if (params.ajnaWeightBps > 10_000) revert InvalidWeight();
-        if (params.charmWeightBps + params.ajnaWeightBps > 10_000) revert InvalidWeight();
+        if (params.solanaWeightBps > 10_000) revert InvalidWeight();
+        if (params.charmWeightBps + params.ajnaWeightBps + params.solanaWeightBps > 10_000) revert InvalidWeight();
 
         if (codeIds.charmAlphaVaultDeploy == bytes32(0) || codeIds.creatorCharmStrategy == bytes32(0)) {
             revert InvalidCodeId();
         }
         if (params.ajnaWeightBps > 0 && codeIds.ajnaStrategy == bytes32(0)) revert InvalidCodeId();
+        if (params.solanaWeightBps > 0 && codeIds.solanaStrategy == bytes32(0)) revert InvalidCodeId();
+        if (params.solanaWeightBps > 0 && (params.solanaKeeper == address(0) || params.solanaBridgeAddress == address(0))) {
+            revert ZeroAddress();
+        }
 
         // ───────────────────────────────
         // 1) Ensure CREATOR/USDC V3 pool exists (0.3% fee)
@@ -970,11 +985,33 @@ contract DeploymentBatcher is ReentrancyGuard {
         }
 
         // ───────────────────────────────
+        // 4b) Deploy Solana strategy (optional) + transfer ownership
+        // ───────────────────────────────
+        if (params.solanaWeightBps > 0) {
+            bytes32 solanaSalt = _saltFor(baseSalt, "solanaStrategy");
+            bytes memory solanaArgs = abi.encode(
+                params.vault,
+                params.creatorToken,
+                address(this),
+                params.solanaKeeper,
+                params.solanaMaxNavAge,
+                params.solanaMaxNavDeltaBpsPerUpdate,
+                params.solanaMinBaseLiquidityBps,
+                params.solanaBridgeAddress
+            );
+            out.solanaStrategy = create2Deployer.deploy(solanaSalt, codeIds.solanaStrategy, solanaArgs);
+            IOwnableTransfer(out.solanaStrategy).transferOwnership(protocolTreasury);
+        }
+
+        // ───────────────────────────────
         // 5) Register strategies on the vault (batcher remains `management` from Phase 1)
         // ───────────────────────────────
         ICreatorOVaultStrategyManager(params.vault).addStrategy(out.charmStrategy, params.charmWeightBps);
         if (params.ajnaWeightBps > 0) {
             ICreatorOVaultStrategyManager(params.vault).addStrategy(out.ajnaStrategy, params.ajnaWeightBps);
+        }
+        if (params.solanaWeightBps > 0) {
+            ICreatorOVaultStrategyManager(params.vault).addStrategy(out.solanaStrategy, params.solanaWeightBps);
         }
         if (params.enableAutoAllocate) {
             ICreatorOVaultStrategyManager(params.vault).setAutoAllocate(true);
@@ -988,8 +1025,10 @@ contract DeploymentBatcher is ReentrancyGuard {
             out.charmVault,
             out.charmStrategy,
             out.ajnaStrategy,
+            out.solanaStrategy,
             params.charmWeightBps,
-            params.ajnaWeightBps
+            params.ajnaWeightBps,
+            params.solanaWeightBps
         );
     }
 

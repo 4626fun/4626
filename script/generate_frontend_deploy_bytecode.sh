@@ -51,6 +51,7 @@ printf "  PayoutRouter: '0x' + '%s',\n" "$(bytecode PayoutRouter)" >>"$OUT_FILE"
 printf "  VaultShareBurnStream: '0x' + '%s',\n" "$(bytecode VaultShareBurnStream)" >>"$OUT_FILE"
 printf "  CreatorCharmStrategy: '0x' + '%s',\n" "$(bytecode CreatorCharmStrategy)" >>"$OUT_FILE"
 printf "  AjnaStrategy: '0x' + '%s',\n" "$(bytecode AjnaStrategy)" >>"$OUT_FILE"
+printf "  SolanaStrategy: '0x' + '%s',\n" "$(bytecode SolanaStrategy)" >>"$OUT_FILE"
 
 cat >>"$OUT_FILE" <<'EOF'
 } as const;

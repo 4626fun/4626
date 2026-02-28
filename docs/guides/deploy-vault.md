@@ -104,12 +104,12 @@ cast call 0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13 \
   --rpc-url "$BASE_RPC_URL"
 ```
 
-4. Optional Solana routing (required if you want the 20% Solana split to bridge instead of vesting fallback):
+4. Optional Solana bridge config (used by `SolanaStrategy` in Phase 3):
 
 ```bash
 export PRIVATE_KEY=... # must be protocolTreasury for setSolanaConfig
 export BASE_RPC_URL=https://mainnet.base.org
-export CREATOR_VAULT_BATCHER=0xB87CBb646dD14F520078F11196f79BF815F18c84
+export DEPLOYMENT_BATCHER=0xB87CBb646dD14F520078F11196f79BF815F18c84
 export SOLANA_BRIDGE_ADAPTER=0x2414b595c4f18532A5836B6e2E6d536832c572e8
 export SOLANA_DESTINATION=0x<32-byte-solana-pubkey>
 export SET_BATCHER_SOLANA_CONFIG=1
@@ -121,6 +121,22 @@ forge script script/AuthorizeSolanaAdapter.s.sol:AuthorizeSolanaAdapter \
 
 Optional keeper setup (same script):
 - set `SOLANA_KEEPER_PUBKEY=0x<32-byte-solana-pubkey>` before running.
+
+### Phase-3 strategy model (current)
+
+Phase 3 now uses a three-strategy accounting model on `CreatorOVault`:
+
+- Charm strategy: `30%` (`3_000` bps)
+- Ajna strategy: `30%` (`3_000` bps)
+- SolanaStrategy: `30%` (`3_000` bps)
+- Idle reserve: `10%` (`1_000` bps via `setMinimumTotalIdle`)
+
+`SolanaStrategy` is a Base-side strategy adapter with keeper-reported remote NAV:
+
+- `solanaMaxNavAge` bounds how old reported NAV can be before valuation is ignored.
+- `solanaMaxNavDeltaBpsPerUpdate` limits per-update NAV jumps (circuit breaker).
+- `solanaMinBaseLiquidityBps` enforces a Base liquidity floor during rebalances.
+- Withdrawals remain synchronous on Base (strategy only withdraws available Base liquidity).
 
 Vercel cutover order:
 
@@ -170,10 +186,14 @@ Fix: add the EOA as an owner first (one-time). After that, deploys can use the 1
 ## Via Script
 
 ```bash
-forge script script/DeployInfrastructure.s.sol:DeployVaultStack \
+forge script script/DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer \
   --rpc-url $BASE_RPC_URL \
   --broadcast \
   --verify
+
+forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore \
+  --rpc-url $BASE_RPC_URL \
+  --broadcast
 ```
 
 ## Post-Deployment Configuration

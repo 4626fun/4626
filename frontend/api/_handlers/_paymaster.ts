@@ -512,6 +512,12 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
           { name: 'charmVaultSymbol', type: 'string' },
           { name: 'charmWeightBps', type: 'uint256' },
           { name: 'ajnaWeightBps', type: 'uint256' },
+          { name: 'solanaWeightBps', type: 'uint256' },
+          { name: 'solanaKeeper', type: 'address' },
+          { name: 'solanaMaxNavAge', type: 'uint64' },
+          { name: 'solanaMaxNavDeltaBpsPerUpdate', type: 'uint16' },
+          { name: 'solanaMinBaseLiquidityBps', type: 'uint16' },
+          { name: 'solanaBridgeAddress', type: 'address' },
           { name: 'enableAutoAllocate', type: 'bool' },
         ],
       },
@@ -522,6 +528,7 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
           { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
           { name: 'creatorCharmStrategy', type: 'bytes32' },
           { name: 'ajnaStrategy', type: 'bytes32' },
+          { name: 'solanaStrategy', type: 'bytes32' },
         ],
       },
     ],
@@ -1130,16 +1137,6 @@ function abiEncodeAddresses(addrs: Address[]): Hex {
   return out as Hex
 }
 
-const BYTECODE_STORE_GET_ABI = [
-  {
-    type: 'function',
-    name: 'get',
-    stateMutability: 'view',
-    inputs: [{ name: 'codeId', type: 'bytes32' }],
-    outputs: [{ name: 'creationCode', type: 'bytes' }],
-  },
-] as const
-
 const _creationCodeCache: Map<string, Hex> = new Map()
 
 async function getCreationCodeFromStore(params: { store: Address; codeId: Hex }): Promise<Hex> {
@@ -1149,7 +1146,7 @@ async function getCreationCodeFromStore(params: { store: Address; codeId: Hex })
   const client = await getBaseClient()
   const code = (await client.readContract({
     address: params.store,
-    abi: BYTECODE_STORE_GET_ABI,
+    abi: BYTECODE_STORE_ABI,
     functionName: 'get',
     args: [params.codeId],
   })) as Hex
