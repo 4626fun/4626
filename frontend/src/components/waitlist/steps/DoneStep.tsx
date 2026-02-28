@@ -168,7 +168,7 @@ function AddrRow({ label, address, accent, icon }: {
       accent ? 'border border-brand-primary/20 bg-brand-primary/6' : 'border border-white/8 bg-black/15',
     ].join(' ')}>
       {icon && <span className="shrink-0">{icon}</span>}
-      <span className={['text-[11px] font-medium shrink-0 w-[80px]', accent ? 'text-brand-300' : 'text-zinc-500'].join(' ')}>
+      <span className={['text-[11px] font-medium shrink-0 w-[80px]', accent ? 'text-brand-300' : 'text-zinc-300'].join(' ')}>
         {label}
       </span>
       <span className={['font-mono text-[12px] flex-1 truncate min-w-0', accent ? 'text-white' : 'text-zinc-200'].join(' ')}>
@@ -328,7 +328,7 @@ function WaitlistedCta({
       <div className="rounded-2xl border border-white/8 bg-white/2 p-3">
         <div className="flex items-center gap-3">
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] font-medium text-zinc-500 mb-0.5">Your referral link</div>
+            <div className="text-[10px] font-medium text-zinc-300 mb-0.5">Your referral link</div>
             <div className="font-mono text-[12px] text-zinc-300 truncate">{referralLink}</div>
           </div>
           <button
@@ -708,7 +708,7 @@ export const DoneStep = memo(function DoneStep({
               {referralCode && (
                 <div className="flex items-center gap-2 rounded-xl border border-white/6 bg-white/2 px-3 py-2">
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] text-zinc-500 mb-0.5">Share with friends</div>
+                    <div className="text-[10px] text-zinc-300 mb-0.5">Share with friends</div>
                     <div className="font-mono text-[11px] text-zinc-400 truncate">{referralLink}</div>
                   </div>
                   <button type="button" onClick={onCopyReferral} className="shrink-0 p-1.5 rounded-lg hover:bg-white/8 transition-colors">

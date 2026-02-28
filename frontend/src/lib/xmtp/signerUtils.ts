@@ -53,9 +53,10 @@ export function decideXmtpSignerType(params: {
     return { signerType: 'SCW', scwChainId: CANONICAL_SCW_CHAIN_ID }
   }
 
-  if (params.storedSignerType === 'SCW' && resolvedSmartWalletContract) {
+  if (params.storedSignerType === 'SCW') {
     // If this identity was previously registered as SCW, keep it stable to
-    // avoid XMTP "Wrong chain id" errors during identity updates.
+    // avoid XMTP "Wrong chain id" errors during identity updates/revocations.
+    // EOA signer does not pass chain id; API receives 0 and rejects.
     return { signerType: 'SCW', scwChainId: CANONICAL_SCW_CHAIN_ID }
   }
 
