@@ -7,8 +7,17 @@ import { useAccount, usePublicClient, useSignMessage } from 'wagmi'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useFarcasterAuth } from '@/hooks/useFarcasterAuth'
 import { isPrivyClientEnabled } from '@/lib/flags'
-import { usePrivyClientStatus } from '@/lib/privy/client'
-import { toViemAccount, useBaseAccountSdk, useConnectWallet, useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
+import { usePrivyClientStatus, ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
+import {
+  toViemAccount,
+  useBaseAccountSdk,
+  useConnectWallet,
+  useCreateWallet,
+  useCrossAppAccounts,
+  useLogin,
+  usePrivy,
+  useWallets,
+} from '@privy-io/react-auth'
 import { base } from 'wagmi/chains'
 import { getAddress, isAddress } from 'viem'
 import { useMiniAppContext } from '@/hooks'
@@ -30,6 +39,11 @@ import { useWaitlistApi } from './useWaitlistApi'
 import { useWaitlistVerification } from './useWaitlistVerification'
 import { useWaitlistReferral, getStoredReferralCode } from './useWaitlistReferral'
 import { resolveDoneStepDeployAccessState } from './_waitlistDeployAccess'
+import {
+  deriveOwnerInstallMappingStatus,
+  extractZoraCrossAppAccounts,
+  extractZoraProviderAddresses,
+} from './ownerInstallMapping'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const EVM_RE = /^0x[a-fA-F0-9]{40}$/
@@ -122,11 +136,39 @@ function useSafeLoginHook(options: any, enabled: boolean) {
 function useSafeWalletsHook(enabled: boolean) {
   try {
     const value = useWallets() as any
-    if (!enabled) return { wallets: [] } as any
+    if (!enabled) return { wallets: [], ready: false } as any
     return value
   } catch (error) {
     warnPrivyHookFailure('useWallets', error)
-    return { wallets: [] } as any
+    return { wallets: [], ready: false } as any
+  }
+}
+
+function useSafeCreateWalletHook(enabled: boolean) {
+  try {
+    const value = useCreateWallet() as any
+    if (!enabled) return { createWallet: async () => null } as any
+    return value
+  } catch (error) {
+    warnPrivyHookFailure('useCreateWallet', error)
+    return { createWallet: async () => null } as any
+  }
+}
+
+function useSafeCrossAppAccountsHook(enabled: boolean) {
+  try {
+    const value = useCrossAppAccounts() as any
+    if (!enabled) {
+      return {
+        loginWithCrossAppAccount: null as null | ((args: { appId: string }) => Promise<unknown>),
+      } as any
+    }
+    return value
+  } catch (error) {
+    warnPrivyHookFailure('useCrossAppAccounts', error)
+    return {
+      loginWithCrossAppAccount: null as null | ((args: { appId: string }) => Promise<unknown>),
+    } as any
   }
 }
 
@@ -205,6 +247,12 @@ const initialWaitlistState: WaitlistState = {
   shareToast: null,
   actionsDone: { ...EMPTY_ACTION_STATE },
   miniAppAddSupported: null,
+  embeddedEoaAddress: null,
+  zoraProviderAddresses: [],
+  canonicalZoraCswAddress: null,
+  canonicalZoraCswUnresolvedReason: null,
+  mappingStatus: 'NEEDS_PRIVY_AUTH',
+  mappingError: null,
   // CSW linking status
   cswLinked: false,
   cswLinkBusy: false,
@@ -560,6 +608,12 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     referralCode,
     actionsDone,
     waitlistPosition,
+    embeddedEoaAddress: embeddedEoaAddressFromState,
+    zoraProviderAddresses,
+    canonicalZoraCswAddress,
+    canonicalZoraCswUnresolvedReason,
+    mappingStatus,
+    mappingError,
     cswProofVerified,
     cswProofBusy,
     cswProofError,
@@ -579,7 +633,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     ready: privyReady,
     authenticated: privyAuthed,
     user: privyUser,
-    logout: privyLogout,
     linkWallet: privyLinkWallet,
     getAccessToken,
   } = useSafePrivyHook(privyHooksEnabled)
@@ -614,8 +667,11 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       setPrivyVerifyError(msg)
     },
   }, privyHooksEnabled)
-  const { wallets: privyWallets } = useSafeWalletsHook(privyHooksEnabled)
+  const { wallets: privyWallets, ready: privyWalletsReady } = useSafeWalletsHook(privyHooksEnabled)
+  const { createWallet: privyCreateWallet } = useSafeCreateWalletHook(privyHooksEnabled)
+  const { loginWithCrossAppAccount } = useSafeCrossAppAccountsHook(privyHooksEnabled)
   const { baseAccountSdk } = useSafeBaseAccountSdkHook(privyHooksEnabled)
+  const walletsReady = typeof privyWalletsReady === 'boolean' ? privyWalletsReady : true
 
   // Wallet type detection can vary across Privy SDK versions/contexts.
   // Mirror deploy hardening: look across multiple fields and use substring matches.
@@ -665,6 +721,96 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     const raw = typeof baseAccountWallet?.address === 'string' ? baseAccountWallet.address : ''
     return isValidEvmAddress(raw) ? raw : null
   }, [baseAccountWallet?.address])
+  const [embeddedWalletCreateBusy, setEmbeddedWalletCreateBusy] = useState(false)
+  const [zoraLinkBusy, setZoraLinkBusy] = useState(false)
+  const [canonicalResolveBusy, setCanonicalResolveBusy] = useState(false)
+  const pendingEmbeddedCreateRef = useRef(false)
+  const canonicalResolveAttemptKeyRef = useRef<string | null>(null)
+
+  const zoraCrossAppAccounts = useMemo(
+    () => extractZoraCrossAppAccounts(privyUser, ZORA_PRIVY_APP_ID),
+    [privyUser],
+  )
+  const zoraAddressSet = useMemo(
+    () => extractZoraProviderAddresses(zoraCrossAppAccounts),
+    [zoraCrossAppAccounts],
+  )
+  const zoraReadOnlyLinked = zoraCrossAppAccounts.length > 0
+
+  const createEmbeddedWallet = useCallback(async () => {
+    if (embeddedWalletCreateBusy) return
+    if (embeddedWalletAddress) return
+    if (!privyAuthed) {
+      setPrivyVerifyError('Continue with Privy before creating your wallet.')
+      return
+    }
+    if (!walletsReady) {
+      setPrivyVerifyError('Wallets are still loading. Please wait a moment and retry.')
+      return
+    }
+    if (typeof privyCreateWallet !== 'function') {
+      setPrivyVerifyError('Wallet creation is unavailable in this session. Please refresh and retry.')
+      return
+    }
+
+    console.info('[waitlist][privy] embedded missing, creating...')
+    pendingEmbeddedCreateRef.current = true
+    setEmbeddedWalletCreateBusy(true)
+    patchWaitlist({ mappingError: null })
+    try {
+      try {
+        await privyCreateWallet({ chainType: 'ethereum' } as any)
+      } catch {
+        await privyCreateWallet()
+      }
+    } catch (e: any) {
+      pendingEmbeddedCreateRef.current = false
+      const msg = e?.message ? String(e.message) : 'Wallet creation failed. Please retry.'
+      patchWaitlist({ mappingError: msg })
+      setPrivyVerifyError(msg)
+    } finally {
+      setEmbeddedWalletCreateBusy(false)
+    }
+  }, [
+    embeddedWalletAddress,
+    embeddedWalletCreateBusy,
+    patchWaitlist,
+    privyAuthed,
+    privyCreateWallet,
+    walletsReady,
+    setPrivyVerifyError,
+  ])
+
+  const linkZoraReadOnly = useCallback(async () => {
+    if (zoraLinkBusy) return
+    if (!embeddedWalletAddress) {
+      patchWaitlist({ mappingError: 'Create your embedded wallet first.' })
+      return
+    }
+    if (typeof loginWithCrossAppAccount !== 'function') {
+      patchWaitlist({ mappingError: 'Zora linking is unavailable in this session. Please refresh and retry.' })
+      return
+    }
+
+    console.info('[waitlist][zora] linking start')
+    setZoraLinkBusy(true)
+    patchWaitlist({ mappingError: null })
+    try {
+      await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+    } catch (e: any) {
+      const msg = e?.message ? String(e.message) : 'Zora linking was cancelled. Please retry.'
+      patchWaitlist({ mappingError: msg })
+      setPrivyVerifyError(msg)
+    } finally {
+      setZoraLinkBusy(false)
+    }
+  }, [
+    embeddedWalletAddress,
+    loginWithCrossAppAccount,
+    patchWaitlist,
+    setPrivyVerifyError,
+    zoraLinkBusy,
+  ])
 
   const ensureBaseSubAccount = useCallback(async () => {
     if (!embeddedWallet || !embeddedWalletAddress) return
@@ -832,41 +978,22 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     if (typeof window !== 'undefined') {
       window.setTimeout(() => finishPrivyVerify(), 12_000)
     }
-    if (privyAuthed && !embeddedWalletAddress) {
-      startPrivyVerify()
-      try {
-        if (typeof privyLogout === 'function') {
-          try {
-            await privyLogout()
-          } catch {
-            // ignore
-          }
-        }
-        // Allow users who started with email/X to retry in the same flow.
-        await privyLogin({ loginMethods: ['wallet', 'email', 'twitter'] })
-      } catch (e: any) {
-        const msg = formatPrivyConnectError(e?.message ? String(e.message) : String(e ?? ''))
-        setPrivyVerifyError(msg)
-        finishPrivyVerify()
-      }
+    if (privyAuthed) {
+      handlePrivyContinue()
       return
     }
     handlePrivyContinue()
   }, [
     connectedAddressRaw,
-    embeddedWalletAddress,
     finishPrivyVerify,
     handlePrivyContinue,
     privyAuthed,
-    privyLogin,
-    privyLogout,
     privyReady,
     privyVerifyBusy,
     showPrivy,
     showPrivyReady,
     siwe,
     setPrivyVerifyError,
-    startPrivyVerify,
     verifyWallet,
   ])
 
@@ -931,7 +1058,33 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     const raw = typeof zoraProfileSmartWalletAddress === 'string' ? zoraProfileSmartWalletAddress : ''
     return isAddress(raw) ? (getAddress(raw) as any) : null
   }, [zoraProfileSmartWalletAddress])
-  const effectiveCswAddress = cswAddress || coinbaseSmartWalletAddress
+  const knownCanonicalCswAddress = cswAddress || coinbaseSmartWalletAddress
+  const effectiveCswAddress = canonicalZoraCswAddress || knownCanonicalCswAddress
+  const ownerInstallStatus = useMemo(
+    () =>
+      deriveOwnerInstallMappingStatus({
+        privyAuthed: Boolean(privyAuthed),
+        walletsReady: Boolean(walletsReady),
+        embeddedEoaAddress: embeddedWalletAddress || embeddedEoaAddressFromState,
+        embeddedWalletCreating: embeddedWalletCreateBusy,
+        zoraLinked: zoraReadOnlyLinked,
+        zoraLinking: zoraLinkBusy,
+        canonicalZoraCswAddress,
+        canonicalResolving: canonicalResolveBusy,
+      }),
+    [
+      canonicalResolveBusy,
+      canonicalZoraCswAddress,
+      embeddedWalletAddress,
+      embeddedEoaAddressFromState,
+      embeddedWalletCreateBusy,
+      privyAuthed,
+      walletsReady,
+      zoraLinkBusy,
+      zoraReadOnlyLinked,
+    ],
+  )
+  const ownerInstallReady = ownerInstallStatus === 'READY_FOR_OWNER_INSTALL'
   const ownerWalletsNormalized = useMemo(() => {
     const seen = new Set<string>()
     const out: string[] = []
@@ -971,7 +1124,294 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     payoutRecipientNormalized,
     verifiedWalletNormalized,
   ])
-  const canSubmit = emailOk && (Boolean(creatorCoin?.address) || creatorCoinDeclaredMissing) && connectedWalletAuthorized
+  const canSubmit =
+    ownerInstallReady && emailOk && (Boolean(creatorCoin?.address) || creatorCoinDeclaredMissing) && connectedWalletAuthorized
+  const privyAuthedLogRef = useRef(false)
+  const privyWalletReadyLogRef = useRef(false)
+  const embeddedFoundLogRef = useRef<string | null>(null)
+  const zoraLinkSuccessLogRef = useRef(false)
+  const zoraProviderLogKeyRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!privyAuthed) {
+      privyAuthedLogRef.current = false
+      return
+    }
+    if (privyAuthedLogRef.current) return
+    privyAuthedLogRef.current = true
+    console.info('[waitlist][privy] authed')
+  }, [privyAuthed])
+
+  useEffect(() => {
+    if (!privyAuthed || !walletsReady) {
+      privyWalletReadyLogRef.current = false
+      return
+    }
+    if (privyWalletReadyLogRef.current) return
+    privyWalletReadyLogRef.current = true
+    console.info('[waitlist][privy] wallets ready')
+  }, [privyAuthed, walletsReady])
+
+  useEffect(() => {
+    const normalized = embeddedWalletAddress ? embeddedWalletAddress.toLowerCase() : null
+    if (!normalized) {
+      embeddedFoundLogRef.current = null
+      return
+    }
+    if (embeddedFoundLogRef.current !== normalized) {
+      embeddedFoundLogRef.current = normalized
+      console.info(`[waitlist][privy] embedded found ${normalized}`)
+    }
+    if (pendingEmbeddedCreateRef.current) {
+      pendingEmbeddedCreateRef.current = false
+      console.info(`[waitlist][privy] embedded created ${normalized}`)
+    }
+  }, [embeddedWalletAddress])
+
+  useEffect(() => {
+    if (mappingStatus !== ownerInstallStatus) {
+      patchWaitlist({ mappingStatus: ownerInstallStatus })
+    }
+  }, [mappingStatus, ownerInstallStatus, patchWaitlist])
+
+  useEffect(() => {
+    const next = embeddedWalletAddress ? embeddedWalletAddress.toLowerCase() : null
+    if (embeddedEoaAddressFromState === next) return
+    patchWaitlist({ embeddedEoaAddress: next })
+  }, [embeddedEoaAddressFromState, embeddedWalletAddress, patchWaitlist])
+
+  useEffect(() => {
+    const next = zoraReadOnlyLinked ? zoraAddressSet.providerAddresses : []
+    const changed =
+      zoraProviderAddresses.length !== next.length ||
+      zoraProviderAddresses.some((value, index) => value !== next[index])
+    if (changed) {
+      patchWaitlist({ zoraProviderAddresses: next })
+    }
+
+    if (!zoraReadOnlyLinked) {
+      zoraLinkSuccessLogRef.current = false
+      zoraProviderLogKeyRef.current = null
+      return
+    }
+    if (!zoraLinkSuccessLogRef.current) {
+      zoraLinkSuccessLogRef.current = true
+      console.info('[waitlist][zora] linking success')
+    }
+    const key = next.join(',')
+    if (zoraProviderLogKeyRef.current === key) return
+    zoraProviderLogKeyRef.current = key
+    console.info(`[waitlist][zora] provider addresses ${JSON.stringify(next)}`)
+  }, [patchWaitlist, zoraAddressSet.providerAddresses, zoraProviderAddresses, zoraReadOnlyLinked])
+
+  useEffect(() => {
+    if (zoraReadOnlyLinked && embeddedWalletAddress) return
+    canonicalResolveAttemptKeyRef.current = null
+    if (!canonicalZoraCswAddress && !canonicalZoraCswUnresolvedReason) return
+    patchWaitlist({
+      canonicalZoraCswAddress: null,
+      canonicalZoraCswUnresolvedReason: null,
+    })
+  }, [
+    canonicalZoraCswAddress,
+    canonicalZoraCswUnresolvedReason,
+    embeddedWalletAddress,
+    patchWaitlist,
+    zoraReadOnlyLinked,
+  ])
+
+  const isContractAddress = useCallback(
+    async (candidate: string): Promise<boolean> => {
+      if (!publicClient) return false
+      try {
+        const code = await publicClient.getBytecode({ address: getAddress(candidate) as any })
+        return Boolean(code && code !== '0x')
+      } catch {
+        return false
+      }
+    },
+    [publicClient],
+  )
+
+  const resolveCanonicalZoraCsw = useCallback(async () => {
+    if (!zoraReadOnlyLinked || !embeddedWalletAddress) return
+    setCanonicalResolveBusy(true)
+    patchWaitlist({ mappingError: null, canonicalZoraCswUnresolvedReason: null })
+    try {
+      const smartCandidates = Array.from(
+        new Set(
+          [
+            ...zoraAddressSet.smartWalletAddresses,
+            ...(knownCanonicalCswAddress && isValidEvmAddress(knownCanonicalCswAddress)
+              ? [knownCanonicalCswAddress.toLowerCase()]
+              : []),
+          ].filter((value) => isValidEvmAddress(String(value || ''))),
+        ),
+      )
+      const providerCandidates = Array.from(
+        new Set(
+          zoraAddressSet.providerAddresses.filter((value) => isValidEvmAddress(String(value || ''))),
+        ),
+      )
+
+      let resolved: string | null = null
+      if (publicClient) {
+        for (const candidate of [...smartCandidates, ...providerCandidates]) {
+          if (!(await isContractAddress(candidate))) continue
+          resolved = getAddress(candidate).toLowerCase()
+          break
+        }
+      } else if (smartCandidates.length > 0) {
+        resolved = getAddress(smartCandidates[0]).toLowerCase()
+      }
+
+      if (!resolved && knownCanonicalCswAddress && isValidEvmAddress(knownCanonicalCswAddress)) {
+        resolved = getAddress(knownCanonicalCswAddress).toLowerCase()
+      }
+
+      if (resolved) {
+        patchWaitlist({
+          canonicalZoraCswAddress: resolved,
+          canonicalZoraCswUnresolvedReason: null,
+        })
+        console.info(`[waitlist][zora] canonical csw resolved ${resolved}`)
+        return
+      }
+
+      const reason =
+        'No canonical smart wallet found from linked Zora provider accounts. TODO: add deterministic factory derivation fallback.'
+      patchWaitlist({
+        canonicalZoraCswAddress: null,
+        canonicalZoraCswUnresolvedReason: reason,
+      })
+      console.warn(`[waitlist][zora] canonical csw unresolved ${reason}`)
+    } finally {
+      setCanonicalResolveBusy(false)
+    }
+  }, [
+    embeddedWalletAddress,
+    isContractAddress,
+    knownCanonicalCswAddress,
+    patchWaitlist,
+    publicClient,
+    zoraAddressSet.providerAddresses,
+    zoraAddressSet.smartWalletAddresses,
+    zoraReadOnlyLinked,
+  ])
+
+  useEffect(() => {
+    if (step !== 'verify') return
+    if (!privyAuthed || !walletsReady) return
+    if (!embeddedWalletAddress || !zoraReadOnlyLinked) return
+
+    const key = [
+      embeddedWalletAddress.toLowerCase(),
+      zoraAddressSet.providerAddresses.join(','),
+      String(knownCanonicalCswAddress || '').toLowerCase(),
+    ].join('|')
+
+    if (
+      canonicalResolveAttemptKeyRef.current === key &&
+      (Boolean(canonicalZoraCswAddress) || Boolean(canonicalZoraCswUnresolvedReason))
+    ) {
+      return
+    }
+
+    canonicalResolveAttemptKeyRef.current = key
+    void resolveCanonicalZoraCsw()
+  }, [
+    canonicalZoraCswAddress,
+    canonicalZoraCswUnresolvedReason,
+    embeddedWalletAddress,
+    knownCanonicalCswAddress,
+    privyAuthed,
+    walletsReady,
+    resolveCanonicalZoraCsw,
+    step,
+    zoraAddressSet.providerAddresses,
+    zoraReadOnlyLinked,
+  ])
+
+  const retryCanonicalResolution = useCallback(() => {
+    canonicalResolveAttemptKeyRef.current = null
+    void resolveCanonicalZoraCsw()
+  }, [resolveCanonicalZoraCsw])
+
+  const ownerInstallGate = useMemo(() => {
+    switch (ownerInstallStatus) {
+      case 'NEEDS_PRIVY_AUTH':
+        return {
+          ctaLabel: 'Continue with Privy',
+          helper: 'Sign in to start wallet setup.',
+          onAction: openInAppPrivyLogin,
+          busy: false,
+        } as const
+      case 'WAITING_FOR_WALLETS':
+        return {
+          ctaLabel: null,
+          helper: 'Preparing your wallets...',
+          onAction: null,
+          busy: true,
+        } as const
+      case 'EMBEDDED_WALLET_MISSING':
+        return {
+          ctaLabel: 'Create wallet',
+          helper: 'Create your embedded signer wallet to continue.',
+          onAction: createEmbeddedWallet,
+          busy: false,
+        } as const
+      case 'EMBEDDED_WALLET_CREATING':
+        return {
+          ctaLabel: null,
+          helper: 'Creating embedded wallet...',
+          onAction: null,
+          busy: true,
+        } as const
+      case 'ZORA_LINK_REQUIRED':
+        return {
+          ctaLabel: 'Link Zora wallet (read-only)',
+          helper: 'Link your Zora Global Wallet so we can map your canonical smart wallet.',
+          onAction: linkZoraReadOnly,
+          busy: false,
+        } as const
+      case 'ZORA_LINKING':
+        return {
+          ctaLabel: null,
+          helper: 'Waiting for Zora linking...',
+          onAction: null,
+          busy: true,
+        } as const
+      case 'CANONICAL_RESOLVING':
+        return {
+          ctaLabel: null,
+          helper: 'Resolving Zora wallet...',
+          onAction: null,
+          busy: true,
+        } as const
+      case 'CANONICAL_UNRESOLVED':
+        return {
+          ctaLabel: 'Retry resolve',
+          helper: canonicalZoraCswUnresolvedReason || 'Unable to resolve your canonical Zora smart wallet.',
+          onAction: retryCanonicalResolution,
+          busy: false,
+        } as const
+      case 'READY_FOR_OWNER_INSTALL':
+      default:
+        return {
+          ctaLabel: null,
+          helper: 'Wallet mapping complete.',
+          onAction: null,
+          busy: false,
+        } as const
+    }
+  }, [
+    canonicalZoraCswUnresolvedReason,
+    createEmbeddedWallet,
+    linkZoraReadOnly,
+    openInAppPrivyLogin,
+    ownerInstallStatus,
+    retryCanonicalResolution,
+  ])
 
   useEffect(() => {
     if (!verifiedWalletNormalized) return
@@ -990,10 +1430,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   }, [connectedWalletAuthorized, creatorCoin?.address, ownershipEvidenceAvailable, verifiedWalletNormalized])
   const cswMismatch = useMemo(() => {
     const a = String(coinbaseSmartWalletAddress || '').trim().toLowerCase()
-    const b = String(cswAddress || '').trim().toLowerCase()
+    const b = String(effectiveCswAddress || '').trim().toLowerCase()
     if (!a || !b) return false
     return a !== b
-  }, [coinbaseSmartWalletAddress, cswAddress])
+  }, [coinbaseSmartWalletAddress, effectiveCswAddress])
   const siweCswOwnershipAttestation = useMemo(() => {
     const claim = siwe.cswOwnership
     if (!claim || claim.verified !== true) return null
@@ -1353,6 +1793,9 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   function buildVerifications(): VerificationClaim[] {
     const ts = new Date().toISOString()
     const out: VerificationClaim[] = []
+    if (embeddedEoaAddressFromState && isValidEvmAddress(embeddedEoaAddressFromState)) {
+      out.push({ method: 'privy-embedded-eoa', subject: embeddedEoaAddressFromState, timestamp: ts })
+    }
     if (verifiedWallet && isValidEvmAddress(verifiedWallet)) {
       out.push({ method: verifiedWalletMethod ?? 'siwe', subject: verifiedWallet, timestamp: ts })
     }
@@ -1364,6 +1807,13 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     }
     if (siweCswOwnershipAttestation) {
       out.push({ method: 'siwe-csw-owner', subject: siweCswOwnershipAttestation.cswAddress, timestamp: ts })
+    }
+    for (const address of zoraProviderAddresses) {
+      if (!isValidEvmAddress(address)) continue
+      out.push({ method: 'privy-zora-readonly', subject: address, timestamp: ts })
+    }
+    if (canonicalZoraCswAddress && isValidEvmAddress(canonicalZoraCswAddress)) {
+      out.push({ method: 'zora-canonical-csw', subject: canonicalZoraCswAddress, timestamp: ts })
     }
     // Include CSW ERC-1271 ownership proof if verified
     if (cswProofUiEnabled && cswProofVerified && effectiveCswAddress) {
@@ -1933,6 +2383,16 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     canSubmit={canSubmit}
                     simpleVerifiedMode
                     submitError={submitError}
+                    mappingStatus={mappingStatus}
+                    embeddedEoaAddress={embeddedEoaAddressFromState}
+                    zoraProviderAddresses={zoraProviderAddresses}
+                    canonicalZoraCswAddress={canonicalZoraCswAddress}
+                    canonicalZoraCswUnresolvedReason={canonicalZoraCswUnresolvedReason}
+                    mappingError={mappingError}
+                    mappingPrimaryCtaLabel={ownerInstallGate.ctaLabel}
+                    mappingPrimaryHelperText={ownerInstallGate.helper}
+                    mappingPrimaryBusy={ownerInstallGate.busy}
+                    onMappingPrimaryAction={ownerInstallGate.onAction ?? undefined}
                     onPrivyContinue={openInAppPrivyLogin}
                     onPrivyFallback={openPrivyLogin}
                     onSubmit={submitWaitlist}
