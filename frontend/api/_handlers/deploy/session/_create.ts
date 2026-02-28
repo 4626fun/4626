@@ -538,13 +538,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const sessionAddress = getAddress(auth.address as Address)
-    const smartWallet = getAddress(body.smartWallet)
-    const creatorToken = getAddress(body.creatorToken)
-    const ownerAddress = getAddress(body.ownerAddress)
+    const smartWalletRaw = typeof body.smartWallet === 'string' ? body.smartWallet.trim() : ''
+    const creatorTokenRaw = typeof body.creatorToken === 'string' ? body.creatorToken.trim() : ''
+    const ownerAddressRaw = typeof body.ownerAddress === 'string' ? body.ownerAddress.trim() : ''
 
-    if (!isAddress(smartWallet) || !isAddress(creatorToken) || !isAddress(ownerAddress)) {
+    if (!isAddress(smartWalletRaw) || !isAddress(creatorTokenRaw) || !isAddress(ownerAddressRaw)) {
       return res.status(400).json({ success: false, error: 'Invalid addresses' } satisfies ApiEnvelope<null>)
     }
+    const smartWallet = getAddress(smartWalletRaw as Address)
+    const creatorToken = getAddress(creatorTokenRaw as Address)
+    const ownerAddress = getAddress(ownerAddressRaw as Address)
     if (ownerAddress.toLowerCase() !== smartWallet.toLowerCase()) {
       return res.status(400).json({
         success: false,

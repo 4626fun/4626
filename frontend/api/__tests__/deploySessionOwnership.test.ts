@@ -132,6 +132,24 @@ describe('deploy session ownership guardrails', () => {
     resolveCoinPartiesMock.mockResolvedValue({ creator: null, payoutRecipient: null })
   })
 
+  it('returns 400 for malformed deploy addresses', async () => {
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        smartWallet: 'not-an-address',
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.error).toBe('Invalid addresses')
+    expect(insertDeploySessionMock).not.toHaveBeenCalled()
+  })
+
   it('returns 403 when canonical smart wallet mapping is missing', async () => {
     getDbMock.mockResolvedValue({
       query: vi.fn(async () => ({ rows: [{}] })),
