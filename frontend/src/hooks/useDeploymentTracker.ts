@@ -183,7 +183,7 @@ export function useDeploymentTracker(owner: Address | null, version: string) {
  * Utility to get the current deployment version from env.
  */
 export function getDeploymentVersion(): string {
-  const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.3.2'
+  const raw = (import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined) ?? 'v1.4.1'
   const v = String(raw).trim()
-  return v.length > 0 ? v : 'v1.3.2'
+  return v.length > 0 ? v : 'v1.4.1'
 }
