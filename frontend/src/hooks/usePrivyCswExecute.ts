@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { encodeFunctionData, getAddress, isAddress, type Address, type Hex } from 'viem'
+import { encodeFunctionData, getAddress, isAddress, toHex, type Address, type Hex } from 'viem'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { useWallets } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
@@ -69,6 +69,21 @@ function isUserRejected(error: unknown): boolean {
 function summarizeError(error: unknown): string {
   if (error instanceof Error) return error.message.slice(0, 300)
   return String(error ?? '').slice(0, 300)
+}
+
+const BASE_CHAIN_ID_HEX = '0x2105'
+
+function ensureSignatureHex(value: unknown, context: string): Hex {
+  if (typeof value === 'string' && /^0x[0-9a-fA-F]+$/.test(value)) return value as Hex
+  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+  const direct = record?.signature ?? record?.sig
+  if (typeof direct === 'string' && /^0x[0-9a-fA-F]+$/.test(direct)) return direct as Hex
+  const nestedResult = record?.result
+  if (nestedResult && typeof nestedResult === 'object') {
+    const nestedSig = (nestedResult as Record<string, unknown>).signature
+    if (typeof nestedSig === 'string' && /^0x[0-9a-fA-F]+$/.test(nestedSig)) return nestedSig as Hex
+  }
+  throw new Error(`Invalid signature returned from ${context}`)
 }
 
 export type PrivyCswExecuteResult = {
@@ -227,6 +242,21 @@ export function usePrivyCswExecute(params: {
     return null
   }, [privyEmbeddedWallet])
 
+  const ensureProviderOnBase = useCallback(async (provider: any, label: string) => {
+    if (!provider?.request) return
+    const current = await provider.request({ method: 'eth_chainId' }).catch(() => null)
+    if (typeof current === 'string' && current.toLowerCase() !== BASE_CHAIN_ID_HEX) {
+      try {
+        await provider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: BASE_CHAIN_ID_HEX }],
+        })
+      } catch {
+        throw new Error(`Please switch ${label} to Base network to continue.`)
+      }
+    }
+  }, [])
+
   const execute = useCallback(async (
     calls: Array<{ to: Address; value?: bigint; data?: Hex }>,
   ): Promise<PrivyCswExecuteResult> => {
@@ -240,9 +270,50 @@ export function usePrivyCswExecute(params: {
     if (signerType === 'privy-embedded' && privyEoaAddress) {
       const provider = await getPrivyProvider()
       if (!provider?.request) throw new Error('Privy embedded wallet provider not available.')
+      await ensureProviderOnBase(provider, 'Privy embedded EOA')
 
       const embeddedWalletClient = {
-        request: async (args: { method: string; params?: any[] }) => provider.request(args),
+        request: async (args: { method: string; params?: any[] }) => {
+          if (args?.method === 'eth_sign') {
+            const p = Array.isArray(args.params) ? args.params : []
+            const hashCandidate = typeof p[1] === 'string' ? p[1] : ''
+            const isHash = /^0x[0-9a-fA-F]{64}$/.test(hashCandidate)
+            if (isHash) {
+              try {
+                const rawSig = await provider.request({
+                  method: 'secp256k1_sign',
+                  params: [hashCandidate],
+                })
+                return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.secp256k1_sign')
+              } catch (signErr) {
+                logger.warn('[usePrivyCswExecute] secp256k1_sign failed; falling back to eth_sign', {
+                  ownerAddress: privyEoaAddress,
+                  error: summarizeError(signErr),
+                })
+              }
+            }
+          }
+          return provider.request(args)
+        },
+        signMessage: async (args: { account: Address; message: any }) => {
+          const raw =
+            typeof args?.message === 'object' && args.message !== null && 'raw' in args.message
+              ? (args.message as any).raw
+              : args?.message
+          const msgHex = typeof raw === 'string' && raw.startsWith('0x') ? raw : toHex(String(raw ?? ''))
+          const rawSig = await provider.request({
+            method: 'personal_sign',
+            params: [msgHex, privyEoaAddress],
+          })
+          return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.personal_sign')
+        },
+        signTypedData: async (typedData: unknown) => {
+          const rawSig = await provider.request({
+            method: 'eth_signTypedData_v4',
+            params: [privyEoaAddress, JSON.stringify(typedData)],
+          })
+          return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.signTypedData')
+        },
       }
 
       try {
@@ -254,10 +325,12 @@ export function usePrivyCswExecute(params: {
           ownerAddress: privyEoaAddress,
           calls,
           version: '1',
-          userOpSignMode: 'auto',
-          allowEoaSignMessageFallback: true,
+          userOpSignMode: 'eth_sign',
+          ownerIsContract: false,
+          allowEoaSignMessageFallback: false,
           skipPaymaster: false,
           retryOnInvalidSignature: false,
+          retryWithLowGasContractSigner: false,
         })
       } catch (error: unknown) {
         if (isUserRejected(error)) throw error
@@ -341,7 +414,7 @@ export function usePrivyCswExecute(params: {
     }
 
     throw new Error('No valid signer available. Sign in via Privy to continue.')
-  }, [smartWalletAddress, publicClient, signerType, privyEoaAddress, connectedAddress, walletClient, getPrivyProvider])
+  }, [smartWalletAddress, publicClient, signerType, privyEoaAddress, connectedAddress, walletClient, getPrivyProvider, ensureProviderOnBase])
 
   return {
     ready,
