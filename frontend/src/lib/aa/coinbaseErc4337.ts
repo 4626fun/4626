@@ -901,14 +901,14 @@ function createWalletBackedLocalAccount(params: {
           throw ethSignError
         }
         
-        // If eth_sign is blocked/unsupported, try signMessage fallback when enabled.
-        // For EOA owners, fallback to personal_sign is often invalid for UserOp digests;
-        // require eth_sign to avoid AA40/AA24 retry loops.
+        // If eth_sign is blocked/unsupported, try signMessage (personal_sign) fallback.
+        // Coinbase Smart Wallet uses Solady's SignatureCheckerLib which validates both
+        // raw and EIP-191 prefixed signatures, so personal_sign works for EOA owners.
         if (isEthSignBlocked(ethSignError)) {
           preferPersonalSignForAutoMode = true
           if (!allowSignMessageFallback) {
             throw new Error(
-              'eth_sign is blocked by your wallet. Retrying with EIP-712 typed-data signing…'
+              'eth_sign is blocked by your wallet and signMessage fallback is disabled.'
             )
           }
           try {
@@ -1280,7 +1280,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     userOpSignMode = 'auto',
     ownerIsContract: ownerIsContractOverride,
     allowContractSignMessageFallback = true,
-    allowEoaSignMessageFallback = false,
+    allowEoaSignMessageFallback = true,
     verificationGasLimits: verificationGasLimitsOverride,
     skipPreflightSimulation,
     skipPaymaster = false,
@@ -1710,10 +1710,9 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     ) {
       // Only retry with signMessage if the owner is a contract (ERC-1271) or
       // the caller explicitly allows the EOA signMessage fallback.
-      // For EOA owners without the flag, shouldCoerceToEthSign would convert
-      // 'signMessage' back to 'eth_sign', producing the same invalid signature.
-      // personal_sign cannot produce valid raw-digest signatures for
-      // CoinbaseSmartWallet, so retrying would be pointless.
+      // Solady's SignatureCheckerLib.isValidSignatureNowCalldata tries both
+      // ecrecover(hash, sig) AND ecrecover(toEthSignedMessageHash(hash), sig),
+      // so personal_sign signatures ARE valid for Coinbase Smart Wallet EOA owners.
       if (ownerIsContract || allowEoaSignMessageFallback) {
         return await sendCoinbaseSmartWalletUserOperation({
           publicClient,
