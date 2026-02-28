@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
+import { fetchExternalJson } from '../../../server/_lib/externalFetch.js'
+import { logger } from '../../../server/_lib/logger.js'
 
 /**
  * Uniswap V4 Subgraph GraphQL Proxy
@@ -65,7 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Check for required env vars
   if (!THEGRAPH_API_KEY) {
-    console.error('Missing THEGRAPH_API_KEY environment variable')
+    logger.error('[uniswap/query] Missing THEGRAPH_API_KEY environment variable')
     return res.status(503).json({
       success: false,
       error: 'Uniswap data service not configured',
@@ -85,8 +87,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const subgraphUrl = getSubgraphUrl()
-    
-    const response = await fetch(subgraphUrl, {
+
+    const upstream = await fetchExternalJson<Record<string, unknown>>(subgraphUrl, {
+      label: 'uniswap_query',
+      allowedHosts: ['gateway.thegraph.com'],
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -95,20 +99,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         query: body.query,
         variables: body.variables || {},
       }),
+      timeoutMs: 10_000,
+      maxResponseBytes: 1_000_000,
     })
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => '')
-      console.error('Subgraph error:', response.status, errorText)
-      throw new Error(`subgraph_status_${response.status}`)
-    }
-
-    const data = await response.json()
-    
     // Return the GraphQL response as-is
-    return res.status(200).json(data)
+    return res.status(upstream.status).json(upstream.data)
   } catch (error) {
-    console.error('Uniswap query error:', error)
+    logger.error('[uniswap/query] Proxy failure', error)
     return res.status(500).json({
       success: false,
       error: 'Internal server error',

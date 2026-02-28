@@ -5,7 +5,7 @@ sidebar_position: 3
 
 # Architecture
 
-CreatorVault's architecture is built for **provenance, identity, and execution**:
+4626's architecture is built for **provenance, identity, and execution**:
 
 - **Provenance (Zora)**: Creator Coins and Content Coins are the discovery layer and identity anchor
 - **Execution (Smart Wallet AA)**: Creators can deploy and operate vault infrastructure via EIP-4337/EIP-5792-style batching
@@ -13,7 +13,7 @@ CreatorVault's architecture is built for **provenance, identity, and execution**
 
 ## System Overview
 
-Onchain, CreatorVault consists of:
+Onchain, 4626 consists of:
 
 - **Shared infrastructure** (deployed once per chain, referenced via `CreatorRegistry`)
 - **Per-creator vault stack** (deployed per creator coin)
@@ -113,11 +113,11 @@ CreatorLotteryManager (prize pool)
 ```
 User clicks "Deploy" → wallet/bundler executes a phased sequence
 
-Phase 1 — Deterministic deploy (CreatorVaultDeployer):
+Phase 1 — Deterministic deploy (deployment batcher):
 - Deploy per-creator contracts (vault, wrapper, share OFT, gauge controller, oracle, CCA strategy)
 - Register them in CreatorRegistry
 
-Phase 2 — Configuration (CreatorVaultDeployer):
+Phase 2 — Configuration (deployment batcher):
 - Wire roles + addresses (vault↔wrapper↔OFT, gauge controller config, oracle config)
 - Set required approvals/launch permissions
 

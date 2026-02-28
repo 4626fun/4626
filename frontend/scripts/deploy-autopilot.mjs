@@ -6,7 +6,7 @@ import path from 'node:path'
 import { createPublicClient, encodeAbiParameters, getAddress, http, isAddress } from 'viem'
 import { base } from 'viem/chains'
 
-const DEFAULT_ORIGIN = process.env.CANONICAL_ORIGIN || 'http://localhost:5173'
+const DEFAULT_ORIGIN = process.env.APP_ORIGIN || process.env.CANONICAL_ORIGIN || 'http://localhost:5173'
 const DEFAULT_RPC = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
 const DEFAULT_BATCHER = '0xB87CBb646dD14F520078F11196f79BF815F18c84'
 const DEFAULT_STORE = '0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13'

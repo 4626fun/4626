@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 /**
  * @title TaxHookConfigurator
- * @author 0xakita.eth (CreatorVault)
- * @notice Helper to configure the existing V4 Tax Hook for CreatorVault
+ * @author 0xakita.eth (4626)
+ * @notice Helper to configure the existing V4 Tax Hook for 4626
  *
  * @dev EXISTING TAX HOOK:
  *      Address: 0xca975B9dAF772C71161f3648437c3616E5Be0088 (Base)

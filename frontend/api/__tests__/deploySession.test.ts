@@ -50,7 +50,7 @@ vi.mock('../../server/_lib/deploySessions.js', () => ({
 }))
 
 vi.mock('../../server/_lib/origin.js', () => ({
-  getCanonicalOrigin: vi.fn(() => 'https://creatorvault.fun'),
+  getCanonicalOrigin: vi.fn(() => 'https://app.4626.fun'),
 }))
 
 vi.mock('../../server/_lib/privyWalletApi.js', () => ({
@@ -60,6 +60,14 @@ vi.mock('../../server/_lib/privyWalletApi.js', () => ({
 
 vi.mock('viem', () => ({
   getAddress: (value: string) => String(value).toLowerCase(),
+  isAddress: (value: string) => /^0x[a-fA-F0-9]{40}$/.test(String(value)),
+  decodeFunctionData: vi.fn(() => ({
+    args: [
+      {
+        creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+      },
+    ],
+  })),
   createPublicClient: vi.fn(() => ({
     readContract: vi.fn(async ({ functionName }: any) => {
       if (functionName === 'ownerCount') return 1n
@@ -470,6 +478,179 @@ describe('deploy session optimistic concurrency', () => {
     expect(transitionDeploySessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sess_1', fromStep: 'phase2_core_sent', toStep: 'phase2_core_confirmed' }),
     )
+  })
+
+  it('status uses canonical Solana bridge registration payload for phase2 finalize', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_core_confirmed'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xB87CBb646dD14F520078F11196f79BF815F18c84')],
+        phase3Calls: [],
+      }),
+    }
+    const originalFetch = globalThis.fetch
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ success: true, data: { registered: true } }),
+    })) as any
+
+    try {
+      ;(globalThis as any).fetch = fetchMock
+      const viem = await import('viem')
+      ;(viem.createPublicClient as any).mockReturnValue({
+        readContract: vi.fn(async ({ functionName }: any) => {
+          switch (functionName) {
+            case 'ownerCount':
+              return 1n
+            case 'nextOwnerIndex':
+              return 1n
+            case 'ownerAtIndex':
+              return '0xownerbytes'
+            case 'solanaBridgeAdapter':
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return false
+            default:
+              return '0xownerbytes'
+          }
+        }),
+      })
+      getDeploySessionByIdMock
+        .mockResolvedValueOnce(rec)
+        .mockResolvedValueOnce({ ...rec, step: 'phase2_sent', lastUserOpHash: '0xuserop' })
+      transitionDeploySessionMock.mockResolvedValue(true)
+
+      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+      const res = createMockRes()
+      await statusHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(fetchMock).toHaveBeenCalled()
+      const [url, init] = (fetchMock.mock.calls as any[])[0] as [string, { body?: string }]
+      expect(String(url)).toContain('/api/deploy/registerSolanaBridgeToken')
+      const payload = JSON.parse(String(init?.body ?? '{}'))
+      expect(String(payload.bridgeToken).toLowerCase()).toBe('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
+      expect(payload.creatorToken).toBeUndefined()
+    } finally {
+      ;(globalThis as any).fetch = originalFetch
+    }
+  })
+
+  it('status forwards internal Solana registration secret when configured', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_core_confirmed'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xB87CBb646dD14F520078F11196f79BF815F18c84')],
+        phase3Calls: [],
+      }),
+    }
+    const previous = process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
+    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = 'internal-secret'
+    const originalFetch = globalThis.fetch
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ success: true, data: { registered: true } }),
+    })) as any
+
+    try {
+      ;(globalThis as any).fetch = fetchMock
+      const viem = await import('viem')
+      ;(viem.createPublicClient as any).mockReturnValue({
+        readContract: vi.fn(async ({ functionName }: any) => {
+          switch (functionName) {
+            case 'ownerCount':
+              return 1n
+            case 'nextOwnerIndex':
+              return 1n
+            case 'ownerAtIndex':
+              return '0xownerbytes'
+            case 'solanaBridgeAdapter':
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return false
+            default:
+              return '0xownerbytes'
+          }
+        }),
+      })
+      getDeploySessionByIdMock
+        .mockResolvedValueOnce(rec)
+        .mockResolvedValueOnce({ ...rec, step: 'phase2_sent', lastUserOpHash: '0xuserop' })
+      transitionDeploySessionMock.mockResolvedValue(true)
+
+      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+      const res = createMockRes()
+      await statusHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      const init = (fetchMock.mock.calls as any[])[0]?.[1] as { headers?: Record<string, string> } | undefined
+      expect(init?.headers?.['X-CV-Solana-Registration-Secret']).toBe('internal-secret')
+    } finally {
+      if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
+      else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
+      ;(globalThis as any).fetch = originalFetch
+    }
+  })
+
+  it('status does not call legacy registration route when canonical route is unavailable', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_core_confirmed'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xB87CBb646dD14F520078F11196f79BF815F18c84')],
+        phase3Calls: [],
+      }),
+    }
+    const originalFetch = globalThis.fetch
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      text: async () => JSON.stringify({ success: false, error: 'Not found' }),
+    }) as any
+
+    try {
+      ;(globalThis as any).fetch = fetchMock
+      const viem = await import('viem')
+      ;(viem.createPublicClient as any).mockReturnValue({
+        readContract: vi.fn(async ({ functionName }: any) => {
+          switch (functionName) {
+            case 'ownerCount':
+              return 1n
+            case 'nextOwnerIndex':
+              return 1n
+            case 'ownerAtIndex':
+              return '0xownerbytes'
+            case 'solanaBridgeAdapter':
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return false
+            default:
+              return '0xownerbytes'
+          }
+        }),
+      })
+      getDeploySessionByIdMock
+        .mockResolvedValueOnce(rec)
+        .mockResolvedValueOnce({ ...rec, step: 'phase2_sent', lastUserOpHash: '0xuserop' })
+      transitionDeploySessionMock.mockResolvedValue(true)
+
+      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+      const res = createMockRes()
+      await statusHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(String((fetchMock.mock.calls as any[])[0]?.[0] ?? '')).toContain('/api/deploy/registerSolanaBridgeToken')
+    } finally {
+      ;(globalThis as any).fetch = originalFetch
+    }
   })
 
   it('status advances phase4_sent to completed', async () => {

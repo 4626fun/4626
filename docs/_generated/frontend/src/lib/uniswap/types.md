@@ -1,8 +1,8 @@
-[**creatorvault-miniapp**](../../../index.md)
+[**4626-miniapp**](../../../index.md)
 
 ***
 
-[creatorvault-miniapp](../../../index.md) / src/lib/uniswap/types
+[4626-miniapp](../../../index.md) / src/lib/uniswap/types
 
 # src/lib/uniswap/types
 

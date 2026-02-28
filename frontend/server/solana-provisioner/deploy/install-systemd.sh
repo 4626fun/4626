@@ -5,11 +5,14 @@ set -euo pipefail
 #
 # Usage:
 #   sudo ./install-systemd.sh \
-#     --repo-root /opt/creatorvault \
-#     --service-user creatorvault
+#     --repo-root /opt/4626 \
+#     --service-user <repo-access-user> \
+#     --env-dir /etc/4626
 
 REPO_ROOT=""
-SERVICE_USER="creatorvault"
+# Dedicated service user for the provisioner.
+SERVICE_USER="app4626"
+ENV_DIR="/etc/4626"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -19,6 +22,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --service-user)
       SERVICE_USER="${2:-}"
+      shift 2
+      ;;
+    --env-dir)
+      ENV_DIR="${2:-}"
       shift 2
       ;;
     *)
@@ -37,7 +44,6 @@ FRONTEND_DIR="${REPO_ROOT}/frontend"
 DEPLOY_DIR="${FRONTEND_DIR}/server/solana-provisioner/deploy"
 UNIT_SRC="${DEPLOY_DIR}/solana-route-provisioner.service"
 UNIT_DST="/etc/systemd/system/solana-route-provisioner.service"
-ENV_DIR="/etc/creatorvault"
 ENV_DST="${ENV_DIR}/solana-provisioner.env"
 ENV_TEMPLATE="${DEPLOY_DIR}/solana-provisioner.env.example"
 
@@ -75,7 +81,8 @@ sed \
   -e "s#^User=.*#User=${SERVICE_USER}#" \
   -e "s#^Group=.*#Group=${SERVICE_USER}#" \
   -e "s#^WorkingDirectory=.*#WorkingDirectory=${FRONTEND_DIR}#" \
-  -e "s#--dir /opt/creatorvault/frontend#--dir ${FRONTEND_DIR}#" \
+  -e "s#^EnvironmentFile=.*#EnvironmentFile=${ENV_DST}#" \
+  -e "s#^ExecStart=.*#ExecStart=/usr/bin/env pnpm --dir ${FRONTEND_DIR} solana-provisioner:start#" \
   "${UNIT_SRC}" > "${UNIT_DST}"
 
 chmod 0644 "${UNIT_DST}"

@@ -1,5 +1,5 @@
 # CreatorRegistry
-[Git Source](https://github.com/creatorvault/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/core/CreatorRegistry.sol)
+[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/core/CreatorRegistry.sol)
 
 **Inherits:**
 [ICreatorRegistry](/contracts/governance/VaultGaugeVoting.sol/interface.ICreatorRegistry.md), Ownable
@@ -10,7 +10,7 @@ CreatorRegistry
 **Author:**
 0xakita.eth
 
-Registry for CreatorVault deployments and configs.
+Registry for 4626 deployments and configs.
 
 Used by factories, vaults, and OFTs to resolve ecosystem addresses.
 
@@ -264,13 +264,13 @@ function registerCreatorCoin(
 ) external override onlyAuthorizedOrOwner;
 ```
 
-### setCreatorVault
+### set4626
 
 Set vault address for a Creator Coin
 
 
 ```solidity
-function setCreatorVault(address _token, address _vault) external override onlyAuthorizedOrOwner;
+function set4626(address _token, address _vault) external override onlyAuthorizedOrOwner;
 ```
 
 ### setCreatorShareOFT

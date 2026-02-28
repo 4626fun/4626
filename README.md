@@ -1,6 +1,6 @@
-# CreatorVault
+# 4626.fun
 
-CreatorVault is a Base-native protocol + app stack for launching creator-centered vault economies.
+4626.fun is a Base-native protocol + app stack for launching creator-centered vault economies.
 It combines ERC-4626 vaults, account abstraction, cross-chain OFT shares, and a fee-driven incentive layer for creator coins.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -28,7 +28,7 @@ It combines ERC-4626 vaults, account abstraction, cross-chain OFT shares, and a 
 
 ## What This Repository Contains
 
-CreatorVault focuses on three outcomes:
+4626 focuses on three outcomes:
 
 - Launch creator vault infrastructure from a single user flow (`/deploy`).
 - Route creator coin activity into vault and incentive mechanics.
@@ -61,7 +61,7 @@ flowchart LR
 
   subgraph Protocol["Protocol Plane (Base + Omnichain)"]
     Registry["CreatorRegistry"]
-    Deployer["CreatorVaultDeployer"]
+    Deployer["DeploymentBatcher"]
     Vault["CreatorOVault (ERC-4626)"]
     Wrapper["CreatorOVaultWrapper"]
     Share["CreatorShareOFT (LayerZero V2 OFT)"]
@@ -181,7 +181,7 @@ flowchart LR
 
 ### 4) Omnichain Share Topology (Base Hub)
 
-CreatorVault is Base-hub-first with omnichain share transport via LayerZero V2 OFT.
+4626 is Base-hub-first with omnichain share transport via LayerZero V2 OFT.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"fontFamily":"Inter, ui-sans-serif, system-ui","fontSize":"13px","lineColor":"#64748B","primaryColor":"#FFFFFF","primaryTextColor":"#0F172A"}}}%%

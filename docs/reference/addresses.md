@@ -5,7 +5,7 @@ sidebar_position: 1
 
 # Contract Addresses
 
-Deployed contract addresses for CreatorVault.
+Deployed contract addresses for 4626.
 
 ## Base (Hub Chain)
 
@@ -15,7 +15,7 @@ Deployed contract addresses for CreatorVault.
 |----------|---------|
 | CreatorRegistry | `TBD` |
 | CreatorLotteryManager | `TBD` |
-| CreatorVaultDeployer | `TBD` |
+| DeploymentBatcher | `TBD` |
 | VRFConsumer | `TBD` |
 
 ### First Deployment: akita

@@ -5,7 +5,7 @@ sidebar_position: 6
 
 # Supported Chains
 
-CreatorVault uses LayerZero V2 for omnichain share tokens. All chains share the same OFT token.
+4626 uses LayerZero V2 for omnichain share tokens. All chains share the same OFT token.
 
 ## Chain Configuration
 

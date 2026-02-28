@@ -36,7 +36,7 @@ export function AuctionBid() {
 
   return (
     <div className="relative min-h-screen">
-      <PageMeta title="Auction Bid" description="Participate in the vault auction on CreatorVault." canonicalPath={`/auction/${address ?? ''}`} />
+      <PageMeta title="Auction Bid" description="Participate in the vault auction on 4626." canonicalPath={`/auction/${address ?? ''}`} />
       <section className="cinematic-section">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <Link

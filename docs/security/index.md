@@ -5,7 +5,7 @@ sidebar_position: 5
 
 # Security
 
-CreatorVault inherits Yearn V3's battle-tested security model with additional safeguards.
+4626 inherits Yearn V3's battle-tested security model with additional safeguards.
 
 ## Anti-Inflation Attack
 

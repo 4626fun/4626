@@ -100,7 +100,7 @@ describe('frames/action validation modes', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(String(res.body)).toContain('CreatorVault')
+    expect(String(res.body)).toContain('4626')
     expect(res.headers['x-frames-validation-mode']).toBe('best-effort')
     expect(res.headers['x-frames-validation-source']).toBe('untrusted')
     expect(String(res.body)).toContain('Join Waitlist')

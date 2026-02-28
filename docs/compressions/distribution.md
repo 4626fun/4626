@@ -6,11 +6,11 @@ slug: /compressions/distribution
 
 # Distribution Compression
 
-CreatorVault compresses distribution by treating launch as a mechanism, not a moment: price discovery and liquidity formation are explicit parts of the system.
+4626 compresses distribution by treating launch as a mechanism, not a moment: price discovery and liquidity formation are explicit parts of the system.
 
 ## Uniswap CCA
 
-CreatorVault uses Uniswap Continuous Clearing Auctions (CCA) to make launch legible and broadly accessible:
+4626 uses Uniswap Continuous Clearing Auctions (CCA) to make launch legible and broadly accessible:
 
 - bids persist across blocks
 - the mechanism produces a clearing price

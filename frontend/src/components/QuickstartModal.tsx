@@ -319,11 +319,11 @@ export function QuickstartModal({ onClose }: { onClose: () => void }) {
                 <StepRow
                   done={Boolean(data.serverSignerAddress)}
                   icon={Bot}
-                  label="Agent provisioned"
+                  label="Wallet provisioned"
                   detail={
                     data.agentType === 'csw'
-                      ? `Agent: ${truncAddr(data.agentAddress)}`
-                      : `User: ${truncAddr(data.agentAddress)}`
+                      ? `Smart Wallet: ${truncAddr(data.agentAddress)}`
+                      : `User Wallet: ${truncAddr(data.agentAddress)}`
                   }
                 />
 
@@ -361,12 +361,12 @@ export function QuickstartModal({ onClose }: { onClose: () => void }) {
                       </>
                     ) : (
                       <>
-                        <Rocket className="w-4 h-4" /> Activate Agent (1 tx)
+                        <Rocket className="w-4 h-4" /> Activate (1 tx)
                       </>
                     )}
                   </button>
                   <p className="text-[10px] text-zinc-600 text-center px-2">
-                    Adds a server signer as owner of your Agent wallet so it can respond to messages.
+                    Adds a server signer as owner of your Smart Wallet so it can respond to messages.
                   </p>
                 </div>
               )}

@@ -4,9 +4,10 @@ import { makeSessionToken } from '../../server/auth/_shared.ts'
 import handler from '../_handlers/portfolio/_me.ts'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 
-const { getDbMock, ensureWaitlistSchemaMock } = vi.hoisted(() => ({
+const { getDbMock, ensureWaitlistSchemaMock, resolveOnchainIdentityProfileMock } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
+  resolveOnchainIdentityProfileMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/postgres.js', () => ({
@@ -17,10 +18,23 @@ vi.mock('../../server/_lib/waitlistSchema.js', () => ({
   ensureWaitlistSchema: ensureWaitlistSchemaMock,
 }))
 
+vi.mock('../../server/_lib/onchainIdentityProfile.js', () => ({
+  resolveOnchainIdentityProfile: resolveOnchainIdentityProfileMock,
+}))
+
 function createPortfolioDb(
   source: 'manual' | 'farcaster',
   extraProfileFields: Record<string, { value: string | null; source: string; updated_at: string }> = {},
+  profileOverrides: Record<string, unknown> = {},
 ) {
+  const defaultProfileFields = {
+    display_name: { value: 'Alice', source, updated_at: new Date().toISOString() },
+    bio: { value: 'hello', source: 'manual', updated_at: new Date().toISOString() },
+    avatar_lens_uri: { value: null, source: 'manual', updated_at: new Date().toISOString() },
+    banner_lens_uri: { value: null, source: 'manual', updated_at: new Date().toISOString() },
+    ...extraProfileFields,
+  }
+
   const profile: any = {
     id: 1,
     primary_smart_wallet: '0x00000000000000000000000000000000000000aa',
@@ -32,13 +46,8 @@ function createPortfolioDb(
     banner_url: null,
     app_access_status: 'approved',
     updated_at: new Date().toISOString(),
-    profile_fields: {
-      display_name: { value: 'Alice', source, updated_at: new Date().toISOString() },
-      bio: { value: 'hello', source: 'manual', updated_at: new Date().toISOString() },
-      avatar_lens_uri: { value: null, source: 'manual', updated_at: new Date().toISOString() },
-      banner_lens_uri: { value: null, source: 'manual', updated_at: new Date().toISOString() },
-      ...extraProfileFields,
-    },
+    profile_fields: defaultProfileFields,
+    ...profileOverrides,
   }
 
   const walletRows = [
@@ -106,6 +115,7 @@ describe('portfolio /api/portfolio/me', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    resolveOnchainIdentityProfileMock.mockResolvedValue(null)
     restoreEnv = applyEnv({
       AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
       DEBANK_ACCESS_KEY: undefined,
@@ -130,6 +140,79 @@ describe('portfolio /api/portfolio/me', () => {
     expect(res.body?.success).toBe(true)
     expect(res.body?.data?.mode).toBe('public')
     expect(res.body?.data?.profile?.primarySmartWallet).toBe('0x00000000000000000000000000000000000000aa')
+  })
+
+  it('hydrates blank profile fields from ENS profile data', async () => {
+    resolveOnchainIdentityProfileMock.mockResolvedValue({
+      source: 'ens',
+      address: '0x00000000000000000000000000000000000000aa',
+      ensName: 'brantly.eth',
+      basename: null,
+      displayName: 'brantly.eth',
+      bio: 'building onchain identity',
+      avatarUrl: 'https://example.com/brantly.png',
+      website: 'https://ethid.org',
+      twitter: 'brantlyeth',
+      github: null,
+      discord: null,
+    })
+    getDbMock.mockResolvedValue(
+      createPortfolioDb(
+        'manual',
+        {},
+        {
+          display_name: null,
+          bio: null,
+          website: null,
+          avatar_url: null,
+          profile_fields: {},
+        },
+      ),
+    )
+    const req = createMockReq({
+      method: 'GET',
+      query: { address: '0x00000000000000000000000000000000000000aa' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.profile?.displayName).toBe('brantly.eth')
+    expect(res.body?.data?.profile?.bio).toBe('building onchain identity')
+    expect(res.body?.data?.profile?.website).toBe('https://ethid.org')
+    expect(res.body?.data?.profile?.avatarUrl).toBe('https://example.com/brantly.png')
+    expect(res.body?.data?.profile?.profileFields?.display_name?.source).toBe('ens')
+    expect(res.body?.data?.onchainIdentity?.ensName).toBe('brantly.eth')
+    expect(res.body?.data?.onchainIdentity?.source).toBe('ens')
+  })
+
+  it('keeps manual profile fields over ENS defaults', async () => {
+    resolveOnchainIdentityProfileMock.mockResolvedValue({
+      source: 'ens',
+      address: '0x00000000000000000000000000000000000000aa',
+      ensName: 'brantly.eth',
+      basename: null,
+      displayName: 'brantly.eth',
+      bio: 'onchain bio',
+      avatarUrl: 'https://example.com/new.png',
+      website: 'https://ens.domains',
+      twitter: null,
+      github: null,
+      discord: null,
+    })
+    getDbMock.mockResolvedValue(createPortfolioDb('manual'))
+    const req = createMockReq({
+      method: 'GET',
+      query: { address: '0x00000000000000000000000000000000000000aa' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.profile?.displayName).toBe('Alice')
+    expect(res.body?.data?.profile?.bio).toBe('hello')
+    expect(res.body?.data?.profile?.profileFields?.display_name?.source).toBe('manual')
   })
 
   it('rejects patching externally sourced fields', async () => {

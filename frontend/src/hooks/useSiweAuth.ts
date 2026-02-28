@@ -288,7 +288,7 @@ export function useSiweAuth() {
     })()
   }, [authAddress, busy, getPrivyAccessToken, privyAuthenticated, privyReady, signInWithPrivyToken])
 
-  // Auto-bridge a Privy-authenticated user into a CreatorVault session (no SIWE signing),
+  // Auto-bridge a Privy-authenticated user into a 4626 session (no SIWE signing),
   // so `/api/auth/me` and other gated API routes work seamlessly.
   useEffect(() => {
     if (!isConnected || !address) return
@@ -387,7 +387,7 @@ export function useSiweAuth() {
       if (!nonce) throw new Error('Failed to start sign-in (missing nonce)')
       if (!nonceToken) throw new Error('Failed to start sign-in (missing nonce token)')
 
-      const message = `${domain} wants you to sign in with your Ethereum account:\n${address}\n\nSign in to Creator Vaults.\n\nURI: ${uri}\nVersion: 1\nChain ID: ${chainId}\nNonce: ${nonce}\nIssued At: ${issuedAt}`
+      const message = `${domain} wants you to sign in with your Ethereum account:\n${address}\n\nSign in to 4626.\n\nURI: ${uri}\nVersion: 1\nChain ID: ${chainId}\nNonce: ${nonce}\nIssued At: ${issuedAt}`
       const signature = await signMessageAsync({ message })
 
       const verifyRes = await apiFetch('/api/auth/verify', {

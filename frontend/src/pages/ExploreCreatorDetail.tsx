@@ -397,7 +397,7 @@ export function ExploreCreatorDetail() {
     <div className="relative min-h-screen bg-black">
       <PageMeta
         title={displayName !== 'Creator' ? `${displayName} (${symbol})` : 'Creator Detail'}
-        description={`Explore ${displayName}'s creator coin ${symbol} — view vault, trades, and activity on CreatorVault.`}
+        description={`Explore ${displayName}'s creator coin ${symbol} — view vault, trades, and activity on 4626.`}
         canonicalPath={`/explore/${chain}/${tokenAddressRaw}`}
       />
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">

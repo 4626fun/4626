@@ -8,7 +8,7 @@ interface ICreatorLotteryManagerAuth {
     function authorizedSwapContracts(address) external view returns (bool);
 }
 
-interface ICreatorVaultDeployerSolanaAuth {
+interface IDeploymentBatcherSolanaAuth {
     function lotteryManager() external view returns (address);
     function protocolTreasury() external view returns (address);
     function solanaBridgeAdapter() external view returns (address);
@@ -28,7 +28,7 @@ interface ICreatorVaultDeployerSolanaAuth {
  *
  * @dev Optional env vars:
  *      - LOTTERY_MANAGER: CreatorLotteryManager address
- *      - CREATOR_VAULT_BATCHER: derive lottery manager from batcher if LOTTERY_MANAGER is unset
+ *      - DEPLOYMENT_BATCHER: derive lottery manager from deployment batcher if LOTTERY_MANAGER is unset
  *      - SET_BATCHER_SOLANA_CONFIG=1 to call batcher.setSolanaConfig(adapter, destination)
  *      - SOLANA_DESTINATION: required when SET_BATCHER_SOLANA_CONFIG=1
  *      - SOLANA_KEEPER_PUBKEY: optional Solana keeper pubkey (bytes32 hex)
@@ -37,7 +37,7 @@ interface ICreatorVaultDeployerSolanaAuth {
  *   forge script script/AuthorizeSolanaAdapter.s.sol --rpc-url $BASE_RPC_URL --broadcast
  */
 contract AuthorizeSolanaAdapter is Script {
-    address constant DEFAULT_CREATOR_VAULT_BATCHER = 0xB87CBb646dD14F520078F11196f79BF815F18c84;
+    address constant DEFAULT_DEPLOYMENT_BATCHER = 0xB87CBb646dD14F520078F11196f79BF815F18c84;
 
     function _trySetAdapterLotteryManager(address adapter, address lotteryManager) internal {
         (bool hasLotteryGetter, bytes memory data) = adapter.staticcall(abi.encodeWithSignature("lotteryManager()"));
@@ -78,7 +78,7 @@ contract AuthorizeSolanaAdapter is Script {
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address broadcaster = vm.addr(pk);
-        address batcher = vm.envOr("CREATOR_VAULT_BATCHER", DEFAULT_CREATOR_VAULT_BATCHER);
+        address batcher = vm.envOr("DEPLOYMENT_BATCHER", DEFAULT_DEPLOYMENT_BATCHER);
         address lotteryManager = vm.envOr("LOTTERY_MANAGER", address(0));
         address solanaBridgeAdapter = vm.envAddress("SOLANA_BRIDGE_ADAPTER");
         bytes32 solanaKeeperPubkey = vm.envOr("SOLANA_KEEPER_PUBKEY", bytes32(0));
@@ -86,7 +86,7 @@ contract AuthorizeSolanaAdapter is Script {
         bool setBatcherSolanaConfig = vm.envOr("SET_BATCHER_SOLANA_CONFIG", uint256(0)) == 1;
 
         if (lotteryManager == address(0)) {
-            lotteryManager = ICreatorVaultDeployerSolanaAuth(batcher).lotteryManager();
+            lotteryManager = IDeploymentBatcherSolanaAuth(batcher).lotteryManager();
         }
         require(lotteryManager != address(0), "LOTTERY_MANAGER required");
 
@@ -97,13 +97,13 @@ contract AuthorizeSolanaAdapter is Script {
         ICreatorLotteryManagerAuth(lotteryManager).setAuthorizedSwapContract(solanaBridgeAdapter, true);
         console.log("Authorized SolanaBridgeAdapter as swap contract on LotteryManager");
 
-        // 2. Optional: set Solana adapter + destination on CreatorVaultDeployer.
+        // 2. Optional: set Solana adapter + destination on deployment batcher.
         if (setBatcherSolanaConfig) {
             require(solanaDestination != bytes32(0), "SOLANA_DESTINATION required");
-            ICreatorVaultDeployerSolanaAuth deployer = ICreatorVaultDeployerSolanaAuth(batcher);
+            IDeploymentBatcherSolanaAuth deployer = IDeploymentBatcherSolanaAuth(batcher);
             require(deployer.protocolTreasury() == broadcaster, "sender must be protocolTreasury");
             deployer.setSolanaConfig(solanaBridgeAdapter, solanaDestination);
-            console.log("Set Solana config on CreatorVaultDeployer");
+            console.log("Set Solana config on deployment batcher (DeploymentBatcher)");
         } else {
             console.log("SET_BATCHER_SOLANA_CONFIG=0; skipping batcher Solana config");
         }
@@ -123,7 +123,7 @@ contract AuthorizeSolanaAdapter is Script {
             ICreatorLotteryManagerAuth(lotteryManager).authorizedSwapContracts(solanaBridgeAdapter)
         );
         if (setBatcherSolanaConfig) {
-            ICreatorVaultDeployerSolanaAuth deployer = ICreatorVaultDeployerSolanaAuth(batcher);
+            IDeploymentBatcherSolanaAuth deployer = IDeploymentBatcherSolanaAuth(batcher);
             console.log("Batcher solana adapter:", deployer.solanaBridgeAdapter());
             console.logBytes32(deployer.solanaDestination());
             require(deployer.solanaBridgeAdapter() == solanaBridgeAdapter, "batcher adapter mismatch");

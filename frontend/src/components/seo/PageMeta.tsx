@@ -12,7 +12,7 @@
 
 import { useEffect } from 'react'
 
-const SITE_NAME = 'CreatorVault'
+const SITE_NAME = '4626'
 
 function getPageOrigin(): string {
   if (typeof window === 'undefined') return 'https://app.4626.fun'
@@ -106,7 +106,7 @@ export function PageMeta({
 export const META = {
   home: {
     title: 'Home',
-    description: 'CreatorVault — tokenized creator vaults on Base.',
+    description: '4626 — tokenized creator vaults on Base.',
   },
   explore: {
     title: 'Explore Creators',
@@ -122,18 +122,18 @@ export const META = {
   },
   agentRegister: {
     title: 'Register Agent',
-    description: 'Register and activate your CreatorVault agent stack (ERC-8004, XMTP, SIWA, Lens/Grove).',
+    description: 'Register and activate your 4626 agent stack (ERC-8004, XMTP, SIWA, Lens/Grove).',
   },
   faq: {
     title: 'FAQ',
-    description: 'Frequently asked questions about CreatorVault.',
+    description: 'Frequently asked questions about 4626.',
   },
   vault: (symbol: string) => ({
     title: `${symbol} Vault`,
-    description: `Deposit and manage ${symbol} in the CreatorVault.`,
+    description: `Deposit and manage ${symbol} in 4626.`,
   }),
   creator: (name: string) => ({
     title: name,
-    description: `${name}'s creator vault and earnings on CreatorVault.`,
+    description: `${name}'s creator vault and earnings on 4626.`,
   }),
 } as const

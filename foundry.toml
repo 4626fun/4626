@@ -48,5 +48,5 @@ base = "${BASE_RPC_URL}"
 
 [doc]
 out = "docs/_generated/contracts"
-repository = "https://github.com/creatorvault/4626"
+repository = "https://github.com/wenakita/4626"
 ignore = ["test/**", "script/**"]

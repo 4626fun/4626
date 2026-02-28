@@ -29,14 +29,14 @@ export const BASE_DEFAULTS = {
   create2Factory: addr('4e59b44847b379578588920cA78FbF26c0B4956C'),
   create2Deployer: addr('aBf645362104F34D9C3FE48440bE7c99aaDE58E7'),
   // Phase-2 v2 bytecode store (chunked) + deterministic CREATE2 deployer-from-store
-  // (rolled to match phased split Phase-1 CreatorVaultDeployer infra)
+  // (rolled to match phased split Phase-1 deployment-batcher infra)
   universalBytecodeStore: addr('1268f550E794e235e4eFCE7B2D3fd7a30bb62d13'),
   universalCreate2DeployerFromStore: addr('74183076C7D33346880A5bf0e263B761FB4d38BA'),
 
   // AA helpers
   vaultActivationBatcher: addr('d17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB'),
-  // v2-infra CreatorVaultBatcher (deterministic, deployed via CREATE2 factory)
-  // NOTE: This is the phased `CreatorVaultDeployer` (Phases 1–3).
+  // v2 deployment batcher (deterministic, deployed via CREATE2 factory)
+  // NOTE: This is the phased batcher for Phases 1-3.
   creatorVaultBatcher: addr('B87CBb646dD14F520078F11196f79BF815F18c84'),
 
   // Treasury

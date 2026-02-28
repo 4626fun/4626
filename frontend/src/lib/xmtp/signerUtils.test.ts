@@ -34,7 +34,9 @@ describe('xmtp signer utils', () => {
     expect(decision.scwChainId).toBe(CANONICAL_SCW_CHAIN_ID)
   })
 
-  it('ignores stale SCW storage when resolved identity is known EOA', () => {
+  it('keeps SCW when stored signer type is SCW even if hasContractCode is false (identity update stability)', () => {
+    // Identity was previously registered as SCW on Base. hasContractCode may be false due to
+    // RPC error or wrong chain. We keep SCW to avoid "Wrong chain id" during revocation.
     const decision = decideXmtpSignerType({
       isCanonicalSmartWallet: false,
       storedSignerType: 'SCW',
@@ -42,7 +44,7 @@ describe('xmtp signer utils', () => {
       hasContractCode: false,
       walletChainId: 1,
     })
-    expect(decision).toEqual({ signerType: 'EOA', scwChainId: CANONICAL_SCW_CHAIN_ID })
+    expect(decision).toEqual({ signerType: 'SCW', scwChainId: CANONICAL_SCW_CHAIN_ID })
   })
 
   it('forces Agent mode when modeOverride is SMART_WALLET', () => {

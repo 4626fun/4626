@@ -17,7 +17,7 @@ import {
 import { logger } from '../../../server/_lib/logger.js'
 
 type ProvisionRouteRequest = {
-  shareOft?: string
+  bridgeToken?: string
   solanaDecimals?: number | string
   deployEnv?: string
   scalerExponent?: number | string
@@ -26,7 +26,7 @@ type ProvisionRouteRequest = {
 }
 
 type ProvisionRouteResponse = {
-  shareOft: Address
+  bridgeToken: Address
   mintPubkey: string
   mintBytes32: Hex
   runner?: string
@@ -75,19 +75,19 @@ const ERC20_METADATA_ABI = [
   },
 ] as const
 
-async function readShareOftMetadata(params: {
+async function readBridgeTokenMetadata(params: {
   publicClient: any
-  shareOft: Address
+  bridgeToken: Address
 }): Promise<{ name: string; symbol: string } | null> {
   try {
     const [nameRaw, symbolRaw] = await Promise.all([
       params.publicClient.readContract({
-        address: params.shareOft,
+        address: params.bridgeToken,
         abi: ERC20_METADATA_ABI,
         functionName: 'name',
       }),
       params.publicClient.readContract({
-        address: params.shareOft,
+        address: params.bridgeToken,
         abi: ERC20_METADATA_ABI,
         functionName: 'symbol',
       }),
@@ -105,8 +105,8 @@ const WRAP_TOKEN_NAME_MAX_LENGTH = 32
 const WRAP_TOKEN_SYMBOL_MAX_LENGTH = 12
 type WrapTokenSymbolMode = 'auto' | 'unicode' | 'ascii'
 
-function sanitizeWrapTokenName(raw: string, shareOft: Address): string {
-  const fallback = `CreatorShare-${shareOft.slice(2, 8)}`
+function sanitizeWrapTokenName(raw: string, bridgeToken: Address): string {
+  const fallback = `CreatorShare-${bridgeToken.slice(2, 8)}`
   const ascii = String(raw ?? '')
     .normalize('NFKD')
     .replace(/[^\x20-\x7E]/g, '')
@@ -124,8 +124,8 @@ function readWrapTokenSymbolMode(): WrapTokenSymbolMode {
   return 'auto'
 }
 
-function sanitizeWrapTokenSymbolUnicode(raw: string, shareOft: Address): string {
-  const fallback = `■${shareOft.slice(2, 6).toUpperCase()}`
+function sanitizeWrapTokenSymbolUnicode(raw: string, bridgeToken: Address): string {
+  const fallback = `■${bridgeToken.slice(2, 6).toUpperCase()}`
   const normalized = String(raw ?? '')
     .normalize('NFKC')
     .toUpperCase()
@@ -135,13 +135,13 @@ function sanitizeWrapTokenSymbolUnicode(raw: string, shareOft: Address): string 
   return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
 }
 
-function sanitizeWrapTokenSymbolAscii(raw: string, shareOft: Address): string {
+function sanitizeWrapTokenSymbolAscii(raw: string, bridgeToken: Address): string {
   const fallbackPrefixRaw = process.env.SOLANA_BRIDGE_WRAP_SYMBOL_PREFIX
   const fallbackPrefix = (fallbackPrefixRaw === undefined ? 'CS' : String(fallbackPrefixRaw))
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '')
-  const fallback = `${fallbackPrefix}${shareOft.slice(2, 6).toUpperCase()}`
+  const fallback = `${fallbackPrefix}${bridgeToken.slice(2, 6).toUpperCase()}`
   const cleaned = String(raw ?? '')
     .normalize('NFKD')
     .toUpperCase()
@@ -150,10 +150,10 @@ function sanitizeWrapTokenSymbolAscii(raw: string, shareOft: Address): string {
   return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
 }
 
-function buildWrapTokenSymbolCandidates(raw: string, shareOft: Address): string[] {
+function buildWrapTokenSymbolCandidates(raw: string, bridgeToken: Address): string[] {
   const mode = readWrapTokenSymbolMode()
-  const unicode = sanitizeWrapTokenSymbolUnicode(raw, shareOft)
-  const ascii = sanitizeWrapTokenSymbolAscii(raw, shareOft)
+  const unicode = sanitizeWrapTokenSymbolUnicode(raw, bridgeToken)
+  const ascii = sanitizeWrapTokenSymbolAscii(raw, bridgeToken)
   const out: string[] = []
   const pushUnique = (value: string): void => {
     if (!value || out.includes(value)) return
@@ -361,11 +361,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = await readJsonBody<ProvisionRouteRequest>(req)
-  const shareOftRaw = typeof body?.shareOft === 'string' ? body.shareOft.trim() : ''
-  if (!isAddress(shareOftRaw)) {
-    return res.status(400).json({ success: false, error: 'Invalid shareOft address' } satisfies ApiEnvelope<never>)
+  const bridgeTokenRaw = typeof body?.bridgeToken === 'string' ? body.bridgeToken.trim() : ''
+  if (!isAddress(bridgeTokenRaw)) {
+    return res.status(400).json({ success: false, error: 'Invalid bridgeToken address' } satisfies ApiEnvelope<never>)
   }
-  const shareOft = shareOftRaw as Address
+  const bridgeToken = bridgeTokenRaw as Address
 
   const cliDir = String(process.env.SOLANA_BRIDGE_CLI_DIR ?? '').trim()
   if (!cliDir || !existsSync(cliDir)) {
@@ -388,15 +388,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     chain: base,
     transport: http(rpcUrl, { timeout: 20_000 }),
   })
-  const shareOftMetadata = await readShareOftMetadata({ publicClient, shareOft })
-  if (!shareOftMetadata) {
+  const bridgeTokenMetadata = await readBridgeTokenMetadata({ publicClient, bridgeToken })
+  if (!bridgeTokenMetadata) {
     return res.status(409).json({
       success: false,
-      error: 'ShareOFT metadata unavailable. CreatorShareOFT name/symbol are required for Solana route provisioning.',
+      error: 'Bridge token metadata unavailable. Name/symbol are required for Solana route provisioning.',
     } satisfies ApiEnvelope<never>)
   }
-  const tokenName = sanitizeWrapTokenName(shareOftMetadata.name, shareOft)
-  const tokenSymbolCandidates = buildWrapTokenSymbolCandidates(shareOftMetadata.symbol, shareOft)
+  const tokenName = sanitizeWrapTokenName(bridgeTokenMetadata.name, bridgeToken)
+  const tokenSymbolCandidates = buildWrapTokenSymbolCandidates(bridgeTokenMetadata.symbol, bridgeToken)
 
   try {
     const buildWrapArgs = (tokenSymbol: string): string[] => {
@@ -407,7 +407,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         '--deploy-env',
         deployEnv,
         '--remote-token',
-        shareOft,
+        bridgeToken,
         '--decimals',
         String(solanaDecimals),
         '--name',
@@ -430,7 +430,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     for (let i = 0; i < tokenSymbolCandidates.length; i += 1) {
       const candidate = tokenSymbolCandidates[i]
       logger.info('[deploy/provisionSolanaRoute] Starting wrap-token provisioning', {
-        shareOft,
+        bridgeToken,
         deployEnv,
         tokenName,
         tokenSymbol: candidate,
@@ -451,7 +451,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const hasFallback = i < tokenSymbolCandidates.length - 1
         const shouldFallback = hasFallback && isLikelyUnicodeSymbolUnsupportedError(message)
         logger.warn('[deploy/provisionSolanaRoute] Symbol candidate failed', {
-          shareOft,
+          bridgeToken,
           tokenSymbol: candidate,
           tokenSymbolCandidate: `${i + 1}/${tokenSymbolCandidates.length}`,
           fallback: shouldFallback,
@@ -478,7 +478,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           address: BASE_SOLANA_BRIDGE,
           abi: BASE_SOLANA_BRIDGE_ABI,
           functionName: 'scalars',
-          args: [shareOft, mintBytes32],
+          args: [bridgeToken, mintBytes32],
         })
         .then((v) => BigInt(v as bigint))
         .catch(() => 0n)
@@ -489,14 +489,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (scalar === 0n) {
       return res.status(500).json({
         success: false,
-        error: `Route scalar remained 0 for ${shareOft} and ${mintBytes32} after wrap-token.`,
+        error: `Route scalar remained 0 for ${bridgeToken} and ${mintBytes32} after wrap-token.`,
       } satisfies ApiEnvelope<never>)
     }
 
     return res.status(200).json({
       success: true,
       data: {
-        shareOft,
+        bridgeToken,
         mintPubkey,
         mintBytes32,
         runner,
@@ -507,7 +507,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     logger.warn('[deploy/provisionSolanaRoute] Provisioning failed', {
-      shareOft,
+      bridgeToken,
       error: message,
     })
     return res.status(500).json({

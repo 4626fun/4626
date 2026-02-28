@@ -20,8 +20,8 @@ import { getApiContracts } from '../../../server/_lib/contracts.js'
 import { readDeployAuthFromRequest } from '../../../server/_lib/deployAuth.js'
 import { resolveMeteoraAlphaVaultConfig } from '../../../server/_lib/meteoraAlphaVaultConfig.js'
 
-type RegisterShareOftRequest = {
-  shareOft?: string
+type RegisterSolanaBridgeTokenRequest = {
+  bridgeToken?: string
   batcherAddress?: string
   solanaMint?: string
   solanaDecimals?: number | string
@@ -37,8 +37,8 @@ type SolanaBridgeIxPayload = {
   data: Hex
 }
 
-type RegisterShareOftResponse = {
-  shareOft: Address
+type RegisterSolanaBridgeTokenResponse = {
+  bridgeToken: Address
   batcher: Address
   adapter: Address
   destination: Hex
@@ -159,11 +159,7 @@ function isBytes32Hex(value: unknown): value is Hex {
 }
 
 function readSolanaMintFromEnv(): Hex | null {
-  const candidates = [
-    process.env.SOLANA_DEFAULT_MINT_BYTES32,
-    process.env.SOLANA_MINT_BYTES32,
-    process.env.SOLANA_SHARE_OFT_DEFAULT_MINT,
-  ]
+  const candidates = [process.env.SOLANA_DEFAULT_MINT_BYTES32, process.env.SOLANA_MINT_BYTES32]
   for (const c of candidates) {
     const v = String(c ?? '').trim()
     if (isBytes32Hex(v) && v.toLowerCase() !== ZERO_BYTES32.toLowerCase()) {
@@ -237,6 +233,33 @@ function readRegistrationSignerPk(): Hex | null {
     if (/^0x[0-9a-fA-F]{64}$/.test(v)) return v as Hex
   }
   return null
+}
+
+function requestHeader(req: VercelRequest, key: string): string {
+  const value = req.headers[key] as string | string[] | undefined
+  if (Array.isArray(value)) return String(value[0] ?? '').trim()
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function readInternalSolanaRegistrationSecret(): string {
+  return String(
+    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
+      process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
+      '',
+  ).trim()
+}
+
+function isInternalSolanaRegistrationAuthorized(req: VercelRequest): boolean {
+  const secret = readInternalSolanaRegistrationSecret()
+  if (!secret) return false
+  const headerSecret = requestHeader(req, 'x-cv-solana-registration-secret')
+  if (headerSecret && headerSecret === secret) return true
+  const authz = requestHeader(req, 'authorization')
+  if (authz.toLowerCase().startsWith('bearer ')) {
+    const token = authz.slice(7).trim()
+    if (token && token === secret) return true
+  }
+  return false
 }
 
 function readDynamicSolanaRouteEnabled(): boolean {
@@ -347,19 +370,19 @@ function readMeteoraProvisionerSecret(): string {
   return String(process.env.METEORA_IX_PROVISIONER_SECRET ?? readDynamicProvisionerSecret()).trim()
 }
 
-async function readShareOftMetadata(params: {
+async function readBridgeTokenMetadata(params: {
   publicClient: any
-  shareOft: Address
+  bridgeToken: Address
 }): Promise<{ name: string; symbol: string } | null> {
   try {
     const [nameRaw, symbolRaw] = await Promise.all([
       params.publicClient.readContract({
-        address: params.shareOft,
+        address: params.bridgeToken,
         abi: ERC20_METADATA_ABI,
         functionName: 'name',
       }),
       params.publicClient.readContract({
-        address: params.shareOft,
+        address: params.bridgeToken,
         abi: ERC20_METADATA_ABI,
         functionName: 'symbol',
       }),
@@ -377,8 +400,8 @@ const WRAP_TOKEN_NAME_MAX_LENGTH = 32
 const WRAP_TOKEN_SYMBOL_MAX_LENGTH = 12
 type WrapTokenSymbolMode = 'auto' | 'unicode' | 'ascii'
 
-function sanitizeWrapTokenName(raw: string, shareOft: Address): string {
-  const fallback = `CreatorShare-${shareOft.slice(2, 8)}`
+function sanitizeWrapTokenName(raw: string, bridgeToken: Address): string {
+  const fallback = `CreatorShare-${bridgeToken.slice(2, 8)}`
   const ascii = String(raw ?? '')
     .normalize('NFKD')
     .replace(/[^\x20-\x7E]/g, '')
@@ -396,8 +419,8 @@ function readWrapTokenSymbolMode(): WrapTokenSymbolMode {
   return 'auto'
 }
 
-function sanitizeWrapTokenSymbolUnicode(raw: string, shareOft: Address): string {
-  const fallback = `■${shareOft.slice(2, 6).toUpperCase()}`
+function sanitizeWrapTokenSymbolUnicode(raw: string, bridgeToken: Address): string {
+  const fallback = `■${bridgeToken.slice(2, 6).toUpperCase()}`
   const normalized = String(raw ?? '')
     .normalize('NFKC')
     .toUpperCase()
@@ -407,13 +430,13 @@ function sanitizeWrapTokenSymbolUnicode(raw: string, shareOft: Address): string 
   return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
 }
 
-function sanitizeWrapTokenSymbolAscii(raw: string, shareOft: Address): string {
+function sanitizeWrapTokenSymbolAscii(raw: string, bridgeToken: Address): string {
   const fallbackPrefixRaw = process.env.SOLANA_BRIDGE_WRAP_SYMBOL_PREFIX
   const fallbackPrefix = (fallbackPrefixRaw === undefined ? 'CS' : String(fallbackPrefixRaw))
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '')
-  const fallback = `${fallbackPrefix}${shareOft.slice(2, 6).toUpperCase()}`
+  const fallback = `${fallbackPrefix}${bridgeToken.slice(2, 6).toUpperCase()}`
   const cleaned = String(raw ?? '')
     .normalize('NFKD')
     .toUpperCase()
@@ -422,10 +445,10 @@ function sanitizeWrapTokenSymbolAscii(raw: string, shareOft: Address): string {
   return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
 }
 
-function buildWrapTokenSymbolCandidates(raw: string, shareOft: Address): string[] {
+function buildWrapTokenSymbolCandidates(raw: string, bridgeToken: Address): string[] {
   const mode = readWrapTokenSymbolMode()
-  const unicode = sanitizeWrapTokenSymbolUnicode(raw, shareOft)
-  const ascii = sanitizeWrapTokenSymbolAscii(raw, shareOft)
+  const unicode = sanitizeWrapTokenSymbolUnicode(raw, bridgeToken)
+  const ascii = sanitizeWrapTokenSymbolAscii(raw, bridgeToken)
   const out: string[] = []
   const pushUnique = (value: string): void => {
     if (!value || out.includes(value)) return
@@ -461,7 +484,7 @@ function isLikelyUnicodeSymbolUnsupportedError(message: string): boolean {
   )
 }
 
-function buildWrapTokenMetadata(metadata: { name: string; symbol: string }, shareOft: Address): {
+function buildWrapTokenMetadata(metadata: { name: string; symbol: string }, bridgeToken: Address): {
   tokenName: string
   tokenSymbolCandidates: string[]
   tokenNameSource: string
@@ -469,15 +492,15 @@ function buildWrapTokenMetadata(metadata: { name: string; symbol: string }, shar
 } {
   const originalName = String(metadata.name ?? '').trim()
   const originalSymbol = String(metadata.symbol ?? '').trim()
-  const tokenName = sanitizeWrapTokenName(originalName, shareOft)
-  const tokenSymbolCandidates = buildWrapTokenSymbolCandidates(originalSymbol, shareOft)
+  const tokenName = sanitizeWrapTokenName(originalName, bridgeToken)
+  const tokenSymbolCandidates = buildWrapTokenSymbolCandidates(originalSymbol, bridgeToken)
   const primarySymbol = tokenSymbolCandidates[0] ?? ''
-  const tokenNameSource = tokenName === originalName ? 'base_shareoft' : 'base_shareoft_sanitized'
+  const tokenNameSource = tokenName === originalName ? 'base_bridge_token' : 'base_bridge_token_sanitized'
   const tokenSymbolSource = primarySymbol === originalSymbol
-    ? 'base_shareoft'
+    ? 'base_bridge_token'
     : primarySymbol.includes('■')
-      ? 'base_shareoft_unicode_sanitized'
-      : 'base_shareoft_ascii_sanitized'
+      ? 'base_bridge_token_unicode_sanitized'
+      : 'base_bridge_token_ascii_sanitized'
   return { tokenName, tokenSymbolCandidates, tokenNameSource, tokenSymbolSource }
 }
 
@@ -696,30 +719,32 @@ async function runWrapToken(cliDir: string, cliBinRaw: string, wrapArgs: string[
 }
 
 async function tryProvisionDynamicRoute(params: {
-  shareOft: Address
+  bridgeToken: Address
   solanaDecimals: number
   publicClient: any
 }): Promise<Hex | null> {
   if (!readDynamicSolanaRouteEnabled()) return null
+
+  const bridgeToken = params.bridgeToken
 
   const cliDir = String(process.env.SOLANA_BRIDGE_CLI_DIR ?? '').trim()
   const cliBin = String(process.env.SOLANA_BRIDGE_CLI_BIN ?? 'auto').trim() || 'auto'
   const deployEnv = String(process.env.SOLANA_BRIDGE_DEPLOY_ENV ?? 'mainnet').trim() || 'mainnet'
   const payerKp = String(process.env.SOLANA_BRIDGE_PAYER_KP ?? 'config').trim() || 'config'
   const scalerExponent = parseDecimals(process.env.SOLANA_BRIDGE_SCALER_EXPONENT) ?? params.solanaDecimals
-  const shareOftMetadata = await readShareOftMetadata({
+  const bridgeTokenMetadata = await readBridgeTokenMetadata({
     publicClient: params.publicClient,
-    shareOft: params.shareOft,
+    bridgeToken,
   })
-  if (!shareOftMetadata) {
+  if (!bridgeTokenMetadata) {
     throw new Error(
-      'ShareOFT metadata unavailable for Solana wrap. CreatorShareOFT name/symbol are required before provisioning.',
+      'Bridge token metadata unavailable for Solana wrap. Name/symbol are required before provisioning.',
     )
   }
   // Prefer canonical Unicode symbol, with deterministic ASCII fallback when needed.
   const { tokenName, tokenSymbolCandidates, tokenNameSource, tokenSymbolSource } = buildWrapTokenMetadata(
-    shareOftMetadata,
-    params.shareOft,
+    bridgeTokenMetadata,
+    bridgeToken,
   )
   const primaryTokenSymbol = tokenSymbolCandidates[0] ?? ''
   const fallbackTokenSymbol = tokenSymbolCandidates[1] ?? null
@@ -739,8 +764,8 @@ async function tryProvisionDynamicRoute(params: {
         provisionerHealthUrls[i] || readDynamicProvisionerHealthUrl(provisionerUrl)
       let candidateError = 'Unknown remote provisioner error'
       for (let attempt = 1; attempt <= retryAttempts; attempt += 1) {
-        logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (remote provisioner)', {
-          shareOft: params.shareOft,
+        logger.info('[deploy/registerSolanaBridgeToken] Dynamic Solana route provisioning start (remote provisioner)', {
+          bridgeToken,
           provisionerUrl,
           provisionerHealthUrl: provisionerHealthUrl || null,
           candidateIndex: i + 1,
@@ -767,7 +792,7 @@ async function tryProvisionDynamicRoute(params: {
                 ...(provisionerSecret ? { Authorization: `Bearer ${provisionerSecret}` } : {}),
               },
               body: JSON.stringify({
-                shareOft: params.shareOft,
+                bridgeToken,
                 deployEnv,
                 solanaDecimals: params.solanaDecimals,
                 tokenName,
@@ -828,8 +853,8 @@ async function tryProvisionDynamicRoute(params: {
           const retryable = isRetryableRemoteProvisionError(message)
           const willRetry = retryable && attempt < retryAttempts
           candidateError = message
-          logger.warn('[deploy/registerShareOft] Remote provisioner candidate attempt failed', {
-            shareOft: params.shareOft,
+          logger.warn('[deploy/registerSolanaBridgeToken] Remote provisioner candidate attempt failed', {
+            bridgeToken,
             provisionerUrl,
             candidateIndex: i + 1,
             candidateCount: provisionerUrls.length,
@@ -847,8 +872,8 @@ async function tryProvisionDynamicRoute(params: {
         }
       }
       failures.push(`${provisionerUrl}: ${candidateError}`)
-      logger.warn('[deploy/registerShareOft] Remote provisioner candidate failed', {
-        shareOft: params.shareOft,
+      logger.warn('[deploy/registerSolanaBridgeToken] Remote provisioner candidate failed', {
+        bridgeToken,
         provisionerUrl,
         candidateIndex: i + 1,
         candidateCount: provisionerUrls.length,
@@ -868,8 +893,8 @@ async function tryProvisionDynamicRoute(params: {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (fallbackTokenSymbol && isLikelyUnicodeSymbolUnsupportedError(message)) {
-        logger.warn('[deploy/registerShareOft] Remote provisioner unicode symbol attempt failed; retrying with ASCII fallback', {
-          shareOft: params.shareOft,
+        logger.warn('[deploy/registerSolanaBridgeToken] Remote provisioner unicode symbol attempt failed; retrying with ASCII fallback', {
+          bridgeToken,
           primaryTokenSymbol,
           fallbackTokenSymbol,
           error: message,
@@ -894,7 +919,7 @@ async function tryProvisionDynamicRoute(params: {
         '--deploy-env',
         deployEnv,
         '--remote-token',
-        params.shareOft,
+        bridgeToken,
         '--decimals',
         String(params.solanaDecimals),
         '--name',
@@ -914,8 +939,8 @@ async function tryProvisionDynamicRoute(params: {
       let localError: unknown = null
       for (let i = 0; i < tokenSymbolCandidates.length; i += 1) {
         const tokenSymbol = tokenSymbolCandidates[i]
-        logger.info('[deploy/registerShareOft] Dynamic Solana route provisioning start (local CLI)', {
-          shareOft: params.shareOft,
+        logger.info('[deploy/registerSolanaBridgeToken] Dynamic Solana route provisioning start (local CLI)', {
+          bridgeToken,
           cliDir,
           deployEnv,
           payerKp,
@@ -942,8 +967,8 @@ async function tryProvisionDynamicRoute(params: {
           const message = error instanceof Error ? error.message : String(error)
           const hasFallback = i < tokenSymbolCandidates.length - 1
           const shouldFallback = hasFallback && isLikelyUnicodeSymbolUnsupportedError(message)
-          logger.warn('[deploy/registerShareOft] Local CLI symbol candidate failed', {
-            shareOft: params.shareOft,
+          logger.warn('[deploy/registerSolanaBridgeToken] Local CLI symbol candidate failed', {
+            bridgeToken,
             tokenSymbol,
             tokenSymbolCandidate: `${i + 1}/${tokenSymbolCandidates.length}`,
             fallback: shouldFallback,
@@ -958,8 +983,8 @@ async function tryProvisionDynamicRoute(params: {
       const canFallbackToRemote =
         provisionerUrls.length > 0 && (isRunnerUnavailable(error) || localError.includes('No usable bridge CLI runner found'))
       if (!canFallbackToRemote) throw error
-      logger.warn('[deploy/registerShareOft] Local dynamic route provisioning failed; falling back to remote provisioner', {
-        shareOft: params.shareOft,
+      logger.warn('[deploy/registerSolanaBridgeToken] Local dynamic route provisioning failed; falling back to remote provisioner', {
+        bridgeToken,
         cliDir,
         cliBin,
         localError,
@@ -990,13 +1015,13 @@ async function tryProvisionDynamicRoute(params: {
         address: BASE_SOLANA_BRIDGE,
         abi: BASE_SOLANA_BRIDGE_ABI,
         functionName: 'scalars',
-        args: [params.shareOft, mintBytes32],
+        args: [bridgeToken, mintBytes32],
       })
       .then((v: unknown) => BigInt(v as bigint))
       .catch(() => 0n)
     if (scalar > 0n) {
-      logger.info('[deploy/registerShareOft] Dynamic Solana route ready', {
-        shareOft: params.shareOft,
+      logger.info('[deploy/registerSolanaBridgeToken] Dynamic Solana route ready', {
+        bridgeToken,
         mintPubkey: mintedPubkey,
         mintBytes32,
         runner: provisionRunner,
@@ -1008,13 +1033,13 @@ async function tryProvisionDynamicRoute(params: {
   }
 
   throw new Error(
-    `Dynamic route provisioning completed, but bridge scalar was still 0 for share ${params.shareOft} and mint ${mintBytes32}.`,
+    `Dynamic route provisioning completed, but bridge scalar was still 0 for bridgeToken ${bridgeToken} and mint ${mintBytes32}.`,
   )
 }
 
 async function buildMeteoraIxsViaProvisioner(params: {
   creatorToken: Address
-  shareOft: Address
+  bridgeToken: Address
   expectedRemoteAmount: bigint
   meteoraAlphaVault: string
   alphaVaultProgramId: string
@@ -1039,7 +1064,7 @@ async function buildMeteoraIxsViaProvisioner(params: {
           },
           body: JSON.stringify({
             creatorToken: params.creatorToken,
-            shareOft: params.shareOft,
+            bridgeToken: params.bridgeToken,
             meteoraAlphaVault: params.meteoraAlphaVault,
             alphaVaultProgramId: params.alphaVaultProgramId,
             expectedRemoteAmount: params.expectedRemoteAmount.toString(),
@@ -1103,19 +1128,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const auth = readDeployAuthFromRequest(req)
-  if (!auth?.address) {
+  const internalAuthorized = isInternalSolanaRegistrationAuthorized(req)
+  if (!auth?.address && !internalAuthorized) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<never>)
   }
+  const callerTag = auth?.address ?? 'internal:solana-registration-secret'
 
-  const body = await readJsonBody<RegisterShareOftRequest>(req)
-  const shareOftRaw = typeof body?.shareOft === 'string' ? body.shareOft.trim() : ''
-  if (!isAddress(shareOftRaw)) {
-    return res.status(400).json({ success: false, error: 'Invalid shareOft address' } satisfies ApiEnvelope<never>)
-  }
-  const shareOft = getAddress(shareOftRaw)
+  const body = await readJsonBody<RegisterSolanaBridgeTokenRequest>(req)
+  const requestedBridgeTokenRaw = typeof body?.bridgeToken === 'string' ? body.bridgeToken.trim() : ''
+  const explicitBridgeToken = isAddress(requestedBridgeTokenRaw) ? getAddress(requestedBridgeTokenRaw) : null
   const buildOnly = body?.buildOnly === true
   const creatorTokenRaw = typeof body?.creatorToken === 'string' ? body.creatorToken.trim() : ''
   const creatorToken = isAddress(creatorTokenRaw) ? getAddress(creatorTokenRaw) : null
+  // Canonical selection order:
+  // 1) explicit bridgeToken
+  // 2) creatorToken (for creator-coin bridging flows)
+  const bridgeToken: Address | null = explicitBridgeToken ?? creatorToken
+  if (!bridgeToken) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid bridgeToken address.',
+    } satisfies ApiEnvelope<never>)
+  }
+  // When a Creator Coin is provided, wrap and register IT on Solana instead of
+  // a receipt-token path. The Creator Coin has a clean ASCII symbol (e.g.
+  // "AKITA" vs "■AKITA"), avoids ConstraintSeeds issues, and is the primary
+  // tradeable brand token that Solana users actually want to hold.
+  const resolvedBridgeToken: Address = bridgeToken
   const expectedSolanaAmountBase = parseBigIntLike(body?.expectedSolanaAmount)
   const requestedShareDecimals = parseDecimals(body?.shareDecimals)
 
@@ -1127,7 +1166,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!batcherRaw || !isAddress(batcherRaw)) {
     return res.status(503).json({
       success: false,
-      error: 'CreatorVaultDeployer is not configured on server.',
+      error: 'Deployment batcher (DeploymentBatcher) is not configured on server.',
     } satisfies ApiEnvelope<never>)
   }
   const batcher = getAddress(batcherRaw)
@@ -1165,7 +1204,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!solanaEnabled) {
       return res.status(409).json({
         success: false,
-        error: 'Solana bridge is not enabled on CreatorVaultDeployer (adapter/destination unset).',
+        error: 'Solana bridge is not enabled on deployment batcher (DeploymentBatcher) (adapter/destination unset).',
       } satisfies ApiEnvelope<never>)
     }
 
@@ -1182,7 +1221,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         address: adapter,
         abi: SOLANA_BRIDGE_ADAPTER_ABI,
         functionName: 'isRegistered',
-        args: [shareOft],
+        args: [resolvedBridgeToken],
       }),
       publicClient.readContract({
         address: adapter,
@@ -1214,7 +1253,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         requestedShareDecimals ??
         (await publicClient
           .readContract({
-            address: shareOft,
+            address: resolvedBridgeToken,
             abi: ERC20_METADATA_ABI,
             functionName: 'decimals',
           })
@@ -1236,7 +1275,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const meteoraProvisionerSecret = readMeteoraProvisionerSecret()
       const meteoraPayload = await buildMeteoraIxsViaProvisioner({
         creatorToken,
-        shareOft,
+        bridgeToken: resolvedBridgeToken,
         expectedRemoteAmount,
         meteoraAlphaVault: meteoraConfig.meteoraAlphaVault,
         alphaVaultProgramId: meteoraConfig.alphaVaultProgramId,
@@ -1247,9 +1286,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
       meteoraAlphaVault = meteoraPayload.meteoraAlphaVault
       solanaIxs = meteoraPayload.solanaIxs
-      logger.info('[deploy/registerShareOft] Built Meteora ix payload', {
+      logger.info('[deploy/registerSolanaBridgeToken] Built Meteora ix payload', {
         creatorToken,
-        shareOft,
+        bridgeToken: resolvedBridgeToken,
         configSource: meteoraConfig.source,
         expectedSolanaAmountBase: expectedSolanaAmountBase.toString(),
         expectedRemoteAmount: expectedRemoteAmount.toString(),
@@ -1262,7 +1301,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({
         success: true,
         data: {
-          shareOft,
+          bridgeToken: resolvedBridgeToken,
           batcher,
           adapter,
           destination,
@@ -1275,7 +1314,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           meteoraAlphaVault,
           solanaIxs,
         },
-      } satisfies ApiEnvelope<RegisterShareOftResponse>)
+      } satisfies ApiEnvelope<RegisterSolanaBridgeTokenResponse>)
     }
 
     if (buildOnly) {
@@ -1285,7 +1324,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({
         success: true,
         data: {
-          shareOft,
+          bridgeToken: resolvedBridgeToken,
           batcher,
           adapter,
           destination,
@@ -1298,16 +1337,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           meteoraAlphaVault,
           solanaIxs,
         },
-      } satisfies ApiEnvelope<RegisterShareOftResponse>)
+      } satisfies ApiEnvelope<RegisterSolanaBridgeTokenResponse>)
     }
 
-    const shareCode = await publicClient.getBytecode({ address: shareOft }).catch(() => '0x' as Hex)
+    const shareCode = await publicClient.getBytecode({ address: resolvedBridgeToken }).catch(() => '0x' as Hex)
     if (!shareCode || shareCode === '0x') {
       return res.status(409).json({
         success: false,
         error:
-          `ShareOFT ${shareOft} has no bytecode yet. ` +
-          'Run phase1 finalize first, then retry Solana registration.',
+          `Bridge token ${resolvedBridgeToken} has no bytecode yet. ` +
+          'Ensure the token is deployed on Base before Solana registration.',
       } satisfies ApiEnvelope<never>)
     }
 
@@ -1353,14 +1392,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           address: BASE_SOLANA_BRIDGE,
           abi: BASE_SOLANA_BRIDGE_ABI,
           functionName: 'scalars',
-          args: [shareOft, mint],
+          args: [bridgeToken, mint],
         })
         .then((v) => BigInt(v as bigint))
         .catch(() => null)
     const trySwitchToDynamicMint = async (): Promise<boolean> => {
       try {
         const dynamicMint = await tryProvisionDynamicRoute({
-          shareOft,
+          bridgeToken,
           solanaDecimals,
           publicClient,
         })
@@ -1370,9 +1409,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return true
       } catch (error) {
         dynamicProvisionError = error instanceof Error ? error.message : String(error)
-        logger.warn('[deploy/registerShareOft] Dynamic Solana route provisioning failed', {
-          caller: auth.address,
-          shareOft,
+        logger.warn('[deploy/registerSolanaBridgeToken] Dynamic Solana route provisioning failed', {
+          caller: callerTag,
+          bridgeToken,
           error: dynamicProvisionError,
         })
         return false
@@ -1395,7 +1434,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let existingTokenForMint = await readExistingTokenForMint(solanaMint)
     if (
       existingTokenForMint.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
-      existingTokenForMint.toLowerCase() !== shareOft.toLowerCase()
+      existingTokenForMint.toLowerCase() !== bridgeToken.toLowerCase()
     ) {
       const switched = await trySwitchToDynamicMint()
       if (!switched) {
@@ -1403,13 +1442,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           success: false,
           error:
             `Solana mint ${solanaMint} is already mapped to ${existingTokenForMint}. ` +
-            'Use a unique mint per ShareOFT.',
+            'Use a unique mint per bridge token.',
         } satisfies ApiEnvelope<never>)
       }
       existingTokenForMint = await readExistingTokenForMint(solanaMint)
       if (
         existingTokenForMint.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
-        existingTokenForMint.toLowerCase() !== shareOft.toLowerCase()
+        existingTokenForMint.toLowerCase() !== bridgeToken.toLowerCase()
       ) {
         return res.status(409).json({
           success: false,
@@ -1427,7 +1466,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         existingTokenForMint = await readExistingTokenForMint(solanaMint)
         if (
           existingTokenForMint.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
-          existingTokenForMint.toLowerCase() !== shareOft.toLowerCase()
+          existingTokenForMint.toLowerCase() !== bridgeToken.toLowerCase()
         ) {
           return res.status(409).json({
             success: false,
@@ -1442,8 +1481,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(409).json({
           success: false,
           error: appendDynamicProvisionDetail(
-            `Base Solana bridge route is not registered for ShareOFT ${shareOft} and mint ${solanaMint} ` +
-              '(WrappedSplRouteNotRegistered). Use a bridge-supported Solana mint for this ShareOFT, ' +
+            `Base Solana bridge route is not registered for bridge token ${bridgeToken} and mint ${solanaMint} ` +
+              '(WrappedSplRouteNotRegistered). Use a bridge-supported Solana mint for this token, ' +
               'or disable Solana bridging on the batcher before deploy. ' +
               'For automatic dynamic route creation, enable SOLANA_DYNAMIC_ROUTE_ENABLED=1 and set SOLANA_BRIDGE_CLI_DIR, or configure SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL.',
           ),
@@ -1461,15 +1500,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       address: adapter,
       abi: SOLANA_BRIDGE_ADAPTER_ABI,
       functionName: 'registerToken',
-      args: [shareOft, solanaMint, solanaDecimals],
+      args: [bridgeToken, solanaMint, solanaDecimals],
       account,
       chain: base,
     })
     await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })
 
-    logger.info('[deploy/registerShareOft] Registered ShareOFT for Solana bridge', {
-      caller: auth.address,
-      shareOft,
+    logger.info('[deploy/registerSolanaBridgeToken] Registered bridge token for Solana bridge', {
+      caller: callerTag,
+      bridgeToken,
       batcher,
       adapter,
       destination,
@@ -1481,7 +1520,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       success: true,
       data: {
-        shareOft,
+        bridgeToken,
         batcher,
         adapter,
         destination,
@@ -1494,18 +1533,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         meteoraAlphaVault,
         solanaIxs,
       },
-    } satisfies ApiEnvelope<RegisterShareOftResponse>)
+    } satisfies ApiEnvelope<RegisterSolanaBridgeTokenResponse>)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    logger.warn('[deploy/registerShareOft] Registration failed', {
-      caller: auth.address,
-      shareOft,
+    logger.warn('[deploy/registerSolanaBridgeToken] Registration failed', {
+      caller: callerTag,
+      bridgeToken,
       batcher,
       error: message,
     })
     return res.status(500).json({
       success: false,
-      error: `Failed to auto-register ShareOFT: ${message}`,
+      error: `Failed to auto-register Solana bridge token: ${message}`,
     } satisfies ApiEnvelope<never>)
   }
 }

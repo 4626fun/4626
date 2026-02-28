@@ -8,7 +8,7 @@ pragma solidity ^0.8.20;
  *
  * @dev Inspired by ve(3,3) systems where voters receive fees/bribes for voting on gauges.
  *      Conceptually similar to bribe/fee-distributor patterns used in b(3,3)/ve(3,3) stacks
- *      (e.g. Hermes V2) but simplified for CreatorVault.
+ *      (e.g. Hermes V2) but simplified for 4626.
  *
  * How it works:
  * - Each CreatorGaugeController sends its voter slice (currently 9.61%) to this contract.

@@ -26,7 +26,7 @@ import { PageMeta, META } from '@/components/seo/PageMeta'
 import { CcaAuctionPanel } from '@/components/cca/CcaAuctionPanel'
 import { useTokenMetadata } from '@/hooks/useTokenMetadata'
 import { useZoraCoin } from '@/lib/zora/hooks'
-import { resolveCreatorVaultByAnyAddress } from '@/lib/onchain/creatorVaultResolve'
+import { resolveVaultByAnyAddress } from '@/lib/onchain/vaultResolve'
 import { OrbBorder } from '@/components/brand/OrbBorder'
 import { TokenOrb } from '@/components/brand/TokenOrb'
 import { SHARE_SYMBOL_PREFIX, toShareSymbol } from '@/lib/tokenSymbols'
@@ -153,10 +153,10 @@ export function Vault() {
 
   const publicClient = usePublicClient({ chainId: base.id })
   const { data: resolved, isLoading: resolveLoading, error: resolveError } = useQuery({
-    queryKey: ['creatorVaultResolve', base.id, addressParam ?? ''],
+    queryKey: ['vaultResolve', base.id, addressParam ?? ''],
     queryFn: async () => {
       if (!publicClient || !addressParam) return null
-      return await resolveCreatorVaultByAnyAddress(publicClient, addressParam)
+      return await resolveVaultByAnyAddress(publicClient, addressParam)
     },
     enabled: Boolean(publicClient && addressParam),
     staleTime: 1000 * 60 * 10,

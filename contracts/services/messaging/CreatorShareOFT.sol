@@ -1005,7 +1005,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      * @notice Get token description
      */
     function description() external pure returns (string memory) {
-        return "CreatorVault Share Token - Represents proportional ownership of assets in a Creator Coin Omnichain Vault. Enables cross-chain transfers via LayerZero.";
+        return "4626 Share Token - Represents proportional ownership of assets in a Creator Coin Omnichain Vault. Enables cross-chain transfers via LayerZero.";
     }
 
     /**

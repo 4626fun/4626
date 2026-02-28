@@ -110,9 +110,9 @@ const FAQ_SECTIONS: FaqSection[] = [
     description: 'What Creator Vaults is (and what it isn’t).',
     items: [
       {
-        id: 'what-is-creatorvault',
+        id: 'what-is-4626',
         question: 'What is Creator Vaults?',
-        search: 'creatorvault vault ws token shareoft',
+        search: '4626 vault ws token shareoft',
         answer: (
           <>
             <p>
@@ -713,7 +713,7 @@ export function Faq() {
 
   return (
     <div className="relative">
-      <PageMeta title="FAQ" description="Frequently asked questions about CreatorVault — vaults, creator coins, fees, and getting started." canonicalPath="/faq" />
+      <PageMeta title="FAQ" description="Frequently asked questions about 4626 — vaults, creator coins, fees, and getting started." canonicalPath="/faq" />
       <section className="cinematic-section">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <motion.div

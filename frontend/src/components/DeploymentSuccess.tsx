@@ -202,7 +202,7 @@ export function DeploymentSuccess({ deployment, shareSymbol }: DeploymentSuccess
         </motion.div>
         <h2 className="text-xl font-medium text-white mb-2">Deployment Complete!</h2>
         <p className="text-sm text-zinc-400 max-w-md mx-auto">
-          Your CreatorVault contracts have been successfully deployed on Base.
+          Your 4626 contracts have been successfully deployed on Base.
           {shareSymbol && ` Your share token is ${shareSymbol}.`}
         </p>
         {deployedAt && (
@@ -366,7 +366,7 @@ export function AlreadyDeployedBanner({ deployment, tokenSymbol }: { deployment:
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-medium text-white">You've Already Deployed</h3>
           <p className="text-sm text-zinc-400 mt-1">
-            Your CreatorVault{tokenSymbol ? ` for ${tokenSymbol}` : ''} was deployed on {deployedAt || 'an earlier date'}.
+            Your 4626 deployment{tokenSymbol ? ` for ${tokenSymbol}` : ''} was deployed on {deployedAt || 'an earlier date'}.
             Each wallet can only deploy once per version ({deployment.version}).
           </p>
           <div className="mt-4 flex flex-wrap gap-3">

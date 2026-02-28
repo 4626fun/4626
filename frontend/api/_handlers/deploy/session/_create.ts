@@ -80,7 +80,7 @@ const CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI = [
       {
         type: 'tuple',
         components: [
-          { name: 'shareOFT', type: 'address' },
+          { name: 'shareToken', type: 'address' },
           { name: 'ccaStrategy', type: 'address' },
           { name: 'amount', type: 'uint256' },
         ],
@@ -95,7 +95,7 @@ function deriveBaseSalt(params: { creatorToken: Address; owner: Address; chainId
       params.creatorToken,
       params.owner,
       BigInt(params.chainId),
-      `CreatorVault:deploy:${params.version}`,
+      `4626:deploy:${params.version}`,
     ]),
   ) as Hex
 }

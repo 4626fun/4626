@@ -459,7 +459,7 @@ function NotFoundPage() {
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="max-w-3xl mx-auto px-6 py-16">
-        <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500 mb-4">CreatorVaults</div>
+        <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500 mb-4">4626</div>
         <div className="card rounded-xl p-8 space-y-4">
           <div className="text-xl font-medium">Route Not Found</div>
           <div className="text-sm text-zinc-400">No page matches <span className="font-mono text-zinc-300">{location.pathname}</span>.</div>

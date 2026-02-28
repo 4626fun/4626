@@ -32,7 +32,7 @@ const VAULT_ABI = [
  * Token Image Generator API
  * 
  * Generates a token image that frames the original creator coin image
- * with a CreatorVaults-style rounded-square outline (from `miniapp-splash.svg`).
+ * with a 4626-style rounded-square outline (from `miniapp-splash.svg`).
  * 
  * Query params:
  *   - address: ShareOFT token address (required)

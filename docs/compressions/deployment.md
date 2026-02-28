@@ -6,7 +6,7 @@ slug: /compressions/deployment
 
 # Deployment Compression
 
-CreatorVault compresses a multi-contract, multi-role setup into a single creator action, aiming for **one signature** and **no gas** when available.
+4626 compresses a multi-contract, multi-role setup into a single creator action, aiming for **one signature** and **no gas** when available.
 
 ## What “One Click” Actually Means
 

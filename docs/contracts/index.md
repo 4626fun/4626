@@ -5,7 +5,7 @@ sidebar_position: 3
 
 # Smart Contracts
 
-Technical documentation for CreatorVault smart contracts.
+Technical documentation for 4626 smart contracts.
 
 ## Contract Categories
 
@@ -18,7 +18,7 @@ Technical documentation for CreatorVault smart contracts.
 
 ## Architecture
 
-CreatorVault consists of:
+4626 consists of:
 - **Shared infrastructure** - Deployed once per chain
 - **Per-creator stack** - Deployed per creator coin
 - **Optional incentives** - ve(3,3) layer

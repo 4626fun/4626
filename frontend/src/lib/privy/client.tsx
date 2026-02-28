@@ -56,7 +56,7 @@ class PrivyProviderSafetyBoundary extends Component<
  *
  * With Zora Global Wallet enabled:
  * - Users who created their coin on Zora can access the SAME Coinbase Smart Wallet
- * - The embedded wallet from Zora is shared with CreatorVaults
+ * - The embedded wallet from Zora is shared with 4626
  * - No new wallet is created - they use their existing Zora wallet
  */
 export function PrivyClientProvider({ children }: { children: ReactNode }) {

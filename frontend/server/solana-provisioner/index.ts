@@ -43,7 +43,7 @@ const ERC20_METADATA_ABI = [
 ] as const
 
 type ProvisionBody = {
-  shareOft?: string
+  bridgeToken?: string
   deployEnv?: string
   solanaDecimals?: number | string
   tokenName?: string
@@ -62,7 +62,7 @@ type MeteoraAccountMetaBody = {
 
 type MeteoraIxsBody = {
   creatorToken?: string
-  shareOft?: string
+  bridgeToken?: string
   meteoraAlphaVault?: string
   alphaVaultProgramId?: string
   expectedRemoteAmount?: number | string
@@ -220,8 +220,8 @@ function envBool(key: string, fallback = false): boolean {
   return raw === '1' || raw === 'true' || raw === 'yes'
 }
 
-function sanitizeWrapTokenName(raw: string, shareOft: Address): string {
-  const fallback = `CreatorShare-${shareOft.slice(2, 8)}`
+function sanitizeWrapTokenName(raw: string, bridgeToken: Address): string {
+  const fallback = `CreatorShare-${bridgeToken.slice(2, 8)}`
   const ascii = String(raw ?? '')
     .normalize('NFKD')
     .replace(/[^\x20-\x7E]/g, '')
@@ -239,8 +239,8 @@ function readWrapTokenSymbolMode(): WrapTokenSymbolMode {
   return 'auto'
 }
 
-function sanitizeWrapTokenSymbolUnicode(raw: string, shareOft: Address): string {
-  const fallback = `■${shareOft.slice(2, 6).toUpperCase()}`
+function sanitizeWrapTokenSymbolUnicode(raw: string, bridgeToken: Address): string {
+  const fallback = `■${bridgeToken.slice(2, 6).toUpperCase()}`
   const normalized = String(raw ?? '')
     .normalize('NFKC')
     .toUpperCase()
@@ -250,12 +250,12 @@ function sanitizeWrapTokenSymbolUnicode(raw: string, shareOft: Address): string 
   return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
 }
 
-function sanitizeWrapTokenSymbolAscii(raw: string, shareOft: Address): string {
+function sanitizeWrapTokenSymbolAscii(raw: string, bridgeToken: Address): string {
   const fallbackPrefixRaw = process.env.SOLANA_BRIDGE_WRAP_SYMBOL_PREFIX
   const fallbackPrefix = (
     fallbackPrefixRaw === undefined ? 'CS' : String(fallbackPrefixRaw).trim().toUpperCase()
   ).replace(/[^A-Z0-9]/g, '')
-  const fallback = `${fallbackPrefix}${shareOft.slice(2, 6).toUpperCase()}`
+  const fallback = `${fallbackPrefix}${bridgeToken.slice(2, 6).toUpperCase()}`
   const cleaned = String(raw ?? '')
     .normalize('NFKD')
     .toUpperCase()
@@ -264,10 +264,10 @@ function sanitizeWrapTokenSymbolAscii(raw: string, shareOft: Address): string {
   return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
 }
 
-function buildWrapTokenSymbolCandidates(raw: string, shareOft: Address): string[] {
+function buildWrapTokenSymbolCandidates(raw: string, bridgeToken: Address): string[] {
   const mode = readWrapTokenSymbolMode()
-  const unicode = sanitizeWrapTokenSymbolUnicode(raw, shareOft)
-  const ascii = sanitizeWrapTokenSymbolAscii(raw, shareOft)
+  const unicode = sanitizeWrapTokenSymbolUnicode(raw, bridgeToken)
+  const ascii = sanitizeWrapTokenSymbolAscii(raw, bridgeToken)
   const out: string[] = []
   const pushUnique = (value: string): void => {
     if (!value || out.includes(value)) return
@@ -283,7 +283,7 @@ function buildWrapTokenSymbolCandidates(raw: string, shareOft: Address): string[
 }
 
 function resolveProvisionerTokenSymbolCandidates(params: {
-  shareOft: Address
+  bridgeToken: Address
   metadataSymbol: string | null
   requestedPrimarySymbol: string | null
   requestedFallbackSymbol: string | null
@@ -292,7 +292,7 @@ function resolveProvisionerTokenSymbolCandidates(params: {
     String(params.requestedPrimarySymbol ?? '').trim() ||
     String(params.metadataSymbol ?? '').trim() ||
     String(params.requestedFallbackSymbol ?? '').trim()
-  const out = buildWrapTokenSymbolCandidates(primaryRaw, params.shareOft)
+  const out = buildWrapTokenSymbolCandidates(primaryRaw, params.bridgeToken)
   const pushUnique = (value: string): void => {
     if (!value || out.includes(value)) return
     out.push(value)
@@ -300,8 +300,8 @@ function resolveProvisionerTokenSymbolCandidates(params: {
   const appendRaw = (raw: string | null): void => {
     const value = String(raw ?? '').trim()
     if (!value) return
-    pushUnique(sanitizeWrapTokenSymbolUnicode(value, params.shareOft))
-    pushUnique(sanitizeWrapTokenSymbolAscii(value, params.shareOft))
+    pushUnique(sanitizeWrapTokenSymbolUnicode(value, params.bridgeToken))
+    pushUnique(sanitizeWrapTokenSymbolAscii(value, params.bridgeToken))
   }
   // Always keep an explicit fallback candidate when caller provides one, even if
   // mode is "unicode", so we can recover from seed/metadata constraints.
@@ -322,19 +322,19 @@ function isLikelyUnicodeSymbolUnsupportedError(message: string): boolean {
   )
 }
 
-async function readShareOftMetadata(params: {
+async function readBridgeTokenMetadata(params: {
   publicClient: any
-  shareOft: Address
+  bridgeToken: Address
 }): Promise<{ name: string; symbol: string } | null> {
   try {
     const [nameRaw, symbolRaw] = await Promise.all([
       params.publicClient.readContract({
-        address: params.shareOft,
+        address: params.bridgeToken,
         abi: ERC20_METADATA_ABI,
         functionName: 'name',
       }),
       params.publicClient.readContract({
-        address: params.shareOft,
+        address: params.bridgeToken,
         abi: ERC20_METADATA_ABI,
         functionName: 'symbol',
       }),
@@ -540,11 +540,11 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
     return json(res, 400, { success: false, error: 'Invalid JSON body.' })
   }
 
-  const shareOftRaw = String(body?.shareOft ?? '').trim()
-  if (!isAddress(shareOftRaw)) {
-    return json(res, 400, { success: false, error: 'Invalid shareOft address' })
+  const bridgeTokenRaw = String(body?.bridgeToken ?? '').trim()
+  if (!isAddress(bridgeTokenRaw)) {
+    return json(res, 400, { success: false, error: 'Invalid bridgeToken address' })
   }
-  const shareOft = shareOftRaw as Address
+  const bridgeToken = bridgeTokenRaw as Address
 
   const solanaDecimals = parseDecimals(body?.solanaDecimals) ?? parseDecimals(process.env.SOLANA_DEFAULT_MINT_DECIMALS) ?? 9
   const deployEnv = String(body?.deployEnv ?? process.env.SOLANA_BRIDGE_DEPLOY_ENV ?? 'mainnet').trim() || 'mainnet'
@@ -561,14 +561,14 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
     chain: base,
     transport: http(rpcUrl, { timeout: 20_000 }),
   })
-  const shareOftMetadata = await readShareOftMetadata({ publicClient, shareOft })
+  const bridgeTokenMetadata = await readBridgeTokenMetadata({ publicClient, bridgeToken })
   const tokenName = sanitizeWrapTokenName(
-    shareOftMetadata?.name ?? String(body?.tokenName ?? ''),
-    shareOft,
+    bridgeTokenMetadata?.name ?? String(body?.tokenName ?? ''),
+    bridgeToken,
   )
   const tokenSymbolCandidates = resolveProvisionerTokenSymbolCandidates({
-    shareOft,
-    metadataSymbol: shareOftMetadata?.symbol ?? null,
+    bridgeToken,
+    metadataSymbol: bridgeTokenMetadata?.symbol ?? null,
     requestedPrimarySymbol:
       typeof body?.tokenSymbol === 'string' ? body.tokenSymbol.trim() : null,
     requestedFallbackSymbol:
@@ -582,7 +582,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
       '--deploy-env',
       deployEnv,
       '--remote-token',
-      shareOft,
+      bridgeToken,
       '--decimals',
       String(solanaDecimals),
       '--name',
@@ -641,7 +641,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
           address: BASE_SOLANA_BRIDGE,
           abi: BASE_SOLANA_BRIDGE_ABI,
           functionName: 'scalars',
-          args: [shareOft, mintBytes32],
+          args: [bridgeToken, mintBytes32],
         })
         .then((v) => BigInt(v as bigint))
         .catch(() => 0n)
@@ -651,7 +651,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
     if (scalar === 0n) {
       return json(res, 500, {
         success: false,
-        error: `Route scalar remained 0 for ${shareOft} and ${mintBytes32} after wrap-token.`,
+        error: `Route scalar remained 0 for ${bridgeToken} and ${mintBytes32} after wrap-token.`,
       })
     }
 
@@ -731,7 +731,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
       success: true,
       mintBytes32,
       data: {
-        shareOft,
+        bridgeToken,
         mintPubkey,
         mintBytes32,
         runner,
@@ -759,7 +759,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
               address: BASE_SOLANA_BRIDGE,
               abi: BASE_SOLANA_BRIDGE_ABI,
               functionName: 'scalars',
-              args: [shareOft, mintBytes32],
+              args: [bridgeToken, mintBytes32],
             })
             .then((v) => BigInt(v as bigint))
             .catch(() => 0n)
@@ -771,7 +771,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
             success: true,
             mintBytes32,
             data: {
-              shareOft,
+              bridgeToken,
               mintPubkey: existingMintPubkey,
               mintBytes32,
               runner: 'existing-mint-reuse',
@@ -864,7 +864,7 @@ async function handleBuildMeteoraIxs(req: IncomingMessage, res: ServerResponse):
       success: true,
       data: {
         creatorToken: typeof body.creatorToken === 'string' ? body.creatorToken : null,
-        shareOft: typeof body.shareOft === 'string' ? body.shareOft : null,
+        bridgeToken: typeof body.bridgeToken === 'string' ? body.bridgeToken : null,
         meteoraAlphaVault: meteoraAlphaVaultBytes32,
         expectedRemoteAmount: remoteAmount.toString(),
         solanaIxs,
@@ -878,7 +878,7 @@ async function handleBuildMeteoraIxs(req: IncomingMessage, res: ServerResponse):
 
 type SetupCreatorBody = {
   hubCreatorCoin?: string
-  hubShareOft?: string
+  hubShareToken?: string
   keeperPubkey?: string
   feeBps?: number
   decimals?: number
@@ -915,15 +915,15 @@ async function handleSetupCreator(req: IncomingMessage, res: ServerResponse): Pr
   }
 
   const hubCreatorCoin = String(body?.hubCreatorCoin ?? '').trim()
-  const hubShareOft = String(body?.hubShareOft ?? '').trim()
-  if (!hubCreatorCoin || !hubShareOft) {
-    return json(res, 400, { success: false, error: 'hubCreatorCoin and hubShareOft are required.' })
+  const hubShareToken = String(body?.hubShareToken ?? '').trim()
+  if (!hubCreatorCoin || !hubShareToken) {
+    return json(res, 400, { success: false, error: 'hubCreatorCoin and hubShareToken are required.' })
   }
 
   const args = [
     'scripts/solana/deploy/setup-creator-full.ts',
     '--hub-creator-coin', hubCreatorCoin,
-    '--hub-share-oft', hubShareOft,
+    '--hub-share-token', hubShareToken,
   ]
   if (body?.keeperPubkey) args.push('--keeper-pubkey', body.keeperPubkey)
   if (body?.feeBps !== undefined) args.push('--fee-bps', String(body.feeBps))

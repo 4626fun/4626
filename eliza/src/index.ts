@@ -1,10 +1,10 @@
 /**
- * CreatorVault ElizaOS Agent
+ * 4626 ElizaOS Agent
  *
  * Entry point that creates an ElizaOS agent runtime with:
  * - XMTP connector plugin (message streaming)
  * - Keepr plugin (vault actions)
- * - CreatorVault character (personality)
+ * - 4626 character (personality)
  *
  * Usage:
  *   # With all env vars set:
@@ -235,7 +235,7 @@ async function handleMessage(msg: {
 
 async function main() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-  console.log('  CreatorVault ElizaOS Agent')
+  console.log('  4626 ElizaOS Agent')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
   const privateKey = (process.env.XMTP_AGENT_PRIVATE_KEY ?? '').trim()

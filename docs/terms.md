@@ -8,7 +8,7 @@ slug: /terms
 
 Last updated: February 6, 2026
 
-These Terms of Service ("Terms") govern your access to and use of CreatorVault and 4626.fun (the "Service"). By using the Service, you agree to these Terms.
+These Terms of Service ("Terms") govern your access to and use of 4626 and 4626.fun (the "Service"). By using the Service, you agree to these Terms.
 
 ## 1. Eligibility
 
@@ -16,7 +16,7 @@ You must be at least the age of majority in your jurisdiction to use the Service
 
 ## 2. Non-custodial Service
 
-CreatorVault is a non-custodial service. You control your wallet and your private keys. We do not hold, store, or transfer your digital assets on your behalf. Onchain transactions are final and irreversible.
+4626 is a non-custodial service. You control your wallet and your private keys. We do not hold, store, or transfer your digital assets on your behalf. Onchain transactions are final and irreversible.
 
 ## 3. Accounts and Access
 
@@ -45,7 +45,7 @@ The Service may integrate third-party protocols, wallets, or networks. Your use 
 
 ## 8. Intellectual Property
 
-The Service and its content are owned by CreatorVault and its licensors. You may not copy, modify, distribute, or create derivative works without permission, except as allowed by law.
+The Service and its content are owned by 4626 and its licensors. You may not copy, modify, distribute, or create derivative works without permission, except as allowed by law.
 
 ## 9. Suspension and Termination
 

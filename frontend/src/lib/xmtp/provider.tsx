@@ -132,7 +132,7 @@ export function useXmtp() {
  * key. New installs use a random key (no wallet popup needed).
  */
 export const ENC_KEY_MESSAGE =
-  'Enable encrypted messaging on CreatorVault (4626.fun)\n\nThis signature encrypts your local message database.\nNo blockchain transaction will occur.'
+  'Enable encrypted messaging on 4626 (4626.fun)\n\nThis signature encrypts your local message database.\nNo blockchain transaction will occur.'
 
 const RAW_XMTP_ENV = String(import.meta.env.VITE_XMTP_ENV ?? '').trim().toLowerCase()
 const XMTP_ENV: 'production' | 'dev' | 'local' =
@@ -314,6 +314,11 @@ function extractInstallationLimitInboxId(message: string): string | null {
 function isInstallationLimitError(message: string): boolean {
   const m = String(message || '').toLowerCase()
   return m.includes('registered 10/10 installations') || m.includes('10/10 installations')
+}
+
+function isWrongChainIdError(message: string): boolean {
+  const m = String(message || '').toLowerCase()
+  return m.includes('wrong chain id') || (m.includes('initially added with') && m.includes('signing from 0'))
 }
 
 /**
@@ -954,25 +959,25 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         return hexToBytes(s)
       }
 
-      const signer: Signer = signerDecision.signerType === 'SCW'
-        ? {
-            type: 'SCW',
-            getIdentifier: () => ({ identifier: xmtpIdentityAddress as `0x${string}`, identifierKind: IdentifierKind.Ethereum }),
-            signMessage: signMessageFn,
-            getChainId: () => BigInt(signerDecision.scwChainId),
-          }
-        : {
-            type: 'EOA',
-            getIdentifier: () => ({ identifier: xmtpIdentityAddress as `0x${string}`, identifierKind: IdentifierKind.Ethereum }),
-            signMessage: signMessageFn,
-          }
+      const scwSigner: Signer = {
+        type: 'SCW',
+        getIdentifier: () => ({ identifier: xmtpIdentityAddress as `0x${string}`, identifierKind: IdentifierKind.Ethereum }),
+        signMessage: signMessageFn,
+        getChainId: () => BigInt(signerDecision.scwChainId),
+      }
+      const eoaSigner: Signer = {
+        type: 'EOA',
+        getIdentifier: () => ({ identifier: xmtpIdentityAddress as `0x${string}`, identifierKind: IdentifierKind.Ethereum }),
+        signMessage: signMessageFn,
+      }
+      const signer: Signer = signerDecision.signerType === 'SCW' ? scwSigner : eoaSigner
 
       console.log('[xmtp] Client.build unavailable — falling through to Client.create (will require wallet signature)')
 
       // Helper: attempt Client.create, auto-revoking stale installations on 10/10.
-      const tryCreate = async (dbKey: Uint8Array): Promise<Client> => {
+      const tryCreate = async (activeSigner: Signer, dbKey: Uint8Array): Promise<Client> => {
         try {
-          return await Client.create(signer, { ...baseOptions, dbEncryptionKey: dbKey })
+          return await Client.create(activeSigner, { ...baseOptions, dbEncryptionKey: dbKey })
         } catch (createErr) {
           const errMsg = createErr instanceof Error ? createErr.message : String(createErr)
           if (!isInstallationLimitError(errMsg)) throw createErr
@@ -983,8 +988,8 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
           console.log('[xmtp] 10/10 installation limit hit — revoking oldest installation to free 1 slot…')
           setStatus('connecting')
-          await autoRevokeOldestInstallation(signer, limitInboxId)
-          return await Client.create(signer, { ...baseOptions, dbEncryptionKey: dbKey })
+          await autoRevokeOldestInstallation(activeSigner, limitInboxId)
+          return await Client.create(activeSigner, { ...baseOptions, dbEncryptionKey: dbKey })
         }
       }
 
@@ -992,7 +997,21 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       // (per XMTP docs), so generating a fresh key on failure would not help
       // and would only risk burning another installation slot.  We try once
       // with the stored key and let tryCreate handle 10/10 auto-revocation.
-      const client = await tryCreate(encKeyBytes)
+      let client: Client
+      try {
+        client = await tryCreate(signer, encKeyBytes)
+      } catch (createErr) {
+        const errMsg = createErr instanceof Error ? createErr.message : String(createErr)
+        // Some inboxes were originally registered as SCW on Base (8453).
+        // If we attempt an EOA update, XMTP reports "Wrong chain id ... signing from 0".
+        if (signer.type === 'EOA' && isWrongChainIdError(errMsg)) {
+          console.warn('[xmtp] Wrong chain id while using EOA signer; retrying with SCW signer on Base (8453)…')
+          writeStoredSignerType(xmtpIdentityAddress, 'SCW')
+          client = await tryCreate(scwSigner, encKeyBytes)
+        } else {
+          throw createErr
+        }
+      }
 
       if (!mountedRef.current) {
         client.close()
@@ -1066,24 +1085,24 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       modeOverride: xmtpModeOverride ?? undefined,
     })
 
-    const signer: Signer = signerDecision.signerType === 'SCW'
-      ? {
-          type: 'SCW',
-          getIdentifier: () => ({
-            identifier: xmtpIdentityAddress,
-            identifierKind: IdentifierKind.Ethereum,
-          }),
-          signMessage: signMessageFn,
-          getChainId: () => BigInt(CANONICAL_SCW_CHAIN_ID),
-        }
-      : {
-          type: 'EOA',
-          getIdentifier: () => ({
-            identifier: xmtpIdentityAddress,
-            identifierKind: IdentifierKind.Ethereum,
-          }),
-          signMessage: signMessageFn,
-        }
+    const scwSigner: Signer = {
+      type: 'SCW',
+      getIdentifier: () => ({
+        identifier: xmtpIdentityAddress,
+        identifierKind: IdentifierKind.Ethereum,
+      }),
+      signMessage: signMessageFn,
+      getChainId: () => BigInt(CANONICAL_SCW_CHAIN_ID),
+    }
+    const eoaSigner: Signer = {
+      type: 'EOA',
+      getIdentifier: () => ({
+        identifier: xmtpIdentityAddress,
+        identifierKind: IdentifierKind.Ethereum,
+      }),
+      signMessage: signMessageFn,
+    }
+    const signer: Signer = signerDecision.signerType === 'SCW' ? scwSigner : eoaSigner
 
     setStatus('connecting')
     try {
@@ -1141,7 +1160,18 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      await (Client as any).revokeInstallations(signer, targetInboxId, toRevoke, XMTP_ENV as any)
+      try {
+        await (Client as any).revokeInstallations(signer, targetInboxId, toRevoke, XMTP_ENV as any)
+      } catch (revokeErr) {
+        const errMsg = revokeErr instanceof Error ? revokeErr.message : String(revokeErr)
+        if (signer.type === 'EOA' && isWrongChainIdError(errMsg)) {
+          console.warn('[xmtp] Wrong chain id during reset with EOA signer; retrying with SCW signer on Base (8453)…')
+          writeStoredSignerType(xmtpIdentityAddress, 'SCW')
+          await (Client as any).revokeInstallations(scwSigner, targetInboxId, toRevoke, XMTP_ENV as any)
+        } else {
+          throw revokeErr
+        }
+      }
 
       setInstallationLimitInboxId(null)
       setError(null)

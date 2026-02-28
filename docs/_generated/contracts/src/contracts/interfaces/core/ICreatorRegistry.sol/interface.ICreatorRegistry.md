@@ -1,5 +1,5 @@
 # ICreatorRegistry
-[Git Source](https://github.com/creatorvault/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/interfaces/core/ICreatorRegistry.sol)
+[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/interfaces/core/ICreatorRegistry.sol)
 
 **Title:**
 ICreatorRegistry
@@ -7,7 +7,7 @@ ICreatorRegistry
 **Author:**
 0xakita.eth
 
-Registry interface for core CreatorVault addresses.
+Registry interface for core 4626 addresses.
 
 Used by vaults, OFTs, and helpers to resolve ecosystem contracts.
 
@@ -40,13 +40,13 @@ function registerCreatorCoin(
 |`_poolFee`|`uint24`|Pool fee tier|
 
 
-### setCreatorVault
+### set4626
 
 Set vault address for a Creator Coin
 
 
 ```solidity
-function setCreatorVault(address _token, address _vault) external;
+function set4626(address _token, address _vault) external;
 ```
 
 ### setCreatorShareOFT

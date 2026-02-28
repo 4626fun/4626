@@ -5,7 +5,7 @@ sidebar_position: 1
 
 # Multisig Operations
 
-Using Safe multisig for CreatorVault operations.
+Using Safe multisig for 4626 operations.
 
 ## Setup
 

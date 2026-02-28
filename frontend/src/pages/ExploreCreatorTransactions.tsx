@@ -21,7 +21,7 @@ export function ExploreCreatorTransactions() {
 
   return (
     <div className="relative pb-24 md:pb-0">
-      <PageMeta title="Creator Transactions" description="View on-chain transactions for this creator coin on CreatorVault." canonicalPath={`/explore/transactions/${String(params.chain ?? '')}/${String(params.tokenAddress ?? '')}`} />
+      <PageMeta title="Creator Transactions" description="View on-chain transactions for this creator coin on 4626." canonicalPath={`/explore/transactions/${String(params.chain ?? '')}/${String(params.tokenAddress ?? '')}`} />
       <section className="cinematic-section">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <motion.div

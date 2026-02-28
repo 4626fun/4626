@@ -136,7 +136,7 @@ const zoraCoinAction: Action = {
 // ---------------------------------------------------------------------------
 
 export const zoraPlugin: Plugin = {
-  name: '@creatorvault/plugin-zora',
+  name: '@4626/plugin-zora',
   description:
     'Zora Coin commands — create Content Coins, buy/sell Creator Coins via the Zora SDK on Base.',
 

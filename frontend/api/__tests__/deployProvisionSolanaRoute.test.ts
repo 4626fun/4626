@@ -22,7 +22,7 @@ describe('deploy provisionSolanaRoute handler', () => {
     try {
       const req = createMockReq({
         method: 'POST',
-        body: { shareOft: '0x49b2FC0E4582F0AeA8c733993A8e18508de7Cd86' },
+        body: { bridgeToken: '0x49b2FC0E4582F0AeA8c733993A8e18508de7Cd86' },
       })
       const res = createMockRes()
       await handler(req, res)
@@ -44,7 +44,7 @@ describe('deploy provisionSolanaRoute handler', () => {
       const req = createMockReq({
         method: 'POST',
         headers: { authorization: 'Bearer test-secret' },
-        body: { shareOft: '0x49b2FC0E4582F0AeA8c733993A8e18508de7Cd86' },
+        body: { bridgeToken: '0x49b2FC0E4582F0AeA8c733993A8e18508de7Cd86' },
       })
       const res = createMockRes()
       await handler(req, res)

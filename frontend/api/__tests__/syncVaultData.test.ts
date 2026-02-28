@@ -36,6 +36,24 @@ describe('sync-vault-data hardening', () => {
     expect(res.body).toEqual({ error: 'Unauthorized' })
   })
 
+  it('fails closed when CRON_SECRET is missing', async () => {
+    restoreEnv = applyEnv({ CRON_SECRET: undefined })
+
+    const mod = await import('../_handlers/_sync-vault-data.ts')
+    const handler = mod.default
+
+    const req = createMockReq({
+      method: 'GET',
+      headers: {},
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(503)
+    expect(res.body).toEqual({ error: 'CRON_SECRET is not configured' })
+  })
+
   it('persists synced data with Base chainId (8453)', async () => {
     const syncStatusUpsert = vi.fn().mockResolvedValue(undefined)
     const vaultSnapshotUpsert = vi.fn().mockResolvedValue(undefined)

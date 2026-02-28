@@ -225,7 +225,7 @@ contract OperationalWiring is Script {
         console.log(unicode"   ✓ CreatorOVaultFactory");
 
         registry.setAuthorizedFactory(VAULT_BATCHER, true);
-        console.log(unicode"   ✓ CreatorVaultBatcher");
+        console.log(unicode"   ✓ DeploymentBatcher");
 
         registry.setAuthorizedFactory(VAULT_ACT_BATCHER, true);
         console.log(unicode"   ✓ VaultActivationBatcher");

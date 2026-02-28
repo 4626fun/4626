@@ -1,4 +1,4 @@
-# UI/UX Pages Changes — CreatorVault (4626.fun)
+# UI/UX Pages Changes — 4626 (4626.fun)
 
 > Changelog tracking what changed, why it's better, and any follow-ups.
 > Updated during implementation.

@@ -1,4 +1,4 @@
-# UI/UX Audit — CreatorVault (4626.fun)
+# UI/UX Audit — 4626 (4626.fun)
 
 > Generated 2026-02-25. Source of truth for theme tokens: `tailwind.config.js` + `src/index.css`.
 

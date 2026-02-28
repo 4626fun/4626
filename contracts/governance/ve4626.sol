@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title ve4626 - CreatorVault Protocol Token
+ * @title ve4626 - 4626 Protocol Token
  * @author 0xakita.eth
  * @notice Vote-escrowed ERC4626 (ve■4626) for protocol-wide boosts.
  * @dev Users lock ■4626 to get voting power and lottery boosts.

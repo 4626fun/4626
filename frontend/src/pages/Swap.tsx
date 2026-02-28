@@ -9,7 +9,7 @@ import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
 import { SwapConfirmModal } from '@/components/trade/SwapConfirmModal'
 import { SwapSettingsSheet } from '@/components/trade/SwapSettingsSheet'
 import { Alert } from '@/components/ui/Alert'
-import { CreatorVaultsPanel } from '@/components/swap/CreatorVaultsPanel'
+import { VaultsPanel } from '@/components/swap/VaultsPanel'
 import { SwapCard } from '@/components/swap/SwapCard'
 import { SwapPageLayout } from '@/components/swap/SwapPageLayout'
 import { TokenSelectorModal, type SwapTokenOption } from '@/components/swap/TokenSelectorModal'
@@ -324,7 +324,7 @@ export function Swap() {
   const swapTokenOptions = useMemo<SwapTokenOption[]>(() => {
     return allTokenOptions.map((option) => ({
       ...option,
-      verified: option.verified ?? option.group === 'core' || option.group === 'creator' || option.group === 'share',
+      verified: option.verified ?? (option.group === 'core' || option.group === 'creator' || option.group === 'share'),
       sectionTag:
         option.group === 'creator' ? 'creator' : option.group === 'share' ? 'content' : undefined,
     }))
@@ -345,6 +345,13 @@ export function Swap() {
   const tokenOutDisplay = tokenOutIdentity.display
   const tokenInSymbol = tokenInDisplay.symbol
   const tokenOutSymbol = tokenOutDisplay.symbol
+  const registerTokenForIdentity = useCallback((option: SwapTokenOption) => {
+    setExtraTokenOptions((previous) => {
+      const normalized = option.address.toLowerCase()
+      if (previous.some((entry) => entry.address.toLowerCase() === normalized)) return previous
+      return [...previous, { ...option }]
+    })
+  }, [])
 
   useEffect(() => {
     const inputUnverified = tokenInOption?.verified === false
@@ -539,14 +546,6 @@ export function Swap() {
         } catch {}
       }
       return next
-    })
-  }, [])
-
-  const registerTokenForIdentity = useCallback((option: SwapTokenOption) => {
-    setExtraTokenOptions((previous) => {
-      const normalized = option.address.toLowerCase()
-      if (previous.some((entry) => entry.address.toLowerCase() === normalized)) return previous
-      return [...previous, { ...option }]
     })
   }, [])
 
@@ -769,7 +768,7 @@ export function Swap() {
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <>
-      <PageMeta title="Swap" description="Swap tokens on Base using CreatorVault — best-price routing via Uniswap." canonicalPath="/swap" />
+      <PageMeta title="Swap" description="Swap tokens on Base using 4626 — best-price routing via Uniswap." canonicalPath="/swap" />
       <SwapPageLayout
         swapPanel={
           activePanel === 'swap' ? (
@@ -872,7 +871,7 @@ export function Swap() {
             />
           )
         }
-        vaultPanel={activePanel === 'swap' ? <CreatorVaultsPanel chainId={swapChainId} /> : null}
+        vaultPanel={activePanel === 'swap' ? <VaultsPanel chainId={swapChainId} /> : null}
         selectedChainId={swapChainId}
         walletChainId={walletChainId}
         gasIndicatorLabel={gasEstimateLabel}
@@ -998,7 +997,7 @@ function LiquidityPanel(props: {
 }) {
   return (
     <div className="space-y-4">
-      <PageMeta title="Swap" description="Swap tokens on Base using CreatorVault — best-price routing via Uniswap." canonicalPath="/swap" />
+      <PageMeta title="Swap" description="Swap tokens on Base using 4626 — best-price routing via Uniswap." canonicalPath="/swap" />
       {/* ─── Execution bar (mirrors swap panel) ─── */}
       <div className="flex items-center gap-2">
         <div className="inline-flex rounded-full border border-white/12 bg-black/40 p-0.5 text-xs">

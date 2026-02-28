@@ -108,7 +108,7 @@ function generateMentionResponse(castText: string, authorUsername: string): stri
 
   // Simple keyword-based responses for now
   if (cleanText.includes('vault') || cleanText.includes('tvl') || cleanText.includes('deposit')) {
-    return `Hey @${authorUsername}! Check out our vaults at https://4626.fun — you can explore Creator Vaults, deposit, and earn yield. Type any questions in our XMTP chat!`
+    return `Hey @${authorUsername}! Check out our vaults at https://4626.fun — you can explore creator vaults, deposit, and earn yield. Type any questions in our XMTP chat!`
   }
 
   if (cleanText.includes('coin') || cleanText.includes('token') || cleanText.includes('buy') || cleanText.includes('trade')) {
@@ -116,11 +116,11 @@ function generateMentionResponse(castText: string, authorUsername: string): stri
   }
 
   if (cleanText.includes('help') || cleanText.includes('how')) {
-    return `Hey @${authorUsername}! I'm Keepr, the CreatorVault assistant. DM me on XMTP to manage vaults, trade coins, and more. Start here: https://4626.fun`
+    return `Hey @${authorUsername}! I'm Keepr, the 4626 assistant. DM me on XMTP to manage vaults, trade coins, and more. Start here: https://4626.fun`
   }
 
   // Default response
-  return `Hey @${authorUsername}! I'm Keepr from CreatorVault. DM me on XMTP for vault management, coin trading, and more. https://4626.fun`
+  return `Hey @${authorUsername}! I'm Keepr from 4626. DM me on XMTP for vault management, coin trading, and more. https://4626.fun`
 }
 
 // ---------------------------------------------------------------------------

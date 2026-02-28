@@ -22,7 +22,7 @@ export function FaqHowItWorks() {
 
   return (
     <div className="relative">
-      <PageMeta title="How It Works" description="Learn how CreatorVault works — deposit creator coins, earn from fees, and withdraw anytime." canonicalPath="/faq/how-it-works" />
+      <PageMeta title="How It Works" description="Learn how 4626 works — deposit creator coins, earn from fees, and withdraw anytime." canonicalPath="/faq/how-it-works" />
       <section className="cinematic-section">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="mb-10">

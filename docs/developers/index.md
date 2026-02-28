@@ -5,12 +5,12 @@ sidebar_position: 7
 
 # Developer Guide
 
-This guide covers how to build on and contribute to CreatorVault.
+This guide covers how to build on and contribute to 4626.
 
 ## Project Structure
 
 ```
-CreatorVault/
+4626/
   contracts/                      # Solidity contracts
     core/                         # Platform core
       CreatorRegistry.sol
@@ -64,7 +64,7 @@ forge test -vvv
 forge test --match-test testVaultDeposit -vvv
 
 # Deploy to Base (example)
-forge script script/DeployCreatorVault.s.sol \
+forge script script/DeployInfrastructure.s.sol:DeployVaultStack \
   --rpc-url $BASE_RPC_URL \
   --broadcast \
   --verify
@@ -89,8 +89,8 @@ For the Vercel API surface, avoid "hidden" dynamic imports: add endpoints by reg
 **Deploy a vault for your Creator Coin:**
 
 ```solidity
-// Via Factory (or use web UI at erc4626.fun/deploy)
-(address vault, address wrapper, address shareOFT) = factory.deployCreatorVault(
+// Via Factory (or use web UI at 4626.fun/deploy)
+(address vault, address wrapper, address shareOFT) = factory.deployVault(
     0x5b67...75,                       // Your Creator Coin address
     "TOKEN Vault",                     // Vault name
     "▢TOKEN",                          // Vault symbol

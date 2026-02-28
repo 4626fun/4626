@@ -1,8 +1,8 @@
-**creatorvault-miniapp**
+**4626-miniapp**
 
 ***
 
-# creatorvault-miniapp
+# 4626-miniapp
 
 ## Modules
 
@@ -35,7 +35,7 @@
 - [src/lib/logger](src/lib/logger.md)
 - [src/lib/neynar-api](src/lib/neynar-api.md)
 - [src/lib/onchain/coinTradeRewardsBatch](src/lib/onchain/coinTradeRewardsBatch.md)
-- [src/lib/onchain/creatorVaultResolve](src/lib/onchain/creatorVaultResolve.md)
+- [src/lib/onchain/vaultResolve](src/lib/onchain/vaultResolve.md)
 - [src/lib/onchain/protocolRewards](src/lib/onchain/protocolRewards.md)
 - [src/lib/reputation-aggregator](src/lib/reputation-aggregator.md)
 - [src/lib/talent-api](src/lib/talent-api.md)

@@ -119,7 +119,7 @@ function formatVaultStatus(v: Awaited<ReturnType<typeof getKeeprVaultByGroupId>>
       'Keepr status',
       '',
       '- configured: no',
-      '- next: ask the creator to connect this group in CreatorVault',
+      '- next: ask the creator to connect this group in 4626',
     ].join('\n')
   }
   return [
@@ -724,7 +724,7 @@ export async function handleKeeprCommand(params: {
           'Keepr rules',
           '',
           '- configured: no',
-          '- next: ask the creator to connect this group in CreatorVault',
+          '- next: ask the creator to connect this group in 4626',
         ].join('\n'),
       }
     }

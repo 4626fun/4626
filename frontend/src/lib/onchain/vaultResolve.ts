@@ -91,7 +91,7 @@ export type CreatorCoinInfo = {
   registeredAt: bigint | null
 }
 
-export type CreatorVaultResolved = {
+export type VaultResolved = {
   token: Address
   info: CreatorCoinInfo
   ccaStrategy: Address | null
@@ -273,13 +273,13 @@ async function selectMatchingPhase2Log<
   return null
 }
 
-async function resolveCreatorVaultFromBatcherEvents<
+async function resolveVaultFromBatcherEvents<
   TTransport extends Transport = Transport,
   TChain extends Chain | undefined = Chain | undefined,
 >(
   publicClient: PublicClient<TTransport, TChain>,
   addr: Address,
-): Promise<CreatorVaultResolved | null> {
+): Promise<VaultResolved | null> {
   const batcher = asAddress(CONTRACTS.creatorVaultBatcher)
   if (!batcher) return null
 
@@ -366,19 +366,19 @@ async function resolveCreatorVaultFromBatcherEvents<
   return null
 }
 
-export async function resolveCreatorVaultByAnyAddress<
+export async function resolveVaultByAnyAddress<
   TTransport extends Transport = Transport,
   TChain extends Chain | undefined = Chain | undefined,
 >(
   publicClient: PublicClient<TTransport, TChain>,
   addressLike: string,
-): Promise<CreatorVaultResolved | null> {
+): Promise<VaultResolved | null> {
   if (!isAddress(addressLike)) return null
   const addr = getAddress(addressLike as Address)
 
   const token = await resolveCreatorTokenFromAnyAddress(publicClient, addr)
   if (token) {
-    const batcherResolved = await resolveCreatorVaultFromBatcherEvents(publicClient, addr)
+    const batcherResolved = await resolveVaultFromBatcherEvents(publicClient, addr)
     const info = await fetchCreatorCoinInfo(publicClient, token)
     if (info) return { token, info, ccaStrategy: batcherResolved?.ccaStrategy ?? null }
 
@@ -389,9 +389,9 @@ export async function resolveCreatorVaultByAnyAddress<
 
   const directTokenInfo = await fetchCreatorCoinInfo(publicClient, addr).catch(() => null)
   if (directTokenInfo) {
-    const batcherResolved = await resolveCreatorVaultFromBatcherEvents(publicClient, addr).catch(() => null)
+    const batcherResolved = await resolveVaultFromBatcherEvents(publicClient, addr).catch(() => null)
     return { token: addr, info: directTokenInfo, ccaStrategy: batcherResolved?.ccaStrategy ?? null }
   }
 
-  return await resolveCreatorVaultFromBatcherEvents(publicClient, addr)
+  return await resolveVaultFromBatcherEvents(publicClient, addr)
 }

@@ -1,11 +1,11 @@
 # ICreatorRegistryLottery
-[Git Source](https://github.com/creatorvault/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/services/lottery/CreatorLotteryManager.sol)
+[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/services/lottery/CreatorLotteryManager.sol)
 
 **Title:**
 CreatorLotteryManager
 
 **Author:**
-0xakita.eth (CreatorVault)
+0xakita.eth (4626)
 
 SHARED swap-based lottery service for ALL Creator Coins
 

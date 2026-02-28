@@ -1,16 +1,16 @@
-# CreatorVaultDeployer
-[Git Source](https://github.com/creatorvault/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/helpers/batchers/CreatorVaultDeployer.sol)
+# DeploymentBatcher
+[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/helpers/batchers/DeploymentBatcher.sol)
 
 **Inherits:**
 ReentrancyGuard
 
 **Title:**
-CreatorVaultDeployer
+DeploymentBatcher
 
 **Author:**
 0xakita.eth
 
-Multi-transaction CreatorVault deployment orchestrator (Phases 1–3).
+Multi-transaction 4626 deployment orchestrator (Phases 1–3).
 
 We can no longer deploy the full stack in one transaction on Base due to code-deposit gas limits.
 This contract splits deployment into multiple calls:

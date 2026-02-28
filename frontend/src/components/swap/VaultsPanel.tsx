@@ -31,7 +31,7 @@ async function fetchActiveVaults(chainId: number): Promise<VaultConfig[]> {
   return payload.data.vaults
 }
 
-export function CreatorVaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainId: number; activeTabDefault?: 'featured' | 'mine' }) {
+export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainId: number; activeTabDefault?: 'featured' | 'mine' }) {
   const [tab, setTab] = useState<'featured' | 'mine'>(activeTabDefault)
   const accountContext = useAccountContext()
   const currentAddress = accountContext.signerAddress ?? null

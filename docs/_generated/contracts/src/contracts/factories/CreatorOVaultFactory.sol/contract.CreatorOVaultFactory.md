@@ -1,5 +1,5 @@
 # CreatorOVaultFactory
-[Git Source](https://github.com/creatorvault/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/factories/CreatorOVaultFactory.sol)
+[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/factories/CreatorOVaultFactory.sol)
 
 **Inherits:**
 Ownable
@@ -22,7 +22,7 @@ NEW APPROACH:
 
 DEPLOYMENT FLOW:
 1. Deploy this factory (part of infrastructure)
-2. Run DeployCreatorVault.s.sol which:
+2. Run DeployVaultStack.s.sol which:
 - Deploys all 6 contracts individually
 - Calls factory.registerDeployment() to store info
 3. Addresses stored here for lookup

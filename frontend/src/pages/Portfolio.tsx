@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
 import { apiFetch } from '@/lib/apiBase'
 import { fetchDebankTokenList, type DebankToken, type DebankTokenList } from '@/lib/debank/client'
@@ -153,6 +154,19 @@ type PortfolioApiResponse = {
     totalUsdValue: number | null
     asOf: string | null
   }
+  onchainIdentity: {
+    source: 'ens' | 'basename'
+    address: string
+    ensName: string | null
+    basename: string | null
+    displayName: string | null
+    bio: string | null
+    avatarUrl: string | null
+    website: string | null
+    twitter: string | null
+    github: string | null
+    discord: string | null
+  } | null
 }
 
 export function Portfolio() {
@@ -484,7 +498,7 @@ export function Portfolio() {
 
   return (
     <div className="relative pb-24 md:pb-0 min-h-screen">
-      <PageMeta title="Portfolio" description="View your token balances, vault positions, and on-chain activity on CreatorVault." canonicalPath="/portfolio" />
+      <PageMeta title="Portfolio" description="View your token balances, vault positions, and on-chain activity on 4626." canonicalPath="/portfolio" />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
           {/* Header (Uniswap-style) */}
@@ -621,6 +635,12 @@ export function Portfolio() {
                   <div className="flex flex-wrap gap-2">
                     {portfolioQuery.data.wallets.map((wallet) => (
                       <div key={wallet.address} className="inline-flex items-center gap-1.5 rounded-lg border border-white/8 bg-white/4 px-2 py-1 text-[10px] text-zinc-400">
+                        <WalletProviderIcon
+                          provider={wallet.provider}
+                          walletType={wallet.walletType}
+                          isCanonicalSmartWallet={wallet.isCanonicalSmartWallet}
+                          size={12}
+                        />
                         <span className="font-mono text-zinc-300">{shortAddr(wallet.address)}</span>
                         {wallet.isCanonicalSmartWallet && <Badge variant="canonical" size="xs">Smart Wallet</Badge>}
                         {wallet.isEmbeddedEoa && <Badge variant="eoa" size="xs">User Wallet</Badge>}
@@ -763,7 +783,11 @@ export function Portfolio() {
                     >
                       Save profile
                     </Button>
-                    <p className="text-[10px] text-zinc-600">Externally sourced fields are locked for edits.</p>
+                    <p className="text-[10px] text-zinc-600">
+                      {portfolioQuery.data?.onchainIdentity
+                        ? `Auto-filled from ${portfolioQuery.data.onchainIdentity.source === 'ens' ? 'ENS' : 'Basename'} for ${shortAddr(portfolioQuery.data.onchainIdentity.address)}.`
+                        : 'No ENS/Basename profile detected yet.'}
+                    </p>
                   </div>
                 </div>
               ) : null}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time environment setup for CreatorVault cloud agents.
+# One-time environment setup for 4626 cloud agents.
 # Run once when provisioning a new sandbox or after a clean wipe.
 set -euo pipefail
 

@@ -5,7 +5,7 @@ sidebar_position: 1
 
 # Launch Your Token
 
-Guide to launching a new creator token with CreatorVault.
+Guide to launching a new creator token with 4626.
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@ Ensure you have at least 50M tokens in your wallet for the initial CCA deposit.
 
 ## Step 2: Navigate to Deploy
 
-Go to [erc4626.fun/deploy](https://erc4626.fun/deploy)
+Go to [4626.fun/deploy](https://4626.fun/deploy)
 
 ## Step 3: Connect Wallet
 

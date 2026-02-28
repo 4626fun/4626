@@ -86,7 +86,7 @@ export async function signInWithSiwaAgent(params: SignInWithSiwaAgentParams): Pr
   const message = buildSIWAMessage({
     domain: nonceData.domain,
     address: nonceData.ownerAddress,
-    statement: params.statement ?? 'Sign in with your agent identity to access CreatorVault agent APIs.',
+    statement: params.statement ?? 'Sign in with your agent identity to access 4626 agent APIs.',
     uri: nonceData.uri,
     version: '1',
     agentId: nonceData.agentId,

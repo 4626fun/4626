@@ -1,8 +1,8 @@
-[**creatorvault-miniapp**](../../index.md)
+[**4626-miniapp**](../../index.md)
 
 ***
 
-[creatorvault-miniapp](../../index.md) / src/config/wagmi
+[4626-miniapp](../../index.md) / src/config/wagmi
 
 # src/config/wagmi
 

@@ -3,14 +3,14 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
 
-import "../contracts/helpers/batchers/CreatorVaultDeployer.sol";
+import "../contracts/helpers/batchers/DeploymentBatcher.sol";
 import "../contracts/helpers/infra/UniversalBytecodeStoreV2.sol";
 import "../contracts/factories/UniversalCreate2DeployerFromStore.sol";
 import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVaultAdminModule.sol";
 import {CreatorOVaultCoreModule} from "../contracts/vault/modules/CreatorOVaultCoreModule.sol";
 import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorOVaultStrategiesModule.sol";
 
-/// @notice Deploys the phased CreatorVault deployer (Phases 1–3) on Base mainnet.
+/// @notice Deploys the phased 4626 deployment batcher (Phases 1–3) on Base mainnet.
 ///
 /// Why:
 /// - The legacy one-tx deploy+launch flow no longer fits in a single Base tx due to code-deposit gas limits.
@@ -43,16 +43,16 @@ contract DeployBaseMainnetDeployer is Script {
     address constant CREATE2_FACTORY_ADDR = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
     // Reuse v2 infra salts (store + deployer).
-    bytes32 constant STORE_SALT_V2 = keccak256("CreatorVault:UniversalBytecodeStore:v2");
-    bytes32 constant DEPLOYER_SALT_V2 = keccak256("CreatorVault:UniversalCreate2DeployerFromStore:v2");
+    bytes32 constant STORE_SALT_V2 = keccak256("4626:UniversalBytecodeStore:v2");
+    bytes32 constant DEPLOYER_SALT_V2 = keccak256("4626:UniversalCreate2DeployerFromStore:v2");
 
     // CreatorOVault module salts (shared logic contracts; no constructor args).
-    bytes32 constant VAULT_CORE_MODULE_SALT = keccak256("CreatorVault:CreatorOVaultCoreModule:v1");
-    bytes32 constant VAULT_STRATEGIES_MODULE_SALT = keccak256("CreatorVault:CreatorOVaultStrategiesModule:v1");
-    bytes32 constant VAULT_ADMIN_MODULE_SALT = keccak256("CreatorVault:CreatorOVaultAdminModule:v1");
+    bytes32 constant VAULT_CORE_MODULE_SALT = keccak256("4626:CreatorOVaultCoreModule:v1");
+    bytes32 constant VAULT_STRATEGIES_MODULE_SALT = keccak256("4626:CreatorOVaultStrategiesModule:v1");
+    bytes32 constant VAULT_ADMIN_MODULE_SALT = keccak256("4626:CreatorOVaultAdminModule:v1");
 
     // Deployer salt (constructor args are chain-specific ⇒ address is chain-specific).
-    bytes32 constant DEPLOYER_SALT = keccak256("CreatorVault:CreatorVaultDeployer:v4");
+    bytes32 constant DEPLOYER_SALT = keccak256("4626:DeploymentBatcher:v4");
 
     // Defaults (Base mainnet) — can be overridden via env.
     address constant DEFAULT_REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
@@ -158,9 +158,9 @@ contract DeployBaseMainnetDeployer is Script {
             strategiesModuleAddr,
             adminModuleAddr
         );
-        bytes memory deployerInit = abi.encodePacked(type(CreatorVaultDeployer).creationCode, deployerArgs);
+        bytes memory deployerInit = abi.encodePacked(type(DeploymentBatcher).creationCode, deployerArgs);
         address deployerAddr = _create2(CREATE2_FACTORY_ADDR, DEPLOYER_SALT, keccak256(deployerInit));
-        console2.log("CreatorVaultDeployer (predicted):", deployerAddr);
+        console2.log("DeploymentBatcher (predicted):", deployerAddr);
 
         vm.startBroadcast(pk);
 
@@ -199,7 +199,7 @@ contract DeployBaseMainnetDeployer is Script {
         vm.stopBroadcast();
 
         // Minimal sanity checks (read-only).
-        CreatorVaultDeployer deployer = CreatorVaultDeployer(deployerAddr);
+        DeploymentBatcher deployer = DeploymentBatcher(deployerAddr);
         require(address(deployer.bytecodeStore()) == storeAddr, "Deployer store mismatch");
         require(address(deployer.create2Deployer()) == create2DeployerAddr, "Deployer create2 mismatch");
         require(address(deployer.registry()) == cfg.registry, "Deployer registry mismatch");
@@ -210,7 +210,7 @@ contract DeployBaseMainnetDeployer is Script {
         require(deployer.vaultCoreModule() == coreModuleAddr, "Deployer core module mismatch");
         require(deployer.vaultStrategiesModule() == strategiesModuleAddr, "Deployer strategies module mismatch");
         require(deployer.vaultAdminModule() == adminModuleAddr, "Deployer admin module mismatch");
-        console2.log("CreatorVaultDeployer:", address(deployer));
+        console2.log("DeploymentBatcher:", address(deployer));
 
         // Optional: configure the 20% Solana allocation path on the batcher.
         if (configureSolana) {

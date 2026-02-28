@@ -1,6 +1,6 @@
 ---
 name: vault-deployment
-description: Deploy and configure CreatorVault vault infrastructure (CreatorOVault, wrapper, ShareOFT, gauge, CCA strategy, oracle) and optionally post-deploy strategies/payout routing. Use when the user mentions deploy vault, DeployCreatorVault, DeployInfrastructure, account abstraction (ERC-4337), Privy deploy flow, CreatorVaultDeployer phases, or strategy batch deployment.
+description: Deploy and configure 4626 vault infrastructure (CreatorOVault, wrapper, ShareOFT, gauge, CCA strategy, oracle) and optionally post-deploy strategies/payout routing. Use when the user mentions deploy vault, DeployVaultStack, DeployInfrastructure, account abstraction (ERC-4337), Privy deploy flow, deployment-batcher phases, or strategy batch deployment.
 ---
 
 ## Quick Start (choose the deployment path)
@@ -8,7 +8,7 @@ description: Deploy and configure CreatorVault vault infrastructure (CreatorOVau
 - Determine target chain and deployment mode:
   - Foundry scripts (EOA / operator): `script/DeployInfrastructure.s.sol` and `script/deploy.sh`
   - ERC-4337 / AA (smart account): `script/deploy-with-aa.ts` (and `frontend/src/pages/DeployVault.tsx` for the UI flow)
-  - Multi-phase orchestrator (Base code-deposit limits): `contracts/helpers/batchers/CreatorVaultDeployer.sol` (Phase 1–2; Phase 3 is strategies)
+  - Multi-phase orchestrator (Base code-deposit limits): `contracts/helpers/batchers/DeploymentBatcher.sol` (Phase 1–2; Phase 3 is strategies)
   - “Infra v2” deterministic deployment helpers: `./script/deploy.sh infra-v2` → `script/DeployBaseMainnetDeployer.s.sol`
   - Post-deploy batchers (strategies + activation): `contracts/helpers/batchers/StrategyDeploymentBatcher.sol`, `contracts/helpers/batchers/VaultActivationBatcher.sol`
 - Always do a read-only preflight first (RPC connectivity, owner/deployer identity, “already deployed?” checks).
@@ -49,7 +49,7 @@ There are multiple layers:
 ## Repo Map (where to look / entrypoints)
 
 - Foundry deployment:
-  - `script/DeployInfrastructure.s.sol` (core infra + `DeployCreatorVault` per creator)
+  - `script/DeployInfrastructure.s.sol` (core infra + `DeployVaultStack` per creator)
   - `script/deploy.sh` (wrapper for infra/vault/AA deploy)
 - “Infra v2” deployer (bytecode store + deployer + multi-phase deploy contract):
   - `script/DeployBaseMainnetDeployer.s.sol` (used by `./script/deploy.sh infra-v2`)
@@ -58,7 +58,7 @@ There are multiple layers:
 - AA deployment (frontend UI):
   - `frontend/src/pages/DeployVault.tsx` (Privy + smart wallet 1-click deploy; can also operate via external owner wallet in some flows)
 - Multi-phase deploy orchestrator:
-  - `contracts/helpers/batchers/CreatorVaultDeployer.sol` (Phase 1: vault/wrapper/shareOFT; Phase 2: gauge/cca/oracle + deposit/auction; Phase 3: strategies)
+  - `contracts/helpers/batchers/DeploymentBatcher.sol` (Phase 1: vault/wrapper/shareOFT; Phase 2: gauge/cca/oracle + deposit/auction; Phase 3: strategies)
 - Strategy deployment:
   - `contracts/helpers/batchers/StrategyDeploymentBatcher.sol` (Charm + optional Ajna strategies)
 - Activation / launch:
@@ -66,9 +66,9 @@ There are multiple layers:
 - Payout routing:
   - `contracts/helpers/routers/PayoutRouter.sol`
 - “Required approvals” reminder:
-  - `docs/deployment/REQUIRED_APPROVALS_CHECKLIST.md`
-  - `docs/deployment/PRE_LAUNCH_VERIFICATION.md`
-  - `docs/deployment/CCA_DEPLOYMENT_VERIFICATION.md`
+  - `docs/guides/deploy-vault.md`
+  - `docs/current-contract-inventory.md`
+  - `AGENTS.md`
 
 ## Read-only Preflight (do before any state changes)
 
@@ -116,7 +116,7 @@ Wrapper:
 - `./script/deploy.sh vault $CREATOR_COIN_ADDRESS`
 
 This runs:
-- `script/DeployInfrastructure.s.sol:DeployCreatorVault` with `CREATOR_COIN_ADDRESS` set
+- `script/DeployInfrastructure.s.sol:DeployVaultStack` with `CREATOR_COIN_ADDRESS` set
 
 Post-checks:
 - Ensure the deployment was registered in `CreatorOVaultFactory` (via `registerDeployment`)
@@ -140,7 +140,7 @@ Reality check (AA CLI vs UI):
 - The **frontend AA path** is the canonical “1-click deploy” in practice. It uses the onchain batcher/deployer addresses from config (e.g. `creatorVaultBatcher`, `vaultActivationBatcher`) and submits UserOperations via Coinbase.
 - The **CLI AA script** (`script/deploy-with-aa.ts`, called by `./script/deploy.sh aa`) may be stale depending on the currently deployed factory shape; validate its target contract ABI before relying on it for production deployments.
 
-### D) Multi-phase: deploy via `CreatorVaultDeployer` (Phase 1–3)
+### D) Multi-phase: deploy via deployment batcher (Phase 1–3)
 
 Use when Base code-deposit limits prevent “all-in-one” deploys, or when you want deterministic CREATE2 addresses + phased execution.
 
@@ -151,7 +151,7 @@ Use when Base code-deposit limits prevent “all-in-one” deploys, or when you 
 ## Approvals / One-time protocol actions
 
 The most common “gotcha” is approvals for launch/batchers. See:
-- `docs/deployment/REQUIRED_APPROVALS_CHECKLIST.md`
+- `docs/guides/deploy-vault.md`
 
 Common required approvals (high level):
 

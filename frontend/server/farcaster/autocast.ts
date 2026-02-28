@@ -91,14 +91,14 @@ function formatEventCast(event: VaultEvent): { text: string; embeds: Array<{ url
     case 'vault.deployed': {
       const creator = event.creatorName ?? event.creatorAddress.slice(0, 10)
       return {
-        text: `New vault launched: ${event.vaultName} by ${creator}\n\nExplore it on CreatorVault`,
+        text: `New vault launched: ${event.vaultName} by ${creator}\n\nExplore it on 4626`,
         embeds: [{ url: `${appUrl}/vault/${event.vaultAddress}` }],
       }
     }
 
     case 'vault.milestone':
       return {
-        text: `${event.vaultName} just hit ${event.milestone}!\n\nCheck it out on CreatorVault`,
+        text: `${event.vaultName} just hit ${event.milestone}!\n\nCheck it out on 4626`,
         embeds: [{ url: `${appUrl}/vault/${event.vaultAddress}` }],
       }
 
@@ -107,7 +107,7 @@ function formatEventCast(event: VaultEvent): { text: string; embeds: Array<{ url
         text: [
           `New content coin: ${event.name} ($${event.symbol})`,
           `Currency: ${event.currency}`,
-          `\nCreated on Base via CreatorVault`,
+          `\nCreated on Base via 4626`,
         ].join('\n'),
         embeds: [
           { url: `${appUrl}/coin/${event.coinAddress}` },
@@ -116,13 +116,13 @@ function formatEventCast(event: VaultEvent): { text: string; embeds: Array<{ url
 
     case 'zora.coin.bought':
       return {
-        text: `Bought coin with ${event.ethAmount} ETH on Base via CreatorVault`,
+        text: `Bought coin with ${event.ethAmount} ETH on Base via 4626`,
         embeds: [{ url: `${appUrl}/coin/${event.coinAddress}` }],
       }
 
     case 'zora.coin.sold':
       return {
-        text: `Sold ${event.amount} tokens on Base via CreatorVault`,
+        text: `Sold ${event.amount} tokens on Base via 4626`,
         embeds: [{ url: `${appUrl}/coin/${event.coinAddress}` }],
       }
   }

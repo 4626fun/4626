@@ -1,6 +1,6 @@
 ---
 name: oft-chain-config
-description: Configure LayerZero V2 OFT cross-chain settings for CreatorVault (peers, endpoints, chain/EID mappings, and OFT deployment bootstrapping). Use when the user mentions LayerZero, OFT, setPeer, endpoint, EID, cross-chain send, or ShareOFT configuration across chains.
+description: Configure LayerZero V2 OFT cross-chain settings for 4626 (peers, endpoints, chain/EID mappings, and OFT deployment bootstrapping). Use when the user mentions LayerZero, OFT, setPeer, endpoint, EID, cross-chain send, or ShareOFT configuration across chains.
 ---
 
 ## Quick Start (most common)
@@ -45,7 +45,7 @@ Never include private keys or full `.env` contents in output.
 - Bootstrap endpoint registry: `contracts/helpers/infra/OFTBootstrapRegistry.sol`
 - Core registry (chain/EID mappings + endpoint lookup): `contracts/core/CreatorRegistry.sol`
 - Deployment tooling (CREATE2/bytecode infra): `script/DeployUniversalBytecodeInfra.s.sol`, `script/SimulateUniversalCreate2Factory.s.sol`
-- Deployer orchestration that sets endpoints before deployment: `contracts/helpers/batchers/CreatorVaultDeployer.sol`
+- Deployer orchestration that sets endpoints before deployment: `contracts/helpers/batchers/DeploymentBatcher.sol`
 
 ## Read-only Checks (before changes)
 

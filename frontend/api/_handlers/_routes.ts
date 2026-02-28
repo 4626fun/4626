@@ -124,7 +124,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'deploy/config': () => import('./deploy/_config.js'),
   'deploy/solanaInfraStatus': () => import('./deploy/_solanaInfraStatus.js'),
   'deploy/provisionSolanaRoute': () => import('./deploy/_provisionSolanaRoute.js'),
-  'deploy/registerShareOft': () => import('./deploy/_registerShareOft.js'),
+  'deploy/registerSolanaBridgeToken': () => import('./deploy/_registerSolanaBridgeToken.js'),
   'deploy/smartWalletOwner': () => import('./deploy/_smartWalletOwner.js'),
   'deploy/smartWalletOwners': () => import('./deploy/_smartWalletOwners.js'),
 

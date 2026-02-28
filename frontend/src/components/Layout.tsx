@@ -64,6 +64,7 @@ export function Layout() {
   const { isAdmin } = useAdminStatus()
   const [isMobileChatOverlayActive, setIsMobileChatOverlayActive] = useState(false)
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
+  const showTopNavBar = hostMode !== 'marketing'
   const showAccountMode = hostMode !== 'marketing' && !publicMode
   const baseItems = publicMode || hostMode === 'marketing' ? navItemsPublic : navItems
   const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, adminNavItem] : baseItems
@@ -93,7 +94,7 @@ export function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-vault-bg">
-      <VaultNavBar />
+      {showTopNavBar ? <VaultNavBar /> : null}
       {showAccountMode ? <AccountModeIndicator /> : null}
       {resolvedSubdomain.data?.record ? (
         <div className="border-b border-vault-border/60 bg-black/50">

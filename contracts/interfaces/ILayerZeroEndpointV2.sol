@@ -5,7 +5,7 @@ pragma solidity ^0.8.22;
  * @title ILayerZeroEndpointV2
  * @author LayerZero Labs
  * @notice Interface for the LayerZero v2 endpoint.
- * @dev Used by CreatorVault OFT integrations.
+ * @dev Used by 4626 OFT integrations.
  */
 
 struct Origin {

@@ -1,4 +1,4 @@
-# UI/UX Design System — CreatorVault (4626.fun)
+# UI/UX Design System — 4626 (4626.fun)
 
 > Living reference for design tokens + component conventions.
 > Token source of truth: `tailwind.config.js` + `src/index.css`.

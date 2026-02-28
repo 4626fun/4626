@@ -1,8 +1,8 @@
-[**creatorvault-miniapp**](../../../index.md)
+[**4626-miniapp**](../../../index.md)
 
 ***
 
-[creatorvault-miniapp](../../../index.md) / src/lib/zora/hooks
+[4626-miniapp](../../../index.md) / src/lib/zora/hooks
 
 # src/lib/zora/hooks
 

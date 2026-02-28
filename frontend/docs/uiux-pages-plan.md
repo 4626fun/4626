@@ -1,4 +1,4 @@
-# UI/UX Pages Implementation Plan — CreatorVault (4626.fun)
+# UI/UX Pages Implementation Plan — 4626 (4626.fun)
 
 > Companion to `uiux-pages-audit.md`. Specifies what to build, why it matters, and which files are touched.
 

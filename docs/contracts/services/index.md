@@ -5,7 +5,7 @@ sidebar_position: 4
 
 # Service Contracts
 
-Shared infrastructure services for CreatorVault.
+Shared infrastructure services for 4626.
 
 ## Overview
 

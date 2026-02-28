@@ -82,7 +82,7 @@ export function AgentVerificationCard() {
         <div className="min-w-0">
           <div className="text-sm font-medium text-zinc-100">Verified Agent</div>
           <div className="text-xs text-zinc-500 mt-0.5">
-            Public, read-only snapshot of the ERC-8004 Identity Registry record for the canonical CreatorVault agent.
+            Public, read-only snapshot of the ERC-8004 Identity Registry record for the canonical 4626 agent.
           </div>
         </div>
       </div>

@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
+import { fetchExternalJson } from '../../../server/_lib/externalFetch.js'
+import { logger } from '../../../server/_lib/logger.js'
 
 /**
  * Get historical pool data for a token
@@ -73,19 +75,21 @@ type PoolHistoryResponse = {
 }
 
 async function fetchGraphQL<T>(subgraphUrl: string, query: string, variables: Record<string, unknown>): Promise<T | null> {
-  const response = await fetch(subgraphUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables }),
-  })
-  
-  if (!response.ok) {
-    console.error('GraphQL error:', response.status, await response.text())
+  try {
+    const { data: result } = await fetchExternalJson<{ data?: T }>(subgraphUrl, {
+      label: 'uniswap_pool_history',
+      allowedHosts: ['gateway.thegraph.com'],
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, variables }),
+      timeoutMs: 10_000,
+      maxResponseBytes: 1_000_000,
+    })
+    return result.data ?? null
+  } catch (error) {
+    logger.warn('[uniswap/poolHistory] GraphQL upstream rejected', error)
     return null
   }
-  
-  const result = await response.json()
-  return result.data ?? null
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -339,7 +343,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     } as PoolHistoryResponse)
   } catch (error) {
-    console.error('Pool history error:', error)
+    logger.error('[uniswap/poolHistory] Proxy failure', error)
     return res.status(500).json({
       success: false,
       error: 'Internal server error',

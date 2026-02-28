@@ -5,7 +5,7 @@ sidebar_position: 10
 
 # Frontend Documentation
 
-Documentation for the CreatorVault frontend application.
+Documentation for the 4626 frontend application.
 
 ## Tech Stack
 

@@ -5,7 +5,7 @@ sidebar_position: 2
 
 # Deploy with Multisig
 
-Deploying CreatorVault with Safe multisig as owner.
+Deploying 4626 with Safe multisig as owner.
 
 ## Steps
 

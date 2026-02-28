@@ -1,4 +1,4 @@
-# UI/UX Design System Rules — CreatorVault (4626.fun)
+# UI/UX Design System Rules — 4626 (4626.fun)
 
 > Source of truth for shared primitives used across Swap, Vault, Portfolio, and Account pages.
 > Token values are never invented here — they are sourced from `tailwind.config.js` and `src/index.css`.

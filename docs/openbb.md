@@ -45,7 +45,7 @@ export OPENBB_API_BASE_URL="http://localhost:6900"
 The agent process in this repo is designed to be long-lived (`frontend/Dockerfile.agent`). In production you typically run:
 
 - OpenBB as its own service/container (private network)
-- The CreatorVault agent as its own service/container
+- The 4626 agent as its own service/container
 
 When both are on the same private network, use the OpenBB service name as the host:
 

@@ -61,7 +61,7 @@ const uniswapSkillAction: Action = {
 }
 
 export const uniswapPlugin: Plugin = {
-  name: '@creatorvault/plugin-uniswap',
+  name: '@4626/plugin-uniswap',
   description: 'Structured Uniswap protocol actions for ElizaOS runtime.',
   actions: [uniswapSkillAction],
 }

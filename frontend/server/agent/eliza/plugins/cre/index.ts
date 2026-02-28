@@ -748,7 +748,7 @@ const creHelpAction: Action = {
 // ---------------------------------------------------------------------------
 
 export const crePlugin: Plugin = {
-  name: '@creatorvault/plugin-cre',
+  name: '@4626/plugin-cre',
   description: 'CRE keeper operations — observe vault/auction/Solana status and trigger keeper actions on demand.',
   actions: [creHelpAction, creObserveAction, creTriggerAction],
 }

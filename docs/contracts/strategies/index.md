@@ -5,7 +5,7 @@ sidebar_position: 3
 
 # Yield Strategies
 
-Pluggable yield strategies for CreatorVault.
+Pluggable yield strategies for 4626.
 
 ## Overview
 

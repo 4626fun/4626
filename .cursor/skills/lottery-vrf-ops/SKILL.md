@@ -1,6 +1,6 @@
 ---
 name: lottery-vrf-ops
-description: Operate the CreatorVault lottery randomness system (Chainlink VRF 2.5 hub on Base + LayerZero cross-chain integrator). Use when the user mentions VRF, subscriptionId, keyHash, VRF coordinator, callback gas limit, pending responses, cross-chain randomness, or lottery randomness/payout failures.
+description: Operate the 4626 lottery randomness system (Chainlink VRF 2.5 hub on Base + LayerZero cross-chain integrator). Use when the user mentions VRF, subscriptionId, keyHash, VRF coordinator, callback gas limit, pending responses, cross-chain randomness, or lottery randomness/payout failures.
 ---
 
 ## Quick Start (most common)
@@ -57,7 +57,7 @@ Never include private keys or full `.env` contents in output.
 - Lottery manager: `contracts/services/lottery/CreatorLotteryManager.sol`
 - Example deployed hub metadata/ABI: `deployments/base/contracts/services/lottery/vrf/CreatorVRFConsumerV2_5.json`
 - Historical run artifacts: `broadcast/**` and `agent-logs/*.json`
-- Notes: `docs/lottery/LOTTERY_INTEGRATION_FIX.md`
+- Notes: `docs/primitives/game-loop/lottery.md`
 
 ## Read-only Health Checks (preferred first)
 

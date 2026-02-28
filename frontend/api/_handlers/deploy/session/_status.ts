@@ -155,7 +155,7 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
           { name: 'owner', type: 'address' },
           { name: 'vault', type: 'address' },
           { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
+          { name: 'shareToken', type: 'address' },
           { name: 'gaugeController', type: 'address' },
           { name: 'ccaStrategy', type: 'address' },
           { name: 'oracle', type: 'address' },
@@ -195,7 +195,7 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
           { name: 'owner', type: 'address' },
           { name: 'vault', type: 'address' },
           { name: 'wrapper', type: 'address' },
-          { name: 'shareOFT', type: 'address' },
+          { name: 'shareToken', type: 'address' },
           { name: 'gaugeController', type: 'address' },
           { name: 'ccaStrategy', type: 'address' },
           { name: 'oracle', type: 'address' },
@@ -279,13 +279,60 @@ function inferRequestOrigin(req: VercelRequest): string | null {
   }
 }
 
-function extractShareOftFromFinalizeCall(data: Hex): Address | null {
+function parseConfiguredOrigin(value: string): string | null {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  try {
+    return new URL(raw).origin
+  } catch {
+    return null
+  }
+}
+
+function readAdditionalSolanaRegistrationOrigins(): string[] {
+  const raw =
+    String(process.env.DEPLOY_SOLANA_REGISTRATION_ORIGINS ?? '').trim() ||
+    String(process.env.SOLANA_REGISTRATION_ORIGINS ?? '').trim()
+  if (!raw) return []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const entry of raw.split(/[,\s]+/)) {
+    const origin = parseConfiguredOrigin(entry)
+    if (!origin) continue
+    const key = origin.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(origin)
+  }
+  return out
+}
+
+function dedupeOrigins(origins: string[]): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const origin of origins) {
+    const key = origin.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(origin)
+  }
+  return out
+}
+
+function extractFinalizeBridgeTokens(data: Hex): { creatorToken: Address | null } | null {
   for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
     try {
       const decoded = decodeFunctionData({ abi, data })
-      const params = (decoded.args?.[0] ?? null) as { shareOFT?: string } | null
-      if (!params?.shareOFT || !isAddress(params.shareOFT)) continue
-      return getAddress(params.shareOFT as Address)
+      const params = (decoded.args?.[0] ?? null) as { creatorToken?: string } | null
+      const creatorTokenCandidate = params?.creatorToken && isAddress(params.creatorToken)
+        ? getAddress(params.creatorToken as Address)
+        : null
+      const creatorToken =
+        creatorTokenCandidate && creatorTokenCandidate.toLowerCase() !== ZERO_ADDRESS.toLowerCase()
+          ? creatorTokenCandidate
+          : null
+      if (!creatorToken) continue
+      return { creatorToken }
     } catch {
       continue
     }
@@ -302,10 +349,9 @@ async function ensureSolanaRouteReadyForPhase2(params: {
   if (!finalizeCall) return
 
   const batcherAddress = getAddress(finalizeCall.to)
-  const shareOft = extractShareOftFromFinalizeCall(finalizeCall.data)
-  if (!shareOft) {
-    throw new Error('phase2_finalize_shareoft_decode_failed')
-  }
+  const finalizeTokens = extractFinalizeBridgeTokens(finalizeCall.data)
+  if (!finalizeTokens?.creatorToken) return
+  const bridgeToken = finalizeTokens.creatorToken
 
   const [adapterRaw, destinationRaw] = await Promise.all([
     params.publicClient
@@ -335,7 +381,7 @@ async function ensureSolanaRouteReadyForPhase2(params: {
       address: adapter,
       abi: SOLANA_BRIDGE_ADAPTER_VIEW_ABI,
       functionName: 'isRegistered',
-      args: [shareOft],
+      args: [bridgeToken],
     })
     .then((v: unknown) => Boolean(v))
     .catch(() => null)
@@ -346,46 +392,71 @@ async function ensureSolanaRouteReadyForPhase2(params: {
   const canonicalOrigin = getCanonicalOrigin(params.req)
   const requestOrigin = inferRequestOrigin(params.req)
   const isPreviewOrigin = requestOrigin && /\.vercel\.app$/i.test(new URL(requestOrigin).hostname)
-  const candidateOrigins = isPreviewOrigin
+  const defaultOrigins = isPreviewOrigin
     ? [canonicalOrigin].filter((o): o is string => Boolean(o))
     : [requestOrigin, canonicalOrigin].filter((o): o is string => Boolean(o))
+  const configuredOrigins = readAdditionalSolanaRegistrationOrigins()
+  const candidateOrigins = dedupeOrigins([...configuredOrigins, ...defaultOrigins])
   const cookie = headerValue(params.req.headers.cookie as string | string[] | undefined)
   const authz = headerValue(params.req.headers.authorization as string | string[] | undefined)
+  const internalRegistrationSecret = String(
+    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
+      process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
+      '',
+  ).trim()
+  const tryRegister = async (
+    origin: string,
+    routePath: '/api/deploy/registerSolanaBridgeToken',
+  ): Promise<{ ok: boolean; failure: string | null }> => {
+    try {
+      const registerUrl = `${origin}${routePath}`
+      const registerRes = await fetch(registerUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(cookie ? { Cookie: cookie } : {}),
+          ...(authz ? { Authorization: authz } : {}),
+          ...(internalRegistrationSecret
+            ? { 'X-CV-Solana-Registration-Secret': internalRegistrationSecret }
+            : {}),
+        },
+        body: JSON.stringify({
+          bridgeToken,
+          batcherAddress,
+        }),
+      })
+      const rawBody = await registerRes.text().catch(() => '')
+      let registerJson: ApiEnvelope<any> | null = null
+      try {
+        registerJson = rawBody ? (JSON.parse(rawBody) as ApiEnvelope<any>) : null
+      } catch {
+        registerJson = null
+      }
+      if (registerRes.ok && registerJson?.success) {
+        return { ok: true, failure: null }
+      }
+      const detail =
+        registerJson?.error
+          ? String(registerJson.error)
+          : rawBody
+            ? rawBody.slice(0, 240)
+            : `http_${registerRes.status}`
+      return {
+        ok: false,
+        failure: `${origin}${routePath} (${registerRes.status}): ${detail}`,
+      }
+    } catch {
+      return { ok: false, failure: `${origin}${routePath}: request_failed` }
+    }
+  }
   let lastFailure: string | null = null
   for (const origin of candidateOrigins) {
-    const registerUrl = `${origin}/api/deploy/registerShareOft`
-    const registerRes = await fetch(registerUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(cookie ? { Cookie: cookie } : {}),
-        ...(authz ? { Authorization: authz } : {}),
-      },
-      body: JSON.stringify({
-        shareOft,
-        batcherAddress,
-      }),
-    })
-    const rawBody = await registerRes.text().catch(() => '')
-    let registerJson: ApiEnvelope<any> | null = null
-    try {
-      registerJson = rawBody ? (JSON.parse(rawBody) as ApiEnvelope<any>) : null
-    } catch {
-      registerJson = null
-    }
-    if (registerRes.ok && registerJson?.success) return
-    const detail =
-      registerJson?.error
-        ? String(registerJson.error)
-        : rawBody
-          ? rawBody.slice(0, 240)
-          : `http_${registerRes.status}`
-    lastFailure = `${origin} (${registerRes.status}): ${detail}`
+    const primary = await tryRegister(origin, '/api/deploy/registerSolanaBridgeToken')
+    if (primary.ok) return
+    lastFailure = primary.failure
   }
-  if (lastFailure) {
-    throw new Error(`phase2_solana_route_unregistered:${lastFailure}`)
-  }
-  throw new Error('phase2_solana_route_unregistered')
+  if (lastFailure) return
+  return
 }
 
 async function getOwnerAccount(rec: any) {

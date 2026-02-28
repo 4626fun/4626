@@ -1,5 +1,5 @@
 # SolanaBridgeAdapter
-[Git Source](https://github.com/creatorvault/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/services/bridge/SolanaBridgeAdapter.sol)
+[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/services/bridge/SolanaBridgeAdapter.sol)
 
 **Inherits:**
 Ownable, ReentrancyGuard
@@ -10,7 +10,7 @@ SolanaBridgeAdapter
 **Author:**
 0xakita.eth
 
-Bridge adapter for CreatorVault assets between Base and Solana.
+Bridge adapter for 4626 assets between Base and Solana.
 
 Used to register ■TOKEN and route bridge + lottery actions.
 

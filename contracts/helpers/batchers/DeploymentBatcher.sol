@@ -54,16 +54,6 @@ interface IOwnableTransfer {
     function transferOwnership(address newOwner) external;
 }
 
-interface ISolanaBridgeAdapter {
-    function bridgeToSolana(address token, uint256 amount, bytes32 solanaDestination) external payable;
-    function bridgeToSolanaWithIxs(
-        address token,
-        uint256 amount,
-        bytes32 solanaDestination,
-        IBaseSolanaBridge.Ix[] calldata ixs
-    ) external payable;
-}
-
 interface IOFTBootstrapRegistry {
     function getLayerZeroEndpoint(uint256 chainId) external pure returns (address);
 }
@@ -106,16 +96,16 @@ interface ICreatorOVaultStrategyManager {
 }
 
 /**
- * @title CreatorVaultDeployer
+ * @title DeploymentBatcher
  * @author 0xakita.eth
- * @notice Multi-transaction CreatorVault deployment orchestrator (Phases 1–3).
+ * @notice Multi-transaction 4626 deployment orchestrator (Phases 1–3).
  * @dev We can no longer deploy the full stack in one transaction on Base due to code-deposit gas limits.
  *      This contract splits deployment into multiple calls:
  *      - Phase 1: deploy vault + wrapper + shareOFT + minimal wiring (no token pulls / no auction)
  *      - Phase 2a: deploy gauge + CCA + oracle + wiring (no token pulls)
  *      - Phase 2b: deposit + vesting + ownership transfers (plus optional deferred auction)
  */
-contract CreatorVaultDeployer is ReentrancyGuard {
+contract DeploymentBatcher is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint24 public constant V3_FEE_TIER = 3000; // 0.3% CREATOR/USDC pool
@@ -124,17 +114,15 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     /// @dev Vaults created via this factory appear on alpha.charm.fi UI
     address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;
 
-    // ── Fixed Three-Way Split Constants ──────────────────────────────
+    // ── Fixed Two-Way Split Constants ────────────────────────────────
     /// @notice Minimum deposit amount (5M tokens, 18 decimals)
     uint256 public constant MIN_DEPOSIT = 5_000_000e18;
     /// @notice Maximum deposit amount (50M tokens, 18 decimals)
     uint256 public constant MAX_DEPOSIT = 50_000_000e18;
     /// @notice Percentage of ■TOKENs allocated to CCA auction
-    uint8 public constant AUCTION_PERCENT = 40;
-    /// @notice Percentage of ■TOKENs bridged to Solana
-    uint8 public constant SOLANA_PERCENT = 20;
+    uint8 public constant AUCTION_PERCENT = 50;
     /// @notice Percentage of ■TOKENs vested to the creator
-    uint8 public constant VESTING_PERCENT = 40;
+    uint8 public constant VESTING_PERCENT = 50;
 
     struct CodeIds {
         bytes32 vault;
@@ -295,9 +283,6 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     error AuctionShareOFTMismatch();
     error AuctionAmountMismatch();
     error Phase2Missing();
-    error MissingMeteoraAlphaVault();
-    error MissingSolanaBridgeIxs();
-    error InvalidSolanaBridgeIx(uint256 index);
 
     ICreatorRegistry public immutable registry;
     IUniversalBytecodeStore public immutable bytecodeStore;
@@ -401,15 +386,6 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         uint256 amount,
         uint64 startTimestamp,
         uint64 durationSeconds
-    );
-
-    event SolanaAllocationBridged(
-        address indexed shareOFT,
-        uint256 amount,
-        bytes32 indexed solanaDestination,
-        bytes32 indexed meteoraAlphaVault,
-        uint256 expectedBridgedAmount,
-        uint256 solanaIxCount
     );
 
     event SolanaConfigSet(address indexed adapter, bytes32 solanaDestination);
@@ -541,7 +517,7 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         bytes32 wrapperSalt = _saltFor(baseSalt, "wrapper");
 
         // OFT bootstrap registry is chain-global + constructor-less => initCodeHash == codeId.
-        bytes32 oftBootstrapSalt = keccak256("CreatorVault:OFTBootstrapRegistry:v1");
+        bytes32 oftBootstrapSalt = keccak256("4626:OFTBootstrapRegistry:v1");
         out.oftBootstrapRegistry = create2Deployer.computeAddress(oftBootstrapSalt, codeIds.oftBootstrap);
         if (out.oftBootstrapRegistry.code.length == 0) {
             create2Deployer.deploy(oftBootstrapSalt, codeIds.oftBootstrap, bytes(""));
@@ -871,10 +847,9 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         IERC20(params.vault).forceApprove(params.wrapper, shares);
         uint256 shareTokens = ICreatorOVaultWrapper(params.wrapper).wrap(shares);
 
-        // ── Fixed Three-Way Split: 40% CCA / 20% Solana / 40% Vesting ──
-        uint256 auctionAmount = (shareTokens * AUCTION_PERCENT) / 100; // 40%
-        uint256 solanaAmount = (shareTokens * SOLANA_PERCENT) / 100; // 20%
-        uint256 vestingAmount = shareTokens - auctionAmount - solanaAmount; // 40% (remainder)
+        // ── Fixed Two-Way Split: 50% CCA / 50% creator vesting ──
+        uint256 auctionAmount = (shareTokens * AUCTION_PERCENT) / 100; // 50%
+        uint256 vestingAmount = shareTokens - auctionAmount; // 50% (remainder)
         if (auctionAmount > 0) {
             PendingAuction storage pending = pendingAuctions[baseSalt];
             if (pending.amount != 0) revert AuctionAlreadyPending();
@@ -883,28 +858,7 @@ contract CreatorVaultDeployer is ReentrancyGuard {
             emit AuctionDeferred(params.creatorToken, params.owner, params.shareOFT, params.ccaStrategy, auctionAmount);
         }
 
-        // 2. Solana allocation — bridge 20% to Solana via SolanaBridgeAdapter
-        if (solanaAmount > 0 && solanaBridgeAdapter != address(0) && solanaDestination != bytes32(0)) {
-            if (params.meteoraAlphaVault == bytes32(0)) revert MissingMeteoraAlphaVault();
-            if (params.solanaIxs.length == 0) revert MissingSolanaBridgeIxs();
-            _validateSolanaIxs(params.solanaIxs);
-            IERC20(params.shareOFT).forceApprove(solanaBridgeAdapter, solanaAmount);
-            ISolanaBridgeAdapter(solanaBridgeAdapter)
-                .bridgeToSolanaWithIxs(params.shareOFT, solanaAmount, solanaDestination, params.solanaIxs);
-            emit SolanaAllocationBridged(
-                params.shareOFT,
-                solanaAmount,
-                solanaDestination,
-                params.meteoraAlphaVault,
-                solanaAmount,
-                params.solanaIxs.length
-            );
-        } else if (solanaAmount > 0) {
-            // If Solana adapter not configured, add Solana portion to vesting.
-            vestingAmount += solanaAmount;
-        }
-
-        // 3. Creator vesting
+        // 2. Creator vesting
         if (vestingAmount > 0) {
             // Vest the creator’s ShareOFT allocation to reduce immediate sell pressure.
             // Default: linear over 365 days, no cliff, starting now.
@@ -1044,9 +998,8 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Set the SolanaBridgeAdapter and destination for the 20% Solana allocation.
-     * @dev Must be called before deployPhase2AndLaunch for Solana bridging to activate.
-     *      If not set, the 20% Solana allocation falls back to creator vesting.
+     * @notice Set Solana bridge adapter + destination configuration.
+     * @dev finalizePhase2 no longer bridges ShareOFT; Solana routing is handled separately.
      */
     function setSolanaConfig(address _adapter, bytes32 _destination) external {
         // Only protocol treasury can configure Solana bridging.
@@ -1114,7 +1067,7 @@ contract CreatorVaultDeployer is ReentrancyGuard {
         view
         returns (bytes32)
     {
-        return keccak256(abi.encodePacked(creatorToken, owner, block.chainid, "CreatorVault:deploy:", version));
+        return keccak256(abi.encodePacked(creatorToken, owner, block.chainid, "4626:deploy:", version));
     }
 
     function _saltFor(bytes32 baseSalt, string memory label) internal pure returns (bytes32) {
@@ -1133,14 +1086,6 @@ contract CreatorVaultDeployer is ReentrancyGuard {
     function _defaultTickSpacingQ96(uint256 floorPriceQ96) internal pure returns (uint256) {
         uint256 spacing = floorPriceQ96 / 100;
         return spacing > 1 ? spacing : 2;
-    }
-
-    function _validateSolanaIxs(IBaseSolanaBridge.Ix[] memory ixs) internal pure {
-        for (uint256 i = 0; i < ixs.length; i++) {
-            if (ixs[i].programId == bytes32(0)) revert InvalidSolanaBridgeIx(i);
-            if (ixs[i].serializedAccounts.length == 0) revert InvalidSolanaBridgeIx(i);
-            if (ixs[i].data.length == 0) revert InvalidSolanaBridgeIx(i);
-        }
     }
 
     function _toLower(string memory input) internal pure returns (string memory) {

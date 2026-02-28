@@ -16,7 +16,7 @@ import {TickMathCompat} from "../../libraries/TickMathCompat.sol";
 
 /**
  * @title CreatorOracle
- * @author 0xakita.eth (CreatorVault)
+ * @author 0xakita.eth (4626)
  * @notice Omnichain oracle for Creator Coin price distribution
  * @dev Deployed to same address on all chains via CREATE2
  *

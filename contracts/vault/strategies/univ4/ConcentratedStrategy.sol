@@ -24,7 +24,7 @@ import {V4LiquidityAmounts} from "../../../libraries/V4LiquidityAmounts.sol";
 
 /**
  * @title ConcentratedStrategy
- * @author 0xakita.eth (CreatorVault)
+ * @author 0xakita.eth (4626)
  * @notice Concentrated liquidity around current price for maximum capital efficiency
  *
  * @dev STRATEGY (inspired by Charm Finance Alpha Vaults):

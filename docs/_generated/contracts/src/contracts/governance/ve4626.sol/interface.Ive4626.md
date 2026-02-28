@@ -1,8 +1,8 @@
 # Ive4626
-[Git Source](https://github.com/creatorvault/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/governance/ve4626.sol)
+[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/governance/ve4626.sol)
 
 **Titles:**
-ve4626 - CreatorVault Protocol Token, Ive4626
+ve4626 - 4626 Protocol Token, Ive4626
 
 **Author:**
 0xakita.eth

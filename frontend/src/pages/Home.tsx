@@ -102,7 +102,7 @@ export function Home() {
   return (
     <div className="relative">
       <PageMeta
-        title="Creator Vaults"
+        title="4626.fun - Creator Vaults"
         description="Deposit creator coins into vaults on Base. Earn from trading fees. Everyone earns together."
         canonicalPath="/"
       />

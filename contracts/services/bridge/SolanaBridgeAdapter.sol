@@ -68,8 +68,8 @@ interface IUniswapV4Router {
 /**
  * @title SolanaBridgeAdapter
  * @author 0xakita.eth
- * @notice Bridge adapter for CreatorVault assets between Base and Solana.
- * @dev Used to register ■TOKEN and route bridge + lottery actions.
+ * @notice Bridge adapter for 4626 assets between Base and Solana.
+ * @dev Used to register bridge tokens and route bridge + lottery actions.
  */
 contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -99,10 +99,10 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     /// @notice Registry for looking up vault addresses
     address public registry;
 
-    /// @notice Mapping of ■TOKEN (Base) → SPL mint (Solana, as bytes32)
+    /// @notice Mapping of bridge token (Base) → SPL mint (Solana, as bytes32)
     mapping(address => bytes32) public tokenToSolanaMint;
 
-    /// @notice Mapping of SPL mint (Solana) → ■TOKEN (Base)
+    /// @notice Mapping of SPL mint (Solana) → bridge token (Base)
     mapping(bytes32 => address) public solanaMintToToken;
 
     /// @notice Registered token decimals (Base token decimals and Solana mint decimals).
@@ -214,9 +214,9 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Register a ■TOKEN (ShareOFT) for Solana bridging
+     * @notice Register a Base token for Solana bridging
      * @dev Creates a wrapped SPL token on Solana via the bridge
-     * @param baseToken The ■TOKEN (ShareOFT) address on Base
+     * @param baseToken The Base token address
      * @param solanaMint The SPL token mint address on Solana (as bytes32)
      * @param solanaDecimals The SPL token decimals on Solana
      */
@@ -268,8 +268,8 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Bridge ■TOKENs (ShareOFT) from Base to Solana
-     * @param token The ■TOKEN to bridge
+     * @notice Bridge a registered Base token from Base to Solana
+     * @param token The Base token to bridge
      * @param amount Amount to bridge
      * @param solanaDestination Destination address on Solana (as bytes32)
      */
@@ -279,7 +279,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Bridge ■TOKENs (ShareOFT) from Base to Solana with explicit Solana instructions.
+     * @notice Bridge a registered Base token to Solana with explicit Solana instructions.
      * @dev This is used by deploy-time Meteora auto-deposit to execute post-bridge ixs on Solana.
      */
     function bridgeToSolanaWithIxs(
@@ -462,20 +462,20 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Buy ■TOKEN (ShareOFT) on Uniswap V4 to enter the lottery
+     * @notice Buy share token on Uniswap V4 to enter the lottery
      * @dev This triggers a lottery entry for the Solana user!
      *
      * @param creatorToken The Creator Coin whose ShareOFT should be purchased (resolved via registry)
      * @param amountIn Amount of SOL (or other token) to spend
-     * @param amountOutMin Minimum ■TOKEN to receive
-     * @param recipient Who receives the ■TOKEN (usually Twin contract)
+     * @param amountOutMin Minimum share token to receive
+     * @param recipient Who receives the share token (usually Twin contract)
      *
-     * @return amountOut Amount of ■TOKEN received
+     * @return amountOut Amount of share token received
      *
      * @dev LOTTERY ENTRY FLOW:
      *      1. Solana user bridges SOL with attached call to this function
-     *      2. This contract swaps SOL for ■TOKEN on Uniswap V4
-     *      3. The ■TOKEN transfer triggers the 6.9% fee hook
+     *      2. This contract swaps input token for share token on Uniswap V4
+     *      3. The share token transfer triggers the 6.9% fee hook
      *      4. Hook registers a lottery entry for the buyer
      *      5. Solana user is now in the jackpot draw!
      */
@@ -525,7 +525,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Buy ■TOKEN (ShareOFT) with native ETH to enter lottery
+     * @notice Buy share token with native ETH to enter lottery
      * @dev For users who bridged ETH or have ETH in their Twin
      */
     function buyAndEnterLotteryWithETH(
@@ -549,12 +549,12 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         address weth = cfg.wrappedNativeToken;
         if (weth == address(0)) revert InvalidAddress();
 
-        // Wrap ETH → WETH and swap WETH for ■TOKEN.
+        // Wrap ETH → WETH and swap WETH for share token.
         // NOTE: this assumes the configured swapRouter expects ERC20 input.
         IWETH(weth).deposit{value: msg.value}();
         IERC20(weth).forceApprove(router, msg.value);
 
-        // Swap WETH for ■TOKEN — triggers lottery!
+        // Swap WETH for share token — triggers lottery.
         IUniswapV4Router.ExactInputSingleParams memory params = IUniswapV4Router.ExactInputSingleParams({
             tokenIn: weth,
             tokenOut: shareToken,

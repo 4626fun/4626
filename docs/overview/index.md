@@ -5,7 +5,7 @@ sidebar_position: 1
 
 # Overview
 
-CreatorVault docs have been reorganized into a narrative-first structure.
+4626 docs have been reorganized into a narrative-first structure.
 
 ## New starting points
 

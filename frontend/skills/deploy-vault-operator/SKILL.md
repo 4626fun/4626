@@ -1,11 +1,11 @@
 ---
 name: deploy-vault-operator
-description: Operator runbook for CreatorVault 1-click deployment (deploy-session + temporary owner + server-continue phases). Use when asked to automate or operate deploys end-to-end with minimal manual steps.
+description: Operator runbook for 4626 1-click deployment (deploy-session + temporary owner + server-continue phases). Use when asked to automate or operate deploys end-to-end with minimal manual steps.
 ---
 
 # Deploy Vault Operator
 
-This skill is the canonical long-task workflow for 1-click CreatorVault deploys in this repo.
+This skill is the canonical long-task workflow for 1-click 4626 deploys in this repo.
 
 ## Goal
 
@@ -38,7 +38,7 @@ Cleanup path:
 
 - `CDP_PAYMASTER_URL`
 - `AUTH_SESSION_SECRET`
-- `CANONICAL_ORIGIN`
+- `APP_ORIGIN` (`CANONICAL_ORIGIN` is supported as a legacy fallback)
 - `DATABASE_URL`
 - `DEPLOY_SESSION_SECRET`
 - `DEPLOY_SESSION_TOKEN_HMAC_SECRET`
@@ -58,7 +58,7 @@ Use the autopilot script:
 
 ```bash
 pnpm -C frontend run deploy:autopilot -- \
-  --origin https://4626.fun \
+  --origin https://app.4626.fun \
   --plan ./deploy-plan.json \
   --auth-bearer "$CV_AUTH_SESSION_TOKEN"
 ```

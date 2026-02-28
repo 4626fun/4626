@@ -1,12 +1,12 @@
 # Solana Dynamic Route Provisioner
 
-Minimal external service for dynamic ShareOFT -> Solana route provisioning.
+Minimal external service for dynamic bridge-token -> Solana route provisioning.
 
 This service is designed for VM/container runtimes where the bridge CLI is available on disk.
 
 ## Why this exists
 
-`/api/deploy/registerShareOft` in the app can auto-register ShareOFTs, but on serverless runtimes it cannot execute local bridge CLI paths.
+`/api/deploy/registerSolanaBridgeToken` in the app can auto-register Solana bridge tokens, but on serverless runtimes it cannot execute local bridge CLI paths.
 
 Point `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL` to this service's `/provision` endpoint.
 For Meteora auto-deposit payloads, point `METEORA_IX_PROVISIONER_URL` to `/meteora-ixs`
@@ -30,7 +30,7 @@ For Meteora auto-deposit payloads, point `METEORA_IX_PROVISIONER_URL` to `/meteo
 
 ```json
 {
-  "shareOft": "0x...",
+  "bridgeToken": "0x...",
   "deployEnv": "mainnet",
   "solanaDecimals": 9,
   "tokenName": "CreatorShare-1234",
@@ -49,7 +49,7 @@ For Meteora auto-deposit payloads, point `METEORA_IX_PROVISIONER_URL` to `/meteo
   "success": true,
   "mintBytes32": "0x...",
   "data": {
-    "shareOft": "0x...",
+    "bridgeToken": "0x...",
     "mintPubkey": "...",
     "mintBytes32": "0x...",
     "routeScalar": "1"
@@ -62,7 +62,7 @@ For Meteora auto-deposit payloads, point `METEORA_IX_PROVISIONER_URL` to `/meteo
 ```json
 {
   "creatorToken": "0x...",
-  "shareOft": "0x...",
+  "bridgeToken": "0x...",
   "meteoraAlphaVault": "<base58 pubkey>",
   "alphaVaultProgramId": "<base58 pubkey>",
   "expectedRemoteAmount": "1000000000",
@@ -79,7 +79,7 @@ For Meteora auto-deposit payloads, point `METEORA_IX_PROVISIONER_URL` to `/meteo
   "success": true,
   "data": {
     "creatorToken": "0x...",
-    "shareOft": "0x...",
+    "bridgeToken": "0x...",
     "meteoraAlphaVault": "0x...",
     "expectedRemoteAmount": "1000000000",
     "solanaIxs": [
@@ -131,7 +131,7 @@ Use this flow when the bridge CLI only exists on your own machine (for example
 4. Start provisioner on your workstation (terminal 1):
 
    ```bash
-   cd ~/projects/creatorvault/frontend
+   cd ~/projects/4626/frontend
    PROVISIONER_BEARER_TOKEN=<set-long-random-token> \
    SOLANA_BRIDGE_CLI_DIR=/home/akitav2/projects/tools/base-bridge/scripts \
    BASE_RPC_URL=https://mainnet.base.org \
@@ -157,7 +157,7 @@ Pre-reqs:
 
 - `pnpm` + Node installed on host
 - bridge CLI repo available on disk
-- this repo checked out on host (example: `/opt/creatorvault`)
+- this repo checked out on host (example: `/opt/4626`)
 
 Deploy assets are under:
 
@@ -168,9 +168,9 @@ Deploy assets are under:
 Install:
 
 ```bash
-cd /opt/creatorvault/frontend/server/solana-provisioner/deploy
-sudo bash ./install-systemd.sh --repo-root /opt/creatorvault --service-user creatorvault
-sudo editor /etc/creatorvault/solana-provisioner.env
+cd /opt/4626/frontend/server/solana-provisioner/deploy
+sudo bash ./install-systemd.sh --repo-root /opt/4626 --service-user <repo-access-user> --env-dir /etc/4626
+sudo editor /etc/4626/solana-provisioner.env
 sudo systemctl restart solana-route-provisioner
 sudo systemctl status solana-route-provisioner --no-pager
 curl -fsS http://127.0.0.1:8788/healthz
@@ -201,11 +201,13 @@ In the app server env (Vercel or otherwise):
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET=<same as PROVISIONER_BEARER_TOKEN>`
 - `METEORA_IX_PROVISIONER_URL=https://<host>/meteora-ixs` (optional; defaults from dynamic route URL)
 - `METEORA_IX_PROVISIONER_SECRET=<same as PROVISIONER_BEARER_TOKEN>` (optional)
+- `DEPLOY_SOLANA_REGISTRATION_ORIGINS=https://4626.fun,https://<host-origin>` (optional for mixed Vercel + VM)
+- `DEPLOY_SOLANA_REGISTRATION_SECRET=<shared-internal-secret>` (optional machine-to-machine auth)
 
 Optional but recommended:
 
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL=https://<host>/healthz` (for your external monitoring)
-- `SOLANA_DEFAULT_SHARE_OFT=0x...` (enables scalar(route) validation in `/api/deploy/solanaInfraStatus`)
+- `SOLANA_DEFAULT_BRIDGE_TOKEN=0x...` (enables scalar(route) validation in `/api/deploy/solanaInfraStatus`)
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_ATTEMPTS=3`
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_DELAY_MS=1200`
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_TIMEOUT_MS=90000`

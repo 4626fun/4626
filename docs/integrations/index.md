@@ -5,7 +5,7 @@ sidebar_position: 7
 
 # Integrations
 
-Guides for integrating with CreatorVault.
+Guides for integrating with 4626.
 
 ## Available Integrations
 

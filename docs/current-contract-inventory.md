@@ -1,7 +1,7 @@
 # Current Contract Inventory (Base)
 
 Generated on: 2026-02-22  
-Scope: CreatorVault deploy stack and related infra used by this repo.
+Scope: 4626 deploy stack and related infra used by this repo.
 
 ## Sources
 
@@ -12,7 +12,7 @@ Scope: CreatorVault deploy stack and related infra used by this repo.
 
 ## Live Onchain (Authoritative For Current Deploy Path)
 
-Queried from `CreatorVaultDeployer` at `0xB87CBb646dD14F520078F11196f79BF815F18c84`:
+Queried from the deployment batcher at `0xB87CBb646dD14F520078F11196f79BF815F18c84`:
 
 | Contract / Field | Address |
 |---|---|
@@ -72,7 +72,7 @@ From `deployments/base/contracts/**/*.json`:
 
 ## Usage Notes
 
-1. `CreatorOVaultFactory` is not part of the current phased deploy execution (`CreatorVaultDeployer` path).
+1. `CreatorOVaultFactory` is not part of the current phased deploy execution (deployment-batcher path).
 2. Runtime app paths now resolve `ccaStrategy` from batcher events / registry-derived resolution and do not require factory reads.
 3. Remaining `CreatorOVaultFactory` references are legacy scripts/docs and optional historical manifests.
 

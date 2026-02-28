@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { guardAgentApiRequest } from '../server/_lib/agentApiGuard.js'
+import { getCanonicalOrigin } from '../../server/_lib/origin.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -22,21 +23,13 @@ function handleOptions(req: VercelRequest, res: VercelResponse): boolean {
   return false
 }
 
-function normalizeOrigin(req: VercelRequest): string {
-  const explicit = (process.env.CANONICAL_ORIGIN ?? '').trim()
-  if (explicit) return explicit
-
-  const vercelUrl = (process.env.VERCEL_URL ?? '').trim()
-  if (vercelUrl) return `https://${vercelUrl.replace(/\/+$/, '')}`
-
-  const proto = String(req.headers['x-forwarded-proto'] ?? 'https').toLowerCase()
-  const host = String(req.headers['x-forwarded-host'] ?? req.headers.host ?? '').trim()
-  if (host) {
-    const safeProto = proto.startsWith('https') ? 'https' : 'http'
-    return `${safeProto}://${host}`
+function resolveAppOrigin(req: VercelRequest): string {
+  try {
+    return getCanonicalOrigin(req)
+  } catch {
+    // Keep directory metadata deterministic when env wiring is incomplete.
+    return 'https://app.4626.fun'
   }
-
-  return 'https://4626.fun'
 }
 
 function isAddressLike(value: string): boolean {
@@ -70,7 +63,7 @@ function getErc8004Meta(req: VercelRequest): {
   if (!Number.isFinite(chainId) || chainId <= 0) return null
   if (!Number.isFinite(agentId) || agentId < 0 || Math.floor(agentId) !== agentId) return null
 
-  const origin = normalizeOrigin(req)
+  const origin = resolveAppOrigin(req)
   const agentRegistry = `eip155:${chainId}:${registry.toLowerCase()}`
   const registrationUrl = `${origin}/.well-known/agent-registration.json`
   const supportedTrust = parseSupportedTrust(process.env.ERC8004_AGENT_SUPPORTED_TRUST)
@@ -82,7 +75,7 @@ function getErc8004Meta(req: VercelRequest): {
  * GET /api/agents
  *
  * Directory-compatible agent listing endpoint (XMTP Agent Directory shape).
- * If XMTP_AGENT_ADDRESS is configured, returns a single CreatorVault agent entry.
+ * If XMTP_AGENT_ADDRESS is configured, returns a single 4626 agent entry.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setPublicCors(res)
@@ -101,7 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const agents = agentAddress
     ? [
         {
-          agentName: 'CreatorVault',
+          agentName: '4626',
           agentAddress,
           agentWebsite: 'https://4626.fun',
           agentCategories: ['defi', 'analytics', 'governance', 'lottery'],
@@ -112,7 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : []
 
   const erc8004 = getErc8004Meta(req)
-  const origin = normalizeOrigin(req)
+  const origin = resolveAppOrigin(req)
   const byo = {
     registrationUrlTemplate: 'https://{your-domain}/.well-known/agent-registration.json',
     agentUriHint:

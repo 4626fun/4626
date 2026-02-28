@@ -32,7 +32,7 @@ export function AgentUriService() {
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-8">
       <PageMeta
         title="Agent URI Service"
-        description="Publish the CreatorVault ERC-8004 registration to Lens Grove and get validator-compatible agentURI outputs."
+        description="Publish the 4626 ERC-8004 registration to Lens Grove and get validator-compatible agentURI outputs."
         canonicalPath="/agents/uri-service"
       />
 
@@ -40,7 +40,7 @@ export function AgentUriService() {
         <div className="label">Agents</div>
         <h1 className="text-2xl sm:text-3xl text-zinc-100 font-semibold tracking-tight">Agent URI service</h1>
         <p className="text-sm text-zinc-500 max-w-prose">
-          This service builds the CreatorVault ERC-8004 registration from the deployed config and publishes it to Lens
+          This service builds the 4626 ERC-8004 registration from the deployed config and publishes it to Lens
           Grove. Use the returned <span className="font-mono text-zinc-300">gatewayUrl</span> as your{" "}
           <span className="font-mono text-zinc-300">agentURI</span> for broad validator compatibility.
         </p>
@@ -102,7 +102,7 @@ export function AgentUriService() {
       <section className="rounded-2xl border border-white/5 bg-white/2 p-6 space-y-3">
         <div className="text-sm text-zinc-200">Notes</div>
         <ul className="text-xs text-zinc-600 space-y-2 list-disc list-inside">
-          <li>This service is scoped to CreatorVault registration metadata; it does not accept arbitrary payloads.</li>
+          <li>This service is scoped to 4626 registration metadata; it does not accept arbitrary payloads.</li>
           <li>If Lens Grove is unavailable, you can still use a data: or ipfs:// URI.</li>
           <li>Registration data is sourced from <span className="font-mono text-zinc-400">/.well-known/agent-registration.json</span> and env overrides.</li>
         </ul>

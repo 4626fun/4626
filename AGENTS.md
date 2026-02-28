@@ -4,7 +4,7 @@
 
 ### Architecture overview
 
-CreatorVault (4626.fun) is a monorepo with two primary dev loops:
+4626 (4626.fun) is a monorepo with two primary dev loops:
 
 | Component | Directory | Toolchain | Dev command |
 |-----------|-----------|-----------|-------------|
@@ -69,7 +69,7 @@ The `creator-share-hook` Anchor program lives at `programs/creator-share-hook/`.
 
 ### Solana bridge on-chain config (Base mainnet)
 
-The `CreatorVaultDeployer` batcher is configured for Solana bridging:
+The deployment batcher is configured for Solana bridging:
 
 | Contract | Config | Value |
 |----------|--------|-------|
@@ -91,8 +91,8 @@ The Solana route provisioner runs on a Vultr VPS at `provisioner.4626.fun` (IP: 
 
 - **SSH:** `ssh root@45.63.52.50`
 - **Service:** `systemctl {status|restart} solana-provisioner`
-- **Env:** `/opt/creatorvault/provisioner.env`
-- **Repo:** `/opt/creatorvault` (branch: `cursor/development-environment-setup-365b`)
+- **Env:** `/etc/4626/solana-provisioner.env`
+- **Repo:** `/opt/4626`
 - **Nginx:** reverse proxy 80/443 → 8788, Let's Encrypt cert (auto-renew)
 - **Bridge CLI:** installed at `/opt/base-bridge/scripts` on the VM. Provisioner healthz reports `ok:true, cliExists:true`.
 - **Auto-pool:** `SOLANA_AUTO_POOL=1` is set — provisioner auto-creates DLMM pool + Alpha Vault after `wrap-token`.

@@ -5,7 +5,7 @@ sidebar_position: 5
 
 # Guides
 
-Step-by-step guides for using CreatorVault.
+Step-by-step guides for using 4626.
 
 ## For Creators
 

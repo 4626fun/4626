@@ -1,7 +1,7 @@
 {
   "$schema": "https://cursor.com/schemas/sandbox.json",
-  "name": "creatorvault-dev",
-  "description": "CreatorVault (4626.fun) — Vite frontend + Foundry contracts + CRE keepers",
+  "name": "4626-dev",
+  "description": "4626 (4626.fun) — Vite frontend + Foundry contracts + CRE keepers",
   "services": {
     "frontend": {
       "command": "cd frontend && pnpm dev",

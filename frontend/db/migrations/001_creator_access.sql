@@ -1,4 +1,4 @@
--- CreatorVault: invite-only creator access (SIWE) schema
+-- 4626: invite-only creator access (SIWE) schema
 -- This migration is intentionally idempotent (safe to run multiple times).
 
 -- =========================

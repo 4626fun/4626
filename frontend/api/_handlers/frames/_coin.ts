@@ -74,18 +74,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <meta property="fc:frame:button:3:target" content="https://xmtp.chat/dm/${process.env.VITE_AGENT_XMTP_ADDRESS ?? ''}" />
 
   <!-- Open Graph -->
-  <meta property="og:title" content="${title} — CreatorVault" />
-  <meta property="og:description" content="Trade ${title} on Base via CreatorVault" />
+  <meta property="og:title" content="${title} — 4626" />
+  <meta property="og:description" content="Trade ${title} on Base via 4626" />
   <meta property="og:image" content="${imageUrl}" />
   <meta property="og:url" content="${coinUrl}" />
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="${title} — CreatorVault" />
-  <meta name="twitter:description" content="Trade ${title} on Base via CreatorVault" />
+  <meta name="twitter:title" content="${title} — 4626" />
+  <meta name="twitter:description" content="Trade ${title} on Base via 4626" />
   <meta name="twitter:image" content="${imageUrl}" />
 
-  <title>${title} — CreatorVault</title>
+  <title>${title} — 4626</title>
 </head>
 <body>
   <h1>${title}</h1>

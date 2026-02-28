@@ -10,7 +10,7 @@ export type CreatorShareHook = {
     "name": "creatorShareHook",
     "version": "0.1.0",
     "spec": "0.1.0",
-    "description": "CreatorVault Transfer Hook for Solana spoke — buy detection, lottery entry recording, fee harvesting, winner notification"
+    "description": "4626 Transfer Hook for Solana spoke — buy detection, lottery entry recording, fee harvesting, winner notification"
   },
   "instructions": [
     {

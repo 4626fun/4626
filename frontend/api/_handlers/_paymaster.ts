@@ -120,7 +120,7 @@ const COINBASE_SMART_WALLET_FACTORY_ABI = [
   },
 ] as const
 
-// Minimal CreatorVaultBatcher ABI for decoding the two-step (phase1/2/3) functions.
+// Minimal deployment-batcher ABI for decoding the two-step (phase1/2/3) functions.
 // These functions take a tuple as the first argument, so we MUST decode via ABI (not by word offset).
 const CREATOR_VAULT_BATCHER_PHASE_ABI = [
   {
@@ -756,8 +756,8 @@ const ZERO_BYTES32 = `0x${'0'.repeat(64)}` as const
 
 const BASE_WETH = getAddress(`0x${'4200000000000000000000000000000000000006'}`)
 const BASE_SWAP_ROUTER = getAddress(`0x${'2626664c2603336E57B271c5C0b26F421741e481'}`)
-const PAYOUT_ROUTER_SALT_TAG = 'CreatorVault:PayoutRouter' as const
-const BURN_STREAM_SALT_TAG = 'CreatorVault:VaultShareBurnStream' as const
+const PAYOUT_ROUTER_SALT_TAG = '4626:PayoutRouter' as const
+const BURN_STREAM_SALT_TAG = '4626:VaultShareBurnStream' as const
 
 type InnerCall = { target: Address; value: bigint; data: Hex }
 
@@ -1667,7 +1667,7 @@ async function validateInnerCalls(params: {
       const baseSalt = keccak256(
         encodePacked(
           ['address', 'address', 'uint256', 'string', 'string'],
-          [getAddress(expectedCreatorToken as Address), params.sender, BigInt(BASE_CHAIN_ID), 'CreatorVault:deploy:', version],
+          [getAddress(expectedCreatorToken as Address), params.sender, BigInt(BASE_CHAIN_ID), '4626:deploy:', version],
         ),
       )
       const vaultSalt = keccak256(encodePacked(['bytes32', 'string'], [baseSalt, 'vault']))
@@ -2189,7 +2189,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Ensure this session is an onchain owner of the Coinbase Smart Wallet sender.
       await assertSessionOwnsSender({ sender, sessionAddress, initCode })
 
-      // Validate inner calls match CreatorVault patterns.
+      // Validate inner calls match deployment flow patterns.
       let expectedCreatorToken: Address | null = null
       if (allowCleanupOnlyForInactiveDeploySession && deploySessionOwner) {
         requestContext.mode = 'cleanup_only'

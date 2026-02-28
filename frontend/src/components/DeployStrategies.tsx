@@ -49,6 +49,7 @@ const VAULT_MGMT_ABI = [
   { type: 'function', name: 'getStrategyCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'addStrategy', stateMutability: 'nonpayable', inputs: [{ name: 'strategy', type: 'address' }, { name: 'weight', type: 'uint256' }], outputs: [] },
   { type: 'function', name: 'setMinimumTotalIdle', stateMutability: 'nonpayable', inputs: [{ name: '_minimumTotalIdle', type: 'uint256' }], outputs: [] },
+  { type: 'function', name: 'deployToStrategies', stateMutability: 'nonpayable', inputs: [], outputs: [] },
 ] as const
 
 export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategiesProps) {
@@ -75,14 +76,17 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
 
   // Default: Q96 (price = 1 in raw token1/token0 terms). Only used if pool doesn't exist yet.
   const [initialSqrtPriceX96, setInitialSqrtPriceX96] = useState<string>('79228162514264337593543950336')
-  const [charmVaultName, setCharmVaultName] = useState<string>('CreatorVault: creator/USDC')
+  const [charmVaultName, setCharmVaultName] = useState<string>('4626: creator/USDC')
   const [charmVaultSymbol, setCharmVaultSymbol] = useState<string>('CV-creator-USDC')
 
-  // Allocation weights are basis points (relative). Idle reserve is controlled by `minimumTotalIdle`.
-  const [charmWeightBps, setCharmWeightBps] = useState<number>(6900)
-  const [ajnaWeightBps, setAjnaWeightBps] = useState<number>(2139)
-  // AKITA default (temporary): 9.61% idle of 5,000,000 = 480,500
-  const [minimumIdle, setMinimumIdle] = useState<string>('480500')
+  // Absolute target model for a 5,000,000 baseline:
+  // 30% Charm + 30% Ajna + 30% Solana reserve + 10% idle.
+  // Since vault strategy weights are relative to deployable balance, use 50/50
+  // strategy weights and reserve 40% as minimum idle.
+  const [charmWeightBps, setCharmWeightBps] = useState<number>(5000)
+  const [ajnaWeightBps, setAjnaWeightBps] = useState<number>(5000)
+  // 40% of 5,000,000 = 2,000,000 reserved in-vault (Solana reserve + idle buffer).
+  const [minimumIdle, setMinimumIdle] = useState<string>('2000000')
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -195,6 +199,17 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
           abi: VAULT_MGMT_ABI,
           functionName: 'setMinimumTotalIdle',
           args: [minIdle],
+        }),
+        value: 0n,
+      })
+
+      // 4) Execute allocation now so actual underlying amounts move into strategies.
+      calls.push({
+        to: vaultAddress,
+        data: encodeFunctionData({
+          abi: VAULT_MGMT_ABI,
+          functionName: 'deployToStrategies',
+          args: [],
         }),
         value: 0n,
       })
@@ -362,11 +377,11 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
       <div className="text-[11px] text-zinc-600 space-y-1">
         {hasPrivySmartWallet ? (
           <>
-            <p>• Using Agent wallet — all calls are batched into one transaction (one approval).</p>
+            <p>• Using Smart Wallet — all calls are batched into one transaction (one approval).</p>
             <p>• ERC-4337 Account Abstraction with gas sponsorship.</p>
           </>
         ) : isSmartWallet ? (
-          <p>• Agent wallet detected.</p>
+          <p>• Smart Wallet detected.</p>
         ) : (
           <p>• User wallet — operations will run sequentially (multiple approvals).</p>
         )}

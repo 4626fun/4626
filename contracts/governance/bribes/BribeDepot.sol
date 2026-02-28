@@ -14,7 +14,7 @@ interface IVaultGaugeVotingForBribeDepot {
 
 /**
  * @title BribeDepot
- * @author CreatorVault
+ * @author 4626
  * @notice Vault-scoped bribe depot for ve(3,3) voting epochs.
  * @dev Deployed per-vault by BribesFactory using CREATE2.
  */

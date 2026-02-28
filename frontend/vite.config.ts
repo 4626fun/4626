@@ -96,7 +96,7 @@ function makeVercelCompatRes(res: ServerResponse): any {
 
 function localApiRoutesPlugin(): Plugin {
   return {
-    name: 'creatorvault-local-api-routes',
+    name: '4626-local-api-routes',
     apply: 'serve',
     configureServer(server) {
       // Load repo envs (secrets) into process.env for local /api handlers.

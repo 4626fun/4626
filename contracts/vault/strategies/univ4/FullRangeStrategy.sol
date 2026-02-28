@@ -21,7 +21,7 @@ import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol"
 
 /**
  * @title FullRangeStrategy
- * @author 0xakita.eth (CreatorVault)
+ * @author 0xakita.eth (4626)
  * @notice Provides full-range liquidity on Uniswap V4
  *
  * @dev STRATEGY:
