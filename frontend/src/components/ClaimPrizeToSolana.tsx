@@ -62,6 +62,27 @@ interface ClaimPrizeToSolanaProps {
 
 type ClaimStep = 'idle' | 'resolving' | 'approve' | 'approve_pending' | 'bridge' | 'bridge_pending' | 'complete' | 'error';
 
+interface ShareTokenMetadataResponse {
+  underlying?: {
+    bridgeSourceToken?: string | null;
+    name?: string | null;
+    symbol?: string | null;
+    image?: string | null;
+  };
+  properties?: {
+    bridgeSourceToken?: string | null;
+    underlyingAssetName?: string | null;
+    underlyingAssetSymbol?: string | null;
+    underlyingAssetImage?: string | null;
+  };
+}
+
+interface BridgeTokenDisplay {
+  name: string | null;
+  symbol: string | null;
+  image: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // ABI (subset of SolanaBridgeAdapter + ERC-20)
 // ---------------------------------------------------------------------------
@@ -100,6 +121,12 @@ function solanaPubkeyToBytes32(pubkey: string): `0x${string}` {
 function truncateAddress(addr: string, start = 6, end = 4): string {
   if (addr.length <= start + end + 2) return addr;
   return `${addr.slice(0, start)}...${addr.slice(-end)}`;
+}
+
+function toNonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -179,6 +206,7 @@ export function ClaimPrizeToSolana({
   const [approveTxHash, setApproveTxHash] = useState<`0x${string}` | undefined>();
   const [bridgeTxHash, setBridgeTxHash] = useState<`0x${string}` | undefined>();
   const [copied, setCopied] = useState(false);
+  const [bridgeTokenDisplay, setBridgeTokenDisplay] = useState<BridgeTokenDisplay | null>(null);
 
   const { isConnected } = useAccount();
   const publicClient = usePublicClient();
@@ -192,6 +220,48 @@ export function ClaimPrizeToSolana({
       return null;
     }
   }, [solanaPubkey]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setBridgeTokenDisplay(null);
+
+    const resolveBridgeTokenDisplay = async () => {
+      try {
+        const search = new URLSearchParams({
+          address: prizeToken,
+          chain: '8453',
+        });
+        const response = await fetch(`/api/token/metadata?${search.toString()}`, {
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+
+        const metadata = (await response.json()) as ShareTokenMetadataResponse;
+        const bridgeSourceToken =
+          toNonEmptyString(metadata?.underlying?.bridgeSourceToken) ??
+          toNonEmptyString(metadata?.properties?.bridgeSourceToken);
+
+        if (bridgeSourceToken !== 'creatorCoin') return;
+
+        setBridgeTokenDisplay({
+          name:
+            toNonEmptyString(metadata?.underlying?.name) ??
+            toNonEmptyString(metadata?.properties?.underlyingAssetName),
+          symbol:
+            toNonEmptyString(metadata?.underlying?.symbol) ??
+            toNonEmptyString(metadata?.properties?.underlyingAssetSymbol),
+          image:
+            toNonEmptyString(metadata?.underlying?.image) ??
+            toNonEmptyString(metadata?.properties?.underlyingAssetImage),
+        });
+      } catch {
+        // Keep fallback display values if metadata fetch is unavailable.
+      }
+    };
+
+    void resolveBridgeTokenDisplay();
+    return () => controller.abort();
+  }, [prizeToken]);
 
   // Resolve Twin address and check balance on mount
   useEffect(() => {
@@ -259,6 +329,9 @@ export function ClaimPrizeToSolana({
 
   const hasSufficientAllowance = currentAllowance >= prizeAmountRaw;
   const hasPrize = prizeBalance !== null && prizeBalance > 0n;
+  const displayTokenSymbol = bridgeTokenDisplay?.symbol ?? tokenSymbol;
+  const displayTokenName = bridgeTokenDisplay?.name;
+  const displayTokenImage = bridgeTokenDisplay?.image;
 
   // ---------------------------------------------------------------------------
   // Direct claim flow (user connected as Twin or has Base wallet access)
@@ -400,7 +473,11 @@ export function ClaimPrizeToSolana({
       {/* Header */}
       <div className="flex items-center gap-3 mb-1">
         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 flex items-center justify-center">
-          <Wallet className="w-5 h-5 text-indigo-400" />
+          {displayTokenImage ? (
+            <img src={displayTokenImage} alt={`${displayTokenSymbol} logo`} className="w-6 h-6 rounded-md object-cover" />
+          ) : (
+            <Wallet className="w-5 h-5 text-indigo-400" />
+          )}
         </div>
         <div>
           <h3 className="text-lg font-semibold text-white">Claim Prize to Solana</h3>
@@ -413,10 +490,16 @@ export function ClaimPrizeToSolana({
 
       {/* Prize details card */}
       <div className="rounded-xl bg-surface-700/40 border border-surface-600/30 p-4 mb-4 space-y-3">
+        {displayTokenName ? (
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-400">Asset</span>
+            <span className="text-sm font-medium text-gray-200">{displayTokenName}</span>
+          </div>
+        ) : null}
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-400">Prize</span>
           <span className="text-sm font-semibold text-white">
-            {prizeAmount} {tokenSymbol}
+            {prizeAmount} {displayTokenSymbol}
           </span>
         </div>
         <div className="flex items-center justify-between">
@@ -444,7 +527,7 @@ export function ClaimPrizeToSolana({
           {prizeBalance !== null ? (
             <span className={`text-sm font-medium ${hasPrize ? 'text-emerald-400' : 'text-red-400'}`}>
               {hasPrize
-                ? `${formatUnits(prizeBalance, tokenDecimals)} ${tokenSymbol}`
+                ? `${formatUnits(prizeBalance, tokenDecimals)} ${displayTokenSymbol}`
                 : 'No funds'}
             </span>
           ) : (

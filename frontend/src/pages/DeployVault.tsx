@@ -164,15 +164,15 @@ function normalizeBytes32(value: unknown): Hex | null {
   return value as Hex
 }
 
-function parseUint8(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 255) {
+function parseUInt32(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 4_294_967_295) {
     return Math.floor(value)
   }
   if (typeof value === 'string') {
     const v = value.trim()
     if (!v) return null
     const n = Number(v)
-    if (Number.isFinite(n) && n >= 0 && n <= 255) return Math.floor(n)
+    if (Number.isFinite(n) && n >= 0 && n <= 4_294_967_295) return Math.floor(n)
   }
   return null
 }
@@ -448,6 +448,15 @@ async function waitForPhase1CoreState(params: {
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type AdminAuthResponse = { address: string; isAdmin: boolean } | null
+type SolanaInfraStatusResponse = {
+  solanaEnabledOnBatcher: boolean
+  dynamicProvisioningMode: 'disabled' | 'local-cli' | 'remote-provisioner' | 'misconfigured'
+  existingMintCompatible: boolean
+  depositEligible: boolean
+  redeemEligible: boolean
+  readyForAutoRegistration: boolean
+  blockers: string[]
+}
 type ServerDeployResponse = {
   userOpHash: string
   addresses: {
@@ -462,6 +471,13 @@ type ServerDeployResponse = {
   }
 }
 type DeploySessionCall = { to: Address; value: string; data: Hex }
+type DeploySessionSolanaOvault = {
+  enabled?: boolean
+  assetMintOrigin?: 'existing' | 'new'
+  assetMeshMint?: Hex
+  shareMeshMint?: Hex
+  solanaEid?: number
+}
 type DeploySessionCreateRequest = {
   smartWallet: Address
   creatorToken: Address
@@ -472,6 +488,7 @@ type DeploySessionCreateRequest = {
   phase2FinalizeCalls: DeploySessionCall[]
   phase3Calls: DeploySessionCall[]
   phase4Calls: DeploySessionCall[]
+  solanaOvault?: DeploySessionSolanaOvault
   version: string
 }
 type DeployPlanExport = {
@@ -770,6 +787,18 @@ async function fetchAdminAuth(): Promise<AdminAuthResponse> {
   if (!res.ok || !json) return null
   if (!json.success) return null
   return (json.data ?? null) as AdminAuthResponse
+}
+
+async function fetchSolanaInfraStatus(): Promise<SolanaInfraStatusResponse | null> {
+  const { apiFetch } = await import('@/lib/apiBase')
+  const res = await apiFetch('/api/deploy/solanaInfraStatus', {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  })
+  const json = (await res.json().catch(() => null)) as ApiEnvelope<SolanaInfraStatusResponse> | null
+  if (!res.ok || !json) return null
+  if (!json.success) return null
+  return (json.data ?? null) as SolanaInfraStatusResponse | null
 }
 
 // Use the canonical EntryPoint v0.6 from the ERC-4337 module
@@ -1541,8 +1570,10 @@ function DeployVaultBatcher({
   privyEmbeddedEoaCanSign,
   connectedEoaOwnerReady,
   strictNoEoaMode,
-  solanaMintOverride,
-  solanaDecimalsOverride,
+  solanaAssetMintOrigin,
+  solanaAssetMeshMintOverride,
+  solanaShareMeshMintOverride,
+  solanaEidOverride,
   connectorId,
   wagmiWalletClient,
 }: {
@@ -1576,8 +1607,10 @@ function DeployVaultBatcher({
   privyEmbeddedEoaCanSign: boolean
   connectedEoaOwnerReady: boolean
   strictNoEoaMode: boolean
-  solanaMintOverride: Hex | null
-  solanaDecimalsOverride: number | null
+  solanaAssetMintOrigin: 'existing' | 'new'
+  solanaAssetMeshMintOverride: Hex | null
+  solanaShareMeshMintOverride: Hex | null
+  solanaEidOverride: number | null
   // For direct Coinbase Wallet connection (supports eth_sign)
   connectorId: string | undefined
   wagmiWalletClient: any
@@ -1586,9 +1619,6 @@ function DeployVaultBatcher({
   const chainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
   const publicClient = usePublicClient({ chainId: base.id })
-  // Legacy ShareOFT Solana overrides are intentionally unused in main deploy flow now.
-  void solanaMintOverride
-  void solanaDecimalsOverride
   
   // Detect Coinbase Wallet direct connection (not via Privy)
   const isCoinbaseWalletDirect = connectorId === 'coinbaseWalletSDK' || connectorId === 'com.coinbase.wallet'
@@ -3668,6 +3698,13 @@ function DeployVaultBatcher({
           phase2FinalizeCalls: serializeSessionCalls(phase2FinalizeCalls),
           phase3Calls: serializeSessionCalls(phase3Calls),
           phase4Calls: serializeSessionCalls(phase4Calls),
+          solanaOvault: {
+            enabled: true,
+            assetMintOrigin: solanaAssetMintOrigin,
+            ...(solanaAssetMeshMintOverride ? { assetMeshMint: solanaAssetMeshMintOverride } : {}),
+            ...(solanaShareMeshMintOverride ? { shareMeshMint: solanaShareMeshMintOverride } : {}),
+            ...(solanaEidOverride !== null ? { solanaEid: solanaEidOverride } : {}),
+          },
           version: deploymentVersion,
         }
         const deployPlanExport: DeployPlanExport = {
@@ -4099,9 +4136,9 @@ function DeployVaultBatcher({
                 }
                 if (simResult.revertData?.toLowerCase().startsWith('0xe092ade8')) {
                   throw new Error(
-                    `${logPhaseLabel} would revert: Solana bridge route is not registered ` +
-                      '(WrappedSplRouteNotRegistered). Register a supported ShareOFT↔SPL route first, ' +
-                      'or disable Solana bridging for this deploy.',
+                    `${logPhaseLabel} would revert: Solana OVault mesh route is not ready ` +
+                      '(WrappedSplRouteNotRegistered). Configure a supported ShareOFT↔SPL mesh route first, ' +
+                      'then retry deploy preflight.',
                   )
                 }
                 // If we have directCallResult with an error, show that too
@@ -4127,9 +4164,9 @@ function DeployVaultBatcher({
                   }
                   if (simResult.directCallResult.revertData?.toLowerCase().startsWith('0xe092ade8')) {
                     throw new Error(
-                      `${logPhaseLabel} would revert: Solana bridge route is not registered ` +
-                        '(WrappedSplRouteNotRegistered). Register a supported ShareOFT↔SPL route first, ' +
-                        'or disable Solana bridging for this deploy.',
+                      `${logPhaseLabel} would revert: Solana OVault mesh route is not ready ` +
+                        '(WrappedSplRouteNotRegistered). Configure a supported ShareOFT↔SPL mesh route first, ' +
+                        'then retry deploy preflight.',
                     )
                   }
                 }
@@ -5387,72 +5424,132 @@ function DeployVaultMain() {
     const query = normalizeBytes32(params.get('shareOftSaltOverride'))
     return query ?? env
   }, [])
-  const [solanaMintOverrideInput, setSolanaMintOverrideInput] = useState<string>(() => {
+  const [solanaAssetMintOrigin, setSolanaAssetMintOrigin] = useState<'existing' | 'new'>(() => {
+    const envRaw = String(import.meta.env.VITE_SOLANA_OVAULT_ASSET_MINT_ORIGIN ?? '').trim().toLowerCase()
+    const env = envRaw === 'new' ? 'new' : 'existing'
+    if (typeof window === 'undefined') return env
+    try {
+      const storedRaw = String(window.localStorage.getItem('cv:deploy:solanaAssetMintOrigin') ?? '').trim().toLowerCase()
+      if (storedRaw === 'existing' || storedRaw === 'new') return storedRaw
+    } catch {
+      // ignore
+    }
+    const params = new URLSearchParams(window.location.search)
+    const queryRaw = String(params.get('solanaAssetMintOrigin') ?? '').trim().toLowerCase()
+    if (queryRaw === 'existing' || queryRaw === 'new') return queryRaw
+    return env
+  })
+  const [solanaAssetMeshMintInput, setSolanaAssetMeshMintInput] = useState<string>(() => {
     const env = normalizeBytes32(import.meta.env.VITE_SOLANA_DEFAULT_MINT_BYTES32 as string | undefined)
     if (typeof window === 'undefined') return String(env ?? '')
     try {
-      const stored = normalizeBytes32(window.localStorage.getItem('cv:deploy:solanaMintOverride'))
+      const stored = normalizeBytes32(window.localStorage.getItem('cv:deploy:solanaAssetMeshMint'))
+      if (stored) return String(stored)
+      const legacy = normalizeBytes32(window.localStorage.getItem('cv:deploy:solanaMintOverride'))
+      if (legacy) return String(legacy)
+    } catch {
+      // ignore
+    }
+    const params = new URLSearchParams(window.location.search)
+    const query = normalizeBytes32(params.get('solanaAssetMint') ?? params.get('solanaMint'))
+    return String(query ?? env ?? '')
+  })
+  const [solanaShareMeshMintInput, setSolanaShareMeshMintInput] = useState<string>(() => {
+    const env = normalizeBytes32(import.meta.env.VITE_SOLANA_OVAULT_SHARE_MINT_BYTES32 as string | undefined)
+    if (typeof window === 'undefined') return String(env ?? '')
+    try {
+      const stored = normalizeBytes32(window.localStorage.getItem('cv:deploy:solanaShareMeshMint'))
       if (stored) return String(stored)
     } catch {
       // ignore
     }
     const params = new URLSearchParams(window.location.search)
-    const query = normalizeBytes32(params.get('solanaMint'))
+    const query = normalizeBytes32(params.get('solanaShareMint'))
     return String(query ?? env ?? '')
   })
-  const [solanaDecimalsOverrideInput, setSolanaDecimalsOverrideInput] = useState<string>(() => {
-    const env = parseUint8(import.meta.env.VITE_SOLANA_DEFAULT_MINT_DECIMALS as string | undefined)
+  const [solanaEidInput, setSolanaEidInput] = useState<string>(() => {
+    const env = parseUInt32(import.meta.env.VITE_SOLANA_EID as string | undefined)
     if (typeof window === 'undefined') return env !== null ? String(env) : ''
     try {
-      const stored = parseUint8(window.localStorage.getItem('cv:deploy:solanaDecimalsOverride'))
+      const stored = parseUInt32(window.localStorage.getItem('cv:deploy:solanaEid'))
       if (stored !== null) return String(stored)
     } catch {
       // ignore
     }
     const params = new URLSearchParams(window.location.search)
-    const query = parseUint8(params.get('solanaDecimals'))
+    const query = parseUInt32(params.get('solanaEid'))
     const v = query ?? env
     return v !== null ? String(v) : ''
   })
-  const solanaMintOverride = useMemo(
-    () => normalizeBytes32(solanaMintOverrideInput),
-    [solanaMintOverrideInput],
+  const solanaAssetMeshMintOverride = useMemo(
+    () => normalizeBytes32(solanaAssetMeshMintInput),
+    [solanaAssetMeshMintInput],
   )
-  const solanaDecimalsOverride = useMemo(
-    () => parseUint8(solanaDecimalsOverrideInput),
-    [solanaDecimalsOverrideInput],
+  const solanaShareMeshMintOverride = useMemo(
+    () => normalizeBytes32(solanaShareMeshMintInput),
+    [solanaShareMeshMintInput],
   )
-  const solanaMintOverrideInvalid = solanaMintOverrideInput.trim().length > 0 && !solanaMintOverride
-  const solanaDecimalsOverrideInvalid =
-    solanaDecimalsOverrideInput.trim().length > 0 && solanaDecimalsOverride === null
+  const solanaEidOverride = useMemo(
+    () => parseUInt32(solanaEidInput),
+    [solanaEidInput],
+  )
+  const solanaAssetMeshMintInvalid = solanaAssetMeshMintInput.trim().length > 0 && !solanaAssetMeshMintOverride
+  const solanaShareMeshMintInvalid = solanaShareMeshMintInput.trim().length > 0 && !solanaShareMeshMintOverride
+  const solanaEidOverrideInvalid = solanaEidInput.trim().length > 0 && solanaEidOverride === null
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
-      const v = solanaMintOverrideInput.trim()
+      window.localStorage.setItem('cv:deploy:solanaAssetMintOrigin', solanaAssetMintOrigin)
+    } catch {
+      // ignore
+    }
+  }, [solanaAssetMintOrigin])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const v = solanaAssetMeshMintInput.trim()
       if (v.length > 0) {
+        window.localStorage.setItem('cv:deploy:solanaAssetMeshMint', v)
+        // Backward compatibility for operators using older localStorage keys.
         window.localStorage.setItem('cv:deploy:solanaMintOverride', v)
       } else {
+        window.localStorage.removeItem('cv:deploy:solanaAssetMeshMint')
         window.localStorage.removeItem('cv:deploy:solanaMintOverride')
       }
     } catch {
       // ignore
     }
-  }, [solanaMintOverrideInput])
+  }, [solanaAssetMeshMintInput])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
-      const v = solanaDecimalsOverrideInput.trim()
+      const v = solanaShareMeshMintInput.trim()
       if (v.length > 0) {
-        window.localStorage.setItem('cv:deploy:solanaDecimalsOverride', v)
+        window.localStorage.setItem('cv:deploy:solanaShareMeshMint', v)
       } else {
-        window.localStorage.removeItem('cv:deploy:solanaDecimalsOverride')
+        window.localStorage.removeItem('cv:deploy:solanaShareMeshMint')
       }
     } catch {
       // ignore
     }
-  }, [solanaDecimalsOverrideInput])
+  }, [solanaShareMeshMintInput])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const v = solanaEidInput.trim()
+      if (v.length > 0) {
+        window.localStorage.setItem('cv:deploy:solanaEid', v)
+      } else {
+        window.localStorage.removeItem('cv:deploy:solanaEid')
+      }
+    } catch {
+      // ignore
+    }
+  }, [solanaEidInput])
 
   const switchAuthCta = useMemo(() => {
     if (!privyReady) return undefined
@@ -5717,6 +5814,13 @@ function DeployVaultMain() {
     retry: 0,
   })
   const isAdmin = Boolean(adminAuthQuery.data?.isAdmin)
+  const solanaInfraStatusQuery = useQuery({
+    queryKey: ['deployVault', 'solanaInfraStatus'],
+    enabled: hasWallet && isAdmin,
+    queryFn: fetchSolanaInfraStatus,
+    staleTime: 30_000,
+    retry: 0,
+  })
 
   const [minCoinAgeDays, setMinCoinAgeDays] = useState<number>(DEFAULT_MIN_COIN_AGE_DAYS)
   useEffect(() => {
@@ -6697,6 +6801,18 @@ function DeployVaultMain() {
       !privySmartWalletIsCanonicalOwner,
   )
   const hasDetectedZoraCrossAppWallet = Boolean(privyCrossAppSmartWalletAddress || privyCrossAppEmbeddedEoaAddress)
+  const solanaOvaultStatus = solanaInfraStatusQuery.data ?? null
+  const solanaOvaultFirstBlocker = useMemo(() => {
+    const blockers = solanaOvaultStatus?.blockers ?? []
+    if (blockers.length === 0) return null
+    const compatibility = blockers.find((b) => /ovault compatibility/i.test(String(b)))
+    return compatibility ?? blockers[0]
+  }, [solanaOvaultStatus?.blockers])
+  const ovaultAutoSetupReady =
+    !isAdmin ||
+    !solanaOvaultStatus ||
+    !solanaOvaultStatus.solanaEnabledOnBatcher ||
+    solanaOvaultStatus.readyForAutoRegistration === true
 
   const canDeploy =
     tokenIsValid &&
@@ -6716,10 +6832,12 @@ function DeployVaultMain() {
     fundingGateOk &&
     creatorVaultBatcherConfigured &&
     bytecodeInfraOk &&
-    !solanaMintOverrideInvalid &&
-    !solanaDecimalsOverrideInvalid &&
+    !solanaAssetMeshMintInvalid &&
+    !solanaShareMeshMintInvalid &&
+    !solanaEidOverrideInvalid &&
     !identityBlockingReason &&
-    smartWalletCapabilityReady
+    smartWalletCapabilityReady &&
+    ovaultAutoSetupReady
 
   const vrfConsumerAddress = (CONTRACTS.vrfConsumer ?? null) as Address | null
   const vrfConsumerConfigured = isAddress(String(vrfConsumerAddress ?? ''))
@@ -6736,6 +6854,41 @@ function DeployVaultMain() {
   const coinAgeReady = creatorCoinReady && coinAgeOk
   const fundingReady = fundingGateOk
   const authReady = isAuthorizedDeployerOrOperator
+  const solanaOvaultChecklistItems =
+    !isAdmin
+      ? []
+      : solanaInfraStatusQuery.isFetching && !solanaOvaultStatus
+        ? [{ label: 'OVault mesh diagnostics', ok: false, hint: 'checking' }]
+        : solanaInfraStatusQuery.isError
+          ? [{ label: 'OVault mesh diagnostics', ok: false, hint: 'error' }]
+          : !solanaOvaultStatus
+            ? [{ label: 'OVault mesh diagnostics', ok: false, hint: 'unavailable' }]
+            : !solanaOvaultStatus.solanaEnabledOnBatcher
+              ? [{ label: 'OVault mesh on batcher', ok: true, hint: 'disabled' }]
+              : [
+                  {
+                    label: 'OVault existing mint compatibility',
+                    ok: solanaOvaultStatus.existingMintCompatible,
+                    hint: solanaOvaultStatus.existingMintCompatible ? 'ok' : 'blocked',
+                  },
+                  {
+                    label: 'OVault deposit eligibility',
+                    ok: solanaOvaultStatus.depositEligible,
+                    hint: solanaOvaultStatus.depositEligible ? 'ok' : 'blocked',
+                  },
+                  {
+                    label: 'OVault redeem eligibility',
+                    ok: solanaOvaultStatus.redeemEligible,
+                    hint: solanaOvaultStatus.redeemEligible ? 'ok' : 'blocked',
+                  },
+                  {
+                    label: 'OVault auto-setup readiness',
+                    ok: solanaOvaultStatus.readyForAutoRegistration,
+                    hint: solanaOvaultStatus.readyForAutoRegistration
+                      ? solanaOvaultStatus.dynamicProvisioningMode
+                      : 'blocked',
+                  },
+                ]
 
   const firstLaunchChecklist = [
     {
@@ -6822,12 +6975,13 @@ function DeployVaultMain() {
             ? `${Number(formatUnits(marketFloorQuery.data.weiPerToken, 18)).toFixed(6)} ETH`
             : 'missing',
     },
+    ...solanaOvaultChecklistItems,
     {
       label: 'Ready to deploy',
       ok: canDeploy,
       hint: canDeploy ? 'ready' : 'missing requirements',
     },
-  ] as const
+  ]
 
   const deployBlocker =
     !tokenIsValid
@@ -6856,10 +7010,16 @@ function DeployVaultMain() {
                         ? NO_EOA_STRICT_BLOCKER
                       : identityBlockingReason
                         ? identityBlockingReason
-                      : solanaMintOverrideInvalid
-                        ? 'Solana mint override must be bytes32 hex (`0x` + 64 chars).'
-                      : solanaDecimalsOverrideInvalid
-                        ? 'Solana decimals override must be 0-255.'
+                      : solanaAssetMeshMintInvalid
+                        ? 'Solana asset mesh mint must be bytes32 hex (`0x` + 64 chars).'
+                      : solanaShareMeshMintInvalid
+                        ? 'Solana share mesh mint must be bytes32 hex (`0x` + 64 chars).'
+                      : solanaEidOverrideInvalid
+                        ? 'Solana EID override must be an unsigned 32-bit integer.'
+                      : isAdmin && !ovaultAutoSetupReady
+                        ? solanaOvaultFirstBlocker
+                          ? `OVault mesh preflight is not ready: ${solanaOvaultFirstBlocker}`
+                          : 'OVault mesh preflight is not ready.'
                       : oneTimePrivyOwnerApprovalNeeded
                         ? connectedWalletAddress
                           ? 'One-time owner approval required before deploy. Approve your app Privy wallet as an owner of your canonical Zora smart wallet.'
@@ -7097,6 +7257,11 @@ function DeployVaultMain() {
                     </div>
                   ))}
                 </div>
+                {solanaOvaultStatus?.solanaEnabledOnBatcher && solanaOvaultFirstBlocker ? (
+                  <div className="mt-2 rounded border border-amber-500/25 bg-amber-500/5 px-2 py-1 text-[11px] text-amber-200/80">
+                    OVault blocker: {solanaOvaultFirstBlocker}
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -7294,35 +7459,57 @@ function DeployVaultMain() {
             </div>
 
               <div className="space-y-2">
-                <label className="label">Solana Mint (Optional)</label>
+                <label className="label">Solana OVault Mesh (Optional)</label>
+                <select
+                  value={solanaAssetMintOrigin}
+                  onChange={(e) => setSolanaAssetMintOrigin(e.target.value === 'new' ? 'new' : 'existing')}
+                  className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-200 outline-none focus:border-cyan-500/50 transition-colors"
+                >
+                  <option value="existing">Asset mint origin: existing mint</option>
+                  <option value="new">Asset mint origin: new mint</option>
+                </select>
                 <input
-                  value={solanaMintOverrideInput}
-                  onChange={(e) => setSolanaMintOverrideInput(e.target.value)}
-                  placeholder="0x<32-byte solana mint pubkey>"
+                  value={solanaAssetMeshMintInput}
+                  onChange={(e) => setSolanaAssetMeshMintInput(e.target.value)}
+                  placeholder="Asset mesh mint (bytes32): 0x<64 hex chars>"
                   className={`w-full bg-black border rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none transition-colors font-mono ${
-                    solanaMintOverrideInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
+                    solanaAssetMeshMintInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
                   }`}
                 />
                 <input
-                  value={solanaDecimalsOverrideInput}
-                  onChange={(e) => setSolanaDecimalsOverrideInput(e.target.value)}
-                  placeholder="Decimals (default 9)"
+                  value={solanaShareMeshMintInput}
+                  onChange={(e) => setSolanaShareMeshMintInput(e.target.value)}
+                  placeholder="Share mesh mint (bytes32): 0x<64 hex chars>"
+                  className={`w-full bg-black border rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none transition-colors font-mono ${
+                    solanaShareMeshMintInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
+                  }`}
+                />
+                <input
+                  value={solanaEidInput}
+                  onChange={(e) => setSolanaEidInput(e.target.value)}
+                  placeholder="Solana EID (optional)"
                   inputMode="numeric"
                   className={`w-full bg-black border rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none transition-colors font-mono ${
-                    solanaDecimalsOverrideInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
+                    solanaEidOverrideInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
                   }`}
                 />
                 <div className="text-xs text-zinc-600">
-                  Used for automatic ShareOFT registration on the Solana adapter when bridging is enabled. If empty, server defaults are used.
+                  Passed into deploy-session OVault preflight (`setupSolanaOvaultMesh`) for mesh readiness and
+                  deposit/redeem eligibility checks. If empty, server defaults are used.
                 </div>
-                {solanaMintOverrideInvalid ? (
+                {solanaAssetMeshMintInvalid ? (
                   <div className="text-[11px] text-red-400/90">
-                    Mint must be a bytes32 hex value (`0x` + 64 hex chars).
+                    Asset mesh mint must be a bytes32 hex value (`0x` + 64 hex chars).
                   </div>
                 ) : null}
-                {solanaDecimalsOverrideInvalid ? (
+                {solanaShareMeshMintInvalid ? (
                   <div className="text-[11px] text-red-400/90">
-                    Decimals must be an integer between 0 and 255.
+                    Share mesh mint must be a bytes32 hex value (`0x` + 64 hex chars).
+                  </div>
+                ) : null}
+                {solanaEidOverrideInvalid ? (
+                  <div className="text-[11px] text-red-400/90">
+                    Solana EID must be an integer in range `0` to `4294967295`.
                   </div>
                 ) : null}
               </div>
@@ -7486,8 +7673,10 @@ function DeployVaultMain() {
                     privyEmbeddedEoaCanSign={privyEmbeddedEoaCanSign}
                     connectedEoaOwnerReady={connectedEoaOwnerReady}
                     strictNoEoaMode={strictNoEoaMode}
-                    solanaMintOverride={solanaMintOverride}
-                    solanaDecimalsOverride={solanaDecimalsOverride}
+                    solanaAssetMintOrigin={solanaAssetMintOrigin}
+                    solanaAssetMeshMintOverride={solanaAssetMeshMintOverride}
+                    solanaShareMeshMintOverride={solanaShareMeshMintOverride}
+                    solanaEidOverride={solanaEidOverride}
                     connectorId={connector?.id}
                     wagmiWalletClient={walletClient}
                   />
@@ -7519,7 +7708,7 @@ function DeployVaultMain() {
                       {canCreateCoinInApp && canonicalIdentityIsContract ? (
                         <LaunchCoinCard
                           smartWalletAddress={canonicalIdentityAddress}
-                          preferredOwnerAddress={connectedWalletAddress}
+                          ownerAddress={connectedWalletAddress}
                           onCoinCreated={(coinAddress) => setCreatorToken(coinAddress)}
                         />
                       ) : (
