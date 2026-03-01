@@ -1,32 +1,32 @@
 # Current Contract Inventory (Base)
 
-Generated on: 2026-02-22  
+Generated on: 2026-02-28  
 Scope: 4626 deploy stack and related infra used by this repo.
 
 ## Sources
 
-1. Live onchain batcher (phased deployer): `0xB87CBb646dD14F520078F11196f79BF815F18c84`
+1. Live onchain batcher (phased deployer): `0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753`
 2. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
 3. Deployment manifests: `deployments/base/contracts/**/*.json`
 4. Local env snapshot: `.env`
 
 ## Live Onchain (Authoritative For Current Deploy Path)
 
-Queried from the deployment batcher at `0xB87CBb646dD14F520078F11196f79BF815F18c84`:
+Queried from the deployment batcher at `0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753`:
 
 | Contract / Field | Address |
 |---|---|
 | `registry` | `0x888506B92181c57A2fD06516FFFb6F375b7A4626` |
-| `bytecodeStore` | `0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13` |
-| `create2Deployer` | `0x74183076C7D33346880A5bf0e263B761FB4d38BA` |
+| `bytecodeStore` | `0x2C5Ff5bd3D6f4aF4742e37Df12E51b39F2C63e6c` |
+| `create2Deployer` | `0x0243F14771054c890E5Ef5D467D0137a20B2d94B` |
 | `protocolTreasury` | `0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3` |
 | `poolManager` | `0x498581fF718922c3f8e6A244956aF099B2652b2b` |
 | `taxHook` | `0xca975B9dAF772C71161f3648437c3616E5Be0088` |
 | `chainlinkEthUsd` | `0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70` |
 | `vaultActivationBatcher` | `0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB` |
 | `lotteryManager` | `0x77705A2f173dd52F28300447506Dc35086c34626` |
-| `solanaBridgeAdapter` | `0x2414b595c4f18532A5836B6e2E6d536832c572e8` |
-| `solanaDestination` | `0x5f38e34ec3b546c53e682f2cf84d35d2edcbd15b498367651835942416f8d4d1` |
+| `solanaBridgeAdapter` | `0x0000000000000000000000000000000000000000` |
+| `solanaDestination` | `0x0000000000000000000000000000000000000000000000000000000000000000` |
 | `permit2` | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
 | `usdc` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 | `uniswapV3Factory` | `0x33128a8fC17869897dcE68Ed026d694621f6FDfD` |
@@ -44,10 +44,10 @@ From `frontend/src/config/contracts.defaults.ts`:
 | `lotteryManager` | `0x77705A2f173dd52F28300447506Dc35086c34626` |
 | `vrfConsumer` | `0x9F85d8EEe5d2b8dC1E99b598B9c2B084934d0304` |
 | `vaultActivationBatcher` | `0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB` |
-| `creatorVaultBatcher` | `0xB87CBb646dD14F520078F11196f79BF815F18c84` |
+| `creatorVaultBatcher` | `0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753` |
 | `solanaBridgeAdapter` | `0x2414b595c4f18532A5836B6e2E6d536832c572e8` |
-| `universalBytecodeStore` | `0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13` |
-| `universalCreate2DeployerFromStore` | `0x74183076C7D33346880A5bf0e263B761FB4d38BA` |
+| `universalBytecodeStore` | `0x2C5Ff5bd3D6f4aF4742e37Df12E51b39F2C63e6c` |
+| `universalCreate2DeployerFromStore` | `0x0243F14771054c890E5Ef5D467D0137a20B2d94B` |
 
 ## Deployment Manifests (Historical/Script Outputs)
 
