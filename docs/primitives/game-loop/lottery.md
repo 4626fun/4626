@@ -25,8 +25,8 @@ In 4626, this is a **Game Loop** boundary because it ties:
 
 - [Engagement (Game Loop)](/compressions/engagement)
 - [Tokenomics](/tokenomics)
-- [Contracts: Lottery Manager](/contracts/services/lottery-manager)
-- [VRF callbacks (in Lottery Manager)](/contracts/services/lottery-manager)
+- [Contracts: Lottery Manager](/contracts/utilities/lottery-manager)
+- [VRF callbacks (in Lottery Manager)](/contracts/utilities/lottery-manager)
 
 ---
 title: Lottery
@@ -48,5 +48,5 @@ The lottery is the core onchain engagement loop: DEX trades fund a prize pool an
 
 - [Tokenomics](/tokenomics)
 - [Security](/security)
-- [Contracts: Lottery Manager](/contracts/services/lottery-manager)
+- [Contracts: Lottery Manager](/contracts/utilities/lottery-manager)
 

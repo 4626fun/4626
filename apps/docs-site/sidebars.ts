@@ -105,11 +105,11 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
-          label: 'Services',
-          link: { type: 'doc', id: 'contracts/services/index' },
+          label: 'Utilities',
+          link: { type: 'doc', id: 'contracts/utilities/index' },
           items: [
-            'contracts/services/lottery-manager',
-            'contracts/services/creator-oracle',
+            'contracts/utilities/lottery-manager',
+            'contracts/utilities/creator-oracle',
           ],
         },
       ],

@@ -14,7 +14,7 @@ Technical documentation for 4626 smart contracts.
 | **[Core](/contracts/core)** | Registry, Vault, Wrapper, ShareOFT |
 | **[Governance](/contracts/governance)** | GaugeController, Voting, ve4626 |
 | **[Strategies](/contracts/strategies)** | Yield strategies, CCA launch |
-| **[Services](/contracts/services)** | Lottery, Oracle |
+| **[Utilities](/contracts/utilities)** | Lottery, Oracle |
 
 ## Architecture
 

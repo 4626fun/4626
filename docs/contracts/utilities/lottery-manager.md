@@ -17,7 +17,7 @@ The CreatorLotteryManager:
 
 ## Architecture
 
-This is a **shared service** deployed once per chain that serves ALL Creator Coins by looking up contracts from the registry.
+This is a **shared utility** deployed once per chain that serves ALL Creator Coins by looking up contracts from the registry.
 
 ## Win Probability
 
