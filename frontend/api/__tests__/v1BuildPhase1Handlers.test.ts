@@ -72,6 +72,16 @@ const GAUGE_RESET_ABI = [
   },
 ] as const
 
+const GAUGE_RESET_WITH_INDEX_ABI = [
+  {
+    type: 'function',
+    name: 'resetVotes',
+    stateMutability: 'nonpayable',
+    inputs: [{ type: 'uint256' }],
+    outputs: [],
+  },
+] as const
+
 const VE_LOCK_ABI = [
   {
     type: 'function',
@@ -112,6 +122,16 @@ const VE_UNLOCK_ABI = [
   },
 ] as const
 
+const VE_UNLOCK_WITH_INDEX_ABI = [
+  {
+    type: 'function',
+    name: 'unlock',
+    stateMutability: 'nonpayable',
+    inputs: [{ type: 'uint256' }],
+    outputs: [{ type: 'uint256' }],
+  },
+] as const
+
 describe('v1 build phase 1 handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -133,9 +153,10 @@ describe('v1 build phase 1 handlers', () => {
   })
 
   it('passes through auth guard failure for all phase 1 handlers', async () => {
-    mocks.guardAgentApiRequest.mockImplementation(async ({ res }: any) => {
+    mocks.guardAgentApiRequest.mockImplementation(async (...args: any[]) => {
+      const [{ res } = {} as any] = args
       res.status(401).json({ success: false, error: 'Authentication required' })
-      return { ok: false, ip: '127.0.0.1' }
+      return { ok: false, ip: '127.0.0.1', auth: null }
     })
 
     const cases = [
@@ -189,6 +210,35 @@ describe('v1 build phase 1 handlers', () => {
     expect(res.body?.data?.data).toBe(expectedData)
   })
 
+  it('changes auction calldata when key args are mutated', async () => {
+    const baseReq = createMockReq({
+      method: 'POST',
+      body: {
+        auction: AUCTION,
+        owner: OWNER,
+        maxPriceQ96: '1000000000000',
+        amountWei: '12345',
+      },
+    })
+    const baseRes = createMockRes()
+    await auctionSubmitBidHandler(baseReq, baseRes)
+    expect(baseRes.statusCode).toBe(200)
+
+    const mutatedReq = createMockReq({
+      method: 'POST',
+      body: {
+        auction: AUCTION,
+        owner: OWNER,
+        maxPriceQ96: '1000000000001',
+        amountWei: '12345',
+      },
+    })
+    const mutatedRes = createMockRes()
+    await auctionSubmitBidHandler(mutatedReq, mutatedRes)
+    expect(mutatedRes.statusCode).toBe(200)
+    expect(mutatedRes.body?.data?.data).not.toBe(baseRes.body?.data?.data)
+  })
+
   it('validates auction amount bounds', async () => {
     const req = createMockReq({
       method: 'POST',
@@ -229,6 +279,33 @@ describe('v1 build phase 1 handlers', () => {
     expect(res.body?.data?.data).toBe(expectedData)
   })
 
+  it('changes gauge vote calldata when weights are mutated', async () => {
+    const vault = '0x6666666666666666666666666666666666666666'
+
+    const baseReq = createMockReq({
+      method: 'POST',
+      body: {
+        vaults: [vault],
+        weights: ['1000'],
+      },
+    })
+    const baseRes = createMockRes()
+    await gaugeVoteHandler(baseReq, baseRes)
+    expect(baseRes.statusCode).toBe(200)
+
+    const mutatedReq = createMockReq({
+      method: 'POST',
+      body: {
+        vaults: [vault],
+        weights: ['1001'],
+      },
+    })
+    const mutatedRes = createMockRes()
+    await gaugeVoteHandler(mutatedReq, mutatedRes)
+    expect(mutatedRes.statusCode).toBe(200)
+    expect(mutatedRes.body?.data?.data).not.toBe(baseRes.body?.data?.data)
+  })
+
   it('validates gauge vote input lengths', async () => {
     const req = createMockReq({
       method: 'POST',
@@ -256,10 +333,19 @@ describe('v1 build phase 1 handlers', () => {
       args: [],
     })
     expect(res.body?.data?.data).toBe(expectedData)
+    const wrongSignature = encodeFunctionData({
+      abi: GAUGE_RESET_WITH_INDEX_ABI,
+      functionName: 'resetVotes',
+      args: [1n],
+    })
+    expect(res.body?.data?.data).not.toBe(wrongSignature)
   })
 
   it('returns 503 when gauge contract config is missing', async () => {
-    mocks.getApiContracts.mockReturnValueOnce({ ve4626: '0x2222222222222222222222222222222222222222' })
+    mocks.getApiContracts.mockReturnValueOnce({
+      vaultGaugeVoting: '',
+      ve4626: '0x2222222222222222222222222222222222222222',
+    })
     const req = createMockReq({ method: 'POST', body: {} })
     const res = createMockRes()
     await gaugeResetVotesHandler(req, res)
@@ -285,6 +371,25 @@ describe('v1 build phase 1 handlers', () => {
     expect(res.body?.data?.data).toBe(expectedData)
   })
 
+  it('changes ve lock calldata when duration is mutated', async () => {
+    const baseReq = createMockReq({
+      method: 'POST',
+      body: { token: TOKEN, amount: '100', durationSec: '86400' },
+    })
+    const baseRes = createMockRes()
+    await veLockHandler(baseReq, baseRes)
+    expect(baseRes.statusCode).toBe(200)
+
+    const mutatedReq = createMockReq({
+      method: 'POST',
+      body: { token: TOKEN, amount: '100', durationSec: '86401' },
+    })
+    const mutatedRes = createMockRes()
+    await veLockHandler(mutatedReq, mutatedRes)
+    expect(mutatedRes.statusCode).toBe(200)
+    expect(mutatedRes.body?.data?.data).not.toBe(baseRes.body?.data?.data)
+  })
+
   it('validates ve lock token input', async () => {
     const req = createMockReq({
       method: 'POST',
@@ -296,7 +401,7 @@ describe('v1 build phase 1 handlers', () => {
     expect(String(res.body?.error ?? '')).toContain('token is required')
   })
 
-  it('builds ve extend/increase/unlock calldata', async () => {
+  it('builds ve extend calldata', async () => {
     const extendReq = createMockReq({ method: 'POST', body: { newEnd: '9999999999' } })
     const extendRes = createMockRes()
     await veExtendHandler(extendReq, extendRes)
@@ -308,7 +413,9 @@ describe('v1 build phase 1 handlers', () => {
       args: [9999999999n],
     })
     expect(extendRes.body?.data?.data).toBe(expectedExtendData)
+  })
 
+  it('builds ve increase calldata', async () => {
     const increaseReq = createMockReq({ method: 'POST', body: { amount: '250' } })
     const increaseRes = createMockRes()
     await veIncreaseHandler(increaseReq, increaseRes)
@@ -320,7 +427,9 @@ describe('v1 build phase 1 handlers', () => {
       args: [250n],
     })
     expect(increaseRes.body?.data?.data).toBe(expectedIncreaseData)
+  })
 
+  it('builds ve unlock calldata', async () => {
     const unlockReq = createMockReq({ method: 'POST', body: {} })
     const unlockRes = createMockRes()
     await veUnlockHandler(unlockReq, unlockRes)
@@ -332,6 +441,38 @@ describe('v1 build phase 1 handlers', () => {
       args: [],
     })
     expect(unlockRes.body?.data?.data).toBe(expectedUnlockData)
+    const wrongUnlockSignature = encodeFunctionData({
+      abi: VE_UNLOCK_WITH_INDEX_ABI,
+      functionName: 'unlock',
+      args: [1n],
+    })
+    expect(unlockRes.body?.data?.data).not.toBe(wrongUnlockSignature)
+  })
+
+  it('changes ve extend calldata when newEnd is mutated', async () => {
+    const baseReq = createMockReq({ method: 'POST', body: { newEnd: '9999999999' } })
+    const baseRes = createMockRes()
+    await veExtendHandler(baseReq, baseRes)
+    expect(baseRes.statusCode).toBe(200)
+
+    const mutatedReq = createMockReq({ method: 'POST', body: { newEnd: '10000000000' } })
+    const mutatedRes = createMockRes()
+    await veExtendHandler(mutatedReq, mutatedRes)
+    expect(mutatedRes.statusCode).toBe(200)
+    expect(mutatedRes.body?.data?.data).not.toBe(baseRes.body?.data?.data)
+  })
+
+  it('changes ve increase calldata when amount is mutated', async () => {
+    const baseReq = createMockReq({ method: 'POST', body: { amount: '250' } })
+    const baseRes = createMockRes()
+    await veIncreaseHandler(baseReq, baseRes)
+    expect(baseRes.statusCode).toBe(200)
+
+    const mutatedReq = createMockReq({ method: 'POST', body: { amount: '251' } })
+    const mutatedRes = createMockRes()
+    await veIncreaseHandler(mutatedReq, mutatedRes)
+    expect(mutatedRes.statusCode).toBe(200)
+    expect(mutatedRes.body?.data?.data).not.toBe(baseRes.body?.data?.data)
   })
 
   it('validates ve extend/increase numeric inputs', async () => {
