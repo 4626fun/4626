@@ -3,6 +3,7 @@ import {
   deriveOwnerInstallMappingStatus,
   extractZoraCrossAppAccounts,
   extractZoraProviderAddresses,
+  resolveCanonicalZoraCswCandidate,
 } from './ownerInstallMapping'
 
 const ZORA_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
@@ -127,6 +128,29 @@ describe('extractZoraProviderAddresses', () => {
     ])
     expect(result.smartWalletAddresses).toEqual(['0x2222222222222222222222222222222222222222'])
     expect(result.embeddedWalletAddresses).toEqual(['0x3333333333333333333333333333333333333333'])
+  })
+})
+
+describe('resolveCanonicalZoraCswCandidate', () => {
+  it('prefers known canonical first', async () => {
+    const resolved = await resolveCanonicalZoraCswCandidate({
+      knownCanonicalAddress: '0x9999999999999999999999999999999999999999',
+      smartWalletAddresses: ['0x2222222222222222222222222222222222222222'],
+      providerAddresses: ['0x1111111111111111111111111111111111111111'],
+      profileFallbackAddress: '0x3333333333333333333333333333333333333333',
+    })
+    expect(resolved).toBe('0x9999999999999999999999999999999999999999')
+  })
+
+  it('falls back from smart candidates to profile fallback', async () => {
+    const resolved = await resolveCanonicalZoraCswCandidate({
+      knownCanonicalAddress: null,
+      smartWalletAddresses: ['0x2222222222222222222222222222222222222222'],
+      providerAddresses: ['0x1111111111111111111111111111111111111111'],
+      profileFallbackAddress: '0x3333333333333333333333333333333333333333',
+      isContractAddress: async (candidate) => candidate.toLowerCase() === '0x1111111111111111111111111111111111111111',
+    })
+    expect(resolved).toBe('0x3333333333333333333333333333333333333333')
   })
 })
 

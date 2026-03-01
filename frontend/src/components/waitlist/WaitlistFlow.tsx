@@ -43,6 +43,7 @@ import {
   deriveOwnerInstallMappingStatus,
   extractZoraCrossAppAccounts,
   extractZoraProviderAddresses,
+  resolveCanonicalZoraCswCandidate,
 } from './ownerInstallMapping'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -1058,8 +1059,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     const raw = typeof zoraProfileSmartWalletAddress === 'string' ? zoraProfileSmartWalletAddress : ''
     return isAddress(raw) ? (getAddress(raw) as any) : null
   }, [zoraProfileSmartWalletAddress])
-  const knownCanonicalCswAddress = cswAddress || coinbaseSmartWalletAddress
-  const effectiveCswAddress = canonicalZoraCswAddress || knownCanonicalCswAddress
+  const knownCanonicalCswAddress = coinbaseSmartWalletAddress
+  const profileDerivedCanonicalCswAddress = cswAddress
+  const effectiveCswAddress =
+    canonicalZoraCswAddress || knownCanonicalCswAddress || profileDerivedCanonicalCswAddress
   const ownerInstallStatus = useMemo(
     () =>
       deriveOwnerInstallMappingStatus({
@@ -1238,36 +1241,13 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     setCanonicalResolveBusy(true)
     patchWaitlist({ mappingError: null, canonicalZoraCswUnresolvedReason: null })
     try {
-      const smartCandidates = Array.from(
-        new Set(
-          [
-            ...zoraAddressSet.smartWalletAddresses,
-            ...(knownCanonicalCswAddress && isValidEvmAddress(knownCanonicalCswAddress)
-              ? [knownCanonicalCswAddress.toLowerCase()]
-              : []),
-          ].filter((value) => isValidEvmAddress(String(value || ''))),
-        ),
-      )
-      const providerCandidates = Array.from(
-        new Set(
-          zoraAddressSet.providerAddresses.filter((value) => isValidEvmAddress(String(value || ''))),
-        ),
-      )
-
-      let resolved: string | null = null
-      if (publicClient) {
-        for (const candidate of [...smartCandidates, ...providerCandidates]) {
-          if (!(await isContractAddress(candidate))) continue
-          resolved = getAddress(candidate).toLowerCase()
-          break
-        }
-      } else if (smartCandidates.length > 0) {
-        resolved = getAddress(smartCandidates[0]).toLowerCase()
-      }
-
-      if (!resolved && knownCanonicalCswAddress && isValidEvmAddress(knownCanonicalCswAddress)) {
-        resolved = getAddress(knownCanonicalCswAddress).toLowerCase()
-      }
+      const resolved = await resolveCanonicalZoraCswCandidate({
+        knownCanonicalAddress: knownCanonicalCswAddress,
+        smartWalletAddresses: zoraAddressSet.smartWalletAddresses,
+        providerAddresses: zoraAddressSet.providerAddresses,
+        profileFallbackAddress: profileDerivedCanonicalCswAddress,
+        isContractAddress: publicClient ? isContractAddress : undefined,
+      })
 
       if (resolved) {
         patchWaitlist({
@@ -1293,6 +1273,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     isContractAddress,
     knownCanonicalCswAddress,
     patchWaitlist,
+    profileDerivedCanonicalCswAddress,
     publicClient,
     zoraAddressSet.providerAddresses,
     zoraAddressSet.smartWalletAddresses,
@@ -1308,6 +1289,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       embeddedWalletAddress.toLowerCase(),
       zoraAddressSet.providerAddresses.join(','),
       String(knownCanonicalCswAddress || '').toLowerCase(),
+      String(profileDerivedCanonicalCswAddress || '').toLowerCase(),
     ].join('|')
 
     if (
@@ -1324,6 +1306,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     canonicalZoraCswUnresolvedReason,
     embeddedWalletAddress,
     knownCanonicalCswAddress,
+    profileDerivedCanonicalCswAddress,
     privyAuthed,
     walletsReady,
     resolveCanonicalZoraCsw,

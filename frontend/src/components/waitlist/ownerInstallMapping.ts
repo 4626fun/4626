@@ -89,6 +89,38 @@ export function extractZoraProviderAddresses(accounts: any[]): ZoraCrossAppAddre
   }
 }
 
+export async function resolveCanonicalZoraCswCandidate(params: {
+  knownCanonicalAddress: string | null
+  smartWalletAddresses: string[]
+  providerAddresses: string[]
+  profileFallbackAddress: string | null
+  isContractAddress?: (address: string) => Promise<boolean>
+}): Promise<string | null> {
+  const knownCanonical = normalizeEvmAddress(params.knownCanonicalAddress)
+  if (knownCanonical) {
+    // If we already have a known canonical address from integration state, trust it first.
+    return knownCanonical
+  }
+
+  const smartCandidates = uniqueAddresses(params.smartWalletAddresses)
+  const providerCandidates = uniqueAddresses(params.providerAddresses)
+  const profileFallback = normalizeEvmAddress(params.profileFallbackAddress)
+
+  if (!params.isContractAddress) {
+    return smartCandidates[0] ?? profileFallback ?? providerCandidates[0] ?? null
+  }
+
+  for (const candidate of smartCandidates) {
+    if (await params.isContractAddress(candidate)) return candidate
+  }
+  if (profileFallback) return profileFallback
+  for (const candidate of providerCandidates) {
+    if (await params.isContractAddress(candidate)) return candidate
+  }
+
+  return null
+}
+
 export function deriveOwnerInstallMappingStatus(params: {
   privyAuthed: boolean
   walletsReady: boolean
