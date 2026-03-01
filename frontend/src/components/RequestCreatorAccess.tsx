@@ -1,10 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Clock, Lock, MailQuestion, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock, MailQuestion, XCircle } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { useAccount } from 'wagmi'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { ConnectButton } from '@/components/ConnectButton'
 import { apiFetch } from '@/lib/apiBase'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
@@ -76,21 +75,6 @@ export function RequestCreatorAccess({ coin }: { coin?: string | null }) {
     if (!statusQuery.data?.approved) return
     void qc.invalidateQueries({ queryKey: ['creatorAllowlist'] })
   }, [qc, statusQuery.data?.approved])
-
-  if (!isConnected) {
-    return (
-      <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-3">
-        <div className="flex items-center gap-2 text-sm text-zinc-200">
-          <Lock className="w-4 h-4 text-zinc-400" />
-          Invite-only launch
-        </div>
-        <div className="text-xs text-zinc-600">
-          Connect your wallet to request creator access.
-        </div>
-        <ConnectButton />
-      </div>
-    )
-  }
 
   if (!isSignedIn) {
     return (

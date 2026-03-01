@@ -443,7 +443,7 @@ function NotFoundPage() {
   const appCta = useMemo(() => {
     const prefix = access.hostMode === 'app' ? MARKETING_ORIGIN : ''
     if (!access.sessionValid) {
-      return { href: prefix + withReason('/', 'needs-session'), label: 'Connect And Sign In', hint: 'Connect wallet and establish a session.' }
+      return { href: prefix + withReason('/', 'needs-session'), label: 'Sign In', hint: 'Sign in to get started.' }
     }
     if (!access.accepted) {
       return {

@@ -4,6 +4,7 @@ import { Wallet, ChevronDown } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import { usePrivy } from '@privy-io/react-auth'
 
 /**
  * Simple Connect Button
@@ -17,6 +18,7 @@ export function ConnectButtonWeb3() {
   const auth = useSiweAuth()
   const privyStatus = usePrivyClientStatus()
   const prefersPrivyWalletLogin = privyStatus === 'ready'
+  const { ready: privyReady, authenticated: privyAuthenticated } = usePrivy()
   const [showMenu, setShowMenu] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
 
@@ -131,26 +133,33 @@ export function ConnectButtonWeb3() {
     )
   }
 
-  // Disconnected - show connect options
+  // Disconnected - Privy-first sign in
   return (
     <div className="relative">
       <button
         type="button"
         disabled={isPending || auth.busy}
         onClick={() => {
-          if (!prefersPrivyWalletLogin) {
+          if (prefersPrivyWalletLogin) {
+            if (privyReady && privyAuthenticated) {
+              void (async () => {
+                const signed = await auth.signIn({ method: 'auto' })
+                if (!signed) setShowOptions(true)
+              })()
+            } else {
+              void (async () => {
+                const signed = await auth.signIn({ method: 'zora' })
+                if (!signed) setShowOptions(true)
+              })()
+            }
+          } else {
             setShowOptions(!showOptions)
-            return
           }
-          void (async () => {
-            const signed = await auth.signIn({ method: 'zora' })
-            if (!signed) setShowOptions(true)
-          })()
         }}
         className="btn-accent btn-no-icon disabled:opacity-50 flex items-center gap-2"
       >
         <Wallet className="w-4 h-4" />
-        <span className="label">{isPending || auth.busy ? 'Connecting…' : 'Connect'}</span>
+        <span className="label">{isPending || auth.busy ? 'Signing in…' : 'Sign in'}</span>
       </button>
 
       {showOptions && (
@@ -160,6 +169,36 @@ export function ConnectButtonWeb3() {
             onClick={() => setShowOptions(false)}
           />
           <div className="absolute right-0 top-full mt-3 w-64 card p-3 z-50 space-y-1">
+            {prefersPrivyWalletLogin ? (
+              <>
+                <button
+                  type="button"
+                  disabled={auth.busy}
+                  className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-50"
+                  onClick={() => {
+                    setShowOptions(false)
+                    void auth.signIn({ method: 'zora' })
+                  }}
+                >
+                  <span className="label block">Continue with Zora</span>
+                  <span className="text-[11px] text-zinc-500 block mt-1">Recommended — uses your Zora smart wallet</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={auth.busy}
+                  className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-50"
+                  onClick={() => {
+                    setShowOptions(false)
+                    void auth.signIn({ method: 'privy' })
+                  }}
+                >
+                  <span className="label block">Sign in another way</span>
+                  <span className="text-[11px] text-zinc-500 block mt-1">Email, social, or Farcaster</span>
+                </button>
+                <div className="h-px bg-white/8 my-1" />
+                <div className="px-4 py-1 text-[10px] text-zinc-600 uppercase tracking-wider">External wallets</div>
+              </>
+            ) : null}
             {hasMultipleInjectedProviders ? (
               <div className="px-4 py-2 text-[11px] text-zinc-500">
                 Multiple wallet extensions detected. Use Coinbase Wallet.
@@ -168,34 +207,6 @@ export function ConnectButtonWeb3() {
               <div className="px-4 py-2 text-[11px] text-zinc-500">
                 Wallet extension collision detected (`window.ethereum` is locked). Use Coinbase Wallet.
               </div>
-            ) : null}
-            {prefersPrivyWalletLogin ? (
-              <button
-                type="button"
-                disabled={auth.busy}
-                className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-50"
-                onClick={() => {
-                  setShowOptions(false)
-                  void auth.signIn({ method: 'zora' })
-                }}
-              >
-                <span className="label block">Continue with Zora</span>
-                <span className="text-[11px] text-zinc-500 block mt-1">Sign in on Zora first</span>
-              </button>
-            ) : null}
-            {prefersPrivyWalletLogin ? (
-              <button
-                type="button"
-                disabled={auth.busy}
-                className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-50"
-                onClick={() => {
-                  setShowOptions(false)
-                  void auth.signIn({ method: 'privy' })
-                }}
-              >
-                <span className="label block">Try another way</span>
-                <span className="text-[11px] text-zinc-500 block mt-1">Try this if wallet login does not open</span>
-              </button>
             ) : null}
             {filteredConnectors.map((connector) => (
               <button

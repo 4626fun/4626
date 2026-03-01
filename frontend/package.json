@@ -61,6 +61,7 @@
     "@zoralabs/protocol-deployments": "^0.7.2",
     "buffer": "^6.0.3",
     "d3": "^7.9.0",
+    "ethereum-identity-kit": "^0.2.72",
     "ethers": "^6.16.0",
     "framer-motion": "^12.33.0",
     "lucide-react": "^0.563.0",
