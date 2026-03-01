@@ -210,11 +210,15 @@ Optional but recommended:
 
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL=https://<host>/healthz` (for your external monitoring)
 - `SOLANA_DEFAULT_BRIDGE_TOKEN=0x...` (enables scalar(route) validation in `/api/deploy/solanaInfraStatus`)
+- `SOLANA_STRICT_SOL_PAIR=1` (enforce SOL-only quote mint; blocks helper-token pool paths)
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_ATTEMPTS=3`
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_DELAY_MS=1200`
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_TIMEOUT_MS=90000`
 - `SOLANA_BRIDGE_WRAP_SYMBOL_MODE=auto` (`auto` | `unicode` | `ascii`)
 - `PROVISIONER_MIN_PAYER_SOL=0.05` (health guardrail; `/healthz` reports payer readiness)
+
+When `SOLANA_STRICT_SOL_PAIR=1`, `SOLANA_POOL_QUOTE_MINT` overrides are ignored and the
+provisioner always uses wrapped SOL (`So11111111111111111111111111111111111111112`) as quote mint.
 
 In the provisioner runtime (`server/solana-provisioner/.env`), enable retry for transient Solana RPC simulation failures:
 

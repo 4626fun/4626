@@ -13,6 +13,7 @@ import { buildUserOpErrorDebug } from '../../../../server/_lib/userOpRevertDebug
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
+import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../server/_lib/solanaOvaultCompatibility.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -309,6 +310,70 @@ function readAdditionalSolanaRegistrationOrigins(): string[] {
   return out
 }
 
+type SolanaPreflightRoutePath =
+  | '/api/deploy/setupSolanaOvaultMesh'
+  | '/api/deploy/registerSolanaBridgeToken'
+
+type SolanaPreflightRouteMode =
+  | 'ovault_first'
+  | 'legacy_first'
+  | 'ovault_only'
+  | 'legacy_only'
+
+function readSolanaOvaultKillSwitchEnabled(): boolean {
+  const raw =
+    process.env.DEPLOY_SOLANA_OVAULT_KILL_SWITCH ??
+    process.env.SOLANA_OVAULT_KILL_SWITCH
+  return isTruthyEnv(raw, false)
+}
+
+function readSolanaPreflightRouteMode(): SolanaPreflightRouteMode {
+  if (readSolanaOvaultKillSwitchEnabled()) return 'legacy_only'
+  const raw = String(
+    process.env.DEPLOY_SOLANA_PREFLIGHT_ROUTE_MODE ??
+      process.env.SOLANA_PREFLIGHT_ROUTE_MODE ??
+      '',
+  )
+    .trim()
+    .toLowerCase()
+
+  if (!raw) return 'ovault_first'
+  if (raw === 'legacy' || raw === 'legacy_only' || raw === 'rollback') return 'legacy_only'
+  if (raw === 'legacy_first') return 'legacy_first'
+  if (raw === 'ovault_only') return 'ovault_only'
+  if (raw === 'ovault_first' || raw === 'default') return 'ovault_first'
+  return 'ovault_first'
+}
+
+function resolveSolanaPreflightRoutes(mode: SolanaPreflightRouteMode): {
+  primary: SolanaPreflightRoutePath
+  fallback: SolanaPreflightRoutePath | null
+} {
+  switch (mode) {
+    case 'legacy_only':
+      return {
+        primary: '/api/deploy/registerSolanaBridgeToken',
+        fallback: null,
+      }
+    case 'legacy_first':
+      return {
+        primary: '/api/deploy/registerSolanaBridgeToken',
+        fallback: '/api/deploy/setupSolanaOvaultMesh',
+      }
+    case 'ovault_only':
+      return {
+        primary: '/api/deploy/setupSolanaOvaultMesh',
+        fallback: null,
+      }
+    case 'ovault_first':
+    default:
+      return {
+        primary: '/api/deploy/setupSolanaOvaultMesh',
+        fallback: '/api/deploy/registerSolanaBridgeToken',
+      }
+  }
+}
+
 function dedupeOrigins(origins: string[]): string[] {
   const out: string[] = []
   const seen = new Set<string>()
@@ -369,6 +434,7 @@ async function ensureSolanaRouteReadyForPhase3(params: {
   req: VercelRequest
   publicClient: any
   phase2FinalizeCalls: Array<{ to: Address; value: bigint; data: Hex }>
+  solanaOvault?: unknown
 }): Promise<void> {
   const finalizeCall = params.phase2FinalizeCalls[0]
   if (!finalizeCall) return
@@ -381,6 +447,14 @@ async function ensureSolanaRouteReadyForPhase3(params: {
     finalizeInfo.depositAmount && finalizeInfo.depositAmount > 0n
       ? (finalizeInfo.depositAmount * SOLANA_RESERVE_PERCENT_BPS) / BPS_DENOMINATOR
       : null
+  const solanaOvault = isPlainObject(params.solanaOvault) ? params.solanaOvault : {}
+  const assetMintOrigin =
+    typeof solanaOvault.assetMintOrigin === 'string' && solanaOvault.assetMintOrigin.trim()
+      ? solanaOvault.assetMintOrigin.trim()
+      : 'existing'
+  const mintCompatibilityHints = isPlainObject(solanaOvault.mintCompatibilityHints)
+    ? solanaOvault.mintCompatibilityHints
+    : readSolanaOvaultMintCompatibilityHintsFromEnv()
 
   const [adapterRaw, destinationRaw] = await Promise.all([
     params.publicClient
@@ -430,7 +504,7 @@ async function ensureSolanaRouteReadyForPhase3(params: {
       'Solana preflight failed: no registration origin available. Configure CANONICAL_ORIGIN or DEPLOY_SOLANA_REGISTRATION_ORIGINS.',
     )
   }
-  if (!expectedSolanaAmount || expectedSolanaAmount <= 0n) {
+  if (registered !== true && (!expectedSolanaAmount || expectedSolanaAmount <= 0n)) {
     throw new Error(
       'Solana preflight failed: missing finalize deposit amount for reserve checks.',
     )
@@ -442,12 +516,27 @@ async function ensureSolanaRouteReadyForPhase3(params: {
       process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
       '',
   ).trim()
+  const routeMode = readSolanaPreflightRouteMode()
+  const routes = resolveSolanaPreflightRoutes(routeMode)
   const tryRegister = async (
     origin: string,
-    routePath: '/api/deploy/registerSolanaBridgeToken',
-  ): Promise<{ ok: boolean; failure: string | null }> => {
+    routePath: SolanaPreflightRoutePath,
+  ): Promise<{ ok: boolean; statusCode: number | null; failure: string | null }> => {
     try {
       const registerUrl = `${origin}${routePath}`
+      const payload: Record<string, unknown> = {
+        bridgeToken,
+        buildOnly: registered === true,
+        batcherAddress,
+        assetMintOrigin,
+        enforceCompatibility: true,
+      }
+      if (mintCompatibilityHints) payload.mintCompatibilityHints = mintCompatibilityHints
+      // Only force Meteora payload generation while the bridge token is not yet registered.
+      if (registered !== true) {
+        payload.creatorToken = bridgeToken
+        payload.expectedSolanaAmount = expectedSolanaAmount?.toString()
+      }
       const registerRes = await fetch(registerUrl, {
         method: 'POST',
         headers: {
@@ -458,13 +547,7 @@ async function ensureSolanaRouteReadyForPhase3(params: {
             ? { 'X-CV-Solana-Registration-Secret': internalRegistrationSecret }
             : {}),
         },
-        body: JSON.stringify({
-          bridgeToken,
-          creatorToken: bridgeToken,
-          expectedSolanaAmount: expectedSolanaAmount.toString(),
-          buildOnly: registered === true,
-          batcherAddress,
-        }),
+        body: JSON.stringify(payload),
       })
       const rawBody = await registerRes.text().catch(() => '')
       let registerJson: ApiEnvelope<any> | null = null
@@ -474,7 +557,28 @@ async function ensureSolanaRouteReadyForPhase3(params: {
         registerJson = null
       }
       if (registerRes.ok && registerJson?.success) {
-        return { ok: true, failure: null }
+        const data = registerJson?.data ?? null
+        const existingMintCompatible = data?.existingMintCompatible === true
+        const depositEligible = data?.depositEligible === true
+        const redeemEligible = data?.redeemEligible === true
+        if (!existingMintCompatible || !depositEligible || !redeemEligible) {
+          const blockersRaw = data?.mintCompatibility?.blockers
+          const blockers =
+            Array.isArray(blockersRaw) && blockersRaw.length > 0
+              ? blockersRaw.map((v: unknown) => String(v)).join(' ')
+              : null
+          return {
+            ok: false,
+            statusCode: registerRes.status,
+            failure:
+              `${origin}${routePath} (ovault eligibility): ` +
+              `existingMintCompatible=${String(data?.existingMintCompatible)} ` +
+              `depositEligible=${String(data?.depositEligible)} ` +
+              `redeemEligible=${String(data?.redeemEligible)}` +
+              (blockers ? ` blockers=${blockers}` : ''),
+          }
+        }
+        return { ok: true, statusCode: registerRes.status, failure: null }
       }
       const detail =
         registerJson?.error
@@ -484,20 +588,27 @@ async function ensureSolanaRouteReadyForPhase3(params: {
             : `http_${registerRes.status}`
       return {
         ok: false,
+        statusCode: registerRes.status,
         failure: `${origin}${routePath} (${registerRes.status}): ${detail}`,
       }
     } catch {
-      return { ok: false, failure: `${origin}${routePath}: request_failed` }
+      return { ok: false, statusCode: null, failure: `${origin}${routePath}: request_failed` }
     }
   }
   const failures: string[] = []
   for (const origin of candidateOrigins) {
-    const primary = await tryRegister(origin, '/api/deploy/registerSolanaBridgeToken')
+    const primary = await tryRegister(origin, routes.primary)
     if (primary.ok) return
     if (primary.failure) failures.push(primary.failure)
+    // Fallback route applies only when primary route appears unavailable in this runtime.
+    if (routes.fallback && (primary.statusCode === 404 || primary.statusCode === 405 || primary.statusCode === null)) {
+      const fallback = await tryRegister(origin, routes.fallback)
+      if (fallback.ok) return
+      if (fallback.failure) failures.push(fallback.failure)
+    }
   }
   throw new Error(
-    `Solana preflight failed: ${failures.join(' | ') || 'registerSolanaBridgeToken call failed.'}`,
+    `Solana preflight failed (mode=${routeMode}): ${failures.join(' | ') || 'setupSolanaOvaultMesh/registerSolanaBridgeToken call failed.'}`,
   )
 }
 
@@ -784,6 +895,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
         req,
         publicClient,
         phase2FinalizeCalls,
+        solanaOvault: payload.solanaOvault,
       })
       await startStage(fromStep, 'phase3_sent', phase3Calls, !hasPhase4)
       return true

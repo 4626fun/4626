@@ -17,6 +17,7 @@
     "solana:create-dlmm-pool": "tsx scripts/solana/launch/create-dlmm-pool.ts",
     "solana:create-alpha-vault": "tsx scripts/solana/launch/create-alpha-vault.ts",
     "solana:register-meteora-vault": "tsx scripts/solana/launch/register-meteora-vault.ts",
+    "solana:bootstrap-side": "tsx scripts/solana/launch/bootstrap-solana-side.ts",
     "solana:set-token-authority": "tsx scripts/solana/authority/set-token-authority.ts",
     "solana:set-program-upgrade-authority": "tsx scripts/solana/authority/set-program-upgrade-authority.ts",
     "solana:prepare-token-badge": "tsx scripts/solana/badges/prepare-token-badge.ts",

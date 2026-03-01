@@ -9,6 +9,11 @@ import { base } from 'viem/chains'
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getApiContracts } from '../../../server/_lib/contracts.js'
 import { getSessionAddress, isAdminAddress } from '../../../server/_lib/session.js'
+import {
+  evaluateSolanaOvaultMintCompatibility,
+  normalizeSolanaAssetMintOrigin,
+  readSolanaOvaultMintCompatibilityHintsFromEnv,
+} from '../../../server/_lib/solanaOvaultCompatibility.js'
 
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
@@ -100,6 +105,12 @@ type SolanaInfraStatusResponse = {
   meteoraProvisionerUrlConfigured: boolean
   meteoraProvisionerSecretConfigured: boolean
   internalRegistrationSecretConfigured: boolean
+  mintCompatibility: ReturnType<typeof evaluateSolanaOvaultMintCompatibility>['mintCompatibility']
+  existingMintCompatible: boolean
+  transferHookDetected: boolean
+  oftFeeIsZero: boolean
+  depositEligible: boolean
+  redeemEligible: boolean
   readyForAutoRegistration: boolean
   blockers: string[]
 }
@@ -357,6 +368,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  const mintCompatibilityHints = readSolanaOvaultMintCompatibilityHintsFromEnv()
+  const assetMintOrigin = normalizeSolanaAssetMintOrigin(
+    process.env.SOLANA_OVAULT_ASSET_MINT_ORIGIN,
+    'existing',
+  )
+  const mintEligibility = evaluateSolanaOvaultMintCompatibility({
+    assetMintOrigin,
+    hints: mintCompatibilityHints,
+    routeReady: defaultMintRouteReady,
+    requireHintsForExisting: true,
+  })
+  const existingMintCompatible = mintEligibility.existingMintCompatible
+  const depositEligible = mintEligibility.depositEligible
+  const redeemEligible = mintEligibility.redeemEligible
+  const transferHookDetected = mintEligibility.mintCompatibility.transferHookDetected
+  const oftFeeIsZero = mintEligibility.mintCompatibility.oftFeeIsZero
+
   const dynamicProvisioningMode = deriveDynamicProvisioningMode({
     enabled: dynamicRouteEnabled,
     cliExists: localCliDirExists,
@@ -431,6 +459,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       'Default Solana mint route is not active for SOLANA_DEFAULT_BRIDGE_TOKEN (scalar=0) and dynamic provisioning is disabled.',
     )
   }
+  if (solanaEnabledOnBatcher && !existingMintCompatible) {
+    for (const blocker of mintEligibility.mintCompatibility.blockers) {
+      blockers.push(`OVault compatibility: ${blocker}`)
+    }
+  }
 
   const hasRouteSource =
     (defaultMintConfigured && defaultMintRouteReady !== false) ||
@@ -443,11 +476,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       remoteProvisionerPayerHealthy !== false)
   const meteoraProvisionerReady = !meteoraProvisionerUrlConfigured || meteoraProvisionerSecretConfigured
   const signerReady = signerConfigured && signerMatchesAdapterOwner !== false
+  const ovaultEligibilityReady = !solanaEnabledOnBatcher || (existingMintCompatible && depositEligible && redeemEligible)
   const readyForAutoRegistration =
     !!batcherAddress &&
     (!solanaEnabledOnBatcher ||
       (adapterHasCode !== false &&
         signerReady &&
+        ovaultEligibilityReady &&
         hasRouteSource &&
         remoteProvisionerReady &&
         meteoraProvisionerReady &&
@@ -492,6 +527,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     meteoraProvisionerUrlConfigured,
     meteoraProvisionerSecretConfigured,
     internalRegistrationSecretConfigured,
+    mintCompatibility: mintEligibility.mintCompatibility,
+    existingMintCompatible,
+    transferHookDetected,
+    oftFeeIsZero,
+    depositEligible,
+    redeemEligible,
     readyForAutoRegistration,
     blockers,
   }

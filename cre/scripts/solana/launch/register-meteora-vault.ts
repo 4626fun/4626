@@ -19,20 +19,29 @@
  *
  * Optional env:
  *   METADATA_JSON             - Arbitrary JSON metadata to store alongside the record
+ *   QUOTE_MINT                - Solana quote mint for strict pair policy (default: wrapped SOL)
  *   DRY_RUN                   - If "true", prints the row but does not insert
+ *   PGSSLMODE / POSTGRES_SSL_MODE
+ *                             - SSL mode: disable | require | verify-ca | verify-full
+ *   POSTGRES_SSL_REJECT_UNAUTHORIZED
+ *                             - "true"/"false" (defaults to false for Supabase unless CA is provided)
+ *   POSTGRES_SSL_CA / PGSSLROOTCERT / PGSSLROOTCERT_CONTENT
+ *                             - Optional CA bundle content (or path via PGSSLROOTCERT)
  *
  * Example DEPOSIT_ACCOUNTS_JSON (single escrow account):
  *   '[{"pubkey":"<base58>","isSigner":false,"isWritable":true}]'
  */
 
 import { config as loadEnv } from 'dotenv';
+import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { getAddress, isAddress } from 'viem';
-import pg from 'pg';
+import pg, { type ClientConfig } from 'pg';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: resolve(__dirname, '../../../.env') });
+const SOLANA_NATIVE_MINT = 'So11111111111111111111111111111111111111112';
 
 function requireEnv(key: string): string {
   const v = (process.env[key] ?? '').trim();
@@ -43,6 +52,64 @@ function requireEnv(key: string): string {
 function isSolanaPubkey(value: string): boolean {
   if (!value || value.length < 32 || value.length > 44) return false;
   return /^[1-9A-HJ-NP-Za-km-z]+$/.test(value);
+}
+
+function parseBooleanEnv(raw: string | undefined): boolean | null {
+  const normalized = String(raw ?? '').trim().toLowerCase();
+  if (!normalized) return null;
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return null;
+}
+
+function readOptionalCaBundle(): string | null {
+  const inline = String(process.env.POSTGRES_SSL_CA ?? process.env.PGSSLROOTCERT_CONTENT ?? '').trim();
+  if (inline) return inline.replace(/\\n/g, '\n');
+
+  const certPath = String(process.env.PGSSLROOTCERT ?? '').trim();
+  if (!certPath) return null;
+  try {
+    return readFileSync(certPath, 'utf8');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Unable to read PGSSLROOTCERT file at "${certPath}": ${message}`);
+  }
+}
+
+function resolvePgSslConfig(databaseUrl: string): ClientConfig['ssl'] | undefined {
+  const envSslMode = String(process.env.POSTGRES_SSL_MODE ?? process.env.PGSSLMODE ?? '')
+    .trim()
+    .toLowerCase();
+
+  let urlSslMode = '';
+  let isSupabaseHost = false;
+  try {
+    const parsed = new URL(databaseUrl);
+    urlSslMode = String(parsed.searchParams.get('sslmode') ?? '').trim().toLowerCase();
+    isSupabaseHost = /\.supabase\.com$/i.test(parsed.hostname);
+  } catch {
+    // Ignore malformed URL edge-cases; pg can still parse raw connection strings.
+  }
+
+  const sslMode = envSslMode || urlSslMode;
+  if (sslMode === 'disable') return false;
+
+  const shouldEnableSsl =
+    sslMode === 'require' ||
+    sslMode === 'verify-ca' ||
+    sslMode === 'verify-full' ||
+    isSupabaseHost;
+
+  if (!shouldEnableSsl) return undefined;
+
+  const ca = readOptionalCaBundle();
+  const explicitRejectUnauthorized = parseBooleanEnv(
+    process.env.POSTGRES_SSL_REJECT_UNAUTHORIZED ?? process.env.PGSSLREJECTUNAUTHORIZED,
+  );
+  const rejectUnauthorized =
+    explicitRejectUnauthorized ?? (sslMode === 'verify-ca' || sslMode === 'verify-full' || Boolean(ca));
+
+  return ca ? { rejectUnauthorized, ca } : { rejectUnauthorized };
 }
 
 async function main() {
@@ -79,6 +146,11 @@ async function main() {
       throw new Error('METADATA_JSON is not valid JSON');
     }
   }
+  const quoteMint = (process.env.QUOTE_MINT ?? SOLANA_NATIVE_MINT).trim();
+  if (!isSolanaPubkey(quoteMint)) {
+    throw new Error(`QUOTE_MINT is not a valid Solana pubkey: ${quoteMint}`);
+  }
+  const metadataWithPair = { ...(metadata ?? {}), pair_base_mint: quoteMint };
 
   const dryRun = (process.env.DRY_RUN ?? '').toLowerCase() === 'true';
 
@@ -88,7 +160,7 @@ async function main() {
     alpha_vault_program_id: alphaVaultProgramId,
     deposit_accounts: depositAccounts,
     enabled: true,
-    metadata,
+    metadata: metadataWithPair,
   };
 
   console.log('=== Register Meteora Alpha Vault ===');
@@ -101,7 +173,11 @@ async function main() {
   }
 
   const databaseUrl = requireEnv('DATABASE_URL');
-  const client = new pg.Client({ connectionString: databaseUrl });
+  const ssl = resolvePgSslConfig(databaseUrl);
+  const client = new pg.Client({
+    connectionString: databaseUrl,
+    ...(ssl !== undefined ? { ssl } : {}),
+  });
   await client.connect();
 
   try {
