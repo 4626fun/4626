@@ -1,8 +1,8 @@
 # ERC4626StrategyAdapter
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/vault/strategies/ERC4626StrategyAdapter.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/vault/strategies/ERC4626StrategyAdapter.sol)
 
 **Inherits:**
-[IStrategy](/contracts/interfaces/IStrategy.sol/interface.IStrategy.md), Ownable, ReentrancyGuard
+[IStrategy](/contracts/interfaces/IStrategy.sol/interface.IStrategy.md), [IStrategyValuation](/contracts/interfaces/IStrategyValuation.sol/interface.IStrategyValuation.md), Ownable, ReentrancyGuard
 
 **Title:**
 ERC4626StrategyAdapter
@@ -95,6 +95,18 @@ function isActive() external view override returns (bool);
 
 ```solidity
 function asset() external view override returns (address);
+```
+
+### isValuationReady
+
+Strategy valuation health check for ERC-4626 deposit/mint gating.
+
+MUST NOT revert. Returns false when the underlying ERC-4626 conversion
+reverts for any held shares.
+
+
+```solidity
+function isValuationReady() external view override returns (bool);
 ```
 
 ### getTotalAssets

@@ -1,5 +1,5 @@
 # OFTBootstrapRegistry
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/helpers/infra/OFTBootstrapRegistry.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/helpers/infra/OFTBootstrapRegistry.sol)
 
 **Title:**
 OFTBootstrapRegistry
@@ -10,12 +10,15 @@ OFTBootstrapRegistry
 Minimal registry for CreatorShareOFT construction.
 
 Used only during OFT deployment to resolve the LayerZero endpoint.
+The endpoint is the canonical LZ v2 EndpointV2, deployed at the same
+address on all EVM chains via CREATE2. No mutable state is needed or
+permitted — this contract is intentionally write-free to eliminate the
+endpoint poisoning attack surface.
 
 
 ## State Variables
 ### LZ_COMMON_ENDPOINT
-LayerZero v2 common endpoint (used as a fallback).
-This is the same value used by CreatorRegistry (`layerZeroCommonEndpoint`).
+LayerZero v2 EndpointV2 — identical address on all EVM chains.
 
 
 ```solidity
@@ -23,46 +26,16 @@ address public constant LZ_COMMON_ENDPOINT = 0x1a44076050125825900e736c501f859c5
 ```
 
 
-### layerZeroEndpoints
-
-```solidity
-mapping(uint16 => address) public layerZeroEndpoints
-```
-
-
 ## Functions
-### setLayerZeroEndpoint
-
-Set (or update) the LayerZero endpoint for a chain.
-
-Permissionless by design — safe because it is only used during OFT construction,
-and our AA batch sets the value atomically immediately before deployment.
-
-
-```solidity
-function setLayerZeroEndpoint(uint16 chainId, address endpoint) external;
-```
-
 ### getLayerZeroEndpoint
 
-Return the LayerZero endpoint for a chain, with a common fallback.
+Return the LayerZero endpoint for any chain.
+
+Always returns LZ_COMMON_ENDPOINT. The chain ID parameter is
+accepted for interface compatibility but has no effect.
 
 
 ```solidity
-function getLayerZeroEndpoint(uint16 chainId) external view returns (address);
-```
-
-## Events
-### LayerZeroEndpointUpdated
-
-```solidity
-event LayerZeroEndpointUpdated(uint16 indexed chainId, address endpoint);
-```
-
-## Errors
-### ZeroAddress
-
-```solidity
-error ZeroAddress();
+function getLayerZeroEndpoint(uint256) external pure returns (address);
 ```
 

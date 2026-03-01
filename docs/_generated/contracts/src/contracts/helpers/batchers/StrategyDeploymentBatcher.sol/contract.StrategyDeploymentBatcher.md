@@ -1,5 +1,5 @@
 # StrategyDeploymentBatcher
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/helpers/batchers/StrategyDeploymentBatcher.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/helpers/batchers/StrategyDeploymentBatcher.sol)
 
 **Inherits:**
 ReentrancyGuard
@@ -30,7 +30,46 @@ address public constant UNISWAP_ROUTER = 0x2626664c2603336E57B271c5C0b26F421741e
 ```
 
 
+### CHARM_FACTORY
+Charm Finance Alpha Vault Factory on Base
+
+Vaults created via this factory appear on alpha.charm.fi UI
+
+
+```solidity
+address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa
+```
+
+
+### creatorCharmStrategyFactory
+
+```solidity
+address public immutable creatorCharmStrategyFactory
+```
+
+
+### ajnaStrategyFactory
+
+```solidity
+address public immutable ajnaStrategyFactory
+```
+
+
+### ADD_STRATEGY_SELECTOR
+
+```solidity
+bytes4 private constant ADD_STRATEGY_SELECTOR = bytes4(keccak256("addStrategy(address,uint256)"))
+```
+
+
 ## Functions
+### constructor
+
+
+```solidity
+constructor() ;
+```
+
 ### batchDeployStrategies
 
 Deploy all strategies for a creator vault (FULLY AUTOMATED)
@@ -98,6 +137,43 @@ function encodeAddStrategyBatch(
 
 ```solidity
 event StrategiesDeployed(address indexed creator, address indexed underlyingToken, DeploymentResult result);
+```
+
+## Errors
+### InvalidOwnerAddress
+
+```solidity
+error InvalidOwnerAddress();
+```
+
+### InvalidVaultName
+
+```solidity
+error InvalidVaultName();
+```
+
+### InvalidVaultSymbol
+
+```solidity
+error InvalidVaultSymbol();
+```
+
+### ZeroUnderlying
+
+```solidity
+error ZeroUnderlying();
+```
+
+### ZeroQuote
+
+```solidity
+error ZeroQuote();
+```
+
+### ZeroVault
+
+```solidity
+error ZeroVault();
 ```
 
 ## Structs

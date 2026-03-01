@@ -7,5 +7,5 @@
 - [helpers](/contracts/helpers)
 - [interfaces](/contracts/interfaces)
 - [libraries](/contracts/libraries)
-- [services](/contracts/services)
+- [utilities](/contracts/utilities)
 - [vault](/contracts/vault)

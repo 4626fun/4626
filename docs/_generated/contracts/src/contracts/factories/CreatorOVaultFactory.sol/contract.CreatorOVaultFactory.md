@@ -1,5 +1,5 @@
 # CreatorOVaultFactory
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/factories/CreatorOVaultFactory.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/factories/CreatorOVaultFactory.sol)
 
 **Inherits:**
 Ownable
@@ -12,17 +12,23 @@ CreatorOVaultFactory
 
 Registry for Creator Vault deployments (contracts deployed via script)
 
-DESIGN RATIONALE:
+DEPRECATED: This factory is superseded by DeploymentBatcher (contracts/helpers/batchers/).
+DeploymentBatcher handles phased deployment (Phase 1-3) with CREATE2 deterministic
+addresses, hub-centric architecture support, and remote chain OFT-only deployment.
+This contract is kept for backwards compatibility with existing deployments.
+New deployments should use DeploymentBatcher exclusively.
+
+LEGACY DESIGN RATIONALE:
 Original factory exceeded EVM contract size limit (88KB > 24KB)
 because it embedded bytecode for 6 contracts.
-NEW APPROACH:
+LEGACY APPROACH:
 - Contracts deployed directly via Foundry script (no size limit)
 - This contract just stores deployment info
 - Enables lookup, enumeration, and registry integration
 
-DEPLOYMENT FLOW:
+DEPLOYMENT FLOW (LEGACY):
 1. Deploy this factory (part of infrastructure)
-2. Run DeployVaultStack.s.sol which:
+2. Run DeployVaultStack script which:
 - Deploys all 6 contracts individually
 - Calls factory.registerDeployment() to store info
 3. Addresses stored here for lookup

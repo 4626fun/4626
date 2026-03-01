@@ -1,5 +1,5 @@
 # ICreatorRegistry
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/interfaces/core/ICreatorRegistry.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/interfaces/core/ICreatorRegistry.sol)
 
 **Title:**
 ICreatorRegistry
@@ -40,13 +40,13 @@ function registerCreatorCoin(
 |`_poolFee`|`uint24`|Pool fee tier|
 
 
-### set4626
+### setVault
 
 Set vault address for a Creator Coin
 
 
 ```solidity
-function set4626(address _token, address _vault) external;
+function setVault(address _token, address _vault) external;
 ```
 
 ### setCreatorShareOFT
@@ -93,6 +93,29 @@ Set active status for a Creator Coin
 ```solidity
 function setCreatorCoinStatus(address _token, bool _isActive) external;
 ```
+
+### setCanonicalWallet
+
+Set the canonical smart wallet for a creator
+
+This is the creator's ERC-4337 smart wallet (e.g., Coinbase Smart Wallet).
+It serves as the unified on-chain identity:
+- ERC-8004 agent wallet (on-chain agent registration)
+- ERC-4337 account (UserOp sender, gas sponsorship)
+- Vault owner and asset holder
+- Lottery prize recipient
+
+
+```solidity
+function setCanonicalWallet(address _token, address _wallet) external;
+```
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`_token`|`address`|Creator Coin address|
+|`_wallet`|`address`|Canonical smart wallet address|
+
 
 ### getCreatorCoin
 
@@ -148,6 +171,146 @@ Get gauge controller for a Creator Coin
 function getGaugeControllerForToken(address _token) external view returns (address);
 ```
 
+### getTokenForShareOFT
+
+Reverse-lookup: get the Creator Coin address for a given ShareOFT
+
+
+```solidity
+function getTokenForShareOFT(address _shareOFT) external view returns (address);
+```
+
+### getCanonicalWallet
+
+Get the canonical smart wallet for a creator
+
+Returns address(0) if not set
+
+
+```solidity
+function getCanonicalWallet(address _token) external view returns (address);
+```
+
+### getTokenForCanonicalWallet
+
+Reverse-lookup: get the Creator Coin address for a canonical wallet
+
+
+```solidity
+function getTokenForCanonicalWallet(address _wallet) external view returns (address);
+```
+
+### setRemoteOFTPeer
+
+Set remote OFT peer for EVM-addressable chains.
+
+
+```solidity
+function setRemoteOFTPeer(address _token, uint32 _chainEid, address _remoteOFT) external;
+```
+
+### removeRemoteOFTPeer
+
+Remove remote OFT peer for EVM-addressable chains.
+
+
+```solidity
+function removeRemoteOFTPeer(address _token, uint32 _chainEid) external;
+```
+
+### getRemoteOFTPeer
+
+Get remote OFT peer for EVM-addressable chains.
+
+
+```solidity
+function getRemoteOFTPeer(address _token, uint32 _chainEid) external view returns (address);
+```
+
+### getRemoteOFTChains
+
+Get all remote OFT peer chains for EVM-addressable peers.
+
+
+```solidity
+function getRemoteOFTChains(address _token) external view returns (uint32[] memory);
+```
+
+### getAllRemoteOFTPeers
+
+Get all remote EVM OFT peers for a token.
+
+
+```solidity
+function getAllRemoteOFTPeers(address _token) external view returns (uint32[] memory eids, address[] memory ofts);
+```
+
+### getTokenForRemoteOFT
+
+Reverse-lookup token for EVM remote OFT address.
+
+
+```solidity
+function getTokenForRemoteOFT(address _remoteOFT) external view returns (address);
+```
+
+### setRemoteOFTPeerBytes32
+
+Set remote OFT peer for non-EVM chains using bytes32 identity (e.g., Solana pubkey).
+
+
+```solidity
+function setRemoteOFTPeerBytes32(address _token, uint32 _chainEid, bytes32 _remoteOFT) external;
+```
+
+### removeRemoteOFTPeerBytes32
+
+Remove remote bytes32 OFT peer mapping.
+
+
+```solidity
+function removeRemoteOFTPeerBytes32(address _token, uint32 _chainEid) external;
+```
+
+### getRemoteOFTPeerBytes32
+
+Get remote bytes32 OFT peer.
+
+
+```solidity
+function getRemoteOFTPeerBytes32(address _token, uint32 _chainEid) external view returns (bytes32);
+```
+
+### getRemoteOFTChainsBytes32
+
+Get all chain EIDs with bytes32 remote peers.
+
+
+```solidity
+function getRemoteOFTChainsBytes32(address _token) external view returns (uint32[] memory);
+```
+
+### getAllRemoteOFTPeersBytes32
+
+Get all bytes32 remote OFT peers for a token.
+
+
+```solidity
+function getAllRemoteOFTPeersBytes32(address _token)
+    external
+    view
+    returns (uint32[] memory eids, bytes32[] memory peers);
+```
+
+### getTokenForRemoteOFTBytes32
+
+Reverse-lookup token for bytes32 remote OFT identity.
+
+
+```solidity
+function getTokenForRemoteOFTBytes32(bytes32 _remoteOFT) external view returns (address);
+```
+
 ### getAllCreatorCoins
 
 Get all registered Creator Coins
@@ -183,7 +346,7 @@ Register a new chain
 
 
 ```solidity
-function registerChain(uint16 _chainId, string calldata _chainName, address _wrappedNativeToken, bool _isActive)
+function registerChain(uint256 _chainId, string calldata _chainName, address _wrappedNativeToken, bool _isActive)
     external;
 ```
 
@@ -194,7 +357,7 @@ Set DEX infrastructure for a chain
 
 ```solidity
 function setDexInfrastructure(
-    uint16 _chainId,
+    uint256 _chainId,
     address _poolManager,
     address _swapRouter,
     address _positionManager,
@@ -208,7 +371,7 @@ Set chain active status
 
 
 ```solidity
-function setChainStatus(uint16 _chainId, bool _isActive) external;
+function setChainStatus(uint256 _chainId, bool _isActive) external;
 ```
 
 ### getChainConfig
@@ -217,7 +380,7 @@ Get chain configuration
 
 
 ```solidity
-function getChainConfig(uint16 _chainId) external view returns (ChainConfig memory);
+function getChainConfig(uint256 _chainId) external view returns (ChainConfig memory);
 ```
 
 ### getSupportedChains
@@ -226,7 +389,7 @@ Get all supported chains
 
 
 ```solidity
-function getSupportedChains() external view returns (uint16[] memory);
+function getSupportedChains() external view returns (uint256[] memory);
 ```
 
 ### getCurrentChainId
@@ -235,7 +398,7 @@ Get current chain ID
 
 
 ```solidity
-function getCurrentChainId() external view returns (uint16);
+function getCurrentChainId() external view returns (uint256);
 ```
 
 ### isChainSupported
@@ -244,7 +407,7 @@ Check if chain is supported
 
 
 ```solidity
-function isChainSupported(uint16 _chainId) external view returns (bool);
+function isChainSupported(uint256 _chainId) external view returns (bool);
 ```
 
 ### setLayerZeroEndpoint
@@ -253,7 +416,7 @@ Set LayerZero endpoint for a chain
 
 
 ```solidity
-function setLayerZeroEndpoint(uint16 _chainId, address _endpoint) external;
+function setLayerZeroEndpoint(uint256 _chainId, address _endpoint) external;
 ```
 
 ### getLayerZeroEndpoint
@@ -262,7 +425,7 @@ Get LayerZero endpoint for a chain
 
 
 ```solidity
-function getLayerZeroEndpoint(uint16 _chainId) external view returns (address);
+function getLayerZeroEndpoint(uint256 _chainId) external view returns (address);
 ```
 
 ### setChainIdToEid
@@ -298,7 +461,7 @@ Get full LZ config for a chain
 
 
 ```solidity
-function getLzConfig(uint16 _chainId) external view returns (LzConfig memory);
+function getLzConfig(uint256 _chainId) external view returns (LzConfig memory);
 ```
 
 ### getEffectiveLzConfig
@@ -307,7 +470,7 @@ Get effective LZ config (custom or default)
 
 
 ```solidity
-function getEffectiveLzConfig(uint16 _chainId) external view returns (LzConfig memory);
+function getEffectiveLzConfig(uint256 _chainId) external view returns (LzConfig memory);
 ```
 
 ### setLotteryManager
@@ -316,7 +479,7 @@ Set lottery manager for a chain
 
 
 ```solidity
-function setLotteryManager(uint16 _chainId, address _manager) external;
+function setLotteryManager(uint256 _chainId, address _manager) external;
 ```
 
 ### getLotteryManager
@@ -325,7 +488,7 @@ Get lottery manager for a chain
 
 
 ```solidity
-function getLotteryManager(uint16 _chainId) external view returns (address);
+function getLotteryManager(uint256 _chainId) external view returns (address);
 ```
 
 ### setGaugeController
@@ -334,7 +497,7 @@ Set gauge controller for a chain
 
 
 ```solidity
-function setGaugeController(uint16 _chainId, address _controller) external;
+function setGaugeController(uint256 _chainId, address _controller) external;
 ```
 
 ### getGaugeController
@@ -343,7 +506,7 @@ Get gauge controller for a chain
 
 
 ```solidity
-function getGaugeController(uint16 _chainId) external view returns (address);
+function getGaugeController(uint256 _chainId) external view returns (address);
 ```
 
 ### setGasReserve
@@ -352,7 +515,7 @@ Set gas reserve for a chain
 
 
 ```solidity
-function setGasReserve(uint16 _chainId, address _reserve) external;
+function setGasReserve(uint256 _chainId, address _reserve) external;
 ```
 
 ### getGasReserve
@@ -361,7 +524,7 @@ Get gas reserve for a chain
 
 
 ```solidity
-function getGasReserve(uint16 _chainId) external view returns (address);
+function getGasReserve(uint256 _chainId) external view returns (address);
 ```
 
 ### getWrappedNativeToken
@@ -370,7 +533,7 @@ Get wrapped native token for a chain
 
 
 ```solidity
-function getWrappedNativeToken(uint16 _chainId) external view returns (address);
+function getWrappedNativeToken(uint256 _chainId) external view returns (address);
 ```
 
 ### getPoolManager
@@ -379,7 +542,7 @@ Get pool manager for a chain
 
 
 ```solidity
-function getPoolManager(uint16 _chainId) external view returns (address);
+function getPoolManager(uint256 _chainId) external view returns (address);
 ```
 
 ### getSwapRouter
@@ -388,7 +551,7 @@ Get swap router for a chain
 
 
 ```solidity
-function getSwapRouter(uint16 _chainId) external view returns (address);
+function getSwapRouter(uint256 _chainId) external view returns (address);
 ```
 
 ### isHubChain
@@ -406,7 +569,7 @@ Get hub chain ID
 
 
 ```solidity
-function hubChainId() external view returns (uint16);
+function hubChainId() external view returns (uint256);
 ```
 
 ### hubChainEid
@@ -445,40 +608,70 @@ event CreatorCoinUpdated(address indexed token);
 event CreatorCoinStatusChanged(address indexed token, bool isActive);
 ```
 
+### CanonicalWalletSet
+
+```solidity
+event CanonicalWalletSet(address indexed token, address indexed wallet);
+```
+
+### RemoteOFTPeerSet
+
+```solidity
+event RemoteOFTPeerSet(address indexed creatorCoin, uint32 indexed chainEid, address remoteOFT);
+```
+
+### RemoteOFTPeerRemoved
+
+```solidity
+event RemoteOFTPeerRemoved(address indexed creatorCoin, uint32 indexed chainEid);
+```
+
+### RemoteOFTPeerBytes32Set
+
+```solidity
+event RemoteOFTPeerBytes32Set(address indexed creatorCoin, uint32 indexed chainEid, bytes32 remoteOFT);
+```
+
+### RemoteOFTPeerBytes32Removed
+
+```solidity
+event RemoteOFTPeerBytes32Removed(address indexed creatorCoin, uint32 indexed chainEid);
+```
+
 ### ChainRegistered
 
 ```solidity
-event ChainRegistered(uint16 indexed chainId, string chainName);
+event ChainRegistered(uint256 indexed chainId, string chainName);
 ```
 
 ### ChainUpdated
 
 ```solidity
-event ChainUpdated(uint16 indexed chainId);
+event ChainUpdated(uint256 indexed chainId);
 ```
 
 ### ChainStatusChanged
 
 ```solidity
-event ChainStatusChanged(uint16 indexed chainId, bool isActive);
+event ChainStatusChanged(uint256 indexed chainId, bool isActive);
 ```
 
 ### LayerZeroEndpointUpdated
 
 ```solidity
-event LayerZeroEndpointUpdated(uint16 indexed chainId, address endpoint);
+event LayerZeroEndpointUpdated(uint256 indexed chainId, address endpoint);
 ```
 
 ### LzConfigUpdated
 
 ```solidity
-event LzConfigUpdated(uint16 indexed chainId);
+event LzConfigUpdated(uint256 indexed chainId);
 ```
 
 ### EcosystemContractSet
 
 ```solidity
-event EcosystemContractSet(uint16 indexed chainId, string contractType, address indexed contractAddress);
+event EcosystemContractSet(uint256 indexed chainId, string contractType, address indexed contractAddress);
 ```
 
 ## Structs
@@ -496,10 +689,13 @@ struct CreatorCoinInfo {
     address wrapper; // CreatorOVaultWrapper address
     address oracle; // CreatorOracle address (per-creator price oracle)
     address gaugeController; // CreatorGaugeController address (per-creator fee distribution)
-    address creator; // Creator's address (admin)
+    address creator; // Creator's address (admin/EOA signer)
+    address canonicalWallet; // Canonical smart wallet (ERC-4337 / Coinbase Smart Wallet)
+    // Used as: ERC-8004 agent identity, asset holder,
+    // lottery prize recipient, and vault owner
     address pool; // Primary liquidity pool
     uint24 poolFee; // Pool fee tier (e.g., 3000 = 0.3%)
-    uint16 primaryChainId; // Chain where token originated
+    uint256 primaryChainId; // Chain where token originated
     bool isActive; // Active status
     uint256 registeredAt; // Registration timestamp
 }
@@ -511,7 +707,7 @@ Chain configuration
 
 ```solidity
 struct ChainConfig {
-    uint16 chainId;
+    uint256 chainId;
     string chainName;
     address wrappedNativeToken;
     string wrappedNativeSymbol;

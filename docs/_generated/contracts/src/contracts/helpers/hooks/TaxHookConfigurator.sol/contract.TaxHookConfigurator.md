@@ -1,5 +1,8 @@
 # TaxHookConfigurator
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/helpers/hooks/TaxHookConfigurator.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/helpers/hooks/TaxHookConfigurator.sol)
+
+**Inherits:**
+Ownable
 
 
 ## State Variables
@@ -40,6 +43,13 @@ uint256 public constant DEFAULT_FEE_BPS = 690
 
 
 ## Functions
+### constructor
+
+
+```solidity
+constructor(address initialOwner) Ownable(initialOwner);
+```
+
 ### configureCreatorPool
 
 Configure tax hook for a ■AKITA/ETH pool
@@ -52,7 +62,7 @@ function configureCreatorPool(
     uint256 _feeBps,
     uint24 _poolLPFee,
     int24 _tickSpacing
-) external returns (bytes32 poolId);
+) external onlyOwner returns (bytes32 poolId);
 ```
 **Parameters**
 
@@ -82,7 +92,7 @@ function configureCreatorPoolDefault(
     address _gaugeController,
     uint24 _poolLPFee,
     int24 _tickSpacing
-) external returns (bytes32 poolId);
+) external onlyOwner returns (bytes32 poolId);
 ```
 
 ### updateFeeRecipient
@@ -91,7 +101,7 @@ Update fee recipient (e.g., to new GaugeController)
 
 
 ```solidity
-function updateFeeRecipient(bytes32 poolId, address _newRecipient) external;
+function updateFeeRecipient(bytes32 poolId, address _newRecipient) external onlyOwner;
 ```
 
 ### updateFeeBps
@@ -100,7 +110,7 @@ Update fee percentage
 
 
 ```solidity
-function updateFeeBps(bytes32 poolId, uint256 _newBuyFeeBps, uint256 _newSellFeeBps) external;
+function updateFeeBps(bytes32 poolId, uint256 _newBuyFeeBps, uint256 _newSellFeeBps) external onlyOwner;
 ```
 
 ### disableFees
@@ -109,7 +119,20 @@ Disable fees for a pool
 
 
 ```solidity
-function disableFees(bytes32 poolId) external;
+function disableFees(bytes32 poolId) external onlyOwner;
+```
+
+### _configureCreatorPool
+
+
+```solidity
+function _configureCreatorPool(
+    address _shareOFT,
+    address _gaugeController,
+    uint256 _feeBps,
+    uint24 _poolLPFee,
+    int24 _tickSpacing
+) internal returns (bytes32 poolId);
 ```
 
 ### getPoolId

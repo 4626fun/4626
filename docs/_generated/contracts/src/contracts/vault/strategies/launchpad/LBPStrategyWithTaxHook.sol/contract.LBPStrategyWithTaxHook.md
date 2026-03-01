@@ -1,8 +1,8 @@
 # LBPStrategyWithTaxHook
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/vault/strategies/launchpad/LBPStrategyWithTaxHook.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/vault/strategies/launchpad/LBPStrategyWithTaxHook.sol)
 
 **Inherits:**
-ILBPStrategyBasic
+[ILBPStrategyBasicCompat](/contracts/vault/strategies/launchpad/LBPStrategyWithTaxHook.sol/interface.ILBPStrategyBasicCompat.md)
 
 **Title:**
 LBPStrategyWithTaxHook
@@ -212,8 +212,6 @@ function onTokensReceived() external;
 
 ### migrate
 
-Migrates the raised funds and tokens to a v4 pool
-
 
 ```solidity
 function migrate() external;
@@ -221,20 +219,12 @@ function migrate() external;
 
 ### sweepToken
 
-Allows the operator to sweep tokens from the contract
-
-Can only be called after sweepBlock by the operator
-
 
 ```solidity
 function sweepToken() external;
 ```
 
 ### sweepCurrency
-
-Allows the operator to sweep currency from the contract
-
-Can only be called after sweepBlock by the operator
 
 
 ```solidity
@@ -280,7 +270,7 @@ function _initializePool(MigrationData memory data) private returns (PoolKey mem
 
 
 ```solidity
-function _createPositionPlan(MigrationData memory data) private view returns (bytes memory plan);
+function _createPositionPlan(MigrationData memory data) private view returns (bytes memory, bool);
 ```
 
 ### _transferAssetsAndExecutePlan
@@ -304,31 +294,6 @@ function _getTokenTransferAmount(MigrationData memory data) private view returns
 function _getCurrencyTransferAmount(MigrationData memory data) private pure returns (uint128);
 ```
 
-### _createFullRangePositionPlan
-
-
-```solidity
-function _createFullRangePositionPlan(
-    BasePositionParams memory baseParams,
-    uint128 tokenAmount,
-    uint128 currencyAmount,
-    uint256 paramsArraySize
-) private pure returns (bytes memory, bytes[] memory);
-```
-
-### _createOneSidedPositionPlan
-
-
-```solidity
-function _createOneSidedPositionPlan(
-    BasePositionParams memory baseParams,
-    bytes memory actions,
-    bytes[] memory params,
-    uint128 tokenAmount,
-    uint128 leftoverCurrency
-) private view returns (bytes memory, bytes[] memory);
-```
-
 ### receive
 
 Only accept native currency transfers from the auction when currency is native.
@@ -343,5 +308,38 @@ receive() external payable;
 
 ```solidity
 error ZeroAddress();
+```
+
+## Structs
+### MigratorParameters
+
+```solidity
+struct MigratorParameters {
+    uint64 migrationBlock;
+    address currency;
+    uint24 poolLPFee;
+    int24 poolTickSpacing;
+    uint24 tokenSplitToAuction;
+    address auctionFactory;
+    address positionRecipient;
+    uint64 sweepBlock;
+    address operator;
+    bool createOneSidedTokenPosition;
+    bool createOneSidedCurrencyPosition;
+}
+```
+
+### MigrationData
+
+```solidity
+struct MigrationData {
+    uint160 sqrtPriceX96;
+    uint128 initialTokenAmount;
+    uint128 initialCurrencyAmount;
+    uint128 leftoverCurrency;
+    uint128 liquidity;
+    bool shouldCreateOneSided;
+    bool hasOneSidedParams;
+}
 ```
 

@@ -1,5 +1,5 @@
 # CreatorOVaultWrapper
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/vault/CreatorOVaultWrapper.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/vault/CreatorOVaultWrapper.sol)
 
 **Inherits:**
 Ownable, ReentrancyGuard
@@ -78,7 +78,7 @@ ShareOFT token (e.g., ■AKITA) - set post-deploy
 
 
 ```solidity
-IMintableBurnableOFT public shareOFT
+IShareOFT public shareOFT
 ```
 
 
@@ -95,6 +95,20 @@ uint256 public totalLocked
 
 ```solidity
 uint256 public totalMinted
+```
+
+
+### totalUserDustShares
+
+```solidity
+uint256 public totalUserDustShares
+```
+
+
+### userDustShares
+
+```solidity
+mapping(address => uint256) public userDustShares
 ```
 
 
@@ -473,9 +487,9 @@ function isReady() external view returns (bool);
 
 ### isBalanced
 
-Check if wrapper is balanced (locked vault shares == minted share tokens * 1000)
+Check if wrapper is balanced against required share backing
 
-Due to normalization: totalLocked (▢AKITA) == totalMinted (■AKITA) * 1000
+required backing = minted * 1000 + user-attributed dust
 
 
 ```solidity
@@ -486,7 +500,7 @@ function isBalanced() external view returns (bool);
 
 Get wrapper reserves
 
-Note: locked = minted * 1000 when balanced
+Note: locked = minted * 1000 + dust when balanced
 
 
 ```solidity
@@ -499,6 +513,15 @@ function getReserves() external view returns (uint256 locked, uint256 minted);
 |`locked`|`uint256`|Vault shares locked (▢AKITA, NOT normalized)|
 |`minted`|`uint256`|ShareOFT minted (■AKITA, normalized)|
 
+
+### requiredLockedBacking
+
+Get the total vault-share backing required by minted supply and user dust
+
+
+```solidity
+function requiredLockedBacking() external view returns (uint256);
+```
 
 ### getFeeStats
 
@@ -549,7 +572,7 @@ function oftToken() external view returns (address);
 
 Emergency verify - check balances match accounting
 
-With normalization: actualLocked == totalLocked == totalMinted * 1000
+With normalization + dust: actualLocked == totalLocked == (totalMinted * 1000 + dust)
 
 
 ```solidity
@@ -572,6 +595,13 @@ Refresh vault approval if needed
 
 ```solidity
 function refreshApproval() external onlyOwner;
+```
+
+### _requiredLockedBacking
+
+
+```solidity
+function _requiredLockedBacking() internal view returns (uint256);
 ```
 
 ## Events
@@ -640,6 +670,46 @@ error ZeroAddress();
 
 ```solidity
 error ShareOFTNotSet();
+```
+
+### ShareOFTAlreadySet
+
+```solidity
+error ShareOFTAlreadySet();
+```
+
+### ShareOFTNotContract
+
+```solidity
+error ShareOFTNotContract(address shareOFT);
+```
+
+### ShareOFTInvalidERC20
+
+```solidity
+error ShareOFTInvalidERC20(address shareOFT);
+```
+
+### ShareOFTMintBalanceMismatch
+
+```solidity
+error ShareOFTMintBalanceMismatch(
+    address user, uint256 beforeBalance, uint256 afterBalance, uint256 expectedIncrease
+);
+```
+
+### ShareOFTBurnBalanceMismatch
+
+```solidity
+error ShareOFTBurnBalanceMismatch(
+    address user, uint256 beforeBalance, uint256 afterBalance, uint256 expectedDecrease
+);
+```
+
+### BurnExceedsTotalMinted
+
+```solidity
+error BurnExceedsTotalMinted(uint256 totalMinted, uint256 burnAmount);
 ```
 
 ### InsufficientLocked

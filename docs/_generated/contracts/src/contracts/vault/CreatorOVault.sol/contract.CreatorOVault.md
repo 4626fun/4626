@@ -1,5 +1,5 @@
 # CreatorOVault
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/vault/CreatorOVault.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/vault/CreatorOVault.sol)
 
 **Inherits:**
 ERC4626, Ownable, ReentrancyGuard, EIP712
@@ -291,6 +291,24 @@ Shares locked from last report
 
 ```solidity
 uint256 public totalLockedShares
+```
+
+
+### totalQueuedWithdrawalShares
+Shares currently held by queued withdrawals
+
+
+```solidity
+uint256 public totalQueuedWithdrawalShares
+```
+
+
+### lastProfitUnlockUpdate
+Last timestamp that profit unlock processing was applied
+
+
+```solidity
+uint96 public lastProfitUnlockUpdate
 ```
 
 
@@ -628,6 +646,27 @@ address public debtPurchaser
 ```
 
 
+### _coreModule
+
+```solidity
+address internal _coreModule
+```
+
+
+### _strategiesModule
+
+```solidity
+address internal _strategiesModule
+```
+
+
+### _adminModule
+
+```solidity
+address internal _adminModule
+```
+
+
 ## Functions
 ### onlyManagement
 
@@ -714,11 +753,64 @@ constructor(address _creatorCoin, address _owner, string memory _name, string me
 |`_symbol`|`string`|Vault symbol (e.g., "▢AKITA")|
 
 
+### setModulesOnce
+
+
+```solidity
+function setModulesOnce(address coreModule, address strategiesModule, address adminModule) external onlyOwner;
+```
+
+### _requireModulesSet
+
+
+```solidity
+function _requireModulesSet() internal view;
+```
+
+### _delegate
+
+
+```solidity
+function _delegate(address module) internal;
+```
+
+### _delegateAndReturn
+
+Delegatecall helper that returns normally so modifiers can clean up.
+Do NOT use `_delegate()` from a function with a modifier that has an epilogue
+(e.g. OZ `nonReentrant`), since `_delegate()` uses an assembly `return`.
+
+
+```solidity
+function _delegateAndReturn(address module) internal returns (bytes memory ret);
+```
+
+### __moduleUpdate
+
+
+```solidity
+function __moduleUpdate(address from, address to, uint256 value) external;
+```
+
+### __moduleSpendAllowance
+
+
+```solidity
+function __moduleSpendAllowance(address owner_, address spender, uint256 value) external;
+```
+
+### __moduleTransferOwnership
+
+
+```solidity
+function __moduleTransferOwnership(address newOwner) external;
+```
+
 ### unlockedShares
 
-Calculate unlocked shares since last report
+Calculate unlocked shares pending burn
 
-Prevents PPS manipulation by gradual unlock
+Shows matured shares since last unlock processing checkpoint
 
 
 ```solidity
@@ -734,6 +826,46 @@ Get locked (not yet unlocked) shares
 function lockedShares() public view returns (uint256);
 ```
 
+### _availableProfitShares
+
+Profit shares available on vault balance (excludes queued withdrawals)
+
+
+```solidity
+function _availableProfitShares() internal view returns (uint256);
+```
+
+### _increaseReportBaselineForPrincipalInflow
+
+Adjust report baseline upward for user principal inflows
+
+Bootstraps from live assets when baseline is uninitialized (legacy vaults)
+
+
+```solidity
+function _increaseReportBaselineForPrincipalInflow(uint256 assets) internal;
+```
+
+### _decreaseReportBaselineForPrincipalOutflow
+
+Adjust report baseline downward for user principal outflows
+
+Uses floor-at-zero semantics to avoid underflow on extreme outflows
+
+
+```solidity
+function _decreaseReportBaselineForPrincipalOutflow(uint256 assets) internal;
+```
+
+### _processProfitUnlock
+
+Burn matured profit-lock shares to realize unlock progression
+
+
+```solidity
+function _processProfitUnlock() internal;
+```
+
 ### totalAssets
 
 Total assets controlled by vault
@@ -743,6 +875,37 @@ Includes idle balance + strategy deployments
 
 ```solidity
 function totalAssets() public view override returns (uint256);
+```
+
+### _getStrategyAssetsSafe
+
+Read strategy assets without allowing a single faulty strategy to brick the vault.
+
+Returns tracked `strategyDebt` when strategy valuation reverts.
+
+
+```solidity
+function _getStrategyAssetsSafe(address strategy) internal view returns (uint256 assets);
+```
+
+### _firstStrategyValuationNotReady
+
+Find the first active strategy explicitly reporting unhealthy valuation.
+
+Strategies MUST implement `IStrategyValuation` and MUST NOT revert in valuation
+reads. Missing interfaces or any reverts are treated as NOT ready to prevent
+ERC-4626 share dilution when `totalAssets()` would be under-reported.
+
+
+```solidity
+function _firstStrategyValuationNotReady() internal view returns (address bad);
+```
+
+### _requireStrategyValuationsReady
+
+
+```solidity
+function _requireStrategyValuationsReady() internal view;
 ```
 
 ### deposit
@@ -901,6 +1064,73 @@ Max redeem (standard ERC4626)
 
 ```solidity
 function maxRedeem(address owner_) public view override returns (uint256);
+```
+
+### _syncCoinBalance
+
+Synchronize internal `coinBalance` to the real token balance.
+
+`coinBalance` is used for operational decisions; we keep it strict and synced
+to prevent share pricing / solvency issues with non-standard ERC-20 behavior.
+
+
+```solidity
+function _syncCoinBalance() internal returns (uint256 actual);
+```
+
+### _pullCreatorCoinExact
+
+Pull creator coin and require exact receipt.
+
+Rejects fee-on-transfer / deflationary / rebasing tokens by enforcing
+that the vault's balance increases by exactly `amount`.
+
+
+```solidity
+function _pullCreatorCoinExact(address from, uint256 amount) internal returns (uint256 received);
+```
+
+### _pushCreatorCoinExact
+
+Push creator coin out of vault and require exact vault-side debit.
+
+Enforces that the vault's own balance decreases by exactly `amount`.
+
+
+```solidity
+function _pushCreatorCoinExact(address to, uint256 amount) internal returns (uint256 spent);
+```
+
+### _depositIntoStrategyExact
+
+Deploy creator coin into a strategy with strict accounting checks.
+
+Requires both vault-side token debit and strategy reported `deposited`
+amount to exactly equal `amount`.
+
+
+```solidity
+function _depositIntoStrategyExact(address strategy, uint256 amount) internal returns (uint256 deposited);
+```
+
+### _withdrawFromStrategyMeasured
+
+Withdraw from strategy and validate returned amount against balance delta.
+
+
+```solidity
+function _withdrawFromStrategyMeasured(address strategy, uint256 amount) internal returns (uint256 withdrawn);
+```
+
+### _withdrawFromStrategyBestEffort
+
+Best-effort strategy withdrawal for user redemptions.
+
+Never reverts on strategy failure; returns the measured amount received by the vault.
+
+
+```solidity
+function _withdrawFromStrategyBestEffort(address strategy, uint256 amount) internal returns (uint256 withdrawn);
 ```
 
 ### _ensureCoin
@@ -1486,6 +1716,18 @@ function rescueETH() external onlyOwner;
 function rescueToken(address token, uint256 amount, address to) external onlyOwner;
 ```
 
+### _update
+
+Track the latest share acquisition block for delay enforcement.
+- Mint: receiver gets current block.
+- Transfer: does NOT update cooldown state (prevents griefing via dust transfers).
+- Burn: no update needed.
+
+
+```solidity
+function _update(address from, address to, uint256 value) internal override;
+```
+
 ### pricePerShare
 
 Get price per share (1e18 scale)
@@ -1551,6 +1793,12 @@ event StrategyDeployed(address indexed strategy, uint256 amount);
 
 ```solidity
 event StrategyWithdrawn(address indexed strategy, uint256 amount);
+```
+
+### StrategyWithdrawFailed
+
+```solidity
+event StrategyWithdrawFailed(address indexed strategy, uint256 amount, bytes revertData);
 ```
 
 ### UpdateManagement
@@ -1765,6 +2013,12 @@ event RescueCancelled(address indexed owner);
 event RescueFinalized(address indexed oldOwner, address indexed newOwner);
 ```
 
+### ModulesSet
+
+```solidity
+event ModulesSet(address indexed coreModule, address indexed strategiesModule, address indexed adminModule);
+```
+
 ## Errors
 ### ZeroAddress
 
@@ -1882,6 +2136,14 @@ Flash loan protection - must wait before withdrawing
 error WithdrawTooSoon(uint256 currentBlock, uint256 requiredBlock);
 ```
 
+### TransferTooSoon
+Flash loan protection - must wait before transferring freshly minted shares
+
+
+```solidity
+error TransferTooSoon(uint256 currentBlock, uint256 requiredBlock);
+```
+
 ### LargeWithdrawalMustBeQueued
 Large withdrawal must be queued
 
@@ -1910,6 +2172,14 @@ error NoQueuedWithdrawal();
 
 ```solidity
 error StrategyHasUnrealisedLosses(address strategy, uint256 lossAmount);
+```
+
+### StrategyValuationNotReady
+Strategy explicitly reports valuation inputs are unhealthy (oracle stale/unavailable).
+
+
+```solidity
+error StrategyValuationNotReady(address strategy);
 ```
 
 ### InsufficientIdleForWithdrawal
@@ -2018,6 +2288,38 @@ error TooManyBlocks(uint256 provided, uint256 max);
 
 ```solidity
 error CannotRescueCreatorCoin();
+```
+
+### TransferAmountMismatch
+Creator coin transfer did not move the expected amount (fee-on-transfer / rebasing / deflationary not supported).
+
+
+```solidity
+error TransferAmountMismatch(uint256 expected, uint256 actual);
+```
+
+### ETHTransferFailed
+
+```solidity
+error ETHTransferFailed();
+```
+
+### ModulesNotSet
+
+```solidity
+error ModulesNotSet();
+```
+
+### ModulesAlreadySet
+
+```solidity
+error ModulesAlreadySet();
+```
+
+### InvalidModuleAddress
+
+```solidity
+error InvalidModuleAddress();
 ```
 
 ## Structs
