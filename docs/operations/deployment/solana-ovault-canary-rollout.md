@@ -26,6 +26,10 @@ Set on all deploy-session runtimes:
 - `DEPLOY_SOLANA_OVAULT_KILL_SWITCH`
   - `0`: normal behavior from route mode
   - `1`: force `legacy_only` regardless of route mode
+- `DEPLOY_SOLANA_LEGACY_WRITE_DISABLED`
+  - `0`: legacy endpoint still accepts writes (default during canary)
+  - `1`: direct writes to `/api/deploy/registerSolanaBridgeToken` are disabled (`410`)
+    - OVault alias route (`/api/deploy/setupSolanaOvaultMesh`) remains available
 
 Optional aliases are also supported:
 
@@ -47,6 +51,10 @@ Optional aliases are also supported:
 4. **Expand**
    - Keep `ovault_first` while cohort size increases
    - Move to `ovault_only` only after stability window is clean
+5. **Legacy cutover**
+   - Set `DEPLOY_SOLANA_LEGACY_WRITE_DISABLED=1`
+   - Keep `DEPLOY_SOLANA_OVAULT_KILL_SWITCH=0`
+   - Verify direct calls to `/api/deploy/registerSolanaBridgeToken` return `410`
 
 ## Monitoring / Go-No-Go
 
@@ -63,17 +71,20 @@ No-Go if canary sessions regress or preflight failures spike.
 If canary health degrades:
 
 1. Set `DEPLOY_SOLANA_OVAULT_KILL_SWITCH=1`
-2. Redeploy config/runtime
-3. Confirm new sessions use legacy route only
-4. Keep investigating OVault path while production deploys continue on legacy mode
+2. Set `DEPLOY_SOLANA_LEGACY_WRITE_DISABLED=0` (required so legacy route can accept writes)
+3. Redeploy config/runtime
+4. Confirm new sessions use legacy route only
+5. Keep investigating OVault path while production deploys continue on legacy mode
 
 When ready to re-enable:
 
 1. Set `DEPLOY_SOLANA_OVAULT_KILL_SWITCH=0`
 2. Restore `DEPLOY_SOLANA_PREFLIGHT_ROUTE_MODE=ovault_first`
-3. Re-run canary validation
+3. After stability, set `DEPLOY_SOLANA_LEGACY_WRITE_DISABLED=1` again
+4. Re-run canary validation
 
 ## Notes
 
 - Kill switch affects deploy-session Solana preflight routing only.
+- Legacy write-disable gate applies only to the direct legacy endpoint path.
 - Existing compatibility/eligibility hard gates remain active regardless of route mode.

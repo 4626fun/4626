@@ -134,6 +134,8 @@ describe('deploy session optimistic concurrency', () => {
     delete process.env.SOLANA_OVAULT_KILL_SWITCH
     delete process.env.DEPLOY_SOLANA_PREFLIGHT_ROUTE_MODE
     delete process.env.SOLANA_PREFLIGHT_ROUTE_MODE
+    delete process.env.DEPLOY_SOLANA_LEGACY_WRITE_DISABLED
+    delete process.env.SOLANA_LEGACY_WRITE_DISABLED
   })
 
   it('allows one continue transition and returns 409 on the second', async () => {
@@ -820,6 +822,62 @@ describe('deploy session optimistic concurrency', () => {
       expect(String((fetchMock.mock.calls as any[])[0]?.[0] ?? '')).toContain('/api/deploy/setupSolanaOvaultMesh')
       expect(transitionDeploySessionMock).not.toHaveBeenCalled()
       expect(updateDeploySessionMock).toHaveBeenCalled()
+    } finally {
+      ;(globalThis as any).fetch = originalFetch
+    }
+  })
+
+  it('status fails fast when legacy_only mode is combined with disabled legacy writes', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_confirmed'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
+        phase3Calls: [makeCall('0xphase3target')],
+      }),
+    }
+    process.env.DEPLOY_SOLANA_PREFLIGHT_ROUTE_MODE = 'legacy_only'
+    process.env.DEPLOY_SOLANA_LEGACY_WRITE_DISABLED = '1'
+    const originalFetch = globalThis.fetch
+    const fetchMock = vi.fn()
+
+    try {
+      ;(globalThis as any).fetch = fetchMock
+      const viem = await import('viem')
+      ;(viem.createPublicClient as any).mockReturnValue({
+        readContract: vi.fn(async ({ functionName }: any) => {
+          switch (functionName) {
+            case 'ownerCount':
+              return 1n
+            case 'nextOwnerIndex':
+              return 1n
+            case 'ownerAtIndex':
+              return '0xownerbytes'
+            case 'solanaBridgeAdapter':
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return false
+            default:
+              return '0xownerbytes'
+          }
+        }),
+      })
+      getDeploySessionByIdMock
+        .mockResolvedValueOnce(rec)
+        .mockResolvedValueOnce({ ...rec, step: 'phase2_confirmed', lastError: 'Solana preflight misconfigured' })
+      transitionDeploySessionMock.mockResolvedValue(true)
+
+      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+      const res = createMockRes()
+      await statusHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(transitionDeploySessionMock).not.toHaveBeenCalled()
+      expect(updateDeploySessionMock).toHaveBeenCalled()
+      const updateArg = (updateDeploySessionMock.mock.calls as any[])[0]?.[0] as any
+      expect(String(updateArg?.lastError ?? '')).toContain('legacy_only route mode')
     } finally {
       ;(globalThis as any).fetch = originalFetch
     }

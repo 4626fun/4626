@@ -318,6 +318,29 @@ function readDynamicSolanaRouteEnabled(): boolean {
   return v === '1' || v === 'true' || v === 'yes'
 }
 
+type SolanaRegistrationRouteKind = 'legacy' | 'ovault'
+
+function readLegacySolanaWriteDisabled(): boolean {
+  const v = String(
+    process.env.DEPLOY_SOLANA_LEGACY_WRITE_DISABLED ??
+      process.env.SOLANA_LEGACY_WRITE_DISABLED ??
+      '',
+  )
+    .trim()
+    .toLowerCase()
+  return v === '1' || v === 'true' || v === 'yes'
+}
+
+function readSolanaRegistrationRouteKind(req: VercelRequest): SolanaRegistrationRouteKind {
+  const header = requestHeader(req, 'x-cv-solana-registration-route').toLowerCase()
+  if (header === 'ovault') return 'ovault'
+  if (header === 'legacy') return 'legacy'
+  const url = String((req as any)?.url ?? '').toLowerCase()
+  if (url.includes('/setupsolanaovaultmesh')) return 'ovault'
+  if (url.includes('/registersolanabridgetoken')) return 'legacy'
+  return 'legacy'
+}
+
 function splitUrlList(raw: string): string[] {
   return raw
     .split(/[,\n\r\t ]+/)
@@ -1200,6 +1223,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  const routeKind = readSolanaRegistrationRouteKind(req)
+  if (routeKind === 'legacy' && readLegacySolanaWriteDisabled()) {
+    return res.status(410).json({
+      success: false,
+      error:
+        'Legacy Solana registration route is disabled. Use /api/deploy/setupSolanaOvaultMesh.',
+    } satisfies ApiEnvelope<never>)
   }
 
   const auth = readDeployAuthFromRequest(req)
