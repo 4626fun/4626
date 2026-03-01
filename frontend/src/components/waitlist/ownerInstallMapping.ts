@@ -166,6 +166,8 @@ export function deriveOwnerInstallMappingStatus(params: {
   if (!privyAuthed) return 'NEEDS_PRIVY_AUTH'
   if (!walletsReady) return 'WAITING_FOR_WALLETS'
   if (!embeddedEoaAddress) return embeddedWalletCreating ? 'EMBEDDED_WALLET_CREATING' : 'EMBEDDED_WALLET_MISSING'
+  // If we already have a canonical CSW from profile/wallet inference, do not block on cross-app linking.
+  if (canonicalZoraCswAddress) return 'READY_FOR_OWNER_INSTALL'
   if (!zoraLinked) return zoraLinking ? 'ZORA_LINKING' : 'ZORA_LINK_REQUIRED'
   if (!canonicalZoraCswAddress) return canonicalResolving ? 'CANONICAL_RESOLVING' : 'CANONICAL_UNRESOLVED'
   return 'READY_FOR_OWNER_INSTALL'

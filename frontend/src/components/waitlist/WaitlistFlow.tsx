@@ -332,6 +332,29 @@ function formatPrivyConnectError(code: string): string {
   return `Wallet connect failed (${code}).`
 }
 
+function readErrorStatusCode(error: unknown): number | null {
+  const candidate = Number(
+    (error as any)?.status ??
+      (error as any)?.statusCode ??
+      (error as any)?.response?.status ??
+      (error as any)?.cause?.status,
+  )
+  if (!Number.isFinite(candidate)) return null
+  return candidate
+}
+
+function isUnauthorizedCrossAppLinkError(error: unknown): boolean {
+  const status = readErrorStatusCode(error)
+  if (status === 401 || status === 403) return true
+
+  const message = String((error as any)?.message ?? '').trim().toLowerCase()
+  if (!message) return false
+  const mentionsCrossAppOAuth =
+    message.includes('oauth/init') || message.includes('cross_app') || message.includes('cross-app')
+  if (!mentionsCrossAppOAuth) return false
+  return message.includes('401') || message.includes('unauthorized') || message.includes('not authorized')
+}
+
 function extractPrivyWalletAddress(user: any, walletsOverride?: any[]): string | null {
   const wallets = Array.isArray(walletsOverride) ? walletsOverride : Array.isArray(user?.wallets) ? user.wallets : []
   const primaryWallet = user?.wallet && typeof user.wallet === 'object' ? [user.wallet] : []
@@ -806,7 +829,16 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     patchWaitlist({ mappingError: null })
     try {
       if (crossAppAuthAction === 'link') {
-        await linkCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+        try {
+          await linkCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+        } catch (linkError: unknown) {
+          if (typeof loginWithCrossAppAccount === 'function' && isUnauthorizedCrossAppLinkError(linkError)) {
+            console.warn('[waitlist][zora] link helper unauthorized; retrying with login helper')
+            await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+          } else {
+            throw linkError
+          }
+        }
       } else {
         await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
       }
@@ -1086,15 +1118,15 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         embeddedWalletCreating: embeddedWalletCreateBusy,
         zoraLinked: zoraReadOnlyLinked,
         zoraLinking: zoraLinkBusy,
-        canonicalZoraCswAddress,
+        canonicalZoraCswAddress: effectiveCswAddress,
         canonicalResolving: canonicalResolveBusy,
       }),
     [
       canonicalResolveBusy,
-      canonicalZoraCswAddress,
       embeddedWalletAddress,
       embeddedEoaAddressFromState,
       embeddedWalletCreateBusy,
+      effectiveCswAddress,
       privyAuthed,
       walletsReady,
       zoraLinkBusy,

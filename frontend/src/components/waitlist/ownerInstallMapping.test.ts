@@ -69,6 +69,19 @@ describe('deriveOwnerInstallMappingStatus', () => {
         walletsReady: true,
         embeddedEoaAddress: '0x1111111111111111111111111111111111111111',
         embeddedWalletCreating: false,
+        zoraLinked: false,
+        zoraLinking: false,
+        canonicalZoraCswAddress: '0x2222222222222222222222222222222222222222',
+        canonicalResolving: false,
+      }),
+    ).toBe('READY_FOR_OWNER_INSTALL')
+
+    expect(
+      deriveOwnerInstallMappingStatus({
+        privyAuthed: true,
+        walletsReady: true,
+        embeddedEoaAddress: '0x1111111111111111111111111111111111111111',
+        embeddedWalletCreating: false,
         zoraLinked: true,
         zoraLinking: false,
         canonicalZoraCswAddress: null,
