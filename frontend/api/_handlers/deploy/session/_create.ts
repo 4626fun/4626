@@ -128,6 +128,23 @@ function shouldPersistManagedSessionOwner(): boolean {
   return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, true)
 }
 
+const DEFAULT_DEPLOY_SESSION_TTL_MINUTES = 45
+const MIN_DEPLOY_SESSION_TTL_MINUTES = 5
+const MAX_DEPLOY_SESSION_TTL_MINUTES = 240
+
+function readDeploySessionTtlMinutes(): number {
+  const raw = String(process.env.DEPLOY_SESSION_TTL_MINUTES ?? '').trim()
+  if (!raw) return DEFAULT_DEPLOY_SESSION_TTL_MINUTES
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_DEPLOY_SESSION_TTL_MINUTES
+  const wholeMinutes = Math.floor(parsed)
+  return Math.min(MAX_DEPLOY_SESSION_TTL_MINUTES, Math.max(MIN_DEPLOY_SESSION_TTL_MINUTES, wholeMinutes))
+}
+
+function readDeploySessionTtlMs(): number {
+  return readDeploySessionTtlMinutes() * 60 * 1000
+}
+
 function parseUInt32Like(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 4_294_967_295) {
     return Math.floor(value)
@@ -766,7 +783,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const now = Date.now()
-    const expiresAt = new Date(now + 10 * 60 * 1000) // 10 minutes
+    const expiresAt = new Date(now + readDeploySessionTtlMs())
     const persistSessionOwner = Boolean(deploySignerWalletId) && shouldPersistManagedSessionOwner()
 
     const cleanupGrantCall = {
