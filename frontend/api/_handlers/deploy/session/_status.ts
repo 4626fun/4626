@@ -27,6 +27,104 @@ const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
 const SOLANA_RESERVE_PERCENT_BPS = 3_000n
 const BPS_DENOMINATOR = 10_000n
+const SESSION_EXPIRED_RESTART_REQUIRED = 'session_expired_restart_required'
+const SESSION_EXPIRED_AT_KEY = 'sessionExpiredAt'
+const SESSION_EXPIRED_REASON_KEY = 'sessionExpiredReason'
+const REPLAY_SKIP_PHASE2_CORE_AT_KEY = 'replaySkipPhase2CoreAt'
+const REPLAY_SKIP_PHASE2_CORE_REASON_KEY = 'replaySkipPhase2CoreReason'
+const REPLAY_SKIP_PHASE2_FINALIZE_AT_KEY = 'replaySkipPhase2FinalizeAt'
+const REPLAY_SKIP_PHASE2_FINALIZE_REASON_KEY = 'replaySkipPhase2FinalizeReason'
+
+function isSessionExpired(expiresAt: unknown): boolean {
+  if (typeof expiresAt !== 'string') return false
+  const expiresMs = Date.parse(expiresAt)
+  return Number.isFinite(expiresMs) && expiresMs <= Date.now()
+}
+
+function readPayloadObjectSafe(value: unknown): Record<string, any> {
+  try {
+    return asPayloadObject(value)
+  } catch {
+    return {}
+  }
+}
+
+function buildSessionDiagnostics(rec: any): {
+  category: 'ok' | 'expired' | 'grant_expired' | 'session_owner_unavailable' | 'onchain_revert' | 'other_error'
+  restartRequired: boolean
+  expired: boolean
+  replay: {
+    phase2CoreSkipRecorded: boolean
+    phase2CoreSkipAt: string | null
+    phase2CoreSkipReason: string | null
+    phase2FinalizeSkipRecorded: boolean
+    phase2FinalizeSkipAt: string | null
+    phase2FinalizeSkipReason: string | null
+    phase2CoreSentWithoutStageHash: boolean
+    phase2FinalizeSentWithoutStageHash: boolean
+  }
+} {
+  const step = String(rec?.step ?? '')
+  const payload = readPayloadObjectSafe(rec?.payload)
+  const lastError = typeof rec?.lastError === 'string' ? rec.lastError : ''
+  const lastErrorLower = lastError.toLowerCase()
+  const expirationRelevant = step !== 'completed' && step !== 'cancelled'
+  const expired = expirationRelevant && isSessionExpired(rec?.expiresAt)
+  const phase2CoreSkipAt =
+    typeof payload?.[REPLAY_SKIP_PHASE2_CORE_AT_KEY] === 'string' && payload[REPLAY_SKIP_PHASE2_CORE_AT_KEY].trim()
+      ? String(payload[REPLAY_SKIP_PHASE2_CORE_AT_KEY]).trim()
+      : null
+  const phase2CoreSkipReason =
+    typeof payload?.[REPLAY_SKIP_PHASE2_CORE_REASON_KEY] === 'string' && payload[REPLAY_SKIP_PHASE2_CORE_REASON_KEY].trim()
+      ? String(payload[REPLAY_SKIP_PHASE2_CORE_REASON_KEY]).trim()
+      : null
+  const phase2FinalizeSkipAt =
+    typeof payload?.[REPLAY_SKIP_PHASE2_FINALIZE_AT_KEY] === 'string' &&
+    payload[REPLAY_SKIP_PHASE2_FINALIZE_AT_KEY].trim()
+      ? String(payload[REPLAY_SKIP_PHASE2_FINALIZE_AT_KEY]).trim()
+      : null
+  const phase2FinalizeSkipReason =
+    typeof payload?.[REPLAY_SKIP_PHASE2_FINALIZE_REASON_KEY] === 'string' &&
+    payload[REPLAY_SKIP_PHASE2_FINALIZE_REASON_KEY].trim()
+      ? String(payload[REPLAY_SKIP_PHASE2_FINALIZE_REASON_KEY]).trim()
+      : null
+  const phase2CoreSentWithoutStageHash =
+    step === 'phase2_core_sent' && !asHexHash(payload?.[stageUserOpHashKey('phase2_core_sent')])
+  const phase2FinalizeSentWithoutStageHash =
+    step === 'phase2_sent' && !asHexHash(payload?.[stageUserOpHashKey('phase2_sent')])
+
+  let category: 'ok' | 'expired' | 'grant_expired' | 'session_owner_unavailable' | 'onchain_revert' | 'other_error' =
+    'ok'
+  if (lastErrorLower.includes(SESSION_EXPIRED_RESTART_REQUIRED) || expired) {
+    category = 'expired'
+  } else if (lastErrorLower.includes('erc7712_expired')) {
+    category = 'grant_expired'
+  } else if (lastErrorLower.includes('session_owner_unavailable') || lastErrorLower.includes('session_owner_key_missing')) {
+    category = 'session_owner_unavailable'
+  } else if (lastError && isOnchainRevertLike(lastError)) {
+    category = 'onchain_revert'
+  } else if (lastError) {
+    category = 'other_error'
+  }
+
+  const restartRequired = category === 'expired' || category === 'grant_expired'
+
+  return {
+    category,
+    restartRequired,
+    expired: category === 'expired',
+    replay: {
+      phase2CoreSkipRecorded: Boolean(phase2CoreSkipAt),
+      phase2CoreSkipAt,
+      phase2CoreSkipReason,
+      phase2FinalizeSkipRecorded: Boolean(phase2FinalizeSkipAt),
+      phase2FinalizeSkipAt,
+      phase2FinalizeSkipReason,
+      phase2CoreSentWithoutStageHash,
+      phase2FinalizeSentWithoutStageHash,
+    },
+  }
+}
 
 function stageUserOpHashKey(step: string): string {
   return `${STAGE_USEROP_HASH_PREFIX}${step}`
@@ -141,6 +239,16 @@ const SOLANA_BRIDGE_ADAPTER_VIEW_ABI = [
     stateMutability: 'view',
     inputs: [{ name: 'token', type: 'address' }],
     outputs: [{ type: 'bool' }],
+  },
+] as const
+
+const OWNABLE_OWNER_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
   },
 ] as const
 
@@ -410,6 +518,11 @@ function parseBigIntLike(value: unknown): bigint | null {
 function extractFinalizePhase2Info(data: Hex): {
   creatorToken: Address | null
   depositAmount: bigint | null
+  owner: Address | null
+  vault: Address | null
+  gaugeController: Address | null
+  ccaStrategy: Address | null
+  oracle: Address | null
 } | null {
   for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
     try {
@@ -417,6 +530,11 @@ function extractFinalizePhase2Info(data: Hex): {
       const params = (decoded.args?.[0] ?? null) as {
         creatorToken?: string
         depositAmount?: bigint | string | number
+        owner?: string
+        vault?: string
+        gaugeController?: string
+        ccaStrategy?: string
+        oracle?: string
       } | null
       const creatorTokenCandidate = params?.creatorToken && isAddress(params.creatorToken)
         ? getAddress(params.creatorToken as Address)
@@ -426,15 +544,94 @@ function extractFinalizePhase2Info(data: Hex): {
           ? creatorTokenCandidate
           : null
       if (!creatorToken) continue
+      const normalizeAddress = (value: unknown): Address | null => {
+        if (typeof value !== 'string' || !isAddress(value)) return null
+        const addr = getAddress(value as Address)
+        return addr.toLowerCase() === ZERO_ADDRESS.toLowerCase() ? null : addr
+      }
       return {
         creatorToken,
         depositAmount: parseBigIntLike(params?.depositAmount),
+        owner: normalizeAddress(params?.owner),
+        vault: normalizeAddress(params?.vault),
+        gaugeController: normalizeAddress(params?.gaugeController),
+        ccaStrategy: normalizeAddress(params?.ccaStrategy),
+        oracle: normalizeAddress(params?.oracle),
       }
     } catch {
       continue
     }
   }
   return null
+}
+
+async function hasRuntimeCode(publicClient: any, address: Address | null): Promise<boolean> {
+  if (!address) return false
+  const getBytecode = publicClient?.getBytecode
+  if (typeof getBytecode !== 'function') return false
+  try {
+    const bytecode = await getBytecode.call(publicClient, { address })
+    return typeof bytecode === 'string' && bytecode !== '0x'
+  } catch {
+    return false
+  }
+}
+
+async function readOwnableOwner(publicClient: any, address: Address | null): Promise<Address | null> {
+  if (!address) return null
+  try {
+    const ownerRaw = await publicClient.readContract({
+      address,
+      abi: OWNABLE_OWNER_VIEW_ABI,
+      functionName: 'owner',
+    })
+    if (typeof ownerRaw !== 'string' || !isAddress(ownerRaw)) return null
+    const owner = getAddress(ownerRaw as Address)
+    return owner.toLowerCase() === ZERO_ADDRESS.toLowerCase() ? null : owner
+  } catch {
+    return null
+  }
+}
+
+async function readPhase2ReplayState(params: {
+  publicClient: any
+  phase2FinalizeCalls: Array<{ to: Address; value: bigint; data: Hex }>
+}): Promise<{
+  phase2CoreAlreadyDeployed: boolean
+  phase2FinalizeAlreadyCompleted: boolean
+}> {
+  const finalizeCall = params.phase2FinalizeCalls[0]
+  if (!finalizeCall) {
+    return {
+      phase2CoreAlreadyDeployed: false,
+      phase2FinalizeAlreadyCompleted: false,
+    }
+  }
+  const finalizeInfo = extractFinalizePhase2Info(finalizeCall.data)
+  if (!finalizeInfo) {
+    return {
+      phase2CoreAlreadyDeployed: false,
+      phase2FinalizeAlreadyCompleted: false,
+    }
+  }
+
+  const [gaugeDeployed, ccaDeployed, oracleDeployed, vaultOwner] = await Promise.all([
+    hasRuntimeCode(params.publicClient, finalizeInfo.gaugeController),
+    hasRuntimeCode(params.publicClient, finalizeInfo.ccaStrategy),
+    hasRuntimeCode(params.publicClient, finalizeInfo.oracle),
+    readOwnableOwner(params.publicClient, finalizeInfo.vault),
+  ])
+
+  const phase2CoreAlreadyDeployed = gaugeDeployed && ccaDeployed && oracleDeployed
+  const phase2FinalizeAlreadyCompleted =
+    Boolean(finalizeInfo.owner) &&
+    Boolean(vaultOwner) &&
+    String(finalizeInfo.owner).toLowerCase() === String(vaultOwner).toLowerCase()
+
+  return {
+    phase2CoreAlreadyDeployed,
+    phase2FinalizeAlreadyCompleted,
+  }
 }
 
 async function ensureSolanaRouteReadyForPhase3(params: {
@@ -782,6 +979,38 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   if (hasPhase3 && phase3Calls.length === 0) throw new Error('phase3_calls_invalid')
   if (hasPhase4 && phase4Calls.length === 0) throw new Error('phase4_calls_invalid')
   const hasPostPhase2 = hasPhase3 || hasPhase4
+  const phase2ReplayState =
+    phase2CoreCalls.length > 0 || hasPhase2Finalize
+      ? await readPhase2ReplayState({
+          publicClient,
+          phase2FinalizeCalls,
+        })
+      : {
+          phase2CoreAlreadyDeployed: false,
+          phase2FinalizeAlreadyCompleted: false,
+        }
+  const shouldSkipPhase2Core = phase2CoreCalls.length > 0 && phase2ReplayState.phase2CoreAlreadyDeployed
+  const shouldSkipPhase2Finalize = hasPhase2Finalize && phase2ReplayState.phase2FinalizeAlreadyCompleted
+  const markReplaySkip = async (phase: 'phase2Core' | 'phase2Finalize'): Promise<void> => {
+    const atKey = phase === 'phase2Core' ? REPLAY_SKIP_PHASE2_CORE_AT_KEY : REPLAY_SKIP_PHASE2_FINALIZE_AT_KEY
+    const reasonKey =
+      phase === 'phase2Core' ? REPLAY_SKIP_PHASE2_CORE_REASON_KEY : REPLAY_SKIP_PHASE2_FINALIZE_REASON_KEY
+    if (typeof payload?.[atKey] === 'string' && payload[atKey].trim()) return
+    const reason =
+      phase === 'phase2Core'
+        ? 'onchain_phase2_core_already_deployed'
+        : 'onchain_phase2_finalize_already_completed'
+    const patch = {
+      [atKey]: new Date().toISOString(),
+      [reasonKey]: reason,
+    }
+    await updateDeploySession({
+      id: rec.id,
+      payloadPatch: patch,
+    })
+    payload[atKey] = patch[atKey]
+    payload[reasonKey] = reason
+  }
 
   type AuthedCtx = {
     bundler: any
@@ -920,6 +1149,44 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     return false
   }
 
+  const startOrCompleteAfterPhase2 = async (fromStep: string): Promise<void> => {
+    if (hasPostPhase2) {
+      await startNextAfterPhase2(fromStep)
+      return
+    }
+    const completed = await transitionDeploySession({ id: rec.id, fromStep: fromStep as any, toStep: 'completed' })
+    if (!completed) throw new Error(CONCURRENT_MODIFICATION)
+  }
+
+  const startFromPhase2 = async (fromStep: string): Promise<void> => {
+    if (phase2CoreCalls.length > 0) {
+      if (!shouldSkipPhase2Core) {
+        await startStage(fromStep, 'phase2_core_sent', phase2CoreCalls, !hasPhase2Finalize && !hasPostPhase2)
+        return
+      }
+      await markReplaySkip('phase2Core')
+    }
+    if (hasPhase2Finalize) {
+      if (!shouldSkipPhase2Finalize) {
+        await startStage(fromStep, 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
+        return
+      }
+      await markReplaySkip('phase2Finalize')
+    }
+    await startOrCompleteAfterPhase2(fromStep)
+  }
+
+  const startAfterPhase2Core = async (fromStep: string): Promise<void> => {
+    if (hasPhase2Finalize) {
+      if (!shouldSkipPhase2Finalize) {
+        await startStage(fromStep, 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
+        return
+      }
+      await markReplaySkip('phase2Finalize')
+    }
+    await startOrCompleteAfterPhase2(fromStep)
+  }
+
   const getSentStagePlan = (
     sentStep: string,
   ): { calls: Array<{ to: Address; value: bigint; data: Hex }>; attachCleanup: boolean } | null => {
@@ -1023,6 +1290,32 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       }
     }
     if (!stageHash) {
+      if (step === 'phase2_core_sent' && shouldSkipPhase2Core) {
+        await markReplaySkip('phase2Core')
+        const confirmed = await transitionDeploySession({
+          id: rec.id,
+          fromStep: 'phase2_core_sent',
+          toStep: 'phase2_core_confirmed',
+          lastTxHash: null,
+          lastError: null,
+        })
+        if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
+        await startAfterPhase2Core('phase2_core_confirmed')
+        return undefined
+      }
+      if (step === 'phase2_sent' && shouldSkipPhase2Finalize) {
+        await markReplaySkip('phase2Finalize')
+        const confirmed = await transitionDeploySession({
+          id: rec.id,
+          fromStep: 'phase2_sent',
+          toStep: 'phase2_confirmed',
+          lastTxHash: null,
+          lastError: null,
+        })
+        if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
+        await startOrCompleteAfterPhase2('phase2_confirmed')
+        return undefined
+      }
       if (step !== 'cleanup_sent') {
         await dispatchSentStage(step)
       }
@@ -1055,20 +1348,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       )
       return
     }
-    if (phase2CoreCalls.length > 0) {
-      await startStage('phase1_confirmed', 'phase2_core_sent', phase2CoreCalls, !hasPhase2Finalize && !hasPostPhase2)
-      return
-    }
-    if (hasPhase2Finalize) {
-      await startStage('phase1_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
-      return
-    }
-    if (hasPostPhase2) {
-      await startNextAfterPhase2('phase1_confirmed')
-      return
-    }
-    const completed = await transitionDeploySession({ id: rec.id, fromStep: 'phase1_confirmed', toStep: 'completed' })
-    if (!completed) throw new Error(CONCURRENT_MODIFICATION)
+    await startFromPhase2('phase1_confirmed')
     return
   }
 
@@ -1081,29 +1361,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     })
     if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
 
-    if (phase2CoreCalls.length > 0) {
-      await startStage(
-        'phase1_finalize_confirmed',
-        'phase2_core_sent',
-        phase2CoreCalls,
-        !hasPhase2Finalize && !hasPostPhase2,
-      )
-      return
-    }
-    if (hasPhase2Finalize) {
-      await startStage('phase1_finalize_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
-      return
-    }
-    if (hasPostPhase2) {
-      await startNextAfterPhase2('phase1_finalize_confirmed')
-      return
-    }
-    const completed = await transitionDeploySession({
-      id: rec.id,
-      fromStep: 'phase1_finalize_confirmed',
-      toStep: 'completed',
-    })
-    if (!completed) throw new Error(CONCURRENT_MODIFICATION)
+    await startFromPhase2('phase1_finalize_confirmed')
     return
   }
 
@@ -1115,17 +1373,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       lastTxHash: txHash,
     })
     if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
-
-    if (hasPhase2Finalize) {
-      await startStage('phase2_core_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
-      return
-    }
-    if (hasPostPhase2) {
-      await startNextAfterPhase2('phase2_core_confirmed')
-      return
-    }
-    const completed = await transitionDeploySession({ id: rec.id, fromStep: 'phase2_core_confirmed', toStep: 'completed' })
-    if (!completed) throw new Error(CONCURRENT_MODIFICATION)
+    await startAfterPhase2Core('phase2_core_confirmed')
     return
   }
 
@@ -1137,13 +1385,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       lastTxHash: txHash,
     })
     if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
-
-    if (hasPostPhase2) {
-      await startNextAfterPhase2('phase2_confirmed')
-      return
-    }
-    const completed = await transitionDeploySession({ id: rec.id, fromStep: 'phase2_confirmed', toStep: 'completed' })
-    if (!completed) throw new Error(CONCURRENT_MODIFICATION)
+    await startOrCompleteAfterPhase2('phase2_confirmed')
     return
   }
 
@@ -1188,71 +1430,22 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       )
       return
     }
-    if (phase2CoreCalls.length > 0) {
-      await startStage('phase1_confirmed', 'phase2_core_sent', phase2CoreCalls, phase2FinalizeCalls.length === 0 && !hasPostPhase2)
-      return
-    }
-    if (phase2FinalizeCalls.length > 0) {
-      await startStage('phase1_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
-      return
-    }
-    if (hasPostPhase2) {
-      await startNextAfterPhase2('phase1_confirmed')
-      return
-    }
-    const completed = await transitionDeploySession({ id: rec.id, fromStep: 'phase1_confirmed', toStep: 'completed' })
-    if (!completed) throw new Error(CONCURRENT_MODIFICATION)
+    await startFromPhase2('phase1_confirmed')
     return
   }
 
   if (step === 'phase1_finalize_confirmed') {
-    if (phase2CoreCalls.length > 0) {
-      await startStage(
-        'phase1_finalize_confirmed',
-        'phase2_core_sent',
-        phase2CoreCalls,
-        phase2FinalizeCalls.length === 0 && !hasPostPhase2,
-      )
-      return
-    }
-    if (phase2FinalizeCalls.length > 0) {
-      await startStage('phase1_finalize_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
-      return
-    }
-    if (hasPostPhase2) {
-      await startNextAfterPhase2('phase1_finalize_confirmed')
-      return
-    }
-    const completed = await transitionDeploySession({
-      id: rec.id,
-      fromStep: 'phase1_finalize_confirmed',
-      toStep: 'completed',
-    })
-    if (!completed) throw new Error(CONCURRENT_MODIFICATION)
+    await startFromPhase2('phase1_finalize_confirmed')
     return
   }
 
   if (step === 'phase2_core_confirmed') {
-    if (hasPhase2Finalize) {
-      await startStage('phase2_core_confirmed', 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
-      return
-    }
-    if (hasPostPhase2) {
-      await startNextAfterPhase2('phase2_core_confirmed')
-      return
-    }
-    const completed = await transitionDeploySession({ id: rec.id, fromStep: 'phase2_core_confirmed', toStep: 'completed' })
-    if (!completed) throw new Error(CONCURRENT_MODIFICATION)
+    await startAfterPhase2Core('phase2_core_confirmed')
     return
   }
 
   if (step === 'phase2_confirmed') {
-    if (hasPostPhase2) {
-      await startNextAfterPhase2('phase2_confirmed')
-      return
-    }
-    const completed = await transitionDeploySession({ id: rec.id, fromStep: 'phase2_confirmed', toStep: 'completed' })
-    if (!completed) throw new Error(CONCURRENT_MODIFICATION)
+    await startOrCompleteAfterPhase2('phase2_confirmed')
     return
   }
 
@@ -1300,64 +1493,87 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(403).json({ success: false, error: 'Forbidden' } satisfies ApiEnvelope<null>)
   }
 
-  try {
-    await advanceDeploySession(rec, req)
-    rec = (await getDeploySessionById(sessionId)) ?? rec
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err ?? 'deploy_session_advance_failed')
-    if (err instanceof Error && (err.message === 'deploy_payload_invalid' || err.message.endsWith('_calls_invalid'))) {
-      return res.status(409).json({
-        success: false,
-        error: 'Deploy session payload is invalid or missing required stage calls. Please restart deploy session.',
-      } satisfies ApiEnvelope<null>)
-    }
-    if (err instanceof Error && err.message === CONCURRENT_MODIFICATION) {
-      return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
-    }
-    if (err instanceof Error && err.message === 'cdp_endpoint_missing_on_vercel') {
-      return res.status(503).json({
-        success: false,
-        error:
-          'Deploy bundler/paymaster is not configured for this Vercel deployment. Set CDP_PAYMASTER_URL (or CDP_PAYMASTER_AND_BUNDLER_URL) to the Coinbase RPC endpoint; do not rely on same-origin /api/paymaster for server-side deploy-session calls.',
-      } satisfies ApiEnvelope<null>)
-    }
+  const isTerminalStep = ['cancelled', 'completed', 'failed'].includes(String(rec.step ?? ''))
+  if (isSessionExpired(rec.expiresAt) && !isTerminalStep) {
+    const expiredAt = new Date().toISOString()
     try {
-      let serializedErr = ''
-      try {
-        serializedErr = JSON.stringify(err)
-      } catch {
-        serializedErr = ''
-      }
-      const advanceDebug = buildUserOpErrorDebug({
-        err,
-        sessionId: rec.id,
-        stage: rec.step,
-        calls: null,
-      })
-      const revertLike =
-        isOnchainRevertLike(errMsg) ||
-        isOnchainRevertLike(serializedErr) ||
-        Boolean(advanceDebug.revertData || advanceDebug.selector)
       await updateDeploySession({
         id: rec.id,
-        lastError: errMsg,
-        ...(revertLike ? { payloadPatch: { lastErrorDebug: advanceDebug } } : {}),
+        step: 'failed',
+        lastError: SESSION_EXPIRED_RESTART_REQUIRED,
+        payloadPatch: {
+          [SESSION_EXPIRED_AT_KEY]: expiredAt,
+          [SESSION_EXPIRED_REASON_KEY]: SESSION_EXPIRED_RESTART_REQUIRED,
+        },
       })
       rec = (await getDeploySessionById(sessionId)) ?? rec
     } catch {
       rec = {
         ...rec,
-        lastError: errMsg,
+        step: 'failed',
+        lastError: SESSION_EXPIRED_RESTART_REQUIRED,
       }
     }
-    if (err instanceof Error && (err.message === 'session_owner_unavailable' || err.message === 'session_owner_key_missing')) {
-      // Legacy/broken session: keep status readable without failing the endpoint.
-      rec = {
-        ...rec,
-        lastError: rec.lastError || 'session_owner_unavailable',
+  } else if (!isSessionExpired(rec.expiresAt)) {
+    try {
+      await advanceDeploySession(rec, req)
+      rec = (await getDeploySessionById(sessionId)) ?? rec
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err ?? 'deploy_session_advance_failed')
+      if (err instanceof Error && (err.message === 'deploy_payload_invalid' || err.message.endsWith('_calls_invalid'))) {
+        return res.status(409).json({
+          success: false,
+          error: 'Deploy session payload is invalid or missing required stage calls. Please restart deploy session.',
+        } satisfies ApiEnvelope<null>)
       }
+      if (err instanceof Error && err.message === CONCURRENT_MODIFICATION) {
+        return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
+      }
+      if (err instanceof Error && err.message === 'cdp_endpoint_missing_on_vercel') {
+        return res.status(503).json({
+          success: false,
+          error:
+            'Deploy bundler/paymaster is not configured for this Vercel deployment. Set CDP_PAYMASTER_URL (or CDP_PAYMASTER_AND_BUNDLER_URL) to the Coinbase RPC endpoint; do not rely on same-origin /api/paymaster for server-side deploy-session calls.',
+        } satisfies ApiEnvelope<null>)
+      }
+      try {
+        let serializedErr = ''
+        try {
+          serializedErr = JSON.stringify(err)
+        } catch {
+          serializedErr = ''
+        }
+        const advanceDebug = buildUserOpErrorDebug({
+          err,
+          sessionId: rec.id,
+          stage: rec.step,
+          calls: null,
+        })
+        const revertLike =
+          isOnchainRevertLike(errMsg) ||
+          isOnchainRevertLike(serializedErr) ||
+          Boolean(advanceDebug.revertData || advanceDebug.selector)
+        await updateDeploySession({
+          id: rec.id,
+          lastError: errMsg,
+          ...(revertLike ? { payloadPatch: { lastErrorDebug: advanceDebug } } : {}),
+        })
+        rec = (await getDeploySessionById(sessionId)) ?? rec
+      } catch {
+        rec = {
+          ...rec,
+          lastError: errMsg,
+        }
+      }
+      if (err instanceof Error && (err.message === 'session_owner_unavailable' || err.message === 'session_owner_key_missing')) {
+        // Legacy/broken session: keep status readable without failing the endpoint.
+        rec = {
+          ...rec,
+          lastError: rec.lastError || 'session_owner_unavailable',
+        }
+      }
+      // Best-effort: if background advancement fails, still return current state.
     }
-    // Best-effort: if background advancement fails, still return current state.
   }
 
   return res.status(200).json({
@@ -1376,6 +1592,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         (typeof rec?.payload?.agentWalletId === 'string' && rec.payload.agentWalletId.trim()) ||
         null,
       sessionOwner: rec.sessionOwner,
+      diagnostics: buildSessionDiagnostics(rec),
     },
   } satisfies ApiEnvelope<any>)
 }

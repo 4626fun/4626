@@ -182,6 +182,92 @@ describe('deploy session optimistic concurrency', () => {
     expect(sendUserOperationMock).not.toHaveBeenCalled()
   })
 
+  it('marks expired sessions as failed and returns restart-required from continue', async () => {
+    const rec = {
+      ...makeDeploySession('created'),
+      expiresAt: new Date(Date.now() - 60_000).toISOString(),
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(410)
+    expect(String(res.body?.error ?? '')).toContain('Please restart deploy session')
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
+    expect(updateDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'sess_1',
+        step: 'failed',
+        lastError: 'session_expired_restart_required',
+        payloadPatch: expect.objectContaining({
+          sessionExpiredReason: 'session_expired_restart_required',
+        }),
+      }),
+    )
+  })
+
+  it('status auto-marks expired non-terminal sessions as failed with restart diagnostics', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_confirmed'),
+      expiresAt: new Date(Date.now() - 60_000).toISOString(),
+    }
+    const updated = {
+      ...rec,
+      step: 'failed',
+      lastError: 'session_expired_restart_required',
+      payload: {
+        sessionExpiredAt: new Date().toISOString(),
+        sessionExpiredReason: 'session_expired_restart_required',
+      },
+    }
+    getDeploySessionByIdMock.mockResolvedValueOnce(rec).mockResolvedValueOnce(updated)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('failed')
+    expect(res.body?.data?.diagnostics?.category).toBe('expired')
+    expect(res.body?.data?.diagnostics?.restartRequired).toBe(true)
+    expect(updateDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'sess_1',
+        step: 'failed',
+        lastError: 'session_expired_restart_required',
+      }),
+    )
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
+  })
+
+  it('status diagnostics report replay-skip markers', async () => {
+    const rec = {
+      ...makeDeploySession('completed'),
+      payload: {
+        replaySkipPhase2CoreAt: '2026-03-01T10:00:00.000Z',
+        replaySkipPhase2CoreReason: 'onchain_phase2_core_already_deployed',
+        replaySkipPhase2FinalizeAt: '2026-03-01T10:00:01.000Z',
+        replaySkipPhase2FinalizeReason: 'onchain_phase2_finalize_already_completed',
+      },
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.diagnostics?.category).toBe('ok')
+    expect(res.body?.data?.diagnostics?.replay?.phase2CoreSkipRecorded).toBe(true)
+    expect(res.body?.data?.diagnostics?.replay?.phase2FinalizeSkipRecorded).toBe(true)
+    expect(res.body?.data?.diagnostics?.replay?.phase2CoreSkipReason).toBe('onchain_phase2_core_already_deployed')
+    expect(res.body?.data?.diagnostics?.replay?.phase2FinalizeSkipReason).toBe(
+      'onchain_phase2_finalize_already_completed',
+    )
+  })
+
   it('allows SIWA auth when cookie session is missing', async () => {
     const rec = {
       ...makeDeploySession('completed'),
@@ -482,6 +568,104 @@ describe('deploy session optimistic concurrency', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body?.data?.step).toBe('phase2_sent')
+    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase2_core_sent', toStep: 'phase2_core_confirmed' }),
+    )
+  })
+
+  it('skips replayed phase2 core/finalize when onchain phase2 is already finalized', async () => {
+    const rec = {
+      ...makeDeploySession('phase1_finalize_confirmed'),
+      payload: JSON.stringify({
+        phase2CoreCalls: [makeCall('0xphase2coretarget')],
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
+      }),
+    }
+    const viem = await import('viem')
+    ;(viem.decodeFunctionData as any).mockReturnValue({
+      args: [
+        {
+          creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+          owner: '0x00000000000000000000000000000000000000aa',
+          vault: '0x00000000000000000000000000000000000000ab',
+          gaugeController: '0x00000000000000000000000000000000000000ac',
+          ccaStrategy: '0x00000000000000000000000000000000000000ad',
+          oracle: '0x00000000000000000000000000000000000000ae',
+          depositAmount: '5000000000000000000000000',
+        },
+      ],
+    })
+    ;(viem.createPublicClient as any).mockReturnValue({
+      readContract: vi.fn(async ({ functionName }: any) => {
+        if (functionName === 'ownerCount') return 1n
+        if (functionName === 'nextOwnerIndex') return 1n
+        if (functionName === 'ownerAtIndex') return '0xownerbytes'
+        if (functionName === 'owner') return '0x00000000000000000000000000000000000000aa'
+        return '0xownerbytes'
+      }),
+      getBytecode: vi.fn(async () => '0x60016000'),
+    })
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
+    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase1_finalize_confirmed', toStep: 'completed' }),
+    )
+  })
+
+  it('status fast-forwards replayed phase2_core_sent with missing hash and starts finalize', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_core_sent'),
+      lastUserOpHash: null,
+      payload: JSON.stringify({
+        phase2CoreCalls: [makeCall('0xphase2coretarget')],
+        phase2FinalizeCalls: [makeCall('0xphase2target')],
+      }),
+    }
+    const viem = await import('viem')
+    ;(viem.decodeFunctionData as any).mockReturnValue({
+      args: [
+        {
+          creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+          owner: '0x00000000000000000000000000000000000000aa',
+          vault: '0x00000000000000000000000000000000000000ab',
+          gaugeController: '0x00000000000000000000000000000000000000ac',
+          ccaStrategy: '0x00000000000000000000000000000000000000ad',
+          oracle: '0x00000000000000000000000000000000000000ae',
+          depositAmount: '5000000000000000000000000',
+        },
+      ],
+    })
+    ;(viem.createPublicClient as any).mockReturnValue({
+      readContract: vi.fn(async ({ functionName }: any) => {
+        if (functionName === 'ownerCount') return 1n
+        if (functionName === 'nextOwnerIndex') return 1n
+        if (functionName === 'ownerAtIndex') return '0xownerbytes'
+        if (functionName === 'owner') return '0x00000000000000000000000000000000000000bb'
+        return '0xownerbytes'
+      }),
+      getBytecode: vi.fn(async () => '0x60016000'),
+    })
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({ ...rec, step: 'phase2_sent', lastUserOpHash: '0xuserop' })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('phase2_sent')
+    expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
+    const args = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
+    expect(String(args.calls[0]?.to)).toBe('0xphase2target')
     expect(transitionDeploySessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sess_1', fromStep: 'phase2_core_sent', toStep: 'phase2_core_confirmed' }),
     )
