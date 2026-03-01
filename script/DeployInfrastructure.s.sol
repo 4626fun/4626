@@ -9,8 +9,8 @@ import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
 import {CreatorOVaultFactory} from "../contracts/factories/CreatorOVaultFactory.sol";
 
 // Shared Services
-import {CreatorLotteryManager} from "../contracts/services/lottery/CreatorLotteryManager.sol";
-import {CreatorVRFConsumerV2_5} from "../contracts/services/lottery/vrf/CreatorVRFConsumerV2_5.sol";
+import {CreatorLotteryManager} from "../contracts/utilities/lottery/CreatorLotteryManager.sol";
+import {CreatorVRFConsumerV2_5} from "../contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol";
 
 // Per-Creator Contracts (legacy script path, now retired)
 import {CreatorOVault} from "../contracts/vault/CreatorOVault.sol";
@@ -18,10 +18,10 @@ import {CreatorOVaultWrapper} from "../contracts/vault/CreatorOVaultWrapper.sol"
 import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVaultAdminModule.sol";
 import {CreatorOVaultCoreModule} from "../contracts/vault/modules/CreatorOVaultCoreModule.sol";
 import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorOVaultStrategiesModule.sol";
-import {CreatorShareOFT} from "../contracts/services/messaging/CreatorShareOFT.sol";
+import {CreatorShareOFT} from "../contracts/utilities/messaging/CreatorShareOFT.sol";
 import {CreatorGaugeController} from "../contracts/governance/CreatorGaugeController.sol";
 import {CCALaunchStrategy} from "../contracts/vault/strategies/CCALaunchStrategy.sol";
-import {CreatorOracle} from "../contracts/services/oracles/CreatorOracle.sol";
+import {CreatorOracle} from "../contracts/utilities/oracles/CreatorOracle.sol";
 
 /**
  * @title DeployInfrastructure

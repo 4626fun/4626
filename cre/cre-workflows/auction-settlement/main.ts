@@ -107,6 +107,15 @@ function readContractField(
 // HTTP helpers
 // ---------------------------------------------------------------------------
 
+function encodeJsonBody(payload: unknown): string {
+  const json = JSON.stringify(payload)
+  if (typeof btoa === "function") return btoa(json)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const maybeBuffer = (globalThis as any).Buffer
+  if (maybeBuffer?.from) return maybeBuffer.from(json, "utf8").toString("base64")
+  throw new Error("base64_encoder_unavailable")
+}
+
 function fetchUnsettledVaultsJson(
   nodeRuntime: NodeRuntime<Config>,
   httpClient: HTTPClient,
@@ -141,7 +150,7 @@ function sendSweepRequest(
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: btoa(JSON.stringify({ ccaStrategyAddress })),
+    body: encodeJsonBody({ ccaStrategyAddress }),
   }).result()
 
   const body = JSON.parse(new TextDecoder().decode(resp.body)) as {
@@ -172,7 +181,7 @@ function markSettled(
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: btoa(JSON.stringify(payload)),
+    body: encodeJsonBody(payload),
   }).result()
 
   const body = JSON.parse(new TextDecoder().decode(resp.body)) as {

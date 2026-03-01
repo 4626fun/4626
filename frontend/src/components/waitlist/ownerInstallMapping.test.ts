@@ -4,6 +4,7 @@ import {
   extractZoraCrossAppAccounts,
   extractZoraProviderAddresses,
   resolveCanonicalZoraCswCandidate,
+  selectZoraCrossAppAuthAction,
 } from './ownerInstallMapping'
 
 const ZORA_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
@@ -151,6 +152,50 @@ describe('resolveCanonicalZoraCswCandidate', () => {
       isContractAddress: async (candidate) => candidate.toLowerCase() === '0x1111111111111111111111111111111111111111',
     })
     expect(resolved).toBe('0x3333333333333333333333333333333333333333')
+  })
+})
+
+describe('selectZoraCrossAppAuthAction', () => {
+  const noop = async () => null
+
+  it('prefers link helper for authenticated users', () => {
+    expect(
+      selectZoraCrossAppAuthAction({
+        privyAuthed: true,
+        linkCrossAppAccount: noop,
+        loginWithCrossAppAccount: noop,
+      }),
+    ).toBe('link')
+  })
+
+  it('falls back to login helper when link helper is unavailable', () => {
+    expect(
+      selectZoraCrossAppAuthAction({
+        privyAuthed: true,
+        linkCrossAppAccount: null,
+        loginWithCrossAppAccount: noop,
+      }),
+    ).toBe('login')
+  })
+
+  it('uses login helper first for unauthenticated users', () => {
+    expect(
+      selectZoraCrossAppAuthAction({
+        privyAuthed: false,
+        linkCrossAppAccount: noop,
+        loginWithCrossAppAccount: noop,
+      }),
+    ).toBe('login')
+  })
+
+  it('returns null when no helper is available', () => {
+    expect(
+      selectZoraCrossAppAuthAction({
+        privyAuthed: true,
+        linkCrossAppAccount: null,
+        loginWithCrossAppAccount: null,
+      }),
+    ).toBeNull()
   })
 })
 

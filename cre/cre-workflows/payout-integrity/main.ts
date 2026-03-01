@@ -37,6 +37,12 @@ import { GaugeControllerABI } from "../contracts/abi/GaugeController"
 import { BurnStreamABI } from "../contracts/abi/BurnStream"
 import { CreatorCoinABI } from "../contracts/abi/CreatorCoin"
 import { ERC20ABI } from "../contracts/abi/ERC20"
+import {
+  createAiFallbackResult,
+  normalizeAiResult,
+  type PayoutIntegrityAlertLike,
+  type PayoutIntegrityAiResult,
+} from "../../utils/payoutIntegrityAi.js"
 
 // ---------------------------------------------------------------------------
 // Config
@@ -86,6 +92,12 @@ type MonitorResult = {
   checksRun: number
   alertsSent: number
   alerts: string[]
+  aiEnabled: boolean
+  aiVerdict: string
+  aiConfidence: number | null
+  aiSummary: string
+  aiSuggestedAction: string
+  aiProvider?: string
   error: string
 }
 
@@ -109,16 +121,26 @@ function evmRead(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     : encodeFunctionData({ abi, functionName } as any)
 
-  return evmClient
-    .callContract(runtime, {
-      call: encodeCallMsg({
-        from: zeroAddress,
-        to: address as `0x${string}`,
-        data: callData,
-      }),
-      blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
-    })
-    .result().data
+  const call = {
+    call: encodeCallMsg({
+      from: zeroAddress,
+      to: address as `0x${string}`,
+      data: callData,
+    }),
+  }
+
+  try {
+    return evmClient
+      .callContract(runtime, {
+        ...call,
+        blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
+      })
+      .result().data
+  } catch {
+    // Some public RPCs do not serve finalized historical state consistently.
+    // Fallback to latest block reads to preserve simulation reliability.
+    return evmClient.callContract(runtime, call).result().data
+  }
 }
 
 function decodeBigInt(
@@ -144,6 +166,15 @@ function decodeAddress(
 // ---------------------------------------------------------------------------
 // HTTP helpers
 // ---------------------------------------------------------------------------
+
+function encodeJsonBody(payload: unknown): string {
+  const json = JSON.stringify(payload)
+  if (typeof btoa === "function") return btoa(json)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const maybeBuffer = (globalThis as any).Buffer
+  if (maybeBuffer?.from) return maybeBuffer.from(json, "utf8").toString("base64")
+  throw new Error("base64_encoder_unavailable")
+}
 
 function fetchVaultsJson(
   nodeRuntime: NodeRuntime<Config>,
@@ -179,7 +210,7 @@ function sendAlert(
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: btoa(JSON.stringify(alert)),
+    body: encodeJsonBody(alert),
   }).result()
 
   const body = JSON.parse(new TextDecoder().decode(resp.body)) as {
@@ -189,6 +220,43 @@ function sendAlert(
   return body.success
 }
 
+type AiAssessmentRequest = {
+  vaultAddress: string
+  checksRun: number
+  alerts: PayoutIntegrityAlertLike[]
+}
+
+function requestAiAssessment(
+  nodeRuntime: NodeRuntime<Config>,
+  httpClient: HTTPClient,
+  apiKey: string,
+  request: AiAssessmentRequest,
+): PayoutIntegrityAiResult {
+  const baseUrl = nodeRuntime.config.apiBaseUrl
+
+  const resp = httpClient.sendRequest(nodeRuntime, {
+    url: `${baseUrl}/cre/keeper/aiAssess`,
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: encodeJsonBody(request),
+  }).result()
+
+  const body = JSON.parse(new TextDecoder().decode(resp.body)) as {
+    success: boolean
+    data?: unknown
+    error?: string
+  }
+
+  if (!body.success || !body.data) {
+    return createAiFallbackResult(request.alerts, body.error ?? "ai_assessment_failed")
+  }
+
+  return normalizeAiResult(body.data, request.alerts)
+}
+
 // ---------------------------------------------------------------------------
 // CRE Callback
 // ---------------------------------------------------------------------------
@@ -196,6 +264,7 @@ function sendAlert(
 const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
   const apiKeySecret = runtime.getSecret({ id: "KEEPR_API_KEY" }).result()
   const apiKey = apiKeySecret.value
+  const emptyAi = createAiFallbackResult([])
 
   runtime.log("Payout integrity monitor starting")
 
@@ -221,6 +290,12 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
       checksRun: 0,
       alertsSent: 0,
       alerts: [],
+      aiEnabled: emptyAi.enabled,
+      aiVerdict: emptyAi.verdict,
+      aiConfidence: emptyAi.confidence,
+      aiSummary: emptyAi.summary,
+      aiSuggestedAction: emptyAi.suggestedAction,
+      ...(emptyAi.provider ? { aiProvider: emptyAi.provider } : {}),
       error: "",
     }
   }
@@ -414,6 +489,23 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
   }
 
   // -----------------------------------------------------------------------
+  // AI-assisted classification (advisory only; deterministic checks remain authoritative)
+  // -----------------------------------------------------------------------
+  const aiAssessment = runtime.runInNodeMode(
+    (nr: NodeRuntime<Config>) =>
+      requestAiAssessment(nr, httpClient, apiKey, {
+        vaultAddress: vaultAddr,
+        checksRun,
+        alerts: pendingAlerts,
+      }),
+    consensusIdenticalAggregation(),
+  )().result()
+
+  runtime.log(
+    `AI assessment: enabled=${aiAssessment.enabled} verdict=${aiAssessment.verdict} confidence=${aiAssessment.confidence ?? "n/a"}`,
+  )
+
+  // -----------------------------------------------------------------------
   // Send alerts
   // -----------------------------------------------------------------------
   let alertsSent = 0
@@ -435,6 +527,12 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
     checksRun,
     alertsSent,
     alerts: pendingAlerts.map((a) => `[${a.severity}] ${a.alertType}: ${a.message}`),
+    aiEnabled: aiAssessment.enabled,
+    aiVerdict: aiAssessment.verdict,
+    aiConfidence: aiAssessment.confidence,
+    aiSummary: aiAssessment.summary,
+    aiSuggestedAction: aiAssessment.suggestedAction,
+    ...(aiAssessment.provider ? { aiProvider: aiAssessment.provider } : {}),
     error: "",
   }
 }

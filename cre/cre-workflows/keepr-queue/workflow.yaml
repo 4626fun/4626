@@ -2,6 +2,14 @@
 # Keepr Queue Executor — CRE Workflow Configuration
 # ==========================================================================
 
+local-simulation:
+  user-workflow:
+    workflow-name: "keepr-queue-local-simulation"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.local-simulation.json"
+    secrets-path: "../secrets.yaml"
+
 staging-settings:
   user-workflow:
     workflow-name: "keepr-queue-staging"

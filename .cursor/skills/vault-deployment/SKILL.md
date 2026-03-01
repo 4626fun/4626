@@ -58,7 +58,7 @@ There are multiple layers:
 - Activation / launch:
   - `contracts/helpers/batchers/VaultActivationBatcher.sol` (activates vault + can trigger launch)
 - Payout routing:
-  - `contracts/helpers/routers/PayoutRouter.sol`
+  - `contracts/utilities/routers/PayoutRouter.sol`
 - “Required approvals” reminder:
   - `docs/guides/deploy-vault.md`
   - `docs/current-contract-inventory.md`

@@ -18,7 +18,7 @@ description: Configure LayerZero V2 OFT cross-chain settings for 4626 (peers, en
 ## System Model (how OFT + LayerZero works here)
 
 - `CreatorShareOFT` is an Omnichain Fungible Token (OFT) built on LayerZero:
-  - Contract: `contracts/services/messaging/CreatorShareOFT.sol`
+  - Contract: `contracts/utilities/messaging/CreatorShareOFT.sol`
   - Constructed with a LayerZero endpoint resolved from a registry (`getLayerZeroEndpoint(chainId)`).
 - Deployment bootstrapping:
   - `contracts/helpers/infra/OFTBootstrapRegistry.sol` provides a minimal `getLayerZeroEndpoint(chainId)` used at OFT construction time.
@@ -41,7 +41,7 @@ Never include private keys or full `.env` contents in output.
 
 ## Repo Map (where to look / entrypoints)
 
-- OFT token implementation: `contracts/services/messaging/CreatorShareOFT.sol`
+- OFT token implementation: `contracts/utilities/messaging/CreatorShareOFT.sol`
 - Bootstrap endpoint registry: `contracts/helpers/infra/OFTBootstrapRegistry.sol`
 - Core registry (chain/EID mappings + endpoint lookup): `contracts/core/CreatorRegistry.sol`
 - Deployment tooling (CREATE2/bytecode infra): `script/DeployUniversalBytecodeInfra.s.sol`, `script/SimulateUniversalCreate2Factory.s.sol`

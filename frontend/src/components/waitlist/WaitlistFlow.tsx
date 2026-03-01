@@ -44,6 +44,7 @@ import {
   extractZoraCrossAppAccounts,
   extractZoraProviderAddresses,
   resolveCanonicalZoraCswCandidate,
+  selectZoraCrossAppAuthAction,
 } from './ownerInstallMapping'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -162,6 +163,7 @@ function useSafeCrossAppAccountsHook(enabled: boolean) {
     if (!enabled) {
       return {
         loginWithCrossAppAccount: null as null | ((args: { appId: string }) => Promise<unknown>),
+        linkCrossAppAccount: null as null | ((args: { appId: string }) => Promise<unknown>),
       } as any
     }
     return value
@@ -169,6 +171,7 @@ function useSafeCrossAppAccountsHook(enabled: boolean) {
     warnPrivyHookFailure('useCrossAppAccounts', error)
     return {
       loginWithCrossAppAccount: null as null | ((args: { appId: string }) => Promise<unknown>),
+      linkCrossAppAccount: null as null | ((args: { appId: string }) => Promise<unknown>),
     } as any
   }
 }
@@ -670,7 +673,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   }, privyHooksEnabled)
   const { wallets: privyWallets, ready: privyWalletsReady } = useSafeWalletsHook(privyHooksEnabled)
   const { createWallet: privyCreateWallet } = useSafeCreateWalletHook(privyHooksEnabled)
-  const { loginWithCrossAppAccount } = useSafeCrossAppAccountsHook(privyHooksEnabled)
+  const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossAppAccountsHook(privyHooksEnabled)
   const { baseAccountSdk } = useSafeBaseAccountSdkHook(privyHooksEnabled)
   const walletsReady = typeof privyWalletsReady === 'boolean' ? privyWalletsReady : true
 
@@ -788,7 +791,12 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       patchWaitlist({ mappingError: 'Create your embedded wallet first.' })
       return
     }
-    if (typeof loginWithCrossAppAccount !== 'function') {
+    const crossAppAuthAction = selectZoraCrossAppAuthAction({
+      privyAuthed,
+      linkCrossAppAccount,
+      loginWithCrossAppAccount,
+    })
+    if (!crossAppAuthAction) {
       patchWaitlist({ mappingError: 'Zora linking is unavailable in this session. Please refresh and retry.' })
       return
     }
@@ -797,7 +805,11 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     setZoraLinkBusy(true)
     patchWaitlist({ mappingError: null })
     try {
-      await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+      if (crossAppAuthAction === 'link') {
+        await linkCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+      } else {
+        await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+      }
     } catch (e: any) {
       const msg = e?.message ? String(e.message) : 'Zora linking was cancelled. Please retry.'
       patchWaitlist({ mappingError: msg })
@@ -807,8 +819,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     }
   }, [
     embeddedWalletAddress,
+    linkCrossAppAccount,
     loginWithCrossAppAccount,
     patchWaitlist,
+    privyAuthed,
     setPrivyVerifyError,
     zoraLinkBusy,
   ])

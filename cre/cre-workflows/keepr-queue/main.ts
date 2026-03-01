@@ -96,6 +96,15 @@ const RETRY_MAX_SECONDS = 600
 // HTTP helper — runs inside runInNodeMode for consensus
 // ---------------------------------------------------------------------------
 
+function encodeJsonBody(payload: unknown): string {
+  const json = JSON.stringify(payload)
+  if (typeof btoa === "function") return btoa(json)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const maybeBuffer = (globalThis as any).Buffer
+  if (maybeBuffer?.from) return maybeBuffer.from(json, "utf8").toString("base64")
+  throw new Error("base64_encoder_unavailable")
+}
+
 function fetchPendingActions(
   nodeRuntime: NodeRuntime<Config>,
   httpClient: HTTPClient,
@@ -148,7 +157,7 @@ function fetchPendingActions(
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: btoa(JSON.stringify({ id: action.id, status: "executing" })),
+      body: encodeJsonBody({ id: action.id, status: "executing" }),
     }).result()
 
     const claimBody = JSON.parse(
@@ -169,15 +178,13 @@ function fetchPendingActions(
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: btoa(
-        JSON.stringify({
-          id: action.id,
-          vaultAddress: action.vaultAddress,
-          groupId: action.groupId,
-          actionType: action.actionType,
-          action: action.action,
-        }),
-      ),
+      body: encodeJsonBody({
+        id: action.id,
+        vaultAddress: action.vaultAddress,
+        groupId: action.groupId,
+        actionType: action.actionType,
+        action: action.action,
+      }),
     }).result()
 
     const execBody = JSON.parse(
@@ -192,7 +199,7 @@ function fetchPendingActions(
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        body: btoa(JSON.stringify({ id: action.id, status: "executed" })),
+        body: encodeJsonBody({ id: action.id, status: "executed" }),
       }).result()
       const doneBody = JSON.parse(
         new TextDecoder().decode(doneResp.body),
@@ -219,12 +226,12 @@ function fetchPendingActions(
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        body: btoa(JSON.stringify({
+        body: encodeJsonBody({
           id: action.id,
           status: "retry",
           error: execBody.data?.error ?? execBody.error ?? "execution_failed",
           retryDelaySeconds,
-        })),
+        }),
       }).result()
       const retryBody = JSON.parse(
         new TextDecoder().decode(retryResp.body),
@@ -242,11 +249,11 @@ function fetchPendingActions(
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        body: btoa(JSON.stringify({
+        body: encodeJsonBody({
           id: action.id,
           status: "failed",
           error: execBody.data?.error ?? execBody.error ?? "execution_failed",
-        })),
+        }),
       }).result()
       const failBody = JSON.parse(
         new TextDecoder().decode(failResp.body),

@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
 
-import {ChainlinkVRFIntegratorV2_5} from "../contracts/services/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol";
+import {ChainlinkVRFIntegratorV2_5} from "../contracts/utilities/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol";
 
 /**
  * @title DeployVRFIntegratorSpoke

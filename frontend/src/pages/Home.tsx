@@ -217,8 +217,7 @@ export function Home() {
                   this mints <span className="font-mono text-brand-primary">5,000,000 {SHARE_TOKEN}</span> and runs a{' '}
                   <span className="text-uniswap">Uniswap CCA</span> auction.
                 </p>
-                <p>Then the vault deploys deposits across liquidity, lending, and reserve strategies.</p>
-              </div>
+                </div>
               {showDeployVaultCta ? (
                 <div>
                   <Link to="/deploy" className={heroCtaClass}>
@@ -283,13 +282,14 @@ export function Home() {
             className="mb-10 sm:mb-20"
           >
             <span className="label">Vault Strategies</span>
-            <h2 className="headline text-3xl sm:text-4xl lg:text-5xl mt-4 sm:mt-6">Deploy across on-chain strategies</h2>
+            <h2 className="headline text-3xl sm:text-4xl lg:text-5xl mt-4 sm:mt-6">Default strategy allocation</h2>
             <p className="text-zinc-600 text-[13px] sm:text-sm font-light max-w-xl mt-3 sm:mt-4">
-              Deployed across liquidity, lending, and a reserve—designed to capture fees and yield.
+              Current launch config allocates 30% to Charm LP, 30% to Ajna lending, 30% as Solana reserve,
+              and keeps 10% idle in-vault for withdrawal flexibility.
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-3 gap-px bg-vault-card/60">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-vault-card/60">
             <motion.div
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
@@ -297,9 +297,19 @@ export function Home() {
               transition={{ duration: 0.4 }}
               className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
             >
-              <span className="label text-[9px] sm:text-[10px]">CREATOR/USDC LP</span>
-              <div className="value mono text-xl sm:text-3xl lg:text-4xl glow-brand">69%</div>
-              <div className="text-zinc-600 text-[10px] sm:text-xs font-light">Liquidity</div>
+              <div className="inline-flex items-center gap-1.5">
+                <img
+                  src="/protocols/charm.png"
+                  alt="Charm"
+                  width={14}
+                  height={14}
+                  className="w-3.5 h-3.5 rounded-sm opacity-90"
+                  loading="lazy"
+                />
+                <span className="label text-[9px] sm:text-[10px]">Charm</span>
+              </div>
+              <div className="value mono text-xl sm:text-3xl lg:text-4xl glow-brand">30%</div>
+              <div className="text-zinc-600 text-[10px] sm:text-xs font-light">CREATOR/USDC Uniswap V3 LP</div>
             </motion.div>
 
             <motion.div
@@ -309,9 +319,19 @@ export function Home() {
               transition={{ duration: 0.4, delay: 0.1 }}
               className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
             >
-              <span className="label text-[9px] sm:text-[10px]">Ajna</span>
-              <div className="value mono text-xl sm:text-3xl lg:text-4xl glow-brand">21.39%</div>
-              <div className="text-zinc-600 text-[10px] sm:text-xs font-light">Lending</div>
+              <div className="inline-flex items-center gap-1.5">
+                <img
+                  src="/protocols/ajna.svg"
+                  alt="Ajna"
+                  width={14}
+                  height={14}
+                  className="w-3.5 h-3.5 opacity-90"
+                  loading="lazy"
+                />
+                <span className="label text-[9px] sm:text-[10px]">Ajna</span>
+              </div>
+              <div className="value mono text-xl sm:text-3xl lg:text-4xl glow-brand">30%</div>
+              <div className="text-zinc-600 text-[10px] sm:text-xs font-light">Permissionless Lending</div>
             </motion.div>
 
             <motion.div
@@ -321,11 +341,36 @@ export function Home() {
               transition={{ duration: 0.4, delay: 0.2 }}
               className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
             >
-              <span className="label text-[9px] sm:text-[10px]">Reserve</span>
-              <div className="value mono text-xl sm:text-3xl lg:text-4xl">9.61%</div>
-              <div className="text-zinc-600 text-[10px] sm:text-xs font-light">Idle</div>
+              <div className="inline-flex items-center gap-1.5">
+                <img
+                  src="/protocols/solana.svg"
+                  alt="Solana"
+                  width={16}
+                  height={14}
+                  className="h-3.5 w-auto opacity-90"
+                  loading="lazy"
+                />
+                <span className="label text-[9px] sm:text-[10px]">Solana</span>
+              </div>
+              <div className="value mono text-xl sm:text-3xl lg:text-4xl">30%</div>
+              <div className="text-zinc-600 text-[10px] sm:text-xs font-light">Reserved for Solana route flow</div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.4, delay: 0.3 }}
+              className="bg-black p-4 sm:p-8 space-y-2 sm:space-y-4"
+            >
+              <span className="label text-[9px] sm:text-[10px]">Idle Buffer</span>
+              <div className="value mono text-xl sm:text-3xl lg:text-4xl">10%</div>
+              <div className="text-zinc-600 text-[10px] sm:text-xs font-light">Kept liquid for operations/withdrawals</div>
             </motion.div>
           </div>
+          <div className="mt-4 text-[11px] sm:text-xs text-zinc-600 font-light">
+              <span className="font-mono text-zinc-400">Strategies deploy underlying TOKEN = creator coin ·{' '} </span> not the ■TOKEN = vault share token 
+         </div>
         </div>
       </section>
 
@@ -342,7 +387,7 @@ export function Home() {
             <span className="label">FAQ</span>
             <h2 className="headline text-3xl sm:text-4xl lg:text-5xl mt-2">See the full walkthrough</h2>
             <p className="text-zinc-600 text-[13px] sm:text-sm font-light max-w-xl">
-              Minimum deposit → Uniswap CCA → vault strategies.
+              Deposit → CCA launch → 30/30/40 allocation model → redeem.
             </p>
             <div>
               <Link to="/faq/how-it-works" className="btn-primary inline-flex items-center">

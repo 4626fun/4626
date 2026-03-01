@@ -61,6 +61,10 @@ vi.mock('../../server/_lib/privyWalletApi.js', () => ({
 vi.mock('viem', () => ({
   getAddress: (value: string) => String(value).toLowerCase(),
   isAddress: (value: string) => /^0x[a-fA-F0-9]{40}$/.test(String(value)),
+  decodeEventLog: vi.fn(() => ({
+    eventName: 'AuctionLaunchedDeferred',
+    args: {},
+  })),
   decodeFunctionData: vi.fn(() => ({
     args: [
       {
@@ -499,7 +503,7 @@ describe('deploy session optimistic concurrency', () => {
     )
   })
 
-  it('status advances phase3_sent to phase4_sent when phase4 calls exist', async () => {
+  it('status blocks phase3_sent advancement when phase3 call is not deployPhase3Strategies', async () => {
     const rec = {
       ...makeDeploySession('phase3_sent'),
       payload: {
@@ -510,7 +514,7 @@ describe('deploy session optimistic concurrency', () => {
     }
     getDeploySessionByIdMock
       .mockResolvedValueOnce(rec)
-      .mockResolvedValueOnce({ ...rec, step: 'phase4_sent', lastUserOpHash: '0xuserop' })
+      .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastError: 'phase3 verification failed' })
     transitionDeploySessionMock.mockResolvedValue(true)
 
     const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
@@ -518,10 +522,9 @@ describe('deploy session optimistic concurrency', () => {
     await statusHandler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(res.body?.data?.step).toBe('phase4_sent')
-    expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
-    const args = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
-    expect(String(args.calls[0]?.to)).toBe('0xphase4target')
+    expect(res.body?.data?.step).toBe('phase3_sent')
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
+    expect(updateDeploySessionMock).toHaveBeenCalled()
   })
 
   it('continue honors required downstream stages when payload is stringified JSON', async () => {
@@ -1262,15 +1265,265 @@ describe('deploy session optimistic concurrency', () => {
     }
   })
 
-  it('status advances phase4_sent to completed', async () => {
+  it('status blocks phase3_sent completion when strategy post-check fails', async () => {
+    const rec = {
+      ...makeDeploySession('phase3_sent'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
+        phase3Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase3deploy')],
+        phase4Calls: [makeCall('0xphase4target')],
+      }),
+      lastUserOpHash: `0x${'2'.repeat(64)}`,
+    }
+    const viem = await import('viem')
+    ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
+      if (String(data) === '0xphase3deploy') {
+        return {
+          functionName: 'deployPhase3Strategies',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault: '0x3000000000000000000000000000000000000003',
+              version: 'v1.4.3',
+              charmWeightBps: 3000n,
+              ajnaWeightBps: 3000n,
+            },
+          ],
+        }
+      }
+      if (String(data) === '0xphase2finalize') {
+        return {
+          functionName: 'finalizePhase2',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault: '0x3000000000000000000000000000000000000003',
+              gaugeController: '0x4000000000000000000000000000000000000004',
+              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              oracle: '0x6000000000000000000000000000000000000006',
+              depositAmount: '5000000000000000000000000',
+            },
+          ],
+        }
+      }
+      return {
+        args: [
+          {
+            creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+            depositAmount: '5000000000000000000000000',
+          },
+        ],
+      }
+    })
+    ;(viem.createPublicClient as any).mockReturnValue({
+      readContract: vi.fn(async ({ functionName, args }: any) => {
+        switch (functionName) {
+          case 'strategyList':
+            // Return only a zero-address placeholder to simulate missing strategy wiring.
+            return Number(args?.[0] ?? 0n) === 0 ? '0x0000000000000000000000000000000000000000' : '0xownerbytes'
+          case 'strategyWeights':
+            return 0n
+          default:
+            return '0xownerbytes'
+        }
+      }),
+      getBytecode: vi.fn(async () => '0x'),
+    })
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastError: 'phase3 verification failed' })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('phase3_sent')
+    expect(transitionDeploySessionMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase3_sent', toStep: 'phase3_confirmed' }),
+    )
+    expect(updateDeploySessionMock).toHaveBeenCalled()
+  })
+
+  it('status blocks phase4_sent completion when CCA/Uniswap post-check fails', async () => {
     const rec = {
       ...makeDeploySession('phase4_sent'),
-      payload: {
-        phase2Calls: [],
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
         phase3Calls: [makeCall('0xphase3target')],
-        phase4Calls: [makeCall('0xphase4target')],
-      },
+        phase4Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase4launch')],
+      }),
+      lastUserOpHash: `0x${'3'.repeat(64)}`,
     }
+    const viem = await import('viem')
+    ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
+      if (String(data) === '0xphase4launch') {
+        return {
+          functionName: 'launchDeferredAuction',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              shareOFT: '0x7000000000000000000000000000000000000007',
+              version: 'v1.4.3',
+              floorPriceQ96: 1n,
+              requiredRaise: 1n,
+              auctionSteps: '0x1234',
+            },
+          ],
+        }
+      }
+      if (String(data) === '0xphase2finalize') {
+        return {
+          functionName: 'finalizePhase2',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault: '0x3000000000000000000000000000000000000003',
+              gaugeController: '0x4000000000000000000000000000000000000004',
+              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              oracle: '0x6000000000000000000000000000000000000006',
+              depositAmount: '5000000000000000000000000',
+            },
+          ],
+        }
+      }
+      return {
+        args: [
+          {
+            creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+            depositAmount: '5000000000000000000000000',
+          },
+        ],
+      }
+    })
+    ;(viem.createPublicClient as any).mockReturnValue({
+      readContract: vi.fn(async ({ functionName }: any) => {
+        switch (functionName) {
+          case 'currentAuction':
+            // Zero auction -> should fail phase4 verification once implemented.
+            return '0x0000000000000000000000000000000000000000'
+          default:
+            return '0xownerbytes'
+        }
+      }),
+      getBytecode: vi.fn(async () => '0x'),
+    })
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({ ...rec, step: 'phase4_sent', lastError: 'phase4 verification failed' })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('phase4_sent')
+    expect(transitionDeploySessionMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase4_sent', toStep: 'phase4_confirmed' }),
+    )
+    expect(updateDeploySessionMock).toHaveBeenCalled()
+  })
+
+  it('status advances phase3_sent when strategy post-check succeeds', async () => {
+    const rec = {
+      ...makeDeploySession('phase3_sent'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
+        phase3Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase3deploy')],
+        phase4Calls: [],
+      }),
+      lastUserOpHash: `0x${'4'.repeat(64)}`,
+    }
+    const viem = await import('viem')
+    const charmStrategy = '0x8000000000000000000000000000000000000008'
+    const ajnaStrategy = '0x9000000000000000000000000000000000000009'
+    const charmVault = '0xa00000000000000000000000000000000000000a'
+    const v3Factory = '0xb00000000000000000000000000000000000000b'
+    const usdc = '0xc00000000000000000000000000000000000000c'
+    const v3Pool = '0xd00000000000000000000000000000000000000d'
+    const vault = '0x3000000000000000000000000000000000000003'
+    ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
+      if (String(data) === '0xphase3deploy') {
+        return {
+          functionName: 'deployPhase3Strategies',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault,
+              version: 'v1.4.3',
+              charmWeightBps: 3000n,
+              ajnaWeightBps: 3000n,
+            },
+          ],
+        }
+      }
+      if (String(data) === '0xphase2finalize') {
+        return {
+          functionName: 'finalizePhase2',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault,
+              gaugeController: '0x4000000000000000000000000000000000000004',
+              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              oracle: '0x6000000000000000000000000000000000000006',
+              depositAmount: '5000000000000000000000000',
+            },
+          ],
+        }
+      }
+      return {
+        args: [
+          {
+            creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+            depositAmount: '5000000000000000000000000',
+          },
+        ],
+      }
+    })
+    ;(viem.createPublicClient as any).mockReturnValue({
+      readContract: vi.fn(async ({ functionName, args, address }: any) => {
+        switch (functionName) {
+          case 'strategyList':
+            if (Number(args?.[0] ?? 0n) === 0) return charmStrategy
+            if (Number(args?.[0] ?? 0n) === 1) return ajnaStrategy
+            return '0xownerbytes'
+          case 'strategyWeights':
+            if (String(args?.[0] ?? '').toLowerCase() === charmStrategy.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === ajnaStrategy.toLowerCase()) return 3000n
+            return 0n
+          case 'charmVault':
+            if (String(address ?? '').toLowerCase() === charmStrategy.toLowerCase()) return charmVault
+            throw new Error('not_charm_strategy')
+          case 'uniswapV3Factory':
+            return v3Factory
+          case 'usdc':
+            return usdc
+          case 'getPool':
+            return v3Pool
+          default:
+            return '0xownerbytes'
+        }
+      }),
+      getBytecode: vi.fn(async ({ address }: any) => {
+        const withCode = new Set([
+          vault.toLowerCase(),
+          charmStrategy.toLowerCase(),
+          ajnaStrategy.toLowerCase(),
+          charmVault.toLowerCase(),
+          v3Pool.toLowerCase(),
+        ])
+        return withCode.has(String(address ?? '').toLowerCase()) ? '0x6001' : '0x'
+      }),
+    })
     getDeploySessionByIdMock
       .mockResolvedValueOnce(rec)
       .mockResolvedValueOnce({ ...rec, step: 'completed', lastTxHash: '0xtxhash' })
@@ -1282,7 +1535,234 @@ describe('deploy session optimistic concurrency', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body?.data?.step).toBe('completed')
+    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase3_sent', toStep: 'phase3_confirmed' }),
+    )
+  })
+
+  it('status advances phase4_sent when CCA/Uniswap post-check succeeds', async () => {
+    const rec = {
+      ...makeDeploySession('phase4_sent'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase4launch')],
+      }),
+      lastUserOpHash: `0x${'5'.repeat(64)}`,
+    }
+    const viem = await import('viem')
+    const shareOft = '0x7000000000000000000000000000000000000007'
+    const ccaStrategy = '0x5000000000000000000000000000000000000005'
+    const auction = '0xe00000000000000000000000000000000000000e'
+    const ccaFactory = '0xf00000000000000000000000000000000000000f'
+    ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
+      if (String(data) === '0xphase4launch') {
+        return {
+          functionName: 'launchDeferredAuction',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              shareOFT: shareOft,
+              version: 'v1.4.3',
+              floorPriceQ96: 1n,
+              requiredRaise: 1n,
+              auctionSteps: '0x1234',
+            },
+          ],
+        }
+      }
+      if (String(data) === '0xphase2finalize') {
+        return {
+          functionName: 'finalizePhase2',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault: '0x3000000000000000000000000000000000000003',
+              gaugeController: '0x4000000000000000000000000000000000000004',
+              ccaStrategy,
+              oracle: '0x6000000000000000000000000000000000000006',
+              depositAmount: '5000000000000000000000000',
+            },
+          ],
+        }
+      }
+      return {
+        args: [
+          {
+            creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+            depositAmount: '5000000000000000000000000',
+          },
+        ],
+      }
+    })
+    ;(viem.createPublicClient as any).mockReturnValue({
+      readContract: vi.fn(async ({ functionName }: any) => {
+        switch (functionName) {
+          case 'currentAuction':
+            return auction
+          case 'ccaFactory':
+            return ccaFactory
+          case 'isGraduated':
+            return false
+          case 'totalSupply':
+            return 1000n
+          default:
+            return '0xownerbytes'
+        }
+      }),
+      getBytecode: vi.fn(async ({ address }: any) => {
+        const withCode = new Set([
+          shareOft.toLowerCase(),
+          ccaStrategy.toLowerCase(),
+          auction.toLowerCase(),
+          ccaFactory.toLowerCase(),
+        ])
+        return withCode.has(String(address ?? '').toLowerCase()) ? '0x6001' : '0x'
+      }),
+    })
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({ ...rec, step: 'completed', lastTxHash: '0xtxhash' })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('completed')
+    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase4_sent', toStep: 'phase4_confirmed' }),
+    )
+  })
+
+  it('status advances phase4_sent from launch event fallback without phase2 finalize payload', async () => {
+    const rec = {
+      ...makeDeploySession('phase4_sent'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [],
+        phase3Calls: [],
+        phase4Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase4launch')],
+      }),
+      lastUserOpHash: `0x${'6'.repeat(64)}`,
+    }
+    const viem = await import('viem')
+    const shareOft = '0x7000000000000000000000000000000000000007'
+    const ccaStrategy = '0x5000000000000000000000000000000000000005'
+    const auction = '0xe00000000000000000000000000000000000000e'
+    const ccaFactory = '0xf00000000000000000000000000000000000000f'
+    ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
+      if (String(data) === '0xphase4launch') {
+        return {
+          functionName: 'launchDeferredAuction',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              shareOFT: shareOft,
+              version: 'v1.4.3',
+              floorPriceQ96: 1n,
+              requiredRaise: 1n,
+              auctionSteps: '0x1234',
+            },
+          ],
+        }
+      }
+      return {
+        args: [
+          {
+            creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+            depositAmount: '5000000000000000000000000',
+          },
+        ],
+      }
+    })
+    ;(viem.decodeEventLog as any).mockImplementation(() => ({
+      eventName: 'AuctionLaunchedDeferred',
+      args: {
+        creatorToken: '0x1000000000000000000000000000000000000001',
+        owner: '0x2000000000000000000000000000000000000002',
+        shareOFT: shareOft,
+        ccaStrategy,
+        amount: 1000n,
+        auction,
+      },
+    }))
+    ;(viem.createPublicClient as any).mockReturnValue({
+      readContract: vi.fn(async ({ functionName }: any) => {
+        switch (functionName) {
+          case 'currentAuction':
+            // Force event fallback path.
+            return '0x0000000000000000000000000000000000000000'
+          case 'ccaFactory':
+            return ccaFactory
+          case 'isGraduated':
+            return false
+          case 'totalSupply':
+            return 1000n
+          default:
+            return '0xownerbytes'
+        }
+      }),
+      getBytecode: vi.fn(async ({ address }: any) => {
+        const withCode = new Set([
+          shareOft.toLowerCase(),
+          ccaStrategy.toLowerCase(),
+          auction.toLowerCase(),
+          ccaFactory.toLowerCase(),
+        ])
+        return withCode.has(String(address ?? '').toLowerCase()) ? '0x6001' : '0x'
+      }),
+      getTransactionReceipt: vi.fn(async () => ({
+        logs: [
+          {
+            address: '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753',
+            data: '0x',
+            topics: ['0x'],
+          },
+        ],
+      })),
+    })
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({ ...rec, step: 'completed', lastTxHash: '0xtxhash' })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('completed')
+    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase4_sent', toStep: 'phase4_confirmed' }),
+    )
+  })
+
+  it('status blocks phase4_sent completion when phase4 call is not launchDeferredAuction', async () => {
+    const rec = {
+      ...makeDeploySession('phase4_sent'),
+      payload: {
+        phase2Calls: [],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xphase4target')],
+      },
+    }
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({ ...rec, step: 'phase4_sent', lastError: 'phase4 verification failed' })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('phase4_sent')
     expect(sendUserOperationMock).not.toHaveBeenCalled()
+    expect(updateDeploySessionMock).toHaveBeenCalled()
   })
 
   it('persists server-side revert debug on continue reverts (no debug blob leaked)', async () => {

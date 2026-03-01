@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
 
-import {SolanaBridgeAdapter} from "../contracts/services/bridge/SolanaBridgeAdapter.sol";
+import {SolanaBridgeAdapter} from "../contracts/utilities/bridge/SolanaBridgeAdapter.sol";
 
 interface ILotteryManagerAdmin {
     function authorizedSwapContracts(address swapContract) external view returns (bool);

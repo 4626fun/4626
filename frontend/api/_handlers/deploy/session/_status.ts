@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { decodeFunctionData, getAddress, isAddress, type Address, type Hex, type SignableMessage } from 'viem'
+import { decodeEventLog, decodeFunctionData, getAddress, isAddress, type Address, type Hex, type SignableMessage } from 'viem'
 import { createPublicClient, encodeAbiParameters, encodeFunctionData, http } from 'viem'
 import { privateKeyToAccount, toAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
@@ -322,6 +322,173 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
   },
 ] as const
 
+const CREATOR_VAULT_BATCHER_DEPLOY_PHASE3_STRATEGIES_ABI = [
+  {
+    type: 'function',
+    name: 'deployPhase3Strategies',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'initialSqrtPriceX96', type: 'uint160' },
+          { name: 'charmVaultName', type: 'string' },
+          { name: 'charmVaultSymbol', type: 'string' },
+          { name: 'charmWeightBps', type: 'uint256' },
+          { name: 'ajnaWeightBps', type: 'uint256' },
+          { name: 'enableAutoAllocate', type: 'bool' },
+        ],
+      },
+      {
+        name: 'codeIds',
+        type: 'tuple',
+        components: [
+          { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
+          { name: 'creatorCharmStrategy', type: 'bytes32' },
+          { name: 'ajnaStrategy', type: 'bytes32' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
+const CREATOR_VAULT_BATCHER_LAUNCH_DEFERRED_AUCTION_ABI = [
+  {
+    type: 'function',
+    name: 'launchDeferredAuction',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'auctionSteps', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [{ name: 'auction', type: 'address' }],
+  },
+] as const
+
+const CREATOR_VAULT_BATCHER_PHASE3_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'uniswapV3Factory',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'usdc',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const UNISWAP_V3_FACTORY_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'getPool',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'tokenA', type: 'address' },
+      { name: 'tokenB', type: 'address' },
+      { name: 'fee', type: 'uint24' },
+    ],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const CREATOR_OVAULT_STRATEGY_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'strategyList',
+    stateMutability: 'view',
+    inputs: [{ name: 'index', type: 'uint256' }],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'strategyWeights',
+    stateMutability: 'view',
+    inputs: [{ name: 'strategy', type: 'address' }],
+    outputs: [{ type: 'uint256' }],
+  },
+] as const
+
+const CREATOR_CHARM_STRATEGY_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'charmVault',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const CCA_STRATEGY_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'currentAuction',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'ccaFactory',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const CONTINUOUS_CCA_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'isGraduated',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'totalSupply',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint128' }],
+  },
+] as const
+
+const CREATOR_VAULT_BATCHER_AUCTION_LAUNCHED_EVENT_ABI = [
+  {
+    type: 'event',
+    name: 'AuctionLaunchedDeferred',
+    inputs: [
+      { indexed: true, name: 'creatorToken', type: 'address' },
+      { indexed: true, name: 'owner', type: 'address' },
+      { indexed: true, name: 'shareOFT', type: 'address' },
+      { indexed: false, name: 'ccaStrategy', type: 'address' },
+      { indexed: false, name: 'amount', type: 'uint256' },
+      { indexed: false, name: 'auction', type: 'address' },
+    ],
+  },
+] as const
+
 function asOwnerBytes(owner: Address): Hex {
   return encodeAbiParameters([{ type: 'address' }], [owner]) as Hex
 }
@@ -515,6 +682,12 @@ function parseBigIntLike(value: unknown): bigint | null {
   return null
 }
 
+function normalizeAddress(value: unknown): Address | null {
+  if (typeof value !== 'string' || !isAddress(value)) return null
+  const addr = getAddress(value as Address)
+  return addr.toLowerCase() === ZERO_ADDRESS.toLowerCase() ? null : addr
+}
+
 function extractFinalizePhase2Info(data: Hex): {
   creatorToken: Address | null
   depositAmount: bigint | null
@@ -544,11 +717,6 @@ function extractFinalizePhase2Info(data: Hex): {
           ? creatorTokenCandidate
           : null
       if (!creatorToken) continue
-      const normalizeAddress = (value: unknown): Address | null => {
-        if (typeof value !== 'string' || !isAddress(value)) return null
-        const addr = getAddress(value as Address)
-        return addr.toLowerCase() === ZERO_ADDRESS.toLowerCase() ? null : addr
-      }
       return {
         creatorToken,
         depositAmount: parseBigIntLike(params?.depositAmount),
@@ -631,6 +799,377 @@ async function readPhase2ReplayState(params: {
   return {
     phase2CoreAlreadyDeployed,
     phase2FinalizeAlreadyCompleted,
+  }
+}
+
+function extractPhase3DeployInfo(calls: Array<{ to: Address; value: bigint; data: Hex }>): {
+  batcher: Address
+  creatorToken: Address
+  owner: Address
+  vault: Address
+  charmWeightBps: bigint
+  ajnaWeightBps: bigint
+} | null {
+  for (const call of calls) {
+    try {
+      const decoded = decodeFunctionData({
+        abi: CREATOR_VAULT_BATCHER_DEPLOY_PHASE3_STRATEGIES_ABI,
+        data: call.data,
+      })
+      if (decoded.functionName !== 'deployPhase3Strategies') continue
+      const params = (decoded.args?.[0] ?? null) as
+        | {
+            creatorToken?: unknown
+            owner?: unknown
+            vault?: unknown
+            charmWeightBps?: unknown
+            ajnaWeightBps?: unknown
+          }
+        | null
+      const creatorToken = normalizeAddress(params?.creatorToken)
+      const owner = normalizeAddress(params?.owner)
+      const vault = normalizeAddress(params?.vault)
+      const charmWeightBps = parseBigIntLike(params?.charmWeightBps)
+      const ajnaWeightBps = parseBigIntLike(params?.ajnaWeightBps)
+      if (!creatorToken || !owner || !vault || charmWeightBps == null || ajnaWeightBps == null) continue
+      return {
+        batcher: call.to,
+        creatorToken,
+        owner,
+        vault,
+        charmWeightBps,
+        ajnaWeightBps,
+      }
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
+function extractPhase4LaunchInfo(calls: Array<{ to: Address; value: bigint; data: Hex }>): {
+  batcher: Address
+  creatorToken: Address
+  owner: Address
+  shareOFT: Address
+} | null {
+  for (const call of calls) {
+    try {
+      const decoded = decodeFunctionData({
+        abi: CREATOR_VAULT_BATCHER_LAUNCH_DEFERRED_AUCTION_ABI,
+        data: call.data,
+      })
+      if (decoded.functionName !== 'launchDeferredAuction') continue
+      const params = (decoded.args?.[0] ?? null) as
+        | {
+            creatorToken?: unknown
+            owner?: unknown
+            shareOFT?: unknown
+          }
+        | null
+      const creatorToken = normalizeAddress(params?.creatorToken)
+      const owner = normalizeAddress(params?.owner)
+      const shareOFT = normalizeAddress(params?.shareOFT)
+      if (!creatorToken || !owner || !shareOFT) continue
+      return {
+        batcher: call.to,
+        creatorToken,
+        owner,
+        shareOFT,
+      }
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
+async function readVaultActiveStrategies(params: {
+  publicClient: any
+  vault: Address
+  maxScan?: number
+}): Promise<Array<{ strategy: Address; weight: bigint }>> {
+  const out: Array<{ strategy: Address; weight: bigint }> = []
+  const seen = new Set<string>()
+  const maxScan = Number.isFinite(params.maxScan as number) ? Math.max(1, Number(params.maxScan)) : 6
+  for (let i = 0; i < maxScan; i++) {
+    const strategyRaw = await params.publicClient
+      .readContract({
+        address: params.vault,
+        abi: CREATOR_OVAULT_STRATEGY_VIEW_ABI,
+        functionName: 'strategyList',
+        args: [BigInt(i)],
+      })
+      .catch(() => null)
+    const strategy = normalizeAddress(strategyRaw)
+    if (!strategy) break
+    const key = strategy.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    const weightRaw = await params.publicClient
+      .readContract({
+        address: params.vault,
+        abi: CREATOR_OVAULT_STRATEGY_VIEW_ABI,
+        functionName: 'strategyWeights',
+        args: [strategy],
+      })
+      .catch(() => 0n)
+    const weight = parseBigIntLike(weightRaw) ?? 0n
+    if (weight > 0n) out.push({ strategy, weight })
+  }
+  return out
+}
+
+async function readCharmVaultAddress(params: {
+  publicClient: any
+  strategy: Address
+}): Promise<Address | null> {
+  const charmVaultRaw = await params.publicClient
+    .readContract({
+      address: params.strategy,
+      abi: CREATOR_CHARM_STRATEGY_VIEW_ABI,
+      functionName: 'charmVault',
+    })
+    .catch(() => null)
+  return normalizeAddress(charmVaultRaw)
+}
+
+async function verifyPhase3PostState(params: {
+  publicClient: any
+  phase3Calls: Array<{ to: Address; value: bigint; data: Hex }>
+}): Promise<void> {
+  const info = extractPhase3DeployInfo(params.phase3Calls)
+  if (!info) {
+    throw new Error('phase3 verification failed: phase3Calls missing deployPhase3Strategies')
+  }
+
+  if (!(await hasRuntimeCode(params.publicClient, info.vault))) {
+    throw new Error(`phase3 verification failed: vault code missing at ${info.vault}`)
+  }
+
+  const [v3FactoryRaw, usdcRaw] = await Promise.all([
+    params.publicClient
+      .readContract({
+        address: info.batcher,
+        abi: CREATOR_VAULT_BATCHER_PHASE3_VIEW_ABI,
+        functionName: 'uniswapV3Factory',
+      })
+      .catch(() => null),
+    params.publicClient
+      .readContract({
+        address: info.batcher,
+        abi: CREATOR_VAULT_BATCHER_PHASE3_VIEW_ABI,
+        functionName: 'usdc',
+      })
+      .catch(() => null),
+  ])
+  const v3Factory = normalizeAddress(v3FactoryRaw)
+  const usdc = normalizeAddress(usdcRaw)
+  if (!v3Factory || !usdc) {
+    throw new Error('phase3 verification failed: batcher v3 config is missing')
+  }
+
+  const v3PoolRaw = await params.publicClient
+    .readContract({
+      address: v3Factory,
+      abi: UNISWAP_V3_FACTORY_VIEW_ABI,
+      functionName: 'getPool',
+      args: [info.creatorToken, usdc, 3000],
+    })
+    .catch(() => null)
+  const v3Pool = normalizeAddress(v3PoolRaw)
+  if (!v3Pool || !(await hasRuntimeCode(params.publicClient, v3Pool))) {
+    throw new Error('phase3 verification failed: CREATOR/USDC v3 pool missing')
+  }
+
+  const strategies = await readVaultActiveStrategies({
+    publicClient: params.publicClient,
+    vault: info.vault,
+    maxScan: 8,
+  })
+  if (strategies.length === 0) {
+    throw new Error('phase3 verification failed: no active strategies found on vault')
+  }
+
+  const strategyDetails = await Promise.all(
+    strategies.map(async (entry) => ({
+      ...entry,
+      charmVault: await readCharmVaultAddress({ publicClient: params.publicClient, strategy: entry.strategy }),
+    })),
+  )
+  const charm = strategyDetails.find((entry) => Boolean(entry.charmVault))
+  if (!charm) {
+    throw new Error('phase3 verification failed: charm strategy not registered on vault')
+  }
+  if (charm.weight < info.charmWeightBps) {
+    throw new Error(
+      `phase3 verification failed: charm strategy weight ${charm.weight.toString()} below expected ${info.charmWeightBps.toString()}`,
+    )
+  }
+  if (!(await hasRuntimeCode(params.publicClient, charm.strategy))) {
+    throw new Error(`phase3 verification failed: charm strategy code missing at ${charm.strategy}`)
+  }
+  if (!(await hasRuntimeCode(params.publicClient, charm.charmVault ?? null))) {
+    throw new Error(`phase3 verification failed: charm vault code missing at ${String(charm.charmVault ?? '')}`)
+  }
+
+  if (info.ajnaWeightBps > 0n) {
+    const ajna = strategyDetails.find((entry) => entry.strategy.toLowerCase() !== charm.strategy.toLowerCase())
+    if (!ajna) {
+      throw new Error('phase3 verification failed: ajna strategy not registered on vault')
+    }
+    if (ajna.weight < info.ajnaWeightBps) {
+      throw new Error(
+        `phase3 verification failed: ajna strategy weight ${ajna.weight.toString()} below expected ${info.ajnaWeightBps.toString()}`,
+      )
+    }
+    if (!(await hasRuntimeCode(params.publicClient, ajna.strategy))) {
+      throw new Error(`phase3 verification failed: ajna strategy code missing at ${ajna.strategy}`)
+    }
+  }
+}
+
+async function verifyPhase4PostState(params: {
+  publicClient: any
+  phase2FinalizeCalls: Array<{ to: Address; value: bigint; data: Hex }>
+  phase4Calls: Array<{ to: Address; value: bigint; data: Hex }>
+  txHash?: Hex
+}): Promise<void> {
+  const launch = extractPhase4LaunchInfo(params.phase4Calls)
+  if (!launch) {
+    throw new Error('phase4 verification failed: phase4Calls missing launchDeferredAuction')
+  }
+
+  const finalizeInfo = params.phase2FinalizeCalls
+    .map((call) => extractFinalizePhase2Info(call.data))
+    .find((info): info is NonNullable<typeof info> => Boolean(info))
+
+  const readLaunchEventFromReceipt = async (): Promise<{
+    ccaStrategy: Address | null
+    auction: Address | null
+    creatorToken: Address | null
+    owner: Address | null
+    shareOFT: Address | null
+  } | null> => {
+    const txHash = params.txHash
+    const getReceipt = params.publicClient?.getTransactionReceipt
+    if (!txHash || typeof getReceipt !== 'function') return null
+    const receipt = await getReceipt.call(params.publicClient, { hash: txHash }).catch(() => null)
+    const logs = Array.isArray(receipt?.logs) ? receipt.logs : []
+    for (const log of logs) {
+      const logAddress = normalizeAddress((log as any)?.address)
+      if (!logAddress || logAddress.toLowerCase() !== launch.batcher.toLowerCase()) continue
+      try {
+        const decoded = decodeEventLog({
+          abi: CREATOR_VAULT_BATCHER_AUCTION_LAUNCHED_EVENT_ABI,
+          data: (log as any).data,
+          topics: (log as any).topics,
+        })
+        if (decoded.eventName !== 'AuctionLaunchedDeferred') continue
+        const args = decoded.args as {
+          creatorToken?: unknown
+          owner?: unknown
+          shareOFT?: unknown
+          ccaStrategy?: unknown
+          auction?: unknown
+        }
+        return {
+          creatorToken: normalizeAddress(args?.creatorToken),
+          owner: normalizeAddress(args?.owner),
+          shareOFT: normalizeAddress(args?.shareOFT),
+          ccaStrategy: normalizeAddress(args?.ccaStrategy),
+          auction: normalizeAddress(args?.auction),
+        }
+      } catch {
+        continue
+      }
+    }
+    return null
+  }
+
+  const launchEvent = await readLaunchEventFromReceipt()
+  if (launchEvent?.creatorToken && launchEvent.creatorToken.toLowerCase() !== launch.creatorToken.toLowerCase()) {
+    throw new Error('phase4 verification failed: launch event creator token mismatch')
+  }
+  if (launchEvent?.owner && launchEvent.owner.toLowerCase() !== launch.owner.toLowerCase()) {
+    throw new Error('phase4 verification failed: launch event owner mismatch')
+  }
+  if (launchEvent?.shareOFT && launchEvent.shareOFT.toLowerCase() !== launch.shareOFT.toLowerCase()) {
+    throw new Error('phase4 verification failed: launch event share OFT mismatch')
+  }
+
+  const finalizeCca = normalizeAddress(finalizeInfo?.ccaStrategy)
+  const eventCca = normalizeAddress(launchEvent?.ccaStrategy)
+  const ccaStrategy = finalizeCca ?? eventCca
+  if (!ccaStrategy) {
+    throw new Error('phase4 verification failed: could not resolve CCA strategy')
+  }
+  if (finalizeInfo?.creatorToken && launch.creatorToken.toLowerCase() !== finalizeInfo.creatorToken.toLowerCase()) {
+    throw new Error('phase4 verification failed: creator token mismatch between phase2 and phase4 payloads')
+  }
+  if (finalizeInfo?.owner && launch.owner.toLowerCase() !== finalizeInfo.owner.toLowerCase()) {
+    throw new Error('phase4 verification failed: owner mismatch between phase2 and phase4 payloads')
+  }
+  if (!(await hasRuntimeCode(params.publicClient, launch.shareOFT))) {
+    throw new Error(`phase4 verification failed: share OFT code missing at ${launch.shareOFT}`)
+  }
+  if (!(await hasRuntimeCode(params.publicClient, ccaStrategy))) {
+    throw new Error(`phase4 verification failed: CCA strategy code missing at ${ccaStrategy}`)
+  }
+
+  const [currentAuctionRaw, ccaFactoryRaw] = await Promise.all([
+    params.publicClient
+      .readContract({
+        address: ccaStrategy,
+        abi: CCA_STRATEGY_VIEW_ABI,
+        functionName: 'currentAuction',
+      })
+      .catch(() => null),
+    params.publicClient
+      .readContract({
+        address: ccaStrategy,
+        abi: CCA_STRATEGY_VIEW_ABI,
+        functionName: 'ccaFactory',
+      })
+      .catch(() => null),
+  ])
+  const currentAuction = normalizeAddress(currentAuctionRaw) ?? normalizeAddress(launchEvent?.auction)
+  const ccaFactory = normalizeAddress(ccaFactoryRaw)
+  if (!currentAuction) {
+    throw new Error('phase4 verification failed: CCA currentAuction is empty')
+  }
+  if (!ccaFactory) {
+    throw new Error('phase4 verification failed: CCA factory is empty')
+  }
+  if (!(await hasRuntimeCode(params.publicClient, currentAuction))) {
+    throw new Error(`phase4 verification failed: auction code missing at ${currentAuction}`)
+  }
+  if (!(await hasRuntimeCode(params.publicClient, ccaFactory))) {
+    throw new Error(`phase4 verification failed: CCA factory code missing at ${ccaFactory}`)
+  }
+
+  const [isGraduatedRaw, totalSupplyRaw] = await Promise.all([
+    params.publicClient
+      .readContract({
+        address: currentAuction,
+        abi: CONTINUOUS_CCA_VIEW_ABI,
+        functionName: 'isGraduated',
+      })
+      .catch(() => null),
+    params.publicClient
+      .readContract({
+        address: currentAuction,
+        abi: CONTINUOUS_CCA_VIEW_ABI,
+        functionName: 'totalSupply',
+      })
+      .catch(() => null),
+  ])
+  if (typeof isGraduatedRaw !== 'boolean') {
+    throw new Error('phase4 verification failed: auction does not expose expected Uniswap CCA interface')
+  }
+  const totalSupply = parseBigIntLike(totalSupplyRaw)
+  if (totalSupply == null || totalSupply <= 0n) {
+    throw new Error('phase4 verification failed: auction totalSupply is zero')
   }
 }
 
@@ -1390,6 +1929,10 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   }
 
   if (step === 'phase3_sent') {
+    await verifyPhase3PostState({
+      publicClient,
+      phase3Calls,
+    })
     const confirmed = await transitionDeploySession({
       id: rec.id,
       fromStep: 'phase3_sent',
@@ -1407,6 +1950,12 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   }
 
   if (step === 'phase4_sent') {
+    await verifyPhase4PostState({
+      publicClient,
+      phase2FinalizeCalls,
+      phase4Calls,
+      txHash,
+    })
     const confirmed = await transitionDeploySession({
       id: rec.id,
       fromStep: 'phase4_sent',

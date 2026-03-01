@@ -345,7 +345,7 @@ const FAQ_SECTIONS: FaqSection[] = [
   {
     id: 'strategies',
     title: 'Strategies, pricing, and oracles',
-    description: 'Where yield can come from, and why configuration matters.',
+    description: 'Current allocation model, potential yield sources, and why configuration matters.',
     items: [
       {
         id: 'what-strategies',
@@ -354,7 +354,8 @@ const FAQ_SECTIONS: FaqSection[] = [
         answer: (
           <>
             <p>
-              Creator Vaults can wire in multiple strategies. Two core ones in this stack are:
+              Creator Vaults can wire in multiple strategies. In the current launch template, capital is split across onchain strategies plus
+              an in-vault reserve.
             </p>
             <ul className="list-disc list-inside space-y-1 text-zinc-500">
               <li>
@@ -363,7 +364,29 @@ const FAQ_SECTIONS: FaqSection[] = [
               <li>
                 <span className="text-white">Ajna</span>: collateralized borrowing/lending mechanics (with liquidation risk).
               </li>
+              <li>
+                <span className="text-white">Reserve + idle in-vault capital</span>: kept available for operations and withdrawals.
+              </li>
             </ul>
+          </>
+        ),
+      },
+      {
+        id: 'default-allocation-model',
+        question: 'What is the current default allocation model?',
+        search: 'default allocation 30 30 40 charm ajna reserve idle solana',
+        answer: (
+          <>
+            <p>Current default launch allocation is:</p>
+            <ul className="list-disc list-inside space-y-1 text-zinc-500">
+              <li>30% to CREATOR/USDC LP (Charm strategy)</li>
+              <li>30% to Ajna lending strategy</li>
+              <li>30% held as Solana reserve for the cross-chain route path</li>
+              <li>10% held as in-vault idle buffer</li>
+            </ul>
+            <p className="text-zinc-600">
+              This is the current default template, not a protocol guarantee. Vault owners can change strategy parameters over time.
+            </p>
           </>
         ),
       },
@@ -726,7 +749,7 @@ export function Faq() {
             <span className="label">FAQ</span>
               <h1 className="headline text-3xl sm:text-5xl mt-4">Frequently asked questions</h1>
               <p className="text-sm text-zinc-500 font-light max-w-prose mt-4">
-                Short answers, no fluff. Built for creators launching and users bidding, trading, and holding.
+                Short answers, no fluff. Built for creators launching and users depositing, trading, and holding.
               </p>
             </div>
           </motion.div>
@@ -741,7 +764,7 @@ export function Faq() {
                   <Link to="/faq/how-it-works" className="flex items-center justify-between gap-4 rounded-xl px-3 py-3 hover:bg-white/3 transition-colors">
                     <div className="space-y-1">
                       <div className="text-white font-light">How it works</div>
-                      <div className="text-xs text-zinc-600 font-light">Deposit → {SHARE_TOKEN} → earn → redeem</div>
+                      <div className="text-xs text-zinc-600 font-light">Deposit → launch → allocate → redeem</div>
                     </div>
                     <ArrowRight className="w-4 h-4 text-zinc-600" />
                   </Link>

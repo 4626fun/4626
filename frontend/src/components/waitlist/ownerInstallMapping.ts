@@ -33,6 +33,27 @@ export type ZoraCrossAppAddressSet = {
   embeddedWalletAddresses: string[]
 }
 
+export type ZoraCrossAppAuthAction = 'link' | 'login'
+
+export function selectZoraCrossAppAuthAction(params: {
+  privyAuthed: boolean
+  linkCrossAppAccount: unknown
+  loginWithCrossAppAccount: unknown
+}): ZoraCrossAppAuthAction | null {
+  const hasLink = typeof params.linkCrossAppAccount === 'function'
+  const hasLogin = typeof params.loginWithCrossAppAccount === 'function'
+
+  if (params.privyAuthed) {
+    if (hasLink) return 'link'
+    if (hasLogin) return 'login'
+    return null
+  }
+
+  if (hasLogin) return 'login'
+  if (hasLink) return 'link'
+  return null
+}
+
 export function readLinkedAccounts(user: unknown): any[] {
   const record = user && typeof user === 'object' ? (user as Record<string, unknown>) : null
   if (!record) return []

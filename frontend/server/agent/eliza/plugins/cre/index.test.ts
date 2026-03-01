@@ -1,4 +1,13 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { getKeeprVaultByGroupIdMock } = vi.hoisted(() => ({
+  getKeeprVaultByGroupIdMock: vi.fn(),
+}))
+
+vi.mock('../../../../_lib/keeprRegistry.js', () => ({
+  getKeeprVaultByGroupId: getKeeprVaultByGroupIdMock,
+}))
+
 import { crePlugin } from './index.ts'
 
 type AnyAction = {
@@ -36,8 +45,15 @@ function getAction(name: string): AnyAction {
   return action
 }
 
-async function runActionText(action: AnyAction, text: string): Promise<string> {
-  const message = { content: { text } }
+async function runActionText(
+  action: AnyAction,
+  text: string,
+  metadata: Record<string, unknown> = {
+    conversationId: 'group-1',
+    senderAddress: '0x1111111111111111111111111111111111111111',
+  },
+): Promise<string> {
+  const message = { content: { text, metadata } }
   const valid = await action.validate?.({}, message)
   expect(valid).toBe(true)
   const outputs: string[] = []
@@ -49,6 +65,14 @@ async function runActionText(action: AnyAction, text: string): Promise<string> {
 }
 
 describe('cre plugin dry-run gate', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getKeeprVaultByGroupIdMock.mockResolvedValue({
+      canonicalOwnerAddress: '0x1111111111111111111111111111111111111111',
+      config: { roles: { admins: ['0x2222222222222222222222222222222222222222'] } },
+    })
+  })
+
   afterEach(() => {
     for (const key of ENV_KEYS) {
       setEnv(key, originalEnv[key])
@@ -102,5 +126,40 @@ describe('cre plugin dry-run gate', () => {
     const text = await runActionText(help, '/cre help')
 
     expect(text).toContain('Dry run: yes')
+  })
+
+  it('denies trigger commands for MEMBER role', async () => {
+    setEnv('DRY_RUN', '0')
+    setEnv('ELIZA_CRE_DRY_RUN', '0')
+    getKeeprVaultByGroupIdMock.mockResolvedValue({
+      canonicalOwnerAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      config: { roles: { admins: [] } },
+    })
+
+    const trigger = getAction('CRE_TRIGGER')
+    const text = await runActionText(trigger, '/cre queue', {
+      conversationId: 'group-1',
+      senderAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    })
+
+    expect(text).toContain('Denied: ADMIN or OWNER only.')
+  })
+
+  it('allows trigger commands for ADMIN role', async () => {
+    setEnv('DRY_RUN', '0')
+    setEnv('ELIZA_CRE_DRY_RUN', '0')
+    setEnv('KEEPR_API_KEY', undefined)
+    getKeeprVaultByGroupIdMock.mockResolvedValue({
+      canonicalOwnerAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      config: { roles: { admins: ['0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'] } },
+    })
+
+    const trigger = getAction('CRE_TRIGGER')
+    const text = await runActionText(trigger, '/cre queue', {
+      conversationId: 'group-1',
+      senderAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    })
+
+    expect(text).toContain('Keepr API not configured')
   })
 })
