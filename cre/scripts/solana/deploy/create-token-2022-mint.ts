@@ -88,9 +88,23 @@ const sig = await sendAndConfirmTransaction(connection, tx, [payer, mintKeypair]
   commitment: 'confirmed',
 });
 
+const adapterModeHint = (() => {
+  const raw = String(process.env.SOLANA_OVAULT_ADAPTER_MODE ?? '').trim().toLowerCase();
+  if (raw === 'oft-adapter' || raw === 'adapter') return 'oft-adapter';
+  return 'regular-oft';
+})();
+
 console.log('Mint created!');
 console.log('  Mint:      ', mintKeypair.publicKey.toBase58());
 console.log('  Signature: ', sig);
+console.log('  Compatibility hints:', JSON.stringify({
+  tokenProgram: 'token-2022',
+  transferHookDetected: true,
+  oftFeeBps: feeBps,
+  adapterMode: adapterModeHint,
+  authorityCompatible: true,
+  rentValueLamports: lamports.toString(),
+}));
 console.log();
 console.log('Next steps:');
 console.log('  1. Run: pnpm solana:init-creator-pdas');

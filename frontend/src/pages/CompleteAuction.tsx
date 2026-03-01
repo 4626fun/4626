@@ -102,7 +102,7 @@ const ZERO_ADDRESS = `0x${'0000000000000000000000000000000000000000'}` as const
 export function CompleteAuction() {
   const { strategy } = useParams()
   const navigate = useNavigate()
-  const { isConnected, address } = useAccount()
+  const { address } = useAccount()
   const [currentStep, setCurrentStep] = useState<Step>('check')
   const [error, setError] = useState<string | null>(null)
 

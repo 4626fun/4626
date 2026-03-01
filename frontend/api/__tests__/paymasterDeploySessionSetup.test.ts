@@ -105,11 +105,11 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     readRequestPrincipalMock.mockReturnValue(sessionAddress)
     getActiveDeploySessionMock.mockResolvedValue({ sessionOwner })
     getApiContractsMock.mockReturnValue({
-      creatorVaultBatcher: '0xB87CBb646dD14F520078F11196f79BF815F18c84',
+      creatorVaultBatcher: '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753',
       vaultActivationBatcher: '0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB',
       permit2: '0x000000000022D473030F116dDEE9F6B43aC78BA3',
-      universalCreate2DeployerFromStore: '0x74183076C7D33346880A5bf0e263B761FB4d38BA',
-      universalBytecodeStore: '0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13',
+      universalCreate2DeployerFromStore: '0x0243F14771054c890E5Ef5D467D0137a20B2d94B',
+      universalBytecodeStore: '0x2C5Ff5bd3D6f4aF4742e37Df12E51b39F2C63e6c',
     })
     isDbConfiguredMock.mockReturnValue(false)
     isSupabaseAdminConfiguredMock.mockReturnValue(false)
@@ -118,7 +118,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     mockGetBytecode.mockResolvedValue('0x1234')
     mockReadContract.mockImplementation((opts: { functionName?: string }) => {
       if (opts.functionName === 'isOwnerAddress') return Promise.resolve(true)
-      if (opts.functionName === 'store') return Promise.resolve('0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13')
+      if (opts.functionName === 'store') return Promise.resolve('0x2C5Ff5bd3D6f4aF4742e37Df12E51b39F2C63e6c')
       return Promise.resolve(null)
     })
     mockGetLogs.mockResolvedValue([])

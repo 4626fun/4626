@@ -1,14 +1,18 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Coins, Loader2, CheckCircle2, Upload, AlertCircle } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { useWallets } from '@privy-io/react-auth'
+import { usePublicClient, useWalletClient } from 'wagmi'
 import { base } from 'wagmi/chains'
 import type { Address, Hex } from 'viem'
-import { isAddress, getAddress } from 'viem'
+import { isAddress, getAddress, toHex } from 'viem'
 
 import { uploadImmutableBlob, uploadImmutableJson } from '@/lib/lens/grove'
+import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
+import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { logger } from '@/lib/logger'
 import { getZoraPlatformReferrerAddress } from '@/lib/zora/referrals'
-import { usePrivyCswExecute } from '@/hooks/usePrivyCswExecute'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -17,9 +21,19 @@ import { usePrivyCswExecute } from '@/hooks/usePrivyCswExecute'
 const PLATFORM_REFERRER = getZoraPlatformReferrerAddress()
 
 const GROVE_BASE_CHAIN_ID = 8453 // Base mainnet for immutable uploads
+const BASE_CHAIN_ID_HEX = '0x2105'
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
 const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml']
+const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
+  {
+    type: 'function',
+    name: 'isOwnerAddress',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+] as const
 
 const baseEase = [0.4, 0, 0.2, 1] as const
 const fadeUp = {
@@ -39,10 +53,27 @@ type LaunchCoinCardProps = {
   defaultSymbol?: string | null
   /** The user's Coinbase Smart Wallet address (coin creator) */
   smartWalletAddress: string | null
-  /** Optional owner address hint to prioritize the correct Privy embedded signer */
-  preferredOwnerAddress?: string | null
+  /** The EOA owner address that will sign the UserOp */
+  ownerAddress: string | null
   /** Callback when coin is successfully created */
   onCoinCreated?: (coinAddress: string, symbol: string) => void
+}
+
+function isHexSignature(value: unknown): value is Hex {
+  return typeof value === 'string' && /^0x[0-9a-fA-F]+$/.test(value)
+}
+
+function ensureSignatureHex(value: unknown, context: string): Hex {
+  if (isHexSignature(value)) return value
+  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+  const direct = record?.signature ?? record?.sig
+  if (isHexSignature(direct)) return direct
+  const nested = record?.result
+  if (nested && typeof nested === 'object') {
+    const nestedSig = (nested as Record<string, unknown>).signature
+    if (isHexSignature(nestedSig)) return nestedSig
+  }
+  throw new Error(`Invalid signature returned from ${context}`)
 }
 
 // ---------------------------------------------------------------------------
@@ -54,13 +85,102 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
   defaultName,
   defaultSymbol,
   smartWalletAddress,
-  preferredOwnerAddress,
+  ownerAddress,
   onCoinCreated,
 }: LaunchCoinCardProps) {
-  const { ready: canExecuteWithCsw, execute, signerType } = usePrivyCswExecute({
-    smartWallet: smartWalletAddress,
-    preferredOwnerAddress,
+  const publicClient = usePublicClient({ chainId: base.id })
+  const { data: walletClient } = useWalletClient({ chainId: base.id })
+  const { wallets: privyWallets } = useWallets()
+
+  const normalizedSmartWalletAddress = useMemo(() => {
+    if (!smartWalletAddress || !isAddress(smartWalletAddress)) return null
+    return getAddress(smartWalletAddress as Address)
+  }, [smartWalletAddress])
+
+  const privyEmbeddedEoaWallet = useMemo(() => {
+    const wallets = Array.isArray(privyWallets) ? (privyWallets as any[]) : []
+    return (
+      wallets.find((wallet) => {
+        const walletType = String(
+          wallet?.wallet_client_type ?? wallet?.walletClientType ?? wallet?.connector_type ?? wallet?.type ?? '',
+        )
+          .trim()
+          .toLowerCase()
+        if (!(walletType === 'privy' || walletType.includes('privy') || walletType.includes('embedded'))) return false
+        const rawAddress = typeof wallet?.address === 'string' ? String(wallet.address).trim() : ''
+        if (!rawAddress || !isAddress(rawAddress)) return false
+        if (normalizedSmartWalletAddress && rawAddress.toLowerCase() === normalizedSmartWalletAddress.toLowerCase()) return false
+        return true
+      }) ?? null
+    )
+  }, [normalizedSmartWalletAddress, privyWallets])
+
+  const privyEmbeddedEoaAddress = useMemo(() => {
+    const rawAddress = typeof (privyEmbeddedEoaWallet as any)?.address === 'string'
+      ? String((privyEmbeddedEoaWallet as any).address).trim()
+      : ''
+    if (!rawAddress || !isAddress(rawAddress)) return null
+    return getAddress(rawAddress as Address)
+  }, [privyEmbeddedEoaWallet])
+
+  const privyEmbeddedEoaCanSign = useMemo(() => {
+    const walletAny: any = privyEmbeddedEoaWallet as any
+    if (!walletAny) return false
+    if (typeof walletAny?.request === 'function') return true
+    if (walletAny?.provider && typeof walletAny.provider.request === 'function') return true
+    if (typeof walletAny?.getEthereumProvider === 'function') return true
+    if (typeof walletAny?.signMessage === 'function') return true
+    return false
+  }, [privyEmbeddedEoaWallet])
+
+  const privyEmbeddedEoaCanOperateCanonicalQuery = useQuery({
+    queryKey: ['launch-coin', 'privy-embedded-can-operate-canonical', normalizedSmartWalletAddress, privyEmbeddedEoaAddress],
+    enabled: Boolean(normalizedSmartWalletAddress && privyEmbeddedEoaAddress && publicClient),
+    staleTime: 10_000,
+    queryFn: async () => {
+      if (!normalizedSmartWalletAddress || !privyEmbeddedEoaAddress || !publicClient) return false
+      try {
+        const isOwner = (await (publicClient as any).readContract({
+          address: normalizedSmartWalletAddress,
+          abi: COINBASE_SMART_WALLET_OWNER_CHECK_ABI,
+          functionName: 'isOwnerAddress',
+          args: [privyEmbeddedEoaAddress],
+        })) as boolean
+        return isOwner === true
+      } catch {
+        return false
+      }
+    },
   })
+
+  const ensureProviderOnBase = useCallback(async (provider: any, label: string) => {
+    if (!provider?.request) return
+    const current = await provider.request({ method: 'eth_chainId' }).catch(() => null)
+    if (typeof current === 'string' && current.toLowerCase() !== BASE_CHAIN_ID_HEX) {
+      try {
+        await provider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: BASE_CHAIN_ID_HEX }],
+        })
+      } catch {
+        throw new Error(`Please switch ${label} to Base network to continue.`)
+      }
+    }
+  }, [])
+
+  const getPrivyEmbeddedEoaProvider = useCallback(async () => {
+    const walletAny: any = privyEmbeddedEoaWallet as any
+    if (!walletAny) return null
+    if (walletAny?.provider && typeof walletAny.provider.request === 'function') return walletAny.provider
+    if (typeof walletAny.getEthereumProvider === 'function') {
+      const provider = await walletAny.getEthereumProvider().catch(() => null)
+      if (provider && typeof provider.request === 'function') return provider
+    }
+    if (typeof walletAny.request === 'function') {
+      return { request: walletAny.request.bind(walletAny) }
+    }
+    return null
+  }, [privyEmbeddedEoaWallet])
 
   // Form state
   const [name, setName] = useState('')
@@ -94,7 +214,9 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
     symbolClean.length >= 2 &&
     step === 'form' &&
     !!smartWalletAddress &&
-    canExecuteWithCsw
+    !!ownerAddress &&
+    !!publicClient &&
+    !!walletClient
 
   // Image handling
   const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -117,8 +239,9 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
 
   // Main creation flow
   const handleCreate = useCallback(async () => {
-    if (!canSubmit) return
+    if (!canSubmit || !publicClient || !walletClient) return
     if (!smartWalletAddress || !isAddress(smartWalletAddress)) return
+    if (!ownerAddress || !isAddress(ownerAddress)) return
 
     setError(null)
 
@@ -183,6 +306,64 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
       setStep('signing')
       setStatusText('Sign the transaction in your wallet...')
 
+      const paymasterUrl = resolveCdpPaymasterUrl(
+        import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined,
+      )
+      const bundlerUrl = paymasterUrl || '/api/paymaster'
+      let userOpWalletClient: any = walletClient as any
+      let userOpOwnerAddress = getAddress(ownerAddress as Address) as Address
+
+      if (
+        privyEmbeddedEoaCanSign &&
+        privyEmbeddedEoaAddress &&
+        privyEmbeddedEoaCanOperateCanonicalQuery.data === true
+      ) {
+        const embeddedProvider = await getPrivyEmbeddedEoaProvider()
+        if (embeddedProvider?.request) {
+          await ensureProviderOnBase(embeddedProvider, 'Privy embedded EOA')
+          userOpOwnerAddress = getAddress(privyEmbeddedEoaAddress as Address)
+          userOpWalletClient = {
+            request: async (args: { method: string; params?: any[] }) => {
+              if (args?.method === 'eth_sign') {
+                const params = Array.isArray(args.params) ? args.params : []
+                const hashCandidate = typeof params[1] === 'string' ? params[1] : ''
+                if (/^0x[0-9a-fA-F]{64}$/.test(hashCandidate)) {
+                  try {
+                    const rawSig = await embeddedProvider.request({
+                      method: 'secp256k1_sign',
+                      params: [hashCandidate],
+                    })
+                    return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.secp256k1_sign')
+                  } catch {
+                    // Fall through to provider eth_sign when secp256k1_sign is unavailable.
+                  }
+                }
+              }
+              return await embeddedProvider.request(args as any)
+            },
+            signMessage: async (args: { message: unknown }) => {
+              const raw =
+                typeof args?.message === 'object' && args.message !== null && 'raw' in (args.message as Record<string, unknown>)
+                  ? (args.message as Record<string, unknown>).raw
+                  : args?.message
+              const msgHex = typeof raw === 'string' && raw.startsWith('0x') ? raw : toHex(String(raw ?? ''))
+              const rawSig = await embeddedProvider.request({
+                method: 'personal_sign',
+                params: [msgHex, userOpOwnerAddress],
+              })
+              return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.personal_sign')
+            },
+            signTypedData: async (typedData: unknown) => {
+              const rawSig = await embeddedProvider.request({
+                method: 'eth_signTypedData_v4',
+                params: [userOpOwnerAddress, JSON.stringify(typedData)],
+              })
+              return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.signTypedData')
+            },
+          }
+        }
+      }
+
       // Map Zora SDK calls to UserOp calls
       const calls = callResult.calls.map((c) => ({
         to: c.to as Address,
@@ -191,13 +372,17 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
       }))
 
       setStep('confirming')
-      setStatusText(
-        signerType === 'privy-embedded'
-          ? 'Submitting with Privy embedded signer...'
-          : 'Confirming on Base...',
-      )
+      setStatusText('Confirming on Base...')
 
-      const result = await execute(calls)
+      const result = await sendCoinbaseSmartWalletUserOperation({
+        publicClient: publicClient as any,
+        walletClient: userOpWalletClient,
+        bundlerUrl,
+        smartWallet: getAddress(smartWalletAddress) as Address,
+        ownerAddress: userOpOwnerAddress,
+        calls,
+        version: '1',
+      })
 
       // ---------------------------------------------------------------
       // Step 5: Success
@@ -230,13 +415,19 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
   }, [
     canSubmit,
     description,
+    ensureProviderOnBase,
     effectiveName,
+    getPrivyEmbeddedEoaProvider,
     imageFile,
     onCoinCreated,
-    execute,
-    signerType,
+    ownerAddress,
+    privyEmbeddedEoaAddress,
+    privyEmbeddedEoaCanOperateCanonicalQuery.data,
+    privyEmbeddedEoaCanSign,
+    publicClient,
     smartWalletAddress,
     symbolClean,
+    walletClient,
   ])
 
   // Reset to form

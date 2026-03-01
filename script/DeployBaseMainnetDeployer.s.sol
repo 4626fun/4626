@@ -38,21 +38,31 @@ import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorO
 ///   CONFIGURE_SOLANA=1
 ///   SOLANA_BRIDGE_ADAPTER=...
 ///   SOLANA_DESTINATION=0x<32-byte-solana-pubkey>
+///
+/// Optional salt overrides (for fresh infra epochs):
+///   INFRA_STORE_SALT or INFRA_STORE_SALT_TAG
+///   INFRA_DEPLOYER_FROM_STORE_SALT or INFRA_DEPLOYER_FROM_STORE_SALT_TAG
+///   INFRA_VAULT_CORE_MODULE_SALT or INFRA_VAULT_CORE_MODULE_SALT_TAG
+///   INFRA_VAULT_STRATEGIES_MODULE_SALT or INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG
+///   INFRA_VAULT_ADMIN_MODULE_SALT or INFRA_VAULT_ADMIN_MODULE_SALT_TAG
+///   INFRA_DEPLOYMENT_BATCHER_SALT or INFRA_DEPLOYMENT_BATCHER_SALT_TAG
 contract DeployBaseMainnetDeployer is Script {
     // EIP-2470 universal CREATE2 factory.
     address constant CREATE2_FACTORY_ADDR = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
-    // Reuse v2 infra salts (store + deployer).
-    bytes32 constant STORE_SALT_V2 = keccak256("4626:UniversalBytecodeStore:v2");
-    bytes32 constant DEPLOYER_SALT_V2 = keccak256("4626:UniversalCreate2DeployerFromStore:v2");
+    // Default salt tags. Scripts may override with:
+    // - raw bytes32: INFRA_*_SALT
+    // - string tag (hashed with keccak256): INFRA_*_SALT_TAG
+    string constant DEFAULT_STORE_SALT_TAG = "4626:UniversalBytecodeStore:v2";
+    string constant DEFAULT_DEPLOYER_FROM_STORE_SALT_TAG = "4626:UniversalCreate2DeployerFromStore:v2";
 
     // CreatorOVault module salts (shared logic contracts; no constructor args).
-    bytes32 constant VAULT_CORE_MODULE_SALT = keccak256("4626:CreatorOVaultCoreModule:v1");
-    bytes32 constant VAULT_STRATEGIES_MODULE_SALT = keccak256("4626:CreatorOVaultStrategiesModule:v1");
-    bytes32 constant VAULT_ADMIN_MODULE_SALT = keccak256("4626:CreatorOVaultAdminModule:v1");
+    string constant DEFAULT_VAULT_CORE_MODULE_SALT_TAG = "4626:CreatorOVaultCoreModule:v1";
+    string constant DEFAULT_VAULT_STRATEGIES_MODULE_SALT_TAG = "4626:CreatorOVaultStrategiesModule:v1";
+    string constant DEFAULT_VAULT_ADMIN_MODULE_SALT_TAG = "4626:CreatorOVaultAdminModule:v1";
 
-    // Deployer salt (constructor args are chain-specific ⇒ address is chain-specific).
-    bytes32 constant DEPLOYER_SALT = keccak256("4626:DeploymentBatcher:v4");
+    // DeploymentBatcher salt (constructor args are chain-specific ⇒ address is chain-specific).
+    string constant DEFAULT_DEPLOYMENT_BATCHER_SALT_TAG = "4626:DeploymentBatcher:v4";
 
     // Defaults (Base mainnet) — can be overridden via env.
     address constant DEFAULT_REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
@@ -85,8 +95,27 @@ contract DeployBaseMainnetDeployer is Script {
         bytes32 solanaDestination;
     }
 
+    struct SaltConfig {
+        bytes32 store;
+        bytes32 deployerFromStore;
+        bytes32 vaultCoreModule;
+        bytes32 vaultStrategiesModule;
+        bytes32 vaultAdminModule;
+        bytes32 deploymentBatcher;
+    }
+
     function _create2(address deployer, bytes32 salt, bytes32 initCodeHash) internal pure returns (address) {
         return address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), deployer, salt, initCodeHash)))));
+    }
+
+    function _saltFromEnv(string memory rawKey, string memory tagKey, string memory defaultTag)
+        internal
+        returns (bytes32)
+    {
+        bytes32 raw = vm.envOr(rawKey, bytes32(0));
+        if (raw != bytes32(0)) return raw;
+        string memory tag = vm.envOr(tagKey, defaultTag);
+        return keccak256(bytes(tag));
     }
 
     function run() external {
@@ -109,17 +138,49 @@ contract DeployBaseMainnetDeployer is Script {
         cfg.solanaBridgeAdapter = vm.envOr("SOLANA_BRIDGE_ADAPTER", address(0));
         cfg.solanaDestination = vm.envOr("SOLANA_DESTINATION", bytes32(0));
         bool configureSolana = vm.envOr("CONFIGURE_SOLANA", uint256(0)) == 1;
+        SaltConfig memory salts;
+        salts.store = _saltFromEnv("INFRA_STORE_SALT", "INFRA_STORE_SALT_TAG", DEFAULT_STORE_SALT_TAG);
+        salts.deployerFromStore = _saltFromEnv(
+            "INFRA_DEPLOYER_FROM_STORE_SALT",
+            "INFRA_DEPLOYER_FROM_STORE_SALT_TAG",
+            DEFAULT_DEPLOYER_FROM_STORE_SALT_TAG
+        );
+        salts.vaultCoreModule = _saltFromEnv(
+            "INFRA_VAULT_CORE_MODULE_SALT", "INFRA_VAULT_CORE_MODULE_SALT_TAG", DEFAULT_VAULT_CORE_MODULE_SALT_TAG
+        );
+        salts.vaultStrategiesModule = _saltFromEnv(
+            "INFRA_VAULT_STRATEGIES_MODULE_SALT",
+            "INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG",
+            DEFAULT_VAULT_STRATEGIES_MODULE_SALT_TAG
+        );
+        salts.vaultAdminModule = _saltFromEnv(
+            "INFRA_VAULT_ADMIN_MODULE_SALT",
+            "INFRA_VAULT_ADMIN_MODULE_SALT_TAG",
+            DEFAULT_VAULT_ADMIN_MODULE_SALT_TAG
+        );
+        salts.deploymentBatcher = _saltFromEnv(
+            "INFRA_DEPLOYMENT_BATCHER_SALT",
+            "INFRA_DEPLOYMENT_BATCHER_SALT_TAG",
+            DEFAULT_DEPLOYMENT_BATCHER_SALT_TAG
+        );
 
         console2.log("Broadcaster:", broadcaster);
         console2.log("Broadcaster balance (ETH):", broadcaster.balance);
+        console2.log("Infra store salt:", uint256(salts.store));
+        console2.log("Infra deployer-from-store salt:", uint256(salts.deployerFromStore));
+        console2.log("Infra vault core module salt:", uint256(salts.vaultCoreModule));
+        console2.log("Infra vault strategies module salt:", uint256(salts.vaultStrategiesModule));
+        console2.log("Infra vault admin module salt:", uint256(salts.vaultAdminModule));
+        console2.log("Infra deployment batcher salt:", uint256(salts.deploymentBatcher));
 
         // Predict deterministic addresses for v2 store + v2 deployer.
         bytes memory storeInit = type(UniversalBytecodeStoreV2).creationCode;
-        address storeAddr = _create2(CREATE2_FACTORY_ADDR, STORE_SALT_V2, keccak256(storeInit));
+        address storeAddr = _create2(CREATE2_FACTORY_ADDR, salts.store, keccak256(storeInit));
 
         bytes memory create2DeployerInit =
             abi.encodePacked(type(UniversalCreate2DeployerFromStore).creationCode, abi.encode(storeAddr));
-        address create2DeployerAddr = _create2(CREATE2_FACTORY_ADDR, DEPLOYER_SALT_V2, keccak256(create2DeployerInit));
+        address create2DeployerAddr =
+            _create2(CREATE2_FACTORY_ADDR, salts.deployerFromStore, keccak256(create2DeployerInit));
 
         console2.log("UniversalBytecodeStoreV2 (predicted):", storeAddr);
         console2.log("UniversalCreate2DeployerFromStoreV2 (predicted):", create2DeployerAddr);
@@ -129,10 +190,10 @@ contract DeployBaseMainnetDeployer is Script {
         bytes memory strategiesModuleInit = type(CreatorOVaultStrategiesModule).creationCode;
         bytes memory adminModuleInit = type(CreatorOVaultAdminModule).creationCode;
 
-        address coreModuleAddr = _create2(CREATE2_FACTORY_ADDR, VAULT_CORE_MODULE_SALT, keccak256(coreModuleInit));
+        address coreModuleAddr = _create2(CREATE2_FACTORY_ADDR, salts.vaultCoreModule, keccak256(coreModuleInit));
         address strategiesModuleAddr =
-            _create2(CREATE2_FACTORY_ADDR, VAULT_STRATEGIES_MODULE_SALT, keccak256(strategiesModuleInit));
-        address adminModuleAddr = _create2(CREATE2_FACTORY_ADDR, VAULT_ADMIN_MODULE_SALT, keccak256(adminModuleInit));
+            _create2(CREATE2_FACTORY_ADDR, salts.vaultStrategiesModule, keccak256(strategiesModuleInit));
+        address adminModuleAddr = _create2(CREATE2_FACTORY_ADDR, salts.vaultAdminModule, keccak256(adminModuleInit));
 
         console2.log("CreatorOVaultCoreModule (predicted):", coreModuleAddr);
         console2.log("CreatorOVaultStrategiesModule (predicted):", strategiesModuleAddr);
@@ -159,41 +220,41 @@ contract DeployBaseMainnetDeployer is Script {
             adminModuleAddr
         );
         bytes memory deployerInit = abi.encodePacked(type(DeploymentBatcher).creationCode, deployerArgs);
-        address deployerAddr = _create2(CREATE2_FACTORY_ADDR, DEPLOYER_SALT, keccak256(deployerInit));
+        address deployerAddr = _create2(CREATE2_FACTORY_ADDR, salts.deploymentBatcher, keccak256(deployerInit));
         console2.log("DeploymentBatcher (predicted):", deployerAddr);
 
         vm.startBroadcast(pk);
 
         // Deploy v2 store (if missing).
         if (storeAddr.code.length == 0) {
-            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(STORE_SALT_V2, storeInit));
+            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(salts.store, storeInit));
             require(ok, "STORE_V2 deploy failed");
         }
 
         // Deploy v2 create2 deployer (if missing).
         if (create2DeployerAddr.code.length == 0) {
-            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(DEPLOYER_SALT_V2, create2DeployerInit));
+            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(salts.deployerFromStore, create2DeployerInit));
             require(ok, "DEPLOYER_V2 deploy failed");
         }
 
         // Deploy shared vault modules (if missing).
         if (coreModuleAddr.code.length == 0) {
-            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(VAULT_CORE_MODULE_SALT, coreModuleInit));
+            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(salts.vaultCoreModule, coreModuleInit));
             require(ok, "VAULT_CORE_MODULE deploy failed");
         }
         if (strategiesModuleAddr.code.length == 0) {
-            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(VAULT_STRATEGIES_MODULE_SALT, strategiesModuleInit));
+            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(salts.vaultStrategiesModule, strategiesModuleInit));
             require(ok, "VAULT_STRATEGIES_MODULE deploy failed");
         }
         if (adminModuleAddr.code.length == 0) {
-            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(VAULT_ADMIN_MODULE_SALT, adminModuleInit));
+            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(salts.vaultAdminModule, adminModuleInit));
             require(ok, "VAULT_ADMIN_MODULE deploy failed");
         }
 
         // Deploy phased deployer (if missing).
         if (deployerAddr.code.length == 0) {
-            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(DEPLOYER_SALT, deployerInit));
-            require(ok, "CREATOR_VAULT_DEPLOYER deploy failed");
+            (bool ok,) = CREATE2_FACTORY_ADDR.call(abi.encodePacked(salts.deploymentBatcher, deployerInit));
+            require(ok, "DEPLOYMENT_BATCHER deploy failed");
         }
 
         vm.stopBroadcast();

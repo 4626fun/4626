@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Droplets, Plus, RefreshCw } from 'lucide-react'
-import { getAddress, isAddress } from 'viem'
+import { getAddress, isAddress, toHex, type Address, type Hex } from 'viem'
 import { useAccount, useBalance, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
+import { useWallets } from '@privy-io/react-auth'
 
 import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
 import { SwapConfirmModal } from '@/components/trade/SwapConfirmModal'
@@ -85,6 +86,33 @@ const CORE_TOKENS: TokenOption[] = [
 ]
 
 type QuoteShape = Record<string, unknown>
+const BASE_CHAIN_ID_HEX = '0x2105'
+const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
+  {
+    type: 'function',
+    name: 'isOwnerAddress',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+] as const
+
+function isHexSignature(value: unknown): value is Hex {
+  return typeof value === 'string' && /^0x[0-9a-fA-F]+$/.test(value)
+}
+
+function ensureSignatureHex(value: unknown, context: string): Hex {
+  if (isHexSignature(value)) return value
+  const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+  const direct = record?.signature ?? record?.sig
+  if (isHexSignature(direct)) return direct
+  const nested = record?.result
+  if (nested && typeof nested === 'object') {
+    const nestedSig = (nested as Record<string, unknown>).signature
+    if (isHexSignature(nestedSig)) return nestedSig
+  }
+  throw new Error(`Invalid signature returned from ${context}`)
+}
 
 function fmtBal(d: { formatted: string; symbol: string } | undefined): string | undefined {
   if (!d) return undefined
@@ -185,6 +213,7 @@ export function Swap() {
   const [searchParams] = useSearchParams()
   const { address, isConnected, chainId: walletChainId } = useAccount()
   const { data: walletClient } = useWalletClient()
+  const { wallets: privyWallets } = useWallets()
   const publicClient = usePublicClient()
   const { switchChainAsync } = useSwitchChain()
   const [swapChainId, setSwapChainId] = useState<SupportedChainId>(DEFAULT_CHAIN_ID)
@@ -258,12 +287,143 @@ export function Swap() {
   const accountContext = useAccountContext()
   const canonicalAddress = accountContext.cswAddress ?? null
   const signerAddress = accountContext.signerAddress ?? null
-  const identityReady = Boolean(
-    canonicalAddress &&
-      walletClient &&
-      publicClient &&
-      (accountContext.signerType === 'SMART_WALLET' || accountContext.eoaIsOwnerOfCsw === true),
-  )
+
+  const privyEmbeddedEoaWallet = useMemo(() => {
+    const wallets = Array.isArray(privyWallets) ? (privyWallets as any[]) : []
+    return (
+      wallets.find((wallet) => {
+        const walletType = String(
+          wallet?.wallet_client_type ?? wallet?.walletClientType ?? wallet?.connector_type ?? wallet?.type ?? '',
+        )
+          .trim()
+          .toLowerCase()
+        if (!(walletType === 'privy' || walletType.includes('privy') || walletType.includes('embedded'))) return false
+        const rawAddress = typeof wallet?.address === 'string' ? String(wallet.address).trim() : ''
+        if (!rawAddress || !isAddress(rawAddress)) return false
+        if (canonicalAddress && rawAddress.toLowerCase() === canonicalAddress.toLowerCase()) return false
+        return true
+      }) ?? null
+    )
+  }, [canonicalAddress, privyWallets])
+
+  const privyEmbeddedEoaAddress = useMemo(() => {
+    const rawAddress = typeof (privyEmbeddedEoaWallet as any)?.address === 'string'
+      ? String((privyEmbeddedEoaWallet as any).address).trim()
+      : ''
+    if (!rawAddress || !isAddress(rawAddress)) return null
+    return getAddress(rawAddress as Address)
+  }, [privyEmbeddedEoaWallet])
+
+  const privyEmbeddedEoaCanSign = useMemo(() => {
+    const walletAny: any = privyEmbeddedEoaWallet as any
+    if (!walletAny) return false
+    if (typeof walletAny?.request === 'function') return true
+    if (walletAny?.provider && typeof walletAny.provider.request === 'function') return true
+    if (typeof walletAny?.getEthereumProvider === 'function') return true
+    if (typeof walletAny?.signMessage === 'function') return true
+    return false
+  }, [privyEmbeddedEoaWallet])
+
+  const ensureProviderOnBase = useCallback(async (provider: any, label: string) => {
+    if (!provider?.request) return
+    const current = await provider.request({ method: 'eth_chainId' }).catch(() => null)
+    if (typeof current === 'string' && current.toLowerCase() !== BASE_CHAIN_ID_HEX) {
+      try {
+        await provider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: BASE_CHAIN_ID_HEX }],
+        })
+      } catch {
+        throw new Error(`Please switch ${label} to Base network to continue.`)
+      }
+    }
+  }, [])
+
+  const getPrivyEmbeddedEoaProvider = useCallback(async () => {
+    const walletAny: any = privyEmbeddedEoaWallet as any
+    if (!walletAny) return null
+    if (walletAny?.provider && typeof walletAny.provider.request === 'function') return walletAny.provider
+    if (typeof walletAny.getEthereumProvider === 'function') {
+      const provider = await walletAny.getEthereumProvider().catch(() => null)
+      if (provider && typeof provider.request === 'function') return provider
+    }
+    if (typeof walletAny.request === 'function') {
+      return { request: walletAny.request.bind(walletAny) }
+    }
+    return null
+  }, [privyEmbeddedEoaWallet])
+
+  const privyEmbeddedEoaCanOperateCanonicalQuery = useQuery({
+    queryKey: ['swap', 'privy-embedded-can-operate-canonical', canonicalAddress, privyEmbeddedEoaAddress, swapChainId],
+    enabled: Boolean(canonicalAddress && privyEmbeddedEoaAddress && publicClient && swapChainId === BASE_CHAIN_ID),
+    staleTime: 10_000,
+    queryFn: async () => {
+      if (!canonicalAddress || !privyEmbeddedEoaAddress || !publicClient) return false
+      try {
+        const isOwner = (await (publicClient as any).readContract({
+          address: canonicalAddress as Address,
+          abi: COINBASE_SMART_WALLET_OWNER_CHECK_ABI,
+          functionName: 'isOwnerAddress',
+          args: [privyEmbeddedEoaAddress as Address],
+        })) as boolean
+        return isOwner === true
+      } catch {
+        return false
+      }
+    },
+  })
+
+  const privyEmbeddedCanonicalWalletClient = useMemo(() => {
+    if (!privyEmbeddedEoaAddress) return null
+    return {
+      request: async (args: { method: string; params?: any[] }) => {
+        const provider = await getPrivyEmbeddedEoaProvider()
+        if (!provider?.request) throw new Error('Privy embedded EOA provider not available')
+        await ensureProviderOnBase(provider, 'Privy embedded EOA')
+        if (args?.method === 'eth_sign') {
+          const params = Array.isArray(args.params) ? args.params : []
+          const hashCandidate = typeof params[1] === 'string' ? params[1] : ''
+          if (/^0x[0-9a-fA-F]{64}$/.test(hashCandidate)) {
+            try {
+              const rawSig = await provider.request({
+                method: 'secp256k1_sign',
+                params: [hashCandidate],
+              })
+              return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.secp256k1_sign')
+            } catch {
+              // Fall through to provider eth_sign when secp256k1_sign is unavailable.
+            }
+          }
+        }
+        return await provider.request(args as any)
+      },
+      signMessage: async (args: { message: unknown }) => {
+        const provider = await getPrivyEmbeddedEoaProvider()
+        if (!provider?.request) throw new Error('Privy embedded EOA provider not available')
+        await ensureProviderOnBase(provider, 'Privy embedded EOA')
+        const raw =
+          typeof args?.message === 'object' && args.message !== null && 'raw' in (args.message as Record<string, unknown>)
+            ? (args.message as Record<string, unknown>).raw
+            : args?.message
+        const msgHex = typeof raw === 'string' && raw.startsWith('0x') ? raw : toHex(String(raw ?? ''))
+        const rawSig = await provider.request({
+          method: 'personal_sign',
+          params: [msgHex, privyEmbeddedEoaAddress],
+        })
+        return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.personal_sign')
+      },
+      signTypedData: async (typedData: unknown) => {
+        const provider = await getPrivyEmbeddedEoaProvider()
+        if (!provider?.request) throw new Error('Privy embedded EOA provider not available')
+        await ensureProviderOnBase(provider, 'Privy embedded EOA')
+        const rawSig = await provider.request({
+          method: 'eth_signTypedData_v4',
+          params: [privyEmbeddedEoaAddress, JSON.stringify(typedData)],
+        })
+        return ensureSignatureHex(rawSig, 'privyEmbeddedEoa.signTypedData')
+      },
+    }
+  }, [ensureProviderOnBase, getPrivyEmbeddedEoaProvider, privyEmbeddedEoaAddress])
 
   // Whether the system has a canonical CSW address on file for this user.
   // When false (null DB row), "Smart Wallet" mode is unavailable AND linking
@@ -274,12 +434,37 @@ export function Swap() {
     accountContext.preferredMode === 'SMART_WALLET' ? 'canonical' : 'eoa'
   const executionMode: WalletMode =
     accountContext.activeAccountType === 'SMART_WALLET' ? 'canonical' : 'eoa'
+  const privyEmbeddedCanonicalSignerAvailable = Boolean(
+    canonicalAddress &&
+      privyEmbeddedEoaAddress &&
+      privyEmbeddedEoaCanSign &&
+      privyEmbeddedCanonicalWalletClient &&
+      privyEmbeddedEoaCanOperateCanonicalQuery.data === true,
+  )
+  const usePrivyEmbeddedCanonicalSigner =
+    executionMode === 'canonical' && privyEmbeddedCanonicalSignerAvailable
+  const canonicalSignerAddress = usePrivyEmbeddedCanonicalSigner ? privyEmbeddedEoaAddress : signerAddress
+  const canonicalSignerWalletClient = usePrivyEmbeddedCanonicalSigner
+    ? (privyEmbeddedCanonicalWalletClient as any)
+    : walletClient
+  const executionSignerAddress = executionMode === 'canonical' ? canonicalSignerAddress : signerAddress
+  const executionWalletClient = executionMode === 'canonical' ? canonicalSignerWalletClient : walletClient
   const executionAddress = accountContext.activeAccount ?? null
-  const executionReady = Boolean(executionAddress && walletClient && publicClient)
+  const executionReady = Boolean(executionAddress && executionWalletClient && publicClient)
   const executionFallbackActive = executionMode !== preferredExecutionMode
   const canonicalAvailable = Boolean(
     canonicalAddress &&
-      (accountContext.signerType === 'SMART_WALLET' || accountContext.eoaIsOwnerOfCsw === true),
+      (accountContext.signerType === 'SMART_WALLET' ||
+        accountContext.eoaIsOwnerOfCsw === true ||
+        privyEmbeddedCanonicalSignerAvailable),
+  )
+  const identityReady = Boolean(
+    canonicalAddress &&
+      executionWalletClient &&
+      publicClient &&
+      (accountContext.signerType === 'SMART_WALLET' ||
+        accountContext.eoaIsOwnerOfCsw === true ||
+        privyEmbeddedCanonicalSignerAvailable),
   )
 
   // ─── Token options (chain-aware) ─────────────────────────────────────────
@@ -435,10 +620,10 @@ export function Swap() {
     resetTradeState,
   } = useSwapExecution({
     address,
-    walletClient,
+    walletClient: executionWalletClient,
     publicClient,
     canonicalAddress,
-    signerAddress,
+    signerAddress: executionSignerAddress,
     executionMode,
     executionAddress,
     executionReady,

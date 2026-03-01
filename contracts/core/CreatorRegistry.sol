@@ -64,6 +64,16 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
     /// @dev Used when a remote OFT sends a lottery entry and we need to identify the creator
     mapping(address => address) public remoteOFTToToken;
 
+    /// @notice Remote OFT peers for non-EVM chains keyed by bytes32 identity (e.g., Solana pubkey)
+    /// @dev creatorCoin → chainEid → remoteOFTBytes32
+    mapping(address => mapping(uint32 => bytes32)) public remoteOFTPeersBytes32;
+
+    /// @notice Chain EIDs that have bytes32 peers for a given creator coin
+    mapping(address => uint32[]) private remoteOFTChainsBytes32;
+
+    /// @notice Reverse lookup: remote bytes32 peer → creator coin
+    mapping(bytes32 => address) public remoteOFTBytes32ToToken;
+
     // =================================
     // CHAIN CONFIGURATION
     // =================================
@@ -120,8 +130,6 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
 
     event FactoryAuthorized(address indexed factory, bool status);
     event HubChainSet(uint256 chainId, uint32 eid);
-    event RemoteOFTPeerSet(address indexed creatorCoin, uint32 indexed chainEid, address remoteOFT);
-    event RemoteOFTPeerRemoved(address indexed creatorCoin, uint32 indexed chainEid);
 
     // =================================
     // ERRORS
@@ -135,6 +143,7 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
     error TooManyCreatorCoins();
     error CanonicalWalletAlreadyInUse(address wallet, address token);
     error ZeroAddress();
+    error ZeroBytes32();
     error NotAuthorized();
 
     // =================================
@@ -392,7 +401,11 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
      * @param _chainEid LayerZero EID of the remote chain
      * @param _remoteOFT Address of the CreatorShareOFT on the remote chain
      */
-    function setRemoteOFTPeer(address _token, uint32 _chainEid, address _remoteOFT) external onlyAuthorizedOrOwner {
+    function setRemoteOFTPeer(address _token, uint32 _chainEid, address _remoteOFT)
+        external
+        override
+        onlyAuthorizedOrOwner
+    {
         if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
         if (_remoteOFT == address(0)) revert ZeroAddress();
 
@@ -414,7 +427,7 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
     /**
      * @notice Remove a remote OFT peer for a creator coin
      */
-    function removeRemoteOFTPeer(address _token, uint32 _chainEid) external onlyOwner {
+    function removeRemoteOFTPeer(address _token, uint32 _chainEid) external override onlyOwner {
         if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
 
         address remoteOFT = remoteOFTPeers[_token][_chainEid];
@@ -442,14 +455,14 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
     /**
      * @notice Get the remote OFT address for a creator coin on a specific chain
      */
-    function getRemoteOFTPeer(address _token, uint32 _chainEid) external view returns (address) {
+    function getRemoteOFTPeer(address _token, uint32 _chainEid) external view override returns (address) {
         return remoteOFTPeers[_token][_chainEid];
     }
 
     /**
      * @notice Get all remote chain EIDs that have a deployed OFT for a creator coin
      */
-    function getRemoteOFTChains(address _token) external view returns (uint32[] memory) {
+    function getRemoteOFTChains(address _token) external view override returns (uint32[] memory) {
         return remoteOFTChains[_token];
     }
 
@@ -458,7 +471,12 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
      * @return eids Array of chain EIDs
      * @return ofts Array of remote OFT addresses (parallel with eids)
      */
-    function getAllRemoteOFTPeers(address _token) external view returns (uint32[] memory eids, address[] memory ofts) {
+    function getAllRemoteOFTPeers(address _token)
+        external
+        view
+        override
+        returns (uint32[] memory eids, address[] memory ofts)
+    {
         eids = remoteOFTChains[_token];
         ofts = new address[](eids.length);
         for (uint256 i; i < eids.length;) {
@@ -473,8 +491,96 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
      * @notice Get the creator coin for a remote OFT address (reverse lookup)
      * @dev Used when a remote OFT sends a lottery entry to identify the creator
      */
-    function getTokenForRemoteOFT(address _remoteOFT) external view returns (address) {
+    function getTokenForRemoteOFT(address _remoteOFT) external view override returns (address) {
         return remoteOFTToToken[_remoteOFT];
+    }
+
+    /**
+     * @notice Sets non-EVM remote OFT peer mapping for a registered creator coin.
+     * @dev Uses bytes32 remote identity so Solana pubkeys can be represented losslessly.
+     */
+    function setRemoteOFTPeerBytes32(address _token, uint32 _chainEid, bytes32 _remoteOFT)
+        external
+        override
+        onlyAuthorizedOrOwner
+    {
+        require(creatorCoins[_token].token != address(0), "Token not registered");
+        require(_chainEid != 0, "Invalid chain EID");
+        if (_remoteOFT == bytes32(0)) revert ZeroBytes32();
+
+        bytes32 oldPeer = remoteOFTPeersBytes32[_token][_chainEid];
+        if (oldPeer == bytes32(0)) {
+            remoteOFTChainsBytes32[_token].push(_chainEid);
+        } else {
+            delete remoteOFTBytes32ToToken[oldPeer];
+        }
+
+        remoteOFTPeersBytes32[_token][_chainEid] = _remoteOFT;
+        remoteOFTBytes32ToToken[_remoteOFT] = _token;
+        emit RemoteOFTPeerBytes32Set(_token, _chainEid, _remoteOFT);
+    }
+
+    /**
+     * @notice Removes non-EVM remote OFT peer mapping.
+     */
+    function removeRemoteOFTPeerBytes32(address _token, uint32 _chainEid) external override onlyOwner {
+        require(_chainEid != 0, "Invalid chain EID");
+
+        bytes32 oldPeer = remoteOFTPeersBytes32[_token][_chainEid];
+        require(oldPeer != bytes32(0), "Peer not set");
+
+        delete remoteOFTPeersBytes32[_token][_chainEid];
+        delete remoteOFTBytes32ToToken[oldPeer];
+
+        uint32[] storage chains = remoteOFTChainsBytes32[_token];
+        for (uint256 i = 0; i < chains.length; i++) {
+            if (chains[i] == _chainEid) {
+                chains[i] = chains[chains.length - 1];
+                chains.pop();
+                break;
+            }
+        }
+
+        emit RemoteOFTPeerBytes32Removed(_token, _chainEid);
+    }
+
+    /**
+     * @notice Returns bytes32 peer identity for token + EID.
+     */
+    function getRemoteOFTPeerBytes32(address _token, uint32 _chainEid) external view override returns (bytes32) {
+        return remoteOFTPeersBytes32[_token][_chainEid];
+    }
+
+    /**
+     * @notice Returns all EIDs with bytes32 peers for token.
+     */
+    function getRemoteOFTChainsBytes32(address _token) external view override returns (uint32[] memory) {
+        return remoteOFTChainsBytes32[_token];
+    }
+
+    /**
+     * @notice Returns all bytes32 peers for token.
+     */
+    function getAllRemoteOFTPeersBytes32(address _token)
+        external
+        view
+        override
+        returns (uint32[] memory eids, bytes32[] memory peers)
+    {
+        uint32[] memory chains = remoteOFTChainsBytes32[_token];
+        eids = chains;
+        peers = new bytes32[](chains.length);
+        for (uint256 i = 0; i < chains.length; i++) {
+            peers[i] = remoteOFTPeersBytes32[_token][chains[i]];
+        }
+        return (eids, peers);
+    }
+
+    /**
+     * @notice Reverse lookup for bytes32 remote OFT identity.
+     */
+    function getTokenForRemoteOFTBytes32(bytes32 _remoteOFT) external view override returns (address) {
+        return remoteOFTBytes32ToToken[_remoteOFT];
     }
 
     // =================================

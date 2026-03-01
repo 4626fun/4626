@@ -184,6 +184,43 @@ describe('deploy session ownership guardrails', () => {
     expect(insertArgs.payload?.persistSessionOwner).toBe(true)
   })
 
+  it('persists solana OVault hints in deploy session payload', async () => {
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        solanaOvault: {
+          enabled: true,
+          assetMintOrigin: 'existing',
+          assetMeshMint: '11111111111111111111111111111111',
+          shareMeshMint: '22222222222222222222222222222222',
+          solanaEid: 30168,
+          mintCompatibilityHints: {
+            tokenProgram: 'token-2022',
+            transferHookDetected: true,
+            oftFeeBps: 0,
+            adapterMode: 'regular-oft',
+            authorityCompatible: true,
+            rentValueLamports: '2039280',
+          },
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
+    const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
+    expect(insertArgs.payload?.solanaOvault?.enabled).toBe(true)
+    expect(insertArgs.payload?.solanaOvault?.assetMintOrigin).toBe('existing')
+    expect(insertArgs.payload?.solanaOvault?.solanaEid).toBe(30168)
+    expect(insertArgs.payload?.solanaOvault?.mintCompatibilityHints?.transferHookDetected).toBe(true)
+    expect(insertArgs.payload?.solanaOvault?.mintCompatibilityHints?.oftFeeBps).toBe(0)
+  })
+
   it('creates session when creator/payout recipient is allowlisted via creatorToken resolution', async () => {
     resolveCoinPartiesMock.mockResolvedValueOnce({
       creator: null,

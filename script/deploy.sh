@@ -6,8 +6,7 @@
 #
 # Usage:
 #   ./script/deploy.sh infrastructure    - Deploy all core contracts
-#   ./script/deploy.sh vault <TOKEN>     - Deploy vault for a creator coin
-#   ./script/deploy.sh aa <TOKEN>        - Deploy via ERC-4337 (gasless)
+#   ./script/deploy.sh infra-v2          - Deploy phased infra + seed bytecode store
 #
 # Environment:
 #   PRIVATE_KEY         - Deployer private key
@@ -51,20 +50,20 @@ print_usage() {
     echo -e "${YELLOW}Usage:${NC}"
     echo "  ./script/deploy.sh infrastructure         Deploy all core contracts"
     echo "  ./script/deploy.sh infra-v2               Deploy v2 infra and seed bytecode store"
-    echo "  ./script/deploy.sh vault <TOKEN_ADDRESS>  Deploy vault for creator coin"
-    echo "  ./script/deploy.sh aa <TOKEN> [--gasless] Deploy via ERC-4337"
     echo ""
     echo -e "${YELLOW}Examples:${NC}"
     echo "  ./script/deploy.sh infrastructure"
-    echo "  ./script/deploy.sh vault 0x5b674196812451b7cec024fe9d22d2c0b172fa75"
-    echo "  ./script/deploy.sh aa 0x5b674196812451b7cec024fe9d22d2c0b172fa75 --gasless"
+    echo "  ./script/deploy.sh infra-v2"
     echo ""
     echo -e "${YELLOW}Environment Variables:${NC}"
     echo "  PRIVATE_KEY         - Your deployer private key"
     echo "  RPC_URL             - Base RPC URL (default: mainnet.base.org)"
     echo "  BASE_RPC_URL        - Base RPC URL for v2 deployer"
     echo "  ETHERSCAN_API_KEY   - For contract verification"
-    echo "  CREATOR_FACTORY     - Factory address (for vault deployment)"
+    echo ""
+    echo -e "${YELLOW}Note:${NC}"
+    echo "  Legacy per-token deploy entrypoints are retired."
+    echo "  Use the app deploy-session flow at /deploy for creator vault launches."
     echo ""
 }
 
@@ -98,7 +97,7 @@ deploy_infrastructure() {
     echo -e "${YELLOW}Next Steps:${NC}"
     echo "1. Copy contract addresses to .env file"
     echo "2. Add contracts to Coinbase Paymaster allowlist"
-    echo "3. Deploy creator vaults"
+    echo "3. Launch creator vaults via the app deploy-session flow (/deploy)"
 }
 
 # Deploy v2 bytecode store + deployer + DeploymentBatcher, then seed store
@@ -108,7 +107,37 @@ deploy_infra_v2() {
         exit 1
     fi
 
+    if [ -n "${DEPLOYMENT_EPOCH_TAG:-}" ]; then
+        : "${INFRA_STORE_SALT_TAG:=4626:UniversalBytecodeStore:${DEPLOYMENT_EPOCH_TAG}}"
+        : "${INFRA_DEPLOYER_FROM_STORE_SALT_TAG:=4626:UniversalCreate2DeployerFromStore:${DEPLOYMENT_EPOCH_TAG}}"
+        : "${INFRA_VAULT_CORE_MODULE_SALT_TAG:=4626:CreatorOVaultCoreModule:${DEPLOYMENT_EPOCH_TAG}}"
+        : "${INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG:=4626:CreatorOVaultStrategiesModule:${DEPLOYMENT_EPOCH_TAG}}"
+        : "${INFRA_VAULT_ADMIN_MODULE_SALT_TAG:=4626:CreatorOVaultAdminModule:${DEPLOYMENT_EPOCH_TAG}}"
+        : "${INFRA_DEPLOYMENT_BATCHER_SALT_TAG:=4626:DeploymentBatcher:${DEPLOYMENT_EPOCH_TAG}}"
+        export INFRA_STORE_SALT_TAG
+        export INFRA_DEPLOYER_FROM_STORE_SALT_TAG
+        export INFRA_VAULT_CORE_MODULE_SALT_TAG
+        export INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG
+        export INFRA_VAULT_ADMIN_MODULE_SALT_TAG
+        export INFRA_DEPLOYMENT_BATCHER_SALT_TAG
+    fi
+
     echo -e "${GREEN}Deploying v2 bytecode store + deployer...${NC}"
+    echo ""
+    echo -e "${YELLOW}Infra Salt Configuration:${NC}"
+    echo "  DEPLOYMENT_EPOCH_TAG=${DEPLOYMENT_EPOCH_TAG:-[not set]}"
+    echo "  INFRA_STORE_SALT=${INFRA_STORE_SALT:-[auto by tag/default]}"
+    echo "  INFRA_STORE_SALT_TAG=${INFRA_STORE_SALT_TAG:-4626:UniversalBytecodeStore:v2 (default)}"
+    echo "  INFRA_DEPLOYER_FROM_STORE_SALT=${INFRA_DEPLOYER_FROM_STORE_SALT:-[auto by tag/default]}"
+    echo "  INFRA_DEPLOYER_FROM_STORE_SALT_TAG=${INFRA_DEPLOYER_FROM_STORE_SALT_TAG:-4626:UniversalCreate2DeployerFromStore:v2 (default)}"
+    echo "  INFRA_VAULT_CORE_MODULE_SALT=${INFRA_VAULT_CORE_MODULE_SALT:-[auto by tag/default]}"
+    echo "  INFRA_VAULT_CORE_MODULE_SALT_TAG=${INFRA_VAULT_CORE_MODULE_SALT_TAG:-4626:CreatorOVaultCoreModule:v1 (default)}"
+    echo "  INFRA_VAULT_STRATEGIES_MODULE_SALT=${INFRA_VAULT_STRATEGIES_MODULE_SALT:-[auto by tag/default]}"
+    echo "  INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG=${INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG:-4626:CreatorOVaultStrategiesModule:v1 (default)}"
+    echo "  INFRA_VAULT_ADMIN_MODULE_SALT=${INFRA_VAULT_ADMIN_MODULE_SALT:-[auto by tag/default]}"
+    echo "  INFRA_VAULT_ADMIN_MODULE_SALT_TAG=${INFRA_VAULT_ADMIN_MODULE_SALT_TAG:-4626:CreatorOVaultAdminModule:v1 (default)}"
+    echo "  INFRA_DEPLOYMENT_BATCHER_SALT=${INFRA_DEPLOYMENT_BATCHER_SALT:-[auto by tag/default]}"
+    echo "  INFRA_DEPLOYMENT_BATCHER_SALT_TAG=${INFRA_DEPLOYMENT_BATCHER_SALT_TAG:-4626:DeploymentBatcher:v4 (default)}"
     echo ""
 
     forge script script/DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer \
@@ -147,61 +176,16 @@ deploy_infra_v2() {
 
 # Deploy vault for creator coin
 deploy_vault() {
-    local token=$1
-    
-    if [ -z "$token" ]; then
-        echo -e "${RED}Error: Token address required${NC}"
-        echo "Usage: ./script/deploy.sh vault <TOKEN_ADDRESS>"
-        exit 1
-    fi
-    
-    if [ -z "$CREATOR_FACTORY" ]; then
-        echo -e "${RED}Error: CREATOR_FACTORY environment variable not set${NC}"
-        echo "Deploy infrastructure first, then set CREATOR_FACTORY=<address>"
-        exit 1
-    fi
-    
-    echo -e "${GREEN}Deploying vault for $token...${NC}"
-    echo ""
-    
-    CREATOR_COIN_ADDRESS=$token forge script script/DeployInfrastructure.s.sol:DeployVaultStack \
-        --rpc-url "$RPC_URL" \
-        --broadcast \
-        -vvvv
-    
-    echo ""
-    echo -e "${GREEN}✓ Vault deployed successfully!${NC}"
+    echo -e "${RED}Error: ./script/deploy.sh vault is retired.${NC}"
+    echo "Use the app deploy-session flow at /deploy."
+    exit 1
 }
 
 # Deploy via ERC-4337
 deploy_aa() {
-    local token=$1
-    local gasless_flag=""
-    
-    if [ -z "$token" ]; then
-        echo -e "${RED}Error: Token address required${NC}"
-        echo "Usage: ./script/deploy.sh aa <TOKEN_ADDRESS> [--gasless]"
-        exit 1
-    fi
-    
-    # Check for --gasless flag
-    if [[ "$*" == *"--gasless"* ]]; then
-        gasless_flag="--gasless"
-        echo -e "${GREEN}Using Coinbase Paymaster (gasless)${NC}"
-    fi
-    
-    if [ -z "$SMART_ACCOUNT" ]; then
-        echo -e "${RED}Error: SMART_ACCOUNT environment variable not set${NC}"
-        exit 1
-    fi
-    
-    echo -e "${GREEN}Deploying via ERC-4337 for $token...${NC}"
-    echo ""
-    
-    npx ts-node script/deploy-with-aa.ts "$token" $gasless_flag
-    
-    echo ""
-    echo -e "${GREEN}✓ Deployment submitted via ERC-4337!${NC}"
+    echo -e "${RED}Error: ./script/deploy.sh aa is retired.${NC}"
+    echo "Use the app deploy-session flow at /deploy."
+    exit 1
 }
 
 # Main

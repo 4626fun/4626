@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { usePrivy, useWallets } from '@privy-io/react-auth'
+import { useWallets } from '@privy-io/react-auth'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { Bot, CheckCircle2, ExternalLink, Loader2, Shield, Sparkles, Zap } from 'lucide-react'
@@ -217,8 +217,6 @@ export function AgentRegister() {
   const { address: connectedAddress, chainId, isConnected, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
   const { wallets: privyWallets } = useWallets()
-  const { ready: privyReady, authenticated: privyAuthenticated, login: privyLogin } = usePrivy()
-  const [showWalletConnect, setShowWalletConnect] = useState(false)
   const basePublicClient = usePublicClient({ chainId: base.id })
   const fallbackPublicClient = usePublicClient()
   const publicClient = basePublicClient ?? fallbackPublicClient

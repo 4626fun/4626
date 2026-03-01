@@ -163,7 +163,7 @@ export function Vault() {
   })
 
   const queryClient = useQueryClient()
-  const { address: userAddress, isConnected } = useAccount()
+  const { address: userAddress } = useAccount()
   const accountContext = useAccountContext()
   const [activeTab, setActiveTab] = useState<TabType>('Deposit')
   const [amount, setAmount] = useState('')

@@ -63,8 +63,8 @@ forge test -vvv
 # Run specific test
 forge test --match-test testVaultDeposit -vvv
 
-# Deploy to Base (example)
-forge script script/DeployInfrastructure.s.sol:DeployVaultStack \
+# Deploy phased infra on Base (example)
+forge script script/DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer \
   --rpc-url $BASE_RPC_URL \
   --broadcast \
   --verify
@@ -89,7 +89,8 @@ For the Vercel API surface, avoid "hidden" dynamic imports: add endpoints by reg
 **Deploy a vault for your Creator Coin:**
 
 ```solidity
-// Via Factory (or use web UI at 4626.fun/deploy)
+// Legacy onchain factory example (retired path).
+// Use the supported app deploy-session flow at app.4626.fun/deploy.
 (address vault, address wrapper, address shareOFT) = factory.deployVault(
     0x5b67...75,                       // Your Creator Coin address
     "TOKEN Vault",                     // Vault name

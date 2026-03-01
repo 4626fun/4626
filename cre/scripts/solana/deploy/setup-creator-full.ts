@@ -128,6 +128,12 @@ function pubkeyToBytes32Hex(pubkey: PublicKey): string {
   return '0x' + Buffer.from(pubkey.toBytes()).toString('hex');
 }
 
+function readAdapterModeHint(): 'regular-oft' | 'oft-adapter' {
+  const raw = String(process.env.SOLANA_OVAULT_ADAPTER_MODE ?? '').trim().toLowerCase();
+  if (raw === 'oft-adapter' || raw === 'adapter') return 'oft-adapter';
+  return 'regular-oft';
+}
+
 function log(msg: string): void {
   process.stderr.write(`[setup-creator-full] ${msg}\n`);
 }
@@ -275,6 +281,14 @@ const result = {
   },
   hubCreatorCoin: config.hubCreatorCoin,
   hubShareToken: config.hubShareToken,
+  mintCompatibilityHints: {
+    tokenProgram: 'token-2022',
+    transferHookDetected: true,
+    oftFeeBps: config.feeBps,
+    adapterMode: readAdapterModeHint(),
+    authorityCompatible: true,
+    rentValueLamports: lamports.toString(),
+  },
   signatures,
 };
 

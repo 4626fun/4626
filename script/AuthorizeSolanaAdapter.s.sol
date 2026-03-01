@@ -37,7 +37,7 @@ interface IDeploymentBatcherSolanaAuth {
  *   forge script script/AuthorizeSolanaAdapter.s.sol --rpc-url $BASE_RPC_URL --broadcast
  */
 contract AuthorizeSolanaAdapter is Script {
-    address constant DEFAULT_DEPLOYMENT_BATCHER = 0xB87CBb646dD14F520078F11196f79BF815F18c84;
+    address constant DEFAULT_DEPLOYMENT_BATCHER = 0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753;
 
     function _trySetAdapterLotteryManager(address adapter, address lotteryManager) internal {
         (bool hasLotteryGetter, bytes memory data) = adapter.staticcall(abi.encodeWithSignature("lotteryManager()"));

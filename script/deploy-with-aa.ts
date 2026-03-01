@@ -27,6 +27,9 @@ import {
 import { base } from 'viem/chains';
 import { privateKeyToAccount, sign } from 'viem/accounts';
 
+const RETIRED_MESSAGE =
+    'script/deploy-with-aa.ts is retired. Use the app deploy-session flow at /deploy.';
+
 // =================================
 // CONFIG
 // =================================
@@ -539,6 +542,11 @@ async function getUserOpHash(
 // =================================
 
 async function main() {
+    console.error('');
+    console.error(`❌ ${RETIRED_MESSAGE}`);
+    console.error('');
+    process.exit(1);
+
     const creatorCoin = process.argv[2] as Address;
     const gaslessFlag = process.argv.includes('--gasless');
     const noPayoutRouter = process.argv.includes('--no-payout-router');

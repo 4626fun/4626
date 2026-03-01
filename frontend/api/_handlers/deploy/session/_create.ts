@@ -26,11 +26,24 @@ import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js
 import { buildDeployPermissionGrant } from '../../../../server/_lib/erc7712Permissions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { resolveCoinParties } from '../../../../server/_lib/coinParties.js'
+import {
+  normalizeSolanaAssetMintOrigin,
+  parseSolanaOvaultMintCompatibilityHints,
+} from '../../../../server/_lib/solanaOvaultCompatibility.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 // JSON comes over the wire, so `value` may be a string/number.
 type Call = { to: Address; value?: bigint | number | string; data: Hex }
+
+type SolanaOvaultRequest = {
+  enabled?: boolean
+  assetMintOrigin?: 'existing' | 'new'
+  assetMeshMint?: string
+  shareMeshMint?: string
+  solanaEid?: number | string
+  mintCompatibilityHints?: unknown
+}
 
 type CreateDeploySessionRequest = {
   smartWallet: Address
@@ -51,6 +64,7 @@ type CreateDeploySessionRequest = {
   // Phase 3 (strategies) + Phase 4 (deferred auction) are also executed server-side.
   phase3Calls?: Call[]
   phase4Calls?: Call[]
+  solanaOvault?: SolanaOvaultRequest
   // Optional metadata for debugging/UI.
   version?: string
 }
@@ -112,6 +126,47 @@ function isTruthyEnv(value: string | undefined, fallback: boolean): boolean {
 function shouldPersistManagedSessionOwner(): boolean {
   // Keep Privy-managed session owners installed by default to reduce repeated add-owner prompts.
   return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, true)
+}
+
+function parseUInt32Like(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 4_294_967_295) {
+    return Math.floor(value)
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value.trim())
+    if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 4_294_967_295) {
+      return Math.floor(parsed)
+    }
+  }
+  return null
+}
+
+function normalizeSolanaOvaultConfig(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const raw = value as Record<string, unknown>
+
+  const enabled = raw.enabled === true
+  const assetMintOrigin = normalizeSolanaAssetMintOrigin(raw.assetMintOrigin, 'existing')
+  const assetMeshMint =
+    typeof raw.assetMeshMint === 'string' && raw.assetMeshMint.trim()
+      ? raw.assetMeshMint.trim()
+      : null
+  const shareMeshMint =
+    typeof raw.shareMeshMint === 'string' && raw.shareMeshMint.trim()
+      ? raw.shareMeshMint.trim()
+      : null
+  const solanaEid = parseUInt32Like(raw.solanaEid)
+  const mintCompatibilityHints = parseSolanaOvaultMintCompatibilityHints(raw.mintCompatibilityHints)
+  const hasMintHints = Object.values(mintCompatibilityHints).some((v) => v !== null)
+
+  return {
+    enabled,
+    assetMintOrigin,
+    ...(assetMeshMint ? { assetMeshMint } : null),
+    ...(shareMeshMint ? { shareMeshMint } : null),
+    ...(solanaEid !== null ? { solanaEid } : null),
+    ...(hasMintHints ? { mintCompatibilityHints } : null),
+  }
 }
 
 
@@ -623,6 +678,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const phase2Calls = Array.isArray(body.phase2Calls) ? body.phase2Calls : []
     const phase3Calls = Array.isArray(body.phase3Calls) ? body.phase3Calls : []
     const phase4Calls = Array.isArray(body.phase4Calls) ? body.phase4Calls : []
+    const solanaOvault = normalizeSolanaOvaultConfig(body.solanaOvault)
     const hasPhase2Finalize = phase2FinalizeCalls.length > 0 || phase2Calls.length > 0
 
     const hasAnyWork =
@@ -787,6 +843,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         phase2Calls,
         phase3Calls,
         phase4Calls,
+        ...(solanaOvault ? { solanaOvault } : null),
         erc7712Grant,
       },
       expiresAt,
