@@ -41,6 +41,7 @@ Optional aliases are also supported:
 1. **Prepare**
    - Ensure `DEPLOY_SOLANA_OVAULT_KILL_SWITCH=0`
    - Set `DEPLOY_SOLANA_PREFLIGHT_ROUTE_MODE=ovault_first`
+   - Ensure deploy-session TTL is long enough for mainnet latency (`DEPLOY_SESSION_TTL_MINUTES>=45`)
    - Deploy API/runtime config
 2. **Canary creators (1-3)**
    - Run `/deploy` for canary creators only

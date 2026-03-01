@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import handler from '../_handlers/deploy/session/_create.ts'
 import { createMockReq, createMockRes } from './helpers'
@@ -129,7 +129,11 @@ function makeCanonicalDb() {
 describe('deploy session ownership guardrails', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.DEPLOY_SESSION_TTL_MINUTES
     resolveCoinPartiesMock.mockResolvedValue({ creator: null, payoutRecipient: null })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('returns 400 for malformed deploy addresses', async () => {
@@ -182,6 +186,41 @@ describe('deploy session ownership guardrails', () => {
     expect(insertArgs.payload?.erc7712Grant?.version).toBe('erc7712-v1')
     expect((insertArgs.payload?.erc7712Grant?.allowedTargets ?? []).map((v: string) => v.toLowerCase())).toContain('0x0000000000000000000000000000000000000010')
     expect(insertArgs.payload?.persistSessionOwner).toBe(true)
+  })
+
+  it('uses a 45-minute default deploy session TTL', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-03-01T07:00:00.000Z'))
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+
+    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
+    const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
+    expect(insertArgs.expiresAt).toBeInstanceOf(Date)
+    expect(insertArgs.expiresAt.toISOString()).toBe('2026-03-01T07:45:00.000Z')
+    expect(insertArgs.payload?.erc7712Grant?.validUntil).toBe('2026-03-01T07:45:00.000Z')
+  })
+
+  it('respects DEPLOY_SESSION_TTL_MINUTES override', async () => {
+    process.env.DEPLOY_SESSION_TTL_MINUTES = '90'
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-03-01T07:00:00.000Z'))
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+
+    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
+    const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
+    expect(insertArgs.expiresAt).toBeInstanceOf(Date)
+    expect(insertArgs.expiresAt.toISOString()).toBe('2026-03-01T08:30:00.000Z')
+    expect(insertArgs.payload?.erc7712Grant?.validUntil).toBe('2026-03-01T08:30:00.000Z')
   })
 
   it('persists solana OVault hints in deploy session payload', async () => {
