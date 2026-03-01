@@ -36,6 +36,7 @@ vi.mock('../../server/_lib/contracts.js', () => ({
 const AUCTION = '0x3333333333333333333333333333333333333333'
 const OWNER = '0x4444444444444444444444444444444444444444'
 const TOKEN = '0x5555555555555555555555555555555555555555'
+const VALID_LOCK_DURATION_SEC = 7 * 24 * 60 * 60
 
 const AUCTION_ABI = [
   {
@@ -356,7 +357,7 @@ describe('v1 build phase 1 handlers', () => {
   it('builds ve lock calldata', async () => {
     const req = createMockReq({
       method: 'POST',
-      body: { token: TOKEN, amount: '100', durationSec: '86400' },
+      body: { token: TOKEN, amount: '100', durationSec: String(VALID_LOCK_DURATION_SEC) },
     })
     const res = createMockRes()
     await veLockHandler(req, res)
@@ -366,7 +367,7 @@ describe('v1 build phase 1 handlers', () => {
     const expectedData = encodeFunctionData({
       abi: VE_LOCK_ABI,
       functionName: 'lock',
-      args: [TOKEN, 100n, 86400n],
+      args: [TOKEN, 100n, BigInt(VALID_LOCK_DURATION_SEC)],
     })
     expect(res.body?.data?.data).toBe(expectedData)
   })
@@ -374,7 +375,7 @@ describe('v1 build phase 1 handlers', () => {
   it('changes ve lock calldata when duration is mutated', async () => {
     const baseReq = createMockReq({
       method: 'POST',
-      body: { token: TOKEN, amount: '100', durationSec: '86400' },
+      body: { token: TOKEN, amount: '100', durationSec: String(VALID_LOCK_DURATION_SEC) },
     })
     const baseRes = createMockRes()
     await veLockHandler(baseReq, baseRes)
@@ -382,7 +383,7 @@ describe('v1 build phase 1 handlers', () => {
 
     const mutatedReq = createMockReq({
       method: 'POST',
-      body: { token: TOKEN, amount: '100', durationSec: '86401' },
+      body: { token: TOKEN, amount: '100', durationSec: String(VALID_LOCK_DURATION_SEC + 1) },
     })
     const mutatedRes = createMockRes()
     await veLockHandler(mutatedReq, mutatedRes)
@@ -393,7 +394,7 @@ describe('v1 build phase 1 handlers', () => {
   it('validates ve lock token input', async () => {
     const req = createMockReq({
       method: 'POST',
-      body: { token: 'not-an-address', amount: '100', durationSec: '86400' },
+      body: { token: 'not-an-address', amount: '100', durationSec: String(VALID_LOCK_DURATION_SEC) },
     })
     const res = createMockRes()
     await veLockHandler(req, res)
@@ -401,8 +402,21 @@ describe('v1 build phase 1 handlers', () => {
     expect(String(res.body?.error ?? '')).toContain('token is required')
   })
 
+  it('validates ve lock duration bounds', async () => {
+    const req = createMockReq({
+      method: 'POST',
+      body: { token: TOKEN, amount: '100', durationSec: String(VALID_LOCK_DURATION_SEC - 1) },
+    })
+    const res = createMockRes()
+    await veLockHandler(req, res)
+    expect(res.statusCode).toBe(400)
+    expect(String(res.body?.error ?? '')).toContain('durationSec must be between')
+  })
+
   it('builds ve extend calldata', async () => {
-    const extendReq = createMockReq({ method: 'POST', body: { newEnd: '9999999999' } })
+    const nowSec = Math.floor(Date.now() / 1000)
+    const newEnd = BigInt(nowSec + 14 * 24 * 60 * 60)
+    const extendReq = createMockReq({ method: 'POST', body: { newEnd: newEnd.toString() } })
     const extendRes = createMockRes()
     await veExtendHandler(extendReq, extendRes)
     expect(extendRes.statusCode).toBe(200)
@@ -410,7 +424,7 @@ describe('v1 build phase 1 handlers', () => {
     const expectedExtendData = encodeFunctionData({
       abi: VE_EXTEND_ABI,
       functionName: 'extendLock',
-      args: [9999999999n],
+      args: [newEnd],
     })
     expect(extendRes.body?.data?.data).toBe(expectedExtendData)
   })
@@ -450,12 +464,16 @@ describe('v1 build phase 1 handlers', () => {
   })
 
   it('changes ve extend calldata when newEnd is mutated', async () => {
-    const baseReq = createMockReq({ method: 'POST', body: { newEnd: '9999999999' } })
+    const nowSec = Math.floor(Date.now() / 1000)
+    const baseEnd = nowSec + 14 * 24 * 60 * 60
+    const mutatedEnd = nowSec + 15 * 24 * 60 * 60
+
+    const baseReq = createMockReq({ method: 'POST', body: { newEnd: String(baseEnd) } })
     const baseRes = createMockRes()
     await veExtendHandler(baseReq, baseRes)
     expect(baseRes.statusCode).toBe(200)
 
-    const mutatedReq = createMockReq({ method: 'POST', body: { newEnd: '10000000000' } })
+    const mutatedReq = createMockReq({ method: 'POST', body: { newEnd: String(mutatedEnd) } })
     const mutatedRes = createMockRes()
     await veExtendHandler(mutatedReq, mutatedRes)
     expect(mutatedRes.statusCode).toBe(200)
@@ -473,6 +491,22 @@ describe('v1 build phase 1 handlers', () => {
     await veIncreaseHandler(mutatedReq, mutatedRes)
     expect(mutatedRes.statusCode).toBe(200)
     expect(mutatedRes.body?.data?.data).not.toBe(baseRes.body?.data?.data)
+  })
+
+  it('validates ve extend newEnd window', async () => {
+    const nowSec = Math.floor(Date.now() / 1000)
+
+    const pastReq = createMockReq({ method: 'POST', body: { newEnd: String(nowSec - 1) } })
+    const pastRes = createMockRes()
+    await veExtendHandler(pastReq, pastRes)
+    expect(pastRes.statusCode).toBe(400)
+    expect(String(pastRes.body?.error ?? '')).toContain('future unix timestamp')
+
+    const farFutureReq = createMockReq({ method: 'POST', body: { newEnd: String(nowSec + 5 * 365 * 24 * 60 * 60) } })
+    const farFutureRes = createMockRes()
+    await veExtendHandler(farFutureReq, farFutureRes)
+    expect(farFutureRes.statusCode).toBe(400)
+    expect(String(farFutureRes.body?.error ?? '')).toContain('cannot exceed now')
   })
 
   it('validates ve extend/increase numeric inputs', async () => {
