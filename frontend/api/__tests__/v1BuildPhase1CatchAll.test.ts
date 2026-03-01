@@ -17,6 +17,20 @@ const ENABLED_BUILD_ROUTES = [
   'v1/build/ajna/setBucketIndex',
   'v1/build/ajna/moveToBucket',
   'v1/build/ajna/setIdleBufferBps',
+  'v1/build/charm/setCharmVault',
+  'v1/build/charm/setSwapPool',
+  'v1/build/charm/setZRouter',
+  'v1/build/charm/setUseZRouter',
+  'v1/build/charm/setUniFactory',
+  'v1/build/charm/setAutoFeeTier',
+  'v1/build/charm/setParameters',
+  'v1/build/charm/setActive',
+  'v1/build/charm/initializeApprovals',
+  'v1/build/charm/rebalance',
+  'v1/build/charm/ownerEmergencyWithdraw',
+  'v1/build/charm/ownerEmergencyWithdrawFromCharm',
+  'v1/build/charm/vault/rebalance',
+  'v1/build/charm/vault/setStrategy',
 ] as const
 
 describe('v1 enabled build routes (catch-all)', () => {
