@@ -44,7 +44,7 @@ const ADMIN_TABS = [
  * Once authenticated, child routes render via <Outlet />.
  */
 export function AdminLayout() {
-  const { isConnected, address } = useAccount()
+  const { address } = useAccount()
   const { busy: authBusy, error: authError, signIn, signOut, authAddress } = useSiweAuth()
   const location = useLocation()
   const hasSessionAddress = Boolean(authAddress)
