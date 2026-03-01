@@ -14,8 +14,27 @@ export type BonusActionKey = 'github' | 'tiktok' | 'instagram' | 'reddit'
 export type ActionKey = LegacyActionKey | SocialActionKey | BonusActionKey
 
 export type ContactPreference = 'wallet' | 'email'
-export type VerificationMethod = 'siwe' | 'privy' | 'siwf' | 'solana' | 'csw-erc1271' | 'siwe-csw-owner'
+export type VerificationMethod =
+  | 'siwe'
+  | 'privy'
+  | 'siwf'
+  | 'solana'
+  | 'csw-erc1271'
+  | 'siwe-csw-owner'
+  | 'privy-embedded-eoa'
+  | 'privy-zora-readonly'
+  | 'zora-canonical-csw'
 export type VerificationClaim = { method: VerificationMethod; subject: string; timestamp: string }
+export type OwnerInstallMappingStatus =
+  | 'NEEDS_PRIVY_AUTH'
+  | 'WAITING_FOR_WALLETS'
+  | 'EMBEDDED_WALLET_MISSING'
+  | 'EMBEDDED_WALLET_CREATING'
+  | 'ZORA_LINK_REQUIRED'
+  | 'ZORA_LINKING'
+  | 'CANONICAL_RESOLVING'
+  | 'CANONICAL_UNRESOLVED'
+  | 'READY_FOR_OWNER_INSTALL'
 
 export type FlowState = {
   persona: Persona | null
@@ -66,6 +85,13 @@ export type WaitlistState = {
   shareToast: string | null
   actionsDone: Record<ActionKey, boolean>
   miniAppAddSupported: boolean | null
+  // Owner-install prerequisites from waitlist verification.
+  embeddedEoaAddress: string | null
+  zoraProviderAddresses: string[]
+  canonicalZoraCswAddress: string | null
+  canonicalZoraCswUnresolvedReason: string | null
+  mappingStatus: OwnerInstallMappingStatus
+  mappingError: string | null
   // CSW linking status
   cswLinked: boolean
   cswLinkBusy: boolean

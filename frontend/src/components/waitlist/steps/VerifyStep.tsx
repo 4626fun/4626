@@ -111,6 +111,17 @@ type VerifyStepProps = {
   canSubmit: boolean
   simpleVerifiedMode?: boolean
   submitError?: string | null
+  // Owner-install prerequisite gating
+  mappingStatus?: WaitlistState['mappingStatus']
+  embeddedEoaAddress?: string | null
+  zoraProviderAddresses?: string[]
+  canonicalZoraCswAddress?: string | null
+  canonicalZoraCswUnresolvedReason?: string | null
+  mappingError?: string | null
+  mappingPrimaryCtaLabel?: string | null
+  mappingPrimaryHelperText?: string | null
+  mappingPrimaryBusy?: boolean
+  onMappingPrimaryAction?: () => void
   onPrivyContinue: () => void
   onPrivyFallback?: () => void
   onSubmit: () => void | Promise<void>
@@ -146,6 +157,16 @@ export const VerifyStep = memo(function VerifyStep({
   canSubmit,
   simpleVerifiedMode,
   submitError,
+  mappingStatus,
+  embeddedEoaAddress,
+  zoraProviderAddresses,
+  canonicalZoraCswAddress,
+  canonicalZoraCswUnresolvedReason,
+  mappingError,
+  mappingPrimaryCtaLabel,
+  mappingPrimaryHelperText,
+  mappingPrimaryBusy,
+  onMappingPrimaryAction,
   onPrivyContinue,
   onPrivyFallback,
   onSubmit,
@@ -179,16 +200,17 @@ export const VerifyStep = memo(function VerifyStep({
     ]
   }, [hasVerification, hasCreatorCoin, creatorCoinDeclaredMissing, showSubmitButton])
   const [showTrouble, setShowTrouble] = useState(false)
-  const canContinue = !privyVerifyBusy && !busy
-  const showPrivyError = Boolean(privyVerifyError) || Boolean(siwfError)
+  const canContinue = !privyVerifyBusy && !busy && !mappingPrimaryBusy
+  const showPrivyError = Boolean(privyVerifyError) || Boolean(siwfError) || Boolean(mappingError)
   const emailError = emailValue.trim().length > 0 && !isEmailValid ? 'Enter a valid email address.' : null
 
   const helperText = useMemo(() => {
+    if (mappingPrimaryHelperText) return mappingPrimaryHelperText
     if (privyVerifyBusy) return 'Opening…'
     if (!showPrivyReady) return 'Wallet login is initializing…'
     if (!privyReady) return 'Loading wallet login…'
     return ''
-  }, [privyReady, privyVerifyBusy, showPrivyReady])
+  }, [mappingPrimaryHelperText, privyReady, privyVerifyBusy, showPrivyReady])
   const ownershipError =
     ownershipGateActive && !walletOwnershipValid
       ? 'Switch to a payout or owner wallet to continue.'
@@ -220,11 +242,26 @@ export const VerifyStep = memo(function VerifyStep({
     : 'border-amber-400/35 bg-amber-500/10 text-amber-100'
   const panelClass = 'rounded-2xl border border-white/6 bg-white/2'
   const microPanelClass = 'rounded-xl border border-white/4 bg-white/1'
+  const mappingReady = mappingStatus === 'READY_FOR_OWNER_INSTALL'
+  const mappingAction = onMappingPrimaryAction ?? onPrivyContinue
+  const embeddedReady = Boolean(embeddedEoaAddress)
+  const zoraLinked = (zoraProviderAddresses?.length ?? 0) > 0
+  const canonicalReady = Boolean(canonicalZoraCswAddress)
+  const mappingBusyLabel =
+    mappingStatus === 'WAITING_FOR_WALLETS'
+      ? 'Waiting'
+      : mappingStatus === 'EMBEDDED_WALLET_CREATING'
+        ? 'Creating'
+        : mappingStatus === 'ZORA_LINKING'
+          ? 'Linking'
+          : mappingStatus === 'CANONICAL_RESOLVING'
+            ? 'Resolving'
+            : 'Running'
 
   if (hasVerification && simpleVerifiedMode) {
     const profileReady = Boolean(hasCreatorCoin || creatorCoinDeclaredMissing)
     const ownerReady = !ownershipGateActive || walletOwnershipValid
-    const setupReady = profileReady && ownerReady
+    const setupReady = profileReady && ownerReady && mappingReady
 
     return (
       <motion.div key="verify-simple" {...fadeUp} className="space-y-6 sm:space-y-7">
@@ -283,6 +320,66 @@ export const VerifyStep = memo(function VerifyStep({
           ) : null}
 
           <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
+            <span className="text-[12px] text-zinc-500">Embedded signer wallet</span>
+            {embeddedReady ? (
+              <span className="text-[12px] text-emerald-300 inline-flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {shortAddress(embeddedEoaAddress, 7, 5)}
+              </span>
+            ) : mappingStatus === 'EMBEDDED_WALLET_CREATING' || mappingStatus === 'WAITING_FOR_WALLETS' ? (
+              <span className="text-[12px] text-zinc-300 inline-flex items-center gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {mappingBusyLabel}
+              </span>
+            ) : (
+              <span className="text-[12px] text-amber-300 inline-flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Required
+              </span>
+            )}
+          </div>
+
+          <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
+            <span className="text-[12px] text-zinc-500">Zora wallet link (read-only)</span>
+            {zoraLinked ? (
+              <span className="text-[12px] text-emerald-300 inline-flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Linked
+              </span>
+            ) : mappingStatus === 'ZORA_LINKING' ? (
+              <span className="text-[12px] text-zinc-300 inline-flex items-center gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Linking
+              </span>
+            ) : (
+              <span className="text-[12px] text-amber-300 inline-flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Required
+              </span>
+            )}
+          </div>
+
+          <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
+            <span className="text-[12px] text-zinc-500">Canonical Zora smart wallet</span>
+            {canonicalReady ? (
+              <span className="text-[12px] text-emerald-300 inline-flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {shortAddress(canonicalZoraCswAddress, 7, 5)}
+              </span>
+            ) : mappingStatus === 'CANONICAL_RESOLVING' ? (
+              <span className="text-[12px] text-zinc-300 inline-flex items-center gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Resolving
+              </span>
+            ) : (
+              <span className="text-[12px] text-amber-300 inline-flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Unresolved
+              </span>
+            )}
+          </div>
+
+          <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
             <span className="text-[12px] text-zinc-500">Backend setup</span>
             {busy ? (
               <span className="text-[12px] text-zinc-200 inline-flex items-center gap-1.5">
@@ -302,6 +399,31 @@ export const VerifyStep = memo(function VerifyStep({
             )}
           </div>
         </motion.div>
+
+        {!mappingReady && mappingPrimaryCtaLabel ? (
+          <motion.div {...scaleIn}>
+            <button
+              type="button"
+              className="btn-primary w-full min-h-[56px] px-6 py-4 text-[15px] disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={mappingAction}
+              disabled={Boolean(mappingPrimaryBusy) || busy}
+            >
+              {mappingPrimaryCtaLabel}
+            </button>
+          </motion.div>
+        ) : null}
+
+        {mappingError ? (
+          <motion.div {...fadeUp}>
+            <Alert variant="error">{mappingError}</Alert>
+          </motion.div>
+        ) : null}
+
+        {!mappingError && canonicalZoraCswUnresolvedReason && !canonicalReady ? (
+          <motion.div {...fadeUp}>
+            <Alert variant="warning">{canonicalZoraCswUnresolvedReason}</Alert>
+          </motion.div>
+        ) : null}
 
         {submitError ? (
           <motion.div {...fadeUp}>
@@ -374,9 +496,9 @@ export const VerifyStep = memo(function VerifyStep({
             type="button"
             className="btn-primary group relative w-full min-h-[56px] justify-center px-5 py-4 pr-12 text-[15px] disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={!canContinue}
-            onClick={onPrivyContinue}
+            onClick={mappingAction}
           >
-            <span className="relative">Sign up</span>
+            <span className="relative">{mappingPrimaryCtaLabel || (mappingPrimaryBusy ? 'Please wait' : 'Continue with Privy')}</span>
             <ChevronRight className="absolute right-5 w-4 h-4 opacity-80" />
           </button>
 
@@ -427,7 +549,7 @@ export const VerifyStep = memo(function VerifyStep({
 
           {showPrivyError ? (
             <motion.div {...fadeUp}>
-              <Alert variant="error">{siwfError || privyVerifyError}</Alert>
+              <Alert variant="error">{mappingError || siwfError || privyVerifyError}</Alert>
             </motion.div>
           ) : null}
 
