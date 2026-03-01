@@ -16,6 +16,7 @@ type TaskWorker = {
 
 const TASK_RETRY_BASE_MS = Math.max(250, Number(process.env.ELIZA_TASK_RETRY_BASE_MS ?? '2000') || 2_000)
 const TASK_RETRY_MAX_MS = Math.max(TASK_RETRY_BASE_MS, Number(process.env.ELIZA_TASK_RETRY_MAX_MS ?? '60000') || 60_000)
+const TASK_STALE_LEASE_MS = Math.max(1_000, Number(process.env.ELIZA_TASK_LEASE_STALE_MS ?? '300000') || 300_000)
 
 const CREATE_QUEUE_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS agent_background_tasks (
@@ -155,6 +156,92 @@ async function markTaskFailed(params: {
   `
 }
 
+async function reclaimStaleLeases(params: {
+  workerId: string
+  staleLeaseMs: number
+}): Promise<number> {
+  const db = await getDb()
+  if (!db) return 0
+  const staleLeaseMs = Math.max(1_000, Math.floor(params.staleLeaseMs))
+  const updated = await db.sql`
+    UPDATE agent_background_tasks
+       SET status = 'pending',
+           leased_at = NULL,
+           leased_by = NULL,
+           run_after = NOW(),
+           updated_at = NOW(),
+           last_error = COALESCE(last_error, 'stale_lease_reclaimed')
+     WHERE status = 'processing'
+       AND leased_at IS NOT NULL
+       AND leased_at < NOW() - (${staleLeaseMs} * INTERVAL '1 millisecond');
+  `
+  const rowCount = Number((updated as any)?.rowCount ?? 0)
+  return Number.isFinite(rowCount) ? rowCount : 0
+}
+
+export type AgentBackgroundQueueStats = {
+  pending: number
+  processing: number
+  done: number
+  failed: number
+  staleProcessing: number
+}
+
+function zeroQueueStats(): AgentBackgroundQueueStats {
+  return {
+    pending: 0,
+    processing: 0,
+    done: 0,
+    failed: 0,
+    staleProcessing: 0,
+  }
+}
+
+export async function getAgentBackgroundQueueStats(params?: {
+  staleLeaseMs?: number
+}): Promise<AgentBackgroundQueueStats> {
+  await ensureQueueSchema()
+  const db = await getDb()
+  if (!db) return zeroQueueStats()
+  const staleLeaseMs = Math.max(1_000, Math.floor(params?.staleLeaseMs ?? TASK_STALE_LEASE_MS))
+  const staleSeconds = staleLeaseMs / 1000
+  const queryText = `
+    SELECT status, COUNT(*)::text AS count
+    FROM agent_background_tasks
+    GROUP BY status
+    UNION ALL
+    SELECT 'stale_processing' AS status, COUNT(*)::text AS count
+    FROM agent_background_tasks
+    WHERE status = 'processing'
+      AND leased_at IS NOT NULL
+      AND leased_at < NOW() - INTERVAL '${staleSeconds} seconds'
+  `
+
+  let rows: any[] = []
+  if (typeof (db as any).query === 'function') {
+    const result = await (db as any).query(queryText)
+    rows = (result?.rows ?? []) as any[]
+  } else {
+    const stmt = [queryText] as unknown as TemplateStringsArray
+    ;(stmt as any).raw = [queryText]
+    const result = await (db as any).sql(stmt)
+    rows = (result?.rows ?? []) as any[]
+  }
+
+  const stats = zeroQueueStats()
+  for (const row of rows) {
+    const status = String((row as any)?.status ?? '').toLowerCase()
+    const count = Number((row as any)?.count ?? 0)
+    if (!Number.isFinite(count)) continue
+    if (status === 'pending') stats.pending = count
+    else if (status === 'processing') stats.processing = count
+    else if (status === 'done') stats.done = count
+    else if (status === 'failed') stats.failed = count
+    else if (status === 'stale_processing') stats.staleProcessing = count
+  }
+  return stats
+}
+
 export function startAgentBackgroundTaskWorker(params: {
   workerName: string
   pollMs?: number
@@ -166,6 +253,7 @@ export function startAgentBackgroundTaskWorker(params: {
   const maxTasksPerTick = Number.isFinite(params.maxTasksPerTick)
     ? Math.max(1, Number(params.maxTasksPerTick))
     : 5
+  const staleLeaseMs = Math.max(1_000, Number(process.env.ELIZA_TASK_LEASE_STALE_MS ?? TASK_STALE_LEASE_MS) || TASK_STALE_LEASE_MS)
   let stopped = false
   let tickRunning = false
   const backoffForAttempt = (attempt: number): number => {
@@ -178,6 +266,17 @@ export function startAgentBackgroundTaskWorker(params: {
     tickRunning = true
     try {
       await ensureQueueSchema()
+      const reclaimed = await reclaimStaleLeases({
+        workerId,
+        staleLeaseMs,
+      })
+      if (reclaimed > 0) {
+        logger.warn('[eliza/queue] reclaimed stale processing leases', {
+          workerId,
+          reclaimed,
+          staleLeaseMs,
+        })
+      }
       for (let i = 0; i < maxTasksPerTick; i += 1) {
         const task = await leaseNextTask(workerId)
         if (!task) break

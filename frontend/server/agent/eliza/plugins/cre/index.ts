@@ -159,6 +159,15 @@ function hasKeeprApi(): boolean {
   return !!(process.env.KEEPR_API_KEY ?? '').trim()
 }
 
+function envFlagEnabled(raw: string | undefined): boolean {
+  const value = String(raw ?? '').trim().toLowerCase()
+  return value === '1' || value === 'true' || value === 'yes' || value === 'on'
+}
+
+function isDryRunEnabled(): boolean {
+  return envFlagEnabled(process.env.ELIZA_CRE_DRY_RUN) || envFlagEnabled(process.env.DRY_RUN)
+}
+
 // ---------------------------------------------------------------------------
 // Dynamic CRE imports (lazy, cached)
 // ---------------------------------------------------------------------------
@@ -456,10 +465,22 @@ const creTriggerAction: Action = {
   ) => {
     const text = (message.content?.text ?? '').trim()
     const sub = text.slice(5).trim().toLowerCase()
+    const dryRunEnabled = isDryRunEnabled()
 
     // Parse optional address argument: /cre tend 0x1234...
     const addressMatch = text.match(/(0x[a-fA-F0-9]{40})/i)
     const address = addressMatch ? addressMatch[1] as `0x${string}` : undefined
+
+    if (dryRunEnabled) {
+      const command = sub.split(/\s+/)[0] ?? sub
+      const target = address ? ` target=${address}` : ''
+      await callback?.({
+        text:
+          `DRY_RUN is enabled. Skipping mutating CRE command \`/cre ${command}\`${target}.\n` +
+          'Set DRY_RUN=0 and ELIZA_CRE_DRY_RUN=0 to execute live operations.',
+      } as Content)
+      return
+    }
 
     try {
       if (sub.startsWith('tend')) {
@@ -712,6 +733,7 @@ const creHelpAction: Action = {
     const baseConfigured = hasBaseKeeper() ? 'yes' : 'no'
     const solanaConfigured = hasSolana() ? 'yes' : 'no'
     const apiConfigured = hasKeeprApi() ? 'yes' : 'no'
+    const dryRun = isDryRunEnabled() ? 'yes' : 'no'
 
     const helpText = [
       '**CRE Keeper Commands**\n',
@@ -729,7 +751,7 @@ const creHelpAction: Action = {
       '  `/cre relay-winners` — Relay winners to Solana',
       '  `/cre graduate` — Check graduation status',
       '  `/cre queue` — Process pending queue actions\n',
-      `**Config:** Base keeper: ${baseConfigured} | Solana: ${solanaConfigured} | API: ${apiConfigured}`,
+      `**Config:** Base keeper: ${baseConfigured} | Solana: ${solanaConfigured} | API: ${apiConfigured} | Dry run: ${dryRun}`,
     ]
 
     await callback?.({ text: helpText.join('\n') } as Content)

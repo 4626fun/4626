@@ -1,6 +1,6 @@
 {
   "name": "@4626/cre-workflows",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "CRE automation workflows for 4626 protocol",
   "type": "module",
   "scripts": {

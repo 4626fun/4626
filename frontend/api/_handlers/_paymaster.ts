@@ -439,6 +439,44 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
+          { name: 'meteoraAlphaVault', type: 'bytes32' },
+          {
+            name: 'solanaIxs',
+            type: 'tuple[]',
+            components: [
+              { name: 'programId', type: 'bytes32' },
+              { name: 'serializedAccounts', type: 'bytes[]' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  // Legacy finalizePhase2 signature kept for in-flight old sessions.
+  {
+    type: 'function',
+    name: 'finalizePhase2',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
         ],
       },
     ],
@@ -575,7 +613,11 @@ const SELECTOR_BATCHER_FINALIZE_PHASE1_WITH_SALT = '0x3bc09a8b'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH = '0x9abe5eca'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT = '0xe20fb0df'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_CORE = '0xf9344d88'
-const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xcafc9348'
+// finalizePhase2 selectors:
+// - current (includes meteoraAlphaVault + solanaIxs): 0xbd4583fb
+// - legacy (pre-Solana tuple extension): 0xcafc9348
+const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xbd4583fb'
+const SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY = '0xcafc9348'
 const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0x6e3f91b0'
 // launchDeferredAuction((address,address,address,string,uint256,uint128,bytes))
 const SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'
@@ -609,6 +651,7 @@ const ALLOWED_BATCHER_SELECTORS = new Set<string>([
   SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT,
   SELECTOR_BATCHER_DEPLOY_PHASE2_CORE,
   SELECTOR_BATCHER_FINALIZE_PHASE2,
+  SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY,
   SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES,
   SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION,
 ])
@@ -1369,6 +1412,7 @@ async function validateInnerCalls(params: {
         selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE2_CORE ||
         selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
+        selector === SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES ||
         selector === SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION
       ) {
@@ -1399,7 +1443,8 @@ async function validateInnerCalls(params: {
           selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH ||
           selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT ||
           selector === SELECTOR_BATCHER_DEPLOY_PHASE2_CORE ||
-          selector === SELECTOR_BATCHER_FINALIZE_PHASE2
+          selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
+          selector === SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY
         ) {
           mode = 'deploy_phase2'
           expectedVault = p && isAddress(p.vault) ? getAddress(p.vault) : null

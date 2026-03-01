@@ -92,5 +92,45 @@ describe('runtime bridge', () => {
     expect(db.query).toHaveBeenCalled()
     expect(insertCall).toBeTruthy()
   })
+
+  it('bounds tracked conversation history buckets', async () => {
+    const { createRuntimeBridge } = await import('../runtimeBridge.ts')
+    const bridge = createRuntimeBridge({
+      agentKey: 'creator-3',
+      plugins: [],
+      history: {
+        maxConversations: 2,
+        maxMessagesPerConversation: 5,
+      },
+    } as any)
+
+    const c1 = bridge.createInboundMemory({
+      conversationId: 'conv-1',
+      conversationType: 'group',
+      senderAddress: '0x1111111111111111111111111111111111111111',
+      content: 'hello 1',
+    })
+    await bridge.runtime.createMemory(c1 as any, 'messages' as any)
+
+    const c2 = bridge.createInboundMemory({
+      conversationId: 'conv-2',
+      conversationType: 'group',
+      senderAddress: '0x1111111111111111111111111111111111111111',
+      content: 'hello 2',
+    })
+    await bridge.runtime.createMemory(c2 as any, 'messages' as any)
+
+    const c3 = bridge.createInboundMemory({
+      conversationId: 'conv-3',
+      conversationType: 'group',
+      senderAddress: '0x1111111111111111111111111111111111111111',
+      content: 'hello 3',
+    })
+    await bridge.runtime.createMemory(c3 as any, 'messages' as any)
+
+    const debug = (bridge as any).getDebugState?.()
+    expect(debug?.trackedConversations).toBe(2)
+    expect(debug?.conversationIds).toEqual(['conv-2', 'conv-3'])
+  })
 })
 

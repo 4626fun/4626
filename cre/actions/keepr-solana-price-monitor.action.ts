@@ -26,8 +26,11 @@ import {
 import { readContract } from '../utils/onchain.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
 import { loadKeeperKeypair } from '../utils/solana.js';
+import { fetchActiveVaults, type VaultConfig } from '../utils/registry.js';
 
 const WORKFLOW_NAME = 'keepr-solana-price-monitor';
+const EVM_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
+const SOLANA_PUBKEY_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -92,6 +95,61 @@ async function fetchSolPriceUsd(): Promise<number> {
   }
 }
 
+function toValidEvmAddress(value: unknown): `0x${string}` | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!EVM_ADDRESS_RE.test(trimmed)) return undefined;
+  return trimmed as `0x${string}`;
+}
+
+function toValidSolanaPubkey(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!SOLANA_PUBKEY_RE.test(trimmed)) return undefined;
+  return trimmed;
+}
+
+function selectPreferredVault(vaults: VaultConfig[]): VaultConfig | undefined {
+  if (vaults.length === 0) return undefined;
+
+  const creatorCoinHint = String(
+    process.env.CREATOR_COIN_ADDRESS ?? process.env.CREATOR_COIN ?? '',
+  )
+    .trim()
+    .toLowerCase();
+  if (creatorCoinHint) {
+    const match = vaults.find(
+      (vault) => String(vault.creatorCoinAddress ?? '').trim().toLowerCase() === creatorCoinHint,
+    );
+    if (match) return match;
+  }
+
+  const vaultHint = String(process.env.VAULT_ADDRESS ?? '').trim().toLowerCase();
+  if (vaultHint) {
+    const match = vaults.find(
+      (vault) => String(vault.vaultAddress ?? '').trim().toLowerCase() === vaultHint,
+    );
+    if (match) return match;
+  }
+
+  return vaults[0];
+}
+
+async function resolveOracleAddress(): Promise<`0x${string}` | undefined> {
+  const envOracle = toValidEvmAddress(process.env.ORACLE_ADDRESS);
+  if (envOracle) return envOracle;
+
+  try {
+    const vaults = await fetchActiveVaults(CHAINS.base.id);
+    const withOracle = vaults.filter((vault) => toValidEvmAddress(vault.oracleAddress));
+    const selected = selectPreferredVault(withOracle);
+    return toValidEvmAddress(selected?.oracleAddress);
+  } catch {
+    // Non-fatal: keep legacy behavior when registry isn't reachable/configured.
+    return undefined;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main execution
 // ---------------------------------------------------------------------------
@@ -104,11 +162,11 @@ export async function executeSolanaPriceMonitor(): Promise<PriceMonitorResult> {
     action: 'none',
   };
 
-  const dlmmPool = process.env.DLMM_POOL_ADDRESS;
-  const oracleAddress = process.env.ORACLE_ADDRESS as `0x${string}` | undefined;
+  const dlmmPool = toValidSolanaPubkey(process.env.DLMM_POOL_ADDRESS);
+  const oracleAddress = await resolveOracleAddress();
 
   // Only active during launch window.
-  if (!dlmmPool || !oracleAddress) {
+  if (!oracleAddress) {
     return result;
   }
 
@@ -125,6 +183,11 @@ export async function executeSolanaPriceMonitor(): Promise<PriceMonitorResult> {
 
     if (basePriceUsd === 0) {
       await alertInfo(WORKFLOW_NAME, 'Base price is 0 — oracle may not be configured yet');
+      return result;
+    }
+
+    if (!dlmmPool) {
+      // Missing/invalid DLMM pool should not break the full command path.
       return result;
     }
 

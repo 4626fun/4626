@@ -20,7 +20,7 @@ import { createMockReq, createMockRes } from './helpers'
 const mocks = vi.hoisted(() => ({
   handleOptions: vi.fn(() => false),
   readJsonBody: vi.fn(async (req: any) => req.body ?? null),
-  guardAgentApiRequest: vi.fn(async () => ({ ok: true, ip: '127.0.0.1', auth: null })),
+  guardAgentApiRequest: vi.fn(async (_ctx?: any) => ({ ok: true, ip: '127.0.0.1', auth: null })),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -101,9 +101,9 @@ describe('v1 build Charm handlers', () => {
   })
 
   it('passes through auth guard failure for all Charm handlers', async () => {
-    mocks.guardAgentApiRequest.mockImplementation(async ({ res }: any) => {
-      res.status(401).json({ success: false, error: 'Authentication required' })
-      return { ok: false, ip: '127.0.0.1' }
+    mocks.guardAgentApiRequest.mockImplementation(async ({ res }: any = {}) => {
+      res?.status(401).json({ success: false, error: 'Authentication required' })
+      return { ok: false, ip: '127.0.0.1', auth: null }
     })
 
     const cases = [

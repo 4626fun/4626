@@ -23,6 +23,7 @@ import type {
 
 import { handleKeeprCommand } from '../../../../keepr/commands.js'
 import { getKeeprVaultByGroupId } from '../../../../_lib/keeprRegistry.js'
+import { toAgentError, toUserFacingAgentErrorMessage } from '../../_errors.js'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -56,6 +57,11 @@ function isKeeprCommand(text: string): boolean {
     t === '/help' ||
     t === 'help'
   )
+}
+
+function isKeeprStatusCommand(text: string): boolean {
+  const t = text.trim().toLowerCase()
+  return t === '/keepr status' || t === 'keepr status'
 }
 
 // ---------------------------------------------------------------------------
@@ -113,11 +119,17 @@ const keeprCommandAction: Action = {
 
       if (result.response) {
         await callback?.({ text: result.response } as Content)
+      } else if (isKeeprStatusCommand(text)) {
+        await callback?.({ text: 'Keepr status is temporarily unavailable. Please try again shortly.' } as Content)
       }
     } catch (err: any) {
-      console.error('[keepr-plugin] handleKeeprCommand error:', err)
+      const agentError = toAgentError(err, 'UPSTREAM_ERROR', 'Keepr command failed')
+      console.error('[keepr-plugin] handleKeeprCommand error:', {
+        code: agentError.code,
+        message: agentError.message,
+      })
       await callback?.({
-        text: `Command failed: ${err.message ?? 'unknown error'}`,
+        text: toUserFacingAgentErrorMessage(agentError),
       } as Content)
     }
   },

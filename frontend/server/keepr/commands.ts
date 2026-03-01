@@ -20,6 +20,7 @@ import { handleCoinCommand } from '../zora/commands.js'
 import { handleSendCommand } from './sendCommand.js'
 import { handleWhoisCommand } from './whoisCommand.js'
 import { generateLlmResponse } from '../ai/chat.js'
+import { toAgentError, toUserFacingAgentErrorMessage } from '../agent/eliza/_errors.js'
 
 export type KeeprRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 
@@ -611,12 +612,13 @@ export async function handleKeeprCommand(params: {
   text: string
 }): Promise<KeeprCommandResult> {
   const raw = (params.text ?? '').trim()
+  try {
 
-  // Global aliases: /help and "help" should always respond (even without DB/vault config).
-  const rawLower = raw.toLowerCase()
-  if (rawLower === '/help' || rawLower === 'help') {
-    return { ok: true, response: formatKeeprHelp() }
-  }
+    // Global aliases: /help and "help" should always respond (even without DB/vault config).
+    const rawLower = raw.toLowerCase()
+    if (rawLower === '/help' || rawLower === 'help') {
+      return { ok: true, response: formatKeeprHelp() }
+    }
 
   // Identity lookup commands should work without vault config/DB.
   const looksLikeWhois = rawLower.startsWith('/whois') || rawLower === 'whois' || rawLower.startsWith('whois ')
@@ -860,5 +862,12 @@ export async function handleKeeprCommand(params: {
     return { ok: true, response: 'Sync requested. The Keepr runtime will process this shortly.' }
   }
 
-  return { ok: false, response: 'Unknown command. Try `/keepr help`.' }
+    return { ok: false, response: 'Unknown command. Try `/keepr help`.' }
+  } catch (error) {
+    const agentError = toAgentError(error, 'UPSTREAM_ERROR', 'Keepr command failed')
+    return {
+      ok: false,
+      response: toUserFacingAgentErrorMessage(agentError),
+    }
+  }
 }

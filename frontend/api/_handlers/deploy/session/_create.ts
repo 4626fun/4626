@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   createPublicClient,
+  decodeFunctionData,
   encodeAbiParameters,
   encodeFunctionData,
   encodePacked,
@@ -84,6 +85,91 @@ type OwnershipCheck = {
   reason?: string
 }
 
+const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
+
+const ERC20_APPROVE_ABI = [
+  {
+    type: 'function',
+    name: 'approve',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ type: 'bool' }],
+  },
+] as const
+
+const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
+  {
+    type: 'function',
+    name: 'finalizePhase2',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareToken', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
+          { name: 'meteoraAlphaVault', type: 'bytes32' },
+          {
+            name: 'solanaIxs',
+            type: 'tuple[]',
+            components: [
+              { name: 'programId', type: 'bytes32' },
+              { name: 'serializedAccounts', type: 'bytes[]' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
+const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
+  {
+    type: 'function',
+    name: 'finalizePhase2',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareToken', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
 const CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI = [
   {
     type: 'function',
@@ -156,6 +242,132 @@ function parseUInt32Like(value: unknown): number | null {
     }
   }
   return null
+}
+
+function parseBigIntLike(value: unknown): bigint | null {
+  if (typeof value === 'bigint') return value >= 0n ? value : null
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return BigInt(Math.trunc(value))
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = BigInt(value.trim())
+      return parsed >= 0n ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function extractFinalizePhase2ApprovalInfo(data: Hex): {
+  creatorToken: Address
+  depositAmount: bigint
+} | null {
+  for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
+    try {
+      const decoded = decodeFunctionData({ abi, data })
+      const params = (decoded.args?.[0] ?? null) as {
+        creatorToken?: string
+        depositAmount?: bigint | string | number
+      } | null
+      const creatorTokenCandidate =
+        params?.creatorToken && isAddress(params.creatorToken)
+          ? getAddress(params.creatorToken as Address)
+          : null
+      const creatorToken =
+        creatorTokenCandidate && creatorTokenCandidate.toLowerCase() !== ZERO_ADDRESS.toLowerCase()
+          ? creatorTokenCandidate
+          : null
+      const depositAmount = parseBigIntLike(params?.depositAmount)
+      if (!creatorToken || !depositAmount || depositAmount <= 0n) continue
+      return { creatorToken, depositAmount }
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
+function callFingerprint(call: Call | null | undefined): string | null {
+  if (!call) return null
+  const to = typeof call.to === 'string' && isAddress(call.to) ? getAddress(call.to as Address).toLowerCase() : ''
+  const data = typeof call.data === 'string' ? call.data.trim().toLowerCase() : ''
+  if (!to || !data.startsWith('0x')) return null
+  return `${to}|${data}`
+}
+
+function derivePhase2FinalizeApprovalCalls(calls: Call[]): Call[] {
+  if (!Array.isArray(calls) || calls.length === 0) return []
+  const approvals: Call[] = []
+  const seen = new Set<string>()
+  for (const call of calls) {
+    const to = typeof call?.to === 'string' && isAddress(call.to) ? getAddress(call.to as Address) : null
+    const data = typeof call?.data === 'string' ? call.data.trim() : ''
+    if (!to || !data.startsWith('0x')) continue
+    const approvalInfo = extractFinalizePhase2ApprovalInfo(data as Hex)
+    if (!approvalInfo) continue
+    const approveData = encodeFunctionData({
+      abi: ERC20_APPROVE_ABI,
+      functionName: 'approve',
+      args: [to, approvalInfo.depositAmount],
+    }) as Hex
+    const approveCall: Call = {
+      to: approvalInfo.creatorToken,
+      // Keep payload JSON-safe when persisted to DB.
+      value: '0',
+      data: approveData,
+    }
+    const key = callFingerprint(approveCall)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    approvals.push(approveCall)
+  }
+  return approvals
+}
+
+function appendUniqueCalls(base: Call[], extras: Call[]): Call[] {
+  const out: Call[] = [...base]
+  const seen = new Set<string>()
+  for (const existing of out) {
+    const key = callFingerprint(existing)
+    if (key) seen.add(key)
+  }
+  for (const extra of extras) {
+    const key = callFingerprint(extra)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    out.push(extra)
+  }
+  return out
+}
+
+function prependPhase2FinalizeApprovals(calls: Call[]): Call[] {
+  if (!Array.isArray(calls) || calls.length === 0) return []
+  const approvals = derivePhase2FinalizeApprovalCalls(calls)
+  return appendUniqueCalls(approvals, calls)
+}
+
+function distributePhase2FinalizeApprovals(params: {
+  phase2CoreCalls: Call[]
+  phase2FinalizeCalls: Call[]
+}): { phase2CoreCalls: Call[]; phase2FinalizeCalls: Call[] } {
+  const phase2CoreCalls = Array.isArray(params.phase2CoreCalls) ? [...params.phase2CoreCalls] : []
+  const phase2FinalizeCalls = Array.isArray(params.phase2FinalizeCalls) ? [...params.phase2FinalizeCalls] : []
+  const approvals = derivePhase2FinalizeApprovalCalls(phase2FinalizeCalls)
+  if (approvals.length === 0) {
+    return { phase2CoreCalls, phase2FinalizeCalls }
+  }
+  if (phase2CoreCalls.length > 0) {
+    // Keep phase2 finalize focused on batcher finalize calls. Approval executes in phase2 core,
+    // so allowance is already persisted before finalize is submitted.
+    return {
+      phase2CoreCalls: appendUniqueCalls(phase2CoreCalls, approvals),
+      phase2FinalizeCalls,
+    }
+  }
+  return {
+    phase2CoreCalls,
+    phase2FinalizeCalls: prependPhase2FinalizeApprovals(phase2FinalizeCalls),
+  }
 }
 
 function normalizeSolanaOvaultConfig(value: unknown): Record<string, unknown> | null {
@@ -690,9 +902,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const phase1Calls = Array.isArray(body.phase1Calls) ? body.phase1Calls : []
-    const phase2CoreCalls = Array.isArray(body.phase2CoreCalls) ? body.phase2CoreCalls : []
-    const phase2FinalizeCalls = Array.isArray(body.phase2FinalizeCalls) ? body.phase2FinalizeCalls : []
-    const phase2Calls = Array.isArray(body.phase2Calls) ? body.phase2Calls : []
+    const phase2CoreCallsRaw = Array.isArray(body.phase2CoreCalls) ? body.phase2CoreCalls : []
+    const phase2FinalizeCallsRaw = Array.isArray(body.phase2FinalizeCalls) ? body.phase2FinalizeCalls : []
+    const phase2CallsRaw = Array.isArray(body.phase2Calls) ? body.phase2Calls : []
+    const { phase2CoreCalls, phase2FinalizeCalls } = distributePhase2FinalizeApprovals({
+      phase2CoreCalls: phase2CoreCallsRaw,
+      phase2FinalizeCalls: phase2FinalizeCallsRaw,
+    })
+    const phase2Calls = prependPhase2FinalizeApprovals(phase2CallsRaw)
     const phase3Calls = Array.isArray(body.phase3Calls) ? body.phase3Calls : []
     const phase4Calls = Array.isArray(body.phase4Calls) ? body.phase4Calls : []
     const solanaOvault = normalizeSolanaOvaultConfig(body.solanaOvault)

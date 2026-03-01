@@ -17,6 +17,7 @@ Guides for deploying 4626 infrastructure.
 | **[Infra Epoch Redeploy](/operations/deployment/infra-epoch-redeploy)** | Full registry/batcher/store redeploy |
 | **[Approvals Checklist](/operations/deployment/approvals-checklist)** | Required approvals |
 | **[CREATE2 Registry](/operations/deployment/create2-registry)** | Deterministic deployments |
+| **[Eliza Runtime](/operations/deployment/eliza-runtime)** | XMTP runtime deploy/rollback/triage runbook |
 
 ## Multisig
 

@@ -27,6 +27,7 @@ interface ICreatorCoin {
 
 interface ICreatorOVaultWrapper {
     function setShareOFT(address _shareOFT) external;
+    function deposit(uint256 amount) external returns (uint256 shareTokens);
     function wrap(uint256 amount) external returns (uint256 shareTokens);
     function transferOwnership(address newOwner) external;
 }
@@ -841,11 +842,12 @@ contract DeploymentBatcher is ReentrancyGuard {
         out.oracle = params.oracle;
 
         // Deposit + wrap
-        IERC20(params.creatorToken).forceApprove(params.vault, params.depositAmount);
-        uint256 shares = ICreatorOVault(params.vault).deposit(params.depositAmount, address(this));
-
-        IERC20(params.vault).forceApprove(params.wrapper, shares);
-        uint256 shareTokens = ICreatorOVaultWrapper(params.wrapper).wrap(shares);
+        //
+        // Route through wrapper.deposit so vault shares are minted directly to the wrapper
+        // and wrapped internally. This avoids same-transaction vault-share transfer cooldown
+        // checks (deposit to batcher -> transfer to wrapper) on hardened vault configs.
+        IERC20(params.creatorToken).forceApprove(params.wrapper, params.depositAmount);
+        uint256 shareTokens = ICreatorOVaultWrapper(params.wrapper).deposit(params.depositAmount);
 
         // ── Fixed Two-Way Split: 50% CCA / 50% creator vesting ──
         uint256 auctionAmount = (shareTokens * AUCTION_PERCENT) / 100; // 50%

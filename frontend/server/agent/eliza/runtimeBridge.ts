@@ -24,6 +24,7 @@ type RuntimeBridge = {
   createOutboundMemory: (conversationId: string, conversationType: string, content: string) => Memory
   composeState: (memory: Memory) => Promise<Record<string, unknown>>
   rankActions: (text: string, memory: Memory) => Promise<RankedAction[]>
+  getDebugState: () => { trackedConversations: number; conversationIds: string[] }
 }
 
 const AGENT_MEMORY_TABLE_SQL = `
@@ -142,9 +143,29 @@ export function createRuntimeBridge(params: {
     systemPrompt: string
     preferredModel?: string
   }
+  history?: {
+    maxConversations?: number
+    maxMessagesPerConversation?: number
+  }
 }): RuntimeBridge {
   const inMemoryHistory = new Map<string, Memory[]>()
+  const maxConversations = Math.max(1, Math.floor(params.history?.maxConversations ?? 250))
+  const maxMessagesPerConversation = Math.max(1, Math.floor(params.history?.maxMessagesPerConversation ?? 30))
   const runtimeAgentId = formatAsUuid(shortHash(`agent:${params.agentKey}`))
+
+  const trimHistoryBuckets = () => {
+    while (inMemoryHistory.size > maxConversations) {
+      const oldestKey = inMemoryHistory.keys().next().value
+      if (!oldestKey) break
+      inMemoryHistory.delete(oldestKey)
+    }
+  }
+
+  const setConversationHistory = (conversationId: string, entries: Memory[]) => {
+    inMemoryHistory.delete(conversationId)
+    inMemoryHistory.set(conversationId, entries.slice(-maxMessagesPerConversation))
+    trimHistoryBuckets()
+  }
 
   const runtime = {
     agentId: runtimeAgentId,
@@ -159,7 +180,7 @@ export function createRuntimeBridge(params: {
       const conversationId = String((memory.content as any)?.metadata?.conversationId ?? memory.roomId ?? 'unknown')
       const existing = inMemoryHistory.get(conversationId) ?? []
       existing.push(memory)
-      inMemoryHistory.set(conversationId, existing.slice(-30))
+      setConversationHistory(conversationId, existing)
 
       const db = await getDb()
       if (!db) return memory
@@ -258,7 +279,7 @@ export function createRuntimeBridge(params: {
       const restored = await hydrateConversationHistoryFromDb(conversationId)
       if (restored.length > 0) {
         history = restored
-        inMemoryHistory.set(conversationId, restored.slice(-30))
+        setConversationHistory(conversationId, restored)
       }
     }
     const recentMessages = history.slice(-12).map((entry) => {
@@ -443,6 +464,10 @@ export function createRuntimeBridge(params: {
     createOutboundMemory,
     composeState,
     rankActions,
+    getDebugState: () => ({
+      trackedConversations: inMemoryHistory.size,
+      conversationIds: [...inMemoryHistory.keys()],
+    }),
   }
 }
 

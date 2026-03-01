@@ -130,6 +130,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'deploy/smartWalletOwners': () => import('./deploy/_smartWalletOwners.js'),
 
   'farcaster/me': () => import('./farcaster/_me.js'),
+  'farcaster/mention': () => import('./farcaster/_mention.js'),
   'farcaster/nonce': () => import('./farcaster/_nonce.js'),
   'farcaster/verify': () => import('./farcaster/_verify.js'),
 
