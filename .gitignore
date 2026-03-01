@@ -19,6 +19,10 @@ build/
 out/
 broadcast/
 
+# Keep API tx-builder handlers (directory name is "build")
+!frontend/api/_handlers/v1/build/
+!frontend/api/_handlers/v1/build/**
+
 # CRE build artifacts
 *.wasm
 .cre/
