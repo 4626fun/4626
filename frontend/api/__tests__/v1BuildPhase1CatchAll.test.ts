@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createMockReq, createMockRes } from './helpers'
 
-const PHASE_ONE_BUILD_ROUTES = [
+const ENABLED_BUILD_ROUTES = [
   'v1/build/auction/submitBid',
   'v1/build/gauge/vote',
   'v1/build/gauge/resetVotes',
@@ -10,14 +10,21 @@ const PHASE_ONE_BUILD_ROUTES = [
   'v1/build/ve4626/extend',
   'v1/build/ve4626/increase',
   'v1/build/ve4626/unlock',
+  'v1/build/ajna/borrow',
+  'v1/build/ajna/repay',
+  'v1/build/ajna/addCollateral',
+  'v1/build/ajna/removeCollateral',
+  'v1/build/ajna/setBucketIndex',
+  'v1/build/ajna/moveToBucket',
+  'v1/build/ajna/setIdleBufferBps',
 ] as const
 
-describe('v1 phase 1 build routes (catch-all)', () => {
-  it('routes phase 1 build endpoints to handlers (not 404)', async () => {
+describe('v1 enabled build routes (catch-all)', () => {
+  it('routes enabled build endpoints to handlers (not 404)', async () => {
     const mod = await import('../[...path].ts')
     const handler = mod.default
 
-    for (const route of PHASE_ONE_BUILD_ROUTES) {
+    for (const route of ENABLED_BUILD_ROUTES) {
       const req = createMockReq({
         method: 'GET',
         query: { path: route },
