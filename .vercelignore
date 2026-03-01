@@ -33,6 +33,10 @@ target
 **/.temp
 *.tsbuildinfo
 
+# Keep API tx-builder handlers (directory name is "build")
+!frontend/api/_handlers/v1/build
+!frontend/api/_handlers/v1/build/**
+
 # Local env / secrets
 .env
 .env.*

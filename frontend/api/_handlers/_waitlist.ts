@@ -538,7 +538,9 @@ export default async function handler(req: any, res: any) {
             .select('id,email,referral_code,primary_wallet,privy_user_id,created_at,updated_at')
             .in('id', uniqueIds)
           if (error) throw new Error(error.message)
-          return (data ?? []).map(toProfileRow).filter((row): row is SupabaseProfileRow => Boolean(row))
+          return (data ?? [])
+            .map(toProfileRow)
+            .filter((row: SupabaseProfileRow | null): row is SupabaseProfileRow => Boolean(row))
         }
 
         const findByAddress = async (address: string): Promise<SupabaseProfileRow | null> => {
@@ -552,7 +554,7 @@ export default async function handler(req: any, res: any) {
           if (profileWalletError) throw new Error(profileWalletError.message)
           const profileIds = (profileWalletRows ?? [])
             .map((row: any) => Number(row?.profile_id))
-            .filter((id) => Number.isFinite(id) && id > 0)
+            .filter((id: number) => Number.isFinite(id) && id > 0)
           candidates.push(...(await fetchProfilesByIds(profileIds)))
 
           const legacyOr = [
@@ -598,7 +600,9 @@ export default async function handler(req: any, res: any) {
             .eq('privy_user_id', privyUserId)
             .limit(10)
           if (privyError) throw new Error(privyError.message)
-          const mapped = (privyRows ?? []).map(toProfileRow).filter((row): row is SupabaseProfileRow => Boolean(row))
+          const mapped = (privyRows ?? [])
+            .map(toProfileRow)
+            .filter((row: SupabaseProfileRow | null): row is SupabaseProfileRow => Boolean(row))
           existingByIdentity = pickBestProfileRow(mapped)
         }
 
