@@ -327,6 +327,13 @@ function readSolanaOvaultKillSwitchEnabled(): boolean {
   return isTruthyEnv(raw, false)
 }
 
+function readLegacySolanaWriteDisabled(): boolean {
+  const raw =
+    process.env.DEPLOY_SOLANA_LEGACY_WRITE_DISABLED ??
+    process.env.SOLANA_LEGACY_WRITE_DISABLED
+  return isTruthyEnv(raw, false)
+}
+
 function readSolanaPreflightRouteMode(): SolanaPreflightRouteMode {
   if (readSolanaOvaultKillSwitchEnabled()) return 'legacy_only'
   const raw = String(
@@ -517,6 +524,12 @@ async function ensureSolanaRouteReadyForPhase3(params: {
       '',
   ).trim()
   const routeMode = readSolanaPreflightRouteMode()
+  const legacyWriteDisabled = readLegacySolanaWriteDisabled()
+  if (routeMode === 'legacy_only' && legacyWriteDisabled) {
+    throw new Error(
+      'Solana preflight misconfigured: legacy_only route mode requires DEPLOY_SOLANA_LEGACY_WRITE_DISABLED=0.',
+    )
+  }
   const routes = resolveSolanaPreflightRoutes(routeMode)
   const tryRegister = async (
     origin: string,
