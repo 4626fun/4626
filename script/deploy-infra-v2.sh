@@ -52,6 +52,22 @@ fi
 require_env PRIVATE_KEY
 require_env BASE_RPC_URL
 
+if [ -n "${DEPLOYMENT_EPOCH_TAG:-}" ]; then
+  # Convenience mode: derive all infra salt tags from one epoch token.
+  : "${INFRA_STORE_SALT_TAG:=4626:UniversalBytecodeStore:${DEPLOYMENT_EPOCH_TAG}}"
+  : "${INFRA_DEPLOYER_FROM_STORE_SALT_TAG:=4626:UniversalCreate2DeployerFromStore:${DEPLOYMENT_EPOCH_TAG}}"
+  : "${INFRA_VAULT_CORE_MODULE_SALT_TAG:=4626:CreatorOVaultCoreModule:${DEPLOYMENT_EPOCH_TAG}}"
+  : "${INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG:=4626:CreatorOVaultStrategiesModule:${DEPLOYMENT_EPOCH_TAG}}"
+  : "${INFRA_VAULT_ADMIN_MODULE_SALT_TAG:=4626:CreatorOVaultAdminModule:${DEPLOYMENT_EPOCH_TAG}}"
+  : "${INFRA_DEPLOYMENT_BATCHER_SALT_TAG:=4626:DeploymentBatcher:${DEPLOYMENT_EPOCH_TAG}}"
+  export INFRA_STORE_SALT_TAG
+  export INFRA_DEPLOYER_FROM_STORE_SALT_TAG
+  export INFRA_VAULT_CORE_MODULE_SALT_TAG
+  export INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG
+  export INFRA_VAULT_ADMIN_MODULE_SALT_TAG
+  export INFRA_DEPLOYMENT_BATCHER_SALT_TAG
+fi
+
 if [ -z "${ETHERSCAN_API_KEY:-}" ] && [ -n "${BASESCAN_API_KEY:-}" ]; then
   export ETHERSCAN_API_KEY="$BASESCAN_API_KEY"
 fi
@@ -59,6 +75,21 @@ fi
 if [ -z "${ETHERSCAN_API_KEY:-}" ]; then
   echo "Warning: ETHERSCAN_API_KEY (or BASESCAN_API_KEY) not set; --verify may fail."
 fi
+
+echo "Infra salt configuration:"
+echo "  DEPLOYMENT_EPOCH_TAG=${DEPLOYMENT_EPOCH_TAG:-[not set]}"
+echo "  INFRA_STORE_SALT=${INFRA_STORE_SALT:-[auto by tag/default]}"
+echo "  INFRA_STORE_SALT_TAG=${INFRA_STORE_SALT_TAG:-4626:UniversalBytecodeStore:v2 (default)}"
+echo "  INFRA_DEPLOYER_FROM_STORE_SALT=${INFRA_DEPLOYER_FROM_STORE_SALT:-[auto by tag/default]}"
+echo "  INFRA_DEPLOYER_FROM_STORE_SALT_TAG=${INFRA_DEPLOYER_FROM_STORE_SALT_TAG:-4626:UniversalCreate2DeployerFromStore:v2 (default)}"
+echo "  INFRA_VAULT_CORE_MODULE_SALT=${INFRA_VAULT_CORE_MODULE_SALT:-[auto by tag/default]}"
+echo "  INFRA_VAULT_CORE_MODULE_SALT_TAG=${INFRA_VAULT_CORE_MODULE_SALT_TAG:-4626:CreatorOVaultCoreModule:v1 (default)}"
+echo "  INFRA_VAULT_STRATEGIES_MODULE_SALT=${INFRA_VAULT_STRATEGIES_MODULE_SALT:-[auto by tag/default]}"
+echo "  INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG=${INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG:-4626:CreatorOVaultStrategiesModule:v1 (default)}"
+echo "  INFRA_VAULT_ADMIN_MODULE_SALT=${INFRA_VAULT_ADMIN_MODULE_SALT:-[auto by tag/default]}"
+echo "  INFRA_VAULT_ADMIN_MODULE_SALT_TAG=${INFRA_VAULT_ADMIN_MODULE_SALT_TAG:-4626:CreatorOVaultAdminModule:v1 (default)}"
+echo "  INFRA_DEPLOYMENT_BATCHER_SALT=${INFRA_DEPLOYMENT_BATCHER_SALT:-[auto by tag/default]}"
+echo "  INFRA_DEPLOYMENT_BATCHER_SALT_TAG=${INFRA_DEPLOYMENT_BATCHER_SALT_TAG:-4626:DeploymentBatcher:v4 (default)}"
 
 echo "Deploying v2 bytecode store + deployer on Base mainnet..."
 forge script script/DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer \

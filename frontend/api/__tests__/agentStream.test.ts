@@ -69,5 +69,35 @@ describe('agent stream handler', () => {
     expect(res.statusCode).toBe(400)
     expect(res.body).toEqual({ success: false, error: 'message is required' })
   })
+
+  it('emits SSE error event when streaming fails', async () => {
+    streamResponseMock.mockImplementation(async function* () {
+      throw new Error('upstream timeout')
+      yield { type: 'done', data: {} }
+    })
+
+    const mod = await import('../_handlers/agent/_stream.ts')
+    const handler = mod.default
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { message: 'hi' },
+      url: '/api/agent/stream',
+    })
+    const res = createMockRes() as any
+    const chunks: string[] = []
+    res.write = vi.fn((chunk: string) => {
+      chunks.push(String(chunk))
+      return true
+    })
+    res.flushHeaders = vi.fn()
+
+    await handler(req, res)
+
+    const payload = chunks.join('')
+    expect(payload).toContain('event: open')
+    expect(payload).toContain('event: error')
+    expect(payload).toContain('stream_failed')
+  })
 })
 

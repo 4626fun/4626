@@ -135,6 +135,8 @@ export type XmtpMessage = {
 
 export type OnMessageCallback = (msg: XmtpMessage) => Promise<string | null>
 
+type XmtpLifecycleState = 'idle' | 'starting' | 'running' | 'stopped' | 'error'
+
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -143,6 +145,10 @@ export class XmtpService {
   private agent: Agent | null = null
   private onMessage: OnMessageCallback | null = null
   private config: XmtpConfig
+  private lifecycleState: XmtpLifecycleState = 'idle'
+  private lastStartedAtMs: number | null = null
+  private lastMessageAtMs: number | null = null
+  private lastError: string | null = null
 
   constructor(config: XmtpConfig) {
     this.config = config
@@ -158,12 +164,30 @@ export class XmtpService {
   }
 
   get isRunning(): boolean {
-    return this.agent !== null
+    return this.lifecycleState === 'running' && this.agent !== null
+  }
+
+  getHealth(): {
+    state: XmtpLifecycleState
+    running: boolean
+    address: string | null
+    lastStartedAtMs: number | null
+    lastMessageAtMs: number | null
+    lastError: string | null
+  } {
+    return {
+      state: this.lifecycleState,
+      running: this.isRunning,
+      address: this.agent?.address ?? null,
+      lastStartedAtMs: this.lastStartedAtMs,
+      lastMessageAtMs: this.lastMessageAtMs,
+      lastError: this.lastError,
+    }
   }
 
   /** Start the XMTP agent and begin streaming messages */
   async start(): Promise<void> {
-    if (this.agent) return
+    if (this.lifecycleState === 'starting' || this.lifecycleState === 'running') return
 
     let signer: any
 
@@ -195,98 +219,112 @@ export class XmtpService {
       createOpts.dbEncryptionKey = this.config.dbEncryptionKey
     }
 
+    this.lifecycleState = 'starting'
+    this.lastError = null
     let effectiveDbEncryptionKey = this.config.dbEncryptionKey
-    this.agent = await withRetry({
-      operationName: 'xmtp_agent_create',
-      maxAttempts: startMaxAttempts,
-      baseDelayMs: startRetryBaseMs,
-      run: async () => {
-        try {
-          return await Agent.create(signer, createOpts as any)
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err)
-          const retryKey = !effectiveDbEncryptionKey ? readEnvDbEncryptionKey() : undefined
-          const isUnsupportedFormat = message.toLowerCase().includes('unsupported file format')
-          if (!retryKey || !isUnsupportedFormat) throw err
+    let createdAgent: Agent | null = null
 
-          // Some runtimes intermittently report unsupported format during first open.
-          // Retry once with the same options before switching to env key fallback.
+    try {
+      createdAgent = await withRetry({
+        operationName: 'xmtp_agent_create',
+        maxAttempts: startMaxAttempts,
+        baseDelayMs: startRetryBaseMs,
+        run: async () => {
           try {
             return await Agent.create(signer, createOpts as any)
-          } catch (retryErr) {
-            const retryMessage = retryErr instanceof Error ? retryErr.message : String(retryErr)
-            if (!retryMessage.toLowerCase().includes('unsupported file format')) throw retryErr
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            const retryKey = !effectiveDbEncryptionKey ? readEnvDbEncryptionKey() : undefined
+            const isUnsupportedFormat = message.toLowerCase().includes('unsupported file format')
+            if (!retryKey || !isUnsupportedFormat) throw err
+
+            // Unsupported format usually means we opened an encrypted DB without
+            // its key. Switch directly to the env key fallback to avoid another
+            // full open timeout with identical options.
+            effectiveDbEncryptionKey = retryKey
+            return await Agent.create(
+              signer,
+              {
+                ...createOpts,
+                dbEncryptionKey: retryKey,
+              } as any,
+            )
           }
+        },
+      })
 
-          // Retry once with env fallback key when initial open keeps reporting unsupported format.
-          effectiveDbEncryptionKey = retryKey
-          return await Agent.create(
-            signer,
-            {
-              ...createOpts,
-              dbEncryptionKey: retryKey,
-            } as any,
-          )
-        }
-      },
-    })
-
-    // Log installation info for persistence debugging
-    try {
-      const info = await getInstallationInfo(this.agent.client)
-      console.log(
-        `[xmtp-service] Connected: ${this.agent.address} | ` +
-        `installations: ${info.totalInstallations}/10 | ` +
-        `dbPath: ${typeof createOpts.dbPath === 'function' ? '(function)' : createOpts.dbPath ?? 'default'} | ` +
-        `dbEncrypted: ${!!effectiveDbEncryptionKey}`,
-      )
-    } catch {
-      // Non-fatal — some SDK versions may not expose getInstallationInfo
-    }
-
-    // Revoke stale installations if requested (recovers from 10/10 limit)
-    if (this.config.revokeOtherInstallations) {
+      // Log installation info for persistence debugging
       try {
-        console.log('[xmtp-service] Revoking all other installations…')
-        await this.agent.client.revokeAllOtherInstallations()
-        console.log('[xmtp-service] Stale installations revoked')
-      } catch (err) {
-        console.error('[xmtp-service] Failed to revoke installations:', err)
-      }
-    }
-
-    // Post-create guard: if we're near the 10-installation limit, proactively
-    // revoke all other installations to prevent future 10/10 errors.
-    try {
-      const info = await getInstallationInfo(this.agent.client)
-      if (info.totalInstallations >= 8) {
-        console.warn(
-          `[xmtp-service] Inbox has ${info.totalInstallations}/10 installations — auto-revoking others to prevent limit`,
+        const info = await getInstallationInfo(createdAgent.client)
+        console.log(
+          `[xmtp-service] Connected: ${createdAgent.address} | ` +
+          `installations: ${info.totalInstallations}/10 | ` +
+          `dbPath: ${typeof createOpts.dbPath === 'function' ? '(function)' : createOpts.dbPath ?? 'default'} | ` +
+          `dbEncrypted: ${!!effectiveDbEncryptionKey}`,
         )
-        await this.agent.client.revokeAllOtherInstallations()
-        console.log('[xmtp-service] Proactive revocation complete')
+      } catch {
+        // Non-fatal — some SDK versions may not expose getInstallationInfo
       }
-    } catch (err) {
-      console.warn('[xmtp-service] Post-create installation check failed (non-fatal):', err)
+
+      // Revoke stale installations if requested (recovers from 10/10 limit)
+      if (this.config.revokeOtherInstallations) {
+        try {
+          console.log('[xmtp-service] Revoking all other installations…')
+          await createdAgent.client.revokeAllOtherInstallations()
+          console.log('[xmtp-service] Stale installations revoked')
+        } catch (err) {
+          console.error('[xmtp-service] Failed to revoke installations:', err)
+        }
+      }
+
+      // Post-create guard: if we're near the 10-installation limit, proactively
+      // revoke all other installations to prevent future 10/10 errors.
+      try {
+        const info = await getInstallationInfo(createdAgent.client)
+        if (info.totalInstallations >= 8) {
+          console.warn(
+            `[xmtp-service] Inbox has ${info.totalInstallations}/10 installations — auto-revoking others to prevent limit`,
+          )
+          await createdAgent.client.revokeAllOtherInstallations()
+          console.log('[xmtp-service] Proactive revocation complete')
+        }
+      } catch (err) {
+        console.warn('[xmtp-service] Post-create installation check failed (non-fatal):', err)
+      }
+
+      // Handle text messages
+      createdAgent.on('text', (ctx) => void this.handleIncoming(ctx))
+      createdAgent.on('markdown', (ctx) => void this.handleIncoming(ctx))
+
+      createdAgent.on('unhandledError', (error) => {
+        console.error('[xmtp-service] Unhandled error:', error)
+      })
+
+      await withRetry({
+        operationName: 'xmtp_agent_start',
+        maxAttempts: startMaxAttempts,
+        baseDelayMs: startRetryBaseMs,
+        run: async () => {
+          await createdAgent!.start()
+        },
+      })
+
+      this.agent = createdAgent
+      this.lifecycleState = 'running'
+      this.lastStartedAtMs = Date.now()
+      this.lastError = null
+      console.log(`[xmtp-service] Agent started: ${this.agent.address}`)
+    } catch (error) {
+      if (createdAgent) {
+        try {
+          await createdAgent.stop()
+        } catch {}
+      }
+      this.agent = null
+      this.lifecycleState = 'error'
+      this.lastError = error instanceof Error ? error.message : String(error)
+      throw error
     }
-
-    // Handle text messages
-    this.agent.on('text', (ctx) => void this.handleIncoming(ctx))
-    this.agent.on('markdown', (ctx) => void this.handleIncoming(ctx))
-
-    this.agent.on('unhandledError', (error) => {
-      console.error('[xmtp-service] Unhandled error:', error)
-    })
-
-    await withRetry({
-      operationName: 'xmtp_agent_start',
-      maxAttempts: startMaxAttempts,
-      baseDelayMs: startRetryBaseMs,
-      run: async () => {
-        await this.agent!.start()
-      },
-    })
-    console.log(`[xmtp-service] Agent started: ${this.agent.address}`)
   }
 
   /** Stop the XMTP agent */
@@ -296,6 +334,7 @@ export class XmtpService {
       await this.agent.stop()
     } catch {}
     this.agent = null
+    this.lifecycleState = 'stopped'
     console.log('[xmtp-service] Agent stopped')
   }
 
@@ -356,6 +395,7 @@ export class XmtpService {
       }
 
       if (this.onMessage) {
+        this.lastMessageAtMs = Date.now()
         const reply = await this.onMessage(msg)
         if (reply) {
           await ctx.conversation.sendText(reply)

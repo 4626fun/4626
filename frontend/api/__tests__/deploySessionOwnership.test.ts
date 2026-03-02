@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { decodeFunctionData, encodeFunctionData } from 'viem'
 
 import handler from '../_handlers/deploy/session/_create.ts'
 import { createMockReq, createMockRes } from './helpers'
@@ -93,6 +94,70 @@ function makeRequestBody() {
   }
 }
 
+function makeFinalizePhase2Data() {
+  return encodeFunctionData({
+    abi: [
+      {
+        type: 'function',
+        name: 'finalizePhase2',
+        stateMutability: 'nonpayable',
+        inputs: [
+          {
+            name: 'params',
+            type: 'tuple',
+            components: [
+              { name: 'creatorToken', type: 'address' },
+              { name: 'owner', type: 'address' },
+              { name: 'vault', type: 'address' },
+              { name: 'wrapper', type: 'address' },
+              { name: 'shareToken', type: 'address' },
+              { name: 'gaugeController', type: 'address' },
+              { name: 'ccaStrategy', type: 'address' },
+              { name: 'oracle', type: 'address' },
+              { name: 'version', type: 'string' },
+              { name: 'depositAmount', type: 'uint256' },
+              { name: 'requiredRaise', type: 'uint128' },
+              { name: 'floorPriceQ96', type: 'uint256' },
+              { name: 'auctionSteps', type: 'bytes' },
+              { name: 'meteoraAlphaVault', type: 'bytes32' },
+              {
+                name: 'solanaIxs',
+                type: 'tuple[]',
+                components: [
+                  { name: 'programId', type: 'bytes32' },
+                  { name: 'serializedAccounts', type: 'bytes[]' },
+                  { name: 'data', type: 'bytes' },
+                ],
+              },
+            ],
+          },
+        ],
+        outputs: [],
+      },
+    ] as const,
+    functionName: 'finalizePhase2',
+    args: [
+      {
+        creatorToken: '0x0000000000000000000000000000000000000003',
+        owner: '0x0000000000000000000000000000000000000002',
+        vault: '0x0000000000000000000000000000000000000101',
+        wrapper: '0x0000000000000000000000000000000000000102',
+        shareToken: '0x0000000000000000000000000000000000000103',
+        gaugeController: '0x0000000000000000000000000000000000000104',
+        ccaStrategy: '0x0000000000000000000000000000000000000105',
+        oracle: '0x0000000000000000000000000000000000000106',
+        version: 'vtest',
+        depositAmount: 5_000_000n * 10n ** 18n,
+        requiredRaise: 1n,
+        floorPriceQ96: 1n,
+        auctionSteps: '0x',
+        meteoraAlphaVault: `0x${'00'.repeat(32)}`,
+        solanaIxs: [],
+      },
+    ],
+  })
+}
+
 function makeCanonicalDb() {
   return {
     query: vi.fn(async () => ({ rows: [{}] })), // allowlist pass
@@ -129,7 +194,11 @@ function makeCanonicalDb() {
 describe('deploy session ownership guardrails', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.DEPLOY_SESSION_TTL_MINUTES
     resolveCoinPartiesMock.mockResolvedValue({ creator: null, payoutRecipient: null })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('returns 400 for malformed deploy addresses', async () => {
@@ -182,6 +251,179 @@ describe('deploy session ownership guardrails', () => {
     expect(insertArgs.payload?.erc7712Grant?.version).toBe('erc7712-v1')
     expect((insertArgs.payload?.erc7712Grant?.allowedTargets ?? []).map((v: string) => v.toLowerCase())).toContain('0x0000000000000000000000000000000000000010')
     expect(insertArgs.payload?.persistSessionOwner).toBe(true)
+  })
+
+  it('prepends creatorToken approval before phase2 finalize and whitelists selector', async () => {
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+    const finalizeData = makeFinalizePhase2Data()
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        phase2Calls: [],
+        phase2FinalizeCalls: [
+          {
+            to: '0x0000000000000000000000000000000000000010',
+            value: '0',
+            data: finalizeData,
+          },
+        ],
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
+    const phase2FinalizeCalls = insertArgs.payload?.phase2FinalizeCalls as Array<{ to: string; data: string }>
+    expect(Array.isArray(phase2FinalizeCalls)).toBe(true)
+    expect(phase2FinalizeCalls.length).toBe(2)
+    expect(phase2FinalizeCalls[0]?.to?.toLowerCase()).toBe('0x0000000000000000000000000000000000000003')
+    expect(String(phase2FinalizeCalls[0]?.data || '').toLowerCase().startsWith('0x095ea7b3')).toBe(true)
+    expect(String(phase2FinalizeCalls[1]?.data || '').toLowerCase()).toBe(finalizeData.toLowerCase())
+
+    const decodedApprove = decodeFunctionData({
+      abi: [
+        {
+          type: 'function',
+          name: 'approve',
+          stateMutability: 'nonpayable',
+          inputs: [
+            { name: 'spender', type: 'address' },
+            { name: 'amount', type: 'uint256' },
+          ],
+          outputs: [{ type: 'bool' }],
+        },
+      ] as const,
+      data: phase2FinalizeCalls[0]!.data as `0x${string}`,
+    })
+    expect(decodedApprove.functionName).toBe('approve')
+    expect((decodedApprove.args?.[0] as string).toLowerCase()).toBe('0x0000000000000000000000000000000000000010')
+    expect(decodedApprove.args?.[1]).toBe(5_000_000n * 10n ** 18n)
+
+    expect((insertArgs.payload?.erc7712Grant?.allowedSelectors ?? []).map((v: string) => v.toLowerCase())).toContain(
+      '0x095ea7b3',
+    )
+  })
+
+  it('moves auto-injected finalize approvals into phase2 core when core stage exists', async () => {
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+    const finalizeData = makeFinalizePhase2Data()
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        phase2Calls: [],
+        phase2CoreCalls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0xf9344d88' }],
+        phase2FinalizeCalls: [
+          {
+            to: '0x0000000000000000000000000000000000000010',
+            value: '0',
+            data: finalizeData,
+          },
+        ],
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
+    const phase2CoreCalls = insertArgs.payload?.phase2CoreCalls as Array<{
+      to: string
+      data: string
+      value?: unknown
+    }>
+    const phase2FinalizeCalls = insertArgs.payload?.phase2FinalizeCalls as Array<{ to: string; data: string }>
+
+    expect(Array.isArray(phase2CoreCalls)).toBe(true)
+    expect(Array.isArray(phase2FinalizeCalls)).toBe(true)
+    expect(phase2CoreCalls.length).toBe(2)
+    expect(phase2CoreCalls[0]?.to?.toLowerCase()).toBe('0x0000000000000000000000000000000000000010')
+    expect(String(phase2CoreCalls[0]?.data || '').toLowerCase()).toBe('0xf9344d88')
+    expect(phase2CoreCalls[0]?.value).toBe('0')
+    expect(phase2CoreCalls[1]?.to?.toLowerCase()).toBe('0x0000000000000000000000000000000000000003')
+    expect(String(phase2CoreCalls[1]?.data || '').toLowerCase().startsWith('0x095ea7b3')).toBe(true)
+    expect(typeof phase2CoreCalls[1]?.value).not.toBe('bigint')
+
+    // Finalize stage remains single-call (no same-stage approval prepend).
+    expect(phase2FinalizeCalls.length).toBe(1)
+    expect(String(phase2FinalizeCalls[0]?.data || '').toLowerCase()).toBe(finalizeData.toLowerCase())
+    expect(() => JSON.stringify(insertArgs.payload)).not.toThrow()
+  })
+
+  it('uses a 45-minute default deploy session TTL', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-03-01T07:00:00.000Z'))
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+
+    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
+    const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
+    expect(insertArgs.expiresAt).toBeInstanceOf(Date)
+    expect(insertArgs.expiresAt.toISOString()).toBe('2026-03-01T07:45:00.000Z')
+    expect(insertArgs.payload?.erc7712Grant?.validUntil).toBe('2026-03-01T07:45:00.000Z')
+  })
+
+  it('respects DEPLOY_SESSION_TTL_MINUTES override', async () => {
+    process.env.DEPLOY_SESSION_TTL_MINUTES = '90'
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-03-01T07:00:00.000Z'))
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+
+    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
+    const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
+    expect(insertArgs.expiresAt).toBeInstanceOf(Date)
+    expect(insertArgs.expiresAt.toISOString()).toBe('2026-03-01T08:30:00.000Z')
+    expect(insertArgs.payload?.erc7712Grant?.validUntil).toBe('2026-03-01T08:30:00.000Z')
+  })
+
+  it('persists solana OVault hints in deploy session payload', async () => {
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        solanaOvault: {
+          enabled: true,
+          assetMintOrigin: 'existing',
+          assetMeshMint: '11111111111111111111111111111111',
+          shareMeshMint: '22222222222222222222222222222222',
+          solanaEid: 30168,
+          mintCompatibilityHints: {
+            tokenProgram: 'token-2022',
+            transferHookDetected: true,
+            oftFeeBps: 0,
+            adapterMode: 'regular-oft',
+            authorityCompatible: true,
+            rentValueLamports: '2039280',
+          },
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
+    const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
+    expect(insertArgs.payload?.solanaOvault?.enabled).toBe(true)
+    expect(insertArgs.payload?.solanaOvault?.assetMintOrigin).toBe('existing')
+    expect(insertArgs.payload?.solanaOvault?.solanaEid).toBe(30168)
+    expect(insertArgs.payload?.solanaOvault?.mintCompatibilityHints?.transferHookDetected).toBe(true)
+    expect(insertArgs.payload?.solanaOvault?.mintCompatibilityHints?.oftFeeBps).toBe(0)
   })
 
   it('creates session when creator/payout recipient is allowlisted via creatorToken resolution', async () => {

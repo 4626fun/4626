@@ -1,5 +1,5 @@
 # VoterRewardsDistributor
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/governance/VoterRewardsDistributor.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/governance/VoterRewardsDistributor.sol)
 
 **Inherits:**
 Ownable, ReentrancyGuard
@@ -17,6 +17,13 @@ uint256 public constant BPS = 10_000
 
 ```solidity
 IVaultGaugeVotingForRewards public immutable gaugeVoting
+```
+
+
+### registry
+
+```solidity
+ICreatorRegistryForVoterRewards public immutable registry
 ```
 
 
@@ -74,7 +81,7 @@ mapping(uint256 => mapping(address => mapping(address => bool))) public hasClaim
 
 
 ```solidity
-constructor(address _gaugeVoting, address _owner) Ownable(_owner);
+constructor(address _gaugeVoting, address _registry, address _owner) Ownable(_owner);
 ```
 
 ### setProtocolTreasury
@@ -82,6 +89,17 @@ constructor(address _gaugeVoting, address _owner) Ownable(_owner);
 
 ```solidity
 function setProtocolTreasury(address _protocolTreasury) external onlyOwner;
+```
+
+### recoverVaultRewardToken
+
+Owner recovery path for fixing an incorrect reward token mapping.
+
+Intended for emergency repair if a vault was initialized with the wrong token.
+
+
+```solidity
+function recoverVaultRewardToken(address vault, address token) external onlyOwner;
 ```
 
 ### notifyRewards
@@ -150,6 +168,12 @@ event RewardsNotified(uint256 indexed epoch, address indexed vault, address inde
 event RewardTokenSet(address indexed vault, address indexed token);
 ```
 
+### RewardTokenRecovered
+
+```solidity
+event RewardTokenRecovered(address indexed vault, address indexed oldToken, address indexed newToken);
+```
+
 ### Claimed
 
 ```solidity
@@ -181,6 +205,18 @@ error ZeroAddress();
 
 ```solidity
 error ZeroAmount();
+```
+
+### UnauthorizedNotifier
+
+```solidity
+error UnauthorizedNotifier();
+```
+
+### InvalidVaultRegistration
+
+```solidity
+error InvalidVaultRegistration();
 ```
 
 ### RewardTokenMismatch

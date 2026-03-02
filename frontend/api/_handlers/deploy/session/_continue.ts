@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { getAddress, type Address, type Hex, type SignableMessage } from 'viem'
+import { decodeFunctionData, getAddress, isAddress, type Address, type Hex, type SignableMessage } from 'viem'
 import { createPublicClient, encodeAbiParameters, encodeFunctionData, http } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { toAccount } from 'viem/accounts'
@@ -21,6 +21,24 @@ declare const process: { env: Record<string, string | undefined> }
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type ContinueRequest = { sessionId: string }
 const STAGE_USEROP_HASH_PREFIX = 'stageUserOpHash_'
+const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
+const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
+const SELECTOR_VAULT_DEPLOY_TO_STRATEGIES = '0x355aa867'
+const SOLANA_RESERVE_PERCENT_BPS = 3_000n
+const BPS_DENOMINATOR = 10_000n
+const SESSION_EXPIRED_RESTART_REQUIRED = 'session_expired_restart_required'
+const SESSION_EXPIRED_AT_KEY = 'sessionExpiredAt'
+const SESSION_EXPIRED_REASON_KEY = 'sessionExpiredReason'
+const REPLAY_SKIP_PHASE2_CORE_AT_KEY = 'replaySkipPhase2CoreAt'
+const REPLAY_SKIP_PHASE2_CORE_REASON_KEY = 'replaySkipPhase2CoreReason'
+const REPLAY_SKIP_PHASE2_FINALIZE_AT_KEY = 'replaySkipPhase2FinalizeAt'
+const REPLAY_SKIP_PHASE2_FINALIZE_REASON_KEY = 'replaySkipPhase2FinalizeReason'
+
+function isSessionExpired(expiresAt: unknown): boolean {
+  if (typeof expiresAt !== 'string') return false
+  const expiresMs = Date.parse(expiresAt)
+  return Number.isFinite(expiresMs) && expiresMs <= Date.now()
+}
 
 function stageUserOpHashKey(step: string): string {
   return `${STAGE_USEROP_HASH_PREFIX}${step}`
@@ -135,6 +153,634 @@ const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
   { type: 'function', name: 'removeOwnerAtIndex', stateMutability: 'nonpayable', inputs: [{ name: 'index', type: 'uint256' }, { name: 'owner', type: 'bytes' }], outputs: [] },
 ] as const
 
+const OWNABLE_OWNER_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
+  {
+    type: 'function',
+    name: 'finalizePhase2',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareToken', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
+          { name: 'meteoraAlphaVault', type: 'bytes32' },
+          {
+            name: 'solanaIxs',
+            type: 'tuple[]',
+            components: [
+              { name: 'programId', type: 'bytes32' },
+              { name: 'serializedAccounts', type: 'bytes[]' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
+const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
+  {
+    type: 'function',
+    name: 'finalizePhase2',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareToken', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
+const CREATOR_VAULT_STRATEGY_ADMIN_ABI = [
+  {
+    type: 'function',
+    name: 'deployToStrategies',
+    stateMutability: 'nonpayable',
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'updateStrategyWeight',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'strategy', type: 'address' },
+      { name: 'newWeight', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setMinimumTotalIdle',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: '_minimumTotalIdle', type: 'uint256' }],
+    outputs: [],
+  },
+] as const
+
+const CREATOR_VAULT_STRATEGY_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'strategyList',
+    stateMutability: 'view',
+    inputs: [{ name: 'index', type: 'uint256' }],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'strategyWeights',
+    stateMutability: 'view',
+    inputs: [{ name: 'strategy', type: 'address' }],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'totalStrategyWeight',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'minimumTotalIdle',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'asset',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const CREATOR_CHARM_STRATEGY_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'charmVault',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const ERC20_BALANCE_OF_ABI = [
+  {
+    type: 'function',
+    name: 'balanceOf',
+    stateMutability: 'view',
+    inputs: [{ type: 'address' }],
+    outputs: [{ type: 'uint256' }],
+  },
+] as const
+
+function parseBigIntLike(value: unknown): bigint | null {
+  if (typeof value === 'bigint') return value >= 0n ? value : null
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return BigInt(Math.trunc(value))
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = BigInt(value.trim())
+      return parsed >= 0n ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function extractFinalizePhase2Info(data: Hex): {
+  creatorToken: Address | null
+  depositAmount: bigint | null
+  owner: Address | null
+  vault: Address | null
+  gaugeController: Address | null
+  ccaStrategy: Address | null
+  oracle: Address | null
+} | null {
+  for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
+    try {
+      const decoded = decodeFunctionData({ abi, data })
+      const params = (decoded.args?.[0] ?? null) as {
+        creatorToken?: string
+        depositAmount?: bigint | string | number
+        owner?: string
+        vault?: string
+        gaugeController?: string
+        ccaStrategy?: string
+        oracle?: string
+      } | null
+      const creatorTokenCandidate = params?.creatorToken && isAddress(params.creatorToken)
+        ? getAddress(params.creatorToken as Address)
+        : null
+      const creatorToken =
+        creatorTokenCandidate && creatorTokenCandidate.toLowerCase() !== ZERO_ADDRESS.toLowerCase()
+          ? creatorTokenCandidate
+          : null
+      if (!creatorToken) continue
+      const normalizeAddress = (value: unknown): Address | null => {
+        if (typeof value !== 'string' || !isAddress(value)) return null
+        const addr = getAddress(value as Address)
+        return addr.toLowerCase() === ZERO_ADDRESS.toLowerCase() ? null : addr
+      }
+      return {
+        creatorToken,
+        depositAmount: parseBigIntLike(params?.depositAmount),
+        owner: normalizeAddress(params?.owner),
+        vault: normalizeAddress(params?.vault),
+        gaugeController: normalizeAddress(params?.gaugeController),
+        ccaStrategy: normalizeAddress(params?.ccaStrategy),
+        oracle: normalizeAddress(params?.oracle),
+      }
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
+function getSelector(data: Hex): string {
+  const v = String(data || '')
+  return v.length >= 10 ? v.slice(0, 10).toLowerCase() : ''
+}
+
+function stripPhase3DeployToStrategiesCall(
+  calls: Array<{ to: Address; value: bigint; data: Hex }>,
+  vault: Address | null,
+): Array<{ to: Address; value: bigint; data: Hex }> {
+  if (!vault) return calls
+  const vaultLc = vault.toLowerCase()
+  return calls.filter((call) => {
+    if (call.to.toLowerCase() !== vaultLc) return true
+    return getSelector(call.data) !== SELECTOR_VAULT_DEPLOY_TO_STRATEGIES
+  })
+}
+
+async function readVaultStrategiesWithWeights(params: {
+  publicClient: any
+  vault: Address
+  maxScan?: number
+}): Promise<Array<{ strategy: Address; weight: bigint }>> {
+  const maxScan = Number.isFinite(Number(params.maxScan)) && Number(params.maxScan) > 0 ? Number(params.maxScan) : 8
+  const out: Array<{ strategy: Address; weight: bigint }> = []
+  const seen = new Set<string>()
+  for (let i = 0; i < maxScan; i += 1) {
+    const strategyRaw = await params.publicClient
+      .readContract({
+        address: params.vault,
+        abi: CREATOR_VAULT_STRATEGY_VIEW_ABI,
+        functionName: 'strategyList',
+        args: [BigInt(i)],
+      })
+      .catch(() => null)
+    if (typeof strategyRaw !== 'string' || !isAddress(strategyRaw)) break
+    const strategy = getAddress(strategyRaw as Address)
+    if (strategy.toLowerCase() === ZERO_ADDRESS.toLowerCase()) break
+    const key = strategy.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    const weightRaw = await params.publicClient
+      .readContract({
+        address: params.vault,
+        abi: CREATOR_VAULT_STRATEGY_VIEW_ABI,
+        functionName: 'strategyWeights',
+        args: [strategy],
+      })
+      .catch(() => 0n)
+    const weight = parseBigIntLike(weightRaw) ?? 0n
+    out.push({ strategy, weight })
+  }
+  return out
+}
+
+async function readCharmVaultAddress(params: {
+  publicClient: any
+  strategy: Address
+}): Promise<Address | null> {
+  const charmVaultRaw = await params.publicClient
+    .readContract({
+      address: params.strategy,
+      abi: CREATOR_CHARM_STRATEGY_VIEW_ABI,
+      functionName: 'charmVault',
+    })
+    .catch(() => null)
+  if (typeof charmVaultRaw !== 'string' || !isAddress(charmVaultRaw)) return null
+  const charmVault = getAddress(charmVaultRaw as Address)
+  return charmVault.toLowerCase() === ZERO_ADDRESS.toLowerCase() ? null : charmVault
+}
+
+async function buildPhase4StrategyDeploymentCalls(params: {
+  publicClient: any
+  vault: Address
+}): Promise<Array<{ to: Address; value: bigint; data: Hex }>> {
+  const strategies = await readVaultStrategiesWithWeights({
+    publicClient: params.publicClient,
+    vault: params.vault,
+    maxScan: 8,
+  })
+  if (strategies.length === 0) return []
+
+  const withCharmProbe = await Promise.all(
+    strategies.map(async (entry) => ({
+      ...entry,
+      charmVault: await readCharmVaultAddress({ publicClient: params.publicClient, strategy: entry.strategy }),
+    })),
+  )
+
+  const hasWeightedStrategies = withCharmProbe.some((entry) => entry.weight > 0n)
+  if (!hasWeightedStrategies) return []
+
+  const charm = withCharmProbe.find((entry) => entry.weight > 0n && Boolean(entry.charmVault))
+  if (!charm) {
+    return [
+      {
+        to: params.vault,
+        value: 0n,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
+          functionName: 'deployToStrategies',
+          args: [],
+        }),
+      },
+    ]
+  }
+
+  const [totalWeightRaw, minIdleRaw, assetRaw] = await Promise.all([
+    params.publicClient
+      .readContract({
+        address: params.vault,
+        abi: CREATOR_VAULT_STRATEGY_VIEW_ABI,
+        functionName: 'totalStrategyWeight',
+      })
+      .catch(() => null),
+    params.publicClient
+      .readContract({
+        address: params.vault,
+        abi: CREATOR_VAULT_STRATEGY_VIEW_ABI,
+        functionName: 'minimumTotalIdle',
+      })
+      .catch(() => null),
+    params.publicClient
+      .readContract({
+        address: params.vault,
+        abi: CREATOR_VAULT_STRATEGY_VIEW_ABI,
+        functionName: 'asset',
+      })
+      .catch(() => null),
+  ])
+  const totalWeight = parseBigIntLike(totalWeightRaw) ?? 0n
+  const charmWeight = charm.weight
+  const minIdle = parseBigIntLike(minIdleRaw) ?? 0n
+
+  if (totalWeight > 0n && charmWeight > 0n && typeof assetRaw === 'string' && isAddress(assetRaw)) {
+    const asset = getAddress(assetRaw as Address)
+    const idleRaw = await params.publicClient
+      .readContract({
+        address: asset,
+        abi: ERC20_BALANCE_OF_ABI,
+        functionName: 'balanceOf',
+        args: [params.vault],
+      })
+      .catch(() => null)
+    const idleBalance = parseBigIntLike(idleRaw) ?? 0n
+    const deployable = idleBalance > minIdle ? idleBalance - minIdle : 0n
+    const charmReserved = deployable > 0n ? (deployable * charmWeight) / totalWeight : 0n
+    const tempMinIdle = minIdle + charmReserved
+
+    return [
+      {
+        to: params.vault,
+        value: 0n,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
+          functionName: 'updateStrategyWeight',
+          args: [charm.strategy, 0n],
+        }),
+      },
+      {
+        to: params.vault,
+        value: 0n,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
+          functionName: 'setMinimumTotalIdle',
+          args: [tempMinIdle],
+        }),
+      },
+      {
+        to: params.vault,
+        value: 0n,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
+          functionName: 'deployToStrategies',
+          args: [],
+        }),
+      },
+      {
+        to: params.vault,
+        value: 0n,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
+          functionName: 'setMinimumTotalIdle',
+          args: [minIdle],
+        }),
+      },
+      {
+        to: params.vault,
+        value: 0n,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
+          functionName: 'updateStrategyWeight',
+          args: [charm.strategy, charm.weight],
+        }),
+      },
+    ]
+  }
+
+  return [
+    {
+      to: params.vault,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
+        functionName: 'updateStrategyWeight',
+        args: [charm.strategy, 0n],
+      }),
+    },
+    {
+      to: params.vault,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
+        functionName: 'deployToStrategies',
+        args: [],
+      }),
+    },
+    {
+      to: params.vault,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: CREATOR_VAULT_STRATEGY_ADMIN_ABI,
+        functionName: 'updateStrategyWeight',
+        args: [charm.strategy, charm.weight],
+      }),
+    },
+  ]
+}
+
+async function hasRuntimeCode(publicClient: any, address: Address | null): Promise<boolean> {
+  if (!address) return false
+  const getBytecode = publicClient?.getBytecode
+  if (typeof getBytecode !== 'function') return false
+  try {
+    const bytecode = await getBytecode.call(publicClient, { address })
+    return typeof bytecode === 'string' && bytecode !== '0x'
+  } catch {
+    return false
+  }
+}
+
+async function readOwnableOwner(publicClient: any, address: Address | null): Promise<Address | null> {
+  if (!address) return null
+  try {
+    const ownerRaw = await publicClient.readContract({
+      address,
+      abi: OWNABLE_OWNER_VIEW_ABI,
+      functionName: 'owner',
+    })
+    if (typeof ownerRaw !== 'string' || !isAddress(ownerRaw)) return null
+    const owner = getAddress(ownerRaw as Address)
+    return owner.toLowerCase() === ZERO_ADDRESS.toLowerCase() ? null : owner
+  } catch {
+    return null
+  }
+}
+
+async function readPhase2ReplayState(params: {
+  publicClient: any
+  phase2FinalizeCalls: Array<{ to: Address; value: bigint; data: Hex }>
+}): Promise<{
+  phase2CoreAlreadyDeployed: boolean
+  phase2FinalizeAlreadyCompleted: boolean
+}> {
+  const finalizeCall = params.phase2FinalizeCalls[0]
+  if (!finalizeCall) {
+    return {
+      phase2CoreAlreadyDeployed: false,
+      phase2FinalizeAlreadyCompleted: false,
+    }
+  }
+  const finalizeInfo = extractFinalizePhase2Info(finalizeCall.data)
+  if (!finalizeInfo) {
+    return {
+      phase2CoreAlreadyDeployed: false,
+      phase2FinalizeAlreadyCompleted: false,
+    }
+  }
+  const [gaugeDeployed, ccaDeployed, oracleDeployed, vaultOwner] = await Promise.all([
+    hasRuntimeCode(params.publicClient, finalizeInfo.gaugeController),
+    hasRuntimeCode(params.publicClient, finalizeInfo.ccaStrategy),
+    hasRuntimeCode(params.publicClient, finalizeInfo.oracle),
+    readOwnableOwner(params.publicClient, finalizeInfo.vault),
+  ])
+  return {
+    phase2CoreAlreadyDeployed: gaugeDeployed && ccaDeployed && oracleDeployed,
+    phase2FinalizeAlreadyCompleted:
+      Boolean(finalizeInfo.owner) &&
+      Boolean(vaultOwner) &&
+      String(finalizeInfo.owner).toLowerCase() === String(vaultOwner).toLowerCase(),
+  }
+}
+
+async function ensureOvaultPreflight(params: {
+  req: VercelRequest
+  phase2FinalizeCalls: Array<{ to: Address; value: bigint; data: Hex }>
+  solanaOvault: unknown
+}): Promise<{
+  existingMintCompatible: boolean
+  depositEligible: boolean
+  redeemEligible: boolean
+  assetPeerSet: boolean
+  sharePeerSet: boolean
+  meshStep: 'ovault_mesh_confirmed'
+}> {
+  const defaultStatus = {
+    existingMintCompatible: true,
+    depositEligible: true,
+    redeemEligible: true,
+    assetPeerSet: true,
+    sharePeerSet: true,
+    meshStep: 'ovault_mesh_confirmed' as const,
+  }
+  const finalizeCall = params.phase2FinalizeCalls[0]
+  if (!finalizeCall) return defaultStatus
+  const finalizeInfo = extractFinalizePhase2Info(finalizeCall.data)
+  if (!finalizeInfo?.creatorToken) return defaultStatus
+
+  const bridgeToken = finalizeInfo.creatorToken
+  const expectedSolanaAmount =
+    finalizeInfo.depositAmount && finalizeInfo.depositAmount > 0n
+      ? (finalizeInfo.depositAmount * SOLANA_RESERVE_PERCENT_BPS) / BPS_DENOMINATOR
+      : null
+  const solanaOvault = isPlainObject(params.solanaOvault) ? params.solanaOvault : {}
+  const assetMintOrigin =
+    typeof solanaOvault.assetMintOrigin === 'string' && solanaOvault.assetMintOrigin.trim()
+      ? solanaOvault.assetMintOrigin.trim()
+      : 'existing'
+  const mintCompatibilityHints = isPlainObject(solanaOvault.mintCompatibilityHints)
+    ? solanaOvault.mintCompatibilityHints
+    : null
+
+  const origin = getCanonicalOrigin(params.req)
+  const cookie = typeof params.req.headers.cookie === 'string' ? params.req.headers.cookie : ''
+  const authz = typeof params.req.headers.authorization === 'string' ? params.req.headers.authorization : ''
+  const internalRegistrationSecret = String(
+    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
+      process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
+      '',
+  ).trim()
+  const failures: string[] = []
+  for (const routePath of ['/api/deploy/setupSolanaOvaultMesh', '/api/deploy/registerSolanaBridgeToken']) {
+    try {
+      const body: Record<string, unknown> = {
+        bridgeToken,
+        batcherAddress: getAddress(finalizeCall.to),
+        buildOnly: true,
+        assetMintOrigin,
+        enforceCompatibility: true,
+      }
+      if (mintCompatibilityHints) body.mintCompatibilityHints = mintCompatibilityHints
+      if (expectedSolanaAmount && expectedSolanaAmount > 0n) {
+        body.creatorToken = bridgeToken
+        body.expectedSolanaAmount = expectedSolanaAmount.toString()
+      }
+      const response = await fetch(`${origin}${routePath}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(cookie ? { Cookie: cookie } : {}),
+          ...(authz ? { Authorization: authz } : {}),
+          ...(internalRegistrationSecret ? { 'X-CV-Solana-Registration-Secret': internalRegistrationSecret } : {}),
+        },
+        body: JSON.stringify(body),
+      })
+      const rawBody = await response.text().catch(() => '')
+      const json = rawBody ? (JSON.parse(rawBody) as ApiEnvelope<any>) : null
+      if (response.ok && json?.success) {
+        const data = json.data ?? {}
+        const existingMintCompatible = data?.existingMintCompatible === true
+        const depositEligible = data?.depositEligible === true
+        const redeemEligible = data?.redeemEligible === true
+        if (!existingMintCompatible || !depositEligible || !redeemEligible) {
+          failures.push(
+            `${routePath} ovault eligibility: existingMintCompatible=${String(data?.existingMintCompatible)} ` +
+              `depositEligible=${String(data?.depositEligible)} redeemEligible=${String(data?.redeemEligible)}`,
+          )
+          continue
+        }
+        return {
+          existingMintCompatible,
+          depositEligible,
+          redeemEligible,
+          assetPeerSet: data?.assetPeerSet === false ? false : true,
+          sharePeerSet: data?.sharePeerSet === false ? false : true,
+          meshStep: 'ovault_mesh_confirmed',
+        }
+      }
+      if (response.status === 404 || response.status === 405) {
+        failures.push(`${routePath} unavailable (${response.status})`)
+        continue
+      }
+      failures.push(`${routePath} failed (${response.status}): ${json?.error ? String(json.error) : rawBody.slice(0, 160)}`)
+    } catch (error) {
+      failures.push(`${routePath} request_failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  throw new Error(`Solana preflight failed: ${failures.join(' | ')}`)
+}
+
 function asOwnerBytes(owner: Address): Hex {
   // Coinbase Smart Wallet stores EOA owners as 32-byte left-padded address bytes.
   return encodeAbiParameters([{ type: 'address' }], [owner]) as Hex
@@ -211,9 +857,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let attemptedStage: string | null = null
   let attemptedCalls: Array<{ to: Address; value: bigint; data: Hex }> | null = null
 
-  // Check session expiration
-  if (Date.parse(rec.expiresAt) <= Date.now()) {
-    return res.status(410).json({ success: false, error: 'Session expired' } satisfies ApiEnvelope<null>)
+  const sessionAddress = getAddress(auth.address)
+  if (sessionAddress.toLowerCase() !== rec.sessionAddress.toLowerCase()) {
+    return res.status(403).json({ success: false, error: 'Forbidden' } satisfies ApiEnvelope<null>)
   }
 
   // Check session not in terminal state
@@ -221,9 +867,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: `Session already ${rec.step}` } satisfies ApiEnvelope<null>)
   }
 
-  const sessionAddress = getAddress(auth.address)
-  if (sessionAddress.toLowerCase() !== rec.sessionAddress.toLowerCase()) {
-    return res.status(403).json({ success: false, error: 'Forbidden' } satisfies ApiEnvelope<null>)
+  if (isSessionExpired(rec.expiresAt)) {
+    const expiredAt = new Date().toISOString()
+    try {
+      await updateDeploySession({
+        id: rec.id,
+        step: 'failed',
+        lastError: SESSION_EXPIRED_RESTART_REQUIRED,
+        payloadPatch: {
+          [SESSION_EXPIRED_AT_KEY]: expiredAt,
+          [SESSION_EXPIRED_REASON_KEY]: SESSION_EXPIRED_RESTART_REQUIRED,
+        },
+      })
+    } catch {
+      // Best-effort expiry marker; still return actionable response.
+    }
+    return res.status(410).json({
+      success: false,
+      error: 'Session expired. Please restart deploy session.',
+    } satisfies ApiEnvelope<null>)
   }
 
   try {
@@ -361,15 +1023,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const hasPhase2Finalize =
       expectedStages.hasPhase2Finalize === true || rawSelectedPhase2FinalizeCalls.length > 0
     const phase2FinalizeCalls = normalizeCalls(rawSelectedPhase2FinalizeCalls)
+    const phase2FinalizeInfo = phase2FinalizeCalls.length > 0 ? extractFinalizePhase2Info(phase2FinalizeCalls[0]!.data) : null
+    const expectedVaultFromFinalize = phase2FinalizeInfo?.vault ?? null
     const rawPhase3Calls = Array.isArray(payload.phase3Calls) ? payload.phase3Calls : []
     const rawPhase4Calls = Array.isArray(payload.phase4Calls) ? payload.phase4Calls : []
     const hasPhase3 = expectedStages.hasPhase3 === true || rawPhase3Calls.length > 0
     const hasPhase4 = expectedStages.hasPhase4 === true || rawPhase4Calls.length > 0
-    const phase3Calls = normalizeCalls(rawPhase3Calls)
+    const phase3Calls = stripPhase3DeployToStrategiesCall(normalizeCalls(rawPhase3Calls), expectedVaultFromFinalize)
     const phase4Calls = normalizeCalls(rawPhase4Calls)
     if (hasPhase2Finalize && phase2FinalizeCalls.length === 0) throw new Error('phase2_finalize_calls_invalid')
     if (hasPhase3 && phase3Calls.length === 0) throw new Error('phase3_calls_invalid')
     if (hasPhase4 && phase4Calls.length === 0) throw new Error('phase4_calls_invalid')
+    const solanaOvaultConfig = isPlainObject(payload.solanaOvault) ? payload.solanaOvault : {}
 
     const isInFlight = [
       'phase1_sent',
@@ -393,6 +1058,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })()
 
     const hasPostPhase2 = hasPhase3 || hasPhase4
+    const hasOvaultMeshStage = solanaOvaultConfig.enabled === true && hasPostPhase2
+    const phase2ReplayState =
+      phase2CoreCalls.length > 0 || hasPhase2Finalize
+        ? await readPhase2ReplayState({
+            publicClient,
+            phase2FinalizeCalls,
+          })
+        : {
+            phase2CoreAlreadyDeployed: false,
+            phase2FinalizeAlreadyCompleted: false,
+          }
+    const shouldSkipPhase2Core = phase2CoreCalls.length > 0 && phase2ReplayState.phase2CoreAlreadyDeployed
+    const shouldSkipPhase2Finalize = hasPhase2Finalize && phase2ReplayState.phase2FinalizeAlreadyCompleted
+    const markReplaySkip = async (phase: 'phase2Core' | 'phase2Finalize'): Promise<void> => {
+      const atKey = phase === 'phase2Core' ? REPLAY_SKIP_PHASE2_CORE_AT_KEY : REPLAY_SKIP_PHASE2_FINALIZE_AT_KEY
+      const reasonKey =
+        phase === 'phase2Core' ? REPLAY_SKIP_PHASE2_CORE_REASON_KEY : REPLAY_SKIP_PHASE2_FINALIZE_REASON_KEY
+      if (typeof payload?.[atKey] === 'string' && payload[atKey].trim()) return
+      const reason =
+        phase === 'phase2Core'
+          ? 'onchain_phase2_core_already_deployed'
+          : 'onchain_phase2_finalize_already_completed'
+      const patch = {
+        [atKey]: new Date().toISOString(),
+        [reasonKey]: reason,
+      }
+      await updateDeploySession({
+        id: rec.id,
+        payloadPatch: patch,
+      })
+      payload[atKey] = patch[atKey]
+      payload[reasonKey] = reason
+    }
+
     const sendNextAfterPhase2 = () => {
       if (hasPhase3) return sendStage('phase3_sent', phase3Calls, !hasPhase4)
       if (hasPhase4) return sendStage('phase4_sent', phase4Calls, true)
@@ -463,10 +1162,96 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<any>)
     }
 
+    const runOvaultMeshGate = async (fromStep: string) => {
+      if (fromStep !== 'ovault_mesh_sent') {
+        const markedSent = await transitionDeploySession({
+          id: rec.id,
+          fromStep: fromStep as any,
+          toStep: 'ovault_mesh_sent',
+          lastUserOpHash: null,
+          lastTxHash: null,
+          lastError: null,
+        })
+        if (!markedSent) {
+          return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
+        }
+      }
+      const ovault = await ensureOvaultPreflight({
+        req,
+        phase2FinalizeCalls,
+        solanaOvault: payload.solanaOvault,
+      })
+      const markedConfirmed = await transitionDeploySession({
+        id: rec.id,
+        fromStep: 'ovault_mesh_sent',
+        toStep: 'ovault_mesh_confirmed',
+        lastError: null,
+        payloadPatch: { ovault },
+      })
+      if (!markedConfirmed) {
+        return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
+      }
+      return res.status(200).json({
+        success: true,
+        data: {
+          id: rec.id,
+          step: 'ovault_mesh_confirmed',
+          ovault,
+        },
+      } satisfies ApiEnvelope<any>)
+    }
+
+    const runAfterPhase2 = async (fromStep: string) => {
+      if (hasPostPhase2 && hasOvaultMeshStage && fromStep !== 'ovault_mesh_confirmed') {
+        return runOvaultMeshGate(fromStep)
+      }
+      if (hasPostPhase2) return sendNextAfterPhase2()
+      return completeFrom(fromStep)
+    }
+
+    const runFromPhase2 = async (fromStep: string) => {
+      if (phase2CoreCalls.length > 0) {
+        if (!shouldSkipPhase2Core) {
+          const attachCleanup = !hasPhase2Finalize && !hasPostPhase2
+          return sendStage('phase2_core_sent', phase2CoreCalls, attachCleanup)
+        }
+        await markReplaySkip('phase2Core')
+      }
+      if (hasPhase2Finalize) {
+        if (!shouldSkipPhase2Finalize) {
+          const attachCleanup = !hasPostPhase2
+          return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
+        }
+        await markReplaySkip('phase2Finalize')
+      }
+      return runAfterPhase2(fromStep)
+    }
+
+    const runAfterPhase2Core = async (fromStep: string) => {
+      if (hasPhase2Finalize) {
+        if (!shouldSkipPhase2Finalize) {
+          const attachCleanup = !hasPostPhase2
+          return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
+        }
+        await markReplaySkip('phase2Finalize')
+      }
+      return runAfterPhase2(fromStep)
+    }
+
+    const buildPhase4CallsWithStrategyDeploy = async (): Promise<Array<{ to: Address; value: bigint; data: Hex }>> => {
+      if (!hasPhase3 || !expectedVaultFromFinalize) return phase4Calls
+      const strategyCalls = await buildPhase4StrategyDeploymentCalls({
+        publicClient,
+        vault: expectedVaultFromFinalize,
+      })
+      if (strategyCalls.length === 0) return phase4Calls
+      return [...strategyCalls, ...phase4Calls]
+    }
+
     // Kick off whichever stage is next based on persisted step.
     // Note: we intentionally key off the persisted step (not call-array emptiness), because
     // the payload contains *all* calls for the full deploy.
-    const runFromCreated = () => {
+    const runFromCreated = async () => {
       if (phase1CoreCalls.length > 0) {
         const attachCleanup =
           phase1FinalizeCalls.length === 0 &&
@@ -475,55 +1260,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           !hasPostPhase2
         return sendStage('phase1_sent', phase1CoreCalls, attachCleanup)
       }
-      if (phase2CoreCalls.length > 0) {
-        const attachCleanup = !hasPhase2Finalize && !hasPostPhase2
-        return sendStage('phase2_core_sent', phase2CoreCalls, attachCleanup)
+      if (phase2CoreCalls.length > 0 || hasPhase2Finalize || hasPostPhase2) {
+        return runFromPhase2('created')
       }
-      if (hasPhase2Finalize) {
-        const attachCleanup = !hasPostPhase2
-        return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
-      }
-      if (hasPostPhase2) return sendNextAfterPhase2()
       return null
     }
 
-    const runFromPhase1Confirmed = () => {
+    const runFromPhase1Confirmed = async () => {
       if (phase1FinalizeCalls.length > 0) {
         const attachCleanup = phase2CoreCalls.length === 0 && !hasPhase2Finalize && !hasPostPhase2
         return sendStage('phase1_finalize_sent', phase1FinalizeCalls, attachCleanup)
       }
-      if (phase2CoreCalls.length > 0) {
-        const attachCleanup = !hasPhase2Finalize && !hasPostPhase2
-        return sendStage('phase2_core_sent', phase2CoreCalls, attachCleanup)
-      }
-      if (hasPhase2Finalize) {
-        const attachCleanup = !hasPostPhase2
-        return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
-      }
-      if (hasPostPhase2) return sendNextAfterPhase2()
-      return completeFrom('phase1_confirmed')
+      return runFromPhase2('phase1_confirmed')
     }
 
-    const runFromPhase1FinalizeConfirmed = () => {
-      if (phase2CoreCalls.length > 0) {
-        const attachCleanup = !hasPhase2Finalize && !hasPostPhase2
-        return sendStage('phase2_core_sent', phase2CoreCalls, attachCleanup)
-      }
-      if (hasPhase2Finalize) {
-        const attachCleanup = !hasPostPhase2
-        return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
-      }
-      if (hasPostPhase2) return sendNextAfterPhase2()
-      return completeFrom('phase1_finalize_confirmed')
+    const runFromPhase1FinalizeConfirmed = async () => {
+      return runFromPhase2('phase1_finalize_confirmed')
     }
 
-    const runFromPhase2CoreConfirmed = () => {
-      if (hasPhase2Finalize) {
-        const attachCleanup = !hasPostPhase2
-        return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
-      }
-      if (hasPostPhase2) return sendNextAfterPhase2()
-      return completeFrom('phase2_core_confirmed')
+    const runFromPhase2CoreConfirmed = async () => {
+      return runAfterPhase2Core('phase2_core_confirmed')
     }
 
     if (rec.step === 'created') {
@@ -543,14 +1299,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (started) return started
     }
     if (rec.step === 'phase2_confirmed' && hasPostPhase2) {
-      const started = await sendNextAfterPhase2()
+      const started = hasOvaultMeshStage
+        ? await runAfterPhase2('phase2_confirmed')
+        : await sendNextAfterPhase2()
       if (started) return started
     }
     if (rec.step === 'phase2_confirmed' && !hasPostPhase2) {
-      return await completeFrom('phase2_confirmed')
+      return await runAfterPhase2('phase2_confirmed')
+    }
+    if (rec.step === 'ovault_mesh_sent') {
+      return await runOvaultMeshGate('ovault_mesh_sent')
+    }
+    if (rec.step === 'ovault_mesh_confirmed' && hasPostPhase2) {
+      const started = await sendNextAfterPhase2()
+      if (started) return started
     }
     if (rec.step === 'phase3_confirmed' && hasPhase4) {
-      return await sendStage('phase4_sent', phase4Calls, true)
+      const phase4CallsWithStrategyDeploy = await buildPhase4CallsWithStrategyDeploy()
+      return await sendStage('phase4_sent', phase4CallsWithStrategyDeploy, true)
     }
     if (rec.step === 'phase3_confirmed' && !hasPhase4) {
       return await completeFrom('phase3_confirmed')

@@ -9,8 +9,8 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {ICreatorRegistry} from "../../interfaces/core/ICreatorRegistry.sol";
 import {ICreatorGaugeController} from "../../interfaces/core/ICreatorGaugeController.sol";
 import {ICreatorOVault} from "../../interfaces/core/ICreatorOVault.sol";
-import {IBaseSolanaBridge} from "../../services/bridge/interfaces/IBaseSolanaBridge.sol";
-import {CreatorLinearVesting} from "../vesting/CreatorLinearVesting.sol";
+import {IBaseSolanaBridge} from "../../interfaces/IBaseSolanaBridge.sol";
+import {CreatorLinearVesting} from "../../utilities/vesting/CreatorLinearVesting.sol";
 
 interface IUniversalCreate2DeployerFromStore {
     function deploy(bytes32 salt, bytes32 codeId, bytes calldata constructorArgs) external returns (address addr);
@@ -27,6 +27,7 @@ interface ICreatorCoin {
 
 interface ICreatorOVaultWrapper {
     function setShareOFT(address _shareOFT) external;
+    function deposit(uint256 amount) external returns (uint256 shareTokens);
     function wrap(uint256 amount) external returns (uint256 shareTokens);
     function transferOwnership(address newOwner) external;
 }
@@ -73,17 +74,24 @@ interface IUniswapV3Pool {
  *      Vaults created via this factory appear on alpha.charm.fi UI
  */
 interface ICharmFactory {
-    function createVault(
-        address pool,
-        address manager,
-        uint256 maxTotalSupply,
-        int24 baseThreshold,
-        int24 limitThreshold,
-        uint24 fullRangeWeight,
-        uint32 period,
-        string memory name,
-        string memory symbol
-    ) external returns (address vault);
+    struct VaultParams {
+        address pool;
+        address manager;
+        uint24 managerFee;
+        address rebalanceDelegate;
+        uint256 maxTotalSupply;
+        int24 baseThreshold;
+        int24 limitThreshold;
+        uint24 fullRangeWeight;
+        uint32 period;
+        int24 minTickMove;
+        int24 maxTwapDeviation;
+        uint32 twapDuration;
+        string name;
+        string symbol;
+    }
+
+    function createVault(VaultParams calldata params) external returns (address vault);
 }
 
 interface ICreatorCharmStrategy {
@@ -244,6 +252,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         bytes32 charmAlphaVaultDeploy;
         bytes32 creatorCharmStrategy;
         bytes32 ajnaStrategy;
+        bytes32 solanaStrategy;
     }
 
     struct Phase3Params {
@@ -258,6 +267,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         string charmVaultSymbol;
         uint256 charmWeightBps;
         uint256 ajnaWeightBps;
+        uint256 solanaWeightBps;
         bool enableAutoAllocate;
     }
 
@@ -266,6 +276,13 @@ contract DeploymentBatcher is ReentrancyGuard {
         address charmVault;
         address charmStrategy;
         address ajnaStrategy;
+        address solanaStrategy;
+    }
+
+    struct OVaultRuntimeConfig {
+        address hubComposer;
+        uint32 solanaEid;
+        bool enabled;
     }
 
     error ZeroAddress();
@@ -283,6 +300,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     error AuctionShareOFTMismatch();
     error AuctionAmountMismatch();
     error Phase2Missing();
+    error InvalidSolanaEid();
+    error InvalidSolanaBridgeConfig();
 
     ICreatorRegistry public immutable registry;
     IUniversalBytecodeStore public immutable bytecodeStore;
@@ -314,6 +333,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     address public solanaBridgeAdapter;
     /// @notice Solana deployer/multisig wallet address (bytes32 pubkey) to receive bridged tokens.
     bytes32 public solanaDestination;
+    /// @notice OVault runtime wiring used for Solana compose orchestration.
+    OVaultRuntimeConfig private ovaultRuntimeConfig;
 
     event Phase1Deployed(
         address indexed creatorToken,
@@ -375,8 +396,10 @@ contract DeploymentBatcher is ReentrancyGuard {
         address charmVault,
         address charmStrategy,
         address ajnaStrategy,
+        address solanaStrategy,
         uint256 charmWeightBps,
-        uint256 ajnaWeightBps
+        uint256 ajnaWeightBps,
+        uint256 solanaWeightBps
     );
 
     event CreatorShareVestingDeployed(
@@ -389,6 +412,7 @@ contract DeploymentBatcher is ReentrancyGuard {
     );
 
     event SolanaConfigSet(address indexed adapter, bytes32 solanaDestination);
+    event OVaultRuntimeConfigSet(address indexed hubComposer, uint32 indexed solanaEid, bool enabled);
 
     constructor(
         address _registry,
@@ -841,11 +865,12 @@ contract DeploymentBatcher is ReentrancyGuard {
         out.oracle = params.oracle;
 
         // Deposit + wrap
-        IERC20(params.creatorToken).forceApprove(params.vault, params.depositAmount);
-        uint256 shares = ICreatorOVault(params.vault).deposit(params.depositAmount, address(this));
-
-        IERC20(params.vault).forceApprove(params.wrapper, shares);
-        uint256 shareTokens = ICreatorOVaultWrapper(params.wrapper).wrap(shares);
+        //
+        // Route through wrapper.deposit so vault shares are minted directly to the wrapper
+        // and wrapped internally. This avoids same-transaction vault-share transfer cooldown
+        // checks (deposit to batcher -> transfer to wrapper) on hardened vault configs.
+        IERC20(params.creatorToken).forceApprove(params.wrapper, params.depositAmount);
+        uint256 shareTokens = ICreatorOVaultWrapper(params.wrapper).deposit(params.depositAmount);
 
         // ── Fixed Two-Way Split: 50% CCA / 50% creator vesting ──
         uint256 auctionAmount = (shareTokens * AUCTION_PERCENT) / 100; // 50%
@@ -909,12 +934,17 @@ contract DeploymentBatcher is ReentrancyGuard {
         }
         if (params.charmWeightBps == 0 || params.charmWeightBps > 10_000) revert InvalidWeight();
         if (params.ajnaWeightBps > 10_000) revert InvalidWeight();
-        if (params.charmWeightBps + params.ajnaWeightBps > 10_000) revert InvalidWeight();
+        if (params.solanaWeightBps > 10_000) revert InvalidWeight();
+        if (params.charmWeightBps + params.ajnaWeightBps + params.solanaWeightBps > 10_000) revert InvalidWeight();
 
         if (codeIds.charmAlphaVaultDeploy == bytes32(0) || codeIds.creatorCharmStrategy == bytes32(0)) {
             revert InvalidCodeId();
         }
         if (params.ajnaWeightBps > 0 && codeIds.ajnaStrategy == bytes32(0)) revert InvalidCodeId();
+        if (params.solanaWeightBps > 0 && codeIds.solanaStrategy == bytes32(0)) revert InvalidCodeId();
+        if (params.solanaWeightBps > 0 && (solanaBridgeAdapter == address(0) || solanaDestination == bytes32(0))) {
+            revert InvalidSolanaBridgeConfig();
+        }
 
         // ───────────────────────────────
         // 1) Ensure CREATOR/USDC V3 pool exists (0.3% fee)
@@ -934,18 +964,24 @@ contract DeploymentBatcher is ReentrancyGuard {
         // NOTE: Using Charm's official factory ensures vault appears on their UI
         // Parameters: manager=protocolTreasury can rebalance, baseThreshold=3000 ticks,
         //             limitThreshold=6000 ticks, fullRangeWeight=0 (no full range), period=1800s (30min)
-        out.charmVault = ICharmFactory(CHARM_FACTORY)
-            .createVault(
-                v3Pool,
-                protocolTreasury, // manager (can call rebalance)
-                type(uint256).max, // maxTotalSupply (unlimited)
-                3000, // baseThreshold (ticks, must be multiple of tickSpacing)
-                6000, // limitThreshold (ticks)
-                0, // fullRangeWeight (0 = no full range position)
-                1800, // period (30 minutes between rebalances)
-                params.charmVaultName,
-                params.charmVaultSymbol
-            );
+        out.charmVault = ICharmFactory(CHARM_FACTORY).createVault(
+            ICharmFactory.VaultParams({
+                pool: v3Pool,
+                manager: protocolTreasury, // manager (can call rebalance)
+                managerFee: 0,
+                rebalanceDelegate: address(0),
+                maxTotalSupply: type(uint256).max, // maxTotalSupply (unlimited)
+                baseThreshold: 3000, // baseThreshold (ticks, must be multiple of tickSpacing)
+                limitThreshold: 6000, // limitThreshold (ticks)
+                fullRangeWeight: 0, // fullRangeWeight (0 = no full range position)
+                period: 1800, // period (30 minutes between rebalances)
+                minTickMove: int24(0),
+                maxTwapDeviation: int24(0),
+                twapDuration: 60,
+                name: params.charmVaultName,
+                symbol: params.charmVaultSymbol
+            })
+        );
 
         bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
 
@@ -966,15 +1002,31 @@ contract DeploymentBatcher is ReentrancyGuard {
             bytes32 ajnaSalt = _saltFor(baseSalt, "ajnaStrategy");
             bytes memory ajnaArgs = abi.encode(params.vault, params.creatorToken, ajnaFactory, usdc, address(this));
             out.ajnaStrategy = create2Deployer.deploy(ajnaSalt, codeIds.ajnaStrategy, ajnaArgs);
-            IOwnableTransfer(out.ajnaStrategy).transferOwnership(protocolTreasury);
+            // Ajna runtime bucket management is executed by the canonical CSW owner path.
+            // Keep Ajna strategy ownership aligned with params.owner (canonical smart wallet).
+            IOwnableTransfer(out.ajnaStrategy).transferOwnership(params.owner);
         }
 
         // ───────────────────────────────
-        // 5) Register strategies on the vault (batcher remains `management` from Phase 1)
+        // 5) Deploy Solana bridge strategy (optional) + transfer ownership
+        // ───────────────────────────────
+        if (params.solanaWeightBps > 0) {
+            bytes32 solanaSalt = _saltFor(baseSalt, "solanaBridgeStrategy");
+            bytes memory solanaArgs =
+                abi.encode(params.vault, params.creatorToken, solanaBridgeAdapter, solanaDestination, address(this));
+            out.solanaStrategy = create2Deployer.deploy(solanaSalt, codeIds.solanaStrategy, solanaArgs);
+            IOwnableTransfer(out.solanaStrategy).transferOwnership(protocolTreasury);
+        }
+
+        // ───────────────────────────────
+        // 6) Register strategies on the vault (batcher remains `management` from Phase 1)
         // ───────────────────────────────
         ICreatorOVaultStrategyManager(params.vault).addStrategy(out.charmStrategy, params.charmWeightBps);
         if (params.ajnaWeightBps > 0) {
             ICreatorOVaultStrategyManager(params.vault).addStrategy(out.ajnaStrategy, params.ajnaWeightBps);
+        }
+        if (params.solanaWeightBps > 0) {
+            ICreatorOVaultStrategyManager(params.vault).addStrategy(out.solanaStrategy, params.solanaWeightBps);
         }
         if (params.enableAutoAllocate) {
             ICreatorOVaultStrategyManager(params.vault).setAutoAllocate(true);
@@ -988,8 +1040,10 @@ contract DeploymentBatcher is ReentrancyGuard {
             out.charmVault,
             out.charmStrategy,
             out.ajnaStrategy,
+            out.solanaStrategy,
             params.charmWeightBps,
-            params.ajnaWeightBps
+            params.ajnaWeightBps,
+            params.solanaWeightBps
         );
     }
 
@@ -1007,6 +1061,28 @@ contract DeploymentBatcher is ReentrancyGuard {
         solanaBridgeAdapter = _adapter;
         solanaDestination = _destination;
         emit SolanaConfigSet(_adapter, _destination);
+    }
+
+    /**
+     * @notice Configure OVault runtime composer + Solana EID.
+     * @dev Enabled configs require a non-zero composer and EID.
+     */
+    function setOVaultRuntimeConfig(address _hubComposer, uint32 _solanaEid, bool _enabled) external {
+        if (msg.sender != protocolTreasury) revert NotOwner();
+        if (_enabled) {
+            if (_hubComposer == address(0)) revert ZeroAddress();
+            if (_solanaEid == 0) revert InvalidSolanaEid();
+        }
+        ovaultRuntimeConfig = OVaultRuntimeConfig({
+            hubComposer: _hubComposer,
+            solanaEid: _solanaEid,
+            enabled: _enabled
+        });
+        emit OVaultRuntimeConfigSet(_hubComposer, _solanaEid, _enabled);
+    }
+
+    function getOVaultRuntimeConfig() external view returns (OVaultRuntimeConfig memory) {
+        return ovaultRuntimeConfig;
     }
 
     // ================================

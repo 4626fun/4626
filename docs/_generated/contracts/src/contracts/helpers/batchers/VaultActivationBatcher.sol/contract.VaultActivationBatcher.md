@@ -1,5 +1,5 @@
 # VaultActivationBatcher
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/helpers/batchers/VaultActivationBatcher.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/helpers/batchers/VaultActivationBatcher.sol)
 
 **Inherits:**
 ReentrancyGuard
@@ -44,10 +44,10 @@ function _executeActivateAndLaunch(
     address ccaStrategy,
     uint256 depositAmount,
     uint8 auctionPercent,
-    uint8 creatorReserveBps,
+    uint8 creatorReservePercent,
     address creatorReserveRecipient,
     uint128 requiredRaise
-) internal returns (address auction, uint256 auctionAmount, uint256 reserveAmount, address wsToken);
+) internal returns (address auction, uint256 auctionAmount, uint256 reserveAmount, address shareToken);
 ```
 
 ### batchActivate
@@ -91,7 +91,7 @@ function batchActivate(
 
 Batch activate with an explicit creator/team reserve allocation.
 
-`auctionPercent + creatorReserveBps` must be <= 100.
+`auctionPercent + creatorReservePercent` must be <= 100.
 The remainder (if any) is returned to `msg.sender`.
 
 
@@ -103,7 +103,7 @@ function batchActivateWithReserve(
     address ccaStrategy,
     uint256 depositAmount,
     uint8 auctionPercent,
-    uint8 creatorReserveBps,
+    uint8 creatorReservePercent,
     address creatorReserveRecipient,
     uint128 requiredRaise
 ) external nonReentrant returns (address auction);
@@ -136,7 +136,7 @@ function batchActivateWithPermit2For(
 
 Permit2 (identity-funded) activate with creator/team reserve allocation.
 
-Remaining wsTokens are returned to `identity` (never msg.sender).
+Remaining ■TOKENs are returned to `identity` (never msg.sender).
 
 
 ```solidity
@@ -148,7 +148,7 @@ function batchActivateWithPermit2ForWithReserve(
     address ccaStrategy,
     uint256 depositAmount,
     uint8 auctionPercent,
-    uint8 creatorReserveBps,
+    uint8 creatorReservePercent,
     address creatorReserveRecipient,
     uint128 requiredRaise,
     ISignatureTransfer.PermitTransferFrom calldata permit,
@@ -183,7 +183,7 @@ function batchActivateWithPermit2FromOperator(
 
 Permit2 (operator-funded) activate with creator/team reserve allocation.
 
-Remaining wsTokens are returned to `identity` (never msg.sender).
+Remaining ■TOKENs are returned to `identity` (never msg.sender).
 
 
 ```solidity
@@ -195,7 +195,7 @@ function batchActivateWithPermit2FromOperatorWithReserve(
     address ccaStrategy,
     uint256 depositAmount,
     uint8 auctionPercent,
-    uint8 creatorReserveBps,
+    uint8 creatorReservePercent,
     address creatorReserveRecipient,
     uint128 requiredRaise,
     ISignatureTransfer.PermitTransferFrom calldata permit,
@@ -226,12 +226,16 @@ event BatchActivationFor(
 ```
 
 ### CreatorReserveAllocated
-Emitted when a portion of wsTokens is reserved for creator/team (e.g. vesting escrow).
+Emitted when a portion of ■TOKENs is reserved for creator/team (e.g. vesting escrow).
 
 
 ```solidity
 event CreatorReserveAllocated(
-    address indexed identity, address indexed recipient, address indexed wsToken, uint256 amount, uint8 reserveBps
+    address indexed identity,
+    address indexed recipient,
+    address indexed shareToken,
+    uint256 amount,
+    uint8 reservePercent
 );
 ```
 

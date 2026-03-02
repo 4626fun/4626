@@ -1,621 +1,407 @@
 # 4626.fun
 
-**Zora coin + Smart Wallet + Farcaster identity + Base groupchats = the creator economy OS on Base.**
-
-4626.fun is the **Base-native creator finance layer** that turns **Zora Creator Coins (Coinbase Creator Coins)** into composable, onchain “creator economies” with FriendTech-like loops: discover → take action → share → engage. In one click, creators deploy institutional-grade **ERC-4626 vault** infrastructure (Yearn V3 architecture) with cross-chain **LayerZero V2 OFT** shares, pluggable **yield strategies**, and a **6.9% trading-fee lottery** (on all DEX trades) powered by **Chainlink VRF** — launched via **Uniswap CCA** and executed through **EIP-4337** account abstraction (optimized for Coinbase Smart Wallet / AA). The app pairs this finance layer with an aggregator UX that uses **Farcaster identity** signals, and is designed to extend into **Base group chats** for community coordination and gating.
-
-**Elevator pitch (one line):** 4626.fun unifies Zora coins, Smart Wallet AA execution, and Farcaster identity into a Base-native vault + incentive layer for creator economies.
+4626.fun is a Base-native protocol + app stack for launching creator-centered vault economies.
+It combines ERC-4626 vaults, account abstraction, cross-chain OFT shares, and a fee-driven incentive layer for creator coins.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.20-363636)](https://docs.soliditylang.org/)
 [![LayerZero](https://img.shields.io/badge/LayerZero-V2-7B3FE4)](https://layerzero.network/)
-[![Multi-Chain](https://img.shields.io/badge/Chains-8+-4CAF50)](#supported-chains)
+[![Tests](https://github.com/wenakita/4626/actions/workflows/test.yml/badge.svg)](https://github.com/wenakita/4626/actions/workflows/test.yml)
 
----
+## Quick Navigation
 
-## Project Metadata (AI-Friendly)
+- [What This Repository Contains](#what-this-repository-contains)
+- [System Atlas](#system-atlas)
+  - [Architecture (Experience -> Control -> Protocol)](#1-architecture-experience---control---protocol)
+  - [Deployment Lifecycle](#2-deployment-lifecycle-phased-and-guarded)
+  - [Fee + Incentive Routing](#3-fee--incentive-routing)
+  - [Omnichain Topology](#4-omnichain-share-topology-base-hub)
+- [Core Protocol Components](#core-protocol-components)
+- [Supported Chains](#supported-chains-current-configuration)
+- [Quick Start (Local Development)](#quick-start-local-development)
+- [Testing and Build Commands](#testing-and-build-commands)
+- [Frontend Routes and API Surface](#frontend-routes-and-api-surface)
+- [Environment and Secrets](#environment-and-secrets)
+- [Security and Invariants](#security-and-invariants)
+- [Documentation Map](#documentation-map)
+- [Repository Layout](#repository-layout)
 
-```json
-{
-  "name": "4626",
-  "version": "1.0.0",
-  "description": "Omnichain vault platform for creator coins with gas-free deployment, cross-chain OFT, pluggable yield strategies, and gamified lottery incentives",
-  "key_features": [
-    "ERC-4626 vault (Yearn V3 architecture)",
-    "LayerZero V2 omnichain share token (OFT)",
-    "One-click deployment via EIP-4337 (gas-sponsored by Coinbase CDP)",
-    "Uniswap V4 Continuous Clearing Auction (CCA) for fair launch",
-    "6.9% trading fee (buys and sells) funding Chainlink VRF lottery",
-    "Pluggable yield strategies",
-    "Anti-whale guards and flash loan protection"
-  ],
-  "tokenomics": {
-    "buy_fee": "6.9%",
-    "sell_fee": "6.9%",
-    "fee_mechanism": "6.9% fee collected on all DEX trades (buys and sells)",
-    "fee_allocation": "100% to GaugeController -> Lottery prize pool",
-    "lottery": "Percentage-based entries: $1 traded = 0.0004% chance to win, Chainlink VRF for fairness"
-  },
-  "tech_stack": [
-    "Solidity 0.8.20",
-    "LayerZero V2 (cross-chain messaging)",
-    "Chainlink VRF 2.5 (lottery randomness)",
-    "Uniswap V4 (Continuous Clearing Auction + liquidity)",
-    "EIP-4337 / EIP-5792 (account abstraction + batching)",
-    "Yearn V3 (vault architecture)"
-  ],
-  "chains": ["Base (hub)", "Ethereum", "Arbitrum", "BSC", "Avalanche", "Monad", "Sonic", "HyperEVM"],
-  "github": "https://github.com/wenakita/4626",
-  "first_deployment": "akita Creator Coin (Base: 0x5b674196812451b7cec024fe9d22d2c0b172fa75)"
-}
+## What This Repository Contains
+
+4626 focuses on three outcomes:
+
+- Launch creator vault infrastructure from a single user flow (`/deploy`).
+- Route creator coin activity into vault and incentive mechanics.
+- Operate lifecycle + maintenance through automated keepers and API-driven workflows.
+
+This monorepo includes:
+
+- Smart contracts (`contracts/`) for vaults, gauges, lottery, wrappers, OFT, and deploy infra.
+- Frontend app (`frontend/`) using Vite + React with local/Vercel API handlers.
+- CRE automation workflows (`cre/`) for tending, reporting, settlement, and queue operations.
+- Docusaurus docs site (`apps/docs-site/`) fed by `docs/` content and generated references.
+
+## System Atlas
+
+### 1) Architecture (Experience -> Control -> Protocol)
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Inter, ui-sans-serif, system-ui","fontSize":"13px","lineColor":"#64748B","primaryColor":"#F8FAFC","primaryTextColor":"#0F172A","tertiaryColor":"#FFFFFF"}}}%%
+flowchart LR
+  subgraph Experience["Experience Plane"]
+    User["Creator / Operator"]
+    App["Web App (`frontend/`)\nRoutes: `/deploy`, `/vault/:address`"]
+  end
+
+  subgraph Control["Control Plane"]
+    API["API Handlers (`frontend/api/_handlers`)"]
+    CRE["CRE Automation (`cre/`)"]
+    Scripts["Foundry + Ops Scripts (`script/`)"]
+  end
+
+  subgraph Protocol["Protocol Plane (Base + Omnichain)"]
+    Registry["CreatorRegistry"]
+    Deployer["DeploymentBatcher"]
+    Vault["CreatorOVault (ERC-4626)"]
+    Wrapper["CreatorOVaultWrapper"]
+    Share["CreatorShareOFT (LayerZero V2 OFT)"]
+    Gauge["CreatorGaugeController"]
+    Lottery["CreatorLotteryManager"]
+    Oracle["CreatorOracle"]
+    Strategies["Strategy Layer"]
+  end
+
+  subgraph External["External Integrations"]
+    LZ["LayerZero V2"]
+    VRF["Chainlink VRF"]
+    DEX["DEX + CCA Launch Surface"]
+  end
+
+  User -->|"configure + launch"| App
+  App -->|"session + orchestration"| API
+  API -->|"job dispatch"| CRE
+  Scripts -->|"admin + migration ops"| Deployer
+  API -->|"phased deploy calls"| Deployer
+
+  Deployer --> Registry
+  Deployer --> Vault
+  Vault --> Wrapper --> Share
+  Vault --> Strategies
+  Vault --> Oracle
+
+  Share --> DEX --> Gauge
+  Gauge --> Lottery
+  Gauge --> Registry
+  Gauge --> Vault
+  Lottery --> VRF
+  Share --> LZ
+
+  App -. "read status + inventory" .-> Registry
+  App -. "read accounting state" .-> Vault
+  App -. "read incentives state" .-> Gauge
+
+  classDef user fill:#DBEAFE,stroke:#2563EB,stroke-width:2px,color:#1E3A8A;
+  classDef control fill:#DCFCE7,stroke:#16A34A,stroke-width:2px,color:#14532D;
+  classDef protocol fill:#FEF3C7,stroke:#D97706,stroke-width:2px,color:#78350F;
+  classDef external fill:#F3E8FF,stroke:#9333EA,stroke-width:2px,color:#581C87;
+  class User,App user;
+  class API,CRE,Scripts control;
+  class Registry,Deployer,Vault,Wrapper,Share,Gauge,Lottery,Oracle,Strategies protocol;
+  class LZ,VRF,DEX external;
 ```
 
----
+### 2) Deployment Lifecycle (Phased and Guarded)
 
-## Features
+Creator deployment is exposed as one user flow, but executed as guarded phases with deterministic addresses and prechecks.
 
-**4626 provides a complete vault-as-a-service platform for Creator Coins. Each feature is designed to maximize creator revenue and community engagement:**
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Inter, ui-sans-serif, system-ui","fontSize":"13px","lineColor":"#64748B","primaryColor":"#FFFFFF","primaryTextColor":"#0F172A"}}}%%
+flowchart TD
+  Start["User starts `/deploy`"] --> Identity{"Canonical identity +\nwallet capability checks"}
+  Identity --> Access{"Creator access gate\n(allowlist/profile checks)"}
+  Access --> Salt["Derive deterministic addresses\n(versioned CREATE2 salts)"]
 
-### Core Features
+  Salt --> P1["Phase 1\nDeploy vault + wrapper + OFT"]
+  P1 --> P2Core["Phase 2 Core\nDeploy gauge + strategy + oracle"]
+  P2Core --> P2Final["Phase 2 Finalize\nRegister + wire + configure"]
+  P2Final --> P3["Phase 3\nOptional strategy/post-config"]
+  P3 --> P4{"Phase 4 required?\nDeferred launch path"}
+  P4 -->|Yes| Launch["Phase 4\nActivate deferred launch"]
+  P4 -->|No| Ready["Deployment ready"]
+  Launch --> Ready
+  Ready --> Ops["CRE keepers + API ops\n(tend/report/settle)"]
 
-- **One-Click Deployment**: Deploy vault + wrapper + OFT + oracle + CCA strategy in a single gas-free transaction via **EIP-4337** account abstraction and **Coinbase CDP** paymaster.
-- **Omnichain Shares**: **LayerZero V2 OFT** enables share tokens to move across 8+ chains with unified liquidity and cross-chain yield.
-- **Pluggable Yield Strategies**: **ERC-4626** vault supports multiple strategies (e.g., Uniswap V4 LP, lending protocols, RWA yield) with configurable allocations.
-- **Fair Launch via CCA**: **Uniswap Continuous Clearing Auction** provides transparent, DeFi-native price discovery with no front-running.
-- **Gamified Lottery**: 6.9% fee on all DEX trades (buys + sells) funds **Chainlink VRF lottery** - percentage-based entries where **$1 traded = 0.0004% chance to win** (e.g., $10k trade = 4% chance).
-- **Security**: Virtual shares offset, flash loan protection, anti-whale guards, minimum deposits, and queued large withdrawals.
-- **Creator-first**: Each creator owns their vault ecosystem - fees flow to lottery prize pool, full branding control.
+  Identity -. "fail with clear reason" .-> Blocked["Blocked (actionable error)"]
+  Access -. "fail with clear reason" .-> Blocked
 
-### Tokenomics (6.9% Trading Fee Explained)
-
-**The 6.9% fee applies to ALL DEX trades (buys and sells) and is the core incentive mechanism. Here's the exact flow:**
-
-1. **Trade Event** -> User buys or sells share tokens (■AKITA, ■BRET, etc.) on a DEX (Uniswap V4 pool).
-2. **Fee Collection** -> 6.9% of the trade amount is automatically deducted and sent to the **GaugeController** contract.
-3. **GaugeController Routing** -> 100% of collected fees are routed to the **CreatorLotteryManager** prize pool.
-4. **Lottery Entry** -> Trader automatically receives lottery entries proportional to their trading volume. Entry percentage scales linearly: **$1 traded = 0.0004% chance**, $100 = 0.04%, $1,000 = 0.4%, $10,000 = 4% (works for both buys and sells).
-5. **Prize Drawing** -> **Chainlink VRF 2.5** provides provably fair randomness for weekly/monthly prize draws.
-6. **Winner Payout** -> Winner receives accumulated prize pool in ETH (or wrapped vault shares at their choice).
-
-**Key Details:**
-- **6.9% on buys AND sells** -> Consistent fee on all trading activity funds the lottery prize pool.
-- **Fee only on DEX trades** -> Deposits, withdrawals, and cross-chain transfers are NOT taxed.
-- **6.9% choice** -> Playful nod to meme culture while maintaining sustainability (lower than typical 10-15% meme coin fees).
-
-### Security Features
-
-- **Anti-Inflation Attack**: Virtual shares offset (1e3), minimum first deposit (50,000,000 tokens), price change limits (10% max per tx).
-- **Flash Loan Protection**: Block delay between deposit/withdraw, queued large withdrawals (100k+ tokens).
-- **Access Control**: Role-based permissions (Owner, Management, Keeper, EmergencyAdmin) with 2-step ownership transfer.
-- **Whale Guards**: Maximum single deposit limits, graduated fee tiers for large purchases.
-
----
-
-## Architecture
-
-4626’s architecture is built for **provenance, identity, and execution**:
-
-- **Provenance (Zora)**: Creator Coins and Content Coins are the discovery layer and identity anchor.
-- **Execution (Smart Wallet AA)**: creators can deploy and operate vault infrastructure via EIP-4337/EIP-5792-style batching.
-- **Social context (Farcaster → Base)**: Farcaster identity is used as a trust signal in the app, and Base group chats are the natural coordination surface.
-
-Onchain, 4626 consists of:
-
-- **Shared infrastructure** (deployed once per chain, referenced via `CreatorRegistry`)
-- **Per-creator vault stack** (deployed per creator coin)
-- **Optional incentives layer** (ve(3,3) voting, voter rewards, bribes)
-
-### Core Contracts (Text Description of Data Flow)
-
-1. **CreatorOVault** (ERC-4626 Vault)
-   - Holds deposited Creator Coins (e.g., akita tokens).
-   - Mints vault shares (▢AKITA) representing proportional ownership.
-   - Allocates deposits across multiple yield strategies.
-   - Based on **Yearn V3** architecture (profit unlocking, strategy queues, debt purchasing).
-
-2. **CreatorOVaultWrapper**
-   - Wraps vault shares (▢AKITA) into **LayerZero OFT** share tokens (■AKITA).
-   - Enables cross-chain transfers via LayerZero V2 messaging.
-   - 1:1 wrapping ratio (no dilution).
-
-3. **CreatorShareOFT** (LayerZero V2 OFT)
-   - **Omnichain fungible token** - same token on all chains.
-   - Collects **6.9% fee on all DEX trades** (buys and sells) via `setAddressType` for DEX pools.
-   - Routes fees to **CreatorGaugeController** (which funds the lottery and, when enabled, voter rewards).
-   - Triggers automatic lottery entries for all traders.
-
-4. **CreatorGaugeController**
-   - Receives 100% of trading fees from all share tokens.
-   - Unwraps fees into vault shares and routes them by configured splits:
-     - jackpot reserve (default: 69%)
-     - burn / PPS increase (default: 21.39%, off by default)
-     - voter rewards (default: 9.61%) to `VoterRewardsDistributor` when configured (otherwise falls back to `protocolTreasury`)
-
-5. **CreatorLotteryManager**
-   - **Shared service** (one per chain): triggered by approved swap contracts.
-   - Manages lottery entries (percentage-based: $1 traded = 0.0004% chance).
-   - Integrates **Chainlink VRF 2.5** for provably fair randomness.
-   - Holds prize pool (accumulated fees) and distributes prizes to winners.
-   - Executes prize draws (weekly/monthly cadence).
-   - Optional boosts:
-     - personal boost via `ve4626BoostManager`
-     - vote-directed boost via `VaultGaugeVoting` (bounded weekly budget)
-
-6. **CreatorCCAStrategy** (Uniswap CCA Integration)
-   - Allocates vault assets to **Uniswap Continuous Clearing Auction** for fair launch price discovery.
-   - After auction ends, migrates liquidity to Uniswap V4 pool for ongoing trading.
-
-7. **CreatorOracle** (Price Oracle)
-   - Tracks real-time share token price via **Uniswap V4 TWAP**.
-   - Used for vault accounting and lottery prize valuations.
-
-8. **CreatorRegistry**
-   - Central registry for all platform contracts.
-   - Maps Creator Coins -> (Vault, Wrapper, OFT, GaugeController, Lottery).
-   - Stores chain configurations (LayerZero endpoints, DEX infrastructure).
-
-### Deployment Flow (DeploymentBatcher Phases 1–3 + Activation)
-
-**User-facing goal**: one creator flow from `/deploy` (wallet/bundler may execute multiple transactions under the hood).
-
-```
-User clicks "Deploy" -> wallet/bundler executes a phased sequence
-
-Phase 1 — deterministic deploy (DeploymentBatcher):
-- deploy per-creator contracts (vault, wrapper, share OFT, gauge controller, oracle, CCA strategy, etc.)
-- register them in CreatorRegistry
-
-Phase 2 — configuration (DeploymentBatcher):
-- wire roles + addresses (vault↔wrapper↔OFT, gauge controller config, oracle config, etc.)
-- set required approvals/launch permissions
-
-Phase 3 — optional activation + launch:
-- for “go live” actions (deposit → wrap → start CCA), use `VaultActivationBatcher`
-- wallets that support batching can combine approve+activate; otherwise execute sequentially
-
-Notes:
-- Gas sponsorship depends on the configured paymaster/bundler; not all wallets/chains will be sponsored.
+  classDef gate fill:#E0F2FE,stroke:#0284C7,stroke-width:2px,color:#0C4A6E;
+  classDef phase fill:#FEF3C7,stroke:#D97706,stroke-width:2px,color:#78350F;
+  classDef success fill:#DCFCE7,stroke:#16A34A,stroke-width:2px,color:#14532D;
+  classDef blocked fill:#FEE2E2,stroke:#DC2626,stroke-width:2px,color:#7F1D1D;
+  class Identity,Access gate;
+  class P1,P2Core,P2Final,P3,P4,Launch,Salt phase;
+  class Ready,Ops,Start success;
+  class Blocked blocked;
 ```
 
-### Token Flow Diagram (Text)
+### 3) Fee + Incentive Routing
 
-```
-Creator Coin (akita)
-   v Deposit
-CreatorOVault (▢AKITA shares)
-   v Wrap
-CreatorOVaultWrapper
-   v Mint
-CreatorShareOFT (■AKITA)
-   v Bridge
-LayerZero V2 Messaging -> Arbitrum, Ethereum, BSC, etc.
-   v Unwrap on destination chain
-▢AKITA -> Redeem -> akita (if available on that chain)
-```
+The documented model applies a 6.9% trading fee to DEX trades (buy + sell), then routes proceeds through the gauge controller.
 
-**Trading Fee Flow:**
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Inter, ui-sans-serif, system-ui","fontSize":"13px","lineColor":"#64748B","primaryColor":"#FFFFFF","primaryTextColor":"#0F172A"}}}%%
+flowchart LR
+  Trade["DEX trade\n(buy or sell)"] --> Fee["6.9% trading fee"]
+  Fee --> Gauge["CreatorGaugeController routing"]
 
-```
-User trades ■AKITA on Uniswap V4 (buy or sell)
-   v 6.9% fee deducted
-CreatorShareOFT.transfer hook
-   v Send fee
-CreatorGaugeController
-   v Route by configured split (jackpot reserve + optional burn + optional voter rewards slice)
-CreatorLotteryManager (prize pool)
-   v Calculate percentage-based chances ($1 = 0.0004%)
-User accumulates chances -> Weekly VRF draw -> Winner receives prize pool
-```
+  Gauge --> Lottery["69.00%\nLottery pool"]
+  Gauge --> Burn["21.39%\nBurn + PPS support"]
+  Gauge --> Rewards["9.61%\nVoter rewards"]
 
-### Incentives Layer (optional): ve4626 + ve(3,3)
+  Lottery --> VRF["Chainlink VRF draw"]
+  VRF --> Payout["Winner payout\n(vault shares)"]
+  Burn --> PPS["Vault share value support"]
+  Rewards --> Gov["ve4626 / gauge incentives"]
 
-This layer can be deployed and enabled after the core system is live.
+  Untaxed["Untaxed actions:\ndeposit, withdraw,\nwrap, unwrap"] -. "0% trading fee" .-> Vault["CreatorOVault accounting"]
 
-- **ve4626**: vote-escrow token that represents locked power.
-- **ve4626BoostManager**: exposes personal boost signals used by `CreatorLotteryManager`.
-- **VaultGaugeVoting**: weekly voting that allocates a bounded probability budget across whitelisted vaults.
-- **VoterRewardsDistributor**: receives the voter slice (9.61% default) from each `CreatorGaugeController` and lets voters claim pro-rata per epoch/vault.
-- **BribesFactory / BribeDepot**: optional external bribes per vault (epoch-scoped).
-
----
-
-## Tokenomics & Incentives (Detailed)
-
-### Fee Structure
-
-| Action | Fee | Recipient | Notes |
-|--------|-----|-----------|-------|
-| **DEX Buy** (e.g., Uniswap V4) | **6.9%** | GaugeController -> Lottery | Applies to all token purchases on DEX pools |
-| **DEX Sell** (e.g., Uniswap V4) | **6.9%** | GaugeController -> Lottery | Applies to all token sales on DEX pools |
-| **Vault Deposit** (akita -> ▢AKITA) | **0%** | N/A | Direct deposits are free |
-| **Vault Withdrawal** (▢AKITA -> akita) | **0%** | N/A | Withdrawals are free |
-| **Cross-Chain Bridge** (via LayerZero) | **0%** + gas | LayerZero relayers | Only pay LayerZero messaging fees (~ $1-5 depending on chain) |
-
-### Lottery Mechanics (Provably Fair)
-
-1. **Entry Allocation** (Percentage-Based):
-   - Every DEX trade (buy or sell) earns lottery entries proportional to USD trade value.
-   - **Entry Formula**: For every **$1 traded** = **0.0004% chance** to win.
-   - **Examples**:
-     - $1 trade = 0.0004% chance
-     - $10 trade = 0.004% chance
-     - $100 trade = 0.04% chance
-     - $1,000 trade = 0.4% chance
-     - $10,000 trade = 4% chance
-   - Chances accumulate across multiple trades until the next draw.
-
-2. **Prize Pool Growth**:
-   - 100% of 6.9% trading fees -> Lottery prize pool.
-   - Example: $1M daily volume (buys + sells) -> $69,000 in fees -> Prize pool.
-
-3. **Drawing Process**:
-   - Weekly or monthly cadence (governance-configurable).
-   - **Chainlink VRF 2.5** requests random number onchain.
-   - Random number selects winner based on cumulative percentage chances.
-   - Example: If total chances = 100%, a trader with 4% has 4/100 probability of winning.
-   - Winner receives entire prize pool (or splits if multiple winners in future versions).
-
-4. **Transparency**:
-   - All trade volumes, percentage chances, draws, and payouts are onchain and auditable.
-   - VRF randomness is cryptographically verifiable.
-   - Anyone can verify the math: (Trader's USD volume) x 0.0004% = Win chance.
-
-### Incentive Alignment
-
-- **Creators**: Lottery drives trading volume -> more liquidity -> higher token price -> more fees collected -> larger prize pools.
-- **Traders**: Every trade earns percentage-based lottery chances (larger trades = higher win probability) -> FOMO + gamification -> more trading activity.
-- **Whales**: $10,000 trade = 4% chance to win -> Incentivizes large trades while keeping small traders competitive.
-- **Holders**: Prize pool grows with trading volume -> incentive to participate in ecosystem -> can trade to accumulate chances.
-- **Platform**: Sustainable revenue via 6.9% trading fees -> 100% allocated to lottery prize pool (no platform take in v1).
-
----
-
-## One-Click Gas-Free Deployment (EIP-4337)
-
-**4626 supports 1-click, gas-free deployment via account abstraction:**
-
-### Powered By
-
-- **EIP-5792**: Batch transaction execution (`wallet_sendCalls`) - all 10 deployment steps in one signature.
-- **EIP-4337**: Account abstraction for smart wallet support (Coinbase Smart Wallet, Safe, etc.).
-- **Coinbase CDP**: Paymaster service sponsors gas fees (~$50-100 saved per deployment).
-
-### Setup (Optional but Recommended)
-
-**To enable gas-free deployments, configure the Coinbase CDP paymaster endpoint (server-only):**
-
-1. Get CDP API key from [Coinbase Developer Portal](https://portal.cdp.coinbase.com/).
-2. Add to `.env`:
-
-```bash
-# Client-side: always use the same-origin proxy
-VITE_CDP_PAYMASTER_URL=/api/paymaster
-# Server-side: real CDP paymaster endpoint (keep secret)
-CDP_PAYMASTER_URL=https://api.developer.coinbase.com/rpc/v1/base/<CDP_API_KEY_ID>
+  classDef source fill:#DBEAFE,stroke:#2563EB,stroke-width:2px,color:#1E3A8A;
+  classDef router fill:#E0F2FE,stroke:#0284C7,stroke-width:2px,color:#0C4A6E;
+  classDef lottery fill:#FCE7F3,stroke:#DB2777,stroke-width:2px,color:#831843;
+  classDef burn fill:#FEF3C7,stroke:#D97706,stroke-width:2px,color:#78350F;
+  classDef governance fill:#EDE9FE,stroke:#7C3AED,stroke-width:2px,color:#4C1D95;
+  classDef neutral fill:#F1F5F9,stroke:#64748B,stroke-width:1.5px,color:#0F172A;
+  class Trade,Fee source;
+  class Gauge router;
+  class Lottery,VRF,Payout lottery;
+  class Burn,PPS burn;
+  class Rewards,Gov governance;
+  class Untaxed,Vault neutral;
 ```
 
-3. Restart dev server:
+### 4) Omnichain Share Topology (Base Hub)
 
-```bash
-cd frontend
-pnpm dev
+4626 is Base-hub-first with omnichain share transport via LayerZero V2 OFT.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Inter, ui-sans-serif, system-ui","fontSize":"13px","lineColor":"#64748B","primaryColor":"#FFFFFF","primaryTextColor":"#0F172A"}}}%%
+flowchart LR
+  Base["Base (Hub)\nCore deployment + accounting"]
+
+  Eth["Ethereum\n(1 / 30101)"]
+  Arb["Arbitrum\n(42161 / 30110)"]
+  BSC["BSC\n(56 / 30102)"]
+  Avax["Avalanche\n(43114 / 30106)"]
+  Monad["Monad\n(10143 / 30390)"]
+  Sonic["Sonic\n(146 / 30332)"]
+  Hyper["HyperEVM\n(999 / 30275)"]
+
+  Base <--> |OFT messaging| Eth
+  Base <--> |OFT messaging| Arb
+  Base <--> |OFT messaging| BSC
+  Base <--> |OFT messaging| Avax
+  Base <--> |OFT messaging| Monad
+  Base <--> |OFT messaging| Sonic
+  Base <--> |OFT messaging| Hyper
+
+  classDef hub fill:#DCFCE7,stroke:#16A34A,stroke-width:2.5px,color:#14532D;
+  classDef satellite fill:#DBEAFE,stroke:#2563EB,stroke-width:2px,color:#1E3A8A;
+  class Base hub;
+  class Eth,Arb,BSC,Avax,Monad,Sonic,Hyper satellite;
 ```
 
-### How It Works
+## Core Protocol Components
 
-1. **User connects** with Coinbase Smart Wallet (or any EIP-5792 compatible wallet).
-2. **Deploy button clicked** -> Frontend prepares batch call.
-3. **Single signature request** -> User signs once to authorize entire deployment.
-4. **Backend batches** all deployment transactions (vault, wrapper, OFT, oracle, CCA, lottery).
-5. **Paymaster sponsors gas** -> Coinbase CDP covers gas fees.
-6. **Execution** -> Contracts deployed + auction launched (may be multiple txs; still one creator “flow”).
-7. **Fallbacks** -> If paymaster unavailable, user pays gas. If batching unsupported, falls back to multi-tx flow.
+| Component | Role |
+|-----------|------|
+| `CreatorRegistry` | Canonical registry of creator coin -> vault stack mappings and chain config |
+| `CreatorOVault` | ERC-4626 vault for creator coin deposits and strategy accounting |
+| `CreatorOVaultWrapper` | Wraps vault shares into transportable OFT-compatible share form |
+| `CreatorShareOFT` | LayerZero V2 OFT share token with DEX-aware fee hooks |
+| `CreatorGaugeController` | Receives and routes trading-fee proceeds to downstream sinks |
+| `CreatorLotteryManager` | Executes lottery odds/payout flow with VRF randomness |
+| `CreatorOracle` | Price and accounting inputs for vault/share mechanics |
+| `CreatorCCAStrategy` | CCA launch path and post-auction liquidity transition |
 
-### Benefits
+## Supported Chains (Current Configuration)
 
-- **Zero gas fees** for creators (when paymaster configured).
-- **One signature** for entire deployment stack.
-- **Atomic execution** (all-or-nothing - no partial deploys).
-- **Better UX** (no 10 separate wallet confirmations).
+Source of truth: `docs/chains.md`.
 
----
+| Network | Chain ID | LayerZero Endpoint ID | Status |
+|---------|----------|-----------------------|--------|
+| Base | 8453 | 30184 | Hub chain |
+| Ethereum | 1 | 30101 | Configured |
+| Arbitrum | 42161 | 30110 | Configured |
+| BSC | 56 | 30102 | Configured |
+| Avalanche | 43114 | 30106 | Configured |
+| Monad | 10143 | 30390 | Configured |
+| Sonic | 146 | 30332 | Configured |
+| HyperEVM | 999 | 30275 | Configured |
 
-## Supported Chains
-
-**4626 uses LayerZero V2 for omnichain share tokens. All chains share the same OFT token:**
-
-| Network | Chain ID | LZ Endpoint ID | Status | Explorer |
-|---------|----------|----------------|--------|----------|
-| **Base** | 8453 | 30184 | Hub chain | [BaseScan](https://basescan.org) |
-| **Ethereum** | 1 | 30101 | Configured | [Etherscan](https://etherscan.io) |
-| **Arbitrum** | 42161 | 30110 | Configured | [Arbiscan](https://arbiscan.io) |
-| **BSC** | 56 | 30102 | Configured | [BscScan](https://bscscan.com) |
-| **Avalanche** | 43114 | 30106 | Configured | [SnowTrace](https://snowtrace.io) |
-| **Monad** | 10143 | 30390 | Configured | [MonadExplorer](https://monadexplorer.com) |
-| **Sonic** | 146 | 30332 | Configured | [SonicScan](https://sonicscan.org) |
-| **HyperEVM** | 999 | 30275 | Configured | [Hyperliquid](https://hyperliquid.xyz) |
-
-**Base is the hub chain** - all deployments start on Base, then OFT can be bridged to other chains.
-
----
-
-## Quick Start
+## Quick Start (Local Development)
 
 ### Prerequisites
 
-- **Node.js** 18+ with pnpm
-- **Foundry** for Solidity development
-- **Coinbase Smart Wallet** (or any EIP-4337 wallet) for gas-free deployment
+- Node.js 20+
+- `pnpm` (root/frontend/docs)
+- `npm` (CRE package install and scripts)
+- Foundry (`forge`) for Solidity build/test
 
-### Installation
+### 1) Clone and install
 
 ```bash
-# Clone repository
 git clone https://github.com/wenakita/4626.git
 cd 4626
 
-# Install dependencies
+# root
 pnpm install
 
-# Compile contracts
-forge build
+# frontend
+pnpm -C frontend install
 
-# Run tests
-forge test -vvv
+# docs (optional if app-only)
+pnpm -C apps/docs-site install
+
+# cre
+npm --prefix cre install
 ```
 
-### Deploy a Vault (Web UI)
+### 2) Configure local env files
 
-1. Navigate to [4626.fun/deploy](https://4626.fun/deploy)
-2. Connect Coinbase Smart Wallet
-3. Enter your Creator Coin address (e.g., 0x5b67...75 for akita)
-4. Send 50,000,000 tokens to your smart wallet (for initial CCA deposit)
-5. Confirm smart wallet address
-6. Click **"Deploy + Launch"**
-7. Sign once -> All contracts deployed + CCA live
+```bash
+# root / contracts
+cp .env.example .env
 
-**Result**: Vault + OFT + Lottery + CCA live in ~30 seconds with zero gas fees.
+# frontend
+cp frontend/.env.example frontend/.env
 
----
-
-## Project Structure
-
-```
-4626/
-  contracts/                      # Solidity contracts
-    core/                         # Platform core
-      CreatorRegistry.sol
-    vault/                        # ERC-4626 vaults
-      CreatorOVault.sol
-      CreatorOVaultWrapper.sol
-    services/messaging/           # LayerZero V2 OFT
-      CreatorShareOFT.sol
-    governance/                   # Tokenomics
-      CreatorGaugeController.sol
-      ve4626.sol
-      ve4626BoostManager.sol
-    services/lottery/             # Lottery system
-      CreatorLotteryManager.sol
-      vrf/                        # Chainlink VRF
-        CreatorVRFConsumerV2_5.sol
-    services/oracles/             # Price oracles
-      CreatorOracle.sol
-    vault/strategies/             # Yield strategies
-      BaseCreatorStrategy.sol
-      CCALaunchStrategy.sol
-    factories/                    # Deployment factories
-      CreatorOVaultFactory.sol
-    helpers/                      # Batchers and infra helpers
-      batchers/
-      infra/
-      hooks/
-      routers/
-    vault/strategies/univ4/       # LP management
-    interfaces/                   # All interfaces
-  frontend/                       # React frontend (Vite)
-    src/
-      components/                 # UI components
-      pages/                      # Page routes
-      lib/                        # Web3 utils
-      config/                     # Contract addresses
-    public/                       # Brand assets (logo, icons)
-  deployments/                    # Deployed contract addresses
-  script/                         # Foundry deploy scripts
-  README.md
+# cre
+cp cre/secrets.example.env cre/.env
 ```
 
----
+Keep real secrets in local env files or your deployment secret manager; do not commit secrets.
 
-## First Deployment: akita
+### 3) Run services
 
-**akita is the first Creator Coin to launch with 4626:**
+```bash
+# app (default: http://localhost:5173)
+pnpm -C frontend dev
 
-| Item | Value |
-|------|-------|
-| **Creator Coin** | akita (Base) |
-| **Token Address** | `0x5b674196812451b7cec024fe9d22d2c0b172fa75` |
-| **Vault Symbol** | ▢AKITA |
-| **OFT Symbol** | ■AKITA |
-| **DEX Pair** | akita/ZORA (Uniswap V4, 3% fee tier) |
-| **Lottery Prize Pool** | Growing daily via 6.9% trading fees (buys + sells) |
-| **CCA Launch** | [View live auction](https://4626.fun/auction/demo) |
+# cre workflows (optional)
+npm --prefix cre run start
 
----
-
-## Security
-
-**4626 inherits Yearn V3's battle-tested security model with additional safeguards:**
-
-### Anti-Inflation Attack
-
-- **Virtual shares offset** (1e3) prevents first-depositor inflation attacks.
-- **Minimum first deposit** (50,000,000 tokens) ensures meaningful initial liquidity.
-- **Price change limits** (10% max per tx) prevents manipulation.
-
-### Flash Loan Protection
-
-- **Block delay** between deposit/withdraw (same-block attacks prevented).
-- **Large withdrawal queue** (100k+ tokens) -> queued with unlock period.
-- **Profit unlocking** (Yearn V3 mechanism) smooths out sudden PnL spikes.
-
-### Access Control
-
-- **Owner**: Full control (deployment, strategy management, emergency shutdown).
-- **Management**: Add/remove strategies, adjust allocations.
-- **Keeper**: Report profits, tend strategies (operational role).
-- **EmergencyAdmin**: Shutdown vault in case of exploit (can't steal funds).
-
-### Whale Guards
-
-- **Maximum single deposit** (configurable per vault).
-- **Graduated fee tiers** for large DEX purchases (future feature).
-
-### Audits
-
-- **Internal audits** completed for core contracts (Vault, OFT, Lottery).
-- **Public audit** (planned) via Code4rena or Spearbit.
-
----
-
-## Usage Examples
-
-### For Creators
-
-**Deploy a vault for your Creator Coin:**
-
-```solidity
-// Via Factory (or use web UI at 4626.fun/deploy)
-(address vault, address wrapper, address shareOFT) = factory.deployVault(
-    0x5b67...75,                       // Your Creator Coin address
-    "TOKEN Vault",                     // Vault name
-    "▢TOKEN",                         // Vault symbol
-    "TOKEN Share",                    // OFT name
-    "■TOKEN",                         // OFT symbol
-    "base",                           // Chain prefix
-    msg.sender                        // Your address (revenue recipient)
-);
+# docs site (optional, default: http://localhost:3000)
+pnpm -C apps/docs-site start
 ```
 
-**Configure DEX pools for trading fee:**
+## Testing and Build Commands
 
-```solidity
-shareOFT.setAddressType(uniswapV4Pool, OperationType.SwapOnly);
-shareOFT.setGaugeController(gaugeControllerAddress);
-```
+### Common validation commands
 
-**Add yield strategies:**
+| Surface | Commands |
+|--------|----------|
+| Frontend | `pnpm -C frontend test`<br/>`pnpm -C frontend typecheck`<br/>`pnpm -C frontend lint` |
+| CRE | `npm --prefix cre test`<br/>`npm --prefix cre run typecheck` |
+| Contracts | `forge build`<br/>`forge test -vvv` |
+| Frontend build | `pnpm -C frontend build` |
+| Docs build | `pnpm -C apps/docs-site build` |
 
-```solidity
-vault.addStrategy(strategyAddress, 5000); // 50% allocation to strategy
-```
+## Frontend Routes and API Surface
 
-### For Users
+### Primary frontend routes
 
-**Deposit Creator Coins:**
+| Route | Purpose |
+|-------|---------|
+| `/` | Landing and navigation entry |
+| `/deploy` | Creator deployment and activation flow |
+| `/waitlist` | Waitlist onboarding path |
+| `/vault/:address` | Vault interaction surface |
+| `/dashboard` | Legacy redirect path |
+| `/launch` | Legacy redirect to deploy flow |
 
-```solidity
-IERC20(akitaToken).approve(vaultAddress, 1000e18);
-vault.deposit(1000e18, msg.sender); // Receive ▢AKITA vault shares
-```
+### API routing model
 
-**Wrap for cross-chain:**
+- Production entrypoint: `frontend/api/[...path].ts`
+- Handler modules: `frontend/api/_handlers/*`
+- Local dev API mapping: `frontend/vite.config.ts`
 
-```solidity
-wrapper.wrap(shareAmount); // Convert ▢AKITA -> ■AKITA
-```
+Important bundling rule: register endpoints through static route mapping in `frontend/api/_handlers/_routes.ts`; do not rely on ad hoc dynamic imports for production handler inclusion.
 
-**Bridge to another chain:**
+## Environment and Secrets
 
-```solidity
-SendParam memory sendParams = SendParam({
-    dstEid: 30110, // Arbitrum
-    to: addressToBytes32(msg.sender),
-    amountLD: 100e18,
-    minAmountLD: 99e18,
-    extraOptions: "",
-    composeMsg: "",
-    oftCmd: ""
-});
+### Core frontend/server variables (examples)
 
-shareOFT.send{value: fee}(sendParams, fee, msg.sender);
-```
+| Variable | Scope | Purpose |
+|----------|-------|---------|
+| `VITE_CDP_PAYMASTER_URL` | client | Optional paymaster/bundler override |
+| `CDP_PAYMASTER_URL` | server | Paymaster endpoint for server handlers |
+| `VITE_ZORA_PUBLIC_API_KEY` | client | Public Zora integration key |
+| `ZORA_SERVER_API_KEY` | server | Server-side Zora API access |
+| `BASE_RPC_URL` | server | Base RPC URL for handlers/workflows |
+| `DATABASE_URL` | server | Database connectivity |
+| `AUTH_SESSION_SECRET` | server | Auth session signing secret |
+| `PRIVY_APP_ID` / `PRIVY_APP_SECRET` | server | Privy integration keys |
 
----
+### Core CRE variables (examples)
+
+| Variable | Purpose |
+|----------|---------|
+| `KEEPR_PRIVATE_KEY` | Keeper signer for workflow-triggered writes |
+| `KEEPR_API_BASE_URL` | Target API base URL for keeper bridge |
+| `KEEPR_API_KEY` | Auth between CRE workflows and API |
+
+For complete env references, see `frontend/README.md` and `cre/README.md`.
+
+## Security and Invariants
+
+- Frontend API routing and auth boundaries are enforced in `frontend/api` + `frontend/server/auth`.
+- Wallet/account invariants are documented in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
+- Deploy/session ownership + creator access checks are enforced server-side before phased execution.
+- CRE automation uses an HTTP bridge pattern; write execution happens through audited API surfaces.
+
+## Documentation Map
+
+- Root docs index: `docs/index.md`
+- Narrative architecture model: `docs/compressions/index.md`
+- Primitive model (account/market/game loop): `docs/primitives/index.md`
+- Deployment operations: `docs/operations/deployment/index.md`
+- Current contract inventory: `docs/current-contract-inventory.md`
+- Security docs: `docs/security/index.md`
+- Frontend guide: `frontend/README.md`
+- CRE guide: `cre/README.md`
+
+## Cloud Agent Onboarding
+
+Cursor Cloud Agent config is committed under `.cursor/`:
+
+- `.cursor/environment.json`
+- `.cursor/install.sh`
+- `.cursor/start.sh`
+- `.cursor/sandbox.json`
+
+Runbook:
+
+- `docs/operations/cursor-cloud-agent-onboarding.md`
+
+## Repository Layout
+
+| Path | Purpose |
+|------|---------|
+| `contracts/` | Protocol smart contracts and related components |
+| `script/` | Foundry scripts for deploy/ops |
+| `frontend/` | Vite React app + local/Vercel API handlers |
+| `cre/` | CRE workflow runners, scripts, and tests |
+| `apps/docs-site/` | Docusaurus documentation site |
+| `docs/` | Product, architecture, operations, and reference docs |
+| `deployments/` | Deployment artifacts and addresses |
 
 ## Contributing
 
-**We welcome contributions from the community:**
-
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Write tests** for new features (`forge test`)
-4. **Commit** changes (`git commit -m 'Add amazing feature'`)
-5. **Push** to branch (`git push origin feature/amazing-feature`)
-6. **Open** a Pull Request
-
-### Development Commands
-
-```bash
-# Compile contracts
-forge build
-
-# Run tests with verbosity
-forge test -vvv
-
-# Run specific test
-forge test --match-test testVaultDeposit -vvv
-
-# Deploy to Base (example)
-forge script script/DeployVaultStack.s.sol \
-  --rpc-url $BASE_RPC_URL \
-  --broadcast \
-  --verify
-
-# Start frontend dev server
-cd frontend && pnpm dev
-```
-
-### Repo build philosophy (Zora-style)
-
-This repo is intentionally split into:
-
-- **Fast UI loop**: `frontend/` (Vite + React). Prefer `pnpm -C frontend dev` / `pnpm -C frontend build` for day-to-day changes.
-- **Heavy onchain loop**: Foundry contracts at repo root. Run `forge build` / `forge test` when you’re changing Solidity.
-
-For the Vercel API surface, avoid “hidden” dynamic imports: add endpoints by registering them in `frontend/api/_handlers/_routes.ts` so the bundler includes them.
-
----
+1. Branch from `main`.
+2. Keep changes scoped (contracts, frontend, CRE, docs).
+3. Run relevant tests before opening a PR.
+4. Include migration or ops notes when behavior changes.
 
 ## License
 
-**MIT License** - see [LICENSE](LICENSE) file for details.
-
----
-
-## Links
-
-- **Website**: [4626.fun](https://4626.fun)
-- **GitHub**: [github.com/wenakita/4626](https://github.com/wenakita/4626)
-- **Docs**: [docs.4626.fun](https://docs.4626.fun) *(coming soon)*
-- **Coinbase Creator Coins**: [Coinbase Ecosystem](https://www.coinbase.com)
-- **LayerZero**: [docs.layerzero.network](https://docs.layerzero.network)
-- **Uniswap CCA**: [cca.uniswap.org](https://cca.uniswap.org)
-- **akita Token**: [Uniswap V4 Pool](https://app.uniswap.org/explore/tokens/base/0x5b674196812451b7cec024fe9d22d2c0b172fa75)
-
----
-
-## Brand Assets
-
-**Logos, icons, and brand guidelines are available in `/frontend/public/`:**
-
-- **Logo** (SVG, PNG): `/frontend/public/logo.svg`
-- **Favicon**: `/frontend/public/favicon.ico`
-- **Protocol logos**: `/frontend/public/protocols/` (Uniswap, LayerZero, Chainlink, etc.)
-
-**For media inquiries or partnership discussions, contact [@wenakita](https://x.com/wenakita) on Twitter.**
-
----
-
-**4626 | Omnichain Vaults for Creator Coins | Powered by LayerZero V2 + Uniswap CCA**
-
-*Enabling any creator to launch institutional-grade vault infrastructure with zero gas fees, fair launch price discovery, and gamified community incentives - all in one click.*
+MIT - AKITA, LLC

@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Script, console2} from "forge-std/Script.sol";
 
 import {CreatorOVaultFactory} from "../contracts/factories/CreatorOVaultFactory.sol";
-import {CreatorVRFConsumerV2_5} from "../contracts/services/lottery/vrf/CreatorVRFConsumerV2_5.sol";
+import {CreatorVRFConsumerV2_5} from "../contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol";
 
 interface ICreatorRegistryAuth {
     function owner() external view returns (address);

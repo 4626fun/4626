@@ -24,6 +24,9 @@ import {ICreatorRegistry} from "../contracts/interfaces/core/ICreatorRegistry.so
  *      forge script script/SeedCreatorRegistry.s.sol:SeedCreatorRegistry \
  *          --rpc-url base \
  *          -vvvv
+ *
+ * @dev OPTIONAL SOLANA EID MAPPING:
+ *      Set SOLANA_CHAIN_ID and SOLANA_EID to also seed non-EVM chainId<->EID mapping.
  */
 contract SeedCreatorRegistry is Script {
     // ═══════════════════════════════════════════════════════════════════
@@ -88,7 +91,7 @@ contract SeedCreatorRegistry is Script {
     address constant CHAINLINK_ETH_USD = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
     address constant CREATOR_FACTORY = 0x90D25129072059ed5AfF321434f36d40B4556Cfc;
     address constant LOTTERY_MANAGER = 0x77705A2f173dd52F28300447506Dc35086c34626;
-    address constant VAULT_BATCHER = 0xB87CBb646dD14F520078F11196f79BF815F18c84;
+    address constant VAULT_BATCHER = 0x6F3662298a96b372Df4134Fd6f89df36Ec014480;
     address constant VAULT_ACT_BATCHER = 0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB;
 
     // ═══════════════════════════════════════════════════════════════════
@@ -98,6 +101,11 @@ contract SeedCreatorRegistry is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
+        uint256 solanaChainId = vm.envOr("SOLANA_CHAIN_ID", uint256(0));
+        uint32 solanaEid = uint32(vm.envOr("SOLANA_EID", uint256(0)));
+        if (solanaChainId > 0 || solanaEid > 0) {
+            require(solanaChainId > 0 && solanaEid > 0, "Set both SOLANA_CHAIN_ID and SOLANA_EID");
+        }
 
         address registryAddr = vm.envOr("REGISTRY", DEFAULT_REGISTRY);
         CreatorRegistry registry = CreatorRegistry(registryAddr);
@@ -201,6 +209,13 @@ contract SeedCreatorRegistry is Script {
             console.log(unicode"   ✓ Monad  10143 <-> 30390");
         }
 
+        if (solanaChainId > 0) {
+            registry.setChainIdToEid(solanaChainId, solanaEid);
+            console.log(unicode"   ✓ Solana", solanaChainId, unicode"<->", solanaEid);
+        } else {
+            console.log(unicode"   [skip] Solana chainId <-> EID mapping (set SOLANA_CHAIN_ID + SOLANA_EID)");
+        }
+
         // ────────────────────────────────────────────────────────────────
         //  4. SET BASE DEX INFRASTRUCTURE + HUB
         // ────────────────────────────────────────────────────────────────
@@ -252,13 +267,13 @@ contract SeedCreatorRegistry is Script {
         console.log(unicode"  ✓ Registry:          ", registryAddr);
         console.log(unicode"  ✓ Chains registered:  Base, Ethereum, Arbitrum, BSC, Avalanche");
         console.log(unicode"  ✓ LZ endpoints set:   5 chains");
-        console.log(unicode"  ✓ EID mappings set:   5 chains");
+        console.log(unicode"  ✓ EID mappings set:   5 chains (+ optional Solana)");
         console.log(unicode"  ✓ Hub chain:          Base (8453 / EID 30184)");
         console.log(unicode"  ✓ DEX infra:          PoolManager + SwapRouter on Base");
         console.log(unicode"  ✓ Factories auth'd:   CreatorOVaultFactory, Batcher, ActivationBatcher");
         console.log("");
         console.log("   No creator-specific data was registered.");
-        console.log("   Creator tokens/vaults are registered per-deployment via DeployVaultStack.");
+        console.log("   Creator tokens/vaults are registered via the app deploy-session flow (/deploy).");
         console.log("");
     }
 

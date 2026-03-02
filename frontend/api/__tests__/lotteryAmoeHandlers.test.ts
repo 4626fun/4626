@@ -1,0 +1,249 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { createMockReq, createMockRes } from './helpers'
+import { getApiHandler } from '../_handlers/_routes.js'
+
+const guardMock = vi.fn()
+const issueAmoeNonceMock = vi.fn()
+const buildAmoeEntryMessageMock = vi.fn()
+const verifyAmoeEntryProofMock = vi.fn()
+const createAmoeAttestationMock = vi.fn()
+const getAmoeCreditSnapshotMock = vi.fn()
+const consumeAmoeCreditsForEntryMock = vi.fn()
+const claimDailyTwitterCheckinMock = vi.fn()
+
+vi.mock('../../server/_lib/agentApiGuard.js', () => ({
+  guardAgentApiRequest: guardMock,
+}))
+
+vi.mock('../../server/_lib/contracts.js', () => ({
+  getApiContracts: () => ({ lotteryManager: '0x32403a647e73E04aE42b02bdd1Ade9C88698FD0c' }),
+}))
+
+vi.mock('../../server/auth/_shared.js', () => ({
+  handleOptions: vi.fn(() => false),
+  readJsonBody: vi.fn(async (req: any) => req.body ?? null),
+}))
+
+vi.mock('../../server/_lib/lotteryAmoe.js', () => ({
+  issueAmoeNonce: issueAmoeNonceMock,
+  buildAmoeEntryMessage: buildAmoeEntryMessageMock,
+  verifyAmoeEntryProof: verifyAmoeEntryProofMock,
+  createAmoeAttestation: createAmoeAttestationMock,
+  getAmoeCreditSnapshot: getAmoeCreditSnapshotMock,
+  consumeAmoeCreditsForEntry: consumeAmoeCreditsForEntryMock,
+  claimDailyTwitterCheckin: claimDailyTwitterCheckinMock,
+}))
+
+describe('AMOE lottery routes', () => {
+  it('registers AMOE nonce, credits, submit, and checkin routes', async () => {
+    const nonceHandler = await getApiHandler('v1/lottery/amoe/nonce')
+    const creditsHandler = await getApiHandler('v1/lottery/amoe/credits')
+    const submitHandler = await getApiHandler('v1/lottery/amoe/submit')
+    const checkinHandler = await getApiHandler('v1/lottery/amoe/twitter-checkin')
+    expect(typeof nonceHandler).toBe('function')
+    expect(typeof creditsHandler).toBe('function')
+    expect(typeof submitHandler).toBe('function')
+    expect(typeof checkinHandler).toBe('function')
+  })
+})
+
+describe('AMOE nonce handler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    guardMock.mockResolvedValue({ ok: true, ip: '127.0.0.1' })
+    issueAmoeNonceMock.mockResolvedValue({
+      nonce: '0x1111111111111111111111111111111111111111111111111111111111111111',
+      issuedAt: '2026-03-01T00:00:00.000Z',
+      expiresAt: '2026-03-01T00:10:00.000Z',
+    })
+    getAmoeCreditSnapshotMock.mockResolvedValue({
+      wallet: '0x000000000000000000000000000000000000cafe',
+      credits: 55,
+      creditsPerEntry: 100,
+      entriesAvailable: 0,
+      nextEntryAtCredits: 100,
+    })
+    buildAmoeEntryMessageMock.mockReturnValue('amoe-message')
+  })
+
+  it('rejects missing wallet/creatorCoin query params', async () => {
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeNonce')
+    const req = createMockReq({ method: 'GET', query: {} })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('returns nonce payload for valid query params', async () => {
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeNonce')
+    const req = createMockReq({
+      method: 'GET',
+      query: {
+        wallet: '0x000000000000000000000000000000000000cAFe',
+        creatorCoin: '0x0000000000000000000000000000000000001001',
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.message).toBe('amoe-message')
+    expect(res.body?.data?.credits).toBe(55)
+    expect(res.body?.data?.creditsPerEntry).toBe(100)
+    expect(res.body?.data?.entriesAvailable).toBe(0)
+    expect(issueAmoeNonceMock).toHaveBeenCalledTimes(1)
+    expect(getAmoeCreditSnapshotMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('AMOE credits handler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    guardMock.mockResolvedValue({ ok: true, ip: '127.0.0.1' })
+    getAmoeCreditSnapshotMock.mockResolvedValue({
+      wallet: '0x000000000000000000000000000000000000cafe',
+      credits: 77,
+      creditsPerEntry: 100,
+      entriesAvailable: 0,
+      nextEntryAtCredits: 100,
+    })
+  })
+
+  it('rejects missing wallet query param', async () => {
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeCredits')
+    const req = createMockReq({ method: 'GET', query: {} })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('returns credit snapshot for wallet', async () => {
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeCredits')
+    const req = createMockReq({
+      method: 'GET',
+      query: { wallet: '0x000000000000000000000000000000000000cAFe' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.credits).toBe(77)
+    expect(getAmoeCreditSnapshotMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('AMOE submit handler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    guardMock.mockResolvedValue({ ok: true, ip: '127.0.0.1' })
+    verifyAmoeEntryProofMock.mockResolvedValue({
+      wallet: '0x000000000000000000000000000000000000cafe',
+      creatorCoin: '0x0000000000000000000000000000000000001001',
+      nonce: '0x1111111111111111111111111111111111111111111111111111111111111111',
+      expiresAt: '2026-03-01T00:10:00.000Z',
+    })
+    createAmoeAttestationMock.mockResolvedValue({
+      buyer: '0x000000000000000000000000000000000000cafe',
+      creatorCoin: '0x0000000000000000000000000000000000001001',
+      nonce: '0x1111111111111111111111111111111111111111111111111111111111111111',
+      deadline: 1772333400,
+      signature: '0xabcdef',
+      callData: '0xdeadbeef',
+      to: '0x32403a647e73E04aE42b02bdd1Ade9C88698FD0c',
+    })
+    consumeAmoeCreditsForEntryMock.mockResolvedValue({
+      wallet: '0x000000000000000000000000000000000000cafe',
+      consumed: 100,
+      creditsRemaining: 23,
+      entriesAvailable: 0,
+      creditsPerEntry: 100,
+    })
+  })
+
+  it('rejects unsupported methods', async () => {
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
+    const req = createMockReq({ method: 'GET' })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(405)
+  })
+
+  it('returns attested AMOE submit payload', async () => {
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        creatorCoin: '0x0000000000000000000000000000000000001001',
+        message: 'amoe-message',
+        signature: '0x1234',
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.callData).toBe('0xdeadbeef')
+    expect(verifyAmoeEntryProofMock).toHaveBeenCalledTimes(1)
+    expect(consumeAmoeCreditsForEntryMock).toHaveBeenCalledTimes(1)
+    expect(createAmoeAttestationMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns 402 when credits are insufficient', async () => {
+    consumeAmoeCreditsForEntryMock.mockRejectedValue(new Error('insufficient_amoe_credits'))
+
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        creatorCoin: '0x0000000000000000000000000000000000001001',
+        message: 'amoe-message',
+        signature: '0x1234',
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(402)
+    expect(res.body?.success).toBe(false)
+    expect(String(res.body?.error ?? '')).toMatch(/insufficient/i)
+  })
+})
+
+describe('AMOE daily Twitter checkin handler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    guardMock.mockResolvedValue({
+      ok: true,
+      ip: '127.0.0.1',
+      auth: { type: 'session', address: '0x000000000000000000000000000000000000cafe' },
+    })
+    claimDailyTwitterCheckinMock.mockResolvedValue({
+      wallet: '0x000000000000000000000000000000000000cafe',
+      awarded: true,
+      awardedCredits: 1,
+      credits: 101,
+      creditsPerEntry: 100,
+      entriesAvailable: 1,
+    })
+  })
+
+  it('rejects unsupported methods', async () => {
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeTwitterCheckin')
+    const req = createMockReq({ method: 'GET' })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(405)
+  })
+
+  it('returns daily checkin credit grant response', async () => {
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeTwitterCheckin')
+    const req = createMockReq({ method: 'POST', body: {} })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.awardedCredits).toBe(1)
+    expect(res.body?.data?.creditsPerEntry).toBe(100)
+    expect(claimDailyTwitterCheckinMock).toHaveBeenCalledTimes(1)
+  })
+})

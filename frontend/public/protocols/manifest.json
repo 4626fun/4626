@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "lastReviewedAt": "2026-03-01",
+  "assets": [
+    {
+      "protocol": "ajna",
+      "variant": "primary-mark-svg",
+      "file": "ajna.svg",
+      "sha256": "6df36cc290b413a0ab756aac419e6aafc10a4d962b617541b0a34dddfe6340c4",
+      "officialSourceUrl": "https://www.ajna.finance/",
+      "brandGuideUrl": "https://www.ajna.finance/"
+    },
+    {
+      "protocol": "base",
+      "variant": "primary-mark-png",
+      "file": "base.png",
+      "sha256": "a4aa4e138a72be7f887d4135605d8fb9296e2ffc983f2de235af85003ed15a7f",
+      "officialSourceUrl": "https://base.org/brand",
+      "brandGuideUrl": "https://base.org/brand"
+    },
+    {
+      "protocol": "chainlink",
+      "variant": "primary-mark-svg",
+      "file": "chainlink.svg",
+      "sha256": "349932f16efb2b33c27a0a95bb98be3747e7ad9950aeca8a3ef53c68542b2448",
+      "officialSourceUrl": "https://chain.link/brand-assets",
+      "brandGuideUrl": "https://chain.link/brand-assets"
+    },
+    {
+      "protocol": "charm",
+      "variant": "primary-mark-png",
+      "file": "charm.png",
+      "sha256": "7b1a0a59e552863775d18cce5c13abdfe1044df47f1c58676cb39fed145fc3b5",
+      "officialSourceUrl": "https://www.charm.fi/",
+      "brandGuideUrl": "https://www.charm.fi/"
+    },
+    {
+      "protocol": "layerzero",
+      "variant": "primary-mark-svg",
+      "file": "layerzero.svg",
+      "sha256": "ec5eda038f43a5869369737111705f571a74b1bfb46b629b367840811ff1b688",
+      "officialSourceUrl": "https://layerzero.network/",
+      "brandGuideUrl": "https://layerzero.network/"
+    },
+    {
+      "protocol": "solana",
+      "variant": "official-logomark-svg",
+      "file": "solana.svg",
+      "sha256": "4940c86077dd9c0b24c421466f77b9c07d59437a5ae538f3a328bc969737d74e",
+      "officialSourceUrl": "https://solana.com/src/img/branding/solanaLogoMark.svg",
+      "brandGuideUrl": "https://solana.com/branding"
+    },
+    {
+      "protocol": "uniswap",
+      "variant": "legacy-mark-png",
+      "file": "uniswap.png",
+      "sha256": "dbc35479dbfe99157f2ceffbddbb84b8ef166dbea2ad51b62f0731d990558ba7",
+      "officialSourceUrl": "https://support.uniswap.org/hc/en-us/articles/20904250665869-Brand-assets",
+      "brandGuideUrl": "https://support.uniswap.org/hc/en-us/articles/20904250665869-Brand-assets"
+    },
+    {
+      "protocol": "uniswap",
+      "variant": "legacy-mark-svg",
+      "file": "uniswap.svg",
+      "sha256": "fc4964ba320c0b10574dba90564e7bbe501f6449908f150e79dc4809377da5ce",
+      "officialSourceUrl": "https://support.uniswap.org/hc/en-us/articles/20904250665869-Brand-assets",
+      "brandGuideUrl": "https://support.uniswap.org/hc/en-us/articles/20904250665869-Brand-assets"
+    },
+    {
+      "protocol": "yearn",
+      "variant": "primary-mark-svg",
+      "file": "yearn.svg",
+      "sha256": "841df1ef0d4be5e209939d5e59eca1500bb2ae7098d976e7cc5bc047d5dae42c",
+      "officialSourceUrl": "https://yearn.fi/",
+      "brandGuideUrl": "https://docs.yearn.fi/"
+    },
+    {
+      "protocol": "zora",
+      "variant": "primary-mark-svg",
+      "file": "zora.svg",
+      "sha256": "38d89b930ef50006232f59d59d2df0e5841d86e3263ee9766a175ea0a0784b5c",
+      "officialSourceUrl": "https://zora.co/",
+      "brandGuideUrl": "https://zora.co/"
+    }
+  ]
+}

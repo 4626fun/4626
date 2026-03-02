@@ -2,6 +2,10 @@
 @config "../tailwind.config.js";
 
 @layer base {
+  html {
+    scrollbar-gutter: stable;
+  }
+
   body {
     @apply bg-vault-bg text-vault-text antialiased font-sans;
     font-weight: 300;
@@ -67,7 +71,7 @@
   .cinematic-section::before,
   .cinematic-section::after {
     content: '';
-    @apply absolute left-0 right-0 h-[1px] bg-zinc-900;
+    @apply absolute left-0 right-0 h-px bg-zinc-900;
   }
   
   .cinematic-section::before {

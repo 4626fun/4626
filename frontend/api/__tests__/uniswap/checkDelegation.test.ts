@@ -77,5 +77,46 @@ describe('/api/uniswap/checkDelegation', () => {
     expect(res.body?.success).toBe(false)
     expect(String(res.body?.error ?? '')).toMatch(/chainIds/i)
   })
+
+  it('returns 400 for unsupported chainIds', async () => {
+    restoreEnv = applyEnv({
+      UNISWAP_API_KEY: 'test-key',
+      UNISWAP_ALLOWED_CHAIN_IDS: '8453',
+    })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { origin: 'https://app.4626.fun', 'x-forwarded-for': '10.1.1.5' },
+      body: {
+        chainIds: [10],
+        walletAddresses: ['0x0000000000000000000000000000000000000002'],
+      },
+    })
+    const res = createMockRes()
+    const handler = await loadHandler()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(String(res.body?.error ?? '')).toMatch(/unsupported/i)
+  })
+
+  it('returns 400 for malformed walletAddresses entries', async () => {
+    restoreEnv = applyEnv({ UNISWAP_API_KEY: 'test-key' })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { origin: 'https://app.4626.fun', 'x-forwarded-for': '10.1.1.6' },
+      body: {
+        chainIds: [8453],
+        walletAddresses: ['0xnot-an-address'],
+      },
+    })
+    const res = createMockRes()
+    const handler = await loadHandler()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(String(res.body?.error ?? '')).toMatch(/walletaddresses/i)
+  })
 })
 

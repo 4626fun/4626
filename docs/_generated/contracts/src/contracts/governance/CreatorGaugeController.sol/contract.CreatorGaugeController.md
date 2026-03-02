@@ -1,5 +1,5 @@
 # CreatorGaugeController
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/governance/CreatorGaugeController.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/governance/CreatorGaugeController.sol)
 
 **Inherits:**
 Ownable, ReentrancyGuard
@@ -61,6 +61,27 @@ Default swap fee tier (0.3%)
 
 ```solidity
 uint24 public constant DEFAULT_SWAP_FEE = 3000
+```
+
+
+### Q192
+
+```solidity
+uint256 private constant Q192 = 1 << 192
+```
+
+
+### MIN_SQRT_RATIO
+
+```solidity
+uint160 private constant MIN_SQRT_RATIO = 4295128739
+```
+
+
+### MAX_SQRT_RATIO
+
+```solidity
+uint160 private constant MAX_SQRT_RATIO = 1461446703485210103287273052203988822378723970342
 ```
 
 
@@ -343,6 +364,39 @@ uint256 public pendingWETHFees
 ```
 
 
+### wethFeeKeeper
+Optional keeper allowed to process large WETH fee batches.
+
+Default: address(0) (disabled). Owner is always authorized.
+
+
+```solidity
+address public wethFeeKeeper
+```
+
+
+### maxPermissionlessWethProcess
+Maximum WETH amount that permissionless callers may process in a single call.
+
+Default: 0 (permissionless processing disabled).
+
+
+```solidity
+uint256 public maxPermissionlessWethProcess
+```
+
+
+### autoProcessWethFees
+If true, `receiveWETHFees()` may auto-process (only up to the permissionless cap).
+
+Default: false (intake should not trigger public mempool swaps).
+
+
+```solidity
+bool public autoProcessWethFees
+```
+
+
 ## Functions
 ### constructor
 
@@ -390,6 +444,20 @@ Direct deposit for manual fee deposits
 function deposit(uint256 amount) external nonReentrant;
 ```
 
+### receiveBridgedFees
+
+Account for OFT tokens that arrived via cross-chain fee flush
+
+When remote CreatorShareOFTs flush fees via OFT send(), the tokens
+are minted directly to this contract by LayerZero's _credit().
+This function sweeps the unaccounted balance into pendingFees.
+Permissionless — anyone can trigger this (keeper, owner, etc.)
+
+
+```solidity
+function receiveBridgedFees() external nonReentrant;
+```
+
 ### receiveWETHFees
 
 Receive WETH fees from the V4 Tax Hook
@@ -426,11 +494,18 @@ Process pending WETH fees: WETH → CreatorCoin → Vault → Distribute
 function processWETHFees() external nonReentrant;
 ```
 
+### _wethAmountToProcessForCaller
+
+
+```solidity
+function _wethAmountToProcessForCaller(address caller) internal view returns (uint256 amountToProcess);
+```
+
 ### _processWETHFees
 
 
 ```solidity
-function _processWETHFees() internal;
+function _processWETHFees(uint256 wethAmount) internal;
 ```
 
 ### _calculateMinOutput
@@ -453,6 +528,23 @@ function _calculateMinOutput(uint256 wethAmount) internal view returns (uint256 
 |----|----|-----------|
 |`minOut`|`uint256`|Minimum Creator Coin to receive (0 if oracle disabled/unavailable)|
 
+
+### _sqrtPriceLimitX96
+
+Derive sqrtPriceLimitX96 from an oracle-derived minOut.
+
+Uniswap v3 price is expressed as sqrt(token1/token0) Q64.96, where token0/token1 are sorted by address.
+We compute a limit price from `minAmountOut / amountIn` (or its inverse), scale to Q192, then sqrt.
+- If WETH is token0: swap is token0->token1 (zeroForOne), price decreases, so we enforce a MIN price.
+- If WETH is token1: swap is token1->token0 (oneForZero), price increases, so we enforce a MAX price.
+
+
+```solidity
+function _sqrtPriceLimitX96(uint256 amountIn, uint256 minAmountOut)
+    internal
+    view
+    returns (uint160 sqrtPriceLimitX96);
+```
 
 ### distribute
 
@@ -637,6 +729,35 @@ function setSwapConfig(uint24 _feeTier, uint256 _slippageBps) external onlyOwner
 |----|----|-----------|
 |`_feeTier`|`uint24`|Uniswap fee tier (100, 500, 3000, 10000)|
 |`_slippageBps`|`uint256`|Slippage tolerance in basis points|
+
+
+### setWethFeeKeeper
+
+Set keeper for processing large WETH fee batches.
+
+Owner is always authorized; keeper can be address(0) to disable.
+
+
+```solidity
+function setWethFeeKeeper(address _keeper) external onlyOwner;
+```
+
+### setWethProcessingConfig
+
+Configure permissionless WETH processing and auto-processing on intake.
+
+
+```solidity
+function setWethProcessingConfig(uint256 _maxPermissionlessWethProcess, bool _autoProcessWethFees)
+    external
+    onlyOwner;
+```
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`_maxPermissionlessWethProcess`|`uint256`|Max WETH per permissionless `processWETHFees()` call (0 disables).|
+|`_autoProcessWethFees`|`bool`|If true, `receiveWETHFees()` may auto-process (only up to the cap).|
 
 
 ### setOracle
@@ -1025,6 +1146,18 @@ event VaultGaugeVotingUpdated(address indexed vaultGaugeVoting);
 event VoterRewardsDistributorUpdated(address indexed distributor);
 ```
 
+### WethFeeKeeperUpdated
+
+```solidity
+event WethFeeKeeperUpdated(address indexed oldKeeper, address indexed newKeeper);
+```
+
+### WethProcessingConfigUpdated
+
+```solidity
+event WethProcessingConfigUpdated(uint256 maxPermissionlessWethProcess, bool autoProcessWethFees);
+```
+
 ## Errors
 ### ZeroAddress
 
@@ -1090,5 +1223,17 @@ error SwapFailed();
 
 ```solidity
 error InvalidSlippage();
+```
+
+### MinOutputUnavailable
+
+```solidity
+error MinOutputUnavailable();
+```
+
+### NotAuthorized
+
+```solidity
+error NotAuthorized();
 ```
 

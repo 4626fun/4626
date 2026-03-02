@@ -56,16 +56,18 @@ interface ISwapRouter {
 }
 
 /// @notice zRouter - gas-efficient multi-AMM DEX aggregator
-/// @dev Base: 0x... (will be deployed)
+/// @dev Base deployment uses a Uniswap-style swapV3 entrypoint with explicit `to` + `exactOut` args.
 interface IzRouter {
     function swapV3(
+        address to,
+        bool exactOut,
+        uint24 swapFee,
         address tokenIn,
         address tokenOut,
-        uint24 fee,
-        uint256 amountIn,
-        uint256 amountOutMin,
+        uint256 swapAmount,
+        uint256 amountLimit,
         uint256 deadline
-    ) external payable returns (uint256 amountOut);
+    ) external payable returns (uint256 amountIn, uint256 amountOut);
 }
 
 // Interfaces imported from v3-core and interfaces/IStrategy.sol
@@ -569,17 +571,13 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
         // Deposit to Charm with safety checks
         _depositToCharmSafe(finalCreator, finalUsdc, creatorIsToken0);
 
-        // Return unused tokens to vault
-        _returnUnusedTokens();
+        // Keep residual balances in-strategy so strict vault accounting remains stable
+        // even when Charm deposit is partially/fully deferred (e.g. out-of-range).
+        // Residual tokens remain reflected in getTotalAssets().
 
-        // Calculate total deposited value in CREATOR terms using TWAP.
-        (uint256 creatorPerUsdc, bool ok) = _getPoolPriceTWAP(twapDuration);
-        if (!ok) {
-            deposited = finalCreator;
-        } else {
-            uint256 usdcInCreator = (finalUsdc * creatorPerUsdc) / 1e6; // USDC has 6 decimals
-            deposited = finalCreator + usdcInCreator;
-        }
+        // Canonical vault accounting path requires strategy-reported deposit to match
+        // the requested vault allocation amount. The vault enforces this strictly.
+        deposited = amount;
 
         // Update for harvest tracking
         lastTotalAssets = getTotalAssets();
@@ -748,9 +746,16 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
 
         // Try zRouter first if enabled (8-18% gas savings)
         if (useZRouter && address(zRouter) != address(0)) {
-            try zRouter.swapV3(address(CREATOR), address(USDC), fee, amountIn, minOut, block.timestamp) returns (
-                uint256 out
-            ) {
+            try zRouter.swapV3(
+                address(this), // recipient
+                false, // exact input
+                fee,
+                address(CREATOR),
+                address(USDC),
+                amountIn,
+                minOut,
+                block.timestamp
+            ) returns (uint256, uint256 out) {
                 amountOut = out;
                 emit TokensSwapped(address(CREATOR), address(USDC), amountIn, amountOut);
                 return amountOut;
@@ -842,9 +847,16 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
         uint256 minOut = (expectedOut * (10000 - swapSlippageBps)) / 10000;
 
         if (useZRouter && address(zRouter) != address(0)) {
-            try zRouter.swapV3(address(USDC), address(CREATOR), fee, amountIn, minOut, block.timestamp) returns (
-                uint256 out
-            ) {
+            try zRouter.swapV3(
+                address(this), // recipient
+                false, // exact input
+                fee,
+                address(USDC),
+                address(CREATOR),
+                amountIn,
+                minOut,
+                block.timestamp
+            ) returns (uint256, uint256 out) {
                 amountOut = out;
                 emit TokensSwapped(address(USDC), address(CREATOR), amountIn, amountOut);
                 return amountOut;

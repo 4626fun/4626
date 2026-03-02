@@ -58,7 +58,8 @@ import { createRuntimeBridge } from './runtimeBridge.js'
 import { getElizaLlmService } from './llm.js'
 import { AgentError, isRetryableAgentError, toAgentError, toErrorDetails } from './_errors.js'
 import { SlidingWindowRateLimiter, parsePositiveNumber } from './_rateLimit.js'
-import { enqueueAgentBackgroundTask, startAgentBackgroundTaskWorker } from './_taskQueue.js'
+import { enqueueAgentBackgroundTask, getAgentBackgroundQueueStats, startAgentBackgroundTaskWorker } from './_taskQueue.js'
+import { WelcomeConversationTracker, fingerprintAgentConfig, getActionRetryBudget } from './_runtimePolicy.js'
 
 import { getDb, getDbInitError, isDbConfigured } from '../../_lib/postgres.js'
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../_lib/creatorXmtpAgents.js'
@@ -101,6 +102,8 @@ const INBOUND_RATE_MAX_MESSAGES = Math.floor(parsePositiveNumber(process.env.ELI
 const MAX_INBOUND_MESSAGE_CHARS = Math.floor(parsePositiveNumber(process.env.ELIZA_MAX_INBOUND_CHARS, 4_000))
 const STARTUP_DB_MAX_RETRIES = Math.floor(parsePositiveNumber(process.env.ELIZA_STARTUP_DB_MAX_RETRIES, 4))
 const STARTUP_DB_RETRY_BASE_MS = Math.floor(parsePositiveNumber(process.env.ELIZA_STARTUP_DB_RETRY_BASE_MS, 1_000))
+const WELCOME_TRACKER_TTL_MS = Math.floor(parsePositiveNumber(process.env.ELIZA_WELCOME_TRACK_TTL_MS, 86_400_000))
+const WELCOME_TRACKER_MAX = Math.floor(parsePositiveNumber(process.env.ELIZA_WELCOME_TRACK_MAX, 20_000))
 
 const llmService = getElizaLlmService()
 const inboundRateLimiter = new SlidingWindowRateLimiter(INBOUND_RATE_WINDOW_MS, INBOUND_RATE_MAX_MESSAGES)
@@ -400,7 +403,10 @@ async function withRetry<T>(params: {
 // Welcome message for first-time conversations
 // ---------------------------------------------------------------------------
 
-const welcomedConversations = new Set<string>()
+const welcomedConversations = new WelcomeConversationTracker({
+  ttlMs: WELCOME_TRACKER_TTL_MS,
+  maxTracked: WELCOME_TRACKER_MAX,
+})
 
 const WELCOME_MESSAGE = [
   `o henlo! I'm Keepr, your 4626 assistant.`,
@@ -598,6 +604,14 @@ async function handleMessage(
     agentKey: ctx.agentKey,
     conversationId: msg.conversationId,
   })
+  const isKeeprStatusCommand = /^\/?keepr\s+status\b/i.test(text)
+  if (isKeeprStatusCommand) {
+    reqLogger.info('[eliza/vertical] keepr_status ingress', {
+      correlationId,
+      agentKey: ctx.agentKey,
+      conversationId: msg.conversationId,
+    })
+  }
   const rateKey = `${msg.conversationId}:${(msg.senderAddress ?? 'unknown').toLowerCase()}`
   const rate = inboundRateLimiter.allow(rateKey)
   if (!rate.allowed) {
@@ -627,8 +641,7 @@ async function handleMessage(
   // Welcome message on first interaction in a conversation.
   // If the user sends a substantive first question, continue to normal
   // routing so they get an actual answer immediately.
-  if (!welcomedConversations.has(msg.conversationId)) {
-    welcomedConversations.add(msg.conversationId)
+  if (welcomedConversations.markAndCheckFirstSeen(msg.conversationId)) {
     const welcomeMemory = ctx.runtimeBridge.createOutboundMemory(
       msg.conversationId,
       msg.conversationType,
@@ -644,12 +657,23 @@ async function handleMessage(
   const rankedActions = await ctx.runtimeBridge.rankActions(text, memory)
   const maxCandidates = Math.max(1, ACTION_MAX_CANDIDATES)
   const candidates = rankedActions.slice(0, maxCandidates)
+  if (isKeeprStatusCommand) {
+    reqLogger.info('[eliza/vertical] keepr_status ranked', {
+      correlationId,
+      candidates: candidates.map((entry) => ({
+        action: String(entry.action?.name ?? 'unknown'),
+        score: entry.score,
+      })),
+    })
+  }
   for (const candidate of candidates) {
+    const actionName = String(candidate.action?.name ?? 'unknown')
     const parts: string[] = []
     try {
+      const actionRetryBudget = getActionRetryBudget(actionName, ACTION_MAX_RETRIES)
       await withRetry({
-        operation: `action_${String(candidate.action?.name ?? 'unknown').toLowerCase()}`,
-        maxRetries: ACTION_MAX_RETRIES,
+        operation: `action_${actionName.toLowerCase()}`,
+        maxRetries: actionRetryBudget,
         correlationId,
         run: async () =>
           withTimeout(
@@ -664,7 +688,7 @@ async function handleMessage(
               },
             ),
             ACTION_TIMEOUT_MS,
-            `action_timeout_${String(candidate.action?.name ?? 'unknown').toLowerCase()}`,
+            `action_timeout_${actionName.toLowerCase()}`,
           ),
       })
       const actionReply = parts.join('\n\n').trim()
@@ -676,22 +700,45 @@ async function handleMessage(
         )
         await ctx.runtimeBridge.runtime.createMemory(actionMemory as any, 'messages' as any)
         reqLogger.info('[eliza] action executed', {
-          action: String(candidate.action?.name ?? 'unknown'),
+          action: actionName,
           score: candidate.score,
           reason: candidate.reason,
+          retriesUsed: actionRetryBudget,
         })
+        if (isKeeprStatusCommand) {
+          reqLogger.info('[eliza/vertical] keepr_status reply', {
+            correlationId,
+            action: actionName,
+            chars: actionReply.length,
+          })
+        }
         return actionReply
       }
     } catch (error) {
       const agentError = toAgentError(error, 'ACTION_FAILED', 'Action execution failed')
       reqLogger.warn('[eliza] action candidate failed', {
-        action: String(candidate.action?.name ?? 'unknown'),
+        action: actionName,
         score: candidate.score,
         reason: candidate.reason,
         error: agentError.message,
         code: agentError.code,
       })
+      if (isKeeprStatusCommand) {
+        reqLogger.warn('[eliza/vertical] keepr_status action failed', {
+          correlationId,
+          action: actionName,
+          code: agentError.code,
+          error: agentError.message,
+        })
+      }
     }
+  }
+
+  if (isKeeprStatusCommand) {
+    reqLogger.warn('[eliza/vertical] keepr_status no_action_reply', {
+      correlationId,
+    })
+    return 'Keepr status is temporarily unavailable. Please try again shortly.'
   }
 
   // LLM fallback for /ai, @keepr, @bot, and plain text.
@@ -791,6 +838,21 @@ type RunningAgent = {
   creatorAddress: string
   xmtp: XmtpService
   runtimeBridge: ReturnType<typeof createRuntimeBridge>
+  rowFingerprint: string
+  startedAtMs: number
+}
+
+function computeRowFingerprint(row: AgentRow): string {
+  return fingerprintAgentConfig({
+    creatorAddress: row.creatorAddress,
+    xmtpAgentAddress: row.xmtpAgentAddress,
+    agentType: row.agentType,
+    privyWalletId: row.privyWalletId,
+    cswAddress: row.cswAddress,
+    encryptedPrivateKeyB64: row.encryptedPrivateKeyB64,
+    encryptedPrivateKeyIvB64: row.encryptedPrivateKeyIvB64,
+    encryptedPrivateKeyTagB64: row.encryptedPrivateKeyTagB64,
+  })
 }
 
 async function loadAgentRows(): Promise<AgentRow[]> {
@@ -842,7 +904,7 @@ async function loadAgentRows(): Promise<AgentRow[]> {
 // Agent lifecycle
 // ---------------------------------------------------------------------------
 
-async function startAgent(row: AgentRow): Promise<RunningAgent> {
+async function startAgent(row: AgentRow, rowFingerprint = computeRowFingerprint(row)): Promise<RunningAgent> {
   const dbEncryptionKey = getEffectiveDbEncryptionKey()
   const runtimeBridge = initializeRuntimeBridge(row.creatorAddress)
   let signer: any
@@ -908,7 +970,13 @@ async function startAgent(row: AgentRow): Promise<RunningAgent> {
     agentType: row.agentType,
   })
 
-  return { creatorAddress: row.creatorAddress, xmtp, runtimeBridge }
+  return {
+    creatorAddress: row.creatorAddress,
+    xmtp,
+    runtimeBridge,
+    rowFingerprint,
+    startedAtMs: Date.now(),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -917,9 +985,11 @@ async function startAgent(row: AgentRow): Promise<RunningAgent> {
 
 const runningAgents = new Map<string, RunningAgent>()
 let shuttingDown = false
+let syncInFlight = false
 
 async function syncAgents() {
-  if (shuttingDown) return
+  if (shuttingDown || syncInFlight) return
+  syncInFlight = true
 
   const { correlationId, logger: syncLogger } = createCorrelationLogger('sync')
   try {
@@ -927,11 +997,32 @@ async function syncAgents() {
     const currentKeys = new Set(runningAgents.keys())
     const desiredKeys = new Set(rows.map((r) => r.creatorAddress))
 
-    // Start new agents
+    // Start new agents or restart changed agents
     for (const row of rows) {
-      if (runningAgents.has(row.creatorAddress)) continue
+      const desiredFingerprint = computeRowFingerprint(row)
+      const existing = runningAgents.get(row.creatorAddress)
+      if (existing) {
+        if (existing.rowFingerprint === desiredFingerprint) continue
+        syncLogger.info('[eliza] Agent config changed; restarting', {
+          correlationId,
+          creatorAddress: row.creatorAddress,
+        })
+        try {
+          const replacement = await startAgent(row, desiredFingerprint)
+          try {
+            await existing.xmtp.stop()
+          } catch {}
+          runningAgents.set(row.creatorAddress, replacement)
+        } catch (err) {
+          syncLogger.error(`[eliza] Failed to restart changed agent for ${row.creatorAddress}`, {
+            correlationId,
+            error: toErrorDetails(err),
+          })
+        }
+        continue
+      }
       try {
-        const running = await startAgent(row)
+        const running = await startAgent(row, desiredFingerprint)
         runningAgents.set(row.creatorAddress, running)
       } catch (err) {
         syncLogger.error(`[eliza] Failed to start agent for ${row.creatorAddress}`, {
@@ -963,6 +1054,8 @@ async function syncAgents() {
       correlationId,
       error: toErrorDetails(err),
     })
+  } finally {
+    syncInFlight = false
   }
 }
 
@@ -1039,7 +1132,13 @@ async function startSingleAgentEoa(privateKey: `0x${string}`): Promise<RunningAg
 
   logger.info(`[eliza] Single EOA agent started`, { agentAddress: xmtp.address })
 
-  return { creatorAddress: 'single-agent', xmtp, runtimeBridge }
+  return {
+    creatorAddress: 'single-agent',
+    xmtp,
+    runtimeBridge,
+    rowFingerprint: 'single-agent:eoa',
+    startedAtMs: Date.now(),
+  }
 }
 
 /**
@@ -1111,7 +1210,13 @@ async function startSingleAgentCsw(params: {
     privyWalletId: params.privyWalletId.slice(0, 12) + '...',
   })
 
-  return { creatorAddress: 'single-agent-csw', xmtp, runtimeBridge }
+  return {
+    creatorAddress: 'single-agent-csw',
+    xmtp,
+    runtimeBridge,
+    rowFingerprint: `single-agent:csw:${params.cswAddress.toLowerCase()}`,
+    startedAtMs: Date.now(),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1422,12 +1527,22 @@ function startHealthServer() {
     const shouldCheckDb = dbRequiredForRuntime && dbConfigured
     const dbInitError = shouldCheckDb ? getDbInitError() : null
     const db = shouldCheckDb ? await getDb() : null
+    const queueStats = dbConfigured
+      ? await getAgentBackgroundQueueStats().catch(() => null)
+      : null
     const llmHealth = llmService.getHealth()
-    const xmtpStates = [...runningAgents.values()].map((agent) => ({
-      creatorAddress: agent.creatorAddress,
-      running: agent.xmtp.isRunning,
-      address: agent.xmtp.address ?? null,
-    }))
+    const xmtpStates = [...runningAgents.values()].map((agent) => {
+      const health = agent.xmtp.getHealth()
+      return {
+        creatorAddress: agent.creatorAddress,
+        running: health.running,
+        address: health.address,
+        state: health.state,
+        lastStartedAtMs: health.lastStartedAtMs,
+        lastMessageAtMs: health.lastMessageAtMs,
+        lastError: health.lastError,
+      }
+    })
     const xmtpReady = xmtpStates.every((entry) => entry.running)
     const readinessReasons: string[] = []
     if (!agentBooted) readinessReasons.push('booting')
@@ -1435,6 +1550,7 @@ function startHealthServer() {
     if (latestEnvValidation.errors.length > 0) readinessReasons.push('env_validation_failed')
     if (shouldCheckDb && db === null) readinessReasons.push('db_unavailable')
     if (!xmtpReady) readinessReasons.push('xmtp_not_running')
+    if ((queueStats?.staleProcessing ?? 0) > 0) readinessReasons.push('queue_stale_leases')
     const ready = Boolean(
       agentBooted &&
       agentCount > 0 &&
@@ -1470,6 +1586,7 @@ function startHealthServer() {
         },
         queueWorker: {
           running: Boolean(backgroundWorker),
+          stats: queueStats,
         },
       },
       validation: latestEnvValidation,

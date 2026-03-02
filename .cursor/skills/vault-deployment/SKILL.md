@@ -1,13 +1,13 @@
 ---
 name: vault-deployment
-description: Deploy and configure 4626 vault infrastructure (CreatorOVault, wrapper, ShareOFT, gauge, CCA strategy, oracle) and optionally post-deploy strategies/payout routing. Use when the user mentions deploy vault, DeployVaultStack, DeployInfrastructure, account abstraction (ERC-4337), Privy deploy flow, deployment-batcher phases, or strategy batch deployment.
+description: Deploy and configure 4626 vault infrastructure (CreatorOVault, wrapper, ShareOFT, gauge, CCA strategy, oracle) and optionally post-deploy strategies/payout routing. Use when the user mentions deploy vault, DeployInfrastructure, account abstraction (ERC-4337), Privy deploy flow, deployment-batcher phases, or strategy batch deployment.
 ---
 
 ## Quick Start (choose the deployment path)
 
 - Determine target chain and deployment mode:
-  - Foundry scripts (EOA / operator): `script/DeployInfrastructure.s.sol` and `script/deploy.sh`
-  - ERC-4337 / AA (smart account): `script/deploy-with-aa.ts` (and `frontend/src/pages/DeployVault.tsx` for the UI flow)
+  - Foundry scripts (EOA / operator, infra only): `script/DeployInfrastructure.s.sol` and `script/deploy.sh`
+  - ERC-4337 / AA (smart account): use `frontend/src/pages/DeployVault.tsx` (CLI AA script is retired)
   - Multi-phase orchestrator (Base code-deposit limits): `contracts/helpers/batchers/DeploymentBatcher.sol` (Phase 1–2; Phase 3 is strategies)
   - “Infra v2” deterministic deployment helpers: `./script/deploy.sh infra-v2` → `script/DeployBaseMainnetDeployer.s.sol`
   - Post-deploy batchers (strategies + activation): `contracts/helpers/batchers/StrategyDeploymentBatcher.sol`, `contracts/helpers/batchers/VaultActivationBatcher.sol`
@@ -39,22 +39,16 @@ There are multiple layers:
   - Creator-owned (creator EOA/smart wallet) vs protocol-owned (multisig/treasury)
 - If deploying via scripts (Foundry):
   - Required env vars (names only): `PRIVATE_KEY`, `RPC_URL` (or `BASE_RPC_URL` for v2 deployer), `ETHERSCAN_API_KEY`/BaseScan key
-  - For per-creator deploy: `CREATOR_FACTORY`
-- If deploying via AA script (`deploy-with-aa.ts`):
-  - Required env vars (names only): `SMART_ACCOUNT`, `PRIVATE_KEY`, `CREATOR_FACTORY`
-  - Optional: `BASE_RPC_URL`, `BUNDLER_URL`, `PAYMASTER_URL`, `PAYOUT_ROUTER_FACTORY`
 - If deploying via frontend UI (`DeployVault.tsx`):
   - Privy must be enabled + configured (client `VITE_PRIVY_*`, server `PRIVY_*`), and the user must sign in with Privy **or** connect an external wallet that can operate the canonical smart wallet.
 
 ## Repo Map (where to look / entrypoints)
 
 - Foundry deployment:
-  - `script/DeployInfrastructure.s.sol` (core infra + `DeployVaultStack` per creator)
-  - `script/deploy.sh` (wrapper for infra/vault/AA deploy)
+  - `script/DeployInfrastructure.s.sol` (core infra)
+  - `script/deploy.sh` (wrapper for infra commands; per-creator legacy entries are retired)
 - “Infra v2” deployer (bytecode store + deployer + multi-phase deploy contract):
   - `script/DeployBaseMainnetDeployer.s.sol` (used by `./script/deploy.sh infra-v2`)
-- AA deployment (CLI):
-  - `script/deploy-with-aa.ts` (UserOp deployment via bundler/paymaster)
 - AA deployment (frontend UI):
   - `frontend/src/pages/DeployVault.tsx` (Privy + smart wallet 1-click deploy; can also operate via external owner wallet in some flows)
 - Multi-phase deploy orchestrator:
@@ -64,7 +58,7 @@ There are multiple layers:
 - Activation / launch:
   - `contracts/helpers/batchers/VaultActivationBatcher.sol` (activates vault + can trigger launch)
 - Payout routing:
-  - `contracts/helpers/routers/PayoutRouter.sol`
+  - `contracts/utilities/routers/PayoutRouter.sol`
 - “Required approvals” reminder:
   - `docs/guides/deploy-vault.md`
   - `docs/current-contract-inventory.md`
@@ -109,36 +103,17 @@ Outputs/verification:
 - Foundry broadcast artifacts under `broadcast/**`
 - Copy emitted addresses into env/config as needed
 
-### B) Foundry: deploy per-creator vault infra (EOA/operator)
+### B) Foundry legacy per-creator scripts
 
-Wrapper:
+Retired. Do not use `DeployVaultStack`/`deploy.sh vault`.
 
-- `./script/deploy.sh vault $CREATOR_COIN_ADDRESS`
+### C) ERC-4337 CLI script
 
-This runs:
-- `script/DeployInfrastructure.s.sol:DeployVaultStack` with `CREATOR_COIN_ADDRESS` set
+Retired. Do not use `script/deploy-with-aa.ts`/`deploy.sh aa`.
 
-Post-checks:
-- Ensure the deployment was registered in `CreatorOVaultFactory` (via `registerDeployment`)
-- Ensure registry wiring happened (if `CreatorOVaultFactory.registry` was set)
-
-### C) ERC-4337 / AA: deploy per-creator vault infra (smart account)
-
-Wrapper:
-
-- `./script/deploy.sh aa $CREATOR_COIN_ADDRESS --gasless`
-
-Under the hood:
-- `npx ts-node script/deploy-with-aa.ts <CREATOR_COIN> [--gasless]`
-
-Notes:
-- This path depends on the AA contracts (`EntryPoint`, smart account) and the bundler/paymaster.
-- It may require simulation/predicted addresses to do multi-call atomic wiring.
-
-Reality check (AA CLI vs UI):
+Reality check (AA UI):
 
 - The **frontend AA path** is the canonical “1-click deploy” in practice. It uses the onchain batcher/deployer addresses from config (e.g. `creatorVaultBatcher`, `vaultActivationBatcher`) and submits UserOperations via Coinbase.
-- The **CLI AA script** (`script/deploy-with-aa.ts`, called by `./script/deploy.sh aa`) may be stale depending on the currently deployed factory shape; validate its target contract ABI before relying on it for production deployments.
 
 ### D) Multi-phase: deploy via deployment batcher (Phase 1–3)
 

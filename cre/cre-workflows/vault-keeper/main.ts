@@ -147,11 +147,20 @@ function shouldReport(
 // HTTP helper — fetch vault list (runs in node mode)
 // ---------------------------------------------------------------------------
 
-function fetchVaultList(
+function encodeJsonBody(payload: unknown): string {
+  const json = JSON.stringify(payload)
+  if (typeof btoa === "function") return btoa(json)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const maybeBuffer = (globalThis as any).Buffer
+  if (maybeBuffer?.from) return maybeBuffer.from(json, "utf8").toString("base64")
+  throw new Error("base64_encoder_unavailable")
+}
+
+function fetchVaultListJson(
   nodeRuntime: NodeRuntime<Config>,
   httpClient: HTTPClient,
   apiKey: string,
-): VaultInfo[] {
+): string {
   const baseUrl = nodeRuntime.config.apiBaseUrl
 
   const resp = httpClient.sendRequest(nodeRuntime, {
@@ -163,13 +172,7 @@ function fetchVaultList(
     },
   }).result()
 
-  const body = JSON.parse(new TextDecoder().decode(resp.body)) as {
-    success: boolean
-    data?: { vaults: VaultInfo[] }
-  }
-
-  if (!body.success || !body.data) return []
-  return body.data.vaults
+  return new TextDecoder().decode(resp.body)
 }
 
 // ---------------------------------------------------------------------------
@@ -192,7 +195,7 @@ function sendBridgeRequest(
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: btoa(JSON.stringify(payload)),
+    body: encodeJsonBody(payload),
   }).result()
 
   const body = JSON.parse(new TextDecoder().decode(resp.body)) as {
@@ -214,10 +217,15 @@ const onCronTrigger = (runtime: Runtime<Config>): KeeperResult => {
 
   // Step 1: Fetch vault list via HTTP (1 HTTP call)
   const httpClient = new HTTPClient()
-  const vaults = runtime.runInNodeMode(
-    (nr: NodeRuntime<Config>) => fetchVaultList(nr, httpClient, apiKey),
+  const vaultsJson = runtime.runInNodeMode(
+    (nr: NodeRuntime<Config>) => fetchVaultListJson(nr, httpClient, apiKey),
     consensusIdenticalAggregation(),
   )().result()
+  const parsed = JSON.parse(vaultsJson) as {
+    success: boolean
+    data?: { vaults: VaultInfo[] }
+  }
+  const vaults: VaultInfo[] = parsed.success && parsed.data ? parsed.data.vaults : []
 
   if (vaults.length === 0) {
     runtime.log("No vaults found")

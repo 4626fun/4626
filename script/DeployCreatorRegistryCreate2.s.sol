@@ -8,7 +8,7 @@ import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
  * @title DeployCreatorRegistryCreate2
  * @author 0xakita.eth
  * @notice Deploys CreatorRegistry via the Deterministic Deployment Proxy (CREATE2)
- *         to a vanity address ending in 4626.
+ *         to a vanity address starting with 0x777 and ending in 4626.
  *
  * @dev HOW IT WORKS:
  *      The Deterministic Deployment Proxy (0x4e59...956C) deploys contracts via CREATE2.
@@ -50,7 +50,7 @@ contract DeployCreatorRegistryCreate2 is Script {
     //
     //  These were mined with `cast create2`:
     //
-    //    cast create2 --init-code-hash <initCodeHash> --starts-with 888 --ends-with 4626
+    //    cast create2 --init-code-hash <initCodeHash> --starts-with 777 --ends-with 4626
     //
     //  The init code hash depends on:
     //   - the CreatorRegistry bytecode, and
@@ -58,9 +58,9 @@ contract DeployCreatorRegistryCreate2 is Script {
     //  If either changes, the salt must be re-mined to keep the vanity suffix.
     //
     //  Results (owner = 0xB05Cf01231cF2fF99499682E64D3780d57c80FdD):
-    //    Init code hash: 0xb9f69ba28177a5646b913753b98b2dc17b997bfd782451705d4ba50206af65e1
-    //    Salt:          0x14266ffc5394023d8ef7a879e273c01eee258d6b32c16f1a5451ce85484e8158
-    //    → Address:     0x888506B92181c57A2fD06516FFFb6F375b7A4626
+    //    Init code hash: 0xe381e28956228e0650f048077ba6be7f584ba77edf287e74a33bad1f1707d4b7
+    //    Salt:          0xba3f2191b669d00d72af79ff766df084862e99ef0a9b922251475dbc843aa713
+    //    → Address:     0x777616Bc376ebf9A9F2C7E3cFB64123FB8e84626
     //
     // ═══════════════════════════════════════════════════════════════════
 
@@ -68,10 +68,10 @@ contract DeployCreatorRegistryCreate2 is Script {
     address constant DEFAULT_OWNER = 0xB05Cf01231cF2fF99499682E64D3780d57c80FdD;
 
     /// @notice Default salt (override with env `SALT`)
-    bytes32 constant DEFAULT_SALT = 0x14266ffc5394023d8ef7a879e273c01eee258d6b32c16f1a5451ce85484e8158;
+    bytes32 constant DEFAULT_SALT = 0xba3f2191b669d00d72af79ff766df084862e99ef0a9b922251475dbc843aa713;
 
     /// @notice Default expected address (override with env `EXPECTED_ADDRESS`)
-    address constant DEFAULT_EXPECTED_ADDRESS = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
+    address constant DEFAULT_EXPECTED_ADDRESS = 0x777616Bc376ebf9A9F2C7E3cFB64123FB8e84626;
 
     function run() external {
         uint256 broadcasterPrivateKey = vm.envUint("PRIVATE_KEY");

@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import {CreatorOracle} from "../contracts/services/oracles/CreatorOracle.sol";
+import {CreatorOracle} from "../contracts/utilities/oracles/CreatorOracle.sol";
 
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";

@@ -6,13 +6,14 @@ slug: /primitives/game-loop/lottery
 
 # Lottery
 
-The lottery is the core engagement primitive: trading activity funds a pot, and winners are selected via VRF.
+The lottery is the core engagement primitive: trade activity funds the jackpot, winners are selected via VRF, and AMOE provides a no-purchase entry path.
 
 In 4626, this is a **Game Loop** boundary because it ties:
 
 - fee routing (market activity)
 - randomness assumptions (VRF)
 - distribution of rewards (payout paths)
+- AMOE eligibility and abuse controls (no-purchase entry path)
 
 ## What It Does
 
@@ -20,33 +21,20 @@ In 4626, this is a **Game Loop** boundary because it ties:
 - funds a prize pot
 - uses VRF-backed randomness to select winners
 - routes payouts according to protocol configuration
-
-## Related docs
-
-- [Engagement (Game Loop)](/compressions/engagement)
-- [Tokenomics](/tokenomics)
-- [Contracts: Lottery Manager](/contracts/services/lottery-manager)
-- [VRF callbacks (in Lottery Manager)](/contracts/services/lottery-manager)
-
----
-title: Lottery
-sidebar_position: 10
-slug: /primitives/game-loop/lottery
----
-
-# Lottery
-
-The lottery is the core onchain engagement loop: DEX trades fund a prize pool and each qualifying trade has an instant chance to win, backed by verifiable randomness.
+- supports no-purchase entries through signed AMOE attestations settled onchain
 
 ## Key Properties
 
 - fee-funded (trading activity grows the pot)
+- no-purchase path (AMOE exists and is materially usable)
 - VRF-backed (randomness is verifiable)
-- immediate (each qualifying trade is an independent roll)
+- immediate (each qualifying entry is an independent roll)
+- abuse-aware (nonce replay guards + per-epoch caps + server attestation checks)
 
 ## References
 
+- [Engagement (Game Loop)](/compressions/engagement)
 - [Tokenomics](/tokenomics)
 - [Security](/security)
-- [Contracts: Lottery Manager](/contracts/services/lottery-manager)
+- [Contracts: Lottery Manager](/contracts/utilities/lottery-manager)
 

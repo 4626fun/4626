@@ -1022,20 +1022,21 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     }
 
     /**
-     * @notice Deploy creator coin into a strategy with strict accounting checks.
-     * @dev Requires both vault-side token debit and strategy reported `deposited`
-     *      amount to exactly equal `amount`.
+     * @notice Deploy creator coin into a strategy using measured vault outflow.
+     * @dev Uses vault-side balance delta (`spent`) as canonical accounting input so
+     *      fee-on-transfer / partial-spend strategy internals do not revert keeper deploys.
      */
-    function _depositIntoStrategyExact(address strategy, uint256 amount) internal returns (uint256 deposited) {
+    function _depositIntoStrategyMeasured(address strategy, uint256 amount) internal returns (uint256 deposited) {
         uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
         CREATOR_COIN.forceApprove(strategy, amount);
-        deposited = IStrategy(strategy).deposit(amount);
+        IStrategy(strategy).deposit(amount);
         uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
 
+        if (afterBal > beforeBal) revert TransferAmountMismatch(amount, 0);
         uint256 spent = beforeBal - afterBal;
-        if (spent != amount) revert TransferAmountMismatch(amount, spent);
-        if (deposited != amount) revert TransferAmountMismatch(amount, deposited);
+        if (spent > amount) revert TransferAmountMismatch(amount, spent);
 
+        deposited = spent;
         coinBalance = afterBal;
     }
 
@@ -1229,7 +1230,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
 
                 if (amount > 0) {
                     uint256 currentDebt = strategyDebt[strategy];
-                    uint256 deposited = _depositIntoStrategyExact(strategy, amount);
+                    uint256 deposited = _depositIntoStrategyMeasured(strategy, amount);
 
                     // Yearn V3: Track strategy debt
                     uint256 newDebt = currentDebt + deposited;
@@ -1340,7 +1341,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
 
         uint256 currentDebt = strategyDebt[firstStrategy];
 
-        uint256 deposited = _depositIntoStrategyExact(firstStrategy, toAllocate);
+        uint256 deposited = _depositIntoStrategyMeasured(firstStrategy, toAllocate);
 
         uint256 newDebt = currentDebt + deposited;
         strategyDebt[firstStrategy] = newDebt;

@@ -68,6 +68,18 @@ interface ICreatorRegistry {
         bool useCustomOApp;
     }
 
+    /**
+     * @notice Per-creator Solana OVault mesh configuration.
+     */
+    struct OmnichainVaultMeshConfig {
+        uint32 solanaEid;
+        address hubComposer;
+        address assetMeshToken;
+        address shareMeshToken;
+        bytes32 solanaAssetMint;
+        bool enabled;
+    }
+
     // =================================
     // EVENTS
     // =================================
@@ -85,6 +97,19 @@ interface ICreatorRegistry {
     event CreatorCoinUpdated(address indexed token);
     event CreatorCoinStatusChanged(address indexed token, bool isActive);
     event CanonicalWalletSet(address indexed token, address indexed wallet);
+    event RemoteOFTPeerSet(address indexed creatorCoin, uint32 indexed chainEid, address remoteOFT);
+    event RemoteOFTPeerRemoved(address indexed creatorCoin, uint32 indexed chainEid);
+    event RemoteOFTPeerBytes32Set(address indexed creatorCoin, uint32 indexed chainEid, bytes32 remoteOFT);
+    event RemoteOFTPeerBytes32Removed(address indexed creatorCoin, uint32 indexed chainEid);
+    event OmnichainVaultMeshConfigured(
+        address indexed creatorCoin,
+        uint32 indexed solanaEid,
+        address hubComposer,
+        address assetMeshToken,
+        address shareMeshToken,
+        bytes32 solanaAssetMint,
+        bool enabled
+    );
 
     event ChainRegistered(uint256 indexed chainId, string chainName);
     event ChainUpdated(uint256 indexed chainId);
@@ -160,6 +185,11 @@ interface ICreatorRegistry {
      */
     function setCanonicalWallet(address _token, address _wallet) external;
 
+    /**
+     * @notice Configure Solana OVault mesh metadata for a creator coin.
+     */
+    function setOmnichainVaultMesh(address _token, OmnichainVaultMeshConfig calldata _cfg) external;
+
     // =================================
     // CREATOR COIN GETTERS
     // =================================
@@ -209,6 +239,85 @@ interface ICreatorRegistry {
      * @notice Reverse-lookup: get the Creator Coin address for a canonical wallet
      */
     function getTokenForCanonicalWallet(address _wallet) external view returns (address);
+
+    /**
+     * @notice Read Solana OVault mesh metadata for a creator coin.
+     */
+    function getOmnichainVaultMesh(address _token) external view returns (OmnichainVaultMeshConfig memory);
+
+    /**
+     * @notice Returns true when this creator coin is currently eligible for Solana deposit routing.
+     */
+    function isSolanaDepositEligible(address _token) external view returns (bool);
+
+    /**
+     * @notice Returns configured Solana asset mint for a creator coin.
+     */
+    function getSolanaAssetMint(address _token) external view returns (bytes32);
+
+    // =================================
+    // REMOTE OFT PEER TRACKING
+    // =================================
+
+    /**
+     * @notice Set remote OFT peer for EVM-addressable chains.
+     */
+    function setRemoteOFTPeer(address _token, uint32 _chainEid, address _remoteOFT) external;
+
+    /**
+     * @notice Remove remote OFT peer for EVM-addressable chains.
+     */
+    function removeRemoteOFTPeer(address _token, uint32 _chainEid) external;
+
+    /**
+     * @notice Get remote OFT peer for EVM-addressable chains.
+     */
+    function getRemoteOFTPeer(address _token, uint32 _chainEid) external view returns (address);
+
+    /**
+     * @notice Get all remote OFT peer chains for EVM-addressable peers.
+     */
+    function getRemoteOFTChains(address _token) external view returns (uint32[] memory);
+
+    /**
+     * @notice Get all remote EVM OFT peers for a token.
+     */
+    function getAllRemoteOFTPeers(address _token) external view returns (uint32[] memory eids, address[] memory ofts);
+
+    /**
+     * @notice Reverse-lookup token for EVM remote OFT address.
+     */
+    function getTokenForRemoteOFT(address _remoteOFT) external view returns (address);
+
+    /**
+     * @notice Set remote OFT peer for non-EVM chains using bytes32 identity (e.g., Solana pubkey).
+     */
+    function setRemoteOFTPeerBytes32(address _token, uint32 _chainEid, bytes32 _remoteOFT) external;
+
+    /**
+     * @notice Remove remote bytes32 OFT peer mapping.
+     */
+    function removeRemoteOFTPeerBytes32(address _token, uint32 _chainEid) external;
+
+    /**
+     * @notice Get remote bytes32 OFT peer.
+     */
+    function getRemoteOFTPeerBytes32(address _token, uint32 _chainEid) external view returns (bytes32);
+
+    /**
+     * @notice Get all chain EIDs with bytes32 remote peers.
+     */
+    function getRemoteOFTChainsBytes32(address _token) external view returns (uint32[] memory);
+
+    /**
+     * @notice Get all bytes32 remote OFT peers for a token.
+     */
+    function getAllRemoteOFTPeersBytes32(address _token) external view returns (uint32[] memory eids, bytes32[] memory peers);
+
+    /**
+     * @notice Reverse-lookup token for bytes32 remote OFT identity.
+     */
+    function getTokenForRemoteOFTBytes32(bytes32 _remoteOFT) external view returns (address);
 
     /**
      * @notice Get all registered Creator Coins

@@ -11,6 +11,12 @@ type ShareTokenMetadataParams = {
   zoraKey?: string | null
 }
 
+const SHARE_TOKEN_PUBLIC_DESCRIPTION = '4626.fun Share Token'
+const LEGACY_SHARE_DESCRIPTION_MARKERS = [
+  'Represents proportional ownership of assets in a Creator Coin Omnichain Vault',
+  'Enables cross-chain transfers via LayerZero',
+]
+
 const SHARE_OFT_ABI = [
   { type: 'function', name: 'name', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
   { type: 'function', name: 'symbol', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
@@ -25,6 +31,31 @@ const SHARE_OFT_ABI = [
 const VAULT_ABI = [
   { type: 'function', name: 'asset', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
+
+function normalizeHost(value?: string | null): string {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    try {
+      return new URL(raw).host
+    } catch {
+      return ''
+    }
+  }
+  return raw.replace(/^\/+|\/+$/g, '')
+}
+
+function inferProtocol(host: string): 'http' | 'https' {
+  const normalized = host.toLowerCase()
+  if (
+    normalized.startsWith('localhost') ||
+    normalized.startsWith('127.0.0.1') ||
+    normalized.startsWith('0.0.0.0')
+  ) {
+    return 'http'
+  }
+  return 'https'
+}
 
 export async function buildShareTokenMetadata({
   address,
@@ -64,6 +95,7 @@ export async function buildShareTokenMetadata({
 
   let creatorCoinImage: string | null = null
   let creatorCoinName: string | null = null
+  let creatorCoinSymbol: string | null = null
   let creatorAddress: string | null = null
   let creatorHandle: string | null = null
   let creatorAvatar: string | null = null
@@ -84,6 +116,7 @@ export async function buildShareTokenMetadata({
           coinData.mediaContent?.originalUri ||
           null
         creatorCoinName = coinData.name || null
+        creatorCoinSymbol = typeof coinData.symbol === 'string' ? coinData.symbol : null
         creatorAddress = typeof coinData.creatorAddress === 'string' ? coinData.creatorAddress : null
         creatorHandle = typeof coinData.creatorProfile?.handle === 'string' ? coinData.creatorProfile.handle : null
         creatorAvatar =
@@ -107,35 +140,55 @@ export async function buildShareTokenMetadata({
     }
   }
 
-  const apiHostValue = apiHost || 'api.4626.fun'
-  const appHostValue = appHost || 'app.4626.fun'
-  const protocol = apiHostValue.includes('localhost') ? 'http' : 'https'
-  const apiBaseUrl = `${protocol}://${apiHostValue}`
-  const appBaseUrl = `${protocol}://${appHostValue}`
+  const appHostValue = normalizeHost(appHost) || 'app.4626.fun'
+  // Prefer explicit API host when configured; otherwise keep metadata links on the app host.
+  // This avoids emitting broken api.4626.fun links when API_HOST is unset or unavailable.
+  const apiHostValue = normalizeHost(apiHost) || appHostValue
+  const apiBaseUrl = `${inferProtocol(apiHostValue)}://${apiHostValue}`
+  const appBaseUrl = `${inferProtocol(appHostValue)}://${appHostValue}`
   const metadataUrl = `${apiBaseUrl}/v1/token/${address}/metadata?chain=${chainId}`
   const lensMetadataPreviewUrl = `${apiBaseUrl}/lens/share-token-metadata?address=${address}&chain=${chainId}&store=false`
   const lensMetadataStoreUrl = `${apiBaseUrl}/lens/share-token-metadata?address=${address}&chain=${chainId}&store=true`
   const lensProfileUrl = lensProfile?.handle ? `https://hey.xyz/u/${lensProfile.handle}` : null
 
-  const imageUrl = creatorCoin
-    ? `${apiBaseUrl}/v1/token/${address}/image?chain=${chainId}&format=png`
-    : `${appBaseUrl}/logo.svg`
+  // Always expose both raster and vector image endpoints.
+  // The image handler gracefully falls back when upstream creator coin media is unavailable.
+  const imagePngUrl = `${apiBaseUrl}/v1/token/${address}/image?chain=${chainId}&format=png`
+  const imageSvgUrl = `${apiBaseUrl}/v1/token/${address}/image?chain=${chainId}&format=svg`
+  const rawDescription = typeof description === 'string' ? description.trim() : ''
+  const isLegacyDescription =
+    rawDescription.length > 0 &&
+    LEGACY_SHARE_DESCRIPTION_MARKERS.every((marker) => rawDescription.includes(marker))
+  const publicDescription = !rawDescription || isLegacyDescription ? SHARE_TOKEN_PUBLIC_DESCRIPTION : rawDescription
 
   return {
     id: `${chainId}:${address.toLowerCase()}`,
     name: String(name),
     symbol: String(symbol),
     decimals: Number(decimals),
-    description: description
-      ? String(description)
-      : `${symbol} - 4626 share token representing ownership in a creator coin vault. Enables cross-chain transfers via LayerZero.`,
-    image: imageUrl,
+    description: publicDescription,
+    // Keep PNG as the default primary image for broad wallet compatibility.
+    image: imagePngUrl,
+    // Expose SVG in a standard rich-media field for clients that support vector rendering.
+    animation_url: imageSvgUrl,
     metadata_uri: metadataUrl,
     contract_uri: metadataUrl,
     external_link: `${appBaseUrl}/vault/${address}`,
+    underlying: {
+      // This is the token bridged to Solana via the adapter flow.
+      bridgeSourceToken: 'creatorCoin',
+      address: creatorCoin || null,
+      name: creatorCoinName,
+      symbol: creatorCoinSymbol,
+      image: creatorCoinImage,
+    },
     extensions: {
       standards: ['ERC-7572', 'LayerZero OFT', 'SPL Token-2022 Bridge'],
       metadataApi: metadataUrl,
+      images: {
+        png: imagePngUrl,
+        svg: imageSvgUrl,
+      },
       lens: {
         profileUrl: lensProfileUrl,
         handle: lensProfile?.handle ?? creatorHandle,
@@ -153,13 +206,15 @@ export async function buildShareTokenMetadata({
       },
     },
     properties: {
-      category: 'Creator Vault Share Token',
+      category: SHARE_TOKEN_PUBLIC_DESCRIPTION,
       version: String(version),
       chainId,
       owner: ownerAddress,
       vault: vault || null,
+      bridgeSourceToken: 'creatorCoin',
       underlyingAsset: creatorCoin || null,
       underlyingAssetName: creatorCoinName,
+      underlyingAssetSymbol: creatorCoinSymbol,
       underlyingAssetImage: creatorCoinImage,
       creatorAddress: creatorAddress || lensProfile?.ownerAddress || null,
       creatorHandle: creatorHandle || lensProfile?.handle || null,
@@ -170,6 +225,8 @@ export async function buildShareTokenMetadata({
       metadataApi: metadataUrl,
       lensMetadataPreviewUrl,
       lensMetadataStoreUrl,
+      imagePng: imagePngUrl,
+      imageSvg: imageSvgUrl,
       twitter: 'https://x.com/4626fun',
       website: 'https://app.4626.fun',
       isOFT: true,

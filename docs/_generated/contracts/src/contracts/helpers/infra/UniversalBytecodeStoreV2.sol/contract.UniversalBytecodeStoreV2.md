@@ -1,5 +1,5 @@
 # UniversalBytecodeStoreV2
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/helpers/infra/UniversalBytecodeStoreV2.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/helpers/infra/UniversalBytecodeStoreV2.sol)
 
 **Title:**
 UniversalBytecodeStoreV2
@@ -48,6 +48,7 @@ mapping(bytes32 => uint256) public sizes
 
 ### chunkPointers
 codeId => chunk pointers (each chunk pointer's runtime contains the chunk bytes).
+Mapping slots are zero-initialized by the EVM.
 
 
 ```solidity

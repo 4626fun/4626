@@ -3,7 +3,13 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import { isObject, readJsonObjectBody, toCleanErrorMessage, uniswapTradeFetch } from '../../../server/uniswap/trading.js'
-import { validateAddressField, validateChainIdField, validateIntegerAmountField } from '../../../server/uniswap/guards.js'
+import {
+  validateAddressField,
+  validateChainIdField,
+  validateIntegerAmountField,
+  validateRoutePolicy,
+  validateTokenPolicy,
+} from '../../../server/uniswap/guards.js'
 
 function isErc20EthEnabledHeader(req: VercelRequest): boolean {
   const raw = req.headers['x-erc20eth-enabled']
@@ -48,6 +54,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const err = validateAddressField(body, field)
     if (err) return res.status(400).json({ success: false, error: err })
   }
+  const tokenPolicyErr = validateTokenPolicy(body, ['tokenIn', 'tokenOut'])
+  if (tokenPolicyErr) {
+    console.warn('[uniswap][policy] quote blocked', { reason: tokenPolicyErr, type: 'token' })
+    return res.status(400).json({ success: false, error: tokenPolicyErr })
+  }
   const amountErr = validateIntegerAmountField(body, 'amount')
   if (amountErr) return res.status(400).json({ success: false, error: amountErr })
 
@@ -82,6 +93,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!isObject(upstream.payload)) {
     return res.status(502).json({ success: false, error: 'Invalid quote response from Uniswap API' })
+  }
+  const routingErr = validateRoutePolicy((upstream.payload as Record<string, unknown>).routing)
+  if (routingErr) {
+    console.warn('[uniswap][policy] quote blocked', { reason: routingErr, type: 'routing' })
+    return res.status(422).json({ success: false, error: routingErr })
   }
 
   return res.status(200).json({ success: true, data: upstream.payload })

@@ -9,10 +9,10 @@ import {CreatorOVaultWrapper} from "../contracts/vault/CreatorOVaultWrapper.sol"
 import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVaultAdminModule.sol";
 import {CreatorOVaultCoreModule} from "../contracts/vault/modules/CreatorOVaultCoreModule.sol";
 import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorOVaultStrategiesModule.sol";
-import {CreatorShareOFT} from "../contracts/services/messaging/CreatorShareOFT.sol";
+import {CreatorShareOFT} from "../contracts/utilities/messaging/CreatorShareOFT.sol";
 import {CreatorGaugeController} from "../contracts/governance/CreatorGaugeController.sol";
 import {CCALaunchStrategy} from "../contracts/vault/strategies/CCALaunchStrategy.sol";
-import {CreatorOracle} from "../contracts/services/oracles/CreatorOracle.sol";
+import {CreatorOracle} from "../contracts/utilities/oracles/CreatorOracle.sol";
 
 /// @notice Fork simulation of the Phase 2 AA deployment sequence.
 /// @dev Run (no broadcast):

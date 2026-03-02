@@ -33,8 +33,8 @@ function ensureWritableDir(dirPath: string): boolean {
 export function resolveXmtpDbDirectory(): string {
   const fromEnv = (process.env.XMTP_DB_DIRECTORY ?? '').trim()
   if (fromEnv) {
-    ensureWritableDir(fromEnv)
-    return fromEnv
+    if (ensureWritableDir(fromEnv)) return fromEnv
+    console.warn(`[xmtp] XMTP_DB_DIRECTORY is not writable: ${fromEnv}. Falling back to auto-detected writable path.`)
   }
 
   const cwdDir = path.join(process.cwd(), '.xmtp-data')

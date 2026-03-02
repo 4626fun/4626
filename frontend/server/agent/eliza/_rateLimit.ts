@@ -4,22 +4,62 @@ type AllowResult = {
   retryAfterMs: number
 }
 
+type SlidingWindowRateLimiterOptions = {
+  maxKeys?: number
+  idleTtlMs?: number
+}
+
 export class SlidingWindowRateLimiter {
   private readonly windowMs: number
   private readonly maxEvents: number
   private readonly buckets = new Map<string, number[]>()
+  private readonly maxKeys: number
+  private readonly idleTtlMs: number
 
-  constructor(windowMs: number, maxEvents: number) {
+  constructor(windowMs: number, maxEvents: number, options: SlidingWindowRateLimiterOptions = {}) {
     this.windowMs = Math.max(1_000, windowMs)
     this.maxEvents = Math.max(1, maxEvents)
+    this.maxKeys = Math.max(1, Math.floor(options.maxKeys ?? 5_000))
+    this.idleTtlMs = Math.max(this.windowMs, Math.floor(options.idleTtlMs ?? this.windowMs * 5))
+  }
+
+  private setBucket(key: string, values: number[]): void {
+    this.buckets.delete(key)
+    this.buckets.set(key, values)
+  }
+
+  private prune(now: number): void {
+    if (this.buckets.size === 0) return
+    const idleLowerBound = now - this.idleTtlMs
+    for (const [key, timestamps] of this.buckets.entries()) {
+      const newest = timestamps[timestamps.length - 1] ?? 0
+      if (newest < idleLowerBound) {
+        this.buckets.delete(key)
+      }
+    }
+
+    if (this.buckets.size <= this.maxKeys) return
+
+    const byNewestAsc = [...this.buckets.entries()].sort((a, b) => {
+      const aNewest = a[1][a[1].length - 1] ?? 0
+      const bNewest = b[1][b[1].length - 1] ?? 0
+      return aNewest - bNewest
+    })
+    const overflow = this.buckets.size - this.maxKeys
+    for (let i = 0; i < overflow; i += 1) {
+      const key = byNewestAsc[i]?.[0]
+      if (key) this.buckets.delete(key)
+    }
   }
 
   allow(key: string, now = Date.now()): AllowResult {
+    this.prune(now)
     const timestamps = this.buckets.get(key) ?? []
     const lowerBound = now - this.windowMs
     const fresh = timestamps.filter((ts) => ts >= lowerBound)
 
     if (fresh.length >= this.maxEvents) {
+      this.setBucket(key, fresh)
       const oldest = fresh[0] ?? now
       return {
         allowed: false,
@@ -29,11 +69,19 @@ export class SlidingWindowRateLimiter {
     }
 
     fresh.push(now)
-    this.buckets.set(key, fresh)
+    this.setBucket(key, fresh)
+    this.prune(now)
     return {
       allowed: true,
       remaining: Math.max(0, this.maxEvents - fresh.length),
       retryAfterMs: 0,
+    }
+  }
+
+  getDebugState(): { trackedKeys: number; keys: string[] } {
+    return {
+      trackedKeys: this.buckets.size,
+      keys: [...this.buckets.keys()],
     }
   }
 }

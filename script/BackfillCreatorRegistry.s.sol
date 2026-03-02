@@ -31,6 +31,8 @@ contract BackfillCreatorRegistry is Script {
     address internal constant DEFAULT_GAUGE = 0x248B34121fB956eb52657348Ab62ae177F58BA84;
 
     function run() external {
+        revert("BackfillCreatorRegistry retired: no legacy registry backfill path");
+
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address broadcaster = vm.addr(pk);
 

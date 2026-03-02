@@ -5,22 +5,28 @@
  *
  * Single workflow that handles all vault automation:
  *   1. Vault Keeper   — tend() idle funds, report() yields (per vault)
- *   2. Auction Settle  — sweepCurrency() graduated auctions (per CCA strategy)
- *   3. Keepr Queue     — execute pending XMTP/Neynar group actions
+ *   2. Ajna Buckets    — liquidity-aware bucket moves from oracle TWAP
+ *   3. Auction Settle  — sweepCurrency() graduated auctions (per CCA strategy)
+ *   4. Keepr Queue     — execute pending XMTP/Neynar group actions
  *
  * All vaults are fetched from the registry API (keepr_vaults table).
  * Falls back to single-vault env vars if KEEPR_API_KEY is not set.
  */
 
 import { executeKeeper, type BatchKeeperResult } from '../actions/vault-keeper.action.js';
+import {
+  executeAjnaBucketManager,
+  type BatchAjnaBucketResult,
+} from '../actions/ajna-bucket-manager.action.js';
 import { executeSettlement, type BatchSettlementResult } from '../actions/auction-settlement.action.js';
 import { executeQueueProcessor, type QueueExecutorResult } from '../actions/keepr-queue-executor.action.js';
-import { alertCritical, alertInfo } from '../utils/alerts.js';
+import { alertCritical } from '../utils/alerts.js';
 
 const WORKFLOW_NAME = '4626';
 
 export interface UnifiedResult {
   keeper: BatchKeeperResult | null;
+  ajnaBuckets: BatchAjnaBucketResult | null;
   settlement: BatchSettlementResult | null;
   queue: QueueExecutorResult | null;
   errors: string[];
@@ -34,6 +40,7 @@ export async function handler(): Promise<void> {
   const start = Date.now();
   const errors: string[] = [];
   let keeperResult: BatchKeeperResult | null = null;
+  let ajnaBucketsResult: BatchAjnaBucketResult | null = null;
   let settlementResult: BatchSettlementResult | null = null;
   let queueResult: QueueExecutorResult | null = null;
 
@@ -51,7 +58,21 @@ export async function handler(): Promise<void> {
     errors.push(`vault-keeper: ${msg}`);
   }
 
-  // ── 2. Auction Settlement (sweepCurrency + sweepUnsoldTokens) ────────
+  // ── 2. Ajna Bucket Manager (TWAP + liquidity-aware) ──────────────────
+  try {
+    console.log('═══ Ajna Bucket Manager ═══');
+    ajnaBucketsResult = await executeAjnaBucketManager();
+    console.log(
+      `  vaults=${ajnaBucketsResult.totalVaults} strategies=${ajnaBucketsResult.totalStrategies} moved=${ajnaBucketsResult.moved} ` +
+        `skipped=${ajnaBucketsResult.skipped} errors=${ajnaBucketsResult.errors}`,
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`  ajna-bucket-manager failed: ${msg}`);
+    errors.push(`ajna-bucket-manager: ${msg}`);
+  }
+
+  // ── 3. Auction Settlement (sweepCurrency + sweepUnsoldTokens) ────────
   try {
     console.log('═══ Auction Settlement ═══');
     settlementResult = await executeSettlement();
@@ -65,7 +86,7 @@ export async function handler(): Promise<void> {
     errors.push(`auction-settlement: ${msg}`);
   }
 
-  // ── 3. Keepr Queue (XMTP group ops + Neynar/Farcaster) ──────────────
+  // ── 4. Keepr Queue (XMTP group ops + Neynar/Farcaster) ──────────────
   try {
     console.log('═══ Keepr Queue ═══');
     queueResult = await executeQueueProcessor();
@@ -93,6 +114,13 @@ export async function handler(): Promise<void> {
     durationMs,
     keeper: keeperResult
       ? { vaults: keeperResult.totalVaults, tended: keeperResult.tended, reported: keeperResult.reported }
+      : null,
+    ajnaBuckets: ajnaBucketsResult
+      ? {
+          vaults: ajnaBucketsResult.totalVaults,
+          strategies: ajnaBucketsResult.totalStrategies,
+          moved: ajnaBucketsResult.moved,
+        }
       : null,
     settlement: settlementResult
       ? { strategies: settlementResult.totalStrategies, settled: settlementResult.settled }

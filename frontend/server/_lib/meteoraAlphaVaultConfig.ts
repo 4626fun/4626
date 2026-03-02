@@ -4,6 +4,8 @@ import { getDb, isDbConfigured } from './postgres.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
+export const SOLANA_NATIVE_MINT = 'So11111111111111111111111111111111111111112'
+
 export type MeteoraAccountMeta = {
   pubkey: string
   isSigner: boolean
@@ -15,6 +17,7 @@ export type MeteoraAlphaVaultConfig = {
   meteoraAlphaVault: string
   alphaVaultProgramId: string
   depositAccounts: MeteoraAccountMeta[]
+  quoteMint: string | null
   source: 'db' | 'env'
 }
 
@@ -39,6 +42,33 @@ function parseAccountMeta(value: unknown): MeteoraAccountMeta | null {
   }
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
+function readQuoteMint(raw: Record<string, unknown>): string | null {
+  const metadata = asRecord(raw.metadata)
+  const candidates: unknown[] = [
+    raw.quoteMint,
+    raw.quote_mint,
+    raw.quoteTokenMint,
+    metadata?.quoteMint,
+    metadata?.quote_mint,
+    metadata?.pairBaseMint,
+    metadata?.pair_base_mint,
+    metadata?.baseMint,
+    metadata?.base_mint,
+  ]
+  for (const candidate of candidates) {
+    const v = typeof candidate === 'string' ? candidate.trim() : ''
+    if (!v) continue
+    if (!isSolanaPubkey(v)) return null
+    return v
+  }
+  return null
+}
+
 function parseConfig(candidate: unknown, creatorToken: Address, source: 'db' | 'env'): MeteoraAlphaVaultConfig | null {
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return null
   const raw = candidate as Record<string, unknown>
@@ -51,11 +81,13 @@ function parseConfig(candidate: unknown, creatorToken: Address, source: 'db' | '
     .map((v) => parseAccountMeta(v))
     .filter((v): v is MeteoraAccountMeta => Boolean(v))
   if (depositAccounts.length === 0) return null
+  const quoteMint = readQuoteMint(raw)
   return {
     creatorToken,
     meteoraAlphaVault,
     alphaVaultProgramId,
     depositAccounts,
+    quoteMint,
     source,
   }
 }
@@ -104,7 +136,8 @@ async function resolveFromDb(creatorToken: Address): Promise<MeteoraAlphaVaultCo
       creator_token,
       meteora_alpha_vault,
       alpha_vault_program_id,
-      deposit_accounts
+      deposit_accounts,
+      metadata
     FROM creator_meteora_alpha_vaults
     WHERE LOWER(creator_token) = ${creatorToken}
       AND enabled = true
@@ -117,6 +150,7 @@ async function resolveFromDb(creatorToken: Address): Promise<MeteoraAlphaVaultCo
       meteoraAlphaVault: row.meteora_alpha_vault,
       alphaVaultProgramId: row.alpha_vault_program_id,
       depositAccounts: row.deposit_accounts,
+      metadata: row.metadata,
     },
     creatorToken,
     'db',

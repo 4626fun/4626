@@ -19,6 +19,10 @@ build/
 out/
 broadcast/
 
+# Keep API tx-builder handlers (directory name is "build")
+!frontend/api/_handlers/v1/build/
+!frontend/api/_handlers/v1/build/**
+
 # CRE build artifacts
 *.wasm
 .cre/
@@ -138,6 +142,7 @@ test/**
 !test/CreatorOracle.TwapSafety.t.sol
 !test/CreatorOracle.BroadcastCreatorPrice.t.sol
 !test/CreatorLotteryManager.OracleTimestampGuard.t.sol
+!test/CCALaunchStrategy.LaunchHandshake.t.sol
 !test/ve4626.LockTokenRestriction.t.sol
 telegram-bot/
 relayer/

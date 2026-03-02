@@ -62,7 +62,7 @@ function parseArgs(): {
   let hubCreatorCoin = '';
   let hubShareToken = '';
   let keeperPubkey: string | null = null;
-  let feeBps = 690;
+  let feeBps = 0;
   let decimals = 9;
   let ammPrograms: string[] = [];
   let flushThreshold = '0';
@@ -128,6 +128,12 @@ function pubkeyToBytes32Hex(pubkey: PublicKey): string {
   return '0x' + Buffer.from(pubkey.toBytes()).toString('hex');
 }
 
+function readAdapterModeHint(): 'regular-oft' | 'oft-adapter' {
+  const raw = String(process.env.SOLANA_OVAULT_ADAPTER_MODE ?? '').trim().toLowerCase();
+  if (raw === 'oft-adapter' || raw === 'adapter') return 'oft-adapter';
+  return 'regular-oft';
+}
+
 function log(msg: string): void {
   process.stderr.write(`[setup-creator-full] ${msg}\n`);
 }
@@ -137,6 +143,18 @@ function log(msg: string): void {
 // ---------------------------------------------------------------------------
 
 const config = parseArgs();
+if (config.feeBps !== 0) {
+  process.stderr.write(
+    'error: TransferHook mint setup requires --fee-bps 0 for OVault compatibility.\n',
+  );
+  process.exit(1);
+}
+if (readAdapterModeHint() === 'oft-adapter') {
+  process.stderr.write(
+    'error: TransferHook mints must use regular-oft mode; oft-adapter is not allowed.\n',
+  );
+  process.exit(1);
+}
 const rpcUrl = process.env.SOLANA_RPC_URL ?? 'https://api.mainnet-beta.solana.com';
 const connection = new Connection(rpcUrl, 'confirmed');
 const payer = loadKeeperKeypair();
@@ -275,6 +293,14 @@ const result = {
   },
   hubCreatorCoin: config.hubCreatorCoin,
   hubShareToken: config.hubShareToken,
+  mintCompatibilityHints: {
+    tokenProgram: 'token-2022',
+    transferHookDetected: true,
+    oftFeeBps: config.feeBps,
+    adapterMode: readAdapterModeHint(),
+    authorityCompatible: true,
+    rentValueLamports: lamports.toString(),
+  },
   signatures,
 };
 

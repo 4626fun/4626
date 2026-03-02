@@ -17,7 +17,7 @@ import "../contracts/helpers/infra/UniversalBytecodeStore.sol";
  */
 contract SeedUniversalBytecodeStore is Script {
     // Base mainnet: v2 chunked store (see `frontend/src/config/contracts.defaults.ts`).
-    address constant DEFAULT_BYTECODE_STORE = 0x1268f550E794e235e4eFCE7B2D3fd7a30bb62d13;
+    address constant DEFAULT_BYTECODE_STORE = 0x4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A;
     uint256 constant MAX_SSTORE2_BYTES = 24_575; // EIP-170 runtime limit (24,576) minus STOP prefix.
 
     function _shouldProcess(uint256 index, uint256 offset, uint256 limit) internal pure returns (bool) {
@@ -152,6 +152,14 @@ contract SeedUniversalBytecodeStore is Script {
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(
                 store, vm.getCode("out/AjnaStrategy.sol/AjnaStrategy.json"), "AjnaStrategy", supportsChunking
+            );
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(
+                store,
+                vm.getCode("out/SolanaBridgeStrategy.sol/SolanaBridgeStrategy.json"),
+                "SolanaBridgeStrategy",
+                supportsChunking
             );
         }
         vm.stopBroadcast();

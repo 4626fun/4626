@@ -7,6 +7,8 @@ sidebar_position: 8
 
 Deployment and maintenance guides for operators.
 
+For XMTP agent operations, use the **[Eliza Runtime](/operations/deployment/eliza-runtime)** deployment runbook.
+
 ## Sections
 
 | Section | Description |

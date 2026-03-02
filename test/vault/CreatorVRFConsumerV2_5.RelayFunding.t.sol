@@ -6,7 +6,7 @@ import {
     CreatorVRFConsumerV2_5,
     IVRFCoordinatorV2Plus,
     RandomWordsRequest
-} from "../../contracts/services/lottery/vrf/CreatorVRFConsumerV2_5.sol";
+} from "../../contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol";
 import {MessagingFee, Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {MessagingReceipt} from "@layerzerolabs/oapp-evm/contracts/oapp/OAppSender.sol";
 

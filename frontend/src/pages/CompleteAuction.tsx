@@ -102,7 +102,7 @@ const ZERO_ADDRESS = `0x${'0000000000000000000000000000000000000000'}` as const
 export function CompleteAuction() {
   const { strategy } = useParams()
   const navigate = useNavigate()
-  const { isConnected, address } = useAccount()
+  const { address } = useAccount()
   const [currentStep, setCurrentStep] = useState<Step>('check')
   const [error, setError] = useState<string | null>(null)
 
@@ -497,7 +497,7 @@ export function CompleteAuction() {
             </h2>
             <p className="text-surface-400">
               Your vault is now live on Uniswap V4 with 6.9% trade fees enabled.
-              Every buy is a lottery entry!
+              Qualifying buys can trigger lottery entries, and a no-purchase AMOE entry path is also available.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button

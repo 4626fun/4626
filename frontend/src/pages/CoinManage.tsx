@@ -28,7 +28,7 @@ function shortAddress(addr: string): string {
 export function CoinManage() {
   const params = useParams()
   const [searchParams] = useSearchParams()
-  const { address: connectedAddress, isConnected } = useAccount()
+  const { address: connectedAddress } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient({ chainId: base.id })
 

@@ -9,6 +9,11 @@ import { base } from 'viem/chains'
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getApiContracts } from '../../../server/_lib/contracts.js'
 import { getSessionAddress, isAdminAddress } from '../../../server/_lib/session.js'
+import {
+  evaluateSolanaOvaultMintCompatibility,
+  normalizeSolanaAssetMintOrigin,
+  readSolanaOvaultMintCompatibilityHintsFromEnv,
+} from '../../../server/_lib/solanaOvaultCompatibility.js'
 
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
@@ -28,6 +33,22 @@ const CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI = [
     stateMutability: 'view',
     inputs: [],
     outputs: [{ type: 'bytes32' }],
+  },
+  {
+    type: 'function',
+    name: 'getOVaultRuntimeConfig',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [
+      {
+        type: 'tuple',
+        components: [
+          { name: 'hubComposer', type: 'address' },
+          { name: 'solanaEid', type: 'uint32' },
+          { name: 'enabled', type: 'bool' },
+        ],
+      },
+    ],
   },
 ] as const
 
@@ -100,6 +121,15 @@ type SolanaInfraStatusResponse = {
   meteoraProvisionerUrlConfigured: boolean
   meteoraProvisionerSecretConfigured: boolean
   internalRegistrationSecretConfigured: boolean
+  mintCompatibility: ReturnType<typeof evaluateSolanaOvaultMintCompatibility>['mintCompatibility']
+  ovaultComposerConfigured: boolean
+  solanaAssetMeshReady: boolean
+  solanaShareMeshReady: boolean
+  existingMintCompatible: boolean
+  transferHookDetected: boolean
+  oftFeeIsZero: boolean
+  depositEligible: boolean
+  redeemEligible: boolean
   readyForAutoRegistration: boolean
   blockers: string[]
 }
@@ -277,12 +307,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let batcherAdapter: Address | null = null
   let batcherDestination: Hex | null = null
   let solanaEnabledOnBatcher = false
+  let ovaultComposerConfigured = false
   let adapterHasCode: boolean | null = null
   let adapterOwner: Address | null = null
   let signerMatchesAdapterOwner: boolean | null = null
 
   if (batcherAddress) {
-    const [adapterRaw, destinationRaw] = await Promise.all([
+    const [adapterRaw, destinationRaw, ovaultRuntimeRaw] = await Promise.all([
       publicClient
         .readContract({
           address: batcherAddress,
@@ -297,6 +328,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           functionName: 'solanaDestination',
         })
         .catch(() => ZERO_BYTES32 as Hex),
+      publicClient
+        .readContract({
+          address: batcherAddress,
+          abi: CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI,
+          functionName: 'getOVaultRuntimeConfig',
+        })
+        .catch(() => null),
     ])
 
     batcherAdapter = getAddress((adapterRaw as Address) || ZERO_ADDRESS)
@@ -304,6 +342,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     solanaEnabledOnBatcher =
       batcherAdapter.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
       batcherDestination.toLowerCase() !== ZERO_BYTES32.toLowerCase()
+    const runtimeTuple = Array.isArray(ovaultRuntimeRaw) ? ovaultRuntimeRaw : null
+    const runtimeObj = ovaultRuntimeRaw && typeof ovaultRuntimeRaw === 'object'
+      ? (ovaultRuntimeRaw as Record<string, unknown>)
+      : null
+    const runtimeHubComposer =
+      typeof runtimeObj?.hubComposer === 'string'
+        ? runtimeObj.hubComposer
+        : runtimeTuple && typeof runtimeTuple[0] === 'string'
+          ? runtimeTuple[0]
+          : ZERO_ADDRESS
+    const runtimeSolanaEid =
+      typeof runtimeObj?.solanaEid === 'number'
+        ? runtimeObj.solanaEid
+        : typeof runtimeObj?.solanaEid === 'bigint'
+          ? Number(runtimeObj.solanaEid)
+        : runtimeTuple && typeof runtimeTuple[1] === 'number'
+          ? runtimeTuple[1]
+          : runtimeTuple && typeof runtimeTuple[1] === 'bigint'
+            ? Number(runtimeTuple[1])
+          : 0
+    const runtimeEnabled =
+      typeof runtimeObj?.enabled === 'boolean'
+        ? runtimeObj.enabled
+        : runtimeTuple && typeof runtimeTuple[2] === 'boolean'
+          ? runtimeTuple[2]
+          : false
+    ovaultComposerConfigured =
+      runtimeEnabled === true &&
+      typeof runtimeHubComposer === 'string' &&
+      isAddress(runtimeHubComposer) &&
+      getAddress(runtimeHubComposer).toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
+      Number(runtimeSolanaEid) > 0
 
     if (solanaEnabledOnBatcher) {
       const code = await publicClient.getBytecode({ address: batcherAdapter }).catch(() => null)
@@ -356,6 +426,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       defaultMintRouteReady = scalar === null ? null : scalar > 0n
     }
   }
+
+  const mintCompatibilityHints = readSolanaOvaultMintCompatibilityHintsFromEnv()
+  const assetMintOrigin = normalizeSolanaAssetMintOrigin(
+    process.env.SOLANA_OVAULT_ASSET_MINT_ORIGIN,
+    'existing',
+  )
+  const mintEligibility = evaluateSolanaOvaultMintCompatibility({
+    assetMintOrigin,
+    hints: mintCompatibilityHints,
+    routeReady: defaultMintRouteReady,
+    requireHintsForExisting: true,
+  })
+  const existingMintCompatible = mintEligibility.existingMintCompatible
+  const depositEligible = mintEligibility.depositEligible
+  const redeemEligible = mintEligibility.redeemEligible
+  const solanaAssetMeshReady = depositEligible
+  const solanaShareMeshReady = redeemEligible
+  const transferHookDetected = mintEligibility.mintCompatibility.transferHookDetected
+  const oftFeeIsZero = mintEligibility.mintCompatibility.oftFeeIsZero
 
   const dynamicProvisioningMode = deriveDynamicProvisioningMode({
     enabled: dynamicRouteEnabled,
@@ -431,6 +520,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       'Default Solana mint route is not active for SOLANA_DEFAULT_BRIDGE_TOKEN (scalar=0) and dynamic provisioning is disabled.',
     )
   }
+  if (solanaEnabledOnBatcher && !existingMintCompatible) {
+    for (const blocker of mintEligibility.mintCompatibility.blockers) {
+      blockers.push(`OVault compatibility: ${blocker}`)
+    }
+  }
 
   const hasRouteSource =
     (defaultMintConfigured && defaultMintRouteReady !== false) ||
@@ -443,11 +537,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       remoteProvisionerPayerHealthy !== false)
   const meteoraProvisionerReady = !meteoraProvisionerUrlConfigured || meteoraProvisionerSecretConfigured
   const signerReady = signerConfigured && signerMatchesAdapterOwner !== false
+  const ovaultEligibilityReady = !solanaEnabledOnBatcher || (existingMintCompatible && depositEligible && redeemEligible)
   const readyForAutoRegistration =
     !!batcherAddress &&
     (!solanaEnabledOnBatcher ||
       (adapterHasCode !== false &&
         signerReady &&
+        ovaultEligibilityReady &&
         hasRouteSource &&
         remoteProvisionerReady &&
         meteoraProvisionerReady &&
@@ -492,6 +588,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     meteoraProvisionerUrlConfigured,
     meteoraProvisionerSecretConfigured,
     internalRegistrationSecretConfigured,
+    mintCompatibility: mintEligibility.mintCompatibility,
+    ovaultComposerConfigured,
+    solanaAssetMeshReady,
+    solanaShareMeshReady,
+    existingMintCompatible,
+    transferHookDetected,
+    oftFeeIsZero,
+    depositEligible,
+    redeemEligible,
     readyForAutoRegistration,
     blockers,
   }

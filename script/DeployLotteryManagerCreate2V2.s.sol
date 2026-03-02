@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
-import {CreatorLotteryManager} from "../contracts/services/lottery/CreatorLotteryManager.sol";
+import {CreatorLotteryManager} from "../contracts/utilities/lottery/CreatorLotteryManager.sol";
 
 /**
  * @title DeployLotteryManagerCreate2V2
@@ -10,8 +10,8 @@ import {CreatorLotteryManager} from "../contracts/services/lottery/CreatorLotter
  *         matching "0x777...4626", then wires it as the Base registry lottery manager.
  *
  * Why:
- * - The old vanity address (0x77740C...4626) is already occupied on Base.
- * - We want a fresh deployment for updated bytecode while keeping the vanity pattern.
+ * - The previous mined address was tied to older constructor args (registry address).
+ * - We re-mine against the current initcode while keeping the vanity pattern.
  *
  * Deployer (EIP-2470 deterministic deployment proxy):
  * - 0x4e59b44847b379578588920cA78FbF26c0B4956C
@@ -51,13 +51,13 @@ contract DeployLotteryManagerCreate2V2 is Script {
     address constant DETERMINISTIC_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
     // Mined salt for the current initcode (re-mine if bytecode/args change).
-    bytes32 constant SALT = 0xe65abe49028b3b75b120aca5277cf7d7f9fd3df6b60794260956285cf5d43fa4;
+    bytes32 constant SALT = 0x677c2dd18a357e3ccc1987d7bdf5dac0b82097a7f3713070bd67fa4c98a41412;
 
     // Expected vanity address for this salt+initcode on Base.
-    address constant EXPECTED_ADDRESS = 0x77705A2f173dd52F28300447506Dc35086c34626;
+    address constant EXPECTED_ADDRESS = 0x77740CD67aF6bC81Cb71c9808B260cf8A4be4626;
 
     // Base mainnet canonical registry + owner (EOA that holds registry ownership).
-    address constant REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
+    address constant REGISTRY = 0x777616Bc376ebf9A9F2C7E3cFB64123FB8e84626;
     address constant OWNER = 0xB05Cf01231cF2fF99499682E64D3780d57c80FdD;
     uint256 constant BASE_CHAIN_ID = 8453;
 

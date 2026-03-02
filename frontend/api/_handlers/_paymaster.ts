@@ -439,6 +439,44 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
           { name: 'requiredRaise', type: 'uint128' },
           { name: 'floorPriceQ96', type: 'uint256' },
           { name: 'auctionSteps', type: 'bytes' },
+          { name: 'meteoraAlphaVault', type: 'bytes32' },
+          {
+            name: 'solanaIxs',
+            type: 'tuple[]',
+            components: [
+              { name: 'programId', type: 'bytes32' },
+              { name: 'serializedAccounts', type: 'bytes[]' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  // Legacy finalizePhase2 signature kept for in-flight old sessions.
+  {
+    type: 'function',
+    name: 'finalizePhase2',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
         ],
       },
     ],
@@ -494,6 +532,42 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
     ],
     outputs: [],
   },
+  {
+    type: 'function',
+    name: 'deployPhase3Strategies',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'initialSqrtPriceX96', type: 'uint160' },
+          { name: 'charmVaultName', type: 'string' },
+          { name: 'charmVaultSymbol', type: 'string' },
+          { name: 'charmWeightBps', type: 'uint256' },
+          { name: 'ajnaWeightBps', type: 'uint256' },
+          { name: 'solanaWeightBps', type: 'uint256' },
+          { name: 'enableAutoAllocate', type: 'bool' },
+        ],
+      },
+      {
+        name: 'codeIds',
+        type: 'tuple',
+        components: [
+          { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
+          { name: 'creatorCharmStrategy', type: 'bytes32' },
+          { name: 'ajnaStrategy', type: 'bytes32' },
+          { name: 'solanaStrategy', type: 'bytes32' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  // Legacy phase-3 signature for in-flight sessions.
   {
     type: 'function',
     name: 'deployPhase3Strategies',
@@ -575,8 +649,13 @@ const SELECTOR_BATCHER_FINALIZE_PHASE1_WITH_SALT = '0x3bc09a8b'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH = '0x9abe5eca'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT = '0xe20fb0df'
 const SELECTOR_BATCHER_DEPLOY_PHASE2_CORE = '0xf9344d88'
-const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xcafc9348'
-const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0x6e3f91b0'
+// finalizePhase2 selectors:
+// - current (includes meteoraAlphaVault + solanaIxs): 0xbd4583fb
+// - legacy (pre-Solana tuple extension): 0xcafc9348
+const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xbd4583fb'
+const SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY = '0xcafc9348'
+const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0xc5dd5bd0'
+const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES_LEGACY = '0x6e3f91b0'
 // launchDeferredAuction((address,address,address,string,uint256,uint128,bytes))
 const SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'
 
@@ -587,6 +666,9 @@ const SELECTOR_CREATE2_DEPLOY_FROM_STORE = '0xd76fad23' // deploy(bytes32,bytes3
 
 const SELECTOR_VAULT_SET_BURN_STREAM = '0xf3a1c8b6' // setBurnStream(address)
 const SELECTOR_VAULT_SET_WHITELIST = '0x53d6fd59' // setWhitelist(address,bool)
+const SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE = '0x8212fd43' // setMinimumTotalIdle(uint256)
+const SELECTOR_VAULT_DEPLOY_TO_STRATEGIES = '0x355aa867' // deployToStrategies()
+const SELECTOR_VAULT_UPDATE_STRATEGY_WEIGHT = '0x3e6881c8' // updateStrategyWeight(address,uint256)
 const SELECTOR_ERC8004_REGISTER = '0xf2c298be' // register(string)
 const SELECTOR_ERC8004_SET_AGENT_URI = '0x0af28bd3' // setAgentURI(uint256,string)
 const SELECTOR_ERC8004_SET_AGENT_WALLET = '0x2d1ef5ae' // setAgentWallet(uint256,address,uint256,bytes)
@@ -609,7 +691,9 @@ const ALLOWED_BATCHER_SELECTORS = new Set<string>([
   SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT,
   SELECTOR_BATCHER_DEPLOY_PHASE2_CORE,
   SELECTOR_BATCHER_FINALIZE_PHASE2,
+  SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY,
   SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES,
+  SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES_LEGACY,
   SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION,
 ])
 
@@ -794,6 +878,18 @@ function parseAllowlist(raw: string | undefined): Set<string> {
     out.add(p.toLowerCase())
   }
   return out
+}
+
+function readUniswapPermit2MaxAmount(): bigint | null {
+  const raw = String(process.env.UNISWAP_PAYMASTER_MAX_PERMIT2_AMOUNT ?? '').trim()
+  if (!raw) return null
+  if (!/^\d+$/.test(raw)) return null
+  try {
+    const parsed = BigInt(raw)
+    return parsed > 0n ? parsed : null
+  } catch {
+    return null
+  }
 }
 
 function normalizeAddresses(input: Array<Address | string | null | undefined>): Address[] {
@@ -1118,6 +1214,17 @@ function decodeBoolArgFromCalldata(data: Hex, argIndex: number): boolean | null 
   }
 }
 
+function decodeUint256ArgFromCalldata(data: Hex, argIndex: number): bigint | null {
+  const start = 10 + argIndex * 64
+  const word = data.slice(start, start + 64)
+  if (word.length !== 64) return null
+  try {
+    return BigInt(`0x${word}`)
+  } catch {
+    return null
+  }
+}
+
 function abiEncodeAddresses(addrs: Address[]): Hex {
   // abi.encode(address...) (static types only)
   // Each address is left-padded to 32 bytes.
@@ -1369,7 +1476,9 @@ async function validateInnerCalls(params: {
         selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE2_CORE ||
         selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
+        selector === SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES ||
+        selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES_LEGACY ||
         selector === SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION
       ) {
         let decodedBatcher: any
@@ -1399,7 +1508,8 @@ async function validateInnerCalls(params: {
           selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH ||
           selector === SELECTOR_BATCHER_DEPLOY_PHASE2_AND_LAUNCH_WITH_PERMIT ||
           selector === SELECTOR_BATCHER_DEPLOY_PHASE2_CORE ||
-          selector === SELECTOR_BATCHER_FINALIZE_PHASE2
+          selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
+          selector === SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY
         ) {
           mode = 'deploy_phase2'
           expectedVault = p && isAddress(p.vault) ? getAddress(p.vault) : null
@@ -1411,7 +1521,10 @@ async function validateInnerCalls(params: {
               ? { vault: codeIds.vault as Hex }
               : null
           expectedVersion = typeof p?.version === 'string' ? p.version : null
-        } else if (selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES) {
+        } else if (
+          selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES ||
+          selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES_LEGACY
+        ) {
           mode = 'deploy_phase3'
           expectedVault = p && isAddress(p.vault) ? getAddress(p.vault) : null
           if (!expectedVault) throw new Error('batcher_vault_decode_failed')
@@ -1885,6 +1998,12 @@ async function validateInnerCalls(params: {
       if (getAddress(permit.permitted.token) !== expectedCreatorToken) throw new Error('permit2_token_mismatch')
       if (getAddress(details.to) !== params.sender) throw new Error('permit2_to_mismatch')
       if (getAddress(ownerArg) !== params.sessionAddress) throw new Error('permit2_owner_mismatch')
+      const permitAmount = BigInt(permit.permitted.amount ?? 0n)
+      const requestedAmount = BigInt(details.requestedAmount ?? 0n)
+      const maxPermit2Amount = readUniswapPermit2MaxAmount()
+      if (maxPermit2Amount !== null && (permitAmount > maxPermit2Amount || requestedAmount > maxPermit2Amount)) {
+        throw new Error('permit2_amount_exceeds_policy')
+      }
       continue
     }
 
@@ -1959,12 +2078,24 @@ async function validateInnerCalls(params: {
       continue
     }
 
-    // Vault admin calls (phase2/phase3 deploy flow)
-    if ((mode === 'deploy_phase2' || mode === 'deploy_phase3') && expectedVault && expectedBurnStream && expectedPayoutRouter && c.target === expectedVault) {
-      if (selector !== SELECTOR_VAULT_SET_BURN_STREAM && selector !== SELECTOR_VAULT_SET_WHITELIST) {
-        throw new Error('vault_selector_not_allowed')
-      }
+    // Vault admin calls (phase2/phase3/phase4 deploy flow)
+    if (
+      (mode === 'deploy_phase2' || mode === 'deploy_phase3' || mode === 'launch_auction') &&
+      expectedVault &&
+      c.target === expectedVault
+    ) {
+      const isWiringSelector = selector === SELECTOR_VAULT_SET_BURN_STREAM || selector === SELECTOR_VAULT_SET_WHITELIST
+      const isStrategySelector =
+        selector === SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE ||
+        selector === SELECTOR_VAULT_DEPLOY_TO_STRATEGIES ||
+        selector === SELECTOR_VAULT_UPDATE_STRATEGY_WEIGHT
+
+      if (mode === 'deploy_phase2' && !isWiringSelector) throw new Error('vault_selector_not_allowed')
+      if (mode === 'deploy_phase3' && !isWiringSelector && !isStrategySelector) throw new Error('vault_selector_not_allowed')
+      if (mode === 'launch_auction' && !isStrategySelector) throw new Error('vault_selector_not_allowed')
+
       if (selector === SELECTOR_VAULT_SET_BURN_STREAM) {
+        if (!expectedBurnStream || !expectedPayoutRouter) throw new Error('missing_expected_addresses')
         const burnStreamArg = decodeAddressArgFromCalldata(c.data, 0)
         if (!burnStreamArg || burnStreamArg !== expectedBurnStream) {
           params.debug?.({
@@ -1979,12 +2110,26 @@ async function validateInnerCalls(params: {
           })
           throw new Error('vault_burn_stream_mismatch')
         }
-      } else {
+      } else if (selector === SELECTOR_VAULT_SET_WHITELIST) {
+        if (!expectedPayoutRouter) throw new Error('missing_expected_addresses')
         const accountArg = decodeAddressArgFromCalldata(c.data, 0)
         const statusArg = decodeBoolArgFromCalldata(c.data, 1)
         if (!accountArg || accountArg !== expectedPayoutRouter) throw new Error('vault_whitelist_account_mismatch')
         if (statusArg !== true) throw new Error('vault_whitelist_status_mismatch')
+      } else if (selector === SELECTOR_VAULT_UPDATE_STRATEGY_WEIGHT) {
+        const strategyArg = decodeAddressArgFromCalldata(c.data, 0)
+        const weightArg = decodeUint256ArgFromCalldata(c.data, 1)
+        if (!strategyArg) throw new Error('vault_strategy_weight_strategy_decode_failed')
+        if (weightArg === null || weightArg > 10_000n) throw new Error('vault_strategy_weight_invalid')
+      } else if (selector === SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE) {
+        const minIdleArg = decodeUint256ArgFromCalldata(c.data, 0)
+        if (minIdleArg === null) throw new Error('vault_min_idle_decode_failed')
+      } else if (selector === SELECTOR_VAULT_DEPLOY_TO_STRATEGIES) {
+        // no args
+      } else {
+        throw new Error('vault_selector_not_allowed')
       }
+
       continue
     }
 

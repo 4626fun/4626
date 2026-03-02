@@ -1,95 +1,9 @@
 import { logger } from '../_lib/logger.js'
 import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'
+import { toAgentError } from '../agent/eliza/_errors.js'
+import { getElizaLlmService } from '../agent/eliza/llm.js'
 
-declare const process: { env: Record<string, string | undefined> }
-
-// ---------------------------------------------------------------------------
-// Provider registry — checked in priority order, first configured key wins.
-// All providers use OpenAI-compatible chat completions format.
-// ---------------------------------------------------------------------------
-type LlmProvider = {
-  name: string
-  envKey: string
-  apiUrl: string
-  model: string
-  /** Optional extra headers (e.g. Anthropic version header) */
-  extraHeaders?: Record<string, string>
-  /** Transform request body if the provider deviates from OpenAI format */
-  transformBody?: (body: Record<string, any>) => Record<string, any>
-  /** Extract content from the response if it deviates from OpenAI format */
-  extractContent?: (data: any) => string
-}
-
-const PROVIDERS: LlmProvider[] = [
-  // 1. Groq — default (free tier, fast inference, OpenAI-compatible)
-  {
-    name: 'Groq',
-    envKey: 'GROQ_API_KEY',
-    apiUrl: 'https://api.groq.com/openai/v1/chat/completions',
-    model: 'llama-3.3-70b-versatile',
-  },
-  // 2. OpenAI
-  {
-    name: 'OpenAI',
-    envKey: 'OPENAI_API_KEY',
-    apiUrl: 'https://api.openai.com/v1/chat/completions',
-    model: 'gpt-4o-mini',
-  },
-  // 3. Anthropic (uses a slightly different format)
-  {
-    name: 'Anthropic',
-    envKey: 'ANTHROPIC_API_KEY',
-    apiUrl: 'https://api.anthropic.com/v1/messages',
-    model: 'claude-3-5-haiku-20241022',
-    extraHeaders: { 'anthropic-version': '2023-06-01' },
-    transformBody: (body) => ({
-      model: body.model,
-      max_tokens: body.max_tokens,
-      system: body.messages[0]?.content ?? '',
-      messages: body.messages.slice(1).map((m: any) => ({
-        role: m.role,
-        content: m.content,
-      })),
-    }),
-    extractContent: (data) => {
-      const blocks = data?.content ?? []
-      return blocks
-        .filter((b: any) => b.type === 'text')
-        .map((b: any) => b.text)
-        .join('')
-    },
-  },
-  // 4. Google Gemini (OpenAI-compatible endpoint)
-  {
-    name: 'Google Gemini',
-    envKey: 'GOOGLE_AI_API_KEY',
-    apiUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-    model: 'gemini-2.0-flash',
-  },
-  // 5. OpenRouter (aggregator — one key, many models)
-  {
-    name: 'OpenRouter',
-    envKey: 'OPENROUTER_API_KEY',
-    apiUrl: 'https://openrouter.ai/api/v1/chat/completions',
-    model: 'meta-llama/llama-3.3-70b-instruct',
-  },
-]
-
-const MAX_TOKENS = 200
-const TEMPERATURE = 0.7
-
-// ---------------------------------------------------------------------------
-// Provider resolution
-// ---------------------------------------------------------------------------
-type ResolvedProvider = LlmProvider & { apiKey: string }
-
-function resolveProvider(): ResolvedProvider | null {
-  for (const p of PROVIDERS) {
-    const key = (process.env[p.envKey] ?? '').trim()
-    if (key) return { ...p, apiKey: key }
-  }
-  return null
-}
+const llmService = getElizaLlmService()
 
 // ---------------------------------------------------------------------------
 // Rate limiting – one LLM call per group every 10 s
@@ -103,7 +17,7 @@ function canCallLlm(groupId: string): boolean {
   return Date.now() - last >= LLM_COOLDOWN_MS
 }
 
-function recordLlmCall(groupId: string) {
+function recordLlmCall(groupId: string): void {
   groupCooldowns.set(groupId, Date.now())
 }
 
@@ -140,94 +54,61 @@ function buildSystemPrompt(vault: KeeprVaultRow | null): string {
     )
   }
 
-
   return base.join('\n')
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Generate an LLM response for a user message in a group chat.
- *
- * Provider priority: GROQ_API_KEY → OPENAI_API_KEY → ANTHROPIC_API_KEY
- *   → GOOGLE_AI_API_KEY → OPENROUTER_API_KEY
- *
- * Returns `{ ok: false, response: '' }` silently when no provider is
- * configured, rate-limited, or on error — the caller treats that as "no reply".
- */
 export async function generateLlmResponse(params: {
   groupId: string
   senderWallet: string
   text: string
   vault: KeeprVaultRow | null
 }): Promise<{ ok: true; response: string } | { ok: false; response: string }> {
-  const provider = resolveProvider()
-  if (!provider) {
-    return { ok: false, response: '' }
-  }
-
   if (!canCallLlm(params.groupId)) {
     return { ok: false, response: 'AI is rate-limited. Try again in a few seconds.' }
   }
 
+  if (llmService.getAvailableProviders().length === 0) {
+    return { ok: false, response: '' }
+  }
+
   try {
     recordLlmCall(params.groupId)
-
-    const messages = [
-      { role: 'system', content: buildSystemPrompt(params.vault) },
-      {
-        role: 'user',
-        content: `[${params.senderWallet.slice(0, 6)}...${params.senderWallet.slice(-4)}]: ${params.text}`,
-      },
-    ]
-
-    let requestBody: Record<string, any> = {
-      model: provider.model,
-      messages,
-      max_tokens: MAX_TOKENS,
-      temperature: TEMPERATURE,
-    }
-
-    if (provider.transformBody) {
-      requestBody = provider.transformBody(requestBody)
-    }
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(provider.name === 'Anthropic'
-        ? { 'x-api-key': provider.apiKey }
-        : { Authorization: `Bearer ${provider.apiKey}` }),
-      ...(provider.extraHeaders ?? {}),
-    }
-
-    const res = await fetch(provider.apiUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody),
+    const identityHint = `[${params.senderWallet.slice(0, 6)}...${params.senderWallet.slice(-4)}]`
+    const result = await llmService.generateResponse({
+      agentKey: params.groupId,
+      userMessage: `${identityHint}: ${params.text}`,
+      systemPrompt: buildSystemPrompt(params.vault),
+      vaultContext: '',
+      correlationId: `keepr-${params.groupId}-${Date.now()}`,
     })
 
-    if (!res.ok) {
-      const text = await res.text()
-      logger.error(`[ai/chat] ${provider.name} error`, { status: res.status, body: text.slice(0, 300) })
+    if (!result.text?.trim()) {
       return { ok: false, response: '' }
     }
 
-    const data = (await res.json()) as any
-
-    const content = provider.extractContent
-      ? provider.extractContent(data)
-      : (data?.choices?.[0]?.message?.content ?? '')
-
-    if (!content.trim()) {
-      return { ok: false, response: '' }
+    logger.info('[ai/chat] Unified Eliza LLM response', {
+      groupId: params.groupId,
+      provider: result.provider,
+    })
+    return { ok: true, response: result.text.trim() }
+  } catch (error) {
+    const agentError = toAgentError(error, 'UPSTREAM_ERROR', 'LLM generation failed')
+    if (agentError.code === 'BUDGET_EXCEEDED') {
+      return { ok: false, response: 'Daily AI budget limit reached for this agent. Please try again tomorrow.' }
     }
-
-    logger.info(`[ai/chat] ${provider.name} response`, { groupId: params.groupId, model: provider.model })
-    return { ok: true, response: content.trim() }
-  } catch (err) {
-    logger.error(`[ai/chat] ${provider.name} call failed`, err)
+    if (agentError.code === 'RATE_LIMITED') {
+      return { ok: false, response: 'AI provider is rate-limited. Please try again shortly.' }
+    }
+    if (agentError.code === 'UPSTREAM_TIMEOUT') {
+      return { ok: false, response: 'AI request timed out. Please retry.' }
+    }
+    if (agentError.code === 'DEPENDENCY_UNAVAILABLE') {
+      return { ok: false, response: 'AI provider is temporarily unavailable. Please retry shortly.' }
+    }
+    logger.error('[ai/chat] Unified Eliza LLM call failed', {
+      code: agentError.code,
+      message: agentError.message,
+    })
     return { ok: false, response: '' }
   }
 }

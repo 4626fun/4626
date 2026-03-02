@@ -23,6 +23,7 @@ import { ClaimPrizeToSolana } from '../components/ClaimPrizeToSolana'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { CcaAuctionPanel } from '@/components/cca/CcaAuctionPanel'
+import { AmoeEntryCard } from '@/components/lottery/AmoeEntryCard'
 import { useTokenMetadata } from '@/hooks/useTokenMetadata'
 import { useZoraCoin } from '@/lib/zora/hooks'
 import { resolveVaultByAnyAddress } from '@/lib/onchain/vaultResolve'
@@ -163,7 +164,7 @@ export function Vault() {
   })
 
   const queryClient = useQueryClient()
-  const { address: userAddress, isConnected } = useAccount()
+  const { address: userAddress } = useAccount()
   const accountContext = useAccountContext()
   const [activeTab, setActiveTab] = useState<TabType>('Deposit')
   const [amount, setAmount] = useState('')
@@ -181,6 +182,13 @@ export function Vault() {
   }, [accountContext.activeAccount, accountContext.activeAccountType])
   const [vaultError, setVaultError] = useState<string | null>(null)
   const [lastSuccess, setLastSuccess] = useState<string | null>(null)
+  const amoeWalletAddress = useMemo(() => {
+    if (accountContext.activeAccount && isAddress(accountContext.activeAccount)) {
+      return getAddress(accountContext.activeAccount) as Address
+    }
+    if (userAddress && isAddress(userAddress)) return getAddress(userAddress) as Address
+    return null
+  }, [accountContext.activeAccount, userAddress])
 
   const tokenAddress = (resolved?.token ?? (akitaFallback ? (AKITA.token as Address) : null)) as Address | null
   const wrapperAddress = (resolved?.info.wrapper ?? (akitaFallback ? (AKITA.wrapper as Address) : null)) as Address | null
@@ -597,7 +605,10 @@ export function Vault() {
                       </span>
                     </h1>
                     <p className="text-zinc-600 text-sm font-light mono mt-3">
-                      {underlyingSymbol} → {shareSymbol}
+                      Deposit {underlyingSymbol || 'underlying token'} to mint {shareSymbol || 'vault shares'}
+                    </p>
+                    <p className="text-zinc-700 text-xs font-light mono mt-1">
+                      Redeem {shareSymbol || 'vault shares'} to withdraw {underlyingSymbol || 'underlying token'}
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px]">
                       <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-400">
@@ -716,6 +727,10 @@ export function Vault() {
               </div>
             </div>
           ) : null}
+
+          <div className="mt-6">
+            <AmoeEntryCard walletAddress={amoeWalletAddress} creatorCoin={tokenAddress} />
+          </div>
 
           <div id="auction" className="mt-10">
             {ccaStrategy && vaultAddress ? (

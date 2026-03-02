@@ -1,5 +1,5 @@
 # BribeDepot
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/governance/bribes/BribeDepot.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/governance/bribes/BribeDepot.sol)
 
 **Inherits:**
 Ownable, ReentrancyGuard
@@ -52,6 +52,35 @@ mapping(uint256 => mapping(address => mapping(address => bool))) public claimed
 ```
 
 
+### claimedAmount
+epoch => token => total amount paid out (sum of transfers attempted)
+
+
+```solidity
+mapping(uint256 => mapping(address => uint256)) public claimedAmount
+```
+
+
+### isClosed
+epoch => token => closed (no further claims; may have been rolled forward)
+
+
+```solidity
+mapping(uint256 => mapping(address => bool)) public isClosed
+```
+
+
+### rolloverGraceEpochs
+Number of epochs to wait before rolling forward leftover bribes.
+
+4 epochs ≈ 4 weeks after the epoch ends.
+
+
+```solidity
+uint256 public rolloverGraceEpochs = 4
+```
+
+
 ## Functions
 ### constructor
 
@@ -92,6 +121,28 @@ function claim(uint256 epoch, address token) external nonReentrant returns (uint
 |`token`|`address`|Token to claim|
 
 
+### rolloverZeroVoteEpoch
+
+Roll bribes from an epoch with zero vault weight into the current epoch.
+
+Safe because there were no eligible claimants for that epoch.
+
+
+```solidity
+function rolloverZeroVoteEpoch(uint256 epoch, address token) external nonReentrant returns (uint256 rolled);
+```
+
+### rolloverExpiredEpoch
+
+Roll leftover (unclaimed + rounding dust) forward after a grace period.
+
+Once rolled, the epoch/token is closed and can no longer be claimed.
+
+
+```solidity
+function rolloverExpiredEpoch(uint256 epoch, address token) external nonReentrant returns (uint256 rolled);
+```
+
 ## Events
 ### Bribed
 
@@ -103,6 +154,12 @@ event Bribed(address indexed token, uint256 amount, uint256 indexed epoch);
 
 ```solidity
 event Claimed(address indexed user, address indexed token, uint256 amount, uint256 indexed epoch);
+```
+
+### BribeRolledOver
+
+```solidity
+event BribeRolledOver(address indexed token, uint256 indexed fromEpoch, uint256 indexed toEpoch, uint256 amount);
 ```
 
 ## Errors
@@ -128,5 +185,29 @@ error AlreadyClaimed();
 
 ```solidity
 error NoUserVotes();
+```
+
+### EpochNotEnded
+
+```solidity
+error EpochNotEnded();
+```
+
+### EpochClosed
+
+```solidity
+error EpochClosed();
+```
+
+### RolloverNotAllowedYet
+
+```solidity
+error RolloverNotAllowedYet();
+```
+
+### NotZeroVoteEpoch
+
+```solidity
+error NotZeroVoteEpoch();
 ```
 

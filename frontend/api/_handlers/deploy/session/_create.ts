@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   createPublicClient,
+  decodeFunctionData,
   encodeAbiParameters,
   encodeFunctionData,
   encodePacked,
@@ -26,11 +27,24 @@ import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js
 import { buildDeployPermissionGrant } from '../../../../server/_lib/erc7712Permissions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { resolveCoinParties } from '../../../../server/_lib/coinParties.js'
+import {
+  normalizeSolanaAssetMintOrigin,
+  parseSolanaOvaultMintCompatibilityHints,
+} from '../../../../server/_lib/solanaOvaultCompatibility.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 // JSON comes over the wire, so `value` may be a string/number.
 type Call = { to: Address; value?: bigint | number | string; data: Hex }
+
+type SolanaOvaultRequest = {
+  enabled?: boolean
+  assetMintOrigin?: 'existing' | 'new'
+  assetMeshMint?: string
+  shareMeshMint?: string
+  solanaEid?: number | string
+  mintCompatibilityHints?: unknown
+}
 
 type CreateDeploySessionRequest = {
   smartWallet: Address
@@ -51,6 +65,7 @@ type CreateDeploySessionRequest = {
   // Phase 3 (strategies) + Phase 4 (deferred auction) are also executed server-side.
   phase3Calls?: Call[]
   phase4Calls?: Call[]
+  solanaOvault?: SolanaOvaultRequest
   // Optional metadata for debugging/UI.
   version?: string
 }
@@ -69,6 +84,91 @@ type OwnershipCheck = {
   ok: boolean
   reason?: string
 }
+
+const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
+
+const ERC20_APPROVE_ABI = [
+  {
+    type: 'function',
+    name: 'approve',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ type: 'bool' }],
+  },
+] as const
+
+const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
+  {
+    type: 'function',
+    name: 'finalizePhase2',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareToken', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
+          { name: 'meteoraAlphaVault', type: 'bytes32' },
+          {
+            name: 'solanaIxs',
+            type: 'tuple[]',
+            components: [
+              { name: 'programId', type: 'bytes32' },
+              { name: 'serializedAccounts', type: 'bytes[]' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
+const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
+  {
+    type: 'function',
+    name: 'finalizePhase2',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareToken', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
 
 const CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI = [
   {
@@ -112,6 +212,196 @@ function isTruthyEnv(value: string | undefined, fallback: boolean): boolean {
 function shouldPersistManagedSessionOwner(): boolean {
   // Keep Privy-managed session owners installed by default to reduce repeated add-owner prompts.
   return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, true)
+}
+
+const DEFAULT_DEPLOY_SESSION_TTL_MINUTES = 45
+const MIN_DEPLOY_SESSION_TTL_MINUTES = 5
+const MAX_DEPLOY_SESSION_TTL_MINUTES = 240
+
+function readDeploySessionTtlMinutes(): number {
+  const raw = String(process.env.DEPLOY_SESSION_TTL_MINUTES ?? '').trim()
+  if (!raw) return DEFAULT_DEPLOY_SESSION_TTL_MINUTES
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_DEPLOY_SESSION_TTL_MINUTES
+  const wholeMinutes = Math.floor(parsed)
+  return Math.min(MAX_DEPLOY_SESSION_TTL_MINUTES, Math.max(MIN_DEPLOY_SESSION_TTL_MINUTES, wholeMinutes))
+}
+
+function readDeploySessionTtlMs(): number {
+  return readDeploySessionTtlMinutes() * 60 * 1000
+}
+
+function parseUInt32Like(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 4_294_967_295) {
+    return Math.floor(value)
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value.trim())
+    if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 4_294_967_295) {
+      return Math.floor(parsed)
+    }
+  }
+  return null
+}
+
+function parseBigIntLike(value: unknown): bigint | null {
+  if (typeof value === 'bigint') return value >= 0n ? value : null
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return BigInt(Math.trunc(value))
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = BigInt(value.trim())
+      return parsed >= 0n ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function extractFinalizePhase2ApprovalInfo(data: Hex): {
+  creatorToken: Address
+  depositAmount: bigint
+  vault: Address | null
+} | null {
+  for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
+    try {
+      const decoded = decodeFunctionData({ abi, data })
+      const params = (decoded.args?.[0] ?? null) as {
+        creatorToken?: string
+        depositAmount?: bigint | string | number
+        vault?: string
+      } | null
+      const creatorTokenCandidate =
+        params?.creatorToken && isAddress(params.creatorToken)
+          ? getAddress(params.creatorToken as Address)
+          : null
+      const creatorToken =
+        creatorTokenCandidate && creatorTokenCandidate.toLowerCase() !== ZERO_ADDRESS.toLowerCase()
+          ? creatorTokenCandidate
+          : null
+      const depositAmount = parseBigIntLike(params?.depositAmount)
+      if (!creatorToken || !depositAmount || depositAmount <= 0n) continue
+      const vault =
+        params?.vault && isAddress(params.vault)
+          ? getAddress(params.vault as Address)
+          : null
+      return { creatorToken, depositAmount, vault }
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
+function callFingerprint(call: Call | null | undefined): string | null {
+  if (!call) return null
+  const to = typeof call.to === 'string' && isAddress(call.to) ? getAddress(call.to as Address).toLowerCase() : ''
+  const data = typeof call.data === 'string' ? call.data.trim().toLowerCase() : ''
+  if (!to || !data.startsWith('0x')) return null
+  return `${to}|${data}`
+}
+
+function derivePhase2FinalizeApprovalCalls(calls: Call[]): Call[] {
+  if (!Array.isArray(calls) || calls.length === 0) return []
+  const approvals: Call[] = []
+  const seen = new Set<string>()
+  for (const call of calls) {
+    const to = typeof call?.to === 'string' && isAddress(call.to) ? getAddress(call.to as Address) : null
+    const data = typeof call?.data === 'string' ? call.data.trim() : ''
+    if (!to || !data.startsWith('0x')) continue
+    const approvalInfo = extractFinalizePhase2ApprovalInfo(data as Hex)
+    if (!approvalInfo) continue
+    const approveData = encodeFunctionData({
+      abi: ERC20_APPROVE_ABI,
+      functionName: 'approve',
+      args: [to, approvalInfo.depositAmount],
+    }) as Hex
+    const approveCall: Call = {
+      to: approvalInfo.creatorToken,
+      // Keep payload JSON-safe when persisted to DB.
+      value: '0',
+      data: approveData,
+    }
+    const key = callFingerprint(approveCall)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    approvals.push(approveCall)
+  }
+  return approvals
+}
+
+function appendUniqueCalls(base: Call[], extras: Call[]): Call[] {
+  const out: Call[] = [...base]
+  const seen = new Set<string>()
+  for (const existing of out) {
+    const key = callFingerprint(existing)
+    if (key) seen.add(key)
+  }
+  for (const extra of extras) {
+    const key = callFingerprint(extra)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    out.push(extra)
+  }
+  return out
+}
+
+function prependPhase2FinalizeApprovals(calls: Call[]): Call[] {
+  if (!Array.isArray(calls) || calls.length === 0) return []
+  const approvals = derivePhase2FinalizeApprovalCalls(calls)
+  return appendUniqueCalls(approvals, calls)
+}
+
+function distributePhase2FinalizeApprovals(params: {
+  phase2CoreCalls: Call[]
+  phase2FinalizeCalls: Call[]
+}): { phase2CoreCalls: Call[]; phase2FinalizeCalls: Call[] } {
+  const phase2CoreCalls = Array.isArray(params.phase2CoreCalls) ? [...params.phase2CoreCalls] : []
+  const phase2FinalizeCalls = Array.isArray(params.phase2FinalizeCalls) ? [...params.phase2FinalizeCalls] : []
+  const approvals = derivePhase2FinalizeApprovalCalls(phase2FinalizeCalls)
+  if (approvals.length === 0) {
+    return { phase2CoreCalls, phase2FinalizeCalls }
+  }
+  if (phase2CoreCalls.length > 0) {
+    // Keep phase2 finalize focused on batcher finalize calls. Approval executes in phase2 core,
+    // so allowance is already persisted before finalize is submitted.
+    return {
+      phase2CoreCalls: appendUniqueCalls(phase2CoreCalls, approvals),
+      phase2FinalizeCalls,
+    }
+  }
+  return {
+    phase2CoreCalls,
+    phase2FinalizeCalls: prependPhase2FinalizeApprovals(phase2FinalizeCalls),
+  }
+}
+
+function normalizeSolanaOvaultConfig(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const raw = value as Record<string, unknown>
+
+  const enabled = raw.enabled === true
+  const assetMintOrigin = normalizeSolanaAssetMintOrigin(raw.assetMintOrigin, 'existing')
+  const assetMeshMint =
+    typeof raw.assetMeshMint === 'string' && raw.assetMeshMint.trim()
+      ? raw.assetMeshMint.trim()
+      : null
+  const shareMeshMint =
+    typeof raw.shareMeshMint === 'string' && raw.shareMeshMint.trim()
+      ? raw.shareMeshMint.trim()
+      : null
+  const solanaEid = parseUInt32Like(raw.solanaEid)
+  const mintCompatibilityHints = parseSolanaOvaultMintCompatibilityHints(raw.mintCompatibilityHints)
+  const hasMintHints = Object.values(mintCompatibilityHints).some((v) => v !== null)
+
+  return {
+    enabled,
+    assetMintOrigin,
+    ...(assetMeshMint ? { assetMeshMint } : null),
+    ...(shareMeshMint ? { shareMeshMint } : null),
+    ...(solanaEid !== null ? { solanaEid } : null),
+    ...(hasMintHints ? { mintCompatibilityHints } : null),
+  }
 }
 
 
@@ -196,6 +486,33 @@ async function checkDeployInfraReady(origin: string): Promise<{ ok: boolean; err
 
 const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
   { type: 'function', name: 'removeOwnerAtIndex', stateMutability: 'nonpayable', inputs: [{ name: 'index', type: 'uint256' }, { name: 'owner', type: 'bytes' }], outputs: [] },
+] as const
+
+const CREATOR_VAULT_DEPLOY_RUNTIME_ABI = [
+  {
+    type: 'function',
+    name: 'updateStrategyWeight',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'strategy', type: 'address' },
+      { name: 'newWeight', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setMinimumTotalIdle',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: '_minimumTotalIdle', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'deployToStrategies',
+    stateMutability: 'nonpayable',
+    inputs: [],
+    outputs: [],
+  },
 ] as const
 
 function asOwnerBytes(owner: Address): Hex {
@@ -618,11 +935,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const phase1Calls = Array.isArray(body.phase1Calls) ? body.phase1Calls : []
-    const phase2CoreCalls = Array.isArray(body.phase2CoreCalls) ? body.phase2CoreCalls : []
-    const phase2FinalizeCalls = Array.isArray(body.phase2FinalizeCalls) ? body.phase2FinalizeCalls : []
-    const phase2Calls = Array.isArray(body.phase2Calls) ? body.phase2Calls : []
+    const phase2CoreCallsRaw = Array.isArray(body.phase2CoreCalls) ? body.phase2CoreCalls : []
+    const phase2FinalizeCallsRaw = Array.isArray(body.phase2FinalizeCalls) ? body.phase2FinalizeCalls : []
+    const phase2CallsRaw = Array.isArray(body.phase2Calls) ? body.phase2Calls : []
+    const { phase2CoreCalls, phase2FinalizeCalls } = distributePhase2FinalizeApprovals({
+      phase2CoreCalls: phase2CoreCallsRaw,
+      phase2FinalizeCalls: phase2FinalizeCallsRaw,
+    })
+    const phase2Calls = prependPhase2FinalizeApprovals(phase2CallsRaw)
     const phase3Calls = Array.isArray(body.phase3Calls) ? body.phase3Calls : []
     const phase4Calls = Array.isArray(body.phase4Calls) ? body.phase4Calls : []
+    const solanaOvault = normalizeSolanaOvaultConfig(body.solanaOvault)
     const hasPhase2Finalize = phase2FinalizeCalls.length > 0 || phase2Calls.length > 0
 
     const hasAnyWork =
@@ -710,7 +1033,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const now = Date.now()
-    const expiresAt = new Date(now + 10 * 60 * 1000) // 10 minutes
+    const expiresAt = new Date(now + readDeploySessionTtlMs())
     const persistSessionOwner = Boolean(deploySignerWalletId) && shouldPersistManagedSessionOwner()
 
     const cleanupGrantCall = {
@@ -723,6 +1046,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }),
     }
 
+    const phase4RuntimeGrantCalls: Call[] = (() => {
+      // Server-side continuation may prepend vault strategy runtime calls in phase-4
+      // to safely deploy around Charm transfer-mismatch edge cases.
+      if (phase3Calls.length === 0 || phase4Calls.length === 0) return []
+      const finalizeInfo =
+        [...phase2FinalizeCalls, ...phase2Calls]
+          .map((c) => extractFinalizePhase2ApprovalInfo(c.data))
+          .find((info): info is NonNullable<typeof info> => Boolean(info)) ?? null
+      const vault = finalizeInfo?.vault ?? null
+      if (!vault) return []
+      return [
+        {
+          to: vault,
+          value: '0',
+          data: encodeFunctionData({
+            abi: CREATOR_VAULT_DEPLOY_RUNTIME_ABI,
+            functionName: 'deployToStrategies',
+            args: [],
+          }),
+        },
+        {
+          to: vault,
+          value: '0',
+          data: encodeFunctionData({
+            abi: CREATOR_VAULT_DEPLOY_RUNTIME_ABI,
+            functionName: 'setMinimumTotalIdle',
+            args: [0n],
+          }),
+        },
+        {
+          to: vault,
+          value: '0',
+          data: encodeFunctionData({
+            abi: CREATOR_VAULT_DEPLOY_RUNTIME_ABI,
+            functionName: 'updateStrategyWeight',
+            args: [ZERO_ADDRESS, 0n],
+          }),
+        },
+      ]
+    })()
+
     const allCallsForGrant = [
       ...phase1Calls,
       ...phase2CoreCalls,
@@ -730,6 +1094,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ...phase2Calls,
       ...phase3Calls,
       ...phase4Calls,
+      ...phase4RuntimeGrantCalls,
       ...(persistSessionOwner ? [] : [cleanupGrantCall]),
     ]
       .map((c) => ({ to: getAddress(c.to), value: typeof c.value === 'bigint' ? c.value : BigInt(c.value ?? 0), data: c.data as Hex }))
@@ -779,6 +1144,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           hasPhase2Finalize,
           hasPhase3: phase3Calls.length > 0,
           hasPhase4: phase4Calls.length > 0,
+          hasOvaultMesh: Boolean(solanaOvault?.enabled) && (phase3Calls.length > 0 || phase4Calls.length > 0),
         },
         version: String(body.version ?? ''),
         phase1Calls,
@@ -787,6 +1153,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         phase2Calls,
         phase3Calls,
         phase4Calls,
+        ...(solanaOvault ? { solanaOvault } : null),
         erc7712Grant,
       },
       expiresAt,

@@ -22,7 +22,11 @@ export function FaqHowItWorks() {
 
   return (
     <div className="relative">
-      <PageMeta title="How It Works" description="Learn how 4626 works — deposit creator coins, earn from fees, and withdraw anytime." canonicalPath="/faq/how-it-works" />
+      <PageMeta
+        title="How It Works"
+        description="Learn the current Creator Vaults flow — deposit, launch, default 30/30/40 allocation, and redeem."
+        canonicalPath="/faq/how-it-works"
+      />
       <section className="cinematic-section">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="mb-10">
@@ -46,13 +50,13 @@ export function FaqHowItWorks() {
               <h1 className="headline text-4xl sm:text-6xl mt-4">How it works</h1>
               <p className="text-zinc-500 text-sm sm:text-base font-light mt-4 max-w-2xl">
                 The short version: deposit a creator coin → receive a vault share token (
-                <span className="mono text-brand-accent">{SHARE_TOKEN}</span>) → the vault earns fees and runs strategies → you can redeem by burning{' '}
+                <span className="mono text-brand-accent">{SHARE_TOKEN}</span>) → launch allocates capital (default 30/30/40) → you can redeem by burning{' '}
                 <span className="mono text-brand-accent">{SHARE_TOKEN}</span>.
               </p>
             </div>
 
             <div className={`${surface} p-6 sm:p-8`}>
-              <span className="label">The 30-second flow</span>
+              <span className="label">Current launch flow</span>
               <div className="mt-6 space-y-0 border-t border-white/5">
                 <div className="data-row group border-white/5">
                   <div className="space-y-2">
@@ -60,6 +64,7 @@ export function FaqHowItWorks() {
                     <h2 className="text-2xl text-white font-light">Deposit</h2>
                     <p className="text-zinc-600 text-sm font-light">
                       Deposit the creator coin into its vault. You receive <span className="mono text-brand-accent">{SHARE_TOKEN}</span> shares.
+                      New vaults currently initialize with a 5,000,000 token first deposit.
                     </p>
                   </div>
                 </div>
@@ -67,16 +72,27 @@ export function FaqHowItWorks() {
                 <div className="data-row group border-white/5">
                   <div className="space-y-2">
                     <span className="label">Step 02</span>
-                    <h2 className="text-2xl text-white font-light">Earn</h2>
+                    <h2 className="text-2xl text-white font-light">Launch</h2>
                     <p className="text-zinc-600 text-sm font-light">
-                      The vault can earn from fee routing and from strategy results. This is not guaranteed yield.
+                      Launch can run a Uniswap CCA flow for price discovery and liquidity bootstrap, then transitions into ongoing vault operations.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="data-row group border-white/5">
+                  <div className="space-y-2">
+                    <span className="label">Step 03</span>
+                    <h2 className="text-2xl text-white font-light">Allocate</h2>
+                    <p className="text-zinc-600 text-sm font-light">
+                      Default allocation today is 30% CREATOR/USDC LP (Charm), 30% Ajna lending, and 40% held in-vault
+                      (30% Solana reserve + 10% idle buffer).
                     </p>
                   </div>
                 </div>
 
                 <div className="data-row group border-none">
                   <div className="space-y-2">
-                    <span className="label">Step 03</span>
+                    <span className="label">Step 04</span>
                     <h2 className="text-2xl text-white font-light">Redeem</h2>
                     <p className="text-zinc-600 text-sm font-light">
                       Burn <span className="mono text-brand-accent">{SHARE_TOKEN}</span> to redeem the underlying creator coin from the vault.
@@ -103,9 +119,9 @@ export function FaqHowItWorks() {
               <div className={`${surface} p-6 sm:p-8 space-y-5`}>
                 <span className="label">Earning sources</span>
                 <ul className="list-disc list-inside space-y-2 text-zinc-600 text-sm font-light">
-                  <li>Fee routing from trading activity (when pools are live)</li>
-                  <li>Strategy results (e.g. LP ranges, lending/borrowing)</li>
-                  <li>Some capital may be kept idle for withdrawals</li>
+                  <li>Trading fees once CREATOR/USDC liquidity is live</li>
+                  <li>Strategy results from Charm LP + Ajna positions</li>
+                  <li>Reserve and idle capital kept in-vault for operations and withdrawals</li>
                 </ul>
                 <p className="text-zinc-700 text-xs font-light">
                   Nothing here implies a promised APY. The vault can make or lose money depending on market conditions and strategy behavior.

@@ -1,7 +1,7 @@
 {
   "name": "4626-miniapp",
   "private": true,
-  "version": "1.3.10",
+  "version": "1.4.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -24,6 +24,7 @@
     "csw:link-owner": "tsx scripts/link-canonical-csw-owner.ts",
     "csw:owner-link:backfill": "tsx scripts/csw-owner-link-backfill.ts",
     "check:agent-registration": "node scripts/check-agent-registration.mjs",
+    "verify:protocol-assets": "node scripts/verify-protocol-assets.mjs",
     "deploy:autopilot": "node scripts/deploy-autopilot.mjs",
     "skills:sync:cursor": "node scripts/sync-cursor-skills.mjs --prune"
   },

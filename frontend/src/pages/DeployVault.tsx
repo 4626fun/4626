@@ -73,16 +73,15 @@ const DEFAULT_REQUIRED_RAISE_WEI = 100_000_000_000_000_000n // 0.1 ETH
 // Keep this as a boolean gate for deferred launch wiring.
 const DEFAULT_AUCTION_PERCENT = 50
 // Strategy deployment targets (of total deposited creator tokens):
-// - 30% Charm
-// - 30% Ajna
-// - 30% reserved for external Solana flow (Meteora DLMM + Alpha Vault; executed outside main deploy)
+// - 30% Charm strategy
+// - 30% Ajna strategy
+// - 30% Solana bridge strategy (explicit bridge operation)
 // - 10% idle operational buffer
-const DEFAULT_CHARM_WEIGHT_BPS = 5_000n // 50% of deployable amount
-const DEFAULT_AJNA_WEIGHT_BPS = 5_000n // 50% of deployable amount
+const DEFAULT_CHARM_WEIGHT_BPS = 3_000n
+const DEFAULT_AJNA_WEIGHT_BPS = 3_000n
+const DEFAULT_SOLANA_WEIGHT_BPS = 3_000n
 const DEFAULT_IDLE_PERCENT_BPS = 1_000n // 10% explicit idle target
-const DEFAULT_SOLANA_RESERVE_PERCENT_BPS = 3_000n // 30% held idle for off-chain Solana step
-const DEFAULT_MIN_IDLE_PERCENT_BPS = DEFAULT_IDLE_PERCENT_BPS + DEFAULT_SOLANA_RESERVE_PERCENT_BPS // 40%
-const DEFAULT_CCA_DURATION_BLOCKS = 302_400n // ~7 days on Base at ~2s blocks (must match CCALaunchStrategy defaultDuration)
+const DEFAULT_MIN_IDLE_PERCENT_BPS = DEFAULT_IDLE_PERCENT_BPS
 const DEFAULT_SHARE_OFT_VANITY_SUFFIX = '4626'
 const DEFAULT_SHARE_OFT_VANITY_MAX_TRIES = 1_000_000
 const BATCHER_PHASE1_WITH_SALT_SELECTOR = '297cb1e6'
@@ -128,7 +127,7 @@ const MIN_COIN_AGE_LOCALSTORAGE_KEY = 'cv:deploy:minCoinAgeDays'
 const BASE_CHAIN_ID_HEX = `0x${base.id.toString(16)}`
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}`
 const MAX_UINT256 = (1n << 256n) - 1n
-const DEFAULT_DEPLOYMENT_VERSION = 'v1.3.11'
+const DEFAULT_DEPLOYMENT_VERSION = 'v1.4.3'
 const DEPLOYMENT_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
 function isDebugEnabled(): boolean {
@@ -164,15 +163,15 @@ function normalizeBytes32(value: unknown): Hex | null {
   return value as Hex
 }
 
-function parseUint8(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 255) {
+function parseUInt32(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 4_294_967_295) {
     return Math.floor(value)
   }
   if (typeof value === 'string') {
     const v = value.trim()
     if (!v) return null
     const n = Number(v)
-    if (Number.isFinite(n) && n >= 0 && n <= 255) return Math.floor(n)
+    if (Number.isFinite(n) && n >= 0 && n <= 4_294_967_295) return Math.floor(n)
   }
   return null
 }
@@ -448,6 +447,15 @@ async function waitForPhase1CoreState(params: {
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type AdminAuthResponse = { address: string; isAdmin: boolean } | null
+type SolanaInfraStatusResponse = {
+  solanaEnabledOnBatcher: boolean
+  dynamicProvisioningMode: 'disabled' | 'local-cli' | 'remote-provisioner' | 'misconfigured'
+  existingMintCompatible: boolean
+  depositEligible: boolean
+  redeemEligible: boolean
+  readyForAutoRegistration: boolean
+  blockers: string[]
+}
 type ServerDeployResponse = {
   userOpHash: string
   addresses: {
@@ -462,6 +470,13 @@ type ServerDeployResponse = {
   }
 }
 type DeploySessionCall = { to: Address; value: string; data: Hex }
+type DeploySessionSolanaOvault = {
+  enabled?: boolean
+  assetMintOrigin?: 'existing' | 'new'
+  assetMeshMint?: Hex
+  shareMeshMint?: Hex
+  solanaEid?: number
+}
 type DeploySessionCreateRequest = {
   smartWallet: Address
   creatorToken: Address
@@ -472,6 +487,7 @@ type DeploySessionCreateRequest = {
   phase2FinalizeCalls: DeploySessionCall[]
   phase3Calls: DeploySessionCall[]
   phase4Calls: DeploySessionCall[]
+  solanaOvault?: DeploySessionSolanaOvault
   version: string
 }
 type DeployPlanExport = {
@@ -604,26 +620,6 @@ function formatEthPerTokenForUi(weiPerToken: bigint): string {
   const compact = formatWithMaxDecimals(DEFAULT_MAX_DECIMALS)
   if (compact === '0' && weiPerToken > 0n) return formatWithMaxDecimals(FULL_MAX_DECIMALS)
   return compact
-}
-
-function encodeUniswapCcaLinearSteps(durationBlocks: bigint): Hex {
-  const MPS = 10_000_000n
-  if (durationBlocks <= 0n) return '0x'
-
-  const mpsLow = MPS / durationBlocks
-  const remainder = MPS - mpsLow * durationBlocks
-  const mpsHigh = mpsLow + 1n
-
-  const highBlocks = remainder
-  const lowBlocks = durationBlocks - highBlocks
-
-  const packStep = (mps: bigint, blockDelta: bigint) =>
-    encodePacked(['uint24', 'uint40'], [Number(mps), Number(blockDelta)]) as Hex
-
-  const steps: Hex[] = []
-  if (highBlocks > 0n) steps.push(packStep(mpsHigh, highBlocks))
-  if (lowBlocks > 0n) steps.push(packStep(mpsLow, lowBlocks))
-  return concatHex(steps)
 }
 
 function deriveBaseSalt(params: { creatorToken: Address; owner: Address; chainId: number; version: string }): Hex {
@@ -770,6 +766,18 @@ async function fetchAdminAuth(): Promise<AdminAuthResponse> {
   if (!res.ok || !json) return null
   if (!json.success) return null
   return (json.data ?? null) as AdminAuthResponse
+}
+
+async function fetchSolanaInfraStatus(): Promise<SolanaInfraStatusResponse | null> {
+  const { apiFetch } = await import('@/lib/apiBase')
+  const res = await apiFetch('/api/deploy/solanaInfraStatus', {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  })
+  const json = (await res.json().catch(() => null)) as ApiEnvelope<SolanaInfraStatusResponse> | null
+  if (!res.ok || !json) return null
+  if (!json.success) return null
+  return (json.data ?? null) as SolanaInfraStatusResponse | null
 }
 
 // Use the canonical EntryPoint v0.6 from the ERC-4337 module
@@ -1406,6 +1414,7 @@ const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'charmVaultSymbol', type: 'string' },
           { name: 'charmWeightBps', type: 'uint256' },
           { name: 'ajnaWeightBps', type: 'uint256' },
+          { name: 'solanaWeightBps', type: 'uint256' },
           { name: 'enableAutoAllocate', type: 'bool' },
         ],
       },
@@ -1416,6 +1425,7 @@ const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
           { name: 'creatorCharmStrategy', type: 'bytes32' },
           { name: 'ajnaStrategy', type: 'bytes32' },
+          { name: 'solanaStrategy', type: 'bytes32' },
         ],
       },
     ],
@@ -1428,6 +1438,7 @@ const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'charmVault', type: 'address' },
           { name: 'charmStrategy', type: 'address' },
           { name: 'ajnaStrategy', type: 'address' },
+          { name: 'solanaStrategy', type: 'address' },
         ],
       },
     ],
@@ -1541,8 +1552,10 @@ function DeployVaultBatcher({
   privyEmbeddedEoaCanSign,
   connectedEoaOwnerReady,
   strictNoEoaMode,
-  solanaMintOverride,
-  solanaDecimalsOverride,
+  solanaAssetMintOrigin,
+  solanaAssetMeshMintOverride,
+  solanaShareMeshMintOverride,
+  solanaEidOverride,
   connectorId,
   wagmiWalletClient,
 }: {
@@ -1576,8 +1589,10 @@ function DeployVaultBatcher({
   privyEmbeddedEoaCanSign: boolean
   connectedEoaOwnerReady: boolean
   strictNoEoaMode: boolean
-  solanaMintOverride: Hex | null
-  solanaDecimalsOverride: number | null
+  solanaAssetMintOrigin: 'existing' | 'new'
+  solanaAssetMeshMintOverride: Hex | null
+  solanaShareMeshMintOverride: Hex | null
+  solanaEidOverride: number | null
   // For direct Coinbase Wallet connection (supports eth_sign)
   connectorId: string | undefined
   wagmiWalletClient: any
@@ -1586,9 +1601,6 @@ function DeployVaultBatcher({
   const chainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
   const publicClient = usePublicClient({ chainId: base.id })
-  // Legacy ShareOFT Solana overrides are intentionally unused in main deploy flow now.
-  void solanaMintOverride
-  void solanaDecimalsOverride
   
   // Detect Coinbase Wallet direct connection (not via Privy)
   const isCoinbaseWalletDirect = connectorId === 'coinbaseWalletSDK' || connectorId === 'com.coinbase.wallet'
@@ -2290,6 +2302,7 @@ function DeployVaultBatcher({
       }
       if (step === 'created' || step.startsWith('phase1')) setPhase('phase1')
       else if (step.startsWith('phase2')) setPhase('phase2')
+      else if (step.startsWith('ovault_mesh')) setPhase('phase3')
       else if (step.startsWith('phase3')) setPhase('phase3')
       else if (step.startsWith('phase4')) setPhase('phase4')
       if (lastTxHash && isHexHash(lastTxHash)) {
@@ -2319,7 +2332,9 @@ function DeployVaultBatcher({
         clearDeploySession()
         throw new Error(String(sjson.data?.lastError ?? 'Server deploy failed'))
       }
-      if (step.endsWith('_sent') || step === 'cleanup_sent') {
+      const isUserOpBackedSentStep =
+        (step.endsWith('_sent') && step !== 'ovault_mesh_sent') || step === 'cleanup_sent'
+      if (isUserOpBackedSentStep) {
         const hasUserOpHash = isHexHash(lastUserOpHash)
         if (!hasUserOpHash) {
           if (sentStepWithoutHash !== step) {
@@ -2347,7 +2362,7 @@ function DeployVaultBatcher({
       if (Date.now() - started > 10 * 60 * 1000) {
         throw new Error('Server deploy did not complete in time. Check status and retry continue.')
       }
-      if (step.endsWith('_sent') || step === 'cleanup_sent') {
+      if (isUserOpBackedSentStep) {
         backoff = true
       }
       if (backoff) delayMs = Math.min(delayMs * 2, 8000)
@@ -2500,6 +2515,7 @@ function DeployVaultBatcher({
       charmAlphaVaultDeploy: keccak256(toBytes('charm-factory-sentinel-v1')),
       creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CreatorCharmStrategy as Hex),
       ajnaStrategy: keccak256(DEPLOY_BYTECODE.AjnaStrategy as Hex),
+      solanaStrategy: keccak256(DEPLOY_BYTECODE.SolanaBridgeStrategy as Hex),
     } as const
   }, [])
 
@@ -2935,7 +2951,8 @@ function DeployVaultBatcher({
 
       const depositAmount = minFirstDeposit
       const minimumTotalIdle = (depositAmount * DEFAULT_MIN_IDLE_PERCENT_BPS) / 10_000n
-      const auctionSteps = encodeUniswapCcaLinearSteps(DEFAULT_CCA_DURATION_BLOCKS)
+      // Schedule is enforced onchain by CCALaunchStrategy; caller-provided steps are ignored.
+      const auctionSteps = '0x' as Hex
       // Safety: The deployment batcher tries to call `CreatorCoin.setPayoutRecipient(payoutRecipient)` when non-zero.
       // Zora Creator Coins restrict `setPayoutRecipient` to the coin owner, so that internal call reverts (msg.sender=batcher).
       // We always pass `address(0)` to the batcher and, when needed, set payoutRecipient from the identity wallet separately.
@@ -3306,12 +3323,13 @@ function DeployVaultBatcher({
           solanaIxs: [],
         } as const
 
-        // Phase 3 (strategies): Charm CREATOR/USDC + Ajna lending
+        // Phase 3 (strategies): Charm + Ajna + Solana bridge strategy
         const charmWeightBps = DEFAULT_CHARM_WEIGHT_BPS
         const ajnaWeightBps = DEFAULT_AJNA_WEIGHT_BPS
+        const solanaWeightBps = DEFAULT_SOLANA_WEIGHT_BPS
         if (charmWeightBps <= 0n) throw new Error('Charm strategy is required')
         if (ajnaWeightBps <= 0n) throw new Error('Ajna strategy is required')
-        const charmLabel = (depositSymbol || '').toLowerCase()
+        if (solanaWeightBps <= 0n) throw new Error('Solana strategy is required')
 
         // If the CREATOR/USDC v3 pool doesn't exist yet, `deployPhase3Strategies` needs a non-zero
         // `initialSqrtPriceX96` to create+initialize it.
@@ -3429,10 +3447,11 @@ function DeployVaultBatcher({
           vault: expected.vault,
           version: deploymentVersion,
           initialSqrtPriceX96: marketV3InitialSqrtPriceX96 ?? fallbackV3InitialSqrtPriceX96,
-          charmVaultName: charmLabel ? `4626: ${charmLabel}/USDC` : '4626: CREATOR/USDC',
-          charmVaultSymbol: charmLabel ? `CV-${charmLabel}-USDC` : 'CV-CREATOR-USDC',
+          charmVaultName: '4626.fun Strategy: Charm',
+          charmVaultSymbol: 'AKITA-USDC',
           charmWeightBps,
           ajnaWeightBps,
+          solanaWeightBps,
           enableAutoAllocate: false,
         } as const
 
@@ -3650,7 +3669,7 @@ function DeployVaultBatcher({
         const phase3Calls: Array<{ target: Address; value: bigint; data: Hex }> = [
           ...phase3StrategyCalls,
           vaultSetMinimumIdleCall,
-          // Apply 30/30 immediately from the 60% deployable bucket (40% reserved idle).
+          // Apply the configured 30/30/30 strategy mix while preserving 10% idle on the vault.
           vaultDeployToStrategiesCall,
           ...phase2Create2Calls,
           ...phase2ConfigCalls,
@@ -3668,6 +3687,13 @@ function DeployVaultBatcher({
           phase2FinalizeCalls: serializeSessionCalls(phase2FinalizeCalls),
           phase3Calls: serializeSessionCalls(phase3Calls),
           phase4Calls: serializeSessionCalls(phase4Calls),
+          solanaOvault: {
+            enabled: true,
+            assetMintOrigin: solanaAssetMintOrigin,
+            ...(solanaAssetMeshMintOverride ? { assetMeshMint: solanaAssetMeshMintOverride } : {}),
+            ...(solanaShareMeshMintOverride ? { shareMeshMint: solanaShareMeshMintOverride } : {}),
+            ...(solanaEidOverride !== null ? { solanaEid: solanaEidOverride } : {}),
+          },
           version: deploymentVersion,
         }
         const deployPlanExport: DeployPlanExport = {
@@ -4099,9 +4125,9 @@ function DeployVaultBatcher({
                 }
                 if (simResult.revertData?.toLowerCase().startsWith('0xe092ade8')) {
                   throw new Error(
-                    `${logPhaseLabel} would revert: Solana bridge route is not registered ` +
-                      '(WrappedSplRouteNotRegistered). Register a supported ShareOFT↔SPL route first, ' +
-                      'or disable Solana bridging for this deploy.',
+                    `${logPhaseLabel} would revert: Solana OVault mesh route is not ready ` +
+                      '(WrappedSplRouteNotRegistered). Configure a supported ShareOFT↔SPL mesh route first, ' +
+                      'then retry deploy preflight.',
                   )
                 }
                 // If we have directCallResult with an error, show that too
@@ -4127,9 +4153,9 @@ function DeployVaultBatcher({
                   }
                   if (simResult.directCallResult.revertData?.toLowerCase().startsWith('0xe092ade8')) {
                     throw new Error(
-                      `${logPhaseLabel} would revert: Solana bridge route is not registered ` +
-                        '(WrappedSplRouteNotRegistered). Register a supported ShareOFT↔SPL route first, ' +
-                        'or disable Solana bridging for this deploy.',
+                      `${logPhaseLabel} would revert: Solana OVault mesh route is not ready ` +
+                        '(WrappedSplRouteNotRegistered). Configure a supported ShareOFT↔SPL mesh route first, ' +
+                        'then retry deploy preflight.',
                     )
                   }
                 }
@@ -5007,6 +5033,13 @@ function DeployVaultBatcher({
             Addresses are deterministic on Base. Click to view on BaseScan.
           </div>
           <div className="rounded-md border border-white/5 bg-black/30 px-3 py-2 mb-3 space-y-1">
+            <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide">Token roles</div>
+            <div className="text-[11px] text-zinc-400 leading-relaxed">
+              Underlying creator coin ({depositSymbol || 'TOKEN'}) is what gets deposited and withdrawn. Vault share token (
+              {shareSymbol || 'ShareOFT'}) is a receipt token that gets minted on deposit and burned on redeem.
+            </div>
+          </div>
+          <div className="rounded-md border border-white/5 bg-black/30 px-3 py-2 mb-3 space-y-1">
             <AddressRow label="Active batcher" address={batcherAddress} />
             <div className="flex items-center justify-between gap-4 text-[11px]">
               <div className="text-zinc-500">Deploy mode</div>
@@ -5018,9 +5051,10 @@ function DeployVaultBatcher({
             <div className="py-3">
               <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 1</div>
               <div className="space-y-2">
+                <AddressRow label="Underlying creator coin" address={creatorToken} />
                 <AddressRow label="Vault" address={expected?.vault} />
                 <AddressRow label="Wrapper" address={expected?.wrapper} />
-                <AddressRow label="Share token" address={expected?.shareOFT} />
+                <AddressRow label="Vault share token (ShareOFT)" address={expected?.shareOFT} />
               </div>
             </div>
 
@@ -5387,72 +5421,132 @@ function DeployVaultMain() {
     const query = normalizeBytes32(params.get('shareOftSaltOverride'))
     return query ?? env
   }, [])
-  const [solanaMintOverrideInput, setSolanaMintOverrideInput] = useState<string>(() => {
+  const [solanaAssetMintOrigin, setSolanaAssetMintOrigin] = useState<'existing' | 'new'>(() => {
+    const envRaw = String(import.meta.env.VITE_SOLANA_OVAULT_ASSET_MINT_ORIGIN ?? '').trim().toLowerCase()
+    const env = envRaw === 'new' ? 'new' : 'existing'
+    if (typeof window === 'undefined') return env
+    try {
+      const storedRaw = String(window.localStorage.getItem('cv:deploy:solanaAssetMintOrigin') ?? '').trim().toLowerCase()
+      if (storedRaw === 'existing' || storedRaw === 'new') return storedRaw
+    } catch {
+      // ignore
+    }
+    const params = new URLSearchParams(window.location.search)
+    const queryRaw = String(params.get('solanaAssetMintOrigin') ?? '').trim().toLowerCase()
+    if (queryRaw === 'existing' || queryRaw === 'new') return queryRaw
+    return env
+  })
+  const [solanaAssetMeshMintInput, setSolanaAssetMeshMintInput] = useState<string>(() => {
     const env = normalizeBytes32(import.meta.env.VITE_SOLANA_DEFAULT_MINT_BYTES32 as string | undefined)
     if (typeof window === 'undefined') return String(env ?? '')
     try {
-      const stored = normalizeBytes32(window.localStorage.getItem('cv:deploy:solanaMintOverride'))
+      const stored = normalizeBytes32(window.localStorage.getItem('cv:deploy:solanaAssetMeshMint'))
+      if (stored) return String(stored)
+      const legacy = normalizeBytes32(window.localStorage.getItem('cv:deploy:solanaMintOverride'))
+      if (legacy) return String(legacy)
+    } catch {
+      // ignore
+    }
+    const params = new URLSearchParams(window.location.search)
+    const query = normalizeBytes32(params.get('solanaAssetMint') ?? params.get('solanaMint'))
+    return String(query ?? env ?? '')
+  })
+  const [solanaShareMeshMintInput, setSolanaShareMeshMintInput] = useState<string>(() => {
+    const env = normalizeBytes32(import.meta.env.VITE_SOLANA_OVAULT_SHARE_MINT_BYTES32 as string | undefined)
+    if (typeof window === 'undefined') return String(env ?? '')
+    try {
+      const stored = normalizeBytes32(window.localStorage.getItem('cv:deploy:solanaShareMeshMint'))
       if (stored) return String(stored)
     } catch {
       // ignore
     }
     const params = new URLSearchParams(window.location.search)
-    const query = normalizeBytes32(params.get('solanaMint'))
+    const query = normalizeBytes32(params.get('solanaShareMint'))
     return String(query ?? env ?? '')
   })
-  const [solanaDecimalsOverrideInput, setSolanaDecimalsOverrideInput] = useState<string>(() => {
-    const env = parseUint8(import.meta.env.VITE_SOLANA_DEFAULT_MINT_DECIMALS as string | undefined)
+  const [solanaEidInput, setSolanaEidInput] = useState<string>(() => {
+    const env = parseUInt32(import.meta.env.VITE_SOLANA_EID as string | undefined)
     if (typeof window === 'undefined') return env !== null ? String(env) : ''
     try {
-      const stored = parseUint8(window.localStorage.getItem('cv:deploy:solanaDecimalsOverride'))
+      const stored = parseUInt32(window.localStorage.getItem('cv:deploy:solanaEid'))
       if (stored !== null) return String(stored)
     } catch {
       // ignore
     }
     const params = new URLSearchParams(window.location.search)
-    const query = parseUint8(params.get('solanaDecimals'))
+    const query = parseUInt32(params.get('solanaEid'))
     const v = query ?? env
     return v !== null ? String(v) : ''
   })
-  const solanaMintOverride = useMemo(
-    () => normalizeBytes32(solanaMintOverrideInput),
-    [solanaMintOverrideInput],
+  const solanaAssetMeshMintOverride = useMemo(
+    () => normalizeBytes32(solanaAssetMeshMintInput),
+    [solanaAssetMeshMintInput],
   )
-  const solanaDecimalsOverride = useMemo(
-    () => parseUint8(solanaDecimalsOverrideInput),
-    [solanaDecimalsOverrideInput],
+  const solanaShareMeshMintOverride = useMemo(
+    () => normalizeBytes32(solanaShareMeshMintInput),
+    [solanaShareMeshMintInput],
   )
-  const solanaMintOverrideInvalid = solanaMintOverrideInput.trim().length > 0 && !solanaMintOverride
-  const solanaDecimalsOverrideInvalid =
-    solanaDecimalsOverrideInput.trim().length > 0 && solanaDecimalsOverride === null
+  const solanaEidOverride = useMemo(
+    () => parseUInt32(solanaEidInput),
+    [solanaEidInput],
+  )
+  const solanaAssetMeshMintInvalid = solanaAssetMeshMintInput.trim().length > 0 && !solanaAssetMeshMintOverride
+  const solanaShareMeshMintInvalid = solanaShareMeshMintInput.trim().length > 0 && !solanaShareMeshMintOverride
+  const solanaEidOverrideInvalid = solanaEidInput.trim().length > 0 && solanaEidOverride === null
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
-      const v = solanaMintOverrideInput.trim()
+      window.localStorage.setItem('cv:deploy:solanaAssetMintOrigin', solanaAssetMintOrigin)
+    } catch {
+      // ignore
+    }
+  }, [solanaAssetMintOrigin])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const v = solanaAssetMeshMintInput.trim()
       if (v.length > 0) {
+        window.localStorage.setItem('cv:deploy:solanaAssetMeshMint', v)
+        // Backward compatibility for operators using older localStorage keys.
         window.localStorage.setItem('cv:deploy:solanaMintOverride', v)
       } else {
+        window.localStorage.removeItem('cv:deploy:solanaAssetMeshMint')
         window.localStorage.removeItem('cv:deploy:solanaMintOverride')
       }
     } catch {
       // ignore
     }
-  }, [solanaMintOverrideInput])
+  }, [solanaAssetMeshMintInput])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
-      const v = solanaDecimalsOverrideInput.trim()
+      const v = solanaShareMeshMintInput.trim()
       if (v.length > 0) {
-        window.localStorage.setItem('cv:deploy:solanaDecimalsOverride', v)
+        window.localStorage.setItem('cv:deploy:solanaShareMeshMint', v)
       } else {
-        window.localStorage.removeItem('cv:deploy:solanaDecimalsOverride')
+        window.localStorage.removeItem('cv:deploy:solanaShareMeshMint')
       }
     } catch {
       // ignore
     }
-  }, [solanaDecimalsOverrideInput])
+  }, [solanaShareMeshMintInput])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const v = solanaEidInput.trim()
+      if (v.length > 0) {
+        window.localStorage.setItem('cv:deploy:solanaEid', v)
+      } else {
+        window.localStorage.removeItem('cv:deploy:solanaEid')
+      }
+    } catch {
+      // ignore
+    }
+  }, [solanaEidInput])
 
   const switchAuthCta = useMemo(() => {
     if (!privyReady) return undefined
@@ -5717,6 +5811,13 @@ function DeployVaultMain() {
     retry: 0,
   })
   const isAdmin = Boolean(adminAuthQuery.data?.isAdmin)
+  const solanaInfraStatusQuery = useQuery({
+    queryKey: ['deployVault', 'solanaInfraStatus'],
+    enabled: hasWallet && isAdmin,
+    queryFn: fetchSolanaInfraStatus,
+    staleTime: 30_000,
+    retry: 0,
+  })
 
   const [minCoinAgeDays, setMinCoinAgeDays] = useState<number>(DEFAULT_MIN_COIN_AGE_DAYS)
   useEffect(() => {
@@ -6413,6 +6514,7 @@ function DeployVaultMain() {
       vaultShareBurnStream: keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex),
       creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CreatorCharmStrategy as Hex),
       ajnaStrategy: keccak256(DEPLOY_BYTECODE.AjnaStrategy as Hex),
+      solanaStrategy: keccak256(DEPLOY_BYTECODE.SolanaBridgeStrategy as Hex),
     } as const
   }, [])
 
@@ -6432,6 +6534,7 @@ function DeployVaultMain() {
       deployCodeIds.vaultShareBurnStream,
       deployCodeIds.creatorCharmStrategy,
       deployCodeIds.ajnaStrategy,
+      deployCodeIds.solanaStrategy,
     ],
     enabled: Boolean(publicClient && creatorVaultBatcherAddress),
     staleTime: 60_000,
@@ -6491,6 +6594,7 @@ function DeployVaultMain() {
         // Charm alpha vault is created via Charm's official factory in phase 3 (not from bytecode store).
         { key: 'creatorCharmStrategy', label: 'CreatorCharmStrategy', codeId: deployCodeIds.creatorCharmStrategy },
         { key: 'ajnaStrategy', label: 'AjnaStrategy', codeId: deployCodeIds.ajnaStrategy },
+        { key: 'solanaStrategy', label: 'SolanaBridgeStrategy', codeId: deployCodeIds.solanaStrategy },
       ] as const
 
       const pointerResults = await publicClient!.multicall({
@@ -6697,6 +6801,18 @@ function DeployVaultMain() {
       !privySmartWalletIsCanonicalOwner,
   )
   const hasDetectedZoraCrossAppWallet = Boolean(privyCrossAppSmartWalletAddress || privyCrossAppEmbeddedEoaAddress)
+  const solanaOvaultStatus = solanaInfraStatusQuery.data ?? null
+  const solanaOvaultFirstBlocker = useMemo(() => {
+    const blockers = solanaOvaultStatus?.blockers ?? []
+    if (blockers.length === 0) return null
+    const compatibility = blockers.find((b) => /ovault compatibility/i.test(String(b)))
+    return compatibility ?? blockers[0]
+  }, [solanaOvaultStatus?.blockers])
+  const ovaultAutoSetupReady =
+    !isAdmin ||
+    !solanaOvaultStatus ||
+    !solanaOvaultStatus.solanaEnabledOnBatcher ||
+    solanaOvaultStatus.readyForAutoRegistration === true
 
   const canDeploy =
     tokenIsValid &&
@@ -6716,10 +6832,12 @@ function DeployVaultMain() {
     fundingGateOk &&
     creatorVaultBatcherConfigured &&
     bytecodeInfraOk &&
-    !solanaMintOverrideInvalid &&
-    !solanaDecimalsOverrideInvalid &&
+    !solanaAssetMeshMintInvalid &&
+    !solanaShareMeshMintInvalid &&
+    !solanaEidOverrideInvalid &&
     !identityBlockingReason &&
-    smartWalletCapabilityReady
+    smartWalletCapabilityReady &&
+    ovaultAutoSetupReady
 
   const vrfConsumerAddress = (CONTRACTS.vrfConsumer ?? null) as Address | null
   const vrfConsumerConfigured = isAddress(String(vrfConsumerAddress ?? ''))
@@ -6736,6 +6854,41 @@ function DeployVaultMain() {
   const coinAgeReady = creatorCoinReady && coinAgeOk
   const fundingReady = fundingGateOk
   const authReady = isAuthorizedDeployerOrOperator
+  const solanaOvaultChecklistItems =
+    !isAdmin
+      ? []
+      : solanaInfraStatusQuery.isFetching && !solanaOvaultStatus
+        ? [{ label: 'OVault mesh diagnostics', ok: false, hint: 'checking' }]
+        : solanaInfraStatusQuery.isError
+          ? [{ label: 'OVault mesh diagnostics', ok: false, hint: 'error' }]
+          : !solanaOvaultStatus
+            ? [{ label: 'OVault mesh diagnostics', ok: false, hint: 'unavailable' }]
+            : !solanaOvaultStatus.solanaEnabledOnBatcher
+              ? [{ label: 'OVault mesh on batcher', ok: true, hint: 'disabled' }]
+              : [
+                  {
+                    label: 'OVault existing mint compatibility',
+                    ok: solanaOvaultStatus.existingMintCompatible,
+                    hint: solanaOvaultStatus.existingMintCompatible ? 'ok' : 'blocked',
+                  },
+                  {
+                    label: 'OVault deposit eligibility',
+                    ok: solanaOvaultStatus.depositEligible,
+                    hint: solanaOvaultStatus.depositEligible ? 'ok' : 'blocked',
+                  },
+                  {
+                    label: 'OVault redeem eligibility',
+                    ok: solanaOvaultStatus.redeemEligible,
+                    hint: solanaOvaultStatus.redeemEligible ? 'ok' : 'blocked',
+                  },
+                  {
+                    label: 'OVault auto-setup readiness',
+                    ok: solanaOvaultStatus.readyForAutoRegistration,
+                    hint: solanaOvaultStatus.readyForAutoRegistration
+                      ? solanaOvaultStatus.dynamicProvisioningMode
+                      : 'blocked',
+                  },
+                ]
 
   const firstLaunchChecklist = [
     {
@@ -6822,12 +6975,13 @@ function DeployVaultMain() {
             ? `${Number(formatUnits(marketFloorQuery.data.weiPerToken, 18)).toFixed(6)} ETH`
             : 'missing',
     },
+    ...solanaOvaultChecklistItems,
     {
       label: 'Ready to deploy',
       ok: canDeploy,
       hint: canDeploy ? 'ready' : 'missing requirements',
     },
-  ] as const
+  ]
 
   const deployBlocker =
     !tokenIsValid
@@ -6856,10 +7010,16 @@ function DeployVaultMain() {
                         ? NO_EOA_STRICT_BLOCKER
                       : identityBlockingReason
                         ? identityBlockingReason
-                      : solanaMintOverrideInvalid
-                        ? 'Solana mint override must be bytes32 hex (`0x` + 64 chars).'
-                      : solanaDecimalsOverrideInvalid
-                        ? 'Solana decimals override must be 0-255.'
+                      : solanaAssetMeshMintInvalid
+                        ? 'Solana asset mesh mint must be bytes32 hex (`0x` + 64 chars).'
+                      : solanaShareMeshMintInvalid
+                        ? 'Solana share mesh mint must be bytes32 hex (`0x` + 64 chars).'
+                      : solanaEidOverrideInvalid
+                        ? 'Solana EID override must be an unsigned 32-bit integer.'
+                      : isAdmin && !ovaultAutoSetupReady
+                        ? solanaOvaultFirstBlocker
+                          ? `OVault mesh preflight is not ready: ${solanaOvaultFirstBlocker}`
+                          : 'OVault mesh preflight is not ready.'
                       : oneTimePrivyOwnerApprovalNeeded
                         ? connectedWalletAddress
                           ? 'One-time owner approval required before deploy. Approve your app Privy wallet as an owner of your canonical Zora smart wallet.'
@@ -7097,6 +7257,11 @@ function DeployVaultMain() {
                     </div>
                   ))}
                 </div>
+                {solanaOvaultStatus?.solanaEnabledOnBatcher && solanaOvaultFirstBlocker ? (
+                  <div className="mt-2 rounded border border-amber-500/25 bg-amber-500/5 px-2 py-1 text-[11px] text-amber-200/80">
+                    OVault blocker: {solanaOvaultFirstBlocker}
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -7294,35 +7459,57 @@ function DeployVaultMain() {
             </div>
 
               <div className="space-y-2">
-                <label className="label">Solana Mint (Optional)</label>
+                <label className="label">Solana OVault Mesh (Optional)</label>
+                <select
+                  value={solanaAssetMintOrigin}
+                  onChange={(e) => setSolanaAssetMintOrigin(e.target.value === 'new' ? 'new' : 'existing')}
+                  className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-200 outline-none focus:border-cyan-500/50 transition-colors"
+                >
+                  <option value="existing">Asset mint origin: existing mint</option>
+                  <option value="new">Asset mint origin: new mint</option>
+                </select>
                 <input
-                  value={solanaMintOverrideInput}
-                  onChange={(e) => setSolanaMintOverrideInput(e.target.value)}
-                  placeholder="0x<32-byte solana mint pubkey>"
+                  value={solanaAssetMeshMintInput}
+                  onChange={(e) => setSolanaAssetMeshMintInput(e.target.value)}
+                  placeholder="Asset mesh mint (bytes32): 0x<64 hex chars>"
                   className={`w-full bg-black border rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none transition-colors font-mono ${
-                    solanaMintOverrideInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
+                    solanaAssetMeshMintInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
                   }`}
                 />
                 <input
-                  value={solanaDecimalsOverrideInput}
-                  onChange={(e) => setSolanaDecimalsOverrideInput(e.target.value)}
-                  placeholder="Decimals (default 9)"
+                  value={solanaShareMeshMintInput}
+                  onChange={(e) => setSolanaShareMeshMintInput(e.target.value)}
+                  placeholder="Share mesh mint (bytes32): 0x<64 hex chars>"
+                  className={`w-full bg-black border rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none transition-colors font-mono ${
+                    solanaShareMeshMintInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
+                  }`}
+                />
+                <input
+                  value={solanaEidInput}
+                  onChange={(e) => setSolanaEidInput(e.target.value)}
+                  placeholder="Solana EID (optional)"
                   inputMode="numeric"
                   className={`w-full bg-black border rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none transition-colors font-mono ${
-                    solanaDecimalsOverrideInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
+                    solanaEidOverrideInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
                   }`}
                 />
                 <div className="text-xs text-zinc-600">
-                  Used for automatic ShareOFT registration on the Solana adapter when bridging is enabled. If empty, server defaults are used.
+                  Passed into deploy-session OVault preflight (`setupSolanaOvaultMesh`) for mesh readiness and
+                  deposit/redeem eligibility checks. If empty, server defaults are used.
                 </div>
-                {solanaMintOverrideInvalid ? (
+                {solanaAssetMeshMintInvalid ? (
                   <div className="text-[11px] text-red-400/90">
-                    Mint must be a bytes32 hex value (`0x` + 64 hex chars).
+                    Asset mesh mint must be a bytes32 hex value (`0x` + 64 hex chars).
                   </div>
                 ) : null}
-                {solanaDecimalsOverrideInvalid ? (
+                {solanaShareMeshMintInvalid ? (
                   <div className="text-[11px] text-red-400/90">
-                    Decimals must be an integer between 0 and 255.
+                    Share mesh mint must be a bytes32 hex value (`0x` + 64 hex chars).
+                  </div>
+                ) : null}
+                {solanaEidOverrideInvalid ? (
+                  <div className="text-[11px] text-red-400/90">
+                    Solana EID must be an integer in range `0` to `4294967295`.
                   </div>
                 ) : null}
               </div>
@@ -7486,8 +7673,10 @@ function DeployVaultMain() {
                     privyEmbeddedEoaCanSign={privyEmbeddedEoaCanSign}
                     connectedEoaOwnerReady={connectedEoaOwnerReady}
                     strictNoEoaMode={strictNoEoaMode}
-                    solanaMintOverride={solanaMintOverride}
-                    solanaDecimalsOverride={solanaDecimalsOverride}
+                    solanaAssetMintOrigin={solanaAssetMintOrigin}
+                    solanaAssetMeshMintOverride={solanaAssetMeshMintOverride}
+                    solanaShareMeshMintOverride={solanaShareMeshMintOverride}
+                    solanaEidOverride={solanaEidOverride}
                     connectorId={connector?.id}
                     wagmiWalletClient={walletClient}
                   />
@@ -7519,7 +7708,7 @@ function DeployVaultMain() {
                       {canCreateCoinInApp && canonicalIdentityIsContract ? (
                         <LaunchCoinCard
                           smartWalletAddress={canonicalIdentityAddress}
-                          preferredOwnerAddress={connectedWalletAddress}
+                          ownerAddress={connectedWalletAddress}
                           onCoinCreated={(coinAddress) => setCreatorToken(coinAddress)}
                         />
                       ) : (

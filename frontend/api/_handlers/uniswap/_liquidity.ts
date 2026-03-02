@@ -2,7 +2,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
-import { validateAddressField, validateChainIdField, validateIntegerAmountField } from '../../../server/uniswap/guards.js'
+import {
+  validateAddressField,
+  validateChainIdField,
+  validateIntegerAmountField,
+  validateTokenPolicy,
+} from '../../../server/uniswap/guards.js'
 import { isObject, readJsonObjectBody, toCleanErrorMessage, uniswapTradeFetch } from '../../../server/uniswap/trading.js'
 
 const ACTION_PATH: Record<string, string> = {
@@ -23,6 +28,8 @@ function assertPayloadSafety(payload: Record<string, unknown>): string | null {
     const err = validateAddressField(payload, key)
     if (err) return err
   }
+  const tokenPolicyErr = validateTokenPolicy(payload, ['token0', 'token1', 'tokenIn', 'tokenOut'])
+  if (tokenPolicyErr) return tokenPolicyErr
 
   for (const key of Object.keys(payload)) {
     if (!/^amount/i.test(key)) continue

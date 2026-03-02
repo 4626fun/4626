@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import handler from '../_handlers/deploy/_registerSolanaBridgeToken.ts'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 
+const SOL_MINT = 'So11111111111111111111111111111111111111112'
+
 const {
   readDeployAuthMock,
   getApiContractsMock,
@@ -36,6 +38,7 @@ vi.mock('../../server/_lib/contracts.js', () => ({
 
 vi.mock('../../server/_lib/meteoraAlphaVaultConfig.js', () => ({
   resolveMeteoraAlphaVaultConfig: resolveMeteoraConfigMock,
+  SOLANA_NATIVE_MINT: 'So11111111111111111111111111111111111111112',
 }))
 
 vi.mock('viem', async () => {
@@ -61,7 +64,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     vi.clearAllMocks()
     readDeployAuthMock.mockReturnValue({ address: '0x1111111111111111111111111111111111111111' })
     getApiContractsMock.mockReturnValue({
-      creatorVaultBatcher: '0xB87CBb646dD14F520078F11196f79BF815F18c84',
+      creatorVaultBatcher: '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753',
     })
     resolveMeteoraConfigMock.mockResolvedValue(null)
   })
@@ -78,6 +81,72 @@ describe('deploy registerSolanaBridgeToken handler', () => {
 
     expect(res.statusCode).toBe(401)
     expect(res.body?.error).toContain('Not authenticated')
+  })
+
+  it('returns 410 when legacy route writes are disabled', async () => {
+    const restoreEnv = applyEnv({
+      DEPLOY_SOLANA_LEGACY_WRITE_DISABLED: '1',
+    })
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        url: '/api/deploy/registerSolanaBridgeToken',
+        body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(410)
+      expect(String(res.body?.error ?? '')).toContain('/api/deploy/setupSolanaOvaultMesh')
+      expect(createPublicClientMock).not.toHaveBeenCalled()
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('allows OVault route writes even when legacy route is disabled', async () => {
+    const restoreEnv = applyEnv({
+      DEPLOY_SOLANA_LEGACY_WRITE_DISABLED: '1',
+    })
+    try {
+      const mockPublicClient = {
+        readContract: vi.fn(async (args: any) => {
+          switch (args.functionName) {
+            case 'solanaBridgeAdapter':
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return true
+            case 'owner':
+              return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
+            case 'solanaMintToToken':
+              return '0x0000000000000000000000000000000000000000'
+            default:
+              throw new Error(`Unexpected read ${String(args.functionName)}`)
+          }
+        }),
+        getBytecode: vi.fn(async () => '0x1234'),
+      }
+      createPublicClientMock.mockReturnValue(mockPublicClient as any)
+
+      const req = createMockReq({
+        method: 'POST',
+        url: '/api/deploy/setupSolanaOvaultMesh',
+        headers: { 'x-cv-solana-registration-route': 'ovault' },
+        body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.success).toBe(true)
+      expect(res.body?.data?.registered).toBe(true)
+    } finally {
+      restoreEnv()
+    }
   })
 
   it('allows internal secret auth when deploy session auth is unavailable', async () => {
@@ -160,6 +229,138 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     expect(createWalletClientMock).not.toHaveBeenCalled()
   })
 
+  it('fails compatibility when transfer-hook mint uses non-zero OFT fee', async () => {
+    const mockPublicClient = {
+      readContract: vi.fn(async (args: any) => {
+        switch (args.functionName) {
+          case 'solanaBridgeAdapter':
+            return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+          case 'solanaDestination':
+            return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+          case 'isRegistered':
+            return true
+          case 'owner':
+            return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
+          default:
+            throw new Error(`Unexpected read ${String(args.functionName)}`)
+        }
+      }),
+      getBytecode: vi.fn(async () => '0x1234'),
+    }
+    createPublicClientMock.mockReturnValue(mockPublicClient as any)
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+        assetMintOrigin: 'existing',
+        enforceCompatibility: true,
+        mintCompatibilityHints: {
+          tokenProgram: 'token-2022',
+          transferHookDetected: true,
+          adapterMode: 'regular-oft',
+          oftFeeBps: 10,
+          authorityCompatible: true,
+          rentValueLamports: '2039280',
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(String(res.body?.error ?? '')).toContain('OFT fee = 0')
+  })
+
+  it('fails compatibility when transfer-hook mint is configured for OFT adapter mode', async () => {
+    const mockPublicClient = {
+      readContract: vi.fn(async (args: any) => {
+        switch (args.functionName) {
+          case 'solanaBridgeAdapter':
+            return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+          case 'solanaDestination':
+            return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+          case 'isRegistered':
+            return true
+          case 'owner':
+            return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
+          default:
+            throw new Error(`Unexpected read ${String(args.functionName)}`)
+        }
+      }),
+      getBytecode: vi.fn(async () => '0x1234'),
+    }
+    createPublicClientMock.mockReturnValue(mockPublicClient as any)
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+        assetMintOrigin: 'existing',
+        enforceCompatibility: true,
+        mintCompatibilityHints: {
+          tokenProgram: 'token-2022',
+          transferHookDetected: true,
+          adapterMode: 'oft-adapter',
+          oftFeeBps: 0,
+          authorityCompatible: true,
+          rentValueLamports: '2039280',
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(String(res.body?.error ?? '')).toContain('regular-oft mode')
+  })
+
+  it('reports existing mint eligibility when compatibility checks pass', async () => {
+    const mockPublicClient = {
+      readContract: vi.fn(async (args: any) => {
+        switch (args.functionName) {
+          case 'solanaBridgeAdapter':
+            return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+          case 'solanaDestination':
+            return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+          case 'isRegistered':
+            return true
+          case 'owner':
+            return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
+          default:
+            throw new Error(`Unexpected read ${String(args.functionName)}`)
+        }
+      }),
+      getBytecode: vi.fn(async () => '0x1234'),
+    }
+    createPublicClientMock.mockReturnValue(mockPublicClient as any)
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+        assetMintOrigin: 'existing',
+        enforceCompatibility: true,
+        mintCompatibilityHints: {
+          tokenProgram: 'token-2022',
+          transferHookDetected: true,
+          adapterMode: 'regular-oft',
+          oftFeeBps: 0,
+          authorityCompatible: true,
+          rentValueLamports: '2039280',
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.existingMintCompatible).toBe(true)
+    expect(res.body?.data?.depositEligible).toBe(true)
+    expect(res.body?.data?.redeemEligible).toBe(true)
+  })
+
   it('returns Meteora bridge ixs payload for creator-scoped build requests', async () => {
     const restoreEnv = applyEnv({
       METEORA_IX_PROVISIONER_URL: 'https://provisioner.4626.fun/meteora-ixs',
@@ -172,6 +373,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         meteoraAlphaVault: '11111111111111111111111111111111',
         alphaVaultProgramId: '11111111111111111111111111111111',
         depositAccounts: [{ pubkey: '11111111111111111111111111111111', isSigner: false, isWritable: true }],
+        quoteMint: SOL_MINT,
         source: 'env',
       })
 
@@ -238,6 +440,51 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       ;(globalThis as any).fetch = originalFetch
       restoreEnv()
     }
+  })
+
+  it('returns 409 when strict SOL pair policy sees non-SOL quote mint', async () => {
+    resolveMeteoraConfigMock.mockResolvedValue({
+      creatorToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+      meteoraAlphaVault: '11111111111111111111111111111111',
+      alphaVaultProgramId: '11111111111111111111111111111111',
+      depositAccounts: [{ pubkey: '11111111111111111111111111111111', isSigner: false, isWritable: true }],
+      quoteMint: 'FG56varC4uyw8RxAswAweE7tQmjxw3vSsZmmCWkKhYuA',
+      source: 'db',
+    })
+    const mockPublicClient = {
+      readContract: vi.fn(async (args: any) => {
+        switch (args.functionName) {
+          case 'solanaBridgeAdapter':
+            return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+          case 'solanaDestination':
+            return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+          case 'isRegistered':
+            return true
+          case 'owner':
+            return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
+          default:
+            throw new Error(`Unexpected read ${String(args.functionName)}`)
+        }
+      }),
+      getBytecode: vi.fn(async () => '0x1234'),
+    }
+    createPublicClientMock.mockReturnValue(mockPublicClient as any)
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+        creatorToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+        expectedSolanaAmount: '1000000000000000000',
+        buildOnly: true,
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body?.success).toBe(false)
+    expect(String(res.body?.error ?? '')).toContain('Strict SOL pair policy is enabled')
   })
 
   it('returns 409 when bridge token has no deployed bytecode yet', async () => {
@@ -347,6 +594,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
         meteoraAlphaVault: '11111111111111111111111111111111',
         alphaVaultProgramId: '11111111111111111111111111111111',
         depositAccounts: [{ pubkey: '11111111111111111111111111111111', isSigner: false, isWritable: true }],
+        quoteMint: SOL_MINT,
         source: 'env',
       })
       const readContractMock = vi.fn(async (args: any) => {
@@ -439,6 +687,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       SOLANA_DEFAULT_MINT_DECIMALS: '9',
       SOLANA_DYNAMIC_ROUTE_ENABLED: '0',
       SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL: undefined,
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_URLS: undefined,
       SOLANA_BRIDGE_CLI_DIR: undefined,
     })
     try {
@@ -491,6 +740,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       SOLANA_DEFAULT_MINT_DECIMALS: '9',
       SOLANA_DYNAMIC_ROUTE_ENABLED: '1',
       SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL: undefined,
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_URLS: undefined,
       SOLANA_BRIDGE_CLI_DIR: '/tmp/does-not-exist',
     })
     try {
@@ -615,6 +865,94 @@ describe('deploy registerSolanaBridgeToken handler', () => {
       expect(res.body?.data?.solanaMint).toBe(
         '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       )
+    } finally {
+      ;(globalThis as any).fetch = originalFetch
+      restoreEnv()
+    }
+  })
+
+  it('uses remote provisioner mint compatibility hints for enforceCompatibility in existing-mint flow', async () => {
+    const restoreEnv = applyEnv({
+      SOLANA_ADAPTER_OWNER_PRIVATE_KEY:
+        '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      SOLANA_DEFAULT_MINT_BYTES32: undefined,
+      SOLANA_DEFAULT_MINT_DECIMALS: '9',
+      SOLANA_DYNAMIC_ROUTE_ENABLED: '1',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL: 'https://provisioner.4626.fun/provision',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET: 'test-secret',
+      SOLANA_BRIDGE_CLI_DIR: undefined,
+    })
+    const originalFetch = globalThis.fetch
+    try {
+      const mockPublicClient = {
+        readContract: vi.fn(async (args: any) => {
+          switch (args.functionName) {
+            case 'solanaBridgeAdapter':
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return false
+            case 'owner':
+              return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
+            case 'solanaMintToToken':
+              return '0x0000000000000000000000000000000000000000'
+            case 'scalars':
+              return 1n
+            case 'name':
+              return 'Creator Share'
+            case 'symbol':
+              return 'CSHARE'
+            default:
+              throw new Error(`Unexpected read ${String(args.functionName)}`)
+          }
+        }),
+        getBytecode: vi.fn(async () => '0x1234'),
+        waitForTransactionReceipt: vi.fn(async () => ({ status: 'success' })),
+      }
+      const writeContractMock = vi.fn(async (_args: any) => '0x5fcb2a505cad6c7c8bb750b95db3a846df8f181f85759750f84d91b736283557')
+      createPublicClientMock.mockReturnValue(mockPublicClient as any)
+      createWalletClientMock.mockReturnValue({ writeContract: writeContractMock } as any)
+      privateKeyToAccountMock.mockReturnValue({
+        address: '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD',
+      })
+
+      ;(globalThis as any).fetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            mintBytes32:
+              '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            runner: 'remote-provisioner',
+            data: {
+              mintCompatibilityHints: {
+                tokenProgram: 'spl-token',
+                transferHookDetected: false,
+                authorityCompatible: true,
+                rentValueLamports: '2039280',
+              },
+            },
+          }),
+      })) as any
+
+      const req = createMockReq({
+        method: 'POST',
+        body: {
+          bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+          assetMintOrigin: 'existing',
+          enforceCompatibility: true,
+        },
+      })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.success).toBe(true)
+      expect(res.body?.data?.existingMintCompatible).toBe(true)
+      expect(res.body?.data?.depositEligible).toBe(true)
+      expect(res.body?.data?.redeemEligible).toBe(true)
+      expect(writeContractMock).toHaveBeenCalledTimes(1)
     } finally {
       ;(globalThis as any).fetch = originalFetch
       restoreEnv()

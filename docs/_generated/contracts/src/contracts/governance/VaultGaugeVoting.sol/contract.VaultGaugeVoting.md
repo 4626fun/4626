@@ -1,5 +1,5 @@
 # VaultGaugeVoting
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/governance/VaultGaugeVoting.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/governance/VaultGaugeVoting.sol)
 
 **Inherits:**
 [IVaultGaugeVoting](/contracts/governance/CreatorGaugeController.sol/interface.IVaultGaugeVoting.md), Ownable, ReentrancyGuard
@@ -189,6 +189,15 @@ uint256 public lastCheckpointedEpoch
 ```
 
 
+### _epochCheckpointed
+Tracks which epochs have emitted `EpochCheckpointed` (idempotency guard).
+
+
+```solidity
+mapping(uint256 => bool) private _epochCheckpointed
+```
+
+
 ## Functions
 ### constructor
 
@@ -244,9 +253,9 @@ function _clearUserVotes(uint256 epoch, address user) internal;
 
 ### checkpoint
 
-Checkpoint the current epoch (anyone can call)
+Checkpoint the most recently ended epoch (anyone can call)
 
-Stores final weights for the epoch that just ended
+Emits exactly once per ended epoch (integrator-safe, idempotent).
 
 
 ```solidity
@@ -568,6 +577,13 @@ Check if a vault is whitelisted
 function _isVaultWhitelisted(address vault) internal view returns (bool);
 ```
 
+### _isVaultRegistered
+
+
+```solidity
+function _isVaultRegistered(address vault) internal view returns (bool);
+```
+
 ### canReceiveVotes
 
 Check if a vault can receive votes
@@ -743,5 +759,11 @@ error ZeroWeight();
 
 ```solidity
 error EpochNotEnded();
+```
+
+### LockExpiresBeforeEpochEnd
+
+```solidity
+error LockExpiresBeforeEpochEnd();
 ```
 

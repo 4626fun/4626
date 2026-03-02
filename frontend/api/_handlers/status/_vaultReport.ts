@@ -124,6 +124,11 @@ const AJNA_STRATEGY_VIEW_ABI = [
   { type: 'function', name: 'collateralToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
 
+const SOLANA_BRIDGE_STRATEGY_VIEW_ABI = [
+  { type: 'function', name: 'bridgeAdapter', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'solanaDestination', stateMutability: 'view', inputs: [], outputs: [{ type: 'bytes32' }] },
+] as const
+
 const STRATEGY_VIEW_ABI = [
   { type: 'function', name: 'isActive', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
   { type: 'function', name: 'asset', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
@@ -234,6 +239,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
 
     const ZERO = `0x${'0'.repeat(40)}`
+    const ZERO_BYTES32 = `0x${'0'.repeat(64)}`
     const addrOk = (a: any): a is `0x${string}` => typeof a === 'string' && isAddress(a) && a !== ZERO
     const any429 = (results: any[]) =>
       results.some((r) => r?.status === 'failure' && isRateLimitError(errorToMessage((r as any)?.error)))
@@ -409,6 +415,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let ajnaStrategyOwner: `0x${string}` | null = null
     let ajnaBucketIndex: bigint | null = null
     let ajnaCollateralToken: `0x${string}` | null = null
+    let solanaStrategyAddress: `0x${string}` | null = null
+    let solanaStrategyOwner: `0x${string}` | null = null
+    let solanaBridgeAdapterAddress: `0x${string}` | null = null
+    let solanaBridgeDestination: `0x${string}` | null = null
 
     const stratCalls: any[] = []
     for (const s of strategies) {
@@ -419,6 +429,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       stratCalls.push({ address: s, abi: AJNA_STRATEGY_VIEW_ABI, functionName: 'collateralToken' })
       stratCalls.push({ address: s, abi: AJNA_STRATEGY_VIEW_ABI, functionName: 'ajnaFactory' })
       stratCalls.push({ address: s, abi: AJNA_STRATEGY_BUCKET_ABI, functionName: 'bucketIndex' })
+      stratCalls.push({ address: s, abi: SOLANA_BRIDGE_STRATEGY_VIEW_ABI, functionName: 'bridgeAdapter' })
+      stratCalls.push({ address: s, abi: SOLANA_BRIDGE_STRATEGY_VIEW_ABI, functionName: 'solanaDestination' })
       stratCalls.push({ address: s, abi: OWNABLE_VIEW_ABI, functionName: 'owner' })
     }
 
@@ -431,7 +443,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         details: 'Rate limited while reading strategy details. Try again.',
       })
     } else {
-      const stride = 8
+      const stride = 10
       for (let i = 0; i < strategies.length; i++) {
         const s = strategies[i]
         const w = weights[i] ?? 0n
@@ -444,12 +456,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const collateral = pickResult<`0x${string}`>(stratRes[base + 4])
         const ajnaFactory = pickResult<`0x${string}`>(stratRes[base + 5])
         const bucketIndex = pickResult<bigint>(stratRes[base + 6])
-        const stratOwner = pickResult<`0x${string}`>(stratRes[base + 7])
+        const bridgeAdapter = pickResult<`0x${string}`>(stratRes[base + 7])
+        const solanaDestination = pickResult<`0x${string}`>(stratRes[base + 8])
+        const stratOwner = pickResult<`0x${string}`>(stratRes[base + 9])
+        const hasSolanaRoute =
+          addrOk(bridgeAdapter) || (typeof solanaDestination === 'string' && solanaDestination.toLowerCase() !== ZERO_BYTES32)
 
         const flavor = addrOk(charmVault)
           ? 'Charm LP (CreatorCharmStrategy)'
           : addrOk(ajnaPool)
             ? 'Ajna lending (AjnaStrategy)'
+            : hasSolanaRoute
+              ? 'Solana bridge (SolanaBridgeStrategy)'
             : `Strategy #${i + 1}`
 
         const assetOk = asset && isAddress(asset) ? asset.toLowerCase() === creatorToken.toLowerCase() : null
@@ -463,6 +481,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (collateral) extras.push(`collateral=${collateral}`)
         if (ajnaFactory) extras.push(`factory=${ajnaFactory}`)
         if (bucketIndex !== null && bucketIndex !== undefined) extras.push(`bucket=${bucketIndex.toString()}`)
+        if (bridgeAdapter) extras.push(`bridgeAdapter=${bridgeAdapter}`)
+        if (solanaDestination) extras.push(`solanaDestination=${solanaDestination}`)
         if (stratOwner) extras.push(`owner=${stratOwner}`)
 
         strategyChecks.push({
@@ -479,6 +499,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ajnaStrategyOwner = stratOwner
           ajnaBucketIndex = bucketIndex ?? null
           ajnaCollateralToken = collateral ?? null
+        }
+        if (!solanaStrategyAddress && hasSolanaRoute) {
+          solanaStrategyAddress = s
+          solanaStrategyOwner = stratOwner
+          solanaBridgeAdapterAddress = bridgeAdapter ?? null
+          solanaBridgeDestination = solanaDestination ?? null
         }
       }
     }
@@ -851,6 +877,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ajnaStrategyOwner,
           ajnaBucketIndex: ajnaBucketIndex == null ? null : ajnaBucketIndex.toString(),
           ajnaSuggestedBucketIndex: suggestedAjnaBucket == null ? null : String(suggestedAjnaBucket),
+          solanaStrategyAddress,
+          solanaStrategyOwner,
+          solanaBridgeAdapterAddress,
+          solanaBridgeDestination,
           creatorTreasury,
           protocolTreasury,
           shareName,

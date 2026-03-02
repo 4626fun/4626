@@ -26,8 +26,14 @@ import {
 import { readContract } from '../utils/onchain.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
 import { loadKeeperKeypair } from '../utils/solana.js';
+import { fetchActiveVaults, type VaultConfig } from '../utils/registry.js';
 
 const WORKFLOW_NAME = 'keepr-solana-price-monitor';
+const EVM_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
+const SOLANA_PUBKEY_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+const USD_DISPLAY_DECIMALS = 6;
+const USD_TINY_DISPLAY_DECIMALS = 12;
+const USD_TINY_THRESHOLD = 1 / 10 ** USD_DISPLAY_DECIMALS;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,6 +42,8 @@ const WORKFLOW_NAME = 'keepr-solana-price-monitor';
 export interface PriceMonitorResult {
   basePriceUsd: string;
   solanaPriceUsd: string;
+  oracleCreatorPerSol?: string;
+  solanaCreatorPerSol?: string;
   deviationBps: number;
   action: 'none' | 'alert' | 'recenter' | 'halt';
 }
@@ -80,15 +88,86 @@ async function fetchDLMMPrice(
  * Uses Pyth or CoinGecko as fallback.
  */
 async function fetchSolPriceUsd(): Promise<number> {
+  const envSolPrice = Number(process.env.SOL_PRICE_USD ?? '');
+  if (Number.isFinite(envSolPrice) && envSolPrice > 0) {
+    return envSolPrice;
+  }
+
   try {
     const res = await fetch(
       'https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd',
     );
-    const data = await res.json();
+    const data = (await res.json()) as { solana?: { usd?: number } };
     return data?.solana?.usd ?? 0;
   } catch {
     // Fallback: read from env (set by infrastructure)
     return Number(process.env.SOL_PRICE_USD ?? '0');
+  }
+}
+
+function toValidEvmAddress(value: unknown): `0x${string}` | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!EVM_ADDRESS_RE.test(trimmed)) return undefined;
+  return trimmed as `0x${string}`;
+}
+
+function toValidSolanaPubkey(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!SOLANA_PUBKEY_RE.test(trimmed)) return undefined;
+  return trimmed;
+}
+
+function formatUsdPrice(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return value.toFixed(USD_DISPLAY_DECIMALS);
+  if (value < USD_TINY_THRESHOLD) return value.toFixed(USD_TINY_DISPLAY_DECIMALS);
+  return value.toFixed(USD_DISPLAY_DECIMALS);
+}
+
+function formatCreatorPerSol(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '0';
+  return value < 1 ? value.toFixed(6) : value.toFixed(2);
+}
+
+function selectPreferredVault(vaults: VaultConfig[]): VaultConfig | undefined {
+  if (vaults.length === 0) return undefined;
+
+  const creatorCoinHint = String(
+    process.env.CREATOR_COIN_ADDRESS ?? process.env.CREATOR_COIN ?? '',
+  )
+    .trim()
+    .toLowerCase();
+  if (creatorCoinHint) {
+    const match = vaults.find(
+      (vault) => String(vault.creatorCoinAddress ?? '').trim().toLowerCase() === creatorCoinHint,
+    );
+    if (match) return match;
+  }
+
+  const vaultHint = String(process.env.VAULT_ADDRESS ?? '').trim().toLowerCase();
+  if (vaultHint) {
+    const match = vaults.find(
+      (vault) => String(vault.vaultAddress ?? '').trim().toLowerCase() === vaultHint,
+    );
+    if (match) return match;
+  }
+
+  return vaults[0];
+}
+
+async function resolveOracleAddress(): Promise<`0x${string}` | undefined> {
+  const envOracle = toValidEvmAddress(process.env.ORACLE_ADDRESS);
+  if (envOracle) return envOracle;
+
+  try {
+    const vaults = await fetchActiveVaults(CHAINS.base.id);
+    const withOracle = vaults.filter((vault) => toValidEvmAddress(vault.oracleAddress));
+    const selected = selectPreferredVault(withOracle);
+    return toValidEvmAddress(selected?.oracleAddress);
+  } catch {
+    // Non-fatal: keep legacy behavior when registry isn't reachable/configured.
+    return undefined;
   }
 }
 
@@ -104,11 +183,11 @@ export async function executeSolanaPriceMonitor(): Promise<PriceMonitorResult> {
     action: 'none',
   };
 
-  const dlmmPool = process.env.DLMM_POOL_ADDRESS;
-  const oracleAddress = process.env.ORACLE_ADDRESS as `0x${string}` | undefined;
+  const dlmmPool = toValidSolanaPubkey(process.env.DLMM_POOL_ADDRESS);
+  const oracleAddress = await resolveOracleAddress();
 
   // Only active during launch window.
-  if (!dlmmPool || !oracleAddress) {
+  if (!oracleAddress) {
     return result;
   }
 
@@ -121,10 +200,21 @@ export async function executeSolanaPriceMonitor(): Promise<PriceMonitorResult> {
     });
 
     const basePriceUsd = Number(basePriceRaw) / 1e18;
-    result.basePriceUsd = basePriceUsd.toFixed(6);
+    result.basePriceUsd = formatUsdPrice(basePriceUsd);
 
     if (basePriceUsd === 0) {
       await alertInfo(WORKFLOW_NAME, 'Base price is 0 — oracle may not be configured yet');
+      return result;
+    }
+
+    // Fetch SOL/USD once and derive creator per 1 SOL from each price source.
+    const solPriceUsd = await fetchSolPriceUsd();
+    if (solPriceUsd > 0) {
+      result.oracleCreatorPerSol = formatCreatorPerSol(solPriceUsd / basePriceUsd);
+    }
+
+    if (!dlmmPool) {
+      // Missing/invalid DLMM pool should not break the full command path.
       return result;
     }
 
@@ -133,15 +223,16 @@ export async function executeSolanaPriceMonitor(): Promise<PriceMonitorResult> {
     const { Connection } = require('@solana/web3.js');
     const connection = new Connection(solanaRpcUrl, 'confirmed');
 
-    // Get SOL/USD price for conversion
-    const solPriceUsd = await fetchSolPriceUsd();
     if (solPriceUsd === 0) {
       await alertWarning(WORKFLOW_NAME, 'Could not fetch SOL/USD price');
       return result;
     }
 
     const solanaPriceUsd = await fetchDLMMPrice(connection, dlmmPool, solPriceUsd);
-    result.solanaPriceUsd = solanaPriceUsd.toFixed(6);
+    result.solanaPriceUsd = formatUsdPrice(solanaPriceUsd);
+    if (solanaPriceUsd > 0) {
+      result.solanaCreatorPerSol = formatCreatorPerSol(solPriceUsd / solanaPriceUsd);
+    }
 
     if (solanaPriceUsd === 0) {
       await alertInfo(WORKFLOW_NAME, 'Solana DLMM price is 0 — pool may not be active yet');

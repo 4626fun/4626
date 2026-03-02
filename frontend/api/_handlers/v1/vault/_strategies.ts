@@ -27,6 +27,10 @@ function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
+function isBytes32Like(value: string): boolean {
+  return /^0x[a-fA-F0-9]{64}$/.test(value)
+}
+
 function getVaultParam(req: VercelRequest): string {
   const v = (typeof req.query?.vault === 'string' ? req.query.vault : typeof req.query?.address === 'string' ? req.query.address : '').trim()
   return v
@@ -71,13 +75,18 @@ const CHARM_ABI = [
   { type: 'function', name: 'autoFeeTier', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
 ] as const
 
+const SOLANA_STRATEGY_ABI = [
+  { type: 'function', name: 'bridgeAdapter', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'solanaDestination', stateMutability: 'view', inputs: [], outputs: [{ type: 'bytes32' }] },
+] as const
+
 type StrategyInfo = {
   address: `0x${string}`
   weight: string
   isActive: boolean | null
   owner: `0x${string}` | null
   asset: `0x${string}` | null
-  kind: 'ajna' | 'charm' | 'unknown'
+  kind: 'ajna' | 'charm' | 'solana' | 'unknown'
   ajna?: {
     pool: `0x${string}` | null
     factory: `0x${string}` | null
@@ -94,6 +103,10 @@ type StrategyInfo = {
     maxSwapPercent: string | null
     useZRouter: boolean | null
     autoFeeTier: boolean | null
+  }
+  solana?: {
+    bridgeAdapter: `0x${string}` | null
+    destination: `0x${string}` | null
   }
 }
 
@@ -159,6 +172,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           { address: s, abi: CHARM_ABI, functionName: 'maxSwapPercent' },
           { address: s, abi: CHARM_ABI, functionName: 'useZRouter' },
           { address: s, abi: CHARM_ABI, functionName: 'autoFeeTier' },
+          // Solana bridge probes
+          { address: s, abi: SOLANA_STRATEGY_ABI, functionName: 'bridgeAdapter' },
+          { address: s, abi: SOLANA_STRATEGY_ABI, functionName: 'solanaDestination' },
         ],
       })
 
@@ -170,8 +186,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const ajnaPool = pick<`0x${string}`>(3)
       const charmVault = pick<`0x${string}`>(8)
+      const bridgeAdapter = pick<`0x${string}`>(16)
+      const solanaDestination = pick<`0x${string}`>(17)
+      const hasSolanaConfig =
+        isAddressLike(String(bridgeAdapter ?? '')) || (typeof solanaDestination === 'string' && isBytes32Like(solanaDestination) && !/^0x0{64}$/i.test(solanaDestination))
 
-      const kind: StrategyInfo['kind'] = isAddressLike(String(ajnaPool ?? '')) ? 'ajna' : isAddressLike(String(charmVault ?? '')) ? 'charm' : 'unknown'
+      const kind: StrategyInfo['kind'] = isAddressLike(String(ajnaPool ?? ''))
+        ? 'ajna'
+        : isAddressLike(String(charmVault ?? ''))
+          ? 'charm'
+          : hasSolanaConfig
+            ? 'solana'
+            : 'unknown'
 
       const info: StrategyInfo = {
         address: s,
@@ -235,6 +261,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const v = pick<boolean>(15)
             return typeof v === 'boolean' ? v : null
           })(),
+        }
+      }
+
+      if (kind === 'solana') {
+        info.solana = {
+          bridgeAdapter: bridgeAdapter && isAddressLike(bridgeAdapter) ? (bridgeAdapter as any) : null,
+          destination: solanaDestination && isBytes32Like(solanaDestination) ? (solanaDestination as any) : null,
         }
       }
 

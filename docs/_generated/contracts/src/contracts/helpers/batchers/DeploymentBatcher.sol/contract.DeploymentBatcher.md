@@ -1,5 +1,5 @@
 # DeploymentBatcher
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/helpers/batchers/DeploymentBatcher.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/helpers/batchers/DeploymentBatcher.sol)
 
 **Inherits:**
 ReentrancyGuard
@@ -24,6 +24,53 @@ This contract splits deployment into multiple calls:
 
 ```solidity
 uint24 public constant V3_FEE_TIER = 3000
+```
+
+
+### CHARM_FACTORY
+Charm Finance Alpha Vault Factory on Base
+
+Vaults created via this factory appear on alpha.charm.fi UI
+
+
+```solidity
+address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa
+```
+
+
+### MIN_DEPOSIT
+Minimum deposit amount (5M tokens, 18 decimals)
+
+
+```solidity
+uint256 public constant MIN_DEPOSIT = 5_000_000e18
+```
+
+
+### MAX_DEPOSIT
+Maximum deposit amount (50M tokens, 18 decimals)
+
+
+```solidity
+uint256 public constant MAX_DEPOSIT = 50_000_000e18
+```
+
+
+### AUCTION_PERCENT
+Percentage of ■TOKENs allocated to CCA auction
+
+
+```solidity
+uint8 public constant AUCTION_PERCENT = 50
+```
+
+
+### VESTING_PERCENT
+Percentage of ■TOKENs vested to the creator
+
+
+```solidity
+uint8 public constant VESTING_PERCENT = 50
 ```
 
 
@@ -125,12 +172,60 @@ address public immutable ajnaFactory
 ```
 
 
+### vaultCoreModule
+
+```solidity
+address public immutable vaultCoreModule
+```
+
+
+### vaultStrategiesModule
+
+```solidity
+address public immutable vaultStrategiesModule
+```
+
+
+### vaultAdminModule
+
+```solidity
+address public immutable vaultAdminModule
+```
+
+
 ### pendingAuctions
 Pending auction allocations keyed by creator/owner/version salt.
 
 
 ```solidity
 mapping(bytes32 => PendingAuction) public pendingAuctions
+```
+
+
+### phase1SplitStates
+Split phase-1 state keyed by creator/owner/version salt.
+
+
+```solidity
+mapping(bytes32 => Phase1SplitState) public phase1SplitStates
+```
+
+
+### solanaBridgeAdapter
+SolanaBridgeAdapter address for bridging the Solana allocation.
+
+
+```solidity
+address public solanaBridgeAdapter
+```
+
+
+### solanaDestination
+Solana deployer/multisig wallet address (bytes32 pubkey) to receive bridged tokens.
+
+
+```solidity
+bytes32 public solanaDestination
 ```
 
 
@@ -153,37 +248,75 @@ constructor(
     address _usdc,
     address _uniswapV3Factory,
     address _uniswapRouter,
-    address _ajnaFactory
+    address _ajnaFactory,
+    address _vaultCoreModule,
+    address _vaultStrategiesModule,
+    address _vaultAdminModule
 ) ;
 ```
 
-### deployPhase1
+### deployPhase1Core
 
 
 ```solidity
-function deployPhase1(Phase1Params calldata params, CodeIds calldata codeIds)
+function deployPhase1Core(Phase1Params calldata params, CodeIds calldata codeIds)
     external
     nonReentrant
     returns (Phase1Result memory out);
 ```
 
-### deployPhase1WithSalt
+### deployPhase1CoreWithSalt
 
 
 ```solidity
-function deployPhase1WithSalt(Phase1Params calldata params, CodeIds calldata codeIds, bytes32 shareOftSaltOverride)
+function deployPhase1CoreWithSalt(
+    Phase1Params calldata params,
+    CodeIds calldata codeIds,
+    bytes32 shareOftSaltOverride
+) external nonReentrant returns (Phase1Result memory out);
+```
+
+### finalizePhase1
+
+
+```solidity
+function finalizePhase1(Phase1Params calldata params, CodeIds calldata codeIds)
     external
     nonReentrant
     returns (Phase1Result memory out);
 ```
 
-### _deployPhase1Internal
+### finalizePhase1WithSalt
 
 
 ```solidity
-function _deployPhase1Internal(Phase1Params calldata params, CodeIds calldata codeIds, bytes32 shareOftSaltOverride)
-    internal
-    returns (Phase1Result memory out);
+function finalizePhase1WithSalt(
+    Phase1Params calldata params,
+    CodeIds calldata codeIds,
+    bytes32 shareOftSaltOverride
+) external nonReentrant returns (Phase1Result memory out);
+```
+
+### _deployPhase1CoreInternal
+
+
+```solidity
+function _deployPhase1CoreInternal(
+    Phase1Params calldata params,
+    CodeIds calldata codeIds,
+    bytes32 shareOftSaltOverride
+) internal returns (Phase1Result memory out);
+```
+
+### _finalizePhase1InternalSplit
+
+
+```solidity
+function _finalizePhase1InternalSplit(
+    Phase1Params calldata params,
+    CodeIds calldata codeIds,
+    bytes32 shareOftSaltOverride
+) internal returns (Phase1Result memory out);
 ```
 
 ### deployPhase2AndLaunch
@@ -267,6 +400,17 @@ function deployPhase3Strategies(Phase3Params calldata params, StrategyCodeIds ca
     returns (Phase3Result memory out);
 ```
 
+### setSolanaConfig
+
+Set Solana bridge adapter + destination configuration.
+
+finalizePhase2 no longer bridges ShareOFT; Solana routing is handled separately.
+
+
+```solidity
+function setSolanaConfig(address _adapter, bytes32 _destination) external;
+```
+
 ### _requireOwner
 
 
@@ -300,6 +444,20 @@ function _requirePhase1CodeIds(CodeIds calldata codeIds) internal pure;
 
 ```solidity
 function _requirePhase2CodeIds(CodeIds calldata codeIds) internal pure;
+```
+
+### _phase1ParamsHash
+
+
+```solidity
+function _phase1ParamsHash(Phase1Params calldata params) internal pure returns (bytes32);
+```
+
+### _phase1CodeIdsHash
+
+
+```solidity
+function _phase1CodeIdsHash(CodeIds calldata codeIds) internal pure returns (bytes32);
 ```
 
 ### _deriveBaseSalt
@@ -361,6 +519,19 @@ event Phase1Deployed(
     address vault,
     address wrapper,
     address shareOFT
+);
+```
+
+### Phase1CoreDeployed
+
+```solidity
+event Phase1CoreDeployed(
+    address indexed creatorToken,
+    address indexed owner,
+    address oftBootstrapRegistry,
+    address vault,
+    address wrapper,
+    bytes32 shareOftSalt
 );
 ```
 
@@ -443,6 +614,12 @@ event CreatorShareVestingDeployed(
 );
 ```
 
+### SolanaConfigSet
+
+```solidity
+event SolanaConfigSet(address indexed adapter, bytes32 solanaDestination);
+```
+
 ## Errors
 ### ZeroAddress
 
@@ -450,10 +627,10 @@ event CreatorShareVestingDeployed(
 error ZeroAddress();
 ```
 
-### InvalidPercent
+### InvalidDepositAmount
 
 ```solidity
-error InvalidPercent();
+error InvalidDepositAmount();
 ```
 
 ### InvalidCodeId
@@ -472,6 +649,18 @@ error NotOwner();
 
 ```solidity
 error Phase1Missing();
+```
+
+### Phase1CoreMissing
+
+```solidity
+error Phase1CoreMissing();
+```
+
+### Phase1StateMismatch
+
+```solidity
+error Phase1StateMismatch();
 ```
 
 ### InvalidWeight
@@ -565,7 +754,6 @@ struct Phase2Params {
     string shareSymbol;
     string version;
     uint256 depositAmount;
-    uint8 auctionPercent;
     uint128 requiredRaise;
     uint256 floorPriceQ96;
     bytes auctionSteps;
@@ -603,10 +791,11 @@ struct Phase2FinalizeParams {
     address oracle;
     string version;
     uint256 depositAmount;
-    uint8 auctionPercent;
     uint128 requiredRaise;
     uint256 floorPriceQ96;
     bytes auctionSteps;
+    bytes32 meteoraAlphaVault;
+    IBaseSolanaBridge.Ix[] solanaIxs;
 }
 ```
 
@@ -629,6 +818,22 @@ struct Phase1Result {
     address vault;
     address wrapper;
     address shareOFT;
+}
+```
+
+### Phase1SplitState
+
+```solidity
+struct Phase1SplitState {
+    address oftBootstrapRegistry;
+    address vault;
+    address wrapper;
+    address shareOFT;
+    bytes32 shareOftSalt;
+    bytes32 paramsHash;
+    bytes32 codeIdsHash;
+    bool coreDone;
+    bool finalized;
 }
 ```
 

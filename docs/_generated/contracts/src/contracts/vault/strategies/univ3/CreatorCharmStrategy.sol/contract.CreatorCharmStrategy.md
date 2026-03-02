@@ -1,11 +1,34 @@
 # CreatorCharmStrategy
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/vault/strategies/univ3/CreatorCharmStrategy.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/vault/strategies/univ3/CreatorCharmStrategy.sol)
 
 **Inherits:**
-[IStrategy](/contracts/interfaces/IStrategy.sol/interface.IStrategy.md), ReentrancyGuard, Ownable
+[IStrategy](/contracts/interfaces/IStrategy.sol/interface.IStrategy.md), [IStrategyValuation](/contracts/interfaces/IStrategyValuation.sol/interface.IStrategyValuation.md), ReentrancyGuard, Ownable
 
 
 ## State Variables
+### DEFAULT_TWAP_DURATION
+Default TWAP window used for valuation (share pricing).
+
+
+```solidity
+uint32 internal constant DEFAULT_TWAP_DURATION = 1800
+```
+
+
+### MIN_TWAP_DURATION
+
+```solidity
+uint32 public constant MIN_TWAP_DURATION = 60
+```
+
+
+### MAX_TWAP_DURATION
+
+```solidity
+uint32 public constant MAX_TWAP_DURATION = 1 days
+```
+
+
 ### vault
 
 ```solidity
@@ -45,6 +68,28 @@ ICharmVault public charmVault
 
 ```solidity
 IUniswapV3Pool public swapPool
+```
+
+
+### creatorOracle
+CreatorOracle used for USDC valuation inside `getTotalAssets()`.
+
+This is intentionally distinct from Uniswap TWAP used for swap sizing/slippage.
+
+
+```solidity
+ICreatorOracle public creatorOracle
+```
+
+
+### twapDuration
+TWAP window (seconds) used for valuation inside `getTotalAssets()`.
+
+This impacts ERC-4626 share pricing via `CreatorOVault.totalAssets()`.
+
+
+```solidity
+uint32 public twapDuration = DEFAULT_TWAP_DURATION
 ```
 
 
@@ -172,6 +217,20 @@ function setCharmVault(address _charmVault) external onlyOwner;
 function setSwapPool(address _swapPool) external onlyOwner;
 ```
 
+### setCreatorOracle
+
+
+```solidity
+function setCreatorOracle(address _creatorOracle) external onlyOwner;
+```
+
+### setTwapDuration
+
+
+```solidity
+function setTwapDuration(uint32 _twapDuration) external onlyOwner;
+```
+
 ### setZRouter
 
 Set zRouter address for gas-efficient swaps
@@ -265,11 +324,57 @@ function isActive() external view override returns (bool);
 function asset() external view override returns (address);
 ```
 
+### isValuationReady
+
+Strategy valuation health check for ERC-4626 deposit/mint gating.
+
+MUST NOT revert. If the strategy has any USDC exposure, this requires a
+configured and fresh `creatorOracle` price. If there is no USDC exposure,
+returns true even if the oracle is unset.
+
+
+```solidity
+function isValuationReady() external view override returns (bool);
+```
+
 ### getTotalAssets
 
 
 ```solidity
 function getTotalAssets() public view override returns (uint256);
+```
+
+### _usdcToCreatorValue
+
+
+```solidity
+function _usdcToCreatorValue(uint256 usdcAmount) internal view returns (uint256 creatorAmount);
+```
+
+### _getPoolPriceTWAP
+
+Get manipulation-resistant valuation price (CREATOR per USDC, 1e18).
+
+Uses Uniswap V3 TWAP (pool observations), not spot `slot0` (manipulable intra-tx).
+If observations are unavailable, returns (0,false). Callers should not silently fall back to spot pricing.
+
+
+```solidity
+function _getPoolPriceTWAP(uint32 duration) internal view returns (uint256 creatorPerUsdc, bool ok);
+```
+
+### _getQuoteAtTick
+
+Minimal Uniswap V3 OracleLibrary-style quote at tick.
+Returns `quoteToken` amount for `baseAmount` of `baseToken`.
+Tick is assumed to be for the canonical Uniswap V3 ordering (token0 < token1).
+
+
+```solidity
+function _getQuoteAtTick(int24 tick, uint128 baseAmount, address baseToken, address quoteToken)
+    internal
+    pure
+    returns (uint256 quoteAmount);
 ```
 
 ### deposit
@@ -317,11 +422,31 @@ function isCharmInRange() public view returns (bool inRange, int24 currentTick, 
 
 Safe Charm deposit - SINGLE ATOMIC
 
+Pre-checks range, uses slippage protection, graceful failure handling
+
 
 ```solidity
 function _depositToCharmSafe(uint256 creatorAmount, uint256 usdcAmount, bool creatorIsToken0)
     internal
     returns (uint256 shares);
+```
+
+### _int24ToString
+
+Convert int24 to string for error messages
+
+
+```solidity
+function _int24ToString(int24 value) internal pure returns (string memory);
+```
+
+### _bytesToHex
+
+Convert bytes to hex string for error debugging
+
+
+```solidity
+function _bytesToHex(bytes memory data) internal pure returns (string memory);
 ```
 
 ### _swapCreatorToUsdcSafe
@@ -333,15 +458,6 @@ Uses zRouter if enabled, auto fee tier if enabled
 
 ```solidity
 function _swapCreatorToUsdcSafe(uint256 amountIn) internal returns (uint256 amountOut);
-```
-
-### _getPoolPrice
-
-Get pool price (CREATOR per USDC)
-
-
-```solidity
-function _getPoolPrice() internal view returns (uint256 creatorPerUsdc);
 ```
 
 ### withdraw
@@ -358,6 +474,20 @@ Swap USDC → CREATOR with slippage protection
 
 ```solidity
 function _swapUsdcToCreatorSafe(uint256 amountIn) internal returns (uint256 amountOut);
+```
+
+### _swapUsdcToCreatorRequired
+
+
+```solidity
+function _swapUsdcToCreatorRequired(uint256 amountIn) internal returns (uint256 amountOut);
+```
+
+### _swapUsdcToCreator
+
+
+```solidity
+function _swapUsdcToCreator(uint256 amountIn, bool required) internal returns (uint256 amountOut);
 ```
 
 ### harvest
@@ -434,6 +564,18 @@ event UnusedTokensReturned(uint256 creatorAmount, uint256 usdcAmount);
 event ParametersUpdated(uint256 maxSwapPercent, uint256 swapSlippageBps);
 ```
 
+### TwapDurationUpdated
+
+```solidity
+event TwapDurationUpdated(uint32 oldDuration, uint32 newDuration);
+```
+
+### CreatorOracleUpdated
+
+```solidity
+event CreatorOracleUpdated(address indexed oldOracle, address indexed newOracle);
+```
+
 ## Errors
 ### NotVault
 
@@ -457,5 +599,23 @@ error ZeroAddress();
 
 ```solidity
 error SlippageExceeded(uint256 expected, uint256 actual);
+```
+
+### InvalidTwapDuration
+
+```solidity
+error InvalidTwapDuration(uint32 duration);
+```
+
+### TwapUnavailable
+
+```solidity
+error TwapUnavailable();
+```
+
+### RequiredSwapFailed
+
+```solidity
+error RequiredSwapFailed();
 ```
 

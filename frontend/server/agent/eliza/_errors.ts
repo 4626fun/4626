@@ -2,6 +2,7 @@ export type AgentErrorCode =
   | 'INVALID_ENV'
   | 'STARTUP_FAILED'
   | 'DEPENDENCY_UNAVAILABLE'
+  | 'UNAUTHORIZED'
   | 'RATE_LIMITED'
   | 'BUDGET_EXCEEDED'
   | 'UPSTREAM_TIMEOUT'
@@ -67,12 +68,47 @@ export function toAgentError(
 ): AgentError {
   if (error instanceof AgentError) return error
   if (error instanceof Error) {
-    return new AgentError(fallbackCode, error.message || fallbackMessage, {
+    const message = error.message || fallbackMessage
+    const lower = message.toLowerCase()
+    const inferredCode: AgentErrorCode =
+      lower.includes('unauthorized') || lower.includes('forbidden') || lower.includes('denied')
+        ? 'UNAUTHORIZED'
+        : lower.includes('rate limit') || lower.includes('too many requests') || lower.includes('429')
+          ? 'RATE_LIMITED'
+          : lower.includes('timeout') || lower.includes('timed out')
+            ? 'UPSTREAM_TIMEOUT'
+            : lower.includes('unavailable') || lower.includes('503') || lower.includes('connection refused')
+              ? 'DEPENDENCY_UNAVAILABLE'
+              : fallbackCode
+    return new AgentError(inferredCode, message, {
       cause: error,
+      retryable:
+        inferredCode === 'UPSTREAM_TIMEOUT' ||
+        inferredCode === 'DEPENDENCY_UNAVAILABLE' ||
+        inferredCode === 'RATE_LIMITED',
     })
   }
   return new AgentError(fallbackCode, fallbackMessage, {
     details: { value: String(error) },
   })
+}
+
+export function toUserFacingAgentErrorMessage(error: AgentError): string {
+  if (error.code === 'RATE_LIMITED') {
+    return 'Request rate limited. Please retry in a few seconds.'
+  }
+  if (error.code === 'UNAUTHORIZED') {
+    return 'Unauthorized for this action.'
+  }
+  if (error.code === 'DEPENDENCY_UNAVAILABLE') {
+    return 'A required service is temporarily unavailable. Please try again shortly.'
+  }
+  if (error.code === 'UPSTREAM_TIMEOUT') {
+    return 'Request timed out. Please try again.'
+  }
+  if (error.code === 'BUDGET_EXCEEDED') {
+    return 'Daily AI budget limit reached for this agent. Please try again tomorrow.'
+  }
+  return 'Command failed due to an upstream error. Please try again later.'
 }
 

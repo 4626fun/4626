@@ -1,0 +1,593 @@
+/**
+ * Ajna Bucket Manager — oracle + liquidity aware bucket rebalancing.
+ *
+ * Goal:
+ * - Follow oracle price drift without hardcoding one bucket forever.
+ * - Add guardrails so bucket moves are incremental and predictable.
+ * - Bias target bucket toward nearby buckets with deeper quote liquidity.
+ *
+ * Flow per vault:
+ *  1) Read oracle suggested bucket from V3 TWAP.
+ *  2) Read Ajna strategy current bucket.
+ *  3) Apply threshold + max-step guardrails.
+ *  4) Scan nearby buckets for quote liquidity and pick best local bucket.
+ *  5) If keeper owns strategy and cooldown allows, call moveToBucket/setBucketIndex.
+ */
+
+import { getAddress, isAddress } from 'viem';
+import {
+  AJNA_BUCKET_LIQUIDITY_SEARCH_RADIUS,
+  AJNA_BUCKET_MAX_STEP,
+  AJNA_BUCKET_MOVE_COOLDOWN_SECONDS,
+  AJNA_BUCKET_MOVE_THRESHOLD,
+  AJNA_BUCKET_TWAP_DURATION,
+  CHAINS,
+  ORACLE_ABI,
+} from '../config.js';
+import {
+  getBlockTimestamp,
+  getKeeperAddress,
+  readContract,
+  writeContract,
+  type WriteResult,
+} from '../utils/onchain.js';
+import { alertCritical, alertInfo, alertWarning } from '../utils/alerts.js';
+import { fetchActiveVaults, filterVaultsForWorkflow, type VaultConfig } from '../utils/registry.js';
+
+const WORKFLOW_NAME = 'ajna-bucket-manager';
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+const MIN_BUCKET_INDEX = 1;
+const MAX_BUCKET_INDEX = 7388;
+const MAX_STRATEGIES = 5;
+
+const VAULT_STRATEGY_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'strategyList',
+    stateMutability: 'view',
+    inputs: [{ name: 'index', type: 'uint256' }],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'strategyWeights',
+    stateMutability: 'view',
+    inputs: [{ name: 'strategy', type: 'address' }],
+    outputs: [{ type: 'uint256' }],
+  },
+] as const;
+
+const AJNA_STRATEGY_VIEW_ABI = [
+  { type: 'function', name: 'ajnaPool', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'bucketIndex', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+] as const;
+
+const AJNA_STRATEGY_ADMIN_ABI = [
+  {
+    type: 'function',
+    name: 'moveToBucket',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'newIndex', type: 'uint256' }, { name: 'lpAmount', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setBucketIndex',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: '_index', type: 'uint256' }],
+    outputs: [],
+  },
+] as const;
+
+const AJNA_POOL_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'lenderInfo',
+    stateMutability: 'view',
+    inputs: [{ name: 'index', type: 'uint256' }, { name: 'lender', type: 'address' }],
+    outputs: [{ type: 'uint256' }, { type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'bucketInfo',
+    stateMutability: 'view',
+    inputs: [{ name: 'index', type: 'uint256' }],
+    outputs: [
+      { name: 'lpBalance', type: 'uint256' },
+      { name: 'collateral', type: 'uint256' },
+      { name: 'bankruptcyTime', type: 'uint256' },
+      { name: 'deposit', type: 'uint256' },
+      { name: 'scale', type: 'uint256' },
+    ],
+  },
+] as const;
+
+interface RuntimeConfig {
+  twapDuration: number;
+  moveThreshold: number;
+  maxStep: number;
+  cooldownSeconds: number;
+  searchRadius: number;
+}
+
+interface AjnaStrategyContext {
+  strategyAddress: `0x${string}`;
+  ajnaPool: `0x${string}`;
+  currentBucket: number;
+  owner: `0x${string}`;
+  weight: bigint;
+}
+
+export interface BucketMoveResult {
+  vaultAddress: `0x${string}`;
+  strategyAddress: `0x${string}`;
+  oracleAddress: `0x${string}`;
+  currentBucket: number;
+  suggestedBucket: number;
+  steppedBucket: number;
+  targetBucket: number;
+  moved: boolean;
+  method?: 'moveToBucket' | 'setBucketIndex';
+  txHash?: `0x${string}`;
+  skippedReason?: string;
+  error?: string;
+}
+
+export interface BatchAjnaBucketResult {
+  totalVaults: number;
+  totalStrategies: number;
+  processed: number;
+  moved: number;
+  skipped: number;
+  errors: number;
+  results: BucketMoveResult[];
+}
+
+function parsePositiveIntEnv(key: string, fallback: number): number {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.floor(n);
+}
+
+function buildRuntimeConfig(): RuntimeConfig {
+  return {
+    twapDuration: parsePositiveIntEnv('AJNA_BUCKET_TWAP_DURATION', AJNA_BUCKET_TWAP_DURATION),
+    moveThreshold: parsePositiveIntEnv('AJNA_BUCKET_MOVE_THRESHOLD', AJNA_BUCKET_MOVE_THRESHOLD),
+    maxStep: parsePositiveIntEnv('AJNA_BUCKET_MAX_STEP', AJNA_BUCKET_MAX_STEP),
+    cooldownSeconds: parsePositiveIntEnv(
+      'AJNA_BUCKET_MOVE_COOLDOWN_SECONDS',
+      AJNA_BUCKET_MOVE_COOLDOWN_SECONDS,
+    ),
+    searchRadius: parsePositiveIntEnv(
+      'AJNA_BUCKET_LIQUIDITY_SEARCH_RADIUS',
+      AJNA_BUCKET_LIQUIDITY_SEARCH_RADIUS,
+    ),
+  };
+}
+
+function asAddress(value: unknown): `0x${string}` | null {
+  if (typeof value !== 'string' || !isAddress(value)) return null;
+  return getAddress(value) as `0x${string}`;
+}
+
+export function clampBucketIndex(index: number): number {
+  return Math.max(MIN_BUCKET_INDEX, Math.min(MAX_BUCKET_INDEX, Math.floor(index)));
+}
+
+export function computeSteppedBucket(params: {
+  currentBucket: number;
+  suggestedBucket: number;
+  moveThreshold: number;
+  maxStep: number;
+}): {
+  shouldMove: boolean;
+  rawDelta: number;
+  steppedBucket: number;
+} {
+  const current = clampBucketIndex(params.currentBucket);
+  const suggested = clampBucketIndex(params.suggestedBucket);
+  const rawDelta = suggested - current;
+  const absDelta = Math.abs(rawDelta);
+  if (absDelta < params.moveThreshold) {
+    return { shouldMove: false, rawDelta, steppedBucket: current };
+  }
+
+  const capped = Math.min(absDelta, Math.max(1, params.maxStep));
+  const step = rawDelta < 0 ? -capped : capped;
+  return {
+    shouldMove: true,
+    rawDelta,
+    steppedBucket: clampBucketIndex(current + step),
+  };
+}
+
+export function pickBestLiquidityBucket(params: {
+  centerBucket: number;
+  candidates: Array<{ index: number; deposit: bigint }>;
+}): number {
+  let bestIndex = clampBucketIndex(params.centerBucket);
+  let bestDeposit = -1n;
+  let bestDistance = Number.MAX_SAFE_INTEGER;
+
+  for (const c of params.candidates) {
+    const index = clampBucketIndex(c.index);
+    const deposit = c.deposit >= 0n ? c.deposit : 0n;
+    const distance = Math.abs(index - params.centerBucket);
+    if (deposit > bestDeposit) {
+      bestDeposit = deposit;
+      bestDistance = distance;
+      bestIndex = index;
+      continue;
+    }
+    if (deposit === bestDeposit && distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  }
+
+  return bestIndex;
+}
+
+async function readAjnaStrategiesForVault(vaultAddress: `0x${string}`): Promise<AjnaStrategyContext[]> {
+  const out: AjnaStrategyContext[] = [];
+  const seen = new Set<string>();
+
+  for (let i = 0; i < MAX_STRATEGIES; i += 1) {
+    const rawStrategy = await readContract<unknown>({
+      address: vaultAddress,
+      abi: VAULT_STRATEGY_VIEW_ABI,
+      functionName: 'strategyList',
+      args: [BigInt(i)],
+    }).catch(() => null);
+
+    const strategyAddress = asAddress(rawStrategy);
+    if (!strategyAddress || strategyAddress.toLowerCase() === ZERO_ADDRESS.toLowerCase()) break;
+    const key = strategyAddress.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const weight = await readContract<bigint>({
+      address: vaultAddress,
+      abi: VAULT_STRATEGY_VIEW_ABI,
+      functionName: 'strategyWeights',
+      args: [strategyAddress],
+    }).catch(() => 0n);
+    if (weight === 0n) continue;
+
+    const ajnaPoolRaw = await readContract<unknown>({
+      address: strategyAddress,
+      abi: AJNA_STRATEGY_VIEW_ABI,
+      functionName: 'ajnaPool',
+    }).catch(() => null);
+    const ajnaPool = asAddress(ajnaPoolRaw);
+    if (!ajnaPool || ajnaPool.toLowerCase() === ZERO_ADDRESS.toLowerCase()) continue;
+
+    const bucketRaw = await readContract<bigint>({
+      address: strategyAddress,
+      abi: AJNA_STRATEGY_VIEW_ABI,
+      functionName: 'bucketIndex',
+    }).catch(() => 0n);
+    const ownerRaw = await readContract<unknown>({
+      address: strategyAddress,
+      abi: AJNA_STRATEGY_VIEW_ABI,
+      functionName: 'owner',
+    }).catch(() => null);
+    const owner = asAddress(ownerRaw);
+    if (!owner) continue;
+
+    out.push({
+      strategyAddress,
+      ajnaPool,
+      currentBucket: clampBucketIndex(Number(bucketRaw)),
+      owner,
+      weight,
+    });
+  }
+
+  return out;
+}
+
+async function readOracleSuggestedBucket(params: {
+  oracleAddress: `0x${string}`;
+  twapDuration: number;
+}): Promise<number | null> {
+  const bucket = await readContract<bigint>({
+    address: params.oracleAddress,
+    abi: ORACLE_ABI,
+    functionName: 'getAjnaBucketFromV3TWAP',
+    args: [params.twapDuration],
+  }).catch(() => null);
+
+  if (bucket === null || bucket === undefined) return null;
+  const asNumber = Number(bucket);
+  if (!Number.isFinite(asNumber) || asNumber <= 0) return null;
+  return clampBucketIndex(asNumber);
+}
+
+async function readCurrentBucketLenderInfo(params: {
+  ajnaPool: `0x${string}`;
+  bucketIndex: number;
+  lender: `0x${string}`;
+}): Promise<{ lpBalance: bigint; depositTime: bigint }> {
+  const data = await readContract<[bigint, bigint]>({
+    address: params.ajnaPool,
+    abi: AJNA_POOL_VIEW_ABI,
+    functionName: 'lenderInfo',
+    args: [BigInt(params.bucketIndex), params.lender],
+  }).catch(() => null);
+  if (!data) return { lpBalance: 0n, depositTime: 0n };
+  return { lpBalance: data[0] ?? 0n, depositTime: data[1] ?? 0n };
+}
+
+async function pickLiquidityAwareTarget(params: {
+  ajnaPool: `0x${string}`;
+  steppedBucket: number;
+  searchRadius: number;
+}): Promise<number> {
+  const radius = Math.max(0, params.searchRadius);
+  const start = clampBucketIndex(params.steppedBucket - radius);
+  const end = clampBucketIndex(params.steppedBucket + radius);
+
+  const candidates: Array<{ index: number; deposit: bigint }> = [];
+  for (let idx = start; idx <= end; idx += 1) {
+    const bucketInfo = await readContract<[bigint, bigint, bigint, bigint, bigint]>({
+      address: params.ajnaPool,
+      abi: AJNA_POOL_VIEW_ABI,
+      functionName: 'bucketInfo',
+      args: [BigInt(idx)],
+    }).catch(() => null);
+
+    const deposit = bucketInfo?.[3] ?? 0n;
+    candidates.push({ index: idx, deposit });
+  }
+
+  if (candidates.length === 0) return params.steppedBucket;
+  return pickBestLiquidityBucket({
+    centerBucket: params.steppedBucket,
+    candidates,
+  });
+}
+
+function resolveSingleVaultMode(): { vaultAddress: `0x${string}`; oracleAddress: `0x${string}` } | null {
+  const vaultAddress =
+    asAddress(process.env.AJNA_BUCKET_VAULT_ADDRESS) ?? asAddress(process.env.VAULT_ADDRESS);
+  const oracleAddress =
+    asAddress(process.env.AJNA_BUCKET_ORACLE_ADDRESS) ?? asAddress(process.env.ORACLE_ADDRESS);
+  if (!vaultAddress || !oracleAddress) return null;
+  return { vaultAddress, oracleAddress };
+}
+
+async function resolveVaults(): Promise<Array<{ vaultAddress: `0x${string}`; oracleAddress: `0x${string}` }>> {
+  const single = resolveSingleVaultMode();
+  if (single) return [single];
+
+  const allVaults = await fetchActiveVaults(CHAINS.base.id);
+  const candidates = filterVaultsForWorkflow(allVaults, 'ajna-bucket-manager');
+  return candidates
+    .map((v: VaultConfig) => {
+      const vaultAddress = asAddress(v.vaultAddress);
+      const oracleAddress = asAddress(v.oracleAddress);
+      if (!vaultAddress || !oracleAddress) return null;
+      return { vaultAddress, oracleAddress };
+    })
+    .filter((v): v is { vaultAddress: `0x${string}`; oracleAddress: `0x${string}` } => Boolean(v));
+}
+
+export async function executeAjnaBucketManager(): Promise<BatchAjnaBucketResult> {
+  const cfg = buildRuntimeConfig();
+  const keeperAddress = getKeeperAddress();
+  const now = await getBlockTimestamp();
+
+  let vaults: Array<{ vaultAddress: `0x${string}`; oracleAddress: `0x${string}` }> = [];
+  try {
+    vaults = await resolveVaults();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await alertCritical(WORKFLOW_NAME, 'Failed to resolve vault/oracle list', { error: message });
+    throw err;
+  }
+
+  const batch: BatchAjnaBucketResult = {
+    totalVaults: vaults.length,
+    totalStrategies: 0,
+    processed: 0,
+    moved: 0,
+    skipped: 0,
+    errors: 0,
+    results: [],
+  };
+
+  if (vaults.length === 0) {
+    return batch;
+  }
+
+  for (const vault of vaults) {
+    const suggestedBucket = await readOracleSuggestedBucket({
+      oracleAddress: vault.oracleAddress,
+      twapDuration: cfg.twapDuration,
+    });
+
+    if (suggestedBucket === null) {
+      batch.skipped += 1;
+      batch.results.push({
+        vaultAddress: vault.vaultAddress,
+        strategyAddress: ZERO_ADDRESS as `0x${string}`,
+        oracleAddress: vault.oracleAddress,
+        currentBucket: 0,
+        suggestedBucket: 0,
+        steppedBucket: 0,
+        targetBucket: 0,
+        moved: false,
+        skippedReason: 'oracle_bucket_unavailable',
+      });
+      continue;
+    }
+
+    const strategies = await readAjnaStrategiesForVault(vault.vaultAddress).catch(() => []);
+    batch.totalStrategies += strategies.length;
+    if (strategies.length === 0) continue;
+
+    for (const strategy of strategies) {
+      const step = computeSteppedBucket({
+        currentBucket: strategy.currentBucket,
+        suggestedBucket,
+        moveThreshold: cfg.moveThreshold,
+        maxStep: cfg.maxStep,
+      });
+
+      if (!step.shouldMove) {
+        batch.processed += 1;
+        batch.skipped += 1;
+        batch.results.push({
+          vaultAddress: vault.vaultAddress,
+          strategyAddress: strategy.strategyAddress,
+          oracleAddress: vault.oracleAddress,
+          currentBucket: strategy.currentBucket,
+          suggestedBucket,
+          steppedBucket: step.steppedBucket,
+          targetBucket: step.steppedBucket,
+          moved: false,
+          skippedReason: 'within_threshold',
+        });
+        continue;
+      }
+
+      const targetBucket = await pickLiquidityAwareTarget({
+        ajnaPool: strategy.ajnaPool,
+        steppedBucket: step.steppedBucket,
+        searchRadius: cfg.searchRadius,
+      }).catch(() => step.steppedBucket);
+
+      if (targetBucket === strategy.currentBucket) {
+        batch.processed += 1;
+        batch.skipped += 1;
+        batch.results.push({
+          vaultAddress: vault.vaultAddress,
+          strategyAddress: strategy.strategyAddress,
+          oracleAddress: vault.oracleAddress,
+          currentBucket: strategy.currentBucket,
+          suggestedBucket,
+          steppedBucket: step.steppedBucket,
+          targetBucket,
+          moved: false,
+          skippedReason: 'already_at_target',
+        });
+        continue;
+      }
+
+      if (strategy.owner.toLowerCase() !== keeperAddress.toLowerCase()) {
+        batch.processed += 1;
+        batch.skipped += 1;
+        batch.results.push({
+          vaultAddress: vault.vaultAddress,
+          strategyAddress: strategy.strategyAddress,
+          oracleAddress: vault.oracleAddress,
+          currentBucket: strategy.currentBucket,
+          suggestedBucket,
+          steppedBucket: step.steppedBucket,
+          targetBucket,
+          moved: false,
+          skippedReason: 'keeper_not_strategy_owner',
+        });
+        continue;
+      }
+
+      const lenderInfo = await readCurrentBucketLenderInfo({
+        ajnaPool: strategy.ajnaPool,
+        bucketIndex: strategy.currentBucket,
+        lender: strategy.strategyAddress,
+      });
+
+      const secondsSinceLastDeposit = lenderInfo.depositTime > 0n ? Number(now - lenderInfo.depositTime) : Number.MAX_SAFE_INTEGER;
+      if (lenderInfo.lpBalance > 0n && secondsSinceLastDeposit < cfg.cooldownSeconds) {
+        batch.processed += 1;
+        batch.skipped += 1;
+        batch.results.push({
+          vaultAddress: vault.vaultAddress,
+          strategyAddress: strategy.strategyAddress,
+          oracleAddress: vault.oracleAddress,
+          currentBucket: strategy.currentBucket,
+          suggestedBucket,
+          steppedBucket: step.steppedBucket,
+          targetBucket,
+          moved: false,
+          skippedReason: 'cooldown_active',
+        });
+        continue;
+      }
+
+      const method: 'moveToBucket' | 'setBucketIndex' =
+        lenderInfo.lpBalance > 0n ? 'moveToBucket' : 'setBucketIndex';
+
+      const write: WriteResult =
+        method === 'moveToBucket'
+          ? await writeContract({
+              address: strategy.strategyAddress,
+              abi: AJNA_STRATEGY_ADMIN_ABI,
+              functionName: 'moveToBucket',
+              args: [BigInt(targetBucket), 0n],
+            })
+          : await writeContract({
+              address: strategy.strategyAddress,
+              abi: AJNA_STRATEGY_ADMIN_ABI,
+              functionName: 'setBucketIndex',
+              args: [BigInt(targetBucket)],
+            });
+
+      batch.processed += 1;
+      if (write.success) {
+        batch.moved += 1;
+        batch.results.push({
+          vaultAddress: vault.vaultAddress,
+          strategyAddress: strategy.strategyAddress,
+          oracleAddress: vault.oracleAddress,
+          currentBucket: strategy.currentBucket,
+          suggestedBucket,
+          steppedBucket: step.steppedBucket,
+          targetBucket,
+          moved: true,
+          method,
+          txHash: write.txHash,
+        });
+      } else {
+        batch.errors += 1;
+        batch.results.push({
+          vaultAddress: vault.vaultAddress,
+          strategyAddress: strategy.strategyAddress,
+          oracleAddress: vault.oracleAddress,
+          currentBucket: strategy.currentBucket,
+          suggestedBucket,
+          steppedBucket: step.steppedBucket,
+          targetBucket,
+          moved: false,
+          method,
+          error: write.error ?? 'unknown_error',
+        });
+      }
+    }
+  }
+
+  if (batch.moved > 0) {
+    await alertInfo(WORKFLOW_NAME, 'Ajna bucket manager moved liquidity', {
+      totalVaults: batch.totalVaults,
+      totalStrategies: batch.totalStrategies,
+      moved: batch.moved,
+      skipped: batch.skipped,
+      errors: batch.errors,
+    });
+  } else if (batch.errors > 0) {
+    await alertWarning(WORKFLOW_NAME, 'Ajna bucket manager completed with errors', {
+      totalVaults: batch.totalVaults,
+      totalStrategies: batch.totalStrategies,
+      moved: batch.moved,
+      skipped: batch.skipped,
+      errors: batch.errors,
+    });
+  }
+
+  return batch;
+}
+

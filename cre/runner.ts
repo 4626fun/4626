@@ -5,12 +5,14 @@
  * Usage:
  *   tsx runner.ts [workflow-name] [--dry-run]
  *
- * No argument runs the unified workflow (vault-keeper + auction-settlement + keepr-queue).
+ * No argument runs the unified workflow
+ * (vault-keeper + ajna-bucket-manager + auction-settlement + keepr-queue).
  *
  * Examples:
  *   tsx runner.ts                        # Run everything
  *   tsx runner.ts --dry-run              # Dry-run everything
  *   tsx runner.ts vault-keeper           # Run just vault keeper
+ *   tsx runner.ts ajna-bucket-manager    # Run just Ajna bucket manager
  *   tsx runner.ts auction-settlement     # Run just auction settlement
  *   tsx runner.ts keepr-queue            # Run just the keepr queue processor
  *
@@ -54,6 +56,9 @@ async function main() {
       case 'vault-keeper':
         workflow = await import('./workflows/vault-keeper.workflow.js');
         break;
+      case 'ajna-bucket-manager':
+        workflow = await import('./workflows/ajna-bucket-manager.workflow.js');
+        break;
       case 'auction-settlement':
         workflow = await import('./workflows/auction-settlement.workflow.js');
         break;
@@ -64,8 +69,11 @@ async function main() {
         console.error(`Unknown workflow: ${workflowName}`);
         console.error('');
         console.error('Available:');
-        console.error('  (no arg)             — run all (vault-keeper + auction-settlement + keepr-queue)');
+        console.error(
+          '  (no arg)             — run all (vault-keeper + ajna-bucket-manager + auction-settlement + keepr-queue)',
+        );
         console.error('  vault-keeper         — tend/report per vault');
+        console.error('  ajna-bucket-manager  — liquidity-aware Ajna bucket management');
         console.error('  auction-settlement   — sweep graduated auctions');
         console.error('  keepr-queue          — process XMTP/Neynar queue');
         process.exit(1);

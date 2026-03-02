@@ -18,7 +18,15 @@ import {
 import { logger } from '../../../server/_lib/logger.js'
 import { getApiContracts } from '../../../server/_lib/contracts.js'
 import { readDeployAuthFromRequest } from '../../../server/_lib/deployAuth.js'
-import { resolveMeteoraAlphaVaultConfig } from '../../../server/_lib/meteoraAlphaVaultConfig.js'
+import {
+  SOLANA_NATIVE_MINT,
+  resolveMeteoraAlphaVaultConfig,
+} from '../../../server/_lib/meteoraAlphaVaultConfig.js'
+import {
+  evaluateSolanaOvaultMintCompatibility,
+  normalizeSolanaAssetMintOrigin,
+  parseSolanaOvaultMintCompatibilityHints,
+} from '../../../server/_lib/solanaOvaultCompatibility.js'
 
 type RegisterSolanaBridgeTokenRequest = {
   bridgeToken?: string
@@ -29,6 +37,9 @@ type RegisterSolanaBridgeTokenRequest = {
   expectedSolanaAmount?: string | number
   shareDecimals?: number | string
   buildOnly?: boolean
+  assetMintOrigin?: 'existing' | 'new'
+  enforceCompatibility?: boolean
+  mintCompatibilityHints?: unknown
 }
 
 type SolanaBridgeIxPayload = {
@@ -50,6 +61,12 @@ type RegisterSolanaBridgeTokenResponse = {
   solanaDecimals: number | null
   meteoraAlphaVault: Hex | null
   solanaIxs: SolanaBridgeIxPayload[]
+  mintCompatibility: ReturnType<typeof evaluateSolanaOvaultMintCompatibility>['mintCompatibility']
+  existingMintCompatible: boolean
+  depositEligible: boolean
+  redeemEligible: boolean
+  assetPeerSet: boolean
+  sharePeerSet: boolean
 }
 
 type WrapRunner = {
@@ -180,6 +197,23 @@ function parseDecimals(value: unknown): number | null {
   return null
 }
 
+type MintCompatibilityHints = ReturnType<typeof parseSolanaOvaultMintCompatibilityHints>
+
+function mergeMintCompatibilityHints(
+  primary: MintCompatibilityHints,
+  fallback: MintCompatibilityHints | null,
+): MintCompatibilityHints {
+  if (!fallback) return primary
+  return {
+    tokenProgram: primary.tokenProgram ?? fallback.tokenProgram,
+    transferHookDetected: primary.transferHookDetected ?? fallback.transferHookDetected,
+    oftFeeBps: primary.oftFeeBps ?? fallback.oftFeeBps,
+    adapterMode: primary.adapterMode ?? fallback.adapterMode,
+    authorityCompatible: primary.authorityCompatible ?? fallback.authorityCompatible,
+    rentValueLamports: primary.rentValueLamports ?? fallback.rentValueLamports,
+  }
+}
+
 function parseBigIntLike(value: unknown): bigint | null {
   if (typeof value === 'bigint') return value >= 0n ? value : null
   if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return BigInt(Math.floor(value))
@@ -192,6 +226,12 @@ function parseBigIntLike(value: unknown): bigint | null {
     }
   }
   return null
+}
+
+function readStrictSolPairEnabled(): boolean {
+  const raw = String(process.env.SOLANA_STRICT_SOL_PAIR ?? '1').trim().toLowerCase()
+  if (!raw) return true
+  return !['0', 'false', 'no', 'off'].includes(raw)
 }
 
 function toRemoteAmountExact(baseAmount: bigint, baseDecimals: number, solanaDecimals: number): bigint {
@@ -278,6 +318,29 @@ function readDynamicSolanaRouteEnabled(): boolean {
     .trim()
     .toLowerCase()
   return v === '1' || v === 'true' || v === 'yes'
+}
+
+type SolanaRegistrationRouteKind = 'legacy' | 'ovault'
+
+function readLegacySolanaWriteDisabled(): boolean {
+  const v = String(
+    process.env.DEPLOY_SOLANA_LEGACY_WRITE_DISABLED ??
+      process.env.SOLANA_LEGACY_WRITE_DISABLED ??
+      '',
+  )
+    .trim()
+    .toLowerCase()
+  return v === '1' || v === 'true' || v === 'yes'
+}
+
+function readSolanaRegistrationRouteKind(req: VercelRequest): SolanaRegistrationRouteKind {
+  const header = requestHeader(req, 'x-cv-solana-registration-route').toLowerCase()
+  if (header === 'ovault') return 'ovault'
+  if (header === 'legacy') return 'legacy'
+  const url = String((req as any)?.url ?? '').toLowerCase()
+  if (url.includes('/setupsolanaovaultmesh')) return 'ovault'
+  if (url.includes('/registersolanabridgetoken')) return 'legacy'
+  return 'legacy'
 }
 
 function splitUrlList(raw: string): string[] {
@@ -736,7 +799,7 @@ async function tryProvisionDynamicRoute(params: {
   bridgeToken: Address
   solanaDecimals: number
   publicClient: any
-}): Promise<Hex | null> {
+}): Promise<{ mintBytes32: Hex; mintCompatibilityHints: MintCompatibilityHints | null } | null> {
   if (!readDynamicSolanaRouteEnabled()) return null
 
   const bridgeToken = params.bridgeToken
@@ -766,7 +829,9 @@ async function tryProvisionDynamicRoute(params: {
   const provisionerUrls = readDynamicProvisionerUrls()
   const provisionerHealthUrls = readDynamicProvisionerHealthUrls(provisionerUrls)
 
-  const provisionViaRemote = async (tokenSymbol: string = primaryTokenSymbol): Promise<{ mintBytes32: Hex; runner: string }> => {
+  const provisionViaRemote = async (
+    tokenSymbol: string = primaryTokenSymbol,
+  ): Promise<{ mintBytes32: Hex; runner: string; mintCompatibilityHints: MintCompatibilityHints | null }> => {
     const retryAttempts = readProvisionerRetryAttempts()
     const retryDelayMs = readProvisionerRetryDelayMs()
     const requestTimeoutMs = readProvisionerRequestTimeoutMs()
@@ -866,7 +931,11 @@ async function tryProvisionDynamicRoute(params: {
               : typeof (json as any)?.data?.runner === 'string'
                 ? String((json as any).data.runner)
                 : 'remote-provisioner'
-          return { mintBytes32: mintBytes32Raw as Hex, runner }
+          const compatibilityRaw = (json as any).mintCompatibilityHints ?? (json as any)?.data?.mintCompatibilityHints ?? null
+          const mintCompatibilityHints = compatibilityRaw
+            ? parseSolanaOvaultMintCompatibilityHints(compatibilityRaw)
+            : null
+          return { mintBytes32: mintBytes32Raw as Hex, runner, mintCompatibilityHints }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           const retryable = isRetryableRemoteProvisionError(message)
@@ -906,7 +975,11 @@ async function tryProvisionDynamicRoute(params: {
 
   // Wraps provisionViaRemote with a single ASCII-symbol retry when the primary
   // (unicode) symbol causes a ConstraintSeeds / metadata-rejection error.
-  const provisionViaRemoteWithFallback = async (): Promise<{ mintBytes32: Hex; runner: string }> => {
+  const provisionViaRemoteWithFallback = async (): Promise<{
+    mintBytes32: Hex
+    runner: string
+    mintCompatibilityHints: MintCompatibilityHints | null
+  }> => {
     try {
       return await provisionViaRemote(primaryTokenSymbol)
     } catch (error) {
@@ -927,6 +1000,7 @@ async function tryProvisionDynamicRoute(params: {
   // Initialize to a sentinel so TS definite-assignment is satisfied; we validate
   // that provisioning replaced it before using it.
   let mintBytes32: Hex = ZERO_BYTES32
+  let mintCompatibilityHints: MintCompatibilityHints | null = null
   let mintedPubkey: string | null = null
   let provisionRunner: string | null = null
   if (cliDir && existsSync(cliDir)) {
@@ -1012,11 +1086,13 @@ async function tryProvisionDynamicRoute(params: {
       const remote = await provisionViaRemoteWithFallback()
       mintBytes32 = remote.mintBytes32
       provisionRunner = remote.runner
+      mintCompatibilityHints = remote.mintCompatibilityHints
     }
   } else if (provisionerUrls.length > 0) {
     const remote = await provisionViaRemoteWithFallback()
     mintBytes32 = remote.mintBytes32
     provisionRunner = remote.runner
+    mintCompatibilityHints = remote.mintCompatibilityHints
   } else {
     throw new Error(
       'Dynamic Solana route is enabled, but neither a valid local SOLANA_BRIDGE_CLI_DIR exists ' +
@@ -1046,7 +1122,7 @@ async function tryProvisionDynamicRoute(params: {
         runner: provisionRunner,
         scalar: scalar.toString(),
       })
-      return mintBytes32
+      return { mintBytes32, mintCompatibilityHints }
     }
     await new Promise((resolve) => setTimeout(resolve, 5_000))
   }
@@ -1151,6 +1227,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
+  const routeKind = readSolanaRegistrationRouteKind(req)
+  if (routeKind === 'legacy' && readLegacySolanaWriteDisabled()) {
+    return res.status(410).json({
+      success: false,
+      error:
+        'Legacy Solana registration route is disabled. Use /api/deploy/setupSolanaOvaultMesh.',
+    } satisfies ApiEnvelope<never>)
+  }
+
   const auth = readDeployAuthFromRequest(req)
   const internalAuthorized = isInternalSolanaRegistrationAuthorized(req)
   if (!auth?.address && !internalAuthorized) {
@@ -1164,6 +1249,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const buildOnly = body?.buildOnly === true
   const creatorTokenRaw = typeof body?.creatorToken === 'string' ? body.creatorToken.trim() : ''
   const creatorToken = isAddress(creatorTokenRaw) ? getAddress(creatorTokenRaw) : null
+  const enforceCompatibility = body?.enforceCompatibility === true
+  const assetMintOrigin = normalizeSolanaAssetMintOrigin(
+    body?.assetMintOrigin,
+    creatorToken ? 'existing' : 'new',
+  )
+  let mintCompatibilityHints = parseSolanaOvaultMintCompatibilityHints(body?.mintCompatibilityHints)
   // Canonical selection order:
   // 1) explicit bridgeToken
   // 2) creatorToken (for creator-coin bridging flows)
@@ -1256,6 +1347,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const alreadyRegistered = Boolean(alreadyRegisteredRaw)
     const adapterOwner = getAddress(String(adapterOwnerRaw) as Address)
     const solanaDecimals = parseDecimals(body?.solanaDecimals) ?? readSolanaDecimalsFromEnv()
+    const evaluateEligibility = (routeReady: boolean | null) =>
+      evaluateSolanaOvaultMintCompatibility({
+        assetMintOrigin,
+        hints: mintCompatibilityHints,
+        routeReady,
+        requireHintsForExisting: enforceCompatibility,
+      })
+    const buildCompatibilityError = (
+      eligibility: ReturnType<typeof evaluateSolanaOvaultMintCompatibility>,
+    ): string => {
+      const blockers = eligibility.mintCompatibility.blockers
+      const details = blockers.length > 0 ? blockers.join(' ') : 'Unknown compatibility failure.'
+      return `Existing Solana mint is not OVault compatible: ${details}`
+    }
 
     let meteoraAlphaVault: Hex | null = null
     let solanaIxs: SolanaBridgeIxPayload[] = []
@@ -1274,6 +1379,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             `Missing Meteora DLMM+Alpha Vault mapping for creator token ${creatorToken}. ` +
             'Add creator mapping in creator_meteora_alpha_vaults or METEORA_CREATOR_ALPHA_VAULT_MAP_JSON.',
         } satisfies ApiEnvelope<never>)
+      }
+      if (readStrictSolPairEnabled()) {
+        const quoteMint = String(meteoraConfig.quoteMint ?? '').trim()
+        if (!quoteMint) {
+          return res.status(409).json({
+            success: false,
+            error:
+              `Strict SOL pair policy is enabled, but creator token ${creatorToken} does not define quoteMint. ` +
+              `Set quoteMint=${SOLANA_NATIVE_MINT} in creator_meteora_alpha_vaults (or METEORA_CREATOR_ALPHA_VAULT_MAP_JSON).`,
+          } satisfies ApiEnvelope<never>)
+        }
+        if (quoteMint !== SOLANA_NATIVE_MINT) {
+          return res.status(409).json({
+            success: false,
+            error:
+              `Strict SOL pair policy is enabled, but creator token ${creatorToken} is mapped to quote mint ${quoteMint}. ` +
+              `Only ${SOLANA_NATIVE_MINT} is allowed.`,
+          } satisfies ApiEnvelope<never>)
+        }
       }
       const shareDecimals =
         requestedShareDecimals ??
@@ -1316,6 +1440,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         creatorToken,
         bridgeToken: resolvedBridgeToken,
         configSource: meteoraConfig.source,
+        quoteMint: meteoraConfig.quoteMint,
         expectedSolanaAmountBase: expectedSolanaAmountBase.toString(),
         expectedRemoteAmount: expectedRemoteAmount.toString(),
         meteoraAlphaVault,
@@ -1324,6 +1449,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (alreadyRegistered) {
+      const eligibility = evaluateEligibility(true)
+      if (enforceCompatibility && !eligibility.existingMintCompatible) {
+        return res.status(409).json({
+          success: false,
+          error: buildCompatibilityError(eligibility),
+        } satisfies ApiEnvelope<never>)
+      }
       return res.status(200).json({
         success: true,
         data: {
@@ -1339,6 +1471,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           solanaDecimals: null,
           meteoraAlphaVault,
           solanaIxs,
+          mintCompatibility: eligibility.mintCompatibility,
+          existingMintCompatible: eligibility.existingMintCompatible,
+          depositEligible: eligibility.depositEligible,
+          redeemEligible: eligibility.redeemEligible,
+          assetPeerSet: eligibility.depositEligible,
+          sharePeerSet: eligibility.redeemEligible,
         },
       } satisfies ApiEnvelope<RegisterSolanaBridgeTokenResponse>)
     }
@@ -1347,6 +1485,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const hintedMint = typeof body?.solanaMint === 'string' && isBytes32Hex(body.solanaMint.trim())
         ? (body.solanaMint.trim() as Hex)
         : readSolanaMintFromEnv()
+      const eligibility = evaluateEligibility(false)
+      if (enforceCompatibility && !eligibility.existingMintCompatible) {
+        return res.status(409).json({
+          success: false,
+          error: buildCompatibilityError(eligibility),
+        } satisfies ApiEnvelope<never>)
+      }
       return res.status(200).json({
         success: true,
         data: {
@@ -1362,6 +1507,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           solanaDecimals,
           meteoraAlphaVault,
           solanaIxs,
+          mintCompatibility: eligibility.mintCompatibility,
+          existingMintCompatible: eligibility.existingMintCompatible,
+          depositEligible: eligibility.depositEligible,
+          redeemEligible: eligibility.redeemEligible,
+          assetPeerSet: false,
+          sharePeerSet: false,
         },
       } satisfies ApiEnvelope<RegisterSolanaBridgeTokenResponse>)
     }
@@ -1430,7 +1581,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           publicClient,
         })
         if (!dynamicMint) return false
-        solanaMint = dynamicMint
+        solanaMint = dynamicMint.mintBytes32
+        mintCompatibilityHints = mergeMintCompatibilityHints(
+          mintCompatibilityHints,
+          dynamicMint.mintCompatibilityHints,
+        )
         dynamicProvisionError = null
         return true
       } catch (error) {
@@ -1516,6 +1671,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    const eligibility = evaluateEligibility(true)
+    if (enforceCompatibility && !eligibility.existingMintCompatible) {
+      return res.status(409).json({
+        success: false,
+        error: buildCompatibilityError(eligibility),
+      } satisfies ApiEnvelope<never>)
+    }
+
     const walletClient = createWalletClient({
       account,
       chain: base,
@@ -1558,6 +1721,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         solanaDecimals,
         meteoraAlphaVault,
         solanaIxs,
+        mintCompatibility: eligibility.mintCompatibility,
+        existingMintCompatible: eligibility.existingMintCompatible,
+        depositEligible: eligibility.depositEligible,
+        redeemEligible: eligibility.redeemEligible,
+        assetPeerSet: eligibility.depositEligible,
+        sharePeerSet: eligibility.redeemEligible,
       },
     } satisfies ApiEnvelope<RegisterSolanaBridgeTokenResponse>)
   } catch (err) {

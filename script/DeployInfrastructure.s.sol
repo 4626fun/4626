@@ -9,19 +9,19 @@ import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
 import {CreatorOVaultFactory} from "../contracts/factories/CreatorOVaultFactory.sol";
 
 // Shared Services
-import {CreatorLotteryManager} from "../contracts/services/lottery/CreatorLotteryManager.sol";
-import {CreatorVRFConsumerV2_5} from "../contracts/services/lottery/vrf/CreatorVRFConsumerV2_5.sol";
+import {CreatorLotteryManager} from "../contracts/utilities/lottery/CreatorLotteryManager.sol";
+import {CreatorVRFConsumerV2_5} from "../contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol";
 
-// Per-Creator Contracts (deployed by DeployVaultStack)
+// Per-Creator Contracts (legacy script path, now retired)
 import {CreatorOVault} from "../contracts/vault/CreatorOVault.sol";
 import {CreatorOVaultWrapper} from "../contracts/vault/CreatorOVaultWrapper.sol";
 import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVaultAdminModule.sol";
 import {CreatorOVaultCoreModule} from "../contracts/vault/modules/CreatorOVaultCoreModule.sol";
 import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorOVaultStrategiesModule.sol";
-import {CreatorShareOFT} from "../contracts/services/messaging/CreatorShareOFT.sol";
+import {CreatorShareOFT} from "../contracts/utilities/messaging/CreatorShareOFT.sol";
 import {CreatorGaugeController} from "../contracts/governance/CreatorGaugeController.sol";
 import {CCALaunchStrategy} from "../contracts/vault/strategies/CCALaunchStrategy.sol";
-import {CreatorOracle} from "../contracts/services/oracles/CreatorOracle.sol";
+import {CreatorOracle} from "../contracts/utilities/oracles/CreatorOracle.sol";
 
 /**
  * @title DeployInfrastructure
@@ -328,9 +328,7 @@ contract DeployInfrastructure is Script {
         console.log(unicode"║  1. Copy contract addresses to .env file                       ║");
         console.log(unicode"║  2. Add contracts to Coinbase Paymaster allowlist              ║");
         console.log(unicode"║  3. Create & fund VRF subscription on Chainlink                ║");
-        console.log(unicode"║  4. Deploy creator vaults:                                     ║");
-        console.log(unicode"║     - Via AA: npx ts-node script/deploy-with-aa.ts --gasless   ║");
-        console.log(unicode"║     - Via EOA: forge script DeployVaultStack                   ║");
+        console.log(unicode"║  4. Launch creator vaults via app deploy-session flow (/deploy) ║");
         console.log(unicode"║                                                                ║");
         console.log(
             unicode"╚════════════════════════════════════════════════════════════════╝"
@@ -340,21 +338,15 @@ contract DeployInfrastructure is Script {
 
 /**
  * @title DeployVaultStack
- * @notice Deploy infrastructure for a specific Creator Coin (deploys contracts directly)
- * @dev Run with:
- *      CREATOR_COIN_ADDRESS=0x... forge script script/DeployInfrastructure.s.sol:DeployVaultStack \
- *          --rpc-url base --broadcast -vvvv
- *
- * @dev DEPLOYS 6 CONTRACTS DIRECTLY:
- *      1. CreatorOVault - ERC-4626 vault
- *      2. CreatorOVaultWrapper - Stake/wrap interface
- *      3. CreatorShareOFT - Cross-chain OFT
- *      4. CreatorGaugeController - Fee distribution
- *      5. CCALaunchStrategy - Fair launch
- *      6. CreatorOracle - Price oracle
+ * @notice Retired legacy per-creator script path.
+ * @dev Kept only to fail fast with an explicit message if invoked by stale ops docs/tooling.
  */
 contract DeployVaultStack is Script {
     function run() external {
+        revert(
+            "DeployVaultStack retired: use app deploy-session flow (/deploy) with DeploymentBatcher phases"
+        );
+
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
 

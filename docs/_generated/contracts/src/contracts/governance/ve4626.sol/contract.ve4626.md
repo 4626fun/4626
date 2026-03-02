@@ -1,5 +1,5 @@
 # ve4626
-[Git Source](https://github.com/4626/4626/blob/a4870e3896f63a65e31b8609af0074d6dc90b03a/contracts/governance/ve4626.sol)
+[Git Source](https://github.com/wenakita/4626/blob/e241310837fd2472040c12df9be8240c28719e34/contracts/governance/ve4626.sol)
 
 **Inherits:**
 [Ive4626](/contracts/governance/VaultGaugeVoting.sol/interface.Ive4626.md), Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyGuard
@@ -26,15 +26,6 @@ Wrapped ShareOFT token (e.g., ■4626)
 
 ```solidity
 address public immutable wrappedShareOFT
-```
-
-
-### vaultShares
-Vault shares token (e.g., ▢4626) - alternative lock token
-
-
-```solidity
-address public vaultShares
 ```
 
 
@@ -74,15 +65,6 @@ uint256 private _totalVotingSupply
 ```
 
 
-### acceptedTokens
-Accepted tokens for locking
-
-
-```solidity
-mapping(address => bool) public acceptedTokens
-```
-
-
 ## Functions
 ### constructor
 
@@ -107,7 +89,7 @@ constructor(string memory _name, string memory _symbol, address _wrappedShareOFT
 
 ### lock
 
-Lock wrapped shares (■4626) or vault shares (▢4626) to receive voting power
+Lock wrapped shares (■4626) to receive voting power
 
 
 ```solidity
@@ -121,7 +103,7 @@ function lock(address _token, uint256 amount, uint256 duration)
 
 |Name|Type|Description|
 |----|----|-----------|
-|`_token`|`address`|Token to lock (wrappedShareOFT or vaultShares)|
+|`_token`|`address`|Token to lock (must be wrappedShareOFT)|
 |`amount`|`uint256`|Amount to lock|
 |`duration`|`uint256`|Lock duration in seconds|
 
@@ -237,13 +219,6 @@ function hasActiveLock(address user) external view override returns (bool);
 function getRemainingLockTime(address user) external view returns (uint256);
 ```
 
-### setVaultShares
-
-
-```solidity
-function setVaultShares(address _vaultShares) external onlyOwner;
-```
-
 ### setVault
 
 
@@ -256,13 +231,6 @@ function setVault(address _vault) external onlyOwner;
 
 ```solidity
 function setBoostManager(address _boostManager) external onlyOwner;
-```
-
-### setAcceptedToken
-
-
-```solidity
-function setAcceptedToken(address token, bool accepted) external onlyOwner;
 ```
 
 ### transfer

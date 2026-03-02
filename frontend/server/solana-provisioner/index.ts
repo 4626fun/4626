@@ -4,12 +4,15 @@ import { existsSync, readFileSync } from 'node:fs'
 import { promisify } from 'node:util'
 import { createHash, timingSafeEqual } from 'node:crypto'
 
-import { Connection, Keypair } from '@solana/web3.js'
+import { Connection, Keypair, PublicKey } from '@solana/web3.js'
 import { createPublicClient, http, isAddress, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
 const execFileAsync = promisify(execFile)
 const BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as Address
+const SOLANA_NATIVE_MINT = 'So11111111111111111111111111111111111111112'
+const SOLANA_SPL_TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
+const SOLANA_TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'
 const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 const BASE58_MAP = new Map(BASE58_ALPHABET.split('').map((ch, idx) => [ch, idx]))
 
@@ -74,6 +77,15 @@ type WrapRunner = {
   bin: string
   args: string[]
   label: string
+}
+
+type ProvisionerMintCompatibilityHints = {
+  tokenProgram: 'spl-token' | 'token-2022' | null
+  transferHookDetected: boolean | null
+  oftFeeBps: number | null
+  adapterMode: 'regular-oft' | 'oft-adapter' | null
+  authorityCompatible: boolean | null
+  rentValueLamports: string | null
 }
 
 const WRAP_TOKEN_NAME_MAX_LENGTH = 32
@@ -219,6 +231,153 @@ function envBool(key: string, fallback = false): boolean {
   const raw = String(process.env[key] ?? '').trim().toLowerCase()
   if (!raw) return fallback
   return raw === '1' || raw === 'true' || raw === 'yes'
+}
+
+function readStrictSolPairEnabled(): boolean {
+  return envBool('SOLANA_STRICT_SOL_PAIR', true)
+}
+
+function readAdapterModeHint(): 'regular-oft' | 'oft-adapter' | null {
+  const raw = String(process.env.SOLANA_OVAULT_ADAPTER_MODE ?? '').trim().toLowerCase()
+  if (!raw) return null
+  if (raw === 'regular-oft' || raw === 'regular' || raw === 'oft') return 'regular-oft'
+  if (raw === 'oft-adapter' || raw === 'adapter') return 'oft-adapter'
+  return null
+}
+
+function parseNonNegativeInt(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return Math.floor(value)
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value.trim(), 10)
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed
+  }
+  return null
+}
+
+function deepFindNumberByKey(value: unknown, keys: string[]): number | null {
+  const want = new Set(keys.map((k) => k.toLowerCase()))
+  const seen = new Set<unknown>()
+  const stack: unknown[] = [value]
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current || typeof current !== 'object') continue
+    if (seen.has(current)) continue
+    seen.add(current)
+    if (Array.isArray(current)) {
+      for (const item of current) stack.push(item)
+      continue
+    }
+    for (const [key, nested] of Object.entries(current as Record<string, unknown>)) {
+      if (want.has(key.toLowerCase())) {
+        const parsed = parseNonNegativeInt(nested)
+        if (parsed !== null) return parsed
+      }
+      stack.push(nested)
+    }
+  }
+  return null
+}
+
+function ownerToTokenProgram(ownerRaw: unknown): 'spl-token' | 'token-2022' | null {
+  const owner =
+    typeof ownerRaw === 'string'
+      ? ownerRaw
+      : ownerRaw && typeof (ownerRaw as any).toBase58 === 'function'
+        ? String((ownerRaw as any).toBase58())
+        : ''
+  if (owner === SOLANA_SPL_TOKEN_PROGRAM) return 'spl-token'
+  if (owner === SOLANA_TOKEN_2022_PROGRAM) return 'token-2022'
+  return null
+}
+
+function detectTransferHookFromParsedInfo(info: unknown): boolean | null {
+  if (!info || typeof info !== 'object') return null
+  const serialized = JSON.stringify(info).toLowerCase()
+  if (!serialized) return null
+  return (
+    serialized.includes('transferhook') ||
+    serialized.includes('transfer_hook') ||
+    serialized.includes('transfer hook')
+  )
+}
+
+function readAuthorityCompatibleHint(params: {
+  parsedInfo: unknown
+  payerPubkey: string | null
+}): boolean | null {
+  const info = params.parsedInfo as Record<string, unknown> | null
+  if (!info || typeof info !== 'object') return null
+  const mintAuthority = typeof info.mintAuthority === 'string' ? info.mintAuthority : null
+  const freezeAuthority = typeof info.freezeAuthority === 'string' ? info.freezeAuthority : null
+  if (!params.payerPubkey) {
+    // Conservative default when payer authority is unknown: require authorities to be immutable.
+    return mintAuthority === null && freezeAuthority === null
+  }
+  const payer = params.payerPubkey
+  const mintOk = mintAuthority === null || mintAuthority === payer
+  const freezeOk = freezeAuthority === null || freezeAuthority === payer
+  return mintOk && freezeOk
+}
+
+async function readMintCompatibilityHints(params: {
+  mintPubkey: string
+  payerPubkey: string | null
+}): Promise<ProvisionerMintCompatibilityHints> {
+  const fallbackAdapterMode = readAdapterModeHint()
+  const out: ProvisionerMintCompatibilityHints = {
+    tokenProgram: null,
+    transferHookDetected: null,
+    oftFeeBps: null,
+    adapterMode: fallbackAdapterMode,
+    authorityCompatible: null,
+    rentValueLamports: null,
+  }
+
+  const rpcUrl =
+    String(process.env.SOLANA_RPC_URL ?? 'https://api.mainnet-beta.solana.com').trim()
+    || 'https://api.mainnet-beta.solana.com'
+  try {
+    const connection = new Connection(rpcUrl, 'confirmed')
+    const mintKey = new PublicKey(params.mintPubkey)
+    const accountInfo = await connection.getParsedAccountInfo(mintKey, 'confirmed')
+    const value: any = accountInfo?.value
+    if (!value) return out
+
+    out.tokenProgram = ownerToTokenProgram(value.owner)
+    if (typeof value.lamports === 'number' && Number.isFinite(value.lamports) && value.lamports >= 0) {
+      out.rentValueLamports = BigInt(Math.floor(value.lamports)).toString()
+    }
+
+    const parsedInfo = (value?.data as any)?.parsed?.info
+    const transferHookDetected = detectTransferHookFromParsedInfo(parsedInfo)
+    if (transferHookDetected !== null) out.transferHookDetected = transferHookDetected
+
+    const detectedFeeBps = deepFindNumberByKey(parsedInfo, [
+      'transferFeeBasisPoints',
+      'newerTransferFeeBasisPoints',
+      'basisPoints',
+      'feeBps',
+      'fee_basis_points',
+    ])
+    if (detectedFeeBps !== null) out.oftFeeBps = detectedFeeBps
+    if (out.transferHookDetected === false && out.oftFeeBps === null) {
+      out.oftFeeBps = 0
+    }
+
+    const authorityCompatible = readAuthorityCompatibleHint({
+      parsedInfo,
+      payerPubkey: params.payerPubkey,
+    })
+    if (authorityCompatible !== null) out.authorityCompatible = authorityCompatible
+    if (out.authorityCompatible === null) out.authorityCompatible = true
+    if (out.transferHookDetected === null) out.transferHookDetected = false
+    return out
+  } catch (error) {
+    process.stderr.write(
+      `[solana-provisioner] mint compatibility hint probe failed for ${params.mintPubkey}: ${error instanceof Error ? error.message : String(error)}\n`,
+    )
+    return out
+  }
 }
 
 function sanitizeWrapTokenName(raw: string, bridgeToken: Address): string {
@@ -707,6 +866,8 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
   const cliBin = String(process.env.SOLANA_BRIDGE_CLI_BIN ?? 'auto').trim() || 'auto'
   const payForRelay =
     typeof body?.payForRelay === 'boolean' ? body.payForRelay : envBool('SOLANA_BRIDGE_PAY_FOR_RELAY', true)
+  const provisionerPayer = resolveProvisionerPayerKeypair()
+  const provisionerPayerPubkey = provisionerPayer.keypair?.publicKey?.toBase58?.() ?? null
   const rpcUrl = (process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()
   const publicClient = createPublicClient({
     chain: base,
@@ -785,6 +946,10 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
       })
     }
     const mintBytes32 = solanaPubkeyToBytes32Hex(mintPubkey)
+    const mintCompatibilityHints = await readMintCompatibilityHints({
+      mintPubkey,
+      payerPubkey: provisionerPayerPubkey,
+    })
     let scalar = 0n
     for (let i = 0; i < 24; i += 1) {
       scalar = await publicClient
@@ -817,9 +982,16 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
     if (envBool('SOLANA_AUTO_POOL', false)) {
       const repoRoot = String(process.env.CRE_REPO_ROOT ?? process.env.REPO_ROOT ?? '').trim()
       const creDir = repoRoot ? `${repoRoot}/cre` : ''
-      const quoteMint = String(process.env.SOLANA_POOL_QUOTE_MINT ?? 'So11111111111111111111111111111111111111112').trim()
+      const strictSolPair = readStrictSolPairEnabled()
+      const configuredQuoteMint = String(process.env.SOLANA_POOL_QUOTE_MINT ?? SOLANA_NATIVE_MINT).trim()
+      const quoteMint = strictSolPair ? SOLANA_NATIVE_MINT : configuredQuoteMint
       const binStep = String(process.env.SOLANA_POOL_BIN_STEP ?? '25').trim()
       const poolFeeBps = String(process.env.SOLANA_POOL_FEE_BPS ?? '100').trim()
+      if (strictSolPair && configuredQuoteMint && configuredQuoteMint !== SOLANA_NATIVE_MINT) {
+        process.stderr.write(
+          `[solana-provisioner] SOLANA_STRICT_SOL_PAIR=1 forcing quote mint ${SOLANA_NATIVE_MINT} (ignoring SOLANA_POOL_QUOTE_MINT=${configuredQuoteMint})\n`,
+        )
+      }
 
       if (creDir && existsSync(creDir)) {
         // Step 1: Create DLMM pool
@@ -888,6 +1060,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
         runner,
         tokenSymbol: tokenSymbolUsed,
         routeScalar: scalar.toString(),
+        mintCompatibilityHints,
         pool: poolResult,
         alphaVault: vaultResult,
       },
@@ -903,6 +1076,10 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
     if (existingMintPubkey) {
       try {
         const mintBytes32 = solanaPubkeyToBytes32Hex(existingMintPubkey)
+        const mintCompatibilityHints = await readMintCompatibilityHints({
+          mintPubkey: existingMintPubkey,
+          payerPubkey: provisionerPayerPubkey,
+        })
         let scalar = 0n
         for (let i = 0; i < 24; i += 1) {
           scalar = await publicClient
@@ -927,6 +1104,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
               mintBytes32,
               runner: 'existing-mint-reuse',
               routeScalar: scalar.toString(),
+              mintCompatibilityHints,
             },
           })
         }
@@ -1152,6 +1330,13 @@ async function handleCreatePool(req: IncomingMessage, res: ServerResponse): Prom
   const tokenMintY = String(body?.tokenMintY ?? '').trim()
   if (!tokenMintX || !tokenMintY) {
     return json(res, 400, { success: false, error: 'tokenMintX and tokenMintY are required.' })
+  }
+  if (readStrictSolPairEnabled() && tokenMintY !== SOLANA_NATIVE_MINT) {
+    return json(res, 400, {
+      success: false,
+      error:
+        `SOLANA_STRICT_SOL_PAIR is enabled. tokenMintY must be ${SOLANA_NATIVE_MINT}, received ${tokenMintY}.`,
+    })
   }
 
   const env = {
