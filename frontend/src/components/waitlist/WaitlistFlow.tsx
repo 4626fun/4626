@@ -438,6 +438,50 @@ function getPrivyWalletMissingMessage(user: any, walletsOverride?: any[]): strin
   return "Wallet sign-in is unavailable. Try another way."
 }
 
+function extractPrivyEmbeddedEoaAddress(user: any): string | null {
+  const normalizeType = (value: unknown): string =>
+    String(value ?? '')
+      .trim()
+      .toLowerCase()
+
+  const collect = [
+    ...(user?.wallet && typeof user.wallet === 'object' ? [user.wallet] : []),
+    ...(Array.isArray(user?.wallets) ? user.wallets : []),
+  ]
+
+  for (const wallet of collect) {
+    const chainType = normalizeType((wallet as any)?.chain_type ?? (wallet as any)?.chainType)
+    const clientType = normalizeType(
+      (wallet as any)?.wallet_client_type ??
+        (wallet as any)?.walletClientType ??
+        (wallet as any)?.connector_type ??
+        (wallet as any)?.connectorType ??
+        (wallet as any)?.type,
+    )
+    const address = typeof (wallet as any)?.address === 'string' ? (wallet as any).address : ''
+    if (!isValidEvmAddress(address)) continue
+    if (chainType.includes('solana')) continue
+    if (clientType === 'privy' || clientType.includes('embedded') || clientType.includes('privy')) {
+      return address
+    }
+  }
+
+  const linked = Array.isArray(user?.linked_accounts) ? user.linked_accounts : Array.isArray(user?.linkedAccounts) ? user.linkedAccounts : []
+  for (const account of linked) {
+    const type = normalizeType((account as any)?.type)
+    const chainType = normalizeType((account as any)?.chain_type ?? (account as any)?.chainType)
+    const clientType = normalizeType((account as any)?.wallet_client_type ?? (account as any)?.walletClientType)
+    const address = typeof (account as any)?.address === 'string' ? (account as any).address : ''
+    if (!isValidEvmAddress(address)) continue
+    if (chainType.includes('solana')) continue
+    if (type.includes('wallet') && (clientType === 'privy' || clientType.includes('embedded') || clientType.includes('privy'))) {
+      return address
+    }
+  }
+
+  return null
+}
+
 type FlowAction =
   | { type: 'reset' }
   | { type: 'select_persona'; persona: Persona }
@@ -698,7 +742,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   const { createWallet: privyCreateWallet } = useSafeCreateWalletHook(privyHooksEnabled)
   const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossAppAccountsHook(privyHooksEnabled)
   const { baseAccountSdk } = useSafeBaseAccountSdkHook(privyHooksEnabled)
-  const walletsReady = typeof privyWalletsReady === 'boolean' ? privyWalletsReady : true
+  const embeddedWalletAddressFromUser = useMemo(() => extractPrivyEmbeddedEoaAddress(privyUser), [privyUser])
+  // Privy iframe/CSP failures can leave `useWallets().ready` false even when user wallet
+  // metadata is already available on `privyUser`; treat that case as ready fallback.
+  const walletsReady = typeof privyWalletsReady === 'boolean' ? privyWalletsReady || Boolean(embeddedWalletAddressFromUser) : true
 
   // Wallet type detection can vary across Privy SDK versions/contexts.
   // Mirror deploy hardening: look across multiple fields and use substring matches.
@@ -742,8 +789,11 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   }, [coinbaseSmartWallet?.address])
   const embeddedWalletAddress = useMemo(() => {
     const raw = typeof embeddedWallet?.address === 'string' ? embeddedWallet.address : ''
-    return isValidEvmAddress(raw) ? raw : null
-  }, [embeddedWallet?.address])
+    if (isValidEvmAddress(raw)) return raw
+    return embeddedWalletAddressFromUser && isValidEvmAddress(embeddedWalletAddressFromUser)
+      ? embeddedWalletAddressFromUser
+      : null
+  }, [embeddedWallet?.address, embeddedWalletAddressFromUser])
   const baseAccountAddress = useMemo(() => {
     const raw = typeof baseAccountWallet?.address === 'string' ? baseAccountWallet.address : ''
     return isValidEvmAddress(raw) ? raw : null
