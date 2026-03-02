@@ -174,6 +174,12 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     /// @notice Total assets at last report
     uint256 public totalAssetsAtLastReport;
 
+    /// @notice Trusted price-per-share checkpoint (1e18) refreshed on `report()`
+    uint256 public trustedPpsCheckpoint;
+
+    /// @notice Maximum allowed deviation from trusted PPS for deposit/mint gating
+    uint256 public trustedPpsMaxDeviationBps = 1_000; // 10%
+
     /// @notice Total shares burned for price increase
     uint256 public totalSharesBurned;
 
@@ -335,6 +341,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     event UpdatePerformanceFee(uint16 newPerformanceFee);
     event UpdatePerformanceFeeRecipient(address indexed newRecipient);
     event UpdateProfitMaxUnlockTime(uint256 newProfitMaxUnlockTime);
+    event UpdateTrustedPpsDeviationBps(uint256 newTrustedPpsDeviationBps);
 
     event BalancesSynced(uint256 coinBalance);
     event WhitelistEnabled(bool enabled);
@@ -399,6 +406,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
 
     /// @notice Price change exceeds safety bounds
     error PriceChangeExceedsLimit(uint256 priceBefore, uint256 priceAfter, uint256 maxChangeBps);
+    error TrustedPpsDeviationExceeded(uint256 checkpointPps, uint256 currentPps, uint256 maxDeviationBps);
 
     /// @notice Mint would result in too many shares for assets (inflation protection)
     error InflationAttackDetected(uint256 assets, uint256 shares);
@@ -1675,6 +1683,14 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         uint256 _largeWithdrawalThreshold,
         uint256 _largeWithdrawalDelayBlocks
     ) external onlyOwner {
+        _delegate(_adminModule);
+    }
+
+    /**
+     * @notice Configure the trusted PPS circuit-breaker for deposit/mint.
+     * @dev Deposits/mints are blocked when live PPS deviates too far from `trustedPpsCheckpoint`.
+     */
+    function setTrustedPpsDeviationBps(uint256) external onlyOwner {
         _delegate(_adminModule);
     }
 

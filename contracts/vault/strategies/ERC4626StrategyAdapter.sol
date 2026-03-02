@@ -5,6 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
@@ -30,6 +31,8 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
 
     error OnlyVault();
     error StrategyPaused();
+    error InvalidBps();
+    error InvalidWindow();
 
     // ================================
     // STATE
@@ -49,6 +52,28 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
 
     /// @notice Target % of strategy assets to keep idle (basis points).
     uint256 public idleBufferBps = 1000; // 10% default
+
+    /// @notice Maximum upward valuation move allowed per check window (basis points).
+    uint256 public valuationMaxIncreaseBps = 1000; // 10%
+
+    /// @notice Maximum downward valuation move allowed per check window (basis points).
+    uint256 public valuationMaxDecreaseBps = 1000; // 10%
+
+    /// @notice Length of one valuation guard window (seconds).
+    uint256 public valuationCheckWindow = 30 minutes;
+
+    /// @notice Last trusted assets-per-share snapshot (1e18 scale).
+    uint256 public lastValuationAssetsPerShare;
+
+    /// @notice Timestamp when valuation snapshot was last synchronized.
+    uint256 public lastValuationTimestamp;
+
+    // ================================
+    // EVENTS
+    // ================================
+
+    event ValuationGuardUpdated(uint256 maxIncreaseBps, uint256 maxDecreaseBps, uint256 checkWindow);
+    event ValuationSnapshotSynced(uint256 assetsPerShare, uint256 timestamp);
 
     // ================================
     // MODIFIERS
@@ -103,22 +128,21 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
      *      reverts for any held shares.
      */
     function isValuationReady() external view override returns (bool) {
-        uint256 sharesHeld;
-        try ERC4626_VAULT.balanceOf(address(this)) returns (uint256 s) {
-            sharesHeld = s;
-        } catch {
+        (bool ok, uint256 currentAssetsPerShare) = _readCurrentAssetsPerShare();
+        if (!ok) {
             return false;
         }
 
-        if (sharesHeld == 0) return true;
+        // No ERC-4626 share exposure to value.
+        if (currentAssetsPerShare == 0) return true;
 
-        try ERC4626_VAULT.convertToAssets(sharesHeld) returns (
-            uint256 /* assetsFromShares */
-        ) {
+        uint256 snapshot = lastValuationAssetsPerShare;
+        if (snapshot == 0) {
+            // Snapshot not initialized yet; first sync happens after strategy operations.
             return true;
-        } catch {
-            return false;
         }
+
+        return _isWithinValuationBounds(snapshot, currentAssetsPerShare);
     }
 
     function getTotalAssets() public view override returns (uint256) {
@@ -157,6 +181,7 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
         }
 
         deposited = amount;
+        _syncValuationSnapshotBestEffort();
         emit StrategyDeposit(msg.sender, amount, deposited);
     }
 
@@ -184,6 +209,7 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
             }
         }
 
+        _syncValuationSnapshotBestEffort();
         emit StrategyWithdraw(msg.sender, amount, withdrawn);
     }
 
@@ -201,6 +227,7 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
             ASSET.safeTransfer(vault, totalWithdrawn);
         }
 
+        _syncValuationSnapshotBestEffort();
         emit EmergencyWithdraw(vault, totalWithdrawn);
     }
 
@@ -231,6 +258,7 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
             }
         }
 
+        _syncValuationSnapshotBestEffort();
         emit StrategyRebalanced(getTotalAssets());
     }
 
@@ -303,10 +331,80 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
         idleBufferBps = newBps;
     }
 
+    /**
+     * @notice Configure valuation guard thresholds and window.
+     * @dev The allowed valuation drift scales by full elapsed windows since the last trusted snapshot.
+     */
+    function setValuationGuard(uint256 maxIncreaseBps, uint256 maxDecreaseBps, uint256 checkWindow) external onlyOwner {
+        if (maxIncreaseBps > 10_000 || maxDecreaseBps > 10_000) revert InvalidBps();
+        if (checkWindow == 0) revert InvalidWindow();
+
+        valuationMaxIncreaseBps = maxIncreaseBps;
+        valuationMaxDecreaseBps = maxDecreaseBps;
+        valuationCheckWindow = checkWindow;
+
+        emit ValuationGuardUpdated(maxIncreaseBps, maxDecreaseBps, checkWindow);
+    }
+
     function rescueTokens(address token, uint256 amount, address to) external onlyOwner {
         // Don't allow rescuing the underlying while active.
         if (token == address(ASSET) && _isActive) revert("Cannot rescue asset when active");
         IERC20(token).safeTransfer(to, amount);
+    }
+
+    // ================================
+    // INTERNAL VALUATION GUARD
+    // ================================
+
+    function _readCurrentAssetsPerShare() internal view returns (bool ok, uint256 assetsPerShare) {
+        uint256 sharesHeld;
+        try ERC4626_VAULT.balanceOf(address(this)) returns (uint256 s) {
+            sharesHeld = s;
+        } catch {
+            return (false, 0);
+        }
+
+        if (sharesHeld == 0) return (true, 0);
+
+        uint256 assetsFromShares;
+        try ERC4626_VAULT.convertToAssets(sharesHeld) returns (uint256 convertedAssets) {
+            assetsFromShares = convertedAssets;
+        } catch {
+            return (false, 0);
+        }
+
+        assetsPerShare = Math.mulDiv(assetsFromShares, 1e18, sharesHeld);
+        return (true, assetsPerShare);
+    }
+
+    function _allowedBpsForElapsedWindows(uint256 perWindowBps) internal view returns (uint256 allowedBps) {
+        if (perWindowBps >= 10_000) return 10_000;
+
+        uint256 elapsed = block.timestamp > lastValuationTimestamp ? block.timestamp - lastValuationTimestamp : 0;
+        uint256 windowsElapsed = (elapsed / valuationCheckWindow) + 1; // always allow at least one window
+        allowedBps = perWindowBps * windowsElapsed;
+        if (allowedBps > 10_000) allowedBps = 10_000;
+    }
+
+    function _isWithinValuationBounds(uint256 snapshotPps, uint256 currentPps) internal view returns (bool) {
+        if (currentPps >= snapshotPps) {
+            uint256 increase = currentPps - snapshotPps;
+            uint256 allowedIncrease = Math.mulDiv(snapshotPps, _allowedBpsForElapsedWindows(valuationMaxIncreaseBps), 10_000);
+            return increase <= allowedIncrease;
+        }
+
+        uint256 decrease = snapshotPps - currentPps;
+        uint256 allowedDecrease = Math.mulDiv(snapshotPps, _allowedBpsForElapsedWindows(valuationMaxDecreaseBps), 10_000);
+        return decrease <= allowedDecrease;
+    }
+
+    function _syncValuationSnapshotBestEffort() internal {
+        (bool ok, uint256 currentAssetsPerShare) = _readCurrentAssetsPerShare();
+        if (!ok) return;
+
+        lastValuationAssetsPerShare = currentAssetsPerShare;
+        lastValuationTimestamp = block.timestamp;
+        emit ValuationSnapshotSynced(currentAssetsPerShare, block.timestamp);
     }
 }
 

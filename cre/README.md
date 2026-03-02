@@ -60,12 +60,13 @@ Expected output highlights:
 
 ## What It Does
 
-Every 5 minutes, the unified `4626` workflow runs four tasks in sequence:
+Every 5 minutes, the unified `4626` workflow runs five tasks in sequence:
 
 | Task | What | Impact |
 |------|------|--------|
 | **Vault Keeper** | Deploy idle funds (`tend`), harvest yields (`report`) | Revenue |
 | **Ajna Bucket Manager** | Move Ajna liquidity buckets using oracle TWAP + local liquidity | Risk/Execution |
+| **Charm Rebalance Manager** | Trigger Charm vault `rebalance()` when price deviates by >= configured threshold | Risk/Execution |
 | **Auction Settlement** | Settle graduated CCA auctions (`sweepCurrency`, `sweepUnsoldTokens`) | Feature |
 | **Keepr Queue** | Process pending XMTP group ops + Neynar/Farcaster actions | Infrastructure |
 
@@ -260,8 +261,13 @@ Optional (alerting):
 
 Optional (Ajna bucket manager):
 - `AJNA_BUCKET_VAULT_ADDRESS` / `AJNA_BUCKET_ORACLE_ADDRESS` — explicit single-vault targeting for Ajna bucket workflow
-- `AJNA_BUCKET_TWAP_DURATION`, `AJNA_BUCKET_MOVE_THRESHOLD`, `AJNA_BUCKET_MAX_STEP`
+- `AJNA_BUCKET_TWAP_DURATION`, `AJNA_BUCKET_TARGET_LTV_BPS`, `AJNA_BUCKET_PRICE_CHANGE_TRIGGER_BPS`
+- `AJNA_BUCKET_MOVE_THRESHOLD`, `AJNA_BUCKET_MAX_STEP`
 - `AJNA_BUCKET_MOVE_COOLDOWN_SECONDS`, `AJNA_BUCKET_LIQUIDITY_SEARCH_RADIUS`
+
+Optional (Charm rebalance manager):
+- `CHARM_REBALANCE_VAULT_ADDRESS` / `CHARM_REBALANCE_ORACLE_ADDRESS` — explicit single-vault targeting for Charm workflow
+- `CHARM_REBALANCE_TWAP_DURATION`, `CHARM_REBALANCE_PRICE_CHANGE_TRIGGER_BPS`
 ### 2. Register Vaults
 
 Each vault is registered via `POST /api/keepr/vault/upsert`. Include contract addresses in `config_json`:
@@ -313,6 +319,7 @@ npm run dry-run
 # Run individual tasks
 npm run start:vault-keeper
 npm run start:ajna-bucket-manager
+npm run start:charm-rebalance-manager
 npm run start:auction-settlement
 npm run start:keepr-queue
 
@@ -371,8 +378,10 @@ cre/
 │       └── tsconfig.json
 │
 ├── workflows/                          # Legacy runner workflows
-│   ├── 4626.workflow.ts                # Unified entrypoint (runs all 3)
+│   ├── 4626.workflow.ts                # Unified entrypoint (runs all 5)
 │   ├── vault-keeper.workflow.ts        # Standalone vault keeper
+│   ├── ajna-bucket-manager.workflow.ts # Standalone Ajna bucket manager
+│   ├── charm-rebalance-manager.workflow.ts # Standalone Charm rebalance manager
 │   ├── auction-settlement.workflow.ts  # Standalone auction settlement
 │   └── keepr-queue-executor.workflow.ts
 ├── actions/

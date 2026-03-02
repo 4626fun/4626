@@ -192,6 +192,13 @@ const UNISWAP_V3_POOL_ABI = [
 // Base mainnet constants (avoid path aliases in serverless handlers used by Vite config bundling)
 const BASE_USDC = `0x${'833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'}`
 const BASE_UNISWAP_V3_FACTORY = `0x${'33128a8fC17869897dcE68Ed026d694621f6FDfD'}`
+const AJNA_BUCKET_TARGET_LTV_BPS = (() => {
+  const raw = Number(process.env.AJNA_BUCKET_TARGET_LTV_BPS ?? '7000')
+  if (!Number.isFinite(raw) || raw <= 0 || raw > 10_000) return 7_000
+  return Math.floor(raw)
+})()
+const LOG_1_0001 = Math.log(1.0001)
+const LOG_10_BASE_1_0001 = Math.log(10) / LOG_1_0001
 
 function floorDiv(a: number, b: number): number {
   const q = Math.trunc(a / b)
@@ -206,6 +213,33 @@ function tickToAjnaBucket(tick: number): number {
   if (idx < 1) idx = 1
   if (idx > 7388) idx = 7388
   return idx
+}
+
+function compareAddressNumeric(a: `0x${string}`, b: `0x${string}`): number {
+  const av = BigInt(a)
+  const bv = BigInt(b)
+  if (av === bv) return 0
+  return av > bv ? 1 : -1
+}
+
+function deriveAjnaBucketFromV3Tick(params: {
+  twapTick: number
+  creatorToken: `0x${string}`
+  usdToken: `0x${string}`
+  creatorDecimals: number
+  usdDecimals: number
+  targetLtvBps: number
+}): { bucket: number; adjustedTick: number } | null {
+  if (!Number.isFinite(params.twapTick)) return null
+  if (params.targetLtvBps <= 0 || params.targetLtvBps > 10_000) return null
+
+  const creatorIsToken1 = compareAddressNumeric(params.creatorToken, params.usdToken) > 0
+  const orientedTick = creatorIsToken1 ? params.twapTick : -params.twapTick
+  const decimalsTickOffset = (params.usdDecimals - params.creatorDecimals) * LOG_10_BASE_1_0001
+  const ltvTickOffset = Math.log(params.targetLtvBps / 10_000) / LOG_1_0001
+  const adjustedTick = Math.floor(orientedTick + decimalsTickOffset + ltvTickOffset)
+  if (!Number.isFinite(adjustedTick)) return null
+  return { bucket: tickToAjnaBucket(adjustedTick), adjustedTick }
 }
 
 function approxToken1PerToken0(tick: number, decimals0: number, decimals1: number): number {
@@ -658,14 +692,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
           }
 
-          // Ajna wants tick for CREATOR per USDC (quote per collateral).
-          const orientedTick = isCreatorToken1 ? tickForPrice : -tickForPrice
-          suggestedAjnaBucket = tickToAjnaBucket(orientedTick)
+          const bucketFromTick = deriveAjnaBucketFromV3Tick({
+            twapTick: tickForPrice,
+            creatorToken,
+            usdToken: usdc,
+            creatorDecimals: creatorDec,
+            usdDecimals: usdcDec,
+            targetLtvBps: AJNA_BUCKET_TARGET_LTV_BPS,
+          })
+          suggestedAjnaBucket = bucketFromTick?.bucket ?? null
           pricingChecks.push({
             id: 'ajna-bucket-suggested',
             label: 'Suggested Ajna bucket (from V3 tick)',
-            status: 'info',
-            details: `bucket=${suggestedAjnaBucket} (tick=${orientedTick})`,
+            status: suggestedAjnaBucket == null ? 'warn' : 'info',
+            details:
+              suggestedAjnaBucket == null
+                ? 'Could not derive bucket (check token ordering/decimals).'
+                : `bucket=${suggestedAjnaBucket} (tick=${bucketFromTick?.adjustedTick}) · quote=CREATOR · collateral=USDC · ltv=${(AJNA_BUCKET_TARGET_LTV_BPS / 100).toFixed(2)}%`,
           })
         } else {
           pricingChecks.push({
@@ -730,7 +773,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         id: 'ajna-bucket-match',
         label: 'Ajna bucket matches suggestion',
         status: ok ? 'pass' : 'warn',
-        details: `current=${ajnaBucketIndex.toString()} · suggested=${suggestedAjnaBucket}${ajnaCollateralToken ? ` · collateral=${ajnaCollateralToken}` : ''}`,
+        details: `current=${ajnaBucketIndex.toString()} · suggested=${suggestedAjnaBucket} · ltv=${(AJNA_BUCKET_TARGET_LTV_BPS / 100).toFixed(2)}%${ajnaCollateralToken ? ` · collateral=${ajnaCollateralToken}` : ''}`,
         href: basescanAddressHref(ajnaStrategyAddress),
       })
     }

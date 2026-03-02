@@ -66,6 +66,8 @@ abstract contract CreatorOVaultModuleStorage {
     // Reporting
     uint96 internal lastReport;
     uint256 internal totalAssetsAtLastReport;
+    uint256 internal trustedPpsCheckpoint;
+    uint256 internal trustedPpsMaxDeviationBps;
     uint256 internal totalSharesBurned;
 
     // Controls

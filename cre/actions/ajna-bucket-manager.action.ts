@@ -19,7 +19,9 @@ import {
   AJNA_BUCKET_LIQUIDITY_SEARCH_RADIUS,
   AJNA_BUCKET_MAX_STEP,
   AJNA_BUCKET_MOVE_COOLDOWN_SECONDS,
+  AJNA_BUCKET_PRICE_CHANGE_TRIGGER_BPS,
   AJNA_BUCKET_MOVE_THRESHOLD,
+  AJNA_BUCKET_TARGET_LTV_BPS,
   AJNA_BUCKET_TWAP_DURATION,
   CHAINS,
   ORACLE_ABI,
@@ -39,6 +41,9 @@ const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const MIN_BUCKET_INDEX = 1;
 const MAX_BUCKET_INDEX = 7388;
 const MAX_STRATEGIES = 5;
+const AJNA_BUCKET_PRICE_STEP = 1.005;
+const LOG_1_0001 = Math.log(1.0001);
+const LOG_10_BASE_1_0001 = Math.log(10) / LOG_1_0001;
 
 const VAULT_STRATEGY_VIEW_ABI = [
   {
@@ -105,6 +110,8 @@ const AJNA_POOL_VIEW_ABI = [
 
 interface RuntimeConfig {
   twapDuration: number;
+  targetLtvBps: number;
+  priceChangeTriggerBps: number;
   moveThreshold: number;
   maxStep: number;
   cooldownSeconds: number;
@@ -152,9 +159,20 @@ function parsePositiveIntEnv(key: string, fallback: number): number {
   return Math.floor(n);
 }
 
+function parseBpsEnv(key: string, fallback: number): number {
+  const value = parsePositiveIntEnv(key, fallback);
+  if (value > 10_000) return fallback;
+  return value;
+}
+
 function buildRuntimeConfig(): RuntimeConfig {
   return {
     twapDuration: parsePositiveIntEnv('AJNA_BUCKET_TWAP_DURATION', AJNA_BUCKET_TWAP_DURATION),
+    targetLtvBps: parseBpsEnv('AJNA_BUCKET_TARGET_LTV_BPS', AJNA_BUCKET_TARGET_LTV_BPS),
+    priceChangeTriggerBps: parseBpsEnv(
+      'AJNA_BUCKET_PRICE_CHANGE_TRIGGER_BPS',
+      AJNA_BUCKET_PRICE_CHANGE_TRIGGER_BPS,
+    ),
     moveThreshold: parsePositiveIntEnv('AJNA_BUCKET_MOVE_THRESHOLD', AJNA_BUCKET_MOVE_THRESHOLD),
     maxStep: parsePositiveIntEnv('AJNA_BUCKET_MAX_STEP', AJNA_BUCKET_MAX_STEP),
     cooldownSeconds: parsePositiveIntEnv(
@@ -175,6 +193,73 @@ function asAddress(value: unknown): `0x${string}` | null {
 
 export function clampBucketIndex(index: number): number {
   return Math.max(MIN_BUCKET_INDEX, Math.min(MAX_BUCKET_INDEX, Math.floor(index)));
+}
+
+function floorDiv(a: number, b: number): number {
+  const q = Math.trunc(a / b);
+  const r = a % b;
+  if (a < 0 && r !== 0) return q - 1;
+  return q;
+}
+
+export function tickToAjnaBucket(tick: number): number {
+  const q = floorDiv(tick, 50);
+  return clampBucketIndex(4156 - q);
+}
+
+/**
+ * Approximate implied price-change threshold between two Ajna buckets.
+ * Each bucket step is ~0.5% (x1.005) on quote/collateral price.
+ */
+export function bucketPriceChangeBps(params: {
+  currentBucket: number;
+  suggestedBucket: number;
+}): number {
+  const current = clampBucketIndex(params.currentBucket);
+  const suggested = clampBucketIndex(params.suggestedBucket);
+  const delta = Math.abs(suggested - current);
+  if (delta === 0) return 0;
+
+  const ratio = Math.pow(AJNA_BUCKET_PRICE_STEP, delta);
+  if (!Number.isFinite(ratio) || ratio <= 1) return Number.MAX_SAFE_INTEGER;
+
+  const bps = Math.floor((ratio - 1) * 10_000);
+  if (!Number.isFinite(bps) || bps < 0) return Number.MAX_SAFE_INTEGER;
+  return Math.min(Number.MAX_SAFE_INTEGER, bps);
+}
+
+function compareAddressNumeric(a: `0x${string}`, b: `0x${string}`): number {
+  const av = BigInt(a);
+  const bv = BigInt(b);
+  if (av === bv) return 0;
+  return av > bv ? 1 : -1;
+}
+
+export function deriveAjnaBucketFromV3Tick(params: {
+  twapTick: number;
+  creatorToken: `0x${string}`;
+  usdToken: `0x${string}`;
+  creatorDecimals: number;
+  usdDecimals: number;
+  targetLtvBps: number;
+}): number | null {
+  if (!Number.isFinite(params.twapTick)) return null;
+  if (params.targetLtvBps <= 0 || params.targetLtvBps > 10_000) return null;
+  if (params.creatorToken.toLowerCase() === params.usdToken.toLowerCase()) return null;
+
+  const creatorIsToken1 = compareAddressNumeric(params.creatorToken, params.usdToken) > 0;
+  const orientedTick = creatorIsToken1 ? params.twapTick : -params.twapTick;
+
+  // Uniswap tick is in raw token units; Ajna bucket targets human quote/collateral price.
+  const decimalsTickOffset = (params.usdDecimals - params.creatorDecimals) * LOG_10_BASE_1_0001;
+
+  // For short lending, tighten borrowable quote by applying a collateralized LTV discount.
+  const ltvFactor = params.targetLtvBps / 10_000;
+  const ltvTickOffset = Math.log(ltvFactor) / LOG_1_0001;
+
+  const adjustedTick = Math.floor(orientedTick + decimalsTickOffset + ltvTickOffset);
+  if (!Number.isFinite(adjustedTick)) return null;
+  return tickToAjnaBucket(adjustedTick);
 }
 
 export function computeSteppedBucket(params: {
@@ -293,18 +378,58 @@ async function readAjnaStrategiesForVault(vaultAddress: `0x${string}`): Promise<
 async function readOracleSuggestedBucket(params: {
   oracleAddress: `0x${string}`;
   twapDuration: number;
+  targetLtvBps: number;
 }): Promise<number | null> {
-  const bucket = await readContract<bigint>({
-    address: params.oracleAddress,
-    abi: ORACLE_ABI,
-    functionName: 'getAjnaBucketFromV3TWAP',
-    args: [params.twapDuration],
-  }).catch(() => null);
+  const [tickRaw, creatorRaw, usdRaw, creatorDecimalsRaw, usdDecimalsRaw] = await Promise.all([
+    readContract<bigint>({
+      address: params.oracleAddress,
+      abi: ORACLE_ABI,
+      functionName: 'getV3TWAPTick',
+      args: [params.twapDuration],
+    }).catch(() => null),
+    readContract<unknown>({
+      address: params.oracleAddress,
+      abi: ORACLE_ABI,
+      functionName: 'v3CreatorToken',
+    }).catch(() => null),
+    readContract<unknown>({
+      address: params.oracleAddress,
+      abi: ORACLE_ABI,
+      functionName: 'v3UsdToken',
+    }).catch(() => null),
+    readContract<bigint>({
+      address: params.oracleAddress,
+      abi: ORACLE_ABI,
+      functionName: 'v3CreatorDecimals',
+    }).catch(() => null),
+    readContract<bigint>({
+      address: params.oracleAddress,
+      abi: ORACLE_ABI,
+      functionName: 'v3UsdDecimals',
+    }).catch(() => null),
+  ]);
 
-  if (bucket === null || bucket === undefined) return null;
-  const asNumber = Number(bucket);
-  if (!Number.isFinite(asNumber) || asNumber <= 0) return null;
-  return clampBucketIndex(asNumber);
+  const creatorToken = asAddress(creatorRaw);
+  const usdToken = asAddress(usdRaw);
+  if (tickRaw === null || !creatorToken || !usdToken || creatorDecimalsRaw === null || usdDecimalsRaw === null) {
+    return null;
+  }
+
+  const twapTick = Number(tickRaw);
+  const creatorDecimals = Number(creatorDecimalsRaw);
+  const usdDecimals = Number(usdDecimalsRaw);
+  if (!Number.isFinite(twapTick) || !Number.isFinite(creatorDecimals) || !Number.isFinite(usdDecimals)) {
+    return null;
+  }
+
+  return deriveAjnaBucketFromV3Tick({
+    twapTick,
+    creatorToken,
+    usdToken,
+    creatorDecimals,
+    usdDecimals,
+    targetLtvBps: params.targetLtvBps,
+  });
 }
 
 async function readCurrentBucketLenderInfo(params: {
@@ -408,6 +533,7 @@ export async function executeAjnaBucketManager(): Promise<BatchAjnaBucketResult>
     const suggestedBucket = await readOracleSuggestedBucket({
       oracleAddress: vault.oracleAddress,
       twapDuration: cfg.twapDuration,
+      targetLtvBps: cfg.targetLtvBps,
     });
 
     if (suggestedBucket === null) {
@@ -431,6 +557,27 @@ export async function executeAjnaBucketManager(): Promise<BatchAjnaBucketResult>
     if (strategies.length === 0) continue;
 
     for (const strategy of strategies) {
+      const priceChangeBps = bucketPriceChangeBps({
+        currentBucket: strategy.currentBucket,
+        suggestedBucket,
+      });
+      if (priceChangeBps < cfg.priceChangeTriggerBps) {
+        batch.processed += 1;
+        batch.skipped += 1;
+        batch.results.push({
+          vaultAddress: vault.vaultAddress,
+          strategyAddress: strategy.strategyAddress,
+          oracleAddress: vault.oracleAddress,
+          currentBucket: strategy.currentBucket,
+          suggestedBucket,
+          steppedBucket: strategy.currentBucket,
+          targetBucket: strategy.currentBucket,
+          moved: false,
+          skippedReason: 'price_change_below_trigger',
+        });
+        continue;
+      }
+
       const step = computeSteppedBucket({
         currentBucket: strategy.currentBucket,
         suggestedBucket,

@@ -52,6 +52,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase {
     error VaultIsShutdown();
     error FirstDepositTooSmall(uint256 provided, uint256 minimum);
     error PriceChangeExceedsLimit(uint256 priceBefore, uint256 priceAfter, uint256 maxChangeBps);
+    error TrustedPpsDeviationExceeded(uint256 checkpointPps, uint256 currentPps, uint256 maxDeviationBps);
     error InflationAttackDetected(uint256 assets, uint256 shares);
     error WithdrawTooSoon(uint256 currentBlock, uint256 requiredBlock);
     error TransferTooSoon(uint256 currentBlock, uint256 requiredBlock);
@@ -209,6 +210,9 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase {
         uint256 priceBefore = isFirstDeposit ? 0 : pricePerShare();
 
         _requireStrategyValuationsReady();
+        if (!isFirstDeposit) {
+            _checkTrustedPpsDeviation(priceBefore);
+        }
 
         shares = IERC4626(address(this)).previewDeposit(assets);
         if (shares == 0) revert ZeroShares();
@@ -245,6 +249,9 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase {
         uint256 priceBefore = isFirstDeposit ? 0 : pricePerShare();
 
         _requireStrategyValuationsReady();
+        if (!isFirstDeposit) {
+            _checkTrustedPpsDeviation(priceBefore);
+        }
 
         assets = IERC4626(address(this)).previewMint(shares);
         if (assets == 0) revert ZeroAmount();
@@ -510,6 +517,21 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase {
         }
     }
 
+    function _checkTrustedPpsDeviation(uint256 currentPps) internal view {
+        uint256 checkpointPps = trustedPpsCheckpoint;
+        if (checkpointPps == 0) return;
+
+        uint256 maxDeviationBps = trustedPpsMaxDeviationBps;
+        if (maxDeviationBps >= MAX_BPS) return;
+
+        uint256 ppsDiff = currentPps > checkpointPps ? currentPps - checkpointPps : checkpointPps - currentPps;
+        uint256 maxAllowedDiff = (checkpointPps * maxDeviationBps) / MAX_BPS;
+
+        if (ppsDiff > maxAllowedDiff) {
+            revert TrustedPpsDeviationExceeded(checkpointPps, currentPps, maxDeviationBps);
+        }
+    }
+
     function pricePerShare() public view onlyDelegateCall returns (uint256) {
         uint256 supply = _totalSupply;
         if (supply == 0) return 1e18;
@@ -530,6 +552,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase {
         if (previousTotalAssets == 0) {
             lastReport = uint96(block.timestamp);
             totalAssetsAtLastReport = currentTotalAssets;
+            trustedPpsCheckpoint = pricePerShare();
             emit Reported(0, 0, 0, currentTotalAssets);
             return (0, 0);
         }
@@ -590,6 +613,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase {
 
         lastReport = uint96(block.timestamp);
         totalAssetsAtLastReport = currentTotalAssets;
+        trustedPpsCheckpoint = pricePerShare();
     }
 
     function _increaseReportBaselineForPrincipalInflow(uint256 assetsIn) internal {

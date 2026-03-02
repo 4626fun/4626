@@ -55,17 +55,29 @@ export const TWAP_DURATION = 1_800; // 30 min
 /** TWAP duration for Ajna bucket suggestions */
 export const AJNA_BUCKET_TWAP_DURATION = 1_800; // 30 min
 
+/** Target LTV used for Ajna short-lending bucket selection (10000 = 100%) */
+export const AJNA_BUCKET_TARGET_LTV_BPS = 7_000; // 70%
+
+/** Minimum implied-price change before Ajna bucket manager attempts a move */
+export const AJNA_BUCKET_PRICE_CHANGE_TRIGGER_BPS = 1_000; // 10%
+
 /** Minimum bucket delta before moving Ajna liquidity */
 export const AJNA_BUCKET_MOVE_THRESHOLD = 50; // ~1.25 ticks (50-index granularity)
 
 /** Max bucket step per rebalance to avoid large jumps */
-export const AJNA_BUCKET_MAX_STEP = 250;
+export const AJNA_BUCKET_MAX_STEP = 2500;
 
 /** Cooldown between Ajna bucket moves (seconds) */
 export const AJNA_BUCKET_MOVE_COOLDOWN_SECONDS = 3_600; // 1 hour
 
 /** Optional search radius around stepped bucket for local liquidity */
 export const AJNA_BUCKET_LIQUIDITY_SEARCH_RADIUS = 20;
+
+/** TWAP duration for Charm rebalance trigger checks */
+export const CHARM_REBALANCE_TWAP_DURATION = 1_800; // 30 min
+
+/** Minimum implied-price change before Charm rebalance attempts */
+export const CHARM_REBALANCE_PRICE_CHANGE_TRIGGER_BPS = 1_000; // 10%
 
 /** VRF hub top-up target (2x minimumBalance = 0.01 ETH) */
 export const VRF_TOPUP_TARGET_WEI = BigInt(0.01e18);
@@ -101,6 +113,11 @@ export const ORACLE_ABI = [
   { type: 'function', name: 'creatorPriceTimestamp', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
   { type: 'function', name: 'isPriceFresh', inputs: [], outputs: [{ type: 'bool' }], stateMutability: 'view' },
   { type: 'function', name: 'v4PoolConfigured', inputs: [], outputs: [{ type: 'bool' }], stateMutability: 'view' },
+  { type: 'function', name: 'getV3TWAPTick', inputs: [{ name: 'duration', type: 'uint32' }], outputs: [{ type: 'int24' }], stateMutability: 'view' },
+  { type: 'function', name: 'v3CreatorToken', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' },
+  { type: 'function', name: 'v3UsdToken', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' },
+  { type: 'function', name: 'v3CreatorDecimals', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' },
+  { type: 'function', name: 'v3UsdDecimals', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' },
   // Write
   {
     type: 'function',

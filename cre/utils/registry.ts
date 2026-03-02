@@ -70,6 +70,7 @@ export function filterVaultsForWorkflow(
     | 'oracle-broadcaster'
     | 'vrf-health-monitor'
     | 'ajna-bucket-manager'
+    | 'charm-rebalance-manager'
 ): VaultConfig[] {
   switch (workflow) {
     case 'vault-keeper':
@@ -90,6 +91,10 @@ export function filterVaultsForWorkflow(
 
     case 'ajna-bucket-manager':
       // Ajna bucket manager needs vault + oracle to compute suggested bucket.
+      return vaults.filter((v) => v.vaultAddress && v.oracleAddress);
+
+    case 'charm-rebalance-manager':
+      // Charm rebalance manager needs vault + oracle for price trigger checks.
       return vaults.filter((v) => v.vaultAddress && v.oracleAddress);
 
     default:

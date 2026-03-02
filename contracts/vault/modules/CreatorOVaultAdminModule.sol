@@ -14,6 +14,7 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase {
     using SafeERC20 for IERC20;
 
     // ---- constants (must match vault) ----
+    uint256 internal constant MAX_BPS = 10_000;
     uint16 internal constant MAX_FEE = 2_000;
     uint256 internal constant SECONDS_PER_YEAR = 365 days;
     uint64 internal constant MIN_RESCUE_DELAY = 1 days;
@@ -28,6 +29,7 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase {
     event UpdatePerformanceFee(uint16 newPerformanceFee);
     event UpdatePerformanceFeeRecipient(address indexed newRecipient);
     event UpdateProfitMaxUnlockTime(uint256 newProfitMaxUnlockTime);
+    event UpdateTrustedPpsDeviationBps(uint256 newTrustedPpsDeviationBps);
 
     event BalancesSynced(uint256 coinBalance);
     event WhitelistEnabled(bool enabled);
@@ -223,6 +225,12 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase {
         if (_profitMaxUnlockTime > SECONDS_PER_YEAR) revert InvalidAmount();
         profitMaxUnlockTime = uint32(_profitMaxUnlockTime);
         emit UpdateProfitMaxUnlockTime(_profitMaxUnlockTime);
+    }
+
+    function setTrustedPpsDeviationBps(uint256 _trustedPpsMaxDeviationBps) external onlyDelegateCall {
+        if (_trustedPpsMaxDeviationBps > MAX_BPS) revert InvalidAmount();
+        trustedPpsMaxDeviationBps = _trustedPpsMaxDeviationBps;
+        emit UpdateTrustedPpsDeviationBps(_trustedPpsMaxDeviationBps);
     }
 
     function setPendingManagement(address _management) external onlyDelegateCall {

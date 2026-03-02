@@ -3,11 +3,13 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {ERC4626} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 
 import "../contracts/vault/CreatorOVault.sol";
 import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVaultAdminModule.sol";
 import {CreatorOVaultCoreModule} from "../contracts/vault/modules/CreatorOVaultCoreModule.sol";
 import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorOVaultStrategiesModule.sol";
+import {ERC4626StrategyAdapter} from "../contracts/vault/strategies/ERC4626StrategyAdapter.sol";
 import "../contracts/interfaces/IStrategy.sol";
 import "../contracts/interfaces/IStrategyValuation.sol";
 
@@ -166,6 +168,27 @@ contract MockNoValuationInterfaceStrategy is IStrategy {
     function rebalance() external pure override {}
 }
 
+contract ManipulableInnerERC4626 is ERC4626 {
+    uint256 public assetsMultiplier = 1e18;
+    bool public revertOnConvert;
+
+    constructor(IERC20 asset_) ERC20("Manipulable 4626 Vault", "x4626") ERC4626(asset_) {}
+
+    function setAssetsMultiplier(uint256 multiplier) external {
+        assetsMultiplier = multiplier;
+    }
+
+    function setRevertOnConvert(bool shouldRevert) external {
+        revertOnConvert = shouldRevert;
+    }
+
+    function convertToAssets(uint256 shares) public view override returns (uint256) {
+        if (revertOnConvert) revert("convertToAssets reverted");
+        uint256 baseAssets = super.convertToAssets(shares);
+        return (baseAssets * assetsMultiplier) / 1e18;
+    }
+}
+
 contract CreatorOVaultValuationGuardTest is Test {
     bytes4 private constant STRATEGY_VALUATION_NOT_READY_SELECTOR =
         bytes4(keccak256("StrategyValuationNotReady(address)"));
@@ -280,6 +303,102 @@ contract CreatorOVaultValuationGuardTest is Test {
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(STRATEGY_VALUATION_NOT_READY_SELECTOR, address(bad)));
         freshVault.mint(shares, alice);
+    }
+
+    function test_deposit_reverts_whenTrustedPpsDeviationTooHigh() external {
+        _bootstrapTrustedCheckpoint();
+        strategy.setTrackedAssets((strategy.trackedAssets() * 150) / 100); // +50%
+
+        vm.prank(alice);
+        vm.expectRevert();
+        vault.deposit(50_000e18, alice);
+    }
+
+    function test_mint_reverts_whenTrustedPpsDeviationTooHigh() external {
+        _bootstrapTrustedCheckpoint();
+        strategy.setTrackedAssets((strategy.trackedAssets() * 150) / 100); // +50%
+
+        vm.prank(alice);
+        vm.expectRevert();
+        vault.mint(10_000e18, alice);
+    }
+
+    function test_deposit_succeeds_whenTrustedPpsDeviationWithinLimit() external {
+        _bootstrapTrustedCheckpoint();
+        strategy.setTrackedAssets((strategy.trackedAssets() * 105) / 100); // +5%
+
+        vm.prank(alice);
+        uint256 shares = vault.deposit(50_000e18, alice);
+        assertGt(shares, 0);
+    }
+
+    function test_ownerCanRelaxTrustedPpsDeviationLimit() external {
+        _bootstrapTrustedCheckpoint();
+        strategy.setTrackedAssets((strategy.trackedAssets() * 150) / 100); // +50%
+
+        vm.prank(alice);
+        vm.expectRevert();
+        vault.deposit(50_000e18, alice);
+
+        vault.setTrustedPpsDeviationBps(5_000);
+
+        vm.prank(alice);
+        uint256 shares = vault.deposit(50_000e18, alice);
+        assertGt(shares, 0);
+    }
+
+    function test_setTrustedPpsDeviationBps_revertsAboveBpsDenominator() external {
+        vm.expectRevert(CreatorOVault.InvalidAmount.selector);
+        vault.setTrustedPpsDeviationBps(10_001);
+    }
+
+    function test_adapterValuationReady_falseOnAtomicSpike() external {
+        (, ManipulableInnerERC4626 innerVault, ERC4626StrategyAdapter adapter) = _deployAdapterGuardHarness();
+
+        assertTrue(adapter.isValuationReady(), "baseline valuation should be ready");
+        innerVault.setAssetsMultiplier(2e18); // +100% in one manipulation step
+        assertFalse(adapter.isValuationReady(), "valuation guard should reject atomic spike");
+    }
+
+    function test_adapterValuationReady_trueForBoundedChange() external {
+        (, ManipulableInnerERC4626 innerVault, ERC4626StrategyAdapter adapter) = _deployAdapterGuardHarness();
+
+        innerVault.setAssetsMultiplier(105e16); // +5%
+        assertTrue(adapter.isValuationReady(), "small bounded move should remain ready");
+    }
+
+    function test_adapterValuationReady_falseWhenConvertReverts() external {
+        (, ManipulableInnerERC4626 innerVault, ERC4626StrategyAdapter adapter) = _deployAdapterGuardHarness();
+
+        assertTrue(adapter.isValuationReady(), "baseline valuation should be ready");
+        innerVault.setRevertOnConvert(true);
+        assertFalse(adapter.isValuationReady(), "reverting conversion must mark valuation not ready");
+    }
+
+    function _deployAdapterGuardHarness()
+        internal
+        returns (CreatorOVault adapterVault, ManipulableInnerERC4626 innerVault, ERC4626StrategyAdapter adapter)
+    {
+        adapterVault = new CreatorOVault(address(creatorCoin), address(this), "Adapter OVault", "ovADAPT");
+        adapterVault.setModulesOnce(coreModule, strategiesModule, adminModule);
+
+        innerVault = new ManipulableInnerERC4626(IERC20(address(creatorCoin)));
+        adapter = new ERC4626StrategyAdapter(address(adapterVault), address(innerVault), address(this));
+
+        creatorCoin.mint(address(adapterVault), 1_000_000e18);
+
+        vm.prank(address(adapterVault));
+        creatorCoin.approve(address(adapter), type(uint256).max);
+        vm.prank(address(adapterVault));
+        adapter.deposit(100e18);
+    }
+
+    function _bootstrapTrustedCheckpoint() internal {
+        uint256 firstDeposit = vault.MINIMUM_FIRST_DEPOSIT() * 2;
+        vm.prank(alice);
+        vault.deposit(firstDeposit, alice);
+        vault.forceDeployToStrategies();
+        vault.report();
     }
 }
 
