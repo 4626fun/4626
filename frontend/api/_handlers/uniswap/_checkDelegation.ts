@@ -2,16 +2,21 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
+import { getAllowedUniswapChainIds } from '../../../server/uniswap/guards.js'
 import { isObject, readJsonObjectBody, toCleanErrorMessage, uniswapTradeFetch } from '../../../server/uniswap/trading.js'
 
 function isChainIdArray(value: unknown): value is number[] {
   if (!Array.isArray(value) || value.length === 0) return false
-  return value.every((x) => Number.isInteger(Number(x)))
+  const allowed = getAllowedUniswapChainIds()
+  return value.every((x) => {
+    const chainId = Number(x)
+    return Number.isInteger(chainId) && allowed.has(chainId)
+  })
 }
 
 function isAddressArray(value: unknown): value is string[] {
   if (!Array.isArray(value) || value.length === 0) return false
-  return value.every((x) => typeof x === 'string' && x.trim().startsWith('0x'))
+  return value.every((x) => typeof x === 'string' && /^0x[a-fA-F0-9]{40}$/.test(x.trim()))
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -34,7 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!body) return res.status(400).json({ success: false, error: 'Invalid JSON body' })
 
   if (!('chainIds' in body) || !isChainIdArray(body.chainIds)) {
-    return res.status(400).json({ success: false, error: 'Missing required field: chainIds' })
+    return res.status(400).json({ success: false, error: 'Unsupported chainIds' })
   }
   if ('walletAddresses' in body && body.walletAddresses !== undefined && !isAddressArray(body.walletAddresses)) {
     return res.status(400).json({ success: false, error: 'Invalid walletAddresses: expected address array' })
