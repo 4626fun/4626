@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
-import { validateChainIdField } from '../../../server/uniswap/guards.js'
+import { validateChainIdField, validateTokenPolicy } from '../../../server/uniswap/guards.js'
 import { isObject, readJsonObjectBody, toCleanErrorMessage, uniswapTradeFetch } from '../../../server/uniswap/trading.js'
 
 function getPlanIdFromReq(req: VercelRequest, body: Record<string, unknown> | null): string {
@@ -41,6 +41,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const err = validateChainIdField(quoteObj, field)
       if (err) return res.status(400).json({ success: false, error: err })
     }
+    const tokenPolicyErr = validateTokenPolicy(quoteObj, ['tokenIn', 'tokenOut'])
+    if (tokenPolicyErr) return res.status(400).json({ success: false, error: tokenPolicyErr })
 
     const upstream = await uniswapTradeFetch({
       path: '/plan',

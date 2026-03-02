@@ -839,6 +839,18 @@ function parseAllowlist(raw: string | undefined): Set<string> {
   return out
 }
 
+function readUniswapPermit2MaxAmount(): bigint | null {
+  const raw = String(process.env.UNISWAP_PAYMASTER_MAX_PERMIT2_AMOUNT ?? '').trim()
+  if (!raw) return null
+  if (!/^\d+$/.test(raw)) return null
+  try {
+    const parsed = BigInt(raw)
+    return parsed > 0n ? parsed : null
+  } catch {
+    return null
+  }
+}
+
 function normalizeAddresses(input: Array<Address | string | null | undefined>): Address[] {
   const out = new Set<string>()
   for (const a of input) {
@@ -1930,6 +1942,12 @@ async function validateInnerCalls(params: {
       if (getAddress(permit.permitted.token) !== expectedCreatorToken) throw new Error('permit2_token_mismatch')
       if (getAddress(details.to) !== params.sender) throw new Error('permit2_to_mismatch')
       if (getAddress(ownerArg) !== params.sessionAddress) throw new Error('permit2_owner_mismatch')
+      const permitAmount = BigInt(permit.permitted.amount ?? 0n)
+      const requestedAmount = BigInt(details.requestedAmount ?? 0n)
+      const maxPermit2Amount = readUniswapPermit2MaxAmount()
+      if (maxPermit2Amount !== null && (permitAmount > maxPermit2Amount || requestedAmount > maxPermit2Amount)) {
+        throw new Error('permit2_amount_exceeds_policy')
+      }
       continue
     }
 

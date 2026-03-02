@@ -613,10 +613,15 @@ export function Swap() {
     permitSignatureRequired,
     permitSignaturePending,
     permitSignatureReady,
+    diagnosticsEnabled,
+    canary7702Eligible,
+    diagnosticsBusy,
+    diagnosticsResult,
     handleQuote,
     handleReviewTrade,
     closeConfirm,
     confirmAndExecute,
+    run7702DryRun,
     resetTradeState,
   } = useSwapExecution({
     address,
@@ -1019,6 +1024,32 @@ export function Swap() {
         title="Swap"
         subtitle="Token exchange with live quote intelligence."
       />
+
+      {activePanel === 'swap' && diagnosticsEnabled ? (
+        <div className="mx-auto mt-4 max-w-4xl rounded-xl border border-white/10 bg-zinc-950/60 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Internal 7702 Diagnostics</div>
+              <div className="text-xs text-zinc-500">
+                Canary eligible: <span className={canary7702Eligible ? 'text-emerald-300' : 'text-zinc-400'}>{canary7702Eligible ? 'yes' : 'no'}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => void run7702DryRun()}
+              disabled={diagnosticsBusy || busy !== null}
+              className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {diagnosticsBusy ? 'Running…' : 'Run dry-run'}
+            </button>
+          </div>
+          {diagnosticsResult ? (
+            <pre className="mt-3 max-h-56 overflow-auto rounded-lg border border-white/10 bg-black/40 p-2 text-[11px] text-zinc-300">
+              {JSON.stringify(diagnosticsResult, null, 2)}
+            </pre>
+          ) : null}
+        </div>
+      ) : null}
 
       {chainMismatch ? (
         <div className="mx-auto mb-4 flex max-w-4xl items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">

@@ -4,14 +4,23 @@ import { encodeFunctionData, erc20Abi, formatUnits, isAddress, parseUnits } from
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { CONTRACTS } from '@/config/contracts'
+import {
+  evaluateSwapPolicyInput,
+  evaluateSwapPolicyRouting,
+  readClientSwapPolicy,
+  shouldEnable7702CanaryForAddress,
+} from '@/lib/uniswap/policy'
 import { normalizeUniswapError } from '@/lib/uniswap/error'
 import { areEquivalentSwapTokens, BASE_CHAIN_ID, getNestedAmountOut, NATIVE_TOKEN_ADDRESS } from '@/lib/uniswap/swapUtils'
 import type { components } from '@/lib/uniswap/generated/tradeApi'
 import {
   assertValidSwapTransaction,
   buildSwap,
+  buildSwap5792,
+  buildSwap7702,
   checkTradeApproval,
   createOrder,
+  fetchDelegationStatus,
   fetchTradeQuote,
   isUniswapXRouting,
   pickQuote,
@@ -25,6 +34,18 @@ import {
 import type { TxLifecycleState } from '@/components/trade/TransactionLifecycle'
 
 const QUOTE_TTL_MS = 30_000
+const CALIBUR_DELEGATION_ADDRESS = '0x000000009B1D0aF20D8C6d0A44e162d11F9b8f00' as const
+
+type Swap7702Diagnostics = {
+  at: number
+  chainId: number
+  canaryEligible: boolean
+  routing: string | null
+  delegationOk: boolean
+  swap5792Ok: boolean
+  swap7702Ok: boolean
+  notes: string[]
+}
 
 const COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI = [
   {
@@ -69,6 +90,16 @@ function toParsableAmount(value: string): string | null {
   return normalized
 }
 
+function buildRoutingQuotePayload(routing: unknown, quotePayload: Record<string, unknown>): Record<string, unknown> {
+  const route = String(routing ?? '')
+    .trim()
+    .toUpperCase()
+  if (route === 'CLASSIC') return { classicQuote: quotePayload }
+  if (route === 'WRAP' || route === 'UNWRAP') return { wrapUnwrapQuote: quotePayload }
+  if (route === 'BRIDGE') return { bridgeQuote: quotePayload }
+  return { priorityQuote: quotePayload }
+}
+
 export function useSwapExecution(params: {
   address: string | undefined
   walletClient: unknown
@@ -109,15 +140,23 @@ export function useSwapExecution(params: {
   const [permitSignatureReady, setPermitSignatureReady] = useState(false)
   const [txState, setTxState] = useState<TxLifecycleState>('idle')
   const [txHash, setTxHash] = useState<string | null>(null)
+  const [diagnosticsBusy, setDiagnosticsBusy] = useState(false)
+  const [diagnosticsResult, setDiagnosticsResult] = useState<Swap7702Diagnostics | null>(null)
   const quoteRunRef = useRef(0)
   const getErrorMessage = useCallback((value: unknown, fallback: string): string => {
     const normalized = normalizeUniswapError(value)
     const message = normalized.message.trim()
     return message || fallback
   }, [])
+  const swapPolicy = useMemo(() => readClientSwapPolicy(), [])
 
   type ChainId = components['schemas']['ChainId']
   const swapChainId = (params.chainId ?? BASE_CHAIN_ID) as ChainId
+  const canary7702Eligible = useMemo(
+    () => shouldEnable7702CanaryForAddress(swapPolicy, params.executionAddress),
+    [swapPolicy, params.executionAddress],
+  )
+  const diagnosticsEnabled = swapPolicy.diagnosticsEnabled || canary7702Eligible
 
   const tokensEquivalent = useMemo(
     () => areEquivalentSwapTokens(params.tokenIn, params.tokenOut, CONTRACTS.weth),
@@ -132,6 +171,48 @@ export function useSwapExecution(params: {
       Number(params.amountInUnits) > 0 &&
       Boolean(params.executionAddress),
     [params.tokenIn, params.tokenOut, params.amountInUnits, params.executionAddress, tokensEquivalent],
+  )
+
+  const guardInputPolicy = useCallback(
+    (amountBaseUnits: string): boolean => {
+      const decision = evaluateSwapPolicyInput({
+        policy: swapPolicy,
+        tokenIn: params.tokenIn,
+        tokenOut: params.tokenOut,
+        amountBaseUnits,
+        slippageBps: Math.round(params.parsedSlippage * 100),
+      })
+      if (!decision.allowed) {
+        console.warn('[swap][policy] input blocked', {
+          code: decision.code,
+          tokenIn: params.tokenIn,
+          tokenOut: params.tokenOut,
+          mode: params.executionMode,
+        })
+        setError(decision.message)
+      }
+      return decision.allowed
+    },
+    [swapPolicy, params.tokenIn, params.tokenOut, params.parsedSlippage, params.executionMode],
+  )
+
+  const guardRoutingPolicy = useCallback(
+    (routing: unknown): boolean => {
+      const decision = evaluateSwapPolicyRouting({
+        policy: swapPolicy,
+        routing,
+      })
+      if (!decision.allowed) {
+        console.warn('[swap][policy] routing blocked', {
+          code: decision.code,
+          routing: String(routing ?? ''),
+          mode: params.executionMode,
+        })
+        setError(decision.message)
+      }
+      return decision.allowed
+    },
+    [swapPolicy, params.executionMode],
   )
 
   const approvalTx = approvalData?.approval as Record<string, unknown> | undefined
@@ -231,6 +312,7 @@ export function useSwapExecution(params: {
     setPermitSignatureRequired(false)
     setPermitSignaturePending(false)
     setPermitSignatureReady(false)
+    setDiagnosticsResult(null)
     setStatus('')
     setError('')
     setTxState('idle')
@@ -249,6 +331,7 @@ export function useSwapExecution(params: {
       const tokenInDecimals = await getTokenDecimals(params.tokenIn)
       if (runId !== quoteRunRef.current) return
       const amount = parseUnits(parsableAmount, tokenInDecimals).toString()
+      if (!guardInputPolicy(amount)) return
       const data = await fetchTradeQuote({
         tokenIn: params.tokenIn,
         tokenOut: params.tokenOut,
@@ -265,6 +348,7 @@ export function useSwapExecution(params: {
         walletModeKey: params.executionMode,
       })
       if (runId !== quoteRunRef.current) return
+      if (!guardRoutingPolicy(data.routing)) return
       setQuote(data)
       setQuoteUpdatedAt(Date.now())
       syncPermitRequirement(data)
@@ -305,6 +389,8 @@ export function useSwapExecution(params: {
     isReady,
     getTokenDecimals,
     getErrorMessage,
+    guardInputPolicy,
+    guardRoutingPolicy,
     syncPermitRequirement,
   ])
 
@@ -326,6 +412,7 @@ export function useSwapExecution(params: {
       if (!parsableAmount) throw new Error('Enter a valid amount greater than 0.')
       const tokenInDecimals = await getTokenDecimals(params.tokenIn)
       const amount = parseUnits(parsableAmount, tokenInDecimals).toString()
+      if (!guardInputPolicy(amount)) return
       const data = await checkTradeApproval({
         walletAddress: params.executionAddress,
         token: params.tokenIn,
@@ -342,7 +429,17 @@ export function useSwapExecution(params: {
     } finally {
       setBusy(null)
     }
-  }, [params.executionAddress, params.tokenIn, params.tokenOut, params.amountInUnits, swapChainId, isReady, getTokenDecimals, getErrorMessage])
+  }, [
+    params.executionAddress,
+    params.tokenIn,
+    params.tokenOut,
+    params.amountInUnits,
+    swapChainId,
+    isReady,
+    getTokenDecimals,
+    getErrorMessage,
+    guardInputPolicy,
+  ])
 
   const handleBuildSwap = useCallback(async () => {
     if (!quote) return
@@ -384,6 +481,7 @@ export function useSwapExecution(params: {
       const tokenOutDecimals = await getTokenDecimals(params.tokenOut)
       if (runId !== quoteRunRef.current) return
       const amount = parseUnits(parsableAmount, tokenInDecimals).toString()
+      if (!guardInputPolicy(amount)) return
 
       const approvalPromise =
         params.tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
@@ -415,6 +513,7 @@ export function useSwapExecution(params: {
         approvalPromise,
       ])
       if (runId !== quoteRunRef.current) return
+      if (!guardRoutingPolicy(nextQuote.routing)) return
       setQuote(nextQuote)
       setQuoteUpdatedAt(Date.now())
       syncPermitRequirement(nextQuote)
@@ -483,11 +582,107 @@ export function useSwapExecution(params: {
     isReady,
     getTokenDecimals,
     getErrorMessage,
+    guardInputPolicy,
+    guardRoutingPolicy,
     syncPermitRequirement,
     signPermitIfRequired,
     params.executionAddress,
     params.executionReady,
   ])
+
+  const run7702DryRun = useCallback(
+    async (options?: { silent?: boolean }): Promise<Swap7702Diagnostics | null> => {
+      if (!quote || !params.executionAddress) {
+        if (!options?.silent) {
+          setDiagnosticsResult(null)
+          setError('Diagnostics unavailable: quote and execution address are required.')
+        }
+        return null
+      }
+      const quotePayload = pickQuote(quote)
+      if (!quotePayload) {
+        if (!options?.silent) {
+          setDiagnosticsResult(null)
+          setError('Diagnostics unavailable: quote payload missing.')
+        }
+        return null
+      }
+
+      if (!options?.silent) setDiagnosticsBusy(true)
+      const notes: string[] = []
+      let delegationOk = false
+      let swap5792Ok = false
+      let swap7702Ok = false
+      const deadline = Math.floor(Date.now() / 1000) + Math.max(60, params.parsedDeadlineMinutes * 60)
+      const quoteShape = buildRoutingQuotePayload(quote.routing, quotePayload)
+
+      try {
+        await fetchDelegationStatus({
+          chainIds: [Number(swapChainId)],
+          walletAddresses: [params.executionAddress],
+        } as any)
+        delegationOk = true
+      } catch (error) {
+        notes.push(`delegation-check-failed:${getErrorMessage(error, 'delegation check failed')}`)
+      }
+
+      try {
+        await buildSwap5792({
+          ...quoteShape,
+          deadline,
+        })
+        swap5792Ok = true
+      } catch (error) {
+        notes.push(`swap5792-failed:${getErrorMessage(error, 'swap5792 build failed')}`)
+      }
+
+      if (canary7702Eligible) {
+        try {
+          await buildSwap7702({
+            ...quoteShape,
+            smartContractDelegationAddress: CALIBUR_DELEGATION_ADDRESS,
+          })
+          swap7702Ok = true
+        } catch (error) {
+          notes.push(`swap7702-failed:${getErrorMessage(error, 'swap7702 build failed')}`)
+        }
+      } else {
+        notes.push('swap7702-skipped:not-canary-eligible')
+      }
+
+      const result: Swap7702Diagnostics = {
+        at: Date.now(),
+        chainId: Number(swapChainId),
+        canaryEligible: canary7702Eligible,
+        routing: quote.routing ? String(quote.routing) : null,
+        delegationOk,
+        swap5792Ok,
+        swap7702Ok,
+        notes,
+      }
+      if (!options?.silent) {
+        setDiagnosticsResult(result)
+        setStatus('Internal diagnostics complete.')
+        setDiagnosticsBusy(false)
+      }
+      console.info('[swap][7702] dry-run complete', {
+        canaryEligible: canary7702Eligible,
+        delegationOk,
+        swap5792Ok,
+        swap7702Ok,
+        notes,
+      })
+      return result
+    },
+    [
+      quote,
+      params.executionAddress,
+      params.parsedDeadlineMinutes,
+      swapChainId,
+      canary7702Eligible,
+      getErrorMessage,
+    ],
+  )
 
   const executeViaCanonical4337 = useCallback(async (executeParams: {
     calls: Array<{ to: `0x${string}`; data?: `0x${string}`; value?: bigint }>
@@ -645,6 +840,11 @@ export function useSwapExecution(params: {
     setBusy('executeSwap')
     setError('')
     try {
+      // Canary users get a best-effort 7702 preflight; send path still falls
+      // back to canonical ERC-4337 on any issue.
+      if (params.executionMode === 'canonical' && canary7702Eligible) {
+        await run7702DryRun({ silent: true }).catch(() => null)
+      }
       if (params.executionMode === 'canonical') {
         await executeViaCanonical4337({
           calls: [
@@ -671,7 +871,7 @@ export function useSwapExecution(params: {
     } finally {
       setBusy(null)
     }
-  }, [swapTx, executeViaCanonical4337, executeViaEoa, getErrorMessage, params.executionMode])
+  }, [swapTx, executeViaCanonical4337, executeViaEoa, getErrorMessage, params.executionMode, canary7702Eligible, run7702DryRun])
 
   const executeOrderNow = useCallback(async () => {
     if (!orderRequest) return
@@ -771,6 +971,10 @@ export function useSwapExecution(params: {
     permitSignatureRequired,
     permitSignaturePending,
     permitSignatureReady,
+    diagnosticsEnabled,
+    canary7702Eligible,
+    diagnosticsBusy,
+    diagnosticsResult,
     setStatus,
     setError,
     setTxState,
@@ -781,6 +985,7 @@ export function useSwapExecution(params: {
     openConfirm,
     closeConfirm,
     confirmAndExecute,
+    run7702DryRun,
     resetTradeState,
   }
 }
