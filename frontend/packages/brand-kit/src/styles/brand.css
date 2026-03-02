@@ -1,0 +1,34 @@
+:root {
+  --brand-primary: 0 82 255;
+  --vault-bg: 248 250 252;
+  --vault-card: 255 255 255;
+  --vault-border: 226 232 240;
+  --vault-text: 11 18 32;
+  --vault-subtext: 71 85 105;
+}
+
+html.dark {
+  --vault-bg: 2 2 2;
+  --vault-card: 10 10 10;
+  --vault-border: 31 31 31;
+  --vault-text: 237 237 237;
+  --vault-subtext: 102 102 102;
+}
+
+.border-glass {
+  border-color: rgb(255 255 255 / 0.08);
+}
+
+.glass-card {
+  border-radius: 1rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background-color: rgb(var(--vault-card) / 0.6);
+  backdrop-filter: blur(12px);
+}
+
+.card {
+  border-radius: 1rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  background-color: rgb(var(--vault-card) / 0.4);
+  backdrop-filter: blur(4px);
+}

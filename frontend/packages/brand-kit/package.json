@@ -1,0 +1,13 @@
+{
+  "name": "@4626/brand-kit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens": "./src/tokens/index.ts",
+    "./tailwind-preset": "./tailwind.preset.js",
+    "./styles": "./src/styles/brand.css",
+    "./components": "./src/components/index.ts"
+  }
+}
