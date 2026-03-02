@@ -571,17 +571,13 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
         // Deposit to Charm with safety checks
         _depositToCharmSafe(finalCreator, finalUsdc, creatorIsToken0);
 
-        // Return unused tokens to vault
-        _returnUnusedTokens();
+        // Keep residual balances in-strategy so strict vault accounting remains stable
+        // even when Charm deposit is partially/fully deferred (e.g. out-of-range).
+        // Residual tokens remain reflected in getTotalAssets().
 
-        // Calculate total deposited value in CREATOR terms using TWAP.
-        (uint256 creatorPerUsdc, bool ok) = _getPoolPriceTWAP(twapDuration);
-        if (!ok) {
-            deposited = finalCreator;
-        } else {
-            uint256 usdcInCreator = (finalUsdc * creatorPerUsdc) / 1e6; // USDC has 6 decimals
-            deposited = finalCreator + usdcInCreator;
-        }
+        // Canonical vault accounting path requires strategy-reported deposit to match
+        // the requested vault allocation amount. The vault enforces this strictly.
+        deposited = amount;
 
         // Update for harvest tracking
         lastTotalAssets = getTotalAssets();
