@@ -50,13 +50,22 @@ export function Modal({
 
   // Prevent body scroll while open
   useEffect(() => {
+    const prevOverflow = document.body.style.overflow
+    const prevPaddingRight = document.body.style.paddingRight
+
     if (open) {
+      const scrollbarWidth = Math.max(0, window.innerWidth - document.documentElement.clientWidth)
       document.body.style.overflow = 'hidden'
+      if (scrollbarWidth > 0) {
+        document.body.style.paddingRight = `${scrollbarWidth}px`
+      }
     } else {
-      document.body.style.overflow = ''
+      document.body.style.overflow = prevOverflow
+      document.body.style.paddingRight = prevPaddingRight
     }
     return () => {
-      document.body.style.overflow = ''
+      document.body.style.overflow = prevOverflow
+      document.body.style.paddingRight = prevPaddingRight
     }
   }, [open])
 

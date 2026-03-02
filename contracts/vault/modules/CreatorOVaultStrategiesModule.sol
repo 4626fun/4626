@@ -132,17 +132,21 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase {
         coinBalance = actual;
     }
 
-    function _depositIntoStrategyExact(address strategy, uint256 amount) internal returns (uint256 deposited) {
+    /// @dev Strategy deposit accounting is based on measured vault outflow (`spent`),
+    ///      not strategy-reported values, so fee-on-transfer and partial-spend
+    ///      strategy internals do not brick keeper deploys.
+    function _depositIntoStrategyMeasured(address strategy, uint256 amount) internal returns (uint256 deposited) {
         IERC20 coin = _creatorCoin();
         uint256 beforeBal = coin.balanceOf(address(this));
         coin.forceApprove(strategy, amount);
-        deposited = IStrategy(strategy).deposit(amount);
+        IStrategy(strategy).deposit(amount);
         uint256 afterBal = coin.balanceOf(address(this));
 
+        if (afterBal > beforeBal) revert TransferAmountMismatch(amount, 0);
         uint256 spent = beforeBal - afterBal;
-        if (spent != amount) revert TransferAmountMismatch(amount, spent);
-        if (deposited != amount) revert TransferAmountMismatch(amount, deposited);
+        if (spent > amount) revert TransferAmountMismatch(amount, spent);
 
+        deposited = spent;
         coinBalance = afterBal;
     }
 
@@ -270,7 +274,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase {
         if (toAllocate == 0) return;
 
         uint256 currentDebt = strategyDebt[firstStrategy];
-        uint256 deposited = _depositIntoStrategyExact(firstStrategy, toAllocate);
+        uint256 deposited = _depositIntoStrategyMeasured(firstStrategy, toAllocate);
 
         uint256 newDebt = currentDebt + deposited;
         strategyDebt[firstStrategy] = newDebt;
@@ -318,7 +322,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase {
             if (amount == 0) continue;
 
             uint256 currentDebt = strategyDebt[strategy];
-            uint256 deposited = _depositIntoStrategyExact(strategy, amount);
+            uint256 deposited = _depositIntoStrategyMeasured(strategy, amount);
 
             uint256 newDebt = currentDebt + deposited;
             strategyDebt[strategy] = newDebt;

@@ -1002,7 +1002,9 @@ contract DeploymentBatcher is ReentrancyGuard {
             bytes32 ajnaSalt = _saltFor(baseSalt, "ajnaStrategy");
             bytes memory ajnaArgs = abi.encode(params.vault, params.creatorToken, ajnaFactory, usdc, address(this));
             out.ajnaStrategy = create2Deployer.deploy(ajnaSalt, codeIds.ajnaStrategy, ajnaArgs);
-            IOwnableTransfer(out.ajnaStrategy).transferOwnership(protocolTreasury);
+            // Ajna runtime bucket management is executed by the canonical CSW owner path.
+            // Keep Ajna strategy ownership aligned with params.owner (canonical smart wallet).
+            IOwnableTransfer(out.ajnaStrategy).transferOwnership(params.owner);
         }
 
         // ───────────────────────────────

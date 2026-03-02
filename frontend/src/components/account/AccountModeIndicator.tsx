@@ -39,16 +39,16 @@ export function AccountModeIndicator() {
 
   return (
     <div className="border-b border-vault-border/60 bg-black/45">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5">
-        <div className="flex flex-wrap items-center gap-2 text-[11px]">
-          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 min-h-[42px]">
+        <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap text-[11px] scrollbar-hide">
+          <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300">
             Connected as: {connectedLabel}
           </span>
-          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300">
+          <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-300">
             Acting as: {actingLabel}
           </span>
           <span
-            className={`rounded-full border px-2 py-0.5 ${
+            className={`shrink-0 rounded-full border px-2 py-0.5 ${
               account.uiFlags.paymasterAvailable
                 ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
                 : 'border-white/10 bg-white/5 text-zinc-400'
@@ -57,7 +57,7 @@ export function AccountModeIndicator() {
             {account.uiFlags.paymasterAvailable ? 'Paymaster ✓' : 'Paymaster —'}
           </span>
           <span
-            className={`rounded-full border px-2 py-0.5 ${
+            className={`shrink-0 rounded-full border px-2 py-0.5 ${
               account.capabilities.atomicStatus === 'supported' || account.capabilities.atomicStatus === 'ready'
                 ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
                 : 'border-white/10 bg-white/5 text-zinc-400'
@@ -67,7 +67,7 @@ export function AccountModeIndicator() {
           </span>
 
           {showModeToggle ? (
-            <div className="inline-flex rounded-full border border-white/10 bg-black/40 p-0.5">
+            <div className="shrink-0 inline-flex rounded-full border border-white/10 bg-black/40 p-0.5">
               <button
                 type="button"
                 aria-label="Use User Wallet mode"
@@ -96,14 +96,14 @@ export function AccountModeIndicator() {
           {!showModeToggle && account.uiFlags.shouldPromptToLinkOwner ? (
             <Link
               to="/account"
-              className="rounded-full border border-brand-primary/35 bg-brand-primary/10 px-2 py-0.5 text-brand-300 hover:bg-brand-primary/20"
+              className="shrink-0 rounded-full border border-brand-primary/35 bg-brand-primary/10 px-2 py-0.5 text-brand-300 hover:bg-brand-primary/20"
             >
               Unlock Smart Wallet features
             </Link>
           ) : null}
 
           {account.uiFlags.shouldShowNetworkMismatch ? (
-            <span className="rounded-full border border-amber-400/35 bg-amber-500/10 px-2 py-0.5 text-amber-300">
+            <span className="shrink-0 rounded-full border border-amber-400/35 bg-amber-500/10 px-2 py-0.5 text-amber-300">
               Switch to Base to verify smart-wallet ownership
             </span>
           ) : null}

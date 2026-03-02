@@ -261,6 +261,7 @@ function parseBigIntLike(value: unknown): bigint | null {
 function extractFinalizePhase2ApprovalInfo(data: Hex): {
   creatorToken: Address
   depositAmount: bigint
+  vault: Address | null
 } | null {
   for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
     try {
@@ -268,6 +269,7 @@ function extractFinalizePhase2ApprovalInfo(data: Hex): {
       const params = (decoded.args?.[0] ?? null) as {
         creatorToken?: string
         depositAmount?: bigint | string | number
+        vault?: string
       } | null
       const creatorTokenCandidate =
         params?.creatorToken && isAddress(params.creatorToken)
@@ -279,7 +281,11 @@ function extractFinalizePhase2ApprovalInfo(data: Hex): {
           : null
       const depositAmount = parseBigIntLike(params?.depositAmount)
       if (!creatorToken || !depositAmount || depositAmount <= 0n) continue
-      return { creatorToken, depositAmount }
+      const vault =
+        params?.vault && isAddress(params.vault)
+          ? getAddress(params.vault as Address)
+          : null
+      return { creatorToken, depositAmount, vault }
     } catch {
       continue
     }
@@ -480,6 +486,33 @@ async function checkDeployInfraReady(origin: string): Promise<{ ok: boolean; err
 
 const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
   { type: 'function', name: 'removeOwnerAtIndex', stateMutability: 'nonpayable', inputs: [{ name: 'index', type: 'uint256' }, { name: 'owner', type: 'bytes' }], outputs: [] },
+] as const
+
+const CREATOR_VAULT_DEPLOY_RUNTIME_ABI = [
+  {
+    type: 'function',
+    name: 'updateStrategyWeight',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'strategy', type: 'address' },
+      { name: 'newWeight', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setMinimumTotalIdle',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: '_minimumTotalIdle', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'deployToStrategies',
+    stateMutability: 'nonpayable',
+    inputs: [],
+    outputs: [],
+  },
 ] as const
 
 function asOwnerBytes(owner: Address): Hex {
@@ -1013,6 +1046,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }),
     }
 
+    const phase4RuntimeGrantCalls: Call[] = (() => {
+      // Server-side continuation may prepend vault strategy runtime calls in phase-4
+      // to safely deploy around Charm transfer-mismatch edge cases.
+      if (phase3Calls.length === 0 || phase4Calls.length === 0) return []
+      const finalizeInfo =
+        [...phase2FinalizeCalls, ...phase2Calls]
+          .map((c) => extractFinalizePhase2ApprovalInfo(c.data))
+          .find((info): info is NonNullable<typeof info> => Boolean(info)) ?? null
+      const vault = finalizeInfo?.vault ?? null
+      if (!vault) return []
+      return [
+        {
+          to: vault,
+          value: '0',
+          data: encodeFunctionData({
+            abi: CREATOR_VAULT_DEPLOY_RUNTIME_ABI,
+            functionName: 'deployToStrategies',
+            args: [],
+          }),
+        },
+        {
+          to: vault,
+          value: '0',
+          data: encodeFunctionData({
+            abi: CREATOR_VAULT_DEPLOY_RUNTIME_ABI,
+            functionName: 'setMinimumTotalIdle',
+            args: [0n],
+          }),
+        },
+        {
+          to: vault,
+          value: '0',
+          data: encodeFunctionData({
+            abi: CREATOR_VAULT_DEPLOY_RUNTIME_ABI,
+            functionName: 'updateStrategyWeight',
+            args: [ZERO_ADDRESS, 0n],
+          }),
+        },
+      ]
+    })()
+
     const allCallsForGrant = [
       ...phase1Calls,
       ...phase2CoreCalls,
@@ -1020,6 +1094,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ...phase2Calls,
       ...phase3Calls,
       ...phase4Calls,
+      ...phase4RuntimeGrantCalls,
       ...(persistSessionOwner ? [] : [cleanupGrantCall]),
     ]
       .map((c) => ({ to: getAddress(c.to), value: typeof c.value === 'bigint' ? c.value : BigInt(c.value ?? 0), data: c.data as Hex }))

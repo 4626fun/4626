@@ -60,11 +60,12 @@ Expected output highlights:
 
 ## What It Does
 
-Every 5 minutes, the unified `4626` workflow runs three tasks in sequence:
+Every 5 minutes, the unified `4626` workflow runs four tasks in sequence:
 
 | Task | What | Impact |
 |------|------|--------|
 | **Vault Keeper** | Deploy idle funds (`tend`), harvest yields (`report`) | Revenue |
+| **Ajna Bucket Manager** | Move Ajna liquidity buckets using oracle TWAP + local liquidity | Risk/Execution |
 | **Auction Settlement** | Settle graduated CCA auctions (`sweepCurrency`, `sweepUnsoldTokens`) | Feature |
 | **Keepr Queue** | Process pending XMTP group ops + Neynar/Farcaster actions | Infrastructure |
 
@@ -256,6 +257,11 @@ Optional (ERC-4337 smart wallet mode):
 
 Optional (alerting):
 - `KEEPR_ALERT_WEBHOOK_URL` — webhook URL for payout-integrity and settlement alerts
+
+Optional (Ajna bucket manager):
+- `AJNA_BUCKET_VAULT_ADDRESS` / `AJNA_BUCKET_ORACLE_ADDRESS` — explicit single-vault targeting for Ajna bucket workflow
+- `AJNA_BUCKET_TWAP_DURATION`, `AJNA_BUCKET_MOVE_THRESHOLD`, `AJNA_BUCKET_MAX_STEP`
+- `AJNA_BUCKET_MOVE_COOLDOWN_SECONDS`, `AJNA_BUCKET_LIQUIDITY_SEARCH_RADIUS`
 ### 2. Register Vaults
 
 Each vault is registered via `POST /api/keepr/vault/upsert`. Include contract addresses in `config_json`:
@@ -306,6 +312,7 @@ npm run dry-run
 
 # Run individual tasks
 npm run start:vault-keeper
+npm run start:ajna-bucket-manager
 npm run start:auction-settlement
 npm run start:keepr-queue
 

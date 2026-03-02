@@ -549,7 +549,7 @@ export function Portfolio() {
   }, [accountContext.activeAccount, accountContext.signerAddress, siwe.authAddress, wagmiAddress])
 
   const holdingsPanel = (
-    <div className="overflow-hidden rounded-[22px] border border-white/10 bg-vault-card/70 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+    <div className="min-h-[360px] overflow-hidden rounded-[22px] border border-white/10 bg-vault-card/70 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl">
       <div className="flex items-center justify-between border-b border-white/8 p-4">
         <div>
           <div className="text-[12px] text-white">Holdings</div>
@@ -559,6 +559,10 @@ export function Portfolio() {
         </div>
         <div className="text-[11px] text-zinc-600">Base</div>
       </div>
+
+      {tokenDataLoading ? (
+        <HoldingsTable items={[]} loading emptyLabel="" />
+      ) : null}
 
       {!tokenDataLoading && effectiveAddress && holdings.length === 0 ? (
         <div className="p-6 text-center">
@@ -582,7 +586,7 @@ export function Portfolio() {
         </div>
       ) : null}
 
-      {holdings.length > 0 ? (
+      {!tokenDataLoading && holdings.length > 0 ? (
         <div className="divide-y divide-zinc-800/70">
           <div className="px-4 py-3 text-[11px] font-medium text-zinc-500">Creator coins</div>
           <HoldingsTable items={creatorHoldings} loading={tokenDataLoading} emptyLabel="No creator coin balances found." />
@@ -594,7 +598,7 @@ export function Portfolio() {
   )
 
   const walletsPanel = (
-    <div className="rounded-[22px] border border-white/10 bg-vault-card/70 p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+    <div className="min-h-[148px] rounded-[22px] border border-white/10 bg-vault-card/70 p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl">
       <div className="mb-3 flex items-center justify-between">
         <div>
           <div className="text-[12px] text-white">Connected wallets</div>
@@ -638,7 +642,7 @@ export function Portfolio() {
   )
 
   const activityPanel = (
-    <div className="rounded-[22px] border border-white/10 bg-vault-card/70 p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+    <div className="min-h-[148px] rounded-[22px] border border-white/10 bg-vault-card/70 p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl">
       <div className="mb-3 flex items-center justify-between">
         <div>
           <div className="text-[12px] text-white">Recent activity</div>
@@ -802,7 +806,7 @@ export function Portfolio() {
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.35, delay: 0.08 }}
-                    className="rounded-[22px] border border-white/10 bg-vault-card/70 p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl"
+                    className="min-h-[260px] rounded-[22px] border border-white/10 bg-vault-card/70 p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl"
                   >
                     <div className="mb-3 flex items-center justify-between">
                       <div>
@@ -851,7 +855,7 @@ export function Portfolio() {
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.35, delay: 0.11 }}
-                    className="rounded-[22px] border border-white/10 bg-vault-card/70 p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl"
+                    className="min-h-[230px] rounded-[22px] border border-white/10 bg-vault-card/70 p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl"
                   >
                     <div className="mb-3 text-[12px] text-white">Quick actions</div>
                     <div className="grid grid-cols-2 gap-2">

@@ -2078,12 +2078,24 @@ async function validateInnerCalls(params: {
       continue
     }
 
-    // Vault admin calls (phase2/phase3 deploy flow)
-    if ((mode === 'deploy_phase2' || mode === 'deploy_phase3') && expectedVault && expectedBurnStream && expectedPayoutRouter && c.target === expectedVault) {
-      if (selector !== SELECTOR_VAULT_SET_BURN_STREAM && selector !== SELECTOR_VAULT_SET_WHITELIST) {
-        throw new Error('vault_selector_not_allowed')
-      }
+    // Vault admin calls (phase2/phase3/phase4 deploy flow)
+    if (
+      (mode === 'deploy_phase2' || mode === 'deploy_phase3' || mode === 'launch_auction') &&
+      expectedVault &&
+      c.target === expectedVault
+    ) {
+      const isWiringSelector = selector === SELECTOR_VAULT_SET_BURN_STREAM || selector === SELECTOR_VAULT_SET_WHITELIST
+      const isStrategySelector =
+        selector === SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE ||
+        selector === SELECTOR_VAULT_DEPLOY_TO_STRATEGIES ||
+        selector === SELECTOR_VAULT_UPDATE_STRATEGY_WEIGHT
+
+      if (mode === 'deploy_phase2' && !isWiringSelector) throw new Error('vault_selector_not_allowed')
+      if (mode === 'deploy_phase3' && !isWiringSelector && !isStrategySelector) throw new Error('vault_selector_not_allowed')
+      if (mode === 'launch_auction' && !isStrategySelector) throw new Error('vault_selector_not_allowed')
+
       if (selector === SELECTOR_VAULT_SET_BURN_STREAM) {
+        if (!expectedBurnStream || !expectedPayoutRouter) throw new Error('missing_expected_addresses')
         const burnStreamArg = decodeAddressArgFromCalldata(c.data, 0)
         if (!burnStreamArg || burnStreamArg !== expectedBurnStream) {
           params.debug?.({
@@ -2098,12 +2110,26 @@ async function validateInnerCalls(params: {
           })
           throw new Error('vault_burn_stream_mismatch')
         }
-      } else {
+      } else if (selector === SELECTOR_VAULT_SET_WHITELIST) {
+        if (!expectedPayoutRouter) throw new Error('missing_expected_addresses')
         const accountArg = decodeAddressArgFromCalldata(c.data, 0)
         const statusArg = decodeBoolArgFromCalldata(c.data, 1)
         if (!accountArg || accountArg !== expectedPayoutRouter) throw new Error('vault_whitelist_account_mismatch')
         if (statusArg !== true) throw new Error('vault_whitelist_status_mismatch')
+      } else if (selector === SELECTOR_VAULT_UPDATE_STRATEGY_WEIGHT) {
+        const strategyArg = decodeAddressArgFromCalldata(c.data, 0)
+        const weightArg = decodeUint256ArgFromCalldata(c.data, 1)
+        if (!strategyArg) throw new Error('vault_strategy_weight_strategy_decode_failed')
+        if (weightArg === null || weightArg > 10_000n) throw new Error('vault_strategy_weight_invalid')
+      } else if (selector === SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE) {
+        const minIdleArg = decodeUint256ArgFromCalldata(c.data, 0)
+        if (minIdleArg === null) throw new Error('vault_min_idle_decode_failed')
+      } else if (selector === SELECTOR_VAULT_DEPLOY_TO_STRATEGIES) {
+        // no args
+      } else {
+        throw new Error('vault_selector_not_allowed')
       }
+
       continue
     }
 

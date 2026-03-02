@@ -79,6 +79,8 @@ export function Layout() {
       return json.data ?? null
     },
   })
+  const subdomainRecord = resolvedSubdomain.data?.record ?? null
+  const showSubdomainStatusRow = hostMode === 'app'
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -96,15 +98,23 @@ export function Layout() {
     <div className="min-h-screen flex flex-col bg-vault-bg">
       {showTopNavBar ? <VaultNavBar /> : null}
       {showAccountMode ? <AccountModeIndicator /> : null}
-      {resolvedSubdomain.data?.record ? (
+      {showSubdomainStatusRow ? (
         <div className="border-b border-vault-border/60 bg-black/50">
-          <div className="max-w-7xl mx-auto px-6 py-2 text-[11px] font-medium text-vault-subtext flex items-center justify-between gap-2">
-            <span>
-              Agent subdomain: <span className="text-vault-text">{resolvedSubdomain.data.record.fullName}</span>
-            </span>
-            <Link className="text-brand-primary hover:text-brand-primary/80" to={`/portfolio?address=${resolvedSubdomain.data.record.ownerAddress}`}>
-              View owner profile
-            </Link>
+          <div className="max-w-7xl mx-auto px-6 py-2 min-h-[33px] text-[11px] font-medium text-vault-subtext flex items-center justify-between gap-2">
+            {subdomainRecord ? (
+              <>
+                <span>
+                  Agent subdomain: <span className="text-vault-text">{subdomainRecord.fullName}</span>
+                </span>
+                <Link className="text-brand-primary hover:text-brand-primary/80" to={`/portfolio?address=${subdomainRecord.ownerAddress}`}>
+                  View owner profile
+                </Link>
+              </>
+            ) : (
+              <span className="text-zinc-500">
+                Agent subdomain: {resolvedSubdomain.isLoading ? 'resolving...' : 'not linked'}
+              </span>
+            )}
           </div>
         </div>
       ) : null}
@@ -112,7 +122,7 @@ export function Layout() {
       {/* Skip to content link */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[200] focus:rounded-lg focus:bg-brand-primary focus:px-4 focus:py-2 focus:text-white focus:text-sm focus:font-medium"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-200 focus:rounded-lg focus:bg-brand-primary focus:px-4 focus:py-2 focus:text-white focus:text-sm focus:font-medium"
       >
         Skip to content
       </a>

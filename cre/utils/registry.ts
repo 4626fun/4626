@@ -64,7 +64,12 @@ export async function fetchActiveVaults(chainId?: number): Promise<VaultConfig[]
  */
 export function filterVaultsForWorkflow(
   vaults: VaultConfig[],
-  workflow: 'vault-keeper' | 'auction-settlement' | 'oracle-broadcaster' | 'vrf-health-monitor'
+  workflow:
+    | 'vault-keeper'
+    | 'auction-settlement'
+    | 'oracle-broadcaster'
+    | 'vrf-health-monitor'
+    | 'ajna-bucket-manager'
 ): VaultConfig[] {
   switch (workflow) {
     case 'vault-keeper':
@@ -82,6 +87,10 @@ export function filterVaultsForWorkflow(
     case 'vrf-health-monitor':
       // VRF monitor needs VRF hub address
       return vaults.filter((v) => v.vaultAddress && v.vrfHubAddress);
+
+    case 'ajna-bucket-manager':
+      // Ajna bucket manager needs vault + oracle to compute suggested bucket.
+      return vaults.filter((v) => v.vaultAddress && v.oracleAddress);
 
     default:
       return vaults;

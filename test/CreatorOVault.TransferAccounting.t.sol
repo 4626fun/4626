@@ -197,6 +197,35 @@ contract CreatorOVaultTransferAccountingTest is CreatorOVaultModulesTestBase {
         vault.withdraw(50e18, alice, alice);
         assertEq(vault.coinBalance(), creatorCoin.balanceOf(address(vault)));
     }
+
+    function test_forceDeploy_tracks_measured_spent_when_strategy_partial_spend_and_misreports() public {
+        MockCreatorCoinStandard creatorCoin = new MockCreatorCoinStandard();
+        CreatorOVault vault = new CreatorOVault(address(creatorCoin), address(this), "Creator OVault", "ovCR8R");
+        _setVaultModules(vault);
+
+        MockPartialSpendStrategy strategy = new MockPartialSpendStrategy(address(creatorCoin), 9_000, 10_000);
+        vault.addStrategy(address(strategy), 10_000, true);
+        vault.setMinimumTotalIdle(0);
+
+        uint256 amount = vault.MINIMUM_FIRST_DEPOSIT() * 2;
+        creatorCoin.mint(alice, amount);
+
+        vm.startPrank(alice);
+        creatorCoin.approve(address(vault), type(uint256).max);
+        vault.deposit(amount, alice);
+        vm.stopPrank();
+
+        uint256 idleBeforeDeploy = creatorCoin.balanceOf(address(vault));
+        uint256 deployable = idleBeforeDeploy - vault.deploymentThreshold();
+        uint256 expectedSpent = (deployable * 9_000) / 10_000;
+
+        vault.forceDeployToStrategies();
+
+        assertEq(vault.strategyDebt(address(strategy)), expectedSpent);
+        assertEq(vault.totalDebt(), expectedSpent);
+        assertEq(strategy.trackedAssets(), expectedSpent);
+        assertEq(vault.coinBalance(), creatorCoin.balanceOf(address(vault)));
+    }
 }
 
 contract MockRevertableStrategy is IStrategy, IStrategyValuation {
@@ -247,6 +276,70 @@ contract MockRevertableStrategy is IStrategy, IStrategyValuation {
     function withdraw(uint256 amount) external override returns (uint256 withdrawn) {
         if (revertOnWithdraw) revert("WITHDRAW_REVERT");
         withdrawCalls += 1;
+        withdrawn = amount > trackedAssets ? trackedAssets : amount;
+        if (withdrawn == 0) return 0;
+        trackedAssets -= withdrawn;
+        require(TOKEN.transfer(msg.sender, withdrawn), "transfer failed");
+    }
+
+    function emergencyWithdraw() external override returns (uint256 withdrawn) {
+        withdrawn = trackedAssets;
+        trackedAssets = 0;
+        if (withdrawn > 0) {
+            require(TOKEN.transfer(msg.sender, withdrawn), "transfer failed");
+        }
+    }
+
+    function harvest() external pure override returns (uint256 profit) {
+        return 0;
+    }
+
+    function rebalance() external override {}
+}
+
+contract MockPartialSpendStrategy is IStrategy, IStrategyValuation {
+    IERC20 public immutable TOKEN;
+    uint16 public immutable spendBps;
+    uint16 public immutable reportBps;
+    bool public active = true;
+    uint256 public trackedAssets;
+
+    constructor(address token_, uint16 spendBps_, uint16 reportBps_) {
+        require(spendBps_ <= 10_000 && reportBps_ <= 10_000, "invalid bps");
+        TOKEN = IERC20(token_);
+        spendBps = spendBps_;
+        reportBps = reportBps_;
+    }
+
+    function isValuationReady() external pure override returns (bool) {
+        return true;
+    }
+
+    function isActive() external view override returns (bool) {
+        return active;
+    }
+
+    function asset() external view override returns (address) {
+        return address(TOKEN);
+    }
+
+    function getTotalAssets() external view override returns (uint256) {
+        return trackedAssets;
+    }
+
+    function deposit(uint256 amount) external override returns (uint256 deposited) {
+        if (amount == 0) return 0;
+
+        uint256 spent = (amount * spendBps) / 10_000;
+        if (spent > 0) {
+            require(TOKEN.transferFrom(msg.sender, address(this), spent), "transferFrom failed");
+            trackedAssets += spent;
+        }
+
+        deposited = (amount * reportBps) / 10_000;
+    }
+
+    function withdraw(uint256 amount) external override returns (uint256 withdrawn) {
         withdrawn = amount > trackedAssets ? trackedAssets : amount;
         if (withdrawn == 0) return 0;
         trackedAssets -= withdrawn;

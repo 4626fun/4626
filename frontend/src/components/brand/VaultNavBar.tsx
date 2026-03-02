@@ -1,7 +1,6 @@
-import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Menu } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 
 import { ConnectButton } from '@/components/ConnectButton'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
@@ -51,7 +50,6 @@ function isActiveLink(location: { pathname: string; hash?: string }, item: NavIt
 
 export function VaultNavBar() {
   const location = useLocation()
-  const [isHovered, setIsHovered] = useState<number | null>(null)
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
   const { isAdmin } = useAdminStatus()
@@ -85,14 +83,12 @@ export function VaultNavBar() {
         </Link>
 
         <nav className="hidden md:flex items-center gap-10 absolute left-1/2 -translate-x-1/2">
-          {items.map((item, i) => {
+          {items.map((item) => {
             const active = isActiveLink(location, item)
             return (
               <Link
                 key={item.to}
                 to={item.to}
-                onMouseEnter={() => setIsHovered(i)}
-                onMouseLeave={() => setIsHovered(null)}
                 className="relative py-4 px-2 group"
               >
                 <span
@@ -110,17 +106,7 @@ export function VaultNavBar() {
                   />
                 )}
 
-                <AnimatePresence>
-                  {isHovered === i && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.8 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute inset-0 bg-brand-primary/5 blur-lg rounded-full -z-10"
-                    />
-                  )}
-                </AnimatePresence>
+                <div className="absolute inset-0 -z-10 rounded-full bg-brand-primary/5 opacity-0 blur-lg transition-opacity duration-200 group-hover:opacity-100" />
               </Link>
             )
           })}

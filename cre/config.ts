@@ -52,6 +52,21 @@ export const ORACLE_BROADCAST_DELTA_BPS = 200; // 2 %
 /** TWAP duration passed to updateCreatorPriceFromTWAP */
 export const TWAP_DURATION = 1_800; // 30 min
 
+/** TWAP duration for Ajna bucket suggestions */
+export const AJNA_BUCKET_TWAP_DURATION = 1_800; // 30 min
+
+/** Minimum bucket delta before moving Ajna liquidity */
+export const AJNA_BUCKET_MOVE_THRESHOLD = 50; // ~1.25 ticks (50-index granularity)
+
+/** Max bucket step per rebalance to avoid large jumps */
+export const AJNA_BUCKET_MAX_STEP = 250;
+
+/** Cooldown between Ajna bucket moves (seconds) */
+export const AJNA_BUCKET_MOVE_COOLDOWN_SECONDS = 3_600; // 1 hour
+
+/** Optional search radius around stepped bucket for local liquidity */
+export const AJNA_BUCKET_LIQUIDITY_SEARCH_RADIUS = 20;
+
 /** VRF hub top-up target (2x minimumBalance = 0.01 ETH) */
 export const VRF_TOPUP_TARGET_WEI = BigInt(0.01e18);
 
@@ -103,6 +118,13 @@ export const ORACLE_ABI = [
     ],
     outputs: [{ type: 'tuple[]', components: [{ name: 'guid', type: 'bytes32' }, { name: 'nonce', type: 'uint64' }, { name: 'fee', type: 'tuple', components: [{ name: 'nativeFee', type: 'uint256' }, { name: 'lzTokenFee', type: 'uint256' }] }] }],
     stateMutability: 'payable',
+  },
+  {
+    type: 'function',
+    name: 'getAjnaBucketFromV3TWAP',
+    inputs: [{ name: 'twapDuration', type: 'uint32' }],
+    outputs: [{ type: 'uint256' }],
+    stateMutability: 'view',
   },
 ] as const;
 
