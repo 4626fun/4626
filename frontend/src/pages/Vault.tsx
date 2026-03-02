@@ -23,6 +23,7 @@ import { ClaimPrizeToSolana } from '../components/ClaimPrizeToSolana'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { CcaAuctionPanel } from '@/components/cca/CcaAuctionPanel'
+import { AmoeEntryCard } from '@/components/lottery/AmoeEntryCard'
 import { useTokenMetadata } from '@/hooks/useTokenMetadata'
 import { useZoraCoin } from '@/lib/zora/hooks'
 import { resolveVaultByAnyAddress } from '@/lib/onchain/vaultResolve'
@@ -181,6 +182,13 @@ export function Vault() {
   }, [accountContext.activeAccount, accountContext.activeAccountType])
   const [vaultError, setVaultError] = useState<string | null>(null)
   const [lastSuccess, setLastSuccess] = useState<string | null>(null)
+  const amoeWalletAddress = useMemo(() => {
+    if (accountContext.activeAccount && isAddress(accountContext.activeAccount)) {
+      return getAddress(accountContext.activeAccount) as Address
+    }
+    if (userAddress && isAddress(userAddress)) return getAddress(userAddress) as Address
+    return null
+  }, [accountContext.activeAccount, userAddress])
 
   const tokenAddress = (resolved?.token ?? (akitaFallback ? (AKITA.token as Address) : null)) as Address | null
   const wrapperAddress = (resolved?.info.wrapper ?? (akitaFallback ? (AKITA.wrapper as Address) : null)) as Address | null
@@ -719,6 +727,10 @@ export function Vault() {
               </div>
             </div>
           ) : null}
+
+          <div className="mt-6">
+            <AmoeEntryCard walletAddress={amoeWalletAddress} creatorCoin={tokenAddress} />
+          </div>
 
           <div id="auction" className="mt-10">
             {ccaStrategy && vaultAddress ? (

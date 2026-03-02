@@ -41,6 +41,18 @@ const LOTTERY_ABI = [
     ],
   },
   { type: 'function', name: 'minVaultWeightBps', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'amoeEnabled', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
+  { type: 'function', name: 'amoeSigner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  {
+    type: 'function',
+    name: 'amoeMaxEntriesPerBuyerPerEpoch',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint32' }],
+  },
+  { type: 'function', name: 'amoeEpochDuration', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'totalTradeEntries', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'totalAmoeEntries', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 ] as const
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -69,10 +81,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       transport: http(getReadRpcUrl(), { timeout: 20_000 }),
     })
 
-    const [stats, cfg, minVaultWeightBps] = await Promise.all([
+    const [stats, cfg, minVaultWeightBps, amoeEnabled, amoeSigner, amoeMaxEntries, amoeEpochDuration, totalTradeEntries, totalAmoeEntries] =
+      await Promise.all([
       client.readContract({ address: lotteryManager as any, abi: LOTTERY_ABI, functionName: 'getGlobalStats' }),
       client.readContract({ address: lotteryManager as any, abi: LOTTERY_ABI, functionName: 'lotteryConfig' }),
       client.readContract({ address: lotteryManager as any, abi: LOTTERY_ABI, functionName: 'minVaultWeightBps' }).catch(() => null),
+      client.readContract({ address: lotteryManager as any, abi: LOTTERY_ABI, functionName: 'amoeEnabled' }).catch(() => null),
+      client.readContract({ address: lotteryManager as any, abi: LOTTERY_ABI, functionName: 'amoeSigner' }).catch(() => null),
+      client.readContract({
+        address: lotteryManager as any,
+        abi: LOTTERY_ABI,
+        functionName: 'amoeMaxEntriesPerBuyerPerEpoch',
+      }).catch(() => null),
+      client.readContract({ address: lotteryManager as any, abi: LOTTERY_ABI, functionName: 'amoeEpochDuration' }).catch(() => null),
+      client.readContract({ address: lotteryManager as any, abi: LOTTERY_ABI, functionName: 'totalTradeEntries' }).catch(() => null),
+      client.readContract({ address: lotteryManager as any, abi: LOTTERY_ABI, functionName: 'totalAmoeEntries' }).catch(() => null),
     ])
 
     const entries = BigInt((stats as any)?.[0] ?? 0n).toString()
@@ -102,6 +125,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           maxWinChancePPM,
           usdMultiplierBps,
           minVaultWeightBps: minVaultWeightBps == null ? null : BigInt(minVaultWeightBps as any).toString(),
+          amoe: {
+            enabled: amoeEnabled == null ? null : Boolean(amoeEnabled),
+            signer: typeof amoeSigner === 'string' ? String(amoeSigner).toLowerCase() : null,
+            maxEntriesPerBuyerPerEpoch: amoeMaxEntries == null ? null : String(amoeMaxEntries),
+            epochDurationSeconds: amoeEpochDuration == null ? null : BigInt(amoeEpochDuration as any).toString(),
+          },
+          entrySources: {
+            trade: totalTradeEntries == null ? null : BigInt(totalTradeEntries as any).toString(),
+            amoe: totalAmoeEntries == null ? null : BigInt(totalAmoeEntries as any).toString(),
+          },
         },
       },
     })

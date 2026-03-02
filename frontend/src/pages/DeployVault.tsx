@@ -73,15 +73,15 @@ const DEFAULT_REQUIRED_RAISE_WEI = 100_000_000_000_000_000n // 0.1 ETH
 // Keep this as a boolean gate for deferred launch wiring.
 const DEFAULT_AUCTION_PERCENT = 50
 // Strategy deployment targets (of total deposited creator tokens):
-// - 30% Charm
-// - 30% Ajna
-// - 30% reserved for external Solana flow (Meteora DLMM + Alpha Vault; executed outside main deploy)
+// - 30% Charm strategy
+// - 30% Ajna strategy
+// - 30% Solana bridge strategy (explicit bridge operation)
 // - 10% idle operational buffer
-const DEFAULT_CHARM_WEIGHT_BPS = 5_000n // 50% of deployable amount
-const DEFAULT_AJNA_WEIGHT_BPS = 5_000n // 50% of deployable amount
+const DEFAULT_CHARM_WEIGHT_BPS = 3_000n
+const DEFAULT_AJNA_WEIGHT_BPS = 3_000n
+const DEFAULT_SOLANA_WEIGHT_BPS = 3_000n
 const DEFAULT_IDLE_PERCENT_BPS = 1_000n // 10% explicit idle target
-const DEFAULT_SOLANA_RESERVE_PERCENT_BPS = 3_000n // 30% held idle for off-chain Solana step
-const DEFAULT_MIN_IDLE_PERCENT_BPS = DEFAULT_IDLE_PERCENT_BPS + DEFAULT_SOLANA_RESERVE_PERCENT_BPS // 40%
+const DEFAULT_MIN_IDLE_PERCENT_BPS = DEFAULT_IDLE_PERCENT_BPS
 const DEFAULT_SHARE_OFT_VANITY_SUFFIX = '4626'
 const DEFAULT_SHARE_OFT_VANITY_MAX_TRIES = 1_000_000
 const BATCHER_PHASE1_WITH_SALT_SELECTOR = '297cb1e6'
@@ -1414,6 +1414,7 @@ const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'charmVaultSymbol', type: 'string' },
           { name: 'charmWeightBps', type: 'uint256' },
           { name: 'ajnaWeightBps', type: 'uint256' },
+          { name: 'solanaWeightBps', type: 'uint256' },
           { name: 'enableAutoAllocate', type: 'bool' },
         ],
       },
@@ -1424,6 +1425,7 @@ const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
           { name: 'creatorCharmStrategy', type: 'bytes32' },
           { name: 'ajnaStrategy', type: 'bytes32' },
+          { name: 'solanaStrategy', type: 'bytes32' },
         ],
       },
     ],
@@ -1436,6 +1438,7 @@ const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'charmVault', type: 'address' },
           { name: 'charmStrategy', type: 'address' },
           { name: 'ajnaStrategy', type: 'address' },
+          { name: 'solanaStrategy', type: 'address' },
         ],
       },
     ],
@@ -2512,6 +2515,7 @@ function DeployVaultBatcher({
       charmAlphaVaultDeploy: keccak256(toBytes('charm-factory-sentinel-v1')),
       creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CreatorCharmStrategy as Hex),
       ajnaStrategy: keccak256(DEPLOY_BYTECODE.AjnaStrategy as Hex),
+      solanaStrategy: keccak256(DEPLOY_BYTECODE.SolanaBridgeStrategy as Hex),
     } as const
   }, [])
 
@@ -3319,11 +3323,13 @@ function DeployVaultBatcher({
           solanaIxs: [],
         } as const
 
-        // Phase 3 (strategies): Charm CREATOR/USDC + Ajna lending
+        // Phase 3 (strategies): Charm + Ajna + Solana bridge strategy
         const charmWeightBps = DEFAULT_CHARM_WEIGHT_BPS
         const ajnaWeightBps = DEFAULT_AJNA_WEIGHT_BPS
+        const solanaWeightBps = DEFAULT_SOLANA_WEIGHT_BPS
         if (charmWeightBps <= 0n) throw new Error('Charm strategy is required')
         if (ajnaWeightBps <= 0n) throw new Error('Ajna strategy is required')
+        if (solanaWeightBps <= 0n) throw new Error('Solana strategy is required')
 
         // If the CREATOR/USDC v3 pool doesn't exist yet, `deployPhase3Strategies` needs a non-zero
         // `initialSqrtPriceX96` to create+initialize it.
@@ -3445,6 +3451,7 @@ function DeployVaultBatcher({
           charmVaultSymbol: 'AKITA-USDC',
           charmWeightBps,
           ajnaWeightBps,
+          solanaWeightBps,
           enableAutoAllocate: false,
         } as const
 
@@ -3662,7 +3669,7 @@ function DeployVaultBatcher({
         const phase3Calls: Array<{ target: Address; value: bigint; data: Hex }> = [
           ...phase3StrategyCalls,
           vaultSetMinimumIdleCall,
-          // Apply 30/30 immediately from the 60% deployable bucket (40% reserved idle).
+          // Apply the configured 30/30/30 strategy mix while preserving 10% idle on the vault.
           vaultDeployToStrategiesCall,
           ...phase2Create2Calls,
           ...phase2ConfigCalls,
@@ -6507,6 +6514,7 @@ function DeployVaultMain() {
       vaultShareBurnStream: keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex),
       creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CreatorCharmStrategy as Hex),
       ajnaStrategy: keccak256(DEPLOY_BYTECODE.AjnaStrategy as Hex),
+      solanaStrategy: keccak256(DEPLOY_BYTECODE.SolanaBridgeStrategy as Hex),
     } as const
   }, [])
 
@@ -6526,6 +6534,7 @@ function DeployVaultMain() {
       deployCodeIds.vaultShareBurnStream,
       deployCodeIds.creatorCharmStrategy,
       deployCodeIds.ajnaStrategy,
+      deployCodeIds.solanaStrategy,
     ],
     enabled: Boolean(publicClient && creatorVaultBatcherAddress),
     staleTime: 60_000,
@@ -6585,6 +6594,7 @@ function DeployVaultMain() {
         // Charm alpha vault is created via Charm's official factory in phase 3 (not from bytecode store).
         { key: 'creatorCharmStrategy', label: 'CreatorCharmStrategy', codeId: deployCodeIds.creatorCharmStrategy },
         { key: 'ajnaStrategy', label: 'AjnaStrategy', codeId: deployCodeIds.ajnaStrategy },
+        { key: 'solanaStrategy', label: 'SolanaBridgeStrategy', codeId: deployCodeIds.solanaStrategy },
       ] as const
 
       const pointerResults = await publicClient!.multicall({

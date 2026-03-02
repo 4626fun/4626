@@ -550,6 +550,42 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
           { name: 'charmVaultSymbol', type: 'string' },
           { name: 'charmWeightBps', type: 'uint256' },
           { name: 'ajnaWeightBps', type: 'uint256' },
+          { name: 'solanaWeightBps', type: 'uint256' },
+          { name: 'enableAutoAllocate', type: 'bool' },
+        ],
+      },
+      {
+        name: 'codeIds',
+        type: 'tuple',
+        components: [
+          { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
+          { name: 'creatorCharmStrategy', type: 'bytes32' },
+          { name: 'ajnaStrategy', type: 'bytes32' },
+          { name: 'solanaStrategy', type: 'bytes32' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  // Legacy phase-3 signature for in-flight sessions.
+  {
+    type: 'function',
+    name: 'deployPhase3Strategies',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'initialSqrtPriceX96', type: 'uint160' },
+          { name: 'charmVaultName', type: 'string' },
+          { name: 'charmVaultSymbol', type: 'string' },
+          { name: 'charmWeightBps', type: 'uint256' },
+          { name: 'ajnaWeightBps', type: 'uint256' },
           { name: 'enableAutoAllocate', type: 'bool' },
         ],
       },
@@ -618,7 +654,8 @@ const SELECTOR_BATCHER_DEPLOY_PHASE2_CORE = '0xf9344d88'
 // - legacy (pre-Solana tuple extension): 0xcafc9348
 const SELECTOR_BATCHER_FINALIZE_PHASE2 = '0xbd4583fb'
 const SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY = '0xcafc9348'
-const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0x6e3f91b0'
+const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES = '0xc5dd5bd0'
+const SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES_LEGACY = '0x6e3f91b0'
 // launchDeferredAuction((address,address,address,string,uint256,uint128,bytes))
 const SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'
 
@@ -629,6 +666,9 @@ const SELECTOR_CREATE2_DEPLOY_FROM_STORE = '0xd76fad23' // deploy(bytes32,bytes3
 
 const SELECTOR_VAULT_SET_BURN_STREAM = '0xf3a1c8b6' // setBurnStream(address)
 const SELECTOR_VAULT_SET_WHITELIST = '0x53d6fd59' // setWhitelist(address,bool)
+const SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE = '0x8212fd43' // setMinimumTotalIdle(uint256)
+const SELECTOR_VAULT_DEPLOY_TO_STRATEGIES = '0x355aa867' // deployToStrategies()
+const SELECTOR_VAULT_UPDATE_STRATEGY_WEIGHT = '0x3e6881c8' // updateStrategyWeight(address,uint256)
 const SELECTOR_ERC8004_REGISTER = '0xf2c298be' // register(string)
 const SELECTOR_ERC8004_SET_AGENT_URI = '0x0af28bd3' // setAgentURI(uint256,string)
 const SELECTOR_ERC8004_SET_AGENT_WALLET = '0x2d1ef5ae' // setAgentWallet(uint256,address,uint256,bytes)
@@ -653,6 +693,7 @@ const ALLOWED_BATCHER_SELECTORS = new Set<string>([
   SELECTOR_BATCHER_FINALIZE_PHASE2,
   SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY,
   SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES,
+  SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES_LEGACY,
   SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION,
 ])
 
@@ -1173,6 +1214,17 @@ function decodeBoolArgFromCalldata(data: Hex, argIndex: number): boolean | null 
   }
 }
 
+function decodeUint256ArgFromCalldata(data: Hex, argIndex: number): bigint | null {
+  const start = 10 + argIndex * 64
+  const word = data.slice(start, start + 64)
+  if (word.length !== 64) return null
+  try {
+    return BigInt(`0x${word}`)
+  } catch {
+    return null
+  }
+}
+
 function abiEncodeAddresses(addrs: Address[]): Hex {
   // abi.encode(address...) (static types only)
   // Each address is left-padded to 32 bytes.
@@ -1426,6 +1478,7 @@ async function validateInnerCalls(params: {
         selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
         selector === SELECTOR_BATCHER_FINALIZE_PHASE2_LEGACY ||
         selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES ||
+        selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES_LEGACY ||
         selector === SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION
       ) {
         let decodedBatcher: any
@@ -1468,7 +1521,10 @@ async function validateInnerCalls(params: {
               ? { vault: codeIds.vault as Hex }
               : null
           expectedVersion = typeof p?.version === 'string' ? p.version : null
-        } else if (selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES) {
+        } else if (
+          selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES ||
+          selector === SELECTOR_BATCHER_DEPLOY_PHASE3_STRATEGIES_LEGACY
+        ) {
           mode = 'deploy_phase3'
           expectedVault = p && isAddress(p.vault) ? getAddress(p.vault) : null
           if (!expectedVault) throw new Error('batcher_vault_decode_failed')

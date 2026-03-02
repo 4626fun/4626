@@ -341,6 +341,42 @@ const CREATOR_VAULT_BATCHER_DEPLOY_PHASE3_STRATEGIES_ABI = [
           { name: 'charmVaultSymbol', type: 'string' },
           { name: 'charmWeightBps', type: 'uint256' },
           { name: 'ajnaWeightBps', type: 'uint256' },
+          { name: 'solanaWeightBps', type: 'uint256' },
+          { name: 'enableAutoAllocate', type: 'bool' },
+        ],
+      },
+      {
+        name: 'codeIds',
+        type: 'tuple',
+        components: [
+          { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
+          { name: 'creatorCharmStrategy', type: 'bytes32' },
+          { name: 'ajnaStrategy', type: 'bytes32' },
+          { name: 'solanaStrategy', type: 'bytes32' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  // Legacy phase-3 signature (no Solana strategy fields) for older sessions.
+  {
+    type: 'function',
+    name: 'deployPhase3Strategies',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'initialSqrtPriceX96', type: 'uint160' },
+          { name: 'charmVaultName', type: 'string' },
+          { name: 'charmVaultSymbol', type: 'string' },
+          { name: 'charmWeightBps', type: 'uint256' },
+          { name: 'ajnaWeightBps', type: 'uint256' },
           { name: 'enableAutoAllocate', type: 'bool' },
         ],
       },
@@ -434,6 +470,26 @@ const CREATOR_CHARM_STRATEGY_VIEW_ABI = [
   {
     type: 'function',
     name: 'charmVault',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const AJNA_STRATEGY_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'ajnaPool',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const SOLANA_BRIDGE_STRATEGY_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'bridgeAdapter',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ type: 'address' }],
@@ -819,6 +875,7 @@ function extractPhase3DeployInfo(calls: Array<{ to: Address; value: bigint; data
   vault: Address
   charmWeightBps: bigint
   ajnaWeightBps: bigint
+  solanaWeightBps: bigint
 } | null {
   for (const call of calls) {
     try {
@@ -834,6 +891,7 @@ function extractPhase3DeployInfo(calls: Array<{ to: Address; value: bigint; data
             vault?: unknown
             charmWeightBps?: unknown
             ajnaWeightBps?: unknown
+            solanaWeightBps?: unknown
           }
         | null
       const creatorToken = normalizeAddress(params?.creatorToken)
@@ -841,6 +899,7 @@ function extractPhase3DeployInfo(calls: Array<{ to: Address; value: bigint; data
       const vault = normalizeAddress(params?.vault)
       const charmWeightBps = parseBigIntLike(params?.charmWeightBps)
       const ajnaWeightBps = parseBigIntLike(params?.ajnaWeightBps)
+      const solanaWeightBps = parseBigIntLike(params?.solanaWeightBps) ?? 0n
       if (!creatorToken || !owner || !vault || charmWeightBps == null || ajnaWeightBps == null) continue
       return {
         batcher: call.to,
@@ -849,6 +908,7 @@ function extractPhase3DeployInfo(calls: Array<{ to: Address; value: bigint; data
         vault,
         charmWeightBps,
         ajnaWeightBps,
+        solanaWeightBps,
       }
     } catch {
       continue
@@ -944,6 +1004,34 @@ async function readCharmVaultAddress(params: {
   return normalizeAddress(charmVaultRaw)
 }
 
+async function readAjnaPoolAddress(params: {
+  publicClient: any
+  strategy: Address
+}): Promise<Address | null> {
+  const ajnaPoolRaw = await params.publicClient
+    .readContract({
+      address: params.strategy,
+      abi: AJNA_STRATEGY_VIEW_ABI,
+      functionName: 'ajnaPool',
+    })
+    .catch(() => null)
+  return normalizeAddress(ajnaPoolRaw)
+}
+
+async function readSolanaBridgeAdapterAddress(params: {
+  publicClient: any
+  strategy: Address
+}): Promise<Address | null> {
+  const adapterRaw = await params.publicClient
+    .readContract({
+      address: params.strategy,
+      abi: SOLANA_BRIDGE_STRATEGY_VIEW_ABI,
+      functionName: 'bridgeAdapter',
+    })
+    .catch(() => null)
+  return normalizeAddress(adapterRaw)
+}
+
 async function verifyPhase3PostState(params: {
   publicClient: any
   phase3Calls: Array<{ to: Address; value: bigint; data: Hex }>
@@ -1005,6 +1093,8 @@ async function verifyPhase3PostState(params: {
     strategies.map(async (entry) => ({
       ...entry,
       charmVault: await readCharmVaultAddress({ publicClient: params.publicClient, strategy: entry.strategy }),
+      ajnaPool: await readAjnaPoolAddress({ publicClient: params.publicClient, strategy: entry.strategy }),
+      bridgeAdapter: await readSolanaBridgeAdapterAddress({ publicClient: params.publicClient, strategy: entry.strategy }),
     })),
   )
   const charm = strategyDetails.find((entry) => Boolean(entry.charmVault))
@@ -1023,8 +1113,14 @@ async function verifyPhase3PostState(params: {
     throw new Error(`phase3 verification failed: charm vault code missing at ${String(charm.charmVault ?? '')}`)
   }
 
+  const remaining = strategyDetails.filter((entry) => entry.strategy.toLowerCase() !== charm.strategy.toLowerCase())
+
+  let ajna: (typeof strategyDetails)[number] | undefined
   if (info.ajnaWeightBps > 0n) {
-    const ajna = strategyDetails.find((entry) => entry.strategy.toLowerCase() !== charm.strategy.toLowerCase())
+    ajna =
+      remaining.find((entry) => Boolean(entry.ajnaPool)) ??
+      remaining.find((entry) => !entry.bridgeAdapter) ??
+      remaining[0]
     if (!ajna) {
       throw new Error('phase3 verification failed: ajna strategy not registered on vault')
     }
@@ -1035,6 +1131,26 @@ async function verifyPhase3PostState(params: {
     }
     if (!(await hasRuntimeCode(params.publicClient, ajna.strategy))) {
       throw new Error(`phase3 verification failed: ajna strategy code missing at ${ajna.strategy}`)
+    }
+  }
+
+  if (info.solanaWeightBps > 0n) {
+    const remainingAfterAjna = remaining.filter(
+      (entry) => !ajna || entry.strategy.toLowerCase() !== ajna.strategy.toLowerCase(),
+    )
+    const solana =
+      remainingAfterAjna.find((entry) => Boolean(entry.bridgeAdapter)) ??
+      (remainingAfterAjna.length === 1 ? remainingAfterAjna[0] : undefined)
+    if (!solana) {
+      throw new Error('phase3 verification failed: solana strategy not registered on vault')
+    }
+    if (solana.weight < info.solanaWeightBps) {
+      throw new Error(
+        `phase3 verification failed: solana strategy weight ${solana.weight.toString()} below expected ${info.solanaWeightBps.toString()}`,
+      )
+    }
+    if (!(await hasRuntimeCode(params.publicClient, solana.strategy))) {
+      throw new Error(`phase3 verification failed: solana strategy code missing at ${solana.strategy}`)
     }
   }
 }

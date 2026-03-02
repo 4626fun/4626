@@ -32,6 +32,31 @@ const VAULT_ABI = [
   { type: 'function', name: 'asset', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
 
+function normalizeHost(value?: string | null): string {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    try {
+      return new URL(raw).host
+    } catch {
+      return ''
+    }
+  }
+  return raw.replace(/^\/+|\/+$/g, '')
+}
+
+function inferProtocol(host: string): 'http' | 'https' {
+  const normalized = host.toLowerCase()
+  if (
+    normalized.startsWith('localhost') ||
+    normalized.startsWith('127.0.0.1') ||
+    normalized.startsWith('0.0.0.0')
+  ) {
+    return 'http'
+  }
+  return 'https'
+}
+
 export async function buildShareTokenMetadata({
   address,
   chainId,
@@ -115,11 +140,12 @@ export async function buildShareTokenMetadata({
     }
   }
 
-  const apiHostValue = apiHost || 'api.4626.fun'
-  const appHostValue = appHost || 'app.4626.fun'
-  const protocol = apiHostValue.includes('localhost') ? 'http' : 'https'
-  const apiBaseUrl = `${protocol}://${apiHostValue}`
-  const appBaseUrl = `${protocol}://${appHostValue}`
+  const appHostValue = normalizeHost(appHost) || 'app.4626.fun'
+  // Prefer explicit API host when configured; otherwise keep metadata links on the app host.
+  // This avoids emitting broken api.4626.fun links when API_HOST is unset or unavailable.
+  const apiHostValue = normalizeHost(apiHost) || appHostValue
+  const apiBaseUrl = `${inferProtocol(apiHostValue)}://${apiHostValue}`
+  const appBaseUrl = `${inferProtocol(appHostValue)}://${appHostValue}`
   const metadataUrl = `${apiBaseUrl}/v1/token/${address}/metadata?chain=${chainId}`
   const lensMetadataPreviewUrl = `${apiBaseUrl}/lens/share-token-metadata?address=${address}&chain=${chainId}&store=false`
   const lensMetadataStoreUrl = `${apiBaseUrl}/lens/share-token-metadata?address=${address}&chain=${chainId}&store=true`

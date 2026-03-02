@@ -5,12 +5,13 @@ sidebar_position: 1
 
 # CreatorLotteryManager
 
-Shared swap-based lottery service for ALL Creator Coins.
+Shared lottery service for ALL Creator Coins, supporting both trade-triggered entries and no-purchase AMOE entries.
 
 ## Purpose
 
 The CreatorLotteryManager:
 - Processes lottery entries from DEX trades
+- Processes AMOE entries from server attestations (no purchase required)
 - Integrates Chainlink VRF 2.5 for randomness
 - Manages cross-chain winner notifications
 - Distributes prizes from ALL active vaults
@@ -41,6 +42,15 @@ function processSwapLottery(
     address tokenIn,
     uint256 amountIn
 ) external payable returns (uint256 entryId);
+
+// Process no-purchase AMOE entry (permissionless submit with backend attestation)
+function submitAmoeEntry(
+    address buyer,
+    address creatorCoin,
+    bytes32 nonce,
+    uint256 deadline,
+    bytes calldata signature
+) external returns (uint256 entryId);
 ```
 
 ### VRF Callbacks
@@ -65,6 +75,10 @@ function setLotteryConfig(
     uint256 maxWinChance,
     uint256 usdMultiplierBps
 ) external onlyOwner;
+
+// Configure AMOE signer and per-wallet epoch cap
+function setAmoeSigner(address signer) external onlyOwner;
+function setAmoeConfig(bool enabled, uint32 maxEntriesPerBuyerPerEpoch, uint256 epochDuration) external onlyOwner;
 ```
 
 ### Cross-Chain Fee Sponsorship Guardrails
@@ -140,6 +154,8 @@ FinalPPM = BasePPM × PersonalBoost + LockDurationBoostPPM + VaultGaugeBoostPPM
 
 ```solidity
 event LotteryEntryCreated(address indexed creatorCoin, address indexed user, uint256 swapAmountUSD, uint256 winChancePPM, uint256 requestId);
+event LotteryEntrySourceTagged(address indexed creatorCoin, address indexed user, uint256 indexed requestId, EntrySource source, uint256 amountUSD);
+event AmoeEntrySubmitted(address indexed creatorCoin, address indexed user, bytes32 indexed nonce, uint256 requestId);
 event LotteryWinner(address indexed creatorCoin, address indexed user, uint256 swapAmountUSD, uint256 rewardAmount, uint256 requestId);
 event MultiTokenJackpotWon(address indexed triggeringCoin, address indexed winner, uint256 numVaultsPaid);
 ```

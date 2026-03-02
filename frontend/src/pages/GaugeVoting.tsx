@@ -37,7 +37,7 @@ export default function GaugeVoting() {
             </h1>
             <p className="text-lg text-zinc-400 max-w-2xl mx-auto">
               Lock your {SHARE_SYMBOL} to earn ve4626 voting power. Vote weekly to direct
-              jackpot probability to your favorite creator vaults.
+              jackpot probability to your favorite creator vaults. No purchase is required to enter via AMOE.
             </p>
           </motion.div>
 
@@ -115,6 +115,7 @@ export default function GaugeVoting() {
               <div className="text-brand-primary">Final Probability = Base × Personal Boost × Vault Weight</div>
               <div className="mt-4 text-zinc-400 space-y-2">
                 <div>• <span className="text-zinc-300">Base</span> = f(swap size) → $1 = 0.0004%, $10K = 4%</div>
+                <div>• <span className="text-zinc-300">AMOE</span> = no-purchase entry at the same base odds as a minimum paid entry</div>
                 <div>• <span className="text-zinc-300">Personal Boost</span> = f(ve4626 lock) → 1.0x to 2.5x</div>
                 <div>• <span className="text-zinc-300">Vault Weight</span> = f(votes for vault) → 1% min to 100%</div>
               </div>
@@ -127,6 +128,9 @@ export default function GaugeVoting() {
                 User has 2.5x boost from 4-year ve4626 lock<br />
                 Vault has 30% of total votes<br />
                 <span className="text-brand-primary font-medium">Final: 0.4% × 2.5 × 0.30 = 0.30% probability</span>
+              </div>
+              <div className="text-xs text-zinc-400 mt-3">
+                AMOE entries are no-purchase and use minimum-entry base odds, with normal anti-abuse limits.
               </div>
             </div>
           </motion.div>

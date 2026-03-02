@@ -1542,6 +1542,131 @@ describe('deploy session optimistic concurrency', () => {
     )
   })
 
+  it('status advances phase3_sent when Charm/Ajna/Solana strategy post-check succeeds', async () => {
+    const rec = {
+      ...makeDeploySession('phase3_sent'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
+        phase3Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase3deployv2')],
+        phase4Calls: [],
+      }),
+      lastUserOpHash: `0x${'8'.repeat(64)}`,
+    }
+    const viem = await import('viem')
+    const charmStrategy = '0x8100000000000000000000000000000000000008'
+    const ajnaStrategy = '0x9100000000000000000000000000000000000009'
+    const solanaStrategy = '0xa10000000000000000000000000000000000000a'
+    const charmVault = '0xb10000000000000000000000000000000000000b'
+    const ajnaPool = '0xc10000000000000000000000000000000000000c'
+    const bridgeAdapter = '0xd10000000000000000000000000000000000000d'
+    const v3Factory = '0xe10000000000000000000000000000000000000e'
+    const usdc = '0xf10000000000000000000000000000000000000f'
+    const v3Pool = '0x1110000000000000000000000000000000000011'
+    const vault = '0x3000000000000000000000000000000000000003'
+    ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
+      if (String(data) === '0xphase3deployv2') {
+        return {
+          functionName: 'deployPhase3Strategies',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault,
+              version: 'v1.4.8',
+              charmWeightBps: 3000n,
+              ajnaWeightBps: 3000n,
+              solanaWeightBps: 3000n,
+            },
+          ],
+        }
+      }
+      if (String(data) === '0xphase2finalize') {
+        return {
+          functionName: 'finalizePhase2',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault,
+              gaugeController: '0x4000000000000000000000000000000000000004',
+              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              oracle: '0x6000000000000000000000000000000000000006',
+              depositAmount: '5000000000000000000000000',
+            },
+          ],
+        }
+      }
+      return {
+        args: [
+          {
+            creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+            depositAmount: '5000000000000000000000000',
+          },
+        ],
+      }
+    })
+    ;(viem.createPublicClient as any).mockReturnValue({
+      readContract: vi.fn(async ({ functionName, args, address }: any) => {
+        switch (functionName) {
+          case 'strategyList':
+            if (Number(args?.[0] ?? 0n) === 0) return charmStrategy
+            if (Number(args?.[0] ?? 0n) === 1) return ajnaStrategy
+            if (Number(args?.[0] ?? 0n) === 2) return solanaStrategy
+            return '0xownerbytes'
+          case 'strategyWeights':
+            if (String(args?.[0] ?? '').toLowerCase() === charmStrategy.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === ajnaStrategy.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return 3000n
+            return 0n
+          case 'charmVault':
+            if (String(address ?? '').toLowerCase() === charmStrategy.toLowerCase()) return charmVault
+            throw new Error('not_charm_strategy')
+          case 'ajnaPool':
+            if (String(address ?? '').toLowerCase() === ajnaStrategy.toLowerCase()) return ajnaPool
+            throw new Error('not_ajna_strategy')
+          case 'bridgeAdapter':
+            if (String(address ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return bridgeAdapter
+            throw new Error('not_solana_strategy')
+          case 'uniswapV3Factory':
+            return v3Factory
+          case 'usdc':
+            return usdc
+          case 'getPool':
+            return v3Pool
+          default:
+            return '0xownerbytes'
+        }
+      }),
+      getBytecode: vi.fn(async ({ address }: any) => {
+        const withCode = new Set([
+          vault.toLowerCase(),
+          charmStrategy.toLowerCase(),
+          ajnaStrategy.toLowerCase(),
+          solanaStrategy.toLowerCase(),
+          charmVault.toLowerCase(),
+          ajnaPool.toLowerCase(),
+          bridgeAdapter.toLowerCase(),
+          v3Pool.toLowerCase(),
+        ])
+        return withCode.has(String(address ?? '').toLowerCase()) ? '0x6001' : '0x'
+      }),
+    })
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({ ...rec, step: 'completed', lastTxHash: '0xtxhash' })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('completed')
+    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase3_sent', toStep: 'phase3_confirmed' }),
+    )
+  })
+
   it('status advances phase4_sent when CCA/Uniswap post-check succeeds', async () => {
     const rec = {
       ...makeDeploySession('phase4_sent'),

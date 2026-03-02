@@ -1,0 +1,41 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node'
+
+import { handleOptions } from '../../../server/auth/_shared.js'
+import { guardAgentApiRequest } from '../../../server/_lib/agentApiGuard.js'
+import { getAmoeCreditSnapshot } from '../../../server/_lib/lotteryAmoe.js'
+
+function setPublicCors(res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  res.setHeader('Cache-Control', 'no-store')
+}
+
+function isAddressLike(value: string): value is `0x${string}` {
+  return /^0x[a-fA-F0-9]{40}$/.test(value)
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  setPublicCors(res)
+  if (handleOptions(req, res)) return
+
+  if (req.method !== 'GET') {
+    return res.status(405).json({ success: false, error: 'Method not allowed' })
+  }
+
+  const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/lottery/amoe/credits', kind: 'read' })
+  if (!g.ok) return
+
+  const walletRaw = typeof req.query.wallet === 'string' ? req.query.wallet.trim() : ''
+  if (!isAddressLike(walletRaw)) {
+    return res.status(400).json({ success: false, error: 'Missing or invalid wallet' })
+  }
+
+  try {
+    const snapshot = await getAmoeCreditSnapshot({ wallet: walletRaw.toLowerCase() as `0x${string}` })
+    return res.status(200).json({ success: true, data: snapshot })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'amoe_credit_snapshot_failed'
+    return res.status(500).json({ success: false, error: message })
+  }
+}

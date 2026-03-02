@@ -497,7 +497,7 @@ export function CompleteAuction() {
             </h2>
             <p className="text-surface-400">
               Your vault is now live on Uniswap V4 with 6.9% trade fees enabled.
-              Every buy is a lottery entry!
+              Qualifying buys can trigger lottery entries, and a no-purchase AMOE entry path is also available.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button
