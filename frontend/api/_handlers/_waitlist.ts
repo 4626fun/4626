@@ -502,6 +502,8 @@ export default async function handler(req: any, res: any) {
           }
         }
 
+        const isSupabaseProfileRow = (row: SupabaseProfileRow | null): row is SupabaseProfileRow => Boolean(row)
+
         const rankProfileRow = (row: SupabaseProfileRow): number => {
           const emailLc = normalizeEmail(row.email)
           if (row.privy_user_id) return 0
@@ -538,9 +540,7 @@ export default async function handler(req: any, res: any) {
             .select('id,email,referral_code,primary_wallet,privy_user_id,created_at,updated_at')
             .in('id', uniqueIds)
           if (error) throw new Error(error.message)
-          return (data ?? [])
-            .map(toProfileRow)
-            .filter((row: SupabaseProfileRow | null): row is SupabaseProfileRow => Boolean(row))
+          return (data ?? []).map(toProfileRow).filter(isSupabaseProfileRow)
         }
 
         const findByAddress = async (address: string): Promise<SupabaseProfileRow | null> => {
@@ -600,9 +600,7 @@ export default async function handler(req: any, res: any) {
             .eq('privy_user_id', privyUserId)
             .limit(10)
           if (privyError) throw new Error(privyError.message)
-          const mapped = (privyRows ?? [])
-            .map(toProfileRow)
-            .filter((row: SupabaseProfileRow | null): row is SupabaseProfileRow => Boolean(row))
+          const mapped = (privyRows ?? []).map(toProfileRow).filter(isSupabaseProfileRow)
           existingByIdentity = pickBestProfileRow(mapped)
         }
 

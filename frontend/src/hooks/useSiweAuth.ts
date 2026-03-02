@@ -4,6 +4,7 @@ import { base } from 'wagmi/chains'
 import { apiFetch } from '@/lib/apiBase'
 import { useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
+import { isPrivyRedirectUrlNotAllowedError, shouldAttemptCrossAppLoginOnPath } from './siweAuthCrossApp'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -327,12 +328,39 @@ export function useSiweAuth() {
       if (allowPrivy) {
         // Zora-first path: redirect through the provider app's cross-app auth flow.
         // This gives users an explicit "signed in via Zora" trust signal.
-        if (method === 'zora' && privyReady && !privyAuthenticated && typeof loginWithCrossAppAccount === 'function') {
-          try {
-            await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
-          } catch (e: unknown) {
-            setError(coerceErrorMessage(e, 'Zora sign-in was cancelled.'))
-            return null
+        if (method === 'zora' && privyReady && !privyAuthenticated) {
+          const fallbackToWalletLogin = async (): Promise<boolean> => {
+            if (typeof login !== 'function') {
+              setError('Zora sign-in is unavailable right now. Try again from the waitlist.')
+              return false
+            }
+            try {
+              // Fallback path avoids route-specific OAuth redirect mismatches.
+              await login({ loginMethods: ['wallet'] })
+              return true
+            } catch (fallbackError: unknown) {
+              setError(coerceErrorMessage(fallbackError, 'Sign-in cancelled.'))
+              return false
+            }
+          }
+
+          const pathname = typeof window !== 'undefined' ? window.location.pathname : '/'
+          const canUseCrossAppPath = shouldAttemptCrossAppLoginOnPath(pathname)
+
+          if (typeof loginWithCrossAppAccount === 'function' && canUseCrossAppPath) {
+            try {
+              await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+            } catch (e: unknown) {
+              if (!isPrivyRedirectUrlNotAllowedError(e)) {
+                setError(coerceErrorMessage(e, 'Zora sign-in was cancelled.'))
+                return null
+              }
+              const recovered = await fallbackToWalletLogin()
+              if (!recovered) return null
+            }
+          } else {
+            const recovered = await fallbackToWalletLogin()
+            if (!recovered) return null
           }
         }
 
