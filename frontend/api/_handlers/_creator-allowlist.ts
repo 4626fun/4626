@@ -86,7 +86,7 @@ async function dbIsWaitlisted(
   if (!address || !isAddressLike(address)) return false
   try {
     const addr = address.toLowerCase()
-    const { rows } = await db.sql`
+    const direct = await db.sql`
       SELECT id
       FROM profiles
       WHERE (lower(primary_wallet) = ${addr}
@@ -95,7 +95,22 @@ async function dbIsWaitlisted(
         AND COALESCE(app_access_status, 'pending') = 'approved'
       LIMIT 1;
     `
-    return rows.length > 0
+    if ((direct?.rows?.length ?? 0) > 0) return true
+  } catch {
+    // Ignore and try profile_wallets relation fallback below.
+  }
+  try {
+    const addr = address.toLowerCase()
+    const linked = await db.sql`
+      SELECT p.id
+      FROM profiles p
+      JOIN profile_wallets pw
+        ON pw.profile_id = p.id
+      WHERE lower(pw.address) = ${addr}
+        AND COALESCE(p.app_access_status, 'pending') = 'approved'
+      LIMIT 1;
+    `
+    return (linked?.rows?.length ?? 0) > 0
   } catch {
     return false
   }
@@ -136,14 +151,36 @@ async function supabaseIsWaitlisted(address: string | null): Promise<boolean> {
   const supabase = getSupabaseAdmin()
   try {
     const addr = address.toLowerCase()
-    const res = await supabase
+    const direct = await supabase
       .from('profiles')
       .select('id')
       .or(`primary_wallet.ilike.${addr},embedded_wallet.ilike.${addr},csw_address.ilike.${addr}`)
       .eq('app_access_status', 'approved')
       .limit(1)
-    if (res.error) return false
-    return Array.isArray(res.data) && res.data.length > 0
+    if (direct.error) return false
+    if (Array.isArray(direct.data) && direct.data.length > 0) return true
+
+    const linked = await supabase
+      .from('profile_wallets')
+      .select('profile_id')
+      .ilike('address', addr)
+      .limit(25)
+    if (linked.error) return false
+    const profileIds = Array.isArray(linked.data)
+      ? linked.data
+          .map((row: any) => Number(row?.profile_id))
+          .filter((id: number) => Number.isFinite(id) && id > 0)
+      : []
+    if (profileIds.length === 0) return false
+
+    const approved = await supabase
+      .from('profiles')
+      .select('id')
+      .in('id', profileIds)
+      .eq('app_access_status', 'approved')
+      .limit(1)
+    if (approved.error) return false
+    return Array.isArray(approved.data) && approved.data.length > 0
   } catch {
     return false
   }
