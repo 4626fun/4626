@@ -1,5 +1,8 @@
+import brandKitPreset from '@4626/brand-kit/tailwind-preset'
+
 /** @type {import('tailwindcss').Config} */
 export default {
+  presets: [brandKitPreset],
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",

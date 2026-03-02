@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 
 import { RootRouter } from './RootRouter'
 import { ThemeProvider } from '@/lib/theme'
+import '@4626/brand-kit/styles'
 import './index.css'
 import 'ethereum-identity-kit/css'
 

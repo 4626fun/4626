@@ -29,6 +29,13 @@ frontend/
   api/             # Vercel API routes
 ```
 
+### UI System
+
+- Shared design system package: `frontend/packages/brand-kit`
+- Tailwind preset source: `@4626/brand-kit/tailwind-preset` (consumed by `frontend/tailwind.config.js`)
+- Shared CSS contract: `@4626/brand-kit/styles` (imported in `frontend/src/main.tsx`)
+- Primitive ownership: `Button` and `Card` live in `@4626/brand-kit/components`; app `src/components/ui/*` files act as compatibility re-exports
+
 ## Development
 
 ```bash
