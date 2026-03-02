@@ -474,6 +474,16 @@ const CONTINUOUS_CCA_VIEW_ABI = [
   },
 ] as const
 
+const ERC20_BALANCE_OF_ABI = [
+  {
+    type: 'function',
+    name: 'balanceOf',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ type: 'uint256' }],
+  },
+] as const
+
 const CREATOR_VAULT_BATCHER_AUCTION_LAUNCHED_EVENT_ABI = [
   {
     type: 'event',
@@ -1065,14 +1075,9 @@ async function verifyPhase4PostState(params: {
           data: (log as any).data,
           topics: (log as any).topics,
         })
+        if (!isPlainObject(decoded)) continue
         if (decoded.eventName !== 'AuctionLaunchedDeferred') continue
-        const args = decoded.args as {
-          creatorToken?: unknown
-          owner?: unknown
-          shareOFT?: unknown
-          ccaStrategy?: unknown
-          auction?: unknown
-        }
+        const args: Record<string, unknown> = isPlainObject(decoded.args) ? decoded.args : {}
         return {
           creatorToken: normalizeAddress(args?.creatorToken),
           owner: normalizeAddress(args?.owner),
@@ -1148,7 +1153,7 @@ async function verifyPhase4PostState(params: {
     throw new Error(`phase4 verification failed: CCA factory code missing at ${ccaFactory}`)
   }
 
-  const [isGraduatedRaw, totalSupplyRaw] = await Promise.all([
+  const [isGraduatedRaw, totalSupplyRaw, shareBalanceRaw] = await Promise.all([
     params.publicClient
       .readContract({
         address: currentAuction,
@@ -1163,6 +1168,14 @@ async function verifyPhase4PostState(params: {
         functionName: 'totalSupply',
       })
       .catch(() => null),
+    params.publicClient
+      .readContract({
+        address: launch.shareOFT,
+        abi: ERC20_BALANCE_OF_ABI,
+        functionName: 'balanceOf',
+        args: [currentAuction],
+      })
+      .catch(() => null),
   ])
   if (typeof isGraduatedRaw !== 'boolean') {
     throw new Error('phase4 verification failed: auction does not expose expected Uniswap CCA interface')
@@ -1171,6 +1184,15 @@ async function verifyPhase4PostState(params: {
   if (totalSupply == null || totalSupply <= 0n) {
     throw new Error('phase4 verification failed: auction totalSupply is zero')
   }
+  const shareBalance = parseBigIntLike(shareBalanceRaw)
+  if (shareBalance == null) {
+    throw new Error('phase4 verification failed: could not read auction share funding balance')
+  }
+  if (shareBalance < totalSupply) {
+    throw new Error(
+      `phase4 verification failed: auction not fully funded (${shareBalance.toString()} < ${totalSupply.toString()})`,
+    )
+  }
 }
 
 async function ensureSolanaRouteReadyForPhase3(params: {
@@ -1178,13 +1200,28 @@ async function ensureSolanaRouteReadyForPhase3(params: {
   publicClient: any
   phase2FinalizeCalls: Array<{ to: Address; value: bigint; data: Hex }>
   solanaOvault?: unknown
-}): Promise<void> {
+}): Promise<{
+  existingMintCompatible: boolean
+  depositEligible: boolean
+  redeemEligible: boolean
+  assetPeerSet: boolean
+  sharePeerSet: boolean
+  meshStep: 'ovault_mesh_confirmed'
+}> {
+  const defaultStatus = {
+    existingMintCompatible: true,
+    depositEligible: true,
+    redeemEligible: true,
+    assetPeerSet: true,
+    sharePeerSet: true,
+    meshStep: 'ovault_mesh_confirmed' as const,
+  }
   const finalizeCall = params.phase2FinalizeCalls[0]
-  if (!finalizeCall) return
+  if (!finalizeCall) return defaultStatus
 
   const batcherAddress = getAddress(finalizeCall.to)
   const finalizeInfo = extractFinalizePhase2Info(finalizeCall.data)
-  if (!finalizeInfo?.creatorToken) return
+  if (!finalizeInfo?.creatorToken) return defaultStatus
   const bridgeToken = finalizeInfo.creatorToken
   const expectedSolanaAmount =
     finalizeInfo.depositAmount && finalizeInfo.depositAmount > 0n
@@ -1220,7 +1257,7 @@ async function ensureSolanaRouteReadyForPhase3(params: {
   const solanaEnabled =
     adapter.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
     destination !== ZERO_BYTES32.toLowerCase()
-  if (!solanaEnabled) return
+  if (!solanaEnabled) return defaultStatus
 
   const registered = await params.publicClient
     .readContract({
@@ -1270,7 +1307,19 @@ async function ensureSolanaRouteReadyForPhase3(params: {
   const tryRegister = async (
     origin: string,
     routePath: SolanaPreflightRoutePath,
-  ): Promise<{ ok: boolean; statusCode: number | null; failure: string | null }> => {
+  ): Promise<{
+    ok: boolean
+    statusCode: number | null
+    failure: string | null
+    ovault: {
+      existingMintCompatible: boolean
+      depositEligible: boolean
+      redeemEligible: boolean
+      assetPeerSet: boolean
+      sharePeerSet: boolean
+      meshStep: 'ovault_mesh_confirmed'
+    } | null
+  }> => {
     try {
       const registerUrl = `${origin}${routePath}`
       const payload: Record<string, unknown> = {
@@ -1325,9 +1374,22 @@ async function ensureSolanaRouteReadyForPhase3(params: {
               `depositEligible=${String(data?.depositEligible)} ` +
               `redeemEligible=${String(data?.redeemEligible)}` +
               (blockers ? ` blockers=${blockers}` : ''),
+            ovault: null,
           }
         }
-        return { ok: true, statusCode: registerRes.status, failure: null }
+        return {
+          ok: true,
+          statusCode: registerRes.status,
+          failure: null,
+          ovault: {
+            existingMintCompatible,
+            depositEligible,
+            redeemEligible,
+            assetPeerSet: data?.assetPeerSet === false ? false : true,
+            sharePeerSet: data?.sharePeerSet === false ? false : true,
+            meshStep: 'ovault_mesh_confirmed',
+          },
+        }
       }
       const detail =
         registerJson?.error
@@ -1339,20 +1401,21 @@ async function ensureSolanaRouteReadyForPhase3(params: {
         ok: false,
         statusCode: registerRes.status,
         failure: `${origin}${routePath} (${registerRes.status}): ${detail}`,
+        ovault: null,
       }
     } catch {
-      return { ok: false, statusCode: null, failure: `${origin}${routePath}: request_failed` }
+      return { ok: false, statusCode: null, failure: `${origin}${routePath}: request_failed`, ovault: null }
     }
   }
   const failures: string[] = []
   for (const origin of candidateOrigins) {
     const primary = await tryRegister(origin, routes.primary)
-    if (primary.ok) return
+    if (primary.ok) return primary.ovault ?? defaultStatus
     if (primary.failure) failures.push(primary.failure)
     // Fallback route applies only when primary route appears unavailable in this runtime.
     if (routes.fallback && (primary.statusCode === 404 || primary.statusCode === 405 || primary.statusCode === null)) {
       const fallback = await tryRegister(origin, routes.fallback)
-      if (fallback.ok) return
+      if (fallback.ok) return fallback.ovault ?? defaultStatus
       if (fallback.failure) failures.push(fallback.failure)
     }
   }
@@ -1419,6 +1482,8 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       'phase2_core_confirmed',
       'phase2_sent',
       'phase2_confirmed',
+      'ovault_mesh_sent',
+      'ovault_mesh_confirmed',
       'phase3_sent',
       'phase3_confirmed',
       'phase4_sent',
@@ -1518,6 +1583,8 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   if (hasPhase3 && phase3Calls.length === 0) throw new Error('phase3_calls_invalid')
   if (hasPhase4 && phase4Calls.length === 0) throw new Error('phase4_calls_invalid')
   const hasPostPhase2 = hasPhase3 || hasPhase4
+  const solanaOvaultConfig = isPlainObject(payload.solanaOvault) ? payload.solanaOvault : {}
+  const hasOvaultMeshStage = solanaOvaultConfig.enabled === true && hasPostPhase2
   const phase2ReplayState =
     phase2CoreCalls.length > 0 || hasPhase2Finalize
       ? await readPhase2ReplayState({
@@ -1669,15 +1736,47 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     }
   }
 
+  const runOvaultMeshGate = async (fromStep: string): Promise<boolean> => {
+    if (!hasOvaultMeshStage) return false
+    const markedSent = await transitionDeploySession({
+      id: rec.id,
+      fromStep: fromStep as any,
+      toStep: 'ovault_mesh_sent',
+      lastError: null,
+      lastUserOpHash: null,
+      lastTxHash: null,
+    })
+    if (!markedSent) throw new Error(CONCURRENT_MODIFICATION)
+
+    const ovault = await ensureSolanaRouteReadyForPhase3({
+      req,
+      publicClient,
+      phase2FinalizeCalls,
+      solanaOvault: payload.solanaOvault,
+    })
+    const markedConfirmed = await transitionDeploySession({
+      id: rec.id,
+      fromStep: 'ovault_mesh_sent',
+      toStep: 'ovault_mesh_confirmed',
+      lastError: null,
+      payloadPatch: { ovault },
+    })
+    if (!markedConfirmed) throw new Error(CONCURRENT_MODIFICATION)
+    payload.ovault = ovault
+    return true
+  }
+
   const startNextAfterPhase2 = async (fromStep: string) => {
     if (hasPhase3) {
-      // Solana route/token registration is now treated as out-of-band strategy-stage prep.
-      await ensureSolanaRouteReadyForPhase3({
-        req,
-        publicClient,
-        phase2FinalizeCalls,
-        solanaOvault: payload.solanaOvault,
-      })
+      if (!hasOvaultMeshStage) {
+        const ovault = await ensureSolanaRouteReadyForPhase3({
+          req,
+          publicClient,
+          phase2FinalizeCalls,
+          solanaOvault: payload.solanaOvault,
+        })
+        await updateDeploySession({ id: rec.id, payloadPatch: { ovault } })
+      }
       await startStage(fromStep, 'phase3_sent', phase3Calls, !hasPhase4)
       return true
     }
@@ -1690,6 +1789,11 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
 
   const startOrCompleteAfterPhase2 = async (fromStep: string): Promise<void> => {
     if (hasPostPhase2) {
+      if (hasOvaultMeshStage) {
+        await runOvaultMeshGate(fromStep)
+        await startNextAfterPhase2('ovault_mesh_confirmed')
+        return
+      }
       await startNextAfterPhase2(fromStep)
       return
     }
@@ -1928,6 +2032,26 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     return
   }
 
+  if (step === 'ovault_mesh_sent') {
+    const ovault = await ensureSolanaRouteReadyForPhase3({
+      req,
+      publicClient,
+      phase2FinalizeCalls,
+      solanaOvault: payload.solanaOvault,
+    })
+    const confirmed = await transitionDeploySession({
+      id: rec.id,
+      fromStep: 'ovault_mesh_sent',
+      toStep: 'ovault_mesh_confirmed',
+      lastError: null,
+      payloadPatch: { ovault },
+    })
+    if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
+    payload.ovault = ovault
+    await startNextAfterPhase2('ovault_mesh_confirmed')
+    return
+  }
+
   if (step === 'phase3_sent') {
     await verifyPhase3PostState({
       publicClient,
@@ -1995,6 +2119,11 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
 
   if (step === 'phase2_confirmed') {
     await startOrCompleteAfterPhase2('phase2_confirmed')
+    return
+  }
+
+  if (step === 'ovault_mesh_confirmed') {
+    await startNextAfterPhase2('ovault_mesh_confirmed')
     return
   }
 
@@ -2125,6 +2254,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  const ovaultEnabled =
+    isPlainObject(rec?.payload?.solanaOvault) && rec.payload.solanaOvault.enabled === true
+  const ovaultRaw = isPlainObject(rec?.payload?.ovault) ? rec.payload.ovault : {}
   return res.status(200).json({
     success: true,
     data: {
@@ -2142,6 +2274,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         null,
       sessionOwner: rec.sessionOwner,
       diagnostics: buildSessionDiagnostics(rec),
+      ovault: ovaultEnabled
+        ? {
+            existingMintCompatible: ovaultRaw.existingMintCompatible === false ? false : true,
+            depositEligible: ovaultRaw.depositEligible === false ? false : true,
+            redeemEligible: ovaultRaw.redeemEligible === false ? false : true,
+            assetPeerSet: ovaultRaw.assetPeerSet === false ? false : true,
+            sharePeerSet: ovaultRaw.sharePeerSet === false ? false : true,
+            meshStep:
+              typeof ovaultRaw.meshStep === 'string' && ovaultRaw.meshStep.trim()
+                ? ovaultRaw.meshStep.trim()
+                : null,
+          }
+        : null,
     },
   } satisfies ApiEnvelope<any>)
 }

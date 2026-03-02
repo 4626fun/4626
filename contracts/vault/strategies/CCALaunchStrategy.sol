@@ -59,6 +59,7 @@ interface IContinuousClearingAuction {
     function clearingPrice() external view returns (uint256);
     function currencyRaised() external view returns (uint256);
     function totalSupply() external view returns (uint128);
+    function onTokensReceived() external;
 }
 
 /**
@@ -89,7 +90,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
 
     /// @notice Uniswap v1.1.0 CCA factory (canonical on Base/Mainnet/Unichain/Sepolia)
     /// @dev See https://github.com/Uniswap/continuous-clearing-auction#deployments
-    address public constant UNISWAP_CCA_FACTORY_V110 = 0xcca1101C61cF5cb44C968947985300DF945C3565;
+    address public constant UNISWAP_CCA_FACTORY_V110 = 0xCCccCcCAE7503Cac057829BF2811De42E16e0bD5;
 
     /// @notice Milli-basis points constant
     uint24 public constant MPS = 1e7;
@@ -284,8 +285,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     function _launchAuctionInternal(
         uint256 amount,
         uint256 floorPrice,
-        uint128 requiredRaise,
-        bytes memory auctionSteps
+        uint128 requiredRaise
     ) internal returns (address auction) {
         if (currentAuction != address(0)) {
             // Check if previous auction is still active
@@ -302,6 +302,10 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         uint64 startBlock = uint64(block.number + 100); // Start in ~100 blocks
         uint64 endBlock = startBlock + defaultDuration;
         uint64 claimBlock = endBlock + defaultClaimDelay;
+
+        // Strict launch policy: always use the strategy-owned schedule so
+        // callers cannot accidentally deploy unsafe issuance curves.
+        bytes memory auctionSteps = _createUniswapSafeDefaultSteps(defaultDuration);
 
         // Build auction parameters
         bytes memory configData =
@@ -320,6 +324,10 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         auction = IContinuousClearingAuctionFactory(ccaFactory)
             .initializeDistribution(address(auctionToken), amount, configData, salt);
 
+        // CCA requires explicit funding + callback before bids/checkpoints become active.
+        auctionToken.safeTransfer(auction, amount);
+        IContinuousClearingAuction(auction).onTokensReceived();
+
         currentAuction = auction;
 
         emit AuctionCreated(auction, address(auctionToken), amount, startBlock, endBlock);
@@ -330,7 +338,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
      * @param amount Amount of tokens to auction
      * @param floorPrice Starting floor price (Q96 format)
      * @param requiredRaise Minimum currency to raise for graduation
-     * @param auctionSteps Packed auction steps data
+     * @param auctionSteps Deprecated. Ignored in favor of strategy-enforced safe schedule.
      */
     function launchAuction(uint256 amount, uint256 floorPrice, uint128 requiredRaise, bytes calldata auctionSteps)
         external
@@ -338,7 +346,9 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         nonReentrant
         returns (address auction)
     {
-        return _launchAuctionInternal(amount, floorPrice, requiredRaise, auctionSteps);
+        // Keep ABI compatibility while enforcing strategy-owned schedule.
+        auctionSteps;
+        return _launchAuctionInternal(amount, floorPrice, requiredRaise);
     }
 
     /**
@@ -352,16 +362,11 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         nonReentrant
         returns (address auction)
     {
-        // Create default Uniswap-safe auction steps:
-        // - monotonically increasing issuance rate
-        // - large issuance in final block to reduce end-price manipulability
-        bytes memory auctionSteps = _createUniswapSafeDefaultSteps(defaultDuration);
-
         // Use default floor price
         uint256 floorPrice = defaultFloorPrice;
 
         // Forward to internal implementation (preserves msg.sender and nonReentrant semantics)
-        return _launchAuctionInternal(amount, floorPrice, requiredRaise, auctionSteps);
+        return _launchAuctionInternal(amount, floorPrice, requiredRaise);
     }
 
     // ================================

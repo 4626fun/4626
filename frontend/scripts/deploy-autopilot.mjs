@@ -8,7 +8,7 @@ import { base } from 'viem/chains'
 
 const DEFAULT_ORIGIN = process.env.APP_ORIGIN || process.env.CANONICAL_ORIGIN || 'http://localhost:5173'
 const DEFAULT_RPC = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
-const DEFAULT_BATCHER = '0x6F3662298a96b372Df4134Fd6f89df36Ec014480'
+const DEFAULT_BATCHER = '0x32403a647e73E04aE42b02bdd1Ade9C88698FD0c'
 const DEFAULT_STORE = '0x4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A'
 const DEFAULT_DEPLOYER = '0x6f02c56B2F6C213f727D303Ce9E12e6bE1D224f0'
 
@@ -259,6 +259,8 @@ async function main() {
     'phase1_finalize_confirmed',
     'phase2_core_confirmed',
     'phase2_confirmed',
+    'ovault_mesh_sent',
+    'ovault_mesh_confirmed',
     'phase3_confirmed',
     'phase4_confirmed',
   ])

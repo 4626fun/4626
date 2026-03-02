@@ -68,6 +68,18 @@ interface ICreatorRegistry {
         bool useCustomOApp;
     }
 
+    /**
+     * @notice Per-creator Solana OVault mesh configuration.
+     */
+    struct OmnichainVaultMeshConfig {
+        uint32 solanaEid;
+        address hubComposer;
+        address assetMeshToken;
+        address shareMeshToken;
+        bytes32 solanaAssetMint;
+        bool enabled;
+    }
+
     // =================================
     // EVENTS
     // =================================
@@ -89,6 +101,15 @@ interface ICreatorRegistry {
     event RemoteOFTPeerRemoved(address indexed creatorCoin, uint32 indexed chainEid);
     event RemoteOFTPeerBytes32Set(address indexed creatorCoin, uint32 indexed chainEid, bytes32 remoteOFT);
     event RemoteOFTPeerBytes32Removed(address indexed creatorCoin, uint32 indexed chainEid);
+    event OmnichainVaultMeshConfigured(
+        address indexed creatorCoin,
+        uint32 indexed solanaEid,
+        address hubComposer,
+        address assetMeshToken,
+        address shareMeshToken,
+        bytes32 solanaAssetMint,
+        bool enabled
+    );
 
     event ChainRegistered(uint256 indexed chainId, string chainName);
     event ChainUpdated(uint256 indexed chainId);
@@ -164,6 +185,11 @@ interface ICreatorRegistry {
      */
     function setCanonicalWallet(address _token, address _wallet) external;
 
+    /**
+     * @notice Configure Solana OVault mesh metadata for a creator coin.
+     */
+    function setOmnichainVaultMesh(address _token, OmnichainVaultMeshConfig calldata _cfg) external;
+
     // =================================
     // CREATOR COIN GETTERS
     // =================================
@@ -213,6 +239,21 @@ interface ICreatorRegistry {
      * @notice Reverse-lookup: get the Creator Coin address for a canonical wallet
      */
     function getTokenForCanonicalWallet(address _wallet) external view returns (address);
+
+    /**
+     * @notice Read Solana OVault mesh metadata for a creator coin.
+     */
+    function getOmnichainVaultMesh(address _token) external view returns (OmnichainVaultMeshConfig memory);
+
+    /**
+     * @notice Returns true when this creator coin is currently eligible for Solana deposit routing.
+     */
+    function isSolanaDepositEligible(address _token) external view returns (bool);
+
+    /**
+     * @notice Returns configured Solana asset mint for a creator coin.
+     */
+    function getSolanaAssetMint(address _token) external view returns (bytes32);
 
     // =================================
     // REMOTE OFT PEER TRACKING

@@ -38,6 +38,10 @@ import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorO
 ///   CONFIGURE_SOLANA=1
 ///   SOLANA_BRIDGE_ADAPTER=...
 ///   SOLANA_DESTINATION=0x<32-byte-solana-pubkey>
+/// Optional OVault runtime wiring (requires broadcaster == protocolTreasury):
+///   CONFIGURE_OVAULT_RUNTIME=1
+///   OVAULT_HUB_COMPOSER=...
+///   OVAULT_SOLANA_EID=30168
 ///
 /// Optional salt overrides (for fresh infra epochs):
 ///   INFRA_STORE_SALT or INFRA_STORE_SALT_TAG
@@ -93,6 +97,8 @@ contract DeployBaseMainnetDeployer is Script {
         address ajnaFactory;
         address solanaBridgeAdapter;
         bytes32 solanaDestination;
+        address ovaultHubComposer;
+        uint32 ovaultSolanaEid;
     }
 
     struct SaltConfig {
@@ -137,7 +143,10 @@ contract DeployBaseMainnetDeployer is Script {
         cfg.ajnaFactory = vm.envOr("AJNA_FACTORY", DEFAULT_AJNA_FACTORY);
         cfg.solanaBridgeAdapter = vm.envOr("SOLANA_BRIDGE_ADAPTER", address(0));
         cfg.solanaDestination = vm.envOr("SOLANA_DESTINATION", bytes32(0));
+        cfg.ovaultHubComposer = vm.envOr("OVAULT_HUB_COMPOSER", address(0));
+        cfg.ovaultSolanaEid = uint32(vm.envOr("OVAULT_SOLANA_EID", uint256(0)));
         bool configureSolana = vm.envOr("CONFIGURE_SOLANA", uint256(0)) == 1;
+        bool configureOvaultRuntime = vm.envOr("CONFIGURE_OVAULT_RUNTIME", uint256(0)) == 1;
         SaltConfig memory salts;
         salts.store = _saltFromEnv("INFRA_STORE_SALT", "INFRA_STORE_SALT_TAG", DEFAULT_STORE_SALT_TAG);
         salts.deployerFromStore = _saltFromEnv(
@@ -294,6 +303,31 @@ contract DeployBaseMainnetDeployer is Script {
             console2.logBytes32(cfg.solanaDestination);
         } else {
             console2.log("CONFIGURE_SOLANA=0 (skipped setSolanaConfig)");
+        }
+
+        if (configureOvaultRuntime) {
+            require(cfg.ovaultHubComposer != address(0), "OVAULT_HUB_COMPOSER required");
+            require(cfg.ovaultSolanaEid != 0, "OVAULT_SOLANA_EID required");
+            require(broadcaster == cfg.protocolTreasury, "broadcaster must equal protocolTreasury");
+
+            DeploymentBatcher.OVaultRuntimeConfig memory currentRuntime = deployer.getOVaultRuntimeConfig();
+            if (
+                currentRuntime.hubComposer != cfg.ovaultHubComposer || currentRuntime.solanaEid != cfg.ovaultSolanaEid
+                    || !currentRuntime.enabled
+            ) {
+                vm.startBroadcast(pk);
+                deployer.setOVaultRuntimeConfig(cfg.ovaultHubComposer, cfg.ovaultSolanaEid, true);
+                vm.stopBroadcast();
+            }
+
+            DeploymentBatcher.OVaultRuntimeConfig memory finalRuntime = deployer.getOVaultRuntimeConfig();
+            require(finalRuntime.hubComposer == cfg.ovaultHubComposer, "OVault hub composer mismatch");
+            require(finalRuntime.solanaEid == cfg.ovaultSolanaEid, "OVault Solana EID mismatch");
+            require(finalRuntime.enabled, "OVault runtime not enabled");
+            console2.log("OVault runtime composer configured:", cfg.ovaultHubComposer);
+            console2.log("OVault runtime Solana EID:", cfg.ovaultSolanaEid);
+        } else {
+            console2.log("CONFIGURE_OVAULT_RUNTIME=0 (skipped setOVaultRuntimeConfig)");
         }
     }
 }

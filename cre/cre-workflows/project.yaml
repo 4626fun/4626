@@ -18,7 +18,7 @@ local-simulation:
     - chain-name: ethereum-mainnet
       url: https://ethereum-rpc.publicnode.com
     - chain-name: ethereum-mainnet-base-1
-      url: https://base-rpc.publicnode.com
+      url: https://mainnet.base.org
 
 staging-settings:
   cre-cli:

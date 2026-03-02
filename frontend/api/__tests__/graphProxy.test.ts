@@ -159,7 +159,7 @@ describe('graph proxy hardening', () => {
   })
 
   it('poolHistory uses allowlisted CORS (no wildcard)', async () => {
-    restoreEnv = applyEnv({ THEGRAPH_API_KEY: undefined })
+    restoreEnv = applyEnv({ THEGRAPH_API_KEY: undefined, GRAPH_API_KEY: undefined })
 
     const req = createMockReq({
       method: 'GET',

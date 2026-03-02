@@ -142,6 +142,7 @@ test/**
 !test/CreatorOracle.TwapSafety.t.sol
 !test/CreatorOracle.BroadcastCreatorPrice.t.sol
 !test/CreatorLotteryManager.OracleTimestampGuard.t.sol
+!test/CCALaunchStrategy.LaunchHandshake.t.sol
 !test/ve4626.LockTokenRestriction.t.sol
 telegram-bot/
 relayer/

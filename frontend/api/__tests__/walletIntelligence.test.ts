@@ -11,6 +11,8 @@ const getWalletPortfolioMock = vi.fn()
 const resolveCanonicalMock = vi.fn()
 const resolveLensMock = vi.fn()
 const tryUploadMock = vi.fn()
+const getCachedWalletIntelligenceMock = vi.fn()
+const cacheWalletIntelligenceMock = vi.fn()
 const guardMock = vi.fn()
 
 vi.mock('../../server/_lib/funderTrace.js', () => ({
@@ -39,6 +41,11 @@ vi.mock('../../server/_lib/lensAccounts.js', () => ({
 
 vi.mock('../../server/_lib/lensGrove.js', () => ({
   tryUploadImmutableJson: tryUploadMock,
+}))
+
+vi.mock('../../server/_lib/walletIntelligenceCache.js', () => ({
+  getCachedWalletIntelligence: getCachedWalletIntelligenceMock,
+  cacheWalletIntelligence: cacheWalletIntelligenceMock,
 }))
 
 vi.mock('../../server/_lib/agentApiGuard.js', () => ({
@@ -103,6 +110,8 @@ function mockRes(): any {
 function setupDefaults() {
   guardMock.mockResolvedValue({ ok: true, ip: '127.0.0.1' })
   resolveCanonicalMock.mockResolvedValue(null) // No CSW resolution
+  getCachedWalletIntelligenceMock.mockResolvedValue(null)
+  cacheWalletIntelligenceMock.mockResolvedValue(undefined)
   traceFundersMock.mockResolvedValue({
     target: TEST_ADDRESS,
     chain: [

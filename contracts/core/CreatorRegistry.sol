@@ -74,6 +74,9 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
     /// @notice Reverse lookup: remote bytes32 peer → creator coin
     mapping(bytes32 => address) public remoteOFTBytes32ToToken;
 
+    /// @notice Per-creator Solana OVault mesh metadata.
+    mapping(address => OmnichainVaultMeshConfig) private omnichainVaultMeshConfigs;
+
     // =================================
     // CHAIN CONFIGURATION
     // =================================
@@ -378,6 +381,40 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
     }
 
     /**
+     * @notice Configure Solana OVault mesh metadata for a creator coin.
+     * @dev Enabled configs must be fully populated.
+     */
+    function setOmnichainVaultMesh(address _token, OmnichainVaultMeshConfig calldata _cfg)
+        external
+        override
+        onlyAuthorizedOrOwner
+    {
+        if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
+
+        if (_cfg.enabled) {
+            if (
+                _cfg.solanaEid == 0 || _cfg.hubComposer == address(0) || _cfg.assetMeshToken == address(0)
+                    || _cfg.shareMeshToken == address(0)
+            ) {
+                revert ZeroAddress();
+            }
+            if (_cfg.solanaAssetMint == bytes32(0)) revert ZeroBytes32();
+        }
+
+        omnichainVaultMeshConfigs[_token] = _cfg;
+
+        emit OmnichainVaultMeshConfigured(
+            _token,
+            _cfg.solanaEid,
+            _cfg.hubComposer,
+            _cfg.assetMeshToken,
+            _cfg.shareMeshToken,
+            _cfg.solanaAssetMint,
+            _cfg.enabled
+        );
+    }
+
+    /**
      * @notice Update Creator Coin pool info
      */
     function setCreatorPool(address _token, address _pool, uint24 _poolFee) external onlyOwner {
@@ -665,6 +702,30 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
      */
     function getTokenForCanonicalWallet(address _wallet) external view override returns (address) {
         return canonicalWalletToToken[_wallet];
+    }
+
+    function getOmnichainVaultMesh(address _token) external view override returns (OmnichainVaultMeshConfig memory) {
+        return omnichainVaultMeshConfigs[_token];
+    }
+
+    function isSolanaDepositEligible(address _token) external view override returns (bool) {
+        CreatorCoinInfo storage info = creatorCoins[_token];
+        if (info.token == address(0) || !info.isActive) return false;
+
+        OmnichainVaultMeshConfig storage cfg = omnichainVaultMeshConfigs[_token];
+        if (!cfg.enabled) return false;
+        if (
+            cfg.solanaEid == 0 || cfg.hubComposer == address(0) || cfg.assetMeshToken == address(0)
+                || cfg.shareMeshToken == address(0) || cfg.solanaAssetMint == bytes32(0)
+        ) {
+            return false;
+        }
+        if (info.vault == address(0) || info.wrapper == address(0) || info.shareOFT == address(0)) return false;
+        return true;
+    }
+
+    function getSolanaAssetMint(address _token) external view override returns (bytes32) {
+        return omnichainVaultMeshConfigs[_token].solanaAssetMint;
     }
 
     // =================================

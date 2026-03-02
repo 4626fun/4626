@@ -14,6 +14,8 @@ export type DeploySessionStep =
   | 'phase2_core_confirmed'
   | 'phase2_sent'
   | 'phase2_confirmed'
+  | 'ovault_mesh_sent'
+  | 'ovault_mesh_confirmed'
   | 'phase3_sent'
   | 'phase3_confirmed'
   | 'phase4_sent'

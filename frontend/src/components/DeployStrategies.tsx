@@ -76,8 +76,8 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
 
   // Default: Q96 (price = 1 in raw token1/token0 terms). Only used if pool doesn't exist yet.
   const [initialSqrtPriceX96, setInitialSqrtPriceX96] = useState<string>('79228162514264337593543950336')
-  const [charmVaultName, setCharmVaultName] = useState<string>('4626: creator/USDC')
-  const [charmVaultSymbol, setCharmVaultSymbol] = useState<string>('CV-creator-USDC')
+  const [charmVaultName, setCharmVaultName] = useState<string>('4626.fun Strategy: Charm')
+  const [charmVaultSymbol, setCharmVaultSymbol] = useState<string>('AKITA-USDC')
 
   // Absolute target model for a 5,000,000 baseline:
   // 30% Charm + 30% Ajna + 30% Solana reserve + 10% idle.

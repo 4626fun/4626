@@ -36,8 +36,11 @@ const mintKeypair = Keypair.generate();
 
 const programId = new PublicKey(CHAINS.solana.programId);
 const decimals = Number(process.env.TOKEN_DECIMALS ?? '9');
-const feeBps = Number(process.env.TRANSFER_FEE_BPS ?? '690');
+const feeBps = Number(process.env.TRANSFER_FEE_BPS ?? '0');
 const maxFee = BigInt(process.env.MAX_FEE ?? String(2n ** 64n - 1n));
+if (feeBps !== 0) {
+  throw new Error('TransferHook mint creation requires TRANSFER_FEE_BPS=0 for OVault compatibility');
+}
 
 console.log('=== Create Token-2022 Mint ===');
 console.log('RPC:            ', rpcUrl);
@@ -93,6 +96,9 @@ const adapterModeHint = (() => {
   if (raw === 'oft-adapter' || raw === 'adapter') return 'oft-adapter';
   return 'regular-oft';
 })();
+if (adapterModeHint === 'oft-adapter') {
+  throw new Error('TransferHook mints must use regular-oft mode; oft-adapter is not allowed');
+}
 
 console.log('Mint created!');
 console.log('  Mint:      ', mintKeypair.publicKey.toBase58());

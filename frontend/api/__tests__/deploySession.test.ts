@@ -140,6 +140,8 @@ describe('deploy session optimistic concurrency', () => {
     delete process.env.SOLANA_PREFLIGHT_ROUTE_MODE
     delete process.env.DEPLOY_SOLANA_LEGACY_WRITE_DISABLED
     delete process.env.SOLANA_LEGACY_WRITE_DISABLED
+    delete process.env.DEPLOY_SOLANA_REGISTRATION_ORIGINS
+    delete process.env.SOLANA_REGISTRATION_ORIGINS
   })
 
   it('allows one continue transition and returns 409 on the second', async () => {
@@ -1608,6 +1610,8 @@ describe('deploy session optimistic concurrency', () => {
             return false
           case 'totalSupply':
             return 1000n
+          case 'balanceOf':
+            return 1000n
           default:
             return '0xownerbytes'
         }
@@ -1636,6 +1640,107 @@ describe('deploy session optimistic concurrency', () => {
     expect(transitionDeploySessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sess_1', fromStep: 'phase4_sent', toStep: 'phase4_confirmed' }),
     )
+  })
+
+  it('status blocks phase4_sent completion when auction funding is below totalSupply', async () => {
+    const rec = {
+      ...makeDeploySession('phase4_sent'),
+      payload: JSON.stringify({
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase4launch')],
+      }),
+      lastUserOpHash: `0x${'7'.repeat(64)}`,
+    }
+    const viem = await import('viem')
+    const shareOft = '0x7000000000000000000000000000000000000007'
+    const ccaStrategy = '0x5000000000000000000000000000000000000005'
+    const auction = '0xe00000000000000000000000000000000000000e'
+    const ccaFactory = '0xf00000000000000000000000000000000000000f'
+    ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
+      if (String(data) === '0xphase4launch') {
+        return {
+          functionName: 'launchDeferredAuction',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              shareOFT: shareOft,
+              version: 'v1.4.3',
+              floorPriceQ96: 1n,
+              requiredRaise: 1n,
+              auctionSteps: '0x1234',
+            },
+          ],
+        }
+      }
+      if (String(data) === '0xphase2finalize') {
+        return {
+          functionName: 'finalizePhase2',
+          args: [
+            {
+              creatorToken: '0x1000000000000000000000000000000000000001',
+              owner: '0x2000000000000000000000000000000000000002',
+              vault: '0x3000000000000000000000000000000000000003',
+              gaugeController: '0x4000000000000000000000000000000000000004',
+              ccaStrategy,
+              oracle: '0x6000000000000000000000000000000000000006',
+              depositAmount: '5000000000000000000000000',
+            },
+          ],
+        }
+      }
+      return {
+        args: [
+          {
+            creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+            depositAmount: '5000000000000000000000000',
+          },
+        ],
+      }
+    })
+    ;(viem.createPublicClient as any).mockReturnValue({
+      readContract: vi.fn(async ({ functionName }: any) => {
+        switch (functionName) {
+          case 'currentAuction':
+            return auction
+          case 'ccaFactory':
+            return ccaFactory
+          case 'isGraduated':
+            return false
+          case 'totalSupply':
+            return 1000n
+          case 'balanceOf':
+            return 999n
+          default:
+            return '0xownerbytes'
+        }
+      }),
+      getBytecode: vi.fn(async ({ address }: any) => {
+        const withCode = new Set([
+          shareOft.toLowerCase(),
+          ccaStrategy.toLowerCase(),
+          auction.toLowerCase(),
+          ccaFactory.toLowerCase(),
+        ])
+        return withCode.has(String(address ?? '').toLowerCase()) ? '0x6001' : '0x'
+      }),
+    })
+    getDeploySessionByIdMock
+      .mockResolvedValueOnce(rec)
+      .mockResolvedValueOnce({ ...rec, step: 'phase4_sent', lastError: 'phase4 verification failed' })
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('phase4_sent')
+    expect(transitionDeploySessionMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase4_sent', toStep: 'phase4_confirmed' }),
+    )
+    expect(updateDeploySessionMock).toHaveBeenCalled()
   })
 
   it('status advances phase4_sent from launch event fallback without phase2 finalize payload', async () => {
@@ -1702,6 +1807,8 @@ describe('deploy session optimistic concurrency', () => {
             return false
           case 'totalSupply':
             return 1000n
+          case 'balanceOf':
+            return 1000n
           default:
             return '0xownerbytes'
         }
@@ -1763,6 +1870,65 @@ describe('deploy session optimistic concurrency', () => {
     expect(res.body?.data?.step).toBe('phase4_sent')
     expect(sendUserOperationMock).not.toHaveBeenCalled()
     expect(updateDeploySessionMock).toHaveBeenCalled()
+  })
+
+  it('continue advances phase2_confirmed into OVault mesh gate when enabled', async () => {
+    const rec = {
+      ...makeDeploySession('phase2_confirmed'),
+      payload: {
+        phase2Calls: [],
+        phase2FinalizeCalls: [],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [],
+        solanaOvault: { enabled: true },
+      },
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('ovault_mesh_confirmed')
+    expect(transitionDeploySessionMock).toHaveBeenCalledTimes(2)
+    expect(transitionDeploySessionMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase2_confirmed', toStep: 'ovault_mesh_sent' }),
+    )
+    expect(transitionDeploySessionMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ id: 'sess_1', fromStep: 'ovault_mesh_sent', toStep: 'ovault_mesh_confirmed' }),
+    )
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
+  })
+
+  it('continue resumes ovault_mesh_sent by confirming mesh without re-sending sent transition', async () => {
+    const rec = {
+      ...makeDeploySession('ovault_mesh_sent'),
+      payload: {
+        phase2Calls: [],
+        phase2FinalizeCalls: [],
+        phase3Calls: [makeCall('0xphase3target')],
+        phase4Calls: [],
+        solanaOvault: { enabled: true },
+      },
+    }
+    getDeploySessionByIdMock.mockResolvedValue(rec)
+    transitionDeploySessionMock.mockResolvedValue(true)
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.step).toBe('ovault_mesh_confirmed')
+    expect(transitionDeploySessionMock).toHaveBeenCalledTimes(1)
+    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sess_1', fromStep: 'ovault_mesh_sent', toStep: 'ovault_mesh_confirmed' }),
+    )
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
   })
 
   it('persists server-side revert debug on continue reverts (no debug blob leaked)', async () => {

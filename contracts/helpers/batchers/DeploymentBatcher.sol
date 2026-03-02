@@ -276,6 +276,12 @@ contract DeploymentBatcher is ReentrancyGuard {
         address ajnaStrategy;
     }
 
+    struct OVaultRuntimeConfig {
+        address hubComposer;
+        uint32 solanaEid;
+        bool enabled;
+    }
+
     error ZeroAddress();
     error InvalidDepositAmount();
     error InvalidCodeId();
@@ -291,6 +297,7 @@ contract DeploymentBatcher is ReentrancyGuard {
     error AuctionShareOFTMismatch();
     error AuctionAmountMismatch();
     error Phase2Missing();
+    error InvalidSolanaEid();
 
     ICreatorRegistry public immutable registry;
     IUniversalBytecodeStore public immutable bytecodeStore;
@@ -322,6 +329,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     address public solanaBridgeAdapter;
     /// @notice Solana deployer/multisig wallet address (bytes32 pubkey) to receive bridged tokens.
     bytes32 public solanaDestination;
+    /// @notice OVault runtime wiring used for Solana compose orchestration.
+    OVaultRuntimeConfig private ovaultRuntimeConfig;
 
     event Phase1Deployed(
         address indexed creatorToken,
@@ -397,6 +406,7 @@ contract DeploymentBatcher is ReentrancyGuard {
     );
 
     event SolanaConfigSet(address indexed adapter, bytes32 solanaDestination);
+    event OVaultRuntimeConfigSet(address indexed hubComposer, uint32 indexed solanaEid, bool enabled);
 
     constructor(
         address _registry,
@@ -1022,6 +1032,28 @@ contract DeploymentBatcher is ReentrancyGuard {
         solanaBridgeAdapter = _adapter;
         solanaDestination = _destination;
         emit SolanaConfigSet(_adapter, _destination);
+    }
+
+    /**
+     * @notice Configure OVault runtime composer + Solana EID.
+     * @dev Enabled configs require a non-zero composer and EID.
+     */
+    function setOVaultRuntimeConfig(address _hubComposer, uint32 _solanaEid, bool _enabled) external {
+        if (msg.sender != protocolTreasury) revert NotOwner();
+        if (_enabled) {
+            if (_hubComposer == address(0)) revert ZeroAddress();
+            if (_solanaEid == 0) revert InvalidSolanaEid();
+        }
+        ovaultRuntimeConfig = OVaultRuntimeConfig({
+            hubComposer: _hubComposer,
+            solanaEid: _solanaEid,
+            enabled: _enabled
+        });
+        emit OVaultRuntimeConfigSet(_hubComposer, _solanaEid, _enabled);
+    }
+
+    function getOVaultRuntimeConfig() external view returns (OVaultRuntimeConfig memory) {
+        return ovaultRuntimeConfig;
     }
 
     // ================================

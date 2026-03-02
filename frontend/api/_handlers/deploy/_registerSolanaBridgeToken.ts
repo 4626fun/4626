@@ -65,6 +65,8 @@ type RegisterSolanaBridgeTokenResponse = {
   existingMintCompatible: boolean
   depositEligible: boolean
   redeemEligible: boolean
+  assetPeerSet: boolean
+  sharePeerSet: boolean
 }
 
 type WrapRunner = {
@@ -1473,6 +1475,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           existingMintCompatible: eligibility.existingMintCompatible,
           depositEligible: eligibility.depositEligible,
           redeemEligible: eligibility.redeemEligible,
+          assetPeerSet: eligibility.depositEligible,
+          sharePeerSet: eligibility.redeemEligible,
         },
       } satisfies ApiEnvelope<RegisterSolanaBridgeTokenResponse>)
     }
@@ -1507,6 +1511,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           existingMintCompatible: eligibility.existingMintCompatible,
           depositEligible: eligibility.depositEligible,
           redeemEligible: eligibility.redeemEligible,
+          assetPeerSet: false,
+          sharePeerSet: false,
         },
       } satisfies ApiEnvelope<RegisterSolanaBridgeTokenResponse>)
     }
@@ -1719,6 +1725,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         existingMintCompatible: eligibility.existingMintCompatible,
         depositEligible: eligibility.depositEligible,
         redeemEligible: eligibility.redeemEligible,
+        assetPeerSet: eligibility.depositEligible,
+        sharePeerSet: eligibility.redeemEligible,
       },
     } satisfies ApiEnvelope<RegisterSolanaBridgeTokenResponse>)
   } catch (err) {

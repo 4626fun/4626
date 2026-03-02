@@ -22,6 +22,9 @@ type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 type ContinueRequest = { sessionId: string }
 const STAGE_USEROP_HASH_PREFIX = 'stageUserOpHash_'
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
+const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
+const SOLANA_RESERVE_PERCENT_BPS = 3_000n
+const BPS_DENOMINATOR = 10_000n
 const SESSION_EXPIRED_RESTART_REQUIRED = 'session_expired_restart_required'
 const SESSION_EXPIRED_AT_KEY = 'sessionExpiredAt'
 const SESSION_EXPIRED_REASON_KEY = 'sessionExpiredReason'
@@ -357,6 +360,113 @@ async function readPhase2ReplayState(params: {
   }
 }
 
+async function ensureOvaultPreflight(params: {
+  req: VercelRequest
+  phase2FinalizeCalls: Array<{ to: Address; value: bigint; data: Hex }>
+  solanaOvault: unknown
+}): Promise<{
+  existingMintCompatible: boolean
+  depositEligible: boolean
+  redeemEligible: boolean
+  assetPeerSet: boolean
+  sharePeerSet: boolean
+  meshStep: 'ovault_mesh_confirmed'
+}> {
+  const defaultStatus = {
+    existingMintCompatible: true,
+    depositEligible: true,
+    redeemEligible: true,
+    assetPeerSet: true,
+    sharePeerSet: true,
+    meshStep: 'ovault_mesh_confirmed' as const,
+  }
+  const finalizeCall = params.phase2FinalizeCalls[0]
+  if (!finalizeCall) return defaultStatus
+  const finalizeInfo = extractFinalizePhase2Info(finalizeCall.data)
+  if (!finalizeInfo?.creatorToken) return defaultStatus
+
+  const bridgeToken = finalizeInfo.creatorToken
+  const expectedSolanaAmount =
+    finalizeInfo.depositAmount && finalizeInfo.depositAmount > 0n
+      ? (finalizeInfo.depositAmount * SOLANA_RESERVE_PERCENT_BPS) / BPS_DENOMINATOR
+      : null
+  const solanaOvault = isPlainObject(params.solanaOvault) ? params.solanaOvault : {}
+  const assetMintOrigin =
+    typeof solanaOvault.assetMintOrigin === 'string' && solanaOvault.assetMintOrigin.trim()
+      ? solanaOvault.assetMintOrigin.trim()
+      : 'existing'
+  const mintCompatibilityHints = isPlainObject(solanaOvault.mintCompatibilityHints)
+    ? solanaOvault.mintCompatibilityHints
+    : null
+
+  const origin = getCanonicalOrigin(params.req)
+  const cookie = typeof params.req.headers.cookie === 'string' ? params.req.headers.cookie : ''
+  const authz = typeof params.req.headers.authorization === 'string' ? params.req.headers.authorization : ''
+  const internalRegistrationSecret = String(
+    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
+      process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
+      '',
+  ).trim()
+  const failures: string[] = []
+  for (const routePath of ['/api/deploy/setupSolanaOvaultMesh', '/api/deploy/registerSolanaBridgeToken']) {
+    try {
+      const body: Record<string, unknown> = {
+        bridgeToken,
+        batcherAddress: getAddress(finalizeCall.to),
+        buildOnly: true,
+        assetMintOrigin,
+        enforceCompatibility: true,
+      }
+      if (mintCompatibilityHints) body.mintCompatibilityHints = mintCompatibilityHints
+      if (expectedSolanaAmount && expectedSolanaAmount > 0n) {
+        body.creatorToken = bridgeToken
+        body.expectedSolanaAmount = expectedSolanaAmount.toString()
+      }
+      const response = await fetch(`${origin}${routePath}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(cookie ? { Cookie: cookie } : {}),
+          ...(authz ? { Authorization: authz } : {}),
+          ...(internalRegistrationSecret ? { 'X-CV-Solana-Registration-Secret': internalRegistrationSecret } : {}),
+        },
+        body: JSON.stringify(body),
+      })
+      const rawBody = await response.text().catch(() => '')
+      const json = rawBody ? (JSON.parse(rawBody) as ApiEnvelope<any>) : null
+      if (response.ok && json?.success) {
+        const data = json.data ?? {}
+        const existingMintCompatible = data?.existingMintCompatible === true
+        const depositEligible = data?.depositEligible === true
+        const redeemEligible = data?.redeemEligible === true
+        if (!existingMintCompatible || !depositEligible || !redeemEligible) {
+          failures.push(
+            `${routePath} ovault eligibility: existingMintCompatible=${String(data?.existingMintCompatible)} ` +
+              `depositEligible=${String(data?.depositEligible)} redeemEligible=${String(data?.redeemEligible)}`,
+          )
+          continue
+        }
+        return {
+          existingMintCompatible,
+          depositEligible,
+          redeemEligible,
+          assetPeerSet: data?.assetPeerSet === false ? false : true,
+          sharePeerSet: data?.sharePeerSet === false ? false : true,
+          meshStep: 'ovault_mesh_confirmed',
+        }
+      }
+      if (response.status === 404 || response.status === 405) {
+        failures.push(`${routePath} unavailable (${response.status})`)
+        continue
+      }
+      failures.push(`${routePath} failed (${response.status}): ${json?.error ? String(json.error) : rawBody.slice(0, 160)}`)
+    } catch (error) {
+      failures.push(`${routePath} request_failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  throw new Error(`Solana preflight failed: ${failures.join(' | ')}`)
+}
+
 function asOwnerBytes(owner: Address): Hex {
   // Coinbase Smart Wallet stores EOA owners as 32-byte left-padded address bytes.
   return encodeAbiParameters([{ type: 'address' }], [owner]) as Hex
@@ -608,6 +718,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (hasPhase2Finalize && phase2FinalizeCalls.length === 0) throw new Error('phase2_finalize_calls_invalid')
     if (hasPhase3 && phase3Calls.length === 0) throw new Error('phase3_calls_invalid')
     if (hasPhase4 && phase4Calls.length === 0) throw new Error('phase4_calls_invalid')
+    const solanaOvaultConfig = isPlainObject(payload.solanaOvault) ? payload.solanaOvault : {}
 
     const isInFlight = [
       'phase1_sent',
@@ -631,6 +742,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })()
 
     const hasPostPhase2 = hasPhase3 || hasPhase4
+    const hasOvaultMeshStage = solanaOvaultConfig.enabled === true && hasPostPhase2
     const phase2ReplayState =
       phase2CoreCalls.length > 0 || hasPhase2Finalize
         ? await readPhase2ReplayState({
@@ -734,7 +846,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<any>)
     }
 
+    const runOvaultMeshGate = async (fromStep: string) => {
+      if (fromStep !== 'ovault_mesh_sent') {
+        const markedSent = await transitionDeploySession({
+          id: rec.id,
+          fromStep: fromStep as any,
+          toStep: 'ovault_mesh_sent',
+          lastUserOpHash: null,
+          lastTxHash: null,
+          lastError: null,
+        })
+        if (!markedSent) {
+          return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
+        }
+      }
+      const ovault = await ensureOvaultPreflight({
+        req,
+        phase2FinalizeCalls,
+        solanaOvault: payload.solanaOvault,
+      })
+      const markedConfirmed = await transitionDeploySession({
+        id: rec.id,
+        fromStep: 'ovault_mesh_sent',
+        toStep: 'ovault_mesh_confirmed',
+        lastError: null,
+        payloadPatch: { ovault },
+      })
+      if (!markedConfirmed) {
+        return res.status(409).json({ success: false, error: 'Concurrent modification' } satisfies ApiEnvelope<null>)
+      }
+      return res.status(200).json({
+        success: true,
+        data: {
+          id: rec.id,
+          step: 'ovault_mesh_confirmed',
+          ovault,
+        },
+      } satisfies ApiEnvelope<any>)
+    }
+
     const runAfterPhase2 = async (fromStep: string) => {
+      if (hasPostPhase2 && hasOvaultMeshStage && fromStep !== 'ovault_mesh_confirmed') {
+        return runOvaultMeshGate(fromStep)
+      }
       if (hasPostPhase2) return sendNextAfterPhase2()
       return completeFrom(fromStep)
     }
@@ -819,11 +973,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (started) return started
     }
     if (rec.step === 'phase2_confirmed' && hasPostPhase2) {
-      const started = await sendNextAfterPhase2()
+      const started = hasOvaultMeshStage
+        ? await runAfterPhase2('phase2_confirmed')
+        : await sendNextAfterPhase2()
       if (started) return started
     }
     if (rec.step === 'phase2_confirmed' && !hasPostPhase2) {
       return await runAfterPhase2('phase2_confirmed')
+    }
+    if (rec.step === 'ovault_mesh_sent') {
+      return await runOvaultMeshGate('ovault_mesh_sent')
+    }
+    if (rec.step === 'ovault_mesh_confirmed' && hasPostPhase2) {
+      const started = await sendNextAfterPhase2()
+      if (started) return started
     }
     if (rec.step === 'phase3_confirmed' && hasPhase4) {
       return await sendStage('phase4_sent', phase4Calls, true)

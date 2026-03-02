@@ -82,7 +82,6 @@ const DEFAULT_AJNA_WEIGHT_BPS = 5_000n // 50% of deployable amount
 const DEFAULT_IDLE_PERCENT_BPS = 1_000n // 10% explicit idle target
 const DEFAULT_SOLANA_RESERVE_PERCENT_BPS = 3_000n // 30% held idle for off-chain Solana step
 const DEFAULT_MIN_IDLE_PERCENT_BPS = DEFAULT_IDLE_PERCENT_BPS + DEFAULT_SOLANA_RESERVE_PERCENT_BPS // 40%
-const DEFAULT_CCA_DURATION_BLOCKS = 302_400n // ~7 days on Base at ~2s blocks (must match CCALaunchStrategy defaultDuration)
 const DEFAULT_SHARE_OFT_VANITY_SUFFIX = '4626'
 const DEFAULT_SHARE_OFT_VANITY_MAX_TRIES = 1_000_000
 const BATCHER_PHASE1_WITH_SALT_SELECTOR = '297cb1e6'
@@ -621,26 +620,6 @@ function formatEthPerTokenForUi(weiPerToken: bigint): string {
   const compact = formatWithMaxDecimals(DEFAULT_MAX_DECIMALS)
   if (compact === '0' && weiPerToken > 0n) return formatWithMaxDecimals(FULL_MAX_DECIMALS)
   return compact
-}
-
-function encodeUniswapCcaLinearSteps(durationBlocks: bigint): Hex {
-  const MPS = 10_000_000n
-  if (durationBlocks <= 0n) return '0x'
-
-  const mpsLow = MPS / durationBlocks
-  const remainder = MPS - mpsLow * durationBlocks
-  const mpsHigh = mpsLow + 1n
-
-  const highBlocks = remainder
-  const lowBlocks = durationBlocks - highBlocks
-
-  const packStep = (mps: bigint, blockDelta: bigint) =>
-    encodePacked(['uint24', 'uint40'], [Number(mps), Number(blockDelta)]) as Hex
-
-  const steps: Hex[] = []
-  if (highBlocks > 0n) steps.push(packStep(mpsHigh, highBlocks))
-  if (lowBlocks > 0n) steps.push(packStep(mpsLow, lowBlocks))
-  return concatHex(steps)
 }
 
 function deriveBaseSalt(params: { creatorToken: Address; owner: Address; chainId: number; version: string }): Hex {
@@ -2320,6 +2299,7 @@ function DeployVaultBatcher({
       }
       if (step === 'created' || step.startsWith('phase1')) setPhase('phase1')
       else if (step.startsWith('phase2')) setPhase('phase2')
+      else if (step.startsWith('ovault_mesh')) setPhase('phase3')
       else if (step.startsWith('phase3')) setPhase('phase3')
       else if (step.startsWith('phase4')) setPhase('phase4')
       if (lastTxHash && isHexHash(lastTxHash)) {
@@ -2349,7 +2329,9 @@ function DeployVaultBatcher({
         clearDeploySession()
         throw new Error(String(sjson.data?.lastError ?? 'Server deploy failed'))
       }
-      if (step.endsWith('_sent') || step === 'cleanup_sent') {
+      const isUserOpBackedSentStep =
+        (step.endsWith('_sent') && step !== 'ovault_mesh_sent') || step === 'cleanup_sent'
+      if (isUserOpBackedSentStep) {
         const hasUserOpHash = isHexHash(lastUserOpHash)
         if (!hasUserOpHash) {
           if (sentStepWithoutHash !== step) {
@@ -2377,7 +2359,7 @@ function DeployVaultBatcher({
       if (Date.now() - started > 10 * 60 * 1000) {
         throw new Error('Server deploy did not complete in time. Check status and retry continue.')
       }
-      if (step.endsWith('_sent') || step === 'cleanup_sent') {
+      if (isUserOpBackedSentStep) {
         backoff = true
       }
       if (backoff) delayMs = Math.min(delayMs * 2, 8000)
@@ -2965,7 +2947,8 @@ function DeployVaultBatcher({
 
       const depositAmount = minFirstDeposit
       const minimumTotalIdle = (depositAmount * DEFAULT_MIN_IDLE_PERCENT_BPS) / 10_000n
-      const auctionSteps = encodeUniswapCcaLinearSteps(DEFAULT_CCA_DURATION_BLOCKS)
+      // Schedule is enforced onchain by CCALaunchStrategy; caller-provided steps are ignored.
+      const auctionSteps = '0x' as Hex
       // Safety: The deployment batcher tries to call `CreatorCoin.setPayoutRecipient(payoutRecipient)` when non-zero.
       // Zora Creator Coins restrict `setPayoutRecipient` to the coin owner, so that internal call reverts (msg.sender=batcher).
       // We always pass `address(0)` to the batcher and, when needed, set payoutRecipient from the identity wallet separately.
@@ -3341,7 +3324,6 @@ function DeployVaultBatcher({
         const ajnaWeightBps = DEFAULT_AJNA_WEIGHT_BPS
         if (charmWeightBps <= 0n) throw new Error('Charm strategy is required')
         if (ajnaWeightBps <= 0n) throw new Error('Ajna strategy is required')
-        const charmLabel = (depositSymbol || '').toLowerCase()
 
         // If the CREATOR/USDC v3 pool doesn't exist yet, `deployPhase3Strategies` needs a non-zero
         // `initialSqrtPriceX96` to create+initialize it.
@@ -3459,8 +3441,8 @@ function DeployVaultBatcher({
           vault: expected.vault,
           version: deploymentVersion,
           initialSqrtPriceX96: marketV3InitialSqrtPriceX96 ?? fallbackV3InitialSqrtPriceX96,
-          charmVaultName: charmLabel ? `4626: ${charmLabel}/USDC` : '4626: CREATOR/USDC',
-          charmVaultSymbol: charmLabel ? `CV-${charmLabel}-USDC` : 'CV-CREATOR-USDC',
+          charmVaultName: '4626.fun Strategy: Charm',
+          charmVaultSymbol: 'AKITA-USDC',
           charmWeightBps,
           ajnaWeightBps,
           enableAutoAllocate: false,
@@ -5044,6 +5026,13 @@ function DeployVaultBatcher({
             Addresses are deterministic on Base. Click to view on BaseScan.
           </div>
           <div className="rounded-md border border-white/5 bg-black/30 px-3 py-2 mb-3 space-y-1">
+            <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide">Token roles</div>
+            <div className="text-[11px] text-zinc-400 leading-relaxed">
+              Underlying creator coin ({depositSymbol || 'TOKEN'}) is what gets deposited and withdrawn. Vault share token (
+              {shareSymbol || 'ShareOFT'}) is a receipt token that gets minted on deposit and burned on redeem.
+            </div>
+          </div>
+          <div className="rounded-md border border-white/5 bg-black/30 px-3 py-2 mb-3 space-y-1">
             <AddressRow label="Active batcher" address={batcherAddress} />
             <div className="flex items-center justify-between gap-4 text-[11px]">
               <div className="text-zinc-500">Deploy mode</div>
@@ -5055,9 +5044,10 @@ function DeployVaultBatcher({
             <div className="py-3">
               <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 1</div>
               <div className="space-y-2">
+                <AddressRow label="Underlying creator coin" address={creatorToken} />
                 <AddressRow label="Vault" address={expected?.vault} />
                 <AddressRow label="Wrapper" address={expected?.wrapper} />
-                <AddressRow label="Share token" address={expected?.shareOFT} />
+                <AddressRow label="Vault share token (ShareOFT)" address={expected?.shareOFT} />
               </div>
             </div>
 

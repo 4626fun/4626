@@ -6,6 +6,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ICreatorRegistry} from "../../interfaces/core/ICreatorRegistry.sol";
+import {ICreatorOVaultComposer} from "../../interfaces/ovault/ICreatorOVaultComposer.sol";
 import {ILayerZeroComposer} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroComposer.sol";
 import {OFTComposeMsgCodec} from "@layerzerolabs/oft-evm/contracts/libs/OFTComposeMsgCodec.sol";
 
@@ -24,7 +25,7 @@ interface ICreatorOVaultWrapperComposer {
  *      balance-delta invariants so a compose packet can never spend or mint more than
  *      the packet-provided OFT amount.
  */
-contract OVaultHubComposer is ILayerZeroComposer, Ownable, ReentrancyGuard {
+contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint8 public constant ACTION_DEPOSIT = 1;
@@ -33,9 +34,30 @@ contract OVaultHubComposer is ILayerZeroComposer, Ownable, ReentrancyGuard {
     ICreatorRegistry public immutable registry;
     address public immutable endpoint;
 
+    struct CreatorMesh {
+        address vault;
+        address assetMeshToken;
+        address shareMeshToken;
+        uint32 solanaEid;
+        bytes32 solanaAssetPeer;
+        bytes32 solanaSharePeer;
+        bool paused;
+    }
+
+    mapping(address => CreatorMesh) internal creatorMeshes;
     mapping(address => bool) public allowedComposeSenders;
 
     event ComposeSenderAllowed(address indexed sender, bool allowed);
+    event CreatorMeshConfigured(
+        address indexed creatorToken,
+        address indexed vault,
+        address assetMeshToken,
+        address shareMeshToken,
+        uint32 solanaEid,
+        bytes32 solanaAssetPeer,
+        bytes32 solanaSharePeer
+    );
+    event CreatorMeshPaused(address indexed creatorToken, bool paused);
     event DepositComposed(
         bytes32 indexed guid,
         address indexed sourceOft,
@@ -69,6 +91,12 @@ contract OVaultHubComposer is ILayerZeroComposer, Ownable, ReentrancyGuard {
     error WrapperMismatch(address expected, address actual);
     error WrapperCreatorTokenMismatch(address expected, address actual);
     error WrapperShareOftMismatch(address expected, address actual);
+    error CreatorMeshPausedError(address creatorToken);
+    error CreatorMeshVaultMismatch(address expected, address actual);
+    error CreatorMeshAssetTokenMismatch(address expected, address actual);
+    error CreatorMeshShareTokenMismatch(address expected, address actual);
+    error CreatorMeshSrcEidMismatch(uint32 expected, uint32 actual);
+    error CreatorMeshPeerMismatch(bytes32 expected, bytes32 actual);
     error InsufficientComposerBalance(address token, uint256 available, uint256 requiredAmount);
     error InputSpendInvariantFailed(address token, uint256 beforeBalance, uint256 afterBalance, uint256 expectedSpend);
     error OutputMintInvariantFailed(address token, uint256 beforeBalance, uint256 afterBalance, uint256 expectedMint);
@@ -86,6 +114,66 @@ contract OVaultHubComposer is ILayerZeroComposer, Ownable, ReentrancyGuard {
         if (sender == address(0)) revert ZeroAddress();
         allowedComposeSenders[sender] = allowed;
         emit ComposeSenderAllowed(sender, allowed);
+    }
+
+    function configureCreatorMesh(
+        address creatorToken,
+        address vault,
+        address assetMeshToken,
+        address shareMeshToken,
+        uint32 solanaEid,
+        bytes32 solanaAssetPeer,
+        bytes32 solanaSharePeer
+    ) external override onlyOwner {
+        if (
+            creatorToken == address(0) || vault == address(0) || assetMeshToken == address(0) || shareMeshToken == address(0)
+        ) {
+            revert ZeroAddress();
+        }
+        creatorMeshes[creatorToken] = CreatorMesh({
+            vault: vault,
+            assetMeshToken: assetMeshToken,
+            shareMeshToken: shareMeshToken,
+            solanaEid: solanaEid,
+            solanaAssetPeer: solanaAssetPeer,
+            solanaSharePeer: solanaSharePeer,
+            paused: false
+        });
+        emit CreatorMeshConfigured(
+            creatorToken, vault, assetMeshToken, shareMeshToken, solanaEid, solanaAssetPeer, solanaSharePeer
+        );
+    }
+
+    function pauseCreatorMesh(address creatorToken, bool paused) external override onlyOwner {
+        if (creatorToken == address(0)) revert ZeroAddress();
+        creatorMeshes[creatorToken].paused = paused;
+        emit CreatorMeshPaused(creatorToken, paused);
+    }
+
+    function creatorMesh(address creatorToken)
+        external
+        view
+        override
+        returns (
+            address vault,
+            address assetMeshToken,
+            address shareMeshToken,
+            uint32 solanaEid,
+            bytes32 solanaAssetPeer,
+            bytes32 solanaSharePeer,
+            bool paused
+        )
+    {
+        CreatorMesh memory mesh = creatorMeshes[creatorToken];
+        return (
+            mesh.vault,
+            mesh.assetMeshToken,
+            mesh.shareMeshToken,
+            mesh.solanaEid,
+            mesh.solanaAssetPeer,
+            mesh.solanaSharePeer,
+            mesh.paused
+        );
     }
 
     function lzCompose(
@@ -113,8 +201,16 @@ contract OVaultHubComposer is ILayerZeroComposer, Ownable, ReentrancyGuard {
         if (sourceOft != _from) revert SourceOftMismatch(sourceOft, _from);
 
         address shareOft = _validateCreatorBindings(creatorToken, wrapper);
-        address composeFrom = OFTComposeMsgCodec.bytes32ToAddress(OFTComposeMsgCodec.composeFrom(_message));
+        bytes32 composeFromBytes32 = OFTComposeMsgCodec.composeFrom(_message);
+        address composeFrom = OFTComposeMsgCodec.bytes32ToAddress(composeFromBytes32);
         uint32 srcEid = OFTComposeMsgCodec.srcEid(_message);
+        _enforceMeshInvariants({
+            action: action,
+            creatorToken: creatorToken,
+            sourceOft: _from,
+            srcEid: srcEid,
+            composeFrom: composeFromBytes32
+        });
 
         if (action == ACTION_DEPOSIT) {
             uint256 sharesOut = _composeDeposit(creatorToken, shareOft, wrapper, receiver, amountIn, minOut);
@@ -222,5 +318,39 @@ contract OVaultHubComposer is ILayerZeroComposer, Ownable, ReentrancyGuard {
         shareOft = registry.getShareOFTForToken(creatorToken);
         address wrapperShare = ICreatorOVaultWrapperComposer(wrapper).shareOFT();
         if (wrapperShare != shareOft) revert WrapperShareOftMismatch(shareOft, wrapperShare);
+    }
+
+    function _enforceMeshInvariants(
+        uint8 action,
+        address creatorToken,
+        address sourceOft,
+        uint32 srcEid,
+        bytes32 composeFrom
+    ) internal view {
+        CreatorMesh memory mesh = creatorMeshes[creatorToken];
+        // Backwards compatibility: if no explicit mesh config exists, keep legacy flow.
+        if (mesh.vault == address(0)) return;
+
+        if (mesh.paused) revert CreatorMeshPausedError(creatorToken);
+        if (mesh.solanaEid != 0 && srcEid != mesh.solanaEid) revert CreatorMeshSrcEidMismatch(mesh.solanaEid, srcEid);
+
+        address expectedVault = registry.getVaultForToken(creatorToken);
+        if (expectedVault != mesh.vault) revert CreatorMeshVaultMismatch(mesh.vault, expectedVault);
+
+        if (action == ACTION_DEPOSIT) {
+            if (sourceOft != mesh.assetMeshToken) revert CreatorMeshAssetTokenMismatch(mesh.assetMeshToken, sourceOft);
+            if (mesh.solanaAssetPeer != bytes32(0) && composeFrom != mesh.solanaAssetPeer) {
+                revert CreatorMeshPeerMismatch(mesh.solanaAssetPeer, composeFrom);
+            }
+            return;
+        }
+
+        if (action == ACTION_REDEEM) {
+            if (sourceOft != mesh.shareMeshToken) revert CreatorMeshShareTokenMismatch(mesh.shareMeshToken, sourceOft);
+            if (mesh.solanaSharePeer != bytes32(0) && composeFrom != mesh.solanaSharePeer) {
+                revert CreatorMeshPeerMismatch(mesh.solanaSharePeer, composeFrom);
+            }
+            return;
+        }
     }
 }

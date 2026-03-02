@@ -597,7 +597,10 @@ export function Vault() {
                       </span>
                     </h1>
                     <p className="text-zinc-600 text-sm font-light mono mt-3">
-                      {underlyingSymbol} → {shareSymbol}
+                      Deposit {underlyingSymbol || 'underlying token'} to mint {shareSymbol || 'vault shares'}
+                    </p>
+                    <p className="text-zinc-700 text-xs font-light mono mt-1">
+                      Redeem {shareSymbol || 'vault shares'} to withdraw {underlyingSymbol || 'underlying token'}
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px]">
                       <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-zinc-400">

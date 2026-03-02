@@ -227,6 +227,22 @@ const FAQ_SECTIONS: FaqSection[] = [
         ),
       },
       {
+        id: 'share-vs-underlying',
+        question: `Is ${SHARE_TOKEN} the same as the creator coin?`,
+        search: 'shareoft underlying creator coin difference',
+        answer: (
+          <>
+            <p>
+              No. The creator coin is the <span className="text-white">underlying asset</span> you deposit into (and withdraw from) the vault.
+            </p>
+            <p>
+              <span className="mono text-brand-accent">{SHARE_TOKEN}</span> is the vault share receipt token that gets minted on deposit and burned on
+              redeem. If bridging is enabled, it applies to the share token path.
+            </p>
+          </>
+        ),
+      },
+      {
         id: 'min-first-deposit',
         question: 'Is there a minimum deposit?',
         search: 'minimum first deposit 5m',

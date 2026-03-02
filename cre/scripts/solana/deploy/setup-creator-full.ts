@@ -62,7 +62,7 @@ function parseArgs(): {
   let hubCreatorCoin = '';
   let hubShareToken = '';
   let keeperPubkey: string | null = null;
-  let feeBps = 690;
+  let feeBps = 0;
   let decimals = 9;
   let ammPrograms: string[] = [];
   let flushThreshold = '0';
@@ -143,6 +143,18 @@ function log(msg: string): void {
 // ---------------------------------------------------------------------------
 
 const config = parseArgs();
+if (config.feeBps !== 0) {
+  process.stderr.write(
+    'error: TransferHook mint setup requires --fee-bps 0 for OVault compatibility.\n',
+  );
+  process.exit(1);
+}
+if (readAdapterModeHint() === 'oft-adapter') {
+  process.stderr.write(
+    'error: TransferHook mints must use regular-oft mode; oft-adapter is not allowed.\n',
+  );
+  process.exit(1);
+}
 const rpcUrl = process.env.SOLANA_RPC_URL ?? 'https://api.mainnet-beta.solana.com';
 const connection = new Connection(rpcUrl, 'confirmed');
 const payer = loadKeeperKeypair();

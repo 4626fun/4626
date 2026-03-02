@@ -4,6 +4,60 @@ Chainlink Runtime Environment (CRE) workflows that automate critical onchain ope
 
 **A single workflow manages every registered vault automatically.**
 
+## Hackathon Submission Quick Links
+
+- Requirement mapping: `docs/hackathon/chainlink-cre-submission.md`
+- 3-5 minute walkthrough script: `docs/hackathon/video-script.md`
+- Simulation evidence logs: `docs/hackathon/evidence/`
+- Public-source packaging runbook: `docs/hackathon/public-source-packaging.md`
+
+## Files Using Chainlink
+
+Core CRE workflow files:
+- `cre/cre-workflows/project.yaml`
+- `cre/cre-workflows/keepr-queue/main.ts`
+- `cre/cre-workflows/keepr-queue/workflow.yaml`
+- `cre/cre-workflows/vault-keeper/main.ts`
+- `cre/cre-workflows/vault-keeper/workflow.yaml`
+- `cre/cre-workflows/auction-settlement/main.ts`
+- `cre/cre-workflows/auction-settlement/workflow.yaml`
+- `cre/cre-workflows/payout-integrity/main.ts`
+- `cre/cre-workflows/payout-integrity/workflow.yaml`
+
+CRE-to-app orchestration bridge files:
+- `frontend/api/_handlers/cre/vaults/_active.ts`
+- `frontend/api/_handlers/cre/keeper/_tend.ts`
+- `frontend/api/_handlers/cre/keeper/_report.ts`
+- `frontend/api/_handlers/cre/keeper/_sweep.ts`
+- `frontend/api/_handlers/cre/keeper/_markSettled.ts`
+- `frontend/api/_handlers/cre/keeper/_alert.ts`
+- `frontend/api/_handlers/cre/keeper/_aiAssess.ts`
+- `frontend/api/_handlers/_routes.ts`
+- `frontend/server/agent/eliza/llm.ts`
+
+## Simulation-First Proof (Hackathon)
+
+All commands below were run from `cre/cre-workflows` and logs were saved under `docs/hackathon/evidence`.
+
+```bash
+# Terminal A: start local mock API bridge
+set -a && source .env && set +a
+node ../scripts/hackathon/mock-cre-api-server.mjs
+
+# Terminal B: DeFi + AI orchestration proof
+cre workflow simulate ./payout-integrity --target local-simulation \
+  | tee ../../docs/hackathon/evidence/cre-payout-integrity-local-simulation.log
+
+# Terminal B: Queue orchestration proof
+cre workflow simulate ./keepr-queue --target local-simulation \
+  | tee ../../docs/hackathon/evidence/cre-keepr-queue-local-simulation.log
+```
+
+Expected output highlights:
+- `payout-integrity`: `AI assessment: enabled=true verdict=critical confidence=0.93`
+- `payout-integrity`: `alertsSent: 2` with deterministic alerts in result payload
+- `keepr-queue`: `processed=0 succeeded=0 failed=0 retried=0 skipped=0`
+
 ## What It Does
 
 Every 5 minutes, the unified `4626` workflow runs three tasks in sequence:
@@ -338,6 +392,7 @@ cre/
 | `/api/cre/keeper/sweep` | POST | HTTP bridge — calls `sweepCurrency()` + `sweepUnsoldTokens()` |
 | `/api/cre/keeper/mark-settled` | POST | Records `graduated_at` / `settled_at` timestamps in DB |
 | `/api/cre/keeper/alert` | POST | Receives alerts from CRE workflows, forwards to webhook |
+| `/api/cre/keeper/aiAssess` | POST | AI advisory classification endpoint for payout-integrity (deterministic checks remain authoritative) |
 | `/api/keepr/actions/pending` | GET | Returns pending queue actions |
 | `/api/keepr/actions/updateStatus` | POST | Updates action status |
 
@@ -359,10 +414,10 @@ cd cre/cre-workflows/keepr-queue && bun install
 
 # Simulate locally (requires cre login)
 cd cre/cre-workflows
-cre workflow simulate keepr-queue --target staging-settings
-cre workflow simulate vault-keeper --target staging-settings
-cre workflow simulate auction-settlement --target staging-settings
-cre workflow simulate payout-integrity --target staging-settings
+cre workflow simulate keepr-queue --target local-simulation
+cre workflow simulate vault-keeper --target local-simulation
+cre workflow simulate auction-settlement --target local-simulation
+cre workflow simulate payout-integrity --target local-simulation
 
 # Deploy to DON (requires cre login + funded account)
 cre workflow deploy keepr-queue --target production-settings

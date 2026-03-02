@@ -1069,6 +1069,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           hasPhase2Finalize,
           hasPhase3: phase3Calls.length > 0,
           hasPhase4: phase4Calls.length > 0,
+          hasOvaultMesh: Boolean(solanaOvault?.enabled) && (phase3Calls.length > 0 || phase4Calls.length > 0),
         },
         version: String(body.version ?? ''),
         phase1Calls,

@@ -12,6 +12,7 @@ import {Script, console} from "forge-std/Script.sol";
  *         - LotteryManager authorizes SolanaBridgeAdapter as swap contract
  *         - Registry points to LotteryManager
  *         - (Optional) Registry sets Solana chain EID + bytes32 remote OFT peer
+ *         - (Optional) Registry sets per-creator OVault mesh metadata
  *
  * @dev This script is idempotent — safe to re-run.
  *
@@ -62,12 +63,23 @@ interface ILotteryManager {
 }
 
 interface IRegistry {
+    struct OmnichainVaultMeshConfig {
+        uint32 solanaEid;
+        address hubComposer;
+        address assetMeshToken;
+        address shareMeshToken;
+        bytes32 solanaAssetMint;
+        bool enabled;
+    }
+
     function owner() external view returns (address);
     function setAuthorizedFactory(address factory, bool authorized) external;
     function setChainIdToEid(uint256 chainId, uint32 eid) external;
     function getEidForChainId(uint256 chainId) external view returns (uint32);
     function setRemoteOFTPeerBytes32(address token, uint32 chainEid, bytes32 remoteOFT) external;
     function getRemoteOFTPeerBytes32(address token, uint32 chainEid) external view returns (bytes32);
+    function setOmnichainVaultMesh(address token, OmnichainVaultMeshConfig calldata cfg) external;
+    function getOmnichainVaultMesh(address token) external view returns (OmnichainVaultMeshConfig memory);
 }
 
 contract OperationalWiring is Script {
@@ -118,14 +130,28 @@ contract OperationalWiring is Script {
         uint32 solanaEid = uint32(vm.envOr("SOLANA_EID", uint256(0)));
         address solanaCreatorToken = vm.envOr("SOLANA_CREATOR_TOKEN", address(0));
         bytes32 solanaRemoteOftPeer = vm.envOr("SOLANA_REMOTE_OFT_PEER_BYTES32", bytes32(0));
+        address ovaultHubComposer = vm.envOr("OVAULT_HUB_COMPOSER", address(0));
+        address ovaultAssetMeshToken = vm.envOr("OVAULT_ASSET_MESH_TOKEN", address(0));
+        address ovaultShareMeshToken = vm.envOr("OVAULT_SHARE_MESH_TOKEN", address(0));
+        bytes32 ovaultSolanaAssetMint = vm.envOr("OVAULT_SOLANA_ASSET_MINT", bytes32(0));
+        bool ovaultMeshEnabled = vm.envOr("OVAULT_MESH_ENABLED", uint256(1)) == 1;
         bool wantsSolanaChainMapping = solanaChainId > 0;
         bool wantsSolanaPeerWiring = solanaCreatorToken != address(0) || solanaRemoteOftPeer != bytes32(0);
-        if (wantsSolanaChainMapping || wantsSolanaPeerWiring) {
+        bool wantsOvaultMeshWiring = ovaultHubComposer != address(0) || ovaultAssetMeshToken != address(0)
+            || ovaultShareMeshToken != address(0) || ovaultSolanaAssetMint != bytes32(0);
+        if (wantsSolanaChainMapping || wantsSolanaPeerWiring || wantsOvaultMeshWiring) {
             require(solanaEid != 0, "SOLANA_EID required when wiring Solana registry config");
         }
         if (wantsSolanaPeerWiring) {
             require(solanaCreatorToken != address(0), "SOLANA_CREATOR_TOKEN required");
             require(solanaRemoteOftPeer != bytes32(0), "SOLANA_REMOTE_OFT_PEER_BYTES32 required");
+        }
+        if (wantsOvaultMeshWiring) {
+            require(solanaCreatorToken != address(0), "SOLANA_CREATOR_TOKEN required for OVAULT mesh wiring");
+            require(ovaultHubComposer != address(0), "OVAULT_HUB_COMPOSER required");
+            require(ovaultAssetMeshToken != address(0), "OVAULT_ASSET_MESH_TOKEN required");
+            require(ovaultShareMeshToken != address(0), "OVAULT_SHARE_MESH_TOKEN required");
+            require(ovaultSolanaAssetMint != bytes32(0), "OVAULT_SOLANA_ASSET_MINT required");
         }
 
         console.log("");
@@ -253,8 +279,8 @@ contract OperationalWiring is Script {
         // ────────────────────────────────────────────────────────────────
 
         console.log("\n[8/8] Registry: Optional Solana bytes32 peer wiring...");
-        if (!wantsSolanaChainMapping && !wantsSolanaPeerWiring) {
-            console.log(unicode"   [skip] No SOLANA_* peer wiring env provided");
+        if (!wantsSolanaChainMapping && !wantsSolanaPeerWiring && !wantsOvaultMeshWiring) {
+            console.log(unicode"   [skip] No SOLANA_* / OVAULT_* wiring env provided");
         } else {
             if (wantsSolanaChainMapping) {
                 uint32 currentEid = registry.getEidForChainId(solanaChainId);
@@ -273,6 +299,28 @@ contract OperationalWiring is Script {
                 } else {
                     registry.setRemoteOFTPeerBytes32(solanaCreatorToken, solanaEid, solanaRemoteOftPeer);
                     console.log(unicode"   ✓ setRemoteOFTPeerBytes32 configured");
+                }
+            }
+
+            if (wantsOvaultMeshWiring) {
+                IRegistry.OmnichainVaultMeshConfig memory desiredCfg = IRegistry.OmnichainVaultMeshConfig({
+                    solanaEid: solanaEid,
+                    hubComposer: ovaultHubComposer,
+                    assetMeshToken: ovaultAssetMeshToken,
+                    shareMeshToken: ovaultShareMeshToken,
+                    solanaAssetMint: ovaultSolanaAssetMint,
+                    enabled: ovaultMeshEnabled
+                });
+                IRegistry.OmnichainVaultMeshConfig memory currentCfg = registry.getOmnichainVaultMesh(solanaCreatorToken);
+                bool sameCfg = currentCfg.solanaEid == desiredCfg.solanaEid && currentCfg.hubComposer == desiredCfg.hubComposer
+                    && currentCfg.assetMeshToken == desiredCfg.assetMeshToken
+                    && currentCfg.shareMeshToken == desiredCfg.shareMeshToken
+                    && currentCfg.solanaAssetMint == desiredCfg.solanaAssetMint && currentCfg.enabled == desiredCfg.enabled;
+                if (sameCfg) {
+                    console.log(unicode"   [skip] Omnichain OVault mesh already configured");
+                } else {
+                    registry.setOmnichainVaultMesh(solanaCreatorToken, desiredCfg);
+                    console.log(unicode"   ✓ setOmnichainVaultMesh configured");
                 }
             }
         }
@@ -299,7 +347,7 @@ contract OperationalWiring is Script {
         console.log(unicode"  ✓ LotteryManager sponsorship guardrails configured");
         console.log(unicode"  ✓ LotteryManager authorized: SolanaBridgeAdapter, TaxHook");
         console.log(unicode"  ✓ Registry factories confirmed");
-        console.log(unicode"  ✓ Optional Solana bytes32 peer wiring applied when SOLANA_* envs are set");
+        console.log(unicode"  ✓ Optional Solana bytes32 peer + OVault mesh wiring applied when envs are set");
         console.log("");
         console.log(
             unicode"┌─────────────────────────────────────────────────────────────────┐"
