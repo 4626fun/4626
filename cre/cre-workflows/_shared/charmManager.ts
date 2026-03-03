@@ -116,6 +116,11 @@ function charmDedupeKey(
   return `vault:${vaultAddress.toLowerCase()}:strategy:${strategyAddress.toLowerCase()}:action:strategy.charm.rebalance:band:${tickBand}`
 }
 
+function isChainReadLimitError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes("CallLimit limited")
+}
+
 function readOraclePriceContext(
   runtime: Runtime<CharmManagerConfig>,
   evmClient: ReturnType<typeof createEvmClientForChain>,
@@ -193,42 +198,72 @@ function readCharmStrategiesForVault(
 ): CharmStrategyContext[] {
   const out: CharmStrategyContext[] = []
   for (let i = 0; i < runtime.config.maxStrategiesPerVault; i += 1) {
-    const strategyAddress = decodeAddress(
-      VaultStrategyViewABI,
-      "strategyList",
-      readContractBytes(runtime, evmClient, {
-        address: vaultAddress,
-        abi: VaultStrategyViewABI,
-        functionName: "strategyList",
-        args: [BigInt(i)],
-      }),
-    )
+    let strategyAddress: `0x${string}`
+    try {
+      strategyAddress = decodeAddress(
+        VaultStrategyViewABI,
+        "strategyList",
+        readContractBytes(runtime, evmClient, {
+          address: vaultAddress,
+          abi: VaultStrategyViewABI,
+          functionName: "strategyList",
+          args: [BigInt(i)],
+        }),
+      )
+    } catch (error) {
+      if (isChainReadLimitError(error)) {
+        runtime.log(`Stopping Charm strategy scan for ${vaultAddress}: chain read call limit reached`)
+        break
+      }
+      throw error
+    }
     if (strategyAddress.toLowerCase() === zeroAddress.toLowerCase()) break
 
-    const weight = decodeBigInt(
-      VaultStrategyViewABI,
-      "strategyWeights",
-      readContractBytes(runtime, evmClient, {
-        address: vaultAddress,
-        abi: VaultStrategyViewABI,
-        functionName: "strategyWeights",
-        args: [strategyAddress],
-      }),
-    )
+    let weight: bigint
+    try {
+      weight = decodeBigInt(
+        VaultStrategyViewABI,
+        "strategyWeights",
+        readContractBytes(runtime, evmClient, {
+          address: vaultAddress,
+          abi: VaultStrategyViewABI,
+          functionName: "strategyWeights",
+          args: [strategyAddress],
+        }),
+      )
+    } catch (error) {
+      if (isChainReadLimitError(error)) {
+        runtime.log(`Stopping Charm strategy scan for ${vaultAddress}: chain read call limit reached`)
+        break
+      }
+      throw error
+    }
     if (weight === 0n) continue
 
-    const charmVaultAddress = decodeAddress(
-      CharmStrategyViewABI,
-      "charmVault",
-      readContractBytes(runtime, evmClient, {
-        address: strategyAddress,
-        abi: CharmStrategyViewABI,
-        functionName: "charmVault",
-      }),
-    )
-    if (charmVaultAddress.toLowerCase() === zeroAddress.toLowerCase()) continue
+    try {
+      const charmVaultAddress = decodeAddress(
+        CharmStrategyViewABI,
+        "charmVault",
+        readContractBytes(runtime, evmClient, {
+          address: strategyAddress,
+          abi: CharmStrategyViewABI,
+          functionName: "charmVault",
+        }),
+      )
+      if (charmVaultAddress.toLowerCase() === zeroAddress.toLowerCase()) continue
 
-    out.push({ strategyAddress, charmVaultAddress })
+      out.push({ strategyAddress, charmVaultAddress })
+    } catch (error) {
+      if (isChainReadLimitError(error)) {
+        runtime.log(`Stopping Charm strategy scan for ${vaultAddress}: chain read call limit reached`)
+        break
+      }
+      const message = error instanceof Error ? error.message : String(error)
+      runtime.log(
+        `Skipping non-Charm/unreadable strategy ${strategyAddress} for vault ${vaultAddress}: ${message}`,
+      )
+      continue
+    }
   }
   return out
 }
@@ -310,51 +345,60 @@ export function evaluateAndEnqueueCharmActions(
 
       const strategies = readCharmStrategiesForVault(runtime, evmClient, vault.vaultAddress)
       for (const strategy of strategies) {
-        const centerTick = readCharmCenterTick(runtime, evmClient, strategy, oracleContext)
-        if (centerTick === null) {
+        try {
+          const centerTick = readCharmCenterTick(runtime, evmClient, strategy, oracleContext)
+          if (centerTick === null) {
+            skippedActions += 1
+            continue
+          }
+
+          const deviationBps = tickPriceChangeBps({
+            currentTick: oracleContext.normalizedTick,
+            referenceTick: centerTick,
+          })
+          if (deviationBps < runtime.config.priceChangeTriggerBps) {
+            skippedActions += 1
+            continue
+          }
+
+          const actionType = "strategy.charm.rebalance"
+          const actionPayload = {
+            action: actionType,
+            actionType,
+            vaultAddress: vault.vaultAddress,
+            strategyAddress: strategy.strategyAddress,
+            charmVaultAddress: strategy.charmVaultAddress,
+            oracleAddress: vault.oracleAddress,
+            triggerTick: oracleContext.normalizedTick,
+            referenceTick: centerTick,
+            computedDeviationBps: deviationBps,
+            timestamp: runtime.now().toISOString(),
+          } satisfies Record<string, unknown>
+
+          const actionId = runtime.runInNodeMode(
+            (nr: NodeRuntime<CharmManagerConfig>) =>
+              enqueueStrategyAction(nr, httpClient, apiKey, {
+                vaultAddress: vault.vaultAddress,
+                groupId: vault.groupId,
+                actionType,
+                dedupeKey: charmDedupeKey(vault.vaultAddress, strategy.strategyAddress, centerTick),
+                action: actionPayload,
+              }),
+            consensusIdenticalAggregation(),
+          )().result()
+
+          enqueuedActions += 1
+          runtime.log(
+            `Enqueued Charm rebalance action id=${actionId} vault=${vault.vaultAddress} strategy=${strategy.strategyAddress}`,
+          )
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          runtime.log(
+            `Skipping Charm strategy ${strategy.strategyAddress} for vault ${vault.vaultAddress}: ${message}`,
+          )
           skippedActions += 1
           continue
         }
-
-        const deviationBps = tickPriceChangeBps({
-          currentTick: oracleContext.normalizedTick,
-          referenceTick: centerTick,
-        })
-        if (deviationBps < runtime.config.priceChangeTriggerBps) {
-          skippedActions += 1
-          continue
-        }
-
-        const actionType = "strategy.charm.rebalance"
-        const actionPayload = {
-          action: actionType,
-          actionType,
-          vaultAddress: vault.vaultAddress,
-          strategyAddress: strategy.strategyAddress,
-          charmVaultAddress: strategy.charmVaultAddress,
-          oracleAddress: vault.oracleAddress,
-          triggerTick: oracleContext.normalizedTick,
-          referenceTick: centerTick,
-          computedDeviationBps: deviationBps,
-          timestamp: runtime.now().toISOString(),
-        } satisfies Record<string, unknown>
-
-        const actionId = runtime.runInNodeMode(
-          (nr: NodeRuntime<CharmManagerConfig>) =>
-            enqueueStrategyAction(nr, httpClient, apiKey, {
-              vaultAddress: vault.vaultAddress,
-              groupId: vault.groupId,
-              actionType,
-              dedupeKey: charmDedupeKey(vault.vaultAddress, strategy.strategyAddress, centerTick),
-              action: actionPayload,
-            }),
-          consensusIdenticalAggregation(),
-        )().result()
-
-        enqueuedActions += 1
-        runtime.log(
-          `Enqueued Charm rebalance action id=${actionId} vault=${vault.vaultAddress} strategy=${strategy.strategyAddress}`,
-        )
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

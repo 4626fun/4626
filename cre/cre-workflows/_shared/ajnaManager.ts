@@ -117,6 +117,11 @@ function strategyDedupeKey(
   return `vault:${vaultAddress.toLowerCase()}:strategy:${strategyAddress.toLowerCase()}:action:strategy.ajna.rebucket:band:${targetBucket}`
 }
 
+function isChainReadLimitError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes("CallLimit limited")
+}
+
 function readOracleSuggestedBucket(
   runtime: Runtime<AjnaManagerConfig>,
   evmClient: ReturnType<typeof createEvmClientForChain>,
@@ -190,57 +195,87 @@ function readAjnaStrategiesForVault(
 ): AjnaStrategyContext[] {
   const out: AjnaStrategyContext[] = []
   for (let i = 0; i < runtime.config.maxStrategiesPerVault; i += 1) {
-    const strategyAddress = decodeAddress(
-      VaultStrategyViewABI,
-      "strategyList",
-      readContractBytes(runtime, evmClient, {
-        address: vaultAddress,
-        abi: VaultStrategyViewABI,
-        functionName: "strategyList",
-        args: [BigInt(i)],
-      }),
-    )
+    let strategyAddress: `0x${string}`
+    try {
+      strategyAddress = decodeAddress(
+        VaultStrategyViewABI,
+        "strategyList",
+        readContractBytes(runtime, evmClient, {
+          address: vaultAddress,
+          abi: VaultStrategyViewABI,
+          functionName: "strategyList",
+          args: [BigInt(i)],
+        }),
+      )
+    } catch (error) {
+      if (isChainReadLimitError(error)) {
+        runtime.log(`Stopping Ajna strategy scan for ${vaultAddress}: chain read call limit reached`)
+        break
+      }
+      throw error
+    }
 
     if (strategyAddress.toLowerCase() === zeroAddress.toLowerCase()) break
 
-    const strategyWeight = decodeBigInt(
-      VaultStrategyViewABI,
-      "strategyWeights",
-      readContractBytes(runtime, evmClient, {
-        address: vaultAddress,
-        abi: VaultStrategyViewABI,
-        functionName: "strategyWeights",
-        args: [strategyAddress],
-      }),
-    )
+    let strategyWeight: bigint
+    try {
+      strategyWeight = decodeBigInt(
+        VaultStrategyViewABI,
+        "strategyWeights",
+        readContractBytes(runtime, evmClient, {
+          address: vaultAddress,
+          abi: VaultStrategyViewABI,
+          functionName: "strategyWeights",
+          args: [strategyAddress],
+        }),
+      )
+    } catch (error) {
+      if (isChainReadLimitError(error)) {
+        runtime.log(`Stopping Ajna strategy scan for ${vaultAddress}: chain read call limit reached`)
+        break
+      }
+      throw error
+    }
     if (strategyWeight === 0n) continue
 
-    const ajnaPool = decodeAddress(
-      AjnaStrategyViewABI,
-      "ajnaPool",
-      readContractBytes(runtime, evmClient, {
-        address: strategyAddress,
-        abi: AjnaStrategyViewABI,
-        functionName: "ajnaPool",
-      }),
-    )
-    if (ajnaPool.toLowerCase() === zeroAddress.toLowerCase()) continue
+    try {
+      const ajnaPool = decodeAddress(
+        AjnaStrategyViewABI,
+        "ajnaPool",
+        readContractBytes(runtime, evmClient, {
+          address: strategyAddress,
+          abi: AjnaStrategyViewABI,
+          functionName: "ajnaPool",
+        }),
+      )
+      if (ajnaPool.toLowerCase() === zeroAddress.toLowerCase()) continue
 
-    const currentBucket = decodeNumber(
-      AjnaStrategyViewABI,
-      "bucketIndex",
-      readContractBytes(runtime, evmClient, {
-        address: strategyAddress,
-        abi: AjnaStrategyViewABI,
-        functionName: "bucketIndex",
-      }),
-    )
+      const currentBucket = decodeNumber(
+        AjnaStrategyViewABI,
+        "bucketIndex",
+        readContractBytes(runtime, evmClient, {
+          address: strategyAddress,
+          abi: AjnaStrategyViewABI,
+          functionName: "bucketIndex",
+        }),
+      )
 
-    out.push({
-      strategyAddress,
-      ajnaPool,
-      currentBucket,
-    })
+      out.push({
+        strategyAddress,
+        ajnaPool,
+        currentBucket,
+      })
+    } catch (error) {
+      if (isChainReadLimitError(error)) {
+        runtime.log(`Stopping Ajna strategy scan for ${vaultAddress}: chain read call limit reached`)
+        break
+      }
+      const message = error instanceof Error ? error.message : String(error)
+      runtime.log(
+        `Skipping non-Ajna/unreadable strategy ${strategyAddress} for vault ${vaultAddress}: ${message}`,
+      )
+      continue
+    }
   }
   return out
 }
@@ -321,84 +356,93 @@ export function evaluateAndEnqueueAjnaActions(
 
       const strategies = readAjnaStrategiesForVault(runtime, evmClient, vault.vaultAddress)
       for (const strategy of strategies) {
-        const deviationBps = bucketPriceChangeBps({
-          currentBucket: strategy.currentBucket,
-          suggestedBucket,
-        })
-        if (deviationBps < runtime.config.priceChangeTriggerBps) {
-          skippedActions += 1
-          continue
-        }
+        try {
+          const deviationBps = bucketPriceChangeBps({
+            currentBucket: strategy.currentBucket,
+            suggestedBucket,
+          })
+          if (deviationBps < runtime.config.priceChangeTriggerBps) {
+            skippedActions += 1
+            continue
+          }
 
-        const step = computeSteppedBucket({
-          currentBucket: strategy.currentBucket,
-          suggestedBucket,
-          moveThreshold: runtime.config.moveThreshold,
-          maxStep: runtime.config.maxStep,
-        })
-        if (!step.shouldMove) {
-          skippedActions += 1
-          continue
-        }
+          const step = computeSteppedBucket({
+            currentBucket: strategy.currentBucket,
+            suggestedBucket,
+            moveThreshold: runtime.config.moveThreshold,
+            maxStep: runtime.config.maxStep,
+          })
+          if (!step.shouldMove) {
+            skippedActions += 1
+            continue
+          }
 
-        const targetBucket = pickLiquidityAwareTarget(
-          runtime,
-          evmClient,
-          strategy.ajnaPool,
-          step.steppedBucket,
-        )
-        if (targetBucket === strategy.currentBucket) {
-          skippedActions += 1
-          continue
-        }
+          const targetBucket = pickLiquidityAwareTarget(
+            runtime,
+            evmClient,
+            strategy.ajnaPool,
+            step.steppedBucket,
+          )
+          if (targetBucket === strategy.currentBucket) {
+            skippedActions += 1
+            continue
+          }
 
-        const lenderInfoData = readContractBytes(runtime, evmClient, {
-          address: strategy.ajnaPool,
-          abi: AjnaPoolViewABI,
-          functionName: "lenderInfo",
-          args: [BigInt(strategy.currentBucket), strategy.strategyAddress],
-        })
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const lenderInfo = decodeFunctionResult({
-          abi: AjnaPoolViewABI,
-          functionName: "lenderInfo",
-          data: bytesToHex(lenderInfoData),
+          const lenderInfoData = readContractBytes(runtime, evmClient, {
+            address: strategy.ajnaPool,
+            abi: AjnaPoolViewABI,
+            functionName: "lenderInfo",
+            args: [BigInt(strategy.currentBucket), strategy.strategyAddress],
+          })
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any) as [bigint, bigint]
-        const method = lenderInfo[0] > 0n ? "moveToBucket" : "setBucketIndex"
+          const lenderInfo = decodeFunctionResult({
+            abi: AjnaPoolViewABI,
+            functionName: "lenderInfo",
+            data: bytesToHex(lenderInfoData),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any) as [bigint, bigint]
+          const method = lenderInfo[0] > 0n ? "moveToBucket" : "setBucketIndex"
 
-        const actionType = "strategy.ajna.rebucket"
-        const actionPayload = {
-          action: actionType,
-          actionType,
-          vaultAddress: vault.vaultAddress,
-          strategyAddress: strategy.strategyAddress,
-          oracleAddress: vault.oracleAddress,
-          currentBucket: strategy.currentBucket,
-          suggestedBucket,
-          steppedBucket: step.steppedBucket,
-          targetBucket,
-          method,
-          computedDeviationBps: deviationBps,
-          timestamp: runtime.now().toISOString(),
-        } satisfies Record<string, unknown>
+          const actionType = "strategy.ajna.rebucket"
+          const actionPayload = {
+            action: actionType,
+            actionType,
+            vaultAddress: vault.vaultAddress,
+            strategyAddress: strategy.strategyAddress,
+            oracleAddress: vault.oracleAddress,
+            currentBucket: strategy.currentBucket,
+            suggestedBucket,
+            steppedBucket: step.steppedBucket,
+            targetBucket,
+            method,
+            computedDeviationBps: deviationBps,
+            timestamp: runtime.now().toISOString(),
+          } satisfies Record<string, unknown>
 
-        const actionId = runtime.runInNodeMode(
-          (nr: NodeRuntime<AjnaManagerConfig>) =>
-            enqueueStrategyAction(nr, httpClient, apiKey, {
-              vaultAddress: vault.vaultAddress,
-              groupId: vault.groupId,
-              actionType,
-              dedupeKey: strategyDedupeKey(vault.vaultAddress, strategy.strategyAddress, targetBucket),
-              action: actionPayload,
-            }),
-          consensusIdenticalAggregation(),
-        )().result()
+          const actionId = runtime.runInNodeMode(
+            (nr: NodeRuntime<AjnaManagerConfig>) =>
+              enqueueStrategyAction(nr, httpClient, apiKey, {
+                vaultAddress: vault.vaultAddress,
+                groupId: vault.groupId,
+                actionType,
+                dedupeKey: strategyDedupeKey(vault.vaultAddress, strategy.strategyAddress, targetBucket),
+                action: actionPayload,
+              }),
+            consensusIdenticalAggregation(),
+          )().result()
 
-        enqueuedActions += 1
-        runtime.log(
-          `Enqueued Ajna rebucket action id=${actionId} vault=${vault.vaultAddress} strategy=${strategy.strategyAddress} targetBucket=${targetBucket}`,
-        )
+          enqueuedActions += 1
+          runtime.log(
+            `Enqueued Ajna rebucket action id=${actionId} vault=${vault.vaultAddress} strategy=${strategy.strategyAddress} targetBucket=${targetBucket}`,
+          )
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          runtime.log(
+            `Skipping Ajna strategy ${strategy.strategyAddress} for vault ${vault.vaultAddress}: ${message}`,
+          )
+          skippedActions += 1
+          continue
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

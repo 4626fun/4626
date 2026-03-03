@@ -7,7 +7,7 @@ const PORT = Number(process.env.CRE_MOCK_API_PORT ?? '8789');
 const API_KEY = process.env.CRE_MOCK_API_KEY ?? process.env.KEEPR_API_KEY_VALUE ?? 'local-test-key';
 
 const MOCK_VAULT = {
-  vaultAddress: '0xA015954E2606d08967Aee3787456bB3A86a46A42',
+  vaultAddress: '0x82C06EaAE27B1Ca31fA29F22341A162A670A4471',
   chainId: 8453,
   creatorCoinAddress: '0x5b674196812451b7cec024fe9d22d2c0b172fa75',
   gaugeControllerAddress: '0xB471B53cD0A30289Bc3a2dc3c6dd913288F8baA1',

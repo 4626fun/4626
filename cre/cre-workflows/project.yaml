@@ -18,26 +18,21 @@ local-simulation:
     - chain-name: ethereum-mainnet
       url: https://ethereum-rpc.publicnode.com
     - chain-name: ethereum-mainnet-base-1
-      url: https://mainnet.base.org
+      url: https://eu.endpoints.matrixed.link/rpc/base?auth=p886of4gitu82
 
 staging-settings:
   cre-cli:
     # Replace with your assigned DON family once approved.
     don-family: "zone-a"
-  account:
-    # Optional for normal signed ops; required when using --unsigned.
-    workflow-owner-address: "(optional) multisig owner address"
   rpcs:
     - chain-name: ethereum-mainnet
-      url: https://mainnet.infura.io/v3/YOUR_API_KEY
+      url: https://ethereum-rpc.publicnode.com
     - chain-name: ethereum-mainnet-base-1
-      url: https://base-mainnet.infura.io/v3/YOUR_API_KEY
+      url: https://eu.endpoints.matrixed.link/rpc/base?auth=p886of4gitu82
 
 production-settings:
   cre-cli:
     don-family: "zone-a"
-  account:
-    workflow-owner-address: "(optional) multisig owner address"
   rpcs:
     - chain-name: ethereum-mainnet
       url: https://mainnet.infura.io/v3/YOUR_API_KEY

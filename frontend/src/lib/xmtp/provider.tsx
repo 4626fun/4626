@@ -28,6 +28,7 @@ import { CANONICAL_SCW_CHAIN_ID, decideXmtpSignerType, resolveXmtpChainId } from
 import {
   Client,
   Opfs,
+  toSafeSigner,
   type Signer,
   type Conversation,
   type Dm,
@@ -769,6 +770,80 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         appVersion: XMTP_APP_VERSION,
       }
 
+      type SignerSelection = {
+        signer: Signer
+        scwSigner: Signer
+        eoaSigner: Signer
+        hasContractCode: boolean | null
+      }
+
+      let signerSelectionPromise: Promise<SignerSelection> | null = null
+      const getSignerSelection = async (): Promise<SignerSelection> => {
+        if (signerSelectionPromise) return signerSelectionPromise
+        signerSelectionPromise = (async () => {
+          const walletChainId = resolveXmtpChainId(walletClient.chain?.id)
+          const storedSignerType = readStoredSignerType(xmtpIdentityAddress)
+
+          let hasContractCode: boolean | null = null
+          if (publicClient) {
+            try {
+              const code = await publicClient.getCode({ address: xmtpIdentityAddress as `0x${string}` })
+              hasContractCode = typeof code === 'string' ? (code !== '0x' && code.length > 2) : null
+            } catch {
+              hasContractCode = null
+            }
+          }
+
+          const signerDecision = decideXmtpSignerType({
+            isCanonicalSmartWallet: resolved.isCanonicalSmartWallet,
+            storedSignerType,
+            connector,
+            hasContractCode,
+            walletChainId,
+            modeOverride: xmtpModeOverride ?? undefined,
+          })
+
+          const signMessageFn = async (message: string) => {
+            const s = await walletClient.signMessage({ message })
+            return hexToBytes(s)
+          }
+
+          const scwSigner: Signer = {
+            type: 'SCW',
+            getIdentifier: () => ({
+              identifier: xmtpIdentityAddress as `0x${string}`,
+              identifierKind: IdentifierKind.Ethereum,
+            }),
+            signMessage: signMessageFn,
+            getChainId: () => BigInt(signerDecision.scwChainId),
+          }
+          const eoaSigner: Signer = {
+            type: 'EOA',
+            getIdentifier: () => ({
+              identifier: xmtpIdentityAddress as `0x${string}`,
+              identifierKind: IdentifierKind.Ethereum,
+            }),
+            signMessage: signMessageFn,
+          }
+          const signer: Signer = signerDecision.signerType === 'SCW' ? scwSigner : eoaSigner
+
+          return { signer, scwSigner, eoaSigner, hasContractCode }
+        })()
+        return signerSelectionPromise
+      }
+
+      const registerRestoredInstallation = async (client: Client, activeSigner: Signer): Promise<void> => {
+        const alreadyRegistered = await client.isRegistered()
+        if (alreadyRegistered) return
+
+        const { signatureText, signatureRequestId } = await client.unsafe_createInboxSignatureText()
+        if (!signatureText || !signatureRequestId) return
+
+        const signature = await activeSigner.signMessage(signatureText)
+        const safeSigner = await toSafeSigner(activeSigner, signature)
+        await client.unsafe_applySignatureRequest(safeSigner, signatureRequestId)
+      }
+
       // Shared setup: sync conversations, start streams, mark connected.
       const setupConversations = async (client: Client) => {
         await client.conversations.sync()
@@ -999,14 +1074,56 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           console.warn('[xmtp] Client.build restored but setupConversations failed:', syncMsg)
 
           if (isUninitialized) {
-            // Identity exists locally but wasn't fully registered on the network
-            // (e.g., user closed the tab mid-registration).  Must fall through
-            // to Client.create to complete registration.
-            console.log('[xmtp] Uninitialized identity — will re-create')
-            try { buildClient.close() } catch {}
-            clientRef.current = null
-            buildClient = null
-            await new Promise((r) => setTimeout(r, 200))
+            // Critical anti-churn path: register the restored installation in-place.
+            // Do NOT fall through to Client.create here — that would burn a new
+            // installation each retry and quickly hit 10/10.
+            console.log(
+              '[xmtp] Uninitialized identity on restored installation — attempting in-place register (no new installation)…',
+            )
+            try {
+              const signerSelection = await getSignerSelection()
+              let registrationSigner = signerSelection.signer
+              try {
+                await registerRestoredInstallation(buildClient, registrationSigner)
+                writeStoredSignerType(xmtpIdentityAddress, registrationSigner.type)
+              } catch (registerErr) {
+                const registerMsg = registerErr instanceof Error ? registerErr.message : String(registerErr)
+                if (registrationSigner.type === 'EOA' && isWrongChainIdError(registerMsg)) {
+                  console.warn(
+                    '[xmtp] Wrong chain id while registering restored installation with EOA; retrying SCW on Base (8453)…',
+                  )
+                  registrationSigner = signerSelection.scwSigner
+                  await registerRestoredInstallation(buildClient, registrationSigner)
+                  writeStoredSignerType(xmtpIdentityAddress, 'SCW')
+                } else if (
+                  registrationSigner.type === 'SCW' &&
+                  signerSelection.hasContractCode !== true &&
+                  isScwSignatureValidationError(registerMsg)
+                ) {
+                  console.warn(
+                    '[xmtp] SCW signature validation failed while registering restored installation; retrying EOA…',
+                  )
+                  registrationSigner = signerSelection.eoaSigner
+                  await registerRestoredInstallation(buildClient, registrationSigner)
+                  writeStoredSignerType(xmtpIdentityAddress, 'EOA')
+                } else {
+                  throw registerErr
+                }
+              }
+
+              await setupConversations(buildClient)
+              return
+            } catch (registerErr) {
+              console.error('[xmtp] In-place registration for restored installation failed:', registerErr)
+              try { buildClient.close() } catch {}
+              clientRef.current = null
+              setStatus('error')
+              setError(
+                'XMTP restored your local installation but identity registration failed. ' +
+                'Refusing to create a new installation to avoid churn. Retry after reconnecting wallet, or use Reset XMTP installations.',
+              )
+              return
+            }
           } else {
             // Transient error (network timeout, server error, etc.).
             // Retry once — do NOT fall through to Client.create.
@@ -1026,48 +1143,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
       setStatus('connecting')
 
-      const walletChainId = resolveXmtpChainId(walletClient.chain?.id)
-      const storedSignerType = readStoredSignerType(xmtpIdentityAddress)
-
-      let hasContractCode: boolean | null = null
-      if (publicClient) {
-        try {
-          const code = await publicClient.getCode({ address: xmtpIdentityAddress as `0x${string}` })
-          hasContractCode = typeof code === 'string' ? (code !== '0x' && code.length > 2) : null
-        } catch {
-          hasContractCode = null
-        }
-      }
-
-      const signerDecision = decideXmtpSignerType({
-        isCanonicalSmartWallet: resolved.isCanonicalSmartWallet,
-        storedSignerType,
-        connector,
-        hasContractCode,
-        walletChainId,
-        modeOverride: xmtpModeOverride ?? undefined,
-      })
-
-      if (signerDecision.signerType === 'SCW') writeStoredSignerType(xmtpIdentityAddress, 'SCW')
+      const signerSelection = await getSignerSelection()
+      const { signer, scwSigner, eoaSigner, hasContractCode } = signerSelection
+      if (signer.type === 'SCW') writeStoredSignerType(xmtpIdentityAddress, 'SCW')
       else writeStoredSignerType(xmtpIdentityAddress, 'EOA')
-
-      const signMessageFn = async (message: string) => {
-        const s = await walletClient.signMessage({ message })
-        return hexToBytes(s)
-      }
-
-      const scwSigner: Signer = {
-        type: 'SCW',
-        getIdentifier: () => ({ identifier: xmtpIdentityAddress as `0x${string}`, identifierKind: IdentifierKind.Ethereum }),
-        signMessage: signMessageFn,
-        getChainId: () => BigInt(signerDecision.scwChainId),
-      }
-      const eoaSigner: Signer = {
-        type: 'EOA',
-        getIdentifier: () => ({ identifier: xmtpIdentityAddress as `0x${string}`, identifierKind: IdentifierKind.Ethereum }),
-        signMessage: signMessageFn,
-      }
-      const signer: Signer = signerDecision.signerType === 'SCW' ? scwSigner : eoaSigner
 
       console.log('[xmtp] No reusable local installation found — falling through to Client.create (will require wallet signature)')
 

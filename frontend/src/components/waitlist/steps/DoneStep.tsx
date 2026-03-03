@@ -164,13 +164,13 @@ function AddrRow({ label, address, accent, icon }: {
   return (
     <div className={[
       'flex items-center gap-2.5 rounded-xl px-3 py-2',
-      accent ? 'border border-brand-primary/20 bg-brand-primary/6' : 'border border-white/8 bg-black/15',
+      accent ? 'border border-brand-primary/15 bg-brand-primary/5' : 'border border-white/6 bg-black/10',
     ].join(' ')}>
       {icon && <span className="shrink-0">{icon}</span>}
-      <span className={['text-[11px] font-medium shrink-0 w-[80px]', accent ? 'text-brand-300' : 'text-zinc-300'].join(' ')}>
+      <span className={['text-[11px] font-medium shrink-0 w-[80px]', accent ? 'text-brand-300' : 'text-zinc-400'].join(' ')}>
         {label}
       </span>
-      <span className={['font-mono text-[12px] flex-1 truncate min-w-0', accent ? 'text-white' : 'text-zinc-200'].join(' ')}>
+      <span className={['font-mono text-[12px] flex-1 truncate min-w-0', accent ? 'text-zinc-100' : 'text-zinc-300'].join(' ')}>
         {address ? truncAddr(address) : <span className="text-zinc-600 not-italic">—</span>}
       </span>
       {address && (
@@ -201,19 +201,19 @@ function WalletCardCollapsed(props: {
   const detailsId = 'waitlist-wallet-card-details'
 
   return (
-    <motion.section {...fadeUp} className="rounded-2xl border border-white/8 bg-white/3 overflow-hidden">
-      <div className="p-3 space-y-2">
+    <motion.section {...fadeUp} className="rounded-2xl border border-white/6 bg-white/2 overflow-hidden">
+      <div className="p-3.5 space-y-2.5">
         <div className="flex items-center justify-between gap-2">
           <div className="inline-flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-brand-primary" />
-            <span className="text-[13px] font-medium text-zinc-200">Wallets</span>
+            <Wallet className="h-3.5 w-3.5 text-zinc-400" />
+            <span className="text-[12px] font-medium text-zinc-300">Wallets</span>
           </div>
           <button
             type="button"
             aria-expanded={expanded}
             aria-controls={detailsId}
             onClick={() => setExpanded((prev) => !prev)}
-            className="inline-flex min-h-10 items-center gap-1 rounded-xl border border-white/10 px-3 text-[12px] font-medium text-zinc-300 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
+            className="inline-flex min-h-9 items-center gap-1 rounded-xl border border-white/8 px-2.5 text-[11px] font-medium text-zinc-400 transition-colors hover:bg-white/4 hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
           >
             {expanded ? 'Hide details' : 'Show details'}
             <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
@@ -253,12 +253,12 @@ function WalletCardCollapsed(props: {
         </AnimatePresence>
       </div>
 
-      <div className="border-t border-white/8 bg-white/2 p-3">
+      <div className="border-t border-white/6 bg-white/2 p-3">
         <a
           href="https://4626.fun/account"
           target="_blank"
           rel="noreferrer"
-          className="btn-secondary min-h-10 w-full justify-center text-[12px]"
+          className="btn-secondary min-h-10 w-full justify-center border-white/8 text-[12px] text-zinc-300"
         >
           Open account
           <ExternalLink className="h-3.5 w-3.5" />
@@ -371,42 +371,42 @@ function RewardsCard({
   }, [shareMenuOpen])
 
   return (
-    <motion.section {...fadeUp} className="rounded-2xl border border-white/6 bg-white/3 p-5 sm:p-6">
-      <div className="space-y-5">
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="flex items-end gap-2">
-              <span className="text-[40px] leading-none font-semibold tabular-nums tracking-tight text-white sm:text-[44px]">
+    <motion.section {...fadeUp} className="rounded-2xl border border-white/5 bg-white/3 p-6 sm:p-7">
+      <div className="space-y-6">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2">
+            <div className="inline-flex items-baseline gap-2">
+              <span className="text-[44px] leading-[0.92] font-semibold tabular-nums tracking-tight text-white sm:text-[48px]">
                 {pointsBalance}
               </span>
-              <span className="pb-1 text-[14px] font-medium text-zinc-400">pts</span>
+              <span className="text-[13px] font-medium tracking-wide text-zinc-400">pts</span>
             </div>
-            <span className="rounded-full border border-brand-primary/30 bg-brand-primary/12 px-2.5 py-1 text-[11px] font-medium text-brand-300">
+            <span className="rounded-full border border-white/12 bg-white/4 px-2.5 py-1 text-[11px] font-medium text-zinc-300">
               {tierLabel}
             </span>
           </div>
 
-          <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-1.5 text-[12px] text-zinc-300">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-1.5 text-[12px] text-zinc-400">
               <CheckCircle2 className={`h-3.5 w-3.5 ${badgeEarned ? 'text-emerald-300' : 'text-zinc-500'}`} aria-hidden="true" />
-              <span>{badgeEarned ? 'Verified badge earned' : 'Badge pending'}</span>
+              <span>{badgeEarned ? 'Your profile is verified' : 'Profile verification pending'}</span>
             </div>
             {rank && rank > 0 ? (
-              <div className="text-[12px] text-zinc-500">Ranked #{rank} on leaderboard</div>
+              <div className="text-[12px] text-zinc-500">You&apos;re ranked #{rank} on the leaderboard</div>
             ) : null}
           </div>
         </div>
 
-        <div className="space-y-3 rounded-xl bg-black/15 px-3.5 py-3.5 sm:px-4">
+        <div className="space-y-3 border-t border-white/6 pt-4">
           <div className="text-[11px] font-medium text-zinc-500">Referral link</div>
-          <div className="rounded-lg bg-black/25 px-2.5 py-2 font-mono text-[12px] text-zinc-300 break-all">
+          <div className="font-mono text-[12px] text-zinc-300 truncate" title={referralUrl}>
             {referralUrl}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => void onCopyReferral()}
-              className="btn-accent btn-no-icon min-h-10 px-3 text-[12px]"
+              className="btn-secondary min-h-10 border-brand-primary/25 bg-brand-primary/12 px-3 text-[12px] text-brand-300 hover:border-brand-primary/35 hover:bg-brand-primary/18"
             >
               <Copy className="h-3.5 w-3.5" />
               Copy link
@@ -419,7 +419,7 @@ function RewardsCard({
                 aria-expanded={shareMenuOpen}
                 aria-controls={shareMenuOpen ? shareMenuId : undefined}
                 onClick={() => setShareMenuOpen((prev) => !prev)}
-                className="btn-secondary min-h-10 px-3 text-[12px]"
+                className="btn-secondary min-h-10 border-white/8 px-3 text-[12px] text-zinc-300"
               >
                 <Share2 className="h-3.5 w-3.5" />
                 Share
@@ -436,7 +436,7 @@ function RewardsCard({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.15, ease: baseEase }}
-                    className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-white/10 bg-[#101113]/95 p-1 shadow-xl backdrop-blur"
+                    className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-white/8 bg-[#111214]/92 p-1 shadow-lg backdrop-blur"
                   >
                     <a
                       role="menuitem"
@@ -474,14 +474,14 @@ function RewardsCard({
           {copyState === 'idle' && copyHint ? <div className="text-[11px] text-emerald-400">{copyHint}</div> : null}
         </div>
 
-        <div className="space-y-2 pt-1">
-          <button type="button" onClick={onEarnMore} className="btn-accent btn-no-icon min-h-11 w-full text-[13px]">
+        <div className="space-y-3 pt-2">
+          <button type="button" onClick={onEarnMore} className="btn-accent btn-no-icon min-h-12 w-full text-[14px]">
             Earn more points
           </button>
           <button
             type="button"
             onClick={onViewLeaderboard}
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-lg px-1 text-[12px] font-medium text-zinc-300 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-lg px-1 text-[12px] font-medium text-zinc-400 transition-colors hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
           >
             <Trophy className="h-3.5 w-3.5" />
             View leaderboard
@@ -500,7 +500,7 @@ function HeaderStatusSection(props: {
   const identityLabel = props.handle ? `@${props.handle}` : props.displayEmail
 
   return (
-    <motion.section {...scaleIn} className="text-center space-y-3 pt-1">
+    <motion.section {...scaleIn} className="text-center space-y-4 pt-1">
       <StepIndicator
         steps={[
           { label: 'Connect', status: 'complete' },
@@ -509,29 +509,29 @@ function HeaderStatusSection(props: {
         ]}
       />
 
-      <div className="flex justify-center pt-1">
+      <div className="flex justify-center pt-2">
         <div className="relative">
-          <div className="h-14 w-14 rounded-2xl border border-white/10 bg-white/6 flex items-center justify-center">
-            <CheckCircle2 className="h-7 w-7 text-white" />
+          <div className="h-12 w-12 rounded-xl border border-white/8 bg-white/4 flex items-center justify-center">
+            <CheckCircle2 className="h-6 w-6 text-zinc-100" />
           </div>
           <motion.div
-            className="absolute inset-0 rounded-2xl border border-white/12"
-            initial={{ scale: 1, opacity: 0.4 }}
-            animate={{ scale: 1.6, opacity: 0 }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
+            className="absolute inset-0 rounded-xl border border-white/10"
+            initial={{ scale: 1, opacity: 0.28 }}
+            animate={{ scale: 1.45, opacity: 0 }}
+            transition={{ duration: 2.1, repeat: Infinity, ease: 'easeOut' }}
           />
         </div>
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight text-white">You&apos;re on the waitlist</h1>
         {identityLabel ? <p className="truncate px-2 text-[13px] text-zinc-300">{identityLabel}</p> : null}
         <div className="flex items-center justify-center gap-2">
-          <span className="rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2.5 py-1 text-[11px] font-medium text-brand-300">
+          <span className="rounded-full border border-white/12 bg-white/4 px-2.5 py-1 text-[11px] font-medium text-zinc-300">
             Active
           </span>
           {props.rankDelta > 0 ? (
-            <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-200">
+            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/8 px-2.5 py-1 text-[11px] font-medium text-emerald-200/90">
               Moved up {props.rankDelta}
             </span>
           ) : null}
@@ -707,6 +707,7 @@ export const DoneStep = memo(function DoneStep({
   const rewardReferralUrl = rewards.referralRef ? rewards.referralUrl : referralLink
   const handleEarnMore = useCallback(() => navigate('/account#account-points-tasks'), [navigate])
   const handleViewLeaderboard = useCallback(() => navigate('/leaderboard'), [navigate])
+  const isEnterAppCta = (primaryCta?.label ?? '').trim().toLowerCase() === 'enter app'
 
   return (
     <AnimatePresence mode="wait">
@@ -716,7 +717,7 @@ export const DoneStep = memo(function DoneStep({
           {...fadeUp}
           exit={{ opacity: 0, scale: 0.96, y: -8 }}
           transition={{ duration: 0.24, ease: baseEase }}
-          className="space-y-5"
+          className="space-y-6"
         >
           <HeaderStatusSection displayEmail={displayEmail} handle={referralHandle} rankDelta={rankDelta} />
 
@@ -740,7 +741,11 @@ export const DoneStep = memo(function DoneStep({
                 type="button"
                 disabled={primaryCta.disabled}
                 onClick={handleDeployClick}
-                className={['btn-primary w-full px-4 py-3.5 text-[15px]', primaryCta.busy ? 'btn-no-icon' : ''].join(' ')}
+                className={
+                  isEnterAppCta
+                    ? 'btn-secondary w-full justify-center rounded-2xl border-white/12 bg-white/4 px-4 py-3 text-[14px] font-semibold text-zinc-100 hover:bg-white/8'
+                    : ['btn-primary w-full px-4 py-3.5 text-[15px]', primaryCta.busy ? 'btn-no-icon' : ''].join(' ')
+                }
               >
                 {primaryCta.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 {primaryCta.busy ? primaryCta.busyLabel ?? primaryCta.label : primaryCta.label}

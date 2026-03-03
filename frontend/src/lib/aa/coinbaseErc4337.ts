@@ -80,6 +80,14 @@ async function verifyBundlerSupportsV06(
     const rpcErrorMessage =
       typeof data?.error?.message === 'string' ? data.error.message.trim() : ''
     if (rpcErrorMessage) {
+      const rpcMessageLower = rpcErrorMessage.toLowerCase()
+      const shouldHardFailProbe =
+        rpcMessageLower.includes('unsupported entrypoint') ||
+        rpcMessageLower.includes('does not support entrypoint v0.6')
+      if (!shouldHardFailProbe) {
+        console.warn('[ERC-4337] Bundler entrypoint probe returned RPC error, continuing:', rpcErrorMessage)
+        return
+      }
       throw new Error(
         `Bundler entrypoint probe failed: ${rpcErrorMessage}. ` +
         'Check VITE_CDP_BUNDLER_URL / CDP_PAYMASTER_URL and ensure the endpoint exposes eth_supportedEntryPoints.'

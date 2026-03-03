@@ -26,6 +26,49 @@ type EnqueueResponse = {
   }
 }
 
+type VaultRecord = {
+  vaultAddress?: unknown
+  chainId?: unknown
+  groupId?: unknown
+  oracleAddress?: unknown
+}
+
+function toOptionalHexAddress(value: unknown): `0x${string}` | undefined {
+  if (typeof value !== "string" || !value.startsWith("0x") || value.length !== 42) {
+    return undefined
+  }
+  return value as `0x${string}`
+}
+
+function sanitizeActiveVaults(vaults: unknown): ActiveVaultConfig[] {
+  if (!Array.isArray(vaults)) return []
+
+  const sanitized: ActiveVaultConfig[] = []
+  for (const item of vaults) {
+    const record = item as VaultRecord
+    const vaultAddress = toOptionalHexAddress(record.vaultAddress)
+    const chainId = typeof record.chainId === "number" ? record.chainId : Number(record.chainId)
+    const groupId = typeof record.groupId === "string" ? record.groupId : ""
+    const oracleAddress = toOptionalHexAddress(record.oracleAddress)
+
+    if (!vaultAddress || !Number.isFinite(chainId) || !groupId) continue
+
+    const normalized: ActiveVaultConfig = {
+      vaultAddress,
+      chainId,
+      groupId,
+    }
+
+    if (oracleAddress) {
+      normalized.oracleAddress = oracleAddress
+    }
+
+    sanitized.push(normalized)
+  }
+
+  return sanitized
+}
+
 export function fetchActiveVaults<Config extends StrategyWorkflowConfig>(
   nodeRuntime: NodeRuntime<Config>,
   httpClient: HTTPClient,
@@ -38,7 +81,7 @@ export function fetchActiveVaults<Config extends StrategyWorkflowConfig>(
     apiKey,
     `/cre/vaults/active?chainId=${chainId}`,
   )
-  return body.success && body.data ? body.data.vaults : []
+  return body.success && body.data ? sanitizeActiveVaults(body.data.vaults) : []
 }
 
 export function enqueueStrategyAction<Config extends StrategyWorkflowConfig>(
