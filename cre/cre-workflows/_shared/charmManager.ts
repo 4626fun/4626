@@ -29,6 +29,10 @@ export type CharmManagerConfig = {
 export type CharmManualPayload = {
   vaultAddress?: string
   maxVaultsPerExecution?: number
+  forceEnqueue?: boolean
+  strategyAddress?: string
+  charmVaultAddress?: string
+  referenceTick?: number
 }
 
 type CharmStrategyContext = {
@@ -105,6 +109,11 @@ function normalizeVaultAddress(value?: string): `0x${string}` | null {
   const trimmed = value.trim()
   if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return null
   return trimmed.toLowerCase() as `0x${string}`
+}
+
+function normalizeOptionalInteger(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null
+  return Math.trunc(value)
 }
 
 function charmDedupeKey(
@@ -215,7 +224,11 @@ function readCharmStrategiesForVault(
         runtime.log(`Stopping Charm strategy scan for ${vaultAddress}: chain read call limit reached`)
         break
       }
-      throw error
+      const message = error instanceof Error ? error.message : String(error)
+      runtime.log(
+        `Stopping Charm strategy scan for ${vaultAddress} at index ${i}: unreadable strategy slot (${message})`,
+      )
+      break
     }
     if (strategyAddress.toLowerCase() === zeroAddress.toLowerCase()) break
 
@@ -236,7 +249,11 @@ function readCharmStrategiesForVault(
         runtime.log(`Stopping Charm strategy scan for ${vaultAddress}: chain read call limit reached`)
         break
       }
-      throw error
+      const message = error instanceof Error ? error.message : String(error)
+      runtime.log(
+        `Skipping Charm strategy weight read for ${strategyAddress} in vault ${vaultAddress}: ${message}`,
+      )
+      continue
     }
     if (weight === 0n) continue
 
@@ -337,6 +354,52 @@ export function evaluateAndEnqueueCharmActions(
     if (!vault.oracleAddress) continue
 
     try {
+      if (manual.forceEnqueue) {
+        const forcedStrategyAddress = normalizeVaultAddress(manual.strategyAddress)
+        if (!forcedStrategyAddress) {
+          skippedActions += 1
+          runtime.log(
+            `Skipping forced Charm enqueue for ${vault.vaultAddress}: invalid strategyAddress in manual payload`,
+          )
+          continue
+        }
+        const forcedCharmVaultAddress = normalizeVaultAddress(manual.charmVaultAddress) ?? zeroAddress
+        const forcedReferenceTick = normalizeOptionalInteger(manual.referenceTick) ?? 0
+
+        const actionType = "strategy.charm.rebalance"
+        const actionPayload = {
+          action: actionType,
+          actionType,
+          forced: true,
+          vaultAddress: vault.vaultAddress,
+          strategyAddress: forcedStrategyAddress,
+          charmVaultAddress: forcedCharmVaultAddress,
+          oracleAddress: vault.oracleAddress,
+          triggerTick: forcedReferenceTick,
+          referenceTick: forcedReferenceTick,
+          computedDeviationBps: 0,
+          timestamp: runtime.now().toISOString(),
+        } satisfies Record<string, unknown>
+
+        const actionId = runtime.runInNodeMode(
+          (nr: NodeRuntime<CharmManagerConfig>) =>
+            enqueueStrategyAction(nr, httpClient, apiKey, {
+              vaultAddress: vault.vaultAddress,
+              groupId: vault.groupId,
+              actionType,
+              dedupeKey: `force:${charmDedupeKey(vault.vaultAddress, forcedStrategyAddress, forcedReferenceTick)}`,
+              action: actionPayload,
+            }),
+          consensusIdenticalAggregation(),
+        )().result()
+
+        enqueuedActions += 1
+        runtime.log(
+          `Force-enqueued Charm rebalance action id=${actionId} vault=${vault.vaultAddress} strategy=${forcedStrategyAddress}`,
+        )
+        continue
+      }
+
       const oracleContext = readOraclePriceContext(runtime, evmClient, vault.oracleAddress)
       if (!oracleContext) {
         skippedActions += 1

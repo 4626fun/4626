@@ -81,6 +81,28 @@ function setStoredSessionToken(token: string | null) {
   }
 }
 
+async function readPrivyAccessTokenWithRetry(
+  getPrivyAccessToken: (() => Promise<string | null>) | null,
+  opts?: { attempts?: number; delayMs?: number },
+): Promise<string | null> {
+  if (typeof getPrivyAccessToken !== 'function') return null
+  const attempts = Math.max(1, Number(opts?.attempts ?? 1))
+  const delayMs = Math.max(0, Number(opts?.delayMs ?? 0))
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const token = await getPrivyAccessToken()
+      const normalized = typeof token === 'string' ? token.trim() : ''
+      if (normalized) return normalized
+    } catch {
+      // Ignore transient token-read failures and retry below.
+    }
+    if (i < attempts - 1 && delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+  return null
+}
+
 function useSafePrivyHook() {
   try {
     return usePrivy() as any
@@ -368,8 +390,14 @@ export function useSiweAuth() {
         // If Privy is enabled but the user isn't authenticated yet, trigger Privy auth first.
         if (method !== 'zora' && privyReady && !privyAuthenticated && typeof login === 'function') {
           try {
-            // Featured guidelines: avoid email/phone verification inside the app.
-            await login({ loginMethods: ['wallet'] })
+            if (method === 'privy') {
+              // Explicit "another way" path should respect the provider's enabled methods
+              // (email/social/Farcaster) instead of forcing wallet-only login.
+              await login()
+            } else {
+              // Auto path stays wallet-first to keep the primary onboarding flow one-tap.
+              await login({ loginMethods: ['wallet'] })
+            }
           } catch {
             // If Privy auth fails/cancels, fall back to SIWE below (only for method=auto).
           }
@@ -377,7 +405,12 @@ export function useSiweAuth() {
 
         if (privyReady && getPrivyAccessToken) {
           try {
-            const privyToken = await getPrivyAccessToken()
+            // Privy auth state can lag for a short moment after login/cross-app return.
+            // Retry a few times for explicit methods so we don't surface false "cancelled".
+            const privyToken = await readPrivyAccessTokenWithRetry(getPrivyAccessToken, {
+              attempts: method === 'auto' ? 1 : 8,
+              delayMs: method === 'auto' ? 0 : 250,
+            })
             if (privyToken) {
               const addr = await signInWithPrivyToken(privyToken)
               if (addr) return addr
@@ -392,10 +425,12 @@ export function useSiweAuth() {
         if (method === 'privy' || method === 'zora') {
           if (!privyReady) {
             setError('Wallet login is still initializing. Try again in a moment.')
+          } else if (privyAuthenticated) {
+            setError('Sign-in is still finalizing. Please try once more.')
           } else if (method === 'zora') {
             setError('Sign-in was cancelled. Try again or choose another way.')
           } else {
-            setError('Wallet login was cancelled. Try again.')
+            setError('Sign-in was cancelled. Try again.')
           }
           return null
         }

@@ -40,6 +40,62 @@ function getBearerToken(req: VercelRequest): string | null {
   return token.length > 0 ? token : null
 }
 
+function normalizeEvmAddress(value: unknown): string | null {
+  const raw = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (!/^0x[a-f0-9]{40}$/.test(raw)) return null
+  return raw
+}
+
+async function resolvePersistedSessionAddress(db: any, privyUserId: string): Promise<string | null> {
+  try {
+    const result = await db.sql`
+      SELECT
+        p.primary_smart_wallet,
+        p.csw_address,
+        p.base_sub_account,
+        p.primary_wallet,
+        p.primary_embedded_eoa,
+        canonical.address AS canonical_wallet
+      FROM profiles p
+      LEFT JOIN LATERAL (
+        SELECT pw.address
+        FROM profile_wallets pw
+        WHERE pw.profile_id = p.id
+          AND pw.is_canonical_smart_wallet = true
+        LIMIT 1
+      ) canonical ON true
+      WHERE p.privy_user_id = ${privyUserId}
+      LIMIT 1;
+    `
+    const row = result?.rows?.[0] as
+      | {
+          primary_smart_wallet?: unknown
+          csw_address?: unknown
+          base_sub_account?: unknown
+          primary_wallet?: unknown
+          primary_embedded_eoa?: unknown
+          canonical_wallet?: unknown
+        }
+      | undefined
+    if (!row) return null
+    const candidates = [
+      row.canonical_wallet,
+      row.primary_smart_wallet,
+      row.csw_address,
+      row.base_sub_account,
+      row.primary_wallet,
+      row.primary_embedded_eoa,
+    ]
+    for (const candidate of candidates) {
+      const normalized = normalizeEvmAddress(candidate)
+      if (normalized) return normalized
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
 
 let lastPrivyAuthDbSyncAtMs = 0
 
@@ -83,25 +139,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await client.getUserById(claims.userId)
 
     const classified = classifyLinkedAccounts(user as any)
-    const sessionAddress = classified.canonicalSmartWallet?.address ?? classified.primaryWalletAddress ?? null
-    if (!sessionAddress) {
-      return res.status(400).json({
-        success: false,
-        error: 'No EVM wallet is linked in Privy. Connect a wallet and retry.',
-      } satisfies ApiEnvelope<never>)
-    }
-
-    const sessionToken = makeSessionToken({ address: sessionAddress })
-    setCookie(req, res, COOKIE_SESSION, sessionToken, { httpOnly: true, maxAgeSeconds: 60 * 60 * 24 * 7 })
+    let sessionAddress = classified.canonicalSmartWallet?.address ?? classified.primaryWalletAddress ?? null
 
     try {
-      const now = Date.now()
-      const minInterval = getPrivyAuthDbSyncMinIntervalMs()
-      if (now - lastPrivyAuthDbSyncAtMs >= minInterval) {
-        const db = await getDb()
-        if (db) {
-          await ensureWaitlistSchema(db as any)
+      const db = await getDb()
+      if (db) {
+        await ensureWaitlistSchema(db as any)
+        const persistedSessionAddress = await resolvePersistedSessionAddress(db as any, claims.userId)
+        if (persistedSessionAddress) {
+          sessionAddress = persistedSessionAddress
+        }
+
+        const now = Date.now()
+        const minInterval = getPrivyAuthDbSyncMinIntervalMs()
+        if (now - lastPrivyAuthDbSyncAtMs >= minInterval) {
           const syncResult = await syncUserWallets(db as any, user as any)
+          sessionAddress = syncResult.canonicalSmartWallet?.address ?? syncResult.primaryWalletAddress ?? sessionAddress
           const rawEmail = typeof (user as any)?.email?.address === 'string' ? String((user as any).email.address).trim() : ''
           const privyEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail) ? rawEmail.toLowerCase() : null
 
@@ -127,6 +180,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch {
       // best-effort: auth should succeed even if DB is unavailable
     }
+
+    if (!sessionAddress) {
+      return res.status(400).json({
+        success: false,
+        error: 'No EVM wallet is linked in Privy. Connect a wallet and retry.',
+      } satisfies ApiEnvelope<never>)
+    }
+
+    const sessionToken = makeSessionToken({ address: sessionAddress })
+    setCookie(req, res, COOKIE_SESSION, sessionToken, { httpOnly: true, maxAgeSeconds: 60 * 60 * 24 * 7 })
 
     return res.status(200).json({
       success: true,

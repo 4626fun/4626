@@ -38,6 +38,9 @@ export type AjnaManagerConfig = {
 export type AjnaManualPayload = {
   vaultAddress?: string
   maxVaultsPerExecution?: number
+  forceEnqueue?: boolean
+  strategyAddress?: string
+  targetBucket?: number
 }
 
 type AjnaStrategyContext = {
@@ -107,6 +110,11 @@ function normalizeVaultAddress(value?: string): `0x${string}` | null {
   const trimmed = value.trim()
   if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return null
   return trimmed.toLowerCase() as `0x${string}`
+}
+
+function normalizeOptionalInteger(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null
+  return Math.trunc(value)
 }
 
 function strategyDedupeKey(
@@ -212,7 +220,11 @@ function readAjnaStrategiesForVault(
         runtime.log(`Stopping Ajna strategy scan for ${vaultAddress}: chain read call limit reached`)
         break
       }
-      throw error
+      const message = error instanceof Error ? error.message : String(error)
+      runtime.log(
+        `Stopping Ajna strategy scan for ${vaultAddress} at index ${i}: unreadable strategy slot (${message})`,
+      )
+      break
     }
 
     if (strategyAddress.toLowerCase() === zeroAddress.toLowerCase()) break
@@ -234,7 +246,11 @@ function readAjnaStrategiesForVault(
         runtime.log(`Stopping Ajna strategy scan for ${vaultAddress}: chain read call limit reached`)
         break
       }
-      throw error
+      const message = error instanceof Error ? error.message : String(error)
+      runtime.log(
+        `Skipping Ajna strategy weight read for ${strategyAddress} in vault ${vaultAddress}: ${message}`,
+      )
+      continue
     }
     if (strategyWeight === 0n) continue
 
@@ -348,6 +364,52 @@ export function evaluateAndEnqueueAjnaActions(
     if (!vault.oracleAddress) continue
 
     try {
+      if (manual.forceEnqueue) {
+        const forcedStrategyAddress = normalizeVaultAddress(manual.strategyAddress)
+        if (!forcedStrategyAddress) {
+          skippedActions += 1
+          runtime.log(
+            `Skipping forced Ajna enqueue for ${vault.vaultAddress}: invalid strategyAddress in manual payload`,
+          )
+          continue
+        }
+
+        const forcedTargetBucket = normalizeOptionalInteger(manual.targetBucket) ?? 1
+        const actionType = "strategy.ajna.rebucket"
+        const actionPayload = {
+          action: actionType,
+          actionType,
+          forced: true,
+          vaultAddress: vault.vaultAddress,
+          strategyAddress: forcedStrategyAddress,
+          oracleAddress: vault.oracleAddress,
+          currentBucket: null,
+          suggestedBucket: forcedTargetBucket,
+          steppedBucket: forcedTargetBucket,
+          targetBucket: forcedTargetBucket,
+          method: "setBucketIndex",
+          timestamp: runtime.now().toISOString(),
+        } satisfies Record<string, unknown>
+
+        const actionId = runtime.runInNodeMode(
+          (nr: NodeRuntime<AjnaManagerConfig>) =>
+            enqueueStrategyAction(nr, httpClient, apiKey, {
+              vaultAddress: vault.vaultAddress,
+              groupId: vault.groupId,
+              actionType,
+              dedupeKey: `force:${strategyDedupeKey(vault.vaultAddress, forcedStrategyAddress, forcedTargetBucket)}`,
+              action: actionPayload,
+            }),
+          consensusIdenticalAggregation(),
+        )().result()
+
+        enqueuedActions += 1
+        runtime.log(
+          `Force-enqueued Ajna rebucket action id=${actionId} vault=${vault.vaultAddress} strategy=${forcedStrategyAddress} targetBucket=${forcedTargetBucket}`,
+        )
+        continue
+      }
+
       const suggestedBucket = readOracleSuggestedBucket(runtime, evmClient, vault.oracleAddress)
       if (suggestedBucket === null) {
         skippedActions += 1

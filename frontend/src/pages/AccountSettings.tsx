@@ -1494,7 +1494,7 @@ export function AccountSettings() {
           <Button
             variant="primary"
             size="lg"
-            onClick={() => void auth.signIn()}
+            onClick={() => void auth.signIn({ method: 'privy' })}
             loading={auth.busy}
           >
             Sign in

@@ -635,6 +635,8 @@ const COINBASE_SMART_WALLET_FACTORIES = new Set<Address>([
 const SELECTOR_ERC20_APPROVE = '0x095ea7b3'
 const SELECTOR_COIN_SET_PAYOUT_RECIPIENT = '0x46bb5954'
 const SELECTOR_PERMIT2_PERMIT_TRANSFER_FROM = '0x30f28b7a'
+const SELECTOR_SWAP_ROUTER_EXECUTE = '0x24856bc3' // execute(bytes,bytes[])
+const SELECTOR_SWAP_ROUTER_EXECUTE_WITH_DEADLINE = '0x3593564c' // execute(bytes,bytes[],uint256)
 
 // Coinbase Smart Wallet owner management (used for deploy sessions)
 const SELECTOR_CSW_ADD_OWNER_ADDRESS = '0x0f0f3f24' // addOwnerAddress(address)
@@ -706,6 +708,10 @@ const ALLOWED_ACTIVATION_SELECTORS = new Set<string>([
 
 const ALLOWED_TOKEN_SELECTORS = new Set<string>([SELECTOR_ERC20_APPROVE, SELECTOR_COIN_SET_PAYOUT_RECIPIENT])
 const ALLOWED_PERMIT2_SELECTORS = new Set<string>([SELECTOR_PERMIT2_PERMIT_TRANSFER_FROM])
+const ALLOWED_SWAP_ROUTER_SELECTORS = new Set<string>([
+  SELECTOR_SWAP_ROUTER_EXECUTE,
+  SELECTOR_SWAP_ROUTER_EXECUTE_WITH_DEADLINE,
+])
 const ALLOWED_SELF_SELECTORS = new Set<string>([SELECTOR_CSW_ADD_OWNER_ADDRESS, SELECTOR_CSW_REMOVE_OWNER_AT_INDEX])
 const ALLOWED_ERC8004_SELECTORS = new Set<string>([
   SELECTOR_ERC8004_REGISTER,
@@ -1498,7 +1504,9 @@ async function validateInnerCalls(params: {
 
   if (innerCalls.length === 0) throw new Error('no_inner_calls')
   for (const c of innerCalls) {
-    if (c.value !== 0n) throw new Error('value_transfer_not_allowed')
+    const selector = getSelector(c.data)
+    const isSwapRouterValueCall = c.target === BASE_SWAP_ROUTER && ALLOWED_SWAP_ROUTER_SELECTORS.has(selector)
+    if (c.value !== 0n && !isSwapRouterValueCall) throw new Error('value_transfer_not_allowed')
   }
 
   const erc8004Registry = getErc8004RegistryAddress()
@@ -1531,6 +1539,7 @@ async function validateInnerCalls(params: {
     | 'deploy'
     | 'activate'
     | 'approve_only'
+    | 'swap'
     | 'legacy_withdraw'
     | 'deploy_session_setup'
     | 'agent_registry'
@@ -1683,6 +1692,26 @@ async function validateInnerCalls(params: {
       if (mode === 'charm_rebalance') {
         // Mode resolved; continue validation in pass 2.
       } else {
+      const swapFlowAllowed = (() => {
+        if (innerCalls.length === 0) return false
+        const hasSwapRouterCall = innerCalls.some(
+          (c) => c.target === BASE_SWAP_ROUTER && ALLOWED_SWAP_ROUTER_SELECTORS.has(getSelector(c.data)),
+        )
+        if (!hasSwapRouterCall) return false
+        return innerCalls.every((c) => {
+          const selector = getSelector(c.data)
+          if (c.target === BASE_SWAP_ROUTER) return ALLOWED_SWAP_ROUTER_SELECTORS.has(selector)
+          if (selector !== SELECTOR_ERC20_APPROVE) return false
+          const spender = decodeAddressArgFromCalldata(c.data, 0)
+          if (!spender) return false
+          return spender === permit2 || spender === BASE_SWAP_ROUTER
+        })
+      })()
+
+      if (swapFlowAllowed) {
+        mode = 'swap'
+        expectedCreatorToken = null
+      } else {
       const approveOnlyToken = (() => {
         if (innerCalls.length === 0) return null
         const firstTarget = innerCalls[0].target
@@ -1799,6 +1828,7 @@ async function validateInnerCalls(params: {
             `missing_primary_call(expectedBatcher=${creatorVaultBatcher},expectedActivation=${vaultActivationBatcher},seen=${sample})`,
           )
         }
+      }
       }
       }
     }
@@ -2271,6 +2301,23 @@ async function validateInnerCalls(params: {
       }
 
       continue
+    }
+
+    if (mode === 'swap') {
+      if (c.target === BASE_SWAP_ROUTER) {
+        if (!ALLOWED_SWAP_ROUTER_SELECTORS.has(selector)) throw new Error('swap_router_selector_not_allowed')
+        continue
+      }
+
+      if (selector === SELECTOR_ERC20_APPROVE) {
+        const spender = decodeAddressArgFromCalldata(c.data, 0)
+        if (!spender) throw new Error('approve_decode_failed')
+        const allowedSwapSpenders = new Set<Address>([permit2, BASE_SWAP_ROUTER])
+        if (!allowedSwapSpenders.has(spender)) throw new Error('approve_spender_not_allowed')
+        continue
+      }
+
+      throw new Error('called_address_not_allowed')
     }
 
     // Dynamic token calls: only allow calls to the same creatorToken used in the primary call.

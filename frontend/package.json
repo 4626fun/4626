@@ -23,6 +23,7 @@
     "subdomains:indexer": "tsx scripts/subdomain-indexer.ts",
     "csw:link-owner": "tsx scripts/link-canonical-csw-owner.ts",
     "csw:owner-link:backfill": "tsx scripts/csw-owner-link-backfill.ts",
+    "privy:user:migrate": "tsx scripts/migrate-privy-user.ts",
     "check:agent-registration": "node scripts/check-agent-registration.mjs",
     "verify:protocol-assets": "node scripts/verify-protocol-assets.mjs",
     "builder-codes:verify": "tsx --env-file=.env scripts/verify-builder-codes.ts",
