@@ -36,6 +36,9 @@ export type ChainKey = keyof typeof CHAINS;
 // In single-vault mode, addresses come from env vars (see secrets.example.env).
 // Individual actions handle address resolution — config.ts only exports ABIs/constants.
 
+/** Charm AlphaProVaultFactory on Base mainnet */
+export const CHARM_FACTORY_ADDRESS = '0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa' as const;
+
 // ---------------------------------------------------------------------------
 // Timing constants
 // ---------------------------------------------------------------------------
@@ -143,6 +146,16 @@ export const ORACLE_ABI = [
     name: 'getAjnaBucketFromV3TWAP',
     inputs: [{ name: 'twapDuration', type: 'uint32' }],
     outputs: [{ type: 'uint256' }],
+    stateMutability: 'view',
+  },
+] as const;
+
+export const CHARM_FACTORY_ABI = [
+  {
+    type: 'function',
+    name: 'isVault',
+    inputs: [{ name: '', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
     stateMutability: 'view',
   },
 ] as const;

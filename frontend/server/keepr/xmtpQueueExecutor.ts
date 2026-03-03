@@ -1,7 +1,23 @@
 import { Agent, createSigner, createUser, getInstallationInfo } from '@xmtp/agent-sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { createPublicClient, createWalletClient, http, type Abi } from 'viem'
+import {
+  createPublicClient,
+  createWalletClient,
+  encodeAbiParameters,
+  encodeFunctionData,
+  getAddress,
+  http,
+  type Abi,
+  type Address,
+  type Hex,
+} from 'viem'
+import {
+  createBundlerClient,
+  createPaymasterClient,
+  sendUserOperation,
+  toCoinbaseSmartAccount,
+} from 'viem/account-abstraction'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
 
@@ -11,10 +27,12 @@ import { resolveXmtpDbDirectory } from '../_lib/xmtpDbDirectory.js'
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../_lib/creatorXmtpAgents.js'
 import { createPrivyScwSigner } from '../_lib/privyXmtpSigner.js'
 import { ensureKeeprSchema } from '../_lib/keeprSchema.js'
+import { isOfficialCharmVault, officialCharmVaultError } from '../_lib/charmVaults.js'
 
 declare const process: { env: Record<string, string | undefined>; cwd(): string }
 
 const ETHEREUM_IDENTIFIER_KIND = 0
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 type XmtpActionType =
   | 'xmtp.group.add_member'
@@ -68,6 +86,35 @@ const AJNA_STRATEGY_ADMIN_ABI = [
 
 const CHARM_VAULT_ADMIN_ABI = [
   { type: 'function', name: 'rebalance', stateMutability: 'nonpayable', inputs: [], outputs: [] },
+] as const
+
+const CHARM_VAULT_AUTH_VIEW_ABI = [
+  { type: 'function', name: 'manager', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  {
+    type: 'function',
+    name: 'rebalanceDelegate',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const COINBASE_SMART_WALLET_OWNERS_ABI = [
+  { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  {
+    type: 'function',
+    name: 'ownerAtIndex',
+    stateMutability: 'view',
+    inputs: [{ name: 'index', type: 'uint256' }],
+    outputs: [{ type: 'bytes' }],
+  },
+  {
+    type: 'function',
+    name: 'nextOwnerIndex',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
 ] as const
 
 type QueueAgentRow = {
@@ -309,6 +356,155 @@ function getKeeperAccount() {
   return privateKeyToAccount(pk as `0x${string}`)
 }
 
+function getBundlerAndPaymasterUrl(): string {
+  const direct =
+    (process.env.CDP_PAYMASTER_URL ?? '').trim() ||
+    (process.env.CDP_PAYMASTER_AND_BUNDLER_URL ?? '').trim() ||
+    (process.env.CDP_PAYMASTER_AND_BUNDLER_ENDPOINT ?? '').trim() ||
+    (process.env.PAYMASTER_URL ?? '').trim() ||
+    (process.env.BUNDLER_URL ?? '').trim()
+  if (!direct) {
+    throw new KeeprQueueError('cdp_paymaster_url_missing', false)
+  }
+  return direct
+}
+
+function asOwnerBytes(owner: Address): Hex {
+  return encodeAbiParameters([{ type: 'address' }], [owner]) as Hex
+}
+
+async function findOwnerIndex(params: {
+  publicClient: any
+  smartWallet: Address
+  ownerAddress: Address
+  maxScan?: number
+}): Promise<number | null> {
+  const { publicClient, smartWallet, ownerAddress, maxScan = 512 } = params
+  const countRaw = (await publicClient
+    .readContract({
+      address: smartWallet,
+      abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+      functionName: 'ownerCount',
+    })
+    .catch(() => null)) as bigint | null
+  if (countRaw === null) return null
+
+  const count = Number(countRaw)
+  let upperBound = Number.isFinite(count) ? count : 0
+  const nextRaw = (await publicClient
+    .readContract({
+      address: smartWallet,
+      abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+      functionName: 'nextOwnerIndex',
+    })
+    .catch(() => null)) as bigint | null
+  if (nextRaw !== null) {
+    const next = Number(nextRaw)
+    if (Number.isFinite(next) && next > 0) upperBound = Math.max(upperBound, next)
+  }
+  if (!Number.isFinite(upperBound) || upperBound <= 0) return null
+
+  const expected = asOwnerBytes(ownerAddress).toLowerCase()
+  const limit = Math.min(upperBound, Math.max(1, maxScan))
+  for (let i = 0; i < limit; i += 1) {
+    const ownerBytes = (await publicClient
+      .readContract({
+        address: smartWallet,
+        abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+        functionName: 'ownerAtIndex',
+        args: [BigInt(i)],
+      })
+      .catch(() => null)) as Hex | null
+    if (!ownerBytes) continue
+    if (String(ownerBytes).toLowerCase() === expected) return i
+  }
+  return null
+}
+
+async function waitForUserOperationReceipt(params: {
+  bundlerClient: any
+  hash: `0x${string}`
+  timeoutMs?: number
+  intervalMs?: number
+}): Promise<any> {
+  const timeoutMs = params.timeoutMs ?? 180_000
+  const intervalMs = params.intervalMs ?? 3_000
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    const receipt = await params.bundlerClient.getUserOperationReceipt({ hash: params.hash }).catch(() => null)
+    if (receipt?.receipt?.transactionHash) return receipt
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+  throw new KeeprQueueError('userop_receipt_timeout', true)
+}
+
+async function executeCharmRebalanceViaCswUserOperation(params: {
+  publicClient: any
+  ownerAccount: ReturnType<typeof privateKeyToAccount>
+  charmVaultAddress: `0x${string}`
+  cswAddress: `0x${string}`
+}): Promise<{ userOpHash: `0x${string}`; txHash: `0x${string}`; smartWallet: `0x${string}`; ownerIndex: number }> {
+  const bundlerUrl = getBundlerAndPaymasterUrl()
+  const ownerAddress = getAddress(params.ownerAccount.address as Address)
+  const smartWallet = getAddress(params.cswAddress as Address)
+  const ownerIndex = await findOwnerIndex({
+    publicClient: params.publicClient,
+    smartWallet,
+    ownerAddress,
+    maxScan: 512,
+  })
+  if (ownerIndex === null) {
+    throw new KeeprQueueError('keeper_not_csw_owner', false)
+  }
+
+  const transport = http(bundlerUrl, { timeout: 30_000 })
+  const paymasterClient = createPaymasterClient({ transport })
+  const bundlerClient = createBundlerClient({ client: params.publicClient as any, transport })
+  const account = await toCoinbaseSmartAccount({
+    client: params.publicClient as any,
+    address: smartWallet,
+    owners: [params.ownerAccount as any],
+    ownerIndex,
+    version: '1',
+  })
+
+  const rebalanceCalldata = encodeFunctionData({
+    abi: CHARM_VAULT_ADMIN_ABI as unknown as Abi,
+    functionName: 'rebalance',
+    args: [],
+  })
+
+  const userOpHash = (await sendUserOperation(bundlerClient, {
+    account,
+    calls: [{ to: params.charmVaultAddress, value: 0n, data: rebalanceCalldata }],
+    paymaster: {
+      getPaymasterData: paymasterClient.getPaymasterData,
+      getPaymasterStubData: paymasterClient.getPaymasterStubData,
+    },
+  })) as `0x${string}`
+
+  const userOpReceipt = await waitForUserOperationReceipt({
+    bundlerClient,
+    hash: userOpHash,
+    timeoutMs: 180_000,
+    intervalMs: 3_000,
+  })
+  const txHash = userOpReceipt?.receipt?.transactionHash as `0x${string}` | undefined
+  if (!txHash) throw new KeeprQueueError('userop_transaction_hash_missing', true)
+
+  const txReceipt = await params.publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 180_000 })
+  if (txReceipt.status !== 'success') {
+    throw new KeeprQueueError('transaction_reverted', false)
+  }
+
+  return {
+    userOpHash,
+    txHash,
+    smartWallet: smartWallet as `0x${string}`,
+    ownerIndex,
+  }
+}
+
 function parseUintLikeFromAction(action: Record<string, unknown>, key: string): bigint {
   const raw = action[key]
   if (typeof raw === 'bigint') {
@@ -522,6 +718,7 @@ async function bootstrapMissingGroupForVault(params: {
 async function executeStrategyAction(
   actionType: StrategyActionType,
   action: Record<string, unknown>,
+  options?: { queueRow?: QueueAgentRow | null },
 ): Promise<Record<string, unknown>> {
   const account = getKeeperAccount()
   const rpcUrl = getBaseRpcUrl()
@@ -570,21 +767,107 @@ async function executeStrategyAction(
     action.charmVaultAddress ?? action.strategyAddress,
     'charmVaultAddress',
   )
-  const txHash = await walletClient.writeContract({
-    address: charmVaultAddress,
-    abi: CHARM_VAULT_ADMIN_ABI as unknown as Abi,
-    functionName: 'rebalance',
-    args: [],
-    chain: base,
-    account,
-  })
-  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })
-  if (receipt.status !== 'success') {
-    throw new KeeprQueueError('transaction_reverted', false)
-  }
-  return {
-    txHash,
+  const isOfficialVault = await isOfficialCharmVault({
     charmVaultAddress,
+    publicClient,
+  })
+  if (!isOfficialVault) {
+    throw new KeeprQueueError(officialCharmVaultError(charmVaultAddress), false)
+  }
+
+  const keeperAddress = normalizeAddress(account.address, 'keeperAddress')
+  const [managerRaw, delegateRaw] = (await Promise.all([
+    publicClient
+      .readContract({
+        address: charmVaultAddress,
+        abi: CHARM_VAULT_AUTH_VIEW_ABI,
+        functionName: 'manager',
+      })
+      .catch(() => null),
+    publicClient
+      .readContract({
+        address: charmVaultAddress,
+        abi: CHARM_VAULT_AUTH_VIEW_ABI,
+        functionName: 'rebalanceDelegate',
+      })
+      .catch(() => null),
+  ])) as [unknown, unknown]
+
+  const managerAddress = isAddressLike(managerRaw) ? normalizeAddress(managerRaw, 'manager') : null
+  const delegateAddress = isAddressLike(delegateRaw) ? normalizeAddress(delegateRaw, 'rebalanceDelegate') : null
+  const rowCswAddress =
+    options?.queueRow?.cswAddress && isAddressLike(options.queueRow.cswAddress)
+      ? normalizeAddress(options.queueRow.cswAddress, 'cswAddress')
+      : null
+
+  const cswCandidates = Array.from(
+    new Set(
+      [rowCswAddress, delegateAddress, managerAddress].filter(
+        (addr): addr is `0x${string}` => Boolean(addr && addr !== ZERO_ADDRESS && addr !== keeperAddress),
+      ),
+    ),
+  )
+
+  let lastUserOpError: unknown = null
+  for (const cswAddress of cswCandidates) {
+    try {
+      const viaUserOp = await executeCharmRebalanceViaCswUserOperation({
+        publicClient,
+        ownerAccount: account,
+        charmVaultAddress,
+        cswAddress,
+      })
+      return {
+        txHash: viaUserOp.txHash,
+        userOpHash: viaUserOp.userOpHash,
+        sender: viaUserOp.smartWallet,
+        ownerIndex: viaUserOp.ownerIndex,
+        mode: 'erc4337_paymaster',
+        charmVaultAddress,
+      }
+    } catch (err) {
+      lastUserOpError = err
+      logger.warn('[keepr/xmtp-queue] charm rebalance userop path failed', {
+        charmVaultAddress,
+        cswAddress,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  const keeperCanDirectlyRebalance =
+    (delegateAddress && delegateAddress === keeperAddress) || (managerAddress && managerAddress === keeperAddress)
+
+  if (keeperCanDirectlyRebalance) {
+    const txHash = await walletClient.writeContract({
+      address: charmVaultAddress,
+      abi: CHARM_VAULT_ADMIN_ABI as unknown as Abi,
+      functionName: 'rebalance',
+      args: [],
+      chain: base,
+      account,
+    })
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })
+    if (receipt.status !== 'success') {
+      throw new KeeprQueueError('transaction_reverted', false)
+    }
+    return {
+      txHash,
+      charmVaultAddress,
+      mode: 'direct_eoa',
+    }
+  }
+
+  if (lastUserOpError instanceof KeeprQueueError) throw lastUserOpError
+  if (lastUserOpError) {
+    const msg = lastUserOpError instanceof Error ? lastUserOpError.message : String(lastUserOpError)
+    throw new KeeprQueueError(`charm_rebalance_userop_failed:${msg}`, isLikelyRetryableRpcError(msg))
+  }
+  throw new KeeprQueueError('charm_rebalance_not_authorized_for_keeper', false)
+
+  return {
+    charmVaultAddress,
+    mode: 'unknown',
   }
 }
 
@@ -668,7 +951,7 @@ export async function executeKeeprAction(input: ExecuteKeeprActionInput): Promis
       return { success: false, retryable: false, actionType: normalizedActionType, error: 'vault_not_configured' }
     }
     if (isStrategyActionType(normalizedActionType)) {
-      const details = await executeStrategyAction(normalizedActionType, input.action ?? {})
+      const details = await executeStrategyAction(normalizedActionType, input.action ?? {}, { queueRow: row })
       return {
         success: true,
         retryable: false,

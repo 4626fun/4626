@@ -16,6 +16,8 @@ import { getAddress, isAddress } from 'viem';
 import {
   CHARM_REBALANCE_PRICE_CHANGE_TRIGGER_BPS,
   CHARM_REBALANCE_TWAP_DURATION,
+  CHARM_FACTORY_ABI,
+  CHARM_FACTORY_ADDRESS,
   CHAINS,
   ORACLE_ABI,
 } from '../config.js';
@@ -134,6 +136,16 @@ function buildRuntimeConfig(): RuntimeConfig {
 function asAddress(value: unknown): `0x${string}` | null {
   if (typeof value !== 'string' || !isAddress(value)) return null;
   return getAddress(value) as `0x${string}`;
+}
+
+async function isOfficialCharmVaultAddress(charmVaultAddress: `0x${string}`): Promise<boolean> {
+  const result = await readContract<unknown>({
+    address: CHARM_FACTORY_ADDRESS,
+    abi: CHARM_FACTORY_ABI,
+    functionName: 'isVault',
+    args: [charmVaultAddress],
+  }).catch(() => null);
+  return result === true;
 }
 
 function compareAddressNumeric(a: `0x${string}`, b: `0x${string}`): number {
@@ -269,6 +281,8 @@ export async function readCharmStrategiesForVault(
     }).catch(() => null);
     const charmVaultAddress = asAddress(charmVaultRaw);
     if (!charmVaultAddress || charmVaultAddress.toLowerCase() === ZERO_ADDRESS.toLowerCase()) continue;
+    const isOfficialVault = await isOfficialCharmVaultAddress(charmVaultAddress);
+    if (!isOfficialVault) continue;
 
     out.push({
       strategyAddress,

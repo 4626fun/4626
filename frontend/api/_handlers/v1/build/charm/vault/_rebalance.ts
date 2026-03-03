@@ -3,6 +3,7 @@ import { encodeFunctionData, type Address } from 'viem'
 
 import { handleOptions, readJsonBody } from '../../../../../server/auth/_shared.js'
 import { guardAgentApiRequest } from '../../../../../server/_lib/agentApiGuard.js'
+import { isOfficialCharmVault, officialCharmVaultError } from '../../../../../../server/_lib/charmVaults.js'
 import type { BuildTxResponse } from '../../_types.js'
 import { CHARM_ALPHA_VAULT_ABI } from './_abi.js'
 import { requireAddress, setPublicCors, toBigIntStrict, toInt24Strict } from '../_shared.js'
@@ -31,6 +32,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const body = (await readJsonBody<Body>(req)) ?? ({} as any)
   try {
     const vault = requireAddress(body.vault, 'vault')
+    const isOfficialVault = await isOfficialCharmVault({ charmVaultAddress: vault })
+    if (!isOfficialVault) throw new Error(officialCharmVaultError(vault))
+
     const swapAmount = toBigIntStrict(body.swapAmount, 'swapAmount') // int256 encoded as bigint
     const sqrtPriceLimitX96 = toBigIntStrict(body.sqrtPriceLimitX96, 'sqrtPriceLimitX96') // uint160
 

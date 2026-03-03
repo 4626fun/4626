@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
   handleOptions: vi.fn(() => false),
   readJsonBody: vi.fn(async (req: any) => req.body ?? null),
   guardAgentApiRequest: vi.fn(async (_ctx?: any) => ({ ok: true, ip: '127.0.0.1', auth: null })),
+  isOfficialCharmVault: vi.fn(async () => true),
+  officialCharmVaultError: vi.fn((vault: string) => `not_official_charm_vault:${vault}`),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -30,6 +32,11 @@ vi.mock('../../server/auth/_shared.js', () => ({
 
 vi.mock('../../server/_lib/agentApiGuard.js', () => ({
   guardAgentApiRequest: mocks.guardAgentApiRequest,
+}))
+
+vi.mock('../../server/_lib/charmVaults.js', () => ({
+  isOfficialCharmVault: mocks.isOfficialCharmVault,
+  officialCharmVaultError: mocks.officialCharmVaultError,
 }))
 
 const STRATEGY = '0x1111111111111111111111111111111111111111'
@@ -90,6 +97,8 @@ describe('v1 build Charm handlers', () => {
     mocks.handleOptions.mockReturnValue(false)
     mocks.readJsonBody.mockImplementation(async (req: any) => req.body ?? null)
     mocks.guardAgentApiRequest.mockResolvedValue({ ok: true, ip: '127.0.0.1', auth: null })
+    mocks.isOfficialCharmVault.mockResolvedValue(true)
+    mocks.officialCharmVaultError.mockImplementation((vault: string) => `not_official_charm_vault:${vault}`)
   })
 
   it('returns 405 for non-POST requests', async () => {
@@ -196,6 +205,41 @@ describe('v1 build Charm handlers', () => {
       args: [ADDRESS_B],
     })
     expect(charmVaultRes.body?.data?.data).not.toBe(tampered)
+  })
+
+  it('rejects non-official Charm vault addresses for Charm vault routes', async () => {
+    mocks.isOfficialCharmVault.mockResolvedValue(false)
+
+    const setCharmReq = createMockReq({ method: 'POST', body: { strategy: STRATEGY, charmVault: ADDRESS_A } })
+    const setCharmRes = createMockRes()
+    await setCharmVaultHandler(setCharmReq, setCharmRes)
+    expect(setCharmRes.statusCode).toBe(400)
+    expect(String(setCharmRes.body?.error ?? '')).toContain('not_official_charm_vault')
+
+    const vaultSetStrategyReq = createMockReq({ method: 'POST', body: { vault: VAULT, strategy: STRATEGY } })
+    const vaultSetStrategyRes = createMockRes()
+    await vaultSetStrategyHandler(vaultSetStrategyReq, vaultSetStrategyRes)
+    expect(vaultSetStrategyRes.statusCode).toBe(400)
+    expect(String(vaultSetStrategyRes.body?.error ?? '')).toContain('not_official_charm_vault')
+
+    const vaultRebalanceReq = createMockReq({
+      method: 'POST',
+      body: {
+        vault: VAULT,
+        swapAmount: '1',
+        sqrtPriceLimitX96: '2',
+        baseLower: '-100',
+        baseUpper: '100',
+        bidLower: '-200',
+        bidUpper: '-100',
+        askLower: '100',
+        askUpper: '200',
+      },
+    })
+    const vaultRebalanceRes = createMockRes()
+    await vaultRebalanceHandler(vaultRebalanceReq, vaultRebalanceRes)
+    expect(vaultRebalanceRes.statusCode).toBe(400)
+    expect(String(vaultRebalanceRes.body?.error ?? '')).toContain('not_official_charm_vault')
   })
 
   it('builds calldata for boolean setter handlers and validates boolean input', async () => {

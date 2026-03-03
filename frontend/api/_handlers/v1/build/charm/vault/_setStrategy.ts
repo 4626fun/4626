@@ -3,6 +3,7 @@ import { encodeFunctionData, type Address } from 'viem'
 
 import { handleOptions, readJsonBody } from '../../../../../server/auth/_shared.js'
 import { guardAgentApiRequest } from '../../../../../server/_lib/agentApiGuard.js'
+import { isOfficialCharmVault, officialCharmVaultError } from '../../../../../../server/_lib/charmVaults.js'
 import type { BuildTxResponse } from '../../_types.js'
 import { CHARM_ALPHA_VAULT_ABI } from './_abi.js'
 import { requireAddress, setPublicCors } from '../_shared.js'
@@ -24,6 +25,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const vault = requireAddress(body.vault, 'vault')
     const strategy = requireAddress(body.strategy, 'strategy')
+    const isOfficialVault = await isOfficialCharmVault({ charmVaultAddress: vault })
+    if (!isOfficialVault) throw new Error(officialCharmVaultError(vault))
 
     const data = encodeFunctionData({
       abi: CHARM_ALPHA_VAULT_ABI,

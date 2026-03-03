@@ -25,6 +25,7 @@ import { handleOptions, readJsonBody, setCors, setNoStore } from '../../server/a
 import { readRequestPrincipalAddress } from '../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
 import { hasContractBytecode } from '../../src/wallet/canonicalWalletPolicy'
+import { isOfficialCharmVault } from '../../server/_lib/charmVaults.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -670,6 +671,7 @@ const SELECTOR_VAULT_SET_WHITELIST = '0x53d6fd59' // setWhitelist(address,bool)
 const SELECTOR_VAULT_SET_MINIMUM_TOTAL_IDLE = '0x8212fd43' // setMinimumTotalIdle(uint256)
 const SELECTOR_VAULT_DEPLOY_TO_STRATEGIES = '0x355aa867' // deployToStrategies()
 const SELECTOR_VAULT_UPDATE_STRATEGY_WEIGHT = '0x3e6881c8' // updateStrategyWeight(address,uint256)
+const SELECTOR_CHARM_REBALANCE = '0x7d7c2a1c' // rebalance()
 const SELECTOR_ERC8004_REGISTER = '0xf2c298be' // register(string)
 const SELECTOR_ERC8004_SET_AGENT_URI = '0x0af28bd3' // setAgentURI(uint256,string)
 const SELECTOR_ERC8004_SET_AGENT_WALLET = '0x2d1ef5ae' // setAgentWallet(uint256,address,uint256,bytes)
@@ -807,6 +809,11 @@ const LEGACY_VESTING_VIEW_ABI = [
   { type: 'function', name: 'beneficiary', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
 
+const CHARM_VAULT_AUTH_VIEW_ABI = [
+  { type: 'function', name: 'manager', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'rebalanceDelegate', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+] as const
+
 const SELECTOR_VESTING_RELEASE = '0x86d1a69f'
 const SELECTOR_WRAPPER_UNWRAP = '0xde0e9a3e'
 const SELECTOR_VAULT_REDEEM = '0xba087652'
@@ -929,6 +936,34 @@ async function checkCswOwnership(sessionAddress: Address, cswAddress: Address): 
   } catch {
     return false
   }
+}
+
+async function isAuthorizedCharmRebalanceCaller(params: {
+  charmVaultAddress: Address
+  sender: Address
+}): Promise<boolean> {
+  const sender = getAddress(params.sender)
+  const client = await getBaseClient()
+  const [managerRaw, delegateRaw] = (await Promise.all([
+    client
+      .readContract({
+        address: params.charmVaultAddress,
+        abi: CHARM_VAULT_AUTH_VIEW_ABI,
+        functionName: 'manager',
+      })
+      .catch(() => null),
+    client
+      .readContract({
+        address: params.charmVaultAddress,
+        abi: CHARM_VAULT_AUTH_VIEW_ABI,
+        functionName: 'rebalanceDelegate',
+      })
+      .catch(() => null),
+  ])) as [Address | null, Address | null]
+
+  const manager = managerRaw && isAddress(managerRaw) ? getAddress(managerRaw) : null
+  const delegate = delegateRaw && isAddress(delegateRaw) ? getAddress(delegateRaw) : null
+  return manager === sender || delegate === sender
 }
 
 async function isCreatorAllowlisted(params: {
@@ -1449,6 +1484,7 @@ async function validateInnerCalls(params: {
     | 'deploy_session_setup'
     | 'agent_registry'
     | 'reputation_feedback'
+    | 'charm_rebalance'
     | null = null
   let expectedCreatorToken: Address | null = null
   let expectedVault: Address | null = null
@@ -1566,6 +1602,36 @@ async function validateInnerCalls(params: {
       mode = 'deploy_session_setup'
       expectedCreatorToken = null
     } else {
+      const isCharmRebalanceOnly =
+        innerCalls.length > 0 && innerCalls.every((c) => getSelector(c.data) === SELECTOR_CHARM_REBALANCE)
+      if (isCharmRebalanceOnly) {
+        const uniqueCharmVaults = Array.from(
+          new Set(
+            innerCalls
+              .map((c) => c.target)
+              .filter((target): target is Address => Boolean(target && isAddress(target)))
+              .map((target) => getAddress(target)),
+          ),
+        )
+        if (uniqueCharmVaults.length === 0) throw new Error('charm_vault_not_found')
+        for (const vault of uniqueCharmVaults) {
+          const isOfficial = await isOfficialCharmVault({
+            charmVaultAddress: vault,
+            publicClient: await getBaseClient(),
+          }).catch(() => false)
+          if (!isOfficial) throw new Error('charm_vault_not_official')
+          const authorized = await isAuthorizedCharmRebalanceCaller({
+            charmVaultAddress: vault,
+            sender: params.sender,
+          }).catch(() => false)
+          if (!authorized) throw new Error('charm_rebalance_not_authorized')
+        }
+        mode = 'charm_rebalance'
+        expectedCreatorToken = null
+      }
+      if (mode === 'charm_rebalance') {
+        // Mode resolved; continue validation in pass 2.
+      } else {
       const approveOnlyToken = (() => {
         if (innerCalls.length === 0) return null
         const firstTarget = innerCalls[0].target
@@ -1682,6 +1748,7 @@ async function validateInnerCalls(params: {
             `missing_primary_call(expectedBatcher=${creatorVaultBatcher},expectedActivation=${vaultActivationBatcher},seen=${sample})`,
           )
         }
+      }
       }
     }
   }
@@ -1945,6 +2012,21 @@ async function validateInnerCalls(params: {
         continue
       }
       throw new Error('legacy_target_not_allowed')
+    }
+
+    if (mode === 'charm_rebalance') {
+      if (selector !== SELECTOR_CHARM_REBALANCE) throw new Error('charm_selector_not_allowed')
+      const isOfficial = await isOfficialCharmVault({
+        charmVaultAddress: c.target,
+        publicClient: await getBaseClient(),
+      }).catch(() => false)
+      if (!isOfficial) throw new Error('charm_vault_not_official')
+      const authorized = await isAuthorizedCharmRebalanceCaller({
+        charmVaultAddress: c.target,
+        sender: params.sender,
+      }).catch(() => false)
+      if (!authorized) throw new Error('charm_rebalance_not_authorized')
+      continue
     }
 
     if (c.target === creatorVaultBatcher) {
