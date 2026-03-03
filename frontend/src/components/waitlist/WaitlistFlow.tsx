@@ -2442,10 +2442,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     privyReady={privyReady}
                     privyVerifyBusy={privyVerifyBusy}
                     privyVerifyError={privyVerifyError}
-                    showSiwf={miniApp.isMiniApp === true && farcasterAuth.canSiwf === true}
+                    showSiwf={false}
                     siwfFid={siwfFid}
                     siwfBusy={farcasterAuth.status === 'loading'}
-                    siwfError={farcasterAuth.status === 'error' ? farcasterAuth.error : null}
+                    siwfError={null}
                     onSiwfContinue={handleSiwfContinue}
                     walletOwnershipValid={connectedWalletAuthorized}
                     ownershipEvidenceAvailable={ownershipEvidenceAvailable}

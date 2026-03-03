@@ -7385,26 +7385,6 @@ function DeployVaultMain() {
             <div className="space-y-2">
                 <label className="label">Creator Coin</label>
 
-                {miniApp.isMiniApp && farcasterAuth.status !== 'verified' && farcasterAuth.canSiwf !== false ? (
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-[11px] text-zinc-600">
-                      Verify your profile to enable Mini App autofill.
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void farcasterAuth.signIn()}
-                      disabled={farcasterAuth.status === 'loading'}
-                      className="text-[10px] text-zinc-600 hover:text-zinc-200 transition-colors disabled:opacity-60"
-                      title="Requests an in-app sign-in credential (no transaction)"
-                    >
-                      {farcasterAuth.status === 'loading' ? 'Verifying…' : 'Verify'}
-                    </button>
-                  </div>
-                ) : null}
-                {miniApp.isMiniApp && farcasterAuth.status === 'error' && farcasterAuth.error ? (
-                  <div className="text-[11px] text-red-400/80">{farcasterAuth.error}</div>
-                ) : null}
-
                 {!hasWallet ? (
                   tokenIsValid ? (
                     <input

@@ -11,6 +11,8 @@ import { apiFetch } from '@/lib/apiBase'
 import { getAppBaseUrl, getMarketingBaseUrl } from '@/lib/host'
 import { isPrivyClientEnabled } from '@/lib/flags'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { useFarcasterAuth } from '@/hooks/useFarcasterAuth'
+import { useMiniAppContext } from '@/hooks/useMiniAppContext'
 import { getFarcasterUserByAddress, getFarcasterUserByFid } from '@/lib/neynar-api'
 import { useZoraCoin, useZoraProfile } from '@/lib/zora/hooks'
 import { Alert } from '@/components/ui/Alert'
@@ -337,6 +339,8 @@ function useSafePrivyUserHook(enabled: boolean): { user: any | null } {
 
 export function AccountSettings() {
   const auth = useSiweAuth()
+  const miniApp = useMiniAppContext()
+  const farcasterAuth = useFarcasterAuth()
   const { address: connectedAddressRaw, chainId } = useAccount()
   const { data: walletClient } = useWalletClient({ chainId: base.id })
   const publicClient = usePublicClient({ chainId: base.id })
@@ -1995,6 +1999,52 @@ export function AccountSettings() {
             No associated social accounts found yet.
           </div>
         )}
+
+        {miniApp.isMiniApp === true ? (
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-3 space-y-2 sm:px-4">
+            <div className="text-[11px] font-medium text-zinc-500">Farcaster (Optional)</div>
+            {effectiveFid ? (
+              <div className="text-sm text-zinc-200">
+                Linked as{' '}
+                {farcasterUsername ? (
+                  <a
+                    href={`https://warpcast.com/${farcasterUsername}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-white"
+                  >
+                    @{farcasterUsername}
+                  </a>
+                ) : (
+                  <span>FID {effectiveFid}</span>
+                )}
+                .
+              </div>
+            ) : (
+              <div className="text-sm text-zinc-300">
+                Link Farcaster only if you want optional social points. It is not required for swaps or vault actions.
+              </div>
+            )}
+            {!effectiveFid ? (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <button
+                  type="button"
+                  onClick={() => void farcasterAuth.signIn()}
+                  disabled={farcasterAuth.status === 'loading' || farcasterAuth.canSiwf === false}
+                  className="btn-secondary min-h-10 w-full justify-center disabled:opacity-50 sm:w-auto"
+                >
+                  {farcasterAuth.status === 'loading' ? 'Verifying Farcaster…' : 'Link Farcaster'}
+                </button>
+                <a href="/waitlist/profile" className="text-xs text-zinc-500 hover:text-zinc-300">
+                  View points tasks
+                </a>
+              </div>
+            ) : null}
+            {farcasterAuth.status === 'error' && farcasterAuth.error ? (
+              <div className="text-xs text-rose-300">{farcasterAuth.error}</div>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-3 space-y-2 sm:px-4">
           <div className="text-[11px] font-medium text-zinc-500">Embedded Wallet Export</div>
