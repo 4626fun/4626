@@ -3,9 +3,11 @@ import { motion } from 'framer-motion'
 
 import { SwapDetails } from '@/components/swap/SwapDetails'
 import { TokenInput } from '@/components/swap/TokenInput'
-import { WalletModeToggle } from '@/components/trade/WalletModeToggle'
+import { ChainSelector } from '@/components/trade/ChainSelector'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
+import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
+import type { SupportedChainId } from '@/config/chains'
 import type { TokenDisplay } from '@/lib/uniswap/swapUtils'
 
 type SwapCardProps = {
@@ -35,6 +37,9 @@ type SwapCardProps = {
   priceImpactLabel: string | null
   lpFeeUsd?: string | null
   protocolFeeUsd?: string | null
+  selectedChainId: SupportedChainId
+  walletChainId?: number | null
+  onSelectChain: (chainId: SupportedChainId) => void
   slippagePct: string
   onOpenTokenSelector: (side: 'input' | 'output') => void
   onAmountChange: (value: string) => void
@@ -43,46 +48,50 @@ type SwapCardProps = {
   onReviewTrade: () => void
   onRefreshQuote: () => void
   onSetSlippagePct: (pct: string) => void
-  onSetExecutionMode: (mode: 'canonical' | 'eoa') => void
   onConfirmUnverified: () => void
-  preferredMode: 'canonical' | 'eoa'
   executionMode: 'canonical' | 'eoa'
-  executionAddress?: string | null
-  canonicalAvailable: boolean
-  canonicalConfigured: boolean
-  eoaAvailable: boolean
   fallbackActive: boolean
-  onEnableCanonical: () => void
   needsUnverifiedConfirmation: boolean
   unverifiedTokenLabel?: string | null
   onResetUnverified: () => void
 }
 
 export function SwapCard(props: SwapCardProps) {
+  const usingSmartWallet = props.executionMode === 'canonical'
+
   return (
     <div className="rounded-[22px] border border-white/10 bg-vault-card/70 p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl">
-      <div className="mb-3 flex items-start justify-between">
-        <div className="text-sm text-zinc-400">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="text-sm text-zinc-400 space-y-1">
           <div className="text-[11px] uppercase tracking-[0.25em]">Swap</div>
-          <div className="mt-1 text-lg font-semibold text-white">Token exchange</div>
+          <div className="text-lg font-semibold text-white">Simple token exchange</div>
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[10px] text-zinc-300">
+            <span>Powered by</span>
+            <img src="/protocols/uniswap.svg" alt="Uniswap" className="h-3.5 w-auto" loading="lazy" />
+          </div>
         </div>
-        <WalletModeToggle
-          mode={props.executionMode}
-          preferredMode={props.preferredMode}
-          executionAddress={
-            props.executionAddress
-              ? (props.executionAddress as `0x${string}`)
-              : null
-          }
-          busy={props.busy !== null}
-          canonicalAvailable={props.canonicalAvailable}
-          canonicalConfigured={props.canonicalConfigured}
-          eoaAvailable={props.eoaAvailable}
-          fallbackActive={props.fallbackActive}
-          onChange={props.onSetExecutionMode}
-          onEnableCanonical={props.onEnableCanonical}
-          compact
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <ChainSelector
+            selectedChainId={props.selectedChainId}
+            walletChainId={props.walletChainId}
+            onSelect={props.onSelectChain}
+            compact
+          />
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/35 px-2.5 py-1 text-[10px] text-zinc-300">
+            <WalletProviderIcon
+              provider={usingSmartWallet ? 'coinbase' : 'privy'}
+              walletType={usingSmartWallet ? 'smart_wallet' : 'embedded_eoa'}
+              isCanonicalSmartWallet={usingSmartWallet}
+              size={12}
+            />
+            <span>{usingSmartWallet ? 'Coinbase Smart Wallet' : 'User Wallet'}</span>
+          </div>
+          {props.fallbackActive ? (
+            <div className="inline-flex items-center rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-200">
+              Fallback active
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -158,7 +167,7 @@ export function SwapCard(props: SwapCardProps) {
           false
         }
       >
-        {props.busy ? 'Preparing…' : props.needsUnverifiedConfirmation ? 'Confirm unverified token to swap' : 'Review swap'}
+        {props.busy ? 'Preparing…' : props.needsUnverifiedConfirmation ? 'Confirm unverified token to swap' : 'Swap now'}
       </Button>
 
       {props.error ? <Alert variant="error" className="mt-3">{props.error}</Alert> : null}

@@ -1,7 +1,6 @@
-import { Sparkles } from 'lucide-react'
+import { useMemo } from 'react'
 
 import { TokenAvatar } from '@/components/swap/TokenAvatar'
-import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import type { TokenDisplay } from '@/lib/uniswap/swapUtils'
 
@@ -38,6 +37,22 @@ export function TokenInput({
   tokenIdentityLoading = false,
   inputAriaLabel = 'token amount',
 }: TokenInputVariant) {
+  const tokenBalanceValue = useMemo(() => {
+    const raw = typeof balanceLabel === 'string' ? balanceLabel.trim() : ''
+    if (!raw) return null
+    const amountToken = raw.split(/\s+/)[0] ?? ''
+    const normalized = amountToken.replace(/,/g, '').replace(/^</, '')
+    const parsed = Number(normalized)
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+  }, [balanceLabel])
+
+  const sliderPercent = useMemo(() => {
+    if (tokenBalanceValue == null || tokenBalanceValue <= 0) return 0
+    const next = (Number(amount || '0') / tokenBalanceValue) * 100
+    if (!Number.isFinite(next)) return 0
+    return Math.max(0, Math.min(100, Math.round(next)))
+  }, [amount, tokenBalanceValue])
+
   return (
     <div className="rounded-2xl border border-white/12 bg-black/35 p-4 backdrop-blur-sm">
       <div className="flex items-start justify-between gap-3">
@@ -90,23 +105,33 @@ export function TokenInput({
           <span className="font-medium text-sm text-white">
             {tokenIdentityLoading ? 'Loading…' : token.symbol}
           </span>
-          <Sparkles className="h-4 w-4 text-zinc-400" />
         </button>
       </div>
 
-      {!readOnly && tokenIdentityLoading === false ? (
-        <div className="mt-3 flex items-center gap-2">
-          {quickPercentages.map((pct) => (
-            <Button
-              key={pct}
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() => onQuickPercent?.(pct, balanceLabel ? balanceLabel.split(' ')[0] : null)}
-            >
-              {pct}%
-            </Button>
-          ))}
+      {!readOnly && tokenIdentityLoading === false && tokenBalanceValue !== null ? (
+        <div className="mt-3 rounded-xl border border-white/10 bg-white/3 px-3 py-2.5">
+          <div className="mb-2 flex items-center justify-between text-[10px] text-zinc-500">
+            <span>Amount slider</span>
+            <span className="font-medium text-zinc-300">{sliderPercent}%</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={sliderPercent}
+            onChange={(event) =>
+              onQuickPercent?.(Number(event.target.value), balanceLabel ? balanceLabel.split(' ')[0] : null)
+            }
+            className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-zinc-700 accent-brand-primary"
+            aria-label={`${label} amount percentage`}
+          />
+          <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-500">
+            <span>0%</span>
+            {quickPercentages.map((pct) => (
+              <span key={pct}>{pct}%</span>
+            ))}
+          </div>
         </div>
       ) : null}
 

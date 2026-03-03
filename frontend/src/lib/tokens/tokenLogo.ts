@@ -41,6 +41,7 @@ const knownTokenLogoSeedByChainAndAddress: Record<string, string> = {
   '8453:0x4200000000000000000000000000000000000006': 'https://assets.coingecko.com/coins/images/2518/small/weth.png',
   '8453:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913': 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
   '8453:0xfde4c96c8593536e31f229ea8f37b2ad2699bb2': 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+  '8453:0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf': 'https://assets.coingecko.com/coins/images/40143/small/cbbtc.webp',
 }
 
 function normalizeChainId(chainId: number | undefined): number {

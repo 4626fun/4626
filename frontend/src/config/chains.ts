@@ -23,7 +23,7 @@ export const SUPPORTED_CHAINS: ChainMeta[] = [
     shortName: 'Base',
     chain: base,
     nativeCurrency: { symbol: 'ETH', name: 'Ethereum', decimals: 18 },
-    logoUrl: '/base/1_Base%20Brand%20Assets/The%20Square/Base_square_white.svg',
+    logoUrl: '/base-logo.svg',
     explorerUrl: 'https://basescan.org',
     weth: '0x4200000000000000000000000000000000000006',
     usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',

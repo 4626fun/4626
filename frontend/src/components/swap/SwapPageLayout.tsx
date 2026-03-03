@@ -1,17 +1,10 @@
 import { ReactNode } from 'react'
 
-import { ChainSelector } from '@/components/trade/ChainSelector'
-import type { SupportedChainId } from '@/config/chains'
-
 type SwapPageLayoutProps = {
   children?: ReactNode
   swapPanel: ReactNode
   vaultPanel: ReactNode | null
-  selectedChainId: SupportedChainId
-  walletChainId?: number
   gasIndicatorLabel: string | null
-  walletIndicator?: ReactNode
-  onSelectChain: (chainId: SupportedChainId) => void
   title?: string
   subtitle?: string
 }
@@ -20,11 +13,7 @@ export function SwapPageLayout({
   children,
   swapPanel,
   vaultPanel,
-  selectedChainId,
-  walletChainId,
   gasIndicatorLabel,
-  walletIndicator,
-  onSelectChain,
   title,
   subtitle,
 }: SwapPageLayoutProps) {
@@ -41,23 +30,13 @@ export function SwapPageLayout({
             </h1>
           </div>
 
-          <div className="mb-4 flex flex-col gap-2 rounded-2xl border border-white/8 bg-vault-card/65 p-3 backdrop-blur-xl md:flex-row md:items-center md:justify-between">
-            <div className="shrink-0">
-              <ChainSelector
-                selectedChainId={selectedChainId}
-                walletChainId={walletChainId}
-                onSelect={onSelectChain}
-              />
-            </div>
-            <div className="flex flex-1 items-center justify-end gap-2">
-              {walletIndicator}
-              <div
-                className="rounded-full border border-white/12 bg-black/35 px-3 py-1.5 text-xs text-zinc-300"
-                aria-live="polite"
-                aria-label="Current estimated gas"
-              >
-                Gas {gasIndicatorLabel ?? '—'}
-              </div>
+          <div className="mb-4 flex items-center justify-end">
+            <div
+              className="rounded-full border border-white/12 bg-black/35 px-3 py-1.5 text-xs text-zinc-300"
+              aria-live="polite"
+              aria-label="Current estimated gas"
+            >
+              Gas {gasIndicatorLabel ?? '—'}
             </div>
           </div>
 

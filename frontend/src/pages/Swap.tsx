@@ -6,8 +6,6 @@ import { getAddress, isAddress, toHex, type Address, type Hex } from 'viem'
 import { useAccount, useBalance, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 import { useWallets } from '@privy-io/react-auth'
 
-import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
-import { SwapConfirmModal } from '@/components/trade/SwapConfirmModal'
 import { SwapSettingsSheet } from '@/components/trade/SwapSettingsSheet'
 import { Alert } from '@/components/ui/Alert'
 import { VaultsPanel } from '@/components/swap/VaultsPanel'
@@ -60,20 +58,26 @@ const CORE_TOKENS: TokenOption[] = [
     logoUrls: tokenLogoFallbacks(CONTRACTS.usdc),
   },
   {
-    symbol: 'BTC',
+    symbol: 'cbBTC',
     name: 'Coinbase Wrapped BTC',
     address: '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf',
     group: 'core',
-    logoUrl: uniswapBaseLogo('0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf'),
-    logoUrls: tokenLogoFallbacks('0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf'),
+    logoUrl: 'https://assets.coingecko.com/coins/images/40143/small/cbbtc.webp',
+    logoUrls: [
+      'https://assets.coingecko.com/coins/images/40143/small/cbbtc.webp',
+      ...tokenLogoFallbacks('0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf'),
+    ],
   },
   {
     symbol: 'USDT',
     name: 'Tether USD',
     address: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
     group: 'core',
-    logoUrl: uniswapBaseLogo('0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2'),
-    logoUrls: tokenLogoFallbacks('0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2'),
+    logoUrl: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+    logoUrls: [
+      'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+      ...tokenLogoFallbacks('0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2'),
+    ],
   },
   {
     symbol: 'ZORA',
@@ -425,11 +429,6 @@ export function Swap() {
     }
   }, [ensureProviderOnBase, getPrivyEmbeddedEoaProvider, privyEmbeddedEoaAddress])
 
-  // Whether the system has a canonical CSW address on file for this user.
-  // When false (null DB row), "Smart Wallet" mode is unavailable AND linking
-  // requires account registration — not just the ownership check failure.
-  const canonicalConfigured = canonicalAddress !== null
-  const eoaReady = Boolean(signerAddress && walletClient && publicClient)
   const preferredExecutionMode: WalletMode =
     accountContext.preferredMode === 'SMART_WALLET' ? 'canonical' : 'eoa'
   const executionMode: WalletMode =
@@ -460,12 +459,6 @@ export function Swap() {
   const executionAddress = accountContext.activeAccount ?? null
   const executionReady = Boolean(executionAddress && executionWalletClient && publicClient)
   const executionFallbackActive = executionMode !== preferredExecutionMode
-  const canonicalAvailable = Boolean(
-    canonicalAddress &&
-      (accountContext.signerType === 'SMART_WALLET' ||
-        accountContext.eoaIsOwnerOfCsw === true ||
-        privyEmbeddedCanonicalSignerAvailable),
-  )
   const identityReady = Boolean(
     canonicalAddress &&
       executionWalletClient &&
@@ -618,9 +611,6 @@ export function Swap() {
     isReady,
     approvalRequired,
     quoteIsStale,
-    permitSignatureRequired,
-    permitSignaturePending,
-    permitSignatureReady,
     diagnosticsEnabled,
     txDebug,
     canary7702Eligible,
@@ -628,7 +618,6 @@ export function Swap() {
     diagnosticsResult,
     handleQuote,
     handleReviewTrade,
-    closeConfirm,
     confirmAndExecute,
     run7702DryRun,
     resetTradeState,
@@ -715,6 +704,17 @@ export function Swap() {
     resetTradeState()
   }, [switchTokens, resetTradeState])
 
+  const handleSelectSwapChain = useCallback(
+    (nextChainId: SupportedChainId) => {
+      setSwapChainId(nextChainId)
+      resetTradeState()
+      if (isConnected && walletChainId !== nextChainId && switchChainAsync) {
+        void switchChainAsync({ chainId: nextChainId }).catch(() => {})
+      }
+    },
+    [isConnected, resetTradeState, switchChainAsync, walletChainId],
+  )
+
   const openTokenSelector = useCallback((side: 'input' | 'output') => {
     setTokenSelectorSide(side)
     setTokenSelectorQuery('')
@@ -766,17 +766,6 @@ export function Swap() {
     setUnverifiedSelectionMode(false)
   }, [])
 
-  const handleSetExecutionMode = useCallback(
-    (nextMode: WalletMode) => {
-      accountContext.actions.setPreferredMode(nextMode === 'canonical' ? 'SMART_WALLET' : 'EOA')
-    },
-    [accountContext.actions],
-  )
-
-  const handleEnableCanonical = useCallback(() => {
-    window.location.assign('/account')
-  }, [])
-
   // Reset when execution address changes
   useEffect(() => {
     resetTradeState()
@@ -822,6 +811,12 @@ export function Swap() {
       window.clearTimeout(timer)
     }
   }, [compareRoutesEnabled, executionReady, isReady, tokenIn, tokenOut, amountInUnits])
+
+  // One-click flow: after review/build, immediately execute without an extra in-app confirm modal.
+  useEffect(() => {
+    if (!confirmIntent) return
+    void confirmAndExecute()
+  }, [confirmAndExecute, confirmIntent])
 
   // ─── LP handlers ──────────────────────────────────────────────────────────
   async function handleLpQuote() {
@@ -951,6 +946,9 @@ export function Swap() {
               priceImpactLabel={priceImpactLabel}
               lpFeeUsd={lpFeeUsd}
               protocolFeeUsd={protocolFeeUsd}
+              selectedChainId={swapChainId}
+              walletChainId={walletChainId}
+              onSelectChain={handleSelectSwapChain}
               slippagePct={slippagePct}
               onOpenTokenSelector={openTokenSelector}
               onAmountChange={setAmountInUnits}
@@ -968,19 +966,12 @@ export function Swap() {
               }}
               onRefreshQuote={() => void handleQuote()}
               onSetSlippagePct={setSlippagePct}
-              onSetExecutionMode={handleSetExecutionMode}
-              onEnableCanonical={handleEnableCanonical}
               onResetUnverified={() => {
                 setUnverifiedSelectionMode(false)
                 setUnverifiedTokenLabel(null)
               }}
               onConfirmUnverified={confirmUnverifiedSelection}
-              preferredMode={preferredExecutionMode}
               executionMode={executionMode}
-              executionAddress={executionAddress}
-              canonicalAvailable={canonicalAvailable}
-              canonicalConfigured={canonicalConfigured}
-              eoaAvailable={eoaReady}
               fallbackActive={executionFallbackActive}
               needsUnverifiedConfirmation={unverifiedSelectionMode}
               unverifiedTokenLabel={unverifiedTokenLabel}
@@ -1023,19 +1014,9 @@ export function Swap() {
           )
         }
         vaultPanel={activePanel === 'swap' ? <VaultsPanel chainId={swapChainId} /> : null}
-        selectedChainId={swapChainId}
-        walletChainId={walletChainId}
         gasIndicatorLabel={gasEstimateLabel}
-        walletIndicator={<AccountModeIndicator compact />}
-        onSelectChain={(nextChainId) => {
-          setSwapChainId(nextChainId)
-          resetTradeState()
-          if (isConnected && walletChainId !== nextChainId && switchChainAsync) {
-            void switchChainAsync({ chainId: nextChainId }).catch(() => {})
-          }
-        }}
         title="Swap"
-        subtitle="Token exchange with live quote intelligence."
+        subtitle="Fast token swaps on Base."
       />
 
       {activePanel === 'swap' && diagnosticsEnabled ? (
@@ -1159,32 +1140,6 @@ export function Swap() {
         onSetCompareRoutesEnabled={setCompareRoutesEnabled}
       />
 
-      <SwapConfirmModal
-        intent={confirmIntent}
-        busy={busy}
-        quoteIsStale={quoteIsStale}
-        executionMode={executionMode}
-        executionAddress={executionAddress}
-        signerAddress={signerAddress}
-        tokenInSymbol={tokenInSymbol}
-        tokenOutSymbol={tokenOutSymbol}
-        tokenInLogoUrl={tokenInDisplay.logoUrl}
-        tokenOutLogoUrl={tokenOutDisplay.logoUrl}
-        tokenInLogoUrls={tokenInDisplay.logoUrls}
-        tokenOutLogoUrls={tokenOutDisplay.logoUrls}
-        amountInUnits={amountInUnits}
-        estimatedOut={estimatedOut}
-        parsedSlippage={parsedSlippage}
-        gasEstimateLabel={gasEstimateLabel}
-        priceImpactLabel={priceImpactLabel}
-        routeSummary={routeSummary}
-        approvalRequired={approvalRequired}
-        permitSignatureRequired={permitSignatureRequired}
-        permitSignaturePending={permitSignaturePending}
-        permitSignatureReady={permitSignatureReady}
-        onCancel={closeConfirm}
-        onConfirm={() => { void confirmAndExecute() }}
-      />
     </>
   )
 }

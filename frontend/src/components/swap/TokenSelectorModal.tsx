@@ -452,7 +452,7 @@ export function TokenSelectorModal({
                     </div>
                     <div className="truncate text-[11px] text-zinc-500">
                       {option.name}
-                      <span className="ml-2">{isUnverified ? '· Not in curated list' : null}</span>
+                      {isUnverified ? <span className="ml-2">- Not in curated list</span> : null}
                     </div>
                   </div>
                   {isSelected ? <Check className="h-4 w-4 text-brand-primary" /> : null}
