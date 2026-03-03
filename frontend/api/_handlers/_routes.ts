@@ -97,6 +97,7 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'cre/keeper/mark-settled': () => import('./cre/keeper/_markSettled.js'),
   'cre/keeper/alert': () => import('./cre/keeper/_alert.js'),
   'cre/keeper/aiAssess': () => import('./cre/keeper/_aiAssess.js'),
+  'cre/keeper/solana/reconcile': () => import('./cre/keeper/_solanaReconcile.js'),
 
   'auth/admin': () => import('./auth/_admin.js'),
   'auth/agent-nonce': () => import('./auth/_agent-nonce.js'),

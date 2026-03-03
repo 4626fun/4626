@@ -9,6 +9,7 @@
 
 # Local scratch
 tmp.js
+.cre_build_tmp.js
 
 # Dependencies
 node_modules/

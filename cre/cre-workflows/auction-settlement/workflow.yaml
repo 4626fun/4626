@@ -7,7 +7,7 @@ local-simulation:
     workflow-name: "auction-settlement-local-simulation"
   workflow-artifacts:
     workflow-path: "./main.ts"
-    config-path: "./config.staging.json"
+    config-path: "./config.local-simulation.json"
     secrets-path: "../secrets.yaml"
 
 staging-settings:

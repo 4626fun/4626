@@ -6,29 +6,30 @@
  * Vercel API HTTP bridge.
  *
  * CRE Quota Budget per execution:
- *   - 1 HTTP call: GET /cre/vaults/active?limit=1 (fetch 1 vault)
+ *   - 1 HTTP call: GET /cre/vaults/active (fetch active vault set)
  *   - Up to 10 EVM reads: vault state fields (coinBalance, deploymentThreshold, etc.)
  *   - Up to 2 HTTP calls: POST /cre/keeper/tend and/or POST /cre/keeper/report
  *   Total: 3 HTTP calls + 10 EVM reads (within CRE limits)
  *
- * Processes 1 vault per execution. Runs every 5 minutes.
+ * Processes 1 rotating vault per execution. Runs every 5 minutes.
  */
 
 import {
   CronCapability,
-  EVMClient,
   HTTPClient,
   handler,
   Runner,
   type Runtime,
   type NodeRuntime,
-  LAST_FINALIZED_BLOCK_NUMBER,
-  encodeCallMsg,
   bytesToHex,
   consensusIdenticalAggregation,
 } from "@chainlink/cre-sdk"
-import { encodeFunctionData, decodeFunctionResult, zeroAddress } from "viem"
+import { decodeFunctionResult } from "viem"
 import { VaultABI } from "../contracts/abi"
+import { createEvmClientForChain, readContractBytes, resolveChainId } from "../_shared/evm"
+import { getJson, postJson } from "../_shared/http"
+import { tryNativeWriteReport } from "../_shared/nativeWrite"
+import { selectRotatingItems } from "../_shared/rotation"
 
 // ---------------------------------------------------------------------------
 // Config
@@ -38,15 +39,17 @@ type Config = {
   schedule: string
   apiBaseUrl: string
   chainName: string
+  chainId?: number
   reportIntervalSeconds: number
+  rotationIntervalSeconds?: number
+  nativeWriteEnabled?: boolean
+  nativeReceiver?: `0x${string}`
+  nativeEncoderName?: string
+  nativeSigningAlgo?: string
+  nativeHashingAlgo?: string
+  nativeGasLimit?: string
+  rpcReadRetryAttempts?: number
 }
-
-// ---------------------------------------------------------------------------
-// Chain selector for Base mainnet
-// ---------------------------------------------------------------------------
-
-const BASE_MAINNET_CHAIN_SELECTOR =
-  EVMClient.SUPPORTED_CHAIN_SELECTORS["ethereum-mainnet-base-1"]
 
 // ---------------------------------------------------------------------------
 // Types
@@ -74,6 +77,12 @@ type KeeperResult = {
   reported: boolean
   skippedReason: string
   error: string
+  metrics: {
+    retryCount: number
+    rateLimited: boolean
+    tendExecutionPath: "none" | "native_success" | "bridge_success" | "bridge_failed"
+    reportExecutionPath: "none" | "native_success" | "bridge_success" | "bridge_failed"
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -84,25 +93,18 @@ type VaultReadFn = typeof VaultABI[number]["name"]
 
 function readVaultField(
   runtime: Runtime<Config>,
-  evmClient: EVMClient,
+  evmClient: ReturnType<typeof createEvmClientForChain>,
   vaultAddress: string,
   functionName: VaultReadFn,
+  onRetry?: (attempt: number, error: unknown) => void,
 ): Uint8Array {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const callData = encodeFunctionData({ abi: VaultABI, functionName } as any)
-
-  const result = evmClient
-    .callContract(runtime, {
-      call: encodeCallMsg({
-        from: zeroAddress,
-        to: vaultAddress as `0x${string}`,
-        data: callData,
-      }),
-      blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
-    })
-    .result()
-
-  return result.data
+  return readContractBytes(runtime, evmClient, {
+    address: vaultAddress,
+    abi: VaultABI,
+    functionName,
+    retryAttempts: runtime.config.rpcReadRetryAttempts ?? 3,
+    onRetry,
+  })
 }
 
 function decodeBigInt(data: Uint8Array, functionName: VaultReadFn): bigint {
@@ -113,6 +115,11 @@ function decodeBigInt(data: Uint8Array, functionName: VaultReadFn): bigint {
 function decodeBool(data: Uint8Array, functionName: VaultReadFn): boolean {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return decodeFunctionResult({ abi: VaultABI, functionName, data: bytesToHex(data) } as any) as boolean
+}
+
+function isRpcRateLimitedError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /429|too many requests|rate limit|over rate limit|-32016/i.test(message)
 }
 
 // ---------------------------------------------------------------------------
@@ -147,32 +154,19 @@ function shouldReport(
 // HTTP helper — fetch vault list (runs in node mode)
 // ---------------------------------------------------------------------------
 
-function encodeJsonBody(payload: unknown): string {
-  const json = JSON.stringify(payload)
-  if (typeof btoa === "function") return btoa(json)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const maybeBuffer = (globalThis as any).Buffer
-  if (maybeBuffer?.from) return maybeBuffer.from(json, "utf8").toString("base64")
-  throw new Error("base64_encoder_unavailable")
-}
-
-function fetchVaultListJson(
+function fetchVaults(
   nodeRuntime: NodeRuntime<Config>,
   httpClient: HTTPClient,
   apiKey: string,
-): string {
-  const baseUrl = nodeRuntime.config.apiBaseUrl
-
-  const resp = httpClient.sendRequest(nodeRuntime, {
-    url: `${baseUrl}/cre/vaults/active?chainId=8453&limit=1`,
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-  }).result()
-
-  return new TextDecoder().decode(resp.body)
+  chainId: number,
+): VaultInfo[] {
+  const body = getJson<Config, { success: boolean; data?: { vaults: VaultInfo[] } }>(
+    nodeRuntime,
+    httpClient,
+    apiKey,
+    `/cre/vaults/active?chainId=${chainId}`,
+  )
+  return body.success && body.data ? body.data.vaults : []
 }
 
 // ---------------------------------------------------------------------------
@@ -186,22 +180,13 @@ function sendBridgeRequest(
   endpoint: string,
   payload: Record<string, string>,
 ): boolean {
-  const baseUrl = nodeRuntime.config.apiBaseUrl
-
-  const resp = httpClient.sendRequest(nodeRuntime, {
-    url: `${baseUrl}/cre/keeper/${endpoint}`,
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: encodeJsonBody(payload),
-  }).result()
-
-  const body = JSON.parse(new TextDecoder().decode(resp.body)) as {
-    success: boolean
-  }
-
+  const body = postJson<Config, { success: boolean }>(
+    nodeRuntime,
+    httpClient,
+    apiKey,
+    `/cre/keeper/${endpoint}`,
+    payload,
+  )
   return body.success
 }
 
@@ -212,20 +197,16 @@ function sendBridgeRequest(
 const onCronTrigger = (runtime: Runtime<Config>): KeeperResult => {
   const apiKeySecret = runtime.getSecret({ id: "KEEPR_API_KEY" }).result()
   const apiKey = apiKeySecret.value
+  const chainId = resolveChainId(runtime.config.chainName, runtime.config.chainId)
 
   runtime.log("Vault keeper starting")
 
-  // Step 1: Fetch vault list via HTTP (1 HTTP call)
+  // Step 1: Fetch vault list via HTTP
   const httpClient = new HTTPClient()
-  const vaultsJson = runtime.runInNodeMode(
-    (nr: NodeRuntime<Config>) => fetchVaultListJson(nr, httpClient, apiKey),
+  const vaults = runtime.runInNodeMode(
+    (nr: NodeRuntime<Config>) => fetchVaults(nr, httpClient, apiKey, chainId),
     consensusIdenticalAggregation(),
   )().result()
-  const parsed = JSON.parse(vaultsJson) as {
-    success: boolean
-    data?: { vaults: VaultInfo[] }
-  }
-  const vaults: VaultInfo[] = parsed.success && parsed.data ? parsed.data.vaults : []
 
   if (vaults.length === 0) {
     runtime.log("No vaults found")
@@ -235,34 +216,122 @@ const onCronTrigger = (runtime: Runtime<Config>): KeeperResult => {
       reported: false,
       skippedReason: "no_vaults",
       error: "",
+      metrics: {
+        retryCount: 0,
+        rateLimited: false,
+        tendExecutionPath: "none",
+        reportExecutionPath: "none",
+      },
     }
   }
 
-  const vault = vaults[0]
+  const selected = selectRotatingItems(
+    [...vaults].sort((a, b) => a.vaultAddress.localeCompare(b.vaultAddress)),
+    {
+      now: runtime.now(),
+      rotationIntervalSeconds: runtime.config.rotationIntervalSeconds ?? 300,
+      maxItems: 1,
+    },
+  )
+  const vault = selected[0]
+  if (!vault) {
+    runtime.log("No selected vaults after rotation")
+    return {
+      vaultAddress: "",
+      tended: false,
+      reported: false,
+      skippedReason: "no_selected_vaults",
+      error: "",
+      metrics: {
+        retryCount: 0,
+        rateLimited: false,
+        tendExecutionPath: "none",
+        reportExecutionPath: "none",
+      },
+    }
+  }
+
   const addr = vault.vaultAddress
   runtime.log(`Processing vault ${addr}`)
 
-  // Step 2: Read vault state via EVMClient (up to 8 EVM reads)
-  const evmClient = new EVMClient(BASE_MAINNET_CHAIN_SELECTOR)
+  // Step 2: Read vault state via EVMClient
+  const evmClient = createEvmClientForChain(runtime.config.chainName)
+  let rpcRetryCount = 0
+  const onReadRetry = () => {
+    rpcRetryCount += 1
+  }
 
-  const coinBalanceData = readVaultField(runtime, evmClient, addr, "coinBalance")
-  const deploymentThresholdData = readVaultField(runtime, evmClient, addr, "deploymentThreshold")
-  const minimumTotalIdleData = readVaultField(runtime, evmClient, addr, "minimumTotalIdle")
-  const totalStrategyWeightData = readVaultField(runtime, evmClient, addr, "totalStrategyWeight")
-  const lastReportData = readVaultField(runtime, evmClient, addr, "lastReport")
-  const isShutdownData = readVaultField(runtime, evmClient, addr, "isShutdown")
-  const pausedData = readVaultField(runtime, evmClient, addr, "paused")
-  const totalAssetsData = readVaultField(runtime, evmClient, addr, "totalAssets")
+  let state: VaultState
+  try {
+    const coinBalanceData = readVaultField(runtime, evmClient, addr, "coinBalance", onReadRetry)
+    const deploymentThresholdData = readVaultField(
+      runtime,
+      evmClient,
+      addr,
+      "deploymentThreshold",
+      onReadRetry,
+    )
+    const minimumTotalIdleData = readVaultField(
+      runtime,
+      evmClient,
+      addr,
+      "minimumTotalIdle",
+      onReadRetry,
+    )
+    const totalStrategyWeightData = readVaultField(
+      runtime,
+      evmClient,
+      addr,
+      "totalStrategyWeight",
+      onReadRetry,
+    )
+    const lastReportData = readVaultField(runtime, evmClient, addr, "lastReport", onReadRetry)
+    const isShutdownData = readVaultField(runtime, evmClient, addr, "isShutdown", onReadRetry)
+    const pausedData = readVaultField(runtime, evmClient, addr, "paused", onReadRetry)
+    const totalAssetsData = readVaultField(runtime, evmClient, addr, "totalAssets", onReadRetry)
 
-  const state: VaultState = {
-    coinBalance: decodeBigInt(coinBalanceData, "coinBalance"),
-    deploymentThreshold: decodeBigInt(deploymentThresholdData, "deploymentThreshold"),
-    minimumTotalIdle: decodeBigInt(minimumTotalIdleData, "minimumTotalIdle"),
-    totalStrategyWeight: decodeBigInt(totalStrategyWeightData, "totalStrategyWeight"),
-    lastReport: decodeBigInt(lastReportData, "lastReport"),
-    isShutdown: decodeBool(isShutdownData, "isShutdown"),
-    paused: decodeBool(pausedData, "paused"),
-    totalAssets: decodeBigInt(totalAssetsData, "totalAssets"),
+    state = {
+      coinBalance: decodeBigInt(coinBalanceData, "coinBalance"),
+      deploymentThreshold: decodeBigInt(deploymentThresholdData, "deploymentThreshold"),
+      minimumTotalIdle: decodeBigInt(minimumTotalIdleData, "minimumTotalIdle"),
+      totalStrategyWeight: decodeBigInt(totalStrategyWeightData, "totalStrategyWeight"),
+      lastReport: decodeBigInt(lastReportData, "lastReport"),
+      isShutdown: decodeBool(isShutdownData, "isShutdown"),
+      paused: decodeBool(pausedData, "paused"),
+      totalAssets: decodeBigInt(totalAssetsData, "totalAssets"),
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (isRpcRateLimitedError(error)) {
+      runtime.log(`RPC rate-limited while reading ${addr}; skipping this run`)
+      return {
+        vaultAddress: addr,
+        tended: false,
+        reported: false,
+        skippedReason: "rpc_rate_limited",
+        error: "",
+        metrics: {
+          retryCount: rpcRetryCount,
+          rateLimited: true,
+          tendExecutionPath: "none",
+          reportExecutionPath: "none",
+        },
+      }
+    }
+    runtime.log(`Vault read failed for ${addr}: ${message}`)
+    return {
+      vaultAddress: addr,
+      tended: false,
+      reported: false,
+      skippedReason: "evm_read_failed",
+      error: message,
+      metrics: {
+        retryCount: rpcRetryCount,
+        rateLimited: false,
+        tendExecutionPath: "none",
+        reportExecutionPath: "none",
+      },
+    }
   }
 
   // Guard: vault is shutdown or paused
@@ -274,6 +343,12 @@ const onCronTrigger = (runtime: Runtime<Config>): KeeperResult => {
       reported: false,
       skippedReason: "vault_shutdown",
       error: "",
+      metrics: {
+        retryCount: rpcRetryCount,
+        rateLimited: false,
+        tendExecutionPath: "none",
+        reportExecutionPath: "none",
+      },
     }
   }
   if (state.paused) {
@@ -284,6 +359,12 @@ const onCronTrigger = (runtime: Runtime<Config>): KeeperResult => {
       reported: false,
       skippedReason: "vault_paused",
       error: "",
+      metrics: {
+        retryCount: rpcRetryCount,
+        rateLimited: false,
+        tendExecutionPath: "none",
+        reportExecutionPath: "none",
+      },
     }
   }
 
@@ -294,25 +375,65 @@ const onCronTrigger = (runtime: Runtime<Config>): KeeperResult => {
 
   let tended = false
   let reported = false
+  let tendExecutionPath: KeeperResult["metrics"]["tendExecutionPath"] = "none"
+  let reportExecutionPath: KeeperResult["metrics"]["reportExecutionPath"] = "none"
 
-  // Step 4: Execute writes via HTTP bridge
+  // Step 4: Execute writes via native report path (prototype) with HTTP fallback
   if (needsTend) {
-    runtime.log(`Calling tend() for ${addr} via HTTP bridge`)
-    tended = runtime.runInNodeMode(
-      (nr: NodeRuntime<Config>) =>
-        sendBridgeRequest(nr, httpClient, apiKey, "tend", { vaultAddress: addr }),
-      consensusIdenticalAggregation(),
-    )().result()
+    const nativeTend = tryNativeWriteReport(runtime, evmClient, {
+      action: "tend",
+      vaultAddress: addr,
+      timestamp: runtime.now().toISOString(),
+    })
+    if (nativeTend.success) {
+      tended = true
+      tendExecutionPath = "native_success"
+      runtime.log(`Native tend write succeeded${nativeTend.txHash ? ` tx=${nativeTend.txHash}` : ""}`)
+    } else {
+      if (nativeTend.attempted) {
+        runtime.log(
+          `Native tend write failed, falling back to HTTP bridge (${nativeTend.error ?? "unknown_error"})`,
+        )
+      } else {
+        runtime.log(`Calling tend() for ${addr} via HTTP bridge`)
+      }
+      tended = runtime.runInNodeMode(
+        (nr: NodeRuntime<Config>) =>
+          sendBridgeRequest(nr, httpClient, apiKey, "tend", { vaultAddress: addr }),
+        consensusIdenticalAggregation(),
+      )().result()
+      tendExecutionPath = tended ? "bridge_success" : "bridge_failed"
+    }
     runtime.log(`tend() ${tended ? "succeeded" : "failed"}`)
   }
 
   if (needsReport) {
-    runtime.log(`Calling report() for ${addr} via HTTP bridge`)
-    reported = runtime.runInNodeMode(
-      (nr: NodeRuntime<Config>) =>
-        sendBridgeRequest(nr, httpClient, apiKey, "report", { vaultAddress: addr }),
-      consensusIdenticalAggregation(),
-    )().result()
+    const nativeReport = tryNativeWriteReport(runtime, evmClient, {
+      action: "report",
+      vaultAddress: addr,
+      timestamp: runtime.now().toISOString(),
+    })
+    if (nativeReport.success) {
+      reported = true
+      reportExecutionPath = "native_success"
+      runtime.log(
+        `Native report write succeeded${nativeReport.txHash ? ` tx=${nativeReport.txHash}` : ""}`,
+      )
+    } else {
+      if (nativeReport.attempted) {
+        runtime.log(
+          `Native report write failed, falling back to HTTP bridge (${nativeReport.error ?? "unknown_error"})`,
+        )
+      } else {
+        runtime.log(`Calling report() for ${addr} via HTTP bridge`)
+      }
+      reported = runtime.runInNodeMode(
+        (nr: NodeRuntime<Config>) =>
+          sendBridgeRequest(nr, httpClient, apiKey, "report", { vaultAddress: addr }),
+        consensusIdenticalAggregation(),
+      )().result()
+      reportExecutionPath = reported ? "bridge_success" : "bridge_failed"
+    }
     runtime.log(`report() ${reported ? "succeeded" : "failed"}`)
   }
 
@@ -326,6 +447,12 @@ const onCronTrigger = (runtime: Runtime<Config>): KeeperResult => {
     reported,
     skippedReason: "",
     error: "",
+    metrics: {
+      retryCount: rpcRetryCount,
+      rateLimited: false,
+      tendExecutionPath,
+      reportExecutionPath,
+    },
   }
 }
 

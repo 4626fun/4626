@@ -6,7 +6,7 @@
  * have NOT been marked as settled in the DB.
  *
  * Flow:
- *   1. HTTP: GET /cre/vaults/active?settled=false&chainId=8453
+ *   1. HTTP: GET /cre/vaults/active?settled=false&chainId=<configured-chain>
  *   2. EVM:  currentAuction(), isGraduated(), sweepCurrencyBlock()
  *   3. HTTP: POST /cre/keeper/sweep (if graduated + not yet swept)
  *   4. HTTP: POST /cre/keeper/mark-settled (record timestamps)
@@ -21,19 +21,20 @@
 
 import {
   CronCapability,
-  EVMClient,
   HTTPClient,
   handler,
   Runner,
   type Runtime,
   type NodeRuntime,
-  LAST_FINALIZED_BLOCK_NUMBER,
-  encodeCallMsg,
   bytesToHex,
   consensusIdenticalAggregation,
 } from "@chainlink/cre-sdk"
-import { encodeFunctionData, decodeFunctionResult, zeroAddress } from "viem"
+import { decodeFunctionResult, zeroAddress } from "viem"
 import { CCAStrategyABI, CCAAuctionABI } from "../contracts/abi"
+import { createEvmClientForChain, readContractBytes, resolveChainId } from "../_shared/evm"
+import { getJson, postJson } from "../_shared/http"
+import { tryNativeWriteReport } from "../_shared/nativeWrite"
+import { selectRotatingItems } from "../_shared/rotation"
 
 // ---------------------------------------------------------------------------
 // Config
@@ -43,14 +44,16 @@ type Config = {
   schedule: string
   apiBaseUrl: string
   chainName: string
+  chainId?: number
+  maxVaultsPerExecution?: number
+  rotationIntervalSeconds?: number
+  nativeWriteEnabled?: boolean
+  nativeReceiver?: `0x${string}`
+  nativeEncoderName?: string
+  nativeSigningAlgo?: string
+  nativeHashingAlgo?: string
+  nativeGasLimit?: string
 }
-
-// ---------------------------------------------------------------------------
-// Chain selector for Base mainnet
-// ---------------------------------------------------------------------------
-
-const BASE_MAINNET_CHAIN_SELECTOR =
-  EVMClient.SUPPORTED_CHAIN_SELECTORS["ethereum-mainnet-base-1"]
 
 // ---------------------------------------------------------------------------
 // Types
@@ -82,57 +85,36 @@ type SettlementResult = {
 
 function readContractField(
   runtime: Runtime<Config>,
-  evmClient: EVMClient,
+  evmClient: ReturnType<typeof createEvmClientForChain>,
   address: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   abi: any,
   functionName: string,
 ): Uint8Array {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const callData = encodeFunctionData({ abi, functionName } as any)
-
-  return evmClient
-    .callContract(runtime, {
-      call: encodeCallMsg({
-        from: zeroAddress,
-        to: address as `0x${string}`,
-        data: callData,
-      }),
-      blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
-    })
-    .result().data
+  return readContractBytes(runtime, evmClient, {
+    address,
+    abi,
+    functionName,
+  })
 }
 
 // ---------------------------------------------------------------------------
 // HTTP helpers
 // ---------------------------------------------------------------------------
 
-function encodeJsonBody(payload: unknown): string {
-  const json = JSON.stringify(payload)
-  if (typeof btoa === "function") return btoa(json)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const maybeBuffer = (globalThis as any).Buffer
-  if (maybeBuffer?.from) return maybeBuffer.from(json, "utf8").toString("base64")
-  throw new Error("base64_encoder_unavailable")
-}
-
-function fetchUnsettledVaultsJson(
+function fetchUnsettledVaults(
   nodeRuntime: NodeRuntime<Config>,
   httpClient: HTTPClient,
   apiKey: string,
+  chainId: number,
 ): string {
-  const baseUrl = nodeRuntime.config.apiBaseUrl
-
-  const resp = httpClient.sendRequest(nodeRuntime, {
-    url: `${baseUrl}/cre/vaults/active?settled=false&chainId=8453`,
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-  }).result()
-
-  return new TextDecoder().decode(resp.body)
+  const body = getJson<Config, { success: boolean; data?: { vaults: VaultInfo[] } }>(
+    nodeRuntime,
+    httpClient,
+    apiKey,
+    `/cre/vaults/active?settled=false&chainId=${chainId}`,
+  )
+  return JSON.stringify(body.success && body.data ? body.data.vaults : [])
 }
 
 function sendSweepRequest(
@@ -141,22 +123,13 @@ function sendSweepRequest(
   apiKey: string,
   ccaStrategyAddress: string,
 ): boolean {
-  const baseUrl = nodeRuntime.config.apiBaseUrl
-
-  const resp = httpClient.sendRequest(nodeRuntime, {
-    url: `${baseUrl}/cre/keeper/sweep`,
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: encodeJsonBody({ ccaStrategyAddress }),
-  }).result()
-
-  const body = JSON.parse(new TextDecoder().decode(resp.body)) as {
-    success: boolean
-  }
-
+  const body = postJson<Config, { success: boolean }>(
+    nodeRuntime,
+    httpClient,
+    apiKey,
+    "/cre/keeper/sweep",
+    { ccaStrategyAddress },
+  )
   return body.success
 }
 
@@ -168,26 +141,17 @@ function markSettled(
   graduatedAt?: string,
   settledAt?: string,
 ): boolean {
-  const baseUrl = nodeRuntime.config.apiBaseUrl
-
   const payload: Record<string, string> = { vaultAddress }
   if (graduatedAt) payload.graduatedAt = graduatedAt
   if (settledAt) payload.settledAt = settledAt
 
-  const resp = httpClient.sendRequest(nodeRuntime, {
-    url: `${baseUrl}/cre/keeper/mark-settled`,
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: encodeJsonBody(payload),
-  }).result()
-
-  const body = JSON.parse(new TextDecoder().decode(resp.body)) as {
-    success: boolean
-  }
-
+  const body = postJson<Config, { success: boolean }>(
+    nodeRuntime,
+    httpClient,
+    apiKey,
+    "/cre/keeper/mark-settled",
+    payload,
+  )
   return body.success
 }
 
@@ -198,24 +162,27 @@ function markSettled(
 const onCronTrigger = (runtime: Runtime<Config>): SettlementResult => {
   const apiKeySecret = runtime.getSecret({ id: "KEEPR_API_KEY" }).result()
   const apiKey = apiKeySecret.value
+  const chainId = resolveChainId(runtime.config.chainName, runtime.config.chainId)
 
   runtime.log("Auction settlement (smart polling) starting")
 
   // Step 1: Fetch only unsettled vaults
   const httpClient = new HTTPClient()
   const vaultsJson = runtime.runInNodeMode(
-    (nr: NodeRuntime<Config>) => fetchUnsettledVaultsJson(nr, httpClient, apiKey),
+    (nr: NodeRuntime<Config>) => fetchUnsettledVaults(nr, httpClient, apiKey, chainId),
     consensusIdenticalAggregation(),
   )().result()
+  const vaults = JSON.parse(vaultsJson) as VaultInfo[]
 
-  const parsed = JSON.parse(vaultsJson) as {
-    success: boolean
-    data?: { vaults: VaultInfo[] }
-  }
-  const vaults: VaultInfo[] = parsed.success && parsed.data ? parsed.data.vaults : []
-
-  // Find the first vault with a CCA strategy
-  const vault = vaults.find((v) => v.ccaStrategyAddress)
+  const eligibleVaults = vaults
+    .filter((v) => v.ccaStrategyAddress)
+    .sort((a, b) => a.vaultAddress.localeCompare(b.vaultAddress))
+  const selected = selectRotatingItems(eligibleVaults, {
+    now: runtime.now(),
+    rotationIntervalSeconds: runtime.config.rotationIntervalSeconds ?? 3600,
+    maxItems: runtime.config.maxVaultsPerExecution ?? 1,
+  })
+  const vault = selected[0]
   if (!vault || !vault.ccaStrategyAddress) {
     runtime.log("No unsettled vaults with CCA strategy found")
     return {
@@ -235,7 +202,7 @@ const onCronTrigger = (runtime: Runtime<Config>): SettlementResult => {
   runtime.log(`Processing CCA strategy ${ccaAddr} for vault ${vault.vaultAddress}`)
 
   // Step 2: Read auction state via EVMClient
-  const evmClient = new EVMClient(BASE_MAINNET_CHAIN_SELECTOR)
+  const evmClient = createEvmClientForChain(runtime.config.chainName)
 
   // Read currentAuction()
   const auctionData = readContractField(runtime, evmClient, ccaAddr, CCAStrategyABI, "currentAuction")
@@ -313,7 +280,7 @@ const onCronTrigger = (runtime: Runtime<Config>): SettlementResult => {
   }
 
   // Step 3: Graduated but not yet swept — execute sweep
-  runtime.log(`Auction ${auctionAddress} graduated — calling sweep via HTTP bridge`)
+  runtime.log(`Auction ${auctionAddress} graduated — attempting native sweep write`)
 
   // Record graduation timestamp
   runtime.runInNodeMode(
@@ -322,11 +289,27 @@ const onCronTrigger = (runtime: Runtime<Config>): SettlementResult => {
     consensusIdenticalAggregation(),
   )().result()
 
-  const swept = runtime.runInNodeMode(
-    (nr: NodeRuntime<Config>) =>
-      sendSweepRequest(nr, httpClient, apiKey, ccaAddr),
-    consensusIdenticalAggregation(),
-  )().result()
+  const nativeSweep = tryNativeWriteReport(runtime, evmClient, {
+    action: "sweep",
+    ccaStrategyAddress: ccaAddr,
+    vaultAddress: vault.vaultAddress,
+    timestamp: nowIso,
+  })
+
+  const swept = nativeSweep.success
+    ? true
+    : runtime.runInNodeMode(
+        (nr: NodeRuntime<Config>) => sendSweepRequest(nr, httpClient, apiKey, ccaAddr),
+        consensusIdenticalAggregation(),
+      )().result()
+
+  if (nativeSweep.success) {
+    runtime.log(`Native sweep write succeeded${nativeSweep.txHash ? ` tx=${nativeSweep.txHash}` : ""}`)
+  } else if (nativeSweep.attempted) {
+    runtime.log(
+      `Native sweep write failed, falling back to HTTP bridge (${nativeSweep.error ?? "unknown_error"})`,
+    )
+  }
 
   // Step 4: If sweep succeeded, mark as fully settled
   let markedSettled = false

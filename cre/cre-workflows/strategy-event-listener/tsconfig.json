@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist",
+    "declaration": true,
+    "types": ["bun"]
+  },
+  "include": [
+    "main.ts",
+    "../contracts/**/*.ts",
+    "../_shared/**/*.ts",
+    "../ajna-bucket-manager/main.ts",
+    "../charm-rebalance-manager/main.ts"
+  ]
+}

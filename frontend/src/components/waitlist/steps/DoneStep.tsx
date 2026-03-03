@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, ArrowRight, Copy, Loader2, Share2, Trophy, ExternalLink, Wallet } from 'lucide-react'
+import { CheckCircle2, ArrowRight, Copy, Loader2, Trophy, ExternalLink, Wallet, ChevronDown } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useLinkAccount, usePrivy } from '@privy-io/react-auth'
 import { LaunchCoinCard } from '../LaunchCoinCard'
@@ -11,6 +11,7 @@ import { usePrivyClientStatus } from '@/lib/privy/client'
 import { classifyPreprovisionResponse } from '../preprovisionStatus'
 import { StepIndicator } from '@/components/ui/StepIndicator'
 import { Alert } from '@/components/ui/Alert'
+import { deriveWaitlistRewards } from '@/lib/rewards/waitlistRewards'
 
 const baseEase = [0.4, 0, 0.2, 1] as const
 const fadeUp = {
@@ -124,8 +125,6 @@ type DoneStepProps = {
       }
     | null
   deployAccessState?: 'checking' | 'ready' | 'waitlist'
-  onCopyReferral: () => void
-  copyToast?: string | null
   creatorCoinMissing?: boolean
   smartWalletAddress?: string | null
   ownerAddress?: string | null
@@ -179,7 +178,7 @@ function AddrRow({ label, address, accent, icon }: {
           type="button"
           onClick={handleCopy}
           title="Copy"
-          className="shrink-0 p-1 rounded-md hover:bg-white/8 transition-colors"
+          className="shrink-0 rounded-md p-1 transition-colors hover:bg-white/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
         >
           {copied
             ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
@@ -191,54 +190,81 @@ function AddrRow({ label, address, accent, icon }: {
   )
 }
 
-function WalletSnapshotCard(props: {
-  connectedOwnerAddress: string | null
-  canonicalSmartWalletAddress: string | null
+function WalletCardCollapsed(props: {
+  ownerWallet: string | null
+  smartWallet: string | null
   creatorCoin?: CreatorCoinSnap | null
 }) {
-  const connectedOwnerAddress = normalizeEvmAddress(props.connectedOwnerAddress)
-  const canonicalSmartWalletAddress = normalizeEvmAddress(props.canonicalSmartWalletAddress)
+  const [expanded, setExpanded] = useState(false)
+  const ownerWallet = normalizeEvmAddress(props.ownerWallet)
+  const smartWallet = normalizeEvmAddress(props.smartWallet)
+  const detailsId = 'waitlist-wallet-card-details'
 
   return (
-    <motion.div {...fadeUp} className="rounded-2xl border border-white/8 bg-white/2 overflow-hidden">
-      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-white/6">
-        <div className="inline-flex items-center gap-1.5">
-          <Wallet className="w-3.5 h-3.5 text-brand-primary" />
-          <span className="text-[13px] font-medium text-zinc-200">Wallet</span>
+    <motion.section {...fadeUp} className="rounded-2xl border border-white/8 bg-white/3 overflow-hidden">
+      <div className="p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="inline-flex items-center gap-2">
+            <Wallet className="h-4 w-4 text-brand-primary" />
+            <span className="text-[13px] font-medium text-zinc-200">Wallets</span>
+          </div>
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-controls={detailsId}
+            onClick={() => setExpanded((prev) => !prev)}
+            className="inline-flex min-h-10 items-center gap-1 rounded-xl border border-white/10 px-3 text-[12px] font-medium text-zinc-300 transition-colors hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
+          >
+            {expanded ? 'Hide details' : 'Show details'}
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+          </button>
         </div>
-        <span className="rounded-full border border-brand-primary/25 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
-          Account ready
-        </span>
+
+        <AddrRow label="Owner wallet" address={ownerWallet} />
+
+        <AnimatePresence initial={false}>
+          {expanded ? (
+            <motion.div
+              id={detailsId}
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: baseEase }}
+              className="overflow-hidden space-y-2"
+            >
+              <AddrRow label="Smart wallet" address={smartWallet} accent />
+              {props.creatorCoin ? (
+                <AddrRow
+                  label="Creator coin"
+                  address={props.creatorCoin.address}
+                  icon={
+                    props.creatorCoin.imageUrl ? (
+                      <img src={props.creatorCoin.imageUrl} className="h-4 w-4 rounded-full object-cover" alt="" />
+                    ) : (
+                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-brand-primary/20 text-[8px] font-bold text-brand-300">
+                        $
+                      </span>
+                    )
+                  }
+                />
+              ) : null}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
 
-      <div className="p-3 space-y-1.5">
-        <AddrRow label="Owner wallet" address={connectedOwnerAddress} />
-        <AddrRow label="Smart wallet" address={canonicalSmartWalletAddress} accent />
-        {props.creatorCoin && (
-          <AddrRow
-            label="Creator coin"
-            address={props.creatorCoin.address}
-            icon={
-              props.creatorCoin.imageUrl
-                ? <img src={props.creatorCoin.imageUrl} className="w-4 h-4 rounded-full object-cover" alt="" />
-                : <span className="w-4 h-4 rounded-full bg-brand-primary/20 flex items-center justify-center text-[8px] font-bold text-brand-300">$</span>
-            }
-          />
-        )}
-      </div>
-
-      <div className="px-3 pb-3">
+      <div className="border-t border-white/8 bg-white/2 p-3">
         <a
           href="https://4626.fun/account"
           target="_blank"
           rel="noreferrer"
-          className="flex items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-white/3 px-3 py-2 text-[12px] font-medium text-zinc-300 hover:bg-white/6 hover:text-white transition-colors"
+          className="btn-secondary min-h-10 w-full justify-center text-[12px]"
         >
           Open account
-          <ExternalLink className="w-3 h-3" />
+          <ExternalLink className="h-3.5 w-3.5" />
         </a>
       </div>
-    </motion.div>
+    </motion.section>
   )
 }
 
@@ -286,94 +312,163 @@ function CtaLoadingSkeleton() {
   )
 }
 
-/** CTA shown when the user is waitlisted (not yet approved). */
-function WaitlistedCta({
-  waitlistPosition,
-  onCopyReferral,
-  referralLink,
-  copyToast,
+function RewardsCard({
+  pointsBalance,
+  tierLabel,
+  badgeEarned,
+  referralUrl,
+  rank,
+  onEarnMore,
+  onViewLeaderboard,
+  onReferralCopied,
+  copyHint,
 }: {
-  waitlistPosition: WaitlistState['waitlistPosition']
-  onCopyReferral: () => void
-  referralLink: string
-  copyToast?: string | null
+  pointsBalance: number
+  tierLabel: string
+  badgeEarned: boolean
+  referralUrl: string
+  rank: number | null
+  onEarnMore: () => void
+  onViewLeaderboard: () => void
+  onReferralCopied?: () => void
+  copyHint?: string | null
 }) {
-  const rank = waitlistPosition?.rank?.total
-  const navigate = useNavigate()
-  const nextBand = useMemo(() => {
-    if (typeof rank !== 'number' || !Number.isFinite(rank) || rank <= 1) return null
-    const bands = [500, 250, 100, 50, 25, 10, 5, 1]
-    const target = bands.find((b) => rank > b)
-    if (!target) return null
-    return { target, remaining: Math.max(0, rank - target) }
-  }, [rank])
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
+  const xShareHref = `https://x.com/intent/tweet?text=${encodeURIComponent("I'm on the 4626 waitlist. Join with my link:")}&url=${encodeURIComponent(referralUrl)}`
+  const farcasterShareHref = `https://warpcast.com/~/compose?text=${encodeURIComponent(`I'm on the 4626 waitlist. Join with my link: ${referralUrl}`)}`
 
-  const xShareHref = `https://x.com/intent/tweet?text=${encodeURIComponent('I just joined the 4626 waitlist. Move up with me:')}&url=${encodeURIComponent(referralLink)}`
-  const farcasterShareHref = `https://warpcast.com/~/compose?text=${encodeURIComponent('I just joined the 4626 waitlist. Move up with me: ' + referralLink)}`
+  const onCopyReferral = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(referralUrl)
+      onReferralCopied?.()
+      setCopyState('copied')
+      window.setTimeout(() => setCopyState('idle'), 1800)
+    } catch {
+      setCopyState('error')
+      window.setTimeout(() => setCopyState('idle'), 1800)
+    }
+  }, [onReferralCopied, referralUrl])
 
   return (
-    <motion.div {...fadeUp} className="space-y-3">
-      {rank ? (
-        <div className="rounded-2xl border border-amber-500/15 bg-amber-500/5 px-4 py-3 text-center space-y-1">
-          <div className="text-[14px] text-amber-200/95 font-medium">#{rank} on the waitlist</div>
-          {nextBand ? (
-            <div className="text-[11px] text-amber-200/70">{nextBand.remaining} invites to reach top {nextBand.target}</div>
-          ) : (
-            <div className="text-[12px] text-zinc-400">Share your link to move up faster</div>
-          )}
+    <motion.section {...fadeUp} className="rounded-2xl border border-white/8 bg-white/3 p-4 space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">Rewards</div>
+          <div className="mt-1 text-[34px] leading-none font-semibold tabular-nums text-white">{pointsBalance}</div>
         </div>
-      ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-brand-primary/30 bg-brand-primary/12 px-2.5 py-1 text-[11px] font-medium text-brand-300">
+            {tierLabel}
+          </span>
+          <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+            badgeEarned
+              ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-200'
+              : 'border-white/10 bg-white/5 text-zinc-400'
+          }`}>
+            {badgeEarned ? 'Verified badge earned' : 'Badge pending'}
+          </span>
+          {rank ? (
+            <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-zinc-300">
+              Rank #{rank}
+            </span>
+          ) : null}
+        </div>
+      </div>
 
-      {/* Referral link with copy */}
-      <div className="rounded-2xl border border-white/8 bg-white/2 p-3">
-        <div className="flex items-center gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="text-[10px] font-medium text-zinc-300 mb-0.5">Your referral link</div>
-            <div className="font-mono text-[12px] text-zinc-300 truncate">{referralLink}</div>
-          </div>
+      <div className="rounded-xl border border-white/8 bg-black/15 p-3 space-y-2">
+        <div className="text-[11px] font-medium text-zinc-500">Referral link</div>
+        <div className="font-mono text-[12px] text-zinc-300 truncate">{referralUrl}</div>
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={onCopyReferral}
-            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/8 bg-white/3 text-[12px] font-medium text-zinc-200 hover:bg-white/6 transition-colors"
+            onClick={() => void onCopyReferral()}
+            className="btn-secondary min-h-10 px-3 text-[12px]"
           >
-            <Copy className="w-3.5 h-3.5" />
-            Copy
+            <Copy className="h-3.5 w-3.5" />
+            {copyState === 'copied' ? 'Copied' : 'Copy'}
           </button>
+          <a
+            href={xShareHref}
+            target="_blank"
+            rel="noreferrer"
+            className="btn-secondary min-h-10 px-3 text-[12px]"
+          >
+            <XLogo className="h-3.5 w-3.5" />
+            Share X
+          </a>
+          <a
+            href={farcasterShareHref}
+            target="_blank"
+            rel="noreferrer"
+            className="btn-secondary min-h-10 px-3 text-[12px]"
+          >
+            <FarcasterLogo className="h-3.5 w-3.5" />
+            Share Farcaster
+          </a>
         </div>
-        {copyToast && <div className="text-[12px] text-emerald-400 mt-2">{copyToast}</div>}
+        {copyState === 'error' ? <div className="text-[11px] text-rose-300">Copy failed. Try again.</div> : null}
+        {copyState === 'idle' && copyHint ? <div className="text-[11px] text-emerald-400">{copyHint}</div> : null}
       </div>
 
-      {/* Social share */}
-      <div className="grid grid-cols-2 gap-2">
-        <a
-          href={xShareHref}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-white/8 bg-white/2 text-zinc-200 text-[13px] font-medium hover:bg-white/5 transition-colors"
-        >
-          <XLogo className="w-3.5 h-3.5" />
-          Share on X
-        </a>
-        <a
-          href={farcasterShareHref}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-white/8 bg-white/2 text-zinc-200 text-[13px] font-medium hover:bg-white/5 transition-colors"
-        >
-          <FarcasterLogo className="w-3.5 h-3.5" />
-          Farcaster
-        </a>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <button type="button" onClick={onEarnMore} className="btn-accent btn-no-icon min-h-11 w-full text-[13px]">
+          Earn more points
+        </button>
+        <button type="button" onClick={onViewLeaderboard} className="btn-secondary min-h-11 w-full text-[13px]">
+          <Trophy className="h-3.5 w-3.5" />
+          View leaderboard
+        </button>
+      </div>
+    </motion.section>
+  )
+}
+
+function HeaderStatusSection(props: {
+  displayEmail: string | null
+  handle: string | null
+  rankDelta: number
+}) {
+  const identityLabel = props.handle ? `@${props.handle}` : props.displayEmail
+
+  return (
+    <motion.section {...scaleIn} className="text-center space-y-3 pt-1">
+      <StepIndicator
+        steps={[
+          { label: 'Connect', status: 'complete' },
+          { label: 'Verify', status: 'complete' },
+          { label: 'Join', status: 'complete' },
+        ]}
+      />
+
+      <div className="flex justify-center pt-1">
+        <div className="relative">
+          <div className="h-14 w-14 rounded-2xl border border-white/10 bg-white/6 flex items-center justify-center">
+            <CheckCircle2 className="h-7 w-7 text-white" />
+          </div>
+          <motion.div
+            className="absolute inset-0 rounded-2xl border border-white/12"
+            initial={{ scale: 1, opacity: 0.4 }}
+            animate={{ scale: 1.6, opacity: 0 }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
+          />
+        </div>
       </div>
 
-      <button
-        type="button"
-        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-zinc-500 text-[13px] font-medium transition-colors hover:text-zinc-200"
-        onClick={() => navigate('/leaderboard')}
-      >
-        <Trophy className="w-3.5 h-3.5" />
-        View Leaderboard
-      </button>
-    </motion.div>
+      <div className="space-y-1.5">
+        <h1 className="text-2xl font-semibold tracking-tight text-white">You&apos;re on the waitlist</h1>
+        {identityLabel ? <p className="truncate px-2 text-[13px] text-zinc-300">{identityLabel}</p> : null}
+        <div className="flex items-center justify-center gap-2">
+          <span className="rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2.5 py-1 text-[11px] font-medium text-brand-300">
+            Active
+          </span>
+          {props.rankDelta > 0 ? (
+            <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-200">
+              Moved up {props.rankDelta}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </motion.section>
   )
 }
 
@@ -385,8 +480,6 @@ export const DoneStep = memo(function DoneStep({
   referralLink,
   primaryCta,
   deployAccessState,
-  onCopyReferral,
-  copyToast,
   creatorCoinMissing,
   smartWalletAddress,
   ownerAddress,
@@ -515,6 +608,37 @@ export const DoneStep = memo(function DoneStep({
     canOneClickLaunchCoin &&
     !(preprovData?.coinAddress && preprovData?.coinSymbol)
 
+  const navigate = useNavigate()
+  const referralHandle = useMemo(() => {
+    const seeds = [
+      preprovData?.farcasterUsername ?? null,
+      preprovData?.zoraHandle ?? null,
+      displayEmail ? displayEmail.split('@')[0] : null,
+    ]
+    for (const seed of seeds) {
+      const trimmed = typeof seed === 'string' ? seed.trim() : ''
+      if (!trimmed) continue
+      const cleaned = trimmed.startsWith('@') ? trimmed.slice(1) : trimmed
+      if (cleaned) return cleaned
+    }
+    return null
+  }, [displayEmail, preprovData?.farcasterUsername, preprovData?.zoraHandle])
+
+  const rewards = useMemo(
+    () =>
+      deriveWaitlistRewards({
+        position: waitlistPosition ?? null,
+        fallbackBorderTier: borderTier,
+        handle: referralHandle,
+        referralCode,
+        referralBaseUrl: 'https://4626.fun',
+      }),
+    [borderTier, referralCode, referralHandle, waitlistPosition],
+  )
+  const rewardReferralUrl = rewards.referralRef ? rewards.referralUrl : referralLink
+  const handleEarnMore = useCallback(() => navigate('/account#account-points-tasks'), [navigate])
+  const handleViewLeaderboard = useCallback(() => navigate('/leaderboard'), [navigate])
+
   return (
     <AnimatePresence mode="wait">
       {!exiting ? (
@@ -525,69 +649,23 @@ export const DoneStep = memo(function DoneStep({
           transition={{ duration: 0.24, ease: baseEase }}
           className="space-y-5"
         >
-          {/* Completed stepper */}
-          <StepIndicator
-            steps={[
-              { label: 'Connect', status: 'complete' },
-              { label: 'Verify', status: 'complete' },
-              { label: 'Join', status: 'complete' },
-            ]}
-          />
+          <HeaderStatusSection displayEmail={displayEmail} handle={referralHandle} rankDelta={rankDelta} />
 
-          {/* Success Header */}
-          <motion.div {...scaleIn} className="text-center space-y-3 pt-1">
-            <div className="flex justify-center">
-              {creatorCoin?.imageUrl ? (
-                /* Creator coin logo replaces the check icon */
-                <div className="relative">
-                  <div className="w-16 h-16 rounded-2xl overflow-hidden border border-white/12 shadow-lg">
-                    <img src={creatorCoin.imageUrl} className="w-full h-full object-cover" alt={creatorCoin.symbol ?? 'Creator coin'} />
-                  </div>
-                  <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-emerald-500 border-2 border-vault-bg flex items-center justify-center">
-                    <CheckCircle2 className="w-3 h-3 text-white" />
-                  </div>
-                </div>
-              ) : (
-                /* Fallback: simple check */
-                <div className="relative">
-                  <div className="w-14 h-14 rounded-2xl bg-white/6 border border-white/10 flex items-center justify-center">
-                    <CheckCircle2 className="w-7 h-7 text-white" />
-                  </div>
-                  <motion.div
-                    className="absolute inset-0 rounded-2xl border border-white/12"
-                    initial={{ scale: 1, opacity: 0.4 }}
-                    animate={{ scale: 1.6, opacity: 0 }}
-                    transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
-                  />
-                </div>
-              )}
-            </div>
-
-            <div>
-              <h1 className="text-2xl font-semibold text-white tracking-tight">
-                You're on the waitlist
-              </h1>
-              {rankDelta > 0 && (
-                <div className="mt-1.5 inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-0.5 text-[11px] font-medium text-emerald-200">
-                  ↑ Moved up {rankDelta} spots
-                </div>
-              )}
-              {displayEmail && (
-                <p className="text-[13px] text-zinc-300 mt-1.5 truncate px-2">{displayEmail}</p>
-              )}
-              <p className="text-[13px] text-zinc-400 mt-1 max-w-[38ch] mx-auto">
-                We'll notify you when it's your turn.
-              </p>
-            </div>
-          </motion.div>
-
-          {/* Pre-provisioning status (loading only) */}
           <PreprovisionStatus onData={setPreprovData} />
 
-          {/* Wallet snapshot */}
-          <WalletSnapshotCard
-            connectedOwnerAddress={ownerAddress ?? null}
-            canonicalSmartWalletAddress={smartWalletAddress ?? null}
+          <RewardsCard
+            pointsBalance={rewards.pointsBalance}
+            tierLabel={rewards.tierLabel}
+            badgeEarned={rewards.badgeEarned}
+            referralUrl={rewardReferralUrl}
+            rank={rewards.rankTotal}
+            onEarnMore={handleEarnMore}
+            onViewLeaderboard={handleViewLeaderboard}
+          />
+
+          <WalletCardCollapsed
+            ownerWallet={ownerAddress ?? null}
+            smartWallet={smartWalletAddress ?? null}
             creatorCoin={creatorCoin}
           />
 
@@ -666,16 +744,15 @@ export const DoneStep = memo(function DoneStep({
                       {xVerifyBusy ? 'Verifying…' : 'Verify'}
                     </button>
                   </div>
-                  {privyTwitter.username && (
+                  {privyTwitter.username ? (
                     <div className="text-[11px] text-zinc-400">Connected as @{privyTwitter.username}</div>
-                  )}
+                  ) : null}
                   {xVerifyError ? <Alert variant="warning">{xVerifyError}</Alert> : null}
                 </div>
               )}
             </motion.div>
           ) : null}
 
-          {/* Launch Creator Coin */}
           {shouldShowLaunchCoinCard ? (
             <LaunchCoinCard
               mode="one-click"
@@ -687,11 +764,10 @@ export const DoneStep = memo(function DoneStep({
             />
           ) : null}
 
-          {/* CTA area */}
           {deployAccessState === 'checking' && !primaryCta ? (
             <CtaLoadingSkeleton />
           ) : primaryCta ? (
-            <motion.div {...fadeUp} className="space-y-3">
+            <motion.div {...fadeUp}>
               <button
                 type="button"
                 disabled={primaryCta.disabled}
@@ -700,30 +776,13 @@ export const DoneStep = memo(function DoneStep({
               >
                 {primaryCta.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 {primaryCta.busy ? primaryCta.busyLabel ?? primaryCta.label : primaryCta.label}
-                {!primaryCta.busy && <ArrowRight className="w-4 h-4" />}
+                {!primaryCta.busy ? <ArrowRight className="w-4 h-4" /> : null}
               </button>
-
-              {/* Compact share row for approved users */}
-              {referralCode && (
-                <div className="flex items-center gap-2 rounded-xl border border-white/6 bg-white/2 px-3 py-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] text-zinc-300 mb-0.5">Share with friends</div>
-                    <div className="font-mono text-[11px] text-zinc-400 truncate">{referralLink}</div>
-                  </div>
-                  <button type="button" onClick={onCopyReferral} className="shrink-0 p-1.5 rounded-lg hover:bg-white/8 transition-colors">
-                    <Share2 className="w-3.5 h-3.5 text-zinc-400" />
-                  </button>
-                  {copyToast && <span className="text-[11px] text-emerald-400 shrink-0">{copyToast}</span>}
-                </div>
-              )}
             </motion.div>
           ) : deployAccessState === 'waitlist' ? (
-            <WaitlistedCta
-              waitlistPosition={waitlistPosition ?? null}
-              onCopyReferral={onCopyReferral}
-              referralLink={referralLink}
-              copyToast={copyToast}
-            />
+            <motion.div {...fadeUp} className="rounded-xl border border-white/8 bg-white/2 px-3 py-2 text-[12px] text-zinc-400">
+              We&apos;ll notify you as soon as access opens.
+            </motion.div>
           ) : null}
         </motion.div>
       ) : null}

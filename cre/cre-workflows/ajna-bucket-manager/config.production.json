@@ -1,0 +1,14 @@
+{
+  "schedule": "0 */10 * * * *",
+  "apiBaseUrl": "https://4626.fun/api",
+  "chainName": "ethereum-mainnet-base-1",
+  "twapDuration": 1800,
+  "targetLtvBps": 7000,
+  "priceChangeTriggerBps": 1000,
+  "moveThreshold": 50,
+  "maxStep": 2500,
+  "liquiditySearchRadius": 20,
+  "maxVaultsPerExecution": 1,
+  "maxStrategiesPerVault": 5,
+  "rotationIntervalSeconds": 600
+}

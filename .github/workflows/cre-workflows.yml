@@ -1,0 +1,96 @@
+name: CRE Workflows
+
+on:
+  pull_request:
+    paths:
+      - "cre/cre-workflows/**"
+      - "frontend/api/_handlers/cre/**"
+      - "frontend/api/_handlers/_routes.ts"
+      - ".github/workflows/cre-workflows.yml"
+  push:
+    branches: [main]
+    paths:
+      - "cre/cre-workflows/**"
+      - "frontend/api/_handlers/cre/**"
+      - "frontend/api/_handlers/_routes.ts"
+      - ".github/workflows/cre-workflows.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cre-config-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate CRE workflow structure and config wiring
+        run: bash cre/cre-workflows/scripts/validate-workflow-layout.sh
+
+  cre-typecheck-and-tests:
+    runs-on: ubuntu-latest
+    needs: cre-config-validation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.1.42"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "9"
+
+      - name: Typecheck CRE workflows
+        run: bash cre/cre-workflows/scripts/typecheck-workflows.sh
+
+      - name: Install frontend dependencies
+        run: pnpm -C frontend install --frozen-lockfile
+
+      - name: Run focused API test coverage for strategy build paths
+        run: pnpm -C frontend test api/__tests__/v1BuildCharmHandlers.test.ts
+
+  cre-simulation:
+    runs-on: ubuntu-latest
+    needs: cre-typecheck-and-tests
+    if: ${{ vars.CRE_SIMULATION_ENABLED == 'true' || secrets.CRE_SIMULATION_ENABLED == 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.1.42"
+
+      - name: Run CRE simulation suite (optional)
+        env:
+          CRE_SIMULATION_ENABLED: "true"
+        run: bash cre/cre-workflows/scripts/simulate-workflows.sh
+
+  cre-secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

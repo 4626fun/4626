@@ -674,7 +674,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     creatorCoinBusy,
     claimCoinBusy,
     claimReferralCode,
-    inviteToast,
     inviteTemplateIdx,
     referralCode,
     actionsDone,
@@ -1810,10 +1809,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     },
     [actionStorageKey, apiFetch, doneEmail, refreshPosition],
   )
-  const {
-    referralLink,
-    handleCopyReferral,
-  } = useWaitlistReferral({
+  const { referralLink } = useWaitlistReferral({
     locationSearch: location.search,
     shareBaseUrl: getWaitlistReferralBaseUrl().replace(/\/+$/, ''),
     inviteTemplateIdx,
@@ -1825,10 +1821,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     apiFetch,
   })
   const displayEmail = doneEmail && !isSyntheticEmail(doneEmail) ? doneEmail : null
-  const handleCopyReferralTracked = useCallback(() => {
-    trackEvent('referral_link_copied', { source: 'waitlist_done' })
-    handleCopyReferral()
-  }, [handleCopyReferral])
 
   // When the user creates a Creator Coin from the DoneStep, update local state
   // and re-trigger pre-provisioning so the backend records it.
@@ -2496,8 +2488,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     referralLink={referralLink}
                     primaryCta={primaryCta}
                     deployAccessState={deployAccessState}
-                    onCopyReferral={handleCopyReferralTracked}
-                    copyToast={inviteToast}
                     creatorCoinMissing={creatorCoinDeclaredMissing && !creatorCoin?.address}
                     smartWalletAddress={effectiveCswAddress}
                     ownerAddress={connectedAddress || (siweAuthAddress ? siweAuthAddress.toLowerCase() : null)}

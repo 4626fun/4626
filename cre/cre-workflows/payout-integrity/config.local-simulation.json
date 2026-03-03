@@ -6,5 +6,6 @@
   "expectedLotteryShareBps": 6900,
   "expectedCreatorShareBps": 0,
   "expectedProtocolShareBps": 961,
-  "staleThresholdSeconds": 86400
+  "staleThresholdSeconds": 86400,
+  "rotationIntervalSeconds": 1800
 }

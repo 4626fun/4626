@@ -1,0 +1,6 @@
+{
+  "schedule": "0 0 * * * *",
+  "apiBaseUrl": "http://127.0.0.1:8789/api",
+  "chainName": "ethereum-mainnet-base-1",
+  "rotationIntervalSeconds": 3600
+}

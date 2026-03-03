@@ -1,0 +1,13 @@
+{
+  "schedule": "*/1 * * * *",
+  "apiBaseUrl": "http://127.0.0.1:8789/api",
+  "workflowName": "solana-orchestrator",
+  "actions": [
+    "entry-relay",
+    "fee-flush",
+    "winner-relay",
+    "graduation",
+    "price-monitor"
+  ],
+  "checkpointIntervalSeconds": 60
+}

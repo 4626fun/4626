@@ -1,0 +1,8 @@
+{
+  "workflowName": "solana-orchestrator",
+  "actions": ["entry-relay", "fee-flush"],
+  "checkpointKey": "manual-run",
+  "payload": {
+    "reason": "operator-recovery"
+  }
+}

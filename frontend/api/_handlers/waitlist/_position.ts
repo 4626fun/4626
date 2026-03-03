@@ -178,7 +178,16 @@ export default async function handler(req: any, res: any) {
       SELECT
         e.id AS signup_id,
         COALESCE(SUM(l.amount), 0)::int AS total_points,
-        COALESCE(SUM(CASE WHEN l.source = 'referral_qualified' THEN l.amount ELSE 0 END), 0)::int AS invite_points
+        COALESCE(
+          SUM(
+            CASE
+              WHEN l.source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN l.amount
+              ELSE 0
+            END
+          ),
+          0
+        )::int AS invite_points,
+        COALESCE(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount ELSE 0 END), 0)::int AS agent_points
       FROM eligible e
       LEFT JOIN points l ON l.signup_id = e.id
       GROUP BY e.id
@@ -186,7 +195,7 @@ export default async function handler(req: any, res: any) {
     ranked AS (
       SELECT
         signup_id,
-        ROW_NUMBER() OVER (ORDER BY invite_points DESC, total_points DESC, signup_id ASC)::int AS rank_invite
+        ROW_NUMBER() OVER (ORDER BY invite_points DESC, total_points DESC, agent_points DESC, signup_id ASC)::int AS rank_invite
       FROM scored
     )
     SELECT rank_invite
@@ -206,7 +215,16 @@ export default async function handler(req: any, res: any) {
       SELECT
         e.id AS signup_id,
         COALESCE(SUM(l.amount), 0)::int AS total_points,
-        COALESCE(SUM(CASE WHEN l.source = 'referral_qualified' THEN l.amount ELSE 0 END), 0)::int AS invite_points
+        COALESCE(
+          SUM(
+            CASE
+              WHEN l.source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN l.amount
+              ELSE 0
+            END
+          ),
+          0
+        )::int AS invite_points,
+        COALESCE(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount ELSE 0 END), 0)::int AS agent_points
       FROM eligible e
       LEFT JOIN points l ON l.signup_id = e.id
       GROUP BY e.id
@@ -214,7 +232,7 @@ export default async function handler(req: any, res: any) {
     ranked AS (
       SELECT
         signup_id,
-        ROW_NUMBER() OVER (ORDER BY total_points DESC, invite_points DESC, signup_id ASC)::int AS rank_total
+        ROW_NUMBER() OVER (ORDER BY total_points DESC, invite_points DESC, agent_points DESC, signup_id ASC)::int AS rank_total
       FROM scored
     )
     SELECT rank_total

@@ -2,5 +2,7 @@
   "schedule": "0 */5 * * * *",
   "apiBaseUrl": "http://127.0.0.1:8789/api",
   "chainName": "ethereum-mainnet-base-1",
-  "reportIntervalSeconds": 86400
+  "reportIntervalSeconds": 86400,
+  "rotationIntervalSeconds": 300,
+  "rpcReadRetryAttempts": 3
 }

@@ -21,18 +21,15 @@
 
 import {
   CronCapability,
-  EVMClient,
   HTTPClient,
   handler,
   Runner,
   type Runtime,
   type NodeRuntime,
-  LAST_FINALIZED_BLOCK_NUMBER,
-  encodeCallMsg,
   bytesToHex,
   consensusIdenticalAggregation,
 } from "@chainlink/cre-sdk"
-import { encodeFunctionData, decodeFunctionResult, zeroAddress } from "viem"
+import { decodeFunctionResult } from "viem"
 import { GaugeControllerABI } from "../contracts/abi/GaugeController"
 import { BurnStreamABI } from "../contracts/abi/BurnStream"
 import { CreatorCoinABI } from "../contracts/abi/CreatorCoin"
@@ -43,6 +40,9 @@ import {
   type PayoutIntegrityAlertLike,
   type PayoutIntegrityAiResult,
 } from "../../utils/payoutIntegrityAi.js"
+import { createEvmClientForChain, readContractBytes, resolveChainId } from "../_shared/evm"
+import { getJson, postJson } from "../_shared/http"
+import { selectRotatingItems } from "../_shared/rotation"
 
 // ---------------------------------------------------------------------------
 // Config
@@ -52,19 +52,14 @@ type Config = {
   schedule: string
   apiBaseUrl: string
   chainName: string
+  chainId?: number
   expectedBurnShareBps: number
   expectedLotteryShareBps: number
   expectedCreatorShareBps: number
   expectedProtocolShareBps: number
   staleThresholdSeconds: number
+  rotationIntervalSeconds?: number
 }
-
-// ---------------------------------------------------------------------------
-// Chain selector for Base mainnet
-// ---------------------------------------------------------------------------
-
-const BASE_MAINNET_CHAIN_SELECTOR =
-  EVMClient.SUPPORTED_CHAIN_SELECTORS["ethereum-mainnet-base-1"]
 
 // ---------------------------------------------------------------------------
 // Types
@@ -94,11 +89,20 @@ type MonitorResult = {
   alerts: string[]
   aiEnabled: boolean
   aiVerdict: string
-  aiConfidence: number | null
+  aiConfidence: number
   aiSummary: string
   aiSuggestedAction: string
   aiProvider?: string
   error: string
+}
+
+type ConsensusAiAssessment = {
+  enabled: boolean
+  verdict: string
+  confidence: number
+  summary: string
+  suggestedAction: string
+  provider?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -107,7 +111,7 @@ type MonitorResult = {
 
 function evmRead(
   runtime: Runtime<Config>,
-  evmClient: EVMClient,
+  evmClient: ReturnType<typeof createEvmClientForChain>,
   address: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   abi: any,
@@ -115,32 +119,13 @@ function evmRead(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   args?: any[],
 ): Uint8Array {
-  const callData = args
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ? encodeFunctionData({ abi, functionName, args } as any)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    : encodeFunctionData({ abi, functionName } as any)
-
-  const call = {
-    call: encodeCallMsg({
-      from: zeroAddress,
-      to: address as `0x${string}`,
-      data: callData,
-    }),
-  }
-
-  try {
-    return evmClient
-      .callContract(runtime, {
-        ...call,
-        blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
-      })
-      .result().data
-  } catch {
-    // Some public RPCs do not serve finalized historical state consistently.
-    // Fallback to latest block reads to preserve simulation reliability.
-    return evmClient.callContract(runtime, call).result().data
-  }
+  return readContractBytes(runtime, evmClient, {
+    address,
+    abi,
+    functionName,
+    args,
+    fallbackToLatest: true,
+  })
 }
 
 function decodeBigInt(
@@ -167,32 +152,19 @@ function decodeAddress(
 // HTTP helpers
 // ---------------------------------------------------------------------------
 
-function encodeJsonBody(payload: unknown): string {
-  const json = JSON.stringify(payload)
-  if (typeof btoa === "function") return btoa(json)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const maybeBuffer = (globalThis as any).Buffer
-  if (maybeBuffer?.from) return maybeBuffer.from(json, "utf8").toString("base64")
-  throw new Error("base64_encoder_unavailable")
-}
-
-function fetchVaultsJson(
+function fetchVaults(
   nodeRuntime: NodeRuntime<Config>,
   httpClient: HTTPClient,
   apiKey: string,
-): string {
-  const baseUrl = nodeRuntime.config.apiBaseUrl
-
-  const resp = httpClient.sendRequest(nodeRuntime, {
-    url: `${baseUrl}/cre/vaults/active?chainId=8453`,
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-  }).result()
-
-  return new TextDecoder().decode(resp.body)
+  chainId: number,
+): VaultInfo[] {
+  const body = getJson<Config, { success: boolean; data?: { vaults: VaultInfo[] } }>(
+    nodeRuntime,
+    httpClient,
+    apiKey,
+    `/cre/vaults/active?chainId=${chainId}`,
+  )
+  return body.success && body.data ? body.data.vaults : []
 }
 
 function sendAlert(
@@ -201,22 +173,13 @@ function sendAlert(
   apiKey: string,
   alert: AlertInfo,
 ): boolean {
-  const baseUrl = nodeRuntime.config.apiBaseUrl
-
-  const resp = httpClient.sendRequest(nodeRuntime, {
-    url: `${baseUrl}/cre/keeper/alert`,
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: encodeJsonBody(alert),
-  }).result()
-
-  const body = JSON.parse(new TextDecoder().decode(resp.body)) as {
-    success: boolean
-  }
-
+  const body = postJson<Config, { success: boolean }>(
+    nodeRuntime,
+    httpClient,
+    apiKey,
+    "/cre/keeper/alert",
+    alert,
+  )
   return body.success
 }
 
@@ -232,29 +195,34 @@ function requestAiAssessment(
   apiKey: string,
   request: AiAssessmentRequest,
 ): PayoutIntegrityAiResult {
-  const baseUrl = nodeRuntime.config.apiBaseUrl
-
-  const resp = httpClient.sendRequest(nodeRuntime, {
-    url: `${baseUrl}/cre/keeper/aiAssess`,
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: encodeJsonBody(request),
-  }).result()
-
-  const body = JSON.parse(new TextDecoder().decode(resp.body)) as {
+  const body = postJson<Config, {
     success: boolean
     data?: unknown
     error?: string
-  }
+  }>(
+    nodeRuntime,
+    httpClient,
+    apiKey,
+    "/cre/keeper/aiAssess",
+    request,
+  )
 
   if (!body.success || !body.data) {
     return createAiFallbackResult(request.alerts, body.error ?? "ai_assessment_failed")
   }
 
   return normalizeAiResult(body.data, request.alerts)
+}
+
+function toConsensusAiAssessment(ai: PayoutIntegrityAiResult): ConsensusAiAssessment {
+  return {
+    enabled: ai.enabled,
+    verdict: ai.verdict,
+    confidence: ai.confidence ?? -1,
+    summary: ai.summary,
+    suggestedAction: ai.suggestedAction,
+    ...(ai.provider ? { provider: ai.provider } : {}),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -264,25 +232,27 @@ function requestAiAssessment(
 const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
   const apiKeySecret = runtime.getSecret({ id: "KEEPR_API_KEY" }).result()
   const apiKey = apiKeySecret.value
+  const chainId = resolveChainId(runtime.config.chainName, runtime.config.chainId)
   const emptyAi = createAiFallbackResult([])
 
   runtime.log("Payout integrity monitor starting")
 
   // Step 1: Fetch all active vaults
   const httpClient = new HTTPClient()
-  const vaultsJson = runtime.runInNodeMode(
-    (nr: NodeRuntime<Config>) => fetchVaultsJson(nr, httpClient, apiKey),
+  const allVaults = runtime.runInNodeMode(
+    (nr: NodeRuntime<Config>) => fetchVaults(nr, httpClient, apiKey, chainId),
     consensusIdenticalAggregation(),
   )().result()
 
-  const parsed = JSON.parse(vaultsJson) as {
-    success: boolean
-    data?: { vaults: VaultInfo[] }
-  }
-  const allVaults: VaultInfo[] = parsed.success && parsed.data ? parsed.data.vaults : []
-
-  // Find the first vault that has a gauge controller configured
-  const vault = allVaults.find((v) => v.gaugeControllerAddress)
+  const eligibleVaults = allVaults
+    .filter((v) => v.gaugeControllerAddress)
+    .sort((a, b) => a.vaultAddress.localeCompare(b.vaultAddress))
+  const selected = selectRotatingItems(eligibleVaults, {
+    now: runtime.now(),
+    rotationIntervalSeconds: runtime.config.rotationIntervalSeconds ?? 1800,
+    maxItems: 1,
+  })
+  const vault = selected[0]
   if (!vault || !vault.gaugeControllerAddress) {
     runtime.log("No vaults with GaugeController configured — skipping")
     return {
@@ -292,7 +262,7 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
       alerts: [],
       aiEnabled: emptyAi.enabled,
       aiVerdict: emptyAi.verdict,
-      aiConfidence: emptyAi.confidence,
+      aiConfidence: emptyAi.confidence ?? -1,
       aiSummary: emptyAi.summary,
       aiSuggestedAction: emptyAi.suggestedAction,
       ...(emptyAi.provider ? { aiProvider: emptyAi.provider } : {}),
@@ -307,7 +277,7 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
 
   runtime.log(`Checking payout integrity for vault ${vaultAddr}`)
 
-  const evmClient = new EVMClient(BASE_MAINNET_CHAIN_SELECTOR)
+  const evmClient = createEvmClientForChain(runtime.config.chainName)
   const pendingAlerts: AlertInfo[] = []
   let checksRun = 0
 
@@ -493,16 +463,18 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
   // -----------------------------------------------------------------------
   const aiAssessment = runtime.runInNodeMode(
     (nr: NodeRuntime<Config>) =>
-      requestAiAssessment(nr, httpClient, apiKey, {
-        vaultAddress: vaultAddr,
-        checksRun,
-        alerts: pendingAlerts,
-      }),
+      toConsensusAiAssessment(
+        requestAiAssessment(nr, httpClient, apiKey, {
+          vaultAddress: vaultAddr,
+          checksRun,
+          alerts: pendingAlerts,
+        }),
+      ),
     consensusIdenticalAggregation(),
   )().result()
 
   runtime.log(
-    `AI assessment: enabled=${aiAssessment.enabled} verdict=${aiAssessment.verdict} confidence=${aiAssessment.confidence ?? "n/a"}`,
+    `AI assessment: enabled=${aiAssessment.enabled} verdict=${aiAssessment.verdict} confidence=${aiAssessment.confidence >= 0 ? aiAssessment.confidence : "n/a"}`,
   )
 
   // -----------------------------------------------------------------------

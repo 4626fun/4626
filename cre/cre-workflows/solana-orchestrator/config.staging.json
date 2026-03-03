@@ -1,0 +1,13 @@
+{
+  "schedule": "*/1 * * * *",
+  "apiBaseUrl": "https://4626.fun/api",
+  "workflowName": "solana-orchestrator",
+  "actions": [
+    "entry-relay",
+    "fee-flush",
+    "winner-relay",
+    "graduation",
+    "price-monitor"
+  ],
+  "checkpointIntervalSeconds": 60
+}

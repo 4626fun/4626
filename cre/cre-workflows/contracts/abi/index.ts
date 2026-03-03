@@ -4,3 +4,11 @@ export { GaugeControllerABI } from "./GaugeController"
 export { BurnStreamABI } from "./BurnStream"
 export { CreatorCoinABI } from "./CreatorCoin"
 export { ERC20ABI } from "./ERC20"
+export {
+  VaultStrategyViewABI,
+  OracleStrategyViewABI,
+  AjnaStrategyViewABI,
+  AjnaPoolViewABI,
+  CharmStrategyViewABI,
+  CharmVaultViewABI,
+} from "./StrategyManagement"

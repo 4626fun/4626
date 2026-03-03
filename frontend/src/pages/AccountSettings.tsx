@@ -23,6 +23,7 @@ import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { isEoaAddressByCode } from '@/wallet/canonicalWalletPolicy'
+import { buildSettingsTasks, deriveWaitlistRewards, type WaitlistPositionData } from '@/lib/rewards/waitlistRewards'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -367,6 +368,7 @@ export function AccountSettings() {
   const [automationActionError, setAutomationActionError] = useState<string | null>(null)
   const [selectedCanonicalSolanaWallet, setSelectedCanonicalSolanaWallet] = useState('')
   const [solanaWalletActionBusy, setSolanaWalletActionBusy] = useState(false)
+  const [tasksCopyNotice, setTasksCopyNotice] = useState<string | null>(null)
 
   const loadProfile = useCallback(async () => {
     setLoading(true)
@@ -677,6 +679,28 @@ export function AccountSettings() {
         enabled: Boolean(cswAgent),
         agentAddress: cswAgent?.xmtpAgentAddress ?? null,
       }
+    },
+  })
+
+  const rewardsPositionQuery = useQuery({
+    queryKey: ['accountRewardsPosition', profile?.email ?? 'none', canonicalSmartWalletAddress ?? profile?.primaryWallet ?? 'none'],
+    enabled: Boolean(profile && (profile.email || canonicalSmartWalletAddress || profile?.primaryWallet)),
+    staleTime: 20_000,
+    retry: 0,
+    queryFn: async (): Promise<WaitlistPositionData | null> => {
+      if (!profile) return null
+      const params = new URLSearchParams()
+      if (profile.email) params.set('email', profile.email)
+      const walletForLookup = canonicalSmartWalletAddress ?? (isEvmAddress(profile.primaryWallet) ? profile.primaryWallet : null)
+      if (walletForLookup) params.set('wallet', walletForLookup.toLowerCase())
+      if (!params.toString()) return null
+
+      const res = await apiFetch(`/api/waitlist/position?${params.toString()}`, { method: 'GET', headers: { Accept: 'application/json' } })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<WaitlistPositionData | null> | null
+      if (!res.ok || !json?.success) {
+        throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to load rewards progress.')
+      }
+      return json.data ?? null
     },
   })
 
@@ -1224,6 +1248,46 @@ export function AccountSettings() {
       ? farcasterIdentity.username
       : profile?.preprovFarcasterUsername,
   )
+
+  const rewardsSummary = useMemo(
+    () =>
+      deriveWaitlistRewards({
+        position: rewardsPositionQuery.data ?? null,
+        fallbackBorderTier: rewardsPositionQuery.data?.borderTier ?? 0,
+        handle: zoraHandle ?? farcasterUsername ?? null,
+        referralCode: rewardsPositionQuery.data?.referralCode ?? null,
+        referralBaseUrl: 'https://4626.fun',
+      }),
+    [farcasterUsername, rewardsPositionQuery.data, zoraHandle],
+  )
+
+  const rewardsTasks = useMemo(
+    () =>
+      buildSettingsTasks({
+        profileCompleted: Boolean(rewardsPositionQuery.data?.profileCompletedAt),
+        xVerified: rewardsSummary.badgeEarned,
+        emailVerified: Boolean(profile?.email && EMAIL_RE.test(profile.email)),
+        hasReferralRef: Boolean(rewardsSummary.referralRef),
+        hasQualifiedReferrals: (rewardsPositionQuery.data?.referrals?.qualifiedCount ?? 0) > 0,
+      }),
+    [profile?.email, rewardsPositionQuery.data?.profileCompletedAt, rewardsPositionQuery.data?.referrals?.qualifiedCount, rewardsSummary.badgeEarned, rewardsSummary.referralRef],
+  )
+
+  const onCopyRewardsReferral = useCallback(async () => {
+    if (!rewardsSummary.referralRef) {
+      setTasksCopyNotice('Referral link is not available yet.')
+      window.setTimeout(() => setTasksCopyNotice(null), 1800)
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(rewardsSummary.referralUrl)
+      setTasksCopyNotice('Copied referral link.')
+      window.setTimeout(() => setTasksCopyNotice(null), 1800)
+    } catch {
+      setTasksCopyNotice('Copy failed. Try again.')
+      window.setTimeout(() => setTasksCopyNotice(null), 1800)
+    }
+  }, [rewardsSummary.referralRef, rewardsSummary.referralUrl])
 
   const creatorCoinDisplaySymbol = useMemo(() => {
     const fromCoin = typeof creatorCoin?.symbol === 'string' && creatorCoin.symbol.trim() ? creatorCoin.symbol.trim() : null
@@ -2035,7 +2099,7 @@ export function AccountSettings() {
                 >
                   {farcasterAuth.status === 'loading' ? 'Verifying Farcaster…' : 'Link Farcaster'}
                 </button>
-                <a href="/waitlist/profile" className="text-xs text-zinc-500 hover:text-zinc-300">
+                <a href="/account#account-points-tasks" className="text-xs text-zinc-500 hover:text-zinc-300">
                   View points tasks
                 </a>
               </div>
@@ -2045,6 +2109,84 @@ export function AccountSettings() {
             ) : null}
           </div>
         ) : null}
+
+        <div id="account-points-tasks" className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-3 space-y-3 sm:px-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-[11px] font-medium text-zinc-500">Tasks to earn points</div>
+              <div className="mt-1 text-sm text-zinc-300">
+                {rewardsSummary.pointsBalance.toLocaleString()} points · {rewardsSummary.tierLabel}
+              </div>
+            </div>
+            <div className="inline-flex items-center gap-2">
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                rewardsSummary.badgeEarned
+                  ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-200'
+                  : 'border-zinc-700 bg-zinc-900/40 text-zinc-400'
+              }`}>
+                {rewardsSummary.badgeEarned ? 'Verified badge earned' : 'Badge pending'}
+              </span>
+            </div>
+          </div>
+
+          {rewardsPositionQuery.isLoading ? (
+            <div className="text-xs text-zinc-500">Loading tasks…</div>
+          ) : rewardsPositionQuery.isError ? (
+            <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+              {rewardsPositionQuery.error instanceof Error ? rewardsPositionQuery.error.message : 'Failed to load rewards tasks.'}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {rewardsTasks.map((task) => (
+                <div key={task.key} className="rounded-md border border-zinc-800 bg-zinc-950/60 px-3 py-2.5">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="text-sm text-zinc-100">{task.title}</div>
+                      <div className="text-[11px] text-zinc-500">+{task.points} points</div>
+                    </div>
+                    <span className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                      task.status === 'completed'
+                        ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
+                        : task.status === 'available'
+                          ? 'border-brand-primary/30 bg-brand-primary/10 text-brand-300'
+                          : 'border-zinc-700 bg-zinc-900/40 text-zinc-500'
+                    }`}>
+                      {task.status}
+                    </span>
+                  </div>
+                  <div className="mt-2">
+                    {task.key === 'refer_friend' ? (
+                      <button
+                        type="button"
+                        onClick={() => void onCopyRewardsReferral()}
+                        disabled={task.status === 'locked'}
+                        className="btn-secondary min-h-10 w-full justify-center disabled:opacity-50 sm:w-auto"
+                      >
+                        {task.ctaLabel}
+                      </button>
+                    ) : (
+                      <a
+                        href={task.href}
+                        target={task.href.startsWith('http') ? '_blank' : undefined}
+                        rel={task.href.startsWith('http') ? 'noreferrer' : undefined}
+                        className={`btn-secondary min-h-10 w-full justify-center sm:w-auto ${
+                          task.status === 'locked' ? 'pointer-events-none opacity-50' : ''
+                        }`}
+                      >
+                        {task.ctaLabel}
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="rounded-md border border-zinc-800 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
+            Referral link: <span className="font-mono text-zinc-300 break-all">{rewardsSummary.referralUrl}</span>
+          </div>
+          {tasksCopyNotice ? <div className="text-xs text-emerald-300">{tasksCopyNotice}</div> : null}
+        </div>
 
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-3 space-y-2 sm:px-4">
           <div className="text-[11px] font-medium text-zinc-500">Embedded Wallet Export</div>

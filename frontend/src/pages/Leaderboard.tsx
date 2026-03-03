@@ -20,9 +20,11 @@ type LeaderboardResponse = {
   page: number
   limit: number
   pointsType: PointsType
+  totalCount: number
   totalPages: number
   hasMore: boolean
   leaderboard: LeaderboardRow[]
+  me: LeaderboardRow | null
 }
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
@@ -95,8 +97,15 @@ export function Leaderboard() {
   }, [fetchLeaderboard])
 
   const subtitle = useMemo(() => {
-    void data
-    return null
+    if (!data) return null
+    const ranked = data.totalCount.toLocaleString()
+    const shown = data.leaderboard.length.toLocaleString()
+    return `Showing ${shown} of ${ranked} ranked creators`
+  }, [data])
+
+  const meInTop = useMemo(() => {
+    if (!data?.me) return false
+    return data.leaderboard.some((row) => row.signupId === data.me?.signupId)
   }, [data])
 
   return (
@@ -165,11 +174,14 @@ export function Leaderboard() {
           </div>
           {data?.leaderboard?.length ? (
             <div>
-              {data.leaderboard.map((r) => (
+              {data.leaderboard.map((r) => {
+                const isMe = Boolean(data?.me && data.me.signupId === r.signupId)
+                return (
                 <div
                   key={`${r.rank}-${r.signupId}`}
                   className={[
                     'grid grid-cols-12 gap-2 px-4 py-3 border-b border-white/5',
+                    isMe ? 'bg-brand-primary/6' : null,
                     r.borderTier >= 1 ? 'bg-brand-primary/[0.035] border-l-2 border-l-[#0052FF]/30' : null,
                   ]
                     .filter(Boolean)
@@ -179,6 +191,11 @@ export function Leaderboard() {
                   <div className="col-span-6 text-sm text-zinc-200">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="font-mono truncate">{r.display}</div>
+                      {isMe ? (
+                        <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
+                          You
+                        </div>
+                      ) : null}
                       {r.borderTier >= 1 ? (
                         <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
                           Tier {r.borderTier}
@@ -191,12 +208,34 @@ export function Leaderboard() {
                     {pointsType === 'invite' ? r.pointsInvite : pointsType === 'agent' ? r.pointsAgent : r.pointsTotal}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <div className="px-4 py-6 text-sm text-zinc-600">No ranked creators yet.</div>
           )}
         </div>
+
+        {data?.me && !meInTop ? (
+          <div className="mt-4 rounded-xl border border-brand-primary/20 bg-brand-primary/5 overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-white/8 text-[11px] font-medium text-brand-300">Your rank</div>
+            <div className="grid grid-cols-12 gap-2 px-4 py-3">
+              <div className="col-span-2 text-sm text-zinc-300">#{data.me.rank}</div>
+              <div className="col-span-6 text-sm text-zinc-200">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="font-mono truncate">{data.me.display}</div>
+                  <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
+                    You
+                  </div>
+                </div>
+                {data.me.referralCode ? <div className="text-[11px] text-zinc-700">code: {data.me.referralCode}</div> : null}
+              </div>
+              <div className="col-span-4 text-right text-sm text-zinc-200 tabular-nums">
+                {pointsType === 'invite' ? data.me.pointsInvite : pointsType === 'agent' ? data.me.pointsAgent : data.me.pointsTotal}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
   )

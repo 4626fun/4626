@@ -1,0 +1,10 @@
+{
+  "schedule": "0 */10 * * * *",
+  "apiBaseUrl": "http://127.0.0.1:8789/api",
+  "chainName": "ethereum-mainnet-base-1",
+  "twapDuration": 1800,
+  "priceChangeTriggerBps": 1000,
+  "maxVaultsPerExecution": 1,
+  "maxStrategiesPerVault": 5,
+  "rotationIntervalSeconds": 600
+}

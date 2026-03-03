@@ -1,0 +1,15 @@
+{
+  "schedule": "*/2 * * * *",
+  "apiBaseUrl": "http://127.0.0.1:8789/api",
+  "chainName": "ethereum-mainnet-base-1",
+  "watchedPoolAddresses": [],
+  "twapDuration": 1800,
+  "targetLtvBps": 7000,
+  "priceChangeTriggerBps": 1000,
+  "moveThreshold": 50,
+  "maxStep": 2500,
+  "liquiditySearchRadius": 20,
+  "maxVaultsPerExecution": 1,
+  "maxStrategiesPerVault": 5,
+  "rotationIntervalSeconds": 120
+}
