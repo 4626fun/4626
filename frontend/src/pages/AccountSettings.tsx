@@ -369,6 +369,7 @@ export function AccountSettings() {
   const [selectedCanonicalSolanaWallet, setSelectedCanonicalSolanaWallet] = useState('')
   const [solanaWalletActionBusy, setSolanaWalletActionBusy] = useState(false)
   const [tasksCopyNotice, setTasksCopyNotice] = useState<string | null>(null)
+  const hasSessionAddress = Boolean(auth.authAddress)
 
   const loadProfile = useCallback(async () => {
     setLoading(true)
@@ -393,12 +394,12 @@ export function AccountSettings() {
 
   useEffect(() => {
     if (!auth.sessionHydrated) return
-    if (!auth.isSignedIn) {
+    if (!hasSessionAddress) {
       setLoading(false)
       return
     }
     void loadProfile()
-  }, [auth.isSignedIn, auth.sessionHydrated, loadProfile])
+  }, [auth.sessionHydrated, hasSessionAddress, loadProfile])
 
   const canSaveEmail = useMemo(() => {
     const trimmed = emailDraft.trim().toLowerCase()
@@ -1485,7 +1486,7 @@ export function AccountSettings() {
     )
   }
 
-  if (!auth.isSignedIn) {
+  if (!hasSessionAddress) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
         <div className="card rounded-xl p-8 space-y-4">
