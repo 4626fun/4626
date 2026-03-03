@@ -48,6 +48,7 @@ import {
 } from '@/lib/tokenSymbols'
 import { computeMarketFloorQuote } from '@/lib/cca/marketFloor'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
+import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { 
   sendCoinbaseSmartWalletUserOperation, 
@@ -3912,7 +3913,10 @@ function DeployVaultBatcher({
                 {
                   from: connectedAddress,
                   to: canonicalSmartWallet,
-                  data: executeBatchData,
+                  data:
+                    appendBuilderSuffixToHex(executeBatchData, {
+                      chainId: chainId ?? base.id,
+                    }) ?? executeBatchData,
                   value: '0x0',
                 },
               ],

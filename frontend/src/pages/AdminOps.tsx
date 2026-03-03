@@ -22,6 +22,7 @@ import { useMiniAppContext } from '@/hooks'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { ConnectButton } from '@/components/ConnectButton'
 import { CONTRACTS } from '@/config/contracts'
+import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { logger } from '@/lib/logger'
@@ -613,7 +614,10 @@ async function sendEmbeddedOwnerSmartWalletCall(params: {
           {
             from: ownerAddress,
             to: smartWallet,
-            data: executeBatchData,
+            data:
+              appendBuilderSuffixToHex(executeBatchData, {
+                chainId: (publicClient as any)?.chain?.id ?? base.id,
+              }) ?? executeBatchData,
           },
         ],
       })

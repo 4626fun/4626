@@ -1,8 +1,7 @@
 import { http, createConfig, fallback } from 'wagmi'
-import { Attribution } from 'ox/erc8021'
-import type { Hex } from 'viem'
 import { base, mainnet, arbitrum, optimism, polygon } from 'wagmi/chains'
 import { coinbaseWallet, injected } from 'wagmi/connectors'
+import { DATA_SUFFIX, warnGlobalWagmiDataSuffixBehavior } from '@/lib/baseBuilderCodes'
 
 /**
  * Minimal Wagmi Config
@@ -33,27 +32,6 @@ function isValidRpcUrl(url: string): boolean {
   } catch {
     return false
   }
-}
-
-
-function parseBuilderCodes(raw: string | undefined): string[] {
-  return String(raw ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-}
-
-function resolveDataSuffix(): Hex | undefined {
-  // Preferred: provide your builder code(s), e.g. "bc_xxx,bc_yyy"
-  const codes = parseBuilderCodes(import.meta.env.VITE_BASE_BUILDER_CODES as string | undefined)
-  if (codes.length > 0) {
-    return Attribution.toDataSuffix({ codes }) as Hex
-  }
-
-  // Fallback: provide a precomputed suffix directly.
-  const rawSuffix = (import.meta.env.VITE_BASE_DATA_SUFFIX as string | undefined)?.trim()
-  if (!rawSuffix) return undefined
-  return (rawSuffix.startsWith('0x') ? rawSuffix : `0x${rawSuffix}`) as Hex
 }
 
 
@@ -135,7 +113,13 @@ function buildConnectors() {
   ] as any
 }
 
-const DATA_SUFFIX = resolveDataSuffix()
+/**
+ * Builder Codes attribution path:
+ * - We intentionally use wagmi's global `dataSuffix` config (Path B).
+ * - Privy's `dataSuffix` plugin is NOT used because it's documented as unsupported
+ *   with `@privy-io/wagmi`.
+ */
+warnGlobalWagmiDataSuffixBehavior(DATA_SUFFIX)
 
 export const wagmiConfig = createConfig({
   chains: [base, mainnet, arbitrum, optimism, polygon],

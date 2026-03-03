@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
+import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
 import { logger } from '@/lib/logger'
 
 const COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI = [
@@ -266,6 +267,7 @@ export function usePrivyCswExecute(params: {
 
     const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
     const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+    const currentChainId = (publicClient as any)?.chain?.id ?? base.id
 
     if (signerType === 'privy-embedded' && privyEoaAddress) {
       const provider = await getPrivyProvider()
@@ -344,9 +346,11 @@ export function usePrivyCswExecute(params: {
           functionName: 'executeBatch' as any,
           args: [calls.map((c) => ({ target: c.to, value: c.value ?? 0n, data: c.data ?? '0x' }))],
         })
+        const attributedExecuteBatchData =
+          appendBuilderSuffixToHex(executeBatchData, { chainId: currentChainId }) ?? executeBatchData
         const txHashRaw = await provider.request({
           method: 'eth_sendTransaction',
-          params: [{ from: privyEoaAddress, to: smartWalletAddress, data: executeBatchData }],
+          params: [{ from: privyEoaAddress, to: smartWalletAddress, data: attributedExecuteBatchData }],
         })
         const txHash = String(txHashRaw ?? '').trim()
         if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
@@ -403,7 +407,17 @@ export function usePrivyCswExecute(params: {
             })
           : await walletAny.request({
               method: 'eth_sendTransaction',
-              params: [{ from: connectedAddress, to: smartWalletAddress, data: executeBatchData, value: '0x0' }],
+              params: [
+                {
+                  from: connectedAddress,
+                  to: smartWalletAddress,
+                  data:
+                    appendBuilderSuffixToHex(executeBatchData, {
+                      chainId: currentChainId,
+                    }) ?? executeBatchData,
+                  value: '0x0',
+                },
+              ],
             })
         const txHash = String(txHashRaw ?? '').trim()
         if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {

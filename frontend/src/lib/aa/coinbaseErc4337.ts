@@ -1,7 +1,6 @@
 import type { Address, Hex } from 'viem'
 import { decodeAbiParameters, encodeAbiParameters, getAddress, hashTypedData, http, isAddress } from 'viem'
 import { toAccount } from 'viem/accounts'
-import { Attribution } from 'ox/erc8021'
 import {
   createBundlerClient,
   createPaymasterClient,
@@ -12,6 +11,7 @@ import {
   waitForUserOperationReceipt,
 } from 'viem/account-abstraction'
 import { logger } from '@/lib/logger'
+import { appendBuilderSuffixToHex, DATA_SUFFIX, isBaseChain } from '@/lib/baseBuilderCodes'
 
 // ============================================================================
 // ENTRYPOINT v0.6 ENFORCEMENT
@@ -25,48 +25,15 @@ import { logger } from '@/lib/logger'
 const ENTRYPOINT_V06 = getAddress(entryPoint06Address)
 const ENTRYPOINT_V06_EXPECTED = getAddress('0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789')
 
-function parseBuilderCodes(raw: string | undefined): string[] {
-  return String(raw ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-}
-
-function resolveBuilderDataSuffix(): Hex | undefined {
-  const codes = parseBuilderCodes(import.meta.env.VITE_BASE_BUILDER_CODES as string | undefined)
-  if (codes.length > 0) {
-    try {
-      return Attribution.toDataSuffix({ codes }) as Hex
-    } catch (e) {
-      logger.warn('[ERC-4337] Failed to derive dataSuffix from builder codes', {
-        codes,
-        error: e instanceof Error ? e.message : String(e),
-      })
-    }
-  }
-
-  const rawSuffix = (import.meta.env.VITE_BASE_DATA_SUFFIX as string | undefined)?.trim()
-  if (!rawSuffix) return undefined
-  return (rawSuffix.startsWith('0x') ? rawSuffix : `0x${rawSuffix}`) as Hex
-}
-
-const BUILDER_DATA_SUFFIX = resolveBuilderDataSuffix()
-
-function appendDataSuffix(data: Hex | undefined, dataSuffix: Hex): Hex {
-  const base = (data && data !== '0x' ? data : '0x') as Hex
-  const baseLc = base.toLowerCase()
-  const suffixBodyLc = dataSuffix.slice(2).toLowerCase()
-  if (suffixBodyLc.length > 0 && baseLc.endsWith(suffixBodyLc)) return base
-  return `${base}${dataSuffix.slice(2)}` as Hex
-}
-
-function withBuilderDataSuffix(
+export function applyBuilderDataSuffixToCalls(
   calls: Array<{ to: Address; value?: bigint; data?: Hex }>,
+  chainId: number,
+  dataSuffix: Hex | undefined = DATA_SUFFIX,
 ): Array<{ to: Address; value?: bigint; data?: Hex }> {
-  if (!BUILDER_DATA_SUFFIX) return calls
+  if (!dataSuffix || !isBaseChain(chainId)) return calls
   return calls.map((c) => ({
     ...c,
-    data: appendDataSuffix(c.data, BUILDER_DATA_SUFFIX),
+    data: appendBuilderSuffixToHex(c.data, { chainId, dataSuffix }),
   }))
 }
 
@@ -1296,7 +1263,8 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   if (!publicClient) throw new Error('Missing public client')
   if (!walletClient) throw new Error('Missing wallet client')
   if (!calls || calls.length === 0) throw new Error('No calls provided')
-  const attributedCalls = withBuilderDataSuffix(calls)
+  const chainId = (publicClient as any).chain?.id ?? 8453
+  const attributedCalls = applyBuilderDataSuffixToCalls(calls, chainId)
 
   const normalizedBundlerUrl = normalizeUrl(bundlerUrlInput)
   const paymasterUrl = normalizeUrl(paymasterUrlInput ?? bundlerUrlInput)
@@ -1430,7 +1398,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     ownerAddress,
     smartWallet,
     ownerIndex,
-    chainId: (publicClient as any).chain?.id ?? 8453,
+    chainId,
     useTypedDataSigning,
   })
 

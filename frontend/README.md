@@ -129,6 +129,50 @@ npm run build
 | `PRIVY_APP_SECRET` | Optional | server | Privy App Secret (server-side). Used by `/api/waitlist` when enabled |
 | `PRIVY_WAITLIST_PREGENERATE` | Optional | server | If true, `/api/waitlist` creates/fetches a Privy user and pregenerates an embedded Ethereum wallet |
 
+## Base Builder Codes Attribution
+
+This app uses a **wagmi-first** Builder Codes integration (ERC-8021 suffix) so attribution is configured once and then applied automatically.
+
+- **Setup**
+  - Set `VITE_BASE_BUILDER_CODES` in `frontend/.env` (preferred, comma-separated if multiple codes).
+  - Optional fallback: set `VITE_BASE_DATA_SUFFIX` with a precomputed hex suffix.
+  - Run `pnpm -C frontend builder-codes:verify` to print the computed `DATA_SUFFIX` and marker checks.
+- **Automatic coverage**
+  - EOA sends via wagmi use global `createConfig({ dataSuffix })`.
+  - ERC-4337 sends append suffix to `userOp.callData` through the shared attribution helper.
+  - Raw `eth_sendTransaction` fallback paths append the same suffix before submission.
+- **Chain scope**
+  - Base rewards are scoped to **Base mainnet** and **Base Sepolia**.
+  - Wagmi `dataSuffix` is a global client setting and can append on non-Base chains.
+  - Direct payload-composition paths are chain-gated to Base/Base Sepolia.
+  - Privy `dataSuffix` plugin is intentionally not used in this app path (see Privy note about `@privy-io/wagmi` support).
+- **Verification**
+  - Check attribution counts on [base.dev](https://base.dev/) (Onchain transaction view).
+  - Inspect tx input data on Basescan and confirm the ERC-8021 repeating `8021` marker tail.
+  - Optionally validate tx/UserOp hash with [builder-code-checker](https://builder-code-checker.vercel.app/).
+
+## Swap Routing Compatibility (Base App + CSW)
+
+Swap execution now uses capability-based routing in `src/lib/txRouter.ts` (not address-equality routing).
+
+- **Routing priority**
+  - Prefer `wallet_sendCalls` when the connected wallet advertises EIP-5792 capabilities (or Coinbase smart-wallet hints in canonical mode).
+  - Fall back to canonical ERC-4337 (`eth_sendUserOperation`) for canonical-owner flows.
+  - Fall back to connector-native direct sends when canonical owner UserOp is not applicable.
+  - Use direct `sendTransaction` path for EOA mode.
+- **Sender consistency**
+  - Approval + swap are routed through the same route family.
+  - In canonical mode, approval + swap can be batched together.
+  - In EOA mode, approval + swap are sent sequentially with the same signer route.
+- **Debugging**
+  - Enable with `VITE_DEBUG_LOGS=true` or in browser devtools:
+    - `localStorage.setItem('cv:debug', 'true')`
+    - refresh the page
+  - On `/swap`, a dev panel shows connector, addresses, capability snapshot, selected mode, last RPC method, and approval-vs-swap sender comparison.
+- **Healthy patterns**
+  - Base App CSW should generally show `wallet_sendCalls` (or explicit canonical ERC-4337 fallback).
+  - Approval and swap should report matching sender semantics in the debug panel.
+
 ## Waitlist (DB)
 
 See also: `docs/waitlist-entry-scenarios.md` for entry-path and email-rule behavior (including CSW-first flows).

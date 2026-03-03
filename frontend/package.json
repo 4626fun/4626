@@ -25,6 +25,7 @@
     "csw:owner-link:backfill": "tsx scripts/csw-owner-link-backfill.ts",
     "check:agent-registration": "node scripts/check-agent-registration.mjs",
     "verify:protocol-assets": "node scripts/verify-protocol-assets.mjs",
+    "builder-codes:verify": "tsx --env-file=.env scripts/verify-builder-codes.ts",
     "deploy:autopilot": "node scripts/deploy-autopilot.mjs",
     "skills:sync:cursor": "node scripts/sync-cursor-skills.mjs --prune"
   },

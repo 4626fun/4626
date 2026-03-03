@@ -8,6 +8,7 @@ import { base } from 'viem/chains'
 import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 
 import { META, PageMeta } from '@/components/seo/PageMeta'
+import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { apiFetch } from '@/lib/apiBase'
@@ -604,7 +605,10 @@ export function AgentRegister() {
                     {
                       from: account,
                       to: canonicalCsw,
-                      data: executeBatchData,
+                      data:
+                        appendBuilderSuffixToHex(executeBatchData, {
+                          chainId: chainId ?? base.id,
+                        }) ?? executeBatchData,
                       value: '0x0',
                     },
                   ],
@@ -727,6 +731,7 @@ export function AgentRegister() {
     canonicalSmartWalletAddress,
     canOperateCanonicalCsw,
     connectedAddress,
+    chainId,
     ensureBaseChain,
     ensureProviderOnBase,
     getPrivyEmbeddedEoaProvider,
