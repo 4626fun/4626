@@ -15,6 +15,8 @@ const {
   generatePrivateKeyMock,
   privateKeyToAccountMock,
   resolveCoinPartiesMock,
+  createPublicClientMock,
+  getBytecodeMock,
 } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async (req: any) => req.body),
   readSessionFromRequestMock: vi.fn(() => ({ address: '0x0000000000000000000000000000000000000001' })),
@@ -32,6 +34,10 @@ const {
     privateKey: ('0x' + '11'.repeat(32)) as `0x${string}`,
   })),
   resolveCoinPartiesMock: vi.fn(async () => ({ creator: null, payoutRecipient: null })),
+  getBytecodeMock: vi.fn(async () => '0x'),
+  createPublicClientMock: vi.fn(() => ({
+    getBytecode: getBytecodeMock,
+  })),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -82,6 +88,15 @@ vi.mock('viem/accounts', () => ({
   generatePrivateKey: generatePrivateKeyMock,
   privateKeyToAccount: privateKeyToAccountMock,
 }))
+
+vi.mock('viem', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('viem')>()
+  return {
+    ...actual,
+    createPublicClient: createPublicClientMock,
+    http: vi.fn(() => ({})),
+  }
+})
 
 function makeRequestBody() {
   return {
@@ -196,6 +211,7 @@ describe('deploy session ownership guardrails', () => {
     vi.clearAllMocks()
     delete process.env.DEPLOY_SESSION_TTL_MINUTES
     resolveCoinPartiesMock.mockResolvedValue({ creator: null, payoutRecipient: null })
+    getBytecodeMock.mockResolvedValue('0x')
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -216,6 +232,50 @@ describe('deploy session ownership guardrails', () => {
 
     expect(res.statusCode).toBe(400)
     expect(res.body?.error).toBe('Invalid addresses')
+    expect(insertDeploySessionMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects contract owner additions in submitted deploy calls', async () => {
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+    const contractOwner = '0x00000000000000000000000000000000000000cc'
+    getBytecodeMock.mockImplementation((async (...args: any[]) => {
+      const address = String(args?.[0]?.address ?? '')
+      if (address.toLowerCase() === contractOwner.toLowerCase()) return '0x1234'
+      return '0x'
+    }) as any)
+    const addOwnerData = encodeFunctionData({
+      abi: [
+        {
+          type: 'function',
+          name: 'addOwnerAddress',
+          stateMutability: 'nonpayable',
+          inputs: [{ name: 'owner', type: 'address' }],
+          outputs: [],
+        },
+      ] as const,
+      functionName: 'addOwnerAddress',
+      args: [contractOwner],
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        phase1Calls: [
+          {
+            to: '0x0000000000000000000000000000000000000002',
+            value: '0',
+            data: addOwnerData,
+          },
+        ],
+        phase2Calls: [],
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(String(res.body?.error ?? '')).toContain('Only EOA owners can be added')
     expect(insertDeploySessionMock).not.toHaveBeenCalled()
   })
 

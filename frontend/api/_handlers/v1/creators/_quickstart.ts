@@ -19,6 +19,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
+  readJsonBody,
   setCors,
   setNoStore,
 } from '../../../../server/auth/_shared.js'
@@ -62,6 +63,10 @@ type QuickstartResult = {
 
   // What the user still needs to do
   pendingActions: string[]
+}
+
+type QuickstartRequestBody = {
+  enableAutomation?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -212,6 +217,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
+  const body = (await readJsonBody<QuickstartRequestBody>(req)) ?? {}
+  const enableAutomation = body.enableAutomation === true
+
   // Require authenticated session or SIWA
   const creatorAddress = readRequestPrincipalAddress(req)
   if (!creatorAddress || !isAddressLike(creatorAddress)) {
@@ -274,72 +282,78 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const allowlisted = await autoAllowlist(db, creatorAddress, creatorAddress)
 
     // ------------------------------------------------------------------
-    // 4. Provision server signer wallet
+    // 4. Provision server signer wallet (explicit opt-in only)
     // ------------------------------------------------------------------
     let serverSignerAddress: string | null = null
     let serverSignerWalletId: string | null = null
     let ownerAdded = false
 
-    try {
-      const wallet = await getOrCreateCreatorAgentWallet({
-        creatorToken: creatorAddress as `0x${string}`,
-      })
-      serverSignerAddress = wallet.address
-      serverSignerWalletId = wallet.walletId
+    if (enableAutomation) {
+      try {
+        const wallet = await getOrCreateCreatorAgentWallet({
+          creatorToken: creatorAddress as `0x${string}`,
+        })
+        serverSignerAddress = wallet.address
+        serverSignerWalletId = wallet.walletId
 
-      // Check if signer is already an owner of the CSW
-      ownerAdded = await checkIsOwner(creatorAddress, wallet.address)
-      if (!ownerAdded) {
-        pendingActions.push('add_owner')
+        // Check if signer is already an owner of the CSW
+        ownerAdded = await checkIsOwner(creatorAddress, wallet.address)
+        if (!ownerAdded) {
+          pendingActions.push('add_owner')
+        }
+      } catch (err) {
+        logger.warn('[quickstart] Server wallet provisioning failed', {
+          creatorAddress,
+          error: err,
+        })
+        pendingActions.push('provision_wallet')
       }
-    } catch (err) {
-      logger.warn('[quickstart] Server wallet provisioning failed', {
-        creatorAddress,
-        error: err,
-      })
-      pendingActions.push('provision_wallet')
     }
 
     // ------------------------------------------------------------------
-    // 5. Enable XMTP agent (CSW mode if signer ready, otherwise EOA)
+    // 5. Enable XMTP agent (explicit opt-in only)
     // ------------------------------------------------------------------
-    let agentType: 'csw' | 'eoa' = 'csw'
+    let agentType: 'csw' | 'eoa' = 'eoa'
     let agentAddress = creatorAddress
 
-    try {
-      if (serverSignerWalletId && ownerAdded) {
-        // Signer is already an owner — fully activate CSW agent
-        const agentRow = await enableCswAgent({
-          creatorAddress: creatorAddress as `0x${string}`,
-          cswAddress: creatorAddress as `0x${string}`,
-          privyWalletId: serverSignerWalletId,
-          listedPublicly: true,
-        })
-        agentAddress = agentRow.xmtpAgentAddress
-        agentType = 'csw'
-      } else if (serverSignerWalletId) {
-        // Signer provisioned but not yet an owner — pre-register as CSW
-        // (will be fully activated after addOwnerAddress tx)
-        const agentRow = await enableCswAgent({
-          creatorAddress: creatorAddress as `0x${string}`,
-          cswAddress: creatorAddress as `0x${string}`,
-          privyWalletId: serverSignerWalletId,
-          listedPublicly: true,
-        })
-        agentAddress = agentRow.xmtpAgentAddress
-        agentType = 'csw'
-      } else {
-        // Fallback: generate EOA agent
-        const agentRow = await getOrCreateCreatorXmtpAgent({
-          creatorAddress: creatorAddress as `0x${string}`,
-          listedPublicly: true,
-        })
-        agentAddress = agentRow.xmtpAgentAddress
-        agentType = 'eoa'
+    if (enableAutomation) {
+      try {
+        if (serverSignerWalletId && ownerAdded) {
+          // Signer is already an owner — fully activate CSW agent
+          const agentRow = await enableCswAgent({
+            creatorAddress: creatorAddress as `0x${string}`,
+            cswAddress: creatorAddress as `0x${string}`,
+            privyWalletId: serverSignerWalletId,
+            listedPublicly: true,
+          })
+          agentAddress = agentRow.xmtpAgentAddress
+          agentType = 'csw'
+        } else if (serverSignerWalletId) {
+          // Signer provisioned but not yet an owner — pre-register as CSW
+          // (will be fully activated after addOwnerAddress tx)
+          const agentRow = await enableCswAgent({
+            creatorAddress: creatorAddress as `0x${string}`,
+            cswAddress: creatorAddress as `0x${string}`,
+            privyWalletId: serverSignerWalletId,
+            listedPublicly: true,
+          })
+          agentAddress = agentRow.xmtpAgentAddress
+          agentType = 'csw'
+        } else {
+          // Fallback: generate EOA agent
+          const agentRow = await getOrCreateCreatorXmtpAgent({
+            creatorAddress: creatorAddress as `0x${string}`,
+            listedPublicly: true,
+          })
+          agentAddress = agentRow.xmtpAgentAddress
+          agentType = 'eoa'
+        }
+      } catch (err) {
+        logger.warn('[quickstart] Agent creation failed', err)
+        pendingActions.push('enable_agent')
       }
-    } catch (err) {
-      logger.warn('[quickstart] Agent creation failed', err)
-      pendingActions.push('enable_agent')
+    } else {
+      pendingActions.push('automation_opt_in_available')
     }
 
     // ------------------------------------------------------------------

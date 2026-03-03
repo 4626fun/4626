@@ -1,6 +1,9 @@
 import { Agent, createSigner, createUser, getInstallationInfo } from '@xmtp/agent-sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { createPublicClient, createWalletClient, http, type Abi } from 'viem'
+import { privateKeyToAccount } from 'viem/accounts'
+import { base } from 'viem/chains'
 
 import { getDb } from '../_lib/postgres.js'
 import { logger } from '../_lib/logger.js'
@@ -12,6 +15,18 @@ import { ensureKeeprSchema } from '../_lib/keeprSchema.js'
 declare const process: { env: Record<string, string | undefined>; cwd(): string }
 
 const ETHEREUM_IDENTIFIER_KIND = 0
+
+type XmtpActionType =
+  | 'xmtp.group.add_member'
+  | 'xmtp.group.remove_member'
+  | 'xmtp.group.send_message'
+  | 'xmtp.group.sync_members'
+
+type StrategyActionType =
+  | 'strategy.ajna.rebucket'
+  | 'strategy.charm.rebalance'
+
+type SupportedActionType = XmtpActionType | StrategyActionType
 
 const ACTION_ALIASES: Record<string, SupportedActionType> = {
   'xmtp.group.add_member': 'xmtp.group.add_member',
@@ -26,13 +41,34 @@ const ACTION_ALIASES: Record<string, SupportedActionType> = {
   'xmtp.group.sync_members': 'xmtp.group.sync_members',
   sync_members: 'xmtp.group.sync_members',
   syncMembers: 'xmtp.group.sync_members',
+  'strategy.ajna.rebucket': 'strategy.ajna.rebucket',
+  ajna_rebucket: 'strategy.ajna.rebucket',
+  ajnaRebucket: 'strategy.ajna.rebucket',
+  'strategy.charm.rebalance': 'strategy.charm.rebalance',
+  charm_rebalance: 'strategy.charm.rebalance',
+  charmRebalance: 'strategy.charm.rebalance',
 }
 
-type SupportedActionType =
-  | 'xmtp.group.add_member'
-  | 'xmtp.group.remove_member'
-  | 'xmtp.group.send_message'
-  | 'xmtp.group.sync_members'
+const AJNA_STRATEGY_ADMIN_ABI = [
+  {
+    type: 'function',
+    name: 'moveToBucket',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'newIndex', type: 'uint256' }, { name: 'lpAmount', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setBucketIndex',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: '_index', type: 'uint256' }],
+    outputs: [],
+  },
+] as const
+
+const CHARM_VAULT_ADMIN_ABI = [
+  { type: 'function', name: 'rebalance', stateMutability: 'nonpayable', inputs: [], outputs: [] },
+] as const
 
 type QueueAgentRow = {
   vaultAddress: string
@@ -52,6 +88,11 @@ type GroupLike = {
   removeMembers: (inboxIds: string[]) => Promise<unknown>
   sendText: (text: string) => Promise<unknown>
   sync: () => Promise<unknown>
+}
+
+type GroupConversationContextLike = {
+  isGroup: () => boolean
+  conversation: GroupLike
 }
 
 export type ExecuteKeeprActionInput = {
@@ -110,6 +151,9 @@ const XMTP_DB_FORCE_ENCRYPTED_MIGRATION =
 function fileLooksLikePlainSqlite(filePath: string): boolean {
   try {
     if (!fs.existsSync(filePath)) return false
+    // SQLCipher DBs managed by XMTP keep a sidecar salt file.
+    // If that file exists, this DB should be treated as encrypted.
+    if (fs.existsSync(`${filePath}.sqlcipher_salt`)) return false
     const fd = fs.openSync(filePath, 'r')
     try {
       const header = Buffer.alloc(SQLITE_HEADER.length)
@@ -211,6 +255,14 @@ function normalizeActionType(actionType?: string | null, actionPayloadType?: str
   return ACTION_ALIASES[raw] ?? null
 }
 
+function isXmtpActionType(actionType: SupportedActionType): actionType is XmtpActionType {
+  return actionType.startsWith('xmtp.group.')
+}
+
+function isStrategyActionType(actionType: SupportedActionType): actionType is StrategyActionType {
+  return actionType.startsWith('strategy.')
+}
+
 function isAddressLike(value: unknown): value is `0x${string}` {
   return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value.trim())
 }
@@ -242,6 +294,62 @@ function getWalletArrayForSync(action: Record<string, unknown>): `0x${string}`[]
     out.add(item.toLowerCase().trim() as `0x${string}`)
   }
   return [...out]
+}
+
+function getBaseRpcUrl(): string {
+  const raw = (process.env.BASE_RPC_URL ?? '').trim()
+  return raw || 'https://mainnet.base.org'
+}
+
+function getKeeperAccount() {
+  const pk = (process.env.KEEPR_PRIVATE_KEY ?? '').trim()
+  if (!pk || !/^0x[0-9a-fA-F]{64}$/.test(pk)) {
+    throw new KeeprQueueError('keeper_private_key_missing', false)
+  }
+  return privateKeyToAccount(pk as `0x${string}`)
+}
+
+function parseUintLikeFromAction(action: Record<string, unknown>, key: string): bigint {
+  const raw = action[key]
+  if (typeof raw === 'bigint') {
+    if (raw < 0n) throw new KeeprQueueError(`invalid_${key}`, false)
+    return raw
+  }
+  if (typeof raw === 'number') {
+    if (!Number.isFinite(raw) || raw < 0 || !Number.isInteger(raw)) {
+      throw new KeeprQueueError(`invalid_${key}`, false)
+    }
+    return BigInt(raw)
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    if (!trimmed) throw new KeeprQueueError(`missing_${key}`, false)
+    try {
+      const out = BigInt(trimmed)
+      if (out < 0n) throw new KeeprQueueError(`invalid_${key}`, false)
+      return out
+    } catch {
+      throw new KeeprQueueError(`invalid_${key}`, false)
+    }
+  }
+  throw new KeeprQueueError(`missing_${key}`, false)
+}
+
+function isLikelyRetryableRpcError(message: string): boolean {
+  const m = message.toLowerCase()
+  return (
+    m.includes('timeout') ||
+    m.includes('timed out') ||
+    m.includes('network') ||
+    m.includes('temporar') ||
+    m.includes('rate limit') ||
+    m.includes('too many requests') ||
+    m.includes('429') ||
+    m.includes('503') ||
+    m.includes('gateway') ||
+    m.includes('socket hang up') ||
+    m.includes('connection reset')
+  )
 }
 
 function getEthereumAddressFromMember(member: any): `0x${string}` | null {
@@ -308,6 +416,7 @@ function isLikelyNonRetryableExecutionError(message: string): boolean {
     m.includes('invalid') ||
     m.includes('not found') ||
     m.includes('missing') ||
+    m.includes('revert') ||
     m.includes('unknown action')
   )
 }
@@ -320,8 +429,167 @@ async function resolveInboxIdForAddress(agent: Agent, address: `0x${string}`): P
   return agent.client.fetchInboxIdByIdentifier(identifier)
 }
 
+async function resolveGroupConversationContext(
+  agent: Agent,
+  groupId: string,
+): Promise<GroupConversationContextLike | null> {
+  let ctx = await agent.getConversationContext(groupId)
+  if (ctx?.isGroup()) return ctx as unknown as GroupConversationContextLike
+
+  // Recovery path: if the installation is fresh, local DB might not have this group yet.
+  // Try a lightweight conversations sync and retry before declaring "group_not_found".
+  const conversationsApi = (agent.client as any)?.conversations as any
+  if (conversationsApi && typeof conversationsApi.sync === 'function') {
+    try {
+      await conversationsApi.sync()
+    } catch {
+      // best effort
+    }
+  }
+
+  ctx = await agent.getConversationContext(groupId)
+  if (ctx?.isGroup()) return ctx as unknown as GroupConversationContextLike
+
+  // Last resort: list groups and match by id.
+  if (conversationsApi && typeof conversationsApi.listGroups === 'function') {
+    try {
+      const groups = await conversationsApi.listGroups()
+      const group = Array.isArray(groups)
+        ? groups.find((g: any) => String(g?.id ?? '') === groupId)
+        : null
+      if (group) {
+        return {
+          isGroup: () => true,
+          conversation: group as GroupLike,
+        }
+      }
+    } catch {
+      // best effort
+    }
+  }
+
+  return null
+}
+
+async function persistVaultGroupId(
+  vaultAddress: `0x${string}`,
+  groupId: string,
+): Promise<void> {
+  const db = await getDb()
+  if (!db) return
+  await ensureKeeprSchema()
+
+  await db.sql`
+    UPDATE keepr_vaults
+      SET group_id = ${groupId},
+          updated_at = NOW()
+    WHERE LOWER(vault_address) = ${vaultAddress.toLowerCase()};
+  `
+}
+
+async function bootstrapMissingGroupForVault(params: {
+  agent: Agent
+  vaultAddress: `0x${string}`
+}): Promise<{ groupId: string; context: GroupConversationContextLike } | null> {
+  try {
+    // Create a minimal self-owned group. Membership actions can add others later.
+    const group = await params.agent.createGroupWithAddresses([])
+    const groupId = String((group as any)?.id ?? '').trim()
+    if (!groupId) return null
+
+    await persistVaultGroupId(params.vaultAddress, groupId).catch((err) => {
+      logger.warn('[keepr/xmtp-queue] failed to persist bootstrapped group id', {
+        vaultAddress: params.vaultAddress,
+        groupId,
+        error: String(err),
+      })
+    })
+
+    const context = await resolveGroupConversationContext(params.agent, groupId)
+    if (context?.isGroup()) {
+      return { groupId, context }
+    }
+    return null
+  } catch (err) {
+    logger.warn('[keepr/xmtp-queue] failed to bootstrap missing group', {
+      vaultAddress: params.vaultAddress,
+      error: String(err),
+    })
+    return null
+  }
+}
+
+async function executeStrategyAction(
+  actionType: StrategyActionType,
+  action: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const account = getKeeperAccount()
+  const rpcUrl = getBaseRpcUrl()
+  const publicClient = createPublicClient({ chain: base, transport: http(rpcUrl, { timeout: 30_000 }) }) as any
+  const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl, { timeout: 30_000 }) })
+
+  if (actionType === 'strategy.ajna.rebucket') {
+    const strategyAddress = normalizeAddress(action.strategyAddress, 'strategyAddress')
+    const targetBucket = parseUintLikeFromAction(action, 'targetBucket')
+    const methodRaw = String(action.method ?? 'moveToBucket').trim()
+    const method = methodRaw === 'setBucketIndex' ? 'setBucketIndex' : methodRaw === 'moveToBucket' ? 'moveToBucket' : null
+    if (!method) throw new KeeprQueueError('invalid_method', false)
+
+    const txHash =
+      method === 'moveToBucket'
+        ? await walletClient.writeContract({
+            address: strategyAddress,
+            abi: AJNA_STRATEGY_ADMIN_ABI as unknown as Abi,
+            functionName: 'moveToBucket',
+            args: [targetBucket, 0n],
+            chain: base,
+            account,
+          })
+        : await walletClient.writeContract({
+            address: strategyAddress,
+            abi: AJNA_STRATEGY_ADMIN_ABI as unknown as Abi,
+            functionName: 'setBucketIndex',
+            args: [targetBucket],
+            chain: base,
+            account,
+          })
+
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })
+    if (receipt.status !== 'success') {
+      throw new KeeprQueueError('transaction_reverted', false)
+    }
+    return {
+      txHash,
+      strategyAddress,
+      method,
+      targetBucket: targetBucket.toString(),
+    }
+  }
+
+  const charmVaultAddress = normalizeAddress(
+    action.charmVaultAddress ?? action.strategyAddress,
+    'charmVaultAddress',
+  )
+  const txHash = await walletClient.writeContract({
+    address: charmVaultAddress,
+    abi: CHARM_VAULT_ADMIN_ABI as unknown as Abi,
+    functionName: 'rebalance',
+    args: [],
+    chain: base,
+    account,
+  })
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })
+  if (receipt.status !== 'success') {
+    throw new KeeprQueueError('transaction_reverted', false)
+  }
+  return {
+    txHash,
+    charmVaultAddress,
+  }
+}
+
 async function executeNormalizedAction(
-  actionType: SupportedActionType,
+  actionType: XmtpActionType,
   action: Record<string, unknown>,
   agent: Agent,
   group: GroupLike,
@@ -399,19 +667,45 @@ export async function executeKeeprAction(input: ExecuteKeeprActionInput): Promis
     if (!row) {
       return { success: false, retryable: false, actionType: normalizedActionType, error: 'vault_not_configured' }
     }
-    if (row.groupId !== String(input.groupId)) {
-      return { success: false, retryable: false, actionType: normalizedActionType, error: 'group_mismatch' }
+    if (isStrategyActionType(normalizedActionType)) {
+      const details = await executeStrategyAction(normalizedActionType, input.action ?? {})
+      return {
+        success: true,
+        retryable: false,
+        actionType: normalizedActionType,
+        details,
+      }
     }
+
+    const requestedGroupId = String(input.groupId)
+    let effectiveGroupId = requestedGroupId
+    if (row.groupId !== requestedGroupId) {
+      // Prefer current vault config to avoid hard-failing stale queued actions
+      // after a group migration/bootstrap.
+      logger.warn('[keepr/xmtp-queue] group id mismatch, using configured vault group', {
+        actionId: input.id,
+        requestedGroupId,
+        configuredGroupId: row.groupId,
+      })
+      effectiveGroupId = row.groupId
+    }
+
     if (!row.creatorAddress) {
       return { success: false, retryable: false, actionType: normalizedActionType, error: 'creator_agent_not_configured' }
     }
 
     let signer: any
     if (row.agentType === 'csw' && row.privyWalletId && row.cswAddress) {
+      const ownerIndexRaw = Number(process.env.XMTP_AGENT_CSW_OWNER_INDEX ?? '')
+      const ownerIndex =
+        Number.isFinite(ownerIndexRaw) && ownerIndexRaw >= 0
+          ? Math.floor(ownerIndexRaw)
+          : undefined
       signer = createPrivyScwSigner({
         walletId: row.privyWalletId,
         cswAddress: normalizeAddress(row.cswAddress, 'cswAddress'),
         chainId: 8453,
+        ...(ownerIndex !== undefined ? { ownerIndex } : {}),
       })
     } else {
       if (!row.encryptedPrivateKeyB64 || !row.encryptedPrivateKeyIvB64 || !row.encryptedPrivateKeyTagB64) {
@@ -447,7 +741,19 @@ export async function executeKeeprAction(input: ExecuteKeeprActionInput): Promis
       logger.warn('[keepr/xmtp-queue] Post-create installation check failed (non-fatal)', { error: String(err) })
     }
 
-    const conversationCtx = await agent.getConversationContext(input.groupId)
+    let conversationCtx = await resolveGroupConversationContext(agent, effectiveGroupId)
+    let bootstrappedGroupId: string | null = null
+    if (!conversationCtx && isXmtpActionType(normalizedActionType)) {
+      const bootstrapped = await bootstrapMissingGroupForVault({
+        agent,
+        vaultAddress: normalizedVaultAddress,
+      })
+      if (bootstrapped) {
+        conversationCtx = bootstrapped.context
+        effectiveGroupId = bootstrapped.groupId
+        bootstrappedGroupId = bootstrapped.groupId
+      }
+    }
     if (!conversationCtx) {
       return { success: false, retryable: false, actionType: normalizedActionType, error: 'group_not_found' }
     }
@@ -466,12 +772,18 @@ export async function executeKeeprAction(input: ExecuteKeeprActionInput): Promis
       success: true,
       retryable: false,
       actionType: normalizedActionType,
-      details,
+      details: {
+        ...(details ?? {}),
+        groupId: effectiveGroupId,
+        ...(bootstrappedGroupId ? { bootstrappedGroupId } : {}),
+      },
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     const retryable =
-      err instanceof KeeprQueueError ? err.retryable : !isLikelyNonRetryableExecutionError(message)
+      err instanceof KeeprQueueError
+        ? err.retryable
+        : isLikelyRetryableRpcError(message) || !isLikelyNonRetryableExecutionError(message)
     logger.error('[keepr/xmtp-queue] execute failed', {
       actionId: input.id,
       actionType: normalizedActionType,

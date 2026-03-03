@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { encodeFunctionData, erc20Abi, formatUnits, isAddress, parseUnits } from 'viem'
+import { erc20Abi, formatUnits, isAddress, parseUnits } from 'viem'
 
-import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
-import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { CONTRACTS } from '@/config/contracts'
+import {
+  buildAndSendApproval,
+  buildAndSendSwap,
+  detectTxSendMode,
+  type TxRouterContext,
+  type TxRouterDebugEvent,
+} from '@/lib/txRouter'
 import {
   evaluateSwapPolicyInput,
   evaluateSwapPolicyRouting,
@@ -12,6 +17,7 @@ import {
 } from '@/lib/uniswap/policy'
 import { normalizeUniswapError } from '@/lib/uniswap/error'
 import { areEquivalentSwapTokens, BASE_CHAIN_ID, getNestedAmountOut, NATIVE_TOKEN_ADDRESS } from '@/lib/uniswap/swapUtils'
+import { isAllowedCanonicalSigner, isTargetCanonicalCsw, shouldApplyCanonicalEnforcement } from '@/wallet/canonicalWalletPolicy'
 import type { components } from '@/lib/uniswap/generated/tradeApi'
 import {
   assertValidSwapTransaction,
@@ -32,6 +38,7 @@ import {
   type TransactionRequest,
 } from '@/lib/uniswap/tradingApi'
 import type { TxLifecycleState } from '@/components/trade/TransactionLifecycle'
+import type { AccountCapabilities, SignerType } from '@/wallet/accountContext'
 
 const QUOTE_TTL_MS = 30_000
 const CALIBUR_DELEGATION_ADDRESS = '0x000000009B1D0aF20D8C6d0A44e162d11F9b8f00' as const
@@ -47,37 +54,52 @@ type Swap7702Diagnostics = {
   notes: string[]
 }
 
-const COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI = [
-  {
-    type: 'function',
-    name: 'executeBatch',
-    stateMutability: 'payable',
-    inputs: [
-      {
-        name: 'calls',
-        type: 'tuple[]',
-        components: [
-          { name: 'target', type: 'address' },
-          { name: 'value', type: 'uint256' },
-          { name: 'data', type: 'bytes' },
-        ],
-      },
-    ],
-    outputs: [],
-  },
-] as const
-
-function asBigInt(v: unknown): bigint {
-  if (typeof v === 'bigint') return v
-  if (typeof v === 'number' && Number.isFinite(v)) return BigInt(Math.floor(v))
-  if (typeof v === 'string' && v.trim()) return BigInt(v)
-  return 0n
+type SwapTxAttemptDebug = {
+  stage: 'approval' | 'swap'
+  mode: string
+  method: string
+  sender: string | null
+  txHash: string | null
+  callsId: string | null
+  callTargets: string[]
+  at: number
 }
 
-function asOptionalBigInt(v: unknown): bigint | undefined {
-  if (v === null || v === undefined) return undefined
-  if (typeof v === 'string' && !v.trim()) return undefined
-  return asBigInt(v)
+type SwapTxDebugState = {
+  enabled: boolean
+  chainId: number
+  selectedAddress: string | null
+  executionAddress: string | null
+  canonicalAddress: string | null
+  signerAddress: string | null
+  signerType: string | null
+  connectorId: string | null
+  connectorName: string | null
+  capabilities: AccountCapabilities
+  smartWalletDetected: boolean
+  selectedSendMode: string | null
+  selectedSendReason: string | null
+  lastMethod: string | null
+  lastError: string | null
+  allowanceCheck: { walletAddress: string; token: string; amount: string } | null
+  approvalAttempt: SwapTxAttemptDebug | null
+  swapAttempt: SwapTxAttemptDebug | null
+}
+
+const EMPTY_CAPABILITIES: AccountCapabilities = {
+  paymasterService: false,
+  atomicStatus: 'unknown',
+  supports5792: false,
+}
+
+function isSwapDebugEnabled(): boolean {
+  if (import.meta.env.VITE_DEBUG_LOGS === 'true') return true
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem('cv:debug') === 'true'
+  } catch {
+    return false
+  }
 }
 
 function toParsableAmount(value: string): string | null {
@@ -115,7 +137,12 @@ export function useSwapExecution(params: {
   parsedSlippage: number
   parsedDeadlineMinutes: number
   chainId?: number
+  signerType?: SignerType
+  capabilities?: AccountCapabilities | null
+  connectorId?: string | null
+  connectorName?: string | null
 }) {
+  const swapDebugEnabled = useMemo(() => isSwapDebugEnabled(), [])
   const [estimatedOut, setEstimatedOut] = useState<string>('')
   const [quote, setQuote] = useState<TradeQuoteResponse | null>(null)
   const [approvalData, setApprovalData] = useState<Record<string, unknown> | null>(null)
@@ -142,6 +169,26 @@ export function useSwapExecution(params: {
   const [txHash, setTxHash] = useState<string | null>(null)
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false)
   const [diagnosticsResult, setDiagnosticsResult] = useState<Swap7702Diagnostics | null>(null)
+  const [txDebug, setTxDebug] = useState<SwapTxDebugState>({
+    enabled: swapDebugEnabled,
+    chainId: Number(params.chainId ?? BASE_CHAIN_ID),
+    selectedAddress: params.address ?? null,
+    executionAddress: params.executionAddress ?? null,
+    canonicalAddress: params.canonicalAddress ?? null,
+    signerAddress: params.signerAddress ?? null,
+    signerType: params.signerType ?? null,
+    connectorId: params.connectorId ?? null,
+    connectorName: params.connectorName ?? null,
+    capabilities: params.capabilities ?? EMPTY_CAPABILITIES,
+    smartWalletDetected: false,
+    selectedSendMode: null,
+    selectedSendReason: null,
+    lastMethod: null,
+    lastError: null,
+    allowanceCheck: null,
+    approvalAttempt: null,
+    swapAttempt: null,
+  })
   const quoteRunRef = useRef(0)
   const getErrorMessage = useCallback((value: unknown, fallback: string): string => {
     const normalized = normalizeUniswapError(value)
@@ -157,6 +204,152 @@ export function useSwapExecution(params: {
     [swapPolicy, params.executionAddress],
   )
   const diagnosticsEnabled = swapPolicy.diagnosticsEnabled || canary7702Eligible
+  const normalizedCapabilities = params.capabilities ?? EMPTY_CAPABILITIES
+  const canonicalPolicyApplies = useMemo(
+    () =>
+      shouldApplyCanonicalEnforcement({
+        canonicalAddress: params.canonicalAddress,
+        executionAddress: params.executionAddress,
+        signerAddress: params.signerAddress,
+      }),
+    [params.canonicalAddress, params.executionAddress, params.signerAddress],
+  )
+
+  useEffect(() => {
+    if (!swapDebugEnabled) return
+    setTxDebug((prev) => ({
+      ...prev,
+      enabled: true,
+      chainId: Number(swapChainId),
+      selectedAddress: params.address ?? null,
+      executionAddress: params.executionAddress ?? null,
+      canonicalAddress: params.canonicalAddress ?? null,
+      signerAddress: params.signerAddress ?? null,
+      signerType: params.signerType ?? null,
+      connectorId: params.connectorId ?? null,
+      connectorName: params.connectorName ?? null,
+      capabilities: normalizedCapabilities,
+    }))
+  }, [
+    swapDebugEnabled,
+    swapChainId,
+    params.address,
+    params.executionAddress,
+    params.canonicalAddress,
+    params.signerAddress,
+    params.signerType,
+    params.connectorId,
+    params.connectorName,
+    normalizedCapabilities,
+  ])
+
+  const updateAttemptDebug = useCallback((attempt: SwapTxAttemptDebug) => {
+    if (!swapDebugEnabled) return
+    setTxDebug((prev) => ({
+      ...prev,
+      lastMethod: attempt.method,
+      lastError: null,
+      approvalAttempt: attempt.stage === 'approval' ? attempt : prev.approvalAttempt,
+      swapAttempt: attempt.stage === 'swap' ? attempt : prev.swapAttempt,
+    }))
+  }, [swapDebugEnabled])
+
+  const updateTxDebugError = useCallback((message: string) => {
+    if (!swapDebugEnabled) return
+    setTxDebug((prev) => ({
+      ...prev,
+      lastError: message,
+    }))
+  }, [swapDebugEnabled])
+
+  const onTxRouterDebug = useCallback((event: TxRouterDebugEvent) => {
+    if (!swapDebugEnabled) return
+    setTxDebug((prev) => {
+      if (event.event === 'route_selected') {
+        return {
+          ...prev,
+          smartWalletDetected: Boolean(event.smartWalletDetected),
+          selectedSendMode: event.mode,
+          selectedSendReason: event.reason ?? null,
+          lastMethod: event.method ?? prev.lastMethod,
+          lastError: null,
+        }
+      }
+      if (event.event === 'send_error') {
+        return {
+          ...prev,
+          lastMethod: event.method ?? prev.lastMethod,
+          lastError: event.error ?? null,
+        }
+      }
+      if (event.event === 'send_attempt' || event.event === 'send_success' || event.event === 'send_fallback') {
+        return {
+          ...prev,
+          lastMethod: event.method ?? prev.lastMethod,
+        }
+      }
+      return prev
+    })
+    console.debug('[swap][tx-router]', event)
+  }, [swapDebugEnabled])
+
+  const assertCanonicalSwapExecutionContext = useCallback(() => {
+    if (!canonicalPolicyApplies) return
+    if (params.executionMode !== 'canonical') {
+      throw new Error('Canonical CSW policy requires canonical execution mode.')
+    }
+    if (!isTargetCanonicalCsw(params.canonicalAddress ?? null)) {
+      throw new Error('Canonical CSW policy requires the configured canonical smart wallet identity.')
+    }
+    if (!isTargetCanonicalCsw(params.executionAddress ?? null)) {
+      throw new Error('Canonical CSW policy blocked non-canonical execution address.')
+    }
+    if (!isAllowedCanonicalSigner(params.signerAddress ?? null)) {
+      throw new Error('Canonical CSW policy requires an allowed owner signer.')
+    }
+    if (params.signerType === 'SMART_WALLET' && !isTargetCanonicalCsw(params.signerAddress ?? null)) {
+      throw new Error('Canonical CSW policy blocked non-canonical smart-wallet signer usage.')
+    }
+  }, [
+    canonicalPolicyApplies,
+    params.executionMode,
+    params.canonicalAddress,
+    params.executionAddress,
+    params.signerAddress,
+    params.signerType,
+  ])
+
+  const buildRouterContext = useCallback((): TxRouterContext => {
+    assertCanonicalSwapExecutionContext()
+    return {
+      chainId: Number(swapChainId),
+      executionMode: params.executionMode,
+      walletClient: params.walletClient,
+      publicClient: params.publicClient,
+      canonicalAddress: params.canonicalAddress,
+      signerAddress: params.signerAddress,
+      executionAddress: params.executionAddress,
+      signerType: params.signerType,
+      connectorId: params.connectorId,
+      connectorName: params.connectorName,
+      capabilities: normalizedCapabilities,
+      debug: onTxRouterDebug,
+    }
+  }, [
+    assertCanonicalSwapExecutionContext,
+    swapChainId,
+    params.executionMode,
+    params.walletClient,
+    params.publicClient,
+    params.canonicalAddress,
+    params.signerAddress,
+    params.executionAddress,
+    params.signerType,
+    params.connectorId,
+    params.connectorName,
+    normalizedCapabilities,
+    onTxRouterDebug,
+  ])
 
   const tokensEquivalent = useMemo(
     () => areEquivalentSwapTokens(params.tokenIn, params.tokenOut, CONTRACTS.weth),
@@ -169,8 +362,23 @@ export function useSwapExecution(params: {
       isAddress(params.tokenOut) &&
       !tokensEquivalent &&
       Number(params.amountInUnits) > 0 &&
-      Boolean(params.executionAddress),
-    [params.tokenIn, params.tokenOut, params.amountInUnits, params.executionAddress, tokensEquivalent],
+      Boolean(params.executionAddress) &&
+      (!canonicalPolicyApplies ||
+        (params.executionMode === 'canonical' &&
+          isTargetCanonicalCsw(params.executionAddress ?? null) &&
+          isTargetCanonicalCsw(params.canonicalAddress ?? null) &&
+          isAllowedCanonicalSigner(params.signerAddress ?? null))),
+    [
+      params.tokenIn,
+      params.tokenOut,
+      params.amountInUnits,
+      params.executionAddress,
+      params.executionMode,
+      params.canonicalAddress,
+      params.signerAddress,
+      tokensEquivalent,
+      canonicalPolicyApplies,
+    ],
   )
 
   const guardInputPolicy = useCallback(
@@ -317,7 +525,19 @@ export function useSwapExecution(params: {
     setError('')
     setTxState('idle')
     setTxHash(null)
-  }, [])
+    if (swapDebugEnabled) {
+      setTxDebug((prev) => ({
+        ...prev,
+        selectedSendMode: null,
+        selectedSendReason: null,
+        lastMethod: null,
+        lastError: null,
+        allowanceCheck: null,
+        approvalAttempt: null,
+        swapAttempt: null,
+      }))
+    }
+  }, [swapDebugEnabled])
 
   const handleQuote = useCallback(async () => {
     if (!params.address || !isReady || !params.executionAddress) return
@@ -413,6 +633,25 @@ export function useSwapExecution(params: {
       const tokenInDecimals = await getTokenDecimals(params.tokenIn)
       const amount = parseUnits(parsableAmount, tokenInDecimals).toString()
       if (!guardInputPolicy(amount)) return
+      if (swapDebugEnabled) {
+        setTxDebug((prev) => ({
+          ...prev,
+          allowanceCheck: {
+            walletAddress: params.executionAddress ?? '',
+            token: params.tokenIn,
+            amount,
+          },
+        }))
+        console.debug('[swap][allowance-check]', {
+          chainId: Number(swapChainId),
+          walletAddress: params.executionAddress,
+          token: params.tokenIn,
+          amount,
+          connectorId: params.connectorId ?? null,
+          connectorName: params.connectorName ?? null,
+          executionMode: params.executionMode,
+        })
+      }
       const data = await checkTradeApproval({
         walletAddress: params.executionAddress,
         token: params.tokenIn,
@@ -431,14 +670,18 @@ export function useSwapExecution(params: {
     }
   }, [
     params.executionAddress,
+    params.executionMode,
     params.tokenIn,
     params.tokenOut,
     params.amountInUnits,
+    params.connectorId,
+    params.connectorName,
     swapChainId,
     isReady,
     getTokenDecimals,
     getErrorMessage,
     guardInputPolicy,
+    swapDebugEnabled,
   ])
 
   const handleBuildSwap = useCallback(async () => {
@@ -482,6 +725,16 @@ export function useSwapExecution(params: {
       if (runId !== quoteRunRef.current) return
       const amount = parseUnits(parsableAmount, tokenInDecimals).toString()
       if (!guardInputPolicy(amount)) return
+      if (swapDebugEnabled && params.tokenIn.trim().toLowerCase() !== NATIVE_TOKEN_ADDRESS) {
+        setTxDebug((prev) => ({
+          ...prev,
+          allowanceCheck: {
+            walletAddress: params.executionAddress ?? '',
+            token: params.tokenIn,
+            amount,
+          },
+        }))
+      }
 
       const approvalPromise =
         params.tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
@@ -588,6 +841,7 @@ export function useSwapExecution(params: {
     signPermitIfRequired,
     params.executionAddress,
     params.executionReady,
+    swapDebugEnabled,
   ])
 
   const run7702DryRun = useCallback(
@@ -684,194 +938,193 @@ export function useSwapExecution(params: {
     ],
   )
 
-  const executeViaCanonical4337 = useCallback(async (executeParams: {
-    calls: Array<{ to: `0x${string}`; data?: `0x${string}`; value?: bigint }>
-    successLabel: string
-  }) => {
-    if (!params.canonicalAddress || !params.signerAddress || !params.walletClient || !params.publicClient) {
-      throw new Error('Canonical smart wallet or owner signer is not ready')
-    }
-    const isSelfConnect = params.canonicalAddress.toLowerCase() === params.signerAddress.toLowerCase()
-    if (isSelfConnect) {
-      const wallet = params.walletClient as any
-      const executeBatchData = encodeFunctionData({
-        abi: COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI,
-        functionName: 'executeBatch',
-        args: [
-          executeParams.calls.map((call) => ({
-            target: call.to,
-            value: call.value ?? 0n,
-            data: call.data ?? '0x',
-          })),
-        ],
-      })
+  const toExecutionTransaction = useCallback((tx: Record<string, unknown>): TransactionRequest => ({
+    to: tx.to as string,
+    from: (tx.from as string) ?? params.signerAddress ?? '',
+    data: tx.data as string,
+    value: typeof tx.value === 'string' && tx.value.trim() ? tx.value : '0',
+    chainId: swapChainId,
+    gasLimit: typeof tx.gasLimit === 'string' ? tx.gasLimit : undefined,
+    maxFeePerGas: typeof tx.maxFeePerGas === 'string' ? tx.maxFeePerGas : undefined,
+    maxPriorityFeePerGas: typeof tx.maxPriorityFeePerGas === 'string' ? tx.maxPriorityFeePerGas : undefined,
+    gasPrice: typeof tx.gasPrice === 'string' ? tx.gasPrice : undefined,
+  }), [params.signerAddress, swapChainId])
 
-      const txHashRaw =
-        typeof wallet?.sendTransaction === 'function'
-          ? await wallet.sendTransaction({
-              account: params.signerAddress,
-              to: params.canonicalAddress,
-              value: 0n,
-              data: executeBatchData,
-            })
-          : await wallet.request({
-              method: 'eth_sendTransaction',
-              params: [
-                {
-                  from: params.signerAddress,
-                  to: params.canonicalAddress,
-                  value: '0x0',
-                  data: executeBatchData,
-                },
-              ],
-            })
-
-      const txHash = String(txHashRaw ?? '').trim()
-      if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
-        throw new Error('Canonical self-connect execution returned an invalid transaction hash.')
-      }
-      setTxHash(txHash)
-      setTxState('pending')
-      setStatus(`${executeParams.successLabel} via connected CSW: ${txHash}`)
-      return
-    }
-
-    const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-    const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-    try {
-      const result = await sendCoinbaseSmartWalletUserOperation({
-        publicClient: params.publicClient as any,
-        walletClient: params.walletClient as any,
-        bundlerUrl,
-        smartWallet: params.canonicalAddress,
-        ownerAddress: params.signerAddress,
-        calls: executeParams.calls,
-        version: '1',
-      })
-      setTxHash(result.transactionHash)
-      setTxState('pending')
-      setStatus(`${executeParams.successLabel}: ${result.transactionHash}`)
-    } catch (error) {
-      const reason = getErrorMessage(error, 'Canonical ERC-4337 execution failed')
-      throw new Error(`Canonical ERC-4337 execution failed with connected owner wallet (${params.signerAddress}): ${reason}`)
-    }
-  }, [getErrorMessage, params.canonicalAddress, params.signerAddress, params.walletClient, params.publicClient])
-
-  const executeViaEoa = useCallback(async (executeParams: {
-    tx: TransactionRequest
-    successLabel: string
-  }) => {
-    if (!params.signerAddress || !params.walletClient) {
-      throw new Error('Connected EOA signer is not ready')
-    }
-    const wallet = params.walletClient as any
-    if (typeof wallet.sendTransaction !== 'function') {
-      throw new Error('Connected wallet does not support direct transaction sends')
-    }
-
-    const hash = await wallet.sendTransaction({
-      account: params.signerAddress,
-      to: executeParams.tx.to as `0x${string}`,
-      data: executeParams.tx.data as `0x${string}`,
-      value: asOptionalBigInt(executeParams.tx.value),
-      gas: asOptionalBigInt(executeParams.tx.gasLimit),
-      gasPrice: asOptionalBigInt(executeParams.tx.gasPrice),
-      maxFeePerGas: asOptionalBigInt(executeParams.tx.maxFeePerGas),
-      maxPriorityFeePerGas: asOptionalBigInt(executeParams.tx.maxPriorityFeePerGas),
-    })
-
-    setTxHash(hash)
-    setTxState('pending')
-    setStatus(`${executeParams.successLabel}: ${hash}`)
-  }, [params.signerAddress, params.walletClient])
+  const getApprovalExecutionTx = useCallback((): TransactionRequest | null => {
+    if (!approvalData) return null
+    const tx = approvalData.approval as Record<string, unknown> | undefined
+    if (!tx?.to || !tx?.data) return null
+    return toExecutionTransaction(tx)
+  }, [approvalData, toExecutionTransaction])
 
   const executeApprovalNow = useCallback(async () => {
-    if (!approvalData) return
-    const tx = approvalData.approval as Record<string, unknown> | undefined
-    if (!tx?.to || !tx?.data) {
+    const approvalTx = getApprovalExecutionTx()
+    if (!approvalTx) {
       setStatus('No approval transaction required')
       return
     }
     setBusy('executeApproval')
     setError('')
     try {
-      if (params.executionMode === 'canonical') {
-        await executeViaCanonical4337({
-          calls: [
-            {
-              to: tx.to as `0x${string}`,
-              data: tx.data as `0x${string}`,
-              value: asBigInt(tx.value),
-            },
-          ],
-          successLabel: 'Approval submitted via canonical ERC-4337',
-        })
-      } else {
-        await executeViaEoa({
-          tx: {
-            to: tx.to as string,
-            from: (tx.from as string) ?? params.signerAddress ?? '',
-            data: tx.data as string,
-            value: typeof tx.value === 'string' && tx.value.trim() ? tx.value : '0',
-            chainId: swapChainId,
-            gasLimit: typeof tx.gasLimit === 'string' ? tx.gasLimit : undefined,
-            maxFeePerGas: typeof tx.maxFeePerGas === 'string' ? tx.maxFeePerGas : undefined,
-            maxPriorityFeePerGas:
-              typeof tx.maxPriorityFeePerGas === 'string' ? tx.maxPriorityFeePerGas : undefined,
-            gasPrice: typeof tx.gasPrice === 'string' ? tx.gasPrice : undefined,
-          },
-          successLabel: 'Approval submitted via connected EOA',
+      const context = buildRouterContext()
+      const routePreview = detectTxSendMode(context)
+      if (swapDebugEnabled) {
+        console.debug('[swap][send][approval]', {
+          chainId: Number(swapChainId),
+          executionMode: params.executionMode,
+          selectedAddress: params.executionAddress,
+          signerAddress: params.signerAddress,
+          canonicalAddress: params.canonicalAddress,
+          connectorId: params.connectorId ?? null,
+          connectorName: params.connectorName ?? null,
+          signerType: params.signerType ?? null,
+          capabilities: normalizedCapabilities,
+          detectedMode: routePreview.mode,
+          detectedReason: routePreview.reason,
         })
       }
+      const { routing, send } = await buildAndSendApproval({
+        context,
+        approvalTx,
+      })
+      const nextHash = send.transactionHash ?? send.txHashes[0] ?? null
+      setTxHash(nextHash)
+      setTxState('pending')
+      setStatus(
+        `Approval submitted via ${routing.mode} (${send.method})${nextHash ? `: ${nextHash}` : ''}`,
+      )
+      updateAttemptDebug({
+        stage: 'approval',
+        mode: routing.mode,
+        method: send.method,
+        sender: send.sender,
+        txHash: nextHash,
+        callsId: send.callsId,
+        callTargets: [approvalTx.to],
+        at: Date.now(),
+      })
       setTxState('success')
     } catch (e: any) {
       const message = getErrorMessage(e, 'Approval transaction failed')
       setError(message)
+      updateTxDebugError(message)
       setTxState('error')
       throw new Error(message)
     } finally {
       setBusy(null)
     }
-  }, [approvalData, executeViaCanonical4337, executeViaEoa, getErrorMessage, params.executionMode, params.signerAddress, swapChainId])
+  }, [
+    getApprovalExecutionTx,
+    buildRouterContext,
+    swapDebugEnabled,
+    swapChainId,
+    params.executionMode,
+    params.executionAddress,
+    params.signerAddress,
+    params.canonicalAddress,
+    params.connectorId,
+    params.connectorName,
+    params.signerType,
+    normalizedCapabilities,
+    getErrorMessage,
+    updateAttemptDebug,
+    updateTxDebugError,
+  ])
 
-  const executeSwapNow = useCallback(async () => {
+  const executeSwapNow = useCallback(async (options?: { approvalTx?: TransactionRequest | null }) => {
     if (!swapTx) return
     assertValidSwapTransaction(swapTx)
     setBusy('executeSwap')
     setError('')
     try {
+      const approvalTx = options?.approvalTx ?? null
       // Canary users get a best-effort 7702 preflight; send path still falls
       // back to canonical ERC-4337 on any issue.
       if (params.executionMode === 'canonical' && canary7702Eligible) {
         await run7702DryRun({ silent: true }).catch(() => null)
       }
-      if (params.executionMode === 'canonical') {
-        await executeViaCanonical4337({
-          calls: [
-            {
-              to: swapTx.to as `0x${string}`,
-              data: swapTx.data as `0x${string}`,
-              value: asBigInt(swapTx.value),
-            },
-          ],
-          successLabel: 'Swap submitted via canonical ERC-4337',
-        })
-      } else {
-        await executeViaEoa({
-          tx: swapTx,
-          successLabel: 'Swap submitted via connected EOA',
+      const context = buildRouterContext()
+      const routePreview = detectTxSendMode(context)
+      if (swapDebugEnabled) {
+        console.debug('[swap][send][swap]', {
+          chainId: Number(swapChainId),
+          executionMode: params.executionMode,
+          selectedAddress: params.executionAddress,
+          signerAddress: params.signerAddress,
+          canonicalAddress: params.canonicalAddress,
+          connectorId: params.connectorId ?? null,
+          connectorName: params.connectorName ?? null,
+          signerType: params.signerType ?? null,
+          capabilities: normalizedCapabilities,
+          detectedMode: routePreview.mode,
+          detectedReason: routePreview.reason,
+          bundledApproval: Boolean(approvalTx),
         })
       }
+      const { routing, send } = await buildAndSendSwap({
+        context,
+        swapTx,
+        approvalTx,
+      })
+      const nextHash = send.transactionHash ?? send.txHashes[send.txHashes.length - 1] ?? null
+      setTxHash(nextHash)
+      setTxState('pending')
+      setStatus(
+        `Swap submitted via ${routing.mode} (${send.method})${nextHash ? `: ${nextHash}` : ''}`,
+      )
+
+      const approvalHash = approvalTx ? send.txHashes[0] ?? nextHash : null
+      if (approvalTx) {
+        updateAttemptDebug({
+          stage: 'approval',
+          mode: routing.mode,
+          method: send.method,
+          sender: send.sender,
+          txHash: approvalHash,
+          callsId: send.callsId,
+          callTargets: [approvalTx.to],
+          at: Date.now(),
+        })
+      }
+      updateAttemptDebug({
+        stage: 'swap',
+        mode: routing.mode,
+        method: send.method,
+        sender: send.sender,
+        txHash: nextHash,
+        callsId: send.callsId,
+        callTargets: [swapTx.to],
+        at: Date.now(),
+      })
       setTxState('success')
     } catch (e: any) {
       const message = getErrorMessage(e, 'Swap transaction failed')
       setError(message)
+      updateTxDebugError(message)
       setTxState('error')
       throw new Error(message)
     } finally {
       setBusy(null)
     }
-  }, [swapTx, executeViaCanonical4337, executeViaEoa, getErrorMessage, params.executionMode, canary7702Eligible, run7702DryRun])
+  }, [
+    swapTx,
+    buildRouterContext,
+    canary7702Eligible,
+    run7702DryRun,
+    swapDebugEnabled,
+    swapChainId,
+    params.executionMode,
+    params.executionAddress,
+    params.signerAddress,
+    params.canonicalAddress,
+    params.connectorId,
+    params.connectorName,
+    params.signerType,
+    normalizedCapabilities,
+    getErrorMessage,
+    updateAttemptDebug,
+    updateTxDebugError,
+  ])
 
   const executeOrderNow = useCallback(async () => {
     if (!orderRequest) return
@@ -931,8 +1184,16 @@ export function useSwapExecution(params: {
       setTxState('signing')
       if (action === 'approval') await executeApprovalNow()
       if (action === 'swap') {
-        if (approvalRequired) await executeApprovalNow()
-        await executeSwapNow()
+        const bundledApprovalTx = approvalRequired ? getApprovalExecutionTx() : null
+        if (approvalRequired && !bundledApprovalTx) {
+          const message = 'Approval is required, but no approval transaction is available. Refresh the quote and try again.'
+          setError(message)
+          setTxState('error')
+          throw new Error(message)
+        }
+        await executeSwapNow({
+          approvalTx: bundledApprovalTx,
+        })
       }
       if (action === 'order') {
         if (approvalRequired) await executeApprovalNow()
@@ -948,6 +1209,7 @@ export function useSwapExecution(params: {
     executeApprovalNow,
     executeOrderNow,
     executeSwapNow,
+    getApprovalExecutionTx,
     handleReviewTrade,
     quoteIsStale,
   ])
@@ -972,6 +1234,7 @@ export function useSwapExecution(params: {
     permitSignaturePending,
     permitSignatureReady,
     diagnosticsEnabled,
+    txDebug,
     canary7702Eligible,
     diagnosticsBusy,
     diagnosticsResult,

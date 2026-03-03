@@ -11,8 +11,11 @@ export function detectSignerType(params: {
   hasContractCode: boolean | null
 }): SignerType {
   if (!params.signerAddress) return 'UNKNOWN'
-  if (hasSmartWalletCapability(params.capabilities)) return 'SMART_WALLET'
   if (params.hasContractCode === true) return 'SMART_WALLET'
+  // Treat known-EOA bytecode checks as authoritative to avoid misclassifying
+  // EOAs when capability probing returns noisy smart-wallet hints.
+  if (params.hasContractCode === false) return 'EOA'
+  if (hasSmartWalletCapability(params.capabilities)) return 'SMART_WALLET'
   return 'EOA'
 }
 

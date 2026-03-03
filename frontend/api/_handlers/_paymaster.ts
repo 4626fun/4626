@@ -24,6 +24,7 @@ import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/s
 import { handleOptions, readJsonBody, setCors, setNoStore } from '../../server/auth/_shared.js'
 import { readRequestPrincipalAddress } from '../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
+import { hasContractBytecode } from '../../src/wallet/canonicalWalletPolicy'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -1910,6 +1911,9 @@ async function validateInnerCalls(params: {
       if (decodedSelf.functionName === 'addOwnerAddress') {
         const ownerArg = getAddress(decodedSelf.args[0] as Address)
         if (ownerArg !== getAddress(ds.sessionOwner as Address)) throw new Error('deploy_session_owner_mismatch')
+        const client = await getBaseClient()
+        const ownerCode = (await client.getBytecode({ address: ownerArg }).catch(() => null)) as Hex | null
+        if (hasContractBytecode(ownerCode)) throw new Error('contract_owner_not_allowed')
         continue
       }
       if (decodedSelf.functionName === 'removeOwnerAtIndex') {

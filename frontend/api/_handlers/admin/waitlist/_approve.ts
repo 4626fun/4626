@@ -9,6 +9,8 @@ import { getClientIp } from '../../../../server/_lib/rateLimit.js'
 import { enableCswAgent, getOrCreateCreatorXmtpAgent } from '../../../../server/_lib/creatorXmtpAgents.js'
 import { logger } from '../../../../server/_lib/logger.js'
 
+declare const process: { env: Record<string, string | undefined> }
+
 type Body = { id?: number; note?: string | null }
 
 function isValidEvmAddress(v: string): boolean {
@@ -62,6 +64,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const creatorWallet = String(row.csw_address || row.primary_wallet || '').trim().toLowerCase()
   const serverWalletId = String(row.preprov_server_wallet_id || '').trim()
   const serverWalletAddress = String(row.preprov_server_wallet_address || '').trim()
+  const autoEnableAgentsRaw = String(process.env.WAITLIST_AUTO_ENABLE_AGENTS ?? '').trim().toLowerCase()
+  const autoEnableAgents = autoEnableAgentsRaw === '1' || autoEnableAgentsRaw === 'true' || autoEnableAgentsRaw === 'yes'
 
   // -------------------------------------------------------------------
   // Auto-allowlist on approval (fire-and-forget, non-blocking)
@@ -86,41 +90,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       logger.warn('[approve] Auto-allowlist failed', err)
     }
 
-    // 2. Enable CSW agent if pre-provisioned server wallet exists
-    if (serverWalletId && serverWalletAddress) {
-      try {
-        await enableCswAgent({
-          creatorAddress: creatorWallet as `0x${string}`,
-          cswAddress: creatorWallet as `0x${string}`,
-          privyWalletId: serverWalletId,
-          listedPublicly: true,
-        })
-        agentEnabled = true
-        logger.info('[approve] CSW agent enabled', { id, wallet: creatorWallet.slice(0, 10) })
-      } catch (err) {
-        logger.warn('[approve] CSW agent enable failed, falling back to EOA', err)
-        // Fallback: create EOA agent
+    // 2. Automation signer enablement is opt-in by default.
+    if (autoEnableAgents) {
+      // Optional legacy path: auto-enable agent on approval when explicitly configured.
+      if (serverWalletId && serverWalletAddress) {
+        try {
+          await enableCswAgent({
+            creatorAddress: creatorWallet as `0x${string}`,
+            cswAddress: creatorWallet as `0x${string}`,
+            privyWalletId: serverWalletId,
+            listedPublicly: true,
+          })
+          agentEnabled = true
+          logger.info('[approve] CSW agent enabled', { id, wallet: creatorWallet.slice(0, 10) })
+        } catch (err) {
+          logger.warn('[approve] CSW agent enable failed, falling back to EOA', err)
+          // Fallback: create EOA agent
+          try {
+            await getOrCreateCreatorXmtpAgent({
+              creatorAddress: creatorWallet as `0x${string}`,
+              listedPublicly: true,
+            })
+            agentEnabled = true
+          } catch (err2) {
+            logger.warn('[approve] EOA agent fallback also failed', err2)
+          }
+        }
+      } else {
+        // No pre-provisioned wallet — try EOA agent as fallback
         try {
           await getOrCreateCreatorXmtpAgent({
             creatorAddress: creatorWallet as `0x${string}`,
             listedPublicly: true,
           })
           agentEnabled = true
-        } catch (err2) {
-          logger.warn('[approve] EOA agent fallback also failed', err2)
+        } catch (err) {
+          logger.warn('[approve] EOA agent creation failed', err)
         }
       }
     } else {
-      // No pre-provisioned wallet — try EOA agent as fallback
-      try {
-        await getOrCreateCreatorXmtpAgent({
-          creatorAddress: creatorWallet as `0x${string}`,
-          listedPublicly: true,
-        })
-        agentEnabled = true
-      } catch (err) {
-        logger.warn('[approve] EOA agent creation failed', err)
-      }
+      logger.info('[approve] Skipping auto-enable agent (explicit opt-in required)', {
+        id,
+        wallet: creatorWallet.slice(0, 10),
+      })
     }
   }
 

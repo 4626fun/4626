@@ -118,7 +118,7 @@ interface RuntimeConfig {
   searchRadius: number;
 }
 
-interface AjnaStrategyContext {
+export interface AjnaStrategyContext {
   strategyAddress: `0x${string}`;
   ajnaPool: `0x${string}`;
   currentBucket: number;
@@ -316,7 +316,9 @@ export function pickBestLiquidityBucket(params: {
   return bestIndex;
 }
 
-async function readAjnaStrategiesForVault(vaultAddress: `0x${string}`): Promise<AjnaStrategyContext[]> {
+export async function readAjnaStrategiesForVault(
+  vaultAddress: `0x${string}`,
+): Promise<AjnaStrategyContext[]> {
   const out: AjnaStrategyContext[] = [];
   const seen = new Set<string>();
 
@@ -375,7 +377,7 @@ async function readAjnaStrategiesForVault(vaultAddress: `0x${string}`): Promise<
   return out;
 }
 
-async function readOracleSuggestedBucket(params: {
+export async function readOracleSuggestedBucket(params: {
   oracleAddress: `0x${string}`;
   twapDuration: number;
   targetLtvBps: number;
@@ -432,7 +434,7 @@ async function readOracleSuggestedBucket(params: {
   });
 }
 
-async function readCurrentBucketLenderInfo(params: {
+export async function readCurrentBucketLenderInfo(params: {
   ajnaPool: `0x${string}`;
   bucketIndex: number;
   lender: `0x${string}`;
@@ -447,7 +449,7 @@ async function readCurrentBucketLenderInfo(params: {
   return { lpBalance: data[0] ?? 0n, depositTime: data[1] ?? 0n };
 }
 
-async function pickLiquidityAwareTarget(params: {
+export async function pickLiquidityAwareTarget(params: {
   ajnaPool: `0x${string}`;
   steppedBucket: number;
   searchRadius: number;

@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/Button'
 import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
 import { PageMeta } from '@/components/seo/PageMeta'
+import { isEoaAddressByCode } from '@/wallet/canonicalWalletPolicy'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -257,6 +258,26 @@ type SmartWalletOwnersResponse = {
   owners: SmartWalletOwner[]
 }
 
+type CreatorAgentSummary = {
+  creatorAddress: string
+  xmtpAgentAddress: string
+  agentType: 'eoa' | 'csw'
+  cswAddress: string | null
+  listedPublicly: boolean
+  createdAt: string
+}
+
+type CreatorAgentListResponse = {
+  count: number
+  agents: CreatorAgentSummary[]
+  nextCursor: string | null
+}
+
+type ProvisionWalletResponse = {
+  walletId: string
+  address: string
+}
+
 const COINBASE_SMART_WALLET_OWNER_VIEW_ABI = [
   {
     type: 'function',
@@ -268,6 +289,13 @@ const COINBASE_SMART_WALLET_OWNER_VIEW_ABI = [
 ] as const
 
 const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+  {
+    type: 'function',
+    name: 'addOwnerAddress',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'owner', type: 'address' }],
+    outputs: [],
+  },
   {
     type: 'function',
     name: 'removeOwnerAtIndex',
@@ -329,6 +357,10 @@ export function AccountSettings() {
   const [ownersActionError, setOwnersActionError] = useState<string | null>(null)
   const [revokeBusyIndex, setRevokeBusyIndex] = useState<number | null>(null)
   const [revokeConfirmOwner, setRevokeConfirmOwner] = useState<SmartWalletOwner | null>(null)
+  const [enableOneClickBusy, setEnableOneClickBusy] = useState(false)
+  const [enableAutomationBusy, setEnableAutomationBusy] = useState(false)
+  const [automationActionMessage, setAutomationActionMessage] = useState<string | null>(null)
+  const [automationActionError, setAutomationActionError] = useState<string | null>(null)
   const [selectedCanonicalSolanaWallet, setSelectedCanonicalSolanaWallet] = useState('')
   const [solanaWalletActionBusy, setSolanaWalletActionBusy] = useState(false)
 
@@ -592,6 +624,16 @@ export function AccountSettings() {
 
   const appAccountUrl = `${getAppBaseUrl()}/account`
 
+  const embeddedExportAddress = useMemo(() => {
+    const primaryEmbeddedEoa = profile?.primaryEmbeddedEoa
+    if (isEvmAddress(primaryEmbeddedEoa)) return primaryEmbeddedEoa
+    const embeddedWallet = profile?.embeddedWallet
+    if (isEvmAddress(embeddedWallet)) return embeddedWallet
+    const embedded = (profile?.connectedAccounts ?? []).find((a) => a.isEmbeddedEoa && isEvmAddress(a.address))
+    if (embedded) return embedded.address
+    return null
+  }, [profile?.connectedAccounts, profile?.embeddedWallet, profile?.primaryEmbeddedEoa])
+
   const smartWalletOwnersQuery = useQuery({
     queryKey: ['smartWalletOwners', canonicalSmartWalletAddress ?? 'none'],
     enabled: Boolean(canonicalSmartWalletAddress),
@@ -609,6 +651,31 @@ export function AccountSettings() {
     },
   })
 
+  const creatorAutomationQuery = useQuery({
+    queryKey: ['creatorAutomation', canonicalSmartWalletAddress ?? 'none'],
+    enabled: Boolean(canonicalSmartWalletAddress),
+    staleTime: 15_000,
+    retry: 0,
+    queryFn: async (): Promise<{ enabled: boolean; agentAddress: string | null }> => {
+      if (!canonicalSmartWalletAddress) return { enabled: false, agentAddress: null }
+      const params = new URLSearchParams({
+        creatorAddress: canonicalSmartWalletAddress,
+        listed: 'false',
+        limit: '5',
+      })
+      const res = await apiFetch(`/api/v1/agents/creators?${params.toString()}`, { method: 'GET' })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<CreatorAgentListResponse> | null
+      if (!res.ok || !json?.success || !json.data) {
+        throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to load automation status.')
+      }
+      const cswAgent = (json.data.agents ?? []).find((agent) => String(agent.agentType ?? '').toLowerCase() === 'csw') ?? null
+      return {
+        enabled: Boolean(cswAgent),
+        agentAddress: cswAgent?.xmtpAgentAddress ?? null,
+      }
+    },
+  })
+
   const smartWalletOwners = useMemo(
     () => smartWalletOwnersQuery.data?.owners ?? [],
     [smartWalletOwnersQuery.data?.owners],
@@ -622,6 +689,12 @@ export function AccountSettings() {
     const connectedLc = connectedAddress.toLowerCase()
     return smartWalletOwners.some((owner) => owner.ownerAddress?.toLowerCase() === connectedLc)
   }, [connectedAddress, smartWalletOwners])
+  const embeddedOwnerAlreadyLinked = useMemo(() => {
+    if (!embeddedExportAddress) return false
+    const targetLc = embeddedExportAddress.toLowerCase()
+    return smartWalletOwners.some((owner) => owner.ownerAddress?.toLowerCase() === targetLc)
+  }, [embeddedExportAddress, smartWalletOwners])
+  const automationEnabled = creatorAutomationQuery.data?.enabled === true
 
   const ensureBaseChain = useCallback(async () => {
     if (chainId === base.id) return
@@ -698,6 +771,216 @@ export function AccountSettings() {
     addressOwnerCount,
     canonicalSmartWalletAddress,
     connectedAddress,
+    ensureBaseChain,
+    loadProfile,
+    publicClient,
+    smartWalletOwnersQuery,
+    walletClient,
+  ])
+
+  const onEnableOneClickActions = useCallback(async () => {
+    if (enableOneClickBusy) return
+    if (!canonicalSmartWalletAddress || !isEvmAddress(canonicalSmartWalletAddress)) {
+      setOwnersActionError('Missing canonical Smart Wallet address.')
+      return
+    }
+    if (!embeddedExportAddress || !isEvmAddress(embeddedExportAddress)) {
+      setOwnersActionError('No Privy embedded wallet detected yet.')
+      return
+    }
+    if (!connectedAddress) {
+      setOwnersActionError('Connect an owner wallet to approve this setup.')
+      return
+    }
+    if (!walletClient || !publicClient) {
+      setOwnersActionError('Wallet client unavailable. Reconnect and try again.')
+      return
+    }
+
+    setOwnersActionError(null)
+    setOwnersActionMessage(null)
+    setEnableOneClickBusy(true)
+    try {
+      await ensureBaseChain()
+
+      const canonical = getAddress(canonicalSmartWalletAddress) as Address
+      const ownerToAdd = getAddress(embeddedExportAddress) as Address
+      const connectedOwner = getAddress(connectedAddress) as Address
+
+      const ownerIsEoa = await isEoaAddressByCode({
+        address: ownerToAdd,
+        getBytecode: async (address) => {
+          const code = await publicClient.getBytecode({ address })
+          return code ?? null
+        },
+      }).catch(() => false)
+      if (!ownerIsEoa) {
+        throw new Error('Only EOA wallets can be added as Smart Wallet owners. Contract owners are blocked.')
+      }
+
+      const callerIsOwner = (await publicClient.readContract({
+        address: canonical,
+        abi: COINBASE_SMART_WALLET_OWNER_VIEW_ABI,
+        functionName: 'isOwnerAddress',
+        args: [connectedOwner],
+      })) as boolean
+      if (!callerIsOwner) {
+        throw new Error('Connected wallet is not an owner of this smart wallet.')
+      }
+
+      const alreadyLinked = (await publicClient.readContract({
+        address: canonical,
+        abi: COINBASE_SMART_WALLET_OWNER_VIEW_ABI,
+        functionName: 'isOwnerAddress',
+        args: [ownerToAdd],
+      })) as boolean
+      if (alreadyLinked) {
+        await smartWalletOwnersQuery.refetch()
+        setOwnersActionMessage('1-click actions are already enabled for your Privy embedded wallet.')
+        return
+      }
+
+      const data = encodeFunctionData({
+        abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+        functionName: 'addOwnerAddress',
+        args: [ownerToAdd],
+      })
+
+      const hash = await walletClient.sendTransaction({
+        to: canonical,
+        data,
+        value: 0n,
+        account: connectedOwner,
+        chain: base,
+      })
+      await publicClient.waitForTransactionReceipt({ hash })
+
+      await Promise.all([
+        smartWalletOwnersQuery.refetch(),
+        loadProfile(),
+      ])
+      setOwnersActionMessage('ERC-4337 Account Abstraction is enabled for your Privy embedded wallet.')
+    } catch (e: any) {
+      setOwnersActionError(typeof e?.message === 'string' ? e.message : 'Failed to enable 1-click actions.')
+    } finally {
+      setEnableOneClickBusy(false)
+    }
+  }, [
+    canonicalSmartWalletAddress,
+    connectedAddress,
+    embeddedExportAddress,
+    enableOneClickBusy,
+    ensureBaseChain,
+    loadProfile,
+    publicClient,
+    smartWalletOwnersQuery,
+    walletClient,
+  ])
+
+  const onEnableAutomation = useCallback(async () => {
+    if (enableAutomationBusy || automationEnabled) return
+    if (!canonicalSmartWalletAddress || !isEvmAddress(canonicalSmartWalletAddress)) {
+      setAutomationActionError('Missing canonical Smart Wallet address.')
+      return
+    }
+    if (!connectedAddress) {
+      setAutomationActionError('Connect an owner wallet to approve automation.')
+      return
+    }
+    if (!walletClient || !publicClient) {
+      setAutomationActionError('Wallet client unavailable. Reconnect and try again.')
+      return
+    }
+
+    setAutomationActionError(null)
+    setAutomationActionMessage(null)
+    setEnableAutomationBusy(true)
+    try {
+      await ensureBaseChain()
+
+      const canonical = getAddress(canonicalSmartWalletAddress) as Address
+      const connectedOwner = getAddress(connectedAddress) as Address
+
+      const callerIsOwner = (await publicClient.readContract({
+        address: canonical,
+        abi: COINBASE_SMART_WALLET_OWNER_VIEW_ABI,
+        functionName: 'isOwnerAddress',
+        args: [connectedOwner],
+      })) as boolean
+      if (!callerIsOwner) {
+        throw new Error('Connected wallet is not an owner of this smart wallet.')
+      }
+
+      const provisionRes = await apiFetch('/api/v1/agents/creators/provision-wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ creatorAddress: canonical }),
+      })
+      const provisionJson = (await provisionRes.json().catch(() => null)) as ApiEnvelope<ProvisionWalletResponse> | null
+      if (!provisionRes.ok || !provisionJson?.success || !provisionJson.data) {
+        throw new Error(typeof provisionJson?.error === 'string' ? provisionJson.error : 'Failed to provision Keepr signer.')
+      }
+      const signerAddressRaw = provisionJson.data.address
+      const signerWalletId = provisionJson.data.walletId
+      if (!isEvmAddress(signerAddressRaw) || !signerWalletId) {
+        throw new Error('Provisioned Keepr signer is invalid.')
+      }
+      const signerAddress = getAddress(signerAddressRaw) as Address
+
+      const signerAlreadyOwner = (await publicClient.readContract({
+        address: canonical,
+        abi: COINBASE_SMART_WALLET_OWNER_VIEW_ABI,
+        functionName: 'isOwnerAddress',
+        args: [signerAddress],
+      })) as boolean
+      if (!signerAlreadyOwner) {
+        const addOwnerData = encodeFunctionData({
+          abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+          functionName: 'addOwnerAddress',
+          args: [signerAddress],
+        })
+        const hash = await walletClient.sendTransaction({
+          to: canonical,
+          data: addOwnerData,
+          value: 0n,
+          account: connectedOwner,
+          chain: base,
+        })
+        await publicClient.waitForTransactionReceipt({ hash })
+      }
+
+      const enableRes = await apiFetch('/api/v1/agents/creators/enable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentType: 'csw',
+          cswAddress: canonical,
+          privyWalletId: signerWalletId,
+          listedPublicly: true,
+        }),
+      })
+      const enableJson = (await enableRes.json().catch(() => null)) as ApiEnvelope<{ creatorAddress: string }> | null
+      if (!enableRes.ok || !enableJson?.success) {
+        throw new Error(typeof enableJson?.error === 'string' ? enableJson.error : 'Failed to enable automation.')
+      }
+
+      await Promise.all([
+        smartWalletOwnersQuery.refetch(),
+        creatorAutomationQuery.refetch(),
+        loadProfile(),
+      ])
+      setAutomationActionMessage('Keepr signer is enabled for 24/7 automation. You can revoke it anytime.')
+    } catch (e: any) {
+      setAutomationActionError(typeof e?.message === 'string' ? e.message : 'Failed to enable Keepr signer.')
+    } finally {
+      setEnableAutomationBusy(false)
+    }
+  }, [
+    automationEnabled,
+    canonicalSmartWalletAddress,
+    connectedAddress,
+    creatorAutomationQuery,
+    enableAutomationBusy,
     ensureBaseChain,
     loadProfile,
     publicClient,
@@ -955,16 +1238,6 @@ export function AccountSettings() {
       holders,
     }
   }, [creatorCoin?.marketCap, creatorCoin?.volume24h, creatorCoin?.uniqueHolders, zoraProfile?.creatorCoin?.marketCap])
-
-  const embeddedExportAddress = useMemo(() => {
-    const primaryEmbeddedEoa = profile?.primaryEmbeddedEoa
-    if (isEvmAddress(primaryEmbeddedEoa)) return primaryEmbeddedEoa
-    const embeddedWallet = profile?.embeddedWallet
-    if (isEvmAddress(embeddedWallet)) return embeddedWallet
-    const embedded = (profile?.connectedAccounts ?? []).find((a) => a.isEmbeddedEoa && isEvmAddress(a.address))
-    if (embedded) return embedded.address
-    return null
-  }, [profile?.connectedAccounts, profile?.embeddedWallet, profile?.primaryEmbeddedEoa])
 
   const onExportEmbeddedWallet = useCallback(async () => {
     if (exportBusy) return
@@ -1347,6 +1620,118 @@ export function AccountSettings() {
             </div>
             <div className="text-[11px] text-zinc-500">
               Non-canonical Privy smart wallets are shown as deploy-session signers, not as the canonical Smart Wallet.
+            </div>
+            <div id="account-aa-setup" className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3 space-y-2">
+              <div className="text-[12px] font-medium text-zinc-200">Enable 1-click actions</div>
+              <p className="text-[11px] text-zinc-400">
+                One-time wallet approval to enable ERC-4337 Account Abstraction with your canonical wallet.
+              </p>
+              <p className="text-[11px] text-zinc-500">
+                No funds move. Canonical wallet stays in control. Revoke anytime.
+              </p>
+              <div className="text-[11px] text-zinc-500">
+                {embeddedExportAddress ? (
+                  <>
+                    Privy embedded wallet target:{' '}
+                    <span className="break-all font-mono text-zinc-300">{embeddedExportAddress}</span>
+                  </>
+                ) : (
+                  'No Privy embedded wallet detected yet.'
+                )}
+              </div>
+              <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <button
+                  type="button"
+                  onClick={() => void onEnableOneClickActions()}
+                  disabled={
+                    enableOneClickBusy ||
+                    embeddedOwnerAlreadyLinked ||
+                    !embeddedExportAddress ||
+                    !connectedAddress ||
+                    !connectedAddressIsOwner ||
+                    !walletClient ||
+                    !publicClient
+                  }
+                  className="btn-secondary min-h-11 w-full justify-center disabled:opacity-50 sm:w-auto"
+                >
+                  {embeddedOwnerAlreadyLinked
+                    ? 'Enabled'
+                    : enableOneClickBusy
+                      ? 'Enabling…'
+                      : 'Enable 1-click actions'}
+                </button>
+                <div className="text-[11px] text-zinc-500">
+                  {!connectedAddress
+                    ? 'Connect an owner wallet to continue.'
+                    : !connectedAddressIsOwner
+                      ? 'Connected wallet must be an owner of this smart wallet.'
+                      : 'One approval transaction on Base.'}
+                </div>
+              </div>
+            </div>
+            <div id="account-automation-setup" className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3 space-y-2">
+              <div className="text-[12px] font-medium text-zinc-200">Enable Keepr signer (optional)</div>
+              <p className="text-[11px] text-zinc-400">
+                Optional one-time approval for unattended automation when you are offline.
+              </p>
+              <p className="text-[11px] text-zinc-500">
+                Uses ERC-4337 with your canonical wallet. No funds move. Canonical wallet stays in control.
+              </p>
+              {creatorAutomationQuery.isLoading ? (
+                <div className="text-[11px] text-zinc-500">Checking automation status…</div>
+              ) : null}
+              {creatorAutomationQuery.isError ? (
+                <div className="text-[11px] text-red-300">
+                  {creatorAutomationQuery.error instanceof Error
+                    ? creatorAutomationQuery.error.message
+                    : 'Failed to load automation status.'}
+                </div>
+              ) : null}
+              {creatorAutomationQuery.data?.agentAddress ? (
+                <div className="text-[11px] text-zinc-500">
+                  Automation agent:{' '}
+                  <span className="break-all font-mono text-zinc-300">{creatorAutomationQuery.data.agentAddress}</span>
+                </div>
+              ) : null}
+              {automationActionMessage ? (
+                <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+                  {automationActionMessage}
+                </div>
+              ) : null}
+              {automationActionError ? (
+                <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+                  {automationActionError}
+                </div>
+              ) : null}
+              <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <button
+                  type="button"
+                  onClick={() => void onEnableAutomation()}
+                  disabled={
+                    enableAutomationBusy ||
+                    automationEnabled ||
+                    !canonicalSmartWalletAddress ||
+                    !connectedAddress ||
+                    !connectedAddressIsOwner ||
+                    !walletClient ||
+                    !publicClient
+                  }
+                  className="btn-secondary min-h-11 w-full justify-center disabled:opacity-50 sm:w-auto"
+                >
+                  {automationEnabled
+                    ? 'Keepr signer enabled'
+                    : enableAutomationBusy
+                      ? 'Enabling Keepr signer…'
+                      : 'Enable Keepr signer'}
+                </button>
+                <div className="text-[11px] text-zinc-500">
+                  {!connectedAddress
+                    ? 'Connect an owner wallet to continue.'
+                    : !connectedAddressIsOwner
+                      ? 'Connected wallet must be an owner of this smart wallet.'
+                      : 'One approval transaction on Base.'}
+                </div>
+              </div>
             </div>
             {ownersActionMessage ? (
               <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">

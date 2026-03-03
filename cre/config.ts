@@ -113,6 +113,8 @@ export const ORACLE_ABI = [
   { type: 'function', name: 'creatorPriceTimestamp', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
   { type: 'function', name: 'isPriceFresh', inputs: [], outputs: [{ type: 'bool' }], stateMutability: 'view' },
   { type: 'function', name: 'v4PoolConfigured', inputs: [], outputs: [{ type: 'bool' }], stateMutability: 'view' },
+  { type: 'function', name: 'v3PoolConfigured', inputs: [], outputs: [{ type: 'bool' }], stateMutability: 'view' },
+  { type: 'function', name: 'v3Pool', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' },
   { type: 'function', name: 'getV3TWAPTick', inputs: [{ name: 'duration', type: 'uint32' }], outputs: [{ type: 'int24' }], stateMutability: 'view' },
   { type: 'function', name: 'v3CreatorToken', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' },
   { type: 'function', name: 'v3UsdToken', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' },

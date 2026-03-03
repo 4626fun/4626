@@ -1,0 +1,83 @@
+name: Builder Codes Guardrails
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/package.json'
+      - 'frontend/pnpm-lock.yaml'
+      - 'frontend/scripts/assert-builder-codes-env.ts'
+      - 'frontend/scripts/verify-builder-codes.ts'
+      - 'frontend/src/config/wagmi.ts'
+      - 'frontend/src/lib/baseBuilderCodes.ts'
+      - 'frontend/src/lib/baseBuilderCodes.test.ts'
+      - 'frontend/src/lib/ethSendTransactionAttribution.guard.test.ts'
+      - 'frontend/src/lib/txRouter.ts'
+      - 'frontend/src/lib/txRouter.test.ts'
+      - 'frontend/src/lib/aa/coinbaseErc4337.ts'
+      - 'frontend/src/lib/aa/coinbaseErc4337.builderCodes.test.ts'
+      - 'frontend/src/hooks/usePrivyCswExecute.ts'
+      - 'frontend/src/hooks/useSwapExecution.ts'
+      - 'frontend/src/pages/DeployVault.tsx'
+      - 'frontend/src/pages/AgentRegister.tsx'
+      - 'frontend/src/pages/AdminOps.tsx'
+  push:
+    branches: [main, master]
+    paths:
+      - 'frontend/package.json'
+      - 'frontend/pnpm-lock.yaml'
+      - 'frontend/scripts/assert-builder-codes-env.ts'
+      - 'frontend/scripts/verify-builder-codes.ts'
+      - 'frontend/src/config/wagmi.ts'
+      - 'frontend/src/lib/baseBuilderCodes.ts'
+      - 'frontend/src/lib/baseBuilderCodes.test.ts'
+      - 'frontend/src/lib/ethSendTransactionAttribution.guard.test.ts'
+      - 'frontend/src/lib/txRouter.ts'
+      - 'frontend/src/lib/txRouter.test.ts'
+      - 'frontend/src/lib/aa/coinbaseErc4337.ts'
+      - 'frontend/src/lib/aa/coinbaseErc4337.builderCodes.test.ts'
+      - 'frontend/src/hooks/usePrivyCswExecute.ts'
+      - 'frontend/src/hooks/useSwapExecution.ts'
+      - 'frontend/src/pages/DeployVault.tsx'
+      - 'frontend/src/pages/AgentRegister.tsx'
+      - 'frontend/src/pages/AdminOps.tsx'
+
+jobs:
+  verify-builder-codes:
+    runs-on: ubuntu-latest
+    env:
+      VITE_BASE_BUILDER_CODES: bc_ci_guardrail
+      AUTH_SESSION_SECRET: test-auth-session-secret-123456
+      DEPLOY_SESSION_SECRET: test-deploy-session-secret-123456
+      DEPLOY_SESSION_TOKEN_HMAC_SECRET: test-deploy-hmac-secret-123456
+      MARKETING_ORIGIN: https://4626.fun
+      APP_ORIGIN: https://app.4626.fun
+      CANONICAL_ORIGIN: https://4626.fun
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        run: pnpm --dir frontend install --frozen-lockfile
+
+      - name: Verify Builder Codes suffix
+        run: pnpm --dir frontend builder-codes:verify
+
+      - name: Run attribution guard tests
+        run: >
+          pnpm --dir frontend test
+          src/lib/baseBuilderCodes.test.ts
+          src/lib/ethSendTransactionAttribution.guard.test.ts
+          src/lib/txRouter.test.ts
+          src/lib/aa/coinbaseErc4337.builderCodes.test.ts

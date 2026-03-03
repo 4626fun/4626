@@ -1,0 +1,15 @@
+{
+  "pools": {
+    "0x77ddd21bdf93f3b9d84f6a57a285099334932039": {
+      "lastProcessedBlock": "42861028"
+    }
+  },
+  "cooldowns": {},
+  "vaultHourly": {},
+  "lastBackfillRange": {
+    "pool": "0x77ddd21bdf93f3b9d84f6a57a285099334932039",
+    "fromBlock": "42861001",
+    "toBlock": "42861028",
+    "at": 1772511404
+  }
+}

@@ -115,7 +115,10 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     isSupabaseAdminConfiguredMock.mockReturnValue(false)
     readJsonBodyMock.mockImplementation((req: { body?: unknown }) => Promise.resolve(req.body ?? null))
 
-    mockGetBytecode.mockResolvedValue('0x1234')
+    mockGetBytecode.mockImplementation(async ({ address }: { address: string }) => {
+      if (String(address).toLowerCase() === sessionOwner.toLowerCase()) return '0x'
+      return '0x1234'
+    })
     mockReadContract.mockImplementation((opts: { functionName?: string }) => {
       if (opts.functionName === 'isOwnerAddress') return Promise.resolve(true)
       if (opts.functionName === 'store') return Promise.resolve('0x2C5Ff5bd3D6f4aF4742e37Df12E51b39F2C63e6c')
@@ -195,5 +198,72 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     const errMsg = responseBody?.error?.message ?? ''
     expect(errMsg).not.toMatch(/request denied/i)
     expect(errMsg).not.toMatch(/missing_primary_call/i)
+  })
+
+  it('rejects addOwnerAddress self-call when deploy session owner has contract bytecode', async () => {
+    mockGetBytecode.mockImplementation(async ({ address }: { address: string }) => {
+      if (String(address).toLowerCase() === sessionOwner.toLowerCase()) return '0x1234'
+      return '0x1234'
+    })
+
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+    const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+      {
+        type: 'function',
+        name: 'addOwnerAddress',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: 'owner', type: 'address' }],
+        outputs: [],
+      },
+    ] as const
+
+    const innerData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+      functionName: 'addOwnerAddress',
+      args: [sessionOwner],
+    })
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [sender, 0n, innerData],
+    })
+
+    const userOp = {
+      sender,
+      callData,
+      initCode: '0x',
+    }
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).toMatch(/contract_owner_not_allowed/i)
   })
 })

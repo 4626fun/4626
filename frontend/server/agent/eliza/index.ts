@@ -67,6 +67,11 @@ import { createPrivyScwSigner } from '../../_lib/privyXmtpSigner.js'
 import { buildAgentRegistration } from '../../_lib/agentRegistration.js'
 import { publishAgentRegistrationToGrove } from '../../_lib/agentRegistrationPublisher.js'
 import { createCorrelationLogger, logger } from '../../_lib/logger.js'
+import {
+  TARGET_CANONICAL_CSW_ADDRESS,
+  isTargetCanonicalCsw,
+  normalizePolicyAddress,
+} from '../../../src/wallet/canonicalWalletPolicy'
 import path from 'node:path'
 import fs from 'node:fs'
 import http from 'node:http'
@@ -466,7 +471,9 @@ function validateStartupEnv(): EnvValidationResult {
   const hasDb = isDbConfigured()
   const hasEncKey = !!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()
   const hasPrivateKey = !!(process.env.XMTP_AGENT_PRIVATE_KEY ?? '').trim()
-  const hasCswAddress = !!(process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim()
+  const configuredCswRaw = (process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim()
+  const configuredCsw = normalizePolicyAddress(configuredCswRaw)
+  const hasCswAddress = !!configuredCswRaw
   const hasCswPrivyWallet = !!(process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
   const hasCswConfig = hasCswAddress && hasCswPrivyWallet
   const multiAgentConfigured = hasDb && hasEncKey
@@ -514,6 +521,14 @@ function validateStartupEnv(): EnvValidationResult {
   }
   if (!hasCswAddress && hasCswPrivyWallet) {
     errors.push('XMTP_AGENT_CSW_ADDRESS is required when XMTP_AGENT_PRIVY_WALLET_ID is set.')
+  }
+  if (hasCswAddress && !configuredCsw) {
+    errors.push('XMTP_AGENT_CSW_ADDRESS must be a valid EVM address.')
+  }
+  if (configuredCsw && !isTargetCanonicalCsw(configuredCsw)) {
+    warnings.push(
+      `XMTP_AGENT_CSW_ADDRESS (${configuredCsw}) does not match canonical target ${TARGET_CANONICAL_CSW_ADDRESS}; startup will enforce canonical target identity.`,
+    )
   }
 
   if (!llmService.getAvailableProviders().length) {
@@ -1241,9 +1256,15 @@ async function uploadRegistrationToGrove(): Promise<void> {
       return
     }
 
-    const cswAddress = String(process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim().toLowerCase()
-    const isCswAddress = /^0x[a-f0-9]{40}$/.test(cswAddress)
-    const agentKey = isCswAddress ? `single-csw:${cswAddress}` : 'single-agent'
+    const configuredCsw = normalizePolicyAddress((process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim())
+    if (configuredCsw && !isTargetCanonicalCsw(configuredCsw)) {
+      regLogger.warn('[eliza] XMTP agent CSW mismatch detected; using canonical target agent key', {
+        configured: configuredCsw,
+        expected: TARGET_CANONICAL_CSW_ADDRESS,
+        correlationId,
+      })
+    }
+    const agentKey = `single-csw:${TARGET_CANONICAL_CSW_ADDRESS}`
     const publish = await withRetry({
       operation: 'grove_registration_upload',
       maxRetries: EXTERNAL_MAX_RETRIES,
@@ -1444,7 +1465,14 @@ async function main() {
     // Single-agent CSW mode: Privy server wallet signs on behalf of your CSW.
     // Same delegation pattern used for ERC-4337 UserOps & vault deployments.
     // -----------------------------------------------------------------------
-    const cswAddress = (process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim() as `0x${string}`
+    const configuredCsw = normalizePolicyAddress((process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim())
+    if (configuredCsw && !isTargetCanonicalCsw(configuredCsw)) {
+      logger.warn('[eliza] overriding configured CSW with canonical target', {
+        configured: configuredCsw,
+        expected: TARGET_CANONICAL_CSW_ADDRESS,
+      })
+    }
+    const cswAddress = TARGET_CANONICAL_CSW_ADDRESS as `0x${string}`
     const privyWalletId = (process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
     const chainId = Number(process.env.XMTP_AGENT_CSW_CHAIN_ID ?? '8453') || 8453
     const ownerIndexRaw = (process.env.XMTP_AGENT_CSW_OWNER_INDEX ?? '').trim()

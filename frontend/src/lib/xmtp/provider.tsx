@@ -19,6 +19,11 @@ import { APP_ORIGIN } from '@/lib/host'
 import { apiFetch } from '@/lib/apiBase'
 import { getBasenameName } from '@/lib/xmtp/socialIdentity'
 import { useAccountContext } from '@/wallet/accountContext'
+import {
+  TARGET_CANONICAL_CSW_ADDRESS,
+  isTargetCanonicalCsw,
+  shouldApplyCanonicalEnforcement,
+} from '@/wallet/canonicalWalletPolicy'
 import { CANONICAL_SCW_CHAIN_ID, decideXmtpSignerType, resolveXmtpChainId } from '@/lib/xmtp/signerUtils'
 import {
   Client,
@@ -627,14 +632,23 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     const cached = resolvedIdentityByWalletRef.current.get(cacheKey)
     if (cached) return cached
 
-    if (modeOverride === 'EOA') {
+    const enforceCanonicalForConnectedSigner = shouldApplyCanonicalEnforcement({
+      signerAddress: connected,
+    })
+    if (modeOverride === 'EOA' && !enforceCanonicalForConnectedSigner) {
       const resolved = { identityAddress: connected, isCanonicalSmartWallet: false }
       resolvedIdentityByWalletRef.current.set(cacheKey, resolved)
       return resolved
     }
+    if (modeOverride === 'EOA' && enforceCanonicalForConnectedSigner) {
+      console.warn('[xmtp] canonical policy ignored EOA identity override for enforced signer', {
+        connected,
+      })
+    }
 
     let preferred = connected
     let isCanonicalSmartWallet = false
+    let policyApplies = enforceCanonicalForConnectedSigner
     try {
       const res = await apiFetch('/api/waitlist/me', {
         method: 'GET',
@@ -647,8 +661,23 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         preferred = canonical
         isCanonicalSmartWallet = true
       }
+      policyApplies = shouldApplyCanonicalEnforcement({
+        canonicalAddress: canonical,
+        signerAddress: connected,
+      })
     } catch {
       // Best-effort canonical identity resolution; fallback to connected wallet.
+    }
+
+    if (policyApplies) {
+      if (preferred !== TARGET_CANONICAL_CSW_ADDRESS) {
+        console.warn('[xmtp] canonical policy overriding identity resolution to target CSW', {
+          connected,
+          resolvedBeforeOverride: preferred,
+        })
+      }
+      preferred = TARGET_CANONICAL_CSW_ADDRESS
+      isCanonicalSmartWallet = true
     }
 
     if (preferred !== connected && publicClient) {
@@ -660,10 +689,16 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           args: [connected as `0x${string}`],
         })) as boolean
         if (!isOwner) {
+          if (policyApplies) {
+            throw new Error('Connected signer is not an owner of the canonical CSW identity')
+          }
           preferred = connected
           isCanonicalSmartWallet = false
         }
       } catch {
+        if (policyApplies) {
+          throw new Error('Unable to verify canonical CSW owner relationship for XMTP identity')
+        }
         preferred = connected
         isCanonicalSmartWallet = false
       }
@@ -671,6 +706,12 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
     if (!isCanonicalSmartWallet && modeOverride === 'SMART_WALLET') {
       isCanonicalSmartWallet = false
+    }
+
+    if (isCanonicalSmartWallet && !isTargetCanonicalCsw(preferred) && policyApplies) {
+      console.warn('[xmtp] canonical policy detected non-target smart wallet identity', {
+        preferred,
+      })
     }
 
     const resolved = { identityAddress: preferred, isCanonicalSmartWallet }

@@ -31,6 +31,7 @@ import {
   normalizeSolanaAssetMintOrigin,
   parseSolanaOvaultMintCompatibilityHints,
 } from '../../../../server/_lib/solanaOvaultCompatibility.js'
+import { hasContractBytecode } from '../../../../src/wallet/canonicalWalletPolicy'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -488,6 +489,16 @@ const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
   { type: 'function', name: 'removeOwnerAtIndex', stateMutability: 'nonpayable', inputs: [{ name: 'index', type: 'uint256' }, { name: 'owner', type: 'bytes' }], outputs: [] },
 ] as const
 
+const COINBASE_SMART_WALLET_OWNER_ADD_ABI = [
+  {
+    type: 'function',
+    name: 'addOwnerAddress',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'owner', type: 'address' }],
+    outputs: [],
+  },
+] as const
+
 const CREATOR_VAULT_DEPLOY_RUNTIME_ABI = [
   {
     type: 'function',
@@ -517,6 +528,42 @@ const CREATOR_VAULT_DEPLOY_RUNTIME_ABI = [
 
 function asOwnerBytes(owner: Address): Hex {
   return encodeAbiParameters([{ type: 'address' }], [owner]) as Hex
+}
+
+function extractAddedOwnerAddress(params: { smartWallet: Address; call: Call }): Address | null {
+  const callTo = typeof params.call?.to === 'string' && isAddress(params.call.to) ? getAddress(params.call.to as Address) : null
+  if (!callTo || callTo.toLowerCase() !== params.smartWallet.toLowerCase()) return null
+  const data = typeof params.call?.data === 'string' ? params.call.data.trim() : ''
+  if (!data || !data.startsWith('0x')) return null
+  try {
+    const decoded = decodeFunctionData({
+      abi: COINBASE_SMART_WALLET_OWNER_ADD_ABI,
+      data: data as Hex,
+    })
+    if (decoded.functionName !== 'addOwnerAddress') return null
+    const ownerArg = decoded.args?.[0]
+    if (typeof ownerArg !== 'string' || !isAddress(ownerArg)) return null
+    return getAddress(ownerArg as Address)
+  } catch {
+    return null
+  }
+}
+
+async function findContractOwnerAdditions(params: {
+  smartWallet: Address
+  calls: Call[]
+  getBytecode: (address: Address) => Promise<Hex | null | undefined>
+}): Promise<Address | null> {
+  for (const call of params.calls) {
+    const candidateOwner = extractAddedOwnerAddress({
+      smartWallet: params.smartWallet,
+      call,
+    })
+    if (!candidateOwner) continue
+    const bytecode = await params.getBytecode(candidateOwner).catch(() => null)
+    if (hasContractBytecode(bytecode)) return candidateOwner
+  }
+  return null
 }
 
 const COINBASE_SMART_WALLET_OWNER_LINK_ABI = [
@@ -947,6 +994,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const phase4Calls = Array.isArray(body.phase4Calls) ? body.phase4Calls : []
     const solanaOvault = normalizeSolanaOvaultConfig(body.solanaOvault)
     const hasPhase2Finalize = phase2FinalizeCalls.length > 0 || phase2Calls.length > 0
+
+    const allSubmittedCalls = [
+      ...phase1Calls,
+      ...phase2CoreCalls,
+      ...phase2FinalizeCalls,
+      ...phase2Calls,
+      ...phase3Calls,
+      ...phase4Calls,
+    ]
+    if (allSubmittedCalls.length > 0) {
+      const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+      const readClient = createPublicClient({
+        chain: base,
+        transport: http(rpc, { timeout: 12_000 }),
+      })
+      const contractOwnerToAdd = await findContractOwnerAdditions({
+        smartWallet,
+        calls: allSubmittedCalls,
+        getBytecode: async (address) => (await readClient.getBytecode({ address })) as Hex | null | undefined,
+      })
+      if (contractOwnerToAdd) {
+        return res.status(400).json({
+          success: false,
+          error: `Only EOA owners can be added to the canonical smart wallet (blocked contract owner: ${contractOwnerToAdd}).`,
+        } satisfies ApiEnvelope<null>)
+      }
+    }
 
     const hasAnyWork =
       phase1Calls.length > 0 ||

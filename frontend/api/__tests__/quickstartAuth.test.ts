@@ -6,6 +6,7 @@ import { applyEnv, createMockReq, createMockRes } from './helpers'
 const {
   readSessionFromRequestMock,
   readSiwaAgentFromRequestMock,
+  readJsonBodyMock,
   getDbMock,
   isDbConfiguredMock,
   getOrCreateCreatorAgentWalletMock,
@@ -15,6 +16,7 @@ const {
 } = vi.hoisted(() => ({
   readSessionFromRequestMock: vi.fn(),
   readSiwaAgentFromRequestMock: vi.fn(),
+  readJsonBodyMock: vi.fn(async () => ({})),
   getDbMock: vi.fn(),
   isDbConfiguredMock: vi.fn(() => true),
   getOrCreateCreatorAgentWalletMock: vi.fn(async () => ({
@@ -48,6 +50,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   handleOptions: vi.fn(() => false),
   setCors: vi.fn(),
   setNoStore: vi.fn(),
+  readJsonBody: readJsonBodyMock,
   readSessionFromRequest: readSessionFromRequestMock,
 }))
 

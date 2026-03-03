@@ -26,6 +26,7 @@
     "check:agent-registration": "node scripts/check-agent-registration.mjs",
     "verify:protocol-assets": "node scripts/verify-protocol-assets.mjs",
     "builder-codes:verify": "tsx --env-file=.env scripts/verify-builder-codes.ts",
+    "builder-codes:assert-env": "tsx scripts/assert-builder-codes-env.ts",
     "deploy:autopilot": "node scripts/deploy-autopilot.mjs",
     "skills:sync:cursor": "node scripts/sync-cursor-skills.mjs --prune"
   },

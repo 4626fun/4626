@@ -70,6 +70,14 @@ Every 5 minutes, the unified `4626` workflow runs five tasks in sequence:
 | **Auction Settlement** | Settle graduated CCA auctions (`sweepCurrency`, `sweepUnsoldTokens`) | Feature |
 | **Keepr Queue** | Process pending XMTP group ops + Neynar/Farcaster actions | Infrastructure |
 
+An optional always-on listener complements cron for lower-latency strategy reactions:
+
+| Service | What | Mode |
+|---------|------|------|
+| **Strategy Event Listener** | Subscribes to oracle v3Pool `Swap` events, evaluates Ajna/Charm thresholds, enqueues deduped strategy actions | Continuous (WebSocket) |
+
+Cron Ajna/Charm workflows stay enabled as fallback heartbeat and recovery path.
+
 ### Payout Integrity Monitor
 
 A dedicated CRE workflow runs every 30 minutes to verify the full fee pipeline:
@@ -268,6 +276,12 @@ Optional (Ajna bucket manager):
 Optional (Charm rebalance manager):
 - `CHARM_REBALANCE_VAULT_ADDRESS` / `CHARM_REBALANCE_ORACLE_ADDRESS` — explicit single-vault targeting for Charm workflow
 - `CHARM_REBALANCE_TWAP_DURATION`, `CHARM_REBALANCE_PRICE_CHANGE_TRIGGER_BPS`
+
+Optional (strategy event listener):
+- `BASE_WS_RPC_URL` — Base WebSocket RPC for `Swap` subscriptions
+- `STRATEGY_EVENT_DEBOUNCE_MS`, `STRATEGY_EVENT_COOLDOWN_SECONDS`, `STRATEGY_EVENT_MAX_ACTIONS_PER_HOUR`
+- `STRATEGY_EVENT_STATE_FILE`, `STRATEGY_EVENT_BACKFILL_CHUNK_BLOCKS`, `STRATEGY_EVENT_START_LOOKBACK_BLOCKS`, `STRATEGY_EVENT_BACKLOG_ALERT_BLOCKS`
+- `STRATEGY_EVENT_RECONNECT_DELAY_MS`, `STRATEGY_EVENT_RECONNECT_DELAY_MAX_MS`, `STRATEGY_EVENT_RECONNECT_BACKOFF_MULTIPLIER`
 ### 2. Register Vaults
 
 Each vault is registered via `POST /api/keepr/vault/upsert`. Include contract addresses in `config_json`:
@@ -322,6 +336,7 @@ npm run start:ajna-bucket-manager
 npm run start:charm-rebalance-manager
 npm run start:auction-settlement
 npm run start:keepr-queue
+npm run start:strategy-event-listener
 
 # Tests
 npm test
@@ -383,19 +398,46 @@ cre/
 │   ├── ajna-bucket-manager.workflow.ts # Standalone Ajna bucket manager
 │   ├── charm-rebalance-manager.workflow.ts # Standalone Charm rebalance manager
 │   ├── auction-settlement.workflow.ts  # Standalone auction settlement
-│   └── keepr-queue-executor.workflow.ts
+│   ├── keepr-queue-executor.workflow.ts
+│   └── strategy-event-listener.workflow.ts # Always-on WS listener (event-driven queue enqueue)
 ├── actions/
 │   ├── vault-keeper.action.ts          # tend/report logic (multi-vault)
 │   ├── auction-settlement.action.ts    # sweep logic (multi-vault, sweepCurrencyBlock guard)
-│   └── keepr-queue-executor.action.ts  # XMTP/Neynar queue processor
+│   ├── keepr-queue-executor.action.ts  # XMTP/Neynar queue processor
+│   └── strategy-event-listener.action.ts # Swap event listener + trigger evaluation
 ├── utils/
 │   ├── onchain.ts                      # viem clients, read/write/dry-run
 │   ├── registry.ts                     # Vault registry client
-│   └── alerts.ts                       # Webhook alerting
+│   ├── alerts.ts                       # Webhook alerting
+│   └── strategy-event-state.ts         # .state persistence (lastProcessedBlock/cooldowns/rate limit)
 ├── tests/
 │   ├── vault-keeper.test.ts
 │   └── auction-settlement.test.ts
 └── secrets.example.env
+```
+
+### systemd Example (Strategy Event Listener)
+
+Use a dedicated unit so cron workflows remain independent:
+
+```ini
+[Unit]
+Description=4626 strategy event listener
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=app4626
+Group=app4626
+WorkingDirectory=/opt/4626/cre
+EnvironmentFile=/etc/4626/cre.env
+ExecStart=/usr/bin/env pnpm --dir /opt/4626/cre start:strategy-event-listener
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
 ```
 
 ## API Endpoints
@@ -409,6 +451,7 @@ cre/
 | `/api/cre/keeper/mark-settled` | POST | Records `graduated_at` / `settled_at` timestamps in DB |
 | `/api/cre/keeper/alert` | POST | Receives alerts from CRE workflows, forwards to webhook |
 | `/api/cre/keeper/aiAssess` | POST | AI advisory classification endpoint for payout-integrity (deterministic checks remain authoritative) |
+| `/api/keepr/actions/enqueue` | POST | Enqueues deduped strategy/XMTP actions |
 | `/api/keepr/actions/pending` | GET | Returns pending queue actions |
 | `/api/keepr/actions/updateStatus` | POST | Updates action status |
 

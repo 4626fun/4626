@@ -211,7 +211,7 @@ function LpPositionCard(props: {
 
 export function Swap() {
   const [searchParams] = useSearchParams()
-  const { address, isConnected, chainId: walletChainId } = useAccount()
+  const { address, isConnected, chainId: walletChainId, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
   const { wallets: privyWallets } = useWallets()
   const publicClient = usePublicClient()
@@ -449,6 +449,14 @@ export function Swap() {
     : walletClient
   const executionSignerAddress = executionMode === 'canonical' ? canonicalSignerAddress : signerAddress
   const executionWalletClient = executionMode === 'canonical' ? canonicalSignerWalletClient : walletClient
+  const executionSignerType = usePrivyEmbeddedCanonicalSigner ? 'EOA' : accountContext.signerType
+  const executionCapabilities = usePrivyEmbeddedCanonicalSigner
+    ? { paymasterService: false, atomicStatus: 'unknown' as const, supports5792: false }
+    : accountContext.capabilities
+  const executionConnectorId = usePrivyEmbeddedCanonicalSigner ? 'privy-embedded' : (connector?.id ?? null)
+  const executionConnectorName = usePrivyEmbeddedCanonicalSigner
+    ? 'Privy Embedded EOA'
+    : (connector?.name ?? null)
   const executionAddress = accountContext.activeAccount ?? null
   const executionReady = Boolean(executionAddress && executionWalletClient && publicClient)
   const executionFallbackActive = executionMode !== preferredExecutionMode
@@ -614,6 +622,7 @@ export function Swap() {
     permitSignaturePending,
     permitSignatureReady,
     diagnosticsEnabled,
+    txDebug,
     canary7702Eligible,
     diagnosticsBusy,
     diagnosticsResult,
@@ -638,6 +647,10 @@ export function Swap() {
     parsedSlippage,
     parsedDeadlineMinutes,
     chainId: swapChainId,
+    signerType: executionSignerType,
+    capabilities: executionCapabilities,
+    connectorId: executionConnectorId,
+    connectorName: executionConnectorName,
   })
 
   const selectedQuote = useMemo<QuoteShape | null>(() => {
@@ -1048,6 +1061,59 @@ export function Swap() {
               {JSON.stringify(diagnosticsResult, null, 2)}
             </pre>
           ) : null}
+        </div>
+      ) : null}
+
+      {activePanel === 'swap' && txDebug.enabled ? (
+        <div className="mx-auto mt-4 max-w-4xl rounded-xl border border-cyan-400/20 bg-cyan-950/20 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-cyan-200">Swap Tx Router Debug</div>
+              <div className="text-xs text-cyan-100/80">
+                mode={txDebug.selectedSendMode ?? '--'} method={txDebug.lastMethod ?? '--'} smartWallet=
+                {txDebug.smartWalletDetected ? 'yes' : 'no'}
+              </div>
+            </div>
+            <div className="text-right text-[11px] text-cyan-100/80">
+              <div>connector: {txDebug.connectorName ?? '--'} ({txDebug.connectorId ?? '--'})</div>
+              <div>signerType: {txDebug.signerType ?? '--'}</div>
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-1 gap-2 text-[11px] text-cyan-100/90 md:grid-cols-2">
+            <div className="rounded-lg border border-cyan-400/15 bg-black/30 p-2">
+              <div>selected: {txDebug.selectedAddress ?? '--'}</div>
+              <div>execution: {txDebug.executionAddress ?? '--'}</div>
+              <div>signer: {txDebug.signerAddress ?? '--'}</div>
+              <div>canonical: {txDebug.canonicalAddress ?? '--'}</div>
+            </div>
+            <div className="rounded-lg border border-cyan-400/15 bg-black/30 p-2">
+              <div>supports5792: {txDebug.capabilities.supports5792 ? 'yes' : 'no'}</div>
+              <div>paymasterService: {txDebug.capabilities.paymasterService ? 'yes' : 'no'}</div>
+              <div>atomicStatus: {txDebug.capabilities.atomicStatus}</div>
+              <div>allowanceWallet: {txDebug.allowanceCheck?.walletAddress ?? '--'}</div>
+            </div>
+          </div>
+
+          <div className="mt-2 rounded-lg border border-cyan-400/15 bg-black/30 p-2 text-[11px] text-cyan-100/90">
+            <div>approval sender: {txDebug.approvalAttempt?.sender ?? '--'}</div>
+            <div>swap sender: {txDebug.swapAttempt?.sender ?? '--'}</div>
+            <div>
+              sender match:{' '}
+              {txDebug.approvalAttempt?.sender && txDebug.swapAttempt?.sender
+                ? txDebug.approvalAttempt.sender.toLowerCase() === txDebug.swapAttempt.sender.toLowerCase()
+                  ? 'yes'
+                  : 'no'
+                : '--'}
+            </div>
+            <div className={txDebug.lastError ? 'text-rose-300' : 'text-cyan-100/90'}>
+              last error: {txDebug.lastError ?? '--'}
+            </div>
+          </div>
+
+          <pre className="mt-2 max-h-56 overflow-auto rounded-lg border border-cyan-400/15 bg-black/40 p-2 text-[11px] text-cyan-100/90">
+            {JSON.stringify(txDebug, null, 2)}
+          </pre>
         </div>
       ) : null}
 

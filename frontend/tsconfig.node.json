@@ -26,6 +26,7 @@
     "server/ai/**/*.ts",
     "server/agent/**/*.ts",
     "src/config/contracts.defaults.ts",
-    "src/deploy/**/*.ts"
+    "src/deploy/**/*.ts",
+    "src/wallet/canonicalWalletPolicy.ts"
   ]
 }

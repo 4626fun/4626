@@ -16,6 +16,7 @@
  *   tsx runner.ts charm-rebalance-manager # Run just Charm rebalance manager
  *   tsx runner.ts auction-settlement     # Run just auction settlement
  *   tsx runner.ts keepr-queue            # Run just the keepr queue processor
+ *   tsx runner.ts strategy-event-listener # Run always-on event listener
  *
  * Environment:
  *   - Loads .env file from cre/ directory
@@ -69,6 +70,9 @@ async function main() {
       case 'keepr-queue':
         workflow = await import('./workflows/keepr-queue-executor.workflow.js');
         break;
+      case 'strategy-event-listener':
+        workflow = await import('./workflows/strategy-event-listener.workflow.js');
+        break;
       default:
         console.error(`Unknown workflow: ${workflowName}`);
         console.error('');
@@ -81,6 +85,7 @@ async function main() {
         console.error('  charm-rebalance-manager — trigger Charm rebalance on 10%+ price move');
         console.error('  auction-settlement   — sweep graduated auctions');
         console.error('  keepr-queue          — process XMTP/Neynar queue');
+        console.error('  strategy-event-listener — always-on WS listener for Ajna/Charm triggers');
         process.exit(1);
     }
 

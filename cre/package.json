@@ -12,6 +12,7 @@
     "start:charm-rebalance-manager": "tsx runner.ts charm-rebalance-manager",
     "start:auction-settlement": "tsx runner.ts auction-settlement",
     "start:keepr-queue": "tsx runner.ts keepr-queue",
+    "start:strategy-event-listener": "tsx runner.ts strategy-event-listener",
     "dry-run": "DRY_RUN=true tsx runner.ts",
     "dry-run:vault-keeper": "DRY_RUN=true tsx runner.ts vault-keeper",
     "dry-run:ajna-bucket-manager": "DRY_RUN=true tsx runner.ts ajna-bucket-manager",

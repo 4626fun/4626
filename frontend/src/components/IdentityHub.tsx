@@ -173,9 +173,9 @@ export function IdentityHub() {
     return base.startsWith('http') ? `${base}/deploy` : '/deploy'
   }, [])
 
-  const enableGasFreeHref = useMemo(() => {
+  const enableOneClickActionsHref = useMemo(() => {
     const base = getAppBaseUrl()
-    return base.startsWith('http') ? `${base}/deploy#gasfree` : '/deploy#gasfree'
+    return base.startsWith('http') ? `${base}/account#account-aa-setup` : '/account#account-aa-setup'
   }, [])
 
   const deployHref = useMemo(() => {
@@ -321,8 +321,8 @@ export function IdentityHub() {
               )}
 
               {showEnableGasFree ? (
-                <a href={enableGasFreeHref} className="btn-primary w-full text-center" onClick={() => setMenuOpen(false)}>
-                  Enable Gas-Free Deploys
+                <a href={enableOneClickActionsHref} className="btn-primary w-full text-center" onClick={() => setMenuOpen(false)}>
+                  Enable 1-click actions
                 </a>
               ) : null}
 

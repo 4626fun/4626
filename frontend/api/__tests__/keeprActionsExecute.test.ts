@@ -119,6 +119,50 @@ describe('keepr/actions/execute', () => {
     expect(executeKeeprActionMock).toHaveBeenCalled()
   })
 
+  it('executes strategy rebucket action payload successfully', async () => {
+    executeKeeprActionMock.mockResolvedValue({
+      success: true,
+      retryable: false,
+      actionType: 'strategy.ajna.rebucket',
+      details: { txHash: '0xabc' },
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-keepr-key' },
+      body: {
+        id: 11,
+        vaultAddress: '0x00000000000000000000000000000000000000bb',
+        groupId: 'group-strategy',
+        actionType: 'strategy.ajna.rebucket',
+        action: {
+          action: 'strategy.ajna.rebucket',
+          strategyAddress: '0x00000000000000000000000000000000000000cc',
+          targetBucket: 1200,
+          method: 'moveToBucket',
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.executed).toBe(true)
+    expect(executeKeeprActionMock).toHaveBeenCalledWith({
+      id: 11,
+      vaultAddress: '0x00000000000000000000000000000000000000bb',
+      groupId: 'group-strategy',
+      actionType: 'strategy.ajna.rebucket',
+      action: {
+        action: 'strategy.ajna.rebucket',
+        strategyAddress: '0x00000000000000000000000000000000000000cc',
+        targetBucket: 1200,
+        method: 'moveToBucket',
+      },
+    })
+  })
+
   it('returns 400 for non-retryable execution failures', async () => {
     executeKeeprActionMock.mockResolvedValue({
       success: false,

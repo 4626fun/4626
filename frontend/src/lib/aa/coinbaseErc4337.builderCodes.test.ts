@@ -29,4 +29,13 @@ describe('applyBuilderDataSuffixToCalls', () => {
     const result = applyBuilderDataSuffixToCalls(calls, 1, dataSuffix)
     expect(result).toEqual(calls)
   })
+
+  it('keeps outbound userOp call payload attribution idempotent', () => {
+    expect(dataSuffix).toBeDefined()
+    const once = applyBuilderDataSuffixToCalls(calls, 8453, dataSuffix)
+    const twice = applyBuilderDataSuffixToCalls(once, 8453, dataSuffix)
+    expect(payloadEndsWithDataSuffix(once[0].data as Hex, dataSuffix as Hex)).toBe(true)
+    expect(payloadEndsWithDataSuffix(twice[0].data as Hex, dataSuffix as Hex)).toBe(true)
+    expect(twice[0].data).toBe(once[0].data)
+  })
 })

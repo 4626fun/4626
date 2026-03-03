@@ -333,14 +333,14 @@ export function QuickstartModal({ onClose }: { onClose: () => void }) {
                   icon={Shield}
                   label={
                     data.ownerAdded || ownerTxDone
-                      ? 'Server signer authorized'
-                      : 'Authorize server signer'
+                      ? 'Keepr signer authorized'
+                      : 'Authorize Keepr signer'
                   }
                   detail={
                     data.ownerAdded || ownerTxDone
-                      ? 'Can sign XMTP messages on your behalf'
+                      ? 'Keepr signer is ready for optional unattended actions'
                       : data.serverSignerAddress
-                        ? `Add ${truncAddr(data.serverSignerAddress)} as CSW owner`
+                        ? `Add ${truncAddr(data.serverSignerAddress)} as Keepr signer owner`
                         : null
                   }
                 />
@@ -366,7 +366,7 @@ export function QuickstartModal({ onClose }: { onClose: () => void }) {
                     )}
                   </button>
                   <p className="text-[10px] text-zinc-600 text-center px-2">
-                    Adds a server signer as owner of your Smart Wallet so it can respond to messages.
+                    Adds a Keepr signer as owner of your Smart Wallet for optional 24/7 automation.
                   </p>
                 </div>
               )}

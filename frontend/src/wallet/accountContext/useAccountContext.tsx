@@ -11,6 +11,12 @@ import { checkEoaOwnershipOfCsw } from './ownership'
 import { resolveActiveAccount } from './resolveActiveAccount'
 import { readPreferredAccountMode, writePreferredAccountMode } from './storage'
 import { deriveAccountUiFlags } from './deriveUiFlags'
+import {
+  isAllowedCanonicalSigner,
+  isTargetCanonicalCsw,
+  resolvePolicyCanonicalAddress,
+  shouldApplyCanonicalEnforcement,
+} from '../canonicalWalletPolicy'
 import type { AccountCapabilities, AccountModePreference, ResolvedAccountContext } from './types'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
@@ -110,10 +116,29 @@ export function AccountContextProvider(props: { children: ReactNode }) {
     return picked ? normalizeAddress(picked) : undefined
   }, [waitlistMeQuery.data])
 
+  const policyCanonicalAddress = useMemo(
+    () =>
+      resolvePolicyCanonicalAddress({
+        canonicalAddress: profileCswAddress,
+        signerAddress,
+      }) ?? undefined,
+    [profileCswAddress, signerAddress],
+  )
+
+  const canonicalPolicyApplies = useMemo(
+    () =>
+      shouldApplyCanonicalEnforcement({
+        canonicalAddress: policyCanonicalAddress,
+        signerAddress,
+      }),
+    [policyCanonicalAddress, signerAddress],
+  )
+
   const cswAddress = useMemo(() => {
+    if (canonicalPolicyApplies && policyCanonicalAddress) return policyCanonicalAddress
     if (signerType === 'SMART_WALLET' && signerAddress) return signerAddress
     return profileCswAddress
-  }, [profileCswAddress, signerAddress, signerType])
+  }, [canonicalPolicyApplies, policyCanonicalAddress, profileCswAddress, signerAddress, signerType])
 
   const [preferredModeVersion, setPreferredModeVersion] = useState(0)
   const preferredMode = useMemo(
@@ -149,17 +174,48 @@ export function AccountContextProvider(props: { children: ReactNode }) {
     return ownerCheckQuery.data ?? null
   }, [signerType, cswAddress, chainIdValue, ownerCheckQuery.data])
 
-  const activeResolution = useMemo(
-    () =>
-      resolveActiveAccount({
-        signerType,
-        signerAddress,
-        cswAddress,
-        eoaIsOwnerOfCsw,
-        preferredMode,
-      }),
-    [cswAddress, eoaIsOwnerOfCsw, preferredMode, signerAddress, signerType],
-  )
+  const activeResolution = useMemo(() => {
+    const baseResolution = resolveActiveAccount({
+      signerType,
+      signerAddress,
+      cswAddress,
+      eoaIsOwnerOfCsw,
+      preferredMode,
+    })
+
+    if (!canonicalPolicyApplies || !policyCanonicalAddress) return baseResolution
+
+    const signerIsCanonicalCsw = isTargetCanonicalCsw(signerAddress)
+    const signerIsAllowedEoa =
+      signerType === 'EOA' &&
+      isAllowedCanonicalSigner(signerAddress) &&
+      // Keep onchain ownership as an enforcement gate when available.
+      eoaIsOwnerOfCsw !== false
+
+    if (signerIsCanonicalCsw || signerIsAllowedEoa) {
+      return {
+        activeAccount: policyCanonicalAddress,
+        activeAccountType: 'SMART_WALLET' as const,
+        canUseSmartWalletMode: true,
+      }
+    }
+
+    // Block accidental identity flips to non-canonical smart wallets for the
+    // enforced account; user must connect the canonical CSW or an allowed EOA.
+    return {
+      activeAccount: undefined,
+      activeAccountType: 'UNKNOWN' as const,
+      canUseSmartWalletMode: false,
+    }
+  }, [
+    canonicalPolicyApplies,
+    cswAddress,
+    eoaIsOwnerOfCsw,
+    policyCanonicalAddress,
+    preferredMode,
+    signerAddress,
+    signerType,
+  ])
 
   const setPreferredMode = useCallback(
     (mode: AccountModePreference) => {

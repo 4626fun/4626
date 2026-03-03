@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 
 declare const process: { env: Record<string, string | undefined>; cwd: () => string }
@@ -28,7 +29,8 @@ function ensureWritableDir(dirPath: string): boolean {
  * 1) XMTP_DB_DIRECTORY if explicitly set
  * 2) Existing CWD db with .db3 files (to keep reusing an already active installation)
  * 3) /data/.xmtp-data when writable (persistent volume default on Railway/Docker)
- * 4) CWD fallback
+ * 4) /tmp/.xmtp-data for serverless runtimes
+ * 5) CWD fallback (only if writable)
  */
 export function resolveXmtpDbDirectory(): string {
   const fromEnv = (process.env.XMTP_DB_DIRECTORY ?? '').trim()
@@ -39,15 +41,17 @@ export function resolveXmtpDbDirectory(): string {
 
   const cwdDir = path.join(process.cwd(), '.xmtp-data')
   const persistentDir = '/data/.xmtp-data'
+  const tmpDir = path.join(os.tmpdir(), '.xmtp-data')
 
   const cwdDbCount = countDbFiles(cwdDir)
-  if (cwdDbCount > 0) {
-    ensureWritableDir(cwdDir)
+  if (cwdDbCount > 0 && ensureWritableDir(cwdDir)) {
     return cwdDir
   }
 
   if (ensureWritableDir(persistentDir)) return persistentDir
+  if (ensureWritableDir(tmpDir)) return tmpDir
+  if (ensureWritableDir(cwdDir)) return cwdDir
 
-  ensureWritableDir(cwdDir)
-  return cwdDir
+  // Last-resort defensive fallback.
+  return tmpDir
 }

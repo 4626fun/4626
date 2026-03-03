@@ -150,6 +150,15 @@ This app uses a **wagmi-first** Builder Codes integration (ERC-8021 suffix) so a
   - Check attribution counts on [base.dev](https://base.dev/) (Onchain transaction view).
   - Inspect tx input data on Basescan and confirm the ERC-8021 repeating `8021` marker tail.
   - Optionally validate tx/UserOp hash with [builder-code-checker](https://builder-code-checker.vercel.app/).
+- **Governance guardrails**
+  - Production Vercel builds run `builder-codes:assert-env` and fail hard if `VITE_BASE_BUILDER_CODES` is missing/empty.
+  - A source-scan guard test (`src/lib/ethSendTransactionAttribution.guard.test.ts`) blocks new raw `.request({ method: 'eth_sendTransaction' })` paths that bypass `appendBuilderSuffixToHex`.
+  - Dependency and attribution-sensitive changes trigger `.github/workflows/builder-codes-guardrails.yml`, which reruns `builder-codes:verify` plus targeted attribution tests.
+  - Keep server wrapper exceptions explicit and minimal via the guard test allowlist.
+- **Local command set**
+  - `pnpm -C frontend builder-codes:verify`
+  - `pnpm -C frontend test src/lib/baseBuilderCodes.test.ts src/lib/ethSendTransactionAttribution.guard.test.ts src/lib/txRouter.test.ts src/lib/aa/coinbaseErc4337.builderCodes.test.ts`
+  - `VERCEL_ENV=production VITE_BASE_BUILDER_CODES=bc_local_guardrail pnpm -C frontend builder-codes:assert-env`
 
 ## Swap Routing Compatibility (Base App + CSW)
 

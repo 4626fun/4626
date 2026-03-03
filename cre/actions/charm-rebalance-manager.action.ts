@@ -66,12 +66,12 @@ interface RuntimeConfig {
   priceChangeTriggerBps: number;
 }
 
-interface CharmStrategyContext {
+export interface CharmStrategyContext {
   strategyAddress: `0x${string}`;
   charmVaultAddress: `0x${string}`;
 }
 
-interface OraclePriceContext {
+export interface OraclePriceContext {
   normalizedTick: number;
   creatorToken: `0x${string}`;
   usdToken: `0x${string}`;
@@ -79,7 +79,7 @@ interface OraclePriceContext {
   usdDecimals: number;
 }
 
-interface CharmRangeContext {
+export interface CharmRangeContext {
   centerTickNormalized: number;
 }
 
@@ -174,7 +174,7 @@ export function tickPriceChangeBps(params: { currentTick: number; referenceTick:
   return Math.min(Number.MAX_SAFE_INTEGER, bps);
 }
 
-async function readOraclePriceContext(
+export async function readOraclePriceContext(
   oracleAddress: `0x${string}`,
   twapDuration: number,
 ): Promise<OraclePriceContext | null> {
@@ -234,7 +234,9 @@ async function readOraclePriceContext(
   };
 }
 
-async function readCharmStrategiesForVault(vaultAddress: `0x${string}`): Promise<CharmStrategyContext[]> {
+export async function readCharmStrategiesForVault(
+  vaultAddress: `0x${string}`,
+): Promise<CharmStrategyContext[]> {
   const out: CharmStrategyContext[] = [];
   const seen = new Set<string>();
 
@@ -277,7 +279,7 @@ async function readCharmStrategiesForVault(vaultAddress: `0x${string}`): Promise
   return out;
 }
 
-async function readCharmRangeContext(
+export async function readCharmRangeContext(
   charmVaultAddress: `0x${string}`,
   oracleContext: OraclePriceContext,
 ): Promise<CharmRangeContext | null> {

@@ -76,7 +76,7 @@ async function provisionServerWallet(creatorAddress: string): Promise<{ walletId
   })
   const json = (await res.json().catch(() => null)) as ApiEnvelope<{ walletId: string; address: string }> | null
   if (!res.ok || !json?.success || !json.data) {
-    throw new Error(json?.error ?? 'Failed to provision server signer')
+    throw new Error(json?.error ?? 'Failed to provision Keepr signer')
   }
   return json.data
 }
@@ -776,20 +776,20 @@ export function AdminAgentSetup() {
 
                   {serverWalletQuery.isLoading && (
                     <div className="flex items-center gap-2 text-xs text-zinc-400">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Provisioning server signer...
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Provisioning Keepr signer...
                     </div>
                   )}
 
                   {serverWallet && (
                     <>
                       <div>
-                        <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Server Signer</div>
+                        <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Keepr Signer</div>
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-xs text-zinc-300">{truncAddr(serverWallet.address)}</span>
                           <CopyButton text={serverWallet.address} />
                         </div>
                         <p className="text-[10px] text-zinc-600 mt-1">
-                          This address signs XMTP messages on behalf of your Smart Wallet.
+                          This address powers optional unattended XMTP automation for your Smart Wallet.
                         </p>
                       </div>
 
@@ -800,7 +800,7 @@ export function AdminAgentSetup() {
                       ) : isServerWalletOwner ? (
                         <div className="space-y-2">
                           <div className="flex items-center gap-2 text-xs text-emerald-400">
-                            <CheckCircle className="w-3.5 h-3.5" /> Server signer is an authorized owner
+                            <CheckCircle className="w-3.5 h-3.5" /> Keepr signer is an authorized owner
                           </div>
                           <button
                             type="button"
@@ -827,7 +827,7 @@ export function AdminAgentSetup() {
                       ) : (
                         <div className="space-y-2">
                           <p className="text-xs text-amber-400">
-                            Add the server signer as an owner of your Smart Wallet so it can sign on your behalf.
+                            Add the Keepr signer as an owner of your Smart Wallet for optional unattended automation.
                           </p>
                           <button
                             type="button"
