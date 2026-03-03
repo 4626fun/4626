@@ -8,9 +8,12 @@ import type { BuildTxResponse } from '../../_types.js'
 import { CHARM_ALPHA_VAULT_ABI } from './_abi.js'
 import { requireAddress, setPublicCors } from '../_shared.js'
 
+type SetMode = 'delegate' | 'manager' | 'legacy-strategy'
+
 type Body = {
   vault: Address
   strategy: Address
+  mode?: SetMode
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -25,12 +28,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const vault = requireAddress(body.vault, 'vault')
     const strategy = requireAddress(body.strategy, 'strategy')
+    const mode: SetMode = body.mode ?? 'delegate'
+    if (mode !== 'delegate' && mode !== 'manager' && mode !== 'legacy-strategy') {
+      throw new Error('mode must be one of: delegate, manager, legacy-strategy')
+    }
     const isOfficialVault = await isOfficialCharmVault({ charmVaultAddress: vault })
     if (!isOfficialVault) throw new Error(officialCharmVaultError(vault))
 
     const data = encodeFunctionData({
       abi: CHARM_ALPHA_VAULT_ABI,
-      functionName: 'setStrategy',
+      functionName:
+        mode === 'manager'
+          ? 'setManager'
+          : mode === 'legacy-strategy'
+            ? 'setStrategy'
+            : 'setRebalanceDelegate',
       args: [strategy],
     })
 
@@ -39,10 +51,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       to: vault,
       data,
       value: '0',
-      description: 'Charm/AlphaVault (governance): set the strategy that is allowed to call rebalance().',
+      description:
+        mode === 'manager'
+          ? 'Charm/AlphaVault (governance): set manager address.'
+          : mode === 'legacy-strategy'
+            ? 'Charm/AlphaVault legacy mode: setStrategy(address).'
+            : 'Charm/AlphaVault (governance): set rebalance delegate address.',
       warnings: [
         'This is build-only: you must submit the transaction via your wallet/provider.',
-        'Onchain permission check: setStrategy is governance-only.',
+        mode === 'legacy-strategy'
+          ? 'Legacy strategy mode is for older Charm vault variants only.'
+          : 'Onchain permission check: manager/delegate updates are governance-only.',
       ],
     }
 

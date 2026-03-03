@@ -72,6 +72,7 @@ const CHARM_STRATEGY_ABI = [
 ] as const
 
 const CHARM_VAULT_ABI = [
+  { type: 'function', name: 'rebalance', stateMutability: 'nonpayable', inputs: [], outputs: [] },
   {
     type: 'function',
     name: 'rebalance',
@@ -88,6 +89,8 @@ const CHARM_VAULT_ABI = [
     ],
     outputs: [],
   },
+  { type: 'function', name: 'setRebalanceDelegate', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [] },
+  { type: 'function', name: 'setManager', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [] },
   { type: 'function', name: 'setStrategy', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [] },
 ] as const
 
@@ -395,17 +398,42 @@ describe('v1 build Charm handlers', () => {
     expect(String(badAmountRes.body?.error ?? '')).toContain('amount must be >= 0')
   })
 
-  it('builds vault actions and validates rebalance tick bounds', async () => {
+  it('builds vault actions and validates rebalance modes/tick bounds', async () => {
     const setStrategyReq = createMockReq({ method: 'POST', body: { vault: VAULT, strategy: STRATEGY } })
     const setStrategyRes = createMockRes()
     await vaultSetStrategyHandler(setStrategyReq, setStrategyRes)
     expect(setStrategyRes.statusCode).toBe(200)
     const expectedSetStrategy = encodeFunctionData({
       abi: CHARM_VAULT_ABI,
-      functionName: 'setStrategy',
+      functionName: 'setRebalanceDelegate',
       args: [STRATEGY],
     })
     expect(setStrategyRes.body?.data?.data).toBe(expectedSetStrategy)
+
+    const legacySetStrategyReq = createMockReq({
+      method: 'POST',
+      body: { vault: VAULT, strategy: STRATEGY, mode: 'legacy-strategy' },
+    })
+    const legacySetStrategyRes = createMockRes()
+    await vaultSetStrategyHandler(legacySetStrategyReq, legacySetStrategyRes)
+    expect(legacySetStrategyRes.statusCode).toBe(200)
+    const expectedLegacySetStrategy = encodeFunctionData({
+      abi: CHARM_VAULT_ABI,
+      functionName: 'setStrategy',
+      args: [STRATEGY],
+    })
+    expect(legacySetStrategyRes.body?.data?.data).toBe(expectedLegacySetStrategy)
+
+    const simpleRebalanceReq = createMockReq({ method: 'POST', body: { vault: VAULT } })
+    const simpleRebalanceRes = createMockRes()
+    await vaultRebalanceHandler(simpleRebalanceReq, simpleRebalanceRes)
+    expect(simpleRebalanceRes.statusCode).toBe(200)
+    const expectedSimpleRebalance = encodeFunctionData({
+      abi: CHARM_VAULT_ABI,
+      functionName: 'rebalance',
+      args: [],
+    })
+    expect(simpleRebalanceRes.body?.data?.data).toBe(expectedSimpleRebalance)
 
     const rebalanceReq = createMockReq({
       method: 'POST',

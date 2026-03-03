@@ -8,17 +8,39 @@ import type { BuildTxResponse } from '../../_types.js'
 import { CHARM_ALPHA_VAULT_ABI } from './_abi.js'
 import { requireAddress, setPublicCors, toBigIntStrict, toInt24Strict } from '../_shared.js'
 
+type RebalanceMode = 'auto' | 'simple' | 'legacy-ranges'
+
 type Body = {
   vault: Address
-  // rebalance params
-  swapAmount: string | number | bigint
-  sqrtPriceLimitX96: string | number | bigint
-  baseLower: string | number | bigint
-  baseUpper: string | number | bigint
-  bidLower: string | number | bigint
-  bidUpper: string | number | bigint
-  askLower: string | number | bigint
-  askUpper: string | number | bigint
+  mode?: RebalanceMode
+  // legacy rebalance params (required when mode=legacy-ranges)
+  swapAmount?: string | number | bigint
+  sqrtPriceLimitX96?: string | number | bigint
+  baseLower?: string | number | bigint
+  baseUpper?: string | number | bigint
+  bidLower?: string | number | bigint
+  bidUpper?: string | number | bigint
+  askLower?: string | number | bigint
+  askUpper?: string | number | bigint
+}
+
+function hasLegacyRangeFields(body: Body): boolean {
+  return [
+    body.swapAmount,
+    body.sqrtPriceLimitX96,
+    body.baseLower,
+    body.baseUpper,
+    body.bidLower,
+    body.bidUpper,
+    body.askLower,
+    body.askUpper,
+  ].some((value) => value !== undefined && value !== null)
+}
+
+function parseRebalanceMode(mode: unknown): RebalanceMode {
+  if (mode === undefined || mode === null || mode === '') return 'auto'
+  if (mode === 'auto' || mode === 'simple' || mode === 'legacy-ranges') return mode
+  throw new Error('mode must be one of: auto, simple, legacy-ranges')
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -35,32 +57,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const isOfficialVault = await isOfficialCharmVault({ charmVaultAddress: vault })
     if (!isOfficialVault) throw new Error(officialCharmVaultError(vault))
 
-    const swapAmount = toBigIntStrict(body.swapAmount, 'swapAmount') // int256 encoded as bigint
-    const sqrtPriceLimitX96 = toBigIntStrict(body.sqrtPriceLimitX96, 'sqrtPriceLimitX96') // uint160
+    const mode = parseRebalanceMode(body.mode)
+    const useLegacyRanges = mode === 'legacy-ranges' || (mode === 'auto' && hasLegacyRangeFields(body))
+    const data = useLegacyRanges
+      ? (() => {
+          const swapAmount = toBigIntStrict(body.swapAmount, 'swapAmount') // int256 encoded as bigint
+          const sqrtPriceLimitX96 = toBigIntStrict(body.sqrtPriceLimitX96, 'sqrtPriceLimitX96') // uint160
 
-    const baseLower = toInt24Strict(body.baseLower, 'baseLower')
-    const baseUpper = toInt24Strict(body.baseUpper, 'baseUpper')
-    const bidLower = toInt24Strict(body.bidLower, 'bidLower')
-    const bidUpper = toInt24Strict(body.bidUpper, 'bidUpper')
-    const askLower = toInt24Strict(body.askLower, 'askLower')
-    const askUpper = toInt24Strict(body.askUpper, 'askUpper')
+          const baseLower = toInt24Strict(body.baseLower, 'baseLower')
+          const baseUpper = toInt24Strict(body.baseUpper, 'baseUpper')
+          const bidLower = toInt24Strict(body.bidLower, 'bidLower')
+          const bidUpper = toInt24Strict(body.bidUpper, 'bidUpper')
+          const askLower = toInt24Strict(body.askLower, 'askLower')
+          const askUpper = toInt24Strict(body.askUpper, 'askUpper')
 
-    const data = encodeFunctionData({
-      abi: CHARM_ALPHA_VAULT_ABI,
-      functionName: 'rebalance',
-      args: [swapAmount, sqrtPriceLimitX96, baseLower, baseUpper, bidLower, bidUpper, askLower, askUpper],
-    })
+          return encodeFunctionData({
+            abi: CHARM_ALPHA_VAULT_ABI,
+            functionName: 'rebalance',
+            args: [swapAmount, sqrtPriceLimitX96, baseLower, baseUpper, bidLower, bidUpper, askLower, askUpper],
+          })
+        })()
+      : encodeFunctionData({
+          abi: CHARM_ALPHA_VAULT_ABI,
+          functionName: 'rebalance',
+          args: [],
+        })
 
     const out: BuildTxResponse = {
       chainId: 8453,
       to: vault,
       data,
       value: '0',
-      description: 'Charm/AlphaVault: rebalance with explicit base + limit ranges.',
+      description: useLegacyRanges
+        ? 'Charm/AlphaVault: legacy rebalance with explicit base + limit ranges.'
+        : 'Charm/AlphaVault: rebalance() no-arg (default for Base Charm vaults).',
       warnings: [
         'This is build-only: you must submit the transaction via your wallet/provider.',
-        'Onchain permission check: vault.rebalance(...) typically requires msg.sender == strategy.',
-        'Ticks must be aligned to the pool tickSpacing; misaligned ticks will revert.',
+        useLegacyRanges
+          ? 'Legacy range mode: ticks must match pool tickSpacing, otherwise rebalance reverts.'
+          : 'Onchain permission check: rebalance() typically requires manager or rebalance delegate authorization.',
       ],
     }
 

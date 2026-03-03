@@ -86,9 +86,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '/v1/build/charm/ownerEmergencyWithdraw': { post: { summary: 'Build CreatorCharmStrategy ownerEmergencyWithdraw calldata (owner)', responses: { '200': { description: 'OK' } } } },
       '/v1/build/charm/ownerEmergencyWithdrawFromCharm': { post: { summary: 'Build CreatorCharmStrategy ownerEmergencyWithdrawFromCharm calldata (owner)', responses: { '200': { description: 'OK' } } } },
 
-      // Charm/AlphaVault-style vault controls (explicit tick ranges)
-      '/v1/build/charm/vault/rebalance': { post: { summary: 'Build Charm/AlphaVault rebalance calldata (strategy-only)', responses: { '200': { description: 'OK' } } } },
-      '/v1/build/charm/vault/setStrategy': { post: { summary: 'Build Charm/AlphaVault setStrategy calldata (governance)', responses: { '200': { description: 'OK' } } } },
+      // Charm/AlphaVault-style vault controls (Base no-arg rebalance by default; legacy ranges supported)
+      '/v1/build/charm/vault/rebalance': { post: { summary: 'Build Charm/AlphaVault rebalance calldata (no-arg default, legacy-range mode optional)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/charm/vault/setStrategy': { post: { summary: 'Build Charm/AlphaVault delegate/manager strategy-calldata (legacy strategy mode optional)', responses: { '200': { description: 'OK' } } } },
     },
   }
 

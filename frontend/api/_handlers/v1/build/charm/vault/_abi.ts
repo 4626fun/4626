@@ -1,4 +1,6 @@
 export const CHARM_ALPHA_VAULT_ABI = [
+  // Base Charm vaults commonly use the no-arg rebalance() entrypoint.
+  { type: 'function', name: 'rebalance', stateMutability: 'nonpayable', inputs: [], outputs: [] },
   {
     type: 'function',
     name: 'rebalance',
@@ -15,6 +17,10 @@ export const CHARM_ALPHA_VAULT_ABI = [
     ],
     outputs: [],
   },
+  // Modern Charm auth model on Base.
+  { type: 'function', name: 'setRebalanceDelegate', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [] },
+  { type: 'function', name: 'setManager', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [] },
+  // Legacy compatibility for older vault variants.
   { type: 'function', name: 'setStrategy', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [] },
 ] as const
 
