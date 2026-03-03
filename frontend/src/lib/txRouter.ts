@@ -805,6 +805,35 @@ function ensureDirectEOASendForSwapWithApproval(decision: TxRoutingDecision, has
   return decision
 }
 
+function ensureCanonicalOneClickBatchRouting(
+  context: TxRouterContext,
+  decision: TxRoutingDecision,
+  hasApproval: boolean,
+): TxRoutingDecision {
+  if (!hasApproval) return decision
+  if (context.executionMode !== 'canonical') return decision
+
+  const canonical4337Ready = Boolean(context.publicClient && context.canonicalAddress && context.signerAddress)
+  if (!canonical4337Ready) return decision
+
+  if (decision.mode === 'canonical4337') return decision
+
+  if (decision.mode === 'sendCalls') {
+    return {
+      ...decision,
+      fallbackMode: 'canonical4337',
+      reason: `${decision.reason}; fallback locked to canonical4337 for approval+swap batching`,
+    }
+  }
+
+  return {
+    ...decision,
+    mode: 'canonical4337',
+    fallbackMode: 'canonical4337',
+    reason: 'canonical approval+swap path enforces ERC-4337 batch execution',
+  }
+}
+
 export async function buildAndSendApproval(params: {
   context: TxRouterContext
   approvalTx: TransactionRequest
@@ -825,7 +854,9 @@ export async function buildAndSendSwap(params: {
   approvalTx?: TransactionRequest | null
 }): Promise<{ routing: TxRoutingDecision; send: TxRouterSendResult }> {
   const hasApproval = Boolean(params.approvalTx)
-  const routing = ensureDirectEOASendForSwapWithApproval(detectTxSendMode(params.context), hasApproval)
+  const baseRouting = detectTxSendMode(params.context)
+  const canonicalRouted = ensureCanonicalOneClickBatchRouting(params.context, baseRouting, hasApproval)
+  const routing = ensureDirectEOASendForSwapWithApproval(canonicalRouted, hasApproval)
   const calls = toRoutedCalls({
     swapTx: params.swapTx,
     approvalTx: params.approvalTx,

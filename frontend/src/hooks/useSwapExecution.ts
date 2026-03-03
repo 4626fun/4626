@@ -562,9 +562,9 @@ export function useSwapExecution(params: {
         swapper: params.executionAddress,
         slippageTolerance: params.parsedSlippage,
         routingPreference: 'BEST_PRICE',
-        // Avoid the Permit2 typed-data using a max uint160 allowance.
-        // For ERC20 inputs, this makes Permit2 ask for exactly the swap amount.
-        permitAmount: 'EXACT',
+        // Canonical AA path prefers FULL to reduce repeated Permit2 signature prompts.
+        // EOA mode keeps EXACT approvals to limit spend scope.
+        permitAmount: params.executionMode === 'canonical' ? 'FULL' : 'EXACT',
         walletModeKey: params.executionMode,
       })
       if (runId !== quoteRunRef.current) return
@@ -760,7 +760,7 @@ export function useSwapExecution(params: {
           swapper: params.executionAddress,
           slippageTolerance: params.parsedSlippage,
           routingPreference: 'BEST_PRICE',
-          permitAmount: 'EXACT',
+          permitAmount: params.executionMode === 'canonical' ? 'FULL' : 'EXACT',
           walletModeKey: params.executionMode,
         }),
         approvalPromise,

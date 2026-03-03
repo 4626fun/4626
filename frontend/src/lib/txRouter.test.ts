@@ -77,7 +77,7 @@ describe('txRouter', () => {
     expect(decision.fallbackMode).toBe('canonicalDirect')
   })
 
-  it('falls back from wallet_sendCalls to canonical direct route when unsupported', async () => {
+  it('falls back from wallet_sendCalls to canonical ERC-4337 when unsupported for approval+swap', async () => {
     const request = vi.fn(async ({ method }: { method: string }) => {
       if (method === 'wallet_sendCalls') throw new Error('Method not found')
       throw new Error(`unexpected method: ${method}`)
@@ -115,10 +115,11 @@ describe('txRouter', () => {
     })
 
     expect(result.routing.mode).toBe('sendCalls')
-    expect(result.send.mode).toBe('canonicalDirect')
-    expect(result.send.method).toBe('walletClient.sendTransaction')
+    expect(result.send.mode).toBe('canonical4337')
+    expect(result.send.method).toBe('eth_sendUserOperation')
     expect(result.send.transactionHash).toBe(HASH_A)
-    expect(sendTransaction).toHaveBeenCalledTimes(1)
+    expect(sendTransaction).not.toHaveBeenCalled()
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
   })
 
   it('falls back when provider returns unsupported-method code shape', async () => {
@@ -234,6 +235,51 @@ describe('txRouter', () => {
     expect(TEST_DATA_SUFFIX).toBeDefined()
     const forwardedData = sendCoinbaseSmartWalletUserOperationMock.mock.calls[0]?.[0]?.calls?.[0]?.data
     expect(payloadEndsWithDataSuffix(forwardedData, TEST_DATA_SUFFIX!)).toBe(true)
+  })
+
+  it('locks canonical approval+swap sendCalls fallback to ERC-4337', async () => {
+    const sendTransaction = vi.fn(async () => HASH_A)
+    const context = makeContext({
+      executionMode: 'canonical',
+      signerType: 'SMART_WALLET',
+      connectorId: 'coinbaseWalletSDK',
+      connectorName: 'Coinbase Wallet',
+      capabilities: {
+        paymasterService: false,
+        atomicStatus: 'unknown',
+        supports5792: false,
+      },
+      walletClient: {
+        request: vi.fn(),
+        sendTransaction,
+      },
+      publicClient: {},
+    })
+
+    const result = await buildAndSendSwap({
+      context,
+      approvalTx: {
+        to: ADDRESS_C,
+        from: ADDRESS_B,
+        data: '0xaaaa',
+        value: '0',
+        chainId: 8453,
+      },
+      swapTx: {
+        to: ADDRESS_A,
+        from: ADDRESS_B,
+        data: '0xbbbb',
+        value: '0',
+        chainId: 8453,
+      },
+    })
+
+    expect(result.routing.mode).toBe('sendCalls')
+    expect(result.routing.fallbackMode).toBe('canonical4337')
+    expect(result.send.mode).toBe('canonical4337')
+    expect(result.send.method).toBe('eth_sendUserOperation')
+    expect(sendTransaction).not.toHaveBeenCalled()
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
   })
 
   it('keeps approval and swap in the same direct EOA route family', async () => {
