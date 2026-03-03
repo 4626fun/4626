@@ -36,7 +36,7 @@ interface ICreatorLotteryManagerAuth {
  * - OVAULT_SOLANA_EID (required when CONFIGURE_OVAULT_RUNTIME=1)
  */
 contract ConfigureDeploymentBatcherSolana is Script {
-    address constant DEFAULT_DEPLOYMENT_BATCHER = 0x6F3662298a96b372Df4134Fd6f89df36Ec014480;
+    address constant DEFAULT_DEPLOYMENT_BATCHER = 0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753;
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");

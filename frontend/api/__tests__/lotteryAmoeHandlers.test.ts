@@ -17,7 +17,7 @@ vi.mock('../../server/_lib/agentApiGuard.js', () => ({
 }))
 
 vi.mock('../../server/_lib/contracts.js', () => ({
-  getApiContracts: () => ({ lotteryManager: '0x32403a647e73E04aE42b02bdd1Ade9C88698FD0c' }),
+  getApiContracts: () => ({ lotteryManager: '0x77705A2f173dd52F28300447506Dc35086c34626' }),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -150,7 +150,7 @@ describe('AMOE submit handler', () => {
       deadline: 1772333400,
       signature: '0xabcdef',
       callData: '0xdeadbeef',
-      to: '0x32403a647e73E04aE42b02bdd1Ade9C88698FD0c',
+      to: '0x77705A2f173dd52F28300447506Dc35086c34626',
     })
     consumeAmoeCreditsForEntryMock.mockResolvedValue({
       wallet: '0x000000000000000000000000000000000000cafe',
