@@ -1114,6 +1114,29 @@ function jsonRpcError(id: JsonRpcId, code: number, message: string) {
   return { jsonrpc: '2.0', id: id ?? null, error: { code, message } }
 }
 
+function getJsonRpcId(value: unknown): JsonRpcId {
+  if (typeof value === 'string' || typeof value === 'number' || value === null) return value
+  return null
+}
+
+function buildEntryPointProbeFallback(
+  requests: JsonRpcRequest[],
+  rawBody: unknown,
+): { jsonrpc: '2.0'; id: JsonRpcId; result: Address[] } | Array<{ jsonrpc: '2.0'; id: JsonRpcId; result: Address[] }> | null {
+  if (requests.length === 0) return null
+  const probeOnly = requests.every((r) => r?.method === 'eth_supportedEntryPoints')
+  if (!probeOnly) return null
+
+  const makeResult = (r: JsonRpcRequest) => ({
+    jsonrpc: '2.0' as const,
+    id: getJsonRpcId(r?.id),
+    result: [ENTRYPOINT_V06],
+  })
+
+  if (isRequestArray(rawBody)) return requests.map(makeResult)
+  return makeResult(requests[0] as JsonRpcRequest)
+}
+
 function getCdpEndpoint(): string | null {
   const v =
     (process.env.CDP_PAYMASTER_URL ?? '').trim() ||
@@ -2305,7 +2328,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(jsonRpcError(null, -32000, 'Server misconfigured: AUTH_SESSION_SECRET is not set'))
   }
 
-  const body = await readJsonBody<unknown>(req)
+  let body: unknown = null
+  try {
+    body = await readJsonBody<unknown>(req)
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err ?? 'unknown')
+    logger.warn('[paymaster-proxy] body parse failed', { msg })
+    return res.status(200).json(jsonRpcError(null, -32600, 'Invalid JSON body'))
+  }
   if (!body) {
     return res.status(200).json(jsonRpcError(null, -32600, 'Invalid JSON body'))
   }
@@ -2328,9 +2358,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Require an authenticated principal for any sponsorship-related method.
   // - Primary: session (cookie or Authorization bearer token) or SIWA receipt.
   // - Secondary: deploy-session token (server-driven completion after one user signature).
-  const principalAddress = readRequestPrincipalAddress(req, { lowercase: false })
+  let principalAddress = ''
 
   try {
+    principalAddress = readRequestPrincipalAddress(req, { lowercase: false })
+
     // Validate sponsorship requests (UserOperations only).
     for (const r of requests) {
       const method = r.method as string
@@ -2519,6 +2551,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Forward to CDP if validation passed.
   try {
+    const entryPointProbeFallback = buildEntryPointProbeFallback(requests, body)
     const upstream = await fetch(cdpEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2569,13 +2602,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (upstream.status < 200 || upstream.status >= 300) {
+      if (entryPointProbeFallback) return res.status(200).send(JSON.stringify(entryPointProbeFallback))
       return res.status(200).json(jsonRpcError(null, -32000, `Upstream paymaster request failed (HTTP ${upstream.status})`))
     }
 
-    return res.status(502).json(jsonRpcError(null, -32000, 'Upstream paymaster returned a non-JSON response'))
+    if (entryPointProbeFallback) return res.status(200).send(JSON.stringify(entryPointProbeFallback))
+    return res.status(200).json(jsonRpcError(null, -32000, 'Upstream paymaster returned a non-JSON response'))
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Upstream request failed'
     logger.error('[paymaster-proxy] upstream error', { msg })
-    return res.status(502).json(jsonRpcError(null, -32000, msg))
+    const entryPointProbeFallback = buildEntryPointProbeFallback(requests, body)
+    if (entryPointProbeFallback) return res.status(200).send(JSON.stringify(entryPointProbeFallback))
+    return res.status(200).json(jsonRpcError(null, -32000, msg))
   }
 }

@@ -61,6 +61,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       route: subpath || '(unknown)',
       error: errorMessage || 'unknown_error',
     })
+    if (subpath === 'paymaster') {
+      return res.status(200).json({
+        jsonrpc: '2.0',
+        id: null,
+        error: {
+          code: -32000,
+          message: 'request denied - paymaster proxy internal error',
+        },
+      })
+    }
     try {
       if (!res.headersSent) res.setHeader('Cache-Control', 'no-store')
     } catch {

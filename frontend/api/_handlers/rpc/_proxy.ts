@@ -4,11 +4,43 @@ import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../serve
 
 type JsonRpcRequest = { jsonrpc?: string; id?: unknown; method?: unknown; params?: unknown }
 
-const DEFAULT_BASE_RPCS = [
-  'https://base-mainnet.public.blastapi.io',
-  'https://base.llamarpc.com',
-  'https://mainnet.base.org',
-] as const
+const DEFAULT_CHAIN_RPCS = {
+  base: [
+    'https://base-mainnet.public.blastapi.io',
+    'https://base.llamarpc.com',
+    'https://mainnet.base.org',
+  ],
+  mainnet: [
+    'https://ethereum-rpc.publicnode.com',
+    'https://rpc.ankr.com/eth',
+    'https://eth.llamarpc.com',
+  ],
+  arbitrum: [
+    'https://arb1.arbitrum.io/rpc',
+    'https://rpc.ankr.com/arbitrum',
+    'https://arbitrum.llamarpc.com',
+  ],
+  optimism: [
+    'https://mainnet.optimism.io',
+    'https://rpc.ankr.com/optimism',
+    'https://optimism.llamarpc.com',
+  ],
+  polygon: [
+    'https://polygon-rpc.com',
+    'https://rpc.ankr.com/polygon',
+    'https://polygon.llamarpc.com',
+  ],
+} as const
+
+type RpcChain = keyof typeof DEFAULT_CHAIN_RPCS
+
+const CHAIN_ENV_KEYS: Record<RpcChain, string[]> = {
+  base: ['BASE_RPC_URL'],
+  mainnet: ['ETH_RPC_URL', 'ETHEREUM_RPC_URL'],
+  arbitrum: ['ARBITRUM_RPC_URL'],
+  optimism: ['OPTIMISM_RPC_URL'],
+  polygon: ['POLYGON_RPC_URL'],
+}
 
 const RETRYABLE_STATUS = new Set([429])
 const MAX_ATTEMPTS_PER_RPC = 2
@@ -25,15 +57,44 @@ function normalizeRpcUrl(raw: string): string | null {
   return t
 }
 
-function getBaseRpcUrls(): string[] {
-  const raw = (process.env.BASE_RPC_URL ?? '').trim()
-  const parts = raw
-    ? raw
-        .split(/[\s,]+/g)
-        .map(normalizeRpcUrl)
-        .filter((x): x is string => Boolean(x))
-    : []
-  const urls = parts.length > 0 ? [...parts, ...DEFAULT_BASE_RPCS] : [...DEFAULT_BASE_RPCS]
+function parseRpcEnv(raw: string): string[] {
+  const value = String(raw ?? '').trim()
+  if (!value) return []
+  return value
+    .split(/[\s,]+/g)
+    .map(normalizeRpcUrl)
+    .filter((x): x is string => Boolean(x))
+}
+
+function readChainRpcUrlsFromEnv(chain: RpcChain): string[] {
+  const keys = CHAIN_ENV_KEYS[chain]
+  if (!Array.isArray(keys) || keys.length === 0) return []
+  const out: string[] = []
+  for (const key of keys) {
+    out.push(...parseRpcEnv(process.env[key] ?? ''))
+  }
+  return out
+}
+
+function firstQueryValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return String(value[0] ?? '').trim()
+  return String(value ?? '').trim()
+}
+
+function resolveRpcChain(req: VercelRequest): RpcChain {
+  const raw = firstQueryValue(req.query?.chain as string | string[] | undefined).toLowerCase()
+  if (!raw || raw === 'base') return 'base'
+  if (raw === 'mainnet' || raw === 'eth' || raw === 'ethereum') return 'mainnet'
+  if (raw === 'arbitrum' || raw === 'arb') return 'arbitrum'
+  if (raw === 'optimism' || raw === 'op') return 'optimism'
+  if (raw === 'polygon' || raw === 'matic') return 'polygon'
+  return 'base'
+}
+
+function getRpcUrls(chain: RpcChain): string[] {
+  const fromEnv = readChainRpcUrlsFromEnv(chain)
+  const defaults = DEFAULT_CHAIN_RPCS[chain]
+  const urls = fromEnv.length > 0 ? [...fromEnv, ...defaults] : [...defaults]
   return Array.from(new Set(urls))
 }
 
@@ -60,7 +121,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const payload = body
-  const rpcUrls = getBaseRpcUrls()
+  const chain = resolveRpcChain(req)
+  const rpcUrls = getRpcUrls(chain)
   let lastStatus = 502
   let lastError: string | null = null
 
@@ -109,6 +171,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   return res.status(lastStatus).json({
     success: false,
-    error: lastError || 'RPC proxy failed',
+    error: lastError || `RPC proxy failed (${chain})`,
   })
 }

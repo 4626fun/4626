@@ -97,7 +97,12 @@ Workflow mapping file: `cre/cre-workflows/secrets.yaml`
     - `ajna-bucket-manager.manual.json`
     - `charm-rebalance-manager.manual.json`
     - `solana-orchestrator.manual.json`
-  - Replay with your CRE CLI HTTP-trigger payload flag and add `--engine-logs`
+  - CLI payload file paths are resolved relative to the selected workflow folder.
+  - Use:
+    - `cre workflow simulate ajna-bucket-manager --target local-simulation --non-interactive --trigger-index 1 --http-payload @../fixtures/http/ajna-bucket-manager.manual.json`
+    - `cre workflow simulate charm-rebalance-manager --target local-simulation --non-interactive --trigger-index 1 --http-payload @../fixtures/http/charm-rebalance-manager.manual.json`
+    - `cre workflow simulate solana-orchestrator --target local-simulation --non-interactive --trigger-index 1 --http-payload @../fixtures/http/solana-orchestrator.manual.json`
+  - Add `--engine-logs` when diagnosing payload/trigger issues.
 - **Log trigger not firing**
   - Verify watched addresses in `strategy-event-listener/config.*.json`
   - Confirm chain selector in `project.yaml` and workflow `chainName` alignment

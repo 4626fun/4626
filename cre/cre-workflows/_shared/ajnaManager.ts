@@ -90,10 +90,15 @@ function decodeNumber(
 
 export function parseAjnaManualPayload(payload: Uint8Array | undefined): AjnaManualPayload {
   if (!payload || payload.length === 0) return {}
+  const raw = Buffer.from(payload).toString("utf-8").trim()
   try {
-    return JSON.parse(Buffer.from(payload).toString("utf-8")) as AjnaManualPayload
+    return JSON.parse(raw) as AjnaManualPayload
   } catch {
-    throw new Error("invalid_manual_payload")
+    try {
+      return JSON.parse(Buffer.from(raw, "base64").toString("utf-8")) as AjnaManualPayload
+    } catch {
+      throw new Error("invalid_manual_payload")
+    }
   }
 }
 

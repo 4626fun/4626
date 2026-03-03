@@ -326,6 +326,14 @@ function isWrongChainIdError(message: string): boolean {
   return m.includes('wrong chain id') || (m.includes('initially added with') && m.includes('signing from 0'))
 }
 
+function isScwSignatureValidationError(message: string): boolean {
+  const m = String(message || '').toLowerCase()
+  return (
+    m.includes('smart contract wallet signature is invalid') ||
+    (m.includes('signature') && m.includes('validation failed'))
+  )
+}
+
 function isOpfsAccessHandleError(message: string): boolean {
   const m = String(message || '').toLowerCase()
   return m.includes('createsyncaccesshandle') || m.includes('nomodificationallowederror')
@@ -1097,6 +1105,16 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           console.warn('[xmtp] Wrong chain id while using EOA signer; retrying with SCW signer on Base (8453)…')
           writeStoredSignerType(xmtpIdentityAddress, 'SCW')
           client = await tryCreate(scwSigner, encKeyBytes)
+        } else if (
+          signer.type === 'SCW' &&
+          hasContractCode !== true &&
+          isScwSignatureValidationError(errMsg)
+        ) {
+          // Recover from stale/incorrect SCW classification (for EOAs this
+          // fails with provider "execution reverted" during EIP-1271 checks).
+          console.warn('[xmtp] SCW signature validation failed; retrying with EOA signer…')
+          writeStoredSignerType(xmtpIdentityAddress, 'EOA')
+          client = await tryCreate(eoaSigner, encKeyBytes)
         } else {
           throw createErr
         }
@@ -1257,6 +1275,14 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           console.warn('[xmtp] Wrong chain id during reset with EOA signer; retrying with SCW signer on Base (8453)…')
           writeStoredSignerType(xmtpIdentityAddress, 'SCW')
           await (Client as any).revokeInstallations(scwSigner, targetInboxId, toRevoke, XMTP_ENV as any)
+        } else if (
+          signer.type === 'SCW' &&
+          hasContractCode !== true &&
+          isScwSignatureValidationError(errMsg)
+        ) {
+          console.warn('[xmtp] SCW signature validation failed during reset; retrying with EOA signer…')
+          writeStoredSignerType(xmtpIdentityAddress, 'EOA')
+          await (Client as any).revokeInstallations(eoaSigner, targetInboxId, toRevoke, XMTP_ENV as any)
         } else {
           throw revokeErr
         }

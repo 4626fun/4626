@@ -266,4 +266,132 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     const errMsg = String(responseBody?.error?.message ?? '')
     expect(errMsg).toMatch(/contract_owner_not_allowed/i)
   })
+
+  it('returns JSON-RPC denial when principal resolution throws unexpectedly', async () => {
+    readRequestPrincipalMock.mockImplementation(() => {
+      throw new Error('principal_resolution_failed')
+    })
+
+    const userOp = {
+      sender,
+      callData: '0x1234',
+      initCode: '0x',
+    }
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    expect(String(responseBody?.error?.message ?? '')).toMatch(/request denied/i)
+  })
+
+  it('returns invalid JSON body error when body parsing throws', async () => {
+    readJsonBodyMock.mockRejectedValueOnce(new Error('body_parse_failed'))
+
+    const req = createMockReq({
+      method: 'POST',
+      body: undefined,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    expect(String(responseBody?.error?.message ?? '')).toMatch(/invalid json body/i)
+  })
+
+  it('returns entrypoint probe fallback result when upstream responds non-JSON', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      status: 200,
+      text: () => Promise.resolve('<html>upstream unavailable</html>'),
+    }) as typeof fetch
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'eth_supportedEntryPoints',
+      params: [],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    expect(responseBody?.id).toBe(1)
+    expect(Array.isArray(responseBody?.result)).toBe(true)
+    expect(responseBody?.result?.[0]).toBe(ENTRYPOINT_V06)
+  })
+
+  it('returns entrypoint probe fallback result when upstream request throws', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('upstream_network_error')) as typeof fetch
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'eth_supportedEntryPoints',
+      params: [],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    expect(responseBody?.id).toBe(1)
+    expect(Array.isArray(responseBody?.result)).toBe(true)
+    expect(responseBody?.result?.[0]).toBe(ENTRYPOINT_V06)
+  })
+
+  it('returns JSON-RPC error with HTTP 200 for non-probe upstream failures', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('upstream_network_error')) as typeof fetch
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 99,
+      method: 'eth_getUserOperationReceipt',
+      params: ['0x' + 'a'.repeat(64)],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    expect(String(responseBody?.error?.message ?? '')).toMatch(/upstream_network_error/i)
+  })
 })

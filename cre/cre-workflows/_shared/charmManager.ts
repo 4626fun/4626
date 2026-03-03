@@ -88,10 +88,15 @@ function decodeNumber(
 
 export function parseCharmManualPayload(payload: Uint8Array | undefined): CharmManualPayload {
   if (!payload || payload.length === 0) return {}
+  const raw = Buffer.from(payload).toString("utf-8").trim()
   try {
-    return JSON.parse(Buffer.from(payload).toString("utf-8")) as CharmManualPayload
+    return JSON.parse(raw) as CharmManualPayload
   } catch {
-    throw new Error("invalid_manual_payload")
+    try {
+      return JSON.parse(Buffer.from(raw, "base64").toString("utf-8")) as CharmManualPayload
+    } catch {
+      throw new Error("invalid_manual_payload")
+    }
   }
 }
 

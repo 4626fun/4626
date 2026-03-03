@@ -141,17 +141,15 @@ export function ConnectButtonWeb3() {
         disabled={isPending || auth.busy}
         onClick={() => {
           if (prefersPrivyWalletLogin) {
-            if (privyReady && privyAuthenticated) {
-              void (async () => {
-                const signed = await auth.signIn({ method: 'auto' })
-                if (!signed) setShowOptions(true)
-              })()
-            } else {
-              void (async () => {
-                const signed = await auth.signIn({ method: 'zora' })
-                if (!signed) setShowOptions(true)
-              })()
+            // Avoid a dead-click path while Privy SDK is still hydrating.
+            if (!privyReady) {
+              setShowOptions(true)
+              return
             }
+            void (async () => {
+              const signed = await auth.signIn({ method: privyAuthenticated ? 'auto' : 'zora' })
+              setShowOptions(!signed)
+            })()
           } else {
             setShowOptions(!showOptions)
           }
@@ -161,6 +159,7 @@ export function ConnectButtonWeb3() {
         <Wallet className="w-4 h-4" />
         <span className="label">{isPending || auth.busy ? 'Signing in…' : 'Sign in'}</span>
       </button>
+      {auth.error ? <div className="mt-2 max-w-[280px] text-[11px] text-red-400/90">{auth.error}</div> : null}
 
       {showOptions && (
         <>

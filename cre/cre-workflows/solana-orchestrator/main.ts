@@ -62,10 +62,15 @@ type SolanaOrchestratorResult = {
 
 function parseManualPayload(payload: HTTPPayload): ManualPayload {
   if (!payload.input || payload.input.length === 0) return {}
+  const raw = Buffer.from(payload.input).toString("utf-8").trim()
   try {
-    return JSON.parse(Buffer.from(payload.input).toString("utf-8")) as ManualPayload
+    return JSON.parse(raw) as ManualPayload
   } catch {
-    throw new Error("invalid_manual_payload")
+    try {
+      return JSON.parse(Buffer.from(raw, "base64").toString("utf-8")) as ManualPayload
+    } catch {
+      throw new Error("invalid_manual_payload")
+    }
   }
 }
 

@@ -82,5 +82,16 @@ describe('xmtp signer utils', () => {
     })
     expect(decision).toEqual({ signerType: 'EOA', scwChainId: CANONICAL_SCW_CHAIN_ID })
   })
+
+  it('defaults to EOA when contract code state is unknown', () => {
+    const decision = decideXmtpSignerType({
+      isCanonicalSmartWallet: false,
+      storedSignerType: null,
+      connector: null,
+      hasContractCode: null,
+      walletChainId: CANONICAL_SCW_CHAIN_ID,
+    })
+    expect(decision).toEqual({ signerType: 'EOA', scwChainId: CANONICAL_SCW_CHAIN_ID })
+  })
 })
 

@@ -72,12 +72,9 @@ export function decideXmtpSignerType(params: {
     return { signerType: 'EOA', scwChainId: CANONICAL_SCW_CHAIN_ID }
   }
 
-  // Unknown on-chain code state: preserve the older heuristic that when the
-  // wallet is on Base, the identity is *probably* a Base SCW.
-  if (params.walletChainId === CANONICAL_SCW_CHAIN_ID) {
-    return { signerType: 'SCW', scwChainId: CANONICAL_SCW_CHAIN_ID }
-  }
-
+  // Unknown on-chain code state: default to EOA to avoid misclassifying EOAs
+  // as SCWs. If this identity was actually SCW, provider.tsx retries with SCW
+  // when XMTP returns an explicit "Wrong chain id" signal.
   return { signerType: 'EOA', scwChainId: CANONICAL_SCW_CHAIN_ID }
 }
 

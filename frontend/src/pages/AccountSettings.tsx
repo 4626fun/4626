@@ -1499,6 +1499,7 @@ export function AccountSettings() {
           >
             Sign in
           </Button>
+          {auth.error ? <div className="text-xs text-red-400/90">{auth.error}</div> : null}
           <div>
             <a
               href={`${getMarketingBaseUrl()}/#waitlist`}

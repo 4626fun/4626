@@ -35,13 +35,16 @@ type IdentityCacheEntry = Omit<IdentityResult, 'loading'>
 // ---------------------------------------------------------------------------
 const identityCache = new Map<string, IdentityCacheEntry>()
 const pendingLookups = new Map<string, Promise<IdentityCacheEntry>>()
+const IS_BROWSER = typeof window !== 'undefined'
 const ensClient = createPublicClient({
   chain: mainnet,
-  transport: fallback([
-    http('https://eth.llamarpc.com'),
-    http('https://ethereum-rpc.publicnode.com'),
-    http('https://rpc.ankr.com/eth'),
-  ]),
+  transport: fallback(
+    (IS_BROWSER
+      ? ['/api/rpc?chain=mainnet']
+      : ['https://ethereum-rpc.publicnode.com', 'https://rpc.ankr.com/eth', 'https://eth.llamarpc.com']).map((url) =>
+      http(url),
+    ),
+  ),
 })
 
 function truncate(addr: string): string {

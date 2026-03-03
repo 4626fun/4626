@@ -48,7 +48,11 @@ const BASE_RPC_URL = (() => {
   if (IS_BROWSER && isCorsRestrictedRpc(BASE_RPC_URL_RAW)) return ''
   return BASE_RPC_URL_RAW
 })()
-const BASE_RPC_PROXY = IS_BROWSER ? '/api/rpc' : ''
+const BASE_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=base' : ''
+const MAINNET_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=mainnet' : ''
+const ARBITRUM_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=arbitrum' : ''
+const OPTIMISM_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=optimism' : ''
+const POLYGON_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=polygon' : ''
 const ENABLE_INJECTED_CONNECTOR =
   !['0', 'false', 'no', 'off'].includes(String(import.meta.env.VITE_ENABLE_INJECTED_CONNECTOR ?? '1').toLowerCase())
 
@@ -71,16 +75,49 @@ function uniqueNonEmptyStrings(values: Array<string | undefined | null>): string
 const BASE_READ_RPC_URLS = uniqueNonEmptyStrings(
   [
     BASE_RPC_PROXY,
-    BASE_RPC_URL,
+    ...(IS_BROWSER ? [] : [BASE_RPC_URL]),
     // Base public RPCs (best-effort fallbacks)
-    'https://base-mainnet.public.blastapi.io',
-    'https://base.llamarpc.com',
-    'https://base.meowrpc.com',
-    'https://mainnet.base.org',
+    ...(IS_BROWSER
+      ? []
+      : [
+          'https://base-mainnet.public.blastapi.io',
+          'https://base.llamarpc.com',
+          'https://base.meowrpc.com',
+          'https://mainnet.base.org',
+        ]),
   ].filter((url) => {
     if (!url) return false
     return !(IS_BROWSER && isCorsRestrictedRpc(url))
   }),
+)
+
+// Browser reads use same-origin RPC proxy to avoid third-party CORS failures.
+const MAINNET_READ_RPC_URLS = uniqueNonEmptyStrings(
+  [
+    MAINNET_RPC_PROXY,
+    ...(IS_BROWSER ? [] : ['https://ethereum-rpc.publicnode.com', 'https://rpc.ankr.com/eth', 'https://eth.llamarpc.com']),
+  ].filter(Boolean),
+)
+
+const ARBITRUM_READ_RPC_URLS = uniqueNonEmptyStrings(
+  [
+    ARBITRUM_RPC_PROXY,
+    ...(IS_BROWSER ? [] : ['https://arb1.arbitrum.io/rpc', 'https://rpc.ankr.com/arbitrum', 'https://arbitrum.llamarpc.com']),
+  ].filter(Boolean),
+)
+
+const OPTIMISM_READ_RPC_URLS = uniqueNonEmptyStrings(
+  [
+    OPTIMISM_RPC_PROXY,
+    ...(IS_BROWSER ? [] : ['https://mainnet.optimism.io', 'https://rpc.ankr.com/optimism', 'https://optimism.llamarpc.com']),
+  ].filter(Boolean),
+)
+
+const POLYGON_READ_RPC_URLS = uniqueNonEmptyStrings(
+  [
+    POLYGON_RPC_PROXY,
+    ...(IS_BROWSER ? [] : ['https://polygon-rpc.com', 'https://rpc.ankr.com/polygon', 'https://polygon.llamarpc.com']),
+  ].filter(Boolean),
 )
 
 function isLockedEthereumProviderGlobal(): boolean {
@@ -127,10 +164,10 @@ export const wagmiConfig = createConfig({
   ...(DATA_SUFFIX ? { dataSuffix: DATA_SUFFIX } : {}),
   transports: {
     [base.id]: BASE_READ_RPC_URLS.length > 0 ? fallback(BASE_READ_RPC_URLS.map((url) => http(url))) : http(),
-    [mainnet.id]: fallback([http('https://eth.llamarpc.com'), http('https://rpc.ankr.com/eth'), http()]),
-    [arbitrum.id]: fallback([http('https://arbitrum.llamarpc.com'), http('https://rpc.ankr.com/arbitrum'), http()]),
-    [optimism.id]: fallback([http('https://optimism.llamarpc.com'), http('https://rpc.ankr.com/optimism'), http()]),
-    [polygon.id]: fallback([http('https://polygon.llamarpc.com'), http('https://rpc.ankr.com/polygon'), http()]),
+    [mainnet.id]: MAINNET_READ_RPC_URLS.length > 0 ? fallback(MAINNET_READ_RPC_URLS.map((url) => http(url))) : http(),
+    [arbitrum.id]: ARBITRUM_READ_RPC_URLS.length > 0 ? fallback(ARBITRUM_READ_RPC_URLS.map((url) => http(url))) : http(),
+    [optimism.id]: OPTIMISM_READ_RPC_URLS.length > 0 ? fallback(OPTIMISM_READ_RPC_URLS.map((url) => http(url))) : http(),
+    [polygon.id]: POLYGON_READ_RPC_URLS.length > 0 ? fallback(POLYGON_READ_RPC_URLS.map((url) => http(url))) : http(),
   },
 })
 

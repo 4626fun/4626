@@ -48,7 +48,8 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 async function ensureSolanaCheckpointTable(db: Awaited<ReturnType<typeof getDb>>) {
-  await db?.sql`
+  if (!db) return
+  await db.sql`
     CREATE TABLE IF NOT EXISTS keepr_workflow_checkpoints (
       workflow TEXT NOT NULL,
       checkpoint_key TEXT NOT NULL,

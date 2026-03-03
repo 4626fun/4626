@@ -18,16 +18,20 @@ export interface BasenameInfo {
   url?: string | null
 }
 
+const IS_BROWSER = typeof window !== 'undefined'
+
 function createMainnetReadClient() {
   // Avoid viem's default public endpoint selection in browsers (can pick
   // providers without permissive CORS, e.g. eth.merkle.io).
   return createPublicClient({
     chain: mainnet,
-    transport: fallback([
-      http('https://eth.llamarpc.com'),
-      http('https://ethereum-rpc.publicnode.com'),
-      http('https://rpc.ankr.com/eth'),
-    ]),
+    transport: fallback(
+      (IS_BROWSER
+        ? ['/api/rpc?chain=mainnet']
+        : ['https://ethereum-rpc.publicnode.com', 'https://rpc.ankr.com/eth', 'https://eth.llamarpc.com']).map((url) =>
+        http(url),
+      ),
+    ),
   })
 }
 

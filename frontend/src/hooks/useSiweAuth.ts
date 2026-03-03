@@ -388,12 +388,23 @@ export function useSiweAuth() {
         }
 
         // If caller explicitly requested Privy, do not attempt SIWE.
+        // Surface an actionable message so the UI never feels like a dead click.
         if (method === 'privy' || method === 'zora') {
+          if (!privyReady) {
+            setError('Wallet login is still initializing. Try again in a moment.')
+          } else if (method === 'zora') {
+            setError('Sign-in was cancelled. Try again or choose another way.')
+          } else {
+            setError('Wallet login was cancelled. Try again.')
+          }
           return null
         }
       }
 
-      if (!address) return null
+      if (!address) {
+        setError('Connect wallet first, then sign in.')
+        return null
+      }
 
       const nonceRes = await apiFetch('/api/auth/nonce', { headers: { Accept: 'application/json' } })
       if (!nonceRes.ok) {
