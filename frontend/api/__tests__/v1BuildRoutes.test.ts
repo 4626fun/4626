@@ -21,8 +21,6 @@ describe('v1 build route registration', () => {
       'v1/build/ajna/setIdleBufferBps',
       'v1/build/charm/setCharmVault',
       'v1/build/charm/setSwapPool',
-      'v1/build/charm/setZRouter',
-      'v1/build/charm/setUseZRouter',
       'v1/build/charm/setUniFactory',
       'v1/build/charm/setAutoFeeTier',
       'v1/build/charm/setParameters',

@@ -55,21 +55,6 @@ interface ISwapRouter {
     function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
 }
 
-/// @notice zRouter - gas-efficient multi-AMM DEX aggregator
-/// @dev Base deployment uses a Uniswap-style swapV3 entrypoint with explicit `to` + `exactOut` args.
-interface IzRouter {
-    function swapV3(
-        address to,
-        bool exactOut,
-        uint24 swapFee,
-        address tokenIn,
-        address tokenOut,
-        uint256 swapAmount,
-        uint256 amountLimit,
-        uint256 deadline
-    ) external payable returns (uint256 amountIn, uint256 amountOut);
-}
-
 // Interfaces imported from v3-core and interfaces/IStrategy.sol
 
 contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard, Ownable {
@@ -99,11 +84,6 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
     /// @notice TWAP window (seconds) used for valuation inside `getTotalAssets()`.
     /// @dev This impacts ERC-4626 share pricing via `CreatorOVault.totalAssets()`.
     uint32 public twapDuration = DEFAULT_TWAP_DURATION;
-
-    /// @notice zRouter for gas-efficient swaps (optional)
-    /// @dev Base: TBD
-    IzRouter public zRouter;
-    bool public useZRouter = false;
 
     /// @notice Uniswap V3 Factory for auto fee tier discovery
     /// @dev Base: 0x33128a8fC17869897dcE68Ed026d694621f6FDfD
@@ -222,16 +202,6 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
         emit TwapDurationUpdated(old, _twapDuration);
     }
 
-    /// @notice Set zRouter address for gas-efficient swaps
-    function setZRouter(address _zRouter) external onlyOwner {
-        zRouter = IzRouter(_zRouter);
-    }
-
-    /// @notice Toggle between zRouter (gas-efficient) and Uniswap Router
-    function setUseZRouter(bool _useZRouter) external onlyOwner {
-        useZRouter = _useZRouter;
-    }
-
     /// @notice Set Uniswap V3 Factory for auto fee tier discovery
     /// @param _factory Factory address (0x33128a8fC17869897dcE68Ed026d694621f6FDfD on Base)
     function setUniFactory(address _factory) external onlyOwner {
@@ -293,10 +263,6 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
         if (address(charmVault) != address(0)) {
             CREATOR.forceApprove(address(charmVault), type(uint256).max);
             USDC.forceApprove(address(charmVault), type(uint256).max);
-        }
-        if (address(zRouter) != address(0)) {
-            CREATOR.forceApprove(address(zRouter), type(uint256).max);
-            USDC.forceApprove(address(zRouter), type(uint256).max);
         }
     }
 
@@ -538,9 +504,12 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
                 uint256 creatorToSwap = _calculateCreatorToSwap(usdcDeficit, maxSwapCreator);
 
                 if (creatorToSwap > 0) {
-                    uint256 moreUsdc = _swapCreatorToUsdcSafe(creatorToSwap);
-                    totalUsdc = totalUsdc + moreUsdc;
-                    totalCreator = totalCreator - creatorToSwap;
+                    // Refresh balances from storage after attempting the swap.
+                    // In bootstrap/no-liquidity phases the swap can be skipped or revert-safe,
+                    // and we must not assume `creatorToSwap` was actually spent.
+                    _swapCreatorToUsdcSafe(creatorToSwap);
+                    totalCreator = CREATOR.balanceOf(address(this));
+                    totalUsdc = USDC.balanceOf(address(this));
 
                     // Recalculate with new balances
                     usdcNeeded = (totalCreator * charmUsdc) / charmCreator;
@@ -555,17 +524,27 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
             }
         } else {
             // Charm empty - deposit 99% CREATOR, 1% USDC
-            // Need to swap ~1% CREATOR → USDC
+            // Attempt to swap ~1% CREATOR → USDC for bootstrap seeding.
             uint256 creatorToSwap = totalCreator / 100; // 1%
 
             if (creatorToSwap > 0) {
-                uint256 usdcReceived = _swapCreatorToUsdcSafe(creatorToSwap);
-                totalUsdc = totalUsdc + usdcReceived;
-                totalCreator = totalCreator - creatorToSwap;
+                // Bootstrap can have zero V3 liquidity and no TWAP history yet.
+                // Re-read actual balances instead of assuming a successful swap.
+                _swapCreatorToUsdcSafe(creatorToSwap);
+                totalCreator = CREATOR.balanceOf(address(this));
+                totalUsdc = USDC.balanceOf(address(this));
             }
 
-            finalCreator = totalCreator;
-            finalUsdc = totalUsdc;
+            // Enforce bootstrap intent: do not seed an initial one-sided CREATOR position.
+            // If no USDC leg is available yet, defer Charm deposit and keep assets idle.
+            if (totalCreator > 0 && totalUsdc == 0) {
+                emit DepositFailed("Bootstrap deferred: require USDC leg for initial 99/1 seed");
+                finalCreator = 0;
+                finalUsdc = 0;
+            } else {
+                finalCreator = totalCreator;
+                finalUsdc = totalUsdc;
+            }
         }
 
         // Deposit to Charm with safety checks
@@ -728,7 +707,7 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
 
     /**
      * @notice Swap CREATOR → USDC with slippage protection
-     * @dev Uses zRouter if enabled, auto fee tier if enabled
+     * @dev Uses Uniswap V3 router with optional auto fee tier discovery.
      */
     function _swapCreatorToUsdcSafe(uint256 amountIn) internal returns (uint256 amountOut) {
         if (amountIn == 0) return 0;
@@ -744,27 +723,6 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
         uint256 expectedOut = (amountIn * 1e6) / creatorPerUsdc; // USDC has 6 decimals
         uint256 minOut = (expectedOut * (10000 - swapSlippageBps)) / 10000;
 
-        // Try zRouter first if enabled (8-18% gas savings)
-        if (useZRouter && address(zRouter) != address(0)) {
-            try zRouter.swapV3(
-                address(this), // recipient
-                false, // exact input
-                fee,
-                address(CREATOR),
-                address(USDC),
-                amountIn,
-                minOut,
-                block.timestamp
-            ) returns (uint256, uint256 out) {
-                amountOut = out;
-                emit TokensSwapped(address(CREATOR), address(USDC), amountIn, amountOut);
-                return amountOut;
-            } catch {
-                // Fall through to Uniswap Router
-            }
-        }
-
-        // Fallback to Uniswap Router
         try UNISWAP_ROUTER.exactInputSingle(
             ISwapRouter.ExactInputSingleParams({
                 tokenIn: address(CREATOR),
@@ -845,23 +803,6 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
 
         uint256 expectedOut = (amountIn * creatorPerUsdc) / 1e6; // USDC has 6 decimals
         uint256 minOut = (expectedOut * (10000 - swapSlippageBps)) / 10000;
-
-        if (useZRouter && address(zRouter) != address(0)) {
-            try zRouter.swapV3(
-                address(this), // recipient
-                false, // exact input
-                fee,
-                address(USDC),
-                address(CREATOR),
-                amountIn,
-                minOut,
-                block.timestamp
-            ) returns (uint256, uint256 out) {
-                amountOut = out;
-                emit TokensSwapped(address(USDC), address(CREATOR), amountIn, amountOut);
-                return amountOut;
-            } catch {}
-        }
 
         try UNISWAP_ROUTER.exactInputSingle(
             ISwapRouter.ExactInputSingleParams({

@@ -15,6 +15,7 @@ import {
 } from '../../../server/auth/_shared.js'
 import { isCswOwner } from '../../../server/_lib/cswOwner.js'
 import { getDb, isDbConfigured } from '../../../server/_lib/postgres.js'
+import { checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { preprovisionWaitlistUser } from '../../../server/_lib/waitlistPreprovision.js'
 
@@ -33,10 +34,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
+  const clientIp = getClientIp(req)
+
   // Require authenticated session or SIWA
   const principalWallet = readRequestPrincipalAddress(req)
   if (!principalWallet || !isValidEvmAddress(principalWallet)) {
     return res.status(401).json({ success: false, error: 'Sign in required' } satisfies ApiEnvelope<never>)
+  }
+  const rateLimit = checkRateLimit(
+    rateLimitKey('waitlist-preprovision', clientIp, principalWallet.toLowerCase()),
+    { windowMs: 60_000, maxRequests: 10 },
+  )
+  if (!rateLimit.allowed) {
+    res.setHeader('Retry-After', Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString())
+    return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 
   if (!isDbConfigured()) {

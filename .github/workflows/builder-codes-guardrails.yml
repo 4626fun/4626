@@ -46,6 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VITE_BASE_BUILDER_CODES: bc_ci_guardrail
+      BUILDER_CODES_ENFORCE_PROD: '1'
       AUTH_SESSION_SECRET: test-auth-session-secret-123456
       DEPLOY_SESSION_SECRET: test-deploy-session-secret-123456
       DEPLOY_SESSION_TOKEN_HMAC_SECRET: test-deploy-hmac-secret-123456
@@ -70,6 +71,9 @@ jobs:
 
       - name: Install frontend dependencies
         run: pnpm --dir frontend install --frozen-lockfile
+
+      - name: Assert Builder Codes env
+        run: pnpm --dir frontend builder-codes:assert-env
 
       - name: Verify Builder Codes suffix
         run: pnpm --dir frontend builder-codes:verify

@@ -59,6 +59,7 @@ const fadeUp = {
   animate: { opacity: 1, y: 0 },
   transition: { duration: 0.2, ease: baseEase },
 }
+const SERVER_CLAIMABLE_BONUS_TASKS = new Set(['github', 'tiktok', 'instagram', 'reddit'])
 
 function isValidEvmAddress(v: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(v)
@@ -141,7 +142,11 @@ export function WaitlistProfile() {
       if (userEmail) params.set('email', userEmail)
       if (userWallet) params.set('wallet', userWallet)
       
-      const res = await fetch(`${appUrl}/api/waitlist/position?${params.toString()}`)
+      const res = await apiFetch(`/api/waitlist/position?${params.toString()}`, {
+        method: 'GET',
+        withCredentials: true,
+        headers: { Accept: 'application/json' },
+      })
       const json = await res.json()
       
       if (json.success && json.data) {
@@ -160,7 +165,7 @@ export function WaitlistProfile() {
     } finally {
       setLoading(false)
     }
-  }, [appUrl, userEmail, userWallet, hasLinkedCsw])
+  }, [apiFetch, userEmail, userWallet, hasLinkedCsw])
 
   useEffect(() => {
     if (privyAuthed && (userEmail || userWallet)) {
@@ -227,7 +232,7 @@ export function WaitlistProfile() {
 
     // Sync to server - use email or wallet
     const identifier = userEmail || (userData?.email)
-    if (identifier) {
+    if (identifier && SERVER_CLAIMABLE_BONUS_TASKS.has(action)) {
       try {
         await apiFetch('/api/waitlist/task-claim', {
           method: 'POST',

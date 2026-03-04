@@ -45,18 +45,18 @@ Use a deterministic fallback chain for token logo URLs:
 
 This keeps logos resilient and avoids hard dependency on one source.
 
-## zRouter / zQuoter / v4-router Guidance
+## Router Guidance
 
 For this phase:
 
 - Keep Trading API/Universal Router path as default execution.
-- Do not replace production execution with direct zRouter yet.
+- Do not replace production execution with alternate router paths in this phase.
 
 Reasoning:
 
 - The current stack is already integrated with approval + quote freshness + Permit2 + canonical CSW/EOA mode handling.
-- zRouter/zQuoter introduce separate path semantics and risk to approvals, tx-shape assumptions, and user-op flows.
-- A safer incremental next phase is adding optional quote comparison (zQuoter vs Trading API) without changing execution.
+- Alternate router surfaces introduce separate path semantics and risk to approvals, tx-shape assumptions, and user-op flows.
+- Prefer preserving one execution path with strict policy and observability.
 
 ## UX/Visual Design
 

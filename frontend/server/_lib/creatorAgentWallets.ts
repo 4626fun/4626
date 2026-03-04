@@ -19,7 +19,6 @@ export async function ensureCreatorAgentWalletsSchema(db: Db): Promise<void> {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `
-    await db.sql`CREATE INDEX IF NOT EXISTS creator_agent_wallets_address_idx ON creator_agent_wallets (agent_wallet_address);`
     creatorAgentWalletsEnsured = true
   } catch (err) {
     creatorAgentWalletsEnsured = false
@@ -41,7 +40,7 @@ export async function getOrCreateCreatorAgentWallet(params: {
   const existing = await db.sql`
     SELECT agent_wallet_id, agent_wallet_address
     FROM creator_agent_wallets
-    WHERE LOWER(coin_address) = ${coin}
+    WHERE coin_address = ${coin}
     LIMIT 1;
   `
   if (existing.rows && existing.rows.length > 0) {

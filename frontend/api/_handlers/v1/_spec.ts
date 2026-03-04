@@ -75,8 +75,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       '/v1/build/charm/setCharmVault': { post: { summary: 'Build CreatorCharmStrategy setCharmVault calldata (owner)', responses: { '200': { description: 'OK' } } } },
       '/v1/build/charm/setSwapPool': { post: { summary: 'Build CreatorCharmStrategy setSwapPool calldata (owner)', responses: { '200': { description: 'OK' } } } },
-      '/v1/build/charm/setZRouter': { post: { summary: 'Build CreatorCharmStrategy setZRouter calldata (owner)', responses: { '200': { description: 'OK' } } } },
-      '/v1/build/charm/setUseZRouter': { post: { summary: 'Build CreatorCharmStrategy setUseZRouter calldata (owner)', responses: { '200': { description: 'OK' } } } },
       '/v1/build/charm/setUniFactory': { post: { summary: 'Build CreatorCharmStrategy setUniFactory calldata (owner)', responses: { '200': { description: 'OK' } } } },
       '/v1/build/charm/setAutoFeeTier': { post: { summary: 'Build CreatorCharmStrategy setAutoFeeTier calldata (owner)', responses: { '200': { description: 'OK' } } } },
       '/v1/build/charm/setParameters': { post: { summary: 'Build CreatorCharmStrategy setParameters calldata (owner)', responses: { '200': { description: 'OK' } } } },
@@ -86,9 +84,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '/v1/build/charm/ownerEmergencyWithdraw': { post: { summary: 'Build CreatorCharmStrategy ownerEmergencyWithdraw calldata (owner)', responses: { '200': { description: 'OK' } } } },
       '/v1/build/charm/ownerEmergencyWithdrawFromCharm': { post: { summary: 'Build CreatorCharmStrategy ownerEmergencyWithdrawFromCharm calldata (owner)', responses: { '200': { description: 'OK' } } } },
 
-      // Charm/AlphaVault-style vault controls (Base no-arg rebalance by default; legacy ranges supported)
-      '/v1/build/charm/vault/rebalance': { post: { summary: 'Build Charm/AlphaVault rebalance calldata (no-arg default, legacy-range mode optional)', responses: { '200': { description: 'OK' } } } },
-      '/v1/build/charm/vault/setStrategy': { post: { summary: 'Build Charm/AlphaVault delegate/manager strategy-calldata (legacy strategy mode optional)', responses: { '200': { description: 'OK' } } } },
+      // Charm/AlphaVault-style vault controls
+      '/v1/build/charm/vault/rebalance': { post: { summary: 'Build Charm/AlphaVault rebalance calldata (no-arg)', responses: { '200': { description: 'OK' } } } },
+      '/v1/build/charm/vault/setStrategy': { post: { summary: 'Build Charm/AlphaVault delegate/manager update calldata', responses: { '200': { description: 'OK' } } } },
     },
   }
 

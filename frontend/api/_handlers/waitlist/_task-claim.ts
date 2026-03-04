@@ -4,29 +4,12 @@ import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincip
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
 
-// Legacy tasks
-type LegacyTaskKey = 'shareX' | 'copyLink' | 'share' | 'saveApp'
-
-// Social tasks (verified or honor system)
-type SocialTaskKey = 'farcaster' | 'baseApp' | 'zora' | 'discord' | 'telegram'
-
 // Bonus tasks (honor system)
 type BonusTaskKey = 'github' | 'tiktok' | 'instagram' | 'reddit'
 
-type TaskKey = LegacyTaskKey | SocialTaskKey | BonusTaskKey
+type TaskKey = BonusTaskKey
 
 const TASK_POINTS: Record<TaskKey, number> = {
-  // Legacy
-  shareX: 10,
-  copyLink: 5,
-  share: 7,
-  saveApp: 6,
-  // Social (verified)
-  farcaster: WAITLIST_POINTS.farcaster,
-  baseApp: WAITLIST_POINTS.baseApp,
-  zora: WAITLIST_POINTS.zora,
-  discord: WAITLIST_POINTS.discord,
-  telegram: WAITLIST_POINTS.telegram,
   // Bonus (honor system)
   github: WAITLIST_POINTS.github,
   tiktok: WAITLIST_POINTS.tiktok,
@@ -36,15 +19,6 @@ const TASK_POINTS: Record<TaskKey, number> = {
 
 // Map task keys to point sources for ledger tracking
 const TASK_SOURCE_MAP: Record<TaskKey, string> = {
-  shareX: 'task',
-  copyLink: 'task',
-  share: 'task',
-  saveApp: 'task',
-  farcaster: 'social_farcaster',
-  baseApp: 'social_base_app',
-  zora: 'social_zora',
-  discord: 'social_discord',
-  telegram: 'social_telegram',
   github: 'bonus_github',
   tiktok: 'bonus_tiktok',
   instagram: 'bonus_instagram',
@@ -88,7 +62,10 @@ export default async function handler(req: any, res: any) {
   }
   const taskKey = (Object.keys(TASK_POINTS) as TaskKey[]).includes(taskKeyRaw as TaskKey) ? (taskKeyRaw as TaskKey) : null
   if (!taskKey) {
-    return res.status(400).json({ success: false, error: 'Invalid task key' } satisfies ApiEnvelope<never>)
+    return res.status(400).json({
+      success: false,
+      error: 'This task requires platform verification. Use the dedicated verify endpoint.',
+    } satisfies ApiEnvelope<never>)
   }
 
   const principalAddress = readRequestPrincipalAddress(req)

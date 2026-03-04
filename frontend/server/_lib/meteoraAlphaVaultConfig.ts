@@ -114,6 +114,35 @@ async function ensureMeteoraConfigSchema(db: Db): Promise<void> {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `
+    try {
+      await db.sql`ALTER TABLE creator_meteora_alpha_vaults ENABLE ROW LEVEL SECURITY;`
+    } catch {
+      // Ignore if RLS cannot be enabled in this runtime.
+    }
+    try {
+      await db.sql`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1
+            FROM pg_policies
+            WHERE schemaname = 'public'
+              AND tablename = 'creator_meteora_alpha_vaults'
+              AND policyname = 'creator_meteora_alpha_vaults_deny_all'
+          ) THEN
+            CREATE POLICY creator_meteora_alpha_vaults_deny_all
+              ON creator_meteora_alpha_vaults
+              FOR ALL
+              TO public
+              USING (false)
+              WITH CHECK (false);
+          END IF;
+        END
+        $$;
+      `
+    } catch {
+      // Ignore if policy creation is unavailable in this runtime.
+    }
     await db.sql`
       CREATE INDEX IF NOT EXISTS creator_meteora_alpha_vaults_enabled_idx
       ON creator_meteora_alpha_vaults (enabled, updated_at DESC);

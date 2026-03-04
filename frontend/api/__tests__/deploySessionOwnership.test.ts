@@ -15,6 +15,8 @@ const {
   generatePrivateKeyMock,
   privateKeyToAccountMock,
   resolveCoinPartiesMock,
+  extractCharmCreateVaultPoolMock,
+  isCharmPoolIndexedMock,
   createPublicClientMock,
   getBytecodeMock,
 } = vi.hoisted(() => ({
@@ -34,6 +36,8 @@ const {
     privateKey: ('0x' + '11'.repeat(32)) as `0x${string}`,
   })),
   resolveCoinPartiesMock: vi.fn(async () => ({ creator: null, payoutRecipient: null })),
+  extractCharmCreateVaultPoolMock: vi.fn((() => null) as (call: unknown) => string | null),
+  isCharmPoolIndexedMock: vi.fn(async () => true),
   getBytecodeMock: vi.fn(async () => '0x'),
   createPublicClientMock: vi.fn(() => ({
     getBytecode: getBytecodeMock,
@@ -84,6 +88,13 @@ vi.mock('../../server/_lib/coinParties.js', () => ({
   resolveCoinParties: resolveCoinPartiesMock,
 }))
 
+vi.mock('../../server/_lib/charmVaults.js', () => ({
+  extractCharmCreateVaultPool: extractCharmCreateVaultPoolMock,
+  isCharmPoolIndexed: isCharmPoolIndexedMock,
+  charmPoolNotIndexedError: (pool: string) =>
+    `Charm pool ${pool} is not currently indexed by Charm's public vault data source. Deploying a vault against this pool can succeed on-chain but remain invisible on alpha.charm.fi.`,
+}))
+
 vi.mock('viem/accounts', () => ({
   generatePrivateKey: generatePrivateKeyMock,
   privateKeyToAccount: privateKeyToAccountMock,
@@ -104,7 +115,7 @@ function makeRequestBody() {
     creatorToken: '0x0000000000000000000000000000000000000003',
     // Handler invariant: ownerAddress must match smartWallet (canonical deploy sender)
     ownerAddress: '0x0000000000000000000000000000000000000002',
-    phase2Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x' }],
+    phase2FinalizeCalls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x' }],
     phase3Calls: [],
   }
 }
@@ -211,6 +222,8 @@ describe('deploy session ownership guardrails', () => {
     vi.clearAllMocks()
     delete process.env.DEPLOY_SESSION_TTL_MINUTES
     resolveCoinPartiesMock.mockResolvedValue({ creator: null, payoutRecipient: null })
+    extractCharmCreateVaultPoolMock.mockReturnValue(null)
+    isCharmPoolIndexedMock.mockResolvedValue(true)
     getBytecodeMock.mockResolvedValue('0x')
   })
   afterEach(() => {
@@ -268,7 +281,7 @@ describe('deploy session ownership guardrails', () => {
             data: addOwnerData,
           },
         ],
-        phase2Calls: [],
+        phase2FinalizeCalls: [],
       },
     })
     const res = createMockRes()
@@ -276,6 +289,30 @@ describe('deploy session ownership guardrails', () => {
 
     expect(res.statusCode).toBe(400)
     expect(String(res.body?.error ?? '')).toContain('Only EOA owners can be added')
+    expect(insertDeploySessionMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects deploy sessions when Charm createVault targets a non-indexed pool', async () => {
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+    extractCharmCreateVaultPoolMock.mockReturnValueOnce('0x00000000000000000000000000000000000000ab')
+    isCharmPoolIndexedMock.mockResolvedValueOnce(false)
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        phase1Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x4989742a' }],
+        phase2FinalizeCalls: [],
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(String(res.body?.error ?? '')).toContain('not currently indexed')
+    expect(isCharmPoolIndexedMock).toHaveBeenCalledWith({
+      poolAddress: '0x00000000000000000000000000000000000000ab',
+    })
     expect(insertDeploySessionMock).not.toHaveBeenCalled()
   })
 
@@ -321,7 +358,6 @@ describe('deploy session ownership guardrails', () => {
       method: 'POST',
       body: {
         ...makeRequestBody(),
-        phase2Calls: [],
         phase2FinalizeCalls: [
           {
             to: '0x0000000000000000000000000000000000000010',
@@ -375,7 +411,6 @@ describe('deploy session ownership guardrails', () => {
       method: 'POST',
       body: {
         ...makeRequestBody(),
-        phase2Calls: [],
         phase2CoreCalls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0xf9344d88' }],
         phase2FinalizeCalls: [
           {
@@ -539,8 +574,8 @@ describe('deploy session ownership guardrails', () => {
     expect(generatePrivateKeyMock).toHaveBeenCalledTimes(1)
     expect(privateKeyToAccountMock).toHaveBeenCalledTimes(1)
     const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
-    expect(insertArgs.sessionOwnerPrivateKey).toBe('0x' + '11'.repeat(32))
-    expect(insertArgs.payload?.agentWalletId).toBeUndefined()
+    expect(insertArgs.sessionSignerPrivateKey).toBe('0x' + '11'.repeat(32))
+    expect(insertArgs.payload?.deploySignerWalletId).toBeUndefined()
     expect(insertArgs.payload?.persistSessionOwner).toBe(false)
   })
   it('falls back to local session owner key when agent wallet provisioning fails', async () => {
@@ -556,8 +591,8 @@ describe('deploy session ownership guardrails', () => {
     expect(privateKeyToAccountMock).toHaveBeenCalledTimes(1)
     expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
     const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
-    expect(insertArgs.sessionOwnerPrivateKey).toBe('0x' + '11'.repeat(32))
-    expect(insertArgs.payload?.agentWalletId).toBeUndefined()
+    expect(insertArgs.sessionSignerPrivateKey).toBe('0x' + '11'.repeat(32))
+    expect(insertArgs.payload?.deploySignerWalletId).toBeUndefined()
     expect(insertArgs.payload?.persistSessionOwner).toBe(false)
   })
 

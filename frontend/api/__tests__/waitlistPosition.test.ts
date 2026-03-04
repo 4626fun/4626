@@ -7,6 +7,12 @@ const { getDbMock, ensureWaitlistSchemaMock } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
 }))
+const { readRequestPrincipalAddressMock, checkRateLimitMock, rateLimitKeyMock, getClientIpMock } = vi.hoisted(() => ({
+  readRequestPrincipalAddressMock: vi.fn(() => ''),
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+  rateLimitKeyMock: vi.fn(() => 'waitlist-position:test'),
+  getClientIpMock: vi.fn(() => '127.0.0.1'),
+}))
 
 vi.mock('../../server/auth/_shared.js', () => ({
   handleOptions: vi.fn(() => false),
@@ -20,6 +26,16 @@ vi.mock('../../server/_lib/postgres.js', () => ({
 
 vi.mock('../../server/_lib/waitlistSchema.js', () => ({
   ensureWaitlistSchema: ensureWaitlistSchemaMock,
+}))
+
+vi.mock('../../server/_lib/requestPrincipal.js', () => ({
+  readRequestPrincipalAddress: readRequestPrincipalAddressMock,
+}))
+
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: checkRateLimitMock,
+  rateLimitKey: rateLimitKeyMock,
+  getClientIp: getClientIpMock,
 }))
 
 function createPositionDb(params: { id: string | number; email: string }) {
@@ -36,12 +52,21 @@ function createPositionDb(params: { id: string | number; email: string }) {
               referral_code: 'AKITA',
               profile_completed_at: '2026-02-25T00:00:00.000Z',
               border_tier: 1,
+              primary_wallet: '0x00000000000000000000000000000000000000aa',
+              embedded_wallet: null,
+              primary_embedded_eoa: null,
+              csw_address: null,
+              primary_smart_wallet: null,
+              base_sub_account: null,
             },
           ],
         }
       }
 
-      if (text.includes('from profiles') && text.includes('where lower(primary_wallet)')) {
+      if (
+        text.includes('from profiles') &&
+        (text.includes('where lower(primary_wallet)') || text.includes('where lower(p.primary_wallet)'))
+      ) {
         return {
           rows: [
             {
@@ -50,6 +75,12 @@ function createPositionDb(params: { id: string | number; email: string }) {
               referral_code: 'AKITA',
               profile_completed_at: '2026-02-25T00:00:00.000Z',
               border_tier: 1,
+              primary_wallet: '0x00000000000000000000000000000000000000aa',
+              embedded_wallet: null,
+              primary_embedded_eoa: null,
+              csw_address: null,
+              primary_smart_wallet: null,
+              base_sub_account: null,
             },
           ],
         }
@@ -92,6 +123,7 @@ describe('waitlist/position', () => {
   })
 
   it('returns data when profile id is a numeric string', async () => {
+    readRequestPrincipalAddressMock.mockReturnValueOnce('0x00000000000000000000000000000000000000aa')
     getDbMock.mockResolvedValue(createPositionDb({ id: '42', email: 'akitav2@proton.me' }) as any)
 
     const req = createMockReq({
@@ -110,7 +142,8 @@ describe('waitlist/position', () => {
     expect(res.body?.data?.points?.total).toBe(150)
   })
 
-  it('returns resolved profile email for wallet lookup', async () => {
+  it('redacts email for wallet-only lookup and checks extended wallet fields', async () => {
+    readRequestPrincipalAddressMock.mockReturnValueOnce('0x00000000000000000000000000000000000000aa')
     getDbMock.mockResolvedValue(createPositionDb({ id: '7', email: 'wallet-owner@proton.me' }) as any)
 
     const req = createMockReq({
@@ -124,6 +157,43 @@ describe('waitlist/position', () => {
     expect(res.body?.success).toBe(true)
     expect(res.body?.data).not.toBeNull()
     expect(res.body?.data?.signupId).toBe(7)
-    expect(res.body?.data?.email).toBe('wallet-owner@proton.me')
+    expect(res.body?.data?.email).toBeNull()
+
+    const db = await getDbMock.mock.results[0]?.value
+    const sqlCalls = db.sql.mock.calls.map((c: unknown[]) => String((c[0] as TemplateStringsArray).join(' ')).toLowerCase())
+    expect(sqlCalls.some((q: string) => q.includes('from profile_wallets pw'))).toBe(true)
+    expect(sqlCalls.some((q: string) => q.includes('lower(p.csw_address)'))).toBe(true)
+  })
+
+  it('returns null for wallet-only lookup when caller is not authorized', async () => {
+    readRequestPrincipalAddressMock.mockReturnValueOnce('')
+    getDbMock.mockResolvedValue(createPositionDb({ id: '7', email: 'wallet-owner@proton.me' }) as any)
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { wallet: '0x00000000000000000000000000000000000000aa' },
+    })
+    const res = createMockRes()
+    await handler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data).toBeNull()
+  })
+
+  it('returns null for email lookup when caller is not authorized', async () => {
+    readRequestPrincipalAddressMock.mockReturnValueOnce('')
+    getDbMock.mockResolvedValue(createPositionDb({ id: '7', email: 'wallet-owner@proton.me' }) as any)
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { email: 'wallet-owner@proton.me' },
+    })
+    const res = createMockRes()
+    await handler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data).toBeNull()
   })
 })

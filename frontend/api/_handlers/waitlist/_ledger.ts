@@ -1,6 +1,8 @@
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
 import { normalizeReferralCode } from '../../../server/_lib/referrals.js'
+import { checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
+import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { ensureWaitlistPointsSchema } from '../../../server/_lib/waitlistPoints.js'
 
@@ -26,6 +28,10 @@ function isValidEmail(v: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
 }
 
+function isValidEvmAddress(v: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(v)
+}
+
 function safeInt(v: any): number {
   const n = typeof v === 'number' ? v : Number(v)
   return Number.isFinite(n) ? Math.floor(n) : 0
@@ -38,6 +44,16 @@ export default async function handler(req: any, res: any) {
 
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  const clientIp = getClientIp(req)
+  const rateLimit = checkRateLimit(rateLimitKey('waitlist-ledger', clientIp), {
+    windowMs: 60_000,
+    maxRequests: 60,
+  })
+  if (!rateLimit.allowed) {
+    res.setHeader('Retry-After', Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString())
+    return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 
   const refParam = typeof (req.query as any)?.ref === 'string' ? String((req.query as any).ref) : ''
@@ -58,15 +74,33 @@ export default async function handler(req: any, res: any) {
   await ensureWaitlistSchema(db as any)
   await ensureWaitlistPointsSchema(db as any)
 
+  const principalAddress = readRequestPrincipalAddress(req)
+
   const me = referralCode
     ? await db.sql`
-        SELECT id, referral_code
+        SELECT
+          id,
+          referral_code,
+          primary_wallet,
+          embedded_wallet,
+          primary_embedded_eoa,
+          csw_address,
+          primary_smart_wallet,
+          base_sub_account
         FROM profiles
         WHERE referral_code = ${referralCode}
         LIMIT 1;
       `
     : await db.sql`
-        SELECT id, referral_code
+        SELECT
+          id,
+          referral_code,
+          primary_wallet,
+          embedded_wallet,
+          primary_embedded_eoa,
+          csw_address,
+          primary_smart_wallet,
+          base_sub_account
         FROM profiles
         WHERE email = ${email}
         LIMIT 1;
@@ -75,6 +109,35 @@ export default async function handler(req: any, res: any) {
   const row = me?.rows?.[0] ?? null
   const signupId = typeof row?.id === 'number' ? (row.id as number) : null
   if (!signupId) {
+    return res.status(200).json({ success: true, data: null } satisfies ApiEnvelope<WaitlistLedgerResponse | null>)
+  }
+
+  // Require owner authorization to prevent email/ref-code profile enumeration.
+  if (!principalAddress || !isValidEvmAddress(principalAddress)) {
+    return res.status(200).json({ success: true, data: null } satisfies ApiEnvelope<WaitlistLedgerResponse | null>)
+  }
+  const principal = principalAddress.toLowerCase()
+  const ownsByInlineField =
+    (typeof row?.primary_wallet === 'string' && row.primary_wallet.toLowerCase() === principal) ||
+    (typeof row?.embedded_wallet === 'string' && row.embedded_wallet.toLowerCase() === principal) ||
+    (typeof row?.primary_embedded_eoa === 'string' && row.primary_embedded_eoa.toLowerCase() === principal) ||
+    (typeof row?.csw_address === 'string' && row.csw_address.toLowerCase() === principal) ||
+    (typeof row?.primary_smart_wallet === 'string' && row.primary_smart_wallet.toLowerCase() === principal) ||
+    (typeof row?.base_sub_account === 'string' && row.base_sub_account.toLowerCase() === principal)
+
+  let ownsByMappedWallet = false
+  if (!ownsByInlineField) {
+    const ownedQ = await db.sql`
+      SELECT 1
+      FROM profile_wallets
+      WHERE profile_id = ${signupId}
+        AND LOWER(address) = ${principal}
+      LIMIT 1;
+    `
+    ownsByMappedWallet = Boolean(ownedQ?.rows?.[0])
+  }
+
+  if (!ownsByInlineField && !ownsByMappedWallet) {
     return res.status(200).json({ success: true, data: null } satisfies ApiEnvelope<WaitlistLedgerResponse | null>)
   }
 

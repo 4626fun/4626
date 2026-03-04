@@ -71,7 +71,7 @@ The `/account` surface already contains rich data and management controls, but t
 
 - Typecheck and targeted tests:
   - `pnpm vitest run src/lib/appOnlyPaths.test.ts` (new test)
-  - `pnpm vitest run api/__tests__/uniswap/_zquote.test.ts src/lib/uniswap/tradingApi.test.ts` (safety spot-check)
+  - `pnpm vitest run src/lib/uniswap/tradingApi.test.ts` (safety spot-check)
   - `pnpm typecheck`
 - Lint check on touched files via `ReadLints`.
 - Manual sanity:

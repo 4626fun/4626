@@ -221,7 +221,6 @@ export async function ensureCreatorMetricsSchema(db: Db): Promise<void> {
   `
   await db.sql`CREATE INDEX IF NOT EXISTS creator_coins_creator_idx ON creator_coins (creator_address);`
   await db.sql`CREATE INDEX IF NOT EXISTS creator_coins_created_at_idx ON creator_coins (created_at DESC);`
-  await db.sql`CREATE INDEX IF NOT EXISTS creator_coins_last_seen_idx ON creator_coins (last_seen_at DESC);`
   await db.sql`CREATE INDEX IF NOT EXISTS creator_coins_chain_idx ON creator_coins (chain_id);`
 
   await db.sql`
@@ -232,7 +231,6 @@ export async function ensureCreatorMetricsSchema(db: Db): Promise<void> {
       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `
-  await db.sql`CREATE INDEX IF NOT EXISTS creators_first_seen_idx ON creators (first_seen_at DESC);`
   await db.sql`CREATE INDEX IF NOT EXISTS creators_last_seen_idx ON creators (last_seen_at DESC);`
 
   await db.sql`

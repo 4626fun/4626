@@ -30,9 +30,9 @@ export type DeploySessionRecord = {
   tokenHash: string
   sessionAddress: `0x${string}`
   smartWallet: `0x${string}`
-  sessionOwner: `0x${string}`
+  sessionSigner: `0x${string}`
   deployToken: string
-  sessionOwnerKeyEnc: string | null
+  sessionSignerKeyEnc: string | null
   payload: any
   step: DeploySessionStep
   expiresAt: string
@@ -60,6 +60,8 @@ export async function ensureDeploySessionsSchema(): Promise<void> {
         session_owner TEXT NOT NULL,
         deploy_token TEXT NOT NULL,
         session_owner_key_enc TEXT NOT NULL,
+        session_signer TEXT,
+        session_signer_key_enc TEXT,
         payload JSONB NOT NULL,
         step TEXT NOT NULL DEFAULT 'created',
         last_error TEXT,
@@ -75,6 +77,12 @@ export async function ensureDeploySessionsSchema(): Promise<void> {
     await db.sql`CREATE INDEX IF NOT EXISTS deploys_session_address_idx ON deploys (session_address);`
     await db.sql`CREATE INDEX IF NOT EXISTS deploys_step_idx ON deploys (step);`
     await db.sql`CREATE INDEX IF NOT EXISTS deploys_expires_idx ON deploys (expires_at);`
+    try {
+      // Remove historical duplicate index name.
+      await db.sql`DROP INDEX IF EXISTS deploy_sessions_session_address_idx;`
+    } catch {
+      // ignore (already dropped or insufficient permissions)
+    }
 
     // Schema evolution (non-breaking):
     // - New Privy agent-wallet sessions do not store raw private keys.
@@ -83,6 +91,30 @@ export async function ensureDeploySessionsSchema(): Promise<void> {
       await db.sql`ALTER TABLE deploys ALTER COLUMN session_owner_key_enc DROP NOT NULL;`
     } catch {
       // ignore (already altered or insufficient permissions)
+    }
+    try {
+      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS session_signer TEXT;`
+    } catch {
+      // ignore (already exists or insufficient permissions)
+    }
+    try {
+      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS session_signer_key_enc TEXT;`
+    } catch {
+      // ignore (already exists or insufficient permissions)
+    }
+    try {
+      await db.sql`
+        UPDATE deploys
+        SET
+          session_signer = COALESCE(NULLIF(session_signer, ''), session_owner),
+          session_signer_key_enc = COALESCE(session_signer_key_enc, session_owner_key_enc)
+        WHERE
+          session_signer IS NULL
+          OR session_signer = ''
+          OR session_signer_key_enc IS NULL;
+      `
+    } catch {
+      // ignore when migration columns are unavailable
     }
     deploySessionsSchemaEnsured = true
   } catch (err) {
@@ -148,9 +180,9 @@ export async function insertDeploySession(params: {
   tokenHash: string
   sessionAddress: string
   smartWallet: string
-  sessionOwner: string
+  sessionSigner: string
   deployToken: string
-  sessionOwnerPrivateKey?: string | null
+  sessionSignerPrivateKey?: string | null
   payload: any
   expiresAt: Date
 }): Promise<DeploySessionRecord> {
@@ -158,9 +190,9 @@ export async function insertDeploySession(params: {
   if (!db) throw new Error('db_not_configured')
   await ensureDeploySessionsSchema()
 
-  const sessionOwnerKeyEnc =
-    typeof params.sessionOwnerPrivateKey === 'string' && params.sessionOwnerPrivateKey.trim().length > 0
-      ? encryptWithSecret(params.sessionOwnerPrivateKey)
+  const sessionSignerKeyEnc =
+    typeof params.sessionSignerPrivateKey === 'string' && params.sessionSignerPrivateKey.trim().length > 0
+      ? encryptWithSecret(params.sessionSignerPrivateKey)
       : null
   const payloadJson = params.payload ?? {}
 
@@ -181,14 +213,26 @@ export async function insertDeploySession(params: {
       ${params.tokenHash},
       ${String(params.sessionAddress).toLowerCase()},
       ${String(params.smartWallet).toLowerCase()},
-      ${String(params.sessionOwner).toLowerCase()},
+      ${String(params.sessionSigner).toLowerCase()},
       ${params.deployToken},
-      ${sessionOwnerKeyEnc},
+      ${sessionSignerKeyEnc},
       ${payloadJson},
       ${'created'},
       ${params.expiresAt.toISOString()}
     );
   `
+  // Best-effort dual-write for non-breaking migration to canonical `session_signer*` columns.
+  try {
+    await db.sql`
+      UPDATE deploys
+      SET
+        session_signer = ${String(params.sessionSigner).toLowerCase()},
+        session_signer_key_enc = ${sessionSignerKeyEnc}
+      WHERE id = ${params.id};
+    `
+  } catch {
+    // ignore when migration columns are unavailable
+  }
 
   const rec = await getDeploySessionById(params.id)
   if (!rec) throw new Error('deploy_session_create_failed')
@@ -372,14 +416,21 @@ export async function transitionDeploySession(params: {
 }
 
 function mapRow(r: any): DeploySessionRecord {
+  const sessionSigner =
+    (typeof r.session_signer === 'string' && r.session_signer.trim() ? r.session_signer : r.session_owner) ??
+    r.session_owner
+  const sessionSignerKeyEnc =
+    (typeof r.session_signer_key_enc === 'string' && r.session_signer_key_enc.trim()
+      ? r.session_signer_key_enc
+      : r.session_owner_key_enc) ?? null
   return {
     id: String(r.id),
     tokenHash: String(r.token_hash),
     sessionAddress: String(r.session_address).toLowerCase() as `0x${string}`,
     smartWallet: String(r.smart_wallet).toLowerCase() as `0x${string}`,
-    sessionOwner: String(r.session_owner).toLowerCase() as `0x${string}`,
+    sessionSigner: String(sessionSigner).toLowerCase() as `0x${string}`,
     deployToken: String(r.deploy_token),
-    sessionOwnerKeyEnc: r.session_owner_key_enc ? String(r.session_owner_key_enc) : null,
+    sessionSignerKeyEnc: sessionSignerKeyEnc ? String(sessionSignerKeyEnc) : null,
     payload: r.payload,
     step: String(r.step) as DeploySessionStep,
     expiresAt: new Date(r.expires_at).toISOString(),

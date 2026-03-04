@@ -71,7 +71,6 @@ const CHARM_ABI = [
   { type: 'function', name: 'swapSlippageBps', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'depositSlippageBps', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'maxSwapPercent', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-  { type: 'function', name: 'useZRouter', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
   { type: 'function', name: 'autoFeeTier', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
 ] as const
 
@@ -101,7 +100,6 @@ type StrategyInfo = {
     swapSlippageBps: string | null
     depositSlippageBps: string | null
     maxSwapPercent: string | null
-    useZRouter: boolean | null
     autoFeeTier: boolean | null
   }
   solana?: {
@@ -170,7 +168,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           { address: s, abi: CHARM_ABI, functionName: 'swapSlippageBps' },
           { address: s, abi: CHARM_ABI, functionName: 'depositSlippageBps' },
           { address: s, abi: CHARM_ABI, functionName: 'maxSwapPercent' },
-          { address: s, abi: CHARM_ABI, functionName: 'useZRouter' },
           { address: s, abi: CHARM_ABI, functionName: 'autoFeeTier' },
           // Solana bridge probes
           { address: s, abi: SOLANA_STRATEGY_ABI, functionName: 'bridgeAdapter' },
@@ -186,8 +183,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const ajnaPool = pick<`0x${string}`>(3)
       const charmVault = pick<`0x${string}`>(8)
-      const bridgeAdapter = pick<`0x${string}`>(16)
-      const solanaDestination = pick<`0x${string}`>(17)
+      const bridgeAdapter = pick<`0x${string}`>(15)
+      const solanaDestination = pick<`0x${string}`>(16)
       const hasSolanaConfig =
         isAddressLike(String(bridgeAdapter ?? '')) || (typeof solanaDestination === 'string' && isBytes32Like(solanaDestination) && !/^0x0{64}$/i.test(solanaDestination))
 
@@ -253,12 +250,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const v = pick<bigint>(13)
             return v === null || v === undefined ? null : BigInt(v as any).toString()
           })(),
-          useZRouter: (() => {
-            const v = pick<boolean>(14)
-            return typeof v === 'boolean' ? v : null
-          })(),
           autoFeeTier: (() => {
-            const v = pick<boolean>(15)
+            const v = pick<boolean>(14)
             return typeof v === 'boolean' ? v : null
           })(),
         }

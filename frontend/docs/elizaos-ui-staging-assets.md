@@ -256,7 +256,7 @@ Use these in elizaOS UI evals before promotion.
   },
   {
     "id": "eval_07_knowledge",
-    "prompt": "/knowledge how does subdomain indexing work",
+    "prompt": "/knowledge how does onchain reputation work",
     "expectedSignals": ["concise document-grounded snippets", "no invented docs"],
     "failSignals": ["hallucinated source", "off-topic response"]
   },

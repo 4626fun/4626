@@ -9,7 +9,6 @@ type KnowledgeDoc = {
 
 const DOC_PATHS = [
   { title: 'Frontend README', filePath: 'README.md' },
-  { title: 'Agent Subdomains', filePath: 'docs/agent-subdomains.md' },
   { title: 'Onchain Reputation', filePath: 'docs/onchain-reputation-system.md' },
 ]
 
@@ -123,8 +122,8 @@ const knowledgeAction: Action = {
   similes: ['kb', 'knowledge', 'docs'],
   examples: [
     [
-      { name: 'user', content: { text: '/knowledge how does subdomain indexing work' } },
-      { name: 'agent', content: { text: 'Knowledge matches\n1) Agent Subdomains: ...' } },
+      { name: 'user', content: { text: '/knowledge how does onchain reputation work' } },
+      { name: 'agent', content: { text: 'Knowledge matches\n1) Onchain Reputation: ...' } },
     ],
   ],
   validate: async (_runtime: IAgentRuntime, message: Memory) => {

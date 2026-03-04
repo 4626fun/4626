@@ -60,12 +60,12 @@ export function SwapCard(props: SwapCardProps) {
   const usingSmartWallet = props.executionMode === 'canonical'
 
   return (
-    <div className="rounded-[22px] border border-white/10 bg-vault-card/70 p-4 shadow-[0_18px_45px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+    <div className="bv-panel p-4">
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="text-sm text-zinc-400 space-y-1">
-          <div className="text-[11px] uppercase tracking-[0.25em]">Swap</div>
-          <div className="text-lg font-semibold text-white">Simple token exchange</div>
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[10px] text-zinc-300">
+        <div className="text-sm text-vault-subtext space-y-1">
+          <div className="bv-kicker">Swap</div>
+          <div className="text-lg font-semibold tracking-tight text-vault-text">Editorial token exchange</div>
+          <div className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] text-vault-subtext" style={{ borderColor: 'rgb(var(--vault-border-strong) / 0.65)', background: 'rgb(var(--vault-card-raised) / 0.62)' }}>
             <span>Powered by</span>
             <img src="/protocols/uniswap.svg" alt="Uniswap" className="h-3.5 w-auto" loading="lazy" />
           </div>
@@ -77,7 +77,7 @@ export function SwapCard(props: SwapCardProps) {
             onSelect={props.onSelectChain}
             compact
           />
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/35 px-2.5 py-1 text-[10px] text-zinc-300">
+          <div className="bv-chip gap-1.5 normal-case tracking-[0.02em]">
             <WalletProviderIcon
               provider={usingSmartWallet ? 'coinbase' : 'privy'}
               walletType={usingSmartWallet ? 'smart_wallet' : 'embedded_eoa'}
@@ -87,7 +87,7 @@ export function SwapCard(props: SwapCardProps) {
             <span>{usingSmartWallet ? 'Coinbase Smart Wallet' : 'User Wallet'}</span>
           </div>
           {props.fallbackActive ? (
-            <div className="inline-flex items-center rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-200">
+            <div className="inline-flex items-center rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-amber-200">
               Fallback active
             </div>
           ) : null}
@@ -115,13 +115,14 @@ export function SwapCard(props: SwapCardProps) {
             type="button"
             onClick={props.onSwitchTokens}
             whileTap={{ scale: 0.96 }}
-            className="absolute left-1/2 top-1/2 z-10 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/14 bg-black/45"
+            className="absolute left-1/2 top-1/2 z-10 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border bg-[rgb(var(--vault-card-raised)/0.95)] shadow-[0_8px_18px_-10px_rgba(0,0,0,0.8)]"
+            style={{ borderColor: 'rgb(var(--vault-border-strong) / 0.82)' }}
             aria-label="Switch tokens"
           >
-            <ArrowDownUp className="h-4 w-4 text-zinc-200" />
+            <ArrowDownUp className="h-4 w-4 text-vault-text" />
             <span className="sr-only">Switch tokens</span>
           </motion.button>
-          <div className="h-px bg-linear-to-r from-white/0 via-white/25 to-white/0" />
+          <div className="h-px bg-linear-to-r from-transparent via-[rgb(var(--vault-border-strong)/0.45)] to-transparent" />
         </div>
 
         <TokenInput
@@ -157,7 +158,7 @@ export function SwapCard(props: SwapCardProps) {
       <Button
         variant="primary"
         size="lg"
-        className="mt-3 w-full"
+        className="mt-3 h-12 w-full rounded-xl shadow-[0_10px_34px_-12px_rgba(0,82,255,0.52)]"
         onClick={props.needsUnverifiedConfirmation ? props.onConfirmUnverified : props.onReviewTrade}
         loading={props.busy === 'pending'}
         disabled={
@@ -171,13 +172,14 @@ export function SwapCard(props: SwapCardProps) {
       </Button>
 
       {props.error ? <Alert variant="error" className="mt-3">{props.error}</Alert> : null}
-      {props.status && <div className="mt-2 text-xs text-zinc-500">{props.status}</div>}
-      <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
-        <span>Quote {props.quoteIsStale ? '(stale)' : '(fresh)'}</span>
+      {props.status && <div className="mt-2 text-xs text-vault-subtext">{props.status}</div>}
+      <div className="mt-3 flex items-center justify-between text-xs text-vault-subtext">
+        <span className="font-mono">Quote {props.quoteIsStale ? '(stale)' : '(fresh)'}</span>
         <button
           type="button"
           onClick={props.onRefreshQuote}
-          className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1"
+          className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-vault-text transition hover:bg-white/6"
+          style={{ borderColor: 'rgb(var(--vault-border-strong) / 0.62)' }}
         >
           <RefreshCw className="h-3 w-3" />
           Refresh

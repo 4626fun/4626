@@ -62,6 +62,24 @@
     @apply bg-vault-card/40 border rounded-2xl backdrop-blur-sm;
     border-color: rgba(255, 255, 255, 0.08);
   }
+
+  .bv-panel {
+    @apply rounded-2xl border bg-vault-card/75 backdrop-blur-xl;
+    border-color: rgb(var(--vault-border) / 0.9);
+    box-shadow: 0 18px 45px -24px rgba(0, 0, 0, 0.72);
+  }
+
+  .bv-chip {
+    @apply inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em];
+    border-color: rgb(var(--vault-border-strong) / 0.65);
+    background: rgb(var(--vault-card-raised) / 0.72);
+    color: rgb(var(--vault-subtext) / 1);
+  }
+
+  .bv-kicker {
+    @apply text-[10px] uppercase tracking-[0.18em] font-medium;
+    color: rgb(var(--vault-subtext) / 1);
+  }
   
   /* Cinematic Sections with Letterbox Feel */
   .cinematic-section {
@@ -308,20 +326,28 @@
 /* Default: light */
 :root {
   --brand-primary: 0 82 255;
+  --brand-hover: 26 102 255;
+  --brand-glow: 0 82 255;
   --vault-bg: 248 250 252;      /* slate-50 */
   --vault-card: 255 255 255;    /* white */
+  --vault-card-raised: 241 245 249;
   --vault-border: 226 232 240;  /* slate-200 */
+  --vault-border-strong: 148 163 184;
   --vault-text: 11 18 32;       /* near-slate-950 */
   --vault-subtext: 71 85 105;   /* slate-600 */
+  --vault-muted: 100 116 139;
 }
 
 /* Dark */
 html.dark {
   --vault-bg: 2 2 2;            /* #020202 */
   --vault-card: 10 10 10;       /* #0A0A0A */
+  --vault-card-raised: 15 16 20; /* #0F1014 */
   --vault-border: 31 31 31;     /* #1F1F1F */
+  --vault-border-strong: 52 55 66; /* #343742 */
   --vault-text: 237 237 237;    /* #EDEDED */
   --vault-subtext: 102 102 102; /* #666666 */
+  --vault-muted: 109 114 129;   /* #6D7281 */
 }
 
 /* Privy modal theming */

@@ -48,6 +48,31 @@ const AGENT_MEMORY_INDEX_SQL = `
     ON agent_message_memory (conversation_id, created_at DESC);
 `
 
+const AGENT_MEMORY_RLS_SQL = `
+  ALTER TABLE agent_message_memory ENABLE ROW LEVEL SECURITY;
+`
+
+const AGENT_MEMORY_POLICY_SQL = `
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_policies
+      WHERE schemaname = 'public'
+        AND tablename = 'agent_message_memory'
+        AND policyname = 'agent_message_memory_deny_all'
+    ) THEN
+      CREATE POLICY agent_message_memory_deny_all
+        ON agent_message_memory
+        FOR ALL
+        TO public
+        USING (false)
+        WITH CHECK (false);
+    END IF;
+  END
+  $$;
+`
+
 let memorySchemaEnsured = false
 
 function shortHash(value: string): string {
@@ -80,13 +105,37 @@ async function ensureMemorySchema(): Promise<void> {
   if (!db) return
   if (typeof (db as any).query === 'function') {
     await (db as any).query(AGENT_MEMORY_TABLE_SQL)
+    try {
+      await (db as any).query(AGENT_MEMORY_RLS_SQL)
+    } catch {
+      // Ignore if RLS cannot be enabled in this runtime.
+    }
+    try {
+      await (db as any).query(AGENT_MEMORY_POLICY_SQL)
+    } catch {
+      // Ignore if policy creation is unavailable in this runtime.
+    }
     await (db as any).query(AGENT_MEMORY_INDEX_SQL)
   } else {
     const tableStmt = [AGENT_MEMORY_TABLE_SQL] as unknown as TemplateStringsArray
     ;(tableStmt as any).raw = [AGENT_MEMORY_TABLE_SQL]
+    const rlsStmt = [AGENT_MEMORY_RLS_SQL] as unknown as TemplateStringsArray
+    ;(rlsStmt as any).raw = [AGENT_MEMORY_RLS_SQL]
+    const policyStmt = [AGENT_MEMORY_POLICY_SQL] as unknown as TemplateStringsArray
+    ;(policyStmt as any).raw = [AGENT_MEMORY_POLICY_SQL]
     const indexStmt = [AGENT_MEMORY_INDEX_SQL] as unknown as TemplateStringsArray
     ;(indexStmt as any).raw = [AGENT_MEMORY_INDEX_SQL]
     await (db as any).sql(tableStmt)
+    try {
+      await (db as any).sql(rlsStmt)
+    } catch {
+      // Ignore if RLS cannot be enabled in this runtime.
+    }
+    try {
+      await (db as any).sql(policyStmt)
+    } catch {
+      // Ignore if policy creation is unavailable in this runtime.
+    }
     await (db as any).sql(indexStmt)
   }
   memorySchemaEnsured = true

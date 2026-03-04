@@ -1,8 +1,6 @@
 export const CREATOR_CHARM_STRATEGY_ABI = [
   { type: 'function', name: 'setCharmVault', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [] },
   { type: 'function', name: 'setSwapPool', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [] },
-  { type: 'function', name: 'setZRouter', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [] },
-  { type: 'function', name: 'setUseZRouter', stateMutability: 'nonpayable', inputs: [{ type: 'bool' }], outputs: [] },
   { type: 'function', name: 'setUniFactory', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [] },
   { type: 'function', name: 'setAutoFeeTier', stateMutability: 'nonpayable', inputs: [{ type: 'bool' }], outputs: [] },
   {

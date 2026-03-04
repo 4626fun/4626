@@ -75,8 +75,8 @@ function createResponse(status: number, payload: any) {
   } as any
 }
 
-function createDb(params: { profileEmail: string; profileOwnerAddress: string }) {
-  const { profileEmail, profileOwnerAddress } = params
+function createDb(params: { profileOwnerAddress: string; profilePrivyUserId?: string | null }) {
+  const { profileOwnerAddress, profilePrivyUserId = 'did:privy:123' } = params
   return {
     sql: vi.fn(async (strings: TemplateStringsArray, ...values: any[]) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
@@ -92,6 +92,7 @@ function createDb(params: { profileEmail: string; profileOwnerAddress: string })
               primary_wallet: profileOwnerAddress,
               embedded_wallet: null,
               csw_address: null,
+              privy_user_id: profilePrivyUserId,
             },
           ],
         }
@@ -124,13 +125,12 @@ describe('waitlist/verify-x', () => {
 
     getDbMock.mockResolvedValue(
       createDb({
-        profileEmail: 'user@example.com',
         profileOwnerAddress: '0x00000000000000000000000000000000000000aa',
       }) as any,
     )
   })
 
-  it('degrades to verified when X follow check is blocked by API access', async () => {
+  it('fails closed when X follow check is blocked by API access', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const u = String(url)
       if (u.includes('/users/by/username/') && u.toLowerCase().includes('4626fun')) {
@@ -145,6 +145,34 @@ describe('waitlist/verify-x', () => {
             },
           ],
         })
+      }
+      return createResponse(500, { error: 'unexpected_url', url: u })
+    })
+    vi.stubGlobal('fetch', fetchMock as any)
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'privy_token' },
+      body: { email: 'user@example.com' },
+    })
+    const res = createMockRes()
+    await handler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.verified).toBe(false)
+    expect(res.body?.data?.awarded).toBe(false)
+    expect(res.body?.data?.borderTier).toBe(0)
+  })
+
+  it('awards points only when follow verification succeeds', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      const u = String(url)
+      if (u.includes('/users/by/username/') && u.toLowerCase().includes('4626fun')) {
+        return createResponse(200, { data: { id: '222', username: '4626fun' } })
+      }
+      if (u.includes('/users/111/following')) {
+        return createResponse(200, { data: [{ id: '222', username: '4626fun' }], meta: {} })
       }
       return createResponse(500, { error: 'unexpected_url', url: u })
     })
@@ -165,58 +193,16 @@ describe('waitlist/verify-x', () => {
     expect(res.body?.data?.borderTier).toBe(1)
   })
 
-  it('avoids ON CONFLICT target mismatch (partial unique index safety)', async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      const u = String(url)
-      if (u.includes('/users/by/username/') && u.toLowerCase().includes('4626fun')) {
-        return createResponse(200, { data: { id: '222', username: '4626fun' } })
-      }
-      if (u.includes('/users/111/following')) {
-        return createResponse(403, {
-          errors: [
-            {
-              message:
-                'You currently have access to a subset of X API V2 endpoints and limited v1.1 endpoints (e.g. media post, oauth) only.',
-            },
-          ],
-        })
-      }
-      return createResponse(500, { error: 'unexpected_url', url: u })
-    })
-    vi.stubGlobal('fetch', fetchMock as any)
+  it('rejects when Privy token user does not match bound waitlist profile', async () => {
+    getDbMock.mockResolvedValueOnce(
+      createDb({
+        profileOwnerAddress: '0x00000000000000000000000000000000000000aa',
+        profilePrivyUserId: 'did:privy:someone-else',
+      }) as any,
+    )
 
-    // Simulate the production Postgres failure mode:
-    // "there is no unique or exclusion constraint matching the ON CONFLICT specification"
-    // when code uses `ON CONFLICT (signup_id, source, source_id)` but the DB only has a partial unique index.
-    const db = {
-      sql: vi.fn(async (strings: TemplateStringsArray, ...values: any[]) => {
-        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
-        if (text.includes('from profiles') && text.includes('where email')) {
-          void values
-          return {
-            rows: [
-              {
-                id: 1,
-                border_tier: 0,
-                x_follow_verified_at: null,
-                primary_wallet: '0x00000000000000000000000000000000000000aa',
-                embedded_wallet: null,
-                csw_address: null,
-              },
-            ],
-          }
-        }
-        if (text.includes('insert into points')) {
-          if (text.includes('on conflict (signup_id, source, source_id)')) {
-            throw new Error('there is no unique or exclusion constraint matching the ON CONFLICT specification')
-          }
-          return { rows: [{ id: 123 }] }
-        }
-        if (text.includes('update profiles') && text.includes('x_follow_verified_at')) return { rows: [{ border_tier: 1 }] }
-        return { rows: [] }
-      }),
-    }
-    getDbMock.mockResolvedValueOnce(db as any)
+    const fetchMock = vi.fn(async () => createResponse(500, { error: 'should_not_call_x_api' }))
+    vi.stubGlobal('fetch', fetchMock as any)
 
     const req = createMockReq({
       method: 'POST',
@@ -226,10 +212,9 @@ describe('waitlist/verify-x', () => {
     const res = createMockRes()
     await handler(req as any, res as any)
 
-    expect(res.statusCode).toBe(200)
-    expect(res.body?.success).toBe(true)
-    expect(res.body?.data?.verified).toBe(true)
-    expect(res.body?.data?.awarded).toBe(true)
+    expect(res.statusCode).toBe(403)
+    expect(res.body?.success).toBe(false)
+    expect(String(res.body?.error ?? '')).toContain('Not authorized')
   })
 })
 

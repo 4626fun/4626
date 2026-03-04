@@ -37,6 +37,35 @@ export async function ensureAgentRegistrationStateSchema(): Promise<void> {
     } catch {
       // Ignore if migration already applied or DDL is unavailable.
     }
+    try {
+      await db.sql`ALTER TABLE agent_registration_state ENABLE ROW LEVEL SECURITY;`
+    } catch {
+      // Ignore if RLS cannot be enabled in this runtime.
+    }
+    try {
+      await db.sql`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1
+            FROM pg_policies
+            WHERE schemaname = 'public'
+              AND tablename = 'agent_registration_state'
+              AND policyname = 'agent_registration_state_deny_all'
+          ) THEN
+            CREATE POLICY agent_registration_state_deny_all
+              ON agent_registration_state
+              FOR ALL
+              TO public
+              USING (false)
+              WITH CHECK (false);
+          END IF;
+        END
+        $$;
+      `
+    } catch {
+      // Ignore if policy creation is unavailable in this runtime.
+    }
     await db.sql`CREATE INDEX IF NOT EXISTS agent_registration_state_updated_idx ON agent_registration_state (updated_at DESC);`
     schemaEnsured = true
   } catch {

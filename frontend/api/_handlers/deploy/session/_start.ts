@@ -16,7 +16,6 @@ type StartRequest = {
   phase1Calls?: Array<{ to: Address; value?: bigint | number | string; data: Hex }>
   phase2CoreCalls?: Array<{ to: Address; value?: bigint | number | string; data: Hex }>
   phase2FinalizeCalls?: Array<{ to: Address; value?: bigint | number | string; data: Hex }>
-  phase2Calls?: Array<{ to: Address; value?: bigint | number | string; data: Hex }>
   phase3Calls?: Array<{ to: Address; value?: bigint | number | string; data: Hex }>
   phase4Calls?: Array<{ to: Address; value?: bigint | number | string; data: Hex }>
   version?: string
@@ -130,8 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const created = await proxyPost<{
       sessionId: string
-      sessionSignerAddress?: Address
-      sessionOwner: Address
+      sessionSignerAddress: Address
       expiresAt: string
     }>({
       origin,
@@ -146,10 +144,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const sessionId = String(created.payload.data.sessionId)
-    const sessionSignerAddressRaw = String(
-      created.payload.data.sessionSignerAddress ?? created.payload.data.sessionOwner ?? '',
-    ).trim()
-    const sessionOwner = getAddress(sessionSignerAddressRaw)
+    const sessionSignerAddressRaw = String(created.payload.data.sessionSignerAddress ?? '').trim()
+    const sessionSigner = getAddress(sessionSignerAddressRaw)
     const smartWallet = getAddress(body.smartWallet)
 
     const autoContinue = body.autoContinue !== false
@@ -167,7 +163,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const ownerInstalled = await isOwnerInstalled({
       smartWallet,
-      ownerAddress: sessionOwner,
+      ownerAddress: sessionSigner,
       maxScan: 512,
     })
     if (!ownerInstalled) {

@@ -471,7 +471,12 @@ export async function ensureCreatorAccessSchema(): Promise<void> {
     );
   `
 
-  await db.sql`CREATE INDEX IF NOT EXISTS allowlist_revoked_at_idx ON allowlist (revoked_at);`
+  try {
+    // Remove historical duplicate index name.
+    await db.sql`DROP INDEX IF EXISTS creator_allowlist_revoked_at_idx;`
+  } catch {
+    // ignore (already dropped or insufficient permissions)
+  }
   
   // Add csw_address column if it doesn't exist (migration for existing tables)
   try {
@@ -479,9 +484,18 @@ export async function ensureCreatorAccessSchema(): Promise<void> {
   } catch {
     // Column may already exist
   }
-  
-  await db.sql`CREATE INDEX IF NOT EXISTS allowlist_csw_idx ON allowlist (csw_address) WHERE csw_address IS NOT NULL;`
 
+  await db.sql`
+    CREATE INDEX IF NOT EXISTS allowlist_address_active_lc_idx
+      ON allowlist ((LOWER(address)))
+      WHERE revoked_at IS NULL;
+  `
+  await db.sql`
+    CREATE INDEX IF NOT EXISTS allowlist_csw_active_lc_idx
+      ON allowlist ((LOWER(csw_address)))
+      WHERE csw_address IS NOT NULL AND revoked_at IS NULL;
+  `
+  
   await db.sql`
     CREATE TABLE IF NOT EXISTS access_requests (
       id BIGSERIAL PRIMARY KEY,
@@ -509,7 +523,16 @@ export async function ensureCreatorAccessSchema(): Promise<void> {
   }
 
   await db.sql`CREATE INDEX IF NOT EXISTS access_requests_status_created_idx ON access_requests (status, created_at DESC);`
-  await db.sql`CREATE INDEX IF NOT EXISTS access_requests_wallet_idx ON access_requests (wallet_address);`
+  await db.sql`
+    CREATE INDEX IF NOT EXISTS access_requests_wallet_lc_created_idx
+      ON access_requests ((LOWER(wallet_address)), created_at DESC);
+  `
+  try {
+    // Remove historical duplicate index names.
+    await db.sql`DROP INDEX IF EXISTS creator_access_requests_wallet_idx;`
+  } catch {
+    // ignore (already dropped or insufficient permissions)
+  }
 
   // Prevent multiple concurrent pending requests per wallet.
   await db.sql`
@@ -517,5 +540,11 @@ export async function ensureCreatorAccessSchema(): Promise<void> {
       ON access_requests (wallet_address)
       WHERE status = 'pending';
   `
+  try {
+    // Remove historical duplicate unique index name.
+    await db.sql`DROP INDEX IF EXISTS creator_access_requests_wallet_pending_unique;`
+  } catch {
+    // ignore (already dropped or insufficient permissions)
+  }
 }
 

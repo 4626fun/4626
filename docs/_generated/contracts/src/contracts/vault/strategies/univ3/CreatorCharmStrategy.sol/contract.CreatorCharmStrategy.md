@@ -93,24 +93,6 @@ uint32 public twapDuration = DEFAULT_TWAP_DURATION
 ```
 
 
-### zRouter
-zRouter for gas-efficient swaps (optional)
-
-Base: TBD
-
-
-```solidity
-IzRouter public zRouter
-```
-
-
-### useZRouter
-
-```solidity
-bool public useZRouter = false
-```
-
-
 ### uniFactory
 Uniswap V3 Factory for auto fee tier discovery
 
@@ -229,24 +211,6 @@ function setCreatorOracle(address _creatorOracle) external onlyOwner;
 
 ```solidity
 function setTwapDuration(uint32 _twapDuration) external onlyOwner;
-```
-
-### setZRouter
-
-Set zRouter address for gas-efficient swaps
-
-
-```solidity
-function setZRouter(address _zRouter) external onlyOwner;
-```
-
-### setUseZRouter
-
-Toggle between zRouter (gas-efficient) and Uniswap Router
-
-
-```solidity
-function setUseZRouter(bool _useZRouter) external onlyOwner;
 ```
 
 ### setUniFactory
@@ -453,7 +417,7 @@ function _bytesToHex(bytes memory data) internal pure returns (string memory);
 
 Swap CREATOR → USDC with slippage protection
 
-Uses zRouter if enabled, auto fee tier if enabled
+Uses Uniswap V3 router with optional auto fee tier discovery.
 
 
 ```solidity

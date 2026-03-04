@@ -54,11 +54,17 @@ export function TokenInput({
   }, [amount, tokenBalanceValue])
 
   return (
-    <div className="rounded-2xl border border-white/12 bg-black/35 p-4 backdrop-blur-sm">
+    <div
+      className="rounded-2xl border p-4 backdrop-blur-sm"
+      style={{
+        borderColor: 'rgb(var(--vault-border-strong) / 0.6)',
+        background: 'rgb(var(--vault-card-raised) / 0.62)',
+      }}
+    >
       <div className="flex items-start justify-between gap-3">
-        <div className="text-sm text-zinc-400">{label}</div>
+        <div className="bv-kicker">{label}</div>
         {balanceLabel && (
-          <div className="text-xs text-zinc-500" aria-live="polite">
+          <div className="text-xs text-vault-muted font-mono" aria-live="polite">
             Balance: {balanceLabel}
           </div>
         )}
@@ -79,17 +85,21 @@ export function TokenInput({
             onChange={(event) => onAmountChange(event.target.value)}
             placeholder={readOnly ? '—' : '0.0'}
             className={cn(
-              'w-full bg-transparent text-4xl leading-tight font-semibold tracking-tight text-white outline-none',
-              'placeholder:text-zinc-600',
-              'border-b border-transparent focus:border-zinc-600',
+              'w-full border-b border-transparent bg-transparent font-display text-[2.45rem] leading-tight font-medium tracking-[-0.02em] text-vault-text outline-none',
+              'placeholder:text-vault-muted',
+              'focus:border-[rgb(var(--vault-border-strong)/0.8)]',
             )}
           />
-          {amountUsd ? <div className="mt-1 text-xs text-zinc-500">{amountUsd}</div> : null}
+          {amountUsd ? <div className="mt-1 text-xs text-vault-muted font-mono">{amountUsd}</div> : null}
         </div>
         <button
           type="button"
           onClick={onSelectToken}
-          className="inline-flex min-w-34 items-center gap-2 rounded-xl border border-white/12 bg-white/4 px-3 py-2 transition hover:bg-white/8"
+          className="inline-flex min-w-34 items-center gap-2 rounded-xl border px-3 py-2 transition hover:bg-white/8"
+          style={{
+            borderColor: 'rgb(var(--vault-border-strong) / 0.64)',
+            background: 'rgb(var(--vault-card) / 0.42)',
+          }}
           aria-label={`Select ${label} token`}
         >
           <TokenAvatar
@@ -102,17 +112,23 @@ export function TokenInput({
             symbol={token.symbol}
             size={30}
           />
-          <span className="font-medium text-sm text-white">
+          <span className="text-sm font-medium text-vault-text">
             {tokenIdentityLoading ? 'Loading…' : token.symbol}
           </span>
         </button>
       </div>
 
       {!readOnly && tokenIdentityLoading === false && tokenBalanceValue !== null ? (
-        <div className="mt-3 rounded-xl border border-white/10 bg-white/3 px-3 py-2.5">
-          <div className="mb-2 flex items-center justify-between text-[10px] text-zinc-500">
+        <div
+          className="mt-3 rounded-xl border px-3 py-2.5"
+          style={{
+            borderColor: 'rgb(var(--vault-border-strong) / 0.52)',
+            background: 'rgb(var(--vault-card) / 0.35)',
+          }}
+        >
+          <div className="mb-2 flex items-center justify-between text-[10px] text-vault-muted">
             <span>Amount slider</span>
-            <span className="font-medium text-zinc-300">{sliderPercent}%</span>
+            <span className="font-medium text-vault-text">{sliderPercent}%</span>
           </div>
           <input
             type="range"
@@ -126,7 +142,7 @@ export function TokenInput({
             className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-zinc-700 accent-brand-primary"
             aria-label={`${label} amount percentage`}
           />
-          <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-500">
+          <div className="mt-2 flex items-center justify-between text-[10px] text-vault-muted">
             <span>0%</span>
             {quickPercentages.map((pct) => (
               <span key={pct}>{pct}%</span>
@@ -135,7 +151,7 @@ export function TokenInput({
         </div>
       ) : null}
 
-      <div className="mt-2 text-[10px] text-zinc-500">
+      <div className="mt-2 text-[10px] text-vault-muted">
         {isLoadingToken ? <span className="inline-flex items-center gap-1">Resolving token metadata…</span> : null}
       </div>
     </div>

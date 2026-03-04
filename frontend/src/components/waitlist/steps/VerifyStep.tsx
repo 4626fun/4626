@@ -88,11 +88,6 @@ type VerifyStepProps = {
   privyReady: boolean
   privyVerifyBusy: boolean
   privyVerifyError: string | null
-  showSiwf?: boolean
-  siwfFid?: number | null
-  siwfBusy?: boolean
-  siwfError?: string | null
-  onSiwfContinue?: () => void
   walletOwnershipValid: boolean
   ownershipEvidenceAvailable: boolean
   cswMismatch?: boolean
@@ -137,11 +132,6 @@ export const VerifyStep = memo(function VerifyStep({
   privyReady,
   privyVerifyBusy,
   privyVerifyError,
-  showSiwf,
-  siwfFid,
-  siwfBusy,
-  siwfError,
-  onSiwfContinue,
   walletOwnershipValid,
   ownershipEvidenceAvailable,
   cswMismatch,
@@ -171,7 +161,7 @@ export const VerifyStep = memo(function VerifyStep({
   onPrivyFallback,
   onSubmit,
 }: VerifyStepProps) {
-  const hasVerification = Boolean(verifiedWallet) || Boolean(siwfFid)
+  const hasVerification = Boolean(verifiedWallet)
   const hasCreatorCoin = !!creatorCoin?.address
   const showSubmitButton = hasVerification && (hasCreatorCoin || creatorCoinDeclaredMissing)
   const ownerWallets = useMemo(() => creatorCoin?.ownerWallets ?? [], [creatorCoin?.ownerWallets])
@@ -201,7 +191,7 @@ export const VerifyStep = memo(function VerifyStep({
   }, [hasVerification, hasCreatorCoin, creatorCoinDeclaredMissing, showSubmitButton])
   const [showTrouble, setShowTrouble] = useState(false)
   const canContinue = !privyVerifyBusy && !busy && !mappingPrimaryBusy
-  const showPrivyError = Boolean(privyVerifyError) || Boolean(siwfError) || Boolean(mappingError)
+  const showPrivyError = Boolean(privyVerifyError) || Boolean(mappingError)
   const emailError = emailValue.trim().length > 0 && !isEmailValid ? 'Enter a valid email address.' : null
 
   const helperText = useMemo(() => {
@@ -217,9 +207,8 @@ export const VerifyStep = memo(function VerifyStep({
       : null
   const connectedWalletShort = useMemo(() => {
     if (verifiedWallet) return shortAddress(verifiedWallet, 8, 6)
-    if (siwfFid) return `FID ${siwfFid}`
     return 'Unavailable'
-  }, [siwfFid, verifiedWallet])
+  }, [verifiedWallet])
   const creatorCoinAddressShort = useMemo(() => shortAddress(creatorCoin?.address, 8, 6), [creatorCoin?.address])
   const payoutRecipientShort = useMemo(() => shortAddress(payoutRecipient, 8, 6), [payoutRecipient])
   const coinMarketCap = useMemo(() => formatUsdCompact(creatorCoin?.marketCapUsd), [creatorCoin?.marketCapUsd])
@@ -243,6 +232,7 @@ export const VerifyStep = memo(function VerifyStep({
   const panelClass = 'rounded-2xl border border-white/6 bg-white/2'
   const microPanelClass = 'rounded-xl border border-white/4 bg-white/1'
   const mappingReady = mappingStatus === 'READY_FOR_OWNER_INSTALL'
+  const mappingShownAsOptional = canSubmit
   const mappingAction = onMappingPrimaryAction ?? onPrivyContinue
   const embeddedReady = Boolean(embeddedEoaAddress)
   const zoraLinked = (zoraProviderAddresses?.length ?? 0) > 0
@@ -261,7 +251,7 @@ export const VerifyStep = memo(function VerifyStep({
   if (hasVerification && simpleVerifiedMode) {
     const profileReady = Boolean(hasCreatorCoin || creatorCoinDeclaredMissing)
     const ownerReady = !ownershipGateActive || walletOwnershipValid
-    const setupReady = profileReady && ownerReady && mappingReady
+    const setupReady = profileReady && ownerReady
 
     return (
       <motion.div key="verify-simple" {...fadeUp} className="space-y-6 sm:space-y-7">
@@ -334,7 +324,7 @@ export const VerifyStep = memo(function VerifyStep({
             ) : (
               <span className="text-[12px] text-amber-300 inline-flex items-center gap-1.5">
                 <AlertTriangle className="h-3.5 w-3.5" />
-                Required
+                {mappingShownAsOptional ? 'Queued' : 'Required'}
               </span>
             )}
           </div>
@@ -354,7 +344,7 @@ export const VerifyStep = memo(function VerifyStep({
             ) : (
               <span className="text-[12px] text-amber-300 inline-flex items-center gap-1.5">
                 <AlertTriangle className="h-3.5 w-3.5" />
-                Required
+                {mappingShownAsOptional ? 'Queued' : 'Required'}
               </span>
             )}
           </div>
@@ -374,7 +364,7 @@ export const VerifyStep = memo(function VerifyStep({
             ) : (
               <span className="text-[12px] text-amber-300 inline-flex items-center gap-1.5">
                 <AlertTriangle className="h-3.5 w-3.5" />
-                Unresolved
+                {mappingShownAsOptional ? 'Queued' : 'Unresolved'}
               </span>
             )}
           </div>
@@ -400,7 +390,7 @@ export const VerifyStep = memo(function VerifyStep({
           </div>
         </motion.div>
 
-        {!mappingReady && mappingPrimaryCtaLabel ? (
+        {!mappingReady && mappingPrimaryCtaLabel && !canSubmit ? (
           <motion.div {...scaleIn}>
             <button
               type="button"
@@ -413,13 +403,13 @@ export const VerifyStep = memo(function VerifyStep({
           </motion.div>
         ) : null}
 
-        {mappingError ? (
+        {mappingError && !canSubmit ? (
           <motion.div {...fadeUp}>
             <Alert variant="error">{mappingError}</Alert>
           </motion.div>
         ) : null}
 
-        {!mappingError && canonicalZoraCswUnresolvedReason && !canonicalReady ? (
+        {!mappingError && canonicalZoraCswUnresolvedReason && !canonicalReady && !canSubmit ? (
           <motion.div {...fadeUp}>
             <Alert variant="warning">{canonicalZoraCswUnresolvedReason}</Alert>
           </motion.div>
@@ -504,27 +494,6 @@ export const VerifyStep = memo(function VerifyStep({
 
           <p className="text-sm text-zinc-500">We'll continue automatically.</p>
 
-          {showSiwf ? (
-            <button
-              type="button"
-              className="w-full flex items-center justify-center gap-2 min-h-[48px] rounded-2xl border border-white/10 bg-white/2 text-zinc-200 font-medium text-[14px] px-4 py-3 transition-all duration-200 hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={Boolean(siwfBusy) || busy}
-              onClick={onSiwfContinue}
-            >
-              {siwfBusy ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Verifying Farcaster…
-                </>
-              ) : (
-                <>
-                  <Fingerprint className="w-4 h-4" />
-                  Verify with Farcaster
-                </>
-              )}
-            </button>
-          ) : null}
-
           <div className="flex items-center justify-between">
             <div className="text-[12px] text-zinc-500">{helperText || '\u00A0'}</div>
             <div className="flex items-center gap-3">
@@ -549,7 +518,7 @@ export const VerifyStep = memo(function VerifyStep({
 
           {showPrivyError ? (
             <motion.div {...fadeUp}>
-              <Alert variant="error">{mappingError || siwfError || privyVerifyError}</Alert>
+              <Alert variant="error">{mappingError || privyVerifyError}</Alert>
             </motion.div>
           ) : null}
 

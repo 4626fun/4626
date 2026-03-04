@@ -5,7 +5,6 @@ import { getAppBaseUrl, getWaitlistReferralBaseUrl } from '@/lib/host'
 import { trackEvent } from '@/lib/analytics'
 import { useAccount, usePublicClient, useSignMessage } from 'wagmi'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { useFarcasterAuth } from '@/hooks/useFarcasterAuth'
 import { isPrivyClientEnabled } from '@/lib/flags'
 import { usePrivyClientStatus, ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import {
@@ -52,8 +51,8 @@ const EVM_RE = /^0x[a-fA-F0-9]{40}$/
 const SOL_RE = /^[1-9A-HJ-NP-Za-km-z]+$/
 const BASE_EASE = [0.4, 0, 0.2, 1] as const
 const BASE_MOTION_MS = 0.2
-const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
-const HANDOFF_HASH_KEY = 'cv_session'
+const HANDOFF_QUERY_KEY = 'cv_handoff'
+const SERVER_CLAIMABLE_BONUS_TASKS = new Set<ActionKey>(['github', 'tiktok', 'instagram', 'reddit'])
 
 const CREATOR_COIN_READ_ABI = [
   {
@@ -612,7 +611,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   const publicClient = usePublicClient({ chainId: base.id })
   const { signMessageAsync } = useSignMessage()
   const siwe = useSiweAuth()
-  const farcasterAuth = useFarcasterAuth()
   const miniApp = useMiniAppContext()
 
   const patchWaitlist = useCallback((patch: Partial<WaitlistState>) => {
@@ -691,10 +689,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
 
   const borderTier = waitlistPosition?.borderTier ?? 0
   const hasUpgradedBorder = borderTier >= 1
-  const siwfFid = useMemo(() => {
-    const fid = typeof farcasterAuth.fid === 'number' ? farcasterAuth.fid : null
-    return fid && Number.isFinite(fid) && fid > 0 ? fid : null
-  }, [farcasterAuth.fid])
 
   const privyStatus = usePrivyClientStatus()
   const showPrivy = isPrivyClientEnabled()
@@ -1026,30 +1020,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     ensureBaseSubAccount,
   })
 
-  useEffect(() => {
-    if (step !== 'verify') return
-    if (verifiedWallet) return
-    const candidate = typeof farcasterAuth.session?.primaryAddress === 'string' ? farcasterAuth.session.primaryAddress : ''
-    if (!isValidEvmAddress(candidate)) return
-    verifyWallet(getAddress(candidate), 'siwf')
-  }, [farcasterAuth.session?.primaryAddress, step, verifiedWallet, verifyWallet])
-
-  const handleSiwfContinue = useCallback(async () => {
-    const session = await farcasterAuth.signIn()
-    const candidate = typeof session?.primaryAddress === 'string' ? session.primaryAddress : ''
-    if (isValidEvmAddress(candidate)) {
-      verifyWallet(getAddress(candidate), 'siwf')
-      setPrivyVerifyError(null)
-      return
-    }
-    const fid = typeof session?.fid === 'number' ? session.fid : null
-    if (fid && fid > 0) {
-      setPrivyVerifyError('Farcaster verified. Connect a wallet owner address to continue.')
-      return
-    }
-    setPrivyVerifyError('Farcaster verification failed. Try again.')
-  }, [farcasterAuth, setPrivyVerifyError, verifyWallet])
-
   const openInAppPrivyLogin = useCallback(async () => {
     if (privyVerifyBusy) return
 
@@ -1182,7 +1152,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       zoraReadOnlyLinked,
     ],
   )
-  const ownerInstallReady = ownerInstallStatus === 'READY_FOR_OWNER_INSTALL'
   const ownerWalletsNormalized = useMemo(() => {
     const seen = new Set<string>()
     const out: string[] = []
@@ -1206,24 +1175,23 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     return isValidEvmAddress(raw) ? raw.toLowerCase() : null
   }, [verifiedWallet])
   const connectedWalletAuthorized = useMemo(() => {
-    if (!verifiedWalletNormalized) {
-      return Boolean(siwfFid) && (!creatorCoin?.address || creatorCoinDeclaredMissing || !ownershipEvidenceAvailable)
-    }
+    if (!verifiedWalletNormalized) return false
     if (!creatorCoin?.address) return true
     if (!ownershipEvidenceAvailable) return true
     if (payoutRecipientNormalized && verifiedWalletNormalized === payoutRecipientNormalized) return true
     return ownerWalletsNormalized.includes(verifiedWalletNormalized)
   }, [
-    siwfFid,
     creatorCoin?.address,
-    creatorCoinDeclaredMissing,
     ownerWalletsNormalized,
     ownershipEvidenceAvailable,
     payoutRecipientNormalized,
     verifiedWalletNormalized,
   ])
   const canSubmit =
-    ownerInstallReady && emailOk && (Boolean(creatorCoin?.address) || creatorCoinDeclaredMissing) && connectedWalletAuthorized
+    Boolean(verifiedWalletNormalized) &&
+    emailOk &&
+    (Boolean(creatorCoin?.address) || creatorCoinDeclaredMissing) &&
+    connectedWalletAuthorized
   const privyAuthedLogRef = useRef(false)
   const privyWalletReadyLogRef = useRef(false)
   const embeddedFoundLogRef = useRef<string | null>(null)
@@ -1615,13 +1583,23 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         let target = deployUrl
         try {
           const parsed = new URL(deployUrl)
-          // Cross-origin handoff: copy SIWE bearer token via hash so app origin can restore session.
+          // Cross-origin handoff: mint one-time code server-side (never place session token in URL).
           if (typeof window !== 'undefined' && parsed.origin !== window.location.origin) {
-            const token = sessionStorage.getItem(SESSION_TOKEN_KEY)?.trim()
-            if (token) {
-              const hashParams = new URLSearchParams(parsed.hash.startsWith('#') ? parsed.hash.slice(1) : parsed.hash)
-              hashParams.set(HANDOFF_HASH_KEY, token)
-              parsed.hash = hashParams.toString()
+            const handoffRes = await apiFetch('/api/auth/handoff/create', {
+              method: 'POST',
+              headers: { Accept: 'application/json' },
+            }).catch(() => null)
+            const handoffJson = handoffRes
+              ? ((await handoffRes.json().catch(() => null)) as
+                  | { success?: boolean; data?: { code?: string } | null }
+                  | null)
+              : null
+            const handoffCode =
+              handoffRes?.ok && handoffJson?.success && typeof handoffJson?.data?.code === 'string'
+                ? handoffJson.data.code.trim()
+                : ''
+            if (handoffCode) {
+              parsed.searchParams.set(HANDOFF_QUERY_KEY, handoffCode)
               target = parsed.toString()
             }
           }
@@ -1635,7 +1613,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     } finally {
       setDeployHandoffBusy(false)
     }
-  }, [deployPath, deployUrl, getAccessToken, navigate, patchWaitlist, privyAuthed, siwe])
+  }, [apiFetch, deployPath, deployUrl, getAccessToken, navigate, patchWaitlist, privyAuthed, siwe])
 
   const primaryCta = useMemo(() => {
     if (deployAccessState !== 'ready') return null
@@ -1667,9 +1645,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     const verificationSubject =
       verifiedWallet && isValidEvmAddress(verifiedWallet)
         ? verifiedWallet.toLowerCase()
-        : siwfFid
-          ? `fid:${siwfFid}`
-          : null
+        : null
     if (step !== 'verify' || !verificationSubject) {
       autoSubmitAttemptRef.current = null
       return
@@ -1687,7 +1663,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     void submitWaitlist()
     // submitWaitlist is intentionally omitted to avoid re-firing on identity changes each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busy, canSubmit, creatorCoin?.address, creatorCoinDeclaredMissing, siwfFid, step, verifiedWallet])
+  }, [busy, canSubmit, creatorCoin?.address, creatorCoinDeclaredMissing, step, verifiedWallet])
 
   // Auto-fill email from Privy user when authenticated
   useEffect(() => {
@@ -1715,6 +1691,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         try {
           const res = await apiFetch(`/api/waitlist/position?email=${encodeURIComponent(emailForSync)}`, {
             method: 'GET',
+            withCredentials: true,
             headers: { Accept: 'application/json' },
             signal: controller.signal,
           })
@@ -1792,7 +1769,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       }
       // Best-effort: sync task completion to server points ledger (idempotent).
       // We key by email so all waitlist users can participate (not just wallet-auth users).
-      if (doneEmail) {
+      if (doneEmail && SERVER_CLAIMABLE_BONUS_TASKS.has(action)) {
         void (async () => {
           try {
             await apiFetch('/api/waitlist/task-claim', {
@@ -1869,9 +1846,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     }
     if (verifiedWallet && isValidEvmAddress(verifiedWallet)) {
       out.push({ method: verifiedWalletMethod ?? 'siwe', subject: verifiedWallet, timestamp: ts })
-    }
-    if (siwfFid) {
-      out.push({ method: 'siwf', subject: `fid:${siwfFid}`, timestamp: ts })
     }
     if (verifiedSolana && isValidSolanaAddress(verifiedSolana)) {
       out.push({ method: 'solana', subject: verifiedSolana, timestamp: ts })
@@ -2056,7 +2030,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
           intent: {
             persona,
             hasCreatorCoin: creatorCoinBusy ? null : creatorCoinDeclaredMissing ? false : Boolean(creatorCoin?.address),
-            fid: siwfFid,
+            fid: null,
           },
         }),
       })
@@ -2434,11 +2408,6 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     privyReady={privyReady}
                     privyVerifyBusy={privyVerifyBusy}
                     privyVerifyError={privyVerifyError}
-                    showSiwf={false}
-                    siwfFid={siwfFid}
-                    siwfBusy={farcasterAuth.status === 'loading'}
-                    siwfError={null}
-                    onSiwfContinue={handleSiwfContinue}
                     walletOwnershipValid={connectedWalletAuthorized}
                     ownershipEvidenceAvailable={ownershipEvidenceAvailable}
                     cswMismatch={cswMismatch}

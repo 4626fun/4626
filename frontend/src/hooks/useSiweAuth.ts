@@ -16,7 +16,6 @@ type CswOwnershipAttestation = {
 }
 
 const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
-const HANDOFF_HASH_KEY = 'cv_session'
 
 type PrivySessionResponse = { address: string; sessionToken: string; privyUserId?: string } | null
 
@@ -178,35 +177,6 @@ export function useSiweAuth() {
       setAuthAddress(a)
     } catch {
       setAuthAddress(null)
-    }
-  }, [])
-
-  // Legacy backward-compat: consume any leftover `#cv_session=...` hash from old
-  // cross-domain handoff URLs (bookmarks, shared links). After the domain merge this
-  // path is rarely hit, but we keep it for one release cycle to avoid breaking stragglers.
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const existing = getStoredSessionToken()
-    if (existing) return
-    const rawHash = String(window.location.hash || '')
-    if (!rawHash || rawHash.length < 2) return
-    const hash = rawHash.startsWith('#') ? rawHash.slice(1) : rawHash
-    if (!hash.includes('=') || !hash.toLowerCase().includes(`${HANDOFF_HASH_KEY}=`)) return
-
-    try {
-      const params = new URLSearchParams(hash)
-      const token = (params.get(HANDOFF_HASH_KEY) ?? '').trim()
-      if (!token) return
-
-      setStoredSessionToken(token)
-
-      // Remove the handoff token from the URL (avoid leaking via copy/paste).
-      params.delete(HANDOFF_HASH_KEY)
-      const nextHash = params.toString()
-      const nextUrl = `${window.location.pathname}${window.location.search}${nextHash ? `#${nextHash}` : ''}`
-      window.history.replaceState({}, '', nextUrl)
-    } catch {
-      // ignore
     }
   }, [])
 

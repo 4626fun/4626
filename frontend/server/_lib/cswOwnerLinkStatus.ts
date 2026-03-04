@@ -72,6 +72,35 @@ export async function ensureCswOwnerLinkStatusSchema(db: Db): Promise<void> {
     await db.sql`ALTER TABLE csw_owner_link_status ADD COLUMN IF NOT EXISTS metadata JSONB NULL;`
     await db.sql`ALTER TABLE csw_owner_link_status ADD COLUMN IF NOT EXISTS checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`
     await db.sql`ALTER TABLE csw_owner_link_status ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`
+    try {
+      await db.sql`ALTER TABLE csw_owner_link_status ENABLE ROW LEVEL SECURITY;`
+    } catch {
+      // Ignore if RLS cannot be enabled in this runtime.
+    }
+    try {
+      await db.sql`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1
+            FROM pg_policies
+            WHERE schemaname = 'public'
+              AND tablename = 'csw_owner_link_status'
+              AND policyname = 'csw_owner_link_status_deny_all'
+          ) THEN
+            CREATE POLICY csw_owner_link_status_deny_all
+              ON csw_owner_link_status
+              FOR ALL
+              TO public
+              USING (false)
+              WITH CHECK (false);
+          END IF;
+        END
+        $$;
+      `
+    } catch {
+      // Ignore if policy creation is unavailable in this runtime.
+    }
 
     try {
       await db.sql`

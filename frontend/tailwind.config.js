@@ -40,9 +40,12 @@ export default {
         vault: {
           bg: 'rgb(var(--vault-bg) / <alpha-value>)',
           card: 'rgb(var(--vault-card) / <alpha-value>)',
+          cardRaised: 'rgb(var(--vault-card-raised) / <alpha-value>)',
           border: 'rgb(var(--vault-border) / <alpha-value>)',
+          borderStrong: 'rgb(var(--vault-border-strong) / <alpha-value>)',
           text: 'rgb(var(--vault-text) / <alpha-value>)',
           subtext: 'rgb(var(--vault-subtext) / <alpha-value>)',
+          muted: 'rgb(var(--vault-muted) / <alpha-value>)',
         },
         // Surface colors - cool slate
         surface: {

@@ -353,16 +353,18 @@ export default async function handler(req: any, res: any) {
   const primaryWalletInput = normalizeAddress(walletRaw)
   const principalWalletRaw = readRequestPrincipalAddress(req, { lowercase: false })
   const principalWallet = normalizeAddress(principalWalletRaw)
+  const hasTrustedPrincipal = principalWallet.length > 0 && isValidEvmAddress(principalWallet)
 
   let primaryWallet = primaryWalletInput
-  if (principalWallet && isValidEvmAddress(principalWallet)) {
-    // If the caller did not provide a wallet, bind the signup to the signed-in wallet.
-    // If they DID provide one and it doesn't match, do not hard-fail:
-    // - This endpoint is used by the marketing waitlist flow which can be used without SIWE.
-    // - Users may also have a stale auth token in sessionStorage from a different wallet/app host.
-    if (!primaryWallet) {
-      primaryWallet = principalWallet
+  if (hasTrustedPrincipal) {
+    if (primaryWallet && primaryWallet !== principalWallet) {
+      return res.status(403).json({
+        success: false,
+        error: 'Submitted wallet must match authenticated wallet.',
+      } satisfies ApiEnvelope<never>)
     }
+    // Always bind wallet identity to the authenticated principal.
+    primaryWallet = principalWallet
   }
 
   if (primaryWallet.length > 0 && !isValidEvmAddress(primaryWallet)) {
@@ -405,17 +407,32 @@ export default async function handler(req: any, res: any) {
   const farcasterFid = farcasterFidRaw && Number.isFinite(farcasterFidRaw) && farcasterFidRaw > 0 ? farcasterFidRaw : null
   const contactPreference = normalizeContactPreference(body.contactPreference)
   const syntheticEmail = isAnySyntheticEmail(email)
+  const primaryWalletForPersistence = hasTrustedPrincipal ? primaryWallet : ''
+  const baseSubAccountForPersistence = hasTrustedPrincipal ? baseSubAccount : ''
+  const cswAddressForPersistence = hasTrustedPrincipal ? cswAddress : ''
+  // Only authenticated principals can mutate profile intent/contact metadata.
+  const personaForPersistence = hasTrustedPrincipal ? persona : null
+  const hasCreatorCoinForPersistence = hasTrustedPrincipal ? hasCreatorCoinRaw : null
+  const farcasterFidForPersistence = hasTrustedPrincipal ? farcasterFid : null
+  const contactPreferenceForPersistence = hasTrustedPrincipal ? contactPreference : null
 
   // Wallet-only onboarding can submit a synthetic fallback email so long as the
   // user has a non-email verification/contact signal.
   if (syntheticEmail && contactPreference === 'email') {
     return res.status(400).json({ success: false, error: 'A real email address is required.' } satisfies ApiEnvelope<never>)
   }
-  const verifications = sanitizeVerifications(body.verifications)
+  if ((syntheticEmail || persona === 'creator') && !hasTrustedPrincipal) {
+    return res.status(401).json({
+      success: false,
+      error: 'Wallet verification is required before joining.',
+    } satisfies ApiEnvelope<never>)
+  }
+  // Never persist untrusted verification claims.
+  const verifications = hasTrustedPrincipal ? sanitizeVerifications(body.verifications) : []
 
   const hasVerificationSignal =
     verifications.length > 0 ||
-    (primaryWallet.length > 0 && isValidEvmAddress(primaryWallet)) ||
+    (primaryWalletForPersistence.length > 0 && isValidEvmAddress(primaryWalletForPersistence)) ||
     (solanaWallet.length > 0 && isValidSolanaAddress(solanaWallet)) ||
     (typeof farcasterFid === 'number' && farcasterFid > 0)
 
@@ -428,11 +445,16 @@ export default async function handler(req: any, res: any) {
 
   const referralFromBody = normalizeReferralCodeOrNull(body.referralCode)
   const claimReferralCode = normalizeReferralCodeOrNull(body.claimReferralCode)
+  const claimReferralCodeForPersistence = hasTrustedPrincipal ? claimReferralCode : null
   let privyUserId: string | null = null
   let embeddedWallet: string | null = null
   let embeddedWalletChain: string | null = null
   let embeddedWalletClientType: string | null = null
-  const walletForDedup = primaryWallet.length > 0 ? primaryWallet : null
+  const walletForDedup = primaryWalletForPersistence.length > 0 ? primaryWalletForPersistence : null
+  const trustedWalletForDedup = hasTrustedPrincipal ? walletForDedup : null
+  const trustedCswForDedup = hasTrustedPrincipal && cswAddressForPersistence.length > 0 ? cswAddressForPersistence : null
+  const trustedBaseSubForDedup =
+    hasTrustedPrincipal && baseSubAccountForPersistence.length > 0 ? baseSubAccountForPersistence : null
   const ipHash = hashForAttribution(getClientIp(req))
   const uaHash = hashForAttribution(getUserAgent(req))
 
@@ -466,6 +488,12 @@ export default async function handler(req: any, res: any) {
       console.warn('waitlist: privy error', e?.message ? String(e.message) : e)
     }
   }
+
+  const solanaWalletForPersistence = hasTrustedPrincipal ? solanaWallet : ''
+  const privyUserIdForPersistence = hasTrustedPrincipal ? privyUserId : null
+  const embeddedWalletForPersistence = hasTrustedPrincipal ? embeddedWallet : null
+  const embeddedWalletChainForPersistence = hasTrustedPrincipal ? embeddedWalletChain : null
+  const embeddedWalletClientTypeForPersistence = hasTrustedPrincipal ? embeddedWalletClientType : null
 
   const dbConfigured = isDbConfigured()
   const supabaseOnly = isSupabaseAdminConfigured()
@@ -579,10 +607,10 @@ export default async function handler(req: any, res: any) {
           return pickBestProfileRow(candidates)
         }
 
-        const embeddedForDedup = embeddedWallet || null
+        const embeddedForDedup = embeddedWalletForPersistence || null
         const dedupAddressSignals = Array.from(
           new Set(
-            [walletForDedup, embeddedForDedup, cswAddress.length > 0 ? cswAddress : null, baseSubAccount.length > 0 ? baseSubAccount : null]
+            [trustedWalletForDedup, embeddedForDedup, trustedCswForDedup, trustedBaseSubForDedup]
               .filter((v): v is string => Boolean(v)),
           ),
         )
@@ -593,11 +621,11 @@ export default async function handler(req: any, res: any) {
           if (existingByIdentity) break
         }
 
-        if (!existingByIdentity && privyUserId) {
+        if (!existingByIdentity && privyUserIdForPersistence) {
           const { data: privyRows, error: privyError } = await supabase
             .from('profiles')
             .select('id,email,referral_code,primary_wallet,privy_user_id,created_at,updated_at')
-            .eq('privy_user_id', privyUserId)
+            .eq('privy_user_id', privyUserIdForPersistence)
             .limit(10)
           if (privyError) throw new Error(privyError.message)
           const mapped = (privyRows ?? []).map(toProfileRow).filter(isSupabaseProfileRow)
@@ -622,24 +650,28 @@ export default async function handler(req: any, res: any) {
           const patch: Record<string, unknown> = { updated_at: nowIso }
           const nextEmail = shouldAdoptIncomingEmail(row.email, email) ? email : row.email
           if (normalizeEmail(nextEmail) !== normalizeEmail(row.email)) patch.email = nextEmail
-          if (primaryWallet.length > 0) patch.primary_wallet = primaryWallet
-          if (solanaWallet.length > 0) {
-            patch.solana_wallet = solanaWallet
-            patch.canonical_solana_wallet = solanaWallet
+          if (primaryWalletForPersistence.length > 0) patch.primary_wallet = primaryWalletForPersistence
+          if (solanaWalletForPersistence.length > 0) {
+            patch.solana_wallet = solanaWalletForPersistence
+            patch.canonical_solana_wallet = solanaWalletForPersistence
           }
-          if (privyUserId) patch.privy_user_id = privyUserId
-          if (embeddedWallet) patch.embedded_wallet = embeddedWallet
-          if (embeddedWalletChain) patch.embedded_wallet_chain = embeddedWalletChain
-          if (embeddedWalletClientType) patch.embedded_wallet_client_type = embeddedWalletClientType
-          if (baseSubAccount.length > 0) patch.base_sub_account = baseSubAccount
-          if (persona) patch.persona = persona
-          if (typeof hasCreatorCoinRaw === 'boolean') patch.has_creator_coin = hasCreatorCoinRaw
-          if (typeof farcasterFid === 'number' && farcasterFid > 0) patch.farcaster_fid = farcasterFid
-          if (contactPreference) patch.contact_preference = contactPreference
+          if (privyUserIdForPersistence) patch.privy_user_id = privyUserIdForPersistence
+          if (embeddedWalletForPersistence) patch.embedded_wallet = embeddedWalletForPersistence
+          if (embeddedWalletChainForPersistence) patch.embedded_wallet_chain = embeddedWalletChainForPersistence
+          if (embeddedWalletClientTypeForPersistence) {
+            patch.embedded_wallet_client_type = embeddedWalletClientTypeForPersistence
+          }
+          if (baseSubAccountForPersistence.length > 0) patch.base_sub_account = baseSubAccountForPersistence
+          if (personaForPersistence) patch.persona = personaForPersistence
+          if (typeof hasCreatorCoinForPersistence === 'boolean') patch.has_creator_coin = hasCreatorCoinForPersistence
+          if (typeof farcasterFidForPersistence === 'number' && farcasterFidForPersistence > 0) {
+            patch.farcaster_fid = farcasterFidForPersistence
+          }
+          if (contactPreferenceForPersistence) patch.contact_preference = contactPreferenceForPersistence
           if (verifications.length > 0) patch.verifications = verifications
-          if (cswAddress.length > 0) {
-            patch.csw_address = cswAddress
-            if (!row.primary_wallet) patch.primary_wallet = cswAddress
+          if (cswAddressForPersistence.length > 0) {
+            patch.csw_address = cswAddressForPersistence
+            if (!row.primary_wallet) patch.primary_wallet = cswAddressForPersistence
           }
 
           const { data: updatedRaw, error: updateErr } = await supabase
@@ -653,18 +685,23 @@ export default async function handler(req: any, res: any) {
         } else {
           const insertPayload: Record<string, unknown> = {
             email,
-            primary_wallet: primaryWallet.length > 0 ? primaryWallet : cswAddress.length > 0 ? cswAddress : null,
-            solana_wallet: solanaWallet.length > 0 ? solanaWallet : null,
-            privy_user_id: privyUserId,
-            embedded_wallet: embeddedWallet,
-            embedded_wallet_chain: embeddedWalletChain,
-            embedded_wallet_client_type: embeddedWalletClientType,
-            base_sub_account: baseSubAccount.length > 0 ? baseSubAccount : null,
-            csw_address: cswAddress.length > 0 ? cswAddress : null,
-            persona,
-            has_creator_coin: hasCreatorCoinRaw,
-            farcaster_fid: farcasterFid,
-            contact_preference: contactPreference,
+            primary_wallet:
+              primaryWalletForPersistence.length > 0
+                ? primaryWalletForPersistence
+                : cswAddressForPersistence.length > 0
+                  ? cswAddressForPersistence
+                  : null,
+            solana_wallet: solanaWalletForPersistence.length > 0 ? solanaWalletForPersistence : null,
+            privy_user_id: privyUserIdForPersistence,
+            embedded_wallet: embeddedWalletForPersistence,
+            embedded_wallet_chain: embeddedWalletChainForPersistence,
+            embedded_wallet_client_type: embeddedWalletClientTypeForPersistence,
+            base_sub_account: baseSubAccountForPersistence.length > 0 ? baseSubAccountForPersistence : null,
+            csw_address: cswAddressForPersistence.length > 0 ? cswAddressForPersistence : null,
+            persona: personaForPersistence,
+            has_creator_coin: hasCreatorCoinForPersistence,
+            farcaster_fid: farcasterFidForPersistence,
+            contact_preference: contactPreferenceForPersistence,
             verifications: verifications.length > 0 ? verifications : null,
             created_at: nowIso,
             updated_at: nowIso,
@@ -684,9 +721,13 @@ export default async function handler(req: any, res: any) {
         let referralCodeOut = row.referral_code
         if (!referralCodeOut) {
           const desired =
-            claimReferralCode ||
-            (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveBasenameHandle(primaryWallet)) : null) ||
-            (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveCreatorCoinSymbolFromWallet(primaryWallet)) : null) ||
+            claimReferralCodeForPersistence ||
+            (primaryWalletForPersistence.length > 0
+              ? normalizeReferralCodeOrNull(await resolveBasenameHandle(primaryWalletForPersistence))
+              : null) ||
+            (primaryWalletForPersistence.length > 0
+              ? normalizeReferralCodeOrNull(await resolveCreatorCoinSymbolFromWallet(primaryWalletForPersistence))
+              : null) ||
             `C${Number(row.id).toString(36).toUpperCase()}`
           const { data: referralRaw, error: referralErr } = await supabase
             .from('profiles')
@@ -697,12 +738,17 @@ export default async function handler(req: any, res: any) {
             .maybeSingle()
           if (!referralErr && typeof referralRaw?.referral_code === 'string') {
             referralCodeOut = String(referralRaw.referral_code)
-          } else {
-            referralCodeOut = desired
+          } else if (referralErr) {
+            console.warn('waitlist: supabase referral code claim failed', referralErr.message)
           }
         }
 
-        const provisionWallet = cswAddress.length > 0 ? cswAddress : primaryWallet.length > 0 ? primaryWallet : null
+        const provisionWallet =
+          cswAddressForPersistence.length > 0
+            ? cswAddressForPersistence
+            : primaryWalletForPersistence.length > 0
+              ? primaryWalletForPersistence
+              : null
         if (row.id && provisionWallet && persona === 'creator') {
           void preprovisionWaitlistUser(row.id, provisionWallet).catch((err) => {
             console.warn('waitlist: preprovision error', err?.message ? String(err.message) : err)
@@ -753,8 +799,8 @@ export default async function handler(req: any, res: any) {
   // with a different (usually synthetic) email. If so, adopt that profile by
   // updating its email to the real one, preventing duplicate rows.
   // ---------------------------------------------------------------------------
-  const privyForDedup = privyUserId || null
-  const embeddedForDedup = embeddedWallet || null
+  const privyForDedup = privyUserIdForPersistence || null
+  const embeddedForDedup = embeddedWalletForPersistence || null
   let adoptedExistingId: number | null = null
 
   try {
@@ -792,7 +838,7 @@ export default async function handler(req: any, res: any) {
 
     const dedupAddressSignals = Array.from(
       new Set(
-        [walletForDedup, embeddedForDedup, cswAddress.length > 0 ? cswAddress : null, baseSubAccount.length > 0 ? baseSubAccount : null]
+        [trustedWalletForDedup, embeddedForDedup, trustedCswForDedup, trustedBaseSubForDedup]
           .filter((v): v is string => Boolean(v)),
       ),
     )
@@ -826,17 +872,17 @@ export default async function handler(req: any, res: any) {
         UPDATE profiles
         SET email = ${nextEmail},
             primary_wallet = COALESCE(${walletForDedup}, primary_wallet),
-            solana_wallet = COALESCE(${solanaWallet.length > 0 ? solanaWallet : null}, solana_wallet),
-            canonical_solana_wallet = COALESCE(${solanaWallet.length > 0 ? solanaWallet : null}, canonical_solana_wallet),
-            privy_user_id = COALESCE(${privyUserId}, privy_user_id),
-            embedded_wallet = COALESCE(${embeddedWallet}, embedded_wallet),
-            embedded_wallet_chain = COALESCE(${embeddedWalletChain}, embedded_wallet_chain),
-            embedded_wallet_client_type = COALESCE(${embeddedWalletClientType}, embedded_wallet_client_type),
-            base_sub_account = COALESCE(${baseSubAccount.length > 0 ? baseSubAccount : null}, base_sub_account),
-            persona = COALESCE(${persona}, persona),
-            has_creator_coin = COALESCE(${hasCreatorCoinRaw}, has_creator_coin),
-            farcaster_fid = COALESCE(${farcasterFid}, farcaster_fid),
-            contact_preference = COALESCE(${contactPreference}, contact_preference),
+            solana_wallet = COALESCE(${solanaWalletForPersistence.length > 0 ? solanaWalletForPersistence : null}, solana_wallet),
+            canonical_solana_wallet = COALESCE(${solanaWalletForPersistence.length > 0 ? solanaWalletForPersistence : null}, canonical_solana_wallet),
+            privy_user_id = COALESCE(${privyUserIdForPersistence}, privy_user_id),
+            embedded_wallet = COALESCE(${embeddedWalletForPersistence}, embedded_wallet),
+            embedded_wallet_chain = COALESCE(${embeddedWalletChainForPersistence}, embedded_wallet_chain),
+            embedded_wallet_client_type = COALESCE(${embeddedWalletClientTypeForPersistence}, embedded_wallet_client_type),
+            base_sub_account = COALESCE(${baseSubAccountForPersistence.length > 0 ? baseSubAccountForPersistence : null}, base_sub_account),
+            persona = COALESCE(${personaForPersistence}, persona),
+            has_creator_coin = COALESCE(${hasCreatorCoinForPersistence}, has_creator_coin),
+            farcaster_fid = COALESCE(${farcasterFidForPersistence}, farcaster_fid),
+            contact_preference = COALESCE(${contactPreferenceForPersistence}, contact_preference),
             verifications = COALESCE(${verifications.length > 0 ? JSON.stringify(verifications) : null}, verifications),
             updated_at = NOW()
         WHERE id = ${existingRow.id}
@@ -875,11 +921,11 @@ export default async function handler(req: any, res: any) {
         }
 
         // Handle CSW, referral code, referral attribution (same as normal path)
-        if (signupId && cswAddress.length > 0) {
+        if (signupId && cswAddressForPersistence.length > 0) {
           await db.sql`
             UPDATE profiles
-            SET csw_address = COALESCE(csw_address, ${cswAddress}),
-                primary_wallet = COALESCE(primary_wallet, ${cswAddress})
+            SET csw_address = COALESCE(csw_address, ${cswAddressForPersistence}),
+                primary_wallet = COALESCE(primary_wallet, ${cswAddressForPersistence})
             WHERE id = ${signupId};
           `
           try {
@@ -887,7 +933,7 @@ export default async function handler(req: any, res: any) {
               db,
               signupId,
               source: 'csw_link',
-              sourceId: `csw:${cswAddress.toLowerCase()}`,
+              sourceId: `csw:${cswAddressForPersistence.toLowerCase()}`,
               amount: WAITLIST_POINTS.linkCsw,
             })
           } catch { /* idempotent */ }
@@ -896,9 +942,13 @@ export default async function handler(req: any, res: any) {
         let referralCodeOut: string | null = typeof row.referral_code === 'string' ? (row.referral_code as string) : null
         if (signupId && !referralCodeOut) {
           const desired =
-            claimReferralCode ||
-            (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveBasenameHandle(primaryWallet)) : null) ||
-            (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveCreatorCoinSymbolFromWallet(primaryWallet)) : null) ||
+            claimReferralCodeForPersistence ||
+            (primaryWalletForPersistence.length > 0
+              ? normalizeReferralCodeOrNull(await resolveBasenameHandle(primaryWalletForPersistence))
+              : null) ||
+            (primaryWalletForPersistence.length > 0
+              ? normalizeReferralCodeOrNull(await resolveCreatorCoinSymbolFromWallet(primaryWalletForPersistence))
+              : null) ||
             `C${Number(signupId).toString(36).toUpperCase()}`
           try {
             const up = await db.sql`
@@ -911,7 +961,7 @@ export default async function handler(req: any, res: any) {
           } catch { /* ignore code collision */ }
         }
 
-        if (signupId && referralFromBody) {
+        if (signupId && referralFromBody && hasTrustedPrincipal) {
           const ref = await db.sql`
             SELECT id FROM profiles WHERE referral_code = ${referralFromBody} LIMIT 1;
           `
@@ -944,7 +994,12 @@ export default async function handler(req: any, res: any) {
 
         const data: WaitlistResponse = { created: false, email: String(row.email ?? ''), referralCode: referralCodeOut }
 
-        const provisionWallet = cswAddress.length > 0 ? cswAddress : primaryWallet.length > 0 ? primaryWallet : null
+        const provisionWallet =
+          cswAddressForPersistence.length > 0
+            ? cswAddressForPersistence
+            : primaryWalletForPersistence.length > 0
+              ? primaryWalletForPersistence
+              : null
         if (signupId && provisionWallet && persona === 'creator') {
           void preprovisionWaitlistUser(signupId, provisionWallet).catch((err) => {
             console.warn('waitlist: preprovision error', err?.message ? String(err.message) : err)
@@ -977,18 +1032,18 @@ export default async function handler(req: any, res: any) {
       )
       VALUES (
         ${email},
-        ${primaryWallet.length > 0 ? primaryWallet : null},
-        ${solanaWallet.length > 0 ? solanaWallet : null},
-        ${solanaWallet.length > 0 ? solanaWallet : null},
-        ${privyUserId},
-        ${embeddedWallet},
-        ${embeddedWalletChain},
-        ${embeddedWalletClientType},
-        ${baseSubAccount.length > 0 ? baseSubAccount : null},
-        ${persona},
-        ${hasCreatorCoinRaw},
-        ${farcasterFid},
-        ${contactPreference},
+        ${primaryWalletForPersistence.length > 0 ? primaryWalletForPersistence : null},
+        ${solanaWalletForPersistence.length > 0 ? solanaWalletForPersistence : null},
+        ${solanaWalletForPersistence.length > 0 ? solanaWalletForPersistence : null},
+        ${privyUserIdForPersistence},
+        ${embeddedWalletForPersistence},
+        ${embeddedWalletChainForPersistence},
+        ${embeddedWalletClientTypeForPersistence},
+        ${baseSubAccountForPersistence.length > 0 ? baseSubAccountForPersistence : null},
+        ${personaForPersistence},
+        ${hasCreatorCoinForPersistence},
+        ${farcasterFidForPersistence},
+        ${contactPreferenceForPersistence},
         ${verifications.length > 0 ? JSON.stringify(verifications) : null},
         NOW(),
         NOW()
@@ -1029,12 +1084,12 @@ export default async function handler(req: any, res: any) {
     }
 
     // Award CSW linking points if CSW was linked before signup
-    if (signupId && cswAddress.length > 0) {
+    if (signupId && cswAddressForPersistence.length > 0) {
       // Update the signup record with CSW address (store in dedicated csw_address column)
       await db.sql`
         UPDATE profiles
-        SET csw_address = COALESCE(csw_address, ${cswAddress}),
-            primary_wallet = COALESCE(primary_wallet, ${cswAddress})
+        SET csw_address = COALESCE(csw_address, ${cswAddressForPersistence}),
+            primary_wallet = COALESCE(primary_wallet, ${cswAddressForPersistence})
         WHERE id = ${signupId};
       `
       // Award CSW points (idempotent)
@@ -1042,7 +1097,7 @@ export default async function handler(req: any, res: any) {
         db,
         signupId,
         source: 'csw_link',
-        sourceId: `csw:${cswAddress.toLowerCase()}`,
+        sourceId: `csw:${cswAddressForPersistence.toLowerCase()}`,
         amount: WAITLIST_POINTS.linkCsw,
       })
     }
@@ -1051,9 +1106,13 @@ export default async function handler(req: any, res: any) {
     let referralCodeOut: string | null = typeof row.referral_code === 'string' ? (row.referral_code as string) : null
     if (signupId && !referralCodeOut) {
       const desired =
-        claimReferralCode ||
-        (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveBasenameHandle(primaryWallet)) : null) ||
-        (primaryWallet.length > 0 ? normalizeReferralCodeOrNull(await resolveCreatorCoinSymbolFromWallet(primaryWallet)) : null) ||
+        claimReferralCodeForPersistence ||
+        (primaryWalletForPersistence.length > 0
+          ? normalizeReferralCodeOrNull(await resolveBasenameHandle(primaryWalletForPersistence))
+          : null) ||
+        (primaryWalletForPersistence.length > 0
+          ? normalizeReferralCodeOrNull(await resolveCreatorCoinSymbolFromWallet(primaryWalletForPersistence))
+          : null) ||
         `C${Number(signupId).toString(36).toUpperCase()}`
       try {
         const up = await db.sql`
@@ -1068,7 +1127,7 @@ export default async function handler(req: any, res: any) {
         const msg = e?.message ? String(e.message) : ''
         if (msg.toLowerCase().includes('unique') || msg.toLowerCase().includes('duplicate')) {
           // If the user explicitly tried to claim a code and it collided, surface the error.
-          if (claimReferralCode) {
+          if (claimReferralCodeForPersistence) {
             return res.status(409).json({
               success: false,
               error: 'Referral code is taken. Choose a different code.',
@@ -1082,7 +1141,7 @@ export default async function handler(req: any, res: any) {
     }
 
     // If the signup came with a referral code, attribute conversion (best-effort).
-    if (signupId && referralFromBody) {
+    if (signupId && referralFromBody && hasTrustedPrincipal) {
       const ref = await db.sql`
         SELECT id
         FROM profiles
@@ -1145,7 +1204,12 @@ export default async function handler(req: any, res: any) {
 
     // Fire-and-forget: pre-provision server wallet + resolve identities.
     // This runs after the response so it doesn't block signup.
-    const provisionWallet = cswAddress.length > 0 ? cswAddress : primaryWallet.length > 0 ? primaryWallet : null
+    const provisionWallet =
+      cswAddressForPersistence.length > 0
+        ? cswAddressForPersistence
+        : primaryWalletForPersistence.length > 0
+          ? primaryWalletForPersistence
+          : null
     if (signupId && provisionWallet && persona === 'creator') {
       void preprovisionWaitlistUser(signupId, provisionWallet).catch((err) => {
         console.warn('waitlist: preprovision error', err?.message ? String(err.message) : err)
@@ -1182,18 +1246,18 @@ export default async function handler(req: any, res: any) {
           )
           VALUES (
             ${email},
-            ${primaryWallet.length > 0 ? primaryWallet : null},
-            ${solanaWallet.length > 0 ? solanaWallet : null},
-            ${solanaWallet.length > 0 ? solanaWallet : null},
-            ${privyUserId},
-            ${embeddedWallet},
-            ${embeddedWalletChain},
-            ${embeddedWalletClientType},
-            ${baseSubAccount.length > 0 ? baseSubAccount : null},
-            ${persona},
-            ${hasCreatorCoinRaw},
-            ${farcasterFid},
-            ${contactPreference},
+            ${primaryWalletForPersistence.length > 0 ? primaryWalletForPersistence : null},
+            ${solanaWalletForPersistence.length > 0 ? solanaWalletForPersistence : null},
+            ${solanaWalletForPersistence.length > 0 ? solanaWalletForPersistence : null},
+            ${privyUserIdForPersistence},
+            ${embeddedWalletForPersistence},
+            ${embeddedWalletChainForPersistence},
+            ${embeddedWalletClientTypeForPersistence},
+            ${baseSubAccountForPersistence.length > 0 ? baseSubAccountForPersistence : null},
+            ${personaForPersistence},
+            ${hasCreatorCoinForPersistence},
+            ${farcasterFidForPersistence},
+            ${contactPreferenceForPersistence},
             ${verifications.length > 0 ? JSON.stringify(verifications) : null},
             NOW(),
             NOW()
@@ -1241,7 +1305,14 @@ export default async function handler(req: any, res: any) {
       try {
         const r2 = await db.sql`
           INSERT INTO profiles (email, primary_wallet, privy_user_id, embedded_wallet, created_at, updated_at)
-          VALUES (${email}, ${primaryWallet.length > 0 ? primaryWallet : null}, ${privyUserId}, ${embeddedWallet}, NOW(), NOW())
+          VALUES (
+            ${email},
+            ${primaryWalletForPersistence.length > 0 ? primaryWalletForPersistence : null},
+            ${privyUserIdForPersistence},
+            ${embeddedWalletForPersistence},
+            NOW(),
+            NOW()
+          )
           ON CONFLICT (email) DO UPDATE
             SET primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),
                 privy_user_id = COALESCE(EXCLUDED.privy_user_id, profiles.privy_user_id),

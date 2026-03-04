@@ -109,11 +109,11 @@ function makeDeploySession(step: string) {
     tokenHash: 'hash',
     sessionAddress: '0xsession',
     smartWallet: '0xsmartwallet',
-    sessionOwner: '0xowner',
+    sessionSigner: '0xowner',
     deployToken: 'token',
-    sessionOwnerKeyEnc: 'encrypted',
+    sessionSignerKeyEnc: 'encrypted',
     payload: {
-      phase2Calls: [{ to: '0xcalltarget', value: '0', data: '0x' }],
+      phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x' }],
       phase3Calls: [],
     },
     step,
@@ -301,7 +301,7 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('created'),
       payload: {
-        phase2Calls: [{ to: '0xcalltarget', value: '0', data: '0x12345678' }],
+        phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x12345678' }],
         phase3Calls: [],
         erc7712Grant: {
           version: 'erc7712-v1',
@@ -329,7 +329,7 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('created'),
       payload: {
-        phase2Calls: [{ to: '0xcalltarget', value: '0', data: '0x12345678' }],
+        phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x12345678' }],
         phase3Calls: [],
         erc7712Grant: {
           version: 'erc7712-v1',
@@ -354,8 +354,8 @@ describe('deploy session optimistic concurrency', () => {
   it('returns actionable 409 when continue session owner credentials are unavailable', async () => {
     const rec = {
       ...makeDeploySession('created'),
-      sessionOwnerKeyEnc: null,
-      payload: { phase2Calls: [{ to: '0xcalltarget', value: '0', data: '0x' }], phase3Calls: [] },
+      sessionSignerKeyEnc: null,
+      payload: { phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x' }], phase3Calls: [] },
     }
     getDeploySessionByIdMock.mockResolvedValue(rec)
 
@@ -372,9 +372,9 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('created'),
       payload: {
-        phase2Calls: [{ to: '0xcalltarget', value: '0', data: '0x12345678' }],
+        phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x12345678' }],
         phase3Calls: [],
-        agentWalletId: 'agent_123',
+        deploySignerWalletId: 'agent_123',
         persistSessionOwner: true,
       },
     }
@@ -396,8 +396,8 @@ describe('deploy session optimistic concurrency', () => {
   it('cancel marks session cancelled when owner credentials are unavailable', async () => {
     const rec = {
       ...makeDeploySession('created'),
-      sessionOwnerKeyEnc: null,
-      payload: { phase2Calls: [{ to: '0xcalltarget', value: '0', data: '0x' }], phase3Calls: [] },
+      sessionSignerKeyEnc: null,
+      payload: { phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x' }], phase3Calls: [] },
     }
     getDeploySessionByIdMock.mockResolvedValue(rec)
 
@@ -417,9 +417,9 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('created'),
       payload: {
-        phase2Calls: [{ to: '0xcalltarget', value: '0', data: '0x' }],
+        phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x' }],
         phase3Calls: [],
-        agentWalletId: 'agent_123',
+        deploySignerWalletId: 'agent_123',
         persistSessionOwner: true,
       },
     }
@@ -441,8 +441,8 @@ describe('deploy session optimistic concurrency', () => {
   it('status remains readable when owner credentials are unavailable', async () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
-      sessionOwnerKeyEnc: null,
-      payload: { phase2Calls: [{ to: '0xcalltarget', value: '0', data: '0x' }], phase3Calls: [] },
+      sessionSignerKeyEnc: null,
+      payload: { phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x' }], phase3Calls: [] },
     }
     getDeploySessionByIdMock.mockResolvedValue(rec)
     transitionDeploySessionMock.mockResolvedValue(true)
@@ -459,7 +459,7 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
       payload: {
-        phase2Calls: [],
+        phase2FinalizeCalls: [],
         phase3Calls: [makeCall('0xphase3target')],
         phase4Calls: [makeCall('0xphase4target')],
       },
@@ -484,7 +484,7 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('phase3_confirmed'),
       payload: {
-        phase2Calls: [],
+        phase2FinalizeCalls: [],
         phase3Calls: [makeCall('0xphase3target')],
         phase4Calls: [makeCall('0xphase4target')],
       },
@@ -509,7 +509,7 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('phase3_sent'),
       payload: {
-        phase2Calls: [],
+        phase2FinalizeCalls: [],
         phase3Calls: [makeCall('0xphase3target')],
         phase4Calls: [makeCall('0xphase4target')],
       },
@@ -1977,7 +1977,7 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('phase4_sent'),
       payload: {
-        phase2Calls: [],
+        phase2FinalizeCalls: [],
         phase3Calls: [makeCall('0xphase3target')],
         phase4Calls: [makeCall('0xphase4target')],
       },
@@ -2001,7 +2001,6 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
       payload: {
-        phase2Calls: [],
         phase2FinalizeCalls: [],
         phase3Calls: [makeCall('0xphase3target')],
         phase4Calls: [],
@@ -2033,7 +2032,6 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('ovault_mesh_sent'),
       payload: {
-        phase2Calls: [],
         phase2FinalizeCalls: [],
         phase3Calls: [makeCall('0xphase3target')],
         phase4Calls: [],
@@ -2060,7 +2058,6 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('created'),
       payload: {
-        phase2Calls: [],
         phase2FinalizeCalls: [makeCall('0xcalltarget', '0x12345678')],
         phase3Calls: [],
       },
@@ -2100,7 +2097,7 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
       payload: {
-        phase2Calls: [],
+        phase2FinalizeCalls: [],
         phase3Calls: [makeCall('0xphase3target', '0x12345678')],
         phase4Calls: [],
       },

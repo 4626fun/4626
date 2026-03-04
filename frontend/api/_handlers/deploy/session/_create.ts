@@ -27,6 +27,7 @@ import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js
 import { buildDeployPermissionGrant } from '../../../../server/_lib/erc7712Permissions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { resolveCoinParties } from '../../../../server/_lib/coinParties.js'
+import { charmPoolNotIndexedError, extractCharmCreateVaultPool, isCharmPoolIndexed } from '../../../../server/_lib/charmVaults.js'
 import {
   normalizeSolanaAssetMintOrigin,
   parseSolanaOvaultMintCompatibilityHints,
@@ -55,14 +56,12 @@ type CreateDeploySessionRequest = {
   // validate auth + ownership + allowlist without creating a deploy session.
   preflightOnly?: boolean
   // Calls that the server will submit after the user approves a one-time setup
-  // transaction that installs `sessionOwner` as a temporary onchain CSW owner.
+  // transaction that installs `sessionSigner` as a temporary onchain CSW owner.
   // These calls are executed by the Coinbase Smart Wallet via ERC-4337.
   // New (preferred): split Phase 2 into multiple UserOps server-side.
   phase1Calls?: Call[]
   phase2CoreCalls?: Call[]
   phase2FinalizeCalls?: Call[]
-  // Back-compat: older clients submit a single Phase 2 array.
-  phase2Calls?: Call[]
   // Phase 3 (strategies) + Phase 4 (deferred auction) are also executed server-side.
   phase3Calls?: Call[]
   phase4Calls?: Call[]
@@ -73,11 +72,8 @@ type CreateDeploySessionRequest = {
 
 type CreateDeploySessionResponse = {
   sessionId: string
-  // Canonical field name for the signer identity used by server-side continuation.
-  // `sessionOwner` is kept for backward compatibility with existing clients.
   sessionSignerAddress: Address
   sessionSignerWalletId?: string
-  sessionOwner: Address
   expiresAt: string
 }
 
@@ -351,6 +347,26 @@ function prependPhase2FinalizeApprovals(calls: Call[]): Call[] {
   if (!Array.isArray(calls) || calls.length === 0) return []
   const approvals = derivePhase2FinalizeApprovalCalls(calls)
   return appendUniqueCalls(approvals, calls)
+}
+
+async function findNonIndexedCharmPool(calls: Call[]): Promise<Address | null> {
+  if (!Array.isArray(calls) || calls.length === 0) return null
+  const uniquePools = new Map<string, Address>()
+  for (const call of calls) {
+    const pool = extractCharmCreateVaultPool(call)
+    if (!pool) continue
+    uniquePools.set(pool.toLowerCase(), pool)
+  }
+  if (uniquePools.size === 0) return null
+
+  const checks = await Promise.all(
+    Array.from(uniquePools.values()).map(async (pool) => ({
+      pool,
+      indexed: await isCharmPoolIndexed({ poolAddress: pool }),
+    })),
+  )
+  const missing = checks.find((entry) => entry.indexed === false)
+  return missing?.pool ?? null
 }
 
 function distributePhase2FinalizeApprovals(params: {
@@ -984,25 +1000,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const phase1Calls = Array.isArray(body.phase1Calls) ? body.phase1Calls : []
     const phase2CoreCallsRaw = Array.isArray(body.phase2CoreCalls) ? body.phase2CoreCalls : []
     const phase2FinalizeCallsRaw = Array.isArray(body.phase2FinalizeCalls) ? body.phase2FinalizeCalls : []
-    const phase2CallsRaw = Array.isArray(body.phase2Calls) ? body.phase2Calls : []
     const { phase2CoreCalls, phase2FinalizeCalls } = distributePhase2FinalizeApprovals({
       phase2CoreCalls: phase2CoreCallsRaw,
       phase2FinalizeCalls: phase2FinalizeCallsRaw,
     })
-    const phase2Calls = prependPhase2FinalizeApprovals(phase2CallsRaw)
     const phase3Calls = Array.isArray(body.phase3Calls) ? body.phase3Calls : []
     const phase4Calls = Array.isArray(body.phase4Calls) ? body.phase4Calls : []
     const solanaOvault = normalizeSolanaOvaultConfig(body.solanaOvault)
-    const hasPhase2Finalize = phase2FinalizeCalls.length > 0 || phase2Calls.length > 0
+    const hasPhase2Finalize = phase2FinalizeCalls.length > 0
 
     const allSubmittedCalls = [
       ...phase1Calls,
       ...phase2CoreCalls,
       ...phase2FinalizeCalls,
-      ...phase2Calls,
       ...phase3Calls,
       ...phase4Calls,
     ]
+    const nonIndexedCharmPool = await findNonIndexedCharmPool(allSubmittedCalls)
+    if (nonIndexedCharmPool) {
+      return res.status(400).json({
+        success: false,
+        error: charmPoolNotIndexedError(nonIndexedCharmPool),
+      } satisfies ApiEnvelope<null>)
+    }
+
     if (allSubmittedCalls.length > 0) {
       const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
       const readClient = createPublicClient({
@@ -1026,7 +1047,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       phase1Calls.length > 0 ||
       phase2CoreCalls.length > 0 ||
       phase2FinalizeCalls.length > 0 ||
-      phase2Calls.length > 0 ||
       phase3Calls.length > 0 ||
       phase4Calls.length > 0
     if (!hasAnyWork) {
@@ -1041,7 +1061,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Phase-4 safety: when launching deferred auction without a same-session phase2 finalize,
     // require pending state to already exist for this deployment namespace.
-    const hasSameSessionPhase2Finalize = phase2FinalizeCalls.length > 0 || phase2Calls.length > 0
+    const hasSameSessionPhase2Finalize = phase2FinalizeCalls.length > 0
     if (phase4Calls.length > 0 && !hasSameSessionPhase2Finalize) {
       const version = String(body.version ?? '').trim()
       if (!version) {
@@ -1085,23 +1105,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const id = randomId()
 
     // Preferred: per-creator Privy-managed deploy signer wallet (Keepr can reuse it for ops).
-    // Fallback: ephemeral local session owner key when Privy wallet provisioning is unavailable.
-    let sessionOwnerPrivateKey: Hex | null = null
+    // Fallback: ephemeral local session signer key when Privy wallet provisioning is unavailable.
+    let sessionSignerPrivateKey: Hex | null = null
     let deploySignerWalletId: string | null = null
     let deploySignerAddress: Address | null = null
-    let sessionOwner: Address
+    let sessionSigner: Address
     try {
       const agentWallet = await getOrCreateCreatorAgentWallet({ creatorToken: creatorToken.toLowerCase() as `0x${string}` })
       const walletId = String(agentWallet.walletId || '').trim()
       if (!walletId) throw new Error('agent_wallet_id_missing')
-      sessionOwner = getAddress(agentWallet.address)
+      sessionSigner = getAddress(agentWallet.address)
       deploySignerWalletId = walletId
       deploySignerAddress = getAddress(agentWallet.address)
     } catch (e: any) {
       const fallback = privateKeyToAccount(generatePrivateKey())
-      sessionOwnerPrivateKey = (fallback as any).privateKey as Hex
-      sessionOwner = getAddress(fallback.address)
-      console.warn('deploy/session/create: falling back to ephemeral session owner key', {
+      sessionSignerPrivateKey = (fallback as any).privateKey as Hex
+      sessionSigner = getAddress(fallback.address)
+      console.warn('deploy/session/create: falling back to ephemeral session signer key', {
         reason: e?.message ? String(e.message) : 'agent_wallet_create_failed',
       })
     }
@@ -1116,7 +1136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       data: encodeFunctionData({
         abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
         functionName: 'removeOwnerAtIndex',
-        args: [0n, asOwnerBytes(sessionOwner)],
+        args: [0n, asOwnerBytes(sessionSigner)],
       }),
     }
 
@@ -1125,7 +1145,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // to safely deploy around Charm transfer-mismatch edge cases.
       if (phase3Calls.length === 0 || phase4Calls.length === 0) return []
       const finalizeInfo =
-        [...phase2FinalizeCalls, ...phase2Calls]
+        phase2FinalizeCalls
           .map((c) => extractFinalizePhase2ApprovalInfo(c.data))
           .find((info): info is NonNullable<typeof info> => Boolean(info)) ?? null
       const vault = finalizeInfo?.vault ?? null
@@ -1165,7 +1185,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ...phase1Calls,
       ...phase2CoreCalls,
       ...phase2FinalizeCalls,
-      ...phase2Calls,
       ...phase3Calls,
       ...phase4Calls,
       ...phase4RuntimeGrantCalls,
@@ -1188,14 +1207,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       tokenHash,
       sessionAddress: sessionAddress,
       smartWallet,
-      sessionOwner,
+      sessionSigner,
       deployToken,
-      sessionOwnerPrivateKey,
+      sessionSignerPrivateKey,
       payload: {
         creatorToken,
         ownerAddress,
         smartWallet,
-        sessionOwner,
+        sessionSigner,
         authType: auth.type,
         ...(auth.type === 'siwa'
           ? {
@@ -1204,12 +1223,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               authAgentChainId: auth.chainId,
             }
           : null),
-        // New names
         ...(deploySignerWalletId ? { deploySignerWalletId } : null),
         ...(deploySignerAddress ? { deploySignerAddress } : null),
-        // Legacy aliases (kept for backward compatibility)
-        ...(deploySignerWalletId ? { agentWalletId: deploySignerWalletId } : null),
-        ...(deploySignerAddress ? { agentWalletAddress: deploySignerAddress } : null),
         persistSessionOwner,
         expectedStages: {
           hasPhase1Core: phase1Calls.length > 0,
@@ -1224,7 +1239,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         phase1Calls,
         phase2CoreCalls,
         phase2FinalizeCalls,
-        phase2Calls,
         phase3Calls,
         phase4Calls,
         ...(solanaOvault ? { solanaOvault } : null),
@@ -1235,9 +1249,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const out: CreateDeploySessionResponse = {
       sessionId: id,
-      sessionSignerAddress: sessionOwner,
+      sessionSignerAddress: sessionSigner,
       ...(deploySignerWalletId ? { sessionSignerWalletId: deploySignerWalletId } : null),
-      sessionOwner,
       expiresAt: expiresAt.toISOString(),
     }
     return res.status(200).json({ success: true, data: out } satisfies ApiEnvelope<CreateDeploySessionResponse>)

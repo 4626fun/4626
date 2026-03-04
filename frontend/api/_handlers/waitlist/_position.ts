@@ -1,9 +1,11 @@
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../server/auth/_shared.js'
 import { getDb } from '../../../server/_lib/postgres.js'
+import { checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
+import { readRequestPrincipalAddress } from '../../../server/_lib/requestPrincipal.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 
 type WaitlistPositionResponse = {
-  email: string
+  email: string | null
   signupId: number
   profileCompletedAt: string | null
 
@@ -63,6 +65,13 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
+  const clientIp = getClientIp(req)
+  const rateLimit = checkRateLimit(rateLimitKey('waitlist-position', clientIp), { windowMs: 60_000, maxRequests: 60 })
+  if (!rateLimit.allowed) {
+    res.setHeader('Retry-After', Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString())
+    return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
+  }
+
   const emailParam = typeof (req.query as any)?.email === 'string' ? String((req.query as any).email) : ''
   const walletParam = typeof (req.query as any)?.wallet === 'string' ? String((req.query as any).wallet).trim().toLowerCase() : ''
   
@@ -72,6 +81,7 @@ export default async function handler(req: any, res: any) {
   // Must provide either valid email or valid wallet
   const hasValidEmail = isValidEmail(email)
   const hasValidWallet = isValidEvmAddress(wallet)
+  const principalAddress = readRequestPrincipalAddress(req)
   
   if (!hasValidEmail && !hasValidWallet) {
     return res.status(400).json({ success: false, error: 'Invalid email or wallet' } satisfies ApiEnvelope<never>)
@@ -85,7 +95,9 @@ export default async function handler(req: any, res: any) {
   let me
   if (hasValidEmail) {
     me = await db.sql`
-      SELECT id, email, referral_code, profile_completed_at, border_tier
+      SELECT
+        id, email, referral_code, profile_completed_at, border_tier,
+        primary_wallet, embedded_wallet, primary_embedded_eoa, csw_address, primary_smart_wallet, base_sub_account
       FROM profiles
       WHERE email = ${email}
       LIMIT 1;
@@ -95,10 +107,23 @@ export default async function handler(req: any, res: any) {
   // If no result by email, try by wallet
   if ((!me?.rows?.length) && hasValidWallet) {
     me = await db.sql`
-      SELECT id, email, referral_code, profile_completed_at, border_tier
-      FROM profiles
-      WHERE LOWER(primary_wallet) = ${wallet}
-         OR LOWER(embedded_wallet) = ${wallet}
+      SELECT
+        p.id, p.email, p.referral_code, p.profile_completed_at, p.border_tier,
+        p.primary_wallet, p.embedded_wallet, p.primary_embedded_eoa, p.csw_address, p.primary_smart_wallet, p.base_sub_account
+      FROM profiles p
+      WHERE LOWER(p.primary_wallet) = ${wallet}
+         OR LOWER(p.embedded_wallet) = ${wallet}
+         OR LOWER(p.primary_embedded_eoa) = ${wallet}
+         OR LOWER(p.csw_address) = ${wallet}
+         OR LOWER(p.primary_smart_wallet) = ${wallet}
+         OR LOWER(p.base_sub_account) = ${wallet}
+         OR EXISTS (
+           SELECT 1
+           FROM profile_wallets pw
+           WHERE pw.profile_id = p.id
+             AND LOWER(pw.address) = ${wallet}
+         )
+      ORDER BY p.updated_at DESC NULLS LAST, p.created_at ASC NULLS LAST, p.id ASC
       LIMIT 1;
     `
   }
@@ -109,7 +134,37 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ success: true, data: null } satisfies ApiEnvelope<WaitlistPositionResponse | null>)
   }
 
+  // All lookups must be owner-authorized to prevent profile enumeration.
+  if (!principalAddress) {
+    return res.status(200).json({ success: true, data: null } satisfies ApiEnvelope<WaitlistPositionResponse | null>)
+  }
+  const principal = principalAddress.toLowerCase()
+  const ownsByInlineField =
+    (typeof row?.primary_wallet === 'string' && row.primary_wallet.toLowerCase() === principal) ||
+    (typeof row?.embedded_wallet === 'string' && row.embedded_wallet.toLowerCase() === principal) ||
+    (typeof row?.primary_embedded_eoa === 'string' && row.primary_embedded_eoa.toLowerCase() === principal) ||
+    (typeof row?.csw_address === 'string' && row.csw_address.toLowerCase() === principal) ||
+    (typeof row?.primary_smart_wallet === 'string' && row.primary_smart_wallet.toLowerCase() === principal) ||
+    (typeof row?.base_sub_account === 'string' && row.base_sub_account.toLowerCase() === principal)
+
+  let ownsByMappedWallet = false
+  if (!ownsByInlineField) {
+    const ownedQ = await db.sql`
+      SELECT 1
+      FROM profile_wallets
+      WHERE profile_id = ${signupId}
+        AND LOWER(address) = ${principal}
+      LIMIT 1;
+    `
+    ownsByMappedWallet = Boolean(ownedQ?.rows?.[0])
+  }
+
+  if (!ownsByInlineField && !ownsByMappedWallet) {
+    return res.status(200).json({ success: true, data: null } satisfies ApiEnvelope<WaitlistPositionResponse | null>)
+  }
+
   const resolvedEmail = typeof row?.email === 'string' ? normalizeEmail(String(row.email)) : email
+  const exposedEmail = hasValidEmail ? resolvedEmail : null
   const profileCompletedAt = row?.profile_completed_at ? String(row.profile_completed_at) : null
   const referralCode = typeof row?.referral_code === 'string' ? String(row.referral_code) : null
   const borderTier = safeInt(row?.border_tier)
@@ -247,7 +302,7 @@ export default async function handler(req: any, res: any) {
     typeof inviteRank === 'number' && inviteRank > 0 && totalCount > 0 ? Math.min(100, Math.max(1, Math.round((inviteRank / totalCount) * 100))) : null
 
   const data: WaitlistPositionResponse = {
-    email: resolvedEmail,
+    email: exposedEmail,
     signupId,
     profileCompletedAt,
     referralCode,

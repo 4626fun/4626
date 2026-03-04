@@ -171,9 +171,9 @@ Confirm no edits in:
 - `frontend/api/_handlers/uniswap/*`
 - `frontend/server/uniswap/trading.ts`
 
-**Step 2: Confirm recommendation note for zRouter/zQuoter**
+**Step 2: Confirm recommendation note for router posture**
 
-Keep this phase on Trading API execution; defer zQuoter comparison to separate phase.
+Keep this phase on Trading API execution and avoid alternate swap-routing surfaces.
 
 **Step 3: Final verification**
 

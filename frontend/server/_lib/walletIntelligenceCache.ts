@@ -40,6 +40,35 @@ export async function ensureWalletIntelligenceSchema(): Promise<void> {
       PRIMARY KEY (address, chain_ids, hops)
     );
   `
+  try {
+    await db.sql`ALTER TABLE wallet_intelligence_cache ENABLE ROW LEVEL SECURITY;`
+  } catch {
+    // Ignore if RLS cannot be enabled in this runtime.
+  }
+  try {
+    await db.sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_policies
+          WHERE schemaname = 'public'
+            AND tablename = 'wallet_intelligence_cache'
+            AND policyname = 'wallet_intelligence_cache_deny_all'
+        ) THEN
+          CREATE POLICY wallet_intelligence_cache_deny_all
+            ON wallet_intelligence_cache
+            FOR ALL
+            TO public
+            USING (false)
+            WITH CHECK (false);
+        END IF;
+      END
+      $$;
+    `
+  } catch {
+    // Ignore if policy creation is unavailable in this runtime.
+  }
   await db.sql`CREATE INDEX IF NOT EXISTS wic_expires_idx ON wallet_intelligence_cache (expires_at);`
   await db.sql`CREATE INDEX IF NOT EXISTS wic_address_idx ON wallet_intelligence_cache (address);`
 
@@ -56,6 +85,35 @@ export async function ensureWalletIntelligenceSchema(): Promise<void> {
       PRIMARY KEY (address, chain_id)
     );
   `
+  try {
+    await db.sql`ALTER TABLE entity_labels_cache ENABLE ROW LEVEL SECURITY;`
+  } catch {
+    // Ignore if RLS cannot be enabled in this runtime.
+  }
+  try {
+    await db.sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_policies
+          WHERE schemaname = 'public'
+            AND tablename = 'entity_labels_cache'
+            AND policyname = 'entity_labels_cache_deny_all'
+        ) THEN
+          CREATE POLICY entity_labels_cache_deny_all
+            ON entity_labels_cache
+            FOR ALL
+            TO public
+            USING (false)
+            WITH CHECK (false);
+        END IF;
+      END
+      $$;
+    `
+  } catch {
+    // Ignore if policy creation is unavailable in this runtime.
+  }
   await db.sql`CREATE INDEX IF NOT EXISTS elc_expires_idx ON entity_labels_cache (expires_at);`
 
   // ── feedback_index ──
@@ -80,6 +138,35 @@ export async function ensureWalletIntelligenceSchema(): Promise<void> {
       UNIQUE (agent_id, client_address, feedback_index)
     );
   `
+  try {
+    await db.sql`ALTER TABLE feedback_index ENABLE ROW LEVEL SECURITY;`
+  } catch {
+    // Ignore if RLS cannot be enabled in this runtime.
+  }
+  try {
+    await db.sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_policies
+          WHERE schemaname = 'public'
+            AND tablename = 'feedback_index'
+            AND policyname = 'feedback_index_deny_all'
+        ) THEN
+          CREATE POLICY feedback_index_deny_all
+            ON feedback_index
+            FOR ALL
+            TO public
+            USING (false)
+            WITH CHECK (false);
+        END IF;
+      END
+      $$;
+    `
+  } catch {
+    // Ignore if policy creation is unavailable in this runtime.
+  }
   await db.sql`CREATE INDEX IF NOT EXISTS fi_agent_idx ON feedback_index (agent_id, created_at DESC);`
   await db.sql`CREATE INDEX IF NOT EXISTS fi_client_idx ON feedback_index (client_address, created_at DESC);`
   await db.sql`CREATE INDEX IF NOT EXISTS fi_tags_idx ON feedback_index (tag1, tag2);`

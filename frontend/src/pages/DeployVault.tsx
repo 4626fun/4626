@@ -40,6 +40,7 @@ import { resolveCreatorIdentity } from '@/lib/identity/creatorIdentity'
 import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
 import {
   normalizeUnderlyingSymbol,
+  toCharmVaultSymbol,
   toShareName,
   toShareSymbol,
   toVaultName,
@@ -50,6 +51,8 @@ import { computeMarketFloorQuote } from '@/lib/cca/marketFloor'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
+import { readClientBootstrapSwapPrefs, type BootstrapSwapProvider } from '@/lib/deploy/bootstrapSwapPrefs'
+import { assertBootstrapSwapPlanReady } from '@/lib/deploy/bootstrapSwapGate'
 import { 
   sendCoinbaseSmartWalletUserOperation, 
   simulateSmartWalletCalls,
@@ -96,6 +99,7 @@ const BATCHER_VAULT_CORE_MODULE_SELECTOR = '22c40b75'
 const BATCHER_VAULT_STRATEGIES_MODULE_SELECTOR = '3283d513'
 const BATCHER_VAULT_ADMIN_MODULE_SELECTOR = '822f9d9b'
 const NO_EOA_STRICT_BLOCKER = 'No-EOA deploy is only available for preconfigured Privy-owner wallets.'
+const AUTH_HANDOFF_QUERY_KEY = 'cv_handoff'
 const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
   {
     name: 'getAuctionStatus',
@@ -491,6 +495,16 @@ type DeploySessionCreateRequest = {
   solanaOvault?: DeploySessionSolanaOvault
   version: string
 }
+type DeployBootstrapSwapSummary = {
+  providerRequested: BootstrapSwapProvider
+  providerUsed: string | null
+  fallbackUsed: boolean
+  bootstrapBps: number
+  slippageBps: number
+  bootstrapCreatorAmountBaseUnits: string | null
+  hasSwap: boolean
+  swapError: string | null
+}
 type DeployPlanExport = {
   generatedAt: string
   chainId: number
@@ -518,6 +532,7 @@ type DeployPlanExport = {
     phase4: number
   }
   sessionCreateRequest: DeploySessionCreateRequest
+  bootstrapSwapPlan: DeployBootstrapSwapSummary | null
 }
 
 const CREATOR_COIN_OWNERS_ABI = [
@@ -1694,6 +1709,9 @@ function DeployVaultBatcher({
   const [exportBusy, setExportBusy] = useState(false)
   const [exportStatus, setExportStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [resumePendingSetup, setResumePendingSetup] = useState<{ sessionId: string; sessionSigner: Address } | null>(null)
+  const [resumePendingSetupBusy, setResumePendingSetupBusy] = useState(false)
+  const [resumePendingSetupError, setResumePendingSetupError] = useState<string | null>(null)
   const [txId, setTxId] = useState<string | null>(null)
   const [phase, setPhase] = useState<'idle' | 'phase1' | 'phase2' | 'phase3' | 'phase4' | 'done'>('idle')
   const [phaseTxs, setPhaseTxs] = useState<{
@@ -1941,7 +1959,11 @@ function DeployVaultBatcher({
         'If needed, disable server-continue (`VITE_DEPLOY_USE_SERVER_CONTINUE=false`) and run phases client-side.'
       )
     }
-    if (lower.includes('session_owner_not_installed') || lower.includes('deploy-session signer is not installed')) {
+    if (
+      lower.includes('session_signer_not_installed') ||
+      lower.includes('session_owner_not_installed') ||
+      lower.includes('deploy-session signer is not installed')
+    ) {
       return (
         'Deploy-session signer is not installed on your canonical smart wallet yet. ' +
         'Approve the one-time add-owner transaction from an owner EOA (for example Coinbase Wallet), then retry deploy.'
@@ -2252,7 +2274,7 @@ function DeployVaultBatcher({
     }
 
     installed = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionSigner })
-    if (!installed) throw new Error('session_owner_not_installed')
+    if (!installed) throw new Error('session_signer_not_installed')
   }, [
     connectedAddress,
     ensureBaseChain,
@@ -2373,9 +2395,15 @@ function DeployVaultBatcher({
 
   useEffect(() => {
     if (!useServerContinue) return
-    if (busy) return
+    if (busy || resumePendingSetupBusy) return
     const sessionId = loadDeploySession()
-    if (!sessionId) return
+    if (!sessionId) {
+      if (resumePendingSetup) setResumePendingSetup(null)
+      if (resumePendingSetupError) setResumePendingSetupError(null)
+      return
+    }
+    // Do not auto-call addOwner on resumed sessions; wait for explicit user action.
+    if (resumePendingSetup?.sessionId === sessionId) return
 
     let cancelled = false
     ;(async () => {
@@ -2394,22 +2422,22 @@ function DeployVaultBatcher({
         if (!statusRes.ok || !statusJson?.success) throw new Error(statusJson?.error || 'Failed to fetch deploy status')
         const step = String(statusJson.data?.step ?? '')
         if (step === 'created') {
-          const sessionSignerRaw = String(
-            statusJson.data?.sessionSignerAddress ?? statusJson.data?.sessionOwner ?? '',
-          ).trim()
+          const sessionSignerRaw = String(statusJson.data?.sessionSignerAddress ?? '').trim()
           if (!isAddress(sessionSignerRaw)) {
             throw new Error('Invalid deploy session status response')
           }
-          await ensureDeploySessionSignerInstalled(getAddress(sessionSignerRaw) as Address)
-          const continueRes = await fetch('/api/deploy/session/continue', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId }),
-          })
-          const continueJson = (await continueRes.json().catch(() => null)) as ApiEnvelope<any> | null
-          if (!continueRes.ok || !continueJson?.success) {
-            throw new Error(continueJson?.error || 'Failed to continue deploy')
+          if (!cancelled) {
+            setResumePendingSetup({
+              sessionId,
+              sessionSigner: getAddress(sessionSignerRaw) as Address,
+            })
+            setResumePendingSetupError(null)
           }
+          return
+        }
+        if (!cancelled && resumePendingSetup?.sessionId === sessionId) {
+          setResumePendingSetup(null)
+          setResumePendingSetupError(null)
         }
         await pollServerDeploySession(sessionId)
       } catch (e) {
@@ -2424,12 +2452,59 @@ function DeployVaultBatcher({
     }
   }, [
     busy,
-    ensureDeploySessionSignerInstalled,
     ensurePaymasterSession,
     formatDeployError,
     loadDeploySession,
     pollServerDeploySession,
+    resumePendingSetup,
+    resumePendingSetupBusy,
+    resumePendingSetupError,
+    setResumePendingSetup,
+    setResumePendingSetupError,
     useServerContinue,
+  ])
+
+  const continueResumedDeploySession = useCallback(async (): Promise<void> => {
+    if (!resumePendingSetup || resumePendingSetupBusy) return
+    const sessionId = resumePendingSetup.sessionId
+    const sessionSigner = resumePendingSetup.sessionSigner
+
+    setResumePendingSetupBusy(true)
+    setBusy(true)
+    setError(null)
+    setResumePendingSetupError(null)
+    setPhase('phase1')
+    lastPolledStepRef.current = ''
+
+    try {
+      await ensurePaymasterSession()
+      await ensureDeploySessionSignerInstalled(sessionSigner)
+      const continueRes = await fetch('/api/deploy/session/continue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      })
+      const continueJson = (await continueRes.json().catch(() => null)) as ApiEnvelope<any> | null
+      if (!continueRes.ok || !continueJson?.success) {
+        throw new Error(continueJson?.error || 'Failed to continue deploy')
+      }
+      setResumePendingSetup(null)
+      await pollServerDeploySession(sessionId)
+    } catch (e) {
+      const pretty = formatDeployError(e)
+      setResumePendingSetupError(pretty)
+      setError(pretty)
+    } finally {
+      setResumePendingSetupBusy(false)
+      setBusy(false)
+    }
+  }, [
+    ensureDeploySessionSignerInstalled,
+    ensurePaymasterSession,
+    formatDeployError,
+    pollServerDeploySession,
+    resumePendingSetup,
+    resumePendingSetupBusy,
   ])
 
   const isTxHash = (h?: string | null) => typeof h === 'string' && /^0x[a-fA-F0-9]{64}$/.test(h)
@@ -2886,6 +2961,69 @@ function DeployVaultBatcher({
     (calls: Array<{ target: Address; value: bigint; data: Hex }>): DeploySessionCall[] =>
       calls.map((c) => ({ to: c.target, value: String(c.value ?? 0n), data: c.data })),
     [],
+  )
+
+  const bootstrapSwapPrefs = useMemo(() => readClientBootstrapSwapPrefs(), [])
+
+  const requestBootstrapSwapPlan = useCallback(
+    async (params: {
+      smartWallet: Address
+      ownerAddress: Address
+      creatorToken: Address
+      creatorAmountBaseUnits: string
+    }): Promise<DeployBootstrapSwapSummary> => {
+      const requestBody = {
+        ...params,
+        bootstrapBps: 100,
+        provider: bootstrapSwapPrefs.provider,
+        allowFallback: bootstrapSwapPrefs.allowFallback,
+        slippageBps: bootstrapSwapPrefs.slippageBps,
+      } as const
+
+      const fallbackSummary = (swapError: string): DeployBootstrapSwapSummary => ({
+        providerRequested: bootstrapSwapPrefs.provider,
+        providerUsed: null,
+        fallbackUsed: false,
+        bootstrapBps: 100,
+        slippageBps: bootstrapSwapPrefs.slippageBps,
+        bootstrapCreatorAmountBaseUnits: null,
+        hasSwap: false,
+        swapError,
+      })
+
+      try {
+        const response = await fetch('/api/deploy/session/bootstrapSwap', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        })
+        const payload = (await response.json().catch(() => null)) as ApiEnvelope<Record<string, unknown>> | null
+        if (!response.ok || !payload?.success || !payload.data || typeof payload.data !== 'object') {
+          const swapError = String(payload?.error || 'bootstrap_swap_unavailable')
+          return fallbackSummary(swapError)
+        }
+
+        const data = payload.data as Record<string, unknown>
+        const summary: DeployBootstrapSwapSummary = {
+          providerRequested:
+            typeof data.providerRequested === 'string'
+              ? (String(data.providerRequested) as BootstrapSwapProvider)
+              : bootstrapSwapPrefs.provider,
+          providerUsed: typeof data.providerUsed === 'string' ? data.providerUsed : null,
+          fallbackUsed: data.fallbackUsed === true,
+          bootstrapBps: typeof data.bootstrapBps === 'number' ? data.bootstrapBps : 100,
+          slippageBps: typeof data.slippageBps === 'number' ? data.slippageBps : bootstrapSwapPrefs.slippageBps,
+          bootstrapCreatorAmountBaseUnits:
+            typeof data.bootstrapCreatorAmountBaseUnits === 'string' ? data.bootstrapCreatorAmountBaseUnits : null,
+          hasSwap: Boolean(data.swap && typeof data.swap === 'object'),
+          swapError: typeof data.swapError === 'string' ? data.swapError : null,
+        }
+        return summary
+      } catch (error) {
+        return fallbackSummary(error instanceof Error ? error.message : String(error ?? 'bootstrap_swap_failed'))
+      }
+    },
+    [bootstrapSwapPrefs.allowFallback, bootstrapSwapPrefs.provider, bootstrapSwapPrefs.slippageBps],
   )
 
   const submit = async (opts?: { planOnly?: boolean }): Promise<DeployPlanExport | null> => {
@@ -3449,7 +3587,7 @@ function DeployVaultBatcher({
           version: deploymentVersion,
           initialSqrtPriceX96: marketV3InitialSqrtPriceX96 ?? fallbackV3InitialSqrtPriceX96,
           charmVaultName: '4626.fun Strategy: Charm',
-          charmVaultSymbol: 'AKITA-USDC',
+          charmVaultSymbol: toCharmVaultSymbol(normalizeUnderlyingSymbol(shareSymbol || 'CREATOR')),
           charmWeightBps,
           ajnaWeightBps,
           solanaWeightBps,
@@ -3482,6 +3620,36 @@ function DeployVaultBatcher({
           throw new Error(
             `Creator smart wallet needs ${formatDeposit(depositAmount)} ${depositSymbol} (has ${formatDeposit(smartWalletBalance)}). Transfer funds to ${shortAddress(owner)} and retry.`,
           )
+        }
+
+        // Controlled bootstrap planner:
+        // ask the server for a CREATOR->USDC bootstrap swap plan (1%) using the configured route provider.
+        // This does not execute a swap inside deploy; it gives an operator-ready route recommendation.
+        const bootstrapSwapPlan = await requestBootstrapSwapPlan({
+          smartWallet: owner,
+          ownerAddress: owner,
+          creatorToken,
+          creatorAmountBaseUnits: depositAmount.toString(),
+        })
+        if (!bootstrapSwapPlan.hasSwap) {
+          logger.error('[DeployVault] bootstrap_swap_plan_unavailable', {
+            providerRequested: bootstrapSwapPlan.providerRequested,
+            providerUsed: bootstrapSwapPlan.providerUsed,
+            fallbackUsed: bootstrapSwapPlan.fallbackUsed,
+            swapError: bootstrapSwapPlan.swapError,
+            planOnly,
+          })
+          if (!planOnly) {
+            assertBootstrapSwapPlanReady(bootstrapSwapPlan)
+          }
+        } else {
+          logger.info('[DeployVault] bootstrap_swap_plan_ready', {
+            providerRequested: bootstrapSwapPlan.providerRequested,
+            providerUsed: bootstrapSwapPlan.providerUsed,
+            fallbackUsed: bootstrapSwapPlan.fallbackUsed,
+            bootstrapCreatorAmountBaseUnits: bootstrapSwapPlan.bootstrapCreatorAmountBaseUnits,
+            planOnly,
+          })
         }
 
         const phase1Calls: Array<{ target: Address; value: bigint; data: Hex }> = phase1CallsPrepared
@@ -3724,6 +3892,7 @@ function DeployVaultBatcher({
             phase4: sessionCreatePayload.phase4Calls.length,
           },
           sessionCreateRequest: sessionCreatePayload,
+          bootstrapSwapPlan,
         }
 
         logger.info('[DeployVault] deploy_start', {
@@ -4719,13 +4888,13 @@ function DeployVaultBatcher({
             // After installation of the temporary owner, the server will submit all phases and then clean up.
             const createJson = await postDeploySessionCreate(false)
             sessionId = String(createJson.data?.sessionId ?? '').trim()
-            const sessionOwnerRaw = String(createJson.data?.sessionSignerAddress ?? createJson.data?.sessionOwner ?? '').trim()
-            if (!sessionId || !isAddress(sessionOwnerRaw)) throw new Error('Invalid deploy session response')
-            const sessionOwner = getAddress(sessionOwnerRaw) as Address
+            const sessionSignerRaw = String(createJson.data?.sessionSignerAddress ?? '').trim()
+            if (!sessionId || !isAddress(sessionSignerRaw)) throw new Error('Invalid deploy session response')
+            const sessionSigner = getAddress(sessionSignerRaw) as Address
             persistDeploySession(sessionId)
 
             // Install the deploy-session signer via a one-time owner EOA transaction if needed.
-            await ensureDeploySessionSignerInstalled(sessionOwner)
+            await ensureDeploySessionSignerInstalled(sessionSigner)
 
             // Kick off server continuation; status polling will advance remaining phases.
             const continueRes = await fetch('/api/deploy/session/continue', {
@@ -4905,10 +5074,13 @@ function DeployVaultBatcher({
     ? ((expectedQuery.error as any)?.message || 'Failed to compute deployment addresses.')
     : null
 
+  const hasResumePendingSetup = Boolean(resumePendingSetup)
   const disabledReason =
     busy
       ? 'Deployment in progress…'
-      : expectedQuery.isLoading
+      : hasResumePendingSetup
+        ? 'Resumed deploy is waiting for one manual owner approval before continue.'
+        : expectedQuery.isLoading
         ? 'Computing deployment addresses…'
         : !expected
           ? expectedError || 'Deployment addresses are not ready.'
@@ -5119,6 +5291,28 @@ function DeployVaultBatcher({
         )}
       </div>
 
+      {resumePendingSetup ? (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
+          <div className="text-sm font-medium text-amber-200">Resume requires one manual approval</div>
+          <div className="text-[11px] text-amber-200/80 leading-relaxed">
+            This resumed deploy session is paused at setup. Approve installing the deploy-session signer once, then we
+            continue phases server-side.
+          </div>
+          <div className="text-[11px] text-zinc-300/90">
+            Session signer: <span className="font-mono">{shortAddress(resumePendingSetup.sessionSigner)}</span>
+          </div>
+          {resumePendingSetupError ? <div className="text-[11px] text-red-400">{resumePendingSetupError}</div> : null}
+          <button
+            type="button"
+            onClick={() => void continueResumedDeploySession()}
+            disabled={resumePendingSetupBusy || busy}
+            className="btn-primary w-full sm:w-auto"
+          >
+            {resumePendingSetupBusy ? 'Waiting for wallet confirmation…' : 'Resume Deploy'}
+          </button>
+        </div>
+      ) : null}
+
       {/* Show deploy button only if we have a valid ERC-4337 path */}
       {hasDeploySignerPath ? (
         <div className="space-y-2">
@@ -5138,7 +5332,12 @@ function DeployVaultBatcher({
                         : 'via app smart wallet owner'
                 }`}
           </div>
-          <button type="button" onClick={() => void submit()} disabled={disabled || exportBusy} className="btn-accent w-full rounded-lg">
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={disabled || exportBusy || hasResumePendingSetup}
+            className="btn-accent w-full rounded-lg"
+          >
             {busy ? 'Deploying…' : '1‑Click Deploy (Gas-Free)'}
           </button>
         </div>
@@ -5222,12 +5421,9 @@ function DeployVaultMain() {
   const [addPrivySmartWalletOwnerBusy, setAddPrivySmartWalletOwnerBusy] = useState(false)
   const [addPrivySmartWalletOwnerTxHash, setAddPrivySmartWalletOwnerTxHash] = useState<string | null>(null)
   const [addPrivySmartWalletOwnerError, setAddPrivySmartWalletOwnerError] = useState<string | null>(null)
-  const [autoSmartWalletOwnerAttemptCount, setAutoSmartWalletOwnerAttemptCount] = useState(0)
-  const [autoSmartWalletOwnerRetryTick, setAutoSmartWalletOwnerRetryTick] = useState(0)
-  const autoSmartWalletOwnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const autoSmartWalletOwnerAttemptKeyRef = useRef<string | null>(null)
   const autoLoginAttemptRef = useRef(false)
   const autoBridgeAttemptRef = useRef(false)
+  const autoHandoffRedeemAttemptRef = useRef(false)
   const [handoffState, setHandoffState] = useState<'idle' | 'signingIn' | 'bridging' | 'ready' | 'error'>('idle')
   const [handoffError, setHandoffError] = useState<string | null>(null)
   
@@ -5611,6 +5807,7 @@ function DeployVaultMain() {
     autoLogin: boolean
     fromWaitlist: boolean
     debugEnabledFromQuery: boolean
+    handoffCode: string
   } | null>(null)
 
   if (!initialQueryRef.current) {
@@ -5621,6 +5818,7 @@ function DeployVaultMain() {
       autoLogin: autoLoginRaw === '1' || autoLoginRaw === 'true' || autoLoginRaw === 'yes',
       fromWaitlist: fromRaw === 'waitlist',
       debugEnabledFromQuery: (searchParams.get('debug') ?? '').trim() === '1',
+      handoffCode: (searchParams.get(AUTH_HANDOFF_QUERY_KEY) ?? '').trim(),
     }
   }
 
@@ -5628,11 +5826,12 @@ function DeployVaultMain() {
   const autoLogin = initialQueryRef.current.autoLogin
   const fromWaitlist = initialQueryRef.current.fromWaitlist
   const debugEnabledFromQuery = initialQueryRef.current.debugEnabledFromQuery
+  const handoffCode = initialQueryRef.current.handoffCode
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams)
     let changed = false
-    for (const key of ['autologin', 'auth', 'from', 'shareOftSaltOverride', 'debug']) {
+    for (const key of ['autologin', 'auth', 'from', AUTH_HANDOFF_QUERY_KEY, 'shareOftSaltOverride', 'debug']) {
       if (next.has(key)) {
         next.delete(key)
         changed = true
@@ -5657,11 +5856,10 @@ function DeployVaultMain() {
   }, [cdpPaymasterUrl])
 
   // Smooth waitlist → deploy:
-  // If we arrived with `autologin=1&from=waitlist`, prompt wallet login on app host
-  // and bridge into a 4626 session.
+  // If we arrived with `autologin=1&from=waitlist`, first redeem any one-time handoff code,
+  // then fall back to Privy login/bridge if needed.
   useEffect(() => {
     if (!autoLogin || !fromWaitlist) return
-    if (!privyReady) return
     if (handoffState === 'ready' || handoffState === 'error') return
     if (handoffState === 'idle') setHandoffState('signingIn')
 
@@ -5671,10 +5869,52 @@ function DeployVaultMain() {
       setHandoffError(message)
     }
 
-    if (!privyAuthenticated) {
-      if (autoLoginAttemptRef.current) return
-      autoLoginAttemptRef.current = true
-      void (async () => {
+    const redeemOneTimeHandoff = async (): Promise<boolean> => {
+      const code = handoffCode.trim()
+      if (!code || autoHandoffRedeemAttemptRef.current) return false
+      autoHandoffRedeemAttemptRef.current = true
+
+      try {
+        setHandoffError(null)
+        setHandoffState('bridging')
+        const { apiFetch } = await import('@/lib/apiBase')
+        const res = await apiFetch('/api/auth/handoff/redeem', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ code }),
+        })
+        const json = (await res.json().catch(() => null)) as
+          | { success?: boolean; data?: { sessionToken?: string; address?: string } | null }
+          | null
+        if (!res.ok || !json?.success) return false
+
+        const sessionToken =
+          json?.data && typeof json.data.sessionToken === 'string' ? json.data.sessionToken.trim() : ''
+        if (sessionToken) {
+          try {
+            sessionStorage.setItem('cv_siwe_session_token', sessionToken)
+          } catch {
+            // ignore
+          }
+        }
+
+        await siwe.refresh().catch(() => null)
+        setHandoffState('ready')
+        setHandoffError(null)
+        return true
+      } catch {
+        return false
+      }
+    }
+
+    void (async () => {
+      const redeemed = await redeemOneTimeHandoff()
+      if (redeemed) return
+
+      if (!privyReady) return
+      if (!privyAuthenticated) {
+        if (autoLoginAttemptRef.current) return
+        autoLoginAttemptRef.current = true
         try {
           setHandoffError(null)
           setHandoffState('signingIn')
@@ -5684,18 +5924,16 @@ function DeployVaultMain() {
           autoLoginAttemptRef.current = false
           failHandoff('Sign-in cancelled. Click “Sign in with wallet” to continue.')
         }
-      })()
-      return
-    }
+        return
+      }
 
-    if (autoBridgeAttemptRef.current) return
-    autoBridgeAttemptRef.current = true
+      if (autoBridgeAttemptRef.current) return
+      autoBridgeAttemptRef.current = true
+      if (typeof getAccessToken !== 'function') {
+        failHandoff('Privy token bridge is unavailable. Click “Sign in with wallet” to retry.')
+        return
+      }
 
-    if (typeof getAccessToken !== 'function') {
-      failHandoff('Privy token bridge is unavailable. Click “Sign in with wallet” to retry.')
-      return
-    }
-    void (async () => {
       try {
         setHandoffError(null)
         setHandoffState('bridging')
@@ -5717,7 +5955,7 @@ function DeployVaultMain() {
         failHandoff('Could not establish a session. Click “Sign in with wallet” and retry.')
       }
     })()
-  }, [autoLogin, fromWaitlist, getAccessToken, handoffState, login, privyAuthenticated, privyReady, siwe])
+  }, [autoLogin, fromWaitlist, getAccessToken, handoffCode, handoffState, login, privyAuthenticated, privyReady, siwe])
 
   // Mark handoff ready once we have an app session.
   useEffect(() => {
@@ -6312,16 +6550,6 @@ function DeployVaultMain() {
     walletClient,
   ])
 
-  useEffect(() => {
-    return () => {
-      if (autoSmartWalletOwnerTimerRef.current) {
-        clearTimeout(autoSmartWalletOwnerTimerRef.current)
-        autoSmartWalletOwnerTimerRef.current = null
-      }
-    }
-  }, [])
-
-
   // Allow injected EOAs (Rabby/MetaMask/etc) to operate a Coinbase Smart Wallet canonical identity
   // when the EOA is an onchain owner of that smart wallet.
   // Uses server-side API to avoid client-side RPC rate limits.
@@ -6714,63 +6942,8 @@ function DeployVaultMain() {
   
   const isCoinbaseWalletDirect = connector?.id === 'coinbaseWalletSDK' || connector?.id === 'com.coinbase.wallet'
 
-  useEffect(() => {
-    if (strictNoEoaMode) return
-    if (isCoinbaseWalletDirect) return
-    if (smartWalletMatchesCanonical) return
-    if (!privySmartWalletAddress || !privySmartWalletCanSign) return
-    // Wait until the owner-check query has resolved before attempting setup.
-    // `data === undefined` during initial load should not be treated as "not owner".
-    if (!privySmartWalletIsCanonicalOwnerQuery.isFetched) return
-    if (privySmartWalletIsCanonicalOwnerQuery.isFetching) return
-    if (privySmartWalletIsCanonicalOwner) return
-    if (!canonicalIdentityIsContract || !canonicalIdentityAddress) return
-    if (!connectedWalletAddress) return
-    if (addPrivySmartWalletOwnerBusy) return
-    if (autoSmartWalletOwnerAttemptCount >= 3) return
-
-    const attemptKey = `${canonicalIdentityAddress.toLowerCase()}:${connectedWalletAddress.toLowerCase()}:${privySmartWalletAddress.toLowerCase()}`
-    if (autoSmartWalletOwnerAttemptKeyRef.current !== attemptKey) {
-      autoSmartWalletOwnerAttemptKeyRef.current = attemptKey
-      if (autoSmartWalletOwnerTimerRef.current) {
-        clearTimeout(autoSmartWalletOwnerTimerRef.current)
-        autoSmartWalletOwnerTimerRef.current = null
-      }
-      setAutoSmartWalletOwnerAttemptCount(0)
-    }
-
-    const run = async () => {
-      const ok = await handleAddPrivyAppSmartWalletOwner({ skipConfirm: true })
-      if (ok) return
-      if (autoSmartWalletOwnerAttemptCount >= 2) return
-      if (autoSmartWalletOwnerTimerRef.current) {
-        clearTimeout(autoSmartWalletOwnerTimerRef.current)
-      }
-      const backoffMs = 2000 * (autoSmartWalletOwnerAttemptCount + 1)
-      autoSmartWalletOwnerTimerRef.current = setTimeout(() => {
-        setAutoSmartWalletOwnerAttemptCount((count) => count + 1)
-        setAutoSmartWalletOwnerRetryTick((tick) => tick + 1)
-      }, backoffMs)
-    }
-
-    void run()
-  }, [
-    addPrivySmartWalletOwnerBusy,
-    autoSmartWalletOwnerAttemptCount,
-    autoSmartWalletOwnerRetryTick,
-    canonicalIdentityAddress,
-    canonicalIdentityIsContract,
-    connectedWalletAddress,
-    handleAddPrivyAppSmartWalletOwner,
-    isCoinbaseWalletDirect,
-    strictNoEoaMode,
-    privySmartWalletAddress,
-    privySmartWalletCanSign,
-    privySmartWalletIsCanonicalOwner,
-    privySmartWalletIsCanonicalOwnerQuery.isFetched,
-    privySmartWalletIsCanonicalOwnerQuery.isFetching,
-    smartWalletMatchesCanonical,
-  ])
+  // Owner approval is intentionally manual via "Approve Once".
+  // Avoid auto-calling addOwnerAddress to prevent repeated wallet prompts.
   
   const privyEmbeddedOwnerReady = privyEmbeddedEoaIsCanonicalOwner && privyEmbeddedEoaCanSign
   const privySmartWalletOwnerReady = privySmartWalletIsCanonicalOwner && privySmartWalletCanSign

@@ -32,7 +32,6 @@ export async function ensureKeeprSchema(): Promise<void> {
     `
 
     await db.sql`CREATE INDEX IF NOT EXISTS keepr_vaults_group_id_idx ON keepr_vaults (group_id);`
-    await db.sql`CREATE INDEX IF NOT EXISTS keepr_vaults_owner_idx ON keepr_vaults (canonical_owner_address);`
 
     // Back-compat: if table exists from a previous deployment, add new columns safely.
     try {
@@ -42,11 +41,6 @@ export async function ensureKeeprSchema(): Promise<void> {
     }
     try {
       await db.sql`ALTER TABLE keepr_vaults ADD COLUMN IF NOT EXISTS lens_group_address TEXT;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`CREATE INDEX IF NOT EXISTS keepr_vaults_lens_group_idx ON keepr_vaults (lens_group_address);`
     } catch {
       // ignore
     }
@@ -126,11 +120,6 @@ export async function ensureKeeprSchema(): Promise<void> {
       // ignore
     }
     try {
-      await db.sql`CREATE INDEX IF NOT EXISTS keepr_actions_group_idx ON keepr_actions (group_id, created_at DESC);`
-    } catch {
-      // ignore
-    }
-    try {
       await db.sql`CREATE INDEX IF NOT EXISTS keepr_actions_dedupe_idx ON keepr_actions (dedupe_key, created_at DESC);`
     } catch {
       // ignore
@@ -146,7 +135,6 @@ export async function ensureKeeprSchema(): Promise<void> {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `
-    await db.sql`CREATE INDEX IF NOT EXISTS keepr_audit_vault_idx ON keepr_logs (vault_address, created_at DESC);`
 
     // Users who attempted to join but were ineligible can be "watched".
     // Keepr will periodically re-check eligibility and auto-add when eligible.
@@ -165,7 +153,6 @@ export async function ensureKeeprSchema(): Promise<void> {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `
-    await db.sql`CREATE INDEX IF NOT EXISTS keepr_join_requests_status_idx ON keepr_join_requests (status, next_check_at, updated_at DESC);`
     await db.sql`CREATE INDEX IF NOT EXISTS keepr_join_requests_vault_wallet_idx ON keepr_join_requests (vault_address, wallet_address);`
 
     // Back-compat: add columns safely.

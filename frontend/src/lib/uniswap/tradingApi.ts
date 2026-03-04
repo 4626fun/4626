@@ -33,30 +33,6 @@ export type TradeQuoteRequest = QuoteRequest & {
 
 export type TradeQuoteResponse = QuoteResponse & Record<string, unknown>
 
-export type ZQuoteCompareRequest = {
-  tokenIn: string
-  tokenOut: string
-  amountInUnits: string
-}
-
-export type ZQuoteCompareResponse = {
-  available: boolean
-  reason?: string
-  zQuoter?: string
-  chainId?: number
-  chainName?: string
-  tokenIn?: string
-  tokenOut?: string
-  amountIn?: string
-  amountInUnits?: string
-  amountOut?: string
-  amountOutUnits?: string
-  fetchedAt?: number
-  maxAgeMs?: number
-  best?: Record<string, unknown>
-  quotes?: Array<Record<string, unknown>>
-} & Record<string, unknown>
-
 // OpenAPI currently types approval/cancel as always-present transactions, but the
 // endpoint can return `null` when no approval/cancel is required.
 export type TradeApprovalResponse = Omit<ApprovalResponse, 'approval' | 'cancel'> & {
@@ -250,10 +226,6 @@ export async function fetchTradeQuote(body: TradeQuoteRequest): Promise<TradeQuo
 
   quoteInFlight.set(key, request)
   return request
-}
-
-export async function fetchZQuoteComparison(body: ZQuoteCompareRequest): Promise<ZQuoteCompareResponse> {
-  return post<ZQuoteCompareResponse>('/api/uniswap/zquote', body as Record<string, unknown>)
 }
 
 export async function checkTradeApproval(body: ApprovalRequest): Promise<TradeApprovalResponse> {

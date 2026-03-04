@@ -11,8 +11,6 @@ import setCharmVaultHandler from '../_handlers/v1/build/charm/_setCharmVault.ts'
 import setParametersHandler from '../_handlers/v1/build/charm/_setParameters.ts'
 import setSwapPoolHandler from '../_handlers/v1/build/charm/_setSwapPool.ts'
 import setUniFactoryHandler from '../_handlers/v1/build/charm/_setUniFactory.ts'
-import setUseZRouterHandler from '../_handlers/v1/build/charm/_setUseZRouter.ts'
-import setZRouterHandler from '../_handlers/v1/build/charm/_setZRouter.ts'
 import vaultRebalanceHandler from '../_handlers/v1/build/charm/vault/_rebalance.ts'
 import vaultSetStrategyHandler from '../_handlers/v1/build/charm/vault/_setStrategy.ts'
 import { createMockReq, createMockRes } from './helpers'
@@ -47,8 +45,6 @@ const ADDRESS_B = '0x4444444444444444444444444444444444444444'
 const CHARM_STRATEGY_ABI = [
   { type: 'function', name: 'setCharmVault', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [] },
   { type: 'function', name: 'setSwapPool', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [] },
-  { type: 'function', name: 'setZRouter', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [] },
-  { type: 'function', name: 'setUseZRouter', stateMutability: 'nonpayable', inputs: [{ type: 'bool' }], outputs: [] },
   { type: 'function', name: 'setUniFactory', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [] },
   { type: 'function', name: 'setAutoFeeTier', stateMutability: 'nonpayable', inputs: [{ type: 'bool' }], outputs: [] },
   {
@@ -73,25 +69,8 @@ const CHARM_STRATEGY_ABI = [
 
 const CHARM_VAULT_ABI = [
   { type: 'function', name: 'rebalance', stateMutability: 'nonpayable', inputs: [], outputs: [] },
-  {
-    type: 'function',
-    name: 'rebalance',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'swapAmount', type: 'int256' },
-      { name: 'sqrtPriceLimitX96', type: 'uint160' },
-      { name: 'baseLower', type: 'int24' },
-      { name: 'baseUpper', type: 'int24' },
-      { name: 'bidLower', type: 'int24' },
-      { name: 'bidUpper', type: 'int24' },
-      { name: 'askLower', type: 'int24' },
-      { name: 'askUpper', type: 'int24' },
-    ],
-    outputs: [],
-  },
   { type: 'function', name: 'setRebalanceDelegate', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [] },
   { type: 'function', name: 'setManager', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [] },
-  { type: 'function', name: 'setStrategy', stateMutability: 'nonpayable', inputs: [{ type: 'address' }], outputs: [] },
 ] as const
 
 describe('v1 build Charm handlers', () => {
@@ -121,8 +100,6 @@ describe('v1 build Charm handlers', () => {
     const cases = [
       { handler: setCharmVaultHandler, body: { strategy: STRATEGY, charmVault: ADDRESS_A } },
       { handler: setSwapPoolHandler, body: { strategy: STRATEGY, swapPool: ADDRESS_A } },
-      { handler: setZRouterHandler, body: { strategy: STRATEGY, zRouter: ADDRESS_A } },
-      { handler: setUseZRouterHandler, body: { strategy: STRATEGY, useZRouter: true } },
       { handler: setUniFactoryHandler, body: { strategy: STRATEGY, uniFactory: ADDRESS_A } },
       { handler: setAutoFeeTierHandler, body: { strategy: STRATEGY, autoFeeTier: true } },
       {
@@ -136,17 +113,7 @@ describe('v1 build Charm handlers', () => {
       { handler: ownerEmergencyWithdrawFromCharmHandler, body: { strategy: STRATEGY } },
       {
         handler: vaultRebalanceHandler,
-        body: {
-          vault: VAULT,
-          swapAmount: '1',
-          sqrtPriceLimitX96: '2',
-          baseLower: '-100',
-          baseUpper: '100',
-          bidLower: '-200',
-          bidUpper: '-100',
-          askLower: '100',
-          askUpper: '200',
-        },
+        body: { vault: VAULT },
       },
       { handler: vaultSetStrategyHandler, body: { vault: VAULT, strategy: STRATEGY } },
     ] as const
@@ -181,16 +148,6 @@ describe('v1 build Charm handlers', () => {
       args: [ADDRESS_A],
     })
     expect(swapPoolRes.body?.data?.data).toBe(expectedSwapPool)
-
-    const zRouterReq = createMockReq({ method: 'POST', body: { strategy: STRATEGY, zRouter: ADDRESS_A } })
-    const zRouterRes = createMockRes()
-    await setZRouterHandler(zRouterReq, zRouterRes)
-    const expectedZRouter = encodeFunctionData({
-      abi: CHARM_STRATEGY_ABI,
-      functionName: 'setZRouter',
-      args: [ADDRESS_A],
-    })
-    expect(zRouterRes.body?.data?.data).toBe(expectedZRouter)
 
     const uniFactoryReq = createMockReq({ method: 'POST', body: { strategy: STRATEGY, uniFactory: ADDRESS_A } })
     const uniFactoryRes = createMockRes()
@@ -227,17 +184,7 @@ describe('v1 build Charm handlers', () => {
 
     const vaultRebalanceReq = createMockReq({
       method: 'POST',
-      body: {
-        vault: VAULT,
-        swapAmount: '1',
-        sqrtPriceLimitX96: '2',
-        baseLower: '-100',
-        baseUpper: '100',
-        bidLower: '-200',
-        bidUpper: '-100',
-        askLower: '100',
-        askUpper: '200',
-      },
+      body: { vault: VAULT },
     })
     const vaultRebalanceRes = createMockRes()
     await vaultRebalanceHandler(vaultRebalanceReq, vaultRebalanceRes)
@@ -246,17 +193,6 @@ describe('v1 build Charm handlers', () => {
   })
 
   it('builds calldata for boolean setter handlers and validates boolean input', async () => {
-    const useZRouterReq = createMockReq({ method: 'POST', body: { strategy: STRATEGY, useZRouter: true } })
-    const useZRouterRes = createMockRes()
-    await setUseZRouterHandler(useZRouterReq, useZRouterRes)
-    expect(useZRouterRes.statusCode).toBe(200)
-    const expectedUseZRouter = encodeFunctionData({
-      abi: CHARM_STRATEGY_ABI,
-      functionName: 'setUseZRouter',
-      args: [true],
-    })
-    expect(useZRouterRes.body?.data?.data).toBe(expectedUseZRouter)
-
     const autoFeeReq = createMockReq({ method: 'POST', body: { strategy: STRATEGY, autoFeeTier: false } })
     const autoFeeRes = createMockRes()
     await setAutoFeeTierHandler(autoFeeReq, autoFeeRes)
@@ -276,12 +212,6 @@ describe('v1 build Charm handlers', () => {
       args: [true],
     })
     expect(setActiveRes.body?.data?.data).toBe(expectedSetActive)
-
-    const badReq = createMockReq({ method: 'POST', body: { strategy: STRATEGY, useZRouter: 'true' } })
-    const badRes = createMockRes()
-    await setUseZRouterHandler(badReq, badRes)
-    expect(badRes.statusCode).toBe(400)
-    expect(String(badRes.body?.error ?? '')).toContain('useZRouter must be a boolean')
   })
 
   it('builds setParameters calldata and validates bounds', async () => {
@@ -398,7 +328,7 @@ describe('v1 build Charm handlers', () => {
     expect(String(badAmountRes.body?.error ?? '')).toContain('amount must be >= 0')
   })
 
-  it('builds vault actions and validates rebalance modes/tick bounds', async () => {
+  it('builds vault actions and rejects removed legacy modes/fields', async () => {
     const setStrategyReq = createMockReq({ method: 'POST', body: { vault: VAULT, strategy: STRATEGY } })
     const setStrategyRes = createMockRes()
     await vaultSetStrategyHandler(setStrategyReq, setStrategyRes)
@@ -410,19 +340,19 @@ describe('v1 build Charm handlers', () => {
     })
     expect(setStrategyRes.body?.data?.data).toBe(expectedSetStrategy)
 
-    const legacySetStrategyReq = createMockReq({
+    const managerSetStrategyReq = createMockReq({
       method: 'POST',
-      body: { vault: VAULT, strategy: STRATEGY, mode: 'legacy-strategy' },
+      body: { vault: VAULT, strategy: STRATEGY, mode: 'manager' },
     })
-    const legacySetStrategyRes = createMockRes()
-    await vaultSetStrategyHandler(legacySetStrategyReq, legacySetStrategyRes)
-    expect(legacySetStrategyRes.statusCode).toBe(200)
-    const expectedLegacySetStrategy = encodeFunctionData({
+    const managerSetStrategyRes = createMockRes()
+    await vaultSetStrategyHandler(managerSetStrategyReq, managerSetStrategyRes)
+    expect(managerSetStrategyRes.statusCode).toBe(200)
+    const expectedManagerSetStrategy = encodeFunctionData({
       abi: CHARM_VAULT_ABI,
-      functionName: 'setStrategy',
+      functionName: 'setManager',
       args: [STRATEGY],
     })
-    expect(legacySetStrategyRes.body?.data?.data).toBe(expectedLegacySetStrategy)
+    expect(managerSetStrategyRes.body?.data?.data).toBe(expectedManagerSetStrategy)
 
     const simpleRebalanceReq = createMockReq({ method: 'POST', body: { vault: VAULT } })
     const simpleRebalanceRes = createMockRes()
@@ -435,47 +365,33 @@ describe('v1 build Charm handlers', () => {
     })
     expect(simpleRebalanceRes.body?.data?.data).toBe(expectedSimpleRebalance)
 
-    const rebalanceReq = createMockReq({
+    const removedLegacyModeReq = createMockReq({
       method: 'POST',
-      body: {
-        vault: VAULT,
-        swapAmount: '-100',
-        sqrtPriceLimitX96: '1',
-        baseLower: '-120',
-        baseUpper: '120',
-        bidLower: '-240',
-        bidUpper: '-120',
-        askLower: '120',
-        askUpper: '240',
-      },
+      body: { vault: VAULT, mode: 'auto' },
     })
-    const rebalanceRes = createMockRes()
-    await vaultRebalanceHandler(rebalanceReq, rebalanceRes)
-    expect(rebalanceRes.statusCode).toBe(200)
-    const expectedRebalance = encodeFunctionData({
-      abi: CHARM_VAULT_ABI,
-      functionName: 'rebalance',
-      args: [-100n, 1n, -120, 120, -240, -120, 120, 240],
-    })
-    expect(rebalanceRes.body?.data?.data).toBe(expectedRebalance)
+    const removedLegacyModeRes = createMockRes()
+    await vaultRebalanceHandler(removedLegacyModeReq, removedLegacyModeRes)
+    expect(removedLegacyModeRes.statusCode).toBe(400)
+    expect(String(removedLegacyModeRes.body?.error ?? '')).toContain('Legacy rebalance params were removed')
 
-    const badTickReq = createMockReq({
+    const removedLegacyFieldsReq = createMockReq({
       method: 'POST',
-      body: {
-        vault: VAULT,
-        swapAmount: '1',
-        sqrtPriceLimitX96: '1',
-        baseLower: '-887273',
-        baseUpper: '120',
-        bidLower: '-240',
-        bidUpper: '-120',
-        askLower: '120',
-        askUpper: '240',
-      },
+      body: { vault: VAULT, baseLower: '-120', baseUpper: '120' },
     })
-    const badTickRes = createMockRes()
-    await vaultRebalanceHandler(badTickReq, badTickRes)
-    expect(badTickRes.statusCode).toBe(400)
-    expect(String(badTickRes.body?.error ?? '')).toContain('baseLower out of range')
+    const removedLegacyFieldsRes = createMockRes()
+    await vaultRebalanceHandler(removedLegacyFieldsReq, removedLegacyFieldsRes)
+    expect(removedLegacyFieldsRes.statusCode).toBe(400)
+    expect(String(removedLegacyFieldsRes.body?.error ?? '')).toContain('Legacy rebalance params were removed')
+
+    const removedLegacyStrategyModeReq = createMockReq({
+      method: 'POST',
+      body: { vault: VAULT, strategy: STRATEGY, mode: 'legacy-strategy' },
+    })
+    const removedLegacyStrategyModeRes = createMockRes()
+    await vaultSetStrategyHandler(removedLegacyStrategyModeReq, removedLegacyStrategyModeRes)
+    expect(removedLegacyStrategyModeRes.statusCode).toBe(400)
+    expect(String(removedLegacyStrategyModeRes.body?.error ?? '')).toContain(
+      'mode must be one of: delegate, manager',
+    )
   })
 })

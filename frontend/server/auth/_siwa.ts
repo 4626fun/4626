@@ -100,6 +100,35 @@ export async function ensureSiwaNonceSchema(db: DbWithSql): Promise<void> {
         created_by_address TEXT
       );
     `
+    try {
+      await db.sql`ALTER TABLE auth_agent_nonces ENABLE ROW LEVEL SECURITY;`
+    } catch {
+      // Ignore if RLS cannot be enabled in this runtime.
+    }
+    try {
+      await db.sql`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1
+            FROM pg_policies
+            WHERE schemaname = 'public'
+              AND tablename = 'auth_agent_nonces'
+              AND policyname = 'auth_agent_nonces_deny_all'
+          ) THEN
+            CREATE POLICY auth_agent_nonces_deny_all
+              ON auth_agent_nonces
+              FOR ALL
+              TO public
+              USING (false)
+              WITH CHECK (false);
+          END IF;
+        END
+        $$;
+      `
+    } catch {
+      // Ignore if policy creation is unavailable in this runtime.
+    }
     await db.sql`CREATE INDEX IF NOT EXISTS auth_agent_nonces_expires_idx ON auth_agent_nonces (expires_at);`
     await db.sql`
       CREATE INDEX IF NOT EXISTS auth_agent_nonces_lookup_idx

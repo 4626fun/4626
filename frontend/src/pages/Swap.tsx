@@ -24,7 +24,7 @@ import {
   quoteCreatePosition,
   removeLiquidity,
 } from '@/lib/uniswap/liquidityApi'
-import { fetchZQuoteComparison, pickQuote } from '@/lib/uniswap/tradingApi'
+import { pickQuote } from '@/lib/uniswap/tradingApi'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
 import {
   BASE_CHAIN_ID,
@@ -246,7 +246,6 @@ export function Swap() {
     initialTokenIn: NATIVE_TOKEN_ADDRESS,
     initialTokenOut: CONTRACTS.usdc,
   })
-  const [compareRoutesEnabled, setCompareRoutesEnabled] = useState(false)
   const [tokenSelectorOpen, setTokenSelectorOpen] = useState(false)
   const [tokenSelectorSide, setTokenSelectorSide] = useState<'input' | 'output'>('input')
   const [tokenSelectorQuery, setTokenSelectorQuery] = useState('')
@@ -789,29 +788,6 @@ export function Swap() {
     // `busy` intentionally omitted — use busyRef to check at call-time.
   }, [tokenIn, tokenOut, amountInUnits, parsedSlippage, executionReady, isReady, handleQuote])
 
-  // Experimental comparison only; execution route remains Uniswap Trading API.
-  useEffect(() => {
-    if (!compareRoutesEnabled || !executionReady || !isReady) {
-      return
-    }
-
-    let cancelled = false
-    const timer = window.setTimeout(() => {
-      if (cancelled) return
-      void fetchZQuoteComparison({
-        tokenIn,
-        tokenOut,
-        amountInUnits,
-      })
-        .catch(() => {})
-    }, 450)
-
-    return () => {
-      cancelled = true
-      window.clearTimeout(timer)
-    }
-  }, [compareRoutesEnabled, executionReady, isReady, tokenIn, tokenOut, amountInUnits])
-
   // One-click flow: after review/build, immediately execute without an extra in-app confirm modal.
   useEffect(() => {
     if (!confirmIntent) return
@@ -1133,11 +1109,9 @@ export function Swap() {
         busy={busy !== null}
         slippagePct={slippagePct}
         deadlineMinutes={deadlineMinutes}
-        compareRoutesEnabled={compareRoutesEnabled}
         onClose={() => setShowAdvanced(false)}
         onSetSlippagePct={setSlippagePct}
         onSetDeadlineMinutes={setDeadlineMinutes}
-        onSetCompareRoutesEnabled={setCompareRoutesEnabled}
       />
 
     </>

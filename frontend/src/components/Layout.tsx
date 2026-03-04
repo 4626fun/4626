@@ -1,30 +1,18 @@
 import { Suspense, useEffect, useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { ArrowLeftRight, Droplets, LayoutDashboard, Mail, ShieldCheck, Wallet } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
 import { VaultNavBar } from './brand/VaultNavBar'
 import { ChatWidget } from './chat/ChatWidget'
 import { AccountModeIndicator } from './account/AccountModeIndicator'
 import { isPublicSiteMode } from '@/lib/flags'
 import { getHostMode } from '@/lib/host'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
-import { apiFetch } from '@/lib/apiBase'
 
 type MobileNavItem = {
   label: string
   path: string
   icon: any
   activePrefixes?: string[]
-}
-
-type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
-type ResolvedAgentSubdomain = {
-  label: string
-  record: {
-    ownerAddress: string
-    fullName: string
-    metadataLensUri: string | null
-  } | null
 }
 
 const navItems: MobileNavItem[] = [
@@ -68,19 +56,6 @@ export function Layout() {
   const showAccountMode = hostMode !== 'marketing' && !publicMode
   const baseItems = publicMode || hostMode === 'marketing' ? navItemsPublic : navItems
   const items = isAdmin && hostMode !== 'marketing' ? [...baseItems, adminNavItem] : baseItems
-  const resolvedSubdomain = useQuery({
-    queryKey: ['agents', 'subdomain-resolve', hostMode],
-    enabled: hostMode === 'app',
-    staleTime: 60_000,
-    queryFn: async (): Promise<ResolvedAgentSubdomain | null> => {
-      const res = await apiFetch('/api/agents/subdomains/resolve', { method: 'GET' })
-      const json = (await res.json().catch(() => null)) as ApiEnvelope<ResolvedAgentSubdomain> | null
-      if (!res.ok || !json?.success) return null
-      return json.data ?? null
-    },
-  })
-  const subdomainRecord = resolvedSubdomain.data?.record ?? null
-  const showSubdomainStatusRow = hostMode === 'app'
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -98,26 +73,6 @@ export function Layout() {
     <div className="min-h-screen flex flex-col bg-vault-bg">
       {showTopNavBar ? <VaultNavBar /> : null}
       {showAccountMode ? <AccountModeIndicator /> : null}
-      {showSubdomainStatusRow ? (
-        <div className="border-b border-vault-border/60 bg-black/50">
-          <div className="max-w-7xl mx-auto px-6 py-2 min-h-[33px] text-[11px] font-medium text-vault-subtext flex items-center justify-between gap-2">
-            {subdomainRecord ? (
-              <>
-                <span>
-                  Agent subdomain: <span className="text-vault-text">{subdomainRecord.fullName}</span>
-                </span>
-                <Link className="text-brand-primary hover:text-brand-primary/80" to={`/portfolio?address=${subdomainRecord.ownerAddress}`}>
-                  View owner profile
-                </Link>
-              </>
-            ) : (
-              <span className="text-zinc-500">
-                Agent subdomain: {resolvedSubdomain.isLoading ? 'resolving...' : 'not linked'}
-              </span>
-            )}
-          </div>
-        </div>
-      ) : null}
 
       {/* Skip to content link */}
       <a

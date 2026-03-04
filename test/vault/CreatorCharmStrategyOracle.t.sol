@@ -31,6 +31,9 @@ contract MockCharmVault {
     uint256 public total1;
     uint256 public withdrawAmount0;
     uint256 public withdrawAmount1;
+    uint256 public lastDepositAmount0;
+    uint256 public lastDepositAmount1;
+    address public lastDepositTo;
     mapping(address => uint256) public balanceOf;
 
     constructor(address token0_, address token1_) {
@@ -59,7 +62,13 @@ contract MockCharmVault {
         return (total0, total1);
     }
 
-    function deposit(uint256, uint256, uint256, uint256, address) external pure returns (uint256, uint256, uint256) {
+    function deposit(uint256 amount0, uint256 amount1, uint256, uint256, address to)
+        external
+        returns (uint256, uint256, uint256)
+    {
+        lastDepositAmount0 = amount0;
+        lastDepositAmount1 = amount1;
+        lastDepositTo = to;
         return (0, 0, 0);
     }
 
@@ -142,6 +151,7 @@ contract MockV3Pool {
 
 contract MockRouter {
     bool public shouldRevert;
+    bool public called;
     uint256 public amountOutToReturn;
     uint256 public lastAmountOutMinimum;
 
@@ -155,6 +165,7 @@ contract MockRouter {
 
     function exactInputSingle(ISwapRouter.ExactInputSingleParams calldata params) external returns (uint256 amountOut) {
         if (shouldRevert) revert("SWAP_FAIL");
+        called = true;
         lastAmountOutMinimum = params.amountOutMinimum;
         if (params.amountIn > 0) {
             ERC20(params.tokenIn).transferFrom(msg.sender, address(this), params.amountIn);
@@ -423,5 +434,33 @@ contract CreatorCharmStrategyOracleTest is Test {
         assertGt(minOutBefore, 0, "expected non-zero minOut");
         assertEq(minOutAfter, minOutBefore, "spot manipulation changed minOut");
     }
+
+    function test_deposit_bootstrap_noTwap_defersWithoutUsdcLeg() external {
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockERC20 creator = new MockERC20("Creator", "CRT", 18);
+        MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
+        pool.setObservationCardinality(1); // no TWAP history yet
+
+        MockRouter router = new MockRouter();
+        router.setAmountOutToReturn(1_000_000e6);
+
+        MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        charm.setPool(address(pool));
+        CreatorCharmStrategy strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        strategy.initializeApprovals();
+
+        creator.mint(address(this), 100e18);
+        creator.approve(address(strategy), type(uint256).max);
+
+        strategy.deposit(100e18);
+
+        assertFalse(router.called(), "router should not be called without TWAP");
+        assertEq(charm.lastDepositAmount0(), 0, "bootstrap should defer deposit without usdc leg");
+        assertEq(charm.lastDepositAmount1(), 0, "bootstrap should defer deposit without usdc leg");
+        assertEq(charm.lastDepositTo(), address(0), "charm deposit should not be called");
+        assertEq(creator.balanceOf(address(strategy)), 100e18, "creator should remain in strategy");
+        assertEq(usdc.balanceOf(address(strategy)), 0, "usdc should remain zero");
+    }
+
 }
 

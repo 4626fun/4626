@@ -23,8 +23,7 @@ type AnalyticsResponse = {
 
 function getConfiguredVaults(): Record<string, string> {
   const out: Record<string, string> = {}
-  const legacyKey = ['VITE', 'CHARM', 'VAULT', 'ADDRESS'].join('_')
-  const v = process.env.CHARM_VAULT_ADDRESS ?? process.env[legacyKey]
+  const v = process.env.CHARM_VAULT_ADDRESS
   if (typeof v === 'string' && v.trim().length > 0) out.VAULT_1 = v.trim().toLowerCase()
   return out
 }

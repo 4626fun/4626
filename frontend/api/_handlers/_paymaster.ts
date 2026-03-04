@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   concatHex,
   decodeFunctionData,
+  encodeFunctionData,
   encodeAbiParameters,
   encodePacked,
   getAddress,
@@ -712,6 +713,33 @@ const ALLOWED_SWAP_ROUTER_SELECTORS = new Set<string>([
   SELECTOR_SWAP_ROUTER_EXECUTE,
   SELECTOR_SWAP_ROUTER_EXECUTE_WITH_DEADLINE,
 ])
+
+const SWAP_ROUTER_EXECUTE_ABI = [
+  {
+    type: 'function',
+    name: 'execute',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'commands', type: 'bytes' },
+      { name: 'inputs', type: 'bytes[]' },
+    ],
+    outputs: [],
+  },
+] as const
+
+const SWAP_ROUTER_EXECUTE_WITH_DEADLINE_ABI = [
+  {
+    type: 'function',
+    name: 'execute',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'commands', type: 'bytes' },
+      { name: 'inputs', type: 'bytes[]' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+] as const
 const ALLOWED_SELF_SELECTORS = new Set<string>([SELECTOR_CSW_ADD_OWNER_ADDRESS, SELECTOR_CSW_REMOVE_OWNER_AT_INDEX])
 const ALLOWED_ERC8004_SELECTORS = new Set<string>([
   SELECTOR_ERC8004_REGISTER,
@@ -1196,6 +1224,40 @@ function isHexString(v: unknown): v is Hex {
 
 function getSelector(data: Hex): string {
   return data.length >= 10 ? data.slice(0, 10).toLowerCase() : ''
+}
+
+function assertCanonicalSwapRouterCalldata(data: Hex) {
+  const selector = getSelector(data)
+  try {
+    if (selector === SELECTOR_SWAP_ROUTER_EXECUTE) {
+      const decoded = decodeFunctionData({ abi: SWAP_ROUTER_EXECUTE_ABI, data })
+      const canonical = encodeFunctionData({
+        abi: SWAP_ROUTER_EXECUTE_ABI,
+        functionName: 'execute',
+        args: decoded.args as readonly [Hex, readonly Hex[]],
+      })
+      if (canonical.toLowerCase() !== data.toLowerCase()) {
+        throw new Error('swap_router_non_canonical_encoding')
+      }
+      return
+    }
+    if (selector === SELECTOR_SWAP_ROUTER_EXECUTE_WITH_DEADLINE) {
+      const decoded = decodeFunctionData({ abi: SWAP_ROUTER_EXECUTE_WITH_DEADLINE_ABI, data })
+      const canonical = encodeFunctionData({
+        abi: SWAP_ROUTER_EXECUTE_WITH_DEADLINE_ABI,
+        functionName: 'execute',
+        args: decoded.args as readonly [Hex, readonly Hex[], bigint],
+      })
+      if (canonical.toLowerCase() !== data.toLowerCase()) {
+        throw new Error('swap_router_non_canonical_encoding')
+      }
+      return
+    }
+    throw new Error('swap_router_selector_not_allowed')
+  } catch (error) {
+    if (error instanceof Error && error.message === 'swap_router_non_canonical_encoding') throw error
+    throw new Error('swap_router_decode_failed')
+  }
 }
 
 function summarizeSmartWalletCallData(callData: Hex): {
@@ -2049,18 +2111,18 @@ async function validateInnerCalls(params: {
       // Find the deploy session so we can bind the session owner address.
       const ds =
         params.deploySessionOwner && isAddress(params.deploySessionOwner)
-          ? ({ sessionOwner: params.deploySessionOwner } as any)
+          ? ({ sessionSigner: params.deploySessionOwner } as any)
           : await getActiveDeploySessionForSender({
               sessionAddress: params.sessionAddress,
               smartWallet: params.sender,
               includeExpired: allowInactiveForCleanup,
               includeFailed: allowInactiveForCleanup,
             })
-      if (!ds?.sessionOwner || !isAddress(ds.sessionOwner)) throw new Error('deploy_session_missing')
+      if (!ds?.sessionSigner || !isAddress(ds.sessionSigner)) throw new Error('deploy_session_missing')
 
       if (decodedSelf.functionName === 'addOwnerAddress') {
         const ownerArg = getAddress(decodedSelf.args[0] as Address)
-        if (ownerArg !== getAddress(ds.sessionOwner as Address)) throw new Error('deploy_session_owner_mismatch')
+        if (ownerArg !== getAddress(ds.sessionSigner as Address)) throw new Error('deploy_session_owner_mismatch')
         const client = await getBaseClient()
         const ownerCode = (await client.getBytecode({ address: ownerArg }).catch(() => null)) as Hex | null
         if (hasContractBytecode(ownerCode)) throw new Error('contract_owner_not_allowed')
@@ -2068,7 +2130,7 @@ async function validateInnerCalls(params: {
       }
       if (decodedSelf.functionName === 'removeOwnerAtIndex') {
         const ownerBytes = decodedSelf.args[1] as Hex
-        const expected = asOwnerBytes(getAddress(ds.sessionOwner as Address))
+        const expected = asOwnerBytes(getAddress(ds.sessionSigner as Address))
         if (String(ownerBytes).toLowerCase() !== String(expected).toLowerCase()) throw new Error('deploy_session_owner_mismatch')
         continue
       }
@@ -2306,6 +2368,7 @@ async function validateInnerCalls(params: {
     if (mode === 'swap') {
       if (c.target === BASE_SWAP_ROUTER) {
         if (!ALLOWED_SWAP_ROUTER_SELECTORS.has(selector)) throw new Error('swap_router_selector_not_allowed')
+        assertCanonicalSwapRouterCalldata(c.data)
         continue
       }
 
@@ -2504,7 +2567,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Allow cleanup-only requests even if the deploy session is expired/failed.
         allowCleanupOnlyForInactiveDeploySession = expired || failed
         sessionAddress = getAddress(ds.sessionAddress)
-        deploySessionOwner = getAddress(ds.sessionOwner)
+        deploySessionOwner = getAddress(ds.sessionSigner)
       }
 
       if (!sessionAddress) {

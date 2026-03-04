@@ -7,11 +7,9 @@ export function SwapSettingsSheet(props: {
   busy: boolean
   slippagePct: string
   deadlineMinutes: string
-  compareRoutesEnabled: boolean
   onClose: () => void
   onSetSlippagePct: (next: string) => void
   onSetDeadlineMinutes: (next: string) => void
-  onSetCompareRoutesEnabled: (next: boolean) => void
 }) {
   if (!props.open) return null
 
@@ -116,35 +114,6 @@ export function SwapSettingsSheet(props: {
             <p className="mt-1 text-[11px] text-vault-subtext">
               Transaction will revert if not confirmed within this time.
             </p>
-          </div>
-
-          {/* Compare routes toggle */}
-          <div className="rounded-xl border border-white/8 bg-white/3 px-3 py-3">
-            <label className="flex cursor-pointer items-start justify-between gap-3">
-              <div className="flex-1">
-                <div className="text-sm font-medium text-zinc-200">Compare routes</div>
-                <div className="text-[11px] text-zinc-500 mt-0.5">
-                  Experimental: compare Uniswap vs zQuoter quotes. Execution always uses Uniswap.
-                </div>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={props.compareRoutesEnabled}
-                onClick={() => props.onSetCompareRoutesEnabled(!props.compareRoutesEnabled)}
-                className={`mt-0.5 h-6 w-11 shrink-0 rounded-full border p-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${
-                  props.compareRoutesEnabled
-                    ? 'border-brand-primary/60 bg-brand-primary/25'
-                    : 'border-white/15 bg-white/8'
-                }`}
-              >
-                <span
-                  className={`block h-5 w-5 rounded-full bg-white transition-transform ${
-                    props.compareRoutesEnabled ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
-            </label>
           </div>
 
           <Button

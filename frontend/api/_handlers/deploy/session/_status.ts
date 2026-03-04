@@ -50,7 +50,7 @@ function readPayloadObjectSafe(value: unknown): Record<string, any> {
 }
 
 function buildSessionDiagnostics(rec: any): {
-  category: 'ok' | 'expired' | 'grant_expired' | 'session_owner_unavailable' | 'onchain_revert' | 'other_error'
+  category: 'ok' | 'expired' | 'grant_expired' | 'session_signer_unavailable' | 'onchain_revert' | 'other_error'
   restartRequired: boolean
   expired: boolean
   replay: {
@@ -93,14 +93,19 @@ function buildSessionDiagnostics(rec: any): {
   const phase2FinalizeSentWithoutStageHash =
     step === 'phase2_sent' && !asHexHash(payload?.[stageUserOpHashKey('phase2_sent')])
 
-  let category: 'ok' | 'expired' | 'grant_expired' | 'session_owner_unavailable' | 'onchain_revert' | 'other_error' =
+  let category: 'ok' | 'expired' | 'grant_expired' | 'session_signer_unavailable' | 'onchain_revert' | 'other_error' =
     'ok'
   if (lastErrorLower.includes(SESSION_EXPIRED_RESTART_REQUIRED) || expired) {
     category = 'expired'
   } else if (lastErrorLower.includes('erc7712_expired')) {
     category = 'grant_expired'
-  } else if (lastErrorLower.includes('session_owner_unavailable') || lastErrorLower.includes('session_owner_key_missing')) {
-    category = 'session_owner_unavailable'
+  } else if (
+    lastErrorLower.includes('session_signer_unavailable') ||
+    lastErrorLower.includes('session_signer_key_missing') ||
+    lastErrorLower.includes('session_owner_unavailable') ||
+    lastErrorLower.includes('session_owner_key_missing')
+  ) {
+    category = 'session_signer_unavailable'
   } else if (lastError && isOnchainRevertLike(lastError)) {
     category = 'onchain_revert'
   } else if (lastError) {
@@ -1545,13 +1550,11 @@ async function getOwnerAccount(rec: any) {
   const deploySignerWalletId =
     typeof payload?.deploySignerWalletId === 'string'
       ? payload.deploySignerWalletId.trim()
-      : typeof payload?.agentWalletId === 'string'
-        ? payload.agentWalletId.trim()
-        : ''
-  const sessionOwner = getAddress(rec.sessionOwner)
+      : ''
+  const sessionSigner = getAddress(rec.sessionSigner)
   const ownerAccount = deploySignerWalletId
     ? toAccount({
-        address: sessionOwner,
+        address: sessionSigner,
         sign: async ({ hash }: { hash: Hex }) => {
           return (await secp256k1SignHash({ walletId: deploySignerWalletId, hash })) as Hex
         },
@@ -1579,11 +1582,11 @@ async function getOwnerAccount(rec: any) {
         },
       })
     : (() => {
-        if (!rec.sessionOwnerKeyEnc) throw new Error('session_owner_unavailable')
-        const pk = decryptWithSecret(rec.sessionOwnerKeyEnc) as Hex
+        if (!rec.sessionSignerKeyEnc) throw new Error('session_signer_unavailable')
+        const pk = decryptWithSecret(rec.sessionSignerKeyEnc) as Hex
         return privateKeyToAccount(pk)
       })()
-  return { ownerAccount, sessionOwner }
+  return { ownerAccount, sessionSigner }
 }
 
 async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void> {
@@ -1640,9 +1643,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   const deploySignerWalletId =
     typeof payload?.deploySignerWalletId === 'string'
       ? payload.deploySignerWalletId.trim()
-      : typeof payload?.agentWalletId === 'string'
-        ? payload.agentWalletId.trim()
-        : ''
+      : ''
   const persistSessionOwner =
     payload?.persistSessionOwner === true ||
     (payload?.persistSessionOwner == null && Boolean(deploySignerWalletId) && shouldPersistManagedSessionOwner())
@@ -1684,11 +1685,8 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   const phase2CoreCalls = normalizeCalls(Array.isArray(payload.phase2CoreCalls) ? payload.phase2CoreCalls : [])
   const expectedStages = isPlainObject(payload.expectedStages) ? payload.expectedStages : {}
   const rawPhase2FinalizeCalls = Array.isArray(payload.phase2FinalizeCalls) ? payload.phase2FinalizeCalls : []
-  const rawLegacyPhase2Calls = Array.isArray(payload.phase2Calls) ? payload.phase2Calls : []
-  const rawSelectedPhase2FinalizeCalls = rawPhase2FinalizeCalls.length > 0 ? rawPhase2FinalizeCalls : rawLegacyPhase2Calls
-  const hasPhase2Finalize =
-    expectedStages.hasPhase2Finalize === true || rawSelectedPhase2FinalizeCalls.length > 0
-  const phase2FinalizeCalls = normalizeCalls(rawSelectedPhase2FinalizeCalls)
+  const hasPhase2Finalize = expectedStages.hasPhase2Finalize === true || rawPhase2FinalizeCalls.length > 0
+  const phase2FinalizeCalls = normalizeCalls(rawPhase2FinalizeCalls)
   const rawPhase3Calls = Array.isArray(payload.phase3Calls) ? payload.phase3Calls : []
   const rawPhase4Calls = Array.isArray(payload.phase4Calls) ? payload.phase4Calls : []
   const hasPhase3 = expectedStages.hasPhase3 === true || rawPhase3Calls.length > 0
@@ -1743,15 +1741,15 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   let ctx: AuthedCtx | null = null
   const getCtx = async (): Promise<AuthedCtx> => {
     if (ctx) return ctx
-    const { ownerAccount, sessionOwner } = await getOwnerAccount(rec)
+    const { ownerAccount, sessionSigner } = await getOwnerAccount(rec)
     const smartWallet = getAddress(rec.smartWallet)
     const ownerIndex = await findOwnerIndex({
       publicClient,
       smartWallet,
-      ownerAddress: sessionOwner,
+      ownerAddress: sessionSigner,
       maxScan: 512,
     })
-    if (ownerIndex === null) throw new Error('session_owner_not_installed')
+    if (ownerIndex === null) throw new Error('session_signer_not_installed')
 
     const deployToken = rec.deployToken
     const deploySig = signDeployToken(deployToken)
@@ -1775,7 +1773,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       version: '1',
     })
     const removeOwnerCall = (() => {
-      const ownerBytes = asOwnerBytes(sessionOwner)
+      const ownerBytes = asOwnerBytes(sessionSigner)
       const data = encodeFunctionData({
         abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
         functionName: 'removeOwnerAtIndex',
@@ -2359,11 +2357,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           lastError: errMsg,
         }
       }
-      if (err instanceof Error && (err.message === 'session_owner_unavailable' || err.message === 'session_owner_key_missing')) {
+      if (
+        err instanceof Error &&
+        (err.message === 'session_signer_unavailable' ||
+          err.message === 'session_signer_key_missing' ||
+          err.message === 'session_owner_unavailable' ||
+          err.message === 'session_owner_key_missing')
+      ) {
         // Legacy/broken session: keep status readable without failing the endpoint.
         rec = {
           ...rec,
-          lastError: rec.lastError || 'session_owner_unavailable',
+          lastError: rec.lastError || 'session_signer_unavailable',
         }
       }
       // Best-effort: if background advancement fails, still return current state.
@@ -2383,12 +2387,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       lastUserOpHash: rec.lastUserOpHash,
       lastTxHash: rec.lastTxHash,
       smartWallet: rec.smartWallet,
-      sessionSignerAddress: rec.sessionOwner,
+      sessionSignerAddress: rec.sessionSigner,
       sessionSignerWalletId:
-        (typeof rec?.payload?.deploySignerWalletId === 'string' && rec.payload.deploySignerWalletId.trim()) ||
-        (typeof rec?.payload?.agentWalletId === 'string' && rec.payload.agentWalletId.trim()) ||
-        null,
-      sessionOwner: rec.sessionOwner,
+        (typeof rec?.payload?.deploySignerWalletId === 'string' && rec.payload.deploySignerWalletId.trim()) || null,
       diagnostics: buildSessionDiagnostics(rec),
       ovault: ovaultEnabled
         ? {

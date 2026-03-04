@@ -20,6 +20,7 @@ import {
   setNoStore,
   readJsonBody,
 } from '../../../server/auth/_shared.js'
+import { checkRateLimit, getClientIp, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -325,9 +326,19 @@ async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res)) return
   setCors(req, res)
   setNoStore(res)
+  const clientIp = getClientIp(req as any)
 
   // GET: Issue a challenge
   if (req.method === 'GET') {
+    const globalLimit = checkRateLimit(rateLimitKey('waitlist-csw-proof:get', clientIp), {
+      windowMs: 60_000,
+      maxRequests: 30,
+    })
+    if (!globalLimit.allowed) {
+      res.setHeader('Retry-After', Math.ceil((globalLimit.resetAt - Date.now()) / 1000).toString())
+      return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
+    }
+
     const cswAddress = typeof req.query.cswAddress === 'string' ? req.query.cswAddress.trim() : ''
     if (!cswAddress || !isValidEvmAddress(cswAddress)) {
       return res.status(400).json({ success: false, error: 'Missing or invalid cswAddress query parameter.' } satisfies ApiEnvelope<never>)
@@ -360,6 +371,15 @@ async function handler(req: VercelRequest, res: VercelResponse) {
 
   // POST: Verify the signature
   if (req.method === 'POST') {
+    const globalLimit = checkRateLimit(rateLimitKey('waitlist-csw-proof:post', clientIp), {
+      windowMs: 60_000,
+      maxRequests: 20,
+    })
+    if (!globalLimit.allowed) {
+      res.setHeader('Retry-After', Math.ceil((globalLimit.resetAt - Date.now()) / 1000).toString())
+      return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
+    }
+
     const body = await readJsonBody<{
       challengeToken?: string
       cswAddress?: string

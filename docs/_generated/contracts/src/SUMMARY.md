@@ -168,7 +168,6 @@
       - [❱ univ3](contracts/vault/strategies/univ3/README.md)
         - [ICharmVault](contracts/vault/strategies/univ3/CreatorCharmStrategy.sol/interface.ICharmVault.md)
         - [ISwapRouter](contracts/vault/strategies/univ3/CreatorCharmStrategy.sol/interface.ISwapRouter.md)
-        - [IzRouter](contracts/vault/strategies/univ3/CreatorCharmStrategy.sol/interface.IzRouter.md)
         - [CreatorCharmStrategy](contracts/vault/strategies/univ3/CreatorCharmStrategy.sol/contract.CreatorCharmStrategy.md)
       - [❱ univ4](contracts/vault/strategies/univ4/README.md)
         - [StrategyType](contracts/vault/strategies/univ4/ConcentratedStrategy.sol/enum.StrategyType.md)

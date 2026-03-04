@@ -896,16 +896,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const deploySignerWalletId =
       typeof payload?.deploySignerWalletId === 'string'
         ? payload.deploySignerWalletId.trim()
-        : typeof payload?.agentWalletId === 'string'
-          ? payload.agentWalletId.trim()
-          : ''
+        : ''
     const persistSessionOwner =
       payload?.persistSessionOwner === true ||
       (payload?.persistSessionOwner == null && Boolean(deploySignerWalletId) && shouldPersistManagedSessionOwner())
-    const sessionOwner = getAddress(rec.sessionOwner)
+    const sessionSigner = getAddress(rec.sessionSigner)
     const ownerAccount = deploySignerWalletId
       ? toAccount({
-          address: sessionOwner,
+          address: sessionSigner,
           sign: async ({ hash }: { hash: Hex }) => {
             return (await secp256k1SignHash({ walletId: deploySignerWalletId, hash })) as Hex
           },
@@ -933,18 +931,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         })
       : (() => {
-          if (!rec.sessionOwnerKeyEnc) throw new Error('session_owner_unavailable')
-          const pk = decryptWithSecret(rec.sessionOwnerKeyEnc) as Hex
+          if (!rec.sessionSignerKeyEnc) throw new Error('session_signer_unavailable')
+          const pk = decryptWithSecret(rec.sessionSignerKeyEnc) as Hex
           return privateKeyToAccount(pk)
         })()
     const smartWallet = getAddress(rec.smartWallet)
     const ownerIndex = await findOwnerIndex({
       publicClient: createPublicClient({ chain: base, transport: http((process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()) }),
       smartWallet,
-      ownerAddress: sessionOwner,
+      ownerAddress: sessionSigner,
       maxScan: 512,
     })
-    if (ownerIndex === null) throw new Error('session_owner_not_installed')
+    if (ownerIndex === null) throw new Error('session_signer_not_installed')
 
     const publicClient = createPublicClient({
       chain: base,
@@ -1018,11 +1016,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const phase2CoreCalls = normalizeCalls(Array.isArray(payload.phase2CoreCalls) ? payload.phase2CoreCalls : [])
     const expectedStages = isPlainObject(payload.expectedStages) ? payload.expectedStages : {}
     const rawPhase2FinalizeCalls = Array.isArray(payload.phase2FinalizeCalls) ? payload.phase2FinalizeCalls : []
-    const rawLegacyPhase2Calls = Array.isArray(payload.phase2Calls) ? payload.phase2Calls : []
-    const rawSelectedPhase2FinalizeCalls = rawPhase2FinalizeCalls.length > 0 ? rawPhase2FinalizeCalls : rawLegacyPhase2Calls
-    const hasPhase2Finalize =
-      expectedStages.hasPhase2Finalize === true || rawSelectedPhase2FinalizeCalls.length > 0
-    const phase2FinalizeCalls = normalizeCalls(rawSelectedPhase2FinalizeCalls)
+    const hasPhase2Finalize = expectedStages.hasPhase2Finalize === true || rawPhase2FinalizeCalls.length > 0
+    const phase2FinalizeCalls = normalizeCalls(rawPhase2FinalizeCalls)
     const phase2FinalizeInfo = phase2FinalizeCalls.length > 0 ? extractFinalizePhase2Info(phase2FinalizeCalls[0]!.data) : null
     const expectedVaultFromFinalize = phase2FinalizeInfo?.vault ?? null
     const rawPhase3Calls = Array.isArray(payload.phase3Calls) ? payload.phase3Calls : []
@@ -1048,7 +1043,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Cleanup call (remove session owner). For managed owners, this can be skipped to reduce repeated prompts.
     const removeOwnerCall = (() => {
-      const ownerBytes = asOwnerBytes(sessionOwner)
+      const ownerBytes = asOwnerBytes(sessionSigner)
       const data = encodeFunctionData({
         abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
         functionName: 'removeOwnerAtIndex',
@@ -1362,13 +1357,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // ignore
       }
     }
-    if (msg === 'session_owner_unavailable' || msg === 'session_owner_key_missing') {
+    if (
+      msg === 'session_signer_unavailable' ||
+      msg === 'session_signer_key_missing' ||
+      msg === 'session_owner_unavailable' ||
+      msg === 'session_owner_key_missing'
+    ) {
       return res.status(409).json({
         success: false,
-        error: 'Session owner credentials unavailable. Please restart deploy session.',
+        error: 'Session signer credentials unavailable. Please restart deploy session.',
       } satisfies ApiEnvelope<null>)
     }
-    if (msg === 'session_owner_not_installed') {
+    if (msg === 'session_signer_not_installed' || msg === 'session_owner_not_installed') {
       return res.status(409).json({
         success: false,
         error:

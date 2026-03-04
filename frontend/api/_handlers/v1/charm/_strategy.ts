@@ -40,8 +40,6 @@ const STRAT_ABI = [
   { type: 'function', name: 'UNISWAP_ROUTER', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'charmVault', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'swapPool', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'zRouter', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'useZRouter', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
   { type: 'function', name: 'uniFactory', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'autoFeeTier', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
   { type: 'function', name: 'maxSwapPercent', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -103,8 +101,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { address: strategy as `0x${string}`, abi: STRAT_ABI, functionName: 'UNISWAP_ROUTER' },
         { address: strategy as `0x${string}`, abi: STRAT_ABI, functionName: 'charmVault' },
         { address: strategy as `0x${string}`, abi: STRAT_ABI, functionName: 'swapPool' },
-        { address: strategy as `0x${string}`, abi: STRAT_ABI, functionName: 'zRouter' },
-        { address: strategy as `0x${string}`, abi: STRAT_ABI, functionName: 'useZRouter' },
         { address: strategy as `0x${string}`, abi: STRAT_ABI, functionName: 'uniFactory' },
         { address: strategy as `0x${string}`, abi: STRAT_ABI, functionName: 'autoFeeTier' },
         { address: strategy as `0x${string}`, abi: STRAT_ABI, functionName: 'maxSwapPercent' },
@@ -128,19 +124,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const router = pick<`0x${string}`>(4)
     const charmVault = pick<`0x${string}`>(5)
     const swapPool = pick<`0x${string}`>(6)
-    const zRouter = pick<`0x${string}`>(7)
-    const useZRouter = pick<boolean>(8)
-    const uniFactory = pick<`0x${string}`>(9)
-    const autoFeeTier = pick<boolean>(10)
-    const maxSwapPercent = pick<bigint>(11)
-    const swapSlippageBps = pick<bigint>(12)
-    const depositSlippageBps = pick<bigint>(13)
-    const swapPoolFee = pick<number>(14)
-    const active = pick<boolean>(15)
-    const totalAssets = pick<bigint>(16)
-    const inRangeTuple = pick<any>(17)
-    const isActive = pick<boolean>(18)
-    const asset = pick<`0x${string}`>(19)
+    const uniFactory = pick<`0x${string}`>(7)
+    const autoFeeTier = pick<boolean>(8)
+    const maxSwapPercent = pick<bigint>(9)
+    const swapSlippageBps = pick<bigint>(10)
+    const depositSlippageBps = pick<bigint>(11)
+    const swapPoolFee = pick<number>(12)
+    const active = pick<boolean>(13)
+    const totalAssets = pick<bigint>(14)
+    const inRangeTuple = pick<any>(15)
+    const isActive = pick<boolean>(16)
+    const asset = pick<`0x${string}`>(17)
 
     const inRange = Array.isArray(inRangeTuple) ? Boolean(inRangeTuple[0]) : null
     const currentTick = Array.isArray(inRangeTuple) ? Number(inRangeTuple[1]) : null
@@ -202,8 +196,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         routers: {
           uniswap: router && isAddressLike(router) ? router.toLowerCase() : null,
-          zRouter: zRouter && isAddressLike(zRouter) ? zRouter.toLowerCase() : null,
-          useZRouter: typeof useZRouter === 'boolean' ? useZRouter : null,
           uniFactory: uniFactory && isAddressLike(uniFactory) ? uniFactory.toLowerCase() : null,
           autoFeeTier: typeof autoFeeTier === 'boolean' ? autoFeeTier : null,
         },

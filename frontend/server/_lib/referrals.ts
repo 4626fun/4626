@@ -79,8 +79,6 @@ export async function ensureReferralsSchema(db: Db): Promise<void> {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `
-    await db.sql`CREATE INDEX IF NOT EXISTS referral_clicks_referrer_created_idx ON referral_clicks (referrer_signup_id, created_at DESC);`
-    await db.sql`CREATE INDEX IF NOT EXISTS referral_clicks_code_created_idx ON referral_clicks (referral_code, created_at DESC);`
 
     // Conversions (one per invitee signup).
     await db.sql`
@@ -101,7 +99,6 @@ export async function ensureReferralsSchema(db: Db): Promise<void> {
       );
     `
     await db.sql`CREATE INDEX IF NOT EXISTS referral_conversions_referrer_created_idx ON referral_conversions (referrer_signup_id, created_at DESC);`
-    await db.sql`CREATE INDEX IF NOT EXISTS referral_conversions_code_created_idx ON referral_conversions (referral_code, created_at DESC);`
 
     referralsSchemaEnsured = true
   } catch (err) {

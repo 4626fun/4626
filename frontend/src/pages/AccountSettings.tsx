@@ -696,7 +696,11 @@ export function AccountSettings() {
       if (walletForLookup) params.set('wallet', walletForLookup.toLowerCase())
       if (!params.toString()) return null
 
-      const res = await apiFetch(`/api/waitlist/position?${params.toString()}`, { method: 'GET', headers: { Accept: 'application/json' } })
+      const res = await apiFetch(`/api/waitlist/position?${params.toString()}`, {
+        method: 'GET',
+        withCredentials: true,
+        headers: { Accept: 'application/json' },
+      })
       const json = (await res.json().catch(() => null)) as ApiEnvelope<WaitlistPositionData | null> | null
       if (!res.ok || !json?.success) {
         throw new Error(typeof json?.error === 'string' ? json.error : 'Failed to load rewards progress.')

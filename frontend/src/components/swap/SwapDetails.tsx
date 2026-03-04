@@ -50,10 +50,14 @@ export function SwapDetails({
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between rounded-xl border border-white/12 bg-white/5 px-3 py-2 text-sm"
+        className="flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm"
+        style={{
+          borderColor: 'rgb(var(--vault-border-strong) / 0.6)',
+          background: 'rgb(var(--vault-card-raised) / 0.58)',
+        }}
       >
-        <span className="font-medium text-zinc-200">Details</span>
-        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        <span className="font-medium text-vault-text">Details</span>
+        {open ? <ChevronUp className="h-4 w-4 text-vault-subtext" /> : <ChevronDown className="h-4 w-4 text-vault-subtext" />}
       </button>
 
       <AnimatePresence initial={false}>
@@ -72,8 +76,14 @@ export function SwapDetails({
               marketPrice={marketPrice}
             />
 
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-              <div className="mb-2 text-xs text-zinc-400">Slippage</div>
+            <div
+              className="rounded-xl border p-3"
+              style={{
+                borderColor: 'rgb(var(--vault-border-strong) / 0.52)',
+                background: 'rgb(var(--vault-card) / 0.35)',
+              }}
+            >
+              <div className="mb-2 text-xs text-vault-subtext uppercase tracking-[0.12em]">Slippage</div>
               <div className="flex flex-wrap items-center gap-1.5">
                 <input
                   type="text"
@@ -81,21 +91,25 @@ export function SwapDetails({
                   value={slippagePct}
                   onChange={(event) => onSetSlippagePct(event.target.value)}
                   className={cn(
-                    'h-9 w-20 rounded-lg border border-white/12 bg-black/30 px-2 text-xs',
-                    'text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-brand-primary/60',
+                    'h-9 w-20 rounded-lg border px-2 text-xs font-mono',
+                    'text-vault-text placeholder:text-vault-muted outline-none',
+                    'bg-[rgb(var(--vault-card-raised)/0.82)]',
+                    'border-[rgb(var(--vault-border-strong)/0.62)] focus:border-brand-primary/70',
                   )}
                   aria-label="Slippage percent"
                   placeholder="0.5"
                 />
-                <span className="text-xs text-zinc-400">%</span>
+                <span className="text-xs text-vault-subtext">%</span>
                 {slippagePresets.map((preset) => (
                   <button
                     type="button"
                     key={preset}
                     onClick={() => onSetSlippagePct(preset)}
                     className={cn(
-                      'rounded-lg border border-white/12 bg-white/5 px-2 py-1 text-[11px]',
-                      slippagePct === preset ? 'bg-white/18 text-white' : 'text-zinc-300',
+                      'rounded-lg border px-2 py-1 text-[11px] font-medium',
+                      slippagePct === preset
+                        ? 'border-brand-primary/45 bg-brand-primary/18 text-vault-text'
+                        : 'border-[rgb(var(--vault-border-strong)/0.45)] bg-[rgb(var(--vault-card-raised)/0.72)] text-vault-subtext',
                     )}
                   >
                     {preset}%
@@ -104,27 +118,33 @@ export function SwapDetails({
               </div>
             </div>
 
-            <div className="grid gap-2 text-sm">
-              <div className="flex items-center justify-between text-zinc-400">
+            <div
+              className="grid gap-2 rounded-xl border p-3 text-sm"
+              style={{
+                borderColor: 'rgb(var(--vault-border-strong) / 0.52)',
+                background: 'rgb(var(--vault-card) / 0.35)',
+              }}
+            >
+              <div className="flex items-center justify-between text-vault-subtext">
                 <span>Estimated gas</span>
-                <span className="text-zinc-200">{gasEstimateLabel ?? '—'}</span>
+                <span className="font-mono text-vault-text">{gasEstimateLabel ?? '—'}</span>
               </div>
-              <div className="flex items-center justify-between text-zinc-400">
+              <div className="flex items-center justify-between text-vault-subtext">
                 <span>LP fee</span>
-                <span className="text-zinc-200">{lpFeeUsd ?? '—'}</span>
+                <span className="font-mono text-vault-text">{lpFeeUsd ?? '—'}</span>
               </div>
-              <div className="flex items-center justify-between text-zinc-400">
+              <div className="flex items-center justify-between text-vault-subtext">
                 <span>Protocol fee</span>
-                <span className="text-zinc-200">{protocolFeeUsd ?? '—'}</span>
+                <span className="font-mono text-vault-text">{protocolFeeUsd ?? '—'}</span>
               </div>
-              <div className="flex items-center justify-between text-zinc-400">
+              <div className="flex items-center justify-between text-vault-subtext">
                 <span>Price impact</span>
                 <span className={cn('rounded-full px-2 py-0.5 text-xs font-semibold', impactColorClass(priceImpactLabel))}>
                   {priceImpactLabel ?? '—'}
                 </span>
               </div>
               {quoteUpdatedAt && (
-                <div className="text-right text-[11px] text-zinc-500">Quote: {quoteUpdatedAt}</div>
+                <div className="text-right text-[11px] text-vault-muted font-mono">Quote: {quoteUpdatedAt}</div>
               )}
             </div>
           </motion.div>

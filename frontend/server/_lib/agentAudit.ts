@@ -18,7 +18,6 @@ async function ensureSchema(db: Db): Promise<void> {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `
-    await db.sql`CREATE INDEX IF NOT EXISTS agent_api_logs_endpoint_idx ON agent_api_logs (endpoint, created_at DESC);`
   } catch {
     schemaEnsured = false
   }

@@ -77,7 +77,7 @@ describe('deploy session start wrapper', () => {
         smartWallet: '0x0000000000000000000000000000000000000002',
         creatorToken: '0x0000000000000000000000000000000000000003',
         ownerAddress: '0x0000000000000000000000000000000000000001',
-        phase2Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x' }],
+        phase2FinalizeCalls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x' }],
       },
     })
     const res = createMockRes()
@@ -106,7 +106,7 @@ describe('deploy session start wrapper', () => {
         smartWallet: '0x0000000000000000000000000000000000000002',
         creatorToken: '0x0000000000000000000000000000000000000003',
         ownerAddress: '0x0000000000000000000000000000000000000001',
-        phase2Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x' }],
+        phase2FinalizeCalls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x' }],
       },
     })
     const res = createMockRes()
@@ -125,7 +125,7 @@ describe('deploy session start wrapper', () => {
           success: true,
           data: {
             sessionId: 'sess_1',
-            sessionOwner: '0x00000000000000000000000000000000000000f1',
+            sessionSignerAddress: '0x00000000000000000000000000000000000000f1',
             expiresAt: new Date(Date.now() + 60_000).toISOString(),
           },
         })),
@@ -142,7 +142,7 @@ describe('deploy session start wrapper', () => {
         smartWallet: '0x0000000000000000000000000000000000000002',
         creatorToken: '0x0000000000000000000000000000000000000003',
         ownerAddress: '0x0000000000000000000000000000000000000001',
-        phase2Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x' }],
+        phase2FinalizeCalls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x' }],
       },
     })
     const res = createMockRes()
@@ -162,7 +162,7 @@ describe('deploy session start wrapper', () => {
           success: true,
           data: {
             sessionId: 'sess_1',
-            sessionOwner: '0x00000000000000000000000000000000000000f1',
+            sessionSignerAddress: '0x00000000000000000000000000000000000000f1',
             expiresAt: new Date(Date.now() + 60_000).toISOString(),
           },
         })
@@ -182,7 +182,7 @@ describe('deploy session start wrapper', () => {
         smartWallet: '0x0000000000000000000000000000000000000002',
         creatorToken: '0x0000000000000000000000000000000000000003',
         ownerAddress: '0x0000000000000000000000000000000000000001',
-        phase2Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x' }],
+        phase2FinalizeCalls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x' }],
       },
     })
     const res = createMockRes()

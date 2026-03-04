@@ -5,7 +5,6 @@ import {
   buildSwap,
   createOrder,
   fetchTradeQuote,
-  fetchZQuoteComparison,
   isProtocolSwapRouting,
   isUniswapXRouting,
   pickOrderQuote,
@@ -242,42 +241,5 @@ describe('createOrder', () => {
     expect((init?.headers as any)?.['Content-Type']).toBe('application/json')
     const sentBody = JSON.parse(String(init?.body ?? '{}'))
     expect(sentBody.signature).toBe('0xabc')
-  })
-})
-
-describe('fetchZQuoteComparison', () => {
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
-  it('posts comparison request to /api/uniswap/zquote', async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        success: true,
-        data: {
-          available: true,
-          amountOutUnits: '123.45',
-        },
-      }),
-    }))
-    vi.stubGlobal('fetch', fetchMock as any)
-
-    const out = await fetchZQuoteComparison({
-      tokenIn: '0x0000000000000000000000000000000000000003',
-      tokenOut: '0x0000000000000000000000000000000000000004',
-      amountInUnits: '1.5',
-    })
-
-    expect(out.available).toBe(true)
-    expect(out.amountOutUnits).toBe('123.45')
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-
-    const [url, init] = fetchMock.mock.calls[0]
-    expect(String(url)).toBe('/api/uniswap/zquote')
-    expect(init?.method).toBe('POST')
-    const body = JSON.parse(String(init?.body ?? '{}'))
-    expect(body.amountInUnits).toBe('1.5')
   })
 })

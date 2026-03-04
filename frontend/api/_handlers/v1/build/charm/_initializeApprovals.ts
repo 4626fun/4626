@@ -30,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       to: strategy,
       data,
       value: '0',
-      description: 'CreatorCharmStrategy (owner): initialize token approvals (router/charm/zRouter).',
+      description: 'CreatorCharmStrategy (owner): initialize token approvals (Uniswap/charm).',
       warnings: [
         'Owner-only onchain action. This API only builds calldata; it does not execute.',
         'This sets unlimited approvals from the strategy contract to its configured routers/vaults.',

@@ -155,9 +155,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const deploySignerWalletId =
       typeof payload?.deploySignerWalletId === 'string'
         ? payload.deploySignerWalletId.trim()
-        : typeof payload?.agentWalletId === 'string'
-          ? payload.agentWalletId.trim()
-          : ''
+        : ''
     const persistSessionOwner =
       payload?.persistSessionOwner === true ||
       (payload?.persistSessionOwner == null && Boolean(deploySignerWalletId) && shouldPersistManagedSessionOwner())
@@ -168,10 +166,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         data: { id: rec.id, step: 'cancelled', cleanupSkipped: true, reason: 'persistent_session_owner' },
       } satisfies ApiEnvelope<any>)
     }
-    const sessionOwner = getAddress(rec.sessionOwner)
+    const sessionSigner = getAddress(rec.sessionSigner)
     const ownerAccount = deploySignerWalletId
       ? toAccount({
-          address: sessionOwner,
+          address: sessionSigner,
           sign: async ({ hash }: { hash: Hex }) => {
             return (await secp256k1SignHash({ walletId: deploySignerWalletId, hash })) as Hex
           },
@@ -199,15 +197,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         })
       : (() => {
-          if (!rec.sessionOwnerKeyEnc) return null
-          const pk = decryptWithSecret(rec.sessionOwnerKeyEnc) as Hex
+          if (!rec.sessionSignerKeyEnc) return null
+          const pk = decryptWithSecret(rec.sessionSignerKeyEnc) as Hex
           return privateKeyToAccount(pk)
         })()
     if (!ownerAccount) {
       await updateDeploySession({ id: rec.id, step: 'cancelled', lastError: 'cleanup_skipped_owner_unavailable' })
       return res.status(200).json({
         success: true,
-        data: { id: rec.id, step: 'cancelled', cleanupSkipped: true, reason: 'session_owner_unavailable' },
+        data: { id: rec.id, step: 'cancelled', cleanupSkipped: true, reason: 'session_signer_unavailable' },
       } satisfies ApiEnvelope<any>)
     }
     const smartWallet = getAddress(rec.smartWallet)
@@ -220,7 +218,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const ownerIndex = await findOwnerIndex({
       publicClient,
       smartWallet,
-      ownerAddress: sessionOwner,
+      ownerAddress: sessionSigner,
       maxScan: 256,
     })
     if (ownerIndex === null) {
@@ -255,7 +253,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       version: '1',
     })
 
-    const ownerBytes = asOwnerBytes(sessionOwner)
+    const ownerBytes = asOwnerBytes(sessionSigner)
     const data = encodeFunctionData({
       abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
       functionName: 'removeOwnerAtIndex',

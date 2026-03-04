@@ -62,6 +62,35 @@ async function ensureSolanaCheckpointTable(db: Awaited<ReturnType<typeof getDb>>
       PRIMARY KEY (workflow, checkpoint_key)
     );
   `
+  try {
+    await db.sql`ALTER TABLE keepr_workflow_checkpoints ENABLE ROW LEVEL SECURITY;`
+  } catch {
+    // Ignore if RLS cannot be enabled in this runtime.
+  }
+  try {
+    await db.sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_policies
+          WHERE schemaname = 'public'
+            AND tablename = 'keepr_workflow_checkpoints'
+            AND policyname = 'keepr_workflow_checkpoints_deny_all'
+        ) THEN
+          CREATE POLICY keepr_workflow_checkpoints_deny_all
+            ON keepr_workflow_checkpoints
+            FOR ALL
+            TO public
+            USING (false)
+            WITH CHECK (false);
+        END IF;
+      END
+      $$;
+    `
+  } catch {
+    // Ignore if policy creation is unavailable in this runtime.
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

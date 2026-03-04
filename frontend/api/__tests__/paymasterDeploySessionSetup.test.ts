@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { encodeFunctionData, getAddress } from 'viem'
+import { decodeFunctionData, encodeFunctionData, getAddress } from 'viem'
 
 import paymasterHandler from '../_handlers/_paymaster.ts'
 import { createMockReq, createMockRes } from './helpers'
@@ -8,8 +8,29 @@ import { applyEnv } from './helpers'
 const ENTRYPOINT_V06 = getAddress('0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789')
 
 const sessionAddress = getAddress('0x1111111111111111111111111111111111111111')
-const sessionOwner = getAddress('0x2222222222222222222222222222222222222222')
+const sessionSigner = getAddress('0x2222222222222222222222222222222222222222')
 const sender = getAddress('0x3333333333333333333333333333333333333333')
+
+function encodeWord(value: bigint): string {
+  return value.toString(16).padStart(64, '0')
+}
+
+function toNonCanonicalExecuteWithDeadline(data: `0x${string}`): `0x${string}` {
+  const selector = data.slice(0, 10)
+  const body = data.slice(10)
+  const head0 = body.slice(0, 64)
+  const head1 = body.slice(64, 128)
+  const head2 = body.slice(128, 192)
+  const tail = body.slice(192)
+
+  const offset0 = BigInt(`0x${head0}`)
+  const offset1 = BigInt(`0x${head1}`)
+  const gapWord = '0'.repeat(64)
+
+  const shifted0 = encodeWord(offset0 + 32n)
+  const shifted1 = encodeWord(offset1 + 32n)
+  return `0x${selector.slice(2)}${shifted0}${shifted1}${head2}${gapWord}${tail}` as `0x${string}`
+}
 
 const readRequestPrincipalMock = vi.fn()
 const getActiveDeploySessionMock = vi.fn()
@@ -58,7 +79,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
 }))
 
 vi.mock('../../server/_lib/coinParties.js', () => ({
-  resolveCoinParties: vi.fn(() => Promise.resolve({ creator: sessionOwner, payoutRecipient: sessionOwner })),
+  resolveCoinParties: vi.fn(() => Promise.resolve({ creator: sessionSigner, payoutRecipient: sessionSigner })),
 }))
 
 vi.mock('../../server/_lib/logger.js', () => ({
@@ -103,7 +124,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     })
 
     readRequestPrincipalMock.mockReturnValue(sessionAddress)
-    getActiveDeploySessionMock.mockResolvedValue({ sessionOwner })
+    getActiveDeploySessionMock.mockResolvedValue({ sessionSigner })
     getApiContractsMock.mockReturnValue({
       creatorVaultBatcher: '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753',
       vaultActivationBatcher: '0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB',
@@ -116,7 +137,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     readJsonBodyMock.mockImplementation((req: { body?: unknown }) => Promise.resolve(req.body ?? null))
 
     mockGetBytecode.mockImplementation(async ({ address }: { address: string }) => {
-      if (String(address).toLowerCase() === sessionOwner.toLowerCase()) return '0x'
+      if (String(address).toLowerCase() === sessionSigner.toLowerCase()) return '0x'
       return '0x1234'
     })
     mockReadContract.mockImplementation((opts: { functionName?: string }) => {
@@ -164,7 +185,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     const innerData = encodeFunctionData({
       abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
       functionName: 'addOwnerAddress',
-      args: [sessionOwner],
+      args: [sessionSigner],
     })
     const callData = encodeFunctionData({
       abi: COINBASE_SMART_WALLET_ABI,
@@ -202,7 +223,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
 
   it('rejects addOwnerAddress self-call when deploy session owner has contract bytecode', async () => {
     mockGetBytecode.mockImplementation(async ({ address }: { address: string }) => {
-      if (String(address).toLowerCase() === sessionOwner.toLowerCase()) return '0x1234'
+      if (String(address).toLowerCase() === sessionSigner.toLowerCase()) return '0x1234'
       return '0x1234'
     })
 
@@ -232,7 +253,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     const innerData = encodeFunctionData({
       abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
       functionName: 'addOwnerAddress',
-      args: [sessionOwner],
+      args: [sessionSigner],
     })
     const callData = encodeFunctionData({
       abi: COINBASE_SMART_WALLET_ABI,
@@ -568,5 +589,86 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     const errMsg = String(responseBody?.error?.message ?? '')
     expect(errMsg).not.toMatch(/request denied/i)
     expect(errMsg).not.toMatch(/missing_primary_call/i)
+  })
+
+  it('rejects non-canonical universal router execute calldata', async () => {
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'executeBatch',
+        stateMutability: 'nonpayable',
+        inputs: [
+          {
+            name: 'calls',
+            type: 'tuple[]',
+            components: [
+              { name: 'target', type: 'address' },
+              { name: 'value', type: 'uint256' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const UNIVERSAL_ROUTER_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'payable',
+        inputs: [
+          { name: 'commands', type: 'bytes' },
+          { name: 'inputs', type: 'bytes[]' },
+          { name: 'deadline', type: 'uint256' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const baseSwapRouter = '0x2626664c2603336E57B271c5C0b26F421741e481'
+    const canonicalSwapData = encodeFunctionData({
+      abi: UNIVERSAL_ROUTER_ABI,
+      functionName: 'execute',
+      args: ['0x00', ['0x'], 1_900_000_000n],
+    })
+
+    const tamperedSwapData = toNonCanonicalExecuteWithDeadline(canonicalSwapData)
+    const decodedCanonical = decodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, data: canonicalSwapData })
+    const decodedTampered = decodeFunctionData({ abi: UNIVERSAL_ROUTER_ABI, data: tamperedSwapData })
+    expect(decodedTampered.args).toEqual(decodedCanonical.args)
+
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'executeBatch',
+      args: [[{ target: baseSwapRouter, value: 0n, data: tamperedSwapData }]],
+    })
+
+    const userOp = {
+      sender,
+      callData,
+      initCode: '0x',
+    }
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).toMatch(/swap_router_non_canonical_encoding/i)
   })
 })

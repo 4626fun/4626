@@ -17,7 +17,6 @@ export type ContactPreference = 'wallet' | 'email'
 export type VerificationMethod =
   | 'siwe'
   | 'privy'
-  | 'siwf'
   | 'solana'
   | 'csw-erc1271'
   | 'siwe-csw-owner'

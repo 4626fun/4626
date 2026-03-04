@@ -27,6 +27,35 @@ async function ensureSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `
+  try {
+    await db.sql`ALTER TABLE farcaster_rollout_events ENABLE ROW LEVEL SECURITY;`
+  } catch {
+    // Ignore if RLS cannot be enabled in this runtime.
+  }
+  try {
+    await db.sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_policies
+          WHERE schemaname = 'public'
+            AND tablename = 'farcaster_rollout_events'
+            AND policyname = 'farcaster_rollout_events_deny_all'
+        ) THEN
+          CREATE POLICY farcaster_rollout_events_deny_all
+            ON farcaster_rollout_events
+            FOR ALL
+            TO public
+            USING (false)
+            WITH CHECK (false);
+        END IF;
+      END
+      $$;
+    `
+  } catch {
+    // Ignore if policy creation is unavailable in this runtime.
+  }
   await db.sql`CREATE INDEX IF NOT EXISTS farcaster_rollout_events_created_idx ON farcaster_rollout_events (created_at DESC);`
   await db.sql`CREATE INDEX IF NOT EXISTS farcaster_rollout_events_category_idx ON farcaster_rollout_events (category, created_at DESC);`
   schemaEnsured = true

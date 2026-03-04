@@ -118,8 +118,8 @@ async function verifyXFollow(params: { twitterSubject: string }): Promise<boolea
   if (!bearer) throw new Error('twitter_bearer_token_missing')
 
   const target = await resolveTargetXUserId(bearer)
-  // If X blocks follow lookups for our access level, degrade to "linked == verified" rather than blocking the waitlist UX.
-  if (!target.id) return target.accessLimited
+  // Fail closed: if we cannot resolve the target account, do not auto-verify.
+  if (!target.id) return false
   const targetId = target.id
 
   let paginationToken: string | null = null
@@ -140,8 +140,8 @@ async function verifyXFollow(params: { twitterSubject: string }): Promise<boolea
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       console.warn('[waitlist/verify-x] X API error (following lookup)', { status: res.status, text: text.slice(0, 200) })
-      // If X blocks this endpoint for our access level, we can't verify follows. Avoid blocking onboarding.
-      if (isXApiAccessLimited(res.status, text)) return true
+      // Fail closed when X API access is limited/unavailable.
+      if (isXApiAccessLimited(res.status, text)) return false
       return false
     }
 
@@ -157,8 +157,7 @@ async function verifyXFollow(params: { twitterSubject: string }): Promise<boolea
     paginationToken = next
   }
 
-  // Avoid false negatives for users who follow >5k accounts; this is best-effort.
-  return true
+  return false
 }
 
 export default async function handler(req: any, res: any) {
@@ -209,9 +208,11 @@ export default async function handler(req: any, res: any) {
 
   // Read linked X account from Privy (server-side verified).
   let twitterSubject: string | null = null
+  let verifiedPrivyUserId: string | null = null
   try {
     const client = new PrivyClient(privyAuth.appId, privyAuth.appSecret)
     const claims = await client.verifyAuthToken(privyAuthToken)
+    verifiedPrivyUserId = typeof (claims as any)?.userId === 'string' ? String((claims as any).userId) : null
     const user = await client.getUserById(claims.userId)
     twitterSubject = extractTwitterSubject(user as any)
   } catch (e: any) {
@@ -241,7 +242,7 @@ export default async function handler(req: any, res: any) {
   await ensureWaitlistSchema(db as any)
 
   const me = await db.sql`
-    SELECT id, border_tier, x_follow_verified_at, primary_wallet, embedded_wallet, csw_address
+    SELECT id, border_tier, x_follow_verified_at, primary_wallet, embedded_wallet, csw_address, privy_user_id
     FROM profiles
     WHERE email = ${email}
     LIMIT 1;
@@ -258,6 +259,26 @@ export default async function handler(req: any, res: any) {
     (typeof row?.csw_address === 'string' && row.csw_address.toLowerCase() === principalAddress)
   if (!ownsProfile) {
     return res.status(403).json({ success: false, error: 'Not authorized to update this profile' } satisfies ApiEnvelope<never>)
+  }
+  const profilePrivyUserId = typeof row?.privy_user_id === 'string' ? String(row.privy_user_id) : ''
+  if (profilePrivyUserId && verifiedPrivyUserId && profilePrivyUserId !== verifiedPrivyUserId) {
+    return res.status(403).json({
+      success: false,
+      error: 'Not authorized to update this profile',
+    } satisfies ApiEnvelope<never>)
+  }
+
+  // Best-effort: bind profile to Privy user identity when missing.
+  if (!profilePrivyUserId && verifiedPrivyUserId) {
+    try {
+      await db.sql`
+        UPDATE profiles
+        SET privy_user_id = COALESCE(privy_user_id, ${verifiedPrivyUserId}), updated_at = NOW()
+        WHERE id = ${signupId};
+      `
+    } catch {
+      // ignore
+    }
   }
 
   const existingTier = typeof row?.border_tier === 'number' ? row.border_tier : row?.border_tier ? Number(row.border_tier) : 0
