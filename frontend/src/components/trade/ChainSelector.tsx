@@ -15,7 +15,7 @@ function ChainLogo({ src, name, size = 20 }: { src: string; name: string; size?:
   if (error || !src) {
     return (
       <div
-        className="shrink-0 flex items-center justify-center rounded-full bg-vault-card-raised text-[9px] font-bold text-vault-text"
+        className="shrink-0 flex items-center justify-center rounded-full bg-vault-cardRaised text-[9px] font-bold text-vault-text"
         style={{ width: size, height: size }}
         aria-hidden="true"
       >

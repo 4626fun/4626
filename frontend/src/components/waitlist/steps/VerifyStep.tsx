@@ -508,7 +508,7 @@ export const VerifyStep = memo(function VerifyStep({
               ) : null}
               <button
                 type="button"
-                className="text-[12px] text-vault-subtext hover:text-vault-text transition-colors"
+                className="inline-flex min-h-8 items-center rounded-md border border-vault-border px-2.5 text-[12px] text-vault-subtext hover:border-vault-borderStrong hover:text-vault-text transition-colors"
                 onClick={() => setShowTrouble(true)}
               >
                 Need help?
@@ -550,23 +550,23 @@ export const VerifyStep = memo(function VerifyStep({
               transition={{ duration: 0.2, ease: baseEase }}
             >
               <div className="w-full max-w-[440px]">
-                <div className="rounded-3xl border border-zinc-700/60 bg-zinc-950/90 backdrop-blur-2xl p-5 shadow-[0_30px_90px_-45px_rgba(0,0,0,0.85)]">
+                <div className="rounded-3xl border border-vault-borderStrong/60 bg-vault-card/95 backdrop-blur-2xl p-5 sm:p-6 shadow-[0_28px_84px_-42px_rgba(0,0,0,0.86)]">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Having trouble?</div>
-                      <div className="text-[16px] text-white mt-1 font-display">Try these quick fixes</div>
-                      <div className="mt-2 text-[12px] text-zinc-400">
+                      <div className="bv-kicker">Having trouble?</div>
+                      <div className="mt-1 text-[17px] text-vault-text font-display">Try these quick fixes</div>
+                      <div className="mt-2 text-[12px] text-vault-subtext">
                         If the sign up button does not open, try:
                       </div>
-                      <div className="mt-2 space-y-1 text-[12px] text-zinc-300">
-                        <div>1) Allow popups for this site.</div>
-                        <div>2) Refresh and try again.</div>
-                        <div>3) Switch browsers or devices.</div>
+                      <div className="mt-3 space-y-1.5">
+                        <div className="rounded-lg border border-vault-border/90 bg-vault-cardRaised/65 px-3 py-2 text-[12px] text-vault-subtext">1) Allow popups for this site.</div>
+                        <div className="rounded-lg border border-vault-border/90 bg-vault-cardRaised/65 px-3 py-2 text-[12px] text-vault-subtext">2) Refresh and try again.</div>
+                        <div className="rounded-lg border border-vault-border/90 bg-vault-cardRaised/65 px-3 py-2 text-[12px] text-vault-subtext">3) Switch browsers or devices.</div>
                       </div>
                     </div>
                     <button
                       type="button"
-                      className="rounded-xl border border-zinc-700 bg-black/30 p-2 text-zinc-400 hover:text-zinc-200 transition-colors"
+                      className="rounded-xl border border-vault-border bg-vault-cardRaised/55 p-2 text-vault-subtext hover:border-vault-borderStrong hover:text-vault-text transition-colors"
                       onClick={() => setShowTrouble(false)}
                       aria-label="Close"
                     >
@@ -574,8 +574,8 @@ export const VerifyStep = memo(function VerifyStep({
                     </button>
                   </div>
 
-                  <div className="mt-3 text-[11px] text-zinc-500">
-                    Need help? <a className="text-zinc-300 hover:text-white" href="mailto:4626dotfun@gmail.com">4626dotfun@gmail.com</a>
+                  <div className="mt-4 rounded-lg border border-vault-border/85 bg-vault-cardRaised/60 px-3 py-2.5 text-[11px] text-vault-subtext">
+                    Need help? <a className="text-vault-text hover:text-white" href="mailto:4626dotfun@gmail.com">4626dotfun@gmail.com</a>
                   </div>
                 </div>
               </div>

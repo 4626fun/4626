@@ -1441,14 +1441,14 @@ export function AccountSettings() {
     const status = String(profile?.appAccessStatus ?? '').toLowerCase()
     if (status.includes('allow') || status.includes('approved')) {
       return {
-        chip: 'border-emerald-400/35 bg-emerald-500/12 text-emerald-200',
+        chip: 'border-emerald-400/40 bg-emerald-500/14 text-emerald-100',
         dot: 'bg-emerald-400',
         label: 'Approved',
       }
     }
     if (status.includes('wait') || status.includes('pending')) {
       return {
-        chip: 'border-amber-400/35 bg-amber-500/12 text-amber-200',
+        chip: 'border-amber-400/40 bg-amber-500/14 text-amber-100',
         dot: 'bg-amber-400',
         label: 'Pending',
       }
@@ -1617,8 +1617,8 @@ export function AccountSettings() {
             {creatorCoinAddress ? <div className="truncate font-mono text-[10px] text-vault-subtext sm:text-[11px]">{creatorCoinAddress}</div> : null}
           </div>
           <div className={`rounded-xl border px-3 py-2.5 sm:py-3 ${accessTone.chip}`}>
-            <div className="text-[10px] font-medium">Access</div>
-            <div className="mt-1 inline-flex items-center gap-1.5 text-[12px] sm:text-[13px]">
+            <div className="bv-kicker text-current/80">Access</div>
+            <div className="mt-1 inline-flex items-center gap-1.5 text-[12px] font-medium sm:text-[13px]">
               <span className={`h-1.5 w-1.5 rounded-full ${accessTone.dot}`} />
               {accessTone.label}
             </div>
@@ -1923,7 +1923,7 @@ export function AccountSettings() {
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     {item.badges.map((badge) => (
-                      <span key={`${item.address}:${badge}`} className="rounded-full border border-vault-borderStrong/55 px-2 py-0.5 text-[10px] font-medium text-vault-subtext">
+                      <span key={`${item.address}:${badge}`} className="inline-flex items-center rounded-full border border-vault-borderStrong/60 bg-vault-cardRaised/68 px-2.5 py-1 text-[10px] font-medium leading-none text-vault-subtext">
                         {badge}
                       </span>
                     ))}
@@ -2128,7 +2128,7 @@ export function AccountSettings() {
               </div>
             </div>
             <div className="inline-flex items-center gap-2">
-              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+              <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium leading-none ${
                 rewardsSummary.badgeEarned
                   ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-200'
                   : 'border-vault-border bg-vault-card/70 text-vault-subtext'
@@ -2153,7 +2153,7 @@ export function AccountSettings() {
                       <div className="text-sm text-vault-text">{task.title}</div>
                       <div className="text-[11px] text-vault-subtext">+{task.points} points</div>
                     </div>
-                    <span className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                    <span className={`inline-flex w-fit items-center rounded-full border px-2.5 py-1 text-[10px] font-medium leading-none ${
                       task.status === 'completed'
                         ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
                         : task.status === 'available'

@@ -50,7 +50,7 @@ export function TokenAvatar(props: {
     if (props.noFallback) return null
     return (
       <div
-        className={`grid place-items-center rounded-full border bg-vault-card-raised text-[10px] font-semibold text-vault-text ${props.className ?? ''}`}
+        className={`grid place-items-center rounded-full border bg-vault-cardRaised text-[10px] font-semibold text-vault-text ${props.className ?? ''}`}
         style={{ width: size, height: size, borderColor: 'rgb(var(--vault-border-strong) / 0.75)' }}
       >
         {props.withFallbackLabel ? initials(props.symbol) : ''}
@@ -60,7 +60,7 @@ export function TokenAvatar(props: {
 
   return (
     <div
-      className={`grid place-items-center rounded-full bg-vault-card-raised/70 ${props.className ?? ''}`}
+      className={`grid place-items-center rounded-full bg-vault-cardRaised/70 ${props.className ?? ''}`}
       style={{
         width: size,
         height: size,

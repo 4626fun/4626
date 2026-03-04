@@ -82,7 +82,8 @@
   }
 
   .bv-subpanel {
-    @apply rounded-xl border bg-vault-card-raised/65;
+    @apply rounded-xl border;
+    background: rgb(var(--vault-card-raised) / 0.65);
     border-color: rgb(var(--vault-border-strong) / 0.58);
   }
   
