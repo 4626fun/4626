@@ -80,6 +80,11 @@
     @apply text-[10px] uppercase tracking-[0.18em] font-medium;
     color: rgb(var(--vault-subtext) / 1);
   }
+
+  .bv-subpanel {
+    @apply rounded-xl border bg-vault-card-raised/65;
+    border-color: rgb(var(--vault-border-strong) / 0.58);
+  }
   
   /* Cinematic Sections with Letterbox Feel */
   .cinematic-section {

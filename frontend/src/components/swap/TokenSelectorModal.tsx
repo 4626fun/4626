@@ -358,17 +358,17 @@ export function TokenSelectorModal({
       open={open}
       onClose={onClose}
       title="Select token"
-      className="max-h-[88vh] overflow-hidden"
+      className="max-h-[88vh] overflow-hidden border border-[rgb(var(--vault-border-strong)/0.7)] bg-[rgb(var(--vault-card)/0.96)]"
     >
       <div className="space-y-3">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-vault-muted" />
           <input
             type="text"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder="Search by name, symbol, or 0x address"
-            className="h-11 w-full rounded-xl border border-white/10 bg-black/40 pl-9 pr-9 text-sm text-white placeholder:text-zinc-600 outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+            className="h-11 w-full rounded-xl border border-[rgb(var(--vault-border-strong)/0.62)] bg-[rgb(var(--vault-card-raised)/0.72)] pl-9 pr-9 text-sm text-vault-text placeholder:text-vault-muted outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
             autoFocus
           />
           {query && (
@@ -376,7 +376,7 @@ export function TokenSelectorModal({
               type="button"
               onClick={() => onQueryChange('')}
               aria-label="Clear search"
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-zinc-500 hover:text-zinc-300"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-vault-muted hover:text-vault-text"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -384,11 +384,11 @@ export function TokenSelectorModal({
         </div>
 
         {isAddressSearchActive ? (
-          <div className="rounded-xl border border-brand-primary/25 bg-brand-primary/8 p-3 text-sm text-brand-200">
-            <div className="font-semibold">Found by address</div>
-            <div className="text-[11px] text-zinc-400">Looking up metadata for {trimmedQuery}</div>
+          <div className="rounded-xl border border-brand-primary/30 bg-brand-primary/8 p-3 text-sm text-brand-200">
+            <div className="font-semibold tracking-wide">Found by address</div>
+            <div className="text-[11px] text-vault-subtext font-mono">Looking up metadata for {trimmedQuery}</div>
             {addressLookupLoading ? (
-              <div className="mt-2 flex items-center gap-2 text-zinc-200">
+              <div className="mt-2 flex items-center gap-2 text-vault-text">
                 <Spinner size="sm" /> Fetching token metadata
               </div>
             ) : null}
@@ -411,7 +411,7 @@ export function TokenSelectorModal({
 
         <div ref={listRef} className="max-h-[45vh] overflow-y-auto pr-1">
           {rows.length === 0 && !addressLookupLoading ? (
-            <div className="py-8 text-center text-sm text-zinc-500">No tokens found</div>
+            <div className="py-8 text-center text-sm text-vault-subtext">No tokens found</div>
           ) : null}
 
           {rows.map(({ option, section }, idx) => {
@@ -421,7 +421,11 @@ export function TokenSelectorModal({
             const showSectionHeader = idx === 0 || rows[idx - 1]?.section !== section
             return (
               <div key={`${section}-${option.address}`}>
-                {showSectionHeader ? <div className="mb-1 px-1 text-[10px] uppercase tracking-[0.16em] text-zinc-500">{section}</div> : null}
+                {showSectionHeader ? (
+                  <div className="mb-1 mt-2 px-1 text-[10px] uppercase tracking-[0.18em] text-vault-muted">
+                    {section}
+                  </div>
+                ) : null}
                 <motion.button
                   type="button"
                   data-token-row={option.address.toLowerCase()}
@@ -432,28 +436,29 @@ export function TokenSelectorModal({
                   className={cn(
                     'group relative flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition',
                     isSelected
-                      ? 'border-brand-primary/35 bg-brand-primary/10 text-white'
-                      : 'border-transparent text-zinc-200 hover:bg-white/5 hover:border-white/10',
+                      ? 'border-brand-primary/40 bg-brand-primary/10 text-vault-text shadow-[0_8px_24px_-18px_rgba(0,82,255,0.6)]'
+                      : 'border-[rgb(var(--vault-border-strong)/0.32)] bg-[rgb(var(--vault-card)/0.25)] text-vault-text hover:bg-[rgb(var(--vault-card-raised)/0.7)] hover:border-[rgb(var(--vault-border-strong)/0.7)]',
                   )}
                 >
                   <TokenAvatar token={{ address: option.address, logoUrl: option.logoUrl, logoUrls: option.logoUrls }} symbol={option.symbol} size={36} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <div className="text-sm font-medium truncate">{option.symbol}</div>
+                      <div className="truncate text-sm font-medium">{option.symbol}</div>
                       {option.sectionTag === 'creator' ? (
-                        <span className="rounded-full border border-brand-primary/35 bg-brand-primary/10 px-2 py-0.5 text-[9px] text-brand-200">Creator</span>
+                        <span className="rounded-full border border-brand-primary/35 bg-brand-primary/10 px-2 py-0.5 text-[9px] uppercase tracking-[0.08em] text-brand-200">Creator</span>
                       ) : null}
                       {option.sectionTag === 'content' ? (
-                        <span className="rounded-full border border-violet-500/35 bg-violet-500/10 px-2 py-0.5 text-[9px] text-violet-200">Content</span>
+                        <span className="rounded-full border border-violet-500/35 bg-violet-500/10 px-2 py-0.5 text-[9px] uppercase tracking-[0.08em] text-violet-200">Content</span>
                       ) : null}
                       {isUnverified ? (
-                        <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[9px] text-amber-200">Unverified</span>
+                        <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[9px] uppercase tracking-[0.08em] text-amber-200">Unverified</span>
                       ) : null}
                     </div>
-                    <div className="truncate text-[11px] text-zinc-500">
+                    <div className="truncate text-[11px] text-vault-muted">
                       {option.name}
                       {isUnverified ? <span className="ml-2">- Not in curated list</span> : null}
                     </div>
+                    <div className="mt-0.5 truncate font-mono text-[10px] text-vault-subtext">{option.address}</div>
                   </div>
                   {isSelected ? <Check className="h-4 w-4 text-brand-primary" /> : null}
                 </motion.button>
@@ -464,7 +469,7 @@ export function TokenSelectorModal({
 
         {needsUnverifiedConfirm ? (
           <div className="rounded-xl border border-amber-400/30 bg-amber-500/8 p-3 text-sm text-amber-200">
-            <div className="font-semibold">Unverified token</div>
+            <div className="font-semibold uppercase tracking-widest">Unverified token</div>
             <p className="mt-1 text-xs text-amber-100/90">
               {needsUnverifiedConfirm.symbol} is not part of curated tokens. Do you want to proceed and use it for this swap?
             </p>

@@ -50,8 +50,8 @@ export function TokenAvatar(props: {
     if (props.noFallback) return null
     return (
       <div
-        className={`grid place-items-center rounded-full border bg-vault-card text-[10px] font-semibold text-zinc-100 ${props.className ?? ''}`}
-        style={{ width: size, height: size, borderColor: 'rgba(255,255,255,0.14)' }}
+        className={`grid place-items-center rounded-full border bg-vault-card-raised text-[10px] font-semibold text-vault-text ${props.className ?? ''}`}
+        style={{ width: size, height: size, borderColor: 'rgb(var(--vault-border-strong) / 0.75)' }}
       >
         {props.withFallbackLabel ? initials(props.symbol) : ''}
       </div>
@@ -60,11 +60,11 @@ export function TokenAvatar(props: {
 
   return (
     <div
-      className={`grid place-items-center rounded-full bg-black/30 ${props.className ?? ''}`}
+      className={`grid place-items-center rounded-full bg-vault-card-raised/70 ${props.className ?? ''}`}
       style={{
         width: size,
         height: size,
-        border: `1px solid rgba(255,255,255,0.16)`,
+        border: `1px solid rgb(var(--vault-border-strong) / 0.72)`,
         overflow: 'hidden',
       }}
     >
@@ -77,10 +77,10 @@ export function TokenAvatar(props: {
           onError={handleImageError}
           onLoad={handleImageLoad}
           className={`h-full w-full rounded-full object-cover ${finalRingClass}`}
-          style={{ borderColor: 'rgba(255,255,255,0.16)' }}
+          style={{ borderColor: 'rgb(var(--vault-border-strong) / 0.72)' }}
         />
       ) : (
-        <span className="text-[10px] font-semibold text-zinc-100">{initials(props.symbol)}</span>
+        <span className="text-[10px] font-semibold text-vault-text">{initials(props.symbol)}</span>
       )}
     </div>
   )

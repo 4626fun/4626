@@ -15,7 +15,7 @@ function ChainLogo({ src, name, size = 20 }: { src: string; name: string; size?:
   if (error || !src) {
     return (
       <div
-        className="rounded-full bg-zinc-700 flex items-center justify-center text-[9px] font-bold text-zinc-200 shrink-0"
+        className="shrink-0 flex items-center justify-center rounded-full bg-vault-card-raised text-[9px] font-bold text-vault-text"
         style={{ width: size, height: size }}
         aria-hidden="true"
       >
@@ -83,12 +83,12 @@ export const ChainSelector = memo(function ChainSelector({
         className={`inline-flex items-center gap-1.5 rounded-xl border transition ${
           mismatch
             ? 'border-amber-500/30 bg-amber-500/8 hover:bg-amber-500/12'
-            : 'border-white/10 bg-[#0f131c] hover:bg-[#141a27]'
+            : 'border-[rgb(var(--vault-border-strong)/0.62)] bg-[rgb(var(--vault-card-raised)/0.72)] hover:bg-[rgb(var(--vault-card-raised)/0.9)]'
         } ${compact ? 'px-2 py-1.5 text-[11px]' : 'px-3 py-2 text-xs'}`}
       >
         <ChainLogo src={selected.logoUrl} name={selected.name} size={compact ? 16 : 20} />
-        {!compact && <span className="text-zinc-200 font-medium">{selected.shortName}</span>}
-        <ChevronDown className={`h-3 w-3 text-zinc-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+        {!compact && <span className="text-vault-text font-medium">{selected.shortName}</span>}
+        <ChevronDown className={`h-3 w-3 text-vault-subtext transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       <AnimatePresence>
@@ -100,7 +100,7 @@ export const ChainSelector = memo(function ChainSelector({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={prefersReduced ? undefined : { opacity: 0, y: -4, scale: 0.97 }}
             transition={{ duration: 0.15 }}
-            className="absolute left-0 top-full mt-1.5 z-50 w-56 rounded-2xl border border-white/10 bg-[#0e1219]/98 p-1.5 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.8)] backdrop-blur-2xl"
+            className="absolute left-0 top-full mt-1.5 z-50 w-56 rounded-2xl border border-[rgb(var(--vault-border-strong)/0.62)] bg-[rgb(var(--vault-card)/0.98)] p-1.5 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.8)] backdrop-blur-2xl"
           >
             {SUPPORTED_CHAINS.map((chain) => {
               const isSelected = chain.id === selectedChainId
@@ -114,13 +114,13 @@ export const ChainSelector = memo(function ChainSelector({
                   onClick={() => handleSelect(chain.id)}
                   className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
                     isSelected
-                      ? 'bg-brand-primary/12 text-white'
-                      : 'text-zinc-300 hover:bg-white/6'
+                      ? 'bg-brand-primary/12 text-vault-text'
+                      : 'text-vault-subtext hover:bg-white/6 hover:text-vault-text'
                   }`}
                 >
                   <ChainLogo src={chain.logoUrl} name={chain.name} size={24} />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">{chain.name}</div>
+                    <div className="truncate text-sm font-medium">{chain.name}</div>
                     {isWalletChain && !isSelected && (
                       <div className="text-[10px] text-emerald-400">Wallet connected</div>
                     )}

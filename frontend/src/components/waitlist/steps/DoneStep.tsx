@@ -25,6 +25,7 @@ const scaleIn = {
   animate: { opacity: 1, scale: 1 },
   transition: { duration: 0.18, ease: baseEase },
 }
+const panelClass = 'bv-panel'
 
 /** Official X (formerly Twitter) logo */
 function XLogo({ className }: { className?: string }) {
@@ -164,25 +165,25 @@ function AddrRow({ label, address, accent, icon }: {
   return (
     <div className={[
       'flex items-center gap-2.5 rounded-xl px-3 py-2',
-      accent ? 'border border-brand-primary/15 bg-brand-primary/5' : 'border border-white/6 bg-black/10',
+      accent ? 'border border-brand-primary/20 bg-brand-primary/10' : 'border border-vault-border/90 bg-vault-cardRaised/60',
     ].join(' ')}>
       {icon && <span className="shrink-0">{icon}</span>}
-      <span className={['text-[11px] font-medium shrink-0 w-[80px]', accent ? 'text-brand-300' : 'text-zinc-400'].join(' ')}>
+      <span className={['text-[11px] font-medium shrink-0 w-[80px]', accent ? 'text-brand-300' : 'text-vault-subtext'].join(' ')}>
         {label}
       </span>
-      <span className={['font-mono text-[12px] flex-1 truncate min-w-0', accent ? 'text-zinc-100' : 'text-zinc-300'].join(' ')}>
-        {address ? truncAddr(address) : <span className="text-zinc-600 not-italic">—</span>}
+      <span className={['font-mono text-[12px] flex-1 truncate min-w-0', accent ? 'text-vault-text' : 'text-vault-subtext'].join(' ')}>
+        {address ? truncAddr(address) : <span className="text-vault-muted not-italic">—</span>}
       </span>
       {address && (
         <button
           type="button"
           onClick={handleCopy}
           title="Copy"
-          className="shrink-0 rounded-md p-1 transition-colors hover:bg-white/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
+          className="shrink-0 rounded-md p-1 transition-colors hover:bg-vault-cardRaised/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
         >
           {copied
             ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            : <Copy className="w-3.5 h-3.5 text-zinc-500" />
+            : <Copy className="w-3.5 h-3.5 text-vault-subtext" />
           }
         </button>
       )}
@@ -201,19 +202,19 @@ function WalletCardCollapsed(props: {
   const detailsId = 'waitlist-wallet-card-details'
 
   return (
-    <motion.section {...fadeUp} className="rounded-2xl border border-white/6 bg-white/2 overflow-hidden">
+    <motion.section {...fadeUp} className={`${panelClass} overflow-hidden`}>
       <div className="p-3.5 space-y-2.5">
         <div className="flex items-center justify-between gap-2">
           <div className="inline-flex items-center gap-2">
-            <Wallet className="h-3.5 w-3.5 text-zinc-400" />
-            <span className="text-[12px] font-medium text-zinc-300">Wallets</span>
+            <Wallet className="h-3.5 w-3.5 text-vault-subtext" />
+            <span className="text-[12px] font-medium text-vault-subtext">Wallets</span>
           </div>
           <button
             type="button"
             aria-expanded={expanded}
             aria-controls={detailsId}
             onClick={() => setExpanded((prev) => !prev)}
-            className="inline-flex min-h-9 items-center gap-1 rounded-xl border border-white/8 px-2.5 text-[11px] font-medium text-zinc-400 transition-colors hover:bg-white/4 hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
+            className="inline-flex min-h-9 items-center gap-1 rounded-xl border border-vault-border px-2.5 text-[11px] font-medium text-vault-subtext transition-colors hover:bg-vault-cardRaised/65 hover:text-vault-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
           >
             {expanded ? 'Hide details' : 'Show details'}
             <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
@@ -253,12 +254,12 @@ function WalletCardCollapsed(props: {
         </AnimatePresence>
       </div>
 
-      <div className="border-t border-white/6 bg-white/2 p-3">
+      <div className="border-t border-vault-border/90 bg-vault-card/50 p-3">
         <a
           href="https://4626.fun/account"
           target="_blank"
           rel="noreferrer"
-          className="btn-secondary min-h-10 w-full justify-center border-white/8 text-[12px] text-zinc-300"
+          className="btn-secondary min-h-10 w-full justify-center border-vault-border text-[12px] text-vault-subtext"
         >
           Open account
           <ExternalLink className="h-3.5 w-3.5" />
@@ -294,7 +295,7 @@ function PreprovisionStatus({ onData }: { onData?: (data: PreprovData | null) =>
   if (status === 'idle' || status === 'done' || status === 'error') return null
 
   return (
-    <motion.div {...fadeUp} className="flex items-center gap-2 px-1 text-[12px] text-zinc-500">
+    <motion.div {...fadeUp} className="flex items-center gap-2 px-1 text-[12px] text-vault-subtext">
       <Loader2 className="w-3 h-3 animate-spin text-indigo-400 shrink-0" />
       <span>Setting up your account…</span>
     </motion.div>
@@ -304,9 +305,9 @@ function PreprovisionStatus({ onData }: { onData?: (data: PreprovData | null) =>
 function CtaLoadingSkeleton() {
   return (
     <motion.div {...fadeUp}>
-      <div className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl border border-white/6 bg-white/2">
-        <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
-        <span className="text-[14px] sm:text-[15px] text-zinc-500 font-medium">Checking access…</span>
+      <div className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl border border-vault-border/90 bg-vault-card/70">
+        <Loader2 className="w-4 h-4 animate-spin text-vault-subtext" />
+        <span className="text-[14px] sm:text-[15px] text-vault-subtext font-medium">Checking access…</span>
       </div>
     </motion.div>
   )
@@ -371,35 +372,35 @@ function RewardsCard({
   }, [shareMenuOpen])
 
   return (
-    <motion.section {...fadeUp} className="rounded-2xl border border-white/5 bg-white/3 p-6 sm:p-7">
+    <motion.section {...fadeUp} className={`${panelClass} p-6 sm:p-7`}>
       <div className="space-y-6">
         <div className="space-y-4">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2">
             <div className="inline-flex items-baseline gap-2">
-              <span className="text-[44px] leading-[0.92] font-semibold tabular-nums tracking-tight text-white sm:text-[48px]">
+              <span className="text-[44px] leading-[0.92] font-semibold tabular-nums tracking-tight text-vault-text sm:text-[48px]">
                 {pointsBalance}
               </span>
-              <span className="text-[13px] font-medium tracking-wide text-zinc-400">pts</span>
+              <span className="text-[13px] font-medium tracking-wide text-vault-subtext">pts</span>
             </div>
-            <span className="rounded-full border border-white/12 bg-white/4 px-2.5 py-1 text-[11px] font-medium text-zinc-300">
+            <span className="rounded-full border border-vault-borderStrong/55 bg-vault-cardRaised/70 px-2.5 py-1 text-[11px] font-medium text-vault-subtext">
               {tierLabel}
             </span>
           </div>
 
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-1.5 text-[12px] text-zinc-400">
+            <div className="inline-flex items-center gap-1.5 text-[12px] text-vault-subtext">
               <CheckCircle2 className={`h-3.5 w-3.5 ${badgeEarned ? 'text-emerald-300' : 'text-zinc-500'}`} aria-hidden="true" />
               <span>{badgeEarned ? 'Your profile is verified' : 'Profile verification pending'}</span>
             </div>
             {rank && rank > 0 ? (
-              <div className="text-[12px] text-zinc-500">You&apos;re ranked #{rank} on the leaderboard</div>
+              <div className="text-[12px] text-vault-muted">You&apos;re ranked #{rank} on the leaderboard</div>
             ) : null}
           </div>
         </div>
 
-        <div className="space-y-3 border-t border-white/6 pt-4">
-          <div className="text-[11px] font-medium text-zinc-500">Referral link</div>
-          <div className="font-mono text-[12px] text-zinc-300 truncate" title={referralUrl}>
+        <div className="space-y-3 border-t border-vault-border/80 pt-4">
+          <div className="bv-kicker">Referral link</div>
+          <div className="font-mono text-[12px] text-vault-subtext truncate" title={referralUrl}>
             {referralUrl}
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -419,7 +420,7 @@ function RewardsCard({
                 aria-expanded={shareMenuOpen}
                 aria-controls={shareMenuOpen ? shareMenuId : undefined}
                 onClick={() => setShareMenuOpen((prev) => !prev)}
-                className="btn-secondary min-h-10 border-white/8 px-3 text-[12px] text-zinc-300"
+                className="btn-secondary min-h-10 border-vault-border px-3 text-[12px] text-vault-subtext"
               >
                 <Share2 className="h-3.5 w-3.5" />
                 Share
@@ -436,7 +437,7 @@ function RewardsCard({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.15, ease: baseEase }}
-                    className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-white/8 bg-[#111214]/92 p-1 shadow-lg backdrop-blur"
+                    className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-vault-border/90 bg-vault-card/92 p-1 shadow-lg backdrop-blur"
                   >
                     <a
                       role="menuitem"
@@ -444,7 +445,7 @@ function RewardsCard({
                       target="_blank"
                       rel="noreferrer"
                       onClick={() => setShareMenuOpen(false)}
-                      className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-[12px] text-zinc-200 transition-colors hover:bg-white/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
+                      className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-[12px] text-vault-text transition-colors hover:bg-vault-cardRaised/72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
                     >
                       <XLogo className="h-3.5 w-3.5" />
                       Share on X
@@ -455,7 +456,7 @@ function RewardsCard({
                       target="_blank"
                       rel="noreferrer"
                       onClick={() => setShareMenuOpen(false)}
-                      className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-[12px] text-zinc-200 transition-colors hover:bg-white/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
+                      className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-[12px] text-vault-text transition-colors hover:bg-vault-cardRaised/72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
                     >
                       <FarcasterLogo className="h-3.5 w-3.5" />
                       Share on Farcaster
@@ -511,8 +512,8 @@ function HeaderStatusSection(props: {
 
       <div className="flex justify-center pt-2">
         <div className="relative">
-          <div className="h-12 w-12 rounded-xl border border-white/8 bg-white/4 flex items-center justify-center">
-            <CheckCircle2 className="h-6 w-6 text-zinc-100" />
+          <div className="h-12 w-12 rounded-xl border border-vault-border/90 bg-vault-cardRaised/70 flex items-center justify-center">
+            <CheckCircle2 className="h-6 w-6 text-vault-text" />
           </div>
           <motion.div
             className="absolute inset-0 rounded-xl border border-white/10"
@@ -524,10 +525,10 @@ function HeaderStatusSection(props: {
       </div>
 
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight text-white">You&apos;re on the waitlist</h1>
-        {identityLabel ? <p className="truncate px-2 text-[13px] text-zinc-300">{identityLabel}</p> : null}
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-vault-text">You&apos;re on the waitlist</h1>
+        {identityLabel ? <p className="truncate px-2 text-[13px] text-vault-subtext">{identityLabel}</p> : null}
         <div className="flex items-center justify-center gap-2">
-          <span className="rounded-full border border-white/12 bg-white/4 px-2.5 py-1 text-[11px] font-medium text-zinc-300">
+          <span className="rounded-full border border-vault-borderStrong/55 bg-vault-cardRaised/68 px-2.5 py-1 text-[11px] font-medium text-vault-subtext">
             Active
           </span>
           {props.rankDelta > 0 ? (
@@ -753,7 +754,7 @@ export const DoneStep = memo(function DoneStep({
               </button>
             </motion.div>
           ) : deployAccessState === 'waitlist' ? (
-            <motion.div {...fadeUp} className="rounded-xl border border-white/8 bg-white/2 px-3 py-2 text-[12px] text-zinc-400">
+            <motion.div {...fadeUp} className="rounded-xl border border-vault-border/90 bg-vault-card/70 px-3 py-2 text-[12px] text-vault-subtext">
               We&apos;ll notify you as soon as access opens.
             </motion.div>
           ) : null}
@@ -766,15 +767,15 @@ export const DoneStep = memo(function DoneStep({
 
           {/* X / social verification — earns a profile badge */}
           {borderTier < 1 && showPrivy ? (
-            <motion.div {...fadeUp} className="rounded-2xl border border-white/8 bg-white/2 p-4 space-y-3">
+            <motion.div {...fadeUp} className={`${panelClass} p-4 space-y-3`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[14px] text-white font-medium">Earn a profile badge</div>
-                  <div className="text-[12px] text-zinc-400 mt-0.5 leading-relaxed">
-                    Follow <span className="text-zinc-200">@4626fun</span> on X to unlock a verified badge on your creator profile.
+                  <div className="text-[14px] text-vault-text font-medium">Earn a profile badge</div>
+                  <div className="text-[12px] text-vault-subtext mt-0.5 leading-relaxed">
+                    Follow <span className="text-vault-text">@4626fun</span> on X to unlock a verified badge on your creator profile.
                   </div>
                 </div>
-                <div className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border border-white/10 bg-black/20 text-zinc-400">
+                <div className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border border-vault-borderStrong/55 bg-vault-cardRaised/72 text-vault-subtext">
                   Tier {borderTier}
                 </div>
               </div>
@@ -790,7 +791,7 @@ export const DoneStep = memo(function DoneStep({
                     {xSignInBusy ? <Loader2 className="w-4 h-4 animate-spin text-zinc-200" /> : <XLogo className="w-4 h-4" />}
                     {xSignInBusy ? 'Opening…' : 'Sign in to connect X'}
                   </button>
-                  <div className="text-[12px] text-zinc-400">After signing in, connect X and click Verify.</div>
+                  <div className="text-[12px] text-vault-subtext">After signing in, connect X and click Verify.</div>
                   {xLinkError ? <Alert variant="error">{xLinkError}</Alert> : null}
                 </div>
               ) : !twitterConnected ? (
@@ -813,7 +814,7 @@ export const DoneStep = memo(function DoneStep({
                       href="https://x.com/4626fun"
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl border border-white/8 bg-white/2 text-zinc-200 text-[13px] hover:bg-white/5 transition-colors"
+                      className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl border border-vault-border bg-vault-cardRaised/65 text-vault-text text-[13px] hover:bg-vault-cardRaised/80 transition-colors"
                     >
                       <XLogo className="w-3.5 h-3.5" />
                       Follow @4626fun
@@ -829,7 +830,7 @@ export const DoneStep = memo(function DoneStep({
                     </button>
                   </div>
                   {privyTwitter.username ? (
-                    <div className="text-[11px] text-zinc-400">Connected as @{privyTwitter.username}</div>
+                    <div className="text-[11px] text-vault-subtext">Connected as @{privyTwitter.username}</div>
                   ) : null}
                   {xVerifyError ? <Alert variant="warning">{xVerifyError}</Alert> : null}
                 </div>

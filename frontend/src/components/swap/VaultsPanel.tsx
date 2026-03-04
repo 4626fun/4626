@@ -53,12 +53,12 @@ export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainI
 
   if (vaultsQuery.isError) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-vault-card/70 p-4">
-        <div className="mb-3 flex items-center gap-2 text-xs font-medium text-zinc-300">
+      <div className="bv-panel p-4">
+        <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-vault-subtext">
           <AlertTriangle className="h-3.5 w-3.5" />
           Vaults unavailable
         </div>
-        <div className="text-sm text-zinc-500">Unable to load featured vaults right now.</div>
+        <div className="text-sm text-vault-muted">Unable to load featured vaults right now.</div>
       </div>
     )
   }
@@ -66,25 +66,25 @@ export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainI
   const list = effectiveTab === 'mine' ? userVaults : featuredVaults
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-vault-card/70 p-3">
+    <section className="bv-panel p-3">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-white">Creator Vaults</h2>
-          <p className="text-xs text-zinc-500">Earn / manage vault positions</p>
+          <h2 className="text-base font-semibold tracking-tight text-vault-text">Creator Vaults</h2>
+          <p className="text-xs text-vault-subtext">Earn / manage vault positions</p>
         </div>
         <Link
           to="/vault/create"
-          className="inline-flex items-center gap-1 rounded-full border border-white/12 bg-white/5 px-2 py-1 text-[11px] text-zinc-300 hover:text-zinc-100"
+          className="bv-chip gap-1 normal-case tracking-[0.02em] hover:text-vault-text"
         >
           <Plus className="h-3.5 w-3.5" /> Create Vault
         </Link>
       </div>
 
-      <div className="mb-3 inline-flex rounded-full border border-white/12 bg-black/40 p-0.5 text-xs">
+      <div className="mb-3 inline-flex rounded-full border border-[rgb(var(--vault-border-strong)/0.55)] bg-[rgb(var(--vault-card-raised)/0.45)] p-0.5 text-xs">
         <button
           type="button"
           onClick={() => setTab('featured')}
-          className={`rounded-full px-3 py-1.5 transition ${effectiveTab === 'featured' ? 'bg-white/15 text-white' : 'text-zinc-400'}`}
+          className={`rounded-full px-3 py-1.5 transition ${effectiveTab === 'featured' ? 'bg-brand-primary/18 text-vault-text' : 'text-vault-subtext hover:text-vault-text'}`}
         >
           Featured Vaults
         </button>
@@ -92,7 +92,7 @@ export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainI
           type="button"
           onClick={() => currentAddress && setTab('mine')}
           disabled={!currentAddress}
-          className={`rounded-full px-3 py-1.5 transition ${effectiveTab === 'mine' ? 'bg-white/15 text-white' : 'text-zinc-400'} disabled:opacity-50`}
+          className={`rounded-full px-3 py-1.5 transition ${effectiveTab === 'mine' ? 'bg-brand-primary/18 text-vault-text' : 'text-vault-subtext hover:text-vault-text'} disabled:opacity-50`}
         >
           My Vaults
         </button>
@@ -100,10 +100,10 @@ export function VaultsPanel({ chainId, activeTabDefault = 'featured' }: { chainI
 
       {vaultsQuery.isLoading ? (
         <div className="grid gap-2">
-          <Activity className="mx-auto h-4 w-4 animate-pulse text-zinc-600" />
+          <Activity className="mx-auto h-4 w-4 animate-pulse text-vault-muted" />
         </div>
       ) : list.length === 0 ? (
-        <div className="rounded-xl border border-white/8 bg-white/4 p-4 text-sm text-zinc-500">
+        <div className="rounded-xl border border-[rgb(var(--vault-border-strong)/0.5)] bg-[rgb(var(--vault-card-raised)/0.55)] p-4 text-sm text-vault-subtext">
           {effectiveTab === 'mine'
             ? currentAddress
               ? 'No vault positions found for this wallet yet.'

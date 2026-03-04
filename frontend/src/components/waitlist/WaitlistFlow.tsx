@@ -2340,7 +2340,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
 
   const containerClass =
     variant === 'page'
-      ? 'waitlist-page relative min-h-[100svh] flex items-center justify-center overflow-hidden px-4 sm:px-6 py-12 sm:py-16 bg-[#0a0a0b]'
+      ? 'waitlist-page relative min-h-[100svh] flex items-center justify-center overflow-hidden px-4 sm:px-6 py-12 sm:py-16 bg-vault-bg'
       : variant === 'modal'
         ? 'waitlist-page relative min-h-0 flex items-start justify-center overflow-visible px-0 py-0 bg-transparent'
         : 'cinematic-section'
@@ -2354,14 +2354,14 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
 
   const cardWrapClass =
     variant === 'page'
-      ? `relative overflow-hidden rounded-3xl border ${
-          hasUpgradedBorder ? 'border-brand-primary/25' : 'border-white/[0.06]'
-        } bg-[#0d0d0f]/95 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_24px_80px_-24px_rgba(0,0,0,0.6)] p-6 sm:p-8`
+      ? `relative overflow-hidden bv-panel p-6 sm:p-8 ${
+          hasUpgradedBorder ? 'ring-1 ring-brand-primary/25' : ''
+        }`
       : variant === 'modal'
         ? 'relative overflow-hidden'
-        : `relative overflow-hidden rounded-3xl border ${
-            hasUpgradedBorder ? 'border-brand-primary/25' : 'border-white/[0.06]'
-          } bg-[#0d0d0f]/95 backdrop-blur-xl p-6 sm:p-8`
+        : `relative overflow-hidden bv-panel p-6 sm:p-8 ${
+            hasUpgradedBorder ? 'ring-1 ring-brand-primary/25' : ''
+          }`
 
   return (
     <section id={variant === 'embedded' ? sectionId : undefined} className={containerClass}>
@@ -2371,7 +2371,8 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
       <div className={innerWrapClass}>
         {variant === 'page' || variant === 'modal' ? null : (
           <div className="mb-6">
-            <div className="font-doto text-4xl sm:text-5xl font-bold tracking-tight text-white leading-[1.05]">
+            <div className="bv-kicker mb-2">Waitlist</div>
+            <div className="font-display text-4xl sm:text-5xl font-semibold tracking-tight text-vault-text leading-[1.05]">
               Waitlist
             </div>
           </div>
@@ -2381,8 +2382,8 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
           {variant !== 'modal' && (
             <div
               className={[
-                'pointer-events-none absolute inset-0 rounded-3xl ring-1 ring-inset',
-                hasUpgradedBorder ? 'ring-brand-primary/20' : 'ring-white/4',
+                'pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset',
+                hasUpgradedBorder ? 'ring-brand-primary/25' : 'ring-white/4',
               ].join(' ')}
             />
           )}

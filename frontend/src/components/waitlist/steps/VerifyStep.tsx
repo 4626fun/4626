@@ -229,8 +229,8 @@ export const VerifyStep = memo(function VerifyStep({
   const ownershipStatusClass = walletOwnershipValid
     ? 'border-emerald-400/35 bg-emerald-500/10 text-emerald-200'
     : 'border-amber-400/35 bg-amber-500/10 text-amber-100'
-  const panelClass = 'rounded-2xl border border-white/6 bg-white/2'
-  const microPanelClass = 'rounded-xl border border-white/4 bg-white/1'
+  const panelClass = 'bv-panel'
+  const microPanelClass = 'bv-subpanel'
   const mappingReady = mappingStatus === 'READY_FOR_OWNER_INSTALL'
   const mappingShownAsOptional = canSubmit
   const mappingAction = onMappingPrimaryAction ?? onPrivyContinue
@@ -257,20 +257,20 @@ export const VerifyStep = memo(function VerifyStep({
       <motion.div key="verify-simple" {...fadeUp} className="space-y-6 sm:space-y-7">
         <StepIndicator steps={stepperSteps} className="mb-2" />
         <motion.div {...scaleIn} className="space-y-3">
-          <h1 className="font-doto text-2xl sm:text-3xl font-bold tracking-tight text-white leading-[1.08]">
+          <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-vault-text leading-[1.08]">
             Setting up your account
           </h1>
-          <p className="max-w-[48ch] text-sm text-zinc-500 leading-relaxed">
+          <p className="max-w-[48ch] text-sm text-vault-subtext leading-relaxed">
             We handle wallet verification and setup for you automatically.
           </p>
-          <p className="max-w-[48ch] text-xs text-zinc-600 leading-relaxed">
+          <p className="max-w-[48ch] text-xs text-vault-muted leading-relaxed">
             After joining, the app header always shows your connected signer and acting account mode.
           </p>
         </motion.div>
 
         <motion.div {...scaleIn} className={`${panelClass} p-4 space-y-3`}>
           <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
-            <span className="text-[12px] text-zinc-500">Wallet connected</span>
+            <span className="text-[12px] text-vault-subtext">Wallet connected</span>
             <span className="text-[12px] text-emerald-300 inline-flex items-center gap-1.5">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Ready
@@ -278,7 +278,7 @@ export const VerifyStep = memo(function VerifyStep({
           </div>
 
           <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
-            <span className="text-[12px] text-zinc-500">Creator profile check</span>
+                <span className="text-[12px] text-vault-subtext">Creator profile check</span>
             {creatorCoinBusy ? (
               <span className="text-[12px] text-zinc-300 inline-flex items-center gap-1.5">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -294,7 +294,7 @@ export const VerifyStep = memo(function VerifyStep({
 
           {ownershipGateActive ? (
             <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
-              <span className="text-[12px] text-zinc-500">Ownership check</span>
+              <span className="text-[12px] text-vault-subtext">Ownership check</span>
               {walletOwnershipValid ? (
                 <span className="text-[12px] text-emerald-300 inline-flex items-center gap-1.5">
                   <CheckCircle2 className="h-3.5 w-3.5" />
@@ -310,7 +310,7 @@ export const VerifyStep = memo(function VerifyStep({
           ) : null}
 
           <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
-            <span className="text-[12px] text-zinc-500">Embedded signer wallet</span>
+            <span className="text-[12px] text-vault-subtext">Embedded signer wallet</span>
             {embeddedReady ? (
               <span className="text-[12px] text-emerald-300 inline-flex items-center gap-1.5">
                 <CheckCircle2 className="h-3.5 w-3.5" />
@@ -330,7 +330,7 @@ export const VerifyStep = memo(function VerifyStep({
           </div>
 
           <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
-            <span className="text-[12px] text-zinc-500">Zora wallet link (read-only)</span>
+                <span className="text-[12px] text-vault-subtext">Zora wallet link (read-only)</span>
             {zoraLinked ? (
               <span className="text-[12px] text-emerald-300 inline-flex items-center gap-1.5">
                 <CheckCircle2 className="h-3.5 w-3.5" />
@@ -350,7 +350,7 @@ export const VerifyStep = memo(function VerifyStep({
           </div>
 
           <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
-            <span className="text-[12px] text-zinc-500">Canonical Zora smart wallet</span>
+            <span className="text-[12px] text-vault-subtext">Canonical Zora smart wallet</span>
             {canonicalReady ? (
               <span className="text-[12px] text-emerald-300 inline-flex items-center gap-1.5">
                 <CheckCircle2 className="h-3.5 w-3.5" />
@@ -370,7 +370,7 @@ export const VerifyStep = memo(function VerifyStep({
           </div>
 
           <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
-            <span className="text-[12px] text-zinc-500">Backend setup</span>
+            <span className="text-[12px] text-vault-subtext">Backend setup</span>
             {busy ? (
               <span className="text-[12px] text-zinc-200 inline-flex items-center gap-1.5">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -422,8 +422,8 @@ export const VerifyStep = memo(function VerifyStep({
         ) : null}
 
         <motion.div {...fadeUp} className={`${panelClass} p-4 space-y-2.5`}>
-          <label htmlFor="waitlist-email-simple" className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
-            Email <span className="text-zinc-700">(optional)</span>
+          <label htmlFor="waitlist-email-simple" className="bv-kicker">
+            Email <span className="text-vault-muted">(optional)</span>
           </label>
           <input
             id="waitlist-email-simple"
@@ -433,9 +433,9 @@ export const VerifyStep = memo(function VerifyStep({
             placeholder="you@example.com"
             aria-invalid={emailError ? true : undefined}
             aria-describedby={emailError ? 'email-error-simple' : 'email-hint-simple'}
-            className="w-full rounded-xl border border-white/10 bg-white/3 px-3 py-2.5 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-[#0052FF]/50"
+            className="w-full rounded-xl border border-vault-border/90 bg-vault-cardRaised/70 px-3 py-2.5 text-[13px] text-vault-text placeholder:text-vault-muted focus:outline-none focus:border-brand-primary/50"
           />
-          <div id="email-hint-simple" className="text-[11px] text-zinc-600">Optional. You can add a recovery email later.</div>
+          <div id="email-hint-simple" className="text-[11px] text-vault-muted">Optional. You can add a recovery email later.</div>
           {emailError ? <div id="email-error-simple" role="alert" className="text-[11px] text-amber-300">{emailError}</div> : null}
         </motion.div>
 
@@ -465,11 +465,11 @@ export const VerifyStep = memo(function VerifyStep({
 
       {/* Header */}
       <motion.div {...scaleIn} className="space-y-3">
-        <h1 className="font-doto text-2xl sm:text-3xl font-bold tracking-tight text-white leading-[1.08]">
+        <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-vault-text leading-[1.08]">
           {headerTitle}
         </h1>
         {headerSubtitle ? (
-          <p className="max-w-[48ch] text-sm text-zinc-500 leading-relaxed">{headerSubtitle}</p>
+          <p className="max-w-[48ch] text-sm text-vault-subtext leading-relaxed">{headerSubtitle}</p>
         ) : null}
         {hasVerification ? (
           <div className="inline-flex items-center gap-2 rounded-full border border-[#0052FF]/20 bg-[#0052FF]/5 px-3 py-1.5 text-[11px] font-medium text-[#8AB5FF]">
@@ -492,15 +492,15 @@ export const VerifyStep = memo(function VerifyStep({
             <ChevronRight className="absolute right-5 w-4 h-4 opacity-80" />
           </button>
 
-          <p className="text-sm text-zinc-500">We'll continue automatically.</p>
+          <p className="text-sm text-vault-subtext">We'll continue automatically.</p>
 
           <div className="flex items-center justify-between">
-            <div className="text-[12px] text-zinc-500">{helperText || '\u00A0'}</div>
+            <div className="text-[12px] text-vault-subtext">{helperText || '\u00A0'}</div>
             <div className="flex items-center gap-3">
               {onPrivyFallback ? (
                 <button
                   type="button"
-                  className="text-[12px] text-zinc-400 hover:text-zinc-200 transition-colors"
+                  className="text-[12px] text-vault-subtext hover:text-vault-text transition-colors"
                   onClick={onPrivyFallback}
                 >
                   Try another way
@@ -508,7 +508,7 @@ export const VerifyStep = memo(function VerifyStep({
               ) : null}
               <button
                 type="button"
-                className="text-[12px] text-zinc-400 hover:text-zinc-200 transition-colors"
+                className="text-[12px] text-vault-subtext hover:text-vault-text transition-colors"
                 onClick={() => setShowTrouble(true)}
               >
                 Need help?
@@ -588,10 +588,10 @@ export const VerifyStep = memo(function VerifyStep({
       {hasVerification && creatorCoinBusy ? (
         <motion.div
           {...fadeUp}
-          className="flex items-center justify-center gap-3 rounded-2xl border border-white/6 bg-white/2 py-4"
+          className="flex items-center justify-center gap-3 rounded-2xl border border-vault-border/90 bg-vault-card/70 py-4"
         >
           <div className="w-5 h-5 rounded-full border-2 border-zinc-600 border-t-[#0052FF] animate-spin" />
-          <span className="text-[13px] text-zinc-500">Reading Zora profile and creator coin owners…</span>
+          <span className="text-[13px] text-vault-subtext">Reading Zora profile and creator coin owners…</span>
         </motion.div>
       ) : null}
 
@@ -599,7 +599,7 @@ export const VerifyStep = memo(function VerifyStep({
       {hasVerification && (hasCreatorCoin || creatorCoinDeclaredMissing) ? (
         <motion.div
           {...scaleIn}
-          className="relative overflow-hidden rounded-2xl border border-white/6 bg-white/2 p-4 sm:p-5"
+          className="relative overflow-hidden rounded-2xl border border-vault-border/90 bg-vault-card/72 p-4 sm:p-5"
         >
           <motion.div
             className="relative space-y-3"
@@ -607,14 +607,14 @@ export const VerifyStep = memo(function VerifyStep({
             initial="initial"
             animate="animate"
           >
-            <motion.div variants={staggerItem} className="rounded-2xl border border-[#0052FF]/20 bg-[#0052FF]/6 px-3.5 py-2.5 text-[11px] leading-relaxed text-zinc-300">
+            <motion.div variants={staggerItem} className="rounded-2xl border border-brand-primary/25 bg-brand-primary/10 px-3.5 py-2.5 text-[11px] leading-relaxed text-vault-subtext">
               <span className="text-[#8AB5FF] font-medium">Using Zora data:</span> ownership and creator coin info are auto-filled so you can review before joining.
             </motion.div>
 
             <motion.div variants={staggerItem} className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-[12px] text-zinc-500">Ownership</div>
-                <div className="mt-0.5 text-[17px] font-semibold text-white">Review before join</div>
+                <div className="bv-kicker">Ownership</div>
+                <div className="mt-0.5 text-[17px] font-semibold text-vault-text">Review before join</div>
               </div>
               <div className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] ${ownershipStatusClass}`}>
                 <BadgeCheck className="h-3.5 w-3.5" />
@@ -628,19 +628,19 @@ export const VerifyStep = memo(function VerifyStep({
                   <img
                     src={creatorCoin.imageUrl}
                     alt={creatorCoin.symbol || 'Creator Coin'}
-                    className="h-12 w-12 rounded-2xl border border-white/15 object-cover shadow-[0_14px_30px_-18px_rgba(58,123,255,0.85)]"
+                    className="h-12 w-12 rounded-2xl border border-vault-borderStrong/65 object-cover shadow-[0_14px_30px_-18px_rgba(58,123,255,0.85)]"
                     loading="lazy"
                   />
                 ) : (
-                    <div className="h-12 w-12 rounded-2xl border border-white/15 bg-linear-to-br from-zinc-900 to-zinc-800 flex items-center justify-center text-[12px] text-zinc-300 font-semibold">
+                    <div className="h-12 w-12 rounded-2xl border border-vault-borderStrong/60 bg-vault-cardRaised/80 flex items-center justify-center text-[12px] text-vault-subtext font-semibold">
                       {(creatorCoin?.symbol || 'CC').slice(0, 2)}
                     </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="text-[15px] text-white font-medium truncate">
+                  <div className="text-[15px] text-vault-text font-medium truncate">
                     {creatorCoin?.symbol ? creatorCoin.symbol : creatorCoinDeclaredMissing ? 'No coin found' : 'Creator Coin'}
                   </div>
-                  <div className="mt-0.5 text-[11px] text-zinc-400 font-mono truncate" title={creatorCoin?.address || undefined}>
+                  <div className="mt-0.5 text-[11px] text-vault-subtext font-mono truncate" title={creatorCoin?.address || undefined}>
                     {creatorCoin?.address ? creatorCoinAddressShort : creatorCoinDeclaredMissing ? 'No on-chain coin detected' : 'Creator coin lookup'}
                   </div>
                 </div>
@@ -648,7 +648,7 @@ export const VerifyStep = memo(function VerifyStep({
                   {creatorCoin?.symbol ? (
                     <CheckCircle2 className="h-5 w-5 text-[#84B2FF]" />
                   ) : (
-                    <div className="rounded-full border border-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-400">
+                    <div className="rounded-full border border-vault-borderStrong/55 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-vault-subtext">
                       Ready
                     </div>
                   )}
@@ -673,13 +673,13 @@ export const VerifyStep = memo(function VerifyStep({
             <motion.div variants={staggerItem} className={`${panelClass} px-4 py-3`}>
               <div className="space-y-2.5">
                 <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
-                  <span className="text-[12px] text-zinc-500">Connected wallet</span>
-                  <span className="text-[12px] font-mono text-zinc-200">{connectedWalletShort}</span>
+                    <span className="text-[12px] text-vault-subtext">Connected wallet</span>
+                    <span className="text-[12px] font-mono text-vault-text">{connectedWalletShort}</span>
                 </div>
 
                 {ownershipGateActive ? (
                   <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
-                    <span className="text-[12px] text-zinc-500">Owner match</span>
+                    <span className="text-[12px] text-vault-subtext">Owner match</span>
                     <span className={`text-[12px] font-medium ${walletOwnershipValid ? 'text-emerald-400' : 'text-amber-400'}`}>
                       {walletOwnershipValid ? 'Matched' : 'Not matched'}
                     </span>
@@ -688,22 +688,22 @@ export const VerifyStep = memo(function VerifyStep({
 
                 {hasCreatorCoin ? (
                   <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
-                    <span className="text-[12px] text-zinc-500">Payout recipient</span>
-                    <span className="text-[12px] font-mono text-zinc-200">{payoutRecipientShort}</span>
+                    <span className="text-[12px] text-vault-subtext">Payout recipient</span>
+                    <span className="text-[12px] font-mono text-vault-text">{payoutRecipientShort}</span>
                   </div>
                 ) : null}
 
                 {hasCreatorCoin ? (
                   <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
-                    <span className="text-[12px] text-zinc-500">Owner wallets</span>
-                    <span className="text-[12px] text-zinc-300">{ownerWalletCountLabel}</span>
+                    <span className="text-[12px] text-vault-subtext">Owner wallets</span>
+                    <span className="text-[12px] text-vault-subtext">{ownerWalletCountLabel}</span>
                   </div>
                 ) : null}
 
                 {canonicalSmartWallet ? (
                   <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
-                    <span className="text-[12px] text-zinc-500">Canonical smart wallet</span>
-                    <span className="text-[12px] font-mono text-zinc-200">{shortAddress(canonicalSmartWallet, 8, 6)}</span>
+                    <span className="text-[12px] text-vault-subtext">Canonical smart wallet</span>
+                    <span className="text-[12px] font-mono text-vault-text">{shortAddress(canonicalSmartWallet, 8, 6)}</span>
                   </div>
                 ) : null}
               </div>
@@ -781,7 +781,7 @@ export const VerifyStep = memo(function VerifyStep({
               </motion.div>
             ) : null}
             {creatorCoinDeclaredMissing ? (
-              <motion.div variants={staggerItem} className={`${panelClass} px-4 py-3 text-[12px] text-zinc-400`}>
+              <motion.div variants={staggerItem} className={`${panelClass} px-4 py-3 text-[12px] text-vault-subtext`}>
                 Creator coin not found for this wallet. You can still join and update ownership later.
               </motion.div>
             ) : null}
@@ -794,36 +794,36 @@ export const VerifyStep = memo(function VerifyStep({
         <motion.div {...scaleIn} className="pt-2 space-y-3">
           {/* Review summary */}
           <div className={`${panelClass} p-4 space-y-2`}>
-            <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 flex items-center gap-1.5">
+            <div className="text-[11px] uppercase tracking-[0.14em] text-vault-subtext flex items-center gap-1.5">
               <CheckCircle2 className="h-3 w-3 text-emerald-400" aria-hidden="true" />
               Review before joining
             </div>
             <div className={`${microPanelClass} px-3 py-2 flex items-center justify-between gap-3`}>
-              <span className="text-xs text-zinc-500">Wallet</span>
-              <span className="text-xs font-mono text-zinc-200">{connectedWalletShort}</span>
+              <span className="text-xs text-vault-subtext">Wallet</span>
+              <span className="text-xs font-mono text-vault-text">{connectedWalletShort}</span>
             </div>
             {hasCreatorCoin ? (
               <div className={`${microPanelClass} px-3 py-2 flex items-center justify-between gap-3`}>
-                <span className="text-xs text-zinc-500">Creator coin</span>
-                <span className="text-xs text-zinc-200">{creatorCoin?.symbol || 'Detected'}</span>
+                <span className="text-xs text-vault-subtext">Creator coin</span>
+                <span className="text-xs text-vault-text">{creatorCoin?.symbol || 'Detected'}</span>
               </div>
             ) : (
               <div className={`${microPanelClass} px-3 py-2 flex items-center justify-between gap-3`}>
-                <span className="text-xs text-zinc-500">Creator coin</span>
-                <span className="text-xs text-zinc-400">Not detected — you can add one later</span>
+                <span className="text-xs text-vault-subtext">Creator coin</span>
+                <span className="text-xs text-vault-subtext">Not detected — you can add one later</span>
               </div>
             )}
             {walletOwnershipValid ? (
               <div className={`${microPanelClass} px-3 py-2 flex items-center justify-between gap-3`}>
-                <span className="text-xs text-zinc-500">Ownership</span>
+                <span className="text-xs text-vault-subtext">Ownership</span>
                 <span className="text-xs text-emerald-400">Verified</span>
               </div>
             ) : null}
           </div>
 
           <div className={`${panelClass} p-4 space-y-2.5`}>
-            <label htmlFor="waitlist-email" className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
-              Email <span className="text-zinc-700">(optional)</span>
+            <label htmlFor="waitlist-email" className="bv-kicker">
+              Email <span className="text-vault-muted">(optional)</span>
             </label>
             <input
               id="waitlist-email"
@@ -833,9 +833,9 @@ export const VerifyStep = memo(function VerifyStep({
               placeholder="you@example.com"
               aria-invalid={emailError ? true : undefined}
               aria-describedby={emailError ? 'email-error' : 'email-hint'}
-              className="w-full rounded-xl border border-white/10 bg-white/3 px-3 py-2.5 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-[#0052FF]/50"
+              className="w-full rounded-xl border border-vault-border/90 bg-vault-cardRaised/70 px-3 py-2.5 text-[13px] text-vault-text placeholder:text-vault-muted focus:outline-none focus:border-brand-primary/50"
             />
-            <div id="email-hint" className="text-[11px] text-zinc-600">Optional. You can add a recovery email later.</div>
+            <div id="email-hint" className="text-[11px] text-vault-muted">Optional. You can add a recovery email later.</div>
             {emailError ? <div id="email-error" role="alert" className="text-[11px] text-amber-300">{emailError}</div> : null}
           </div>
           <button
