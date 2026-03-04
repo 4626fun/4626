@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { isPrivyRedirectUrlNotAllowedError, shouldAttemptCrossAppLoginOnPath } from './siweAuthCrossApp'
+import {
+  getCrossAppSafeRedirectPath,
+  isPrivyRedirectUrlNotAllowedError,
+  shouldAttemptCrossAppLoginOnPath,
+} from './siweAuthCrossApp'
 
 describe('siweAuthCrossApp', () => {
   it('detects Privy redirect allowlist errors', () => {
@@ -13,5 +17,20 @@ describe('siweAuthCrossApp', () => {
     expect(shouldAttemptCrossAppLoginOnPath('')).toBe(true)
     expect(shouldAttemptCrossAppLoginOnPath('/deploy')).toBe(false)
     expect(shouldAttemptCrossAppLoginOnPath('/vault')).toBe(false)
+  })
+
+  it('derives a safe redirect path for cross-app auth', () => {
+    expect(getCrossAppSafeRedirectPath({ pathname: '/', search: '', hash: '#waitlist' })).toEqual({
+      safePath: '/',
+      shouldSanitize: true,
+    })
+    expect(getCrossAppSafeRedirectPath({ pathname: '/waitlist', search: '?ref=abc', hash: '' })).toEqual({
+      safePath: '/waitlist',
+      shouldSanitize: true,
+    })
+    expect(getCrossAppSafeRedirectPath({ pathname: '/waitlist', search: '', hash: '' })).toEqual({
+      safePath: '/waitlist',
+      shouldSanitize: false,
+    })
   })
 })

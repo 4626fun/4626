@@ -20,6 +20,7 @@ import {
 import { base } from 'wagmi/chains'
 import { getAddress, isAddress } from 'viem'
 import { useMiniAppContext } from '@/hooks'
+import { sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 import { fetchZoraCoin, fetchZoraProfile } from '@/lib/zora/client'
 import type {
   ActionKey,
@@ -870,20 +871,30 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     console.info('[waitlist][zora] linking start')
     setZoraLinkBusy(true)
     patchWaitlist({ mappingError: null })
+
+    const runCrossAppAuth = async (run: () => Promise<unknown>) => {
+      const restoreCrossAppRedirect = sanitizeCrossAppRedirectUrlForAuth()
+      try {
+        await run()
+      } finally {
+        restoreCrossAppRedirect?.()
+      }
+    }
+
     try {
       if (crossAppAuthAction === 'link') {
         try {
-          await linkCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+          await runCrossAppAuth(() => linkCrossAppAccount({ appId: ZORA_PRIVY_APP_ID }))
         } catch (linkError: unknown) {
           if (typeof loginWithCrossAppAccount === 'function' && isUnauthorizedCrossAppLinkError(linkError)) {
             console.warn('[waitlist][zora] link helper unauthorized; retrying with login helper')
-            await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+            await runCrossAppAuth(() => loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID }))
           } else {
             throw linkError
           }
         }
       } else {
-        await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+        await runCrossAppAuth(() => loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID }))
       }
     } catch (e: any) {
       const msg = e?.message ? String(e.message) : 'Zora linking was cancelled. Please retry.'

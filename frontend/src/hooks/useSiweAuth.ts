@@ -4,7 +4,11 @@ import { base } from 'wagmi/chains'
 import { apiFetch } from '@/lib/apiBase'
 import { useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
-import { isPrivyRedirectUrlNotAllowedError, shouldAttemptCrossAppLoginOnPath } from './siweAuthCrossApp'
+import {
+  isPrivyRedirectUrlNotAllowedError,
+  sanitizeCrossAppRedirectUrlForAuth,
+  shouldAttemptCrossAppLoginOnPath,
+} from './siweAuthCrossApp'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -341,7 +345,12 @@ export function useSiweAuth() {
 
           if (typeof loginWithCrossAppAccount === 'function' && canUseCrossAppPath) {
             try {
-              await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+              const restoreCrossAppRedirect = sanitizeCrossAppRedirectUrlForAuth()
+              try {
+                await loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })
+              } finally {
+                restoreCrossAppRedirect?.()
+              }
             } catch (e: unknown) {
               if (!isPrivyRedirectUrlNotAllowedError(e)) {
                 setError(coerceErrorMessage(e, 'Zora sign-in was cancelled.'))
