@@ -1,8 +1,11 @@
 import { HTTPClient, type NodeRuntime } from "@chainlink/cre-sdk"
+import { decodeJsonBody, encodeJsonBody as encodeJsonBodyInternal } from "./determinism"
 
 export type ApiRuntimeConfig = {
   apiBaseUrl: string
 }
+
+export const encodeJsonBody = encodeJsonBodyInternal
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
 
@@ -10,19 +13,6 @@ type JsonRequestOptions = {
   method: HttpMethod
   path: string
   payload?: unknown
-}
-
-export function encodeJsonBody(payload: unknown): string {
-  const json = JSON.stringify(payload)
-  if (typeof btoa === "function") return btoa(json)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const maybeBuffer = (globalThis as any).Buffer
-  if (maybeBuffer?.from) return maybeBuffer.from(json, "utf8").toString("base64")
-  throw new Error("base64_encoder_unavailable")
-}
-
-function decodeJsonBody<T>(body: Uint8Array): T {
-  return JSON.parse(new TextDecoder().decode(body)) as T
 }
 
 function withLeadingSlash(path: string): string {
@@ -48,7 +38,7 @@ export function sendJsonRequest<Config extends ApiRuntimeConfig, T>(
     url,
     method: options.method,
     headers: requestHeaders(apiKey),
-    ...(options.payload === undefined ? {} : { body: encodeJsonBody(options.payload) }),
+    ...(options.payload === undefined ? {} : { body: encodeJsonBodyInternal(options.payload) }),
   }
 
   const response = httpClient.sendRequest(nodeRuntime, request).result()

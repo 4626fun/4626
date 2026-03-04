@@ -22,6 +22,52 @@ bash cre/cre-workflows/scripts/typecheck-workflows.sh
 CRE_SIMULATION_ENABLED=true bash cre/cre-workflows/scripts/simulate-workflows.sh
 ```
 
+### Simulate runtime orchestration workflows (local-simulation)
+
+All commands run from `cre/cre-workflows`:
+
+```bash
+# Export local secret placeholders for simulation
+export KEEPR_API_KEY_VALUE="local-dev-key"
+export KEEPR_API_BASE_URL_VALUE="http://127.0.0.1:8789/api"
+export KEEPR_PRIVATE_KEY_VALUE="0x0000000000000000000000000000000000000000000000000000000000000001"
+export CRE_RUNTIME_WEBHOOK_HMAC_SECRET_VALUE="local-hmac-secret"
+export AWS_ACCESS_KEY_ID_VALUE="AKIALOCALTEST"
+export AWS_SECRET_ACCESS_KEY_VALUE="local-secret"
+
+# runtime-indexer-block (HTTP trigger)
+cre workflow simulate runtime-indexer-block \
+  --target local-simulation \
+  --non-interactive \
+  --trigger-index 0 \
+  --http-payload @test-block.json
+
+# runtime-indexer-data-fetch (Cron trigger)
+cre workflow simulate runtime-indexer-data-fetch \
+  --target local-simulation \
+  --non-interactive \
+  --trigger-index 0
+
+# runtime-reference-feeds (Cron trigger)
+cre workflow simulate runtime-reference-feeds \
+  --target local-simulation \
+  --non-interactive \
+  --trigger-index 0
+
+# runtime-orchestrator (Cron trigger)
+cre workflow simulate runtime-orchestrator \
+  --target local-simulation \
+  --non-interactive \
+  --trigger-index 0
+
+# runtime-orchestrator (HTTP manual trigger)
+cre workflow simulate runtime-orchestrator \
+  --target local-simulation \
+  --non-interactive \
+  --trigger-index 1 \
+  --http-payload @http_trigger_payload.json
+```
+
 ### Engine logs (debug mode)
 
 ```bash
