@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress, toHex, type Address, type Hex } from 'viem'
 import { useAccount, useBalance, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
-import { useWallets } from '@privy-io/react-auth'
+import { usePrivy, useWallets } from '@privy-io/react-auth'
 
 import { SwapSettingsSheet } from '@/components/trade/SwapSettingsSheet'
 import { Alert } from '@/components/ui/Alert'
@@ -26,6 +26,11 @@ import {
 } from '@/lib/uniswap/liquidityApi'
 import { pickQuote } from '@/lib/uniswap/tradingApi'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
+import {
+  evaluateCanonicalSignerGate,
+  type CanonicalAuthStatus,
+  type CanonicalOwnerCheckStatus,
+} from '@/lib/uniswap/canonicalSignerGate'
 import {
   BASE_CHAIN_ID,
   NATIVE_TOKEN_ADDRESS,
@@ -116,6 +121,84 @@ function ensureSignatureHex(value: unknown, context: string): Hex {
     if (isHexSignature(nestedSig)) return nestedSig
   }
   throw new Error(`Invalid signature returned from ${context}`)
+}
+
+function normalizePrivyText(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+}
+
+function normalizeAddressOrNull(value: unknown): Address | null {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (!raw || !isAddress(raw)) return null
+  return getAddress(raw as Address)
+}
+
+function pickPrivyCrossAppEmbeddedEoaAddress(user: any): Address | null {
+  const linked = Array.isArray(user?.linkedAccounts)
+    ? (user.linkedAccounts as any[])
+    : Array.isArray(user?.linked_accounts)
+      ? (user.linked_accounts as any[])
+      : []
+  const crossAppAccounts = linked.filter((account) => normalizePrivyText(account?.type) === 'cross_app')
+  for (const account of crossAppAccounts) {
+    const embeddedWallets = Array.isArray((account as any)?.embedded_wallets)
+      ? ((account as any).embedded_wallets as any[])
+      : Array.isArray((account as any)?.embeddedWallets)
+        ? ((account as any).embeddedWallets as any[])
+        : []
+    for (const wallet of embeddedWallets) {
+      const address = normalizeAddressOrNull(wallet?.address)
+      if (address) return address
+    }
+  }
+  return null
+}
+
+function pickPrivyEmbeddedEoaAddressFromUser(user: any): Address | null {
+  const walletCandidates = [
+    ...(user?.wallet && typeof user.wallet === 'object' ? [user.wallet] : []),
+    ...(Array.isArray(user?.wallets) ? user.wallets : []),
+  ]
+  for (const wallet of walletCandidates) {
+    const chainType = normalizePrivyText((wallet as any)?.chain_type ?? (wallet as any)?.chainType)
+    if (chainType.includes('solana')) continue
+    const clientType = normalizePrivyText(
+      (wallet as any)?.wallet_client_type ??
+        (wallet as any)?.walletClientType ??
+        (wallet as any)?.connector_type ??
+        (wallet as any)?.connectorType ??
+        (wallet as any)?.type,
+    )
+    if (!(clientType === 'privy' || clientType.includes('embedded') || clientType.includes('privy'))) continue
+    const address = normalizeAddressOrNull((wallet as any)?.address)
+    if (address) return address
+  }
+
+  const linked = Array.isArray(user?.linkedAccounts)
+    ? (user.linkedAccounts as any[])
+    : Array.isArray(user?.linked_accounts)
+      ? (user.linked_accounts as any[])
+      : []
+  for (const account of linked) {
+    const type = normalizePrivyText((account as any)?.type)
+    const chainType = normalizePrivyText((account as any)?.chain_type ?? (account as any)?.chainType)
+    if (chainType.includes('solana')) continue
+    const clientType = normalizePrivyText(
+      (account as any)?.wallet_client_type ??
+        (account as any)?.walletClientType ??
+        (account as any)?.connector_type ??
+        (account as any)?.connectorType ??
+        (account as any)?.provider,
+    )
+    if (!(type.includes('wallet') && (clientType === 'privy' || clientType.includes('embedded') || clientType.includes('privy')))) {
+      continue
+    }
+    const address = normalizeAddressOrNull((account as any)?.address)
+    if (address) return address
+  }
+  return null
 }
 
 function fmtBal(d: { formatted: string; symbol: string } | undefined): string | undefined {
@@ -217,6 +300,7 @@ export function Swap() {
   const [searchParams] = useSearchParams()
   const { address, isConnected, chainId: walletChainId, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
+  const { authenticated: privyAuthenticated, user: privyUser } = usePrivy() as any
   const { wallets: privyWallets } = useWallets()
   const publicClient = usePublicClient()
   const { switchChainAsync } = useSwitchChain()
@@ -291,31 +375,38 @@ export function Swap() {
   const canonicalAddress = accountContext.cswAddress ?? null
   const signerAddress = accountContext.signerAddress ?? null
 
+  const privyCrossAppEmbeddedEoaAddress = useMemo(() => pickPrivyCrossAppEmbeddedEoaAddress(privyUser), [privyUser])
+  const privyEmbeddedEoaAddressFromUser = useMemo(() => pickPrivyEmbeddedEoaAddressFromUser(privyUser), [privyUser])
+
   const privyEmbeddedEoaWallet = useMemo(() => {
     const wallets = Array.isArray(privyWallets) ? (privyWallets as any[]) : []
+    const fallbackAddresses = new Set(
+      [privyCrossAppEmbeddedEoaAddress, privyEmbeddedEoaAddressFromUser]
+        .filter((value): value is Address => Boolean(value))
+        .map((value) => value.toLowerCase()),
+    )
     return (
       wallets.find((wallet) => {
-        const walletType = String(
+        const walletType = normalizePrivyText(
           wallet?.wallet_client_type ?? wallet?.walletClientType ?? wallet?.connector_type ?? wallet?.type ?? '',
         )
-          .trim()
-          .toLowerCase()
-        if (!(walletType === 'privy' || walletType.includes('privy') || walletType.includes('embedded'))) return false
-        const rawAddress = typeof wallet?.address === 'string' ? String(wallet.address).trim() : ''
-        if (!rawAddress || !isAddress(rawAddress)) return false
-        if (canonicalAddress && rawAddress.toLowerCase() === canonicalAddress.toLowerCase()) return false
-        return true
+        const address = normalizeAddressOrNull(wallet?.address)
+        if (!address) return false
+        if (canonicalAddress && address.toLowerCase() === canonicalAddress.toLowerCase()) return false
+        const isEmbeddedType = walletType === 'privy' || walletType.includes('privy') || walletType.includes('embedded')
+        if (isEmbeddedType) return true
+        return fallbackAddresses.has(address.toLowerCase())
       }) ?? null
     )
-  }, [canonicalAddress, privyWallets])
+  }, [canonicalAddress, privyCrossAppEmbeddedEoaAddress, privyEmbeddedEoaAddressFromUser, privyWallets])
 
   const privyEmbeddedEoaAddress = useMemo(() => {
-    const rawAddress = typeof (privyEmbeddedEoaWallet as any)?.address === 'string'
-      ? String((privyEmbeddedEoaWallet as any).address).trim()
-      : ''
-    if (!rawAddress || !isAddress(rawAddress)) return null
-    return getAddress(rawAddress as Address)
-  }, [privyEmbeddedEoaWallet])
+    const fromWallet = normalizeAddressOrNull((privyEmbeddedEoaWallet as any)?.address)
+    const candidate = fromWallet ?? privyCrossAppEmbeddedEoaAddress ?? privyEmbeddedEoaAddressFromUser ?? null
+    if (!candidate) return null
+    if (canonicalAddress && candidate.toLowerCase() === canonicalAddress.toLowerCase()) return null
+    return candidate
+  }, [canonicalAddress, privyCrossAppEmbeddedEoaAddress, privyEmbeddedEoaAddressFromUser, privyEmbeddedEoaWallet])
 
   const privyEmbeddedEoaCanSign = useMemo(() => {
     const walletAny: any = privyEmbeddedEoaWallet as any
@@ -432,39 +523,87 @@ export function Swap() {
     accountContext.preferredMode === 'SMART_WALLET' ? 'canonical' : 'eoa'
   const executionMode: WalletMode =
     accountContext.activeAccountType === 'SMART_WALLET' ? 'canonical' : 'eoa'
-  const privyEmbeddedCanonicalSignerAvailable = Boolean(
-    canonicalAddress &&
-      privyEmbeddedEoaAddress &&
-      privyEmbeddedEoaCanSign &&
-      privyEmbeddedCanonicalWalletClient &&
-      privyEmbeddedEoaCanOperateCanonicalQuery.data === true,
+  const canonicalAuthStatus = useMemo<CanonicalAuthStatus>(() => {
+    if (privyAuthenticated === true) return 'authenticated'
+    if (privyAuthenticated === false) return 'unauthenticated'
+    return 'unknown'
+  }, [privyAuthenticated])
+  const canonicalOwnerCheckStatus = useMemo<CanonicalOwnerCheckStatus>(() => {
+    if (privyEmbeddedEoaCanOperateCanonicalQuery.isLoading || privyEmbeddedEoaCanOperateCanonicalQuery.isFetching) {
+      return 'pending'
+    }
+    if (privyEmbeddedEoaCanOperateCanonicalQuery.data === true) return 'owner'
+    if (privyEmbeddedEoaCanOperateCanonicalQuery.data === false) return 'not-owner'
+    return 'unknown'
+  }, [
+    privyEmbeddedEoaCanOperateCanonicalQuery.data,
+    privyEmbeddedEoaCanOperateCanonicalQuery.isFetching,
+    privyEmbeddedEoaCanOperateCanonicalQuery.isLoading,
+  ])
+  const canonicalSignerGate = useMemo(
+    () =>
+      evaluateCanonicalSignerGate({
+        executionMode,
+        canonicalAddress,
+        authStatus: canonicalAuthStatus,
+        embeddedWalletDetected: Boolean(privyEmbeddedEoaAddress),
+        embeddedWalletAddress: privyEmbeddedEoaAddress,
+        embeddedWalletCanSign: privyEmbeddedEoaCanSign,
+        ownerCheckStatus: canonicalOwnerCheckStatus,
+      }),
+    [
+      executionMode,
+      canonicalAddress,
+      canonicalAuthStatus,
+      privyEmbeddedEoaAddress,
+      privyEmbeddedEoaCanSign,
+      canonicalOwnerCheckStatus,
+    ],
   )
-  const usePrivyEmbeddedCanonicalSigner =
-    executionMode === 'canonical' && privyEmbeddedCanonicalSignerAvailable
-  const canonicalSignerAddress = usePrivyEmbeddedCanonicalSigner ? privyEmbeddedEoaAddress : signerAddress
-  const canonicalSignerWalletClient = usePrivyEmbeddedCanonicalSigner
-    ? (privyEmbeddedCanonicalWalletClient as any)
-    : walletClient
+  const usePrivyEmbeddedCanonicalSigner = executionMode === 'canonical' && canonicalSignerGate.ready
+  const canonicalSignerAddress =
+    executionMode === 'canonical' ? (usePrivyEmbeddedCanonicalSigner ? privyEmbeddedEoaAddress : null) : signerAddress
+  const canonicalSignerWalletClient =
+    executionMode === 'canonical'
+      ? (usePrivyEmbeddedCanonicalSigner ? (privyEmbeddedCanonicalWalletClient as any) : null)
+      : walletClient
   const executionSignerAddress = executionMode === 'canonical' ? canonicalSignerAddress : signerAddress
   const executionWalletClient = executionMode === 'canonical' ? canonicalSignerWalletClient : walletClient
-  const executionSignerType = usePrivyEmbeddedCanonicalSigner ? 'EOA' : accountContext.signerType
-  const executionCapabilities = usePrivyEmbeddedCanonicalSigner
-    ? { paymasterService: false, atomicStatus: 'unknown' as const, supports5792: false }
-    : accountContext.capabilities
-  const executionConnectorId = usePrivyEmbeddedCanonicalSigner ? 'privy-embedded' : (connector?.id ?? null)
-  const executionConnectorName = usePrivyEmbeddedCanonicalSigner
-    ? 'Privy Embedded EOA'
-    : (connector?.name ?? null)
+  const executionSignerType =
+    executionMode === 'canonical' ? (usePrivyEmbeddedCanonicalSigner ? 'EOA' : 'UNKNOWN') : accountContext.signerType
+  const executionCapabilities =
+    executionMode === 'canonical'
+      ? { paymasterService: false, atomicStatus: 'unknown' as const, supports5792: false }
+      : accountContext.capabilities
+  const executionConnectorId =
+    executionMode === 'canonical'
+      ? usePrivyEmbeddedCanonicalSigner
+        ? 'privy-embedded'
+        : 'privy-embedded-required'
+      : (connector?.id ?? null)
+  const executionConnectorName =
+    executionMode === 'canonical'
+      ? usePrivyEmbeddedCanonicalSigner
+        ? 'Privy Embedded EOA'
+        : 'Privy Embedded EOA (required)'
+      : (connector?.name ?? null)
   const executionAddress = accountContext.activeAccount ?? null
-  const executionReady = Boolean(executionAddress && executionWalletClient && publicClient)
+  const executionReady = Boolean(
+    executionAddress &&
+      executionWalletClient &&
+      publicClient &&
+      (executionMode !== 'canonical' || canonicalSignerGate.ready),
+  )
   const executionFallbackActive = executionMode !== preferredExecutionMode
+  const canonicalSignerGuardError =
+    executionMode === 'canonical' && !canonicalSignerGate.ready ? canonicalSignerGate.reason : null
   const identityReady = Boolean(
     canonicalAddress &&
       executionWalletClient &&
       publicClient &&
       (accountContext.signerType === 'SMART_WALLET' ||
         accountContext.eoaIsOwnerOfCsw === true ||
-        privyEmbeddedCanonicalSignerAvailable),
+        canonicalSignerGate.ready),
   )
 
   // ─── Token options (chain-aware) ─────────────────────────────────────────
@@ -639,6 +778,12 @@ export function Swap() {
     capabilities: executionCapabilities,
     connectorId: executionConnectorId,
     connectorName: executionConnectorName,
+    canonicalSignerDebug: {
+      required: canonicalSignerGate.required,
+      ready: canonicalSignerGate.ready,
+      code: canonicalSignerGate.code,
+      reason: canonicalSignerGate.reason,
+    },
   })
 
   const selectedQuote = useMemo<QuoteShape | null>(() => {
@@ -913,7 +1058,7 @@ export function Swap() {
               isReady={isReady}
               busy={busy}
               status={status}
-              error={error}
+              error={error ?? canonicalSignerGuardError}
               quoteIsStale={quoteIsStale}
               quoteUpdatedAt={quoteUpdatedAt ? new Date(quoteUpdatedAt).toLocaleTimeString() : null}
               approvalRequired={approvalRequired}
@@ -1048,6 +1193,9 @@ export function Swap() {
               <div>supports5792: {txDebug.capabilities.supports5792 ? 'yes' : 'no'}</div>
               <div>paymasterService: {txDebug.capabilities.paymasterService ? 'yes' : 'no'}</div>
               <div>atomicStatus: {txDebug.capabilities.atomicStatus}</div>
+              <div>canonicalSignerRequired: {txDebug.canonicalSigner.required ? 'yes' : 'no'}</div>
+              <div>canonicalSignerReady: {txDebug.canonicalSigner.ready ? 'yes' : 'no'}</div>
+              <div>canonicalSignerGate: {txDebug.canonicalSigner.code ?? '--'}</div>
               <div>allowanceWallet: {txDebug.allowanceCheck?.walletAddress ?? '--'}</div>
             </div>
           </div>
@@ -1066,6 +1214,7 @@ export function Swap() {
             <div className={txDebug.lastError ? 'text-rose-300' : 'text-cyan-100/90'}>
               last error: {txDebug.lastError ?? '--'}
             </div>
+            <div>canonical signer reason: {txDebug.canonicalSigner.reason ?? '--'}</div>
           </div>
 
           <pre className="mt-2 max-h-56 overflow-auto rounded-lg border border-cyan-400/15 bg-black/40 p-2 text-[11px] text-cyan-100/90">

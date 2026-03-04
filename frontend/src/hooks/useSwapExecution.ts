@@ -65,6 +65,13 @@ type SwapTxAttemptDebug = {
   at: number
 }
 
+type CanonicalSignerDebugState = {
+  required: boolean
+  ready: boolean
+  code: string | null
+  reason: string | null
+}
+
 type SwapTxDebugState = {
   enabled: boolean
   chainId: number
@@ -84,6 +91,7 @@ type SwapTxDebugState = {
   allowanceCheck: { walletAddress: string; token: string; amount: string } | null
   approvalAttempt: SwapTxAttemptDebug | null
   swapAttempt: SwapTxAttemptDebug | null
+  canonicalSigner: CanonicalSignerDebugState
 }
 
 const EMPTY_CAPABILITIES: AccountCapabilities = {
@@ -141,6 +149,7 @@ export function useSwapExecution(params: {
   capabilities?: AccountCapabilities | null
   connectorId?: string | null
   connectorName?: string | null
+  canonicalSignerDebug?: CanonicalSignerDebugState | null
 }) {
   const swapDebugEnabled = useMemo(() => isSwapDebugEnabled(), [])
   const [estimatedOut, setEstimatedOut] = useState<string>('')
@@ -188,6 +197,12 @@ export function useSwapExecution(params: {
     allowanceCheck: null,
     approvalAttempt: null,
     swapAttempt: null,
+    canonicalSigner: {
+      required: Boolean(params.canonicalSignerDebug?.required),
+      ready: Boolean(params.canonicalSignerDebug?.ready),
+      code: params.canonicalSignerDebug?.code ?? null,
+      reason: params.canonicalSignerDebug?.reason ?? null,
+    },
   })
   const quoteRunRef = useRef(0)
   const getErrorMessage = useCallback((value: unknown, fallback: string): string => {
@@ -229,6 +244,12 @@ export function useSwapExecution(params: {
       connectorId: params.connectorId ?? null,
       connectorName: params.connectorName ?? null,
       capabilities: normalizedCapabilities,
+      canonicalSigner: {
+        required: Boolean(params.canonicalSignerDebug?.required),
+        ready: Boolean(params.canonicalSignerDebug?.ready),
+        code: params.canonicalSignerDebug?.code ?? null,
+        reason: params.canonicalSignerDebug?.reason ?? null,
+      },
     }))
   }, [
     swapDebugEnabled,
@@ -240,6 +261,10 @@ export function useSwapExecution(params: {
     params.signerType,
     params.connectorId,
     params.connectorName,
+    params.canonicalSignerDebug?.required,
+    params.canonicalSignerDebug?.ready,
+    params.canonicalSignerDebug?.code,
+    params.canonicalSignerDebug?.reason,
     normalizedCapabilities,
   ])
 
