@@ -1835,6 +1835,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   )
 
   function primaryWalletForSubmit(): string | null {
+    const authenticatedWallet =
+      typeof siweAuthAddress === 'string' && isValidEvmAddress(siweAuthAddress) ? siweAuthAddress : null
+    if (authenticatedWallet) return authenticatedWallet
+
     const pw = typeof verifiedWallet === 'string' && isValidEvmAddress(verifiedWallet) ? verifiedWallet : null
     return pw
   }
@@ -2040,7 +2044,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
           verifications,
           intent: {
             persona,
-            hasCreatorCoin: creatorCoinBusy ? null : creatorCoinDeclaredMissing ? false : Boolean(creatorCoin?.address),
+            hasCreatorCoin: creatorCoin?.address ? true : creatorCoinDeclaredMissing ? false : null,
             fid: null,
           },
         }),

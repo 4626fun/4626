@@ -357,13 +357,9 @@ export default async function handler(req: any, res: any) {
 
   let primaryWallet = primaryWalletInput
   if (hasTrustedPrincipal) {
-    if (primaryWallet && primaryWallet !== principalWallet) {
-      return res.status(403).json({
-        success: false,
-        error: 'Submitted wallet must match authenticated wallet.',
-      } satisfies ApiEnvelope<never>)
-    }
     // Always bind wallet identity to the authenticated principal.
+    // If the client submitted a different wallet (for example an owner EOA while
+    // the session is already bound to canonical CSW), ignore the client value.
     primaryWallet = principalWallet
   }
 

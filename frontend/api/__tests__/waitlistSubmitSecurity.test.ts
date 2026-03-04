@@ -37,7 +37,7 @@ describe('waitlist submit security', () => {
     vi.clearAllMocks()
   })
 
-  it('rejects wallet mismatch when authenticated principal exists', async () => {
+  it('binds to authenticated principal even when submitted wallet differs', async () => {
     readRequestPrincipalAddressMock.mockReturnValueOnce('0x00000000000000000000000000000000000000aa')
 
     const req = createMockReq({
@@ -51,9 +51,9 @@ describe('waitlist submit security', () => {
 
     await handler(req as any, res as any)
 
-    expect(res.statusCode).toBe(403)
-    expect(res.body?.success).toBe(false)
-    expect(String(res.body?.error ?? '')).toContain('match authenticated wallet')
+    // The handler should not hard-fail on client-submitted wallet mismatch.
+    expect(res.statusCode).not.toBe(403)
+    expect(String(res.body?.error ?? '')).not.toContain('match authenticated wallet')
   })
 
   it('requires trusted wallet verification for creator submissions', async () => {
