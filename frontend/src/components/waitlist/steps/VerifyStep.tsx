@@ -246,6 +246,10 @@ export const VerifyStep = memo(function VerifyStep({
           ? 'Linking'
           : mappingStatus === 'CANONICAL_RESOLVING'
             ? 'Resolving'
+          : mappingStatus === 'OWNER_INSTALL_CHECKING'
+            ? 'Checking'
+          : mappingStatus === 'OWNER_INSTALLING'
+            ? 'Installing'
             : 'Running'
 
   if (hasVerification && simpleVerifiedMode) {
@@ -365,6 +369,31 @@ export const VerifyStep = memo(function VerifyStep({
               <span className="text-[12px] text-amber-300 inline-flex items-center gap-1.5">
                 <AlertTriangle className="h-3.5 w-3.5" />
                 {mappingShownAsOptional ? 'Queued' : 'Unresolved'}
+              </span>
+            )}
+          </div>
+
+          <div className={`${microPanelClass} px-3 py-2.5 flex items-center justify-between gap-3`}>
+            <span className="text-[12px] text-vault-subtext">Embedded owner install</span>
+            {mappingStatus === 'READY_FOR_OWNER_INSTALL' ? (
+              <span className="text-[12px] text-emerald-300 inline-flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Installed
+              </span>
+            ) : mappingStatus === 'OWNER_INSTALL_CHECKING' || mappingStatus === 'OWNER_INSTALLING' ? (
+              <span className="text-[12px] text-zinc-300 inline-flex items-center gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {mappingBusyLabel}
+              </span>
+            ) : canonicalReady ? (
+              <span className="text-[12px] text-amber-300 inline-flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {mappingShownAsOptional ? 'Queued' : 'Required'}
+              </span>
+            ) : (
+              <span className="text-[12px] text-zinc-300 inline-flex items-center gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Waiting
               </span>
             )}
           </div>

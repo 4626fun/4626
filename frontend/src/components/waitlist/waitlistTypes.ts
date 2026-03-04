@@ -33,6 +33,9 @@ export type OwnerInstallMappingStatus =
   | 'ZORA_LINKING'
   | 'CANONICAL_RESOLVING'
   | 'CANONICAL_UNRESOLVED'
+  | 'OWNER_INSTALL_CHECKING'
+  | 'OWNER_INSTALL_REQUIRED'
+  | 'OWNER_INSTALLING'
   | 'READY_FOR_OWNER_INSTALL'
 
 export type FlowState = {

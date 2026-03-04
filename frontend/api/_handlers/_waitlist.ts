@@ -8,6 +8,7 @@ import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
 import { readRequestPrincipalAddress } from '../../server/_lib/requestPrincipal.js'
 import { preprovisionWaitlistUser } from '../../server/_lib/waitlistPreprovision.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
+import { isCswOwner } from '../../server/_lib/cswOwner.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -384,6 +385,26 @@ export default async function handler(req: any, res: any) {
   const cswAddress = normalizeAddress(cswRaw)
   if (cswAddress.length > 0 && !isValidEvmAddress(cswAddress)) {
     return res.status(400).json({ success: false, error: 'Invalid CSW address' } satisfies ApiEnvelope<never>)
+  }
+  if (hasTrustedPrincipal && cswAddress.length > 0) {
+    // Hardened CSW flow: only allow persisting/awarding a submitted CSW when
+    // the authenticated principal is that CSW itself or an on-chain owner.
+    if (principalWallet !== cswAddress) {
+      try {
+        const principalOwnsSubmittedCsw = await isCswOwner(principalWallet, cswAddress)
+        if (!principalOwnsSubmittedCsw) {
+          return res.status(403).json({
+            success: false,
+            error: 'Submitted CSW must be owned by the authenticated wallet.',
+          } satisfies ApiEnvelope<never>)
+        }
+      } catch {
+        return res.status(503).json({
+          success: false,
+          error: 'Unable to verify smart wallet ownership right now. Please retry.',
+        } satisfies ApiEnvelope<never>)
+      }
+    }
   }
 
   const persona =

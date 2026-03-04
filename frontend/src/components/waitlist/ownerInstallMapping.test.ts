@@ -21,6 +21,8 @@ describe('deriveOwnerInstallMappingStatus', () => {
         zoraLinking: false,
         canonicalZoraCswAddress: null,
         canonicalResolving: false,
+        embeddedEoaOwnerInstalled: null,
+        ownerInstallBusy: false,
       }),
     ).toBe('NEEDS_PRIVY_AUTH')
 
@@ -34,6 +36,8 @@ describe('deriveOwnerInstallMappingStatus', () => {
         zoraLinking: false,
         canonicalZoraCswAddress: null,
         canonicalResolving: false,
+        embeddedEoaOwnerInstalled: null,
+        ownerInstallBusy: false,
       }),
     ).toBe('WAITING_FOR_WALLETS')
 
@@ -47,6 +51,8 @@ describe('deriveOwnerInstallMappingStatus', () => {
         zoraLinking: false,
         canonicalZoraCswAddress: null,
         canonicalResolving: false,
+        embeddedEoaOwnerInstalled: null,
+        ownerInstallBusy: false,
       }),
     ).toBe('EMBEDDED_WALLET_CREATING')
 
@@ -60,6 +66,8 @@ describe('deriveOwnerInstallMappingStatus', () => {
         zoraLinking: false,
         canonicalZoraCswAddress: null,
         canonicalResolving: false,
+        embeddedEoaOwnerInstalled: null,
+        ownerInstallBusy: false,
       }),
     ).toBe('ZORA_LINK_REQUIRED')
 
@@ -73,8 +81,10 @@ describe('deriveOwnerInstallMappingStatus', () => {
         zoraLinking: false,
         canonicalZoraCswAddress: '0x2222222222222222222222222222222222222222',
         canonicalResolving: false,
+        embeddedEoaOwnerInstalled: null,
+        ownerInstallBusy: false,
       }),
-    ).toBe('READY_FOR_OWNER_INSTALL')
+    ).toBe('OWNER_INSTALL_CHECKING')
 
     expect(
       deriveOwnerInstallMappingStatus({
@@ -86,6 +96,8 @@ describe('deriveOwnerInstallMappingStatus', () => {
         zoraLinking: false,
         canonicalZoraCswAddress: null,
         canonicalResolving: true,
+        embeddedEoaOwnerInstalled: null,
+        ownerInstallBusy: false,
       }),
     ).toBe('CANONICAL_RESOLVING')
 
@@ -99,8 +111,42 @@ describe('deriveOwnerInstallMappingStatus', () => {
         zoraLinking: false,
         canonicalZoraCswAddress: '0x2222222222222222222222222222222222222222',
         canonicalResolving: false,
+        embeddedEoaOwnerInstalled: true,
+        ownerInstallBusy: false,
       }),
     ).toBe('READY_FOR_OWNER_INSTALL')
+  })
+
+  it('surfaces owner install requirement once canonical csw is known', () => {
+    expect(
+      deriveOwnerInstallMappingStatus({
+        privyAuthed: true,
+        walletsReady: true,
+        embeddedEoaAddress: '0x1111111111111111111111111111111111111111',
+        embeddedWalletCreating: false,
+        zoraLinked: true,
+        zoraLinking: false,
+        canonicalZoraCswAddress: '0x2222222222222222222222222222222222222222',
+        canonicalResolving: false,
+        embeddedEoaOwnerInstalled: false,
+        ownerInstallBusy: false,
+      }),
+    ).toBe('OWNER_INSTALL_REQUIRED')
+
+    expect(
+      deriveOwnerInstallMappingStatus({
+        privyAuthed: true,
+        walletsReady: true,
+        embeddedEoaAddress: '0x1111111111111111111111111111111111111111',
+        embeddedWalletCreating: false,
+        zoraLinked: true,
+        zoraLinking: false,
+        canonicalZoraCswAddress: '0x2222222222222222222222222222222222222222',
+        canonicalResolving: false,
+        embeddedEoaOwnerInstalled: false,
+        ownerInstallBusy: true,
+      }),
+    ).toBe('OWNER_INSTALLING')
   })
 })
 

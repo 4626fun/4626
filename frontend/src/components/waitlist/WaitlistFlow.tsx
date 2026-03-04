@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { useLocation, useNavigate } from 'react-router-dom'
 import { getAppBaseUrl, getWaitlistReferralBaseUrl } from '@/lib/host'
 import { trackEvent } from '@/lib/analytics'
-import { useAccount, usePublicClient, useSignMessage } from 'wagmi'
+import { useAccount, usePublicClient, useSignMessage, useSwitchChain, useWalletClient } from 'wagmi'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { isPrivyClientEnabled } from '@/lib/flags'
 import { usePrivyClientStatus, ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
@@ -18,10 +18,11 @@ import {
   useWallets,
 } from '@privy-io/react-auth'
 import { base } from 'wagmi/chains'
-import { getAddress, isAddress } from 'viem'
+import { encodeFunctionData, getAddress, isAddress, type Address } from 'viem'
 import { useMiniAppContext } from '@/hooks'
 import { sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 import { fetchZoraCoin, fetchZoraProfile } from '@/lib/zora/client'
+import { isEoaAddressByCode } from '@/wallet/canonicalWalletPolicy'
 import type {
   ActionKey,
   ContactPreference,
@@ -76,6 +77,26 @@ const CREATOR_COIN_READ_ABI = [
     outputs: [{ name: '', type: 'address' }],
     stateMutability: 'view',
     type: 'function',
+  },
+] as const
+
+const COINBASE_SMART_WALLET_OWNER_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'isOwnerAddress',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+] as const
+
+const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+  {
+    type: 'function',
+    name: 'addOwnerAddress',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'owner', type: 'address' }],
+    outputs: [],
   },
 ] as const
 
@@ -608,8 +629,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
 
   const appUrl = useMemo(() => getAppBaseUrl(), [])
   const { apiFetch } = useWaitlistApi(appUrl)
-  const { address: connectedAddressRaw } = useAccount()
+  const { address: connectedAddressRaw, chainId } = useAccount()
   const publicClient = usePublicClient({ chainId: base.id })
+  const { data: walletClient } = useWalletClient({ chainId: base.id })
+  const { switchChainAsync } = useSwitchChain()
   const { signMessageAsync } = useSignMessage()
   const siwe = useSiweAuth()
   const miniApp = useMiniAppContext()
@@ -795,8 +818,11 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   const [embeddedWalletCreateBusy, setEmbeddedWalletCreateBusy] = useState(false)
   const [zoraLinkBusy, setZoraLinkBusy] = useState(false)
   const [canonicalResolveBusy, setCanonicalResolveBusy] = useState(false)
+  const [embeddedOwnerInstallBusy, setEmbeddedOwnerInstallBusy] = useState(false)
+  const [embeddedEoaOwnerInstalled, setEmbeddedEoaOwnerInstalled] = useState<boolean | null>(null)
   const pendingEmbeddedCreateRef = useRef(false)
   const canonicalResolveAttemptKeyRef = useRef<string | null>(null)
+  const ownerInstallCheckKeyRef = useRef<string | null>(null)
 
   const zoraCrossAppAccounts = useMemo(
     () => extractZoraCrossAppAccounts(privyUser, ZORA_PRIVY_APP_ID),
@@ -1150,11 +1176,15 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         zoraLinking: zoraLinkBusy,
         canonicalZoraCswAddress: effectiveCswAddress,
         canonicalResolving: canonicalResolveBusy,
+        embeddedEoaOwnerInstalled,
+        ownerInstallBusy: embeddedOwnerInstallBusy,
       }),
     [
       canonicalResolveBusy,
+      embeddedEoaOwnerInstalled,
       embeddedWalletAddress,
       embeddedEoaAddressFromState,
+      embeddedOwnerInstallBusy,
       embeddedWalletCreateBusy,
       effectiveCswAddress,
       privyAuthed,
@@ -1202,7 +1232,8 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     Boolean(verifiedWalletNormalized) &&
     emailOk &&
     (Boolean(creatorCoin?.address) || creatorCoinDeclaredMissing) &&
-    connectedWalletAuthorized
+    connectedWalletAuthorized &&
+    (!effectiveCswAddress || ownerInstallStatus === 'READY_FOR_OWNER_INSTALL')
   const privyAuthedLogRef = useRef(false)
   const privyWalletReadyLogRef = useRef(false)
   const embeddedFoundLogRef = useRef<string | null>(null)
@@ -1394,6 +1425,170 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     void resolveCanonicalZoraCsw()
   }, [resolveCanonicalZoraCsw])
 
+  useEffect(() => {
+    const csw = isValidEvmAddress(effectiveCswAddress) ? getAddress(effectiveCswAddress) : null
+    const embedded = isValidEvmAddress(embeddedWalletAddress) ? getAddress(embeddedWalletAddress) : null
+    if (!csw || !embedded) {
+      ownerInstallCheckKeyRef.current = null
+      setEmbeddedEoaOwnerInstalled(null)
+      return
+    }
+    if (!publicClient) {
+      ownerInstallCheckKeyRef.current = null
+      setEmbeddedEoaOwnerInstalled(false)
+      return
+    }
+
+    const key = `${csw.toLowerCase()}|${embedded.toLowerCase()}`
+    if (ownerInstallCheckKeyRef.current === key && embeddedEoaOwnerInstalled !== null) return
+    ownerInstallCheckKeyRef.current = key
+
+    let cancelled = false
+    setEmbeddedEoaOwnerInstalled(null)
+    ;(async () => {
+      try {
+        const isOwner = (await publicClient.readContract({
+          address: csw as Address,
+          abi: COINBASE_SMART_WALLET_OWNER_VIEW_ABI,
+          functionName: 'isOwnerAddress',
+          args: [embedded as Address],
+        })) as boolean
+        if (!cancelled) {
+          setEmbeddedEoaOwnerInstalled(Boolean(isOwner))
+          if (isOwner) patchWaitlist({ mappingError: null })
+        }
+      } catch (error: any) {
+        if (!cancelled) {
+          setEmbeddedEoaOwnerInstalled(false)
+          const message =
+            typeof error?.shortMessage === 'string'
+              ? error.shortMessage
+              : typeof error?.message === 'string'
+                ? error.message
+                : 'Failed to verify embedded owner status on-chain.'
+          patchWaitlist({ mappingError: message })
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [effectiveCswAddress, embeddedEoaOwnerInstalled, embeddedWalletAddress, patchWaitlist, publicClient])
+
+  const installEmbeddedOwnerOnCanonicalCsw = useCallback(async () => {
+    if (embeddedOwnerInstallBusy) return
+    if (!publicClient || !walletClient) {
+      patchWaitlist({ mappingError: 'Wallet client unavailable. Reconnect and try again.' })
+      return
+    }
+    if (!effectiveCswAddress || !isValidEvmAddress(effectiveCswAddress)) {
+      patchWaitlist({ mappingError: 'Canonical smart wallet is not ready yet.' })
+      return
+    }
+    if (!embeddedWalletAddress || !isValidEvmAddress(embeddedWalletAddress)) {
+      patchWaitlist({ mappingError: 'Embedded wallet not detected yet.' })
+      return
+    }
+    if (!connectedAddressRaw || !isValidEvmAddress(connectedAddressRaw)) {
+      patchWaitlist({ mappingError: 'Connect the owner wallet from your creator profile to continue.' })
+      return
+    }
+
+    setEmbeddedOwnerInstallBusy(true)
+    patchWaitlist({ mappingError: null })
+    try {
+      if (chainId !== base.id) {
+        if (!switchChainAsync) {
+          throw new Error('Switch to Base in your wallet to approve owner setup.')
+        }
+        await switchChainAsync({ chainId: base.id })
+      }
+
+      const canonical = getAddress(effectiveCswAddress) as Address
+      const ownerToAdd = getAddress(embeddedWalletAddress) as Address
+      const connectedOwner = getAddress(connectedAddressRaw) as Address
+
+      const ownerToAddIsEoa = await isEoaAddressByCode({
+        address: ownerToAdd,
+        getBytecode: async (address) => {
+          const code = await publicClient.getBytecode({ address })
+          return code ?? null
+        },
+      }).catch(() => false)
+      if (!ownerToAddIsEoa) {
+        throw new Error('Only EOA wallets can be added as smart wallet owners.')
+      }
+
+      const callerIsOwner = (await publicClient.readContract({
+        address: canonical,
+        abi: COINBASE_SMART_WALLET_OWNER_VIEW_ABI,
+        functionName: 'isOwnerAddress',
+        args: [connectedOwner],
+      })) as boolean
+      if (!callerIsOwner) {
+        throw new Error('Connected wallet is not an owner of your canonical smart wallet.')
+      }
+
+      const alreadyLinked = (await publicClient.readContract({
+        address: canonical,
+        abi: COINBASE_SMART_WALLET_OWNER_VIEW_ABI,
+        functionName: 'isOwnerAddress',
+        args: [ownerToAdd],
+      })) as boolean
+      if (!alreadyLinked) {
+        const data = encodeFunctionData({
+          abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+          functionName: 'addOwnerAddress',
+          args: [ownerToAdd],
+        })
+        const hash = await walletClient.sendTransaction({
+          to: canonical,
+          data,
+          value: 0n,
+          account: connectedOwner,
+          chain: base,
+        })
+        await publicClient.waitForTransactionReceipt({ hash })
+      }
+
+      const ownerInstalled = (await publicClient.readContract({
+        address: canonical,
+        abi: COINBASE_SMART_WALLET_OWNER_VIEW_ABI,
+        functionName: 'isOwnerAddress',
+        args: [ownerToAdd],
+      })) as boolean
+      if (!ownerInstalled) {
+        throw new Error('Owner install could not be confirmed on-chain. Please retry.')
+      }
+
+      ownerInstallCheckKeyRef.current = `${canonical.toLowerCase()}|${ownerToAdd.toLowerCase()}`
+      setEmbeddedEoaOwnerInstalled(true)
+      patchWaitlist({ mappingError: null })
+    } catch (error: any) {
+      patchWaitlist({
+        mappingError:
+          typeof error?.shortMessage === 'string'
+            ? error.shortMessage
+            : typeof error?.message === 'string'
+              ? error.message
+            : 'Failed to add your embedded wallet as a smart wallet owner.',
+      })
+    } finally {
+      setEmbeddedOwnerInstallBusy(false)
+    }
+  }, [
+    chainId,
+    connectedAddressRaw,
+    effectiveCswAddress,
+    embeddedOwnerInstallBusy,
+    embeddedWalletAddress,
+    patchWaitlist,
+    publicClient,
+    switchChainAsync,
+    walletClient,
+  ])
+
   const ownerInstallGate = useMemo(() => {
     switch (ownerInstallStatus) {
       case 'NEEDS_PRIVY_AUTH':
@@ -1452,11 +1647,32 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
           onAction: retryCanonicalResolution,
           busy: false,
         } as const
+      case 'OWNER_INSTALL_CHECKING':
+        return {
+          ctaLabel: null,
+          helper: 'Checking embedded owner access on your smart wallet...',
+          onAction: null,
+          busy: true,
+        } as const
+      case 'OWNER_INSTALL_REQUIRED':
+        return {
+          ctaLabel: 'Enable 1-click actions',
+          helper: 'Add your 4626 embedded wallet as an owner on the canonical smart wallet.',
+          onAction: installEmbeddedOwnerOnCanonicalCsw,
+          busy: false,
+        } as const
+      case 'OWNER_INSTALLING':
+        return {
+          ctaLabel: null,
+          helper: 'Confirm the owner-install transaction in your wallet...',
+          onAction: null,
+          busy: true,
+        } as const
       case 'READY_FOR_OWNER_INSTALL':
       default:
         return {
           ctaLabel: null,
-          helper: 'Wallet mapping complete.',
+          helper: 'Wallet mapping complete. Embedded owner is installed.',
           onAction: null,
           busy: false,
         } as const
@@ -1464,6 +1680,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   }, [
     canonicalZoraCswUnresolvedReason,
     createEmbeddedWallet,
+    installEmbeddedOwnerOnCanonicalCsw,
     linkZoraReadOnly,
     openInAppPrivyLogin,
     ownerInstallStatus,

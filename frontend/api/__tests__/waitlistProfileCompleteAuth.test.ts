@@ -74,6 +74,31 @@ function createDb() {
   }
 }
 
+function createDbLinkedWalletFallback() {
+  return {
+    sql: vi.fn(async (strings: TemplateStringsArray) => {
+      const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      if (text.includes('update profiles') && text.includes('where email')) {
+        // Simulate no direct legacy-column wallet match.
+        return { rows: [] }
+      }
+      if (text.includes('from profiles') && text.includes('where email')) {
+        // Existing signup exists for this email.
+        return { rows: [{ id: 1, csw_address: '0xab6d5c10b03300326cd7fab7267ae192842967b5' }] }
+      }
+      if (text.includes('from profile_wallets')) {
+        // Principal is linked to the profile via canonical wallet mapping.
+        return { rows: [{ exists: 1 }] }
+      }
+      if (text.includes('update profiles') && text.includes('where id')) {
+        return { rows: [{ id: 1, profile_completed_at: new Date().toISOString() }] }
+      }
+      if (text.includes('from referral_conversions')) return { rows: [] }
+      return { rows: [] }
+    }),
+  }
+}
+
 describe('waitlist/profile-complete auth parity', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -106,6 +131,16 @@ describe('waitlist/profile-complete auth parity', () => {
       agentRegistry: 'eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432',
       chainId: 8453,
     } as any)
+    const req = createMockReq({ method: 'POST', body: { email: 'user@example.com' } })
+    const res = createMockRes()
+    await handler(req as any, res as any)
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+  })
+
+  it('accepts principals linked via profile_wallets fallback', async () => {
+    getDbMock.mockResolvedValue(createDbLinkedWalletFallback())
+    readSessionFromRequestMock.mockReturnValue({ address: '0x00000000000000000000000000000000000000aa' } as any)
     const req = createMockReq({ method: 'POST', body: { email: 'user@example.com' } })
     const res = createMockRes()
     await handler(req as any, res as any)
