@@ -294,7 +294,7 @@ function RewardsCard({
     }
   }, [shareMenuOpen])
 
-  const isEnterAppCta = (primaryCta?.label ?? '').trim().toLowerCase() === 'enter app'
+  const isTopRank = typeof rank === 'number' && rank > 0 && rank <= 3
 
   return (
     <motion.section {...fadeUp} className={`${panelClass} p-4 sm:p-5`}>
@@ -302,7 +302,15 @@ function RewardsCard({
         {/* Stats row */}
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
           <div className="inline-flex items-baseline gap-1.5">
-            <span className="text-[40px] leading-[0.92] font-semibold tabular-nums tracking-tight text-vault-text sm:text-[44px]">
+            <span
+              className="text-[40px] leading-[0.92] font-semibold tabular-nums tracking-tight sm:text-[44px]"
+              style={{
+                background: 'linear-gradient(135deg, #6BA8FF 0%, #C8DCFF 55%, #ffffff 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}
+            >
               {pointsBalance}
             </span>
             <span className="text-[13px] font-medium tracking-wide text-vault-subtext">pts</span>
@@ -319,7 +327,10 @@ function RewardsCard({
             <span>{badgeEarned ? 'Profile verified' : 'Verification pending'}</span>
           </div>
           {rank && rank > 0 ? (
-            <span className="text-[12px] text-vault-muted">#{rank} on leaderboard</span>
+            <span className={`inline-flex items-center gap-1 text-[12px] font-medium ${isTopRank ? 'text-amber-300' : 'text-vault-muted'}`}>
+              {isTopRank ? <Trophy className="h-3 w-3" aria-hidden="true" /> : null}
+              #{rank} on leaderboard
+            </span>
           ) : null}
         </div>
 
@@ -334,11 +345,7 @@ function RewardsCard({
             type="button"
             disabled={primaryCta.disabled}
             onClick={primaryCta.onClick}
-            className={
-              isEnterAppCta
-                ? 'btn-secondary w-full justify-center rounded-2xl border-white/12 bg-white/4 px-4 py-3 text-[14px] font-semibold text-zinc-100 hover:bg-white/8'
-                : ['btn-primary w-full px-4 py-3.5 text-[15px]', primaryCta.busy ? 'btn-no-icon' : ''].join(' ')
-            }
+            className={['btn-primary w-full px-4 py-3.5 text-[15px]', primaryCta.busy ? 'btn-no-icon' : ''].join(' ')}
           >
             {primaryCta.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             {primaryCta.busy ? primaryCta.busyLabel ?? primaryCta.label : primaryCta.label}
@@ -350,8 +357,12 @@ function RewardsCard({
           </div>
         ) : null}
 
-        {/* Referral — compact single row */}
+        {/* Referral — compact single row with framing */}
         <div className="border-t border-vault-border/80 pt-3 space-y-2">
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <span className="text-[11px] font-medium text-vault-subtext tracking-wide uppercase">Share your link</span>
+            <span className="text-[11px] text-vault-muted">+10 pts per invite</span>
+          </div>
           <div className="flex items-center gap-2">
             <span className="font-mono text-[11px] text-vault-muted truncate flex-1 min-w-0" title={referralUrl}>
               {referralUrl}
@@ -463,17 +474,26 @@ function HeaderStatusSection(props: {
   return (
     <motion.section {...scaleIn} className="text-center space-y-2">
       <div className="flex justify-center">
-        <div className="relative">
-          <div className="h-10 w-10 rounded-xl border border-vault-border/90 bg-vault-cardRaised/70 flex items-center justify-center">
-            <CheckCircle2 className="h-5 w-5 text-vault-text" />
+        <motion.div
+          className="relative"
+          initial={{ scale: 0.6, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 320, damping: 20, delay: 0.05 }}
+        >
+          <div
+            className="h-11 w-11 rounded-xl flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg, rgba(0,52,204,0.35) 0%, rgba(91,168,255,0.18) 100%)', border: '1px solid rgba(91,168,255,0.28)' }}
+          >
+            <CheckCircle2 className="h-5 w-5 text-[#7DBCFF]" />
           </div>
           <motion.div
-            className="absolute inset-0 rounded-xl border border-white/10"
-            initial={{ scale: 1, opacity: 0.28 }}
-            animate={{ scale: 1.45, opacity: 0 }}
-            transition={{ duration: 2.1, repeat: Infinity, ease: 'easeOut' }}
+            className="absolute inset-0 rounded-xl"
+            style={{ border: '1px solid rgba(91,168,255,0.35)' }}
+            initial={{ scale: 1, opacity: 0.5 }}
+            animate={{ scale: 1.55, opacity: 0 }}
+            transition={{ duration: 2.4, repeat: Infinity, ease: 'easeOut', delay: 0.3 }}
           />
-        </div>
+        </motion.div>
       </div>
 
       <div className="space-y-1">
