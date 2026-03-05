@@ -18,11 +18,10 @@ import {
   useWallets,
 } from '@privy-io/react-auth'
 import { base } from 'wagmi/chains'
-import { encodeFunctionData, getAddress, isAddress, type Address } from 'viem'
+import { getAddress, isAddress, type Address } from 'viem'
 import { useMiniAppContext } from '@/hooks'
 import { sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 import { fetchZoraCoin, fetchZoraProfile } from '@/lib/zora/client'
-import { isEoaAddressByCode } from '@/wallet/canonicalWalletPolicy'
 import type {
   ActionKey,
   ContactPreference,
@@ -44,7 +43,6 @@ import {
   deriveOwnerInstallMappingStatus,
   extractZoraCrossAppAccounts,
   extractZoraProviderAddresses,
-  resolveCanonicalZoraCswCandidate,
   selectZoraCrossAppAuthAction,
 } from './ownerInstallMapping'
 
@@ -52,7 +50,6 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const EVM_RE = /^0x[a-fA-F0-9]{40}$/
 const SOL_RE = /^[1-9A-HJ-NP-Za-km-z]+$/
 const BASE_EASE = [0.4, 0, 0.2, 1] as const
-const BASE_MOTION_MS = 0.2
 const HANDOFF_QUERY_KEY = 'cv_handoff'
 const SERVER_CLAIMABLE_BONUS_TASKS = new Set<ActionKey>(['github', 'tiktok', 'instagram', 'reddit'])
 
@@ -77,26 +74,6 @@ const CREATOR_COIN_READ_ABI = [
     outputs: [{ name: '', type: 'address' }],
     stateMutability: 'view',
     type: 'function',
-  },
-] as const
-
-const COINBASE_SMART_WALLET_OWNER_VIEW_ABI = [
-  {
-    type: 'function',
-    name: 'isOwnerAddress',
-    stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-] as const
-
-const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
-  {
-    type: 'function',
-    name: 'addOwnerAddress',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'owner', type: 'address' }],
-    outputs: [],
   },
 ] as const
 
@@ -289,6 +266,31 @@ const initialWaitlistState: WaitlistState = {
   waitlistPosition: null,
 }
 
+type OnboardingBootstrapData = {
+  chainId: 8453
+  canonicalCswAddress: string
+  privyEmbeddedEoaAddress: string
+  privyIsOwner: boolean
+}
+
+type PrepareOwnerData =
+  | { alreadyOwner: true }
+  | {
+      alreadyOwner: false
+      txRequest: {
+        chainId: 8453
+        to: `0x${string}`
+        data: `0x${string}`
+        value: '0x0'
+      }
+    }
+
+type ConfirmOwnerData = {
+  isOwner: boolean
+  canonicalCswAddress: string
+  ownerAddress: string
+}
+
 function normalizeEmail(v: string): string {
   return v.trim().toLowerCase()
 }
@@ -362,6 +364,16 @@ function readErrorStatusCode(error: unknown): number | null {
   )
   if (!Number.isFinite(candidate)) return null
   return candidate
+}
+
+function readApiErrorMessage(payload: unknown, fallback: string): string {
+  const errorText =
+    typeof (payload as any)?.error === 'string'
+      ? String((payload as any).error).trim()
+      : typeof (payload as any)?.message === 'string'
+        ? String((payload as any).message).trim()
+        : ''
+  return errorText || fallback
 }
 
 function isUnauthorizedCrossAppLinkError(error: unknown): boolean {
@@ -819,10 +831,11 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   const [zoraLinkBusy, setZoraLinkBusy] = useState(false)
   const [canonicalResolveBusy, setCanonicalResolveBusy] = useState(false)
   const [embeddedOwnerInstallBusy, setEmbeddedOwnerInstallBusy] = useState(false)
+  const [advancedOwnerBusy, setAdvancedOwnerBusy] = useState(false)
+  const [advancedOwnerError, setAdvancedOwnerError] = useState<string | null>(null)
   const [embeddedEoaOwnerInstalled, setEmbeddedEoaOwnerInstalled] = useState<boolean | null>(null)
   const pendingEmbeddedCreateRef = useRef(false)
   const canonicalResolveAttemptKeyRef = useRef<string | null>(null)
-  const ownerInstallCheckKeyRef = useRef<string | null>(null)
 
   const zoraCrossAppAccounts = useMemo(
     () => extractZoraCrossAppAccounts(privyUser, ZORA_PRIVY_APP_ID),
@@ -1313,7 +1326,7 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   }, [patchWaitlist, zoraAddressSet.providerAddresses, zoraProviderAddresses, zoraReadOnlyLinked])
 
   useEffect(() => {
-    if (zoraReadOnlyLinked && embeddedWalletAddress) return
+    if (embeddedWalletAddress) return
     canonicalResolveAttemptKeyRef.current = null
     if (!canonicalZoraCswAddress && !canonicalZoraCswUnresolvedReason) return
     patchWaitlist({
@@ -1325,73 +1338,99 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
     canonicalZoraCswUnresolvedReason,
     embeddedWalletAddress,
     patchWaitlist,
-    zoraReadOnlyLinked,
   ])
 
-  const isContractAddress = useCallback(
-    async (candidate: string): Promise<boolean> => {
-      if (!publicClient) return false
-      try {
-        const code = await publicClient.getBytecode({ address: getAddress(candidate) as any })
-        return Boolean(code && code !== '0x')
-      } catch {
-        return false
-      }
-    },
-    [publicClient],
-  )
+  const readPrivyTokenForServer = useCallback(async (): Promise<string> => {
+    if (!showPrivyReady || !privyAuthed || typeof getAccessToken !== 'function') {
+      throw new Error('Sign in with Privy to continue wallet setup.')
+    }
+    const token = await getAccessToken().catch(() => null)
+    const normalized = typeof token === 'string' ? token.trim() : ''
+    if (!normalized) throw new Error('Privy session expired. Sign in again.')
+    return normalized
+  }, [getAccessToken, privyAuthed, showPrivyReady])
 
   const resolveCanonicalZoraCsw = useCallback(async () => {
-    if (!zoraReadOnlyLinked || !embeddedWalletAddress) return
+    if (step !== 'verify') return
+    if (!privyAuthed) return
     setCanonicalResolveBusy(true)
     patchWaitlist({ mappingError: null, canonicalZoraCswUnresolvedReason: null })
     try {
-      const resolved = await resolveCanonicalZoraCswCandidate({
-        knownCanonicalAddress: knownCanonicalCswAddress,
-        smartWalletAddresses: zoraAddressSet.smartWalletAddresses,
-        providerAddresses: zoraAddressSet.providerAddresses,
-        profileFallbackAddress: profileDerivedCanonicalCswAddress,
-        isContractAddress: publicClient ? isContractAddress : undefined,
+      const privyToken = await readPrivyTokenForServer()
+      const res = await apiFetch('/api/onboarding/bootstrap', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'X-Privy-Token': privyToken,
+        },
       })
+      const json = (await res.json().catch(() => null)) as
+        | {
+            success?: boolean
+            data?: OnboardingBootstrapData
+            error?: string
+            needsConnectedOwnerWallet?: boolean
+            needsZoraIdentitySignal?: boolean
+          }
+        | null
 
-      if (resolved) {
-        patchWaitlist({
-          canonicalZoraCswAddress: resolved,
-          canonicalZoraCswUnresolvedReason: null,
-        })
-        console.info(`[waitlist][zora] canonical csw resolved ${resolved}`)
+      if (!res.ok || !json?.success || !json?.data) {
+        const message = readApiErrorMessage(json, `Failed to bootstrap wallets (HTTP ${res.status}).`)
+        if (json?.needsZoraIdentitySignal === true) {
+          patchWaitlist({
+            canonicalZoraCswAddress: null,
+            canonicalZoraCswUnresolvedReason: message,
+            mappingError: null,
+          })
+        } else {
+          patchWaitlist({ mappingError: message })
+        }
         return
       }
 
-      const reason =
-        'No canonical smart wallet found from linked Zora provider accounts. TODO: add deterministic factory derivation fallback.'
+      const canonical = isValidEvmAddress(json.data.canonicalCswAddress)
+        ? getAddress(json.data.canonicalCswAddress).toLowerCase()
+        : null
+      const embedded = isValidEvmAddress(json.data.privyEmbeddedEoaAddress)
+        ? getAddress(json.data.privyEmbeddedEoaAddress).toLowerCase()
+        : null
+
+      if (!canonical) {
+        patchWaitlist({
+          canonicalZoraCswAddress: null,
+          canonicalZoraCswUnresolvedReason: 'Canonical smart wallet was not resolved yet.',
+        })
+        return
+      }
+
       patchWaitlist({
-        canonicalZoraCswAddress: null,
-        canonicalZoraCswUnresolvedReason: reason,
+        canonicalZoraCswAddress: canonical,
+        canonicalZoraCswUnresolvedReason: null,
+        embeddedEoaAddress: embedded ?? embeddedEoaAddressFromState,
+        mappingError: null,
       })
-      console.warn(`[waitlist][zora] canonical csw unresolved ${reason}`)
+      setEmbeddedEoaOwnerInstalled(Boolean(json.data.privyIsOwner))
+      console.info(`[waitlist][bootstrap] canonical ${canonical} owner=${Boolean(json.data.privyIsOwner)}`)
+    } catch (error: any) {
+      const message =
+        typeof error?.shortMessage === 'string'
+          ? error.shortMessage
+          : typeof error?.message === 'string'
+            ? error.message
+            : 'Failed to bootstrap wallet setup.'
+      patchWaitlist({ mappingError: message })
     } finally {
       setCanonicalResolveBusy(false)
     }
-  }, [
-    embeddedWalletAddress,
-    isContractAddress,
-    knownCanonicalCswAddress,
-    patchWaitlist,
-    profileDerivedCanonicalCswAddress,
-    publicClient,
-    zoraAddressSet.providerAddresses,
-    zoraAddressSet.smartWalletAddresses,
-    zoraReadOnlyLinked,
-  ])
+  }, [apiFetch, embeddedEoaAddressFromState, patchWaitlist, privyAuthed, readPrivyTokenForServer, step])
 
   useEffect(() => {
     if (step !== 'verify') return
     if (!privyAuthed || !walletsReady) return
-    if (!embeddedWalletAddress || !zoraReadOnlyLinked) return
 
     const key = [
-      embeddedWalletAddress.toLowerCase(),
+      String((privyUser as any)?.id ?? ''),
+      String(embeddedWalletAddress || '').toLowerCase(),
       zoraAddressSet.providerAddresses.join(','),
       String(knownCanonicalCswAddress || '').toLowerCase(),
       String(profileDerivedCanonicalCswAddress || '').toLowerCase(),
@@ -1399,7 +1438,9 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
 
     if (
       canonicalResolveAttemptKeyRef.current === key &&
-      (Boolean(canonicalZoraCswAddress) || Boolean(canonicalZoraCswUnresolvedReason))
+      (Boolean(canonicalZoraCswAddress) ||
+        Boolean(canonicalZoraCswUnresolvedReason) ||
+        embeddedEoaOwnerInstalled !== null)
     ) {
       return
     }
@@ -1409,15 +1450,16 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   }, [
     canonicalZoraCswAddress,
     canonicalZoraCswUnresolvedReason,
+    embeddedEoaOwnerInstalled,
     embeddedWalletAddress,
     knownCanonicalCswAddress,
     profileDerivedCanonicalCswAddress,
     privyAuthed,
-    walletsReady,
+    privyUser,
     resolveCanonicalZoraCsw,
     step,
+    walletsReady,
     zoraAddressSet.providerAddresses,
-    zoraReadOnlyLinked,
   ])
 
   const retryCanonicalResolution = useCallback(() => {
@@ -1426,78 +1468,26 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
   }, [resolveCanonicalZoraCsw])
 
   useEffect(() => {
-    const csw = isValidEvmAddress(effectiveCswAddress) ? getAddress(effectiveCswAddress) : null
-    const embedded = isValidEvmAddress(embeddedWalletAddress) ? getAddress(embeddedWalletAddress) : null
-    if (!csw || !embedded) {
-      ownerInstallCheckKeyRef.current = null
+    const cswReady = Boolean(effectiveCswAddress && isValidEvmAddress(effectiveCswAddress))
+    const embeddedReady = Boolean(embeddedWalletAddress && isValidEvmAddress(embeddedWalletAddress))
+    if (!cswReady || !embeddedReady) {
       setEmbeddedEoaOwnerInstalled(null)
-      return
     }
-    if (!publicClient) {
-      ownerInstallCheckKeyRef.current = null
-      setEmbeddedEoaOwnerInstalled(false)
-      return
-    }
+  }, [effectiveCswAddress, embeddedWalletAddress])
 
-    const key = `${csw.toLowerCase()}|${embedded.toLowerCase()}`
-    if (ownerInstallCheckKeyRef.current === key && embeddedEoaOwnerInstalled !== null) return
-    ownerInstallCheckKeyRef.current = key
-
-    let cancelled = false
-    setEmbeddedEoaOwnerInstalled(null)
-    ;(async () => {
-      try {
-        const isOwner = (await publicClient.readContract({
-          address: csw as Address,
-          abi: COINBASE_SMART_WALLET_OWNER_VIEW_ABI,
-          functionName: 'isOwnerAddress',
-          args: [embedded as Address],
-        })) as boolean
-        if (!cancelled) {
-          setEmbeddedEoaOwnerInstalled(Boolean(isOwner))
-          if (isOwner) patchWaitlist({ mappingError: null })
-        }
-      } catch (error: any) {
-        if (!cancelled) {
-          setEmbeddedEoaOwnerInstalled(false)
-          const message =
-            typeof error?.shortMessage === 'string'
-              ? error.shortMessage
-              : typeof error?.message === 'string'
-                ? error.message
-                : 'Failed to verify embedded owner status on-chain.'
-          patchWaitlist({ mappingError: message })
-        }
+  const executePreparedOwnerTx = useCallback(
+    async (params: {
+      privyToken: string
+      txRequest: { to: `0x${string}`; data: `0x${string}`; value: '0x0'; chainId: 8453 }
+      ownerAddressToConfirm?: string
+    }): Promise<ConfirmOwnerData> => {
+      if (!walletClient || !publicClient) {
+        throw new Error('Wallet client unavailable. Reconnect and try again.')
       }
-    })()
+      if (!connectedAddressRaw || !isValidEvmAddress(connectedAddressRaw)) {
+        throw new Error('Connect an existing owner wallet to continue.')
+      }
 
-    return () => {
-      cancelled = true
-    }
-  }, [effectiveCswAddress, embeddedEoaOwnerInstalled, embeddedWalletAddress, patchWaitlist, publicClient])
-
-  const installEmbeddedOwnerOnCanonicalCsw = useCallback(async () => {
-    if (embeddedOwnerInstallBusy) return
-    if (!publicClient || !walletClient) {
-      patchWaitlist({ mappingError: 'Wallet client unavailable. Reconnect and try again.' })
-      return
-    }
-    if (!effectiveCswAddress || !isValidEvmAddress(effectiveCswAddress)) {
-      patchWaitlist({ mappingError: 'Canonical smart wallet is not ready yet.' })
-      return
-    }
-    if (!embeddedWalletAddress || !isValidEvmAddress(embeddedWalletAddress)) {
-      patchWaitlist({ mappingError: 'Embedded wallet not detected yet.' })
-      return
-    }
-    if (!connectedAddressRaw || !isValidEvmAddress(connectedAddressRaw)) {
-      patchWaitlist({ mappingError: 'Connect the owner wallet from your creator profile to continue.' })
-      return
-    }
-
-    setEmbeddedOwnerInstallBusy(true)
-    patchWaitlist({ mappingError: null })
-    try {
       if (chainId !== base.id) {
         if (!switchChainAsync) {
           throw new Error('Switch to Base in your wallet to approve owner setup.')
@@ -1505,66 +1495,81 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         await switchChainAsync({ chainId: base.id })
       }
 
-      const canonical = getAddress(effectiveCswAddress) as Address
-      const ownerToAdd = getAddress(embeddedWalletAddress) as Address
       const connectedOwner = getAddress(connectedAddressRaw) as Address
+      const to = getAddress(params.txRequest.to) as Address
+      const data = params.txRequest.data
+      const value = /^0x[0-9a-fA-F]+$/.test(params.txRequest.value) ? BigInt(params.txRequest.value) : 0n
 
-      const ownerToAddIsEoa = await isEoaAddressByCode({
-        address: ownerToAdd,
-        getBytecode: async (address) => {
-          const code = await publicClient.getBytecode({ address })
-          return code ?? null
+      const hash = await walletClient.sendTransaction({
+        to,
+        data,
+        value,
+        account: connectedOwner,
+        chain: base,
+      })
+      await publicClient.waitForTransactionReceipt({ hash })
+
+      const confirmRes = await apiFetch('/api/wallet/confirm-owner', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'X-Privy-Token': params.privyToken,
         },
-      }).catch(() => false)
-      if (!ownerToAddIsEoa) {
-        throw new Error('Only EOA wallets can be added as smart wallet owners.')
+        body: JSON.stringify({
+          txHash: hash,
+          ...(params.ownerAddressToConfirm ? { ownerAddress: params.ownerAddressToConfirm } : null),
+        }),
+      })
+      const confirmJson = (await confirmRes.json().catch(() => null)) as
+        | { success?: boolean; data?: ConfirmOwnerData; error?: string }
+        | null
+      if (!confirmRes.ok || !confirmJson?.success || !confirmJson?.data) {
+        throw new Error(readApiErrorMessage(confirmJson, 'Owner install could not be confirmed on-chain.'))
+      }
+      return confirmJson.data
+    },
+    [apiFetch, chainId, connectedAddressRaw, publicClient, switchChainAsync, walletClient],
+  )
+
+  const installEmbeddedOwnerOnCanonicalCsw = useCallback(async () => {
+    if (embeddedOwnerInstallBusy) return
+    setEmbeddedOwnerInstallBusy(true)
+    setAdvancedOwnerError(null)
+    patchWaitlist({ mappingError: null })
+    try {
+      const privyToken = await readPrivyTokenForServer()
+      const prepareRes = await apiFetch('/api/wallet/prepare-add-privy-owner', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'X-Privy-Token': privyToken,
+        },
+      })
+      const prepareJson = (await prepareRes.json().catch(() => null)) as
+        | { success?: boolean; data?: PrepareOwnerData; error?: string }
+        | null
+      if (!prepareRes.ok || !prepareJson?.success || !prepareJson?.data) {
+        throw new Error(readApiErrorMessage(prepareJson, 'Failed to prepare owner install.'))
       }
 
-      const callerIsOwner = (await publicClient.readContract({
-        address: canonical,
-        abi: COINBASE_SMART_WALLET_OWNER_VIEW_ABI,
-        functionName: 'isOwnerAddress',
-        args: [connectedOwner],
-      })) as boolean
-      if (!callerIsOwner) {
-        throw new Error('Connected wallet is not an owner of your canonical smart wallet.')
+      if (prepareJson.data.alreadyOwner === true) {
+        setEmbeddedEoaOwnerInstalled(true)
+        patchWaitlist({ mappingError: null })
+        await resolveCanonicalZoraCsw()
+        return
       }
 
-      const alreadyLinked = (await publicClient.readContract({
-        address: canonical,
-        abi: COINBASE_SMART_WALLET_OWNER_VIEW_ABI,
-        functionName: 'isOwnerAddress',
-        args: [ownerToAdd],
-      })) as boolean
-      if (!alreadyLinked) {
-        const data = encodeFunctionData({
-          abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
-          functionName: 'addOwnerAddress',
-          args: [ownerToAdd],
-        })
-        const hash = await walletClient.sendTransaction({
-          to: canonical,
-          data,
-          value: 0n,
-          account: connectedOwner,
-          chain: base,
-        })
-        await publicClient.waitForTransactionReceipt({ hash })
-      }
-
-      const ownerInstalled = (await publicClient.readContract({
-        address: canonical,
-        abi: COINBASE_SMART_WALLET_OWNER_VIEW_ABI,
-        functionName: 'isOwnerAddress',
-        args: [ownerToAdd],
-      })) as boolean
-      if (!ownerInstalled) {
+      const confirmed = await executePreparedOwnerTx({
+        privyToken,
+        txRequest: prepareJson.data.txRequest,
+      })
+      if (confirmed.isOwner !== true) {
         throw new Error('Owner install could not be confirmed on-chain. Please retry.')
       }
-
-      ownerInstallCheckKeyRef.current = `${canonical.toLowerCase()}|${ownerToAdd.toLowerCase()}`
       setEmbeddedEoaOwnerInstalled(true)
       patchWaitlist({ mappingError: null })
+      await resolveCanonicalZoraCsw()
     } catch (error: any) {
       patchWaitlist({
         mappingError:
@@ -1572,22 +1577,87 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
             ? error.shortMessage
             : typeof error?.message === 'string'
               ? error.message
-            : 'Failed to add your embedded wallet as a smart wallet owner.',
+              : 'Failed to add your embedded wallet as a smart wallet owner.',
       })
     } finally {
       setEmbeddedOwnerInstallBusy(false)
     }
   }, [
-    chainId,
-    connectedAddressRaw,
-    effectiveCswAddress,
+    apiFetch,
     embeddedOwnerInstallBusy,
-    embeddedWalletAddress,
+    executePreparedOwnerTx,
     patchWaitlist,
-    publicClient,
-    switchChainAsync,
-    walletClient,
+    readPrivyTokenForServer,
+    resolveCanonicalZoraCsw,
   ])
+
+  const installRabbyOwnerOnCanonicalCsw = useCallback(
+    async (rabbyAddressRaw: string) => {
+      if (advancedOwnerBusy) return
+      if (!rabbyAddressRaw || !isValidEvmAddress(rabbyAddressRaw)) {
+        setAdvancedOwnerError('Enter a valid Rabby address.')
+        return
+      }
+      const rabbyAddress = getAddress(rabbyAddressRaw)
+      if (
+        typeof window !== 'undefined' &&
+        !window.confirm(
+          'Adding a co-owner allows that wallet to move assets. Continue only if you understand the risk.',
+        )
+      ) {
+        return
+      }
+
+      setAdvancedOwnerBusy(true)
+      setAdvancedOwnerError(null)
+      try {
+        const privyToken = await readPrivyTokenForServer()
+        const prepareRes = await apiFetch('/api/wallet/prepare-add-rabby-owner', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'X-Privy-Token': privyToken,
+          },
+          body: JSON.stringify({
+            rabbyAddress,
+            confirmedAdvanced: true,
+          }),
+        })
+        const prepareJson = (await prepareRes.json().catch(() => null)) as
+          | {
+              success?: boolean
+              data?: { txRequest?: { to: `0x${string}`; data: `0x${string}`; value: '0x0'; chainId: 8453 } }
+              error?: string
+            }
+          | null
+        if (!prepareRes.ok || !prepareJson?.success || !prepareJson?.data?.txRequest) {
+          throw new Error(readApiErrorMessage(prepareJson, 'Failed to prepare advanced owner install.'))
+        }
+
+        const confirmed = await executePreparedOwnerTx({
+          privyToken,
+          txRequest: prepareJson.data.txRequest,
+          ownerAddressToConfirm: rabbyAddress,
+        })
+        if (confirmed.isOwner !== true) {
+          throw new Error('Rabby owner install could not be confirmed on-chain.')
+        }
+        await resolveCanonicalZoraCsw()
+      } catch (error: any) {
+        setAdvancedOwnerError(
+          typeof error?.shortMessage === 'string'
+            ? error.shortMessage
+            : typeof error?.message === 'string'
+              ? error.message
+              : 'Failed to add Rabby as co-owner.',
+        )
+      } finally {
+        setAdvancedOwnerBusy(false)
+      }
+    },
+    [advancedOwnerBusy, apiFetch, executePreparedOwnerTx, readPrivyTokenForServer, resolveCanonicalZoraCsw],
+  )
 
   const ownerInstallGate = useMemo(() => {
     switch (ownerInstallStatus) {
@@ -1656,8 +1726,8 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
         } as const
       case 'OWNER_INSTALL_REQUIRED':
         return {
-          ctaLabel: 'Enable 1-click actions',
-          helper: 'Add your 4626 embedded wallet as an owner on the canonical smart wallet.',
+          ctaLabel: 'Enable 4626 signing (Add Privy signer as owner)',
+          helper: 'One-time setup: add your Privy embedded signer as an owner on the canonical smart wallet.',
           onAction: installEmbeddedOwnerOnCanonicalCsw,
           busy: false,
         } as const
@@ -2665,6 +2735,21 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
                     mappingPrimaryHelperText={ownerInstallGate.helper}
                     mappingPrimaryBusy={ownerInstallGate.busy}
                     onMappingPrimaryAction={ownerInstallGate.onAction ?? undefined}
+                    onInstallAdvancedOwner={
+                      privyAuthed && effectiveCswAddress && isValidEvmAddress(effectiveCswAddress)
+                        ? installRabbyOwnerOnCanonicalCsw
+                        : undefined
+                    }
+                    advancedOwnerBusy={
+                      privyAuthed && effectiveCswAddress && isValidEvmAddress(effectiveCswAddress)
+                        ? advancedOwnerBusy
+                        : undefined
+                    }
+                    advancedOwnerError={
+                      privyAuthed && effectiveCswAddress && isValidEvmAddress(effectiveCswAddress)
+                        ? advancedOwnerError
+                        : undefined
+                    }
                     onPrivyContinue={openInAppPrivyLogin}
                     onPrivyFallback={openPrivyLogin}
                     onSubmit={submitWaitlist}

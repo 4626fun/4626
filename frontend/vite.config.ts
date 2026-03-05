@@ -175,8 +175,12 @@ function localApiRoutesPlugin(): Plugin {
         '/api/auth/verify': () => import('./api/_handlers/auth/_verify'),
         '/api/auth/me': () => import('./api/_handlers/auth/_me'),
         '/api/auth/logout': () => import('./api/_handlers/auth/_logout'),
+        '/api/onboarding/bootstrap': () => import('./api/_handlers/onboarding/_bootstrap'),
         '/api/creator-wallets/claim': () => import('./api/_handlers/_creator-wallets-claim'),
         '/api/deploy/smartWalletOwner': () => import('./api/_handlers/deploy/_smartWalletOwner'),
+        '/api/wallet/prepare-add-privy-owner': () => import('./api/_handlers/wallet/_prepare-add-privy-owner'),
+        '/api/wallet/confirm-owner': () => import('./api/_handlers/wallet/_confirm-owner'),
+        '/api/wallet/prepare-add-rabby-owner': () => import('./api/_handlers/wallet/_prepare-add-rabby-owner'),
         '/api/rpc': () => import('./api/_handlers/rpc/_proxy'),
 
         // Keepr (local dev)

@@ -116,6 +116,9 @@ type VerifyStepProps = {
   mappingPrimaryHelperText?: string | null
   mappingPrimaryBusy?: boolean
   onMappingPrimaryAction?: () => void
+  onInstallAdvancedOwner?: (ownerAddress: string) => void | Promise<void>
+  advancedOwnerBusy?: boolean
+  advancedOwnerError?: string | null
   onPrivyContinue: () => void
   onPrivyFallback?: () => void
   onSubmit: () => void | Promise<void>
@@ -155,6 +158,9 @@ export const VerifyStep = memo(function VerifyStep({
   mappingPrimaryHelperText,
   mappingPrimaryBusy,
   onMappingPrimaryAction,
+  onInstallAdvancedOwner,
+  advancedOwnerBusy,
+  advancedOwnerError,
   onPrivyContinue,
   onPrivyFallback,
   onSubmit,
@@ -188,6 +194,8 @@ export const VerifyStep = memo(function VerifyStep({
     ]
   }, [hasVerification, hasCreatorCoin, creatorCoinDeclaredMissing, showSubmitButton])
   const [showTrouble, setShowTrouble] = useState(false)
+  const [showAdvancedOwner, setShowAdvancedOwner] = useState(false)
+  const [advancedOwnerAddress, setAdvancedOwnerAddress] = useState('')
   const canContinue = !privyVerifyBusy && !busy && !mappingPrimaryBusy
   const showPrivyError = Boolean(privyVerifyError) || Boolean(mappingError)
   const emailError = emailValue.trim().length > 0 && !isEmailValid ? 'Enter a valid email address.' : null
@@ -459,6 +467,45 @@ export const VerifyStep = memo(function VerifyStep({
         {submitError ? (
           <motion.div {...fadeUp}>
             <Alert variant="error">{submitError}</Alert>
+          </motion.div>
+        ) : null}
+
+        {onInstallAdvancedOwner ? (
+          <motion.div {...scaleIn} className={`${panelClass} p-4 space-y-3`}>
+            <button
+              type="button"
+              className="w-full flex items-center justify-between rounded-xl border border-vault-border/90 bg-vault-cardRaised/65 px-3 py-2.5 text-left text-[12px] text-vault-subtext hover:border-vault-borderStrong hover:text-vault-text transition-colors"
+              onClick={() => setShowAdvancedOwner((value) => !value)}
+            >
+              <span>Add Rabby as co-owner (advanced)</span>
+              <ChevronRight
+                className={`h-4 w-4 transition-transform ${showAdvancedOwner ? 'rotate-90' : ''}`}
+                aria-hidden="true"
+              />
+            </button>
+            {showAdvancedOwner ? (
+              <div className="space-y-2.5">
+                <div className="text-[11px] text-amber-200/90 leading-relaxed">
+                  Warning: co-owners can move assets. Continue only if you fully understand the risk.
+                </div>
+                <input
+                  type="text"
+                  value={advancedOwnerAddress}
+                  onChange={(event) => setAdvancedOwnerAddress(event.target.value)}
+                  placeholder="Rabby address (0x...)"
+                  className="w-full rounded-xl border border-vault-border/90 bg-vault-cardRaised/70 px-3 py-2.5 text-[12px] text-vault-text placeholder:text-vault-muted focus:outline-none focus:border-brand-primary/50"
+                />
+                <button
+                  type="button"
+                  className="w-full rounded-xl border border-vault-borderStrong/70 bg-vault-cardRaised/80 px-3 py-2.5 text-[12px] text-vault-text disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={Boolean(advancedOwnerBusy) || advancedOwnerAddress.trim().length === 0}
+                  onClick={() => void onInstallAdvancedOwner(advancedOwnerAddress.trim())}
+                >
+                  {advancedOwnerBusy ? 'Preparing owner install…' : 'Prepare and add Rabby owner'}
+                </button>
+                {advancedOwnerError ? <Alert variant="error">{advancedOwnerError}</Alert> : null}
+              </div>
+            ) : null}
           </motion.div>
         ) : null}
 

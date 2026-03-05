@@ -1,0 +1,82 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node'
+
+import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../server/auth/_shared.js'
+import { getDb } from '../../../server/_lib/postgres.js'
+import { confirmOwnerState, extractDelegationFlags } from '../../../server/_lib/canonicalCswDelegation.js'
+
+type ConfirmBody = {
+  cswAddress?: string
+  ownerAddress?: string
+  txHash?: string
+}
+
+type ConfirmResponse = {
+  isOwner: boolean
+  canonicalCswAddress: string
+  ownerAddress: string
+  txHash: string | null
+}
+
+function resolveStatusCode(error: unknown): number {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  if (
+    lower.includes('missing privy auth token') ||
+    lower.includes('invalid privy auth token') ||
+    lower.includes('privy verification failed') ||
+    lower.includes('jwt') ||
+    lower.includes('unauthorized') ||
+    lower.includes('forbidden')
+  ) {
+    return 401
+  }
+  if (
+    lower.includes('unable to resolve canonical zora smart wallet') ||
+    lower.includes('no privy embedded eoa found')
+  ) {
+    return 409
+  }
+  if (lower.includes('not configured')) return 503
+  return 500
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  setCors(req, res)
+  setNoStore(res)
+  if (handleOptions(req, res)) return
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  const db = await getDb()
+  if (!db) {
+    return res.status(503).json({ success: false, error: 'Service unavailable' } satisfies ApiEnvelope<never>)
+  }
+
+  const body = await readJsonBody<ConfirmBody>(req)
+  const ownerAddress = typeof body?.ownerAddress === 'string' ? body.ownerAddress : null
+  const cswAddress = typeof body?.cswAddress === 'string' ? body.cswAddress : null
+  const txHash = typeof body?.txHash === 'string' ? body.txHash.trim() : ''
+
+  try {
+    const confirmed = await confirmOwnerState({
+      db: db as any,
+      req,
+      ownerAddress,
+      cswAddress,
+    })
+    const data: ConfirmResponse = {
+      isOwner: confirmed.isOwner,
+      canonicalCswAddress: confirmed.canonicalCswAddress,
+      ownerAddress: confirmed.ownerAddress,
+      txHash: txHash || null,
+    }
+    return res.status(200).json({ success: true, data } satisfies ApiEnvelope<ConfirmResponse>)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to confirm owner install'
+    return res
+      .status(resolveStatusCode(error))
+      .json({ success: false, error: message, ...extractDelegationFlags(error) } satisfies ApiEnvelope<never>)
+  }
+}
