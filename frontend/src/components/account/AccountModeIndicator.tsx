@@ -95,7 +95,7 @@ export function AccountModeIndicator() {
 
           {!showModeToggle && account.uiFlags.shouldPromptToLinkOwner ? (
             <Link
-              to="/account"
+              to="/accounts"
               className="shrink-0 rounded-full border border-brand-primary/35 bg-brand-primary/10 px-2 py-0.5 text-brand-300 hover:bg-brand-primary/20"
             >
               Unlock Smart Wallet features

@@ -33,7 +33,7 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
   if (compact) {
     return (
       <Link
-        to="/account"
+        to="/accounts"
         title={
           isSmartWalletMode
             ? `Smart Wallet mode active — ${isConnectedAsAgent ? 'connected Smart Wallet' : 'linked Smart Wallet'}`
@@ -109,14 +109,14 @@ export function AccountModeIndicator({ compact = false, className }: AccountMode
       ) : (
         canSwitchToSmartWallet ? (
           <Link
-            to="/account"
+            to="/accounts"
             className="text-brand-accent hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary rounded"
           >
             Switch →
           </Link>
         ) : account.uiFlags.shouldPromptToLinkOwner ? (
           <Link
-            to="/account"
+            to="/accounts"
             className="text-brand-accent hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary rounded"
           >
             Unlock →

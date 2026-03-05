@@ -1,7 +1,7 @@
-import { WaitlistFlow } from '@/components/waitlist/WaitlistFlow'
+import { ThinWaitlistFlow } from '@/components/waitlist/ThinWaitlistFlow'
 
 export function WaitlistLanding() {
   // Unify marketing + app/public waitlist into a single flow component.
-  return <WaitlistFlow variant="page" />
+  return <ThinWaitlistFlow variant="page" />
 }
 

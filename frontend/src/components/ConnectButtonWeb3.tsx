@@ -97,7 +97,7 @@ export function ConnectButtonWeb3() {
               )}
               {auth.isSignedIn ? (
                 <Link
-                  to="/account"
+                  to="/accounts"
                   onClick={() => setShowMenu(false)}
                   className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
                 >

@@ -181,7 +181,7 @@ function WalletFooter(props: { ownerWallet: string | null }) {
       </button>
       <span className="text-vault-muted text-[11px]">·</span>
       <a
-        href="https://4626.fun/account"
+        href="https://4626.fun/accounts"
         target="_blank"
         rel="noreferrer"
         className="shrink-0 text-[11px] text-vault-muted transition-colors hover:text-vault-subtext focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/40 rounded"
@@ -677,7 +677,7 @@ export const DoneStep = memo(function DoneStep({
     [borderTier, referralCode, referralHandle, waitlistPosition],
   )
   const rewardReferralUrl = rewards.referralRef ? rewards.referralUrl : referralLink
-  const handleEarnMore = useCallback(() => navigate('/account#account-points-tasks'), [navigate])
+  const handleEarnMore = useCallback(() => navigate('/accounts'), [navigate])
   const handleViewLeaderboard = useCallback(() => navigate('/leaderboard'), [navigate])
 
   return (

@@ -175,7 +175,7 @@ export function IdentityHub() {
 
   const enableOneClickActionsHref = useMemo(() => {
     const base = getAppBaseUrl()
-    return base.startsWith('http') ? `${base}/account#account-aa-setup` : '/account#account-aa-setup'
+    return base.startsWith('http') ? `${base}/accounts#advanced` : '/accounts#advanced'
   }, [])
 
   const deployHref = useMemo(() => {

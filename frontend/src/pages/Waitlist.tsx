@@ -1,4 +1,4 @@
-import { WaitlistFlow } from '@/components/waitlist/WaitlistFlow'
+import { ThinWaitlistFlow } from '@/components/waitlist/ThinWaitlistFlow'
 
 /**
  * /waitlist route.
@@ -9,5 +9,5 @@ import { WaitlistFlow } from '@/components/waitlist/WaitlistFlow'
  * cross-domain redirects have been removed.
  */
 export function Waitlist() {
-  return <WaitlistFlow variant="page" />
+  return <ThinWaitlistFlow variant="page" />
 }
