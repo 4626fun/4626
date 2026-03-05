@@ -2565,8 +2565,8 @@ function DeployVaultBatcher({
   }, [])
 
   const shareOftVanitySuffix = useMemo(() => {
-    const raw = (import.meta.env.VITE_SHARE_OFT_VANITY_SUFFIX as string | undefined) ?? DEFAULT_SHARE_OFT_VANITY_SUFFIX
-    return normalizeHexSuffix(raw)
+    // Keep ShareOFT vanity deterministic for production deploys: enforce "...4626".
+    return DEFAULT_SHARE_OFT_VANITY_SUFFIX.toLowerCase()
   }, [])
 
   const shareOftVanityMaxTries = useMemo(() => {
@@ -2725,10 +2725,9 @@ function DeployVaultBatcher({
       const derivedShareOftSalt = deriveShareOftSalt({ owner, shareSymbol, version: deploymentVersion })
       let shareOftSaltOverrideUsed = shareOftSaltOverride
       if (shareOftSaltOverrideUsed && !supportsPhase1WithSalt) {
-        logger.warn('[DeployVault] Batcher lacks vanity salt support; ignoring ShareOFT override', {
-          batcher: batcherAddress,
-        })
-        shareOftSaltOverrideUsed = null
+        throw new Error(
+          `Batcher ${batcherAddress} does not support ShareOFT salt overrides, so vanity suffix "${shareOftVanitySuffix}" cannot be guaranteed.`,
+        )
       }
       if (!shareOftSaltOverrideUsed && shareOftVanitySuffix && supportsPhase1WithSalt) {
         const initCodeHash = keccak256(shareOftInitCode)
@@ -2777,6 +2776,11 @@ function DeployVaultBatcher({
       }
       const shareOftSalt = shareOftSaltOverrideUsed ?? derivedShareOftSalt
       const shareOftAddress = predictCreate2Address({ create2Deployer, salt: shareOftSalt, initCode: shareOftInitCode })
+      if (shareOftAddress.slice(-shareOftVanitySuffix.length).toLowerCase() !== shareOftVanitySuffix) {
+        throw new Error(
+          `ShareOFT vanity suffix check failed: expected address ending in "${shareOftVanitySuffix}", got ${shareOftAddress}.`,
+        )
+      }
 
       const vaultArgs = encodeAbiParameters(parseAbiParameters('address,address,string,string'), [
         creatorToken,
