@@ -50,9 +50,16 @@ type ZoraResolveResponse = {
   zoraHandle: string | null
 }
 
+type HandoffCreateResponse = {
+  code: string
+  expiresAt: string
+}
+
 type WaitlistStep = 'email' | 'auth' | 'zora' | 'done'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const HANDOFF_QUERY_KEY = 'cv_handoff'
+const ENTER_APP_PATH = '/deploy?from=waitlist&autologin=1&auth=wallet'
 
 function normalizeEmail(value: string): string {
   return value.trim().toLowerCase()
@@ -160,6 +167,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
   const [email, setEmail] = useState('')
 
   const [busy, setBusy] = useState(false)
+  const [enterAppBusy, setEnterAppBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [account, setAccount] = useState<AccountsSummary | null>(null)
@@ -167,13 +175,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
 
   const emailIsValid = EMAIL_RE.test(normalizeEmail(email))
 
-  const isModal = variant === 'modal'
   const isPage = variant === 'page'
 
   const wrapClass = isPage ? 'mx-auto w-full max-w-lg' : 'w-full'
   const innerClass = isPage
     ? 'card rounded-2xl border border-white/10 bg-black/50 p-6 sm:p-8 space-y-6'
     : 'space-y-6'
+  const enterAppUrl = useMemo(() => `${getAppBaseUrl()}${ENTER_APP_PATH}`, [])
 
   const runBootstrap = useCallback(async () => {
     const token = await getAccessToken()
@@ -317,6 +325,61 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
   const onFinish = useCallback(() => {
     setStep('done')
   }, [])
+
+  const onEnterApp = useCallback(async () => {
+    if (enterAppBusy) return
+    setEnterAppBusy(true)
+    try {
+      let target = enterAppUrl
+
+      // Best-effort: materialize a server session from Privy before handoff mint.
+      if (privyAuthed) {
+        const token = await getAccessToken().catch(() => null)
+        if (token) {
+          await apiFetch('/api/auth/privy', {
+            method: 'POST',
+            withCredentials: true,
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: 'application/json',
+            },
+          }).catch(() => null)
+        }
+      }
+
+      if (target.startsWith('http') && typeof window !== 'undefined') {
+        try {
+          const parsed = new URL(target)
+          if (parsed.origin !== window.location.origin) {
+            const handoffRes = await apiFetch('/api/auth/handoff/create', {
+              method: 'POST',
+              withCredentials: true,
+              headers: { Accept: 'application/json' },
+            }).catch(() => null)
+            const handoffJson = handoffRes
+              ? ((await handoffRes.json().catch(() => null)) as ApiEnvelope<HandoffCreateResponse> | null)
+              : null
+            const handoffCode =
+              handoffRes?.ok && handoffJson?.success && typeof handoffJson?.data?.code === 'string'
+                ? handoffJson.data.code.trim()
+                : ''
+            if (handoffCode) {
+              parsed.searchParams.set(HANDOFF_QUERY_KEY, handoffCode)
+              target = parsed.toString()
+            }
+          }
+        } catch {
+          // Keep original target if URL parsing fails.
+        }
+        window.location.href = target
+        return
+      }
+
+      window.location.assign(target)
+    } finally {
+      setEnterAppBusy(false)
+    }
+  }, [enterAppBusy, enterAppUrl, getAccessToken, privyAuthed])
 
   useEffect(() => {
     if (step !== 'auth') return
@@ -576,54 +639,33 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
 
             <div className="space-y-3">
               {(account?.score?.tier ?? 0) >= 1 ? (
-                <a
-                  href={getAppBaseUrl()}
-                  className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center"
+                <button
+                  type="button"
+                  onClick={() => void onEnterApp()}
+                  disabled={enterAppBusy}
+                  className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
                 >
-                  Enter App
-                </a>
+                  {enterAppBusy ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Entering App…
+                    </>
+                  ) : (
+                    'Enter App'
+                  )}
+                </button>
               ) : null}
 
-              {(account?.score?.tier ?? 0) >= 1 && isModal && props.onClose ? (
-                <div className="flex items-center gap-2">
-                  <Link
-                    to="/accounts"
-                    className="flex-1 text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1 inline-block"
-                  >
-                    Go to accounts
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={props.onClose}
-                    className="flex-1 text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1"
-                  >
-                    Close
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <Link
-                    to="/accounts"
-                    className={
-                      (account?.score?.tier ?? 0) >= 1
-                        ? 'w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1 inline-block'
-                        : 'btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center'
-                    }
-                  >
-                    Go to accounts
-                  </Link>
-
-                  {isModal && props.onClose ? (
-                    <button
-                      type="button"
-                      onClick={props.onClose}
-                      className="w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1"
-                    >
-                      Close
-                    </button>
-                  ) : null}
-                </>
-              )}
+              <Link
+                to="/accounts"
+                className={
+                  (account?.score?.tier ?? 0) >= 1
+                    ? 'w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1 inline-block'
+                    : 'btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center'
+                }
+              >
+                Go to accounts
+              </Link>
             </div>
           </motion.div>
         ) : null}
