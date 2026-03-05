@@ -22,6 +22,11 @@ interface ModalProps {
   showClose?: boolean
   /** Override the max-width Tailwind class (e.g. "max-w-lg") */
   maxWidth?: string
+  /**
+   * 'bottom-sheet' (default): slides up from bottom on mobile, centered on sm+
+   * 'center': always centered regardless of screen size
+   */
+  placement?: 'bottom-sheet' | 'center'
 }
 
 export function Modal({
@@ -33,6 +38,7 @@ export function Modal({
   className,
   showClose = true,
   maxWidth = 'sm:max-w-md',
+  placement = 'bottom-sheet',
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const titleId = title ? 'modal-title' : undefined
@@ -115,7 +121,7 @@ export function Modal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-110 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          className={`fixed inset-0 z-110 flex justify-center p-0 sm:p-4 ${placement === 'center' ? 'items-center' : 'items-end sm:items-center'}`}
           style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
           onClick={handleBackdropClick}
           aria-hidden={!open}
@@ -133,7 +139,7 @@ export function Modal({
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             className={cn(
               `w-full ${maxWidth} glass-card overflow-hidden`,
-              'rounded-t-2xl sm:rounded-2xl',
+              placement === 'center' ? 'rounded-2xl' : 'rounded-t-2xl sm:rounded-2xl',
               className,
             )}
             onClick={(e) => e.stopPropagation()}

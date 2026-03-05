@@ -18,6 +18,7 @@ import { useSwapExecution } from '@/hooks/useSwapExecution'
 import { useSwapState } from '@/hooks/useSwapState'
 import { useTokenIdentity } from '@/hooks/useTokenIdentity'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { usePrivyClientStatus } from '@/lib/privy/client'
 import {
   claimLiquidityFees,
   createPosition,
@@ -106,6 +107,45 @@ const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
     outputs: [{ name: '', type: 'bool' }],
   },
 ] as const
+
+let warnedSwapPrivyHookFailure = false
+function warnSwapPrivyHookFailure(scope: string, error: unknown) {
+  if (warnedSwapPrivyHookFailure) return
+  warnedSwapPrivyHookFailure = true
+  console.warn(`[swap] Privy hook unavailable in ${scope}; falling back to non-Privy mode`, error)
+}
+
+function useSafeSwapPrivyHook(enabled: boolean) {
+  try {
+    const value = usePrivy() as any
+    if (!enabled) {
+      return {
+        ready: false,
+        authenticated: false,
+        user: null,
+      } as any
+    }
+    return value
+  } catch (error) {
+    warnSwapPrivyHookFailure('usePrivy', error)
+    return {
+      ready: false,
+      authenticated: false,
+      user: null,
+    } as any
+  }
+}
+
+function useSafeSwapWalletsHook(enabled: boolean) {
+  try {
+    const value = useWallets() as any
+    if (!enabled) return { wallets: [] } as any
+    return value
+  } catch (error) {
+    warnSwapPrivyHookFailure('useWallets', error)
+    return { wallets: [] } as any
+  }
+}
 
 function isHexSignature(value: unknown): value is Hex {
   return typeof value === 'string' && /^0x[0-9a-fA-F]+$/.test(value)
@@ -301,8 +341,10 @@ export function Swap() {
   const [searchParams] = useSearchParams()
   const { address, isConnected, chainId: walletChainId, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
-  const { ready: privyReady, authenticated: privyAuthenticated, user: privyUser } = usePrivy() as any
-  const { wallets: privyWallets } = useWallets()
+  const privyClientStatus = usePrivyClientStatus()
+  const privyHooksEnabled = privyClientStatus === 'ready'
+  const { ready: privyReady, authenticated: privyAuthenticated, user: privyUser } = useSafeSwapPrivyHook(privyHooksEnabled)
+  const { wallets: privyWallets } = useSafeSwapWalletsHook(privyHooksEnabled)
   const auth = useSiweAuth()
   const publicClient = usePublicClient()
   const { switchChainAsync } = useSwitchChain()
@@ -402,13 +444,43 @@ export function Swap() {
     )
   }, [canonicalAddress, privyCrossAppEmbeddedEoaAddress, privyEmbeddedEoaAddressFromUser, privyWallets])
 
-  const privyEmbeddedEoaAddress = useMemo(() => {
+  const privyEmbeddedEoaAddressInfo = useMemo(() => {
     const fromWallet = normalizeAddressOrNull((privyEmbeddedEoaWallet as any)?.address)
-    const candidate = fromWallet ?? privyCrossAppEmbeddedEoaAddress ?? privyEmbeddedEoaAddressFromUser ?? null
-    if (!candidate) return null
-    if (canonicalAddress && candidate.toLowerCase() === canonicalAddress.toLowerCase()) return null
-    return candidate
+    if (fromWallet && (!canonicalAddress || fromWallet.toLowerCase() !== canonicalAddress.toLowerCase())) {
+      return {
+        address: fromWallet,
+        source: 'wallets' as const,
+      }
+    }
+
+    if (
+      privyCrossAppEmbeddedEoaAddress &&
+      (!canonicalAddress || privyCrossAppEmbeddedEoaAddress.toLowerCase() !== canonicalAddress.toLowerCase())
+    ) {
+      return {
+        address: privyCrossAppEmbeddedEoaAddress,
+        source: 'cross-app-linked-account' as const,
+      }
+    }
+
+    if (
+      privyEmbeddedEoaAddressFromUser &&
+      (!canonicalAddress || privyEmbeddedEoaAddressFromUser.toLowerCase() !== canonicalAddress.toLowerCase())
+    ) {
+      return {
+        address: privyEmbeddedEoaAddressFromUser,
+        source: 'privy-user' as const,
+      }
+    }
+
+    return {
+      address: null,
+      source: null as null,
+    }
   }, [canonicalAddress, privyCrossAppEmbeddedEoaAddress, privyEmbeddedEoaAddressFromUser, privyEmbeddedEoaWallet])
+
+  const privyEmbeddedEoaAddress = privyEmbeddedEoaAddressInfo.address
+  const privyEmbeddedEoaAddressSource = privyEmbeddedEoaAddressInfo.source
 
   const privyEmbeddedEoaCanSign = useMemo(() => {
     const walletAny: any = privyEmbeddedEoaWallet as any
@@ -526,11 +598,12 @@ export function Swap() {
   const executionMode: WalletMode =
     accountContext.activeAccountType === 'SMART_WALLET' ? 'canonical' : 'eoa'
   const canonicalAuthStatus = useMemo<CanonicalAuthStatus>(() => {
+    if (privyClientStatus !== 'ready') return 'unknown'
     if (privyReady !== true) return 'unknown'
     if (privyAuthenticated === true) return 'authenticated'
     if (privyAuthenticated === false) return 'unauthenticated'
     return 'unknown'
-  }, [privyAuthenticated, privyReady])
+  }, [privyAuthenticated, privyClientStatus, privyReady])
   const canonicalOwnerCheckStatus = useMemo<CanonicalOwnerCheckStatus>(() => {
     if (privyEmbeddedEoaCanOperateCanonicalQuery.isLoading || privyEmbeddedEoaCanOperateCanonicalQuery.isFetching) {
       return 'pending'
@@ -548,6 +621,7 @@ export function Swap() {
       evaluateCanonicalSignerGate({
         executionMode,
         canonicalAddress,
+        clientStatus: privyClientStatus,
         authStatus: canonicalAuthStatus,
         embeddedWalletDetected: Boolean(privyEmbeddedEoaAddress),
         embeddedWalletAddress: privyEmbeddedEoaAddress,
@@ -557,6 +631,7 @@ export function Swap() {
     [
       executionMode,
       canonicalAddress,
+      privyClientStatus,
       canonicalAuthStatus,
       privyEmbeddedEoaAddress,
       privyEmbeddedEoaCanSign,
@@ -603,12 +678,17 @@ export function Swap() {
   const needsPrivyCanonicalAuth = useMemo(
     () =>
       executionMode === 'canonical' &&
+      privyClientStatus === 'ready' &&
       (canonicalSignerGate.code === 'privy-auth-required' ||
         canonicalSignerGate.code === 'embedded-wallet-missing' ||
         canonicalSignerGate.code === 'embedded-wallet-cannot-sign'),
-    [canonicalSignerGate.code, executionMode],
+    [canonicalSignerGate.code, executionMode, privyClientStatus],
   )
-  const canonicalSignInMethod: 'zora' | 'privy' = privyAuthenticated ? 'privy' : 'zora'
+  const showPrivyClientDisabledHint =
+    executionMode === 'canonical' && canonicalSignerGate.code === 'privy-client-disabled'
+  const showPrivyLoadingHint = executionMode === 'canonical' && canonicalSignerGate.code === 'privy-auth-loading'
+  const canonicalSignInMethod: 'zora' | 'privy' =
+    privyClientStatus === 'ready' && privyAuthenticated ? 'privy' : 'zora'
   const identityReady = Boolean(
     canonicalAddress &&
       executionWalletClient &&
@@ -795,6 +875,13 @@ export function Swap() {
       ready: canonicalSignerGate.ready,
       code: canonicalSignerGate.code,
       reason: canonicalSignerGate.reason,
+    },
+    privyDebug: {
+      clientStatus: privyClientStatus,
+      ready: privyReady === true,
+      authenticated: typeof privyAuthenticated === 'boolean' ? privyAuthenticated : null,
+      embeddedWalletAddress: privyEmbeddedEoaAddress,
+      embeddedWalletSource: privyEmbeddedEoaAddressSource,
     },
   })
 
@@ -1160,13 +1247,34 @@ export function Swap() {
             action={{
               label: auth.busy ? 'Signing in...' : 'Sign in with Privy',
               onClick: () => {
-                if (auth.busy) return
+                if (auth.busy || privyClientStatus !== 'ready') return
                 void auth.signIn({ method: canonicalSignInMethod })
               },
             }}
           >
             Canonical mode uses your Privy embedded EOA as the owner signer. Sign in with Privy, then retry the swap.
             {auth.error ? <div className="mt-2 text-rose-300">{auth.error}</div> : null}
+          </Alert>
+        </div>
+      ) : null}
+
+      {activePanel === 'swap' && showPrivyClientDisabledHint ? (
+        <div className="mx-auto mt-4 max-w-4xl">
+          <Alert variant="warning" title="Privy is not configured for canonical swaps">
+            Canonical mode requires Privy authentication and an embedded owner wallet. Enable Privy for this environment,
+            then reload.
+            <div className="mt-2 text-zinc-300">
+              Set <span className="font-mono text-zinc-200">VITE_PRIVY_ENABLED=true</span> with a valid Privy app
+              configuration.
+            </div>
+          </Alert>
+        </div>
+      ) : null}
+
+      {activePanel === 'swap' && showPrivyLoadingHint ? (
+        <div className="mx-auto mt-4 max-w-4xl">
+          <Alert variant="warning" title="Initializing Privy for canonical signing">
+            Waiting for the Privy client/session to finish loading before canonical signer checks can complete.
           </Alert>
         </div>
       ) : null}
@@ -1227,6 +1335,14 @@ export function Swap() {
               <div>canonicalSignerRequired: {txDebug.canonicalSigner.required ? 'yes' : 'no'}</div>
               <div>canonicalSignerReady: {txDebug.canonicalSigner.ready ? 'yes' : 'no'}</div>
               <div>canonicalSignerGate: {txDebug.canonicalSigner.code ?? '--'}</div>
+              <div>privyClientStatus: {txDebug.privy.clientStatus ?? '--'}</div>
+              <div>privyReady: {txDebug.privy.ready ? 'yes' : 'no'}</div>
+              <div>
+                privyAuthenticated:{' '}
+                {txDebug.privy.authenticated === null ? '--' : txDebug.privy.authenticated ? 'yes' : 'no'}
+              </div>
+              <div>embeddedWalletSource: {txDebug.privy.embeddedWalletSource ?? '--'}</div>
+              <div>embeddedWalletAddress: {txDebug.privy.embeddedWalletAddress ?? '--'}</div>
               <div>allowanceWallet: {txDebug.allowanceCheck?.walletAddress ?? '--'}</div>
             </div>
           </div>

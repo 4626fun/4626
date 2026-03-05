@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, ArrowRight, Copy, Loader2, Trophy, ExternalLink, Wallet, ChevronDown, Share2 } from 'lucide-react'
+import { CheckCircle2, ArrowRight, Copy, Loader2, Trophy, Wallet, Share2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useLinkAccount, usePrivy } from '@privy-io/react-auth'
 import { LaunchCoinCard } from '../LaunchCoinCard'
@@ -146,13 +146,11 @@ function normalizeEvmAddress(value: string | null | undefined): string | null {
 }
 
 /** Single-line address row: label | address | copy */
-function AddrRow({ label, address, accent, icon }: {
-  label: string
-  address: string | null
-  accent?: boolean
-  icon?: React.ReactNode
-}) {
+
+function WalletFooter(props: { ownerWallet: string | null }) {
   const [copied, setCopied] = useState(false)
+  const address = normalizeEvmAddress(props.ownerWallet)
+
   const handleCopy = useCallback(() => {
     if (!address) return
     navigator.clipboard.writeText(address).then(() => {
@@ -161,110 +159,36 @@ function AddrRow({ label, address, accent, icon }: {
     })
   }, [address])
 
-  return (
-    <div className={[
-      'flex items-center gap-2.5 rounded-xl px-3 py-2',
-      accent ? 'border border-brand-primary/20 bg-brand-primary/10' : 'border border-vault-border/90 bg-vault-cardRaised/60',
-    ].join(' ')}>
-      {icon && <span className="shrink-0">{icon}</span>}
-      <span className={['text-[11px] font-medium shrink-0 w-[80px]', accent ? 'text-brand-300' : 'text-vault-subtext'].join(' ')}>
-        {label}
-      </span>
-      <span className={['font-mono text-[12px] flex-1 truncate min-w-0', accent ? 'text-vault-text' : 'text-vault-subtext'].join(' ')}>
-        {address ? truncAddr(address) : <span className="text-vault-muted not-italic">—</span>}
-      </span>
-      {address && (
-        <button
-          type="button"
-          onClick={handleCopy}
-          title="Copy"
-          className="shrink-0 rounded-md p-1 transition-colors hover:bg-vault-cardRaised/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
-        >
-          {copied
-            ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            : <Copy className="w-3.5 h-3.5 text-vault-subtext" />
-          }
-        </button>
-      )}
-    </div>
-  )
-}
-
-function WalletCardCollapsed(props: {
-  ownerWallet: string | null
-  smartWallet: string | null
-  creatorCoin?: CreatorCoinSnap | null
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const ownerWallet = normalizeEvmAddress(props.ownerWallet)
-  const smartWallet = normalizeEvmAddress(props.smartWallet)
-  const detailsId = 'waitlist-wallet-card-details'
+  if (!address) return null
 
   return (
-    <motion.section {...fadeUp} className={`${panelClass} overflow-hidden`}>
-      <div className="p-3.5 space-y-2.5">
-        <div className="flex items-center justify-between gap-2">
-          <div className="inline-flex items-center gap-2">
-            <Wallet className="h-3.5 w-3.5 text-vault-subtext" />
-            <span className="text-[12px] font-medium text-vault-subtext">Wallets</span>
-          </div>
-          <button
-            type="button"
-            aria-expanded={expanded}
-            aria-controls={detailsId}
-            onClick={() => setExpanded((prev) => !prev)}
-            className="inline-flex min-h-9 items-center gap-1 rounded-xl border border-vault-border px-2.5 text-[11px] font-medium text-vault-subtext transition-colors hover:bg-vault-cardRaised/65 hover:text-vault-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
-          >
-            {expanded ? 'Hide details' : 'Show details'}
-            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
-          </button>
-        </div>
-
-        <AddrRow label="Owner wallet" address={ownerWallet} />
-
-        <AnimatePresence initial={false}>
-          {expanded ? (
-            <motion.div
-              id={detailsId}
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: baseEase }}
-              className="overflow-hidden space-y-2"
-            >
-              <AddrRow label="Smart wallet" address={smartWallet} accent />
-              {props.creatorCoin ? (
-                <AddrRow
-                  label="Creator coin"
-                  address={props.creatorCoin.address}
-                  icon={
-                    props.creatorCoin.imageUrl ? (
-                      <img src={props.creatorCoin.imageUrl} className="h-4 w-4 rounded-full object-cover" alt="" />
-                    ) : (
-                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-brand-primary/20 text-[8px] font-bold text-brand-300">
-                        $
-                      </span>
-                    )
-                  }
-                />
-              ) : null}
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-      </div>
-
-      <div className="border-t border-vault-border/90 bg-vault-card/50 p-3">
-        <a
-          href="https://4626.fun/account"
-          target="_blank"
-          rel="noreferrer"
-          className="btn-secondary min-h-10 w-full justify-center border-vault-border text-[12px] text-vault-subtext"
-        >
-          Open account
-          <ExternalLink className="h-3.5 w-3.5" />
-        </a>
-      </div>
-    </motion.section>
+    <motion.div {...fadeUp} className="flex items-center gap-2 px-1">
+      <Wallet className="h-3 w-3 shrink-0 text-vault-muted" aria-hidden="true" />
+      <span className="font-mono text-[11px] text-vault-muted truncate flex-1 min-w-0">
+        {truncAddr(address)}
+      </span>
+      <button
+        type="button"
+        onClick={handleCopy}
+        title="Copy address"
+        aria-label="Copy wallet address"
+        className="shrink-0 rounded p-0.5 text-vault-muted transition-colors hover:text-vault-subtext focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/40"
+      >
+        {copied
+          ? <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+          : <Copy className="h-3 w-3" />
+        }
+      </button>
+      <span className="text-vault-muted text-[11px]">·</span>
+      <a
+        href="https://4626.fun/account"
+        target="_blank"
+        rel="noreferrer"
+        className="shrink-0 text-[11px] text-vault-muted transition-colors hover:text-vault-subtext focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/40 rounded"
+      >
+        Account ↗
+      </a>
+    </motion.div>
   )
 }
 
@@ -583,7 +507,6 @@ export const DoneStep = memo(function DoneStep({
   ownerAddress,
   onCoinCreated,
   onRefreshPosition,
-  creatorCoin,
 }: DoneStepProps) {
   const [exiting, setExiting] = useState(false)
   const [rankDelta, setRankDelta] = useState<number>(0)
@@ -763,11 +686,7 @@ export const DoneStep = memo(function DoneStep({
             deployAccessState={deployAccessState}
           />
 
-          <WalletCardCollapsed
-            ownerWallet={ownerAddress ?? null}
-            smartWallet={smartWalletAddress ?? null}
-            creatorCoin={creatorCoin}
-          />
+          <WalletFooter ownerWallet={ownerAddress ?? null} />
 
           {/* X / social verification — earns a profile badge */}
           {borderTier < 1 && showPrivy ? (

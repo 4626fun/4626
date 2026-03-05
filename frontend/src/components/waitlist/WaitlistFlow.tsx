@@ -2620,23 +2620,22 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
             />
           )}
           <div className="relative z-10">
-          {/* Step transition: smooth layout */}
-          <div className="relative">
-            <AnimatePresence mode="wait">
+          {/* Step transition: slides horizontally, clipped at card edge */}
+          <div className="relative overflow-hidden">
+            <AnimatePresence mode="popLayout" initial={false}>
               {step === 'verify' ? (
                 <motion.div
                   key="step:verify"
-                  initial={prefersReducedMotion ? false : { opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={prefersReducedMotion ? undefined : { opacity: 0, y: -10 }}
-                  transition={prefersReducedMotion ? { duration: 0 } : { duration: BASE_MOTION_MS + 0.06, ease: BASE_EASE }}
+                  initial={prefersReducedMotion ? false : { opacity: 0, x: 32 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={prefersReducedMotion ? undefined : { opacity: 0, x: -32 }}
+                  transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.26, ease: BASE_EASE }}
                 >
                   <VerifyStep
                     verifiedWallet={verifiedWallet}
                     emailValue={email}
                     isEmailValid={isEmailValid}
                     onEmailChange={setEmail}
-                    showPrivy={showPrivy}
                     showPrivyReady={showPrivyReady}
                     privyReady={privyReady}
                     privyVerifyBusy={privyVerifyBusy}
@@ -2676,10 +2675,10 @@ export function WaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
               {step === 'done' ? (
                 <motion.div
                   key="step:done"
-                  initial={prefersReducedMotion ? false : { opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={prefersReducedMotion ? undefined : { opacity: 0, y: -10 }}
-                  transition={prefersReducedMotion ? { duration: 0 } : { duration: BASE_MOTION_MS + 0.06, ease: BASE_EASE }}
+                  initial={prefersReducedMotion ? false : { opacity: 0, x: 32 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={prefersReducedMotion ? undefined : { opacity: 0, x: -32 }}
+                  transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.26, ease: BASE_EASE }}
                 >
                   <DoneStep
                     doneEmail={doneEmail}

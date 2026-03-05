@@ -72,6 +72,14 @@ type CanonicalSignerDebugState = {
   reason: string | null
 }
 
+type PrivyDebugState = {
+  clientStatus: string | null
+  ready: boolean
+  authenticated: boolean | null
+  embeddedWalletAddress: string | null
+  embeddedWalletSource: string | null
+}
+
 type SwapTxDebugState = {
   enabled: boolean
   chainId: number
@@ -92,6 +100,7 @@ type SwapTxDebugState = {
   approvalAttempt: SwapTxAttemptDebug | null
   swapAttempt: SwapTxAttemptDebug | null
   canonicalSigner: CanonicalSignerDebugState
+  privy: PrivyDebugState
 }
 
 const EMPTY_CAPABILITIES: AccountCapabilities = {
@@ -150,6 +159,7 @@ export function useSwapExecution(params: {
   connectorId?: string | null
   connectorName?: string | null
   canonicalSignerDebug?: CanonicalSignerDebugState | null
+  privyDebug?: PrivyDebugState | null
 }) {
   const swapDebugEnabled = useMemo(() => isSwapDebugEnabled(), [])
   const [estimatedOut, setEstimatedOut] = useState<string>('')
@@ -203,6 +213,14 @@ export function useSwapExecution(params: {
       code: params.canonicalSignerDebug?.code ?? null,
       reason: params.canonicalSignerDebug?.reason ?? null,
     },
+    privy: {
+      clientStatus: params.privyDebug?.clientStatus ?? null,
+      ready: Boolean(params.privyDebug?.ready),
+      authenticated:
+        typeof params.privyDebug?.authenticated === 'boolean' ? params.privyDebug.authenticated : null,
+      embeddedWalletAddress: params.privyDebug?.embeddedWalletAddress ?? null,
+      embeddedWalletSource: params.privyDebug?.embeddedWalletSource ?? null,
+    },
   })
   const quoteRunRef = useRef(0)
   const getErrorMessage = useCallback((value: unknown, fallback: string): string => {
@@ -250,6 +268,14 @@ export function useSwapExecution(params: {
         code: params.canonicalSignerDebug?.code ?? null,
         reason: params.canonicalSignerDebug?.reason ?? null,
       },
+      privy: {
+        clientStatus: params.privyDebug?.clientStatus ?? null,
+        ready: Boolean(params.privyDebug?.ready),
+        authenticated:
+          typeof params.privyDebug?.authenticated === 'boolean' ? params.privyDebug.authenticated : null,
+        embeddedWalletAddress: params.privyDebug?.embeddedWalletAddress ?? null,
+        embeddedWalletSource: params.privyDebug?.embeddedWalletSource ?? null,
+      },
     }))
   }, [
     swapDebugEnabled,
@@ -265,6 +291,11 @@ export function useSwapExecution(params: {
     params.canonicalSignerDebug?.ready,
     params.canonicalSignerDebug?.code,
     params.canonicalSignerDebug?.reason,
+    params.privyDebug?.clientStatus,
+    params.privyDebug?.ready,
+    params.privyDebug?.authenticated,
+    params.privyDebug?.embeddedWalletAddress,
+    params.privyDebug?.embeddedWalletSource,
     normalizedCapabilities,
   ])
 

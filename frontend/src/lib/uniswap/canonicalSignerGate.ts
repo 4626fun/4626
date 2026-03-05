@@ -4,10 +4,12 @@ import type { WalletMode } from '@/lib/uniswap/walletMode'
 
 export type CanonicalOwnerCheckStatus = 'owner' | 'not-owner' | 'pending' | 'unknown'
 export type CanonicalAuthStatus = 'authenticated' | 'unauthenticated' | 'unknown'
+export type CanonicalPrivyClientStatus = 'disabled' | 'loading' | 'ready'
 
 export type CanonicalSignerGateInput = {
   executionMode: WalletMode
   canonicalAddress: string | null
+  clientStatus?: CanonicalPrivyClientStatus
   authStatus?: CanonicalAuthStatus
   embeddedWalletDetected: boolean
   embeddedWalletAddress: string | null
@@ -20,6 +22,7 @@ export type CanonicalSignerGateResult = {
   ready: boolean
   code:
     | 'not-required'
+    | 'privy-client-disabled'
     | 'privy-auth-loading'
     | 'privy-auth-required'
     | 'missing-canonical-address'
@@ -52,6 +55,20 @@ export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): Ca
       code: 'not-required',
       reason: null,
     }
+  }
+
+  if ((input.clientStatus ?? 'ready') === 'disabled') {
+    return gateFailure(
+      'privy-client-disabled',
+      'Privy is not configured for this environment. Canonical swaps require Privy auth with an embedded wallet.',
+    )
+  }
+
+  if ((input.clientStatus ?? 'ready') === 'loading') {
+    return gateFailure(
+      'privy-auth-loading',
+      'Privy client is still initializing before canonical signer checks can run.',
+    )
   }
 
   if (!input.canonicalAddress || !isAddress(input.canonicalAddress)) {

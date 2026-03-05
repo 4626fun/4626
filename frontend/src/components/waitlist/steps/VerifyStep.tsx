@@ -83,7 +83,6 @@ type VerifyStepProps = {
   emailValue: string
   isEmailValid: boolean
   onEmailChange: (value: string) => void
-  showPrivy: boolean
   showPrivyReady: boolean
   privyReady: boolean
   privyVerifyBusy: boolean
@@ -127,7 +126,6 @@ export const VerifyStep = memo(function VerifyStep({
   emailValue,
   isEmailValid,
   onEmailChange,
-  showPrivy,
   showPrivyReady,
   privyReady,
   privyVerifyBusy,
@@ -170,7 +168,7 @@ export const VerifyStep = memo(function VerifyStep({
   const ownershipGateActive = Boolean(hasCreatorCoin && ownershipEvidenceAvailable)
   const headerTitle = !hasVerification ? 'Get started' : showSubmitButton ? 'Review and join' : 'Setting up'
   const headerSubtitle = !hasVerification
-    ? 'Create your account in one tap.'
+    ? null
     : showSubmitButton
       ? ownershipGateActive && !walletOwnershipValid
         ? 'Connect the wallet linked to your creator profile to continue.'
@@ -252,14 +250,28 @@ export const VerifyStep = memo(function VerifyStep({
             ? 'Installing'
             : 'Running'
 
-  if (hasVerification && simpleVerifiedMode) {
-    const profileReady = Boolean(hasCreatorCoin || creatorCoinDeclaredMissing)
-    const ownerReady = !ownershipGateActive || walletOwnershipValid
-    const setupReady = profileReady && ownerReady
+  // Variables used in the setup body
+  const profileReady = Boolean(hasCreatorCoin || creatorCoinDeclaredMissing)
+  const ownerReady = !ownershipGateActive || walletOwnershipValid
+  const setupReady = profileReady && ownerReady
 
-    return (
-      <motion.div key="verify-simple" {...fadeUp} className="space-y-6 sm:space-y-7">
-        <StepIndicator steps={stepperSteps} className="mb-2" />
+  return (
+    <div className="space-y-6 sm:space-y-7">
+      {/* Persistent progress bar — lives outside the animated region so the
+          bar fill animates smoothly without remounting between body swaps */}
+      <StepIndicator steps={stepperSteps} className="mb-2" />
+
+      {/* Body slides forward when transitioning between states */}
+      <AnimatePresence mode="popLayout" initial={false}>
+        {hasVerification && simpleVerifiedMode ? (
+          <motion.div
+            key="body:setup"
+            initial={{ opacity: 0, x: 28 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -28 }}
+            transition={{ duration: 0.22, ease: baseEase }}
+            className="space-y-6 sm:space-y-7"
+          >
         <motion.div {...scaleIn} className="space-y-3">
           <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-vault-text leading-[1.08]">
             Setting up your account
@@ -479,19 +491,16 @@ export const VerifyStep = memo(function VerifyStep({
             </button>
           </motion.div>
         ) : null}
-      </motion.div>
-    )
-  }
-
-  return (
-    <motion.div
-      key="verify"
-      {...fadeUp}
-      className="space-y-6 sm:space-y-7"
-    >
-      {/* Progress stepper */}
-      <StepIndicator steps={stepperSteps} className="mb-2" />
-
+          </motion.div>
+        ) : (
+          <motion.div
+            key="body:start"
+            initial={{ opacity: 0, x: 28 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -28 }}
+            transition={{ duration: 0.22, ease: baseEase }}
+            className="space-y-6 sm:space-y-7"
+          >
       {/* Header */}
       <motion.div {...scaleIn} className="space-y-3">
         <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-vault-text leading-[1.08]">
@@ -521,8 +530,6 @@ export const VerifyStep = memo(function VerifyStep({
             <ChevronRight className="absolute right-5 w-4 h-4 opacity-80" />
           </button>
 
-          <p className="text-sm text-vault-subtext">We'll continue automatically.</p>
-
           <div className="flex items-center justify-between">
             <div className="text-[12px] text-vault-subtext">{helperText || '\u00A0'}</div>
             <div className="flex items-center gap-3">
@@ -551,67 +558,8 @@ export const VerifyStep = memo(function VerifyStep({
             </motion.div>
           ) : null}
 
-          <motion.div {...fadeUp}>
-            <Alert variant="info">
-              <span className="font-medium">Zora sync:</span> We only check your Zora profile to prefill this step. No transaction is sent.
-            </Alert>
-          </motion.div>
         </motion.div>
       ) : null}
-
-      {/* Trouble sheet */}
-      <AnimatePresence>
-        {showTrouble ? (
-          <>
-            <motion.div
-              className="fixed inset-0 z-40 bg-black/60"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18, ease: baseEase }}
-              onClick={() => setShowTrouble(false)}
-            />
-            <motion.div
-              className="fixed inset-0 z-50 flex items-center justify-center px-4"
-              initial={{ y: 16, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 16, opacity: 0 }}
-              transition={{ duration: 0.2, ease: baseEase }}
-            >
-              <div className="w-full max-w-[440px]">
-                <div className="rounded-3xl border border-vault-borderStrong/60 bg-vault-card/95 backdrop-blur-2xl p-5 sm:p-6 shadow-[0_28px_84px_-42px_rgba(0,0,0,0.86)]">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="bv-kicker">Having trouble?</div>
-                      <div className="mt-1 text-[17px] text-vault-text font-display">Try these quick fixes</div>
-                      <div className="mt-2 text-[12px] text-vault-subtext">
-                        If the sign up button does not open, try:
-                      </div>
-                      <div className="mt-3 space-y-1.5">
-                        <div className="rounded-lg border border-vault-border/90 bg-vault-cardRaised/65 px-3 py-2 text-[12px] text-vault-subtext">1) Allow popups for this site.</div>
-                        <div className="rounded-lg border border-vault-border/90 bg-vault-cardRaised/65 px-3 py-2 text-[12px] text-vault-subtext">2) Refresh and try again.</div>
-                        <div className="rounded-lg border border-vault-border/90 bg-vault-cardRaised/65 px-3 py-2 text-[12px] text-vault-subtext">3) Switch browsers or devices.</div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="rounded-xl border border-vault-border bg-vault-cardRaised/55 p-2 text-vault-subtext hover:border-vault-borderStrong hover:text-vault-text transition-colors"
-                      onClick={() => setShowTrouble(false)}
-                      aria-label="Close"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="mt-4 rounded-lg border border-vault-border/85 bg-vault-cardRaised/60 px-3 py-2.5 text-[11px] text-vault-subtext">
-                    Need help? <a className="text-vault-text hover:text-white" href="mailto:4626dotfun@gmail.com">4626dotfun@gmail.com</a>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </>
-        ) : null}
-      </AnimatePresence>
 
       {/* Loading Creator Coin */}
       {hasVerification && creatorCoinBusy ? (
@@ -819,6 +767,7 @@ export const VerifyStep = memo(function VerifyStep({
       ) : null}
 
       {/* Review & submit */}
+      {/* Review & submit */}
       {showSubmitButton ? (
         <motion.div {...scaleIn} className="pt-2 space-y-3">
           {/* Review summary */}
@@ -892,12 +841,63 @@ export const VerifyStep = memo(function VerifyStep({
           ) : null}
         </motion.div>
       ) : null}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {!showPrivy ? (
-        <Alert variant="warning">
-          Wallet sign-in is loading. If this persists, try refreshing the page or switching browsers.
-        </Alert>
-      ) : null}
-    </motion.div>
+      {/* Trouble sheet overlay — fixed position, outside the slide region */}
+      <AnimatePresence>
+        {showTrouble ? (
+          <>
+            <motion.div
+              className="fixed inset-0 z-40 bg-black/60"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18, ease: baseEase }}
+              onClick={() => setShowTrouble(false)}
+            />
+            <motion.div
+              className="fixed inset-0 z-50 flex items-center justify-center px-4"
+              initial={{ y: 16, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 16, opacity: 0 }}
+              transition={{ duration: 0.2, ease: baseEase }}
+            >
+              <div className="w-full max-w-[440px]">
+                <div className="rounded-3xl border border-vault-borderStrong/60 bg-vault-card/95 backdrop-blur-2xl p-5 sm:p-6 shadow-[0_28px_84px_-42px_rgba(0,0,0,0.86)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="bv-kicker">Having trouble?</div>
+                      <div className="mt-1 text-[17px] text-vault-text font-display">Try these quick fixes</div>
+                      <div className="mt-2 text-[12px] text-vault-subtext">
+                        If the sign up button does not open, try:
+                      </div>
+                      <div className="mt-3 space-y-1.5">
+                        <div className="rounded-lg border border-vault-border/90 bg-vault-cardRaised/65 px-3 py-2 text-[12px] text-vault-subtext">1) Allow popups for this site.</div>
+                        <div className="rounded-lg border border-vault-border/90 bg-vault-cardRaised/65 px-3 py-2 text-[12px] text-vault-subtext">2) Refresh and try again.</div>
+                        <div className="rounded-lg border border-vault-border/90 bg-vault-cardRaised/65 px-3 py-2 text-[12px] text-vault-subtext">3) Switch browsers or devices.</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-xl border border-vault-border bg-vault-cardRaised/55 p-2 text-vault-subtext hover:border-vault-borderStrong hover:text-vault-text transition-colors"
+                      onClick={() => setShowTrouble(false)}
+                      aria-label="Close"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="mt-4 rounded-lg border border-vault-border/85 bg-vault-cardRaised/60 px-3 py-2.5 text-[11px] text-vault-subtext">
+                    Need help? <a className="text-vault-text hover:text-white" href="mailto:4626dotfun@gmail.com">4626dotfun@gmail.com</a>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        ) : null}
+      </AnimatePresence>
+    </div>
   )
 })

@@ -19,10 +19,47 @@ describe('evaluateCanonicalSignerGate', () => {
     expect(result.reason).toBeNull()
   })
 
+  it('fails with privy-client-disabled when canonical mode has no Privy client', () => {
+    const result = evaluateCanonicalSignerGate({
+      executionMode: 'canonical',
+      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      clientStatus: 'disabled',
+      authStatus: 'unknown',
+      embeddedWalletDetected: false,
+      embeddedWalletAddress: null,
+      embeddedWalletCanSign: false,
+      ownerCheckStatus: 'unknown',
+    })
+
+    expect(result.required).toBe(true)
+    expect(result.ready).toBe(false)
+    expect(result.code).toBe('privy-client-disabled')
+    expect(result.reason).toContain('Privy is not configured')
+  })
+
+  it('returns auth-loading while Privy client is initializing', () => {
+    const result = evaluateCanonicalSignerGate({
+      executionMode: 'canonical',
+      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      clientStatus: 'loading',
+      authStatus: 'unknown',
+      embeddedWalletDetected: false,
+      embeddedWalletAddress: null,
+      embeddedWalletCanSign: false,
+      ownerCheckStatus: 'unknown',
+    })
+
+    expect(result.required).toBe(true)
+    expect(result.ready).toBe(false)
+    expect(result.code).toBe('privy-auth-loading')
+    expect(result.reason).toContain('still initializing')
+  })
+
   it('fails when embedded wallet is missing in canonical mode', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
       canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      clientStatus: 'ready',
       authStatus: 'authenticated',
       embeddedWalletDetected: false,
       embeddedWalletAddress: null,
@@ -40,6 +77,7 @@ describe('evaluateCanonicalSignerGate', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
       canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      clientStatus: 'ready',
       authStatus: 'unknown',
       embeddedWalletDetected: false,
       embeddedWalletAddress: null,
@@ -57,6 +95,7 @@ describe('evaluateCanonicalSignerGate', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
       canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      clientStatus: 'ready',
       authStatus: 'unauthenticated',
       embeddedWalletDetected: false,
       embeddedWalletAddress: null,
@@ -74,6 +113,7 @@ describe('evaluateCanonicalSignerGate', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
       canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      clientStatus: 'ready',
       authStatus: 'authenticated',
       embeddedWalletDetected: true,
       embeddedWalletAddress: '0x1111111111111111111111111111111111111111',
@@ -91,6 +131,7 @@ describe('evaluateCanonicalSignerGate', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
       canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      clientStatus: 'ready',
       authStatus: 'authenticated',
       embeddedWalletDetected: true,
       embeddedWalletAddress: '0x1111111111111111111111111111111111111111',
@@ -108,6 +149,7 @@ describe('evaluateCanonicalSignerGate', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
       canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      clientStatus: 'ready',
       authStatus: 'authenticated',
       embeddedWalletDetected: true,
       embeddedWalletAddress: '0x1111111111111111111111111111111111111111',
