@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
+import { useCrossAppAccounts, usePrivy } from '@privy-io/react-auth'
+import { motion } from 'framer-motion'
+import { CheckCircle2, Loader2 } from 'lucide-react'
 
 import { apiFetch } from '@/lib/apiBase'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
+import { StepIndicator } from '@/components/ui/StepIndicator'
 
 import { selectZoraCrossAppAuthAction } from './ownerInstallMapping'
 import type { Variant } from './waitlistTypes'
@@ -96,14 +99,6 @@ function useSafePrivy() {
   }
 }
 
-function useSafeLogin() {
-  try {
-    return useLogin({}) as any
-  } catch {
-    return { login: async () => {} } as any
-  }
-}
-
 function useSafeCrossAppAccounts() {
   try {
     return useCrossAppAccounts() as any
@@ -120,12 +115,11 @@ function shortAddress(value: string | null | undefined): string {
   return value.length <= 12 ? value : `${value.slice(0, 6)}...${value.slice(-4)}`
 }
 
-export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string }) {
+export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string; onClose?: () => void }) {
   const variant = props.variant ?? 'embedded'
   const sectionId = props.sectionId ?? 'waitlist'
 
   const privy = useSafePrivy()
-  const { login } = useSafeLogin()
   const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossAppAccounts()
 
   const privyAuthed = Boolean(privy?.authenticated)
@@ -139,7 +133,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
   const [step, setStep] = useState<WaitlistStep>('email')
   const [email, setEmail] = useState('')
-  const [waitlistEntryId, setWaitlistEntryId] = useState<number | null>(null)
 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -149,13 +142,13 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
 
   const emailIsValid = EMAIL_RE.test(normalizeEmail(email))
 
-  const cardClass = variant === 'page'
-    ? 'card rounded-2xl border border-white/10 bg-black/50 p-6 sm:p-8'
-    : 'rounded-2xl border border-white/10 bg-black/40 p-5'
+  const isModal = variant === 'modal'
+  const isPage = variant === 'page'
 
-  const wrapClass = variant === 'page'
-    ? 'mx-auto w-full max-w-2xl'
-    : 'w-full'
+  const wrapClass = isPage ? 'mx-auto w-full max-w-lg' : 'w-full'
+  const innerClass = isPage
+    ? 'card rounded-2xl border border-white/10 bg-black/50 p-6 sm:p-8 space-y-6'
+    : 'space-y-6'
 
   const runBootstrap = useCallback(async () => {
     const token = await getAccessToken()
@@ -198,7 +191,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       if (!response.ok || !payload?.success || !payload.data) {
         throw new Error(readApiErrorMessage(payload, 'Failed to join waitlist.'))
       }
-      setWaitlistEntryId(payload.data.waitlistEntryId)
       setStep('auth')
       if (privyAuthed) {
         await runBootstrap()
@@ -209,22 +201,6 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
       setBusy(false)
     }
   }, [busy, email, emailIsValid, privyAuthed, runBootstrap])
-
-  const onPrivyContinue = useCallback(async () => {
-    if (busy) return
-    setBusy(true)
-    setError(null)
-    try {
-      if (!privyAuthed && typeof login === 'function') {
-        await login()
-      }
-      await runBootstrap()
-    } catch (authError: any) {
-      setError(typeof authError?.message === 'string' ? authError.message : 'Privy sign-in failed.')
-    } finally {
-      setBusy(false)
-    }
-  }, [busy, login, privyAuthed, runBootstrap])
 
   const onLinkZora = useCallback(async () => {
     if (busy) return
@@ -348,109 +324,223 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string 
     return summary
   }, [account, zoraSummary])
 
+  const stepOrder: WaitlistStep[] = ['email', 'auth', 'zora', 'done']
+  const stepIdx = stepOrder.indexOf(step)
+
+  const indicatorSteps = [
+    {
+      label: 'Email',
+      status: (stepIdx >= 2 ? 'complete' : stepIdx <= 1 ? (stepIdx === 0 || step === 'auth' ? 'active' : 'pending') : 'pending') as 'pending' | 'active' | 'complete',
+    },
+    {
+      label: 'Zora',
+      status: (step === 'zora' ? 'active' : step === 'done' ? 'complete' : 'pending') as 'pending' | 'active' | 'complete',
+    },
+    {
+      label: 'Done',
+      status: (step === 'done' ? 'active' : 'pending') as 'pending' | 'active' | 'complete',
+    },
+  ]
+
   return (
     <section id={sectionId} className={wrapClass}>
-      <div className={cardClass}>
-        <div className="mb-5">
-          <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">4626 Waitlist</div>
-          <h2 className="mt-2 text-2xl font-semibold text-white">Join in one tap, manage identities later</h2>
-          <p className="mt-2 text-sm text-zinc-400">
-            Email is required for notifications. You can link additional identities in <code>/accounts</code>.
-          </p>
-        </div>
+      <div className={innerClass}>
+        {/* Step progress indicator */}
+        <StepIndicator steps={indicatorSteps} />
 
-        <div className="mb-5 flex flex-wrap items-center gap-2 text-xs">
-          {(['email', 'auth', 'zora', 'done'] as WaitlistStep[]).map((item, index) => {
-            const active = item === step
-            const completed = ['email', 'auth', 'zora', 'done'].indexOf(step) > index
-            return (
-              <span
-                key={item}
-                className={`rounded-full border px-3 py-1 ${
-                  active
-                    ? 'border-brand-primary/50 bg-brand-primary/20 text-brand-primary'
-                    : completed
-                      ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
-                      : 'border-white/10 bg-white/5 text-zinc-400'
-                }`}
-              >
-                {index + 1}. {item === 'auth' ? 'privy' : item}
-              </span>
-            )
-          })}
-        </div>
+        {/* Email step — also used while 'auth' is running in background */}
+        {(step === 'email' || step === 'auth') ? (
+          <motion.div
+            key="step-email"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+            className="space-y-5"
+          >
+            <div className="space-y-1">
+              <h2 className="text-2xl font-semibold tracking-tight text-white">Get early access</h2>
+              <p className="text-sm text-zinc-400">
+                Enter your email to join. Connect Zora next for extra points.
+              </p>
+            </div>
 
-        {step === 'email' ? (
-          <div className="space-y-3">
-            <label className="block text-xs text-zinc-400">Email (notifications)</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none transition focus:border-brand-primary/50"
-            />
+            <div className="space-y-2">
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && emailIsValid && !busy) void onJoinWaitlist() }}
+                placeholder="you@example.com"
+                disabled={step === 'auth'}
+                className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white placeholder:text-zinc-600 outline-none transition focus:border-brand-primary/50 focus:ring-2 focus:ring-brand-primary/20 disabled:opacity-60"
+              />
+              <p className="text-xs text-zinc-600">No spam. Notifications only.</p>
+            </div>
+
             <button
               type="button"
               disabled={!emailIsValid || busy}
               onClick={() => void onJoinWaitlist()}
-              className="btn-accent btn-no-icon inline-flex"
+              className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              {busy ? 'Joining…' : 'Sign up'}
+              {busy ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Setting up…
+                </>
+              ) : (
+                'Join waitlist'
+              )}
             </button>
-          </div>
-        ) : null}
 
-        {step === 'auth' ? (
-          <div className="space-y-3">
-            <p className="text-sm text-zinc-300">
-              Step 2: Sign in with Privy to attach your canonical internal account (Privy user id).
-            </p>
-            <button type="button" disabled={busy} onClick={() => void onPrivyContinue()} className="btn-accent btn-no-icon inline-flex">
-              {busy ? 'Connecting…' : privyAuthed ? 'Continue' : 'Sign in / Continue'}
-            </button>
-            {waitlistEntryId ? <p className="text-xs text-zinc-500">Waitlist entry #{waitlistEntryId}</p> : null}
-          </div>
-        ) : null}
-
-        {step === 'zora' ? (
-          <div className="space-y-4">
-            <p className="text-sm text-zinc-300">
-              Step 3 (optional): Link your Zora account to boost your profile signal.
-            </p>
-            <button type="button" disabled={busy} onClick={() => void onLinkZora()} className="btn-primary btn-no-icon inline-flex">
-              {busy ? 'Linking Zora…' : 'Link Zora to boost'}
-            </button>
-            {zoraStatus ? (
-              <div className="rounded-xl border border-white/10 bg-black/30 p-4 text-xs text-zinc-300 space-y-2">
-                <div><span className="text-zinc-500">Zora handle:</span> {zoraStatus.zoraHandle ? `@${zoraStatus.zoraHandle}` : '—'}</div>
-                <div><span className="text-zinc-500">Canonical CSW:</span> {shortAddress(zoraStatus.canonicalCswAddress)}</div>
-                <div><span className="text-zinc-500">Creator coin:</span> {shortAddress(zoraStatus.creatorCoin?.address)}</div>
+            {error ? (
+              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                {error}
               </div>
             ) : null}
-            <button type="button" onClick={onFinish} className="btn-secondary btn-no-icon inline-flex">
-              Continue to done
-            </button>
-          </div>
+          </motion.div>
         ) : null}
 
-        {step === 'done' ? (
-          <div className="space-y-4">
-            <p className="text-sm text-zinc-300">
-              You are on the waitlist. Identity linking, social boosts, and advanced wallet permissions now live in <code>/accounts</code>.
-            </p>
-            <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-200">
-              <div>Email: {(account?.email ?? normalizeEmail(email)) || '—'}</div>
-              <div>Points: {account?.score?.points ?? 0}</div>
-              <div>Tier: {account?.score?.tier ?? 0}</div>
+        {/* Zora step */}
+        {step === 'zora' ? (
+          <motion.div
+            key="step-zora"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+            className="space-y-5"
+          >
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <h2 className="text-2xl font-semibold tracking-tight text-white">Connect Zora</h2>
+                <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+                  Optional
+                </span>
+              </div>
+              <p className="text-sm text-zinc-400">
+                Link your Zora identity to unlock reputation signals, boost your ranking, and earn points.
+              </p>
             </div>
-            <Link to="/accounts" className="btn-accent btn-no-icon inline-flex">
-              Manage identities in /accounts
-            </Link>
-          </div>
+
+            {zoraStatus ? (
+              <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2">
+                <p className="text-xs font-medium text-emerald-400">Zora connected</p>
+                <div className="space-y-1 text-xs text-zinc-400">
+                  {zoraStatus.zoraHandle ? (
+                    <div><span className="text-zinc-600">Handle</span> · @{zoraStatus.zoraHandle}</div>
+                  ) : null}
+                  {zoraStatus.canonicalCswAddress ? (
+                    <div><span className="text-zinc-600">Wallet</span> · {shortAddress(zoraStatus.canonicalCswAddress)}</div>
+                  ) : null}
+                  {zoraStatus.creatorCoin?.address ? (
+                    <div><span className="text-zinc-600">Creator coin</span> · {shortAddress(zoraStatus.creatorCoin.address)}</div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="space-y-3">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void onLinkZora()}
+                className="btn-primary btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {busy ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Linking…
+                  </>
+                ) : zoraStatus ? (
+                  'Reconnect Zora'
+                ) : (
+                  'Connect Zora'
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={onFinish}
+                className="w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1"
+              >
+                Skip for now →
+              </button>
+            </div>
+
+            {error ? (
+              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                {error}
+              </div>
+            ) : null}
+          </motion.div>
         ) : null}
 
-        {error ? <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{error}</div> : null}
+        {/* Done step */}
+        {step === 'done' ? (
+          <motion.div
+            key="step-done"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+            className="space-y-5"
+          >
+            <div className="flex flex-col items-center text-center space-y-3 pt-2">
+              <motion.div
+                className="relative"
+                initial={{ scale: 0.6, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 20, delay: 0.05 }}
+              >
+                <div
+                  className="h-11 w-11 rounded-xl flex items-center justify-center"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(0,52,204,0.35) 0%, rgba(91,168,255,0.18) 100%)',
+                    border: '1px solid rgba(91,168,255,0.28)',
+                  }}
+                >
+                  <CheckCircle2 className="h-5 w-5 text-[#7DBCFF]" />
+                </div>
+                <motion.div
+                  className="absolute inset-0 rounded-xl"
+                  style={{ border: '1px solid rgba(91,168,255,0.35)' }}
+                  initial={{ scale: 1, opacity: 0.5 }}
+                  animate={{ scale: 1.6, opacity: 0 }}
+                  transition={{ duration: 2.4, repeat: Infinity, ease: 'easeOut', delay: 0.3 }}
+                />
+              </motion.div>
+
+              <div className="space-y-1">
+                <h2 className="text-2xl font-semibold tracking-tight text-white">You&apos;re in!</h2>
+                <p className="text-sm text-zinc-400 max-w-xs mx-auto">
+                  Done! Visit{' '}
+                  <Link to="/accounts" className="text-zinc-300 hover:text-white transition-colors">
+                    /accounts
+                  </Link>{' '}
+                  to manage connected accounts, earn points, and see the leaderboard.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Link
+                to="/accounts"
+                className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center"
+              >
+                Go to /accounts
+              </Link>
+
+              {isModal && props.onClose ? (
+                <button
+                  type="button"
+                  onClick={props.onClose}
+                  className="w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1"
+                >
+                  Close
+                </button>
+              ) : null}
+            </div>
+          </motion.div>
+        ) : null}
       </div>
     </section>
   )

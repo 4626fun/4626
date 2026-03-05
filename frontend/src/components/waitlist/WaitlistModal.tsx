@@ -11,7 +11,7 @@ type WaitlistModalProps = {
 
 export function WaitlistModal({ open, onClose }: WaitlistModalProps) {
   return (
-    <Modal open={open} onClose={onClose} title="Waitlist" maxWidth="sm:max-w-[440px]" placement="center">
+    <Modal open={open} onClose={onClose} title="Waitlist" maxWidth="sm:max-w-[480px]" placement="center">
       <Suspense
         fallback={
           <div className="space-y-4">
@@ -22,7 +22,7 @@ export function WaitlistModal({ open, onClose }: WaitlistModalProps) {
           </div>
         }
       >
-        <WaitlistFlowWithProviders variant="modal" />
+        <WaitlistFlowWithProviders variant="modal" onClose={onClose} />
       </Suspense>
     </Modal>
   )
