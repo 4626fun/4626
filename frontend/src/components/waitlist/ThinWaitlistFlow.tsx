@@ -130,9 +130,13 @@ function CoinbaseLogo({ className }: { className?: string }) {
 
 function ZoraLogo({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2Zm4.5 13.5h-9l4.5-7 4.5 7Z" />
-    </svg>
+    <img
+      src="/protocols/zora.svg"
+      alt="Zora"
+      aria-hidden="true"
+      className={className}
+      style={{ borderRadius: '50%' }}
+    />
   )
 }
 
@@ -446,7 +450,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
                 <div className="space-y-2">
                   {zoraStatus.zoraHandle ? (
                     <div className="flex items-center gap-2 text-xs">
-                      <ZoraLogo className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
+                      <ZoraLogo className="w-3.5 h-3.5 shrink-0 rounded-full" />
                       <span className="text-zinc-400">@{zoraStatus.zoraHandle}</span>
                     </div>
                   ) : null}
@@ -466,7 +470,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
                           className="w-3.5 h-3.5 rounded-full shrink-0 object-cover"
                         />
                       ) : (
-                        <ZoraLogo className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
+                        <ZoraLogo className="w-3.5 h-3.5 shrink-0 rounded-full" />
                       )}
                       <span className="text-zinc-500">Creator coin</span>
                       {zoraStatus.creatorCoin.symbol ? (
