@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 
 import { apiFetch } from '@/lib/apiBase'
+import { getAppBaseUrl } from '@/lib/host'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 import { StepIndicator } from '@/components/ui/StepIndicator'
@@ -554,7 +555,7 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
                 <p className="text-sm text-zinc-400 max-w-xs mx-auto">
                   Done! Visit{' '}
                   <Link to="/accounts" className="text-zinc-300 hover:text-white transition-colors">
-                    /accounts
+                    accounts
                   </Link>{' '}
                   to manage connected accounts, earn points, and see the leaderboard.
                 </p>
@@ -562,11 +563,24 @@ export function ThinWaitlistFlow(props: { variant?: Variant; sectionId?: string;
             </div>
 
             <div className="space-y-3">
+              {(account?.score?.tier ?? 0) >= 1 ? (
+                <a
+                  href={getAppBaseUrl()}
+                  className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center"
+                >
+                  Enter App
+                </a>
+              ) : null}
+
               <Link
                 to="/accounts"
-                className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center"
+                className={
+                  (account?.score?.tier ?? 0) >= 1
+                    ? 'w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1 inline-block'
+                    : 'btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center'
+                }
               >
-                Go to /accounts
+                Go to accounts
               </Link>
 
               {isModal && props.onClose ? (
