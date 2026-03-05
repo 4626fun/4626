@@ -52,6 +52,7 @@ import { crePlugin } from './plugins/cre/index.js'
 import { zoraPlugin } from './plugins/zora/index.js'
 import { uniswapPlugin } from './plugins/uniswap/index.js'
 import { knowledgePlugin } from './plugins/knowledge/index.js'
+import { bankrPlugin } from './plugins/bankr/index.js'
 import { creatorVaultCharacter, resolveCharacterRuntimeConfig } from './character.js'
 import { XmtpService } from './plugins/xmtp/service.js'
 import { createRuntimeBridge } from './runtimeBridge.js'
@@ -337,10 +338,30 @@ export type { Erc8004Identity } from './identity.js'
 // Plugins & Actions
 // ---------------------------------------------------------------------------
 
-const plugins = [keeprPlugin, zoraPlugin, uniswapPlugin, lensPlugin, walletIntelPlugin, reputationPlugin, crePlugin, knowledgePlugin]
+const plugins = [
+  keeprPlugin,
+  zoraPlugin,
+  uniswapPlugin,
+  bankrPlugin,
+  lensPlugin,
+  walletIntelPlugin,
+  reputationPlugin,
+  crePlugin,
+  knowledgePlugin,
+]
 const allActions = plugins.flatMap((p) => p.actions ?? [])
 
-export { keeprPlugin, zoraPlugin, uniswapPlugin, lensPlugin, walletIntelPlugin, reputationPlugin, crePlugin, knowledgePlugin }
+export {
+  keeprPlugin,
+  zoraPlugin,
+  uniswapPlugin,
+  bankrPlugin,
+  lensPlugin,
+  walletIntelPlugin,
+  reputationPlugin,
+  crePlugin,
+  knowledgePlugin,
+}
 
 // ---------------------------------------------------------------------------
 // LLM providers (for /ai fallback)

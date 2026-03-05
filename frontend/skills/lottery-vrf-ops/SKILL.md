@@ -57,7 +57,7 @@ Never include private keys or full `.env` contents in output.
 - Lottery manager: `contracts/utilities/lottery/CreatorLotteryManager.sol`
 - Example deployed hub metadata/ABI: `deployments/base/contracts/services/lottery/vrf/CreatorVRFConsumerV2_5.json`
 - Historical run artifacts: `broadcast/**` and `agent-logs/*.json`
-- Notes: `docs/lottery/LOTTERY_INTEGRATION_FIX.md`
+- Notes: `docs/primitives/game-loop/lottery.md`
 
 ## Read-only Health Checks (preferred first)
 

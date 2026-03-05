@@ -42,9 +42,8 @@ Key ideas:
 - Ajna strategy: `contracts/vault/strategies/AjnaStrategy.sol`
 - Strategy deploy tooling:
   - `contracts/helpers/batchers/StrategyDeploymentBatcher.sol`
-  - `docs/aa/AA_STRATEGY_DEPLOYMENT.md`
-- Allocation notes: `docs/lottery/MULTI_STRATEGY_ALLOCATION.md`
-- Architecture: `docs/architecture/STRATEGY_ARCHITECTURE.md`
+- Allocation notes: `docs/primitives/market/vault.md`
+- Architecture: `docs/overview/architecture.md`
 
 ## Read-only Health Checks (preferred first)
 

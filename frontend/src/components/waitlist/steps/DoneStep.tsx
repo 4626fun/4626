@@ -9,7 +9,6 @@ import { apiFetch } from '@/lib/apiBase'
 import { isPrivyClientEnabled } from '@/lib/flags'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { classifyPreprovisionResponse } from '../preprovisionStatus'
-import { StepIndicator } from '@/components/ui/StepIndicator'
 import { Alert } from '@/components/ui/Alert'
 import { deriveWaitlistRewards } from '@/lib/rewards/waitlistRewards'
 
@@ -302,16 +301,6 @@ function PreprovisionStatus({ onData }: { onData?: (data: PreprovData | null) =>
   )
 }
 
-function CtaLoadingSkeleton() {
-  return (
-    <motion.div {...fadeUp}>
-      <div className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl border border-vault-border/90 bg-vault-card/70">
-        <Loader2 className="w-4 h-4 animate-spin text-vault-subtext" />
-        <span className="text-[14px] sm:text-[15px] text-vault-subtext font-medium">Checking access…</span>
-      </div>
-    </motion.div>
-  )
-}
 
 function RewardsCard({
   pointsBalance,
@@ -323,6 +312,8 @@ function RewardsCard({
   onViewLeaderboard,
   onReferralCopied,
   copyHint,
+  primaryCta,
+  deployAccessState,
 }: {
   pointsBalance: number
   tierLabel: string
@@ -333,6 +324,14 @@ function RewardsCard({
   onViewLeaderboard: () => void
   onReferralCopied?: () => void
   copyHint?: string | null
+  primaryCta?: {
+    label: string
+    disabled?: boolean
+    busy?: boolean
+    busyLabel?: string
+    onClick?: () => void | Promise<void>
+  } | null
+  deployAccessState?: 'checking' | 'ready' | 'waitlist'
 }) {
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
   const [shareMenuOpen, setShareMenuOpen] = useState(false)
@@ -371,121 +370,158 @@ function RewardsCard({
     }
   }, [shareMenuOpen])
 
-  return (
-    <motion.section {...fadeUp} className={`${panelClass} p-6 sm:p-7`}>
-      <div className="space-y-6">
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2">
-            <div className="inline-flex items-baseline gap-2">
-              <span className="text-[44px] leading-[0.92] font-semibold tabular-nums tracking-tight text-vault-text sm:text-[48px]">
-                {pointsBalance}
-              </span>
-              <span className="text-[13px] font-medium tracking-wide text-vault-subtext">pts</span>
-            </div>
-            <span className="rounded-full border border-vault-borderStrong/55 bg-vault-cardRaised/70 px-2.5 py-1 text-[11px] font-medium text-vault-subtext">
-              {tierLabel}
-            </span>
-          </div>
+  const isEnterAppCta = (primaryCta?.label ?? '').trim().toLowerCase() === 'enter app'
 
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-1.5 text-[12px] text-vault-subtext">
-              <CheckCircle2 className={`h-3.5 w-3.5 ${badgeEarned ? 'text-emerald-300' : 'text-zinc-500'}`} aria-hidden="true" />
-              <span>{badgeEarned ? 'Your profile is verified' : 'Profile verification pending'}</span>
-            </div>
-            {rank && rank > 0 ? (
-              <div className="text-[12px] text-vault-muted">You&apos;re ranked #{rank} on the leaderboard</div>
-            ) : null}
+  return (
+    <motion.section {...fadeUp} className={`${panelClass} p-4 sm:p-5`}>
+      <div className="space-y-4">
+        {/* Stats row */}
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <div className="inline-flex items-baseline gap-1.5">
+            <span className="text-[40px] leading-[0.92] font-semibold tabular-nums tracking-tight text-vault-text sm:text-[44px]">
+              {pointsBalance}
+            </span>
+            <span className="text-[13px] font-medium tracking-wide text-vault-subtext">pts</span>
           </div>
+          <span className="rounded-full border border-vault-borderStrong/55 bg-vault-cardRaised/70 px-2.5 py-1 text-[11px] font-medium text-vault-subtext">
+            {tierLabel}
+          </span>
         </div>
 
-        <div className="space-y-3 border-t border-vault-border/80 pt-4">
-          <div className="bv-kicker">Referral link</div>
-          <div className="font-mono text-[12px] text-vault-subtext truncate" title={referralUrl}>
-            {referralUrl}
+        {/* Status line */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <div className="inline-flex items-center gap-1.5 text-[12px] text-vault-subtext">
+            <CheckCircle2 className={`h-3.5 w-3.5 ${badgeEarned ? 'text-emerald-300' : 'text-zinc-500'}`} aria-hidden="true" />
+            <span>{badgeEarned ? 'Profile verified' : 'Verification pending'}</span>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void onCopyReferral()}
-              className="btn-secondary min-h-10 border-brand-primary/25 bg-brand-primary/12 px-3 text-[12px] text-brand-300 hover:border-brand-primary/35 hover:bg-brand-primary/18"
-            >
-              <Copy className="h-3.5 w-3.5" />
-              Copy link
-            </button>
+          {rank && rank > 0 ? (
+            <span className="text-[12px] text-vault-muted">#{rank} on leaderboard</span>
+          ) : null}
+        </div>
 
-            <div ref={shareMenuRef} className="relative">
+        {/* Primary CTA — inside the card, between stats and referral */}
+        {deployAccessState === 'checking' && !primaryCta ? (
+          <div className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-vault-border/90 bg-vault-card/70">
+            <Loader2 className="w-4 h-4 animate-spin text-vault-subtext" />
+            <span className="text-[14px] text-vault-subtext font-medium">Checking access…</span>
+          </div>
+        ) : primaryCta ? (
+          <button
+            type="button"
+            disabled={primaryCta.disabled}
+            onClick={primaryCta.onClick}
+            className={
+              isEnterAppCta
+                ? 'btn-secondary w-full justify-center rounded-2xl border-white/12 bg-white/4 px-4 py-3 text-[14px] font-semibold text-zinc-100 hover:bg-white/8'
+                : ['btn-primary w-full px-4 py-3.5 text-[15px]', primaryCta.busy ? 'btn-no-icon' : ''].join(' ')
+            }
+          >
+            {primaryCta.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            {primaryCta.busy ? primaryCta.busyLabel ?? primaryCta.label : primaryCta.label}
+            {!primaryCta.busy ? <ArrowRight className="w-4 h-4" /> : null}
+          </button>
+        ) : deployAccessState === 'waitlist' ? (
+          <div className="rounded-xl border border-vault-border/90 bg-vault-card/70 px-3 py-2 text-[12px] text-vault-subtext">
+            We&apos;ll notify you as soon as access opens.
+          </div>
+        ) : null}
+
+        {/* Referral — compact single row */}
+        <div className="border-t border-vault-border/80 pt-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[11px] text-vault-muted truncate flex-1 min-w-0" title={referralUrl}>
+              {referralUrl}
+            </span>
+            <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
-                aria-haspopup="menu"
-                aria-expanded={shareMenuOpen}
-                aria-controls={shareMenuOpen ? shareMenuId : undefined}
-                onClick={() => setShareMenuOpen((prev) => !prev)}
-                className="btn-secondary min-h-10 border-vault-border px-3 text-[12px] text-vault-subtext"
+                onClick={() => void onCopyReferral()}
+                title="Copy referral link"
+                aria-label="Copy referral link"
+                className="inline-flex items-center justify-center h-7 w-7 rounded-lg border border-vault-border/80 bg-vault-cardRaised/50 text-vault-subtext transition-colors hover:bg-vault-cardRaised/80 hover:text-vault-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
               >
-                <Share2 className="h-3.5 w-3.5" />
-                Share
-                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${shareMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+                {copyState === 'copied'
+                  ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  : copyState === 'error'
+                    ? <Copy className="h-3.5 w-3.5 text-rose-400" />
+                    : <Copy className="h-3.5 w-3.5" />
+                }
               </button>
 
-              <AnimatePresence>
-                {shareMenuOpen ? (
-                  <motion.div
-                    id={shareMenuId}
-                    role="menu"
-                    aria-label="Share referral link"
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.15, ease: baseEase }}
-                    className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-vault-border/90 bg-vault-card/92 p-1 shadow-lg backdrop-blur"
-                  >
-                    <a
-                      role="menuitem"
-                      href={xShareHref}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={() => setShareMenuOpen(false)}
-                      className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-[12px] text-vault-text transition-colors hover:bg-vault-cardRaised/72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
-                    >
-                      <XLogo className="h-3.5 w-3.5" />
-                      Share on X
-                    </a>
-                    <a
-                      role="menuitem"
-                      href={farcasterShareHref}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={() => setShareMenuOpen(false)}
-                      className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-[12px] text-vault-text transition-colors hover:bg-vault-cardRaised/72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
-                    >
-                      <FarcasterLogo className="h-3.5 w-3.5" />
-                      Share on Farcaster
-                    </a>
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
-            </div>
+              <div ref={shareMenuRef} className="relative">
+                <button
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={shareMenuOpen}
+                  aria-controls={shareMenuOpen ? shareMenuId : undefined}
+                  onClick={() => setShareMenuOpen((prev) => !prev)}
+                  title="Share referral link"
+                  aria-label="Share referral link"
+                  className="inline-flex items-center justify-center h-7 w-7 rounded-lg border border-vault-border/80 bg-vault-cardRaised/50 text-vault-subtext transition-colors hover:bg-vault-cardRaised/80 hover:text-vault-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                </button>
 
-            {copyState !== 'idle' ? (
-              <span aria-live="polite" className={`text-[11px] ${copyState === 'copied' ? 'text-emerald-300' : 'text-rose-300'}`}>
-                {copyState === 'copied' ? 'Copied' : 'Copy failed'}
-              </span>
-            ) : null}
+                <AnimatePresence>
+                  {shareMenuOpen ? (
+                    <motion.div
+                      id={shareMenuId}
+                      role="menu"
+                      aria-label="Share referral link"
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.15, ease: baseEase }}
+                      className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-vault-border/90 bg-vault-card/92 p-1 shadow-lg backdrop-blur"
+                    >
+                      <a
+                        role="menuitem"
+                        href={xShareHref}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={() => setShareMenuOpen(false)}
+                        className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-[12px] text-vault-text transition-colors hover:bg-vault-cardRaised/72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
+                      >
+                        <XLogo className="h-3.5 w-3.5" />
+                        Share on X
+                      </a>
+                      <a
+                        role="menuitem"
+                        href={farcasterShareHref}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={() => setShareMenuOpen(false)}
+                        className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-[12px] text-vault-text transition-colors hover:bg-vault-cardRaised/72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
+                      >
+                        <FarcasterLogo className="h-3.5 w-3.5" />
+                        Share on Farcaster
+                      </a>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+              </div>
+            </div>
           </div>
-          {copyState === 'idle' && copyHint ? <div className="text-[11px] text-emerald-400">{copyHint}</div> : null}
+          {copyHint ? <div className="text-[11px] text-emerald-400">{copyHint}</div> : null}
         </div>
 
-        <div className="space-y-3 pt-2">
-          <button type="button" onClick={onEarnMore} className="btn-accent btn-no-icon min-h-12 w-full text-[14px]">
+        {/* Secondary links — inline, minimal */}
+        <div className="flex items-center justify-center gap-3 pt-1">
+          <button
+            type="button"
+            onClick={onEarnMore}
+            className="text-[12px] font-medium text-vault-subtext transition-colors hover:text-vault-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded"
+          >
             Earn more points
           </button>
+          <span className="text-vault-muted text-[11px]">·</span>
           <button
             type="button"
             onClick={onViewLeaderboard}
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-lg px-1 text-[12px] font-medium text-zinc-400 transition-colors hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
+            className="inline-flex items-center gap-1 text-[12px] font-medium text-vault-subtext transition-colors hover:text-vault-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded"
           >
-            <Trophy className="h-3.5 w-3.5" />
-            View leaderboard
+            <Trophy className="h-3 w-3" />
+            Leaderboard
           </button>
         </div>
       </div>
@@ -501,19 +537,11 @@ function HeaderStatusSection(props: {
   const identityLabel = props.handle ? `@${props.handle}` : props.displayEmail
 
   return (
-    <motion.section {...scaleIn} className="text-center space-y-4 pt-1">
-      <StepIndicator
-        steps={[
-          { label: 'Connect', status: 'complete' },
-          { label: 'Verify', status: 'complete' },
-          { label: 'Join', status: 'complete' },
-        ]}
-      />
-
-      <div className="flex justify-center pt-2">
+    <motion.section {...scaleIn} className="text-center space-y-2">
+      <div className="flex justify-center">
         <div className="relative">
-          <div className="h-12 w-12 rounded-xl border border-vault-border/90 bg-vault-cardRaised/70 flex items-center justify-center">
-            <CheckCircle2 className="h-6 w-6 text-vault-text" />
+          <div className="h-10 w-10 rounded-xl border border-vault-border/90 bg-vault-cardRaised/70 flex items-center justify-center">
+            <CheckCircle2 className="h-5 w-5 text-vault-text" />
           </div>
           <motion.div
             className="absolute inset-0 rounded-xl border border-white/10"
@@ -524,17 +552,17 @@ function HeaderStatusSection(props: {
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-1">
         <h1 className="font-display text-2xl font-semibold tracking-tight text-vault-text">You&apos;re on the waitlist</h1>
-        {identityLabel ? <p className="truncate px-2 text-[13px] text-vault-subtext">{identityLabel}</p> : null}
-        <div className="flex items-center justify-center gap-2">
-          <span className="rounded-full border border-vault-borderStrong/55 bg-vault-cardRaised/68 px-2.5 py-1 text-[11px] font-medium text-vault-subtext">
-            Active
-          </span>
+        <div className="flex items-center justify-center gap-1.5 text-[12px] text-vault-subtext">
+          {identityLabel ? <span className="truncate max-w-[180px]">{identityLabel}</span> : null}
+          {identityLabel ? <span className="text-vault-muted">·</span> : null}
+          <span className="text-emerald-300/90">Active</span>
           {props.rankDelta > 0 ? (
-            <span className="rounded-full border border-emerald-400/20 bg-emerald-500/8 px-2.5 py-1 text-[11px] font-medium text-emerald-200/90">
-              Moved up {props.rankDelta}
-            </span>
+            <>
+              <span className="text-vault-muted">·</span>
+              <span className="text-emerald-200/90">↑{props.rankDelta}</span>
+            </>
           ) : null}
         </div>
       </div>
@@ -708,7 +736,6 @@ export const DoneStep = memo(function DoneStep({
   const rewardReferralUrl = rewards.referralRef ? rewards.referralUrl : referralLink
   const handleEarnMore = useCallback(() => navigate('/account#account-points-tasks'), [navigate])
   const handleViewLeaderboard = useCallback(() => navigate('/leaderboard'), [navigate])
-  const isEnterAppCta = (primaryCta?.label ?? '').trim().toLowerCase() === 'enter app'
 
   return (
     <AnimatePresence mode="wait">
@@ -718,7 +745,7 @@ export const DoneStep = memo(function DoneStep({
           {...fadeUp}
           exit={{ opacity: 0, scale: 0.96, y: -8 }}
           transition={{ duration: 0.24, ease: baseEase }}
-          className="space-y-6"
+          className="space-y-4"
         >
           <HeaderStatusSection displayEmail={displayEmail} handle={referralHandle} rankDelta={rankDelta} />
 
@@ -732,32 +759,9 @@ export const DoneStep = memo(function DoneStep({
             rank={rewards.rankTotal}
             onEarnMore={handleEarnMore}
             onViewLeaderboard={handleViewLeaderboard}
+            primaryCta={primaryCta ? { ...primaryCta, onClick: handleDeployClick } : null}
+            deployAccessState={deployAccessState}
           />
-
-          {deployAccessState === 'checking' && !primaryCta ? (
-            <CtaLoadingSkeleton />
-          ) : primaryCta ? (
-            <motion.div {...fadeUp}>
-              <button
-                type="button"
-                disabled={primaryCta.disabled}
-                onClick={handleDeployClick}
-                className={
-                  isEnterAppCta
-                    ? 'btn-secondary w-full justify-center rounded-2xl border-white/12 bg-white/4 px-4 py-3 text-[14px] font-semibold text-zinc-100 hover:bg-white/8'
-                    : ['btn-primary w-full px-4 py-3.5 text-[15px]', primaryCta.busy ? 'btn-no-icon' : ''].join(' ')
-                }
-              >
-                {primaryCta.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                {primaryCta.busy ? primaryCta.busyLabel ?? primaryCta.label : primaryCta.label}
-                {!primaryCta.busy ? <ArrowRight className="w-4 h-4" /> : null}
-              </button>
-            </motion.div>
-          ) : deployAccessState === 'waitlist' ? (
-            <motion.div {...fadeUp} className="rounded-xl border border-vault-border/90 bg-vault-card/70 px-3 py-2 text-[12px] text-vault-subtext">
-              We&apos;ll notify you as soon as access opens.
-            </motion.div>
-          ) : null}
 
           <WalletCardCollapsed
             ownerWallet={ownerAddress ?? null}

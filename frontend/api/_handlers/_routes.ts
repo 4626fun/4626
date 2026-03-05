@@ -143,6 +143,9 @@ export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'farcaster/nonce': () => import('./farcaster/_nonce.js'),
   'farcaster/verify': () => import('./farcaster/_verify.js'),
 
+  'bankr/status': () => import('./bankr/_status.js'),
+  'bankr/profile': () => import('./bankr/_profile.js'),
+
   'health': () => import('./_health.js'),
 
   'onchain/coinMarketRewardsByCoin': () => import('./onchain/_coinMarketRewardsByCoin.js'),

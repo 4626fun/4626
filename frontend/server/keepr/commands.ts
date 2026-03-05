@@ -17,6 +17,7 @@ import {
 } from '../_lib/openbbClient.js'
 import { handleFarcasterCommand } from '../farcaster/commands.js'
 import { handleCoinCommand } from '../zora/commands.js'
+import { handleBankrCommand } from '../bankr/commands.js'
 import { handleSendCommand } from './sendCommand.js'
 import { handleWhoisCommand } from './whoisCommand.js'
 import { generateLlmResponse } from '../ai/chat.js'
@@ -93,6 +94,14 @@ function formatKeeprHelp(): string {
     '- /cre tend [vault] — deploy idle funds',
     '- /cre report [vault] — harvest yields',
     '- /cre flush-fees — flush Solana fees',
+    '',
+    'Bankr commands:',
+    '',
+    '- /bankr status',
+    '- /bankr me',
+    '- /bankr balances [base,solana]',
+    '- /bankr ask <question>',
+    '- /bankr exec <instruction> --confirm (ADMIN/OWNER)',
     '',
     'Wallet & Reputation:',
     '',
@@ -667,6 +676,27 @@ export async function handleKeeprCommand(params: {
       senderWallet: params.senderWallet,
       text: raw,
       role,
+    })
+  }
+
+  const looksLikeBankr = raw.toLowerCase().startsWith('/bankr') || raw.toLowerCase().startsWith('bankr ')
+  if (looksLikeBankr) {
+    const v = await getKeeprVaultByGroupId(params.groupId)
+    let role: KeeprRole = 'MEMBER'
+    let canonicalOwnerAddress: string | null = null
+    if (v) {
+      const owner = v.canonicalOwnerAddress
+      const admins = Array.isArray(v.config?.roles?.admins) ? v.config.roles.admins : []
+      const adminsLc = admins.filter(isAddressLike).map((a) => a.toLowerCase() as Address)
+      role = roleForWallet({ wallet: params.senderWallet, owner, admins: adminsLc })
+      canonicalOwnerAddress = owner
+    }
+    return handleBankrCommand({
+      groupId: params.groupId,
+      senderWallet: params.senderWallet,
+      text: raw,
+      role,
+      canonicalOwnerAddress,
     })
   }
 
